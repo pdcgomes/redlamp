@@ -42,8 +42,12 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 3. **Modern, native UI and great UX.** The UI follows the macOS and iOS 26 design language. Liquid Glass is used only on floating chrome, and editing surfaces stay neutral grey so nothing distorts your color judgment. It is direct-manipulation first, every action can be undone, and there are no modal dialogs while you edit.
 4. **Extreme responsiveness.** Rendering and UI are strictly separated. Slider changes should reach the screen within a frame (under 16 ms), and the UI thread never waits on the engine, the disk, or the GPU.
 5. **Serious color science.** The pipeline is scene-referred and linear, with DCP camera profiles, LUTs, lens profiles, and our own looks. Some looks are fitted by measurement to match popular camera and editor renderings.
-6. **Mac, iPad, and iPhone from one engine.** A single platform-neutral engine sits under thin, native shells for each platform. Edits move between devices through iCloud Drive, Files, and Photos.
-7. **Open source (MPL-2.0).** The license is compatible with the App Store. Algorithms are implemented clean-room from papers and specifications.
+6. **Computational photography built into the editing workflow.**
+   - **Best-in-class denoise:** a classical, noise-profiled denoiser plus an on-device AI denoiser that runs directly on raw data.
+   - **Focus stacking in one click,** from detecting a bracketed sequence to an editable result, with pro-level strategies and retouching. This is something Lightroom doesn't offer at all, and dedicated tools only offer with a lot of friction.
+   - **AI where it clearly wins:** masks, removal and upscaling, running on the device with no cloud and no credits.
+7. **Mac, iPad, and iPhone from one engine.** A single platform-neutral engine sits under thin, native shells for each platform. Edits move between devices through iCloud Drive, Files, and Photos.
+8. **Open source (MPL-2.0).** The license is compatible with the App Store. Algorithms are implemented clean-room from papers and specifications.
 
 ## Where we are
 
@@ -144,7 +148,7 @@ Every phase ships on Mac, iPad, and iPhone. The Lightroom feature inventory in [
 
 ### Phase 2: Develop parity
 - [ ] Texture, Clarity, and Dehaze, plus edge-aware Highlights and Shadows
-- [ ] Detail panel: sharpening and noise reduction
+- [ ] Detail panel: sharpening and **best-in-class classical noise reduction**, profiled per camera and ISO, on raw data, with Lightroom's luminance and color controls
 - [ ] Better demosaicing (RCD and AMaZE for Bayer, Markesteijn for X-Trans) and highlight reconstruction
 - [ ] Full DCP camera profiles (dual and triple illuminant), ICC input profiles, **LUT import** (`.cube`, `.3dl`, HaldCLUT), and a Profile Browser
 - [ ] Lens corrections from the lensfun database, Adobe LCP import, and DNG opcodes
@@ -153,20 +157,28 @@ Every phase ships on Mac, iPad, and iPhone. The Lightroom feature inventory in [
 - [ ] Slider-feel calibration against Lightroom, and Lightroom XMP preset import
 - [ ] Photos library integration and a Photos editing extension
 
-### Phase 3: Pro masking, healing, and looks
+### Phase 3: Pro masking, healing, AI denoise, focus stacking, and looks
 - [ ] SAM-class object and people-part masks, mask refinement, mask presets, and syncing masks across photos
-- [ ] Healing, clone, and content-aware remove
+- [ ] Healing, clone, and content-aware remove, with AI inpainting on the device
+- [ ] **AI Denoise:** an on-device model working on raw data, matching or beating the best commercial denoisers, with a fast 1:1 preview and non-destructive results
+- [ ] **Focus stacking v1:** stacks detected automatically in the filmstrip, alignment (including focus breathing and handheld sequences), depth-map and pyramid fusion strategies, a retouch brush, and results that stay fully editable
 - [ ] Manufacturer lens corrections embedded in RAW files (Sony, Fujifilm, Panasonic, OM System)
 - [ ] `redlamp-profiler`: look matching by black-box measurement (Fujifilm film simulation–inspired looks, Adobe-compatible looks), with a DCP and LUT writer
 
 ### Phase 4: 1.0
 - [ ] Lightroom XMP sidecar import, HDR/EDR editing and export, and batch export
+- [ ] **AI-assisted focus stacking:** learned fusion and halo suppression, occlusion and motion handling, and good stacks from fewer or handheld frames
+- [ ] **AI Super Resolution** (2x and 4x) that stays faithful and doesn't invent detail
 - [ ] Accessibility, usability testing on every platform, and App Store releases
 
 ### Later
 - CloudKit sync with lightweight proxy RAW files
 - A library and catalog, tethered shooting, and panorama and HDR merge
-- AI denoise and super-resolution, on-device
+- More AI features, subject to the research below: lens blur, distraction removal, and personalized auto settings
+
+### Research in progress
+
+A research brief for denoise, AI across the product (upscaling, masks, removal, auto settings), and focus stacking lives in [`docs/research/ai-and-computational-photography-brief.md`](docs/research/ai-and-computational-photography-brief.md). Its findings will refine the phases above.
 
 ## Getting started
 

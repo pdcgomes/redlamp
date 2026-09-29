@@ -66,11 +66,11 @@ Each feature has a roadmap tag:
 
 ## 7. Detail
 - Sharpening: Amount, Radius, Detail, Masking, with an Alt-drag preview [P2]
-- Noise reduction, luminance: Amount, Detail, Contrast [P2]
+- Noise reduction, luminance: Amount, Detail, Contrast [P2, a best-in-class classical denoiser profiled per camera and ISO, working on raw data]
 - Noise reduction, color: Amount, Detail, Smoothness [P2]
-- Enhance, AI Denoise with Amount [Later, using an on-device Core ML model]
-- Enhance, Raw Details (improved demosaic) [Later, as an ML demosaic]
-- Enhance, Super Resolution (2x upscale) [Later]
+- Enhance, AI Denoise with Amount [P3, an on-device model working on raw data; non-destructive rather than baked into a new DNG. See the AI research brief]
+- Enhance, Raw Details (improved demosaic) [P3 or Later, as an ML demosaic, subject to research]
+- Enhance, Super Resolution (2x upscale) [P4, on-device, faithful and not inventing detail]
 
 ## 8. Lens Corrections (Mobile: Optics)
 - Remove Chromatic Aberration (automatic) [P2]
@@ -178,6 +178,13 @@ Each feature has a roadmap tag:
 - HDR merge: auto align, auto settings, deghosting, DNG output [Later]
 - Panorama: Spherical, Cylindrical, Perspective, Boundary Warp, Fill Edges [Later]
 - HDR Panorama [Later]
+- **Beyond Lightroom: focus stacking** [P3 for v1, P4 for AI assistance]. This is a flagship differentiator; Lightroom has nothing like it.
+  - Stack detection from focus-bracketing metadata.
+  - Alignment that handles focus breathing and handheld sequences.
+  - Depth-map, pyramid and weighted fusion strategies.
+  - A retouch brush that paints from a chosen source frame.
+  - Results kept as an editable virtual raw.
+  - Later, learned fusion and halo suppression.
 
 ## 19. Export and Output
 - Formats: JPEG, PNG, TIFF, PSD, DNG, JPEG XL, AVIF, HEIF, or the original file [P1 for JPEG and TIFF; P2 for PNG and HEIF; P4 for the rest]
