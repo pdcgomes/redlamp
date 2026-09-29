@@ -145,6 +145,8 @@ struct InspectorView: View {
                         EffectsPanel()
                         CalibrationPanel()
                     }
+                } else if model.activeTool == .masking {
+                    MaskingPanel()
                 } else {
                     PlannedToolCard(tool: model.activeTool)
                 }
@@ -153,9 +155,9 @@ struct InspectorView: View {
 
             Rectangle().fill(Theme.divider).frame(height: 1)
             HStack {
-                Button("Previous") {}
-                    .disabled(true)
-                    .help("Apply the previous photo's settings (Phase 2)")
+                Button("Previous") { model.pasteFromPrevious() }
+                    .disabled(model.previousSelection == nil || model.info == nil)
+                    .help("Apply the previously viewed photo's settings (⌥⌘V)")
                 Spacer()
                 Button("Reset") { model.resetAll() }
                     .disabled(model.info == nil)

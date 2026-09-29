@@ -76,8 +76,11 @@ enum RawDecoder {
         let cameraToSRGB = (0 ..< 3).flatMap { row in
             (0 ..< 3).map { col in Double(rl_rgb_cam(raw, Int32(row), Int32(col))) }
         }
-        let xyzToCamera = (0 ..< 3).flatMap { row in
+        var xyzToCamera = (0 ..< 3).flatMap { row in
             (0 ..< 3).map { col in Double(rl_cam_xyz(raw, Int32(row), Int32(col))) }
+        }
+        if !xyzToCamera.contains(where: { $0 != 0 }) {
+            xyzToCamera = dngColorMatrix(raw) ?? xyzToCamera
         }
 
         let other = raw.pointee.other
@@ -117,6 +120,22 @@ enum RawDecoder {
     }
 
     // MARK: - Helpers
+
+    /// A DNG's own ColorMatrix, preferring the D65 calibration (EXIF LightSource 21).
+    /// LibRaw leaves `cam_xyz` empty for some DNGs, notably linear (ProRAW) files.
+    private static func dngColorMatrix(_ raw: UnsafeMutablePointer<libraw_data_t>) -> [Double]? {
+        let d65: Int32 = 21
+        let order: [Int32] = rl_dng_illuminant(raw, 0) == d65 ? [0, 1] : [1, 0]
+        for index in order {
+            let matrix = (0 ..< 3).flatMap { row in
+                (0 ..< 3).map { col in Double(rl_dng_colormatrix(raw, index, Int32(row), Int32(col))) }
+            }
+            if matrix.contains(where: { $0 != 0 }) {
+                return matrix
+            }
+        }
+        return nil
+    }
 
     /// LibRaw reports a large negative sentinel when a file has no DNG BaselineExposure.
     private static func plausibleBaselineExposure(_ value: Float) -> Double {

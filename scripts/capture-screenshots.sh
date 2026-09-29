@@ -16,6 +16,9 @@ OUT="$ROOT/docs/images"
 WAIT="${WAIT:-9}"
 
 [[ -x "$APP" ]] || { echo "error: build the app first (mise run build)" >&2; exit 1; }
+
+# A sleeping display has no windows to capture; keep it awake for the whole run.
+caffeinate -u -d -w $$ &
 [[ -d "$FIXTURES" ]] || { echo "error: fetch fixtures first (mise run fixtures)" >&2; exit 1; }
 mkdir -p "$OUT"
 
@@ -43,6 +46,7 @@ capture color-grading "select=2,panel=colorGrading,exposure=0.2,contrast=15,grad
 capture black-and-white "select=0,panel=basic,preset=bw.selenium,vignetteAmount=-30,grainAmount=25"
 capture zoom-xtrans "select=1,panel=colorMixer,zoom=1:1,vibrance=15"
 capture proraw "select=4,panel=basic+colorMixer,exposure=0.15,highlights=-50,shadows=25,vibrance=30,saturationBlue=15,luminanceBlue=-20"
+capture masking "select=0,tool=masking,linear=0.5:0.02:0.5:0.42,localExposure=-1.3,localTemperature=-30,localSaturation=25,radial=0.72:0.62:0.3:0.22:70,localExposure=0.9,localTemperature=30"
 
 pkill -x Redlamp 2>/dev/null || true
 clean_sidecars

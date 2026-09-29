@@ -95,6 +95,7 @@ struct SidebarView: View {
                 }
             }
             .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
             .font(Theme.labelFont)
         }
     }
@@ -159,23 +160,26 @@ struct NavigatorView: View {
                 zoomButton("2:1", .twoToOne)
             }
             GeometryReader { geometry in
-                ZStack {
-                    RoundedRectangle(cornerRadius: 6).fill(Theme.well)
-                    CanvasView(frame: model.frame, controller: controller, clickAction: .none, interactive: false)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                    if model.canvas.isZoomedIn, model.info != nil {
-                        let image = controller.imageRect(in: geometry.size)
-                        let visible = model.canvas.visibleImageRect
-                        Rectangle()
-                            .strokeBorder(Color.white.opacity(0.9), lineWidth: 1)
-                            .frame(width: visible.width * image.width, height: visible.height * image.height)
-                            .position(
-                                x: image.minX + visible.midX * image.width,
-                                y: image.minY + visible.midY * image.height,
-                            )
+                CanvasView(frame: model.frame, controller: controller, clickAction: .none, interactive: false)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    // The Metal view draws over overlays attached to it directly and over
+                    // ZStack siblings; an overlay on a containing view renders above it.
+                    .containerized()
+                    .overlay {
+                        if model.canvas.isZoomedIn, model.info != nil {
+                            let image = controller.imageRect(in: geometry.size)
+                            let visible = model.canvas.visibleImageRect
+                            Rectangle()
+                                .strokeBorder(Color.white.opacity(0.9), lineWidth: 1)
+                                .frame(width: visible.width * image.width, height: visible.height * image.height)
+                                .position(
+                                    x: image.minX + visible.midX * image.width,
+                                    y: image.minY + visible.midY * image.height,
+                                )
+                        }
                     }
-                }
             }
+            .background(RoundedRectangle(cornerRadius: 6).fill(Theme.well))
             .aspectRatio(1.5, contentMode: .fit)
         }
         .onAppear { controller.imageSize = model.canvas.imageSize }

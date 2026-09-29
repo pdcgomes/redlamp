@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: macos-26
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install mise tools
+        uses: jdx/mise-action@v2
+
+      - name: Select Xcode 26
+        run: |
+          XCODE="$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Engine purity gate
+        run: scripts/check-engine-purity.sh
+
+      - name: Cache vendored LibRaw
+        uses: actions/cache@v4
+        with:
+          path: vendor/build
+          key: libraw-${{ hashFiles('config/vendored-libs.json', 'vendor/shims/**', 'scripts/vendor-libraw.sh') }}
+
+      - name: Cache sample raw files
+        uses: actions/cache@v4
+        with:
+          path: tests/fixtures/raw
+          key: fixtures-${{ hashFiles('mise/tasks/fixtures') }}
+
+      - name: Fetch fixtures
+        run: mise run fixtures
+
+      - name: Generate workspace
+        run: mise run generate
+
+      - name: Lint (SwiftFormat)
+        run: mise exec -- swiftformat --lint .
+
+      # GPU-dependent engine tests skip themselves when the runner has no Metal device.
+      - name: Test
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -workspace Redlamp.xcworkspace \
+            -scheme Redlamp-Workspace \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee build/test.log | grep -E "error:|✔ Test|✘|TEST (SUCCEEDED|FAILED)"
+
+      - name: Build app (Release)
+        run: |
+          xcodebuild build \
+            -workspace Redlamp.xcworkspace \
+            -scheme Redlamp \
+            -configuration Release \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            -quiet
+
+      - name: Upload test log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-log
+          path: build/test.log

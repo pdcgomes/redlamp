@@ -17,6 +17,8 @@ public struct CanvasView: NSViewRepresentable {
     let revision: Int
     let clickAction: ClickAction
     let interactive: Bool
+    /// Linear grey level around the photo (Lightroom's Lights Out dims it to black).
+    let surround: Double
     let onSample: (CGPoint) -> Void
 
     public init(
@@ -24,8 +26,10 @@ public struct CanvasView: NSViewRepresentable {
         controller: CanvasController,
         clickAction: ClickAction = .zoom,
         interactive: Bool = true,
+        surround: Double = CanvasMetalView.defaultSurround,
         onSample: @escaping (CGPoint) -> Void = { _ in },
     ) {
+        self.surround = surround
         self.frame = frame
         self.controller = controller
         revision = controller.revision
@@ -41,6 +45,7 @@ public struct CanvasView: NSViewRepresentable {
     public func updateNSView(_ view: CanvasMetalView, context _: Context) {
         view.clickAction = clickAction
         view.interactive = interactive
+        view.clearColor = MTLClearColor(red: surround, green: surround, blue: surround, alpha: 1)
         view.onSample = onSample
         view.display(frame)
         view.needsDisplay = true
@@ -49,7 +54,8 @@ public struct CanvasView: NSViewRepresentable {
 
 public final class CanvasMetalView: MTKView {
     /// Neutral surround, linear. Matches Lightroom's default dark grey (#1f1f1f).
-    static let surround = MTLClearColor(red: 0.0137, green: 0.0137, blue: 0.0137, alpha: 1)
+    public static let defaultSurround = 0.0137
+    static let surround = MTLClearColor(red: defaultSurround, green: defaultSurround, blue: defaultSurround, alpha: 1)
 
     let controller: CanvasController
     var clickAction: CanvasView.ClickAction = .zoom

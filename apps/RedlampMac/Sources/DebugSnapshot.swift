@@ -18,8 +18,9 @@
                 arguments.firstIndex(of: flag).flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }
             }
 
+            // Deliberately never activates the app: stealing focus while someone types
+            // elsewhere sends their keystrokes (e.g. Z for zoom) into the editor.
             if let script = value(after: "--script") {
-                NSApp.activate()
                 run(script, model: model)
             }
 

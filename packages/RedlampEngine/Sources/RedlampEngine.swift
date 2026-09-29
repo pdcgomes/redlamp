@@ -129,7 +129,9 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         commands.label = "Interactive render"
         try encodeDevelop(
             request.recipe, session: session, into: target.texture, size: size,
-            encoding: .linear, showClipping: request.showClipping, commands: commands,
+            encoding: .linear, showClipping: request.showClipping, maskOverlay: request.maskOverlay,
+            maskOverlayColor: request.maskOverlayColor,
+            commands: commands,
         )
         try encodeHistogram(texture: target.texture, size: size, linear: true, commands: commands)
         commands.commit()
@@ -154,18 +156,25 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         size: PixelSize,
         encoding: OutputEncoding,
         showClipping: Bool,
+        maskOverlay: UUID? = nil,
+        maskOverlayColor: MaskOverlayColor = .red,
         commands: any MTLCommandBuffer,
     ) throws {
         guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
-        var (params, lut, mixer) = DevelopParameters.make(
-            recipe: recipe, session: session, outputSize: size, encoding: encoding, showClipping: showClipping,
+        var inputs = DevelopParameters.make(
+            recipe: recipe, session: session, outputSize: size, encoding: encoding,
+            showClipping: showClipping, maskOverlay: maskOverlay, maskOverlayColor: maskOverlayColor,
         )
         encoder.setComputePipelineState(kernels.develop)
         encoder.setTexture(session.pyramid, index: 0)
         encoder.setTexture(texture, index: 1)
-        encoder.setBytes(&params, length: MemoryLayout<DevelopParams>.stride, index: 0)
-        encoder.setBytes(&lut, length: lut.count * MemoryLayout<Float>.stride, index: 1)
-        encoder.setBytes(&mixer, length: mixer.count * MemoryLayout<Float>.stride, index: 2)
+        encoder.setBytes(&inputs.params, length: MemoryLayout<DevelopParams>.stride, index: 0)
+        encoder.setBytes(&inputs.toneLUT, length: inputs.toneLUT.count * MemoryLayout<Float>.stride, index: 1)
+        encoder.setBytes(&inputs.mixer, length: inputs.mixer.count * MemoryLayout<Float>.stride, index: 2)
+        encoder.setBytes(&inputs.layers, length: inputs.layers.count * MemoryLayout<MaskLayerGPU>.stride, index: 3)
+        encoder.setBytes(
+            &inputs.components, length: inputs.components.count * MemoryLayout<MaskComponentGPU>.stride, index: 4,
+        )
         encoder.dispatchGrid(width: size.width, height: size.height, pipeline: kernels.develop)
         encoder.endEncoding()
     }

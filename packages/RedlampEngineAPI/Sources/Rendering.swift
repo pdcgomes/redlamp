@@ -9,14 +9,42 @@ public struct RenderRequest: Sendable, Hashable {
     public var targetSize: PixelSize
     /// Paint clipped highlights red and clipped shadows blue.
     public var showClipping: Bool
+    /// Tints this mask's coverage (Lightroom's mask overlay).
+    public var maskOverlay: UUID?
+    public var maskOverlayColor: MaskOverlayColor = .red
     /// Monotonic counter set by the caller so frames can be matched to requests.
     public var generation: UInt64
 
-    public init(recipe: EditRecipe, targetSize: PixelSize, showClipping: Bool = false, generation: UInt64 = 0) {
+    public init(
+        recipe: EditRecipe,
+        targetSize: PixelSize,
+        showClipping: Bool = false,
+        maskOverlay: UUID? = nil,
+        generation: UInt64 = 0,
+    ) {
         self.recipe = recipe
         self.targetSize = targetSize
         self.showClipping = showClipping
+        self.maskOverlay = maskOverlay
         self.generation = generation
+    }
+}
+
+/// Mask overlay colors, cycled with Shift-O as in Lightroom.
+public enum MaskOverlayColor: Int, Sendable, Hashable, CaseIterable {
+    case red, green, blue, white
+
+    public var next: MaskOverlayColor {
+        MaskOverlayColor(rawValue: (rawValue + 1) % MaskOverlayColor.allCases.count) ?? .red
+    }
+
+    public var name: String {
+        switch self {
+        case .red: "Red"
+        case .green: "Green"
+        case .blue: "Blue"
+        case .white: "White"
+        }
     }
 }
 

@@ -1,79 +1,63 @@
 import AppKit
 import RedlampUI
 
-/// Lightroom Classic's single-key Develop shortcuts.
+/// Routes Develop shortcuts from the keyboard to the registry (`ShortcutAction`).
 ///
-/// Menu key equivalents without modifiers would fire while typing in a value field, so
-/// these go through a local event monitor that steps aside whenever text is being edited.
+/// ⌘ combos belong to the menu bar (see `AppCommands`), which gives them menu items and
+/// native key equivalents. Everything else (single keys, Shift-keys, Tab, F-keys) is handled
+/// here, because menu key equivalents without ⌘ would fire while typing in a value field.
+/// The monitor steps aside whenever text is being edited.
 @MainActor
 final class KeyboardShortcuts {
-    private var monitor: Any?
+    private var keyMonitor: Any?
+    private var flagsMonitor: Any?
 
     func install(model: EditorModel) {
-        guard monitor == nil else { return }
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            if NSApp.keyWindow?.firstResponder is NSTextView {
-                return event
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            Self.handle(event, model: model) ? nil : event
+        }
+        // Holding Option shows "Reset …" group titles, as in Lightroom.
+        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+            let option = event.modifierFlags.contains(.option)
+            if model.optionKeyHeld != option {
+                model.optionKeyHeld = option
             }
-            let modifiers = event.modifierFlags.intersection([.command, .control, .option])
-            guard modifiers.isEmpty else { return event }
-            return Self.handle(event, model: model) ? nil : event
+            return event
         }
     }
 
     private static func handle(_ event: NSEvent, model: EditorModel) -> Bool {
-        switch event.keyCode {
-        case 53: // Escape
-            if model.eyedropperActive {
-                model.eyedropperActive = false
-                return true
-            }
-            if model.activeTool != .edit {
-                model.activeTool = .edit
-                return true
-            }
+        if NSApp.keyWindow?.firstResponder is NSTextView {
             return false
-        case 48: // Tab
-            let visible = model.leftPanelVisible || model.rightPanelVisible
-            model.leftPanelVisible = !visible
-            model.rightPanelVisible = !visible
-            if event.modifierFlags.contains(.shift) {
-                model.filmstripVisible = !visible
-            }
-            return true
-        case 123: // ←
-            model.selectPrevious()
-            return true
-        case 124: // →
-            model.selectNext()
-            return true
-        default:
-            break
         }
+        let flags = event.modifierFlags
+        guard !flags.contains(.command), !flags.contains(.control), let key = key(for: event) else { return false }
+        let combo = KeyCombo(key, shift: flags.contains(.shift), option: flags.contains(.option))
+        guard let (action, shifted) = ShortcutAction.resolve(combo), !action.isMenuShortcut else { return false }
+        return model.perform(action, shifted: shifted)
+    }
 
-        let shifted = event.modifierFlags.contains(.shift)
-        switch event.charactersIgnoringModifiers?.lowercased() {
-        case "\\":
-            model.showBefore.toggle()
-        case "j":
-            model.showClipping.toggle()
-        case "z":
-            model.canvas.toggleZoom(at: nil)
-        case "w" where shifted:
-            model.activeTool = model.activeTool == .masking ? .edit : .masking
-        case "w":
-            if model.info?.supportsWhiteBalance == true {
-                model.eyedropperActive.toggle()
-            }
-        case "r":
-            model.activeTool = model.activeTool == .crop ? .edit : .crop
-        case "q":
-            model.activeTool = model.activeTool == .heal ? .edit : .heal
-        case "d":
-            model.activeTool = .edit
+    /// The unshifted key, so Shift-1 reads as "1" with Shift held.
+    private static func key(for event: NSEvent) -> KeyCombo.Key? {
+        switch event.keyCode {
+        case 48: return .tab
+        case 53: return .escape
+        case 51, 117: return .delete
+        case 49: return .space
+        case 123: return .left
+        case 124: return .right
+        case 125: return .down
+        case 126: return .up
+        case 96: return .function(5)
+        case 97: return .function(6)
+        case 98: return .function(7)
+        case 100: return .function(8)
         default:
-            return false
+            guard let characters = event.characters(byApplyingModifiers: []), let first = characters.first else {
+                return nil
+            }
+            return .character(Character(first.lowercased()))
         }
-        return true
     }
 }

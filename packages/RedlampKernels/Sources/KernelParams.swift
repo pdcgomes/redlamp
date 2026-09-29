@@ -86,6 +86,7 @@ public struct DevelopParams {
     public var grain = SIMD4<Float>(0, 0.25, 0.5, 0)
     public var geometry = SIMD4<Float>(0, 0, 0, 1)
     public var outputSize = SIMD4<Float>(0, 0, 1, 0)
+    public var masks = SIMD4<Float>(0, -1, 0, 0)
 
     public init() {}
 
@@ -109,6 +110,34 @@ public struct DevelopParams {
             SIMD4(t.columns.2, 0),
         )
     }
+}
+
+public struct MaskComponentGPU: Sendable {
+    public var geometry: SIMD4<Float>
+    public var shape: SIMD4<Float>
+    public var rotation: SIMD4<Float>
+
+    public init(geometry: SIMD4<Float>, shape: SIMD4<Float>, rotation: SIMD4<Float>) {
+        self.geometry = geometry
+        self.shape = shape
+        self.rotation = rotation
+    }
+
+    public static let empty = MaskComponentGPU(geometry: .zero, shape: .zero, rotation: .zero)
+}
+
+public struct MaskLayerGPU: Sendable {
+    public var color: SIMD4<Float>
+    public var tone: SIMD4<Float>
+    public var tone2: SIMD4<Float>
+
+    public init(color: SIMD4<Float>, tone: SIMD4<Float>, tone2: SIMD4<Float>) {
+        self.color = color
+        self.tone = tone
+        self.tone2 = tone2
+    }
+
+    public static let empty = MaskLayerGPU(color: .zero, tone: .zero, tone2: .zero)
 }
 
 /// The output encodings understood by `rl_develop`.

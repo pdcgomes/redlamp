@@ -299,6 +299,36 @@ public enum ParameterCatalog {
             ParameterSpec(.calibrationGreenSaturation, "Saturation", availability: .planned(phase: "Phase 2")),
             ParameterSpec(.calibrationBlueHue, "Hue", availability: .planned(phase: "Phase 2")),
             ParameterSpec(.calibrationBlueSaturation, "Saturation", availability: .planned(phase: "Phase 2")),
+
+            ParameterSpec(.localTemperature, "Temp", track: .temperature),
+            ParameterSpec(.localTint, "Tint", track: .tint),
+            ParameterSpec(
+                .localExposure, "Exposure", range: -4 ... 4, step: 0.05, format: .signedDecimal(2),
+                track: .monochrome,
+            ),
+            ParameterSpec(.localContrast, "Contrast"),
+            ParameterSpec(.localHighlights, "Highlights"),
+            ParameterSpec(.localShadows, "Shadows"),
+            ParameterSpec(.localWhites, "Whites"),
+            ParameterSpec(.localBlacks, "Blacks"),
+            ParameterSpec(.localTexture, "Texture", availability: texture),
+            ParameterSpec(.localClarity, "Clarity", availability: texture),
+            ParameterSpec(.localDehaze, "Dehaze", availability: texture),
+            ParameterSpec(
+                .localHue,
+                "Hue",
+                range: -180 ... 180,
+                step: 0.5,
+                format: .signedDecimal(1),
+                track: .gradingHue,
+            ),
+            ParameterSpec(.localSaturation, "Saturation"),
+            ParameterSpec(.localSharpness, "Sharpness", availability: detail),
+            ParameterSpec(.localNoise, "Noise", availability: detail),
+            ParameterSpec(.localMoire, "Moiré", availability: detail),
+            ParameterSpec(.localDefringe, "Defringe", range: -100 ... 100, availability: geometry),
+            ParameterSpec(.maskAmount, "Amount", range: 0 ... 200, default: 100, format: .integer),
+            ParameterSpec(.maskFeather, "Feather", range: 0 ... 100, default: 50, format: .integer),
         ]
 
     public static let specs: [ParameterID: ParameterSpec] = Dictionary(

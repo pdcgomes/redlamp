@@ -6,7 +6,7 @@ Redlamp is built from scratch in Swift and Metal for Apple Silicon. It focuses o
 
 ![Redlamp editing a Nikon Z 6 raw file](docs/images/editor.png)
 
-> **Status: pre-alpha, iteration 1 (macOS).** The core RAW pipeline, the Develop workspace, and the Basic, Tone Curve, Color Mixer, Color Grading, and Effects adjustments work today. Masking, crop, healing, lens corrections, and the iPad and iPhone apps are next. See [Where we are](#where-we-are) and the [Roadmap](#roadmap).
+> **Status: pre-alpha, iteration 2 (macOS).** The core RAW pipeline, the Develop workspace, and the Basic, Tone Curve, Color Mixer, Color Grading, and Effects adjustments work today, and so does **masking with linear and radial gradients** and local adjustments. Crop, healing, brush and AI masks, lens corrections, and the iPad and iPhone apps are next. See [Where we are](#where-we-are) and the [Roadmap](#roadmap).
 >
 > This README is the project's primary status page and is kept up to date as work lands. *Last updated: 29 September 2026.*
 
@@ -71,6 +71,17 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] **Color Grading:** 3-way and individual wheels, Blending, and Balance. It also tints B&W images for split-toning.
 - [x] **Effects:** post-crop vignette (amount, midpoint, roundness, feather) and zoom-stable film grain.
 
+**Masking** (Lightroom's model)
+- [x] Each mask is a layer: its own adjustments plus a mask built from components. Components combine with **Add**, **Subtract**, and **Intersect**, and each can be inverted.
+- [x] **Linear and radial gradient** components.
+  - Draw them on the photo.
+  - Drag the handles to move, resize, and rotate; radial gradients also have a Feather control.
+  - Pins select the other masks.
+- [x] **Local adjustments:** Temp, Tint, Exposure, Contrast, Highlights, Shadows, Whites, Blacks, Hue, and Saturation, plus the mask's Amount (0–200%).
+- [x] **Mask management:** a red mask overlay (`O`), and a mask list where you can show and hide, rename, duplicate, "duplicate and invert", reset, and delete masks.
+- [x] **Fast by design:** masks are evaluated analytically, per pixel, inside the same fused GPU kernel. Up to 16 masks cost well under a millisecond extra at Fit.
+- [x] The **Create New Mask** grid already lists every Lightroom mask type (Subject, Sky, Background, Objects, People, Landscape, Brush, Color, Luminance, and Depth Range). Each shows the phase it arrives in.
+
 **Workspace**
 - [x] A Lightroom-style layout. On the left: Navigator, Presets, Snapshots, and History. In the center: the photo, with the filmstrip below. On the right: histogram, tool strip, and the Develop panels in Lightroom's order.
 - [x] **Sliders:** click to jump, drag to adjust, Shift-drag for fine control, double-click to reset, and click the value to type one in. Option-dragging a tone slider shows clipping, as in Lightroom.
@@ -78,11 +89,12 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] **Histogram:** clipping indicators, and you can drag across it to adjust Blacks, Shadows, Exposure, Highlights, or Whites.
 - [x] **Presets:** hover to preview, click to apply. Snapshots and full undo/redo history are also available.
 - [x] **Viewing:** Fit, Fill, 1:1, and 2:1 zoom, click to zoom, pan, pinch, before/after, and a clipping overlay.
-- [x] Lightroom's keyboard shortcuts (see [Keyboard shortcuts](#keyboard-shortcuts)).
+- [x] **Lightroom Classic's keyboard shortcuts**: 79 actions on 83 key bindings, from one registry that also drives the menus and an in-app ⌘/ reference (see [Keyboard shortcuts](#keyboard-shortcuts)).
+- [x] **Culling while you develop:** star ratings, pick/reject flags and color labels, shown on the filmstrip. There's also an Info overlay (`I`), Lights Out (`L`), full-screen preview (`F`), and Paste from Previous (`⌥⌘V` and the Previous button).
 - [x] Non-destructive edits, saved automatically to a sidecar file next to each photo (`IMG_1234.ARW.redlamp`).
 - [x] Export to JPEG, plus a headless `redlamp` command-line tool for rendering and export.
 
-**Panels laid out but not yet rendering** (shown dimmed, with the phase they arrive in): Texture, Clarity, and Dehaze, and the Detail, Lens Corrections, Transform, and Calibration panels. The Crop, Healing, Red Eye, and Masking tools show what is coming and when.
+**Panels laid out but not yet rendering** (shown dimmed, with the phase they arrive in): Texture, Clarity, and Dehaze (both global and in masks), and the Detail, Lens Corrections, Transform, and Calibration panels. The Crop, Healing, and Red Eye tools show what is coming and when.
 
 ### Measured performance
 
@@ -92,6 +104,7 @@ Measured on an Apple M1 Ultra with a Release build.
 | --- | --- |
 | Open a 24–26 MP raw file (decode, GPU upload, demosaic, pyramid) | 70–250 ms |
 | Interactive render at Fit (every adjustment, fused) | 0.6–3 ms |
+| Interactive render at Fit with two gradient masks | ~1.3 ms |
 | Interactive render at 1:1 (full 26 MP frame) | ~13 ms |
 | Full-resolution export render (24–26 MP) | ~45 ms |
 
@@ -99,12 +112,21 @@ Measured on an Apple M1 Ultra with a Release build.
 
 - Highlights and Shadows are per-pixel approximations for now. Lightroom-quality versions need edge-aware local tone mapping, which arrives with Clarity and Texture in Phase 2.
 - X-Trans demosaicing is a first-generation interpolation. A Markesteijn-class demosaic (and AMaZE and RCD for Bayer sensors) comes in Phase 2.
-- White balance for linear DNGs (for example ProRAW) is not wired up yet; those files render with their embedded balance.
-- Color uses LibRaw's single-illuminant Adobe-derived matrix. Dual-illuminant DCP profiles come in Phase 2.
-- The Navigator does not yet outline the zoomed viewport.
+- Color uses a single-illuminant Adobe-derived matrix: LibRaw's, or the DNG's own ColorMatrix. Dual-illuminant DCP profiles come in Phase 2.
+- Masks support linear and radial gradients only. Brush, range, and AI masks come in Phases 2 and 3.
+- Local Whites and Blacks are approximated with tonal-region gains.
 - The app is not sandboxed yet (required later for the Mac App Store), and there is no iPad or iPhone app yet.
 
+**Fixed in iteration 2:**
+- White balance now works for linear DNGs such as iPhone ProRAW.
+- The Navigator outlines the zoomed viewport.
+- The loading placeholder now shows while a photo decodes.
+
 ## Screenshots
+
+**Masking on a Sony A7 III ARW.** A linear gradient darkens and cools the sky, and a feathered radial gradient warms and lifts the trees. The red overlay shows the selected mask's coverage.
+
+![Masking](docs/images/masking.png)
 
 **Color grading on a Canon EOS R6 CR3.** Split-toned shadows and highlights with the 3-way wheels.
 
@@ -133,14 +155,15 @@ Every phase ships on Mac, iPad, and iPhone. The Lightroom feature inventory in [
 - [x] LibRaw vendored as a pinned, static XCFramework (macOS, iOS, and Simulator; arm64 only)
 - [x] Engine API contract, headless CLI, and a unit and engine smoke-test suite
 - [x] Lightroom feature inventory
+- [x] GitHub Actions CI: purity gate, SwiftFormat lint, build, and tests, with cached LibRaw and fixtures
 - [ ] Performance lab: CI runner plus tethered iPhone and iPad, with per-tier regression gates that block merges
 - [ ] Golden-image color regression tests (ΔE2000)
 - [ ] Written clean-room policy and a license-audit gate in CI
 
-### Phase 1: First light *(in progress; macOS iteration 1 done)*
+### Phase 1: First light *(in progress; macOS iterations 1 and 2 done)*
 - [x] RAW pipeline core, fused develop kernel, cached pyramid, and latest-wins rendering
 - [x] Develop workspace on macOS, Basic panel, histogram, before/after, sidecars, undo, and export
-- [ ] Layer and mask engine, with linear and radial gradient masks
+- [x] Layer and mask engine, with linear and radial gradient masks, local adjustments, and the Masking panel
 - [ ] Sandboxed XPC decode helper on macOS and in-process decoding on iOS
 - [ ] Render scheduler with priority lanes, tile cancellation, and thermal awareness
 - [ ] iPad and iPhone shells (compact layout, touch, Apple Pencil)
@@ -233,24 +256,20 @@ mise run render -- render ~/Pictures/DSC01234.ARW -o out.jpg --size 2048 \
 
 ### Keyboard shortcuts
 
-These match Lightroom Classic's Develop module.
+Redlamp follows Lightroom Classic's Develop-module shortcuts. Press **⌘/** in the app for the complete, always-current list (generated from the same registry the app uses). Shortcuts for tools that arrive later are already reserved and shown dimmed, with the phase they arrive in.
 
-| Key | Action |
+| Area | Keys |
 | --- | --- |
-| `\` | Before / After |
-| `J` | Show clipping |
-| `Z` or click the photo | Toggle Fit / 100% |
-| `W` | White Balance Selector (eyedropper) |
-| `R`, `Q`, `⇧W` | Crop, Healing, Masking (tools coming in later phases) |
-| `D` | Back to Edit |
-| `Tab` / `⇧Tab` | Hide side panels / all panels |
-| `←` `→` or `⌘←` `⌘→` | Previous / next photo |
-| `⌘U` | Auto settings |
-| `⇧⌘C` / `⇧⌘V` | Copy / paste settings |
-| `⇧⌘R` | Reset all settings |
-| `⌘N` | New snapshot |
-| `⌘Z` / `⇧⌘Z` | Undo / redo |
-| `⌘O` / `⇧⌘E` | Open folder / export |
+| **View** | `\` before/after · `Z` or `Space` toggle Fit/100% · `⌘=` / `⌘-` zoom in/out · `J` clipping · `I` cycle info overlay · `L` cycle Lights Out · `F` full-screen preview · `T` / `F5` toolbar · `Y`, `⌥Y`, `⇧Y` side-by-side before/after *(Phase 2)* |
+| **Panels** | `Tab` hide side panels · `⇧Tab` hide all · `F6` filmstrip · `F7` left panel · `F8` right panel · `⌘1`–`⌘9` open or close Basic, Tone Curve, Color Mixer, Color Grading, Detail, Lens Corrections, Transform, Effects, Calibration |
+| **Navigation** | `←` `→` or `⌘←` `⌘→` previous/next photo |
+| **Develop** | `,` `.` select previous/next setting · `-` `=` decrease/increase it (`⇧` for larger steps) · `V` black & white · `W` white-balance selector · `⌘U` auto settings · `⇧⌘U` auto white balance · `⇧⌘C` / `⇧⌘V` copy/paste settings · `⌥⌘V` paste from previous · `⇧⌘R` reset all · `⌘N` new snapshot · `⌘Z` / `⇧⌘Z` undo/redo · hold `⌥` to turn group titles into "Reset …" |
+| **Tools** | `D` Edit · `⇧W` Masking · `M` linear gradient · `⇧M` radial gradient · `R` crop, `A` crop aspect lock *(Phase 2)* · `Q` healing *(Phase 3)* · `K` brush, `⇧J` color range, `⇧Q` luminance range *(Phase 2)* · `⇧Z` depth range *(Phase 3)* |
+| **Masking** | `O` show/hide overlay · `⇧O` cycle overlay color · `H` show/hide pins · `⌫` delete selected mask · `Esc` cancel drawing or leave the tool |
+| **Rating & flags** | `0`–`5` star rating · `[` `]` decrease/increase rating · `P` pick · `X` reject · `U` unflag · `6`–`9` red, yellow, green, blue label · add `⇧` to any of these to also move to the next photo |
+| **File** | `⌘O` open folder · `⇧⌘E` export · `⌘/` keyboard shortcuts |
+
+Ratings, flags and color labels are saved in the photo's sidecar and shown on the filmstrip.
 
 **Slider gestures:**
 - Double-click a label or thumb to reset it.
@@ -289,7 +308,7 @@ flowchart LR
 1. LibRaw unpacks the sensor data.
 2. The GPU applies black and white levels and the as-shot white balance.
 3. The image is demosaiced and cached as a mip pyramid.
-4. The fused develop kernel applies, in order: the white-balance ratio, the camera matrix to linear Rec.2020 (scene-referred), exposure and tone in log space, a filmic tone map, OKLCh color work (vibrance, saturation, mixer, grading, profile look), the tone-curve lookup, vignette, grain, and the output encoding.
+4. The fused develop kernel first evaluates every mask's coverage for the pixel. It then applies, in order, each with its local (masked) adjustments where they exist: the white-balance ratio, the camera matrix to linear Rec.2020 (scene-referred), exposure and tone in log space, a filmic tone map, OKLCh color work (vibrance, saturation, mixer, grading, profile look), the tone-curve lookup, vignette, grain, and the output encoding.
 
 **Packages** (`packages/`; `Tuist/ProjectDescriptionHelpers/Module.swift` is the single source of truth for which package may depend on which):
 

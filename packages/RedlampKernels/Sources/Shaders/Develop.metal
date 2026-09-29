@@ -97,6 +97,45 @@ static inline float2 orient(float2 uv, int orientation) {
     }
 }
 
+// MARK: - Masks
+
+constant int kMaxMaskLayers = 16;
+
+// Coverage of one component at an aspect-corrected position.
+static inline float evaluateMaskComponent(MaskComponentGPU c, float2 p) {
+    float weight;
+    if (c.shape.x < 1.5f) {
+        float2 start = c.geometry.xy;
+        float2 axis = c.geometry.zw - start;
+        float t = dot(p - start, axis) / max(dot(axis, axis), 1e-8f);
+        weight = 1.0f - smoothstep(0.0f, 1.0f, t);
+    } else {
+        float2 q = p - c.geometry.xy;
+        float2 rotated = float2(q.x * c.rotation.x + q.y * c.rotation.y, -q.x * c.rotation.y + q.y * c.rotation.x);
+        float distance = length(rotated / max(c.geometry.zw, float2(1e-5f)));
+        float inner = min(1.0f - clamp(c.shape.w, 0.0f, 1.0f), 0.999f);
+        weight = 1.0f - smoothstep(inner, 1.0f, distance);
+    }
+    return c.shape.z > 0.5f ? 1.0f - weight : weight;
+}
+
+// Combines a layer's components in order: add = union, subtract, intersect.
+static inline float evaluateMaskLayer(MaskLayerGPU layer, constant MaskComponentGPU *components, float2 p) {
+    int first = int(layer.tone2.z);
+    int count = int(layer.tone2.w);
+    float coverage = 0.0f;
+    for (int i = 0; i < count; i++) {
+        MaskComponentGPU c = components[first + i];
+        float w = evaluateMaskComponent(c, p);
+        int operation = int(c.shape.y);
+        if (i == 0) coverage = operation == 1 ? 0.0f : w;
+        else if (operation == 0) coverage = max(coverage, w);
+        else if (operation == 1) coverage *= 1.0f - w;
+        else coverage *= w;
+    }
+    return coverage;
+}
+
 // MARK: - Develop
 
 kernel void rl_develop(
@@ -105,6 +144,8 @@ kernel void rl_develop(
     constant DevelopParams &p [[buffer(0)]],
     constant float *toneLUT [[buffer(1)]],
     constant float *mixer [[buffer(2)]],
+    constant MaskLayerGPU *layers [[buffer(3)]],
+    constant MaskComponentGPU *components [[buffer(4)]],
     uint2 gid [[thread_position_in_grid]])
 {
     uint width = uint(p.outputSize.x);
@@ -115,16 +156,36 @@ kernel void rl_develop(
     float2 uv = (float2(gid) + 0.5f) / float2(width, height);
     float2 sourceUV = orient(uv, int(p.geometry.x));
     float3 camera = source.sample(linearSampler, sourceUV, level(p.geometry.y)).rgb;
-    // Scene-referred: white balance, camera matrix, exposure.
+
+    // Mask coverage for every layer, then the summed local adjustments.
+    int layerCount = min(int(p.masks.x), kMaxMaskLayers);
+    float coverage[kMaxMaskLayers];
+    float2 maskPosition = float2(uv.x * p.geometry.w, uv.y);
+    float4 localColor = 0.0f;
+    float4 localTone = 0.0f;
+    float2 localTone2 = 0.0f;
+    for (int i = 0; i < layerCount; i++) {
+        coverage[i] = evaluateMaskLayer(layers[i], components, maskPosition);
+        localColor += coverage[i] * layers[i].color;
+        localTone += coverage[i] * layers[i].tone;
+        localTone2 += coverage[i] * layers[i].tone2.xy;
+    }
+
+    // Scene-referred: white balance (global and local), camera matrix, exposure.
     camera *= p.wbRatio.xyz;
+    camera *= float3(exp2(localColor.x * 0.6f), exp2(-localColor.y * 0.4f), exp2(-localColor.x * 0.6f));
     float3 scene = max(mul3(p.camToWork0, p.camToWork1, p.camToWork2, camera), 0.0f);
-    scene *= p.tone.x;
+    scene *= p.tone.x * exp2(localTone.x);
     // Tone controls in log space around middle grey, applied as a luminance ratio.
     float luma = max(dot(scene, kRec2020Luma), 1e-7f);
     float ev = log2(luma / kMiddleGrey);
     float highlightWeight = smoothstep(-0.5f, 2.5f, ev);
     float shadowWeight = (1.0f - smoothstep(-4.5f, 0.0f, ev)) * smoothstep(-10.0f, -5.5f, ev);
-    float adjustedEV = ev * (1.0f + p.tone.y) + p.tone.z * 1.25f * highlightWeight + p.tone.w * 1.6f * shadowWeight;
+    float adjustedEV = ev * (1.0f + p.tone.y + localTone.y * 0.32f)
+        + (p.tone.z + localTone.z) * 1.25f * highlightWeight
+        + (p.tone.w + localTone.w) * 1.6f * shadowWeight
+        + localTone2.x * 0.9f * smoothstep(0.5f, 3.0f, ev)
+        + localTone2.y * 0.9f * (1.0f - smoothstep(-8.0f, -2.5f, ev));
     scene *= exp2(adjustedEV - ev);
 
     // Black and white points, then the filmic tone map to display-referred.
@@ -170,6 +231,8 @@ kernel void rl_develop(
         lab.x += bandLuminance * 0.15f * colorfulness * smoothstep(0.0f, 0.1f, chroma);
     }
 
+    saturation *= 1.0f + localColor.w;
+    hue += localColor.z * smoothstep(0.0f, 0.04f, chroma);
     chroma *= max(saturation, 0.0f);
     if (p.color.w > 0.5f) chroma = 0.0f;
     float hueRadians = hue * (M_PI_F / 180.0f);
@@ -237,6 +300,15 @@ kernel void rl_develop(
     if (p.tone2.w > 0.5f) {
         if (any(encoded >= 0.998f)) encoded = float3(1.0f, 0.1f, 0.1f);
         else if (all(encoded <= 0.002f)) encoded = float3(0.15f, 0.35f, 1.0f);
+    }
+
+    int overlay = int(p.masks.y);
+    if (overlay >= 0 && overlay < layerCount) {
+        const float3 overlayColors[4] = {
+            float3(0.95f, 0.18f, 0.18f), float3(0.2f, 0.9f, 0.3f), float3(0.25f, 0.45f, 1.0f), float3(1.0f),
+        };
+        float3 tint = overlayColors[clamp(int(p.masks.w), 0, 3)];
+        encoded = mix(encoded, tint, coverage[overlay] * 0.55f);
     }
 
     // Output encoding: 0 linear (extended) display primaries, 1 sRGB-encoded, 2 P3-encoded.

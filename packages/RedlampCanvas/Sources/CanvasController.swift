@@ -2,7 +2,28 @@ import CoreGraphics
 import Observation
 import RedlampEngineAPI
 
+/// Space reserved around the stage for panels that float over the canvas, in points.
+public struct StageInsets: Hashable, Sendable {
+    public var leading: CGFloat
+    public var trailing: CGFloat
+    public var top: CGFloat
+    public var bottom: CGFloat
+
+    public init(leading: CGFloat = 0, trailing: CGFloat = 0, top: CGFloat = 0, bottom: CGFloat = 0) {
+        self.leading = leading
+        self.trailing = trailing
+        self.top = top
+        self.bottom = bottom
+    }
+
+    public static let zero = StageInsets()
+}
+
 /// Zoom and pan state for an image canvas, in Lightroom's terms.
+///
+/// Geometry is computed against the *stage*: the view minus `stageInsets`. The canvas
+/// itself spans the whole window with panels floating over it, so resizing a panel never
+/// moves or rescales the photo; only changing the insets (showing or hiding a panel) does.
 @MainActor
 @Observable
 public final class CanvasController {
@@ -33,6 +54,14 @@ public final class CanvasController {
         }
     }
 
+    public var stageInsets = StageInsets.zero {
+        didSet {
+            if stageInsets != oldValue {
+                changed()
+            }
+        }
+    }
+
     public private(set) var viewSize: CGSize = .zero
     public private(set) var backingScale: CGFloat = 2
 
@@ -47,8 +76,19 @@ public final class CanvasController {
 
     // MARK: - Geometry
 
+    /// The area the photo is fitted and centred in, for a view of `bounds` size.
+    public func stage(in bounds: CGSize) -> CGRect {
+        CGRect(
+            x: stageInsets.leading,
+            y: stageInsets.top,
+            width: max(bounds.width - stageInsets.leading - stageInsets.trailing, 1),
+            height: max(bounds.height - stageInsets.top - stageInsets.bottom, 1),
+        )
+    }
+
     private var viewPixels: CGSize {
-        CGSize(width: viewSize.width * backingScale, height: viewSize.height * backingScale)
+        let stage = stage(in: viewSize)
+        return CGSize(width: stage.width * backingScale, height: stage.height * backingScale)
     }
 
     public var fitScale: Double {
@@ -99,20 +139,21 @@ public final class CanvasController {
         let scale = pixelScale / backingScale
         let width = Double(imageSize.width) * scale
         let height = Double(imageSize.height) * scale
-        let clamped = clampedCenter(width: width, height: height, bounds: bounds)
+        let stage = stage(in: bounds)
+        let clamped = clampedCenter(width: width, height: height, stage: stage.size)
         return CGRect(
-            x: bounds.width / 2 - clamped.x * width,
-            y: bounds.height / 2 - clamped.y * height,
+            x: stage.midX - clamped.x * width,
+            y: stage.midY - clamped.y * height,
             width: width,
             height: height,
         )
     }
 
-    /// The visible part of the image, normalised (for the navigator).
+    /// The part of the image inside the stage, normalised (for the navigator).
     public var visibleImageRect: CGRect {
         let rect = imageRect(in: viewSize)
         guard rect.width > 0, rect.height > 0 else { return CGRect(x: 0, y: 0, width: 1, height: 1) }
-        let visible = rect.intersection(CGRect(origin: .zero, size: viewSize))
+        let visible = rect.intersection(stage(in: viewSize))
         return CGRect(
             x: (visible.minX - rect.minX) / rect.width,
             y: (visible.minY - rect.minY) / rect.height,
@@ -128,15 +169,15 @@ public final class CanvasController {
         return CGPoint(x: (viewPoint.x - rect.minX) / rect.width, y: (viewPoint.y - rect.minY) / rect.height)
     }
 
-    private func clampedCenter(width: Double, height: Double, bounds: CGSize) -> CGPoint {
+    private func clampedCenter(width: Double, height: Double, stage: CGSize) -> CGPoint {
         func clamp(_ value: Double, extent: Double, available: Double) -> Double {
             guard extent > available else { return 0.5 }
             let half = available / 2 / extent
             return min(max(value, half), 1 - half)
         }
         return CGPoint(
-            x: clamp(center.x, extent: width, available: bounds.width),
-            y: clamp(center.y, extent: height, available: bounds.height),
+            x: clamp(center.x, extent: width, available: stage.width),
+            y: clamp(center.y, extent: height, available: stage.height),
         )
     }
 
@@ -162,12 +203,33 @@ public final class CanvasController {
         }
     }
 
+    /// Zoom steps for ⌘= / ⌘-: Fit, then fixed ratios up to 8:1.
+    private var zoomSteps: [Double] {
+        ([fitScale] + [0.25, 0.5, 1, 2, 3, 4, 8].filter { $0 > fitScale + 1e-3 }).sorted()
+    }
+
+    public func zoomIn() {
+        guard let next = zoomSteps.first(where: { $0 > pixelScale + 1e-3 }) else { return }
+        zoom = .scale(next)
+    }
+
+    public func zoomOut() {
+        guard let previous = zoomSteps.last(where: { $0 < pixelScale - 1e-3 }) else { return }
+        if abs(previous - fitScale) < 1e-3 {
+            zoom = .fit
+            center = CGPoint(x: 0.5, y: 0.5)
+        } else {
+            zoom = .scale(previous)
+        }
+    }
+
     public func pan(byPoints delta: CGSize) {
         let rect = imageRect(in: viewSize)
+        let stage = stage(in: viewSize)
         guard rect.width > 0 else { return }
         let current = CGPoint(
-            x: (viewSize.width / 2 - rect.minX) / rect.width,
-            y: (viewSize.height / 2 - rect.minY) / rect.height,
+            x: (stage.midX - rect.minX) / rect.width,
+            y: (stage.midY - rect.minY) / rect.height,
         )
         center = CGPoint(x: current.x - delta.width / rect.width, y: current.y - delta.height / rect.height)
     }
@@ -178,9 +240,10 @@ public final class CanvasController {
         zoom = abs(newScale - fitScale) < 1e-4 ? .fit : .scale(newScale)
         if let anchor, isZoomedIn {
             let rect = imageRect(in: viewSize)
+            let stage = stage(in: viewSize)
             let offset = CGPoint(
-                x: (viewPoint.x - viewSize.width / 2) / rect.width,
-                y: (viewPoint.y - viewSize.height / 2) / rect.height,
+                x: (viewPoint.x - stage.midX) / rect.width,
+                y: (viewPoint.y - stage.midY) / rect.height,
             )
             center = CGPoint(x: anchor.x - offset.x, y: anchor.y - offset.y)
         }

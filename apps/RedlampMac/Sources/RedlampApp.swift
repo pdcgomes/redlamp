@@ -20,6 +20,8 @@ struct RedlampApp: App {
         model.onFolderChange = { url in
             UserDefaults.standard.set(url.path, forKey: "lastFolder")
         }
+        model.onToggleFullScreen = { NSApp.keyWindow?.toggleFullScreen(nil) }
+        model.onToggleToolbar = { NSApp.keyWindow?.toggleToolbarShown(nil) }
         _model = State(initialValue: model)
     }
 

@@ -29,6 +29,33 @@ struct EditRecipeTests {
         #expect(decoded == recipe)
     }
 
+    @Test func `round trips masks`() throws {
+        var recipe = EditRecipe()
+        var mask = MaskLayer(name: "Sky", components: [
+            MaskComponent(shape: .linear(LinearMask(start: ImagePoint(x: 0.5, y: 0), end: ImagePoint(x: 0.5, y: 0.4)))),
+            MaskComponent(
+                shape: .radial(RadialMask(center: ImagePoint(x: 0.3, y: 0.3), radiusX: 0.1, radiusY: 0.1)),
+                operation: .subtract,
+                inverted: true,
+            ),
+        ])
+        mask[.localExposure] = -1.25
+        mask[.exposure] = 3 // global parameters are ignored on masks
+        recipe.masks = [mask]
+        #expect(!recipe.isPristine)
+        let decoded = try JSONDecoder().decode(EditRecipe.self, from: JSONEncoder().encode(recipe))
+        #expect(decoded == recipe)
+        #expect(decoded.masks[0][.localExposure] == -1.25)
+        #expect(decoded.masks[0].adjustments.count == 1)
+    }
+
+    @Test func `global recipe ignores mask parameters`() {
+        var recipe = EditRecipe()
+        recipe[.localExposure] = 2
+        recipe[.maskAmount] = 50
+        #expect(recipe.values.isEmpty)
+    }
+
     @Test func `ignores unknown keys`() throws {
         let json = #"{"version":1,"values":{"basic.exposure":0.5,"future.parameter":3}}"#
         let decoded = try JSONDecoder().decode(EditRecipe.self, from: Data(json.utf8))

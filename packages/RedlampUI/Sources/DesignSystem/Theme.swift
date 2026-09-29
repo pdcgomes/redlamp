@@ -48,6 +48,14 @@ extension ColorBand {
     }
 }
 
+extension View {
+    /// Wraps the view in a container, so overlays attach to the container rather than
+    /// to a hosted AppKit view (such as the Metal canvas), which would draw over them.
+    func containerized() -> some View {
+        ZStack { self }
+    }
+}
+
 extension Color {
     static func wheelHue(_ degrees: Double, saturation: Double = 0.85, brightness: Double = 0.95) -> Color {
         let wrapped = (degrees.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360)

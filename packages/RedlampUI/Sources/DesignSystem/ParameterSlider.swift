@@ -17,41 +17,53 @@ struct ParameterSlider: View {
     @Environment(EditorModel.self) private var model
     @State private var isHovering = false
 
-    private static let clippingParameters: Set<ParameterID> = [.exposure, .highlights, .shadows, .whites, .blacks]
+    private static let clippingParameters: Set<ParameterID> = [
+        .exposure, .highlights, .shadows, .whites, .blacks,
+        .localExposure, .localHighlights, .localShadows, .localWhites, .localBlacks,
+    ]
 
     var body: some View {
         let spec = parameter.spec
         let live = spec.availability.isLive && enabled
+        let focused = model.focusedParameter == parameter
         HStack(spacing: 6) {
             Text(label ?? spec.label)
-                .font(Theme.labelFont)
-                .foregroundStyle(isHovering && live ? Theme.labelHover : Theme.label)
+                .font(focused ? Theme.labelFont.weight(.semibold) : Theme.labelFont)
+                .foregroundStyle(focused ? Color.accentColor : (isHovering && live ? Theme.labelHover : Theme.label))
                 .lineLimit(1)
                 .frame(width: Theme.labelWidth, alignment: .leading)
                 .contentShape(Rectangle())
-                .onTapGesture(count: 2) { model.reset(parameter) }
+                .onTapGesture(count: 2) { model.resetSlider(parameter) }
+                .onTapGesture { model.focusedParameter = parameter }
 
             SliderTrack(
                 spec: spec,
-                value: model.value(parameter),
+                value: model.sliderValue(parameter),
                 onBegin: {
+                    model.focusedParameter = parameter
                     model.beginEdit(parameter)
                     if Self.clippingParameters.contains(parameter), NSEvent.modifierFlags.contains(.option) {
                         model.setTemporaryClipping(true)
                     }
                 },
-                onChange: { model.setValue(parameter, $0) },
+                onChange: { model.setSliderValue(parameter, $0) },
                 onEnd: {
                     model.setTemporaryClipping(false)
                     model.endEdit()
                 },
-                onReset: { model.reset(parameter) },
+                onReset: { model.resetSlider(parameter) },
             )
 
-            ValueField(spec: spec, value: model.value(parameter)) { model.setValue(parameter, $0) }
+            ValueField(spec: spec, value: model.sliderValue(parameter)) { model.setSliderValue(parameter, $0) }
                 .frame(width: Theme.valueWidth)
         }
         .frame(height: Theme.rowHeight)
+        .background(alignment: .leading) {
+            if focused {
+                // Lightroom-style marker for the slider `,` `.` select and `-` `=` nudge.
+                Capsule().fill(Color.accentColor).frame(width: 2, height: 12).offset(x: -8)
+            }
+        }
         .opacity(live ? 1 : 0.35)
         .disabled(!live)
         .onHover { isHovering = $0 }
@@ -215,13 +227,21 @@ struct SubsectionHeader<Accessory: View>: View {
     @Environment(EditorModel.self) private var model
 
     var body: some View {
+        // Holding Option turns the title into a one-click "Reset …", as in Lightroom.
+        let resetMode = model.optionKeyHeld && !parameters.isEmpty
         HStack {
-            Text(title.uppercased())
+            Text(resetMode ? "RESET \(title.uppercased())" : title.uppercased())
                 .font(Theme.sectionFont)
                 .tracking(0.6)
-                .foregroundStyle(Theme.secondaryLabel)
+                .foregroundStyle(resetMode ? Color.accentColor : Theme.secondaryLabel)
+                .contentShape(Rectangle())
                 .onTapGesture(count: 2) { model.resetParameters(parameters, name: "Reset \(title)") }
-                .help("Double-click to reset \(title)")
+                .onTapGesture {
+                    if resetMode {
+                        model.resetParameters(parameters, name: "Reset \(title)")
+                    }
+                }
+                .help("Double-click, or Option-click, to reset \(title)")
             Spacer()
             accessory
         }

@@ -56,12 +56,15 @@ public struct EditRecipe: Sendable, Hashable {
     public var whiteBalanceMode: WhiteBalanceMode = .asShot
     public var pointCurve: [CurvePoint] = EditRecipe.linearPointCurve
     public private(set) var values: [ParameterID: Double] = [:]
+    /// Local adjustments, applied in order on top of the global edit.
+    public var masks: [MaskLayer] = []
 
     public init() {}
 
     public subscript(parameter: ParameterID) -> Double {
         get { values[parameter] ?? parameter.spec.defaultValue }
         set {
+            guard !parameter.isMaskScoped else { return }
             let spec = parameter.spec
             let clamped = spec.clamp(newValue)
             if abs(clamped - spec.defaultValue) < 1e-9 {
@@ -89,6 +92,11 @@ public struct EditRecipe: Sendable, Hashable {
             && profile == BuiltInProfile.color.reference
             && whiteBalanceMode == .asShot
             && pointCurve == EditRecipe.linearPointCurve
+            && masks.isEmpty
+    }
+
+    public func mask(_ id: UUID) -> MaskLayer? {
+        masks.first { $0.id == id }
     }
 
     public var hasPointCurve: Bool {
@@ -100,7 +108,7 @@ public struct EditRecipe: Sendable, Hashable {
 
 extension EditRecipe: Codable {
     private enum CodingKeys: String, CodingKey {
-        case version, treatment, profile, whiteBalance, pointCurve, values
+        case version, treatment, profile, whiteBalance, pointCurve, values, masks
     }
 
     public init(from decoder: Decoder) throws {
@@ -118,6 +126,7 @@ extension EditRecipe: Codable {
                 self[parameter] = value
             }
         }
+        masks = try container.decodeIfPresent([MaskLayer].self, forKey: .masks) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -131,5 +140,8 @@ extension EditRecipe: Codable {
         }
         let raw = Dictionary(uniqueKeysWithValues: values.map { ($0.key.rawValue, $0.value) })
         try container.encode(raw, forKey: .values)
+        if !masks.isEmpty {
+            try container.encode(masks, forKey: .masks)
+        }
     }
 }

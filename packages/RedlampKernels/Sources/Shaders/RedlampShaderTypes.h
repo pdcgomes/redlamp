@@ -42,6 +42,22 @@ struct DevelopParams {
     float4 grain;             // amount, size, roughness, seed
     float4 geometry;          // x orientation, y source LOD, z output encoding, w aspect
     float4 outputSize;        // x width, y height, z full-resolution scale
+    float4 masks;             // x layer count, y overlay layer index (-1 none), z component count, w overlay color
+};
+
+// One mask component. Coordinates are aspect-corrected: x is scaled by width/height so
+// distances are isotropic.
+struct MaskComponentGPU {
+    float4 geometry;          // linear: start.xy, end.xy; radial: center.xy, radius.xy
+    float4 shape;             // x kind (1 linear, 2 radial), y operation (0 add, 1 subtract, 2 intersect), z inverted, w feather 0...1
+    float4 rotation;          // x cos, y sin of the radial rotation
+};
+
+// One mask layer's local adjustments, already scaled by the mask's Amount.
+struct MaskLayerGPU {
+    float4 color;             // x temperature, y tint, z hue shift (degrees), w saturation
+    float4 tone;              // x exposure (EV), y contrast, z highlights, w shadows
+    float4 tone2;             // x whites, y blacks, z first component index, w component count
 };
 
 #endif

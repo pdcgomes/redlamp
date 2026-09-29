@@ -121,6 +121,46 @@ public enum ParameterID: String, CaseIterable, Codable, Sendable, Hashable {
     case calibrationGreenSaturation = "calibration.green.saturation"
     case calibrationBlueHue = "calibration.blue.hue"
     case calibrationBlueSaturation = "calibration.blue.saturation"
+
+    // Local adjustments (per mask). Stored on `MaskLayer`, never in the global recipe.
+    case localTemperature = "local.temperature"
+    case localTint = "local.tint"
+    case localExposure = "local.exposure"
+    case localContrast = "local.contrast"
+    case localHighlights = "local.highlights"
+    case localShadows = "local.shadows"
+    case localWhites = "local.whites"
+    case localBlacks = "local.blacks"
+    case localTexture = "local.texture"
+    case localClarity = "local.clarity"
+    case localDehaze = "local.dehaze"
+    case localHue = "local.hue"
+    case localSaturation = "local.saturation"
+    case localSharpness = "local.sharpness"
+    case localNoise = "local.noise"
+    case localMoire = "local.moire"
+    case localDefringe = "local.defringe"
+
+    /// The local adjustments, in Lightroom's masking-panel order.
+    public static let localParameters: [ParameterID] = [
+        .localTemperature, .localTint, .localExposure, .localContrast, .localHighlights, .localShadows,
+        .localWhites, .localBlacks, .localTexture, .localClarity, .localDehaze, .localHue, .localSaturation,
+        .localSharpness, .localNoise, .localMoire, .localDefringe,
+    ]
+
+    // Mask properties shown as sliders (stored on the mask or component, not as adjustments).
+    case maskAmount = "mask.amount"
+    case maskFeather = "mask.feather"
+
+    /// A per-mask adjustment, stored in `MaskLayer.adjustments`.
+    public var isLocal: Bool {
+        rawValue.hasPrefix("local.")
+    }
+
+    /// Anything edited per mask; never stored in the global recipe.
+    public var isMaskScoped: Bool {
+        isLocal || rawValue.hasPrefix("mask.")
+    }
 }
 
 /// The eight hue bands of the color mixer, in Lightroom's order.

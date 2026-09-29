@@ -1,6 +1,7 @@
 import RedlampUI
 import SwiftUI
 
+/// The menu bar, built from `ShortcutAction` so menus, keys and the ⌘/ sheet always agree.
 struct AppCommands: Commands {
     let model: EditorModel
     let onOpen: () -> Void
@@ -8,56 +9,75 @@ struct AppCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("Open Folder…", action: onOpen)
-                .keyboardShortcut("o")
+            item(.openFolder, perform: onOpen)
             Divider()
-            Button("Export…", action: onExport)
-                .keyboardShortcut("e", modifiers: [.command, .shift])
+            item(.export, perform: onExport)
                 .disabled(model.info == nil)
         }
 
         CommandGroup(replacing: .undoRedo) {
-            Button("Undo") { model.undo() }
-                .keyboardShortcut("z")
-                .disabled(!model.canUndo)
-            Button("Redo") { model.redo() }
-                .keyboardShortcut("z", modifiers: [.command, .shift])
-                .disabled(!model.canRedo)
+            item(.undo).disabled(!model.canUndo)
+            item(.redo).disabled(!model.canRedo)
         }
 
         CommandMenu("Photo") {
-            Button("Copy Settings") { model.copySettings() }
-                .keyboardShortcut("c", modifiers: [.command, .shift])
-                .disabled(model.info == nil)
-            Button("Paste Settings") { model.pasteSettings() }
-                .keyboardShortcut("v", modifiers: [.command, .shift])
-                .disabled(!model.hasClipboard || model.info == nil)
+            item(.copySettings).disabled(model.info == nil)
+            item(.pasteSettings).disabled(!model.hasClipboard || model.info == nil)
+            item(.pastePrevious).disabled(model.previousSelection == nil || model.info == nil)
             Divider()
-            Button("Auto Settings") { model.autoTone() }
-                .keyboardShortcut("u")
-                .disabled(model.info == nil)
-            Button("Reset All Settings") { model.resetAll() }
-                .keyboardShortcut("r", modifiers: [.command, .shift])
-                .disabled(model.info == nil)
-            Button("New Snapshot") { model.createSnapshot() }
-                .keyboardShortcut("n")
-                .disabled(model.info == nil)
+            item(.autoTone).disabled(model.info == nil)
+            item(.autoWhiteBalance).disabled(model.info?.supportsWhiteBalance != true)
+            item(.resetAll).disabled(model.info == nil)
             Divider()
-            Button("Previous Photo") { model.selectPrevious() }
-                .keyboardShortcut(.leftArrow, modifiers: [.command])
-            Button("Next Photo") { model.selectNext() }
-                .keyboardShortcut(.rightArrow, modifiers: [.command])
+            item(.newSnapshot).disabled(model.info == nil)
+            item(.newPreset)
+            item(.virtualCopy)
+            Divider()
+            item(.previousPhoto)
+            item(.nextPhoto)
+            Divider()
+            Menu("Set Rating") {
+                ForEach([ShortcutAction.rating0, .rating1, .rating2, .rating3, .rating4, .rating5]) { mouseItem($0) }
+            }
+            Menu("Set Flag") {
+                ForEach([ShortcutAction.flagPick, .flagReject, .unflag]) { mouseItem($0) }
+            }
+            Menu("Set Color Label") {
+                ForEach([ShortcutAction.labelRed, .labelYellow, .labelGreen, .labelBlue]) { mouseItem($0) }
+            }
         }
 
         CommandGroup(after: .toolbar) {
-            Section {
-                Text("Before / After  \\")
-                Text("Show Clipping  J")
-                Text("Zoom  Z")
-                Text("White Balance Selector  W")
-                Text("Hide Panels  Tab")
+            item(.zoomIn)
+            item(.zoomOut)
+            Menu("Develop Panels") {
+                ForEach(ShortcutAction.allCases.filter { $0.category == .panels && $0.isMenuShortcut }) { item($0) }
             }
-            .disabled(true)
+            Divider()
         }
+
+        CommandGroup(after: .help) {
+            item(.showShortcuts)
+        }
+    }
+
+    /// A menu item with the action's ⌘ shortcut.
+    private func item(_ action: ShortcutAction, perform: (() -> Void)? = nil) -> some View {
+        Button(action.plannedPhase.map { "\(action.title) (\($0))" } ?? action.title) {
+            if let perform {
+                perform()
+            } else {
+                model.perform(action)
+            }
+        }
+        .keyboardShortcut(action.combos.first?.keyboardShortcut)
+        .disabled(!action.isAvailable)
+    }
+
+    /// A menu item for a single-key shortcut: the key is shown in the title, because a
+    /// modifier-free key equivalent would also fire while typing in a text field.
+    private func mouseItem(_ action: ShortcutAction) -> some View {
+        Button("\(action.title)    \(action.combos.first?.display ?? "")") { model.perform(action) }
+            .disabled(model.selection == nil)
     }
 }

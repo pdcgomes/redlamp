@@ -1,3 +1,4 @@
+import RedlampDocument
 import SwiftUI
 
 struct FilmstripView: View {
@@ -76,10 +77,64 @@ private struct FilmstripCell: View {
             }
         }
         .frame(width: 96, height: 70)
+        .overlay(alignment: .topLeading) { flagBadge }
+        .overlay(alignment: .bottomLeading) { stars }
+        .overlay(alignment: .top) {
+            if let label = item.metadata.label {
+                Capsule().fill(label.color).frame(height: 3).padding(.horizontal, 6).padding(.top, 2)
+            }
+        }
         .overlay(
             RoundedRectangle(cornerRadius: 4)
                 .strokeBorder(isSelected ? Color.white.opacity(0.85) : .clear, lineWidth: 1.5),
         )
+        .opacity(item.metadata.flag == .reject ? 0.45 : 1)
         .help(item.name)
+    }
+
+    @ViewBuilder
+    private var flagBadge: some View {
+        switch item.metadata.flag {
+        case .pick:
+            Image(systemName: "flag.fill")
+                .font(.system(size: 8))
+                .foregroundStyle(Color.white)
+                .padding(5)
+        case .reject:
+            Image(systemName: "xmark")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(Color.white)
+                .padding(5)
+        case nil:
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private var stars: some View {
+        if item.metadata.rating > 0 {
+            HStack(spacing: 1) {
+                ForEach(0 ..< item.metadata.rating, id: \.self) { _ in
+                    Image(systemName: "star.fill").font(.system(size: 6))
+                }
+            }
+            .foregroundStyle(Color.white.opacity(0.9))
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(Color.black.opacity(0.55)))
+            .padding(4)
+        }
+    }
+}
+
+extension ColorLabel {
+    var color: Color {
+        switch self {
+        case .red: Color(red: 0.9, green: 0.25, blue: 0.25)
+        case .yellow: Color(red: 0.95, green: 0.8, blue: 0.2)
+        case .green: Color(red: 0.3, green: 0.8, blue: 0.35)
+        case .blue: Color(red: 0.3, green: 0.5, blue: 0.95)
+        case .purple: Color(red: 0.65, green: 0.4, blue: 0.9)
+        }
     }
 }

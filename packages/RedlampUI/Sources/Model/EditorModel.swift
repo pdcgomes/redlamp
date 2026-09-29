@@ -18,7 +18,7 @@ public final class EditorModel {
     // MARK: Library
 
     public private(set) var folder: URL?
-    public private(set) var items: [LibraryItem] = []
+    public internal(set) var items: [LibraryItem] = []
     public private(set) var thumbnails: [URL: CGImage] = [:]
     public private(set) var selection: URL?
 
@@ -46,12 +46,64 @@ public final class EditorModel {
     }
 
     public var eyedropperActive = false
-    public var activeTool: EditTool = .edit
+    public var activeTool: EditTool = .edit {
+        didSet {
+            if activeTool != .masking {
+                drawingKind = nil
+            }
+            requestRender()
+        }
+    }
+
+    // MARK: Masking state
+
+    public var selectedMaskID: UUID? {
+        didSet { requestRender() }
+    }
+
+    public var selectedComponentID: UUID?
+    public var showMaskOverlay = true {
+        didSet { requestRender() }
+    }
+
+    /// The mask type armed for drawing on the canvas, if any.
+    public internal(set) var drawingKind: MaskKind?
+    public internal(set) var drawingOperation: MaskOperation = .add
+    /// When set, the drawn shape is added to this mask instead of creating a new one.
+    public internal(set) var drawingTarget: UUID?
     public var expandedPanels: Set<PanelID> = [.basic, .toneCurve, .colorMixer]
     public var soloMode = false
     public var leftPanelVisible = true
     public var rightPanelVisible = true
     public var filmstripVisible = true
+
+    // MARK: Shortcut-driven view state
+
+    /// 0 off, 1 basic, 2 detailed (Lightroom's `I`).
+    public var infoOverlay = 0
+    /// 0 normal, 1 dimmed, 2 off (Lightroom's `L`).
+    public var lightsOut = 0
+    public internal(set) var isPresenting = false
+    @ObservationIgnored var visibilityBeforePresenting: (left: Bool, right: Bool, filmstrip: Bool)?
+    /// The slider `,` `.` select and `-` `=` nudge; highlighted in the panels.
+    public var focusedParameter: ParameterID?
+    /// Holding Option turns group titles into "Reset …" buttons, as in Lightroom.
+    public var optionKeyHeld = false
+    public var showMaskPins = true
+    public var maskOverlayColor: MaskOverlayColor = .red {
+        didSet { requestRender() }
+    }
+
+    public var showShortcuts = false
+    /// The photo viewed before the current one, for Paste from Previous.
+    public internal(set) var previousSelection: URL?
+    /// Window-level effects the app layer performs (full screen, toolbar visibility).
+    @ObservationIgnored public var onToggleFullScreen: (() -> Void)?
+    @ObservationIgnored public var onToggleToolbar: (() -> Void)?
+
+    /// Live panel widths. The canvas deliberately ignores these (see `PanelMetrics`).
+    public var sidebarWidth: CGFloat = 250
+    public var inspectorWidth: CGFloat = 316
     public private(set) var previewingPreset: Preset?
     public private(set) var hasClipboard = false
 
@@ -60,8 +112,9 @@ public final class EditorModel {
 
     @ObservationIgnored private var temporaryClipping = false
     @ObservationIgnored private var clipboard: EditRecipe?
-    @ObservationIgnored private var editStart: EditRecipe?
-    @ObservationIgnored private var editParameter: ParameterID?
+    @ObservationIgnored var pendingDrawingName: String?
+    @ObservationIgnored var editStart: EditRecipe?
+    @ObservationIgnored var editParameter: ParameterID?
     @ObservationIgnored private var generation: UInt64 = 0
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored private var openTask: Task<Void, Never>?
@@ -98,7 +151,10 @@ public final class EditorModel {
         let store = sidecars
         Task {
             let found = await Task.detached(priority: .userInitiated) {
-                Library.images(in: url).map { LibraryItem(url: $0, hasEdits: Library.hasEdits($0, store: store)) }
+                Library.images(in: url).map { image in
+                    let summary = Library.summary(image, store: store)
+                    return LibraryItem(url: image, hasEdits: summary.hasEdits, metadata: summary.metadata)
+                }
             }.value
             guard folder == url else { return }
             items = found
@@ -119,6 +175,9 @@ public final class EditorModel {
     public func select(_ url: URL) {
         guard url != selection else { return }
         saveNow()
+        if let selection {
+            previousSelection = selection
+        }
         selection = url
         info = nil
         frame = nil
@@ -127,6 +186,9 @@ public final class EditorModel {
         isLoading = true
         eyedropperActive = false
         previewingPreset = nil
+        selectedMaskID = nil
+        selectedComponentID = nil
+        drawingKind = nil
         openTask?.cancel()
         openTask = Task { [engine, sidecars] in
             await loadThumbnail(for: url)
@@ -194,12 +256,16 @@ public final class EditorModel {
         guard size.width > 0 else { return }
         generation &+= 1
         let displayed = showBefore ? beforeRecipe : (previewingPreset.map { $0.apply(to: recipe) } ?? recipe)
-        engine.render(RenderRequest(
+        let overlay = activeTool == .masking && showMaskOverlay && !showBefore ? selectedMaskID : nil
+        var request = RenderRequest(
             recipe: displayed,
             targetSize: size,
             showClipping: showClipping || temporaryClipping,
+            maskOverlay: overlay,
             generation: generation,
-        ))
+        )
+        request.maskOverlayColor = maskOverlayColor
+        engine.render(request)
     }
 
     private func receive(_ frame: RenderedFrame) {
@@ -279,9 +345,12 @@ public final class EditorModel {
         commit(beforeRecipe, name: "Reset")
     }
 
-    private func historyName(for parameter: ParameterID) -> String {
+    func historyName(for parameter: ParameterID) -> String {
         let spec = parameter.spec
         let key = parameter.rawValue
+        if parameter.isMaskScoped {
+            return "\(selectedMask?.name ?? "Mask") \(spec.label) \(spec.formatted(maskValue(parameter)))"
+        }
         let prefix: String = if PanelID.colorMixer.parameters.contains(parameter) {
             "\(spec.label) \(mixerAttribute(parameter))"
         } else if PanelID.toneCurve.parameters.contains(parameter) {
@@ -477,7 +546,15 @@ public final class EditorModel {
         historyIndex = 0
     }
 
-    private func commit(_ next: EditRecipe, name: String) {
+    /// Applies a change without recording history (the live part of a drag).
+    func applyLive(_ next: EditRecipe) {
+        guard next != recipe else { return }
+        recipe = next
+        requestRender()
+        scheduleSave()
+    }
+
+    func commit(_ next: EditRecipe, name: String) {
         guard next != recipe else { return }
         recipe = next
         recordHistory(name)
@@ -485,7 +562,7 @@ public final class EditorModel {
         scheduleSave()
     }
 
-    private func recordHistory(_ name: String) {
+    func recordHistory(_ name: String) {
         if historyIndex < history.count - 1 {
             history.removeSubrange((historyIndex + 1)...)
         }
@@ -549,6 +626,14 @@ public final class EditorModel {
                 }
             case "zoom":
                 canvas.zoom = value == "1:1" ? .oneToOne : value == "fill" ? .fill : .fit
+            case "action":
+                if let action = ShortcutAction(rawValue: value) {
+                    perform(action)
+                }
+            case "sidebarWidth":
+                sidebarWidth = CGFloat(Double(value) ?? 250)
+            case "inspectorWidth":
+                inspectorWidth = CGFloat(Double(value) ?? 316)
             case "before":
                 showBefore = value == "1"
             case "clipping":
@@ -565,10 +650,23 @@ public final class EditorModel {
                 if let mode = WhiteBalanceMode(rawValue: value) {
                     setWhiteBalanceMode(mode)
                 }
+            case "linear", "radial":
+                // linear=x1:y1:x2:y2   radial=cx:cy:rx:ry[:feather]
+                let n = value.split(separator: ":").compactMap { Double($0) }
+                guard n.count >= 4 else { return }
+                let shape: MaskShape = key == "linear"
+                    ? .linear(LinearMask(start: ImagePoint(x: n[0], y: n[1]), end: ImagePoint(x: n[2], y: n[3])))
+                    : .radial(RadialMask(
+                        center: ImagePoint(x: n[0], y: n[1]), radiusX: n[2], radiusY: n[3],
+                        feather: n.count > 4 ? n[4] : 50,
+                    ))
+                startDrawing(key == "linear" ? .linear : .radial)
+                beginDrawing(shape)
+                finishDrawing()
             default:
                 let parameter = ParameterID(rawValue: key) ?? ParameterID.allCases.first { key == "\($0)" }
                 if let parameter, let number = Double(value) {
-                    setValue(parameter, number)
+                    setSliderValue(parameter, number)
                 }
             }
         }
@@ -576,7 +674,7 @@ public final class EditorModel {
 
     // MARK: - Persistence
 
-    private func scheduleSave() {
+    func scheduleSave() {
         saveTask?.cancel()
         saveTask = Task {
             try? await Task.sleep(for: .milliseconds(600))
@@ -588,8 +686,9 @@ public final class EditorModel {
     public func saveNow() {
         saveTask?.cancel()
         guard let url = selection, info != nil else { return }
-        let sidecar = Sidecar(recipe: recipe, snapshots: snapshots)
-        let pristine = recipe.isPristine && snapshots.isEmpty
+        let metadata = items.first { $0.url == url }?.metadata ?? PhotoMetadata()
+        let sidecar = Sidecar(recipe: recipe, snapshots: snapshots, metadata: metadata.isEmpty ? nil : metadata)
+        let pristine = sidecar.isPristine
         let store = sidecars
         Task.detached(priority: .utility) {
             if pristine {
@@ -599,7 +698,7 @@ public final class EditorModel {
             }
         }
         if let index = items.firstIndex(where: { $0.url == url }) {
-            items[index].hasEdits = !pristine
+            items[index].hasEdits = !recipe.isPristine
         }
     }
 }

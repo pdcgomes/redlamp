@@ -1,9 +1,11 @@
 import Foundation
+import RedlampDocument
 import RedlampEngineAPI
 
 public struct LibraryItem: Identifiable, Hashable, Sendable {
     public let url: URL
     public var hasEdits: Bool
+    public var metadata = PhotoMetadata()
 
     public var id: URL {
         url
@@ -166,9 +168,8 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
     /// Where the tool lands on the roadmap; `nil` once it is live.
     public var plannedPhase: String? {
         switch self {
-        case .edit: nil
+        case .edit, .masking: nil
         case .crop: "Phase 2"
-        case .masking: "Phase 1 (linear and radial), Phase 2 (brush, range, AI)"
         case .heal, .redEye: "Phase 3"
         }
     }

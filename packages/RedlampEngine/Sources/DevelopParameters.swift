@@ -4,6 +4,16 @@ import RedlampEngineAPI
 import RedlampKernels
 import simd
 
+/// Everything the fused develop kernel reads for one render.
+struct DevelopInputs {
+    var params: DevelopParams
+    var toneLUT: [Float]
+    var mixer: [Float]
+    /// Never empty: Metal needs a bound buffer, so a zeroed element stands in.
+    var layers: [MaskLayerGPU]
+    var components: [MaskComponentGPU]
+}
+
 /// Translates an `EditRecipe` into the fused kernel's parameter block.
 ///
 /// This is where slider units become rendering units; tuning a slider's feel happens here
@@ -17,7 +27,9 @@ enum DevelopParameters {
         outputSize: PixelSize,
         encoding: OutputEncoding,
         showClipping: Bool,
-    ) -> (params: DevelopParams, toneLUT: [Float], mixer: [Float]) {
+        maskOverlay: UUID? = nil,
+        maskOverlayColor: MaskOverlayColor = .red,
+    ) -> DevelopInputs {
         var p = DevelopParams()
         let profile = BuiltInProfile(reference: recipe.profile) ?? .color
         let look = profile.look
@@ -114,7 +126,93 @@ enum DevelopParameters {
             0,
         )
 
+        let (layers, components, overlayIndex) = maskBuffers(
+            recipe.masks, aspect: outputSize.aspectRatio, overlay: maskOverlay,
+        )
+        p.masks = SIMD4(
+            Float(layers.count), Float(overlayIndex ?? -1), Float(components.count), Float(maskOverlayColor.rawValue),
+        )
+
         let lut = ToneCurveMath.isIdentity(recipe) ? [Float](repeating: 0, count: 4) : ToneCurveMath.lut(for: recipe)
-        return (p, lut, mixer)
+        return DevelopInputs(
+            params: p,
+            toneLUT: lut,
+            mixer: mixer,
+            layers: layers.isEmpty ? [.empty] : layers,
+            components: components.isEmpty ? [.empty] : components,
+        )
+    }
+
+    /// Visible masks (plus the overlaid one, even if hidden) as kernel buffers.
+    /// Coordinates are aspect-corrected so gradients stay perpendicular and circles round.
+    private static func maskBuffers(
+        _ masks: [MaskLayer],
+        aspect: Double,
+        overlay: UUID?,
+    ) -> (layers: [MaskLayerGPU], components: [MaskComponentGPU], overlayIndex: Int?) {
+        var layers: [MaskLayerGPU] = []
+        var components: [MaskComponentGPU] = []
+        var overlayIndex: Int?
+
+        for mask in masks where mask.isVisible || mask.id == overlay {
+            guard layers.count < MaskLayer.maximumLayers else { break }
+            let first = components.count
+            for component in mask.components where components.count < MaskLayer.maximumComponents {
+                components.append(gpuComponent(component, aspect: aspect))
+            }
+            let scale = mask.isVisible ? mask.amount / 100 : 0
+            func value(_ parameter: ParameterID, _ divisor: Double = 100) -> Float {
+                Float(mask[parameter] / divisor * scale)
+            }
+            if mask.id == overlay {
+                overlayIndex = layers.count
+            }
+            layers.append(MaskLayerGPU(
+                color: SIMD4(
+                    value(.localTemperature),
+                    value(.localTint),
+                    value(.localHue, 1) / 6,
+                    value(.localSaturation),
+                ),
+                tone: SIMD4(
+                    value(.localExposure, 1),
+                    value(.localContrast),
+                    value(.localHighlights),
+                    value(.localShadows),
+                ),
+                tone2: SIMD4(value(.localWhites), value(.localBlacks), Float(first), Float(components.count - first)),
+            ))
+        }
+        return (layers, components, overlayIndex)
+    }
+
+    private static func gpuComponent(_ component: MaskComponent, aspect: Double) -> MaskComponentGPU {
+        let operation: Float = switch component.operation {
+        case .add: 0
+        case .subtract: 1
+        case .intersect: 2
+        }
+        let inverted: Float = component.inverted ? 1 : 0
+        switch component.shape {
+        case let .linear(gradient):
+            return MaskComponentGPU(
+                geometry: SIMD4(
+                    Float(gradient.start.x * aspect), Float(gradient.start.y),
+                    Float(gradient.end.x * aspect), Float(gradient.end.y),
+                ),
+                shape: SIMD4(1, operation, inverted, 0),
+                rotation: SIMD4(1, 0, 0, 0),
+            )
+        case let .radial(gradient):
+            let radians = gradient.rotation * .pi / 180
+            return MaskComponentGPU(
+                geometry: SIMD4(
+                    Float(gradient.center.x * aspect), Float(gradient.center.y),
+                    Float(gradient.radiusX), Float(gradient.radiusY),
+                ),
+                shape: SIMD4(2, operation, inverted, Float(gradient.feather / 100)),
+                rotation: SIMD4(Float(cos(radians)), Float(sin(radians)), 0, 0),
+            )
+        }
     }
 }

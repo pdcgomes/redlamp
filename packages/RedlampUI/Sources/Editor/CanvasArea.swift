@@ -1,4 +1,5 @@
 import RedlampCanvas
+import RedlampEngineAPI
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -15,11 +16,79 @@ struct CanvasArea: View {
                 CanvasView(
                     frame: model.frame,
                     controller: model.canvas,
-                    clickAction: model.eyedropperActive ? .sample : .zoom,
+                    clickAction: model.activeTool == .masking ? .none : (model.eyedropperActive ? .sample : .zoom),
+                    surround: [CanvasMetalView.defaultSurround, 0.003, 0][min(model.lightsOut, 2)],
                     onSample: { model.sampleWhiteBalance(at: $0) },
                 )
             }
+        }
+        // Everything drawn over the photo lives in overlays: they render above the Metal
+        // layer, whereas ZStack siblings of the canvas would be hidden beneath it.
+        .overlay {
+            statusLayer
+                .padding(stagePadding)
+        }
+        .overlay {
+            // Full canvas: mask geometry uses the same coordinates as the Metal view.
+            if model.activeTool == .masking, model.info != nil, !model.showBefore {
+                MaskOverlayView()
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            if model.infoOverlay > 0, model.lightsOut == 0, let info = model.info {
+                InfoOverlay(info: info, detailed: model.infoOverlay == 2)
+                    .padding(16)
+                    .padding(stagePadding)
+                    .allowsHitTesting(false)
+            }
+        }
+        .overlay(alignment: .top) {
+            if model.lightsOut == 0,
+               model.showBefore || model.previewingPreset != nil || model.eyedropperActive || model.drawingKind != nil {
+                StatusPill(text: statusText)
+                    .padding(.top, 14)
+                    .padding(stagePadding)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if model.info != nil, model.lightsOut == 0, !model.isPresenting {
+                CanvasControls()
+                    .padding(.bottom, 14)
+                    .padding(stagePadding)
+            }
+        }
+        .overlay {
+            if dropTargeted {
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(Color.white.opacity(0.6), style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
+                    .padding(12)
+                    .padding(stagePadding)
+                    .allowsHitTesting(false)
+            }
+        }
+        .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in
+            Task {
+                var urls: [URL] = []
+                for provider in providers {
+                    if let url = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? Data,
+                       let fileURL = URL(dataRepresentation: url, relativeTo: nil) {
+                        urls.append(fileURL)
+                    }
+                }
+                model.open(urls)
+            }
+            return true
+        }
+    }
 
+    /// Chrome over the photo is laid out on the stage (the canvas minus the panels' space).
+    private var stagePadding: EdgeInsets {
+        let insets = model.canvas.stageInsets
+        return EdgeInsets(top: insets.top, leading: insets.leading, bottom: insets.bottom, trailing: insets.trailing)
+    }
+
+    private var statusLayer: some View {
+        ZStack {
             if model.frame == nil, let selection = model.selection, let thumbnail = model.thumbnails[selection] {
                 Image(decorative: thumbnail, scale: 1)
                     .resizable()
@@ -48,42 +117,12 @@ struct CanvasArea: View {
                 EmptyStateView(onOpen: onOpen)
             }
         }
-        .overlay(alignment: .top) {
-            if model.showBefore || model.previewingPreset != nil || model.eyedropperActive {
-                StatusPill(text: statusText)
-                    .padding(.top, 14)
-            }
-        }
-        .overlay(alignment: .bottom) {
-            if model.info != nil {
-                CanvasControls()
-                    .padding(.bottom, 14)
-            }
-        }
-        .overlay {
-            if dropTargeted {
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(Color.white.opacity(0.6), style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
-                    .padding(12)
-                    .allowsHitTesting(false)
-            }
-        }
-        .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in
-            Task {
-                var urls: [URL] = []
-                for provider in providers {
-                    if let url = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? Data,
-                       let fileURL = URL(dataRepresentation: url, relativeTo: nil) {
-                        urls.append(fileURL)
-                    }
-                }
-                model.open(urls)
-            }
-            return true
-        }
     }
 
     private var statusText: String {
+        if let kind = model.drawingKind {
+            return "Drag on the photo to draw a \(kind.name)  ·  Esc to cancel"
+        }
         if model.eyedropperActive {
             return "Click a neutral area to set white balance  ·  Esc to cancel"
         }
@@ -91,6 +130,44 @@ struct CanvasArea: View {
             return "Preview: \(preset.name)"
         }
         return "Before"
+    }
+}
+
+/// Lightroom's loupe info overlay (`I`): file and camera, then capture details.
+private struct InfoOverlay: View {
+    let info: ImageInfo
+    let detailed: Bool
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(info.fileName)
+                .font(.system(size: 14, weight: .semibold))
+            Text([
+                "\(info.pixelSize.width) × \(info.pixelSize.height)",
+                info.cameraName,
+                info.sensorDescription,
+            ].compactMap(\.self).joined(separator: "  ·  "))
+            if detailed {
+                Text(info.exposureSummary.joined(separator: "   "))
+                if let lens = info.lens {
+                    Text(lens)
+                }
+                if let date = info.captureDate {
+                    Text(date.formatted(date: .abbreviated, time: .standard))
+                }
+                let metadata = model.currentMetadata
+                if metadata.rating > 0 || metadata.flag != nil {
+                    Text([
+                        metadata.rating > 0 ? String(repeating: "★", count: metadata.rating) : nil,
+                        metadata.flag.map { $0 == .pick ? "Pick" : "Rejected" },
+                    ].compactMap(\.self).joined(separator: "  "))
+                }
+            }
+        }
+        .font(.system(size: 11))
+        .foregroundStyle(Color.white.opacity(0.92))
+        .shadow(color: .black.opacity(0.8), radius: 2)
     }
 }
 

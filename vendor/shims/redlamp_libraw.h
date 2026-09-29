@@ -15,6 +15,12 @@ static inline float rl_rgb_cam(const libraw_data_t *d, int row, int col) { retur
 static inline float rl_cam_xyz(const libraw_data_t *d, int row, int col) { return d->color.cam_xyz[row & 3][col % 3]; }
 static inline float rl_baseline_exposure(const libraw_data_t *d) { return d->color.dng_levels.baseline_exposure; }
 
+// DNG ColorMatrix1/2 (XYZ -> camera) and their calibration illuminants (EXIF LightSource codes).
+static inline int rl_dng_illuminant(const libraw_data_t *d, int index) { return d->color.dng_color[index & 1].illuminant; }
+static inline float rl_dng_colormatrix(const libraw_data_t *d, int index, int row, int col) {
+    return d->color.dng_color[index & 1].colormatrix[row & 3][col % 3];
+}
+
 static inline int rl_xtrans(const libraw_data_t *d, int row, int col) { return d->idata.xtrans[row % 6][col % 6]; }
 
 static inline const char *rl_make(const libraw_data_t *d) { return d->idata.make; }
