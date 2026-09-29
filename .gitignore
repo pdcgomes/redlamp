@@ -1,0 +1,39 @@
+# macOS
+.DS_Store
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+
+# Tuist — generated artifacts (source of truth is the .swift manifests)
+*.xcodeproj
+*.xcworkspace
+Derived/
+Tuist/.build/
+.build/
+graph.png
+
+# SPM
+.swiftpm/
+
+# mise
+.mise.local.toml
+
+# Vendored third-party builds (reproduced by `mise run vendor`)
+vendor/build/
+vendor/cache/
+
+# Test fixtures that are downloaded, not committed (CC0 samples from raw.pixls.us)
+tests/fixtures/raw/
+
+# Sidecars written while testing against fixtures
+*.redlamp
+
+# Secrets
+*.p8
+*.p12
+*.mobileprovision
+.env
+.env.local

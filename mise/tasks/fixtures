@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+#MISE description="Download CC0 sample raw files from raw.pixls.us into tests/fixtures/raw"
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+mkdir -p tests/fixtures/raw
+cd tests/fixtures/raw
+
+# One body per sensor family: Sony Bayer, Fujifilm X-Trans, Canon CR3, Nikon NEF, Apple linear DNG.
+FILES=(
+    "Sony/ILCE-7M3/_DSC0009.ARW"
+    "Fujifilm/X-T3/AFXT2720.RAF"
+    "Canon/EOS%20R6/Canon_EOS_R6_RAW_ISO_100_nocrop_nodual.CR3"
+    "Nikon/Z%206/DSC_0750.NEF"
+    "Apple/iPhone%2012%20Pro/IMG_1361.DNG"
+)
+
+for path in "${FILES[@]}"; do
+    name="$(basename "$path")"
+    if [[ -f "$name" ]]; then
+        echo "==> $name (cached)"
+        continue
+    fi
+    echo "==> $name"
+    curl -sfL -o "$name" "https://raw.pixls.us/data/$path"
+done

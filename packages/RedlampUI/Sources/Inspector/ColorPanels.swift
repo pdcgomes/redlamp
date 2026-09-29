@@ -1,0 +1,271 @@
+import RedlampEngineAPI
+import SwiftUI
+
+struct ColorMixerPanel: View {
+    enum Mixer: String, CaseIterable {
+        case hsl = "HSL"
+        case color = "Color"
+    }
+
+    enum Attribute: String, CaseIterable {
+        case hue = "Hue"
+        case saturation = "Saturation"
+        case luminance = "Luminance"
+        case all = "All"
+
+        func parameter(for band: ColorBand) -> ParameterID {
+            switch self {
+            case .hue, .all: band.hueParameter
+            case .saturation: band.saturationParameter
+            case .luminance: band.luminanceParameter
+            }
+        }
+    }
+
+    @Environment(EditorModel.self) private var model
+    @State private var mixer: Mixer = .hsl
+    @State private var attribute: Attribute = .hue
+    @State private var band: ColorBand = .orange
+
+    var body: some View {
+        PanelSection(panel: .colorMixer) {
+            ControlRow(label: "Mixer") {
+                Picker("Mixer", selection: $mixer) {
+                    ForEach(Mixer.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.small)
+            }
+            .padding(.bottom, 4)
+
+            switch mixer {
+            case .hsl:
+                Picker("Adjust", selection: $attribute) {
+                    ForEach(Attribute.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.small)
+                .padding(.bottom, 4)
+
+                if attribute == .all {
+                    ForEach([Attribute.hue, .saturation, .luminance], id: \.self) { group in
+                        SubsectionHeader(
+                            title: group.rawValue,
+                            parameters: ColorBand.allCases.map { group.parameter(for: $0) },
+                        )
+                        ForEach(ColorBand.allCases, id: \.self) { band in
+                            ParameterSlider(parameter: group.parameter(for: band))
+                        }
+                    }
+                } else {
+                    ForEach(ColorBand.allCases, id: \.self) { band in
+                        ParameterSlider(parameter: attribute.parameter(for: band))
+                    }
+                }
+
+            case .color:
+                HStack(spacing: 0) {
+                    ForEach(ColorBand.allCases, id: \.self) { candidate in
+                        Button {
+                            band = candidate
+                        } label: {
+                            Circle()
+                                .fill(candidate.color)
+                                .frame(width: 16, height: 16)
+                                .overlay(
+                                    Circle()
+                                        .strokeBorder(Color.white, lineWidth: band == candidate ? 2 : 0)
+                                        .padding(-3),
+                                )
+                                .frame(maxWidth: .infinity, minHeight: 26)
+                        }
+                        .buttonStyle(.plain)
+                        .help(candidate.name)
+                    }
+                }
+                .padding(.bottom, 6)
+                ParameterSlider(parameter: band.hueParameter, label: "Hue")
+                ParameterSlider(parameter: band.saturationParameter, label: "Saturation")
+                ParameterSlider(parameter: band.luminanceParameter, label: "Luminance")
+            }
+        }
+    }
+}
+
+struct ColorGradingPanel: View {
+    enum View3: String, CaseIterable {
+        case threeWay = "3-Way"
+        case shadows = "Shadows"
+        case midtones = "Midtones"
+        case highlights = "Highlights"
+        case global = "Global"
+
+        var range: GradingRange? {
+            switch self {
+            case .threeWay: nil
+            case .shadows: .shadows
+            case .midtones: .midtones
+            case .highlights: .highlights
+            case .global: .global
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .threeWay: "circle.grid.cross"
+            case .shadows: "circle.fill"
+            case .midtones: "circle.lefthalf.filled"
+            case .highlights: "circle"
+            case .global: "globe"
+            }
+        }
+    }
+
+    @State private var view: View3 = .threeWay
+
+    var body: some View {
+        PanelSection(panel: .colorGrading) {
+            Picker("Grading", selection: $view) {
+                ForEach(View3.allCases, id: \.self) { option in
+                    Image(systemName: option.symbol).help(option.rawValue).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.small)
+            .padding(.bottom, 8)
+
+            if let range = view.range {
+                HStack {
+                    Spacer()
+                    ColorWheel(range: range, diameter: 170)
+                    Spacer()
+                }
+                ParameterSlider(parameter: range.hueParameter)
+                ParameterSlider(parameter: range.saturationParameter)
+                ParameterSlider(parameter: range.luminanceParameter)
+            } else {
+                VStack(spacing: 10) {
+                    wheel(.midtones, diameter: 118)
+                    HStack(alignment: .top, spacing: 12) {
+                        wheel(.shadows, diameter: 104)
+                        wheel(.highlights, diameter: 104)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+
+            Spacer().frame(height: 6)
+            ParameterSlider(parameter: .gradeBlending)
+            ParameterSlider(parameter: .gradeBalance)
+        }
+    }
+
+    private func wheel(_ range: GradingRange, diameter: CGFloat) -> some View {
+        VStack(spacing: 4) {
+            Text(range.name)
+                .font(Theme.captionFont)
+                .foregroundStyle(Theme.secondaryLabel)
+            ColorWheel(range: range, diameter: diameter)
+            CompactLuminanceSlider(parameter: range.luminanceParameter)
+                .frame(width: diameter)
+        }
+    }
+}
+
+/// A grading wheel: angle is hue, distance from centre is saturation.
+struct ColorWheel: View {
+    let range: GradingRange
+    let diameter: CGFloat
+
+    @Environment(EditorModel.self) private var model
+    @State private var dragging = false
+
+    var body: some View {
+        let hue = model.value(range.hueParameter)
+        let saturation = model.value(range.saturationParameter)
+        let radius = diameter / 2
+        let angle = hue * .pi / 180
+        let distance = saturation / 100 * radius
+        let puck = CGPoint(x: radius + cos(angle) * distance, y: radius - sin(angle) * distance)
+
+        ZStack {
+            Circle()
+                .fill(AngularGradient(
+                    gradient: Gradient(colors: stride(from: 360.0, through: 0, by: -30).map { .wheelHue(
+                        $0,
+                        saturation: 0.75,
+                        brightness: 0.85,
+                    ) }),
+                    center: .center,
+                ))
+            Circle()
+                .fill(RadialGradient(
+                    gradient: Gradient(colors: [Color(white: 0.5), Color(white: 0.5).opacity(0)]),
+                    center: .center, startRadius: 0, endRadius: radius,
+                ))
+            Circle().strokeBorder(Color.black.opacity(0.35), lineWidth: 1)
+            Path { path in
+                path.move(to: CGPoint(x: radius - 4, y: radius))
+                path.addLine(to: CGPoint(x: radius + 4, y: radius))
+                path.move(to: CGPoint(x: radius, y: radius - 4))
+                path.addLine(to: CGPoint(x: radius, y: radius + 4))
+            }
+            .stroke(Color.black.opacity(0.4), lineWidth: 1)
+            Circle()
+                .fill(Color.wheelHue(hue, saturation: saturation / 100, brightness: 0.95))
+                .overlay(Circle().strokeBorder(Color.white, lineWidth: 1.5))
+                .shadow(color: .black.opacity(0.5), radius: 2)
+                .frame(width: 12, height: 12)
+                .position(puck)
+        }
+        .frame(width: diameter, height: diameter)
+        .contentShape(Circle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { gesture in
+                    if !dragging {
+                        dragging = true
+                        model.beginEdit()
+                    }
+                    let dx = gesture.location.x - radius
+                    let dy = radius - gesture.location.y
+                    var degrees = atan2(dy, dx) * 180 / .pi
+                    if degrees < 0 {
+                        degrees += 360
+                    }
+                    let amount = min(hypot(dx, dy) / radius, 1) * 100
+                    model.setValue(range.hueParameter, degrees)
+                    model.setValue(range.saturationParameter, amount)
+                }
+                .onEnded { _ in
+                    dragging = false
+                    model.endEdit(name: "\(range.name) Grading")
+                },
+        )
+        .simultaneousGesture(TapGesture(count: 2).onEnded {
+            model.resetParameters([range.hueParameter, range.saturationParameter], name: "Reset \(range.name) Grading")
+        })
+        .help("\(range.name): hue \(Int(hue))°, saturation \(Int(saturation)). Double-click to reset.")
+    }
+}
+
+/// The luminance slider under each 3-way wheel.
+struct CompactLuminanceSlider: View {
+    let parameter: ParameterID
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        SliderTrack(
+            spec: parameter.spec,
+            value: model.value(parameter),
+            onBegin: { model.beginEdit(parameter) },
+            onChange: { model.setValue(parameter, $0) },
+            onEnd: { model.endEdit() },
+            onReset: { model.reset(parameter) },
+        )
+        .help("Luminance \(parameter.spec.formatted(model.value(parameter)))")
+    }
+}

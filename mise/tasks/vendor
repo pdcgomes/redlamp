@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#MISE description="Build vendored C/C++ libraries (LibRaw) into static XCFrameworks"
+#MISE alias="v"
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+scripts/vendor-libraw.sh

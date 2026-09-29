@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE description="Regenerate the README screenshots in docs/images (needs Screen Recording permission)"
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+mise run build
+scripts/capture-screenshots.sh

@@ -1,0 +1,17 @@
+# SwiftFormat configuration for Redlamp
+--swiftversion 6.2
+--indent 4
+--maxwidth 120
+--wraparguments before-first
+--wrapparameters before-first
+--wrapcollections before-first
+--self remove
+--importgrouping testable-bottom
+--commas always
+--trimwhitespace always
+
+# Keep the opening brace on the same line as a wrapped condition so SwiftFormat
+# and SwiftLint (opening_brace) agree.
+--disable wrapMultilineStatementBraces
+
+--exclude .build,Derived,build,vendor,**/*.generated.swift

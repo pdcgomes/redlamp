@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+#MISE description="Run the purity gate and all unit tests"
+#MISE alias="t"
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+scripts/check-engine-purity.sh
+
+WORKSPACE="Redlamp.xcworkspace"
+if [ ! -d "$WORKSPACE" ]; then
+    mise run generate
+fi
+
+echo "==> Testing Redlamp-Workspace..."
+xcodebuild test \
+    -workspace "$WORKSPACE" \
+    -scheme "Redlamp-Workspace" \
+    -destination 'platform=macOS,arch=arm64' \
+    -derivedDataPath build/DerivedData \
+    -quiet
