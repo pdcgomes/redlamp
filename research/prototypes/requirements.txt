@@ -1,0 +1,11 @@
+# Research prototypes only. Nothing here ships in Redlamp.
+# coremltools 9.0 is tested against torch <= 2.7, so torch is pinned.
+torch==2.7.0
+torchvision==0.22.0
+coremltools==9.0
+numpy
+scikit-learn
+opencv-python-headless
+pillow
+huggingface_hub
+gdown

@@ -176,9 +176,9 @@ Every phase ships on Mac, iPad, and iPhone. The Lightroom feature inventory in [
 - A library and catalog, tethered shooting, and panorama and HDR merge
 - More AI features, subject to the research below: lens blur, distraction removal, and personalized auto settings
 
-### Research in progress
+### Research
 
-A research brief for denoise, AI across the product (upscaling, masks, removal, auto settings), and focus stacking lives in [`docs/research/ai-and-computational-photography-brief.md`](docs/research/ai-and-computational-photography-brief.md). Its findings will refine the phases above.
+The [AI and computational photography brief](docs/research/ai-and-computational-photography-brief.md) covers denoise, AI across the product (upscaling, masks, removal, auto settings), and focus stacking. Its first round of [findings](docs/research/ai-findings.md) gives a verdict for each workstream, a license matrix for every candidate model and dataset, the engine AI architecture, measured Core ML and focus-stacking prototypes (in [`research/prototypes/`](research/prototypes/README.md)), and proposed changes to the phases above.
 
 ## Getting started
 
