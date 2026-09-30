@@ -311,7 +311,13 @@ Ratings, flags and color labels are saved in the photo's sidecar and shown on th
 
 ### Where edits are stored
 
-Edits are saved as JSON next to the photo, in `IMG_1234.ARW.redlamp`. The file holds the edit recipe and any snapshots. Only values that differ from the defaults are stored, and unknown keys are ignored, so sidecars stay small and keep working across versions. Resetting a photo completely deletes its sidecar.
+Edits are saved as JSON next to the photo, in `IMG_1234.ARW.redlamp`. The file holds the edit recipe and any snapshots. Only values that differ from the defaults are stored, so sidecars stay small. Resetting a photo completely deletes its sidecar.
+
+Sidecars carry two version numbers:
+- The **format version** describes the file's syntax. Older formats are migrated silently when read.
+- The **process version** records the rendering behavior the edit was made with, like Lightroom's process versions. An edit keeps rendering the way it did when it was made; moving it to a newer process is always an explicit choice.
+
+Settings a newer Redlamp wrote, but this version doesn't know, are kept and written back unchanged. A sidecar written with a newer format or process version is never overwritten or deleted, and sidecars are only rewritten when their content changes.
 
 ## Architecture
 

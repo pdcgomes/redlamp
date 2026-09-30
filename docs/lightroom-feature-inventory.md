@@ -90,7 +90,7 @@ Each feature has a roadmap tag:
 - Grain: Amount, Size, Roughness [P2]
 
 ## 11. Calibration
-- Process version selector [P2; our own versioned pipeline]
+- Process version selector [P1 for the process version stored in every edit; P2 for the selector and "Update to current process"; our own versioned pipeline]
 - Shadows Tint [P2]
 - Red, Green, and Blue Primary Hue and Saturation [P2]
 
