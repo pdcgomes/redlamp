@@ -63,6 +63,65 @@ static inline uint cfaColor(constant uchar *pattern, constant DemosaicParams &p,
     return pattern[py * p.patternWidth + px];
 }
 
+// MARK: - Sensor cleanup
+
+struct HotPixelParams {
+    uint width;
+    uint height;
+    uint patternWidth;
+    uint patternHeight;
+    float threshold;     // noise sigmas above every neighbour
+    float ratio;         // and this many times the brightest neighbour
+    float pad1;
+    float pad2;
+    float4 a;            // noise per CFA colour, normalised units: variance = a · value + b
+    float4 b;
+};
+
+// Replaces stuck-high photosites with the mean of their same-colour neighbours. A sample only
+// counts as hot when it is several times brighter than every neighbour within two pixels, and
+// well clear of their noise. The adjacent photosites of other colours count too: a white point
+// highlight spills into those. Saturated colour detail finer than the colour's own sampling
+// (red and blue are every other photosite) can exceed its neighbours, but not by the ratio.
+kernel void rl_cfa_repair_hot_pixels(
+    texture2d<float, access::read> cfa [[texture(0)]],
+    texture2d<float, access::write> out [[texture(1)]],
+    constant HotPixelParams &p [[buffer(0)]],
+    constant uchar *pattern [[buffer(1)]],
+    device atomic_uint *repaired [[buffer(2)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    if (gid.x >= p.width || gid.y >= p.height) return;
+    int x = int(gid.x);
+    int y = int(gid.y);
+    uint color = pattern[(gid.y % p.patternHeight) * p.patternWidth + gid.x % p.patternWidth];
+    float value = cfa.read(gid).r;
+    float highest = 0.0f;
+    float sameSum = 0.0f;
+    int sameCount = 0;
+    for (int dy = -2; dy <= 2; dy++) {
+        for (int dx = -2; dx <= 2; dx++) {
+            int qx = x + dx;
+            int qy = y + dy;
+            if ((dx == 0 && dy == 0) || qx < 0 || qy < 0 || qx >= int(p.width) || qy >= int(p.height)) continue;
+            float neighbour = cfa.read(uint2(qx, qy)).r;
+            uint neighbourColor = pattern[(uint(qy) % p.patternHeight) * p.patternWidth + uint(qx) % p.patternWidth];
+            bool adjacent = abs(dx) <= 1 && abs(dy) <= 1;
+            if (neighbourColor == color) {
+                sameSum += neighbour;
+                sameCount++;
+            }
+            if (neighbourColor == color || adjacent) highest = max(highest, neighbour);
+        }
+    }
+    float sigma = sqrt(max(p.a[color] * highest + p.b[color], 0.0f));
+    if (sameCount > 0 && value > p.ratio * highest + p.threshold * sigma) {
+        value = sameSum / float(sameCount);
+        atomic_fetch_add_explicit(repaired, 1u, memory_order_relaxed);
+    }
+    out.write(float4(value), gid);
+}
+
 // Malvar–He–Cutler gradient-corrected bilinear demosaic for 2x2 Bayer patterns.
 kernel void rl_demosaic_bayer(
     texture2d<float, access::read> cfa [[texture(0)]],

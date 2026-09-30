@@ -13,6 +13,10 @@ struct SessionBuilder {
     let kernels: KernelLibrary
 
     static let analysisLongEdge = 1024
+    /// A photosite counts as hot when it is this many noise sigmas above every neighbour...
+    static let hotPixelThreshold: Float = 8
+    /// ...and this many times as bright as the brightest.
+    static let hotPixelRatio: Float = 2
 
     func build(_ decoded: DecodedImage) throws -> ImageSession {
         let width = decoded.width
@@ -35,10 +39,20 @@ struct SessionBuilder {
         let minimum = decoded.asShotMultipliers.min()
         let balance = minimum > 0 ? decoded.asShotMultipliers / minimum : SIMD3(1, 1, 1)
         let multipliers = SIMD4<Float>(SIMD3<Float>(balance), 1)
+        let noise = decoded.noise
+        guard let repairedCount = device.makeBuffer(length: MemoryLayout<UInt32>.stride, options: .storageModeShared)
+        else {
+            throw EngineError.gpuUnavailable
+        }
+        memset(repairedCount.contents(), 0, repairedCount.length)
 
         switch decoded.layout {
         case let .mosaic(pattern):
-            try encodeMosaic(decoded, pattern: pattern, multipliers: multipliers, into: pyramid, commands: commands)
+            try encodeMosaic(
+                decoded, pattern: pattern, multipliers: multipliers,
+                noise: noise.scaled(by: SIMD3<Float>(balance)), repairedCount: repairedCount,
+                into: pyramid, commands: commands,
+            )
         case .linearRGB:
             try encodeLinearRGB(decoded, multipliers: multipliers, into: pyramid, commands: commands)
         case .linearSRGBHalf:
@@ -63,7 +77,6 @@ struct SessionBuilder {
         )
         blit.endEncoding()
         commands.commit()
-        let noise = decoded.noise
         commands.waitUntilCompleted()
         if let error = commands.error {
             throw EngineError.renderFailed(error.localizedDescription)
@@ -86,6 +99,7 @@ struct SessionBuilder {
             balanceMultipliers: balance,
             analysis: analysis,
             noise: noise,
+            repairedPixels: Int(repairedCount.contents().load(as: UInt32.self)),
         )
     }
 
@@ -93,6 +107,8 @@ struct SessionBuilder {
         _ decoded: DecodedImage,
         pattern: CFAPattern,
         multipliers: SIMD4<Float>,
+        noise: NoiseModel,
+        repairedCount: any MTLBuffer,
         into pyramid: any MTLTexture,
         commands: any MTLCommandBuffer,
     ) throws {
@@ -104,6 +120,7 @@ struct SessionBuilder {
         cfaDescriptor.usage = [.shaderRead, .shaderWrite]
         cfaDescriptor.storageMode = .private
         guard let cfa = device.makeTexture(descriptor: cfaDescriptor),
+              let repaired = device.makeTexture(descriptor: cfaDescriptor),
               let samples = decoded.samples.withUnsafeBytes({
                   device.makeBuffer(bytes: $0.baseAddress!, length: $0.count, options: .storageModeShared)
               }),
@@ -127,13 +144,26 @@ struct SessionBuilder {
         encoder.setTexture(cfa, index: 0)
         encoder.dispatchGrid(width: width, height: height, pipeline: kernels.cfaNormalize)
 
+        var hotParams = HotPixelParams(
+            width: UInt32(width), height: UInt32(height),
+            patternWidth: UInt32(pattern.width), patternHeight: UInt32(pattern.height),
+            threshold: Self.hotPixelThreshold, ratio: Self.hotPixelRatio, a: SIMD4(noise.a, 0), b: SIMD4(noise.b, 0),
+        )
+        encoder.setComputePipelineState(kernels.repairHotPixels)
+        encoder.setTexture(cfa, index: 0)
+        encoder.setTexture(repaired, index: 1)
+        encoder.setBytes(&hotParams, length: MemoryLayout<HotPixelParams>.stride, index: 0)
+        encoder.setBytes(&colors, length: colors.count, index: 1)
+        encoder.setBuffer(repairedCount, offset: 0, index: 2)
+        encoder.dispatchGrid(width: width, height: height, pipeline: kernels.repairHotPixels)
+
         var demosaicParams = DemosaicParams(
             width: UInt32(width), height: UInt32(height),
             patternWidth: UInt32(pattern.width), patternHeight: UInt32(pattern.height),
         )
         let demosaic = pattern.width == 2 && pattern.height == 2 ? kernels.demosaicBayer : kernels.demosaicGeneric
         encoder.setComputePipelineState(demosaic)
-        encoder.setTexture(cfa, index: 0)
+        encoder.setTexture(repaired, index: 0)
         encoder.setTexture(pyramid, index: 1)
         encoder.setBytes(&demosaicParams, length: MemoryLayout<DemosaicParams>.stride, index: 0)
         encoder.setBytes(&colors, length: colors.count, index: 1)

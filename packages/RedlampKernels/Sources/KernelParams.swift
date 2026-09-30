@@ -48,6 +48,39 @@ public struct DemosaicParams {
     }
 }
 
+public struct HotPixelParams {
+    public var width: UInt32
+    public var height: UInt32
+    public var patternWidth: UInt32
+    public var patternHeight: UInt32
+    public var threshold: Float
+    public var ratio: Float
+    public var pad1: Float = 0
+    public var pad2: Float = 0
+    public var a: SIMD4<Float>
+    public var b: SIMD4<Float>
+
+    public init(
+        width: UInt32,
+        height: UInt32,
+        patternWidth: UInt32,
+        patternHeight: UInt32,
+        threshold: Float,
+        ratio: Float,
+        a: SIMD4<Float>,
+        b: SIMD4<Float>,
+    ) {
+        self.width = width
+        self.height = height
+        self.patternWidth = patternWidth
+        self.patternHeight = patternHeight
+        self.threshold = threshold
+        self.ratio = ratio
+        self.a = a
+        self.b = b
+    }
+}
+
 public struct HistogramParams {
     public var width: UInt32
     public var height: UInt32

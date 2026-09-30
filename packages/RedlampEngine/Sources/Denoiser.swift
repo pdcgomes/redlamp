@@ -71,7 +71,7 @@ final class Denoiser {
     }
 
     private var entries: [Entry] = []
-    private static let maximumEntries = 3
+    private static let maximumEntries = 4
     private var scratch: [any MTLTexture] = []
 
     init(device: any MTLDevice, kernels: KernelLibrary) {

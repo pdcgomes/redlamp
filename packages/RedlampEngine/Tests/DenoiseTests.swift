@@ -100,9 +100,39 @@ struct DenoiseTests {
         #expect(worst <= 1, "largest difference \(worst) in \(differing) bytes")
     }
 
+    // MARK: - Sensor cleanup
+
+    @Test func `hot pixels are repaired`() throws {
+        var random = SeededRandom(seed: 3)
+        let hot = (0 ..< 40).map { _ in
+            SIMD2(8 + Int(random.uniform() * 1000), 8 + Int(random.uniform() * 740))
+        }
+        let session = try makeSession(.bayer, width: 1024, height: 768, spikes: hot.map { ($0, 0.9) })
+        #expect(session.repairedPixels == hot.count)
+        let pixels = try readLevel(session, level: 0)
+        for point in hot {
+            let value = pixels[point.y * 1024 + point.x]
+            #expect(value.max() < Self.level * 1.5, "\(point): \(value)")
+        }
+    }
+
+    @Test func `clean noise and real highlights are left alone`() throws {
+        #expect(try makeSession(.bayer, width: 1024, height: 768).repairedPixels == 0)
+        #expect(try makeSession(.xTrans, width: 1024, height: 768).repairedPixels == 0)
+        // A small highlight lights its neighbours too.
+        let highlight = (-1 ... 1).flatMap { dy in (-1 ... 1).map { dx in (SIMD2(500 + dx, 400 + dy), Float(0.9)) } }
+        #expect(try makeSession(.bayer, width: 1024, height: 768, spikes: highlight).repairedPixels == 0)
+    }
+
     // MARK: - Helpers
 
-    private func makeSession(_ sensor: SensorKind, width: Int, height: Int) throws -> ImageSession {
+    /// `spikes` overrides single photosites with a normalised value.
+    private func makeSession(
+        _ sensor: SensorKind,
+        width: Int,
+        height: Int,
+        spikes: [(SIMD2<Int>, Float)] = [],
+    ) throws -> ImageSession {
         let layout: DecodedImage.Layout
         let channels: Int
         switch sensor {
@@ -123,9 +153,12 @@ struct DenoiseTests {
         let white: Float = 16383
         var random = SeededRandom(seed: 7)
         let sigma = (Self.noise.a.x * Self.level + Self.noise.b.x).squareRoot()
-        let samples = (0 ..< width * height * channels).map { _ in
-            let value = Self.level + sigma * random.gaussian()
-            return UInt16(min(max(black + value * (white - black), 0), 65535).rounded())
+        func raw(_ value: Float) -> UInt16 {
+            UInt16(min(max(black + value * (white - black), 0), 65535).rounded())
+        }
+        var samples = (0 ..< width * height * channels).map { _ in raw(Self.level + sigma * random.gaussian()) }
+        for (point, value) in spikes {
+            samples[(point.y * width + point.x) * channels] = raw(value)
         }
         var decoded = DecodedImage(
             width: width, height: height, layout: layout, samples: samples,

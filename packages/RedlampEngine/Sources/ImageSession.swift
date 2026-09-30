@@ -27,6 +27,8 @@ final class ImageSession: @unchecked Sendable {
     /// Sensor noise in pyramid units (after the balance multipliers).
     let noise: NoiseModel
     let sensor: SensorKind
+    /// Hot photosites replaced before demosaicing.
+    let repairedPixels: Int
 
     init(
         info: ImageInfo,
@@ -36,7 +38,9 @@ final class ImageSession: @unchecked Sendable {
         balanceMultipliers: SIMD3<Double>,
         analysis: AnalysisImage,
         noise: NoiseModel,
+        repairedPixels: Int,
     ) {
+        self.repairedPixels = repairedPixels
         self.noise = noise.scaled(by: SIMD3<Float>(balanceMultipliers))
         sensor = SensorKind(decoded.layout)
         self.info = info
