@@ -161,9 +161,10 @@
                 }
                 return
             }
-            guard let index = arguments.firstIndex(of: "--sweep"), index + 1 < arguments.count,
-                  let parameter = ParameterID.allCases.first(where: { arguments[index + 1] == "\($0)" })
-            else { return }
+            guard let index = arguments.firstIndex(of: "--sweep"), index + 1 < arguments.count else { return }
+            let target = arguments[index + 1]
+            let parameter = ParameterID.allCases.first { target == "\($0)" }
+            guard parameter != nil || target == "maskDrag" else { return }
             let seconds = arguments.firstIndex(of: "--sweep-seconds").flatMap { Double(arguments[$0 + 1]) } ?? 3
 
             Task { @MainActor in
@@ -173,7 +174,11 @@
                 }
                 trace("image ready")
                 try? await Task.sleep(for: .seconds(1.5))
-                await sweep(parameter, seconds: seconds, model: model)
+                if let parameter {
+                    await sweep(parameter, seconds: seconds, model: model)
+                } else {
+                    await maskDrag(seconds: seconds, model: model)
+                }
             }
         }
 
@@ -189,21 +194,52 @@
         }
 
         private static func sweep(_ parameter: ParameterID, seconds: Double, model: EditorModel) async {
+            let spec = parameter.spec
+            await drag(
+                "\(spec.label) sweep", seconds: seconds, model: model,
+                begin: { model.beginEdit(parameter) },
+                step: { t in model.setSliderValue(parameter, spec.value(atPosition: 0.5 + 0.35 * sin(t * .pi * 4))) },
+            )
+        }
+
+        /// `--sweep maskDrag`: draws a radial mask, then moves it the way its center handle does.
+        private static func maskDrag(seconds: Double, model: EditorModel) async {
+            var radial = RadialMask(center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.15)
+            model.startDrawing(.radial)
+            model.beginDrawing(.radial(radial))
+            model.finishDrawing()
+            guard let mask = model.selectedMask, let component = mask.components.first else { return }
+            await drag(
+                "radial mask drag", seconds: seconds, model: model,
+                begin: { model.beginEdit() },
+                step: { t in
+                    radial.center = ImagePoint(x: 0.5 + 0.2 * sin(t * .pi * 4), y: 0.5 + 0.15 * cos(t * .pi * 4))
+                    model.updateComponent(component.id, in: mask.id, shape: .radial(radial))
+                },
+            )
+        }
+
+        /// Runs `step` with progress 0…1 at 120 Hz (like a trackpad drag), then writes main-thread
+        /// and frame statistics to /tmp/redlamp-perf.txt.
+        private static func drag(
+            _ label: String,
+            seconds: Double,
+            model: EditorModel,
+            begin: () -> Void,
+            step: (Double) -> Void,
+        ) async {
             trace("sweep start")
             defer { trace("sweep end") }
             let monitor = MainThreadMonitor()
-            let spec = parameter.spec
             let framesBefore = model.debugFrameCount
             let sampler = LaunchArguments.all.contains("--sweep-profile") ? MainThreadSampler() : nil
             sampler?.start()
             monitor.start()
-            model.beginEdit(parameter)
+            begin()
             let started = CFAbsoluteTimeGetCurrent()
             var events = 0
             while CFAbsoluteTimeGetCurrent() - started < seconds {
-                let t = (CFAbsoluteTimeGetCurrent() - started) / seconds
-                let position = 0.5 + 0.35 * sin(t * .pi * 4)
-                model.setSliderValue(parameter, spec.value(atPosition: position))
+                step((CFAbsoluteTimeGetCurrent() - started) / seconds)
                 events += 1
                 try? await Task.sleep(for: .microseconds(8333))
             }
@@ -228,9 +264,9 @@
 
             let frames = model.debugFrameCount - framesBefore
             let report = [
-                monitor.report("main thread during \(spec.label) sweep", seconds: seconds),
+                monitor.report("main thread during \(label)", seconds: seconds),
                 String(
-                    format: "slider events: %d (%.0f/s), frames received: %d (%.0f/s)",
+                    format: "drag events: %d (%.0f/s), frames received: %d (%.0f/s)",
                     events,
                     Double(events) / seconds,
                     frames,
