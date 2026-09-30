@@ -94,6 +94,33 @@ static inline float3 gamutMap(float3 rec2020, constant DevelopParams &p) {
     return clippedLo + (clippedHi - clippedLo) * (rgb - lo) / (hi - lo);
 }
 
+// The most chroma an OKLab lightness and hue can have inside the output gamut (bisection).
+static inline float maxChroma(float lightness, float hueRadians, constant DevelopParams &p) {
+    float2 direction = float2(cos(hueRadians), sin(hueRadians));
+    float inside = 0.0f;
+    float outside = 0.5f;
+    for (int i = 0; i < 10; i++) {
+        float c = 0.5f * (inside + outside);
+        float3 rgb = mul3(p.displayToOutput0, p.displayToOutput1, p.displayToOutput2,
+                          okLabToRec2020(float3(lightness, c * direction)));
+        bool fits = all(rgb >= -1e-4f) && all(rgb <= 1.0001f);
+        inside = fits ? c : inside;
+        outside = fits ? outside : c;
+    }
+    return inside;
+}
+
+// Gamut-relative saturation: a boost from `chroma` towards `target` approaches the gamut
+// boundary instead of passing it, so already vivid colours don't clip flat. Small boosts are
+// unchanged; reductions pass through.
+static inline float boostChroma(float chroma, float target, float lightness, float hueRadians,
+                                constant DevelopParams &p) {
+    if (target <= chroma) return target;
+    float headroom = maxChroma(lightness, hueRadians, p) - chroma;
+    if (headroom <= 1e-5f) return chroma;
+    return chroma + headroom * (1.0f - exp(-(target - chroma) / headroom));
+}
+
 static inline float hueDistance(float a, float b) {
     float d = fmod(abs(a - b), 360.0f);
     return d > 180.0f ? 360.0f - d : d;
@@ -236,7 +263,7 @@ kernel void rl_develop(
 
     saturation *= 1.0f + localColor.w;
     hue += localColor.z * smoothstep(0.0f, 0.04f, chroma);
-    chroma *= max(saturation, 0.0f);
+    chroma = boostChroma(chroma, chroma * max(saturation, 0.0f), lab.x, hue * (M_PI_F / 180.0f), p);
     if (p.color.w > 0.5f) chroma = 0.0f;
     float hueRadians = hue * (M_PI_F / 180.0f);
     lab.y = chroma * cos(hueRadians);
