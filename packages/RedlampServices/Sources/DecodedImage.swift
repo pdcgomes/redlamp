@@ -67,6 +67,8 @@ public struct DecodedImage: Sendable {
     public var gainMaps: [GainMap] = []
     /// The file's DNG colour calibrations, interpolated by white balance when rendering.
     public var dngColor: DNGColorCalibration?
+    /// Row and column offsets from the optical-black margins, when they show banding.
+    public var banding: BandingCorrection?
 
     public init(
         width: Int,

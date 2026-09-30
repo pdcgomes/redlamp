@@ -231,6 +231,16 @@ struct SessionBuilder {
         encoder.setBytes(&params, length: MemoryLayout<CFAParams>.stride, index: 1)
         encoder.setBytes(&blacks, length: blacks.count * MemoryLayout<Float>.stride, index: 2)
         encoder.setBytes(&colors, length: colors.count, index: 3)
+        let banding = decoded.banding
+        for (index, (offsets, count)) in [(banding?.rows ?? [], height), (banding?.columns ?? [], width)].enumerated() {
+            let values = offsets.count == count ? offsets : [Float](repeating: 0, count: count)
+            guard let buffer = device.makeBuffer(
+                bytes: values, length: count * MemoryLayout<Float>.stride, options: .storageModeShared,
+            ) else {
+                throw EngineError.gpuUnavailable
+            }
+            encoder.setBuffer(buffer, offset: 0, index: 4 + index)
+        }
         encoder.setTexture(cfa, index: 0)
         encoder.dispatchGrid(width: width, height: height, pipeline: kernels.cfaNormalize)
 

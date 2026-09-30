@@ -30,6 +30,7 @@ enum RawDecoder {
         let layout: DecodedImage.Layout
         let samples: [UInt16]
         let blackLevels: [Float]
+        var banding: BandingCorrection?
 
         if let jpegXL {
             layout = .linearRGB
@@ -46,6 +47,14 @@ enum RawDecoder {
             blackLevels = blackPattern(raw, filters: filters, pattern: pattern, base: black)
             whiteLevel = histogram.withUnsafeBufferPointer {
                 WhiteLevel.measured(histogram: $0, nominal: whiteLevel, total: width * height)
+            }
+            banding = OpticalBlack.measure(
+                raw: rawImage, pitch: pitch / MemoryLayout<UInt16>.size, top: top, left: left,
+                width: width, height: height, white: whiteLevel,
+            ) { [blackLevels] x, y in
+                let column = (x % pattern.width + pattern.width) % pattern.width
+                let row = (y % pattern.height + pattern.height) % pattern.height
+                return blackLevels[row * pattern.width + column]
             }
         } else if colors >= 3, let pixels = raw.pointee.rawdata.color3_image {
             layout = .linearRGB
@@ -122,6 +131,7 @@ enum RawDecoder {
         decoded.noiseProfile = DNGNoiseProfile.read(url)
         decoded.gainMaps = DNGGainMaps.read(url)
         decoded.dngColor = DNGColorCalibration.read(url)
+        decoded.banding = banding
         return decoded
     }
 

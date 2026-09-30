@@ -2,21 +2,25 @@
 
 // MARK: - Raw normalisation
 
-// Black-subtracts, scales to the white level and applies the as-shot white balance. Values
-// above 1 are kept: a channel with a large multiplier only clips at its own level, and
-// highlight reconstruction deals with photosites that did clip.
+// Black-subtracts (with each row's and column's banding offset, zero without banding), scales
+// to the white level and applies the as-shot white balance. Values above 1 are kept: a channel
+// with a large multiplier only clips at its own level, and highlight reconstruction deals with
+// photosites that did clip.
 kernel void rl_cfa_normalize(
     device const ushort *raw [[buffer(0)]],
     constant CFAParams &p [[buffer(1)]],
     constant float *blackPattern [[buffer(2)]],
     constant uchar *colorPattern [[buffer(3)]],
+    device const float *rowOffsets [[buffer(4)]],
+    device const float *columnOffsets [[buffer(5)]],
     texture2d<float, access::write> out [[texture(0)]],
     uint2 gid [[thread_position_in_grid]])
 {
     if (gid.x >= p.width || gid.y >= p.height) return;
     uint position = (gid.y % p.patternHeight) * p.patternWidth + (gid.x % p.patternWidth);
     float black = blackPattern[position];
-    float value = (float(raw[gid.y * p.width + gid.x]) - black) / max(p.white - black, 1.0f);
+    float banding = rowOffsets[gid.y] + columnOffsets[gid.x];
+    float value = (float(raw[gid.y * p.width + gid.x]) - black - banding) / max(p.white - black, 1.0f);
     value = max(value * p.multipliers[colorPattern[position]], 0.0f);
     out.write(float4(value), gid);
 }

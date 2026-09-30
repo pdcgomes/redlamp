@@ -348,6 +348,27 @@ struct DetailStageTests {
         #expect(abs(shaded / plain - 1) < 0.15, "noise left: \(plain) plain, \(shaded) behind a 3x gain")
     }
 
+    // MARK: - Banding
+
+    @Test func `banding offsets are subtracted before demosaicing`() throws {
+        let (width, height) = (256, 256)
+        let offsets = (0 ..< height).map { Float(($0 * 7919) % 13) - 6 }
+        let banded = { (_: Int, y: Int) in Self.level + offsets[y] / (16383 - 512) }
+        func rowSpread(_ session: ImageSession) throws -> Float {
+            let pixels = try readLevel(session, level: 0)
+            let means = (8 ..< height - 8).map { y in
+                (8 ..< width - 8).reduce(Float(0)) { $0 + pixels[y * width + $1].y } / Float(width - 16)
+            }
+            return (means.max() ?? 0) - (means.min() ?? 0)
+        }
+        let plain = try rowSpread(makeSession(.bayer, width: width, height: height, noiseScale: 0, signal: banded))
+        let corrected = try rowSpread(makeSession(
+            .bayer, width: width, height: height, noiseScale: 0,
+            banding: BandingCorrection(rows: offsets, columns: []), signal: banded,
+        ))
+        #expect(corrected < 0.2 * plain, "row spread \(corrected), was \(plain)")
+    }
+
     // MARK: - Helpers
 
     /// `signal` is the scene per photosite (`level` by default), `noiseScale` scales the
@@ -359,6 +380,7 @@ struct DetailStageTests {
         noiseScale: Float = 1,
         asShot: SIMD3<Double> = SIMD3(1, 1, 1),
         gainMaps: [GainMap] = [],
+        banding: BandingCorrection? = nil,
         spikes: [(SIMD2<Int>, Float)] = [],
         signal: (Int, Int) -> Float = { _, _ in DetailStageTests.level },
     ) throws -> ImageSession {
@@ -404,6 +426,7 @@ struct DetailStageTests {
         )
         decoded.noiseProfile = Self.noise
         decoded.gainMaps = gainMaps
+        decoded.banding = banding
         return try SessionBuilder(device: device, queue: queue, kernels: kernels).build(decoded)
     }
 
