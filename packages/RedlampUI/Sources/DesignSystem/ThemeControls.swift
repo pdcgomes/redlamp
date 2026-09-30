@@ -12,22 +12,19 @@ public struct ThemeControls: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                ThemeDot(family: ThemeCatalog.family(id: theme.familyID), appearance: theme.appearance, size: 16)
-                Picker("Theme", selection: $theme.familyID) {
-                    ForEach(ThemeCatalog.families) { family in
-                        Label {
-                            Text(family.displayName)
-                        } icon: {
-                            ThemeDot(family: family, appearance: theme.appearance).image
-                        }
-                        .tag(family.id)
+            Picker("Theme", selection: $theme.familyID) {
+                ForEach(ThemeCatalog.families) { family in
+                    Label {
+                        Text(family.displayName)
+                    } icon: {
+                        ThemeDot(family: family, appearance: theme.appearance).image
                     }
+                    .tag(family.id)
                 }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .help("The theme the panels are drawn in")
             }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .help("The theme the panels are drawn in")
             Picker("Appearance", selection: $theme.appearance) {
                 Label("Dark", systemImage: "moon.fill").tag(ThemeAppearance.dark)
                 Label("Light", systemImage: "sun.max.fill").tag(ThemeAppearance.light)
