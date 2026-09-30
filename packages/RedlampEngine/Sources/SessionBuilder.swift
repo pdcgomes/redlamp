@@ -47,29 +47,9 @@ struct SessionBuilder {
         }
         commands.label = "Build pyramid"
 
-        let minimum = decoded.asShotMultipliers.min()
-        let balance = minimum > 0 ? decoded.asShotMultipliers / minimum : SIMD3(1, 1, 1)
-        let multipliers = SIMD4<Float>(SIMD3<Float>(balance), 1)
+        let balance = Self.balance(decoded)
         let noise = decoded.noise
-        guard let repairedCount = device.makeBuffer(length: MemoryLayout<UInt32>.stride, options: .storageModeShared)
-        else {
-            throw EngineError.gpuUnavailable
-        }
-        memset(repairedCount.contents(), 0, repairedCount.length)
-
-        switch decoded.layout {
-        case let .mosaic(pattern):
-            try encodeMosaic(
-                decoded, pattern: pattern, multipliers: multipliers,
-                noise: noise.scaled(by: SIMD3<Float>(balance)), repairedCount: repairedCount,
-                highlights: HighlightModel.fit(decoded, balance: SIMD3<Float>(balance)),
-                into: pyramid, commands: commands,
-            )
-        case .linearRGB:
-            try encodeLinearRGB(decoded, multipliers: multipliers, into: pyramid, commands: commands)
-        case .linearSRGBHalf:
-            try encodeBitmap(decoded, into: pyramid, commands: commands)
-        }
+        let repairedCount = try encodeBase(decoded, balance: balance, noise: noise, into: pyramid, commands: commands)
 
         guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
         blit.generateMipmaps(for: pyramid)
@@ -127,6 +107,66 @@ struct SessionBuilder {
             airlight: airlight,
             hazeMap: hazeMap,
         )
+    }
+
+    /// A frame for focus stacking: level 0 only (no mipmaps, analysis or haze map), full resolution,
+    /// in camera RGB balanced by `balance(_:)`, exactly as a session's pyramid holds it.
+    func demosaic(_ decoded: DecodedImage) throws -> DemosaicedFrame {
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba16Float, width: decoded.width, height: decoded.height, mipmapped: false,
+        )
+        descriptor.usage = [.shaderRead, .shaderWrite]
+        descriptor.storageMode = .private
+        guard let texture = device.makeTexture(descriptor: descriptor), let commands = queue.makeCommandBuffer() else {
+            throw EngineError.gpuUnavailable
+        }
+        commands.label = "Demosaic frame"
+        let balance = Self.balance(decoded)
+        _ = try encodeBase(decoded, balance: balance, noise: decoded.noise, into: texture, commands: commands)
+        commands.commit()
+        commands.waitUntilCompleted()
+        if let error = commands.error {
+            throw EngineError.renderFailed(error.localizedDescription)
+        }
+        return DemosaicedFrame(texture: texture, balance: balance, decoded: decoded)
+    }
+
+    /// As-shot white balance with the smallest channel at 1: what normalisation multiplies by, so
+    /// highlight reconstruction and demosaicing see neutral colours.
+    static func balance(_ decoded: DecodedImage) -> SIMD3<Double> {
+        let minimum = decoded.asShotMultipliers.min()
+        return minimum > 0 ? decoded.asShotMultipliers / minimum : SIMD3(1, 1, 1)
+    }
+
+    /// Level 0 of `texture`: normalised, hot pixels repaired, highlights rebuilt and demosaiced.
+    /// Returns the buffer counting repaired photosites, readable once `commands` completes.
+    private func encodeBase(
+        _ decoded: DecodedImage,
+        balance: SIMD3<Double>,
+        noise: NoiseModel,
+        into texture: any MTLTexture,
+        commands: any MTLCommandBuffer,
+    ) throws -> any MTLBuffer {
+        let multipliers = SIMD4<Float>(SIMD3<Float>(balance), 1)
+        guard let repairedCount = device.makeBuffer(length: MemoryLayout<UInt32>.stride, options: .storageModeShared)
+        else {
+            throw EngineError.gpuUnavailable
+        }
+        memset(repairedCount.contents(), 0, repairedCount.length)
+        switch decoded.layout {
+        case let .mosaic(pattern):
+            try encodeMosaic(
+                decoded, pattern: pattern, multipliers: multipliers,
+                noise: noise.scaled(by: SIMD3<Float>(balance)), repairedCount: repairedCount,
+                highlights: HighlightModel.fit(decoded, balance: SIMD3<Float>(balance)),
+                into: texture, commands: commands,
+            )
+        case .linearRGB:
+            try encodeLinearRGB(decoded, multipliers: multipliers, into: texture, commands: commands)
+        case .linearSRGBHalf:
+            try encodeBitmap(decoded, into: texture, commands: commands)
+        }
+        return repairedCount
     }
 
     private func encodeMosaic(

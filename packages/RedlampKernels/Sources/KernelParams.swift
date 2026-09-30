@@ -175,6 +175,21 @@ public struct DenoiseParams {
     }
 }
 
+public struct StackWarpParams {
+    /// a, b, tx, ty: output (reference) pixel to source pixel.
+    public var transform: SIMD4<Float>
+    /// Per-channel gain to the reference's brightness.
+    public var gain: SIMD4<Float>
+    /// xy output size, zw source size.
+    public var size: SIMD4<Int32>
+
+    public init(transform: SIMD4<Float>, gain: SIMD4<Float>, size: SIMD4<Int32>) {
+        self.transform = transform
+        self.gain = gain
+        self.size = size
+    }
+}
+
 public struct SharpenParams {
     public var origin: SIMD4<Int32>
     public var size: SIMD4<Int32>

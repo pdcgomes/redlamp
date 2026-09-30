@@ -21,6 +21,7 @@ public final class KernelLibrary: @unchecked Sendable {
     public let denoisePrepare: any MTLComputePipelineState
     public let denoiseRows: any MTLComputePipelineState
     public let denoiseColumns: any MTLComputePipelineState
+    public let stackWarp: any MTLComputePipelineState
     public let sharpenLog: any MTLComputePipelineState
     public let sharpenLuma: any MTLComputePipelineState
     public let sharpenBlur: any MTLComputePipelineState
@@ -59,6 +60,7 @@ public final class KernelLibrary: @unchecked Sendable {
         denoisePrepare = try pipeline("rl_denoise_prepare")
         denoiseRows = try pipeline("rl_denoise_rows")
         denoiseColumns = try pipeline("rl_denoise_columns")
+        stackWarp = try pipeline("rl_stack_warp")
         sharpenLog = try pipeline("rl_sharpen_log")
         sharpenLuma = try pipeline("rl_sharpen_luma")
         sharpenBlur = try pipeline("rl_sharpen_blur")
