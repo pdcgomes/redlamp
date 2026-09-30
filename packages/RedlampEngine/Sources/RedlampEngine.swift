@@ -32,6 +32,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     // Owned by `renderQueue`.
     private let surfaces: SurfacePool
     private let histogramBuffer: any MTLBuffer
+    /// A small whole-photo render, for the histogram when only a region is rendered.
+    private var histogramScratch: (any MTLTexture)?
 
     public init() throws {
         guard let device = MTLCreateSystemDefaultDevice(),
@@ -137,20 +139,31 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         let clock = ContinuousClock()
         let started = clock.now
 
-        let size = session.orientedSize.fitted(within: request.targetSize)
-        guard size.width > 0 else { throw EngineError.renderFailed("empty target") }
+        let region = request.region ?? .full
+        let size = request.region == nil ? session.orientedSize.fitted(within: request.targetSize) : request.targetSize
+        guard size.width > 0, size.height > 0 else { throw EngineError.renderFailed("empty target") }
         let target = try surfaces.next(size: size)
         memset(histogramBuffer.contents(), 0, histogramBuffer.length)
 
         guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
         commands.label = "Interactive render"
         try encodeDevelop(
-            request.recipe, session: session, into: target.texture, size: size,
+            request.recipe, session: session, into: target.texture, size: size, region: region,
             encoding: .linear, showClipping: request.showClipping, maskOverlay: request.maskOverlay,
             maskOverlayColor: request.maskOverlayColor,
             commands: commands,
         )
-        try encodeHistogram(texture: target.texture, size: size, linear: true, commands: commands)
+        if request.region == nil {
+            try encodeHistogram(texture: target.texture, size: size, linear: true, commands: commands)
+        } else {
+            let overview = try histogramTexture(for: session)
+            let overviewSize = PixelSize(width: overview.width, height: overview.height)
+            try encodeDevelop(
+                request.recipe, session: session, into: overview, size: overviewSize,
+                encoding: .linear, showClipping: false, commands: commands,
+            )
+            try encodeHistogram(texture: overview, size: overviewSize, linear: true, commands: commands)
+        }
         commands.commit()
         commands.waitUntilCompleted()
         if let error = commands.error {
@@ -160,10 +173,27 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         return RenderedFrame(
             surface: target.surface,
             size: size,
+            region: region,
             histogram: readHistogram(),
             generation: request.generation,
             renderDuration: clock.now - started,
         )
+    }
+
+    /// Whole-photo histogram source, about 0.4 MP like the histogram's own sampling.
+    private func histogramTexture(for session: ImageSession) throws -> any MTLTexture {
+        let size = session.orientedSize.fitted(within: PixelSize(width: 768, height: 768))
+        if let texture = histogramScratch, texture.width == size.width, texture.height == size.height {
+            return texture
+        }
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba16Float, width: size.width, height: size.height, mipmapped: false,
+        )
+        descriptor.usage = [.shaderWrite, .shaderRead]
+        descriptor.storageMode = .private
+        guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
+        histogramScratch = texture
+        return texture
     }
 
     private func encodeDevelop(
@@ -171,6 +201,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         session: ImageSession,
         into texture: any MTLTexture,
         size: PixelSize,
+        region: ImageRect = .full,
         encoding: OutputEncoding,
         showClipping: Bool,
         maskOverlay: UUID? = nil,
@@ -179,7 +210,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     ) throws {
         guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
         var inputs = DevelopParameters.make(
-            recipe: recipe, session: session, outputSize: size, encoding: encoding,
+            recipe: recipe, session: session, outputSize: size, region: region, encoding: encoding,
             showClipping: showClipping, maskOverlay: maskOverlay, maskOverlayColor: maskOverlayColor,
         )
         encoder.setComputePipelineState(kernels.develop)

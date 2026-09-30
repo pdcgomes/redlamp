@@ -196,7 +196,8 @@ kernel void rl_develop(
     if (gid.x >= width || gid.y >= height) return;
 
     constexpr sampler linearSampler(coord::normalized, filter::linear, mip_filter::linear, address::clamp_to_edge);
-    float2 uv = (float2(gid) + 0.5f) / float2(width, height);
+    // Image coordinates of the whole photo, so masks, vignette and grain don't depend on the region.
+    float2 uv = p.region.xy + (float2(gid) + 0.5f) / float2(width, height) * p.region.zw;
     float2 sourceUV = orient(uv, int(p.geometry.x));
     float3 camera = source.sample(linearSampler, sourceUV, level(p.geometry.y)).rgb;
 
@@ -326,7 +327,8 @@ kernel void rl_develop(
 
     // Film grain, anchored to full-resolution pixel coordinates so it is zoom-stable.
     if (p.grain.x > 0.0f) {
-        float2 fullPosition = float2(gid) * p.outputSize.z;
+        float2 fullSize = p.outputSize.z * p.outputSize.xy / p.region.zw;
+        float2 fullPosition = p.region.xy * fullSize + float2(gid) * p.outputSize.z;
         float size = mix(0.6f, 3.5f, p.grain.y);
         float coarse = valueNoise(fullPosition / size, uint(p.grain.w));
         float fine = valueNoise(fullPosition / (size * 0.5f), uint(p.grain.w) + 17u);

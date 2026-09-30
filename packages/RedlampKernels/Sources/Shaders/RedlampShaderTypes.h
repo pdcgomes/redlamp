@@ -40,6 +40,7 @@ struct DevelopParams {
     float4 geometry;          // x orientation, y source LOD, z output encoding, w aspect
     float4 outputSize;        // x width, y height, z full-resolution scale
     float4 masks;             // x layer count, y overlay layer index (-1 none), z component count, w overlay color
+    float4 region;            // rendered part of the image: xy origin, zw size (normalized, oriented)
 };
 
 // One mask component. Coordinates are aspect-corrected: x is scaled by width/height so

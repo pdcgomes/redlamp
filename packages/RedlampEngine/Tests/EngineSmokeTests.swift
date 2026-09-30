@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import IOSurface
 import Metal
 import RedlampEngine
 import RedlampEngineAPI
@@ -98,6 +99,71 @@ struct EngineSmokeTests {
         let bottomRows = (plain.height - 10) ..< plain.height
         #expect(brightness(masked, rows: 0 ..< 10) < brightness(plain, rows: 0 ..< 10) * 0.6)
         #expect(abs(brightness(masked, rows: bottomRows) - brightness(plain, rows: bottomRows)) < 0.5)
+    }
+
+    /// Rendering only part of the photo must give exactly the pixels a full render has there,
+    /// including everything positioned on the whole photo: masks, vignette and grain.
+    @Test(.enabled(if: canRender))
+    func `region render matches a crop of the full render`() async throws {
+        let engine = try RedlampEngine()
+        _ = try await engine.open(Self.fixtures[0])
+        var recipe = EditRecipe()
+        recipe[.vignetteAmount] = -40
+        recipe[.grainAmount] = 40
+        var mask = MaskLayer(name: "Spot", components: [
+            MaskComponent(shape: .radial(RadialMask(center: ImagePoint(x: 0.4, y: 0.45), radiusX: 0.2, radiusY: 0.15))),
+        ])
+        mask[.localExposure] = 1
+        recipe.masks = [mask]
+
+        let frames = engine.frames()
+        var iterator = frames.makeAsyncIterator()
+        engine.render(RenderRequest(recipe: recipe, targetSize: PixelSize(width: 1200, height: 1200), generation: 1))
+        let full = try #require(await iterator.next())
+        let fullPixels = pixels(of: full)
+
+        let x0 = full.size.width / 4, y0 = full.size.height / 3, width = 320, height = 240
+        let region = ImageRect(
+            x: Double(x0) / Double(full.size.width), y: Double(y0) / Double(full.size.height),
+            width: Double(width) / Double(full.size.width), height: Double(height) / Double(full.size.height),
+        )
+        engine.render(RenderRequest(
+            recipe: recipe, targetSize: PixelSize(width: width, height: height), region: region, generation: 2,
+        ))
+        let part = try #require(await iterator.next())
+        #expect(part.region == region)
+        #expect(part.size == PixelSize(width: width, height: height))
+        #expect(part.histogram.totalCount > 0)
+
+        let partPixels = pixels(of: part)
+        var largest: Float = 0
+        for y in 0 ..< height {
+            for x in 0 ..< width {
+                for channel in 0 ..< 3 {
+                    let a = partPixels[(y * width + x) * 4 + channel]
+                    let b = fullPixels[((y0 + y) * full.size.width + x0 + x) * 4 + channel]
+                    largest = max(largest, abs(a - b))
+                }
+            }
+        }
+        #expect(largest < 2e-3)
+    }
+
+    /// RGBA float16 surface contents, row-major and tightly packed.
+    private func pixels(of frame: RenderedFrame) -> [Float] {
+        let surface = frame.surface
+        IOSurfaceLock(surface, .readOnly, nil)
+        defer { IOSurfaceUnlock(surface, .readOnly, nil) }
+        let base = IOSurfaceGetBaseAddress(surface)
+        let bytesPerRow = IOSurfaceGetBytesPerRow(surface)
+        var result = [Float](repeating: 0, count: frame.size.width * frame.size.height * 4)
+        for y in 0 ..< frame.size.height {
+            let row = (base + y * bytesPerRow).assumingMemoryBound(to: Float16.self)
+            for x in 0 ..< frame.size.width * 4 {
+                result[y * frame.size.width * 4 + x] = Float(row[x])
+            }
+        }
+        return result
     }
 
     private func brightness(_ image: CGImage, rows: Range<Int>) -> Double {

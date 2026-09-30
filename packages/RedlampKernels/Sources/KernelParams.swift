@@ -84,6 +84,7 @@ public struct DevelopParams {
     public var geometry = SIMD4<Float>(0, 0, 0, 1)
     public var outputSize = SIMD4<Float>(0, 0, 1, 0)
     public var masks = SIMD4<Float>(0, -1, 0, 0)
+    public var region = SIMD4<Float>(0, 0, 1, 1)
 
     public init() {}
 

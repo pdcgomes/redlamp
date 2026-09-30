@@ -2,11 +2,33 @@ import CoreGraphics
 import Foundation
 import IOSurface
 
+/// A rectangle in normalized image coordinates, after orientation: (0, 0) is the top-left
+/// corner of the photo as displayed and (1, 1) the bottom-right.
+public struct ImageRect: Sendable, Hashable {
+    public var x: Double
+    public var y: Double
+    public var width: Double
+    public var height: Double
+
+    public init(x: Double, y: Double, width: Double, height: Double) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+    }
+
+    public static let full = ImageRect(x: 0, y: 0, width: 1, height: 1)
+}
+
 /// An interactive render: the latest request always wins, older ones are dropped.
 public struct RenderRequest: Sendable, Hashable {
     public var recipe: EditRecipe
-    /// The rendered image is fitted inside this size (after orientation).
+    /// Without a `region`, the whole photo is fitted inside this size (after orientation).
+    /// With one, the region is rendered at exactly this size.
     public var targetSize: PixelSize
+    /// Renders only this part of the photo, for example the visible part at 1:1. The frame's
+    /// histogram still describes the whole photo.
+    public var region: ImageRect?
     /// Paint clipped highlights red and clipped shadows blue.
     public var showClipping: Bool
     /// Tints this mask's coverage (Lightroom's mask overlay).
@@ -18,12 +40,14 @@ public struct RenderRequest: Sendable, Hashable {
     public init(
         recipe: EditRecipe,
         targetSize: PixelSize,
+        region: ImageRect? = nil,
         showClipping: Bool = false,
         maskOverlay: UUID? = nil,
         generation: UInt64 = 0,
     ) {
         self.recipe = recipe
         self.targetSize = targetSize
+        self.region = region
         self.showClipping = showClipping
         self.maskOverlay = maskOverlay
         self.generation = generation
@@ -127,6 +151,8 @@ public struct RenderedFrame: @unchecked Sendable {
     /// `RGhA` (RGBA float16), linear extended Display P3.
     public let surface: IOSurfaceRef
     public let size: PixelSize
+    /// The part of the photo the surface shows.
+    public let region: ImageRect
     public let histogram: Histogram
     public let generation: UInt64
     public let renderDuration: Duration
@@ -134,12 +160,14 @@ public struct RenderedFrame: @unchecked Sendable {
     public init(
         surface: IOSurfaceRef,
         size: PixelSize,
+        region: ImageRect = .full,
         histogram: Histogram,
         generation: UInt64,
         renderDuration: Duration,
     ) {
         self.surface = surface
         self.size = size
+        self.region = region
         self.histogram = histogram
         self.generation = generation
         self.renderDuration = renderDuration

@@ -23,6 +23,7 @@ enum DevelopParameters {
         recipe: EditRecipe,
         session: ImageSession,
         outputSize: PixelSize,
+        region: ImageRect = .full,
         encoding: OutputEncoding,
         showClipping: Bool,
         maskOverlay: UUID? = nil,
@@ -112,22 +113,19 @@ enum DevelopParameters {
         )
 
         let full = session.orientedSize
-        let lod = max(0, log2(Double(full.longEdge) / Double(max(outputSize.longEdge, 1))))
+        // Full-resolution pixels per output pixel; picks the pyramid level to sample.
+        let scale = region.width * Double(full.width) / Double(max(outputSize.width, 1))
         p.geometry = SIMD4(
             Float(session.orientation),
-            Float(lod),
+            Float(max(0, log2(scale))),
             encoding.rawValue,
-            Float(outputSize.aspectRatio),
+            Float(full.aspectRatio),
         )
-        p.outputSize = SIMD4(
-            Float(outputSize.width),
-            Float(outputSize.height),
-            Float(Double(full.width) / Double(max(outputSize.width, 1))),
-            0,
-        )
+        p.outputSize = SIMD4(Float(outputSize.width), Float(outputSize.height), Float(scale), 0)
+        p.region = SIMD4(Float(region.x), Float(region.y), Float(region.width), Float(region.height))
 
         let (layers, components, overlayIndex) = maskBuffers(
-            recipe.masks, aspect: outputSize.aspectRatio, overlay: maskOverlay,
+            recipe.masks, aspect: full.aspectRatio, overlay: maskOverlay,
         )
         p.masks = SIMD4(
             Float(layers.count), Float(overlayIndex ?? -1), Float(components.count), Float(maskOverlayColor.rawValue),
