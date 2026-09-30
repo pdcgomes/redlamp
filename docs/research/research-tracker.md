@@ -57,10 +57,10 @@ These block other rows. Most need the project owner; the ones marked *counsel* n
 
 | ID | Item | Recommended | Size | Depends on | Decision | Status | Source |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| P1-01 | Add `processVersion` to `EditRecipe` (legacy sidecars read as version 1) | Adopt | S | — | Proposed | In progress (implemented and tested, not committed) | [DT §6](darktable-findings.md#6-edits-presets-styles-and-versioning) |
-| P1-02 | Preserve unknown recipe values and fields, and unknown top-level sidecar fields, through load and save | Do better | S | — | Proposed | In progress (implemented and tested, not committed) | [DT §2](darktable-findings.md#2-phase-1-issues-found-in-redlamp) |
-| P1-03 | Never overwrite or delete a sidecar written with a newer format or process version | Adopt | S | — | Proposed | In progress (implemented and tested, not committed) | [DT §6](darktable-findings.md#6-edits-presets-styles-and-versioning) |
-| P1-04 | Skip sidecar writes when only `modified` would change | Adopt | S | — | Proposed | In progress (implemented and tested, not committed) | [DT §2](darktable-findings.md#2-phase-1-issues-found-in-redlamp) |
+| P1-01 | Add `processVersion` to `EditRecipe` (legacy sidecars read as version 1) | Adopt | S | — | Accepted (2026-09-30) | Done (`382f1ac`) | [DT §6](darktable-findings.md#6-edits-presets-styles-and-versioning) |
+| P1-02 | Preserve unknown recipe values and fields, and unknown top-level sidecar fields, through load and save | Do better | S | — | Accepted (2026-09-30) | Done (`382f1ac`) | [DT §2](darktable-findings.md#2-phase-1-issues-found-in-redlamp) |
+| P1-03 | Never overwrite or delete a sidecar written with a newer format or process version | Adopt | S | — | Accepted (2026-09-30) | Done (`382f1ac`) | [DT §6](darktable-findings.md#6-edits-presets-styles-and-versioning) |
+| P1-04 | Skip sidecar writes when only `modified` would change | Adopt | S | — | Accepted (2026-09-30) | Done (`382f1ac`) | [DT §2](darktable-findings.md#2-phase-1-issues-found-in-redlamp) |
 | P1-05 | Show that a photo's edit is read-only because a newer Redlamp wrote it | Adopt | S | P1-03 | Proposed | Not started | [DT §6](darktable-findings.md#6-edits-presets-styles-and-versioning) |
 | P1-06 | Move "Process version selector" in the Lightroom inventory from Phase 2 to Phase 1; document the format-versus-process-version rules | Adopt | S | P1-01 | Proposed | Not started | [DT §11](darktable-findings.md#11-roadmap-changes) |
 | TON-01 | Confirm the +2.5 EV highlight clip and the sRGB-only output with an exposure-wedge render and a Display P3 test pattern | Adopt | S | — | Proposed | Not started | [DT §2](darktable-findings.md#2-phase-1-issues-found-in-redlamp) |
