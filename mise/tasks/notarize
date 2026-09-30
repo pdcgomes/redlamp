@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+#MISE description="Notarize and staple a signed .app, .dmg or .zip (e.g. mise run notarize -- build/release/Redlamp.app)"
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+fail() {
+    echo "error: $*" >&2
+    exit 1
+}
+
+PROFILE="${REDLAMP_NOTARY_PROFILE:?REDLAMP_NOTARY_PROFILE is not set (run through mise)}"
+TARGET="${1:-}"
+[ -n "$TARGET" ] || fail "usage: mise run notarize -- <signed .app, .dmg or .zip>"
+[ -e "$TARGET" ] || fail "$TARGET does not exist"
+TARGET="${TARGET%/}"
+case "$TARGET" in
+    *.app | *.dmg | *.zip) ;;
+    *) fail "expected a .app, .dmg or .zip: $TARGET" ;;
+esac
+
+xcrun notarytool history --keychain-profile "$PROFILE" >/dev/null 2>&1 \
+    || fail "no notarytool keychain profile '$PROFILE' (see README: Releasing)"
+
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+
+# The notary service takes archives, not bundles.
+case "$TARGET" in
+    *.app)
+        SUBMIT="$WORK/$(basename "$TARGET" .app).zip"
+        ditto -c -k --keepParent "$TARGET" "$SUBMIT"
+        ;;
+    *) SUBMIT="$TARGET" ;;
+esac
+
+echo "==> Notarizing $(basename "$TARGET") with profile '$PROFILE' (usually a few minutes)..."
+RESULT="$(xcrun notarytool submit "$SUBMIT" --keychain-profile "$PROFILE" --wait --output-format json)" || true
+if ! grep -qE '"status" *: *"Accepted"' <<<"$RESULT"; then
+    echo "$RESULT" >&2
+    ID="$(sed -nE 's/.*"id" *: *"([^"]+)".*/\1/p' <<<"$RESULT")"
+    [ -n "$ID" ] && xcrun notarytool log "$ID" --keychain-profile "$PROFILE" >&2
+    fail "notarization was not accepted"
+fi
+
+case "$TARGET" in
+    *.app)
+        xcrun stapler staple "$TARGET"
+        spctl --assess --type execute --verbose "$TARGET"
+        ;;
+    *.dmg)
+        xcrun stapler staple "$TARGET"
+        spctl --assess --type open --context context:primary-signature --verbose "$TARGET"
+        ;;
+    *.zip)
+        echo "note: a zip can't carry a stapled ticket; Gatekeeper will look it up online on first launch"
+        ;;
+esac
+
+echo "==> Notarized $TARGET"

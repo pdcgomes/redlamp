@@ -6,8 +6,7 @@ cd "$(git rev-parse --show-toplevel)"
 
 # DRY_RUN=1 builds, signs and zips without notarizing, tagging or publishing.
 DRY_RUN="${DRY_RUN:-0}"
-# Created once with `xcrun notarytool store-credentials redlamp-notary --team-id <team> ...`.
-NOTARY_PROFILE="${REDLAMP_NOTARY_PROFILE:-redlamp-notary}"
+NOTARY_PROFILE="${REDLAMP_NOTARY_PROFILE:?REDLAMP_NOTARY_PROFILE is not set (run through mise)}"
 TEAM_ID="${REDLAMP_TEAM_ID:?REDLAMP_TEAM_ID is not set (run through mise)}"
 
 VERSION="$(sed -nE 's/^MARKETING_VERSION *= *([^ ]+).*/\1/p' Version.xcconfig)"
@@ -76,26 +75,15 @@ codesign --verify --deep --strict "$APP"
 grep -q 'usage: redlamp' <<<"$("$APP/Contents/Helpers/redlamp" 2>&1 || true)" \
     || fail "the bundled CLI does not run (missing frameworks?)"
 
-ditto -c -k --keepParent "$APP" "$ZIP"
-
 if [ "$DRY_RUN" = 1 ]; then
-    echo "==> Dry run: signed but not notarized: $ZIP"
+    ditto -c -k --keepParent "$APP" "$ZIP"
+    echo "==> Dry run: signed but not notarized: $ZIP (mise run notarize -- $APP to notarize it)"
     exit 0
 fi
 
-echo "==> Notarizing (this usually takes a few minutes)..."
-RESULT="$(xcrun notarytool submit "$ZIP" --keychain-profile "$NOTARY_PROFILE" --wait --output-format json)"
-if ! grep -q '"status":"Accepted"' <<<"$RESULT"; then
-    echo "$RESULT" >&2
-    ID="$(sed -nE 's/.*"id":"([^"]+)".*/\1/p' <<<"$RESULT")"
-    [ -n "$ID" ] && xcrun notarytool log "$ID" --keychain-profile "$NOTARY_PROFILE" >&2
-    fail "notarization was not accepted"
-fi
-xcrun stapler staple "$APP"
-spctl --assess --type execute "$APP"
+mise run notarize -- "$APP"
 
-# Re-zip so the download carries the stapled ticket and opens offline.
-rm "$ZIP"
+# Zipped after stapling so the download carries its ticket and opens offline.
 ditto -c -k --keepParent "$APP" "$ZIP"
 
 echo "==> Publishing $TAG..."

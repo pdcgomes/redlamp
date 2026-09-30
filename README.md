@@ -28,6 +28,7 @@ Redlamp is built from scratch in Swift and Metal for Apple Silicon. It focuses o
 - [Where we are](#where-we-are)
 - [Screenshots](#screenshots)
 - [Roadmap](#roadmap)
+- [Installation](#installation)
 - [Getting started](#getting-started)
 - [Component harness](#component-harness)
 - [Using Redlamp](#using-redlamp)
@@ -317,16 +318,53 @@ The [AI and computational photography brief](docs/research/ai-and-computational-
 
 A [study of darktable](docs/research/darktable-findings.md), the most complete open-source raw developer, covers how it handles cameras, color science, modules and masks, presets and sidecars, lenses, performance and UX, and what Redlamp should adopt, do better or skip in each area. A [study of Topaz-style upscaling and sharpening](docs/research/notes/H-topaz-upscale-sharpen.md) includes a measured bake-off of open models. Every recommendation from these studies is tracked, with its decision, phase and status, in the [research intake tracker](docs/research/research-tracker.md).
 
-## Getting started
+## Installation
 
-### Install with Homebrew
+Redlamp runs on Apple Silicon Macs with **macOS 26** or later. Install a release with Homebrew, or build it yourself from source.
+
+> The first release hasn't been published yet. Until it is, build from source.
+
+### Homebrew
 
 ```bash
 brew tap pdcgomes/redlamp https://github.com/pdcgomes/redlamp
 brew install --cask redlamp
 ```
 
-This installs the latest signed and notarized release of Redlamp.app and puts the `redlamp` CLI on your `PATH`. `brew upgrade` picks up new releases.
+This installs the latest signed and notarized Redlamp.app in `/Applications` and puts the [`redlamp` command-line tool](#command-line-tool) on your `PATH`. The tap is this repository, so the explicit URL is needed the first time.
+
+```bash
+brew upgrade --cask redlamp          # update to the latest release
+brew uninstall --cask redlamp        # remove the app and the CLI
+brew uninstall --zap --cask redlamp  # also remove your recipes, looks and preferences
+```
+
+Edits live in sidecars next to your photos (see [where edits are stored](#where-edits-are-stored)), so no uninstall touches them.
+
+### Build from source
+
+You need **Xcode 26** or later and [**mise**](https://mise.jdx.dev). Then:
+
+```bash
+git clone https://github.com/pdcgomes/redlamp.git && cd redlamp
+mise install                                   # Tuist, SwiftFormat, SwiftLint at pinned versions
+mise run generate                              # builds vendored LibRaw, then generates Redlamp.xcworkspace
+CONFIGURATION=Release mise run build           # the app
+SCHEME=redlamp CONFIGURATION=Release mise run build   # the CLI
+```
+
+Both land in `build/DerivedData/Build/Products/Release/`. Copy the app into `/Applications`, and link the CLI from somewhere on your `PATH`. The CLI loads the frameworks next to it, so link it rather than copying it:
+
+```bash
+ditto build/DerivedData/Build/Products/Release/Redlamp.app /Applications/Redlamp.app
+mkdir -p ~/.local/bin && ln -sf "$PWD/build/DerivedData/Build/Products/Release/redlamp" ~/.local/bin/redlamp
+```
+
+Builds are signed with the project's development team. To sign with your own, set `redlampDevelopmentTeam` in `Tuist/ProjectDescriptionHelpers/Module.swift` to your team ID and run `mise run generate` again.
+
+## Getting started
+
+This section is for working on Redlamp. To just use it, see [Installation](#installation).
 
 ### Requirements
 
@@ -377,18 +415,19 @@ mise run render -- render ~/Pictures/DSC01234.ARW -o out.jpg --size 2048 \
 | `mise run screenshots` | Regenerate the README screenshots of the app and the harness, on temporary copies of the fixtures (needs Screen Recording permission, the fixtures and the look-development set) |
 | `mise run harness` (`h`) | Build and launch the UI component harness |
 | `mise run release` | Build, sign, notarize and publish the version in `Version.xcconfig` as a GitHub release (see [Releasing](#releasing)). `DRY_RUN=1` stops after signing |
+| `mise run notarize -- <path>` | Notarize a signed `.app`, `.dmg` or `.zip`, then staple and check it with Gatekeeper |
 | `scripts/perf-sweep.sh [Debug\|Release] [parameter] [script]` | Drag a slider for 3 s and report main-thread smoothness. `PROFILE=1` adds a main-thread profile; `PANELS=swiftui` measures the SwiftUI panels |
 | `scripts/harness-capture.sh <scene> <png> [mode]` | Screenshot a harness scene; with `side` mode, `swift scripts/parity-diff.swift <png>` scores it and `scripts/parity-rows.swift` compares it row by row |
 
 ### Releasing
 
-Releases are built and notarized on a Mac with the team's Developer ID Application certificate in the keychain. Store notarization credentials once, using an [app-specific password](https://support.apple.com/102654):
+Releases are built and notarized on a Mac with the team's Developer ID Application certificate in the keychain. Notarization uses the notarytool keychain profile named by `REDLAMP_NOTARY_PROFILE` in `mise.toml`. It defaults to `driftstation-notarize`, since the credentials belong to the team's Apple ID rather than one app. On a Mac without that profile, create one with an [app-specific password](https://support.apple.com/102654), and override the name in `.mise.local.toml` if you pick another:
 
 ```bash
-xcrun notarytool store-credentials redlamp-notary --apple-id <apple-id> --team-id 3JP75Z3F98
+xcrun notarytool store-credentials driftstation-notarize --apple-id <apple-id> --team-id 3JP75Z3F98
 ```
 
-Then bump `MARKETING_VERSION` in `Version.xcconfig`, commit and push to `main`, and run `mise run release`. It builds the app and CLI, puts the CLI in `Redlamp.app/Contents/Helpers`, signs, notarizes and staples, then tags `v<version>` and publishes `Redlamp-<version>.zip` as a GitHub release. The **Update cask** workflow then points `Casks/redlamp.rb` at the new release, so `brew upgrade` finds it.
+Then bump `MARKETING_VERSION` in `Version.xcconfig`, commit and push to `main`, and run `mise run release`. It builds the app and CLI, puts the CLI in `Redlamp.app/Contents/Helpers`, and signs everything. It then notarizes and staples through `mise run notarize`, tags `v<version>`, and publishes `Redlamp-<version>.zip` as a GitHub release. The **Update cask** workflow then points `Casks/redlamp.rb` at the new release, so `brew upgrade` finds it.
 
 ## Component harness
 

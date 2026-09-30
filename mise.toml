@@ -7,3 +7,6 @@ swiftlint = "0.65.0"
 # Signing / project identity. Override per-machine in .mise.local.toml if needed.
 REDLAMP_TEAM_ID = "3JP75Z3F98"
 REDLAMP_BUNDLE_ID = "app.redlamp.mac"
+# notarytool keychain profile for the team's Apple ID. It isn't tied to one app, so this
+# reuses Drift Station's; create one with `xcrun notarytool store-credentials`.
+REDLAMP_NOTARY_PROFILE = "driftstation-notarize"
