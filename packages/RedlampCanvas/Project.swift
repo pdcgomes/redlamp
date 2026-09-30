@@ -5,5 +5,6 @@ let project = Project(
     name: Module.canvas.name,
     targets: [
         .frameworkTarget(module: .canvas),
+        .frameworkTestTarget(module: .canvas),
     ],
 )

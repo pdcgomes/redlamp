@@ -37,6 +37,16 @@ public final class CanvasController {
         public static let twoToOne = Zoom.scale(2)
     }
 
+    /// Lightroom Classic's zoom ratios (the Navigator menu and ⌘= / ⌘- steps).
+    public static let zoomRatios: [Double] = [1 / 16, 1 / 8, 1 / 4, 1 / 3, 1 / 2, 1, 2, 3, 4, 8, 11]
+    /// 11:1, Lightroom Classic's closest zoom.
+    public static let maxScale = 11.0
+
+    /// "1:4", "1:1", "11:1"…
+    public static func ratioLabel(_ scale: Double) -> String {
+        scale >= 1 ? "\(Int(scale.rounded())):1" : "1:\(Int((1 / scale).rounded()))"
+    }
+
     public var zoom: Zoom = .fit {
         didSet { changed() }
     }
@@ -183,14 +193,19 @@ public final class CanvasController {
     }
 
     private func clampedCenter(width: Double, height: Double, stage: CGSize) -> CGPoint {
+        clamped(center, width: width, height: height, stage: stage)
+    }
+
+    /// The closest point to `point` the stage can be centred on without showing past the image edges.
+    private func clamped(_ point: CGPoint, width: Double, height: Double, stage: CGSize) -> CGPoint {
         func clamp(_ value: Double, extent: Double, available: Double) -> Double {
             guard extent > available else { return 0.5 }
             let half = available / 2 / extent
             return min(max(value, half), 1 - half)
         }
         return CGPoint(
-            x: clamp(center.x, extent: width, available: stage.width),
-            y: clamp(center.y, extent: height, available: stage.height),
+            x: clamp(point.x, extent: width, available: stage.width),
+            y: clamp(point.y, extent: height, available: stage.height),
         )
     }
 
@@ -216,9 +231,14 @@ public final class CanvasController {
         }
     }
 
-    /// Zoom steps for ⌘= / ⌘-: Fit, then fixed ratios up to 8:1.
+    /// Zoom steps for ⌘= / ⌘-: Fit, then Lightroom's ratios up to 11:1.
     private var zoomSteps: [Double] {
-        ([fitScale] + [0.25, 0.5, 1, 2, 3, 4, 8].filter { $0 > fitScale + 1e-3 }).sorted()
+        ([fitScale] + Self.zoomRatios.filter { $0 > fitScale + 1e-3 }).sorted()
+    }
+
+    /// `scale` limited to the range the wheel and pinch zoom through: Fit to 11:1.
+    public func clampedScale(_ scale: Double) -> Double {
+        min(max(scale, fitScale), Self.maxScale)
     }
 
     public func zoomIn() {
@@ -248,18 +268,34 @@ public final class CanvasController {
     }
 
     public func magnify(by factor: Double, at viewPoint: CGPoint) {
-        let anchor = imagePoint(for: viewPoint)
-        let newScale = min(max(pixelScale * factor, fitScale), 8)
+        zoom(toScale: pixelScale * factor, anchoredAt: viewPoint)
+    }
+
+    /// Zooms to `scale` (Fit to 11:1), keeping the image point under `viewPoint` where it is.
+    public func zoom(toScale scale: Double, anchoredAt viewPoint: CGPoint) {
+        let before = imageRect(in: viewSize)
+        guard before.width > 0, before.height > 0 else { return }
+        let anchor = CGPoint(
+            x: (viewPoint.x - before.minX) / before.width,
+            y: (viewPoint.y - before.minY) / before.height,
+        )
+        let newScale = clampedScale(scale)
         zoom = abs(newScale - fitScale) < 1e-4 ? .fit : .scale(newScale)
-        if let anchor, isZoomedIn {
-            let rect = imageRect(in: viewSize)
-            let stage = stage(in: viewSize)
-            let offset = CGPoint(
-                x: (viewPoint.x - stage.midX) / rect.width,
-                y: (viewPoint.y - stage.midY) / rect.height,
-            )
-            center = CGPoint(x: anchor.x - offset.x, y: anchor.y - offset.y)
-        }
+        guard isZoomedIn else { return }
+        let rect = imageRect(in: viewSize)
+        let stage = stage(in: viewSize)
+        let wanted = CGPoint(
+            x: anchor.x - (viewPoint.x - stage.midX) / rect.width,
+            y: anchor.y - (viewPoint.y - stage.midY) / rect.height,
+        )
+        center = clamped(wanted, width: rect.width, height: rect.height, stage: stage.size)
+    }
+
+    /// Centres the stage on a normalised image point, as far as the image edges allow
+    /// (dragging the Navigator's viewport).
+    public func centerOn(_ point: CGPoint) {
+        let rect = imageRect(in: viewSize)
+        center = clamped(point, width: rect.width, height: rect.height, stage: stage(in: viewSize).size)
     }
 
     private func changed() {

@@ -33,6 +33,7 @@ public final class CanvasMetalView: NSView {
     private var textures: [IOSurfaceID: any MTLTexture] = [:]
     private var dragOrigin: CGPoint?
     private var didDrag = false
+    var wheelZoom = WheelZoom()
 
     init(controller: CanvasController) {
         self.controller = controller
@@ -180,8 +181,14 @@ public final class CanvasMetalView: NSView {
         }
     }
 
+    /// A non-interactive canvas (the Navigator) leaves clicks to the SwiftUI views over it.
+    override public func hitTest(_ point: NSPoint) -> NSView? {
+        interactive ? super.hitTest(point) : nil
+    }
+
     override public func mouseDown(with event: NSEvent) {
         guard interactive else { return }
+        stopWheelZoom()
         dragOrigin = convert(event.locationInWindow, from: nil)
         didDrag = false
     }
@@ -219,13 +226,9 @@ public final class CanvasMetalView: NSView {
         }
     }
 
-    override public func scrollWheel(with event: NSEvent) {
-        guard interactive, controller.isZoomedIn else { return }
-        controller.pan(byPoints: CGSize(width: event.scrollingDeltaX, height: event.scrollingDeltaY))
-    }
-
     override public func magnify(with event: NSEvent) {
         guard interactive else { return }
+        stopWheelZoom()
         controller.magnify(by: 1 + event.magnification, at: convert(event.locationInWindow, from: nil))
     }
 }

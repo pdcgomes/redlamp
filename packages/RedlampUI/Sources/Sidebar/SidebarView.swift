@@ -140,11 +140,15 @@ private struct HistoryRow: View {
     }
 }
 
-/// A live, fitted view of the current render, with the zoomed viewport outlined and
-/// Lightroom's FIT / FILL / 1:1 / 2:1 zoom buttons.
+/// A live, fitted view of the current render, with the zoomed viewport outlined (drag it,
+/// or click, to move around the photo) and Lightroom's FIT / FILL / 1:1 / ratio zoom buttons.
 struct NavigatorView: View {
     let controller: CanvasController
     @Environment(EditorModel.self) private var model
+    /// The ratio behind the fourth zoom button, chosen from its menu as in Lightroom.
+    @State private var ratio = 2.0
+    /// Where the viewport was grabbed, relative to its centre, while dragging.
+    @State private var grab: CGPoint?
 
     var body: some View {
         VStack(spacing: 6) {
@@ -157,7 +161,7 @@ struct NavigatorView: View {
                 zoomButton("Fit", .fit)
                 zoomButton("Fill", .fill)
                 zoomButton("1:1", .oneToOne)
-                zoomButton("2:1", .twoToOne)
+                ratioMenu
             }
             GeometryReader { geometry in
                 CanvasView(feed: model.frames, controller: controller, clickAction: .none, interactive: false)
@@ -178,6 +182,8 @@ struct NavigatorView: View {
                                 )
                         }
                     }
+                    .contentShape(Rectangle())
+                    .gesture(viewportDrag(in: geometry.size))
             }
             .background(RoundedRectangle(cornerRadius: 6).fill(Theme.well))
             .aspectRatio(1.5, contentMode: .fit)
@@ -193,5 +199,49 @@ struct NavigatorView: View {
         .buttonStyle(.plain)
         .font(Theme.captionFont)
         .foregroundStyle(model.canvas.zoom == zoom ? Theme.labelHover : Theme.secondaryLabel)
+    }
+
+    private var ratioMenu: some View {
+        Menu {
+            ForEach(CanvasController.zoomRatios, id: \.self) { choice in
+                Button(CanvasController.ratioLabel(choice)) {
+                    ratio = choice
+                    model.canvas.zoom = .scale(choice)
+                }
+            }
+        } label: {
+            Text(CanvasController.ratioLabel(ratio))
+        } primaryAction: {
+            model.canvas.zoom = .scale(ratio)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .fixedSize()
+        .font(Theme.captionFont)
+        .foregroundStyle(model.canvas.zoom == .scale(ratio) ? Theme.labelHover : Theme.secondaryLabel)
+        .help("Zoom ratio")
+    }
+
+    /// Dragging the outline moves it from where it was grabbed; clicking elsewhere centres
+    /// the view on that point, as in Lightroom.
+    private func viewportDrag(in size: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                let image = controller.imageRect(in: size)
+                guard model.canvas.isZoomedIn, model.info != nil, image.width > 0, image.height > 0 else { return }
+                func normalized(_ point: CGPoint) -> CGPoint {
+                    CGPoint(x: (point.x - image.minX) / image.width, y: (point.y - image.minY) / image.height)
+                }
+                let offset = grab ?? {
+                    let visible = model.canvas.visibleImageRect
+                    let start = normalized(value.startLocation)
+                    guard visible.contains(start) else { return .zero }
+                    return CGPoint(x: start.x - visible.midX, y: start.y - visible.midY)
+                }()
+                grab = offset
+                let point = normalized(value.location)
+                model.canvas.centerOn(CGPoint(x: point.x - offset.x, y: point.y - offset.y))
+            }
+            .onEnded { _ in grab = nil }
     }
 }
