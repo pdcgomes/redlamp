@@ -35,7 +35,10 @@ PROFILE_FLAG=""
 [[ "${PROFILE:-0}" == "1" ]] && PROFILE_FLAG="--sweep-profile" && rm -f /tmp/redlamp-profile.txt
 # PROFILE_FOCUS=<mangled symbol substring> also lists what that function spends time in.
 [[ -n "$PROFILE_FLAG" && -n "${PROFILE_FOCUS:-}" ]] && PROFILE_FLAG="$PROFILE_FLAG --sweep-profile-focus $PROFILE_FOCUS"
-echo "$FIXTURES --script $SCRIPT --sweep $PARAMETER --sweep-seconds 3 --sweep-quit $PROFILE_FLAG" >/tmp/redlamp-launch-args
+# PANELS=swiftui measures the SwiftUI Develop panels instead of the AppKit ones.
+PANELS_FLAG=""
+[[ "${PANELS:-appkit}" == "swiftui" ]] && PANELS_FLAG="--swiftui-panels"
+echo "$FIXTURES --script $SCRIPT --sweep $PARAMETER --sweep-seconds 3 --sweep-quit $PROFILE_FLAG $PANELS_FLAG" >/tmp/redlamp-launch-args
 open -n -g "$BUNDLE"
 PID=""
 for _ in $(seq 1 80); do
@@ -47,7 +50,7 @@ sleep 0.5
 [[ -n "$PID" ]] && kill "$PID" 2>/dev/null || true
 find "$FIXTURES" -name '*.redlamp' -delete
 
-echo "== $CONFIGURATION · $PARAMETER · $SCRIPT"
+echo "== $CONFIGURATION · $PARAMETER · $SCRIPT · ${PANELS:-appkit} panels"
 cat /tmp/redlamp-perf.txt 2>/dev/null || echo "(no report: the app did not finish the sweep)"
 if [[ -n "$PROFILE_FLAG" && -f /tmp/redlamp-profile.txt ]]; then
     xcrun swift-demangle --simplified </tmp/redlamp-profile.txt >/tmp/redlamp-profile-demangled.txt

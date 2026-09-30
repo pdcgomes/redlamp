@@ -116,6 +116,32 @@ struct CalibrationPanel: View {
     }
 }
 
+@_spi(Harness) public enum DevelopPanels {
+    /// Shows the SwiftUI panels instead of the AppKit ones, for side-by-side measurements.
+    /// Set before the window appears.
+    @MainActor public static var usesSwiftUI = false
+}
+
+/// The Develop panels as SwiftUI views: the reference the AppKit panels are matched
+/// against, pixel for pixel, in the harness.
+@_spi(Harness) public struct SwiftUIDevelopPanels: View {
+    public init() {}
+
+    public var body: some View {
+        LazyVStack(spacing: 0) {
+            BasicPanel()
+            ToneCurvePanel()
+            ColorMixerPanel()
+            ColorGradingPanel()
+            DetailPanel()
+            LensPanel()
+            TransformPanel()
+            EffectsPanel()
+            CalibrationPanel()
+        }
+    }
+}
+
 /// The right-hand column: histogram, tool strip and the Develop panels.
 struct InspectorView: View {
     @Environment(EditorModel.self) private var model
@@ -132,26 +158,20 @@ struct InspectorView: View {
 
             Rectangle().fill(Theme.divider).frame(height: 1)
 
-            ScrollView {
-                if model.activeTool == .edit {
-                    LazyVStack(spacing: 0) {
-                        BasicPanel()
-                        ToneCurvePanel()
-                        ColorMixerPanel()
-                        ColorGradingPanel()
-                        DetailPanel()
-                        LensPanel()
-                        TransformPanel()
-                        EffectsPanel()
-                        CalibrationPanel()
+            if model.activeTool == .edit, !DevelopPanels.usesSwiftUI {
+                InspectorPanelsHost(model: model)
+            } else {
+                ScrollView {
+                    if model.activeTool == .edit {
+                        SwiftUIDevelopPanels()
+                    } else if model.activeTool == .masking {
+                        MaskingPanel()
+                    } else {
+                        PlannedToolCard(tool: model.activeTool)
                     }
-                } else if model.activeTool == .masking {
-                    MaskingPanel()
-                } else {
-                    PlannedToolCard(tool: model.activeTool)
                 }
+                .scrollIndicators(.automatic)
             }
-            .scrollIndicators(.automatic)
 
             Rectangle().fill(Theme.divider).frame(height: 1)
             HStack {

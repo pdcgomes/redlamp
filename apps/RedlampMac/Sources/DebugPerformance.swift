@@ -2,63 +2,10 @@
     import AppKit
     import CoreFoundation
     import Foundation
+    import RedlampDesign
     import RedlampEngineAPI
     import RedlampUI
     import Synchronization
-
-    /// Measures how long each main run-loop iteration keeps the main thread busy. A slider
-    /// drag feels smooth only if iterations stay well under one display frame (8.3 ms at 120 Hz).
-    @MainActor
-    final class MainThreadMonitor {
-        private var observer: CFRunLoopObserver?
-        private var iterationStart: CFAbsoluteTime = 0
-        private(set) var durations: [Double] = []
-
-        func start() {
-            durations.removeAll()
-            let observer = CFRunLoopObserverCreateWithHandler(
-                nil,
-                CFRunLoopActivity.afterWaiting.rawValue | CFRunLoopActivity.beforeWaiting.rawValue,
-                true,
-                0,
-            ) { [weak self] _, activity in
-                MainActor.assumeIsolated {
-                    guard let self else { return }
-                    let now = CFAbsoluteTimeGetCurrent()
-                    if activity == .afterWaiting {
-                        self.iterationStart = now
-                    } else if self.iterationStart > 0 {
-                        self.durations.append((now - self.iterationStart) * 1000)
-                        self.iterationStart = 0
-                    }
-                }
-            }
-            CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
-            self.observer = observer
-        }
-
-        func stop() {
-            if let observer {
-                CFRunLoopRemoveObserver(CFRunLoopGetMain(), observer, .commonModes)
-            }
-            observer = nil
-        }
-
-        func report(_ label: String, seconds: Double) -> String {
-            let sorted = durations.sorted()
-            guard !sorted.isEmpty else { return "\(label): no samples" }
-            func percentile(_ p: Double) -> Double {
-                sorted[min(sorted.count - 1, Int(Double(sorted.count) * p))]
-            }
-            let busy = sorted.reduce(0, +)
-            return String(
-                format: "%@: %d iterations, busy %.0f%% of %.1fs, p50 %.2f ms, p95 %.2f ms, p99 %.2f ms, max %.1f ms, >8.3 ms: %d, >16.7 ms: %d",
-                label, sorted.count, busy / (seconds * 1000) * 100, seconds,
-                percentile(0.5), percentile(0.95), percentile(0.99), sorted.last ?? 0,
-                sorted.count(where: { $0 > 8.3 }), sorted.count(where: { $0 > 16.7 }),
-            )
-        }
-    }
 
     /// Samples the main thread's call stack every millisecond from a background thread (suspend,
     /// walk the frame-pointer chain, resume) — a Time Profiler that needs neither developer mode
@@ -158,13 +105,13 @@
                 selfCounts[name(frames[0]), default: 0] += 1
                 var seen = Set<String>()
                 var focusedCallee: String?
-                for level in 0 ..< depth {
+                for level in 0 ..< depth where frames[level] > 1 {
                     // Return addresses point after the call; step back into the calling instruction.
                     let symbol = name(level == 0 ? frames[level] : frames[level] - 1)
                     if seen.insert(symbol).inserted {
                         totalCounts[symbol, default: 0] += 1
                     }
-                    if let focus, focusedCallee == nil, symbol.contains(focus), level > 0 {
+                    if let focus, focusedCallee == nil, symbol.contains(focus), level > 0, frames[level - 1] > 1 {
                         focusedCallee = name(level == 1 ? frames[0] : frames[level - 1] - 1)
                     }
                 }
@@ -264,8 +211,10 @@
             try? await Task.sleep(for: .milliseconds(300))
             monitor.stop()
             sampler?.stop()
+            trace("drag finished")
             if let sampler {
                 try? await Task.sleep(for: .milliseconds(20))
+                defer { trace("profile written") }
                 let arguments = LaunchArguments.all
                 let focus = arguments.firstIndex(of: "--sweep-profile-focus").flatMap {
                     $0 + 1 < arguments.count ? arguments[$0 + 1] : nil

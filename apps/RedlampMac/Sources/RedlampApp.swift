@@ -1,7 +1,7 @@
 import AppKit
 import RedlampEngine
 import RedlampEngineAPI
-import RedlampUI
+@_spi(Harness) import RedlampUI
 import SwiftUI
 
 @main
@@ -10,6 +10,9 @@ struct RedlampApp: App {
     @State private var keyboard = KeyboardShortcuts()
 
     init() {
+        #if DEBUG || REDLAMP_PROFILING
+            DevelopPanels.usesSwiftUI = LaunchArguments.all.contains("--swiftui-panels")
+        #endif
         let engine: any EditingEngine
         do {
             engine = try RedlampEngine()

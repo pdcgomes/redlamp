@@ -9,7 +9,7 @@ import SwiftUI
 /// - Double-click the label or thumb to reset.
 /// - Option-drag on tone sliders previews clipping.
 /// - Click the value to type; arrow keys step (Shift for ×10).
-struct ParameterSlider: View {
+@_spi(Harness) public struct ParameterSlider: View {
     let parameter: ParameterID
     var label: String?
     var enabled = true
@@ -17,12 +17,18 @@ struct ParameterSlider: View {
     @Environment(EditorModel.self) private var model
     @State private var isHovering = false
 
+    public init(parameter: ParameterID, label: String? = nil, enabled: Bool = true) {
+        self.parameter = parameter
+        self.label = label
+        self.enabled = enabled
+    }
+
     private static let clippingParameters: Set<ParameterID> = [
         .exposure, .highlights, .shadows, .whites, .blacks,
         .localExposure, .localHighlights, .localShadows, .localWhites, .localBlacks,
     ]
 
-    var body: some View {
+    public var body: some View {
         let spec = parameter.spec
         let live = spec.availability.isLive && enabled
         let focused = model.focusedParameter == parameter
@@ -219,14 +225,20 @@ struct ValueField: View {
 }
 
 /// A small caps subsection title ("TONE", "PRESENCE") that resets its group on double-click.
-struct SubsectionHeader<Accessory: View>: View {
+@_spi(Harness) public struct SubsectionHeader<Accessory: View>: View {
     let title: String
     let parameters: [ParameterID]
     @ViewBuilder var accessory: Accessory
 
+    public init(title: String, parameters: [ParameterID], @ViewBuilder accessory: () -> Accessory) {
+        self.title = title
+        self.parameters = parameters
+        self.accessory = accessory()
+    }
+
     @Environment(EditorModel.self) private var model
 
-    var body: some View {
+    public var body: some View {
         // Holding Option turns the title into a one-click "Reset …", as in Lightroom.
         let resetMode = model.optionKeyHeld && !parameters.isEmpty
         HStack {
@@ -250,18 +262,23 @@ struct SubsectionHeader<Accessory: View>: View {
     }
 }
 
-extension SubsectionHeader where Accessory == EmptyView {
+@_spi(Harness) public extension SubsectionHeader where Accessory == EmptyView {
     init(title: String, parameters: [ParameterID]) {
         self.init(title: title, parameters: parameters) { EmptyView() }
     }
 }
 
 /// A compact label + control row (Treatment, Profile, WB).
-struct ControlRow<Content: View>: View {
+@_spi(Harness) public struct ControlRow<Content: View>: View {
     let label: String
     @ViewBuilder var content: Content
 
-    var body: some View {
+    public init(label: String, @ViewBuilder content: () -> Content) {
+        self.label = label
+        self.content = content()
+    }
+
+    public var body: some View {
         HStack(spacing: 6) {
             Text(label)
                 .font(Theme.labelFont)

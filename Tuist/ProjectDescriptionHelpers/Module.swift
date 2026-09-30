@@ -14,6 +14,7 @@ public enum Module: String, CaseIterable {
     case document = "RedlampDocument"
     case engine = "RedlampEngine"
     case canvas = "RedlampCanvas"
+    case design = "RedlampDesign"
     case ui = "RedlampUI"
 
     public var name: String {
@@ -32,7 +33,7 @@ public enum Module: String, CaseIterable {
     public var isEngineLayer: Bool {
         switch self {
         case .engineAPI, .kernels, .color, .services, .document, .engine: true
-        case .canvas, .ui: false
+        case .canvas, .design, .ui: false
         }
     }
 
@@ -61,7 +62,8 @@ public enum Module: String, CaseIterable {
         case .document: [.engineAPI]
         case .engine: [.engineAPI, .kernels, .color, .services]
         case .canvas: [.engineAPI]
-        case .ui: [.engineAPI, .canvas, .document]
+        case .design: [.engineAPI]
+        case .ui: [.engineAPI, .canvas, .design, .document]
         }
     }
 }

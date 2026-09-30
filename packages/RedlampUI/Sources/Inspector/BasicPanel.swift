@@ -1,56 +1,25 @@
 import RedlampEngineAPI
 import SwiftUI
 
-struct BasicPanel: View {
+@_spi(Harness) public struct BasicPanel: View {
     @Environment(EditorModel.self) private var model
 
-    var body: some View {
+    public init() {}
+
+    public var body: some View {
+        let supported = model.info?.supportsWhiteBalance ?? false
         PanelSection(panel: .basic) {
-            ControlRow(label: "Treatment") {
-                Picker("Treatment", selection: Binding(
-                    get: { model.treatment },
-                    set: { model.setTreatment($0) },
-                )) {
-                    ForEach(Treatment.allCases, id: \.self) { Text($0.name).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.small)
-            }
-
-            ControlRow(label: "Profile") {
-                Menu {
-                    ForEach(BuiltInProfile.allCases, id: \.self) { profile in
-                        Button {
-                            model.setProfile(profile)
-                        } label: {
-                            if model.profile.id == profile.rawValue {
-                                Label(profile.name, systemImage: "checkmark")
-                            } else {
-                                Text(profile.name)
-                            }
-                        }
-                    }
-                    Divider()
-                    Button("Browse Profiles, DCPs and LUTs…") {}.disabled(true)
-                } label: {
-                    Text(model.profile.name).font(Theme.labelFont)
-                }
-                .menuStyle(.button)
-                .controlSize(.small)
-                .help("Profile Browser with DCP and LUT import arrives in Phase 2")
-            }
-
-            whiteBalance
+            ControlRow(label: "Treatment") { TreatmentPicker() }
+            ControlRow(label: "Profile") { ProfileMenu() }
+            ControlRow(label: "White Balance") { WhiteBalanceControls() }
+            ParameterSlider(parameter: .temperature, enabled: supported)
+            ParameterSlider(parameter: .tint, enabled: supported)
 
             SubsectionHeader(
                 title: "Tone",
                 parameters: [.exposure, .contrast, .highlights, .shadows, .whites, .blacks],
             ) {
-                Button("Auto") { model.autoTone() }
-                    .controlSize(.mini)
-                    .disabled(model.info == nil)
-                    .help("Auto tone (⌘U)")
+                AutoToneButton()
             }
             ParameterSlider(parameter: .exposure)
             ParameterSlider(parameter: .contrast)
@@ -69,12 +38,62 @@ struct BasicPanel: View {
             ParameterSlider(parameter: .saturation)
         }
     }
+}
 
-    @ViewBuilder
-    private var whiteBalance: some View {
+// The Basic panel's native controls, shared by the SwiftUI panel and the AppKit port
+// (which hosts each one on its own), so both show exactly the same controls.
+
+struct TreatmentPicker: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        Picker("Treatment", selection: Binding(
+            get: { model.treatment },
+            set: { model.setTreatment($0) },
+        )) {
+            ForEach(Treatment.allCases, id: \.self) { Text($0.name).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.small)
+    }
+}
+
+struct ProfileMenu: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        Menu {
+            ForEach(BuiltInProfile.allCases, id: \.self) { profile in
+                Button {
+                    model.setProfile(profile)
+                } label: {
+                    if model.profile.id == profile.rawValue {
+                        Label(profile.name, systemImage: "checkmark")
+                    } else {
+                        Text(profile.name)
+                    }
+                }
+            }
+            Divider()
+            Button("Browse Profiles, DCPs and LUTs…") {}.disabled(true)
+        } label: {
+            Text(model.profile.name).font(Theme.labelFont)
+        }
+        .menuStyle(.button)
+        .controlSize(.small)
+        .help("Profile Browser with DCP and LUT import arrives in Phase 2")
+    }
+}
+
+/// The eyedropper and the white balance preset menu.
+struct WhiteBalanceControls: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
         let supported = model.info?.supportsWhiteBalance ?? false
         @Bindable var model = model
-        ControlRow(label: "White Balance") {
+        HStack(spacing: 6) {
             Button {
                 model.eyedropperActive.toggle()
             } label: {
@@ -99,7 +118,16 @@ struct BasicPanel: View {
             .controlSize(.small)
             .disabled(!supported)
         }
-        ParameterSlider(parameter: .temperature, enabled: supported)
-        ParameterSlider(parameter: .tint, enabled: supported)
+    }
+}
+
+struct AutoToneButton: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        Button("Auto") { model.autoTone() }
+            .controlSize(.mini)
+            .disabled(model.info == nil)
+            .help("Auto tone (⌘U)")
     }
 }

@@ -61,6 +61,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] A single fused Metal kernel applies every per-pixel adjustment. Frames are delivered as IOSurfaces, so pixels are never copied between engine and UI.
 - [x] Latest-wins render scheduling: a burst of slider events collapses to the newest one.
 - [x] Rendering stays off the main thread while you drag a slider. Frames go straight to the canvas, which a dedicated display-link thread presents, and each view observes only the values it shows.
+- [x] AppKit Develop panels (Basic so far) that match the SwiftUI originals pixel for pixel, and a component harness for building and reviewing them (see [Component harness](#component-harness)).
 - [x] Temperature and tint use a proper camera white-balance model (Robertson's method with the camera's color matrix). As Shot, Auto, and the illuminant presets all work.
 
 **Develop adjustments that render**
@@ -111,14 +112,14 @@ Measured on an Apple M1 Ultra with a Release build.
 
 Dragging a slider at 120 events a second (`scripts/perf-sweep.sh`), with every panel open:
 
-| Main thread during the drag | Before | Now |
-| --- | --- | --- |
-| Time busy | 100% | ~54% |
-| Slowest 5% of run-loop iterations | 157 ms | ~8 ms |
-| Longest stall | 277 ms | ~20 ms |
-| Slider events handled per second | 89 | 104 |
+| Main thread during the drag | Iteration 2 | Off-main rendering | AppKit Basic panel |
+| --- | --- | --- | --- |
+| Time busy | 100% | ~54% | ~36–41% |
+| Typical run-loop iteration (median) | — | 2.3 ms | 0.16–0.19 ms |
+| Slowest 5% of iterations | 157 ms | ~8 ms | ~6 ms |
+| Longest stall | 277 ms | ~20 ms | ~15–24 ms |
 
-Almost all the remaining main-thread time is SwiftUI updating the one slider being dragged.
+Most of what remains is the histogram and tone curve, still SwiftUI, redrawing at 30 Hz; they are the next panels to port.
 
 ### Known limitations
 
@@ -261,7 +262,22 @@ mise run render -- render ~/Pictures/DSC01234.ARW -o out.jpg --size 2048 \
 | `mise run fixtures` | Download CC0 sample raw files |
 | `mise run render` | Build and run the `redlamp` CLI |
 | `mise run screenshots` | Regenerate the README screenshots (needs Screen Recording permission) |
-| `scripts/perf-sweep.sh [Debug\|Release] [parameter] [script]` | Drag a slider for 3 s and report main-thread smoothness. `PROFILE=1` adds a main-thread profile |
+| `mise run harness` (`h`) | Build and launch the UI component harness |
+| `scripts/perf-sweep.sh [Debug\|Release] [parameter] [script]` | Drag a slider for 3 s and report main-thread smoothness. `PROFILE=1` adds a main-thread profile; `PANELS=swiftui` measures the SwiftUI panels |
+| `scripts/harness-capture.sh <scene> <png> [mode]` | Screenshot a harness scene; with `side` mode, `swift scripts/parity-diff.swift <png>` scores it and `scripts/parity-rows.swift` compares it row by row |
+
+### Component harness
+
+`mise run harness` opens Redlamp Harness, a development app for building and reviewing UI components in isolation, in the spirit of a design-system workbench. It hosts the real frameworks and the real editor (with a sample photo open, copied to a temporary folder so reviews never write sidecars):
+
+- **Foundations:** the palette, the type ramp (SwiftUI and AppKit side by side), and metrics.
+- **Controls and Panels:** every component in every state worth reviewing, each with a note on what would be wrong with it.
+- **Parity:** a SwiftUI original and its AppKit port at the same width, shown side by side, as a difference blend (identical pixels are black), as an onion skin, or flickering. The inspector has knobs for drawing constants and a **Copy values** button. `--probe` measures SwiftUI and AppKit elements one by one and writes the sizes to `/tmp/redlamp-probe.txt`.
+- **Performance:** drags a slider at 120 events a second through each implementation and reports how busy the main thread got.
+
+![The harness comparing the SwiftUI Basic panel with its AppKit port](docs/images/harness-parity.png)
+
+To add a component, write a scene in `apps/RedlampHarness/Sources/Scenes/` and register it in `BuiltInScenes.swift`. The Basic panel currently scores a mean difference of 0.1 grey levels against its SwiftUI original, with 99.97% of pixels within 24 levels (the rest is anti-aliasing on the slider thumbs).
 
 ## Using Redlamp
 
@@ -304,7 +320,7 @@ The rendering engine and the UI are completely separate. The UI talks to the eng
 ```mermaid
 flowchart LR
     subgraph ui [UI - macOS today, iPad and iPhone next]
-        Views["SwiftUI panels + design system"] --> Model["EditorModel"]
+        Views["AppKit panels + RedlampDesign"] --> Model["EditorModel"]
         Canvas["Metal canvas"]
     end
     subgraph api [RedlampEngineAPI - value types only]
@@ -336,10 +352,13 @@ flowchart LR
 | `RedlampServices` | Decoding (LibRaw, ImageIO) and thumbnails |
 | `RedlampDocument` | Sidecars, snapshots, presets, library scanning, export writers |
 | `RedlampEngine` | Sessions, the GPU pyramid, render loop, analysis (auto WB, auto tone, eyedropper) |
-| `RedlampCanvas` | Metal canvas that samples frame IOSurfaces directly; zoom and pan |
-| `RedlampUI` | Design system, Develop panels, sidebar, filmstrip, `EditorModel` |
+| `RedlampCanvas` | Metal canvas that samples frame IOSurfaces directly, presented from its own display-link thread; zoom and pan |
+| `RedlampDesign` | Design tokens (colors, type, metrics) for SwiftUI and AppKit, and the AppKit panel components: slider rows, panel sections, control rows |
+| `RedlampUI` | Develop panels, sidebar, filmstrip, `EditorModel` |
 
-**Apps** (`apps/`): `RedlampMac`, the macOS app and composition root, and `RedlampCLI`, the headless `redlamp` tool.
+**Apps** (`apps/`): `RedlampMac`, the macOS app and composition root; `RedlampCLI`, the headless `redlamp` tool; and `RedlampHarness`, the UI component harness (see [Component harness](#component-harness)).
+
+**The panels are AppKit, drawn to match SwiftUI pixel for pixel.** SwiftUI re-walks its whole view tree on every change, however small, so dragging one slider in a window full of panels kept the main thread busy. The Develop panels are built from `RedlampDesign`'s AppKit components instead: each control observes only the values it shows (a small `Tracker` over Swift Observation) and redraws only itself. Native controls such as menus and segmented pickers stay SwiftUI, each hosted on its own. Panels not yet ported are hosted one per view, and the SwiftUI originals are kept as the reference the ports are checked against.
 
 **Engineering principles:**
 - **Swift for everything on the CPU side, Metal for every pixel.** C and C++ appear only in vendored libraries.

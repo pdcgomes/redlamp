@@ -1,8 +1,11 @@
 import ProjectDescription
 import ProjectDescriptionHelpers
 
+/// A development app for building and reviewing Redlamp's UI components in isolation:
+/// every component in every state, pixel-parity checks against the SwiftUI originals, and
+/// performance scenes. It hosts the real frameworks, not copies of them.
 let project = Project(
-    name: "RedlampMac",
+    name: "RedlampHarness",
     settings: .settings(
         base: redlampBaseSettings,
         configurations: [
@@ -12,18 +15,17 @@ let project = Project(
     ),
     targets: [
         .target(
-            name: "Redlamp",
+            name: "RedlampHarness",
             destinations: [.mac],
             product: .app,
-            bundleId: "\(redlampBundlePrefix).mac",
+            bundleId: "\(redlampBundlePrefix).harness",
             deploymentTargets: .macOS(redlampMacOSVersion),
             infoPlist: .extendingDefault(with: [
-                "CFBundleName": "Redlamp",
-                "CFBundleDisplayName": "Redlamp",
+                "CFBundleName": "Redlamp Harness",
+                "CFBundleDisplayName": "Redlamp Harness",
                 "CFBundleShortVersionString": "$(MARKETING_VERSION)",
                 "CFBundleVersion": "$(CURRENT_PROJECT_VERSION)",
-                "LSApplicationCategoryType": "public.app-category.photography",
-                "NSHumanReadableCopyright": "Redlamp contributors. MPL-2.0.",
+                "LSApplicationCategoryType": "public.app-category.developer-tools",
             ]),
             sources: ["Sources/**"],
             dependencies: [
@@ -34,19 +36,11 @@ let project = Project(
                 Module.design.dependency,
                 Module.ui.dependency,
             ],
-            // Signed with the same team as the frameworks: with the hardened runtime,
-            // library validation refuses frameworks from a different team (or ad-hoc).
-            settings: .settings(
-                base: [
-                    "CODE_SIGN_STYLE": "Automatic",
-                    "CODE_SIGN_IDENTITY": "Apple Development",
-                ],
-                configurations: [
-                    // Debug builds stay attachable by sample/Instruments for profiling.
-                    .debug(name: .debug, settings: ["ENABLE_HARDENED_RUNTIME": "NO"]),
-                    .release(name: .release, settings: ["ENABLE_HARDENED_RUNTIME": "YES"]),
-                ],
-            ),
+            settings: .settings(base: [
+                "CODE_SIGN_STYLE": "Automatic",
+                "CODE_SIGN_IDENTITY": "Apple Development",
+                "ENABLE_HARDENED_RUNTIME": "NO",
+            ]),
         ),
     ],
 )
