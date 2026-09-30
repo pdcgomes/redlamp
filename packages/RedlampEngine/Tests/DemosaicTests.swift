@@ -53,6 +53,17 @@ struct DemosaicTests {
         #expect(menon < malvar * 0.8)
     }
 
+    /// Flat grey with sensor noise: the dual demosaic's plain average must beat Menon's
+    /// directional green, which adds red and blue noise and picks directions at random.
+    @Test func `the dual demosaic calms flat noisy areas`() throws {
+        let flat = Image(width: 512, height: 384, pixels: .init(repeating: SIMD3(repeating: 0.2), count: 512 * 384))
+        let noise = NoiseModel(a: SIMD3(repeating: 4e-4), b: SIMD3(repeating: 2e-6))
+        let single = try error(demosaic(flat, .menon, noise: noise, dual: false), from: 0.2)
+        let dual = try error(demosaic(flat, .menon, noise: noise, dual: true), from: 0.2)
+        print(String(format: "flat noise, green RMS error: Menon %.5f, dual %.5f", single, dual))
+        #expect(dual < single * 0.85)
+    }
+
     // MARK: - Helpers
 
     struct Image {
@@ -91,16 +102,26 @@ struct DemosaicTests {
         return Image(width: width, height: height, pixels: pixels.map { $0 * (0.9 / peak) })
     }
 
-    /// Mosaics an image as RGGB and demosaics it with `algorithm`.
-    private func demosaic(_ image: Image, _ algorithm: BayerDemosaic) throws -> Image {
+    /// Mosaics an image as RGGB, with `noise` if given, and demosaics it with `algorithm`.
+    private func demosaic(
+        _ image: Image,
+        _ algorithm: BayerDemosaic,
+        noise: NoiseModel? = nil,
+        dual: Bool = true,
+    ) throws -> Image {
         let pattern = CFAPattern(width: 2, height: 2, colors: [0, 1, 1, 2])
         let black: Float = 512
         let white: Float = 16383
         var samples = [UInt16](repeating: 0, count: image.width * image.height)
+        var random = SeededRandom(seed: 11)
         for y in 0 ..< image.height {
             for x in 0 ..< image.width {
-                let value = image.pixels[y * image.width + x][Int(pattern.color(x: x, y: y))]
-                samples[y * image.width + x] = UInt16((black + min(value, 1) * (white - black)).rounded())
+                let color = Int(pattern.color(x: x, y: y))
+                var value = image.pixels[y * image.width + x][color]
+                if let noise {
+                    value += (noise.a[color] * value + noise.b[color]).squareRoot() * random.gaussian()
+                }
+                samples[y * image.width + x] = UInt16((black + min(max(value, 0), 1) * (white - black)).rounded())
             }
         }
         var decoded = DecodedImage(
@@ -113,9 +134,10 @@ struct DemosaicTests {
                 isRaw: true, sensorDescription: "synthetic",
             ),
         )
-        decoded.noiseProfile = .quantization
+        decoded.noiseProfile = noise ?? .quantization
         var builder = SessionBuilder(device: device, queue: queue, kernels: kernels)
         builder.bayerDemosaic = algorithm
+        builder.dualDemosaic = dual
         let session = try builder.build(decoded)
         return try Image(width: image.width, height: image.height, pixels: readLevel0(session))
     }
@@ -156,6 +178,20 @@ struct DemosaicTests {
         return 10 * log10(1 / (squares / count))
     }
 
+    /// Green's RMS error against a flat `level`, away from an 8 px border.
+    private func error(_ image: Image, from level: Float) -> Double {
+        var squares = 0.0
+        var count = 0.0
+        for y in 8 ..< image.height - 8 {
+            for x in 8 ..< image.width - 8 {
+                let d = Double(image.pixels[y * image.width + x].y - level)
+                squares += d * d
+                count += 1
+            }
+        }
+        return (squares / count).squareRoot()
+    }
+
     /// Mean distance from grey, away from an 8 px border.
     private func falseColour(_ image: Image) -> Double {
         var total = 0.0
@@ -169,5 +205,30 @@ struct DemosaicTests {
             }
         }
         return total / count
+    }
+}
+
+/// xorshift64* with Box–Muller, so tests are reproducible.
+private struct SeededRandom {
+    var state: UInt64
+
+    init(seed: UInt64) {
+        state = seed
+    }
+
+    mutating func next() -> UInt64 {
+        state ^= state >> 12
+        state ^= state << 25
+        state ^= state >> 27
+        return state &* 2_685_821_657_736_338_717
+    }
+
+    mutating func uniform() -> Float {
+        Float(next() >> 40) / Float(1 << 24)
+    }
+
+    mutating func gaussian() -> Float {
+        let u1 = max(uniform(), 1e-7)
+        return (-2 * log(u1)).squareRoot() * cos(2 * .pi * uniform())
     }
 }

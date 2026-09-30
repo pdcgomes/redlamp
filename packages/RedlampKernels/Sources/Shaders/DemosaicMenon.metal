@@ -7,6 +7,9 @@
 //   2. per pixel, the direction whose colour difference varies least over a 5 x 5 window;
 //   3. red and blue at green sites from the neighbouring colour differences;
 //   4. the missing red or blue at blue and red sites along the chosen direction.
+// Then a dual demosaic: where a red or blue site's four green neighbours differ by no more than
+// noise explains, its green becomes their plain average instead, which neither picks a direction
+// at random (the maze artefact) nor mixes red and blue noise into green.
 
 struct MenonParams {
     uint width;
@@ -135,13 +138,16 @@ static inline float differenceAt(texture2d<float, access::read> partial, int x, 
 }
 
 // Pass 4: the missing colour at red and blue sites, from the colour difference at the green
-// neighbours along the chosen direction; written to the pyramid's full-resolution level.
+// neighbours along the chosen direction, then the dual-demosaic blend; written to the pyramid's
+// full-resolution level. `noise` holds the white-balanced noise model (a, b) per colour.
 kernel void rl_menon_rb_at_rb(
     texture2d<float, access::read> partial [[texture(0)]],
     texture2d<float, access::read> directions [[texture(1)]],
     texture2d<float, access::write> out [[texture(2)]],
+    texture2d<float, access::read> cfa [[texture(3)]],
     constant MenonParams &p [[buffer(0)]],
     constant uchar *pattern [[buffer(1)]],
+    constant float4 *noise [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]])
 {
     if (gid.x >= p.width || gid.y >= p.height) return;
@@ -157,6 +163,16 @@ kernel void rl_menon_rb_at_rb(
         float direction = directions.read(gid).x;
         float d = direction > 0.0f ? rows : (direction < 0.0f ? columns : 0.5f * (rows + columns));
         rgb[missing] = rgb.g + d;
+
+        float4 greens = float4(cfaAt(cfa, x - 1, y, p), cfaAt(cfa, x + 1, y, p), cfaAt(cfa, x, y - 1, p),
+                               cfaAt(cfa, x, y + 1, p));
+        float smooth = 0.25f * (greens.x + greens.y + greens.z + greens.w);
+        float range = max(max(greens.x, greens.y), max(greens.z, greens.w))
+            - min(min(greens.x, greens.y), min(greens.z, greens.w));
+        // Four samples of pure noise span about 2 sigmas.
+        float sigma = sqrt(max(noise[0].y * smooth + noise[1].y, 1e-12f));
+        float detail = smoothstep(3.0f * sigma, 6.0f * sigma, range);
+        rgb += (1.0f - detail) * (smooth - rgb.g);
     }
     out.write(float4(max(rgb, 0.0f), 1.0f), gid);
 }

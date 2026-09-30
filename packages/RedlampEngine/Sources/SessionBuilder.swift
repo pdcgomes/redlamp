@@ -20,6 +20,8 @@ struct SessionBuilder {
     let queue: any MTLCommandQueue
     let kernels: KernelLibrary
     var bayerDemosaic = BayerDemosaic.menon
+    /// Menon's green is replaced by a plain average where only noise varies (CAM-06).
+    var dualDemosaic = true
 
     static let analysisLongEdge = 1024
     /// A photosite counts as hot when it is this many noise sigmas above every neighbour...
@@ -197,6 +199,7 @@ struct SessionBuilder {
         if bayer, bayerDemosaic == .menon {
             try encodeMenon(
                 mosaic: mosaic, spare: mosaic === cfa ? repaired : cfa, colors: colors, params: demosaicParams,
+                noise: noise,
                 into: pyramid, encoder: encoder,
             )
             encoder.endEncoding()
@@ -212,12 +215,14 @@ struct SessionBuilder {
         encoder.endEncoding()
     }
 
-    /// The four Menon passes. `spare` is a free full-resolution float texture, reused for green.
+    /// The four Menon passes. `spare` is a free full-resolution float texture, reused for green;
+    /// `noise` (white-balanced) sets where the dual demosaic smooths.
     private func encodeMenon(
         mosaic: any MTLTexture,
         spare: any MTLTexture,
         colors: [UInt8],
         params: DemosaicParams,
+        noise: NoiseModel,
         into pyramid: any MTLTexture,
         encoder: any MTLComputeCommandEncoder,
     ) throws {
@@ -249,7 +254,11 @@ struct SessionBuilder {
         dispatch(kernels.menonDirectional, [mosaic, working])
         dispatch(kernels.menonGreen, [mosaic, working, spare, directions])
         dispatch(kernels.menonRBAtGreen, [mosaic, spare, working])
-        dispatch(kernels.menonRBAtRB, [working, directions, pyramid])
+        // Without noise every site counts as detail, which turns the blend off.
+        let blend = dualDemosaic ? noise : NoiseModel(a: .zero, b: .zero)
+        var model = [SIMD4<Float>(blend.a, 0), SIMD4<Float>(blend.b, 0)]
+        encoder.setBytes(&model, length: model.count * MemoryLayout<SIMD4<Float>>.stride, index: 2)
+        dispatch(kernels.menonRBAtRB, [working, directions, pyramid, mosaic])
     }
 
     private func encodeLinearRGB(
