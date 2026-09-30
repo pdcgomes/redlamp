@@ -4,8 +4,8 @@ import SwiftUI
 
 /// Mask drawing and handles, layered over the canvas while the Masking tool is active.
 ///
-/// Reads `maskOutlines` (geometry, not adjustments), so dragging a mask's sliders doesn't
-/// re-render the guides.
+/// Reads `maskOutlines` and `maskShapes` (structure and geometry, not adjustments), so
+/// dragging a mask's sliders doesn't re-render the guides.
 struct MaskOverlayView: View {
     @Environment(EditorModel.self) private var model
     @State private var drawingKind: MaskKind?
@@ -28,9 +28,10 @@ struct MaskOverlayView: View {
                         }
                 }
 
+                let shapes = model.maskShapes
                 ForEach(model.maskOutlines) { mask in
                     if model.showMaskPins, mask.id != model.selectedMaskID,
-                       let center = mask.components.first?.shape.center {
+                       let first = mask.components.first, let center = shapes[first.id]?.center {
                         Pin(selected: false)
                             .position(frame.view(center))
                             .onTapGesture { model.selectMask(mask.id) }
@@ -41,12 +42,15 @@ struct MaskOverlayView: View {
                 // Shown while a shape is being drawn too, so its guides follow the drag.
                 if model.showMaskPins, let mask = model.selectedOutline {
                     ForEach(mask.components) { component in
-                        ComponentHandles(
-                            mask: mask,
-                            component: component,
-                            frame: frame,
-                            isSelected: component.id == model.selectedComponentOutline?.id,
-                        )
+                        if let shape = shapes[component.id] {
+                            ComponentHandles(
+                                mask: mask,
+                                component: component,
+                                shape: shape,
+                                frame: frame,
+                                isSelected: component.id == model.selectedComponentOutline?.id,
+                            )
+                        }
                     }
                 }
             }
@@ -157,6 +161,7 @@ private struct Handle: View {
 private struct ComponentHandles: View {
     let mask: MaskOutline
     let component: MaskOutline.Component
+    let shape: MaskShape
     let frame: ImageFrame
     let isSelected: Bool
 
@@ -164,7 +169,7 @@ private struct ComponentHandles: View {
     @State private var original: MaskShape?
 
     var body: some View {
-        switch component.shape {
+        switch shape {
         case let .linear(gradient):
             linear(gradient)
         case let .radial(gradient):
@@ -284,7 +289,7 @@ private struct ComponentHandles: View {
         DragGesture(minimumDistance: 1)
             .onChanged { gesture in
                 if original == nil {
-                    original = component.shape
+                    original = shape
                     model.selectedComponentID = component.id
                     model.beginEdit()
                 }
@@ -305,10 +310,10 @@ private struct ComponentHandles: View {
         DragGesture(minimumDistance: 1)
             .onChanged { gesture in
                 if original == nil {
-                    original = component.shape
+                    original = shape
                     model.beginEdit()
                 }
-                guard case var .radial(value) = component.shape else { return }
+                guard case var .radial(value) = shape else { return }
                 let projected = abs((gesture.location.x - center.x) * axis.x + (gesture.location.y - center.y) * axis.y)
                 apply(&value, max(projected / frame.heightScale, 0.01))
                 model.updateComponent(component.id, in: mask.id, shape: .radial(value))
@@ -323,10 +328,10 @@ private struct ComponentHandles: View {
         DragGesture(minimumDistance: 1)
             .onChanged { gesture in
                 if original == nil {
-                    original = component.shape
+                    original = shape
                     model.beginEdit()
                 }
-                guard case var .radial(value) = component.shape else { return }
+                guard case var .radial(value) = shape else { return }
                 let degrees = atan2(gesture.location.y - center.y, gesture.location.x - center.x) * 180 / .pi + 90
                 value.rotation = degrees
                 model.updateComponent(component.id, in: mask.id, shape: .radial(value))

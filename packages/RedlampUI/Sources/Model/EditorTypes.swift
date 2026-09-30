@@ -185,18 +185,14 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// A mask without its adjustments: name, visibility and components (with their shapes,
-/// for the canvas guides).
+/// A mask's structure without its adjustments or geometry: name, visibility and components.
+/// Shapes live in `EditorModel.maskShapes`, so dragging a shape doesn't rebuild mask lists.
 public struct MaskOutline: Hashable, Identifiable, Sendable {
     public struct Component: Hashable, Identifiable, Sendable {
         public let id: UUID
-        public let shape: MaskShape
+        public let kind: MaskKind
         public let operation: MaskOperation
         public let inverted: Bool
-
-        public var kind: MaskKind {
-            shape.kind
-        }
     }
 
     public let id: UUID
@@ -209,7 +205,7 @@ public struct MaskOutline: Hashable, Identifiable, Sendable {
         name = mask.name
         isVisible = mask.isVisible
         components = mask.components.map {
-            Component(id: $0.id, shape: $0.shape, operation: $0.operation, inverted: $0.inverted)
+            Component(id: $0.id, kind: $0.shape.kind, operation: $0.operation, inverted: $0.inverted)
         }
     }
 }

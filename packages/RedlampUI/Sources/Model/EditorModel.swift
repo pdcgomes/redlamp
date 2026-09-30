@@ -58,6 +58,9 @@ public final class EditorModel {
                 if newValue.masks.map(MaskOutline.init) != old.masks.map(MaskOutline.init) {
                     withMutation(keyPath: \.maskOutlines) {}
                 }
+                if Self.shapes(of: newValue) != Self.shapes(of: old) {
+                    withMutation(keyPath: \.maskShapes) {}
+                }
             }
         }
     }
@@ -99,6 +102,16 @@ public final class EditorModel {
     public var maskOutlines: [MaskOutline] {
         access(keyPath: \.maskOutlines)
         return storedRecipe.masks.map(MaskOutline.init)
+    }
+
+    /// Every mask component's shape, by component: the canvas guides observe this.
+    public var maskShapes: [UUID: MaskShape] {
+        access(keyPath: \.maskShapes)
+        return Self.shapes(of: storedRecipe)
+    }
+
+    private static func shapes(of recipe: EditRecipe) -> [UUID: MaskShape] {
+        Dictionary(recipe.masks.flatMap(\.components).map { ($0.id, $0.shape) }) { first, _ in first }
     }
 
     /// Just the tone curve, observing only the parameters that shape it.
