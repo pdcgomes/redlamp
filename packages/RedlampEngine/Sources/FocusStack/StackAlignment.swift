@@ -146,12 +146,51 @@ enum ECCAligner {
         iterations: Int,
         tolerance: Float,
     ) -> Result {
+        var level = ECCLevel(template: template, image: image)
         var p = initial
         var correlation: Float = 0
-        let width = template.width
-        let height = template.height
-        // The image and its central-difference gradients, interleaved so one bilinear lookup
-        // fetches all three.
+        for _ in 0 ..< iterations {
+            let count = level.warp(by: p)
+            guard count > 64 else { break }
+            let step = level.update(count: count)
+            correlation = step.correlation
+            guard let delta = step.delta else { break }
+            p.a += delta.x
+            p.b += delta.y
+            p.tx += delta.z
+            p.ty += delta.w
+            // The largest move of an image corner this step, in pixels.
+            let shift = abs(delta.x) * Float(template.width) + abs(delta.y) * Float(template.height)
+                + abs(delta.z) + abs(delta.w)
+            if shift < tolerance {
+                break
+            }
+        }
+        return Result(transform: p, correlation: correlation)
+    }
+}
+
+/// One scale of an ECC fit: the image with its gradients, and the per-iteration samples over a
+/// grid of template pixels.
+private struct ECCLevel {
+    let template: LumaImage
+    let image: LumaImage
+    /// The image and its central-difference gradients, interleaved so one bilinear lookup
+    /// fetches all three.
+    let packed: [SIMD4<Float>]
+    /// Above a megapixel every other pixel each way is plenty: the fit stays heavily
+    /// overdetermined at a quarter of the cost.
+    let step: Int
+    let columns: Int
+    let rows: Int
+    var warped: [Float]
+    var templated: [Float]
+    var valid: [Bool]
+    var steepest: [SIMD4<Float>]
+
+    init(template: LumaImage, image: LumaImage) {
+        self.template = template
+        self.image = image
         var packed = [SIMD4<Float>](repeating: .zero, count: image.width * image.height)
         for y in 0 ..< image.height {
             for x in 0 ..< image.width {
@@ -164,100 +203,91 @@ enum ECCAligner {
                 )
             }
         }
+        self.packed = packed
+        step = template.width * template.height > 1_000_000 ? 2 : 1
+        columns = (template.width + step - 1) / step
+        rows = (template.height + step - 1) / step
+        warped = [Float](repeating: 0, count: columns * rows)
+        templated = [Float](repeating: 0, count: columns * rows)
+        valid = [Bool](repeating: false, count: columns * rows)
+        steepest = [SIMD4<Float>](repeating: .zero, count: columns * rows)
+    }
+
+    /// Samples the image warped by `p`, its steepest-descent images and the template over the
+    /// overlap; returns how many grid pixels overlap.
+    mutating func warp(by p: Similarity) -> Int {
         let maxU = Float(image.width - 1)
         let maxV = Float(image.height - 1)
-        // Above a megapixel every other pixel each way is plenty: the fit stays heavily
-        // overdetermined at a quarter of the cost.
-        let step = width * height > 1_000_000 ? 2 : 1
-        let columns = (width + step - 1) / step
-        let rows = (height + step - 1) / step
-
-        var warped = [Float](repeating: 0, count: columns * rows)
-        var templated = [Float](repeating: 0, count: columns * rows)
-        var valid = [Bool](repeating: false, count: columns * rows)
-        var steepest = [SIMD4<Float>](repeating: .zero, count: columns * rows)
-        for _ in 0 ..< iterations {
-            // Warped image, its gradients and the steepest-descent images over the valid overlap.
-            var count = 0
-            var sumT: Double = 0
-            var sumI: Double = 0
-            for index in valid.indices {
-                valid[index] = false
-            }
-            for row in 0 ..< rows {
-                let y = row * step
-                for column in 0 ..< columns {
-                    let x = column * step
-                    let (u, v) = p.apply(Float(x), Float(y))
-                    guard u >= 0, v >= 0, u <= maxU, v <= maxV else { continue }
-                    let x0 = min(Int(u), image.width - 2)
-                    let y0 = min(Int(v), image.height - 2)
-                    let fx = u - Float(x0)
-                    let fy = v - Float(y0)
-                    let at = y0 * image.width + x0
-                    let top = packed[at] + fx * (packed[at + 1] - packed[at])
-                    let bottom = packed[at + image.width] + fx *
-                        (packed[at + image.width + 1] - packed[at + image.width])
-                    let sample = top + fy * (bottom - top)
-                    let (value, ix, iy) = (sample.x, sample.y, sample.z)
-                    let index = row * columns + column
-                    // Image gradient times d(u, v)/d(a, b, tx, ty), for u = a x - b y + tx, v = b x + a y + ty.
-                    steepest[index] = SIMD4(
-                        ix * Float(x) + iy * Float(y), -ix * Float(y) + iy * Float(x), ix, iy,
-                    )
-                    warped[index] = value
-                    templated[index] = template.pixels[y * width + x]
-                    valid[index] = true
-                    sumT += Double(templated[index])
-                    sumI += Double(value)
-                    count += 1
+        var count = 0
+        for row in 0 ..< rows {
+            let y = row * step
+            for column in 0 ..< columns {
+                let x = column * step
+                let index = row * columns + column
+                let (u, v) = p.apply(Float(x), Float(y))
+                guard u >= 0, v >= 0, u <= maxU, v <= maxV else {
+                    valid[index] = false
+                    continue
                 }
-            }
-            guard count > 64 else { break }
-            let meanT = Float(sumT / Double(count))
-            let meanI = Float(sumI / Double(count))
-            var hessian = simd_float4x4()
-            var projI = SIMD4<Float>.zero
-            var projT = SIMD4<Float>.zero
-            var normI: Float = 0
-            var normT: Float = 0
-            var dot: Float = 0
-            var meanG = SIMD4<Float>.zero
-            for index in valid.indices where valid[index] {
-                meanG += steepest[index]
-            }
-            meanG /= Float(count)
-            for index in valid.indices where valid[index] {
-                let g = steepest[index] - meanG
-                let i = warped[index] - meanI
-                let t = templated[index] - meanT
-                hessian += simd_float4x4(columns: (g * g.x, g * g.y, g * g.z, g * g.w))
-                projI += g * i
-                projT += g * t
-                normI += i * i
-                normT += t * t
-                dot += i * t
-            }
-            correlation = dot / max((normI * normT).squareRoot(), 1e-12)
-            let inverse = hessian.inverse
-            let hI = inverse * projI
-            let hT = inverse * projT
-            let numerator = normI - simd_dot(projI, hI)
-            let denominator = dot - simd_dot(projT, hI)
-            guard denominator > 1e-12 else { break }
-            let lambda = numerator / denominator
-            // Update: H^-1 G^T (lambda t - i).
-            let delta = lambda * hT - hI
-            p.a += delta.x
-            p.b += delta.y
-            p.tx += delta.z
-            p.ty += delta.w
-            // The largest move of an image corner this step, in pixels.
-            let shift = abs(delta.x) * Float(width) + abs(delta.y) * Float(height) + abs(delta.z) + abs(delta.w)
-            if shift < tolerance {
-                break
+                let x0 = min(Int(u), image.width - 2)
+                let y0 = min(Int(v), image.height - 2)
+                let fx = u - Float(x0)
+                let fy = v - Float(y0)
+                let at = y0 * image.width + x0
+                let below = at + image.width
+                let top = packed[at] + fx * (packed[at + 1] - packed[at])
+                let bottom = packed[below] + fx * (packed[below + 1] - packed[below])
+                let sample = top + fy * (bottom - top)
+                let (ix, iy) = (sample.y, sample.z)
+                // Image gradient times d(u, v)/d(a, b, tx, ty), for u = a x - b y + tx, v = b x + a y + ty.
+                steepest[index] = SIMD4(ix * Float(x) + iy * Float(y), -ix * Float(y) + iy * Float(x), ix, iy)
+                warped[index] = sample.x
+                templated[index] = template.pixels[y * template.width + x]
+                valid[index] = true
+                count += 1
             }
         }
-        return Result(transform: p, correlation: correlation)
+        return count
+    }
+
+    /// The correlation of the last warp, and the Gauss-Newton step from it (nil when degenerate).
+    func update(count: Int) -> (delta: SIMD4<Float>?, correlation: Float) {
+        var sumT: Double = 0
+        var sumI: Double = 0
+        var meanG = SIMD4<Float>.zero
+        for index in valid.indices where valid[index] {
+            sumT += Double(templated[index])
+            sumI += Double(warped[index])
+            meanG += steepest[index]
+        }
+        let meanT = Float(sumT / Double(count))
+        let meanI = Float(sumI / Double(count))
+        meanG /= Float(count)
+        var hessian = simd_float4x4()
+        var projI = SIMD4<Float>.zero
+        var projT = SIMD4<Float>.zero
+        var normI: Float = 0
+        var normT: Float = 0
+        var dot: Float = 0
+        for index in valid.indices where valid[index] {
+            let g = steepest[index] - meanG
+            let i = warped[index] - meanI
+            let t = templated[index] - meanT
+            hessian += simd_float4x4(columns: (g * g.x, g * g.y, g * g.z, g * g.w))
+            projI += g * i
+            projT += g * t
+            normI += i * i
+            normT += t * t
+            dot += i * t
+        }
+        let correlation = dot / max((normI * normT).squareRoot(), 1e-12)
+        let inverse = hessian.inverse
+        let hI = inverse * projI
+        let hT = inverse * projT
+        let denominator = dot - simd_dot(projT, hI)
+        guard denominator > 1e-12 else { return (nil, correlation) }
+        let lambda = (normI - simd_dot(projI, hI)) / denominator
+        // H^-1 G^T (lambda t - i).
+        return (lambda * hT - hI, correlation)
     }
 }
