@@ -51,6 +51,7 @@ struct SessionBuilder {
             try encodeMosaic(
                 decoded, pattern: pattern, multipliers: multipliers,
                 noise: noise.scaled(by: SIMD3<Float>(balance)), repairedCount: repairedCount,
+                highlights: HighlightModel.fit(decoded, balance: SIMD3<Float>(balance)),
                 into: pyramid, commands: commands,
             )
         case .linearRGB:
@@ -109,6 +110,7 @@ struct SessionBuilder {
         multipliers: SIMD4<Float>,
         noise: NoiseModel,
         repairedCount: any MTLBuffer,
+        highlights: HighlightModel?,
         into pyramid: any MTLTexture,
         commands: any MTLCommandBuffer,
     ) throws {
@@ -157,13 +159,34 @@ struct SessionBuilder {
         encoder.setBuffer(repairedCount, offset: 0, index: 2)
         encoder.dispatchGrid(width: width, height: height, pipeline: kernels.repairHotPixels)
 
+        // Rebuilt highlights go back into the first texture, which the demosaic then reads.
+        var mosaic = repaired
+        if let highlights {
+            var highlightParams = HighlightParams(
+                width: UInt32(width), height: UInt32(height),
+                patternWidth: UInt32(pattern.width), patternHeight: UInt32(pattern.height),
+                clip: highlights.clip,
+            )
+            var coefficients = highlights.coefficients
+            encoder.setComputePipelineState(kernels.reconstructHighlights)
+            encoder.setTexture(repaired, index: 0)
+            encoder.setTexture(cfa, index: 1)
+            encoder.setBytes(&highlightParams, length: MemoryLayout<HighlightParams>.stride, index: 0)
+            encoder.setBytes(&colors, length: colors.count, index: 1)
+            encoder.setBytes(
+                &coefficients, length: coefficients.count * MemoryLayout<SIMD4<Float>>.stride, index: 2,
+            )
+            encoder.dispatchGrid(width: width, height: height, pipeline: kernels.reconstructHighlights)
+            mosaic = cfa
+        }
+
         var demosaicParams = DemosaicParams(
             width: UInt32(width), height: UInt32(height),
             patternWidth: UInt32(pattern.width), patternHeight: UInt32(pattern.height),
         )
         let demosaic = pattern.width == 2 && pattern.height == 2 ? kernels.demosaicBayer : kernels.demosaicGeneric
         encoder.setComputePipelineState(demosaic)
-        encoder.setTexture(repaired, index: 0)
+        encoder.setTexture(mosaic, index: 0)
         encoder.setTexture(pyramid, index: 1)
         encoder.setBytes(&demosaicParams, length: MemoryLayout<DemosaicParams>.stride, index: 0)
         encoder.setBytes(&colors, length: colors.count, index: 1)

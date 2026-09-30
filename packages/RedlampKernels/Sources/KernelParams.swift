@@ -81,6 +81,22 @@ public struct HotPixelParams {
     }
 }
 
+public struct HighlightParams {
+    public var width: UInt32
+    public var height: UInt32
+    public var patternWidth: UInt32
+    public var patternHeight: UInt32
+    public var clip: SIMD4<Float>
+
+    public init(width: UInt32, height: UInt32, patternWidth: UInt32, patternHeight: UInt32, clip: SIMD4<Float>) {
+        self.width = width
+        self.height = height
+        self.patternWidth = patternWidth
+        self.patternHeight = patternHeight
+        self.clip = clip
+    }
+}
+
 public struct HistogramParams {
     public var width: UInt32
     public var height: UInt32

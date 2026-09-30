@@ -221,6 +221,38 @@ struct DetailStageTests {
         #expect(try makeSession(.bayer, width: 1024, height: 768, spikes: highlight).repairedPixels == 0)
     }
 
+    // MARK: - Highlights
+
+    /// Bayer RGGB colour at a photosite.
+    private static func bayerColor(_ x: Int, _ y: Int) -> Int {
+        [0, 1, 1, 2][(y % 2) * 2 + x % 2]
+    }
+
+    @Test func `a clipped channel is rebuilt from its neighbours`() throws {
+        // A reddish highlight (R:G:B = 1.25:1:0.8) whose red goes past the sensor's clip.
+        let ratios: [Float] = [1.25, 1, 0.8]
+        let session = try makeSession(.bayer, width: 512, height: 384, noiseScale: 0) { x, y in
+            let r2 = Float((x - 256) * (x - 256) + (y - 192) * (y - 192))
+            let level = 0.95 * exp(-r2 / (2 * 60 * 60))
+            return min(ratios[Self.bayerColor(x, y)] * level, 1)
+        }
+        let centre = try readLevel(session, level: 0)[192 * 512 + 256]
+        #expect(abs(centre.x / (1.25 * 0.95) - 1) < 0.05, "red \(centre.x)")
+        #expect(abs(centre.x / centre.y / 1.25 - 1) < 0.05, "red to green \(centre.x / centre.y)")
+    }
+
+    @Test func `fully clipped areas stay neutral`() throws {
+        let session = try makeSession(.bayer, width: 512, height: 384, noiseScale: 0, asShot: SIMD3(2, 1, 1.5)) {
+            x, y in
+            let r2 = Float((x - 256) * (x - 256) + (y - 192) * (y - 192))
+            return min(2 * exp(-r2 / (2 * 40 * 40)), 1)
+        }
+        let centre = try readLevel(session, level: 0)[192 * 512 + 256]
+        let neutral = HighlightModel.clipFraction * 2
+        #expect(abs(centre.x / neutral - 1) < 0.01 && abs(centre.y / neutral - 1) < 0.01, "\(centre)")
+        #expect(abs(centre.z / neutral - 1) < 0.01, "\(centre)")
+    }
+
     // MARK: - Helpers
 
     /// `signal` is the scene per photosite (`level` by default), `noiseScale` scales the
@@ -230,6 +262,7 @@ struct DetailStageTests {
         width: Int,
         height: Int,
         noiseScale: Float = 1,
+        asShot: SIMD3<Double> = SIMD3(1, 1, 1),
         spikes: [(SIMD2<Int>, Float)] = [],
         signal: (Int, Int) -> Float = { _, _ in DetailStageTests.level },
     ) throws -> ImageSession {
@@ -266,7 +299,7 @@ struct DetailStageTests {
         var decoded = DecodedImage(
             width: width, height: height, layout: layout, samples: samples,
             blackLevels: [Float](repeating: black, count: channels == 1 ? 4 : 3), whiteLevel: white,
-            asShotMultipliers: SIMD3(1, 1, 1), cameraToSRGB: [1, 0, 0, 0, 1, 0, 0, 0, 1], xyzToCamera: nil,
+            asShotMultipliers: asShot, cameraToSRGB: [1, 0, 0, 0, 1, 0, 0, 0, 1], xyzToCamera: nil,
             orientation: 0, baselineExposure: 0,
             info: ImageInfo(
                 url: URL(fileURLWithPath: "/synthetic.dng"), pixelSize: PixelSize(width: width, height: height),

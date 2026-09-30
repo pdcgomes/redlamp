@@ -2,8 +2,9 @@
 
 // MARK: - Raw normalisation
 
-// Black-subtracts, scales to the white level and applies the as-shot white balance.
-// Values are clipped at 1 after white balance, so sensor-clipped highlights stay neutral.
+// Black-subtracts, scales to the white level and applies the as-shot white balance. Values
+// above 1 are kept: a channel with a large multiplier only clips at its own level, and
+// highlight reconstruction deals with photosites that did clip.
 kernel void rl_cfa_normalize(
     device const ushort *raw [[buffer(0)]],
     constant CFAParams &p [[buffer(1)]],
@@ -16,7 +17,7 @@ kernel void rl_cfa_normalize(
     uint position = (gid.y % p.patternHeight) * p.patternWidth + (gid.x % p.patternWidth);
     float black = blackPattern[position];
     float value = (float(raw[gid.y * p.width + gid.x]) - black) / max(p.white - black, 1.0f);
-    value = clamp(value * p.multipliers[colorPattern[position]], 0.0f, 1.0f);
+    value = max(value * p.multipliers[colorPattern[position]], 0.0f);
     out.write(float4(value), gid);
 }
 
@@ -122,6 +123,62 @@ kernel void rl_cfa_repair_hot_pixels(
     out.write(float4(value), gid);
 }
 
+struct HighlightParams {
+    uint width;
+    uint height;
+    uint patternWidth;
+    uint patternHeight;
+    float4 clip;         // xyz clip level per colour (white-balanced), w level for fully clipped areas
+};
+
+// Rebuilds clipped photosites from the unclipped colours around them (see HighlightModel):
+// the prediction in cube-root space from the means of its bright neighbours (at least half their
+// clip level: darker ones belong to another surface, such as a twig against the sky), never below the
+// clip level and at most two stops above it. Where every colour clipped, the lowest neutral
+// consistent with all of them.
+kernel void rl_cfa_reconstruct_highlights(
+    texture2d<float, access::read> cfa [[texture(0)]],
+    texture2d<float, access::write> out [[texture(1)]],
+    constant HighlightParams &p [[buffer(0)]],
+    constant uchar *pattern [[buffer(1)]],
+    constant float4 *model [[buffer(2)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    if (gid.x >= p.width || gid.y >= p.height) return;
+    uint color = pattern[(gid.y % p.patternHeight) * p.patternWidth + gid.x % p.patternWidth];
+    float value = cfa.read(gid).r;
+    if (value < p.clip[color]) {
+        out.write(float4(value), gid);
+        return;
+    }
+    float3 sums = 0.0f;
+    float3 counts = 0.0f;
+    for (int dy = -2; dy <= 2; dy++) {
+        for (int dx = -2; dx <= 2; dx++) {
+            int qx = int(gid.x) + dx;
+            int qy = int(gid.y) + dy;
+            if (qx < 0 || qy < 0 || qx >= int(p.width) || qy >= int(p.height)) continue;
+            uint neighbourColor = pattern[(uint(qy) % p.patternHeight) * p.patternWidth + uint(qx) % p.patternWidth];
+            float neighbour = cfa.read(uint2(qx, qy)).r;
+            if (neighbour < p.clip[neighbourColor] && neighbour >= 0.5f * p.clip[neighbourColor]) {
+                sums[neighbourColor] += neighbour;
+                counts[neighbourColor] += 1.0f;
+            }
+        }
+    }
+    bool first = counts[(color + 1) % 3] > 0.0f;
+    bool second = counts[(color + 2) % 3] > 0.0f;
+    if (!first && !second) {
+        out.write(float4(p.clip.w), gid);
+        return;
+    }
+    float4 m = model[color * 3 + (first && second ? 0 : (first ? 1 : 2))];
+    float3 means = select(float3(0.0f), sums / max(counts, float3(1.0f)), counts > 0.0f);
+    float root = m.x + dot(m.yzw, powr(means, float3(1.0f / 3.0f)));
+    float predicted = root > 0.0f ? root * root * root : 0.0f;
+    out.write(float4(clamp(predicted, p.clip[color], 4.0f * p.clip[color])), gid);
+}
+
 // Malvar–He–Cutler gradient-corrected bilinear demosaic for 2x2 Bayer patterns.
 kernel void rl_demosaic_bayer(
     texture2d<float, access::read> cfa [[texture(0)]],
@@ -157,7 +214,7 @@ kernel void rl_demosaic_bayer(
         rgb = color == 0 ? float3(c, green, opposite) : float3(opposite, green, c);
     }
     #undef S
-    out.write(float4(clamp(rgb, 0.0f, 1.0f), 1.0f), gid);
+    out.write(float4(max(rgb, 0.0f), 1.0f), gid);
 }
 
 // Distance-weighted same-color interpolation for any CFA up to 6x6 (X-Trans).
@@ -193,5 +250,5 @@ kernel void rl_demosaic_generic(
     if (own == 0) rgb.r = ownValue;
     else if (own == 1) rgb.g = ownValue;
     else rgb.b = ownValue;
-    out.write(float4(clamp(rgb, 0.0f, 1.0f), 1.0f), gid);
+    out.write(float4(max(rgb, 0.0f), 1.0f), gid);
 }
