@@ -57,6 +57,8 @@ public struct DecodedImage: Sendable {
     /// DNG BaselineExposure, in stops.
     public let baselineExposure: Double
     public let info: ImageInfo
+    /// The file's own noise calibration (DNG NoiseProfile), when it has one.
+    public var noiseProfile: NoiseModel?
 
     public init(
         width: Int,
@@ -84,6 +86,11 @@ public struct DecodedImage: Sendable {
         self.orientation = orientation
         self.baselineExposure = baselineExposure
         self.info = info
+    }
+
+    /// Sensor noise in normalised units: the file's profile, else measured from the image.
+    public var noise: NoiseModel {
+        noiseProfile ?? NoiseEstimator.estimate(self) ?? .quantization
     }
 
     public var isRaw: Bool {

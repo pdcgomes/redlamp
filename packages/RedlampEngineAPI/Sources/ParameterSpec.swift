@@ -231,26 +231,21 @@ public enum ParameterCatalog {
                 availability: detail,
             ),
             ParameterSpec(.sharpenMasking, "Masking", range: 0 ... 100, format: .integer, availability: detail),
-            ParameterSpec(.noiseLuminance, "Luminance", range: 0 ... 100, format: .integer, availability: detail),
+            ParameterSpec(.noiseLuminance, "Luminance", range: 0 ... 100, format: .integer),
             ParameterSpec(
                 .noiseLuminanceDetail, "Detail", range: 0 ... 100, default: 50, format: .integer,
-                availability: detail,
             ),
             ParameterSpec(
                 .noiseLuminanceContrast, "Contrast", range: 0 ... 100, format: .integer,
-                availability: detail,
             ),
             ParameterSpec(
                 .noiseColor, "Color", range: 0 ... 100, default: 25, format: .integer,
-                availability: detail,
             ),
             ParameterSpec(
                 .noiseColorDetail, "Detail", range: 0 ... 100, default: 50, format: .integer,
-                availability: detail,
             ),
             ParameterSpec(
                 .noiseColorSmoothness, "Smoothness", range: 0 ... 100, default: 50, format: .integer,
-                availability: detail,
             ),
 
             ParameterSpec(.lensDistortion, "Distortion", availability: geometry),

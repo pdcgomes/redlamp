@@ -34,6 +34,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     private let histogramBuffer: any MTLBuffer
     /// Small whole-photo renders sent with region frames; they also feed the histogram.
     private let overviews: SurfacePool
+    private let denoiser: Denoiser
 
     public init() throws {
         guard let device = MTLCreateSystemDefaultDevice(),
@@ -53,6 +54,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         kernels = try KernelLibrary(device: device)
         surfaces = SurfacePool(device: device)
         overviews = SurfacePool(device: device)
+        denoiser = Denoiser(device: device, kernels: kernels)
 
         let builder = SessionBuilder(device: device, queue: buildQueue, kernels: kernels)
         let signposter = signposts
@@ -199,15 +201,21 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         maskOverlay: UUID? = nil,
         maskOverlayColor: MaskOverlayColor = .red,
         commands: any MTLCommandBuffer,
+        cacheDenoise: Bool = true,
     ) throws {
+        let denoised = try denoiser.denoise(
+            recipe, session: session, region: region, outputSize: size, commands: commands, cache: cacheDenoise,
+        )
         guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
         var inputs = DevelopParameters.make(
             recipe: recipe, session: session, outputSize: size, region: region, encoding: encoding,
             showClipping: showClipping, maskOverlay: maskOverlay, maskOverlayColor: maskOverlayColor,
         )
+        inputs.params.denoised = denoised?.area ?? .zero
         encoder.setComputePipelineState(kernels.develop)
         encoder.setTexture(session.pyramid, index: 0)
         encoder.setTexture(texture, index: 1)
+        encoder.setTexture(denoised?.texture ?? session.pyramid, index: 2)
         encoder.setBytes(&inputs.params, length: MemoryLayout<DevelopParams>.stride, index: 0)
         encoder.setBytes(&inputs.toneLUT, length: inputs.toneLUT.count * MemoryLayout<Float>.stride, index: 1)
         encoder.setBytes(&inputs.mixer, length: inputs.mixer.count * MemoryLayout<Float>.stride, index: 2)
@@ -280,20 +288,17 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         )
         descriptor.usage = [.shaderWrite, .shaderRead]
         descriptor.storageMode = .shared
-        guard let texture = device.makeTexture(descriptor: descriptor),
-              let commands = queue.makeCommandBuffer()
-        else {
-            throw EngineError.gpuUnavailable
-        }
+        guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
         let encoding: OutputEncoding = request.colorSpace == .sRGB ? .sRGB : .displayP3
-        try encodeDevelop(
-            request.recipe, session: session, into: texture, size: size,
-            encoding: encoding, showClipping: false, commands: commands,
-        )
-        commands.commit()
-        commands.waitUntilCompleted()
-        if let error = commands.error {
-            throw EngineError.renderFailed(error.localizedDescription)
+        if DenoiseSettings(recipe: request.recipe).isActive {
+            try renderTiles(request.recipe, session: session, into: texture, size: size, encoding: encoding)
+        } else {
+            guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
+            try encodeDevelop(
+                request.recipe, session: session, into: texture, size: size,
+                encoding: encoding, showClipping: false, commands: commands,
+            )
+            try finish(commands)
         }
 
         let bytesPerPixel = sixteenBit ? 8 : 4
@@ -350,5 +355,62 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         await Task.detached(priority: .utility) {
             Thumbnails.thumbnail(for: url, maxPixelSize: maxPixelSize)
         }.value
+    }
+}
+
+// MARK: - Tiled stills
+
+extension RedlampEngine {
+    static let stillTile = 2048
+
+    /// Develops a still in tiles, so spatial stages only ever need a tile's worth of memory.
+    private func renderTiles(
+        _ recipe: EditRecipe,
+        session: ImageSession,
+        into texture: any MTLTexture,
+        size: PixelSize,
+        encoding: OutputEncoding,
+    ) throws {
+        let tile = Self.stillTile
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: texture.pixelFormat, width: min(tile, size.width), height: min(tile, size.height),
+            mipmapped: false,
+        )
+        descriptor.usage = [.shaderWrite, .shaderRead]
+        descriptor.storageMode = .private
+        guard let scratch = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
+        for y in stride(from: 0, to: size.height, by: tile) {
+            for x in stride(from: 0, to: size.width, by: tile) {
+                let tileSize = PixelSize(width: min(tile, size.width - x), height: min(tile, size.height - y))
+                let region = ImageRect(
+                    x: Double(x) / Double(size.width), y: Double(y) / Double(size.height),
+                    width: Double(tileSize.width) / Double(size.width),
+                    height: Double(tileSize.height) / Double(size.height),
+                )
+                guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
+                try encodeDevelop(
+                    recipe, session: session, into: scratch, size: tileSize, region: region,
+                    encoding: encoding, showClipping: false, commands: commands, cacheDenoise: false,
+                )
+                guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
+                blit.copy(
+                    from: scratch, sourceSlice: 0, sourceLevel: 0,
+                    sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+                    sourceSize: MTLSize(width: tileSize.width, height: tileSize.height, depth: 1),
+                    to: texture, destinationSlice: 0, destinationLevel: 0,
+                    destinationOrigin: MTLOrigin(x: x, y: y, z: 0),
+                )
+                blit.endEncoding()
+                try finish(commands)
+            }
+        }
+    }
+
+    private func finish(_ commands: any MTLCommandBuffer) throws {
+        commands.commit()
+        commands.waitUntilCompleted()
+        if let error = commands.error {
+            throw EngineError.renderFailed(error.localizedDescription)
+        }
     }
 }

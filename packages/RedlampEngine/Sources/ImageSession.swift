@@ -24,6 +24,9 @@ final class ImageSession: @unchecked Sendable {
     let baselineExposure: Double
     /// A small CPU copy of the pyramid (camera RGB) for white-balance and tone analysis.
     let analysis: AnalysisImage
+    /// Sensor noise in pyramid units (after the balance multipliers).
+    let noise: NoiseModel
+    let sensor: SensorKind
 
     init(
         info: ImageInfo,
@@ -32,7 +35,10 @@ final class ImageSession: @unchecked Sendable {
         colorModel: CameraColorModel?,
         balanceMultipliers: SIMD3<Double>,
         analysis: AnalysisImage,
+        noise: NoiseModel,
     ) {
+        self.noise = noise.scaled(by: SIMD3<Float>(balanceMultipliers))
+        sensor = SensorKind(decoded.layout)
         self.info = info
         isRaw = decoded.isRaw
         self.pyramid = pyramid
@@ -55,6 +61,22 @@ final class ImageSession: @unchecked Sendable {
             tint: recipe[.tint],
         ))
         return target / asShotMultipliers
+    }
+}
+
+/// How the pyramid was reconstructed, which shapes its noise.
+enum SensorKind: Sendable {
+    case bayer
+    case xTrans
+    case linear
+    case bitmap
+
+    init(_ layout: DecodedImage.Layout) {
+        switch layout {
+        case let .mosaic(pattern): self = pattern.width == 2 && pattern.height == 2 ? .bayer : .xTrans
+        case .linearRGB: self = .linear
+        case .linearSRGBHalf: self = .bitmap
+        }
     }
 }
 

@@ -41,7 +41,28 @@ struct DevelopParams {
     float4 outputSize;        // x width, y height, z full-resolution scale
     float4 masks;             // x layer count, y overlay layer index (-1 none), z component count, w overlay color
     float4 region;            // rendered part of the image: xy origin, zw size (normalized, oriented)
+    float4 denoised;          // area covered by the denoised texture: xy origin, zw size (normalized, source); z 0 = none
 };
+
+// Noise reduction over one work area of the pyramid.
+struct DenoiseParams {
+    int4 origin;              // xy first texel of the work area, z pyramid level
+    int4 size;                // xy work area size in texels
+    int4 scale;               // x à-trous hole spacing, y 1 on the finest scale, z 1 on the coarsest
+    float4 a;                 // noise per channel in pyramid units: variance = a · value + b
+    float4 b;
+    float4 threshold;         // x luma, yz chroma: detail below these is removed (0 keeps it)
+};
+
+// Maps oriented output coordinates to source texture coordinates (LibRaw flip codes).
+static inline float2 orient(float2 uv, int orientation) {
+    switch (orientation) {
+    case 3: return float2(1.0f - uv.x, 1.0f - uv.y);
+    case 5: return float2(1.0f - uv.y, uv.x);
+    case 6: return float2(uv.y, 1.0f - uv.x);
+    default: return uv;
+    }
+}
 
 // One mask component. Coordinates are aspect-corrected: x is scaled by width/height so
 // distances are isotropic.

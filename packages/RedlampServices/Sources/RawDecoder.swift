@@ -103,7 +103,7 @@ enum RawDecoder {
             captureDate: other.timestamp > 0 ? Date(timeIntervalSince1970: TimeInterval(other.timestamp)) : nil,
         )
 
-        return DecodedImage(
+        var decoded = DecodedImage(
             width: width,
             height: height,
             layout: layout,
@@ -117,6 +117,8 @@ enum RawDecoder {
             baselineExposure: plausibleBaselineExposure(rl_baseline_exposure(raw)),
             info: info,
         )
+        decoded.noiseProfile = DNGNoiseProfile.read(url)
+        return decoded
     }
 
     // MARK: - Helpers

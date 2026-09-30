@@ -130,16 +130,6 @@ static inline float valueNoise(float2 p, uint seed) {
     return mix(mix(a, b, f.x), mix(cc, d, f.x), f.y);
 }
 
-// Maps oriented output coordinates to source texture coordinates (LibRaw flip codes).
-static inline float2 orient(float2 uv, int orientation) {
-    switch (orientation) {
-    case 3: return float2(1.0f - uv.x, 1.0f - uv.y);
-    case 5: return float2(1.0f - uv.y, uv.x);
-    case 6: return float2(uv.y, 1.0f - uv.x);
-    default: return uv;
-    }
-}
-
 // MARK: - Masks
 
 constant int kMaxMaskLayers = 16;
@@ -184,6 +174,7 @@ static inline float evaluateMaskLayer(MaskLayerGPU layer, constant MaskComponent
 kernel void rl_develop(
     texture2d<float, access::sample> source [[texture(0)]],
     texture2d<float, access::write> out [[texture(1)]],
+    texture2d<float, access::sample> denoised [[texture(2)]],
     constant DevelopParams &p [[buffer(0)]],
     constant float *toneLUT [[buffer(1)]],
     constant float *mixer [[buffer(2)]],
@@ -199,7 +190,13 @@ kernel void rl_develop(
     // Image coordinates of the whole photo, so masks, vignette and grain don't depend on the region.
     float2 uv = p.region.xy + (float2(gid) + 0.5f) / float2(width, height) * p.region.zw;
     float2 sourceUV = orient(uv, int(p.geometry.x));
-    float3 camera = source.sample(linearSampler, sourceUV, level(p.geometry.y)).rgb;
+    float3 camera;
+    if (p.denoised.z > 0.0f) {
+        constexpr sampler areaSampler(coord::normalized, filter::linear, address::clamp_to_edge);
+        camera = denoised.sample(areaSampler, (sourceUV - p.denoised.xy) / p.denoised.zw).rgb;
+    } else {
+        camera = source.sample(linearSampler, sourceUV, level(p.geometry.y)).rgb;
+    }
 
     // Mask coverage for every layer, then the summed local adjustments.
     int layerCount = min(int(p.masks.x), kMaxMaskLayers);

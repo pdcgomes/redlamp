@@ -85,6 +85,7 @@ public struct DevelopParams {
     public var outputSize = SIMD4<Float>(0, 0, 1, 0)
     public var masks = SIMD4<Float>(0, -1, 0, 0)
     public var region = SIMD4<Float>(0, 0, 1, 1)
+    public var denoised = SIMD4<Float>(0, 0, 0, 0)
 
     public init() {}
 
@@ -103,6 +104,22 @@ public struct DevelopParams {
             SIMD4(t.columns.1, 0),
             SIMD4(t.columns.2, 0),
         )
+    }
+}
+
+public struct DenoiseParams {
+    public var origin: SIMD4<Int32>
+    public var size: SIMD4<Int32>
+    public var scale = SIMD4<Int32>(1, 0, 0, 0)
+    public var a: SIMD4<Float>
+    public var b: SIMD4<Float>
+    public var threshold = SIMD4<Float>(0, 0, 0, 0)
+
+    public init(origin: SIMD4<Int32>, size: SIMD4<Int32>, a: SIMD4<Float>, b: SIMD4<Float>) {
+        self.origin = origin
+        self.size = size
+        self.a = a
+        self.b = b
     }
 }
 

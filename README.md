@@ -6,7 +6,7 @@ Redlamp is built from scratch in Swift and Metal for Apple Silicon. It focuses o
 
 ![Redlamp editing a Nikon Z 6 raw file](docs/images/editor.png)
 
-> **Status: pre-alpha, iteration 2 (macOS).** The core RAW pipeline, the Develop workspace, and the Basic, Tone Curve, Color Mixer, Color Grading, and Effects adjustments work today, and so does **masking with linear and radial gradients** and local adjustments. Crop, healing, brush and AI masks, lens corrections, and the iPad and iPhone apps are next. See [Where we are](#where-we-are) and the [Roadmap](#roadmap).
+> **Status: pre-alpha, iteration 2 (macOS).** The core RAW pipeline, the Develop workspace, and the Basic, Tone Curve, Color Mixer, Color Grading, and Effects adjustments and noise reduction work today, and so does **masking with linear and radial gradients** and local adjustments. Crop, healing, brush and AI masks, lens corrections, and the iPad and iPhone apps are next. See [Where we are](#where-we-are) and the [Roadmap](#roadmap).
 >
 > This README is the project's primary status page and is kept up to date as work lands. *Last updated: 29 September 2026.*
 
@@ -72,6 +72,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] **Color Mixer:** HSL (Hue, Saturation, Luminance, and All) and a per-color mode, working in OKLCh.
 - [x] **Color Grading:** 3-way and individual wheels, Blending, and Balance. It also tints B&W images for split-toning.
 - [x] **Effects:** post-crop vignette (amount, midpoint, roundness, feather) and zoom-stable film grain.
+- [x] **Noise reduction** (Detail panel): Luminance with Detail and Contrast, and Color with Detail and Smoothness. It is scaled to each photo's own noise, read from the DNG NoiseProfile tag or measured from the raw data when the file opens. It runs as a cached stage in front of the fused kernel, so other sliders stay as fast as before, and exports render in tiles.
 
 **Masking** (Lightroom's model)
 - [x] Each mask is a layer: its own adjustments plus a mask built from components. Components combine with **Add**, **Subtract**, and **Intersect**, and each can be inverted.
@@ -96,7 +97,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] Non-destructive edits, saved automatically to a sidecar file next to each photo (`IMG_1234.ARW.redlamp`).
 - [x] Export to JPEG, plus a headless `redlamp` command-line tool for rendering and export.
 
-**Panels laid out but not yet rendering** (shown dimmed, with the phase they arrive in): Texture, Clarity, and Dehaze (both global and in masks), and the Detail, Lens Corrections, Transform, and Calibration panels. The Crop, Healing, and Red Eye tools show what is coming and when.
+**Panels laid out but not yet rendering** (shown dimmed, with the phase they arrive in): Texture, Clarity, and Dehaze (both global and in masks), Sharpening in the Detail panel, and the Lens Corrections, Transform, and Calibration panels. The Crop, Healing, and Red Eye tools show what is coming and when.
 
 ### Measured performance
 
@@ -109,6 +110,8 @@ Measured on an Apple M1 Ultra with a Release build.
 | Interactive render at Fit with two gradient masks | ~1.3 ms |
 | Interactive render at 1:1 (full 26 MP frame) | ~13 ms |
 | Full-resolution export render (24–26 MP) | ~45 ms |
+| Full-resolution export render with noise reduction (24 MP, tiled) | ~100 ms |
+| Interactive render at 1:1 while dragging a noise-reduction slider | 9–10 ms (p95 14 ms) |
 
 Dragging a slider at 120 events a second (`scripts/perf-sweep.sh`), with every panel open:
 
@@ -336,6 +339,7 @@ flowchart LR
     subgraph engine [Engine - platform-neutral, no UI imports]
         Sched["Latest-wins render loop"] --> Kernels["Fused Metal develop kernel"]
         Pyramid["Demosaiced mip pyramid"] --> Kernels
+        Pyramid --> Denoise["Denoise stage (cached)"] --> Kernels
         Decode["LibRaw / ImageIO decode"] --> Pyramid
     end
     Model --> Req --> Sched
@@ -345,8 +349,9 @@ flowchart LR
 **The pipeline:**
 1. LibRaw unpacks the sensor data.
 2. The GPU applies black and white levels and the as-shot white balance.
-3. The image is demosaiced and cached as a mip pyramid.
-4. The fused develop kernel first evaluates every mask's coverage for the pixel. It then applies, in order, each with its local (masked) adjustments where they exist: the white-balance ratio, the camera matrix to linear Rec.2020 (scene-referred), exposure and tone in log space, a hue-preserving tone curve that rolls highlights off smoothly to white at +4 EV above middle grey, OKLCh color work (vibrance, saturation, mixer, grading, profile look), the tone-curve lookup, vignette and grain, all still in Rec.2020 primaries, and finally a hue-preserving fit into the output gamut (sRGB or Display P3) and the output encoding.
+3. The image is demosaiced and cached as a mip pyramid. Its noise level is read from the file or measured from the raw data.
+4. When noise reduction is on, a spatial stage denoises the pyramid texels behind the rendered region: an à-trous wavelet decomposition in a noise-stabilized opponent space, with each scale's detail shrunk where it is indistinguishable from noise. The result is cached per region, pyramid level and settings.
+5. The fused develop kernel first evaluates every mask's coverage for the pixel. It then applies, in order, each with its local (masked) adjustments where they exist: the white-balance ratio, the camera matrix to linear Rec.2020 (scene-referred), exposure and tone in log space, a hue-preserving tone curve that rolls highlights off smoothly to white at +4 EV above middle grey, OKLCh color work (vibrance, saturation, mixer, grading, profile look), the tone-curve lookup, vignette and grain, all still in Rec.2020 primaries, and finally a hue-preserving fit into the output gamut (sRGB or Display P3) and the output encoding.
 
 **Packages** (`packages/`; `Tuist/ProjectDescriptionHelpers/Module.swift` is the single source of truth for which package may depend on which):
 

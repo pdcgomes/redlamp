@@ -12,6 +12,9 @@ public final class KernelLibrary: @unchecked Sendable {
     public let demosaicGeneric: any MTLComputePipelineState
     public let develop: any MTLComputePipelineState
     public let histogram: any MTLComputePipelineState
+    public let denoisePrepare: any MTLComputePipelineState
+    public let denoiseRows: any MTLComputePipelineState
+    public let denoiseColumns: any MTLComputePipelineState
 
     public init(device: any MTLDevice) throws {
         self.device = device
@@ -30,6 +33,9 @@ public final class KernelLibrary: @unchecked Sendable {
         demosaicGeneric = try pipeline("rl_demosaic_generic")
         develop = try pipeline("rl_develop")
         histogram = try pipeline("rl_histogram")
+        denoisePrepare = try pipeline("rl_denoise_prepare")
+        denoiseRows = try pipeline("rl_denoise_rows")
+        denoiseColumns = try pipeline("rl_denoise_columns")
     }
 }
 

@@ -63,6 +63,7 @@ struct SessionBuilder {
         )
         blit.endEncoding()
         commands.commit()
+        let noise = decoded.noise
         commands.waitUntilCompleted()
         if let error = commands.error {
             throw EngineError.renderFailed(error.localizedDescription)
@@ -84,6 +85,7 @@ struct SessionBuilder {
             colorModel: colorModel,
             balanceMultipliers: balance,
             analysis: analysis,
+            noise: noise,
         )
     }
 
