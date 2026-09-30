@@ -68,6 +68,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] Decodes RAW files through LibRaw (unpacking only). Black levels, white balance, demosaicing, and color are all done by Redlamp on the GPU.
 - [x] Bayer demosaic by directional filtering with a posteriori decision (Menon, Andriani and Calvagno, 2007), with a dual pass that takes plain green where the neighbours differ only by noise, a first-generation X-Trans demosaic, and linear DNG support (for example iPhone ProRAW).
 - [x] Hot pixels are repaired before demosaicing, judged against each photo's own noise level.
+- [x] **DNG gain maps** (OpcodeList2), such as phones' lens shading correction, are applied before demosaicing.
 - [x] **Highlight reconstruction:** channels are no longer clipped at 1 after white balance, and photosites that did clip are rebuilt from their bright unclipped neighbours, using the colour measured around the clipped area. Fully blown areas stay neutral.
 - [x] Tested on Sony **ARW**, Canon **CR3**, Nikon **NEF**, Fujifilm **RAF** (X-Trans), and Apple **ProRAW DNG**, plus JPEG, HEIC, TIFF, and PNG.
 - [x] The demosaiced image is cached as a full mip pyramid, so interactive renders sample the right resolution for the zoom level.
