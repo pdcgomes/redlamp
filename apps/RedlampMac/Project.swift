@@ -33,11 +33,19 @@ let project = Project(
                 Module.canvas.dependency,
                 Module.ui.dependency,
             ],
-            settings: .settings(base: [
-                "CODE_SIGN_IDENTITY": "-",
-                "CODE_SIGN_STYLE": "Manual",
-                "ENABLE_HARDENED_RUNTIME": "YES",
-            ]),
+            // Signed with the same team as the frameworks: with the hardened runtime,
+            // library validation refuses frameworks from a different team (or ad-hoc).
+            settings: .settings(
+                base: [
+                    "CODE_SIGN_STYLE": "Automatic",
+                    "CODE_SIGN_IDENTITY": "Apple Development",
+                ],
+                configurations: [
+                    // Debug builds stay attachable by sample/Instruments for profiling.
+                    .debug(name: .debug, settings: ["ENABLE_HARDENED_RUNTIME": "NO"]),
+                    .release(name: .release, settings: ["ENABLE_HARDENED_RUNTIME": "YES"]),
+                ],
+            ),
         ),
     ],
 )

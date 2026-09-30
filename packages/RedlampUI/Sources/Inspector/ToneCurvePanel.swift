@@ -89,7 +89,7 @@ struct CurveEditor: View {
                     drawCurve(context, size: canvasSize)
                 }
                 if mode == .point {
-                    ForEach(Array(model.recipe.pointCurve.enumerated()), id: \.offset) { index, point in
+                    ForEach(Array(model.pointCurve.enumerated()), id: \.offset) { index, point in
                         Circle()
                             .fill(dragIndex == index ? Color.white : Color(white: 0.85))
                             .overlay(Circle().strokeBorder(Color.black.opacity(0.5), lineWidth: 0.5))
@@ -112,7 +112,7 @@ struct CurveEditor: View {
                     x: min(max(gesture.location.x / size.width, 0), 1),
                     y: min(max(1 - gesture.location.y / size.height, 0), 1),
                 )
-                var points = model.recipe.pointCurve.sorted { $0.x < $1.x }
+                var points = model.pointCurve.sorted { $0.x < $1.x }
                 if dragIndex == nil {
                     model.beginEdit()
                     let start = CGPoint(
@@ -148,7 +148,7 @@ struct CurveEditor: View {
     }
 
     private func removePoint(_ index: Int) {
-        var points = model.recipe.pointCurve.sorted { $0.x < $1.x }
+        var points = model.pointCurve.sorted { $0.x < $1.x }
         guard index > 0, index < points.count - 1 else { return }
         points.remove(at: index)
         model.setPointCurve(points)
@@ -204,7 +204,7 @@ struct CurveEditor: View {
     }
 
     private func drawCurve(_ context: GraphicsContext, size: CGSize) {
-        let lut = ToneCurveMath.lut(for: model.recipe, count: 256)
+        let lut = ToneCurveMath.lut(for: model.toneCurve, count: 256)
         var path = Path()
         for (index, value) in lut.enumerated() {
             let point = CGPoint(x: Double(index) / 255 * size.width, y: (1 - Double(value)) * size.height)

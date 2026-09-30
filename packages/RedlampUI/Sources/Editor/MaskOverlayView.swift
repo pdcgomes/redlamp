@@ -25,7 +25,7 @@ struct MaskOverlayView: View {
                         }
                 }
 
-                ForEach(model.recipe.masks) { mask in
+                ForEach(model.masks) { mask in
                     if model.showMaskPins, mask.id != model.selectedMaskID,
                        let center = mask.components.first?.shape.center {
                         Pin(selected: false)

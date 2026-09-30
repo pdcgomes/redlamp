@@ -14,4 +14,4 @@
 # and SwiftLint (opening_brace) agree.
 --disable wrapMultilineStatementBraces
 
---exclude .build,Derived,build,vendor,**/*.generated.swift
+--exclude .build,**/Derived,build,vendor,**/*.generated.swift

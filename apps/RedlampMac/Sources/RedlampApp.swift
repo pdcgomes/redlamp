@@ -32,8 +32,9 @@ struct RedlampApp: App {
                 .onAppear {
                     keyboard.install(model: model)
                     openInitialFolder()
-                    #if DEBUG
+                    #if DEBUG || REDLAMP_PROFILING
                         DebugSnapshot.scheduleIfRequested(model: model)
+                        DebugPerformance.scheduleIfRequested(model: model)
                     #endif
                 }
         }
@@ -47,7 +48,7 @@ struct RedlampApp: App {
     /// Opens paths passed on the command line (`mise run run -- <folder>`), otherwise the
     /// folder from the previous session.
     private func openInitialFolder() {
-        let arguments = CommandLine.arguments.dropFirst().prefix { !$0.hasPrefix("-") }
+        let arguments = LaunchArguments.all.dropFirst().prefix { !$0.hasPrefix("-") }
         let paths = arguments.isEmpty
             ? [UserDefaults.standard.string(forKey: "lastFolder")].compactMap(\.self)
             : Array(arguments)
@@ -85,4 +86,22 @@ struct RedlampApp: App {
             }
         }
     }
+}
+
+/// The command line, plus (in development builds) one line of arguments left in
+/// `/tmp/redlamp-launch-args`, consumed on launch. Tooling launches through `open`, since a
+/// process started straight from a non-GUI shell may never get a window, and `open` can
+/// silently drop `--args` and `--env`.
+enum LaunchArguments {
+    static let all: [String] = {
+        var arguments = CommandLine.arguments
+        #if DEBUG || REDLAMP_PROFILING
+            let path = "/tmp/redlamp-launch-args"
+            if let line = try? String(contentsOfFile: path, encoding: .utf8) {
+                try? FileManager.default.removeItem(atPath: path)
+                arguments += line.split(whereSeparator: \.isWhitespace).map(String.init)
+            }
+        #endif
+        return arguments
+    }()
 }

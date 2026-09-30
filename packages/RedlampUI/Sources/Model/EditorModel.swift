@@ -27,11 +27,88 @@ public final class EditorModel {
     public private(set) var info: ImageInfo?
     public private(set) var isLoading = false
     public private(set) var errorMessage: String?
-    public private(set) var recipe = EditRecipe()
+    /// Reading `recipe` observes every change to it. Views observe only what they show —
+    /// `value(_:)` for one parameter, or `masks`, `pointCurve`, … — so a slider drag
+    /// re-evaluates a single row rather than every panel.
+    public private(set) var recipe: EditRecipe {
+        get {
+            access(keyPath: \.recipe)
+            return storedRecipe
+        }
+        set {
+            let old = storedRecipe
+            withMutation(keyPath: \.recipe) { storedRecipe = newValue }
+            for parameter in newValue.parametersChanged(from: old) {
+                withMutation(keyPath: \.[observing: parameter]) {}
+            }
+            if newValue.treatment != old.treatment {
+                withMutation(keyPath: \.treatment) {}
+            }
+            if newValue.profile != old.profile {
+                withMutation(keyPath: \.profile) {}
+            }
+            if newValue.whiteBalanceMode != old.whiteBalanceMode {
+                withMutation(keyPath: \.whiteBalanceMode) {}
+            }
+            if newValue.pointCurve != old.pointCurve {
+                withMutation(keyPath: \.pointCurve) {}
+            }
+            if newValue.masks != old.masks {
+                withMutation(keyPath: \.masks) {}
+            }
+        }
+    }
+
+    @ObservationIgnored private var storedRecipe = EditRecipe()
+
+    private subscript(observing parameter: ParameterID) -> Double {
+        access(keyPath: \.[observing: parameter])
+        return storedRecipe[parameter]
+    }
+
+    public var treatment: Treatment {
+        access(keyPath: \.treatment)
+        return storedRecipe.treatment
+    }
+
+    public var profile: ProfileReference {
+        access(keyPath: \.profile)
+        return storedRecipe.profile
+    }
+
+    public var whiteBalanceMode: WhiteBalanceMode {
+        access(keyPath: \.whiteBalanceMode)
+        return storedRecipe.whiteBalanceMode
+    }
+
+    public var pointCurve: [CurvePoint] {
+        access(keyPath: \.pointCurve)
+        return storedRecipe.pointCurve
+    }
+
+    public var masks: [MaskLayer] {
+        access(keyPath: \.masks)
+        return storedRecipe.masks
+    }
+
+    /// Just the tone curve, observing only the parameters that shape it.
+    public var toneCurve: EditRecipe {
+        var curve = EditRecipe()
+        curve.pointCurve = pointCurve
+        for parameter in PanelID.toneCurve.parameters {
+            curve[parameter] = value(parameter)
+        }
+        return curve
+    }
+
     public private(set) var history: [HistoryStep] = []
     public private(set) var historyIndex = 0
     public private(set) var snapshots: [Snapshot] = []
-    public private(set) var frame: RenderedFrame?
+    /// Frames go straight to the canvases; views only observe whether there is one.
+    @ObservationIgnored public let frames = FrameFeed()
+    public private(set) var hasFrame = false
+    /// Published at most ~30 times a second: enough for a live readout, while frames
+    /// arrive at up to the display rate.
     public private(set) var histogram = Histogram.empty
     public private(set) var lastRenderTime: Duration?
 
@@ -120,6 +197,7 @@ public final class EditorModel {
     /// previous photo stays on screen rather than flashing the placeholder in between.
     @ObservationIgnored private var pendingCanvas: (imageSize: PixelSize, firstGeneration: UInt64)?
     @ObservationIgnored private var saveTask: Task<Void, Never>?
+    @ObservationIgnored private var saveDeadline: ContinuousClock.Instant?
     @ObservationIgnored private var openTask: Task<Void, Never>?
     @ObservationIgnored private var framesTask: Task<Void, Never>?
 
@@ -197,8 +275,9 @@ public final class EditorModel {
             didOpen(opened, sidecar: sidecars.load(for: url))
             return
         }
-        frame = nil
+        showFrame(nil)
         pendingCanvas = nil
+        latestFrame = nil
         histogram = .empty
         isLoading = true
         Task { await loadThumbnail(for: url) }
@@ -252,7 +331,7 @@ public final class EditorModel {
         history = [HistoryStep(name: sidecar == nil ? "Import" : "Opened with edits", recipe: loaded)]
         historyIndex = 0
         isLoading = false
-        if frame == nil {
+        if !hasFrame {
             showOnCanvas(opened.pixelSize)
         } else {
             pendingCanvas = (opened.pixelSize, generation &+ 1)
@@ -295,6 +374,9 @@ public final class EditorModel {
         engine.render(request)
     }
 
+    /// Frames received from the engine (for performance diagnostics).
+    @ObservationIgnored public private(set) var debugFrameCount = 0
+
     private func receive(_ frame: RenderedFrame) {
         guard info != nil else { return }
         if let pending = pendingCanvas {
@@ -302,22 +384,51 @@ public final class EditorModel {
             pendingCanvas = nil
             showOnCanvas(pending.imageSize)
         }
-        self.frame = frame
-        histogram = frame.histogram
-        lastRenderTime = frame.renderDuration
+        debugFrameCount += 1
+        showFrame(frame)
+        latestFrame = frame
+        guard statsTask == nil else { return }
+        let wait = lastStatsUpdate + .milliseconds(33) - .now
+        statsTask = Task { [weak self] in
+            if wait > .zero {
+                try? await Task.sleep(for: wait)
+            }
+            guard let self else { return }
+            statsTask = nil
+            guard let latest = latestFrame else { return }
+            lastStatsUpdate = .now
+            histogram = latest.histogram
+            // A readout people can actually read; faster only re-renders its glass capsule.
+            if lastRenderTimeUpdate.duration(to: .now) > .milliseconds(250) {
+                lastRenderTimeUpdate = .now
+                lastRenderTime = latest.renderDuration
+            }
+        }
     }
+
+    private func showFrame(_ frame: RenderedFrame?) {
+        frames.show(frame)
+        if hasFrame != (frame != nil) {
+            hasFrame = frame != nil
+        }
+    }
+
+    @ObservationIgnored private var latestFrame: RenderedFrame?
+    @ObservationIgnored private var statsTask: Task<Void, Never>?
+    @ObservationIgnored private var lastStatsUpdate = ContinuousClock.now
+    @ObservationIgnored private var lastRenderTimeUpdate = ContinuousClock.now
 
     // MARK: - Parameters
 
     public func value(_ parameter: ParameterID) -> Double {
-        recipe[parameter]
+        self[observing: parameter]
     }
 
     public func isEdited(_ parameter: ParameterID) -> Bool {
         if parameter == .temperature || parameter == .tint {
-            return recipe.whiteBalanceMode != .asShot
+            return whiteBalanceMode != .asShot
         }
-        return abs(recipe[parameter] - parameter.spec.defaultValue) > 1e-9
+        return abs(self[observing: parameter] - parameter.spec.defaultValue) > 1e-9
     }
 
     /// Starts a continuous edit (a slider drag); history records one step when it ends.
@@ -643,7 +754,7 @@ public final class EditorModel {
         }.value
     }
 
-    #if DEBUG
+    #if DEBUG || REDLAMP_PROFILING
         /// Scripted state changes for development snapshots (`--snapshot-script`).
         public func applyDebugCommand(_ key: String, _ value: String) {
             switch key {
@@ -706,17 +817,26 @@ public final class EditorModel {
 
     // MARK: - Persistence
 
+    /// Saves 600 ms after the last change. A drag pushes the deadline back on every event
+    /// rather than spawning a task per event.
     func scheduleSave() {
-        saveTask?.cancel()
-        saveTask = Task {
-            try? await Task.sleep(for: .milliseconds(600))
-            guard !Task.isCancelled else { return }
-            saveNow()
+        saveDeadline = .now + .milliseconds(600)
+        guard saveTask == nil else { return }
+        saveTask = Task { [weak self] in
+            while let deadline = self?.saveDeadline, deadline > .now {
+                try? await Task.sleep(until: deadline)
+                if Task.isCancelled {
+                    return
+                }
+            }
+            self?.saveNow()
         }
     }
 
     public func saveNow() {
         saveTask?.cancel()
+        saveTask = nil
+        saveDeadline = nil
         guard let url = selection, info != nil else { return }
         let metadata = items.first { $0.url == url }?.metadata ?? PhotoMetadata()
         let sidecar = Sidecar(recipe: recipe, snapshots: snapshots, metadata: metadata.isEmpty ? nil : metadata)

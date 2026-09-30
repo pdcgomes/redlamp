@@ -60,6 +60,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] The demosaiced image is cached as a full mip pyramid, so interactive renders sample the right resolution for the zoom level.
 - [x] A single fused Metal kernel applies every per-pixel adjustment. Frames are delivered as IOSurfaces, so pixels are never copied between engine and UI.
 - [x] Latest-wins render scheduling: a burst of slider events collapses to the newest one.
+- [x] Rendering stays off the main thread while you drag a slider. Frames go straight to the canvas, which a dedicated display-link thread presents, and each view observes only the values it shows.
 - [x] Temperature and tint use a proper camera white-balance model (Robertson's method with the camera's color matrix). As Shot, Auto, and the illuminant presets all work.
 
 **Develop adjustments that render**
@@ -108,6 +109,17 @@ Measured on an Apple M1 Ultra with a Release build.
 | Interactive render at 1:1 (full 26 MP frame) | ~13 ms |
 | Full-resolution export render (24–26 MP) | ~45 ms |
 
+Dragging a slider at 120 events a second (`scripts/perf-sweep.sh`), with every panel open:
+
+| Main thread during the drag | Before | Now |
+| --- | --- | --- |
+| Time busy | 100% | ~54% |
+| Slowest 5% of run-loop iterations | 157 ms | ~8 ms |
+| Longest stall | 277 ms | ~20 ms |
+| Slider events handled per second | 89 | 104 |
+
+Almost all the remaining main-thread time is SwiftUI updating the one slider being dragged.
+
 ### Known limitations
 
 - Highlights and Shadows are per-pixel approximations for now. Lightroom-quality versions need edge-aware local tone mapping, which arrives with Clarity and Texture in Phase 2.
@@ -121,6 +133,7 @@ Measured on an Apple M1 Ultra with a Release build.
 - White balance now works for linear DNGs such as iPhone ProRAW.
 - The Navigator outlines the zoomed viewport.
 - The loading placeholder now shows while a photo decodes.
+- Dragging a slider no longer stutters. Every change used to re-render every panel and wait on the canvas's drawable on the main thread.
 
 ## Screenshots
 
@@ -246,6 +259,7 @@ mise run render -- render ~/Pictures/DSC01234.ARW -o out.jpg --size 2048 \
 | `mise run fixtures` | Download CC0 sample raw files |
 | `mise run render` | Build and run the `redlamp` CLI |
 | `mise run screenshots` | Regenerate the README screenshots (needs Screen Recording permission) |
+| `scripts/perf-sweep.sh [Debug\|Release] [parameter] [script]` | Drag a slider for 3 s and report main-thread smoothness. `PROFILE=1` adds a main-thread profile |
 
 ## Using Redlamp
 

@@ -5,7 +5,7 @@ import RedlampEngineAPI
 /// each mask with its own local adjustments.
 public extension EditorModel {
     var selectedMask: MaskLayer? {
-        selectedMaskID.flatMap { recipe.mask($0) }
+        selectedMaskID.flatMap { id in masks.first { $0.id == id } }
     }
 
     var selectedComponent: MaskComponent? {

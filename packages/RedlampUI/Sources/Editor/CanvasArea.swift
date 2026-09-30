@@ -14,7 +14,7 @@ struct CanvasArea: View {
 
             if model.selection != nil {
                 CanvasView(
-                    frame: model.frame,
+                    feed: model.frames,
                     controller: model.canvas,
                     clickAction: model.activeTool == .masking ? .none : (model.eyedropperActive ? .sample : .zoom),
                     surround: [CanvasMetalView.defaultSurround, 0.003, 0][min(model.lightsOut, 2)],
@@ -89,7 +89,7 @@ struct CanvasArea: View {
 
     private var statusLayer: some View {
         ZStack {
-            if model.frame == nil, let selection = model.selection, let thumbnail = model.thumbnails[selection] {
+            if !model.hasFrame, let selection = model.selection, let thumbnail = model.thumbnails[selection] {
                 Image(decorative: thumbnail, scale: 1)
                     .resizable()
                     .scaledToFit()

@@ -1,4 +1,4 @@
-#if DEBUG
+#if DEBUG || REDLAMP_PROFILING
     import AppKit
     import RedlampCanvas
     import RedlampUI
@@ -13,7 +13,7 @@
     @MainActor
     enum DebugSnapshot {
         static func scheduleIfRequested(model: EditorModel) {
-            let arguments = CommandLine.arguments
+            let arguments = LaunchArguments.all
             func value(after flag: String) -> String? {
                 arguments.firstIndex(of: flag).flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }
             }

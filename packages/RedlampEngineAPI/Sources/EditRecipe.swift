@@ -95,6 +95,12 @@ public struct EditRecipe: Sendable, Hashable {
             && masks.isEmpty
     }
 
+    /// Parameters whose value differs from `other`.
+    public func parametersChanged(from other: EditRecipe) -> [ParameterID] {
+        values.compactMap { other.values[$0.key] == $0.value ? nil : $0.key }
+            + other.values.keys.filter { values[$0] == nil }
+    }
+
     public func mask(_ id: UUID) -> MaskLayer? {
         masks.first { $0.id == id }
     }

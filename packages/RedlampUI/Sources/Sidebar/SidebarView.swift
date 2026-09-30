@@ -160,7 +160,7 @@ struct NavigatorView: View {
                 zoomButton("2:1", .twoToOne)
             }
             GeometryReader { geometry in
-                CanvasView(frame: model.frame, controller: controller, clickAction: .none, interactive: false)
+                CanvasView(feed: model.frames, controller: controller, clickAction: .none, interactive: false)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                     // The Metal view draws over overlays attached to it directly and over
                     // ZStack siblings; an overlay on a containing view renders above it.

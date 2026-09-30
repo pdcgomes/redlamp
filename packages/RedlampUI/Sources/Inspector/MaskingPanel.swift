@@ -22,7 +22,7 @@ struct MaskingPanel: View {
             .padding(.horizontal, Theme.panelPadding)
             .padding(.vertical, 10)
 
-            if model.recipe.masks.isEmpty {
+            if model.masks.isEmpty {
                 CreateMaskGrid(title: "Create New Mask") { kind in model.startDrawing(kind) }
                     .padding(.horizontal, Theme.panelPadding)
                     .padding(.bottom, 12)
@@ -164,7 +164,7 @@ private struct MaskList: View {
 
     var body: some View {
         VStack(spacing: 2) {
-            ForEach(model.recipe.masks.reversed()) { mask in
+            ForEach(model.masks.reversed()) { mask in
                 let selected = mask.id == model.selectedMaskID
                 HStack(spacing: 8) {
                     Image(systemName: mask.components.first?.shape.kind.symbol ?? "circle.dashed")

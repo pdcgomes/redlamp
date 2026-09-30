@@ -8,7 +8,7 @@ struct BasicPanel: View {
         PanelSection(panel: .basic) {
             ControlRow(label: "Treatment") {
                 Picker("Treatment", selection: Binding(
-                    get: { model.recipe.treatment },
+                    get: { model.treatment },
                     set: { model.setTreatment($0) },
                 )) {
                     ForEach(Treatment.allCases, id: \.self) { Text($0.name).tag($0) }
@@ -24,7 +24,7 @@ struct BasicPanel: View {
                         Button {
                             model.setProfile(profile)
                         } label: {
-                            if model.recipe.profile.id == profile.rawValue {
+                            if model.profile.id == profile.rawValue {
                                 Label(profile.name, systemImage: "checkmark")
                             } else {
                                 Text(profile.name)
@@ -34,7 +34,7 @@ struct BasicPanel: View {
                     Divider()
                     Button("Browse Profiles, DCPs and LUTs…") {}.disabled(true)
                 } label: {
-                    Text(model.recipe.profile.name).font(Theme.labelFont)
+                    Text(model.profile.name).font(Theme.labelFont)
                 }
                 .menuStyle(.button)
                 .controlSize(.small)
@@ -90,7 +90,7 @@ struct BasicPanel: View {
             .help("White Balance Selector (W): click a neutral area of the photo")
 
             Picker("White Balance", selection: Binding(
-                get: { model.recipe.whiteBalanceMode },
+                get: { model.whiteBalanceMode },
                 set: { model.setWhiteBalanceMode($0) },
             )) {
                 ForEach(WhiteBalanceMode.allCases, id: \.self) { Text($0.name).tag($0) }

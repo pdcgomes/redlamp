@@ -31,12 +31,7 @@ struct PanelSection<Content: View>: View {
                         .background(Capsule().fill(Theme.selection))
                 }
                 Spacer()
-                if panel.parameters.contains(where: model.isEdited) {
-                    Circle()
-                        .fill(Color.white.opacity(0.55))
-                        .frame(width: 4, height: 4)
-                        .help("This panel has edits")
-                }
+                EditedDot(panel: panel)
             }
             .padding(.horizontal, Theme.panelPadding)
             .frame(height: 32)
@@ -66,6 +61,22 @@ struct PanelSection<Content: View>: View {
             }
 
             Rectangle().fill(Theme.divider).frame(height: 1)
+        }
+    }
+}
+
+/// Its own view so that a slider drag, which changes whether the panel is edited, re-evaluates
+/// just the dot rather than the whole panel.
+private struct EditedDot: View {
+    let panel: PanelID
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        if panel.parameters.contains(where: model.isEdited) {
+            Circle()
+                .fill(Color.white.opacity(0.55))
+                .frame(width: 4, height: 4)
+                .help("This panel has edits")
         }
     }
 }
