@@ -71,10 +71,13 @@ extension FocusStacker {
             luma.pixels = luma.pixels.map { $0 * gain }
             let factor = analysis.factor * Float(analysis.luma.width) / Float(luma.width)
             let transform = StackAligner.analysisResolution(alignment.transforms[index], factor: factor)
-            let focus = LumaImage(
+            var focus = LumaImage(
                 width: luma.width, height: luma.height,
                 pixels: StackDepthSolver.sumModifiedLaplacian(luma, radius: depthSettings.focusRadius),
             )
+            // A clipped highlight has hard edges in whichever frame blew it out, so it says
+            // nothing about focus there.
+            Self.ignoreClipped(&focus, colour: analysis, radius: depthSettings.focusRadius + 1)
             return (StackAligner.warp(focus, by: transform, outside: 0).pixels, StackAligner.warp(luma, by: transform))
         }
         let depth = StackDepthSolver.solve(volume: aligned.map(\.0), lumas: aligned.map(\.1), settings: depthSettings)
@@ -118,6 +121,25 @@ extension FocusStacker {
         progress(1)
         timings["total"] = timings.values.reduce(0, +)
         return StackMergeResult(fused: fused, alignment: alignment, depth: depth, timings: timings)
+    }
+
+    /// Balanced green at or above this is treated as clipped (green clips first after white
+    /// balance; averaged over 4 x 4 analysis pixels, a clipped edge reads a little lower).
+    static let clipLevel: Float = 0.9
+
+    /// Zeroes `focus` within `radius` of any clipped pixel of the frame's colour copy, which is on
+    /// the same grid.
+    static func ignoreClipped(_ focus: inout LumaImage, colour analysis: FrameAnalysis, radius: Int) {
+        let (w, h) = (min(focus.width, analysis.colourWidth), min(focus.height, analysis.colourHeight))
+        for y in 0 ..< h {
+            for x in 0 ..< w where analysis.colour[y * analysis.colourWidth + x].y >= clipLevel {
+                for dy in max(y - radius, 0) ... min(y + radius, focus.height - 1) {
+                    for dx in max(x - radius, 0) ... min(x + radius, focus.width - 1) {
+                        focus.pixels[dy * focus.width + dx] = 0
+                    }
+                }
+            }
+        }
     }
 
     /// The depth map as a shared `.r32Float` texture, sampled bilinearly by the fusion kernels.

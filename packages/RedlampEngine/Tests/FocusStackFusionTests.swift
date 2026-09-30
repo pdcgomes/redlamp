@@ -108,6 +108,29 @@ extension FocusStackTests {
         #expect(brightest < 0.5, "\(brightest) of the depth map chose the brightest frame")
     }
 
+    /// A blown-out square in the first frame has the stack's hardest edges, but the depth there
+    /// should still follow the frames that are actually sharp.
+    @Test func `clipped highlights don't count as sharp`() throws {
+        let (width, height) = (320, 240)
+        var frames = syntheticStack(frames: 3, width: width, height: height) { _, _ in 2 }
+        let square = (100 ..< 180, 80 ..< 160)
+        for y in square.1 {
+            for x in square.0 {
+                frames[0].pixels[y * width + x] = 1.2
+            }
+        }
+        let textures = try frames.map(texture)
+        let stacker = FocusStacker(device: device, queue: queue, kernels: kernels)
+        let result = try stacker.merge(frameCount: 3, settings: StackMergeSettings(strategy: .smooth)) { textures[$0] }
+        let depth = result.depth
+        // The square's edge, in depth pixels.
+        let scale = Float(depth.width) / Float(width)
+        let edge = Int(Float(square.0.lowerBound) * scale)
+        let rows = Int(Float(square.1.lowerBound) * scale) + 2 ..< Int(Float(square.1.upperBound) * scale) - 2
+        let edgeDepths = rows.map { depth.depth[$0 * depth.width + edge] }
+        #expect(edgeDepths.allSatisfy { $0 > 1 }, "\(edgeDepths)")
+    }
+
     @Test func `unknown depth is filled from its surroundings`() {
         // Known: frame 0 in the left quarter, frame 4 in the right quarter; the middle is unknown.
         let (width, height) = (40, 10)
