@@ -13,6 +13,23 @@ struct NoiseEstimateTests {
         expectClose(model)
     }
 
+    /// Texture everywhere, no flat areas: the patch-covariance method must still see only the noise.
+    @Test func `sees through texture on a Bayer mosaic`() throws {
+        let pattern = CFAPattern(width: 2, height: 2, colors: [0, 1, 1, 2])
+        let image = synthetic(.mosaic(pattern), channels: 1) { x, y in
+            let wave = sin(Float(x) * 0.37 + 2 * sin(Float(y) * 0.11)) * cos(Float(y) * 0.29)
+            return 0.05 + 0.6 * (0.5 + 0.5 * wave) * (0.4 + 0.6 * Float((x / 64 + y / 64) % 3) / 2)
+        }
+        let model = try #require(NoiseEstimator.estimate(image))
+        for channel in 0 ..< 3 {
+            for level: Float in [0.1, 0.3, 0.6] {
+                let predicted = model.a[channel] * level + model.b[channel]
+                let truth = Self.a * level + Self.b
+                #expect(abs(predicted / truth - 1) < 0.25, "channel \(channel) at \(level): \(predicted / truth)")
+            }
+        }
+    }
+
     @Test func `recovers the noise of an X-Trans mosaic`() throws {
         let colors: [UInt8] = [
             1, 1, 0, 1, 1, 2,
@@ -73,7 +90,11 @@ struct NoiseEstimateTests {
 
     /// Flat 16×16 patches of random brightness, a band of strong texture that the estimate must
     /// ignore, and Poisson–Gaussian noise with known `a` and `b`.
-    private func synthetic(_ layout: DecodedImage.Layout, channels: Int) -> DecodedImage {
+    private func synthetic(
+        _ layout: DecodedImage.Layout,
+        channels: Int,
+        scene: ((Int, Int) -> Float)? = nil,
+    ) -> DecodedImage {
         let width = 1536
         let height = 1024
         let black: Float = 512
@@ -84,8 +105,8 @@ struct NoiseEstimateTests {
         for y in 0 ..< height {
             for x in 0 ..< width {
                 for channel in 0 ..< channels {
-                    var signal = patches[(y / 16) * (width / 16) + x / 16]
-                    if y < 128 {
+                    var signal = scene?(x, y) ?? patches[(y / 16) * (width / 16) + x / 16]
+                    if scene == nil, y < 128 {
                         signal = 0.4 + 0.35 * sin(Float(x) * 0.7) * cos(Float(y) * 0.9)
                     }
                     let sigma = (Self.a * signal + Self.b).squareRoot()

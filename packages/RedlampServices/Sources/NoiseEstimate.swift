@@ -28,7 +28,8 @@ public struct NoiseModel: Sendable, Hashable {
 /// those points gives `a` and `b`.
 ///
 /// Scenes with texture everywhere, and lossy-compressed raws (whose errors grow with local
-/// contrast), still read noisier than the sensor is.
+/// contrast), read noisier than the sensor is. Bayer mosaics therefore use the patch-covariance
+/// method (`patchLevels`) first, which separates texture from noise, and fall back to tiles.
 public enum NoiseEstimator {
     public static func estimate(_ image: DecodedImage) -> NoiseModel? {
         let layout: Layout
@@ -37,12 +38,24 @@ public enum NoiseEstimator {
         case .linearRGB: layout = rgbLayout(blackLevels: image.blackLevels)
         case .linearSRGBHalf: return nil
         }
-        let points = measure(image, layout: layout)
+        var lines: [(a: Float, b: Float)?] = [nil, nil, nil]
+        if let levels = patchLevels(image) {
+            for channel in 0 ..< 3 where levels[channel].count >= 2 {
+                let line = solve(levels[channel]) { $0.tiles / max($0.variance * $0.variance, 1e-24) }
+                lines[channel] = (Float(line.a), Float(max(line.b, 1e-9)))
+            }
+        }
+        if lines.contains(where: { $0 == nil }) {
+            let points = measure(image, layout: layout)
+            for channel in 0 ..< 3 where lines[channel] == nil {
+                lines[channel] = fit(points[channel])
+            }
+        }
         var a = SIMD3<Float>.zero
         var b = SIMD3<Float>.zero
         var fitted = [Bool](repeating: false, count: 3)
         for channel in 0 ..< 3 {
-            guard let line = fit(points[channel]) else { continue }
+            guard let line = lines[channel] else { continue }
             a[channel] = line.a
             b[channel] = line.b
             fitted[channel] = true
@@ -227,14 +240,14 @@ public enum NoiseEstimator {
         return Level(mean: mean, variance: pick.ratio / bias * expected(mean), tiles: Double(bin.count))
     }
 
-    private struct Level {
+    struct Level {
         var mean: Double
         var variance: Double
         var tiles: Double
     }
 
     /// Weighted least squares for variance = a · mean + b, with a and b kept non-negative.
-    private static func solve(_ levels: [Level], weight: (Level) -> Double) -> (a: Double, b: Double) {
+    static func solve(_ levels: [Level], weight: (Level) -> Double) -> (a: Double, b: Double) {
         var sw = 0.0, sm = 0.0, smm = 0.0, sv = 0.0, smv = 0.0
         for level in levels {
             let w = weight(level)
