@@ -180,6 +180,11 @@ extension HarnessScene {
             }) {
                 NavigatorPanelViews.make(model: $0)
             },
+            panelParity(id: "sidebar-lists", title: "Presets, Snapshots, History", symbol: "list.bullet", reference: {
+                SidebarLists().frame(height: 420)
+            }) {
+                FixedHeightView(SidebarListViews.make(model: $0), height: 420)
+            },
             panelParity(id: "detail", title: "Detail", symbol: "triangle", reference: { DetailPanel() }) {
                 ReferencePanelViews.detail(model: $0)
             },

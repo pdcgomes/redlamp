@@ -19,11 +19,13 @@ import SwiftUI
 }
 
 /// Presets, Snapshots and History.
-struct SidebarLists: View {
+@_spi(Harness) public struct SidebarLists: View {
     @Environment(EditorModel.self) private var model
     @State private var presetsExpanded: Set<String> = ["Essentials"]
 
-    var body: some View {
+    public init() {}
+
+    public var body: some View {
         List {
             Section("Presets") {
                 ForEach(BuiltInPresets.groups, id: \.name) { group in

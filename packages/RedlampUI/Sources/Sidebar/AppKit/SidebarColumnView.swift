@@ -12,7 +12,7 @@ final class SidebarColumnView: NSView {
             insets: NSEdgeInsets(top: 0, left: 12, bottom: 10, right: 12),
             views: [NavigatorPanelView(model: model)],
         )
-        lists = NSHostingView(rootView: SidebarLists().environment(model))
+        lists = SidebarListView(model: model)
         super.init(frame: .zero)
         addSubview(navigator)
         addSubview(lists)
