@@ -77,6 +77,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] **Noise reduction** (Detail panel): Luminance with Detail and Contrast, and Color with Detail and Smoothness. It is scaled to each photo's own noise, read from the DNG NoiseProfile tag or measured from the raw data when the file opens. It runs as a cached stage in front of the fused kernel, so other sliders stay as fast as before, and exports render in tiles.
 - [x] **Sharpening** (Detail panel): Amount, Radius, Detail and Masking, in the same cached stage after noise reduction. It boosts luminance detail in stops, so it doesn't depend on exposure and leaves colors alone; Detail holds back halos on strong edges, and Masking keeps flat areas untouched.
 - [x] **Texture and Clarity** (global): gains on medium (about 2–8 px) and larger (about 8–64 px) luminance detail, taken from the image pyramid in the same cached stage, so tiles and zoom levels agree. Negative values soften.
+- [x] **Dehaze** (global and in masks): the dark channel prior (He, Sun and Tang, 2009) with the airlight and a haze map measured when the photo opens; negative values add a neutral veil.
 
 **Masking** (Lightroom's model)
 - [x] Each mask is a layer: its own adjustments plus a mask built from components. Components combine with **Add**, **Subtract**, and **Intersect**, and each can be inverted.
@@ -84,7 +85,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
   - Draw them on the photo.
   - Drag the handles to move, resize, and rotate; radial gradients also have a Feather control.
   - Pins select the other masks.
-- [x] **Local adjustments:** Temp, Tint, Exposure, Contrast, Highlights, Shadows, Whites, Blacks, Texture, Clarity, Hue, Saturation, Sharpness, and Noise, plus the mask's Amount (0–200%).
+- [x] **Local adjustments:** Temp, Tint, Exposure, Contrast, Highlights, Shadows, Whites, Blacks, Texture, Clarity, Dehaze, Hue, Saturation, Sharpness, and Noise, plus the mask's Amount (0–200%).
 - [x] **Mask management:** a red mask overlay (`O`), and a mask list where you can show and hide, rename, duplicate, "duplicate and invert", reset, and delete masks.
 - [x] **Fast by design:** masks are evaluated analytically, per pixel, inside the same fused GPU kernel. Up to 16 masks cost well under a millisecond extra at Fit.
 - [x] The **Create New Mask** grid already lists every Lightroom mask type (Subject, Sky, Background, Objects, People, Landscape, Brush, Color, Luminance, and Depth Range). Each shows the phase it arrives in.
@@ -102,7 +103,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] Non-destructive edits, saved automatically to a sidecar file next to each photo (`IMG_1234.ARW.redlamp`).
 - [x] Export to JPEG, plus a headless `redlamp` command-line tool for rendering and export.
 
-**Panels laid out but not yet rendering** (shown dimmed, with the phase they arrive in): Dehaze (global and in masks), Moiré and Defringe in masks, and the Lens Corrections, Transform, and Calibration panels. The Crop, Healing, and Red Eye tools show what is coming and when.
+**Panels laid out but not yet rendering** (shown dimmed, with the phase they arrive in): Moiré and Defringe in masks, and the Lens Corrections, Transform, and Calibration panels. The Crop, Healing, and Red Eye tools show what is coming and when.
 
 ### Measured performance
 
@@ -192,7 +193,7 @@ Every phase ships on Mac, iPad, and iPhone. The Lightroom feature inventory in [
 - [ ] Coordinated sidecar I/O for iCloud Drive and Files
 
 ### Phase 2: Develop parity
-- [ ] Texture, Clarity, and Dehaze, plus edge-aware Highlights and Shadows
+- [ ] Edge-aware Highlights and Shadows, and edge-refined Dehaze (Texture, Clarity and Dehaze are done)
 - [ ] Detail panel: sharpening and **best-in-class classical noise reduction**, profiled per camera and ISO, on raw data, with Lightroom's luminance and color controls
 - [ ] Better X-Trans demosaicing (Markesteijn) and a dual demosaic for Bayer (Bayer demosaicing from the Menon paper and highlight reconstruction are done)
 - [ ] Full DCP camera profiles (dual and triple illuminant), ICC input profiles, and `.3dl` and log-space LUT import (`.cube`, HaldCLUT and the Base Look browser are done)
@@ -415,6 +416,7 @@ Redlamp builds on the work of others:
 - Robertson's method for correlated color temperature
 - The Malvar–He–Cutler demosaicing paper, and Menon, Andriani and Calvagno's directional-filtering demosaic (2007)
 - Zhang and Brainard's estimation of saturated pixel values (2004), for highlight reconstruction
+- He, Sun and Tang's dark channel prior (2009), for Dehaze, and Liu, Tanaka and Okutomi's patch-based noise level estimation (2013)
 - The à-trous wavelet and generalized Anscombe transform literature, for noise reduction
 - Krzysztof Narkowicz's filmic curve fit
 

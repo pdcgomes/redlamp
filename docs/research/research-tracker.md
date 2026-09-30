@@ -53,6 +53,7 @@ These block other rows. Most need the project owner; the ones marked *counsel* n
 | DEC-13 | Get written confirmation of SIDD's MIT terms; ask LSFD and DND authors for evaluation rights; check Helicon, Zerene and DxO EULAs before publishing comparisons | Do all four | DN-09, FS-12 | Proposed | [AI §11.3](ai-findings.md#113-open-questions-to-verify) |
 | DEC-14 | Offer an opt-in, labelled, Mac-only generative "creative" upscale or refocus tier, for parity with Topaz Wonder and Lightroom Generative Upscale? (would reopen SKIP-10) | Not now; revisit if users ask. It would need our own diffusion training, or counsel clearing a base model such as SeedVR2 or AdcSR | — | Proposed | [H §7](notes/H-topaz-upscale-sharpen.md#7-how-redlamp-could-produce-similar-results) |
 | DEC-15 | May shipped models be trained on the CC BY 4.0 deblur datasets (GoPro, REDS, RealBlur) with attribution? *(counsel)* | Yes, if counsel agrees | SHP-03 | Proposed | [H §3](notes/H-topaz-upscale-sharpen.md#3-open-models-that-get-similar-effects) |
+| DEC-16 | Use the dark channel prior (He, Sun & Tang 2009) for Dehaze, though it may still be patented and isn't in DEC-05's search | Check with counsel first | Dehaze | Accepted (2026-09-30): the owner chose to proceed with the standard method; shipped in fdf9960 without guided-filter refinement (DEC-05) | This tracker |
 
 ---
 
@@ -118,7 +119,7 @@ These block other rows. Most need the project owner; the ones marked *counsel* n
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | MSK-01 | Implement and document the mask coordinate contract; migrate sidecars if needed | Adopt | P2 (before crop) | M | DEC-07 | Proposed | Not started | [DT §5](darktable-findings.md#5-modules-filters-and-masks) |
 | MSK-02 | Match Lightroom's Intersect semantics | Adopt | P2 | S | DEC-08 | Proposed | Not started | [DT §2](darktable-findings.md#2-phase-1-issues-found-in-redlamp) |
-| MSK-03 | Spatial local adjustments (Clarity, Texture, Dehaze, Sharpness, Noise inside masks) as cached detail bands scaled by mask coverage | Do better | P2 | L | ARC-01, TON-06 | Accepted (2026-09-30) | In progress (26ca220): Texture, Clarity, Sharpness and Noise inside masks render in the detail stage, with mask coverage from the develop kernel's shared Masks.h. Dehaze inside masks waits for Dehaze itself | [DT §5](darktable-findings.md#5-modules-filters-and-masks) |
+| MSK-03 | Spatial local adjustments (Clarity, Texture, Dehaze, Sharpness, Noise inside masks) as cached detail bands scaled by mask coverage | Do better | P2 | L | ARC-01, TON-06 | Accepted (2026-09-30) | In progress (26ca220): Texture, Clarity, Sharpness and Noise inside masks render in the detail stage, with mask coverage from the develop kernel's shared Masks.h. Dehaze inside masks done (fdf9960) | [DT §5](darktable-findings.md#5-modules-filters-and-masks) |
 | MSK-04 | Detail refinement: keep only textured or flat areas of a mask | Adopt | P2 | S | — | Proposed | Not started | [DT §5](darktable-findings.md#5-modules-filters-and-masks) |
 | MSK-05 | Luminance and Color Range masks as trapezoids in OKLCh | Adopt | P2 | M | — | Proposed | Not started | [DT §5](darktable-findings.md#5-modules-filters-and-masks) |
 | MSK-06 | Reuse another mask's coverage as a component | Adopt | P2 | S | — | Proposed | Not started | [DT §5](darktable-findings.md#5-modules-filters-and-masks) |
