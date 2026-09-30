@@ -246,6 +246,18 @@ struct SessionBuilder {
             mosaic = cfa
         }
 
+        // Lens shading last: clipping and hot pixels are judged against the sensor's own levels.
+        if !decoded.gainMaps.isEmpty {
+            let (maps, gains) = try gainMapBuffers(decoded.gainMaps)
+            var count = UInt32(decoded.gainMaps.count)
+            encoder.setComputePipelineState(kernels.applyGainMaps)
+            encoder.setTexture(mosaic, index: 0)
+            encoder.setBytes(&count, length: MemoryLayout<UInt32>.stride, index: 0)
+            encoder.setBuffer(maps, offset: 0, index: 1)
+            encoder.setBuffer(gains, offset: 0, index: 2)
+            encoder.dispatchGrid(width: width, height: height, pipeline: kernels.applyGainMaps)
+        }
+
         var demosaicParams = DemosaicParams(
             width: UInt32(width), height: UInt32(height),
             patternWidth: UInt32(pattern.width), patternHeight: UInt32(pattern.height),
@@ -316,6 +328,35 @@ struct SessionBuilder {
         dispatch(kernels.menonRBAtRB, [working, directions, pyramid, mosaic])
     }
 
+    /// Gain maps as kernel buffers; a neutral placeholder when there are none.
+    private func gainMapBuffers(_ maps: [GainMap]) throws -> (maps: any MTLBuffer, gains: any MTLBuffer) {
+        var descriptors: [GainMapGPU] = []
+        var gains: [Float] = []
+        for map in maps {
+            descriptors.append(GainMapGPU(
+                area: SIMD4(Int32(map.top), Int32(map.left), Int32(map.bottom), Int32(map.right)),
+                grid: SIMD4(Int32(map.rowPitch), Int32(map.columnPitch), Int32(map.pointsV), Int32(map.pointsH)),
+                placement: SIMD4(Float(map.spacingV), Float(map.spacingH), Float(map.originV), Float(map.originH)),
+                planes: SIMD4(Int32(map.plane), Int32(map.planes), Int32(map.mapPlanes), Int32(gains.count)),
+            ))
+            gains += map.gains
+        }
+        if descriptors.isEmpty {
+            descriptors = [GainMapGPU(area: .zero, grid: SIMD4(1, 1, 1, 1), placement: SIMD4(1, 1, 0, 0), planes: .zero)]
+            gains = [1]
+        }
+        guard let mapBuffer = device.makeBuffer(
+            bytes: descriptors, length: descriptors.count * MemoryLayout<GainMapGPU>.stride, options: .storageModeShared,
+        ),
+            let gainBuffer = device.makeBuffer(
+                bytes: gains, length: gains.count * MemoryLayout<Float>.stride, options: .storageModeShared,
+            )
+        else {
+            throw EngineError.gpuUnavailable
+        }
+        return (mapBuffer, gainBuffer)
+    }
+
     private func encodeLinearRGB(
         _ decoded: DecodedImage,
         multipliers: SIMD4<Float>,
@@ -333,11 +374,15 @@ struct SessionBuilder {
             width: UInt32(decoded.width), height: UInt32(decoded.height), channels: 3,
             patternWidth: 1, patternHeight: 1, white: decoded.whiteLevel, multipliers: multipliers,
         )
+        params.pad0 = UInt32(decoded.gainMaps.count)
+        let (maps, gains) = try gainMapBuffers(decoded.gainMaps)
         var blacks = decoded.blackLevels
         encoder.setComputePipelineState(kernels.rgbNormalize)
         encoder.setBuffer(samples, offset: 0, index: 0)
         encoder.setBytes(&params, length: MemoryLayout<CFAParams>.stride, index: 1)
         encoder.setBytes(&blacks, length: blacks.count * MemoryLayout<Float>.stride, index: 2)
+        encoder.setBuffer(maps, offset: 0, index: 3)
+        encoder.setBuffer(gains, offset: 0, index: 4)
         encoder.setTexture(pyramid, index: 0)
         encoder.dispatchGrid(width: decoded.width, height: decoded.height, pipeline: kernels.rgbNormalize)
         encoder.endEncoding()

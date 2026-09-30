@@ -97,6 +97,20 @@ public struct HighlightParams {
     }
 }
 
+public struct GainMapGPU {
+    public var area: SIMD4<Int32>
+    public var grid: SIMD4<Int32>
+    public var placement: SIMD4<Float>
+    public var planes: SIMD4<Int32>
+
+    public init(area: SIMD4<Int32>, grid: SIMD4<Int32>, placement: SIMD4<Float>, planes: SIMD4<Int32>) {
+        self.area = area
+        self.grid = grid
+        self.placement = placement
+        self.planes = planes
+    }
+}
+
 public struct HistogramParams {
     public var width: UInt32
     public var height: UInt32

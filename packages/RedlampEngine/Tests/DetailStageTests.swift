@@ -285,6 +285,22 @@ struct DetailStageTests {
         #expect(abs(centre.z / neutral - 1) < 0.01, "\(centre)")
     }
 
+    // MARK: - Gain maps
+
+    @Test func `gain maps scale the mosaic before demosaicing`() throws {
+        // Gains 1 at the left edge to 2 at the right, on every photosite.
+        let ramp = GainMap(
+            top: 0, left: 0, bottom: 256, right: 512, plane: 0, planes: 1, rowPitch: 1, columnPitch: 1,
+            pointsV: 1, pointsH: 2, spacingV: 1, spacingH: 1, originV: 0, originH: 0, mapPlanes: 1, gains: [1, 2],
+        )
+        let session = try makeSession(.bayer, width: 512, height: 256, noiseScale: 0, gainMaps: [ramp])
+        let pixels = try readLevel(session, level: 0)
+        for x in [128, 384] {
+            let expected = Self.level * (1 + Float(x) / 512)
+            #expect(abs(pixels[128 * 512 + x].y / expected - 1) < 0.02, "x \(x): \(pixels[128 * 512 + x].y)")
+        }
+    }
+
     // MARK: - Helpers
 
     /// `signal` is the scene per photosite (`level` by default), `noiseScale` scales the
@@ -295,6 +311,7 @@ struct DetailStageTests {
         height: Int,
         noiseScale: Float = 1,
         asShot: SIMD3<Double> = SIMD3(1, 1, 1),
+        gainMaps: [GainMap] = [],
         spikes: [(SIMD2<Int>, Float)] = [],
         signal: (Int, Int) -> Float = { _, _ in DetailStageTests.level },
     ) throws -> ImageSession {
@@ -339,6 +356,7 @@ struct DetailStageTests {
             ),
         )
         decoded.noiseProfile = Self.noise
+        decoded.gainMaps = gainMaps
         return try SessionBuilder(device: device, queue: queue, kernels: kernels).build(decoded)
     }
 

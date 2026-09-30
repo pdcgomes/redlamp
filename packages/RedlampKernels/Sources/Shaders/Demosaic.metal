@@ -21,11 +21,68 @@ kernel void rl_cfa_normalize(
     out.write(float4(value), gid);
 }
 
-// Linear (already demosaiced) raw, e.g. ProRAW DNGs.
+// MARK: - DNG gain maps
+
+// One GainMap opcode (see GainMap in RedlampServices).
+struct GainMapGPU {
+    int4 area;           // top, left, bottom, right (pixels)
+    int4 grid;           // row pitch, column pitch, points V, points H
+    float4 placement;    // spacing V, spacing H, origin V, origin H (fractions of the image)
+    int4 planes;         // first plane, plane count, map planes, first gain index
+};
+
+// The product of every map's gain for one plane of a pixel, bilinear on each map's grid.
+static inline float gainAt(constant GainMapGPU *maps, uint count, constant float *gains,
+                           int x, int y, int plane, uint width, uint height) {
+    float product = 1.0f;
+    for (uint i = 0; i < count; i++) {
+        GainMapGPU m = maps[i];
+        if (y < m.area.x || y >= m.area.z || x < m.area.y || x >= m.area.w) continue;
+        if ((y - m.area.x) % m.grid.x != 0 || (x - m.area.y) % m.grid.y != 0) continue;
+        if (plane < m.planes.x || plane >= m.planes.x + m.planes.y) continue;
+        float v = clamp((float(y) / float(height) - m.placement.z) / m.placement.x, 0.0f, float(m.grid.z - 1));
+        float h = clamp((float(x) / float(width) - m.placement.w) / m.placement.y, 0.0f, float(m.grid.w - 1));
+        int v0 = int(v);
+        int h0 = int(h);
+        int v1 = min(v0 + 1, m.grid.z - 1);
+        int h1 = min(h0 + 1, m.grid.w - 1);
+        int mapPlane = min(plane - m.planes.x, m.planes.z - 1);
+        int stride = m.planes.z;
+        int base = m.planes.w + mapPlane;
+        float g00 = gains[base + (v0 * m.grid.w + h0) * stride];
+        float g01 = gains[base + (v0 * m.grid.w + h1) * stride];
+        float g10 = gains[base + (v1 * m.grid.w + h0) * stride];
+        float g11 = gains[base + (v1 * m.grid.w + h1) * stride];
+        float fv = v - float(v0);
+        float fh = h - float(h0);
+        product *= mix(mix(g00, g01, fh), mix(g10, g11, fh), fv);
+    }
+    return product;
+}
+
+// Applies a mosaic's gain maps in place, after sensor cleanup and highlight reconstruction
+// (which judge clipping against the sensor's own levels) and before demosaicing.
+kernel void rl_cfa_apply_gain_maps(
+    texture2d<float, access::read_write> cfa [[texture(0)]],
+    constant uint &count [[buffer(0)]],
+    constant GainMapGPU *maps [[buffer(1)]],
+    constant float *gains [[buffer(2)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    uint width = cfa.get_width();
+    uint height = cfa.get_height();
+    if (gid.x >= width || gid.y >= height) return;
+    float gain = gainAt(maps, count, gains, int(gid.x), int(gid.y), 0, width, height);
+    if (gain != 1.0f) cfa.write(cfa.read(gid) * gain, gid);
+}
+
+// Linear (already demosaiced) raw, e.g. ProRAW DNGs; gain maps apply per channel (pad0 of them).
 kernel void rl_rgb_normalize(
     device const ushort *raw [[buffer(0)]],
     constant CFAParams &p [[buffer(1)]],
     constant float *blackPattern [[buffer(2)]],
+    constant GainMapGPU *maps [[buffer(3)]],
+    constant float *gains [[buffer(4)]],
     texture2d<float, access::write> out [[texture(0)]],
     uint2 gid [[thread_position_in_grid]])
 {
@@ -34,6 +91,11 @@ kernel void rl_rgb_normalize(
     float3 value = float3(raw[index], raw[index + 1], raw[index + 2]);
     float3 black = float3(blackPattern[0], blackPattern[1], blackPattern[2]);
     value = (value - black) / max(float3(p.white) - black, float3(1.0f));
+    if (p.pad0 > 0) {
+        for (int c = 0; c < 3; c++) {
+            value[c] *= gainAt(maps, p.pad0, gains, int(gid.x), int(gid.y), c, p.width, p.height);
+        }
+    }
     value = clamp(value * p.multipliers.xyz, 0.0f, 1.0f);
     out.write(float4(value, 1.0f), gid);
 }

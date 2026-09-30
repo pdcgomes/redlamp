@@ -63,6 +63,8 @@ public struct DecodedImage: Sendable {
     public let info: ImageInfo
     /// The file's own noise calibration (DNG NoiseProfile), when it has one.
     public var noiseProfile: NoiseModel?
+    /// The file's gain maps (DNG OpcodeList2), usually lens shading, applied before demosaicing.
+    public var gainMaps: [GainMap] = []
 
     public init(
         width: Int,

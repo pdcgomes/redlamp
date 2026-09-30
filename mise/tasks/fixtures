@@ -6,13 +6,15 @@ cd "$(git rev-parse --show-toplevel)"
 mkdir -p tests/fixtures/raw
 cd tests/fixtures/raw
 
-# One body per sensor family: Sony Bayer, Fujifilm X-Trans, Canon CR3, Nikon NEF, Apple linear DNG.
+# One body per sensor family: Sony Bayer, Fujifilm X-Trans, Canon CR3, Nikon NEF, Apple linear DNG,
+# and a Google Pixel Bayer DNG with gain maps (lens shading) and a warp opcode.
 FILES=(
     "Sony/ILCE-7M3/_DSC0009.ARW"
     "Fujifilm/X-T3/AFXT2720.RAF"
     "Canon/EOS%20R6/Canon_EOS_R6_RAW_ISO_100_nocrop_nodual.CR3"
     "Nikon/Z%206/DSC_0750.NEF"
     "Apple/iPhone%2012%20Pro/IMG_1361.DNG"
+    "Google/Pixel%204a/PXL_20201121_100251397.dng"
 )
 
 for path in "${FILES[@]}"; do

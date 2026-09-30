@@ -162,6 +162,39 @@
       0.4307
     ]
   },
+  "PXL_20201121_100251397.dng" : {
+    "asShotMultipliers" : [
+      2.1378,
+      1,
+      1.7534
+    ],
+    "baselineExposure" : 0.9,
+    "blackLevels" : [
+      1023,
+      1023,
+      1022,
+      1022
+    ],
+    "height" : 3024,
+    "layout" : "Bayer RGGB",
+    "make" : "Google",
+    "model" : "Pixel 4a",
+    "orientation" : 0,
+    "sampleChecksum" : "ac056154d440cb2d",
+    "whiteLevel" : 16368,
+    "width" : 4032,
+    "xyzToCamera" : [
+      1.0626,
+      -0.4466,
+      -0.1116,
+      -0.4205,
+      1.2766,
+      0.1562,
+      -0.0739,
+      0.2132,
+      0.5474
+    ]
+  },
   "_DSC0009.ARW" : {
     "asShotMultipliers" : [
       2.2188,

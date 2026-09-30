@@ -122,6 +122,7 @@ enum RawDecoder {
             info: info,
         )
         decoded.noiseProfile = DNGNoiseProfile.read(url)
+        decoded.gainMaps = DNGGainMaps.read(url)
         return decoded
     }
 
