@@ -12,6 +12,10 @@ public final class KernelLibrary: @unchecked Sendable {
     public let reconstructHighlights: any MTLComputePipelineState
     public let demosaicBayer: any MTLComputePipelineState
     public let demosaicGeneric: any MTLComputePipelineState
+    public let menonDirectional: any MTLComputePipelineState
+    public let menonGreen: any MTLComputePipelineState
+    public let menonRBAtGreen: any MTLComputePipelineState
+    public let menonRBAtRB: any MTLComputePipelineState
     public let develop: any MTLComputePipelineState
     public let histogram: any MTLComputePipelineState
     public let denoisePrepare: any MTLComputePipelineState
@@ -39,6 +43,10 @@ public final class KernelLibrary: @unchecked Sendable {
         reconstructHighlights = try pipeline("rl_cfa_reconstruct_highlights")
         demosaicBayer = try pipeline("rl_demosaic_bayer")
         demosaicGeneric = try pipeline("rl_demosaic_generic")
+        menonDirectional = try pipeline("rl_menon_directional")
+        menonGreen = try pipeline("rl_menon_green")
+        menonRBAtGreen = try pipeline("rl_menon_rb_at_green")
+        menonRBAtRB = try pipeline("rl_menon_rb_at_rb")
         develop = try pipeline("rl_develop")
         histogram = try pipeline("rl_histogram")
         denoisePrepare = try pipeline("rl_denoise_prepare")

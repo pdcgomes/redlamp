@@ -6,11 +6,20 @@ import RedlampKernels
 import RedlampServices
 import simd
 
+/// How 2 x 2 Bayer mosaics are demosaiced.
+enum BayerDemosaic {
+    /// Directional filtering with a posteriori decision (Menon, Andriani & Calvagno 2007).
+    case menon
+    /// Gradient-corrected bilinear (Malvar, He & Cutler 2004); kept for comparison.
+    case malvar
+}
+
 /// Uploads decoded sensor data and builds the demosaiced pyramid on the GPU.
 struct SessionBuilder {
     let device: any MTLDevice
     let queue: any MTLCommandQueue
     let kernels: KernelLibrary
+    var bayerDemosaic = BayerDemosaic.menon
 
     static let analysisLongEdge = 1024
     /// A photosite counts as hot when it is this many noise sigmas above every neighbour...
@@ -184,7 +193,16 @@ struct SessionBuilder {
             width: UInt32(width), height: UInt32(height),
             patternWidth: UInt32(pattern.width), patternHeight: UInt32(pattern.height),
         )
-        let demosaic = pattern.width == 2 && pattern.height == 2 ? kernels.demosaicBayer : kernels.demosaicGeneric
+        let bayer = pattern.width == 2 && pattern.height == 2
+        if bayer, bayerDemosaic == .menon {
+            try encodeMenon(
+                mosaic: mosaic, spare: mosaic === cfa ? repaired : cfa, colors: colors, params: demosaicParams,
+                into: pyramid, encoder: encoder,
+            )
+            encoder.endEncoding()
+            return
+        }
+        let demosaic = bayer ? kernels.demosaicBayer : kernels.demosaicGeneric
         encoder.setComputePipelineState(demosaic)
         encoder.setTexture(mosaic, index: 0)
         encoder.setTexture(pyramid, index: 1)
@@ -192,6 +210,46 @@ struct SessionBuilder {
         encoder.setBytes(&colors, length: colors.count, index: 1)
         encoder.dispatchGrid(width: width, height: height, pipeline: demosaic)
         encoder.endEncoding()
+    }
+
+    /// The four Menon passes. `spare` is a free full-resolution float texture, reused for green.
+    private func encodeMenon(
+        mosaic: any MTLTexture,
+        spare: any MTLTexture,
+        colors: [UInt8],
+        params: DemosaicParams,
+        into pyramid: any MTLTexture,
+        encoder: any MTLComputeCommandEncoder,
+    ) throws {
+        let width = mosaic.width
+        let height = mosaic.height
+        func texture(_ format: MTLPixelFormat) throws -> any MTLTexture {
+            let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+                pixelFormat: format, width: width, height: height, mipmapped: false,
+            )
+            descriptor.usage = [.shaderRead, .shaderWrite]
+            descriptor.storageMode = .private
+            guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
+            return texture
+        }
+        // Pass 1's estimates, then pass 3's partial RGB.
+        let working = try texture(.rgba16Float)
+        let directions = try texture(.r8Snorm)
+        var params = params
+        var colors = colors
+        func dispatch(_ pipeline: any MTLComputePipelineState, _ textures: [any MTLTexture]) {
+            encoder.setComputePipelineState(pipeline)
+            for (index, texture) in textures.enumerated() {
+                encoder.setTexture(texture, index: index)
+            }
+            encoder.setBytes(&params, length: MemoryLayout<DemosaicParams>.stride, index: 0)
+            encoder.setBytes(&colors, length: colors.count, index: 1)
+            encoder.dispatchGrid(width: width, height: height, pipeline: pipeline)
+        }
+        dispatch(kernels.menonDirectional, [mosaic, working])
+        dispatch(kernels.menonGreen, [mosaic, working, spare, directions])
+        dispatch(kernels.menonRBAtGreen, [mosaic, spare, working])
+        dispatch(kernels.menonRBAtRB, [working, directions, pyramid])
     }
 
     private func encodeLinearRGB(
