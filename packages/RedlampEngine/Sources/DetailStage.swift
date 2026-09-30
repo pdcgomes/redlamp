@@ -35,14 +35,44 @@ struct DenoiseSettings: Hashable {
     }
 }
 
-/// Noise reduction as a cached spatial stage in front of the fused develop kernel.
+/// The Detail panel's sharpening sliders in rendering units. Sharpening boosts log-luminance
+/// detail, so it is independent of exposure and leaves colours alone.
+struct SharpenSettings: Hashable {
+    /// Detail gain (Amount).
+    var gain: Float
+    /// Gaussian sigma in full-resolution pixels (Radius).
+    var sigma: Float
+    /// Detail beyond about this many stops is boosted less and less, which holds back halos
+    /// on strong edges (Detail).
+    var haloScale: Float
+    /// Local gradient, in stops per texel, below which nothing is sharpened (Masking).
+    var edgeThreshold: Float
+
+    init(recipe: EditRecipe) {
+        gain = Float(recipe[.sharpenAmount] / 100)
+        sigma = Float(recipe[.sharpenRadius]) * 0.8
+        let detail = Float(recipe[.sharpenDetail] / 100)
+        haloScale = 0.08 + 0.9 * detail * detail
+        let masking = Float(recipe[.sharpenMasking] / 100)
+        edgeThreshold = 0.3 * masking * masking
+    }
+
+    /// The blur sigma in texels of a pyramid level; nil where sharpening is off or too fine to show.
+    func sigma(atLevel level: Int) -> Float? {
+        let texels = sigma / Float(1 << level)
+        return gain > 0 && texels >= 0.3 ? texels : nil
+    }
+}
+
+/// The Detail panel as a cached spatial stage in front of the fused develop kernel: noise
+/// reduction, then sharpening.
 ///
 /// It works on exact pyramid texels (the level whose texels are at least as dense as the
 /// output), so the noise it removes is known from the session's noise model. The develop
 /// kernel then samples the result instead of the pyramid.
 ///
 /// Owned by the engine's render queue.
-final class Denoiser {
+final class DetailStage {
     struct Output {
         let texture: any MTLTexture
         /// The area the texture covers: xy origin, zw size, in normalised source coordinates.
@@ -52,15 +82,19 @@ final class Denoiser {
     /// Texels of context around the work area, enough for the widest à-trous scale.
     static let margin = 64
 
+    /// Whether the recipe needs the stage at full resolution.
+    static func isActive(_ recipe: EditRecipe) -> Bool {
+        DenoiseSettings(recipe: recipe).isActive || SharpenSettings(recipe: recipe).sigma(atLevel: 0) != nil
+    }
+
     private let device: any MTLDevice
     private let kernels: KernelLibrary
 
     private struct Key: Equatable {
         var session: ObjectIdentifier
-        var level: Int
-        var origin: SIMD2<Int>
-        var size: SIMD2<Int>
-        var settings: DenoiseSettings
+        var work: WorkArea
+        var denoise: DenoiseSettings?
+        var sharpen: SharpenSettings?
     }
 
     private struct Entry {
@@ -71,17 +105,18 @@ final class Denoiser {
     }
 
     private var entries: [Entry] = []
+    /// A region and its overview, and the same for a comparison render.
     private static let maximumEntries = 4
-    private var scratch: [any MTLTexture] = []
+    private var scratch: [MTLPixelFormat: [any MTLTexture]] = [:]
 
     init(device: any MTLDevice, kernels: KernelLibrary) {
         self.device = device
         self.kernels = kernels
     }
 
-    /// The denoised pyramid texels behind `region` rendered at `outputSize`, encoding the work
-    /// into `commands` unless it's cached. Nil when the recipe's noise reduction is off.
-    func denoise(
+    /// The processed pyramid texels behind `region` rendered at `outputSize`, encoding the work
+    /// into `commands` unless it's cached. Nil when the recipe needs none of the stage there.
+    func process(
         _ recipe: EditRecipe,
         session: ImageSession,
         region: ImageRect,
@@ -89,13 +124,14 @@ final class Denoiser {
         commands: any MTLCommandBuffer,
         cache: Bool = true,
     ) throws -> Output? {
-        let settings = DenoiseSettings(recipe: recipe)
-        guard settings.isActive, outputSize.width > 0 else { return nil }
+        guard outputSize.width > 0 else { return nil }
         let work = Self.workArea(session: session, region: region, outputSize: outputSize)
-        let key = Key(
-            session: ObjectIdentifier(session), level: work.level, origin: work.origin, size: work.size,
-            settings: settings,
-        )
+        let denoiseSettings = DenoiseSettings(recipe: recipe)
+        let sharpenSettings = SharpenSettings(recipe: recipe)
+        let denoise = denoiseSettings.isActive ? denoiseSettings : nil
+        let sharpen = sharpenSettings.sigma(atLevel: work.level) != nil ? sharpenSettings : nil
+        guard denoise != nil || sharpen != nil else { return nil }
+        let key = Key(session: ObjectIdentifier(session), work: work, denoise: denoise, sharpen: sharpen)
         if let index = entries.firstIndex(where: { $0.key == key }) {
             let entry = entries.remove(at: index)
             entries.append(entry)
@@ -107,8 +143,29 @@ final class Denoiser {
         )
         descriptor.usage = [.shaderRead, .shaderWrite]
         descriptor.storageMode = .private
-        guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
-        try encode(session: session, settings: settings, work: work, into: texture, commands: commands)
+        guard let texture = device.makeTexture(descriptor: descriptor),
+              let encoder = commands.makeComputeCommandEncoder()
+        else {
+            throw EngineError.gpuUnavailable
+        }
+        encoder.label = "Detail"
+        var source = Source(texture: session.pyramid, origin: work.origin, level: work.level)
+        if let denoise {
+            let target = sharpen == nil ? texture : try scratchTextures(.rgba16Float, 5, work)[4]
+            try encodeDenoise(session: session, settings: denoise, work: work, into: target, encoder: encoder)
+            source = Source(texture: target, origin: .zero, level: 0)
+        }
+        if let sharpen {
+            try encodeSharpen(
+                session: session,
+                settings: sharpen,
+                work: work,
+                source: source,
+                into: texture,
+                encoder: encoder,
+            )
+        }
+        encoder.endEncoding()
 
         let levelWidth = Float(max(1, session.pyramid.width >> work.level))
         let levelHeight = Float(max(1, session.pyramid.height >> work.level))
@@ -159,26 +216,32 @@ final class Denoiser {
 
     // MARK: - Encoding
 
-    private func encode(
+    /// Where a pass reads the work area from: the pyramid at the work level, or an earlier
+    /// pass's texture.
+    private struct Source {
+        var texture: any MTLTexture
+        var origin: SIMD2<Int>
+        var level: Int
+    }
+
+    private func encodeDenoise(
         session: ImageSession,
         settings: DenoiseSettings,
         work: WorkArea,
         into output: any MTLTexture,
-        commands: any MTLCommandBuffer,
+        encoder: any MTLComputeCommandEncoder,
     ) throws {
-        try ensureScratch(width: work.size.x, height: work.size.y)
-        guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
-        encoder.label = "Denoise"
+        let textures = try scratchTextures(.rgba16Float, 4, work)
         var params = DenoiseParams(
             origin: SIMD4(Int32(work.origin.x), Int32(work.origin.y), Int32(work.level), 0),
             size: SIMD4(Int32(work.size.x), Int32(work.size.y), 0, 0),
             a: SIMD4(session.noise.a, 0),
             b: SIMD4(session.noise.b, 0),
         )
-        var current = scratch[0]
-        var next = scratch[1]
-        let rows = scratch[2]
-        let result = scratch[3]
+        var current = textures[0]
+        var next = textures[1]
+        let rows = textures[2]
+        let result = textures[3]
 
         encoder.setComputePipelineState(kernels.denoisePrepare)
         encoder.setTexture(session.pyramid, index: 0)
@@ -207,26 +270,67 @@ final class Denoiser {
             encoder.dispatchGrid(width: work.size.x, height: work.size.y, pipeline: kernels.denoiseColumns)
             swap(&current, &next)
         }
-        encoder.endEncoding()
     }
 
-    /// Four working textures at least `width` x `height`, reused across renders.
-    private func ensureScratch(width: Int, height: Int) throws {
-        if let first = scratch.first, first.width >= width, first.height >= height {
-            return
+    private func encodeSharpen(
+        session: ImageSession,
+        settings: SharpenSettings,
+        work: WorkArea,
+        source: Source,
+        into output: any MTLTexture,
+        encoder: any MTLComputeCommandEncoder,
+    ) throws {
+        let textures = try scratchTextures(.r32Float, 3, work)
+        let (logLuma, rows, blurred) = (textures[0], textures[1], textures[2])
+        // Rec. 2020 luminance of the camera RGB the pyramid holds.
+        let luma = session.cameraToWorking.transpose * SIMD3<Float>(0.2627, 0.6780, 0.0593)
+        var params = SharpenParams(
+            origin: SIMD4(Int32(source.origin.x), Int32(source.origin.y), Int32(source.level), 0),
+            size: SIMD4(Int32(work.size.x), Int32(work.size.y), 0, 0),
+            luma: SIMD4(luma, 1.0 / 1024),
+            shape: SIMD4(
+                settings.gain, settings.haloScale, settings.edgeThreshold,
+                settings.sigma(atLevel: work.level) ?? 0,
+            ),
+        )
+        let size = params.size
+        func dispatch(_ pipeline: any MTLComputePipelineState, _ textures: [any MTLTexture]) {
+            encoder.setComputePipelineState(pipeline)
+            for (index, texture) in textures.enumerated() {
+                encoder.setTexture(texture, index: index)
+            }
+            encoder.setBytes(&params, length: MemoryLayout<SharpenParams>.stride, index: 0)
+            encoder.dispatchGrid(width: Int(size.x), height: Int(size.y), pipeline: pipeline)
+        }
+        dispatch(kernels.sharpenLog, [source.texture, logLuma])
+        params.size.z = 0
+        dispatch(kernels.sharpenBlur, [logLuma, rows])
+        params.size.z = 1
+        dispatch(kernels.sharpenBlur, [rows, blurred])
+        dispatch(kernels.sharpenApply, [source.texture, logLuma, blurred, output])
+    }
+
+    /// `count` working textures of `format` covering the work area, reused across renders.
+    private func scratchTextures(_ format: MTLPixelFormat, _ count: Int, _ work: WorkArea) throws -> [any MTLTexture] {
+        let existing = scratch[format] ?? []
+        if existing.count >= count, let first = existing.first,
+           first.width >= work.size.x, first.height >= work.size.y {
+            return existing
         }
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .rgba16Float,
-            width: max(width, scratch.first?.width ?? 0),
-            height: max(height, scratch.first?.height ?? 0),
+            pixelFormat: format,
+            width: max(work.size.x, existing.first?.width ?? 0),
+            height: max(work.size.y, existing.first?.height ?? 0),
             mipmapped: false,
         )
         descriptor.usage = [.shaderRead, .shaderWrite]
         descriptor.storageMode = .private
-        scratch = try (0 ..< 4).map { _ in
+        let textures = try (0 ..< max(count, existing.count)).map { _ in
             guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
             return texture
         }
+        scratch[format] = textures
+        return textures
     }
 }
 

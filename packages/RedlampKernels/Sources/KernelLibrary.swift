@@ -16,6 +16,9 @@ public final class KernelLibrary: @unchecked Sendable {
     public let denoisePrepare: any MTLComputePipelineState
     public let denoiseRows: any MTLComputePipelineState
     public let denoiseColumns: any MTLComputePipelineState
+    public let sharpenLog: any MTLComputePipelineState
+    public let sharpenBlur: any MTLComputePipelineState
+    public let sharpenApply: any MTLComputePipelineState
 
     public init(device: any MTLDevice) throws {
         self.device = device
@@ -38,6 +41,9 @@ public final class KernelLibrary: @unchecked Sendable {
         denoisePrepare = try pipeline("rl_denoise_prepare")
         denoiseRows = try pipeline("rl_denoise_rows")
         denoiseColumns = try pipeline("rl_denoise_columns")
+        sharpenLog = try pipeline("rl_sharpen_log")
+        sharpenBlur = try pipeline("rl_sharpen_blur")
+        sharpenApply = try pipeline("rl_sharpen_apply")
     }
 }
 

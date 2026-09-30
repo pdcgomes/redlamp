@@ -220,17 +220,14 @@ public enum ParameterCatalog {
 
             ParameterSpec(
                 .sharpenAmount, "Amount", range: 0 ... 150, default: 40, format: .integer,
-                availability: detail,
             ),
             ParameterSpec(
                 .sharpenRadius, "Radius", range: 0.5 ... 3, default: 1, step: 0.1, format: .decimal(1),
-                availability: detail,
             ),
             ParameterSpec(
                 .sharpenDetail, "Detail", range: 0 ... 100, default: 25, format: .integer,
-                availability: detail,
             ),
-            ParameterSpec(.sharpenMasking, "Masking", range: 0 ... 100, format: .integer, availability: detail),
+            ParameterSpec(.sharpenMasking, "Masking", range: 0 ... 100, format: .integer),
             ParameterSpec(.noiseLuminance, "Luminance", range: 0 ... 100, format: .integer),
             ParameterSpec(
                 .noiseLuminanceDetail, "Detail", range: 0 ... 100, default: 50, format: .integer,

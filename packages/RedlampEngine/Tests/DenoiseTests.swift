@@ -47,11 +47,11 @@ struct DenoiseTests {
 
     @Test func `noise reduction removes noise and keeps the level`() throws {
         let session = try makeSession(.bayer, width: 1024, height: 768)
-        var recipe = EditRecipe()
+        var recipe = Self.unsharpened
         recipe[.noiseLuminance] = 60
         recipe[.noiseColor] = 50
         let before = try statistics(of: readLevel(session, level: 0))
-        let after = try statistics(of: denoised(session, recipe: recipe))
+        let after = try statistics(of: processed(session, recipe: recipe))
         for channel in 0 ..< 3 {
             #expect(abs(after.mean[channel] / before.mean[channel] - 1) < 0.01, "mean \(channel)")
             #expect(after.deviation[channel] < before.deviation[channel] * 0.4, "deviation \(channel)")
@@ -61,11 +61,11 @@ struct DenoiseTests {
     @Test func `zero thresholds reproduce the pyramid`() throws {
         let session = try makeSession(.bayer, width: 512, height: 384)
         let source = try readLevel(session, level: 0)
-        var nearlyOff = EditRecipe()
+        var nearlyOff = Self.unsharpened
         // Keeps the stage running with thresholds that remove nothing.
         nearlyOff[.noiseLuminance] = 0.001
         nearlyOff[.noiseColor] = 0
-        let passed = try denoised(session, recipe: nearlyOff)
+        let passed = try processed(session, recipe: nearlyOff)
         var worst: Float = 0
         for index in stride(from: 0, to: source.count, by: 7) {
             worst = max(worst, simd_abs(source[index] - passed[index]).max())
@@ -100,6 +100,64 @@ struct DenoiseTests {
         #expect(worst <= 1, "largest difference \(worst) in \(differing) bytes")
     }
 
+    // MARK: - Sharpening
+
+    /// Noise reduction and sharpening both off.
+    static let untouched: EditRecipe = {
+        var recipe = EditRecipe()
+        recipe[.noiseColor] = 0
+        recipe[.sharpenAmount] = 0
+        return recipe
+    }()
+
+    static let unsharpened: EditRecipe = {
+        var recipe = EditRecipe()
+        recipe[.sharpenAmount] = 0
+        return recipe
+    }()
+
+    @Test func `sharpening overshoots an edge and keeps the level`() throws {
+        let session = try makeSession(.bayer, width: 512, height: 256, noiseScale: 0) { x, _ in x < 256 ? 0.1 : 0.4 }
+        var recipe = Self.untouched
+        recipe[.sharpenAmount] = 100
+        let before = try readLevel(session, level: 0)
+        let after = try processed(session, recipe: recipe)
+        let row = 128 * 512
+        // The dark side of the step gets darker and the bright side brighter; flat areas far
+        // from it don't change. (Extremes, because demosaicing already ripples at a hard step.)
+        let dark = { (pixels: [SIMD3<Float>]) in (250 ... 255).map { pixels[row + $0].y }.min()! }
+        let bright = { (pixels: [SIMD3<Float>]) in (256 ... 261).map { pixels[row + $0].y }.max()! }
+        #expect(dark(after) < dark(before) * 0.97)
+        #expect(bright(after) > bright(before) * 1.02)
+        #expect(abs(after[row + 100].y / before[row + 100].y - 1) < 0.002)
+        let mean = { (pixels: [SIMD3<Float>]) in pixels.reduce(SIMD3<Float>.zero, +).y / Float(pixels.count) }
+        #expect(abs(mean(after) / mean(before) - 1) < 0.01)
+    }
+
+    @Test func `masking keeps sharpening off flat noise`() throws {
+        let session = try makeSession(.bayer, width: 512, height: 384)
+        var sharpened = Self.untouched
+        sharpened[.sharpenAmount] = 100
+        var masked = sharpened
+        masked[.sharpenMasking] = 100
+        let before = try statistics(of: readLevel(session, level: 0)).deviation.y
+        let open = try statistics(of: processed(session, recipe: sharpened)).deviation.y
+        let protected = try statistics(of: processed(session, recipe: masked)).deviation.y
+        #expect(open > before * 1.05)
+        #expect(abs(protected / before - 1) < 0.01)
+    }
+
+    @Test func `the stage is skipped when nothing needs it`() throws {
+        let session = try makeSession(.bayer, width: 256, height: 256)
+        let stage = DetailStage(device: device, kernels: kernels)
+        let commands = try #require(queue.makeCommandBuffer())
+        let output = try stage.process(
+            Self.untouched, session: session, region: .full, outputSize: session.orientedSize, commands: commands,
+        )
+        #expect(output == nil)
+        #expect(!DetailStage.isActive(Self.untouched))
+    }
+
     // MARK: - Sensor cleanup
 
     @Test func `hot pixels are repaired`() throws {
@@ -126,12 +184,15 @@ struct DenoiseTests {
 
     // MARK: - Helpers
 
-    /// `spikes` overrides single photosites with a normalised value.
+    /// `signal` is the scene per photosite (`level` by default), `noiseScale` scales the
+    /// noise, and `spikes` overrides single photosites with a normalised value.
     private func makeSession(
         _ sensor: SensorKind,
         width: Int,
         height: Int,
+        noiseScale: Float = 1,
         spikes: [(SIMD2<Int>, Float)] = [],
+        signal: (Int, Int) -> Float = { _, _ in DenoiseTests.level },
     ) throws -> ImageSession {
         let layout: DecodedImage.Layout
         let channels: Int
@@ -152,11 +213,14 @@ struct DenoiseTests {
         let black: Float = 512
         let white: Float = 16383
         var random = SeededRandom(seed: 7)
-        let sigma = (Self.noise.a.x * Self.level + Self.noise.b.x).squareRoot()
         func raw(_ value: Float) -> UInt16 {
             UInt16(min(max(black + value * (white - black), 0), 65535).rounded())
         }
-        var samples = (0 ..< width * height * channels).map { _ in raw(Self.level + sigma * random.gaussian()) }
+        var samples = (0 ..< width * height * channels).map { index in
+            let value = signal((index / channels) % width, (index / channels) / width)
+            let sigma = (Self.noise.a.x * value + Self.noise.b.x).squareRoot() * noiseScale
+            return raw(value + sigma * random.gaussian())
+        }
         for (point, value) in spikes {
             samples[(point.y * width + point.x) * channels] = raw(value)
         }
@@ -201,12 +265,12 @@ struct DenoiseTests {
         }
     }
 
-    /// The whole image through the denoise stage at full resolution.
-    private func denoised(_ session: ImageSession, recipe: EditRecipe) throws -> [SIMD3<Float>] {
-        let denoiser = Denoiser(device: device, kernels: kernels)
+    /// The whole image through the detail stage at full resolution.
+    private func processed(_ session: ImageSession, recipe: EditRecipe) throws -> [SIMD3<Float>] {
+        let stage = DetailStage(device: device, kernels: kernels)
         let commands = try #require(queue.makeCommandBuffer())
         let size = session.orientedSize
-        let output = try #require(try denoiser.denoise(
+        let output = try #require(try stage.process(
             recipe, session: session, region: .full, outputSize: size, commands: commands,
         ))
         commands.commit()

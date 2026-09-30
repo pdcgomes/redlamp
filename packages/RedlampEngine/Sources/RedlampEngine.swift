@@ -39,7 +39,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     private let comparisons: SurfacePool
     private let comparisonOverviews: SurfacePool
     private var comparison: CachedComparison?
-    private let denoiser: Denoiser
+    private let detailStage: DetailStage
     /// Output tile edge for stills, in pixels.
     let stillTile: Int
 
@@ -68,7 +68,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         overviews = SurfacePool(device: device)
         comparisons = SurfacePool(device: device)
         comparisonOverviews = SurfacePool(device: device)
-        denoiser = Denoiser(device: device, kernels: kernels)
+        detailStage = DetailStage(device: device, kernels: kernels)
 
         let builder = SessionBuilder(device: device, queue: buildQueue, kernels: kernels)
         let signposter = signposts
@@ -222,21 +222,21 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         maskOverlay: UUID? = nil,
         maskOverlayColor: MaskOverlayColor = .red,
         commands: any MTLCommandBuffer,
-        cacheDenoise: Bool = true,
+        cacheDetail: Bool = true,
     ) throws {
-        let denoised = try denoiser.denoise(
-            recipe, session: session, region: region, outputSize: size, commands: commands, cache: cacheDenoise,
+        let processed = try detailStage.process(
+            recipe, session: session, region: region, outputSize: size, commands: commands, cache: cacheDetail,
         )
         guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
         var inputs = DevelopParameters.make(
             recipe: recipe, session: session, outputSize: size, region: region, encoding: encoding,
             showClipping: showClipping, maskOverlay: maskOverlay, maskOverlayColor: maskOverlayColor,
         )
-        inputs.params.denoised = denoised?.area ?? .zero
+        inputs.params.denoised = processed?.area ?? .zero
         encoder.setComputePipelineState(kernels.develop)
         encoder.setTexture(session.pyramid, index: 0)
         encoder.setTexture(texture, index: 1)
-        encoder.setTexture(denoised?.texture ?? session.pyramid, index: 2)
+        encoder.setTexture(processed?.texture ?? session.pyramid, index: 2)
         encoder.setBytes(&inputs.params, length: MemoryLayout<DevelopParams>.stride, index: 0)
         encoder.setBytes(&inputs.toneLUT, length: inputs.toneLUT.count * MemoryLayout<Float>.stride, index: 1)
         encoder.setBytes(&inputs.mixer, length: inputs.mixer.count * MemoryLayout<Float>.stride, index: 2)
@@ -311,7 +311,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         descriptor.storageMode = .shared
         guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
         let encoding: OutputEncoding = request.colorSpace == .sRGB ? .sRGB : .displayP3
-        if DenoiseSettings(recipe: request.recipe).isActive {
+        if DetailStage.isActive(request.recipe) {
             try renderTiles(request.recipe, session: session, into: texture, size: size, encoding: encoding)
         } else {
             guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
@@ -409,7 +409,7 @@ extension RedlampEngine {
                 guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
                 try encodeDevelop(
                     recipe, session: session, into: scratch, size: tileSize, region: region,
-                    encoding: encoding, showClipping: false, commands: commands, cacheDenoise: false,
+                    encoding: encoding, showClipping: false, commands: commands, cacheDetail: false,
                 )
                 guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
                 blit.copy(
