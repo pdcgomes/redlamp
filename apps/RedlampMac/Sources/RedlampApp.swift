@@ -53,6 +53,10 @@ struct RedlampApp: App {
         .commands {
             AppCommands(model: model, onOpen: openPanel, onExport: exportPanel)
         }
+
+        Settings {
+            SettingsView(theme: theme)
+        }
     }
 
     /// Opens paths passed on the command line (`mise run run -- <folder>`), otherwise the

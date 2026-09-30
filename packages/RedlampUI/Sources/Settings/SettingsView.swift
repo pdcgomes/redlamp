@@ -1,0 +1,106 @@
+import AppKit
+import RedlampDesign
+import SwiftUI
+
+/// The Settings window (⌘,): one tab per section, each a grouped form.
+public struct SettingsView: View {
+    @Bindable var theme: ThemeSettings
+
+    public init(theme: ThemeSettings) {
+        self.theme = theme
+    }
+
+    public var body: some View {
+        TabView {
+            Tab("Appearance", systemImage: "paintpalette") {
+                AppearanceSettings(theme: theme)
+            }
+            Tab("About", systemImage: "info.circle") {
+                AboutSettings()
+            }
+        }
+        .frame(width: 500)
+        .preferredColorScheme(theme.selection.appearance == .dark ? .dark : .light)
+    }
+}
+
+private struct AppearanceSettings: View {
+    @Bindable var theme: ThemeSettings
+
+    var body: some View {
+        Form {
+            Section {
+                ThemePicker(selection: $theme.selection)
+                Picker("Appearance", selection: $theme.selection.appearance) {
+                    Label("Dark", systemImage: "moon.fill").tag(ThemeAppearance.dark)
+                    Label("Light", systemImage: "sun.max.fill").tag(ThemeAppearance.light)
+                }
+                .pickerStyle(.segmented)
+                LabeledContent("Tint") {
+                    TintSlider(tint: $theme.selection.tint)
+                }
+            } footer: {
+                Text("""
+                Neutral is Redlamp's own grey, which never tints your judgment of color. \
+                Lower the tint to keep a theme's tones without its hue.
+                """)
+                .formFooter()
+            }
+            Section {
+                Toggle("Tint native controls", isOn: $theme.selection.tintsNativeControls)
+            } footer: {
+                Text("""
+                Checkboxes, segmented pickers and buttons take the theme's accent \
+                instead of the one chosen in System Settings.
+                """)
+                .formFooter()
+            }
+        }
+        .formStyle(.grouped)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+private struct AboutSettings: View {
+    private let info = Bundle.main.infoDictionary ?? [:]
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .frame(width: 112, height: 112)
+                .padding(.bottom, 6)
+            Text(info["CFBundleDisplayName"] as? String ?? "Redlamp")
+                .font(.title2.weight(.semibold))
+            Text(version)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+            Text("Redlamp develops your raw photos without ever touching the originals.")
+                .multilineTextAlignment(.center)
+                .padding(.top, 10)
+            if let copyright = info["NSHumanReadableCopyright"] as? String {
+                Text(copyright)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 4)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
+        .padding(.horizontal, 32)
+    }
+
+    private var version: String {
+        let short = info["CFBundleShortVersionString"] as? String ?? "–"
+        let build = info["CFBundleVersion"] as? String
+        return build.map { "Version \(short) (\($0))" } ?? "Version \(short)"
+    }
+}
+
+private extension Text {
+    func formFooter() -> some View {
+        font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}

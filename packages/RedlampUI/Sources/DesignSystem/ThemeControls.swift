@@ -1,10 +1,9 @@
 import RedlampDesign
 import SwiftUI
 
-/// Theme, appearance and tint, for the app's Theme popover and the harness.
+/// Theme, appearance and tint, compact, for the toolbar's Theme popover and the harness.
 public struct ThemeControls: View {
     @Binding var theme: ThemeSelection
-    @State private var draftTint: Double?
 
     public init(theme: Binding<ThemeSelection>) {
         _theme = theme
@@ -12,19 +11,8 @@ public struct ThemeControls: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Picker("Theme", selection: $theme.familyID) {
-                ForEach(ThemeCatalog.families) { family in
-                    Label {
-                        Text(family.displayName)
-                    } icon: {
-                        ThemeDot(family: family, appearance: theme.appearance).image
-                    }
-                    .tag(family.id)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .help("The theme the panels are drawn in")
+            ThemePicker(selection: $theme)
+                .labelsHidden()
             Picker("Appearance", selection: $theme.appearance) {
                 Label("Dark", systemImage: "moon.fill").tag(ThemeAppearance.dark)
                 Label("Light", systemImage: "sun.max.fill").tag(ThemeAppearance.light)
@@ -33,33 +21,70 @@ public struct ThemeControls: View {
             .pickerStyle(.segmented)
             .help("Dark or light half of the theme")
             VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text("Tint")
-                    Spacer()
-                    Text("\(Int(((draftTint ?? theme.tint) * 100).rounded())) %")
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                }
-                .font(.callout)
-                // Edits a draft and commits on release, since every commit rebuilds the panels.
-                Slider(
-                    value: Binding(get: { draftTint ?? theme.tint }, set: { draftTint = $0 }),
-                    in: 0 ... 1,
-                    onEditingChanged: { editing in
-                        if !editing, let draftTint {
-                            theme.tint = draftTint
-                            self.draftTint = nil
-                        }
-                    },
-                )
-                .controlSize(.small)
-                .help("How much of the theme's hue to keep. 0 % keeps its tones in neutral grey.")
+                Text("Tint").font(.callout)
+                TintSlider(tint: $theme.tint)
             }
             Toggle("Tint native controls", isOn: $theme.tintsNativeControls)
                 .toggleStyle(.checkbox)
                 .font(.callout)
                 .help("Checkboxes, segmented pickers and buttons take the theme's accent instead of the system one")
         }
+    }
+}
+
+/// The theme menu, each entry with its swatch.
+public struct ThemePicker: View {
+    @Binding var selection: ThemeSelection
+
+    public init(selection: Binding<ThemeSelection>) {
+        _selection = selection
+    }
+
+    public var body: some View {
+        Picker("Theme", selection: $selection.familyID) {
+            ForEach(ThemeCatalog.families) { family in
+                Label {
+                    Text(family.displayName)
+                } icon: {
+                    ThemeDot(family: family, appearance: selection.appearance).image
+                }
+                .tag(family.id)
+            }
+        }
+        .pickerStyle(.menu)
+        .help("The theme the panels are drawn in")
+    }
+}
+
+/// How much of the theme's hue to keep, with its percentage. It edits a draft and commits
+/// on release, since every commit rebuilds the panels.
+public struct TintSlider: View {
+    @Binding var tint: Double
+    @State private var draft: Double?
+
+    public init(tint: Binding<Double>) {
+        _tint = tint
+    }
+
+    public var body: some View {
+        HStack(spacing: 8) {
+            Slider(
+                value: Binding(get: { draft ?? tint }, set: { draft = $0 }),
+                in: 0 ... 1,
+                onEditingChanged: { editing in
+                    if !editing, let draft {
+                        tint = draft
+                        self.draft = nil
+                    }
+                },
+            )
+            .controlSize(.small)
+            Text("\(Int(((draft ?? tint) * 100).rounded())) %")
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .frame(width: 40, alignment: .trailing)
+        }
+        .help("How much of the theme's hue to keep. 0 % keeps its tones in neutral grey.")
     }
 }
 
