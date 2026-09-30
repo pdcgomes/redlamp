@@ -34,6 +34,10 @@ public struct RenderRequest: Sendable, Hashable {
     /// Tints this mask's coverage (Lightroom's mask overlay).
     public var maskOverlay: UUID?
     public var maskOverlayColor: MaskOverlayColor = .red
+    /// Also renders this recipe at the same size and region (the "before" of a before/after
+    /// view). It is re-rendered only when it, the geometry or clipping change, so edits to
+    /// `recipe` cost no more than without it.
+    public var comparison: EditRecipe?
     /// Monotonic counter set by the caller so frames can be matched to requests.
     public var generation: UInt64
 
@@ -157,6 +161,11 @@ public struct RenderedFrame: @unchecked Sendable {
     /// region while the view pans.
     public let overview: IOSurfaceRef?
     public let overviewSize: PixelSize
+    /// The request's `comparison` recipe, rendered like `surface` (same size and region).
+    public let comparison: IOSurfaceRef?
+    /// With a region, the comparison's whole-photo render, like `overview`.
+    public let comparisonOverview: IOSurfaceRef?
+    /// Describes `surface` only.
     public let histogram: Histogram
     public let generation: UInt64
     public let renderDuration: Duration
@@ -167,6 +176,8 @@ public struct RenderedFrame: @unchecked Sendable {
         region: ImageRect = .full,
         overview: IOSurfaceRef? = nil,
         overviewSize: PixelSize = .zero,
+        comparison: IOSurfaceRef? = nil,
+        comparisonOverview: IOSurfaceRef? = nil,
         histogram: Histogram,
         generation: UInt64,
         renderDuration: Duration,
@@ -176,6 +187,8 @@ public struct RenderedFrame: @unchecked Sendable {
         self.region = region
         self.overview = overview
         self.overviewSize = overviewSize
+        self.comparison = comparison
+        self.comparisonOverview = comparisonOverview
         self.histogram = histogram
         self.generation = generation
         self.renderDuration = renderDuration

@@ -108,7 +108,7 @@ public struct EditorView: View {
             ToolbarSpacer(.fixed, placement: .primaryAction)
             ToolbarItemGroup(placement: .primaryAction) {
                 Toggle(isOn: $model.showBefore) {
-                    Label("Before / After", systemImage: "square.split.2x1")
+                    Label("Before / After", systemImage: model.compareLayout.symbol)
                 }
                 .help("Before / After (\\)")
                 Toggle(isOn: $model.filmstripVisible) {

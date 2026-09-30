@@ -149,18 +149,54 @@ struct EngineSmokeTests {
         #expect(largest < 2e-3)
     }
 
+    /// The comparison recipe renders like a main render of it, and survives edits to the main
+    /// recipe without being re-rendered or overwritten.
+    @Test(.enabled(if: canRender))
+    func `comparison renders once and is reused while editing`() async throws {
+        let engine = try RedlampEngine()
+        _ = try await engine.open(Self.fixtures[0])
+        let frames = engine.frames()
+        var iterator = frames.makeAsyncIterator()
+        let size = PixelSize(width: 600, height: 600)
+        let before = EditRecipe()
+
+        engine.render(RenderRequest(recipe: before, targetSize: size, generation: 1))
+        let reference = try #require(await iterator.next())
+        let referencePixels = pixels(of: reference.surface, size: reference.size)
+
+        var edited = EditRecipe()
+        var comparedSurfaces: [IOSurfaceID] = []
+        for (step, exposure) in [0.5, 1.0, 1.5, 2.0].enumerated() {
+            edited[.exposure] = exposure
+            var request = RenderRequest(recipe: edited, targetSize: size, generation: UInt64(step + 2))
+            request.comparison = before
+            engine.render(request)
+            let frame = try #require(await iterator.next())
+            let comparison = try #require(frame.comparison)
+            comparedSurfaces.append(IOSurfaceGetID(comparison))
+            #expect(pixels(of: comparison, size: frame.size) == referencePixels)
+        }
+        #expect(Set(comparedSurfaces).count == 1)
+
+        engine.render(RenderRequest(recipe: edited, targetSize: size, generation: 9))
+        #expect(try #require(await iterator.next()).comparison == nil)
+    }
+
     /// RGBA float16 surface contents, row-major and tightly packed.
     private func pixels(of frame: RenderedFrame) -> [Float] {
-        let surface = frame.surface
+        pixels(of: frame.surface, size: frame.size)
+    }
+
+    private func pixels(of surface: IOSurfaceRef, size: PixelSize) -> [Float] {
         IOSurfaceLock(surface, .readOnly, nil)
         defer { IOSurfaceUnlock(surface, .readOnly, nil) }
         let base = IOSurfaceGetBaseAddress(surface)
         let bytesPerRow = IOSurfaceGetBytesPerRow(surface)
-        var result = [Float](repeating: 0, count: frame.size.width * frame.size.height * 4)
-        for y in 0 ..< frame.size.height {
+        var result = [Float](repeating: 0, count: size.width * size.height * 4)
+        for y in 0 ..< size.height {
             let row = (base + y * bytesPerRow).assumingMemoryBound(to: Float16.self)
-            for x in 0 ..< frame.size.width * 4 {
-                result[y * frame.size.width * 4 + x] = Float(row[x])
+            for x in 0 ..< size.width * 4 {
+                result[y * size.width * 4 + x] = Float(row[x])
             }
         }
         return result

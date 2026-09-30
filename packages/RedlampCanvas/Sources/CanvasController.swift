@@ -72,6 +72,15 @@ public final class CanvasController {
         }
     }
 
+    /// How a before/after comparison shares the canvas with the photo.
+    public var comparison = Comparison.none {
+        didSet {
+            if comparison != oldValue {
+                changed()
+            }
+        }
+    }
+
     public private(set) var viewSize: CGSize = .zero
     public private(set) var backingScale: CGFloat = 2
 
@@ -100,8 +109,14 @@ public final class CanvasController {
 
     // MARK: - Geometry
 
-    /// The area the photo is fitted and centred in, for a view of `bounds` size.
+    /// The area the photo is fitted and centred in, for a view of `bounds` size: the whole
+    /// stage, or side by side, the after pane (right or bottom).
     public func stage(in bounds: CGSize) -> CGRect {
+        panes(in: bounds)?.primary ?? fullStage(in: bounds)
+    }
+
+    /// The view minus the insets.
+    func fullStage(in bounds: CGSize) -> CGRect {
         CGRect(
             x: stageInsets.leading,
             y: stageInsets.top,
@@ -199,8 +214,10 @@ public final class CanvasController {
         )
     }
 
-    /// Normalised image coordinates for a point in the view, if it lies on the image.
+    /// Normalised image coordinates for a point in the view, if it lies on the image (in
+    /// either pane).
     public func imagePoint(for viewPoint: CGPoint) -> CGPoint? {
+        let viewPoint = primaryPoint(for: viewPoint)
         let rect = imageRect(in: viewSize)
         guard rect.contains(viewPoint), rect.width > 0 else { return nil }
         return CGPoint(x: (viewPoint.x - rect.minX) / rect.width, y: (viewPoint.y - rect.minY) / rect.height)
@@ -287,6 +304,7 @@ public final class CanvasController {
 
     /// Zooms to `scale` (Fit to 11:1), keeping the image point under `viewPoint` where it is.
     public func zoom(toScale scale: Double, anchoredAt viewPoint: CGPoint) {
+        let viewPoint = primaryPoint(for: viewPoint)
         let before = imageRect(in: viewSize)
         guard before.width > 0, before.height > 0 else { return }
         let anchor = CGPoint(

@@ -1,0 +1,148 @@
+import Foundation
+import Metal
+import QuartzCore
+import Synchronization
+
+/// Presents canvas scenes on its own thread. The display link runs only while there is
+/// something new to show, and pauses itself once the latest scene is on screen.
+final class CanvasRenderer: NSObject, CAMetalDisplayLinkDelegate, @unchecked Sendable {
+    struct Layer: @unchecked Sendable {
+        var texture: any MTLTexture
+        /// The quad in NDC: left, top, right, bottom.
+        var rect: SIMD4<Float>
+        var nearest: Bool
+        /// Keeps the half-plane where `dot(clip.xyz, (x, y, 1)) <= 0`, in drawable pixels.
+        var clip: SIMD4<Float>
+    }
+
+    struct Scene: @unchecked Sendable {
+        /// Drawn in order, later layers on top.
+        var layers: [Layer]
+        var clearColor: MTLClearColor
+    }
+
+    private struct Shared {
+        /// The scene not yet presented, if any.
+        var pending: Scene?
+        var wakeScheduled = false
+        var stopped = false
+    }
+
+    private let shared = Mutex(Shared())
+    private let queue: any MTLCommandQueue
+    private let pipeline: any MTLRenderPipelineState
+    private let link: CAMetalDisplayLink
+    /// Set once by the render thread before `init` returns.
+    private var runLoop: CFRunLoop?
+
+    init?(device: any MTLDevice, layer: CAMetalLayer) {
+        guard let queue = device.makeCommandQueue(), let pipeline = Self.makePipeline(device: device)
+        else { return nil }
+        self.queue = queue
+        self.pipeline = pipeline
+        link = CAMetalDisplayLink(metalLayer: layer)
+        super.init()
+        link.delegate = self
+        link.preferredFrameLatency = 1
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 120, preferred: 120)
+        link.isPaused = true
+
+        let started = DispatchSemaphore(value: 0)
+        let thread = Thread { [self] in
+            runLoop = CFRunLoopGetCurrent()
+            // Keeps the run loop alive while the display link is paused.
+            RunLoop.current.add(NSMachPort(), forMode: .default)
+            link.add(to: .current, forMode: .default)
+            started.signal()
+            while !shared.withLock({ $0.stopped }) {
+                RunLoop.current.run(mode: .default, before: .distantFuture)
+            }
+            link.invalidate()
+        }
+        thread.name = "Redlamp canvas"
+        thread.qualityOfService = .userInteractive
+        thread.start()
+        started.wait()
+    }
+
+    func publish(_ scene: Scene) {
+        let wake = shared.withLock { shared in
+            shared.pending = scene
+            defer { shared.wakeScheduled = true }
+            return !shared.wakeScheduled
+        }
+        guard wake, let runLoop else { return }
+        CFRunLoopPerformBlock(runLoop, CFRunLoopMode.defaultMode.rawValue) { [self] in
+            shared.withLock { $0.wakeScheduled = false }
+            link.isPaused = false
+        }
+        CFRunLoopWakeUp(runLoop)
+    }
+
+    func shutdown() {
+        shared.withLock { $0.stopped = true }
+        if let runLoop {
+            CFRunLoopStop(runLoop)
+            CFRunLoopWakeUp(runLoop)
+        }
+    }
+
+    func metalDisplayLink(_ link: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
+        let scene = shared.withLock { shared in
+            defer { shared.pending = nil }
+            return shared.pending
+        }
+        guard let scene else {
+            link.isPaused = true
+            return
+        }
+        draw(scene, to: update.drawable)
+    }
+
+    private func draw(_ scene: Scene, to drawable: any CAMetalDrawable) {
+        guard let commands = encode(scene, into: drawable.texture) else { return }
+        commands.present(drawable)
+        commands.commit()
+    }
+
+    /// Draws `scene` into `texture` and waits for it (for snapshots).
+    func render(_ scene: Scene, into texture: any MTLTexture) {
+        guard let commands = encode(scene, into: texture) else { return }
+        commands.commit()
+        commands.waitUntilCompleted()
+    }
+
+    private func encode(_ scene: Scene, into texture: any MTLTexture) -> (any MTLCommandBuffer)? {
+        let pass = MTLRenderPassDescriptor()
+        pass.colorAttachments[0].texture = texture
+        pass.colorAttachments[0].loadAction = .clear
+        pass.colorAttachments[0].storeAction = .store
+        pass.colorAttachments[0].clearColor = scene.clearColor
+        guard let commands = queue.makeCommandBuffer(),
+              let encoder = commands.makeRenderCommandEncoder(descriptor: pass)
+        else { return nil }
+        encoder.setRenderPipelineState(pipeline)
+        for layer in scene.layers {
+            var rect = layer.rect
+            var nearest: UInt32 = layer.nearest ? 1 : 0
+            var clip = layer.clip
+            encoder.setVertexBytes(&rect, length: MemoryLayout<SIMD4<Float>>.stride, index: 0)
+            encoder.setFragmentTexture(layer.texture, index: 0)
+            encoder.setFragmentBytes(&nearest, length: MemoryLayout<UInt32>.stride, index: 0)
+            encoder.setFragmentBytes(&clip, length: MemoryLayout<SIMD4<Float>>.stride, index: 1)
+            encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
+        }
+        encoder.endEncoding()
+        return commands
+    }
+
+    private static func makePipeline(device: any MTLDevice) -> (any MTLRenderPipelineState)? {
+        guard let library = try? device.makeDefaultLibrary(bundle: Bundle(for: CanvasRenderer.self))
+        else { return nil }
+        let descriptor = MTLRenderPipelineDescriptor()
+        descriptor.vertexFunction = library.makeFunction(name: "rl_canvas_vertex")
+        descriptor.fragmentFunction = library.makeFunction(name: "rl_canvas_fragment")
+        descriptor.colorAttachments[0].pixelFormat = .rgba16Float
+        return try? device.makeRenderPipelineState(descriptor: descriptor)
+    }
+}

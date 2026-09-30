@@ -20,6 +20,8 @@ public extension EditorModel {
         switch action {
         // View
         case .beforeAfter: showBefore.toggle()
+        case .nextCompareLayout: cycleCompareLayout(by: 1)
+        case .previousCompareLayout: cycleCompareLayout(by: -1)
         case .toggleZoom: canvas.toggleZoom(at: nil)
         case .zoomIn: canvas.zoomIn()
         case .zoomOut: canvas.zoomOut()

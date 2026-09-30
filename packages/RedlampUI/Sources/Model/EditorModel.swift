@@ -140,8 +140,22 @@ public final class EditorModel {
 
     // MARK: View state
 
+    /// Before / After (`\`), shown in `compareLayout`.
     public var showBefore = false {
-        didSet { requestRender() }
+        didSet { updateComparison() }
+    }
+
+    public var compareLayout = CompareLayout.toggle {
+        didSet {
+            guard compareLayout != oldValue else { return }
+            onCompareLayoutChange?(compareLayout)
+            updateComparison()
+        }
+    }
+
+    /// Where the diagonal split's line sits: 0 top-left, 0.5 through the centre, 1 bottom-right.
+    public var splitPosition = 0.5 {
+        didSet { canvas.comparison = canvasComparison }
     }
 
     public var showClipping = false {
@@ -212,6 +226,8 @@ public final class EditorModel {
 
     /// Called when the folder changes, so the app can remember it.
     @ObservationIgnored public var onFolderChange: ((URL) -> Void)?
+    /// Called when the Before / After layout changes, so the app can remember it.
+    @ObservationIgnored public var onCompareLayoutChange: ((CompareLayout) -> Void)?
 
     @ObservationIgnored private var temporaryClipping = false
     @ObservationIgnored private var clipboard: EditRecipe?
@@ -390,8 +406,8 @@ public final class EditorModel {
             ?? canvas.renderTarget
         guard target.size.width > 0 else { return }
         generation &+= 1
-        let displayed = showBefore ? beforeRecipe : (previewingPreset.map { $0.apply(to: recipe) } ?? recipe)
-        let overlay = activeTool == .masking && showMaskOverlay && !showBefore ? selectedMaskID : nil
+        let displayed = isShowingOriginal ? beforeRecipe : (previewingPreset.map { $0.apply(to: recipe) } ?? recipe)
+        let overlay = activeTool == .masking && showMaskOverlay && !isShowingOriginal ? selectedMaskID : nil
         var request = RenderRequest(
             recipe: displayed,
             targetSize: target.size,
@@ -401,6 +417,7 @@ public final class EditorModel {
             generation: generation,
         )
         request.maskOverlayColor = maskOverlayColor
+        request.comparison = isComparing ? beforeRecipe : nil
         engine.render(request)
     }
 
@@ -815,6 +832,10 @@ public final class EditorModel {
                 inspectorWidth = CGFloat(Double(value) ?? 316)
             case "before":
                 showBefore = value == "1"
+            case "compare":
+                compareLayout = CompareLayout(rawValue: value) ?? .toggle
+            case "split":
+                splitPosition = Double(value) ?? 0.5
             case "clipping":
                 showClipping = value == "1"
             case "preset":

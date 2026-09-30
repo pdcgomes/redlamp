@@ -48,6 +48,21 @@ struct AppCommands: Commands {
         }
 
         CommandGroup(after: .toolbar) {
+            Menu("Before / After") {
+                mouseItem(.beforeAfter)
+                Divider()
+                Picker("Layout", selection: Binding(
+                    get: { model.compareLayout },
+                    set: { model.showComparison(in: $0) },
+                )) {
+                    ForEach(CompareLayout.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.inline)
+                .disabled(model.selection == nil)
+                Divider()
+                mouseItem(.nextCompareLayout)
+                mouseItem(.previousCompareLayout)
+            }
             item(.zoomIn)
             item(.zoomOut)
             Menu("Develop Panels") {

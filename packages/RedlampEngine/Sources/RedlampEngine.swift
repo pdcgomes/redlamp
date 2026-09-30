@@ -34,6 +34,11 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     private let histogramBuffer: any MTLBuffer
     /// Small whole-photo renders sent with region frames; they also feed the histogram.
     private let overviews: SurfacePool
+    /// The request's comparison recipe gets its own rings, so a cached comparison is never
+    /// overwritten by the main render.
+    private let comparisons: SurfacePool
+    private let comparisonOverviews: SurfacePool
+    private var comparison: CachedComparison?
     private let denoiser: Denoiser
     /// Output tile edge for stills, in pixels.
     let stillTile: Int
@@ -61,6 +66,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         kernels = try KernelLibrary(device: device)
         surfaces = SurfacePool(device: device)
         overviews = SurfacePool(device: device)
+        comparisons = SurfacePool(device: device)
+        comparisonOverviews = SurfacePool(device: device)
         denoiser = Denoiser(device: device, kernels: kernels)
 
         let builder = SessionBuilder(device: device, queue: buildQueue, kernels: kernels)
@@ -179,11 +186,16 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             try encodeHistogram(texture: whole.texture, size: overviewSize, linear: true, commands: commands)
             overview = whole
         }
+        let compared = try encodeComparison(
+            request, session: session, size: size, overviewSize: overviewSize, commands: commands,
+        )
         commands.commit()
         commands.waitUntilCompleted()
         if let error = commands.error {
+            comparison = nil
             throw EngineError.renderFailed(error.localizedDescription)
         }
+        comparison = compared
 
         return RenderedFrame(
             surface: target.surface,
@@ -191,6 +203,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             region: region,
             overview: overview?.surface,
             overviewSize: overviewSize,
+            comparison: compared?.surface,
+            comparisonOverview: compared?.overview,
             histogram: readHistogram(),
             generation: request.generation,
             renderDuration: clock.now - started,
@@ -417,5 +431,66 @@ extension RedlampEngine {
         if let error = commands.error {
             throw EngineError.renderFailed(error.localizedDescription)
         }
+    }
+}
+
+// MARK: - Comparison renders
+
+extension RedlampEngine {
+    fileprivate struct ComparisonKey: Equatable {
+        var session: ObjectIdentifier
+        var recipe: EditRecipe
+        var size: PixelSize
+        var region: ImageRect?
+        var showClipping: Bool
+    }
+
+    struct CachedComparison {
+        fileprivate var key: ComparisonKey
+        /// Keeps the session alive so its identifier can't be reused while cached.
+        var session: ImageSession
+        var surface: IOSurfaceRef
+        var overview: IOSurfaceRef?
+    }
+
+    /// The request's comparison recipe, from the cache when nothing it depends on changed.
+    func encodeComparison(
+        _ request: RenderRequest,
+        session: ImageSession,
+        size: PixelSize,
+        overviewSize: PixelSize,
+        commands: any MTLCommandBuffer,
+    ) throws -> CachedComparison? {
+        guard let recipe = request.comparison else {
+            if comparison != nil {
+                comparison = nil
+                comparisons.removeAll()
+                comparisonOverviews.removeAll()
+            }
+            return nil
+        }
+        let key = ComparisonKey(
+            session: ObjectIdentifier(session), recipe: recipe, size: size, region: request.region,
+            showClipping: request.showClipping,
+        )
+        if let comparison, comparison.key == key {
+            return comparison
+        }
+        let region = request.region ?? .full
+        let target = try comparisons.next(size: size)
+        try encodeDevelop(
+            recipe, session: session, into: target.texture, size: size, region: region,
+            encoding: .linear, showClipping: request.showClipping, commands: commands,
+        )
+        var overview: IOSurfaceRef?
+        if request.region != nil {
+            let whole = try comparisonOverviews.next(size: overviewSize)
+            try encodeDevelop(
+                recipe, session: session, into: whole.texture, size: overviewSize,
+                encoding: .linear, showClipping: request.showClipping, commands: commands,
+            )
+            overview = whole.surface
+        }
+        return CachedComparison(key: key, session: session, surface: target.surface, overview: overview)
     }
 }

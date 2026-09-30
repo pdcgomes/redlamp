@@ -23,6 +23,12 @@ struct RedlampApp: App {
         model.onFolderChange = { url in
             UserDefaults.standard.set(url.path, forKey: "lastFolder")
         }
+        if let layout = UserDefaults.standard.string(forKey: "compareLayout").flatMap(CompareLayout.init) {
+            model.compareLayout = layout
+        }
+        model.onCompareLayoutChange = { layout in
+            UserDefaults.standard.set(layout.rawValue, forKey: "compareLayout")
+        }
         model.onToggleFullScreen = { NSApp.keyWindow?.toggleFullScreen(nil) }
         model.onToggleToolbar = { NSApp.keyWindow?.toggleToolbarShown(nil) }
         _model = State(initialValue: model)

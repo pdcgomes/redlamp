@@ -88,6 +88,65 @@ struct CanvasControllerTests {
         #expect(abs(visible.maxY - 1) < 1e-9)
     }
 
+    @Test func `side by side fits the photo in each pane`() throws {
+        let controller = makeController()
+        let fit = controller.fitScale
+        controller.comparison = .sideBySide
+        // A 3:2 photo in a 1000×800 view shows larger stacked than across.
+        #expect(controller.paneAxis(in: controller.viewSize) == .vertical)
+        let before = try #require(controller.comparisonStage(in: controller.viewSize))
+        let after = controller.stage(in: controller.viewSize)
+        #expect(before.maxY + CanvasController.paneGap == after.minY)
+        #expect(before.size == after.size)
+        #expect(controller.fitScale < fit)
+        #expect(controller.renderTarget.size == controller.renderSize)
+
+        let photo = controller.imageRect(in: controller.viewSize)
+        let mirrored = try #require(controller.comparisonImageRect(in: controller.viewSize))
+        #expect(mirrored.size == photo.size)
+        #expect(abs((mirrored.minY - photo.minY) - (before.minY - after.minY)) < 1e-9)
+
+        controller.comparison = .none
+        #expect(controller.comparisonStage(in: controller.viewSize) == nil)
+        #expect(controller.fitScale == fit)
+    }
+
+    @Test func `wide views put the panes side by side`() {
+        let controller = makeController()
+        controller.updateView(size: CGSize(width: 2000, height: 700), backingScale: 2)
+        controller.comparison = .sideBySide
+        #expect(controller.paneAxis(in: controller.viewSize) == .horizontal)
+    }
+
+    @Test func `a point in the before pane maps to the same spot of the photo`() throws {
+        let controller = makeController()
+        controller.comparison = .sideBySide
+        let photo = controller.imageRect(in: controller.viewSize)
+        let mirrored = try #require(controller.comparisonImageRect(in: controller.viewSize))
+        let inAfter = CGPoint(x: photo.minX + photo.width * 0.3, y: photo.minY + photo.height * 0.6)
+        let inBefore = CGPoint(x: mirrored.minX + mirrored.width * 0.3, y: mirrored.minY + mirrored.height * 0.6)
+        let fromAfter = try #require(controller.imagePoint(for: inAfter))
+        let fromBefore = try #require(controller.imagePoint(for: inBefore))
+        #expect(abs(fromAfter.x - fromBefore.x) < 1e-9)
+        #expect(abs(fromAfter.y - fromBefore.y) < 1e-9)
+    }
+
+    @Test func `the split line follows the visible photo's diagonal`() throws {
+        let controller = makeController()
+        #expect(controller.splitLine(in: controller.viewSize) == nil)
+        controller.comparison = .split(position: 0.5)
+        let frame = controller.visibleImageFrame(in: controller.viewSize)
+        let centered = try #require(controller.splitLine(in: controller.viewSize))
+        #expect(centered.start == CGPoint(x: frame.maxX, y: frame.minY))
+        #expect(centered.end == CGPoint(x: frame.minX, y: frame.maxY))
+
+        controller.comparison = .split(position: 0.25)
+        let early = try #require(controller.splitLine(in: controller.viewSize))
+        let middle = CGPoint(x: (early.start.x + early.end.x) / 2, y: (early.start.y + early.end.y) / 2)
+        #expect(abs(controller.splitPosition(through: middle) - 0.25) < 1e-9)
+        #expect(controller.splitPosition(through: CGPoint(x: -500, y: -500)) == 0)
+    }
+
     @Test func `ratio labels`() {
         #expect(CanvasController.zoomRatios.map(CanvasController.ratioLabel) == [
             "1:16", "1:8", "1:4", "1:3", "1:2", "1:1", "2:1", "3:1", "4:1", "8:1", "11:1",

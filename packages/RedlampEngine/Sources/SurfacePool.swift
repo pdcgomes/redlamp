@@ -33,6 +33,12 @@ final class SurfacePool {
         return targets[cursor]
     }
 
+    /// Frees the surfaces until the next `next(size:)`.
+    func removeAll() {
+        targets = []
+        size = .zero
+    }
+
     private func makeTarget(_ size: PixelSize) throws -> Target {
         let bytesPerElement = 8
         let bytesPerRow = IOSurfaceAlignProperty(kIOSurfaceBytesPerRow, size.width * bytesPerElement)

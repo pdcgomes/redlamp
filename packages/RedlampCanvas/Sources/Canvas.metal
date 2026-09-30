@@ -16,11 +16,16 @@ vertex CanvasVertexOut rl_canvas_vertex(uint vid [[vertex_id]], constant float4 
     return out;
 }
 
+// `clip` keeps the half-plane where dot(clip.xyz, (x, y, 1)) <= 0, in drawable pixels.
 fragment float4 rl_canvas_fragment(
     CanvasVertexOut in [[stage_in]],
     texture2d<float> image [[texture(0)]],
-    constant uint &nearest [[buffer(0)]])
+    constant uint &nearest [[buffer(0)]],
+    constant float4 &clip [[buffer(1)]])
 {
+    if (dot(clip.xyz, float3(in.position.xy, 1.0)) > 0.0) {
+        discard_fragment();
+    }
     constexpr sampler linearSampler(filter::linear, address::clamp_to_edge);
     constexpr sampler nearestSampler(filter::nearest, address::clamp_to_edge);
     return nearest ? image.sample(nearestSampler, in.uv) : image.sample(linearSampler, in.uv);

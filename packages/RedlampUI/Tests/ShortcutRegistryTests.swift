@@ -41,6 +41,8 @@ struct ShortcutRegistryTests {
 
     @Test func `lightroom classics are bound`() {
         #expect(ShortcutAction.resolve(.char("\\"))?.action == .beforeAfter)
+        #expect(ShortcutAction.resolve(.char("y"))?.action == .nextCompareLayout)
+        #expect(ShortcutAction.resolve(.char("y", shift: true))?.action == .previousCompareLayout)
         #expect(ShortcutAction.resolve(.char("j"))?.action == .clipping)
         #expect(ShortcutAction.resolve(KeyCombo(.tab))?.action == .toggleSidePanels)
         #expect(ShortcutAction.resolve(.char("c", shift: true, command: true))?.action == .copySettings)

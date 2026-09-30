@@ -127,6 +127,42 @@ public enum PanelID: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// How Before / After (`\`) shows the original against the edit. It sticks between uses;
+/// `Y` and `⇧Y` cycle through the layouts.
+public enum CompareLayout: String, CaseIterable, Identifiable, Sendable {
+    /// The original replaces the edit on the whole canvas.
+    case toggle
+    case sideBySide
+    /// One canvas, cut diagonally: the original top-left, the edit bottom-right.
+    case split
+
+    public var id: String {
+        rawValue
+    }
+
+    public var title: String {
+        switch self {
+        case .toggle: "Full Frame"
+        case .sideBySide: "Side by Side"
+        case .split: "Diagonal Split"
+        }
+    }
+
+    public var symbol: String {
+        switch self {
+        case .toggle: "rectangle.2.swap"
+        case .sideBySide: "rectangle.split.2x1"
+        case .split: "square.split.diagonal"
+        }
+    }
+
+    public func cycled(by offset: Int) -> CompareLayout {
+        let all = Self.allCases
+        let index = all.firstIndex(of: self) ?? 0
+        return all[((index + offset) % all.count + all.count) % all.count]
+    }
+}
+
 /// The tool strip under the histogram.
 public enum EditTool: String, CaseIterable, Identifiable, Sendable {
     case edit, crop, heal, redEye, masking

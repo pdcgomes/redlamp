@@ -93,7 +93,7 @@ public enum ShortcutCategory: String, CaseIterable, Sendable {
 /// full map is visible from day one.
 public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     // View
-    case beforeAfter, beforeAfterLeftRight, beforeAfterTopBottom, beforeAfterSplit
+    case beforeAfter, nextCompareLayout, previousCompareLayout
     case toggleZoom, zoomIn, zoomOut
     case clipping, infoOverlay, lightsOut, fullScreenPreview, toggleToolbar
 
@@ -133,7 +133,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
 
     public var category: ShortcutCategory {
         switch self {
-        case .beforeAfter, .beforeAfterLeftRight, .beforeAfterTopBottom, .beforeAfterSplit,
+        case .beforeAfter, .nextCompareLayout, .previousCompareLayout,
              .toggleZoom, .zoomIn, .zoomOut, .clipping, .infoOverlay, .lightsOut,
              .fullScreenPreview, .toggleToolbar:
             .view
@@ -163,9 +163,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     public var title: String {
         switch self {
         case .beforeAfter: "Before / After"
-        case .beforeAfterLeftRight: "Before / After Left–Right"
-        case .beforeAfterTopBottom: "Before / After Top–Bottom"
-        case .beforeAfterSplit: "Before / After Split"
+        case .nextCompareLayout: "Next Before / After Layout"
+        case .previousCompareLayout: "Previous Before / After Layout"
         case .toggleZoom: "Toggle Zoom (Fit ↔ 100%)"
         case .zoomIn: "Zoom In"
         case .zoomOut: "Zoom Out"
@@ -248,9 +247,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     public var combos: [KeyCombo] {
         switch self {
         case .beforeAfter: [.char("\\")]
-        case .beforeAfterLeftRight: [.char("y")]
-        case .beforeAfterTopBottom: [.char("y", option: true)]
-        case .beforeAfterSplit: [.char("y", shift: true)]
+        case .nextCompareLayout: [.char("y")]
+        case .previousCompareLayout: [.char("y", shift: true)]
         case .toggleZoom: [.char("z"), KeyCombo(.space)]
         case .zoomIn: [.char("=", command: true)]
         case .zoomOut: [.char("-", command: true)]
@@ -345,7 +343,6 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     /// Where the feature lands on the roadmap; `nil` once it works.
     public var plannedPhase: String? {
         switch self {
-        case .beforeAfterLeftRight, .beforeAfterTopBottom, .beforeAfterSplit: "Phase 2"
         case .cropTool, .cropAspectLock, .brushMask, .colorRangeMask, .luminanceRangeMask, .newPreset,
              .virtualCopy:
             "Phase 2"

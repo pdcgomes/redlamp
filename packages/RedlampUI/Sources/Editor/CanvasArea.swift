@@ -30,8 +30,13 @@ struct CanvasArea: View {
         }
         .overlay {
             // Full canvas: mask geometry uses the same coordinates as the Metal view.
-            if model.activeTool == .masking, model.info != nil, !model.showBefore {
+            if model.activeTool == .masking, model.info != nil, !model.isShowingOriginal {
                 MaskOverlayView()
+            }
+        }
+        .overlay {
+            if model.isComparing, model.hasFrame {
+                CompareOverlay()
             }
         }
         .overlay(alignment: .topLeading) {
@@ -43,7 +48,7 @@ struct CanvasArea: View {
             }
         }
         .overlay(alignment: .top) {
-            if model.lightsOut == 0, model.showBefore || model.previewingPreset != nil || model.eyedropperActive
+            if model.lightsOut == 0, model.isShowingOriginal || model.previewingPreset != nil || model.eyedropperActive
                 || model.drawingKind != nil || model.isReadOnly {
                 StatusPill(text: statusText)
                     .padding(.top, 14)
@@ -129,7 +134,7 @@ struct CanvasArea: View {
         if let preset = model.previewingPreset {
             return "Preview: \(preset.name)"
         }
-        if model.showBefore {
+        if model.isShowingOriginal {
             return "Before"
         }
         return "Edited in a newer version of Redlamp  ·  Changes won't be saved"
@@ -210,7 +215,22 @@ private struct CanvasControls: View {
                 .glassEffect(.regular, in: .capsule)
 
                 HStack(spacing: 4) {
-                    iconToggle("square.split.2x1", isOn: $model.showBefore, help: "Before / After (\\)")
+                    HStack(spacing: 0) {
+                        iconToggle(model.compareLayout.symbol, isOn: $model.showBefore, help: "Before / After (\\)")
+                        Menu {
+                            CompareLayoutPicker()
+                        } label: {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundStyle(Theme.label)
+                                .frame(width: 12, height: 22)
+                        }
+                        .menuStyle(.button)
+                        .buttonStyle(.plain)
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .help("Before / After Layout (Y)")
+                    }
                     iconToggle("exclamationmark.triangle", isOn: $model.showClipping, help: "Show Clipping (J)")
                 }
                 .padding(.horizontal, 6)
@@ -257,6 +277,26 @@ private struct CanvasControls: View {
         }
         .buttonStyle(.plain)
         .help(help)
+    }
+}
+
+/// The Before / After layouts, checked by the current one. Choosing one also shows it.
+public struct CompareLayoutPicker: View {
+    @Environment(EditorModel.self) private var model
+
+    public init() {}
+
+    public var body: some View {
+        Picker("Before / After Layout", selection: Binding(
+            get: { model.compareLayout },
+            set: { model.showComparison(in: $0) },
+        )) {
+            ForEach(CompareLayout.allCases) { layout in
+                Label(layout.title, systemImage: layout.symbol).tag(layout)
+            }
+        }
+        .pickerStyle(.inline)
+        .labelsHidden()
     }
 }
 
