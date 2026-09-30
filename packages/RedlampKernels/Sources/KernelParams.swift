@@ -66,9 +66,6 @@ public struct DevelopParams {
     public var camToWork0 = SIMD4<Float>(1, 0, 0, 0)
     public var camToWork1 = SIMD4<Float>(0, 1, 0, 0)
     public var camToWork2 = SIMD4<Float>(0, 0, 1, 0)
-    public var workToDisplay0 = SIMD4<Float>(1, 0, 0, 0)
-    public var workToDisplay1 = SIMD4<Float>(0, 1, 0, 0)
-    public var workToDisplay2 = SIMD4<Float>(0, 0, 1, 0)
     public var displayToOutput0 = SIMD4<Float>(1, 0, 0, 0)
     public var displayToOutput1 = SIMD4<Float>(0, 1, 0, 0)
     public var displayToOutput2 = SIMD4<Float>(0, 0, 1, 0)
@@ -92,10 +89,6 @@ public struct DevelopParams {
 
     public mutating func setCameraToWorking(_ matrix: simd_float3x3) {
         (camToWork0, camToWork1, camToWork2) = Self.rows(matrix)
-    }
-
-    public mutating func setWorkingToDisplay(_ matrix: simd_float3x3) {
-        (workToDisplay0, workToDisplay1, workToDisplay2) = Self.rows(matrix)
     }
 
     public mutating func setDisplayToOutput(_ matrix: simd_float3x3) {

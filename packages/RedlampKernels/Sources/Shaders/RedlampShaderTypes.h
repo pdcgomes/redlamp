@@ -22,10 +22,7 @@ struct DevelopParams {
     float4 camToWork0;        // camera RGB -> linear Rec.2020 (rows)
     float4 camToWork1;
     float4 camToWork2;
-    float4 workToDisplay0;    // linear Rec.2020 -> linear sRGB (rows)
-    float4 workToDisplay1;
-    float4 workToDisplay2;
-    float4 displayToOutput0;  // linear sRGB -> output primaries (rows)
+    float4 displayToOutput0;  // linear Rec.2020 -> output primaries (rows)
     float4 displayToOutput1;
     float4 displayToOutput2;
     float4 wbRatio;           // xyz: user / as-shot multipliers

@@ -19,8 +19,6 @@ struct DevelopInputs {
 /// This is where slider units become rendering units; tuning a slider's feel happens here
 /// and nowhere else.
 enum DevelopParameters {
-    static let sRGBToDisplayP3 = RGBPrimaries.sRGB.conversion(to: .displayP3).floatMatrix
-
     static func make(
         recipe: EditRecipe,
         session: ImageSession,
@@ -35,8 +33,10 @@ enum DevelopParameters {
         let look = profile.look
 
         p.setCameraToWorking(session.cameraToWorking)
-        p.setWorkingToDisplay(ColorMatrices.rec2020ToSRGB.floatMatrix)
-        p.setDisplayToOutput(encoding == .sRGB ? matrix_identity_float3x3 : sRGBToDisplayP3)
+        // Display-referred work stays in Rec.2020 primaries; the kernel gamut-maps into these.
+        p.setDisplayToOutput(
+            encoding == .sRGB ? ColorMatrices.rec2020ToSRGB.floatMatrix : ColorMatrices.rec2020ToDisplayP3.floatMatrix,
+        )
 
         p.wbRatio = SIMD4(SIMD3<Float>(session.whiteBalanceRatio(for: recipe)), 0)
 

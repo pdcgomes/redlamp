@@ -12,11 +12,12 @@ static inline float3 mul3(float4 r0, float4 r1, float4 r2, float3 v) {
 
 static inline float signedCbrt(float x) { return sign(x) * pow(abs(x), 1.0f / 3.0f); }
 
-// Björn Ottosson's OKLab, from linear sRGB.
-static inline float3 linearSRGBToOKLab(float3 c) {
-    float l = 0.4122214708f * c.r + 0.5363325363f * c.g + 0.0514459929f * c.b;
-    float m = 0.2119034982f * c.r + 0.6806995451f * c.g + 0.1073969566f * c.b;
-    float s = 0.0883024619f * c.r + 0.2817188376f * c.g + 0.6299787005f * c.b;
+// Björn Ottosson's OKLab, from linear Rec.2020 (his linear-sRGB matrices composed with
+// Rec.2020 -> sRGB, so values match the sRGB-based OKLab in RedlampColor).
+static inline float3 rec2020ToOKLab(float3 c) {
+    float l = 0.6167557872f * c.r + 0.3601983994f * c.g + 0.0230458134f * c.b;
+    float m = 0.2651330640f * c.r + 0.6358393641f * c.g + 0.0990275718f * c.b;
+    float s = 0.1001026342f * c.r + 0.2039065194f * c.g + 0.6959908464f * c.b;
     l = signedCbrt(l); m = signedCbrt(m); s = signedCbrt(s);
     return float3(
         0.2104542553f * l + 0.7936177850f * m - 0.0040720468f * s,
@@ -24,15 +25,15 @@ static inline float3 linearSRGBToOKLab(float3 c) {
         0.0259040371f * l + 0.7827717662f * m - 0.8086757660f * s);
 }
 
-static inline float3 okLabToLinearSRGB(float3 lab) {
+static inline float3 okLabToRec2020(float3 lab) {
     float l = lab.x + 0.3963377774f * lab.y + 0.2158037573f * lab.z;
     float m = lab.x - 0.1055613458f * lab.y - 0.0638541728f * lab.z;
     float s = lab.x - 0.0894841775f * lab.y - 1.2914855480f * lab.z;
     l = l * l * l; m = m * m * m; s = s * s * s;
     return float3(
-        4.0767416621f * l - 3.3077115913f * m + 0.2309699292f * s,
-        -1.2684380046f * l + 2.6097574011f * m - 0.3413193965f * s,
-        -0.0041960863f * l - 0.7034186147f * m + 1.7076147010f * s);
+        2.1399067357f * l - 1.2463895088f * m + 0.1064827730f * s,
+        -0.8847358625f * l + 2.1632309821f * m - 0.2784951194f * s,
+        -0.0485737580f * l - 0.4545031429f * m + 1.5030769009f * s);
 }
 
 static inline float srgbEncode(float x) {
@@ -46,9 +47,51 @@ static inline float srgbDecode(float x) {
 static inline float3 srgbEncode3(float3 c) { return float3(srgbEncode(c.r), srgbEncode(c.g), srgbEncode(c.b)); }
 static inline float3 srgbDecode3(float3 c) { return float3(srgbDecode(c.r), srgbDecode(c.g), srgbDecode(c.b)); }
 
-// Filmic curve (Narkowicz's ACES fit), normalised so `white` maps to 1.
+// Filmic curve (Narkowicz's ACES fit).
 static inline float filmic(float x) {
     return (x * (2.51f * x + 0.03f)) / (x * (2.43f * x + 0.59f) + 0.14f);
+}
+
+// Scene -> display tone curve. Below 0.8 display (about +1.6 EV above middle grey) it is the
+// filmic curve normalised so scene 1.0 maps to 1. Above that, a shoulder in log2 space that
+// joins with matching slope and reaches white smoothly at +4 EV, so highlights roll off over
+// 1.5 EV beyond the old clip point while sensor-saturated areas still render white.
+constant float kShoulderStart = 0.54358851f;    // scene value where the curve reaches 0.8
+constant float kShoulderStartY = 0.8f;
+constant float kShoulderWidthEV = 2.40548194f;  // join to white (0.18 * 2^4)
+constant float kShoulderPower = 3.25537943f;    // matches the filmic slope at the join
+constant float kFilmicAtOne = 0.80379747f;
+
+static inline float toneCurveChannel(float x) {
+    if (x <= kShoulderStart) return filmic(x) / kFilmicAtOne;
+    float u = min(log2(x / kShoulderStart) / kShoulderWidthEV, 1.0f);
+    return 1.0f - (1.0f - kShoulderStartY) * pow(1.0f - u, kShoulderPower);
+}
+
+// Per-channel curve, with each channel's position between the smallest and largest kept, so
+// hue survives the curve and bright saturated colors head towards white without shifting.
+static inline float3 toneCurve(float3 x) {
+    float3 y = float3(toneCurveChannel(x.r), toneCurveChannel(x.g), toneCurveChannel(x.b));
+    float lo = min3(x.r, x.g, x.b);
+    float hi = max3(x.r, x.g, x.b);
+    if (hi - lo < 1e-7f) return y;
+    float yLo = min3(y.r, y.g, y.b);
+    float yHi = max3(y.r, y.g, y.b);
+    return yLo + (yHi - yLo) * (x - lo) / (hi - lo);
+}
+
+// Fits a linear Rec.2020 color into the output gamut: channels are clipped to [0, 1], then each
+// channel's position between the smallest and largest is restored. That keeps hue and nearly all
+// saturation; mapping at constant OKLab lightness instead visibly dulls vivid colors.
+static inline float3 gamutMap(float3 rec2020, constant DevelopParams &p) {
+    float3 rgb = mul3(p.displayToOutput0, p.displayToOutput1, p.displayToOutput2, rec2020);
+    float3 clipped = clamp(rgb, 0.0f, 1.0f);
+    float lo = min3(rgb.r, rgb.g, rgb.b);
+    float hi = max3(rgb.r, rgb.g, rgb.b);
+    if (hi - lo < 1e-7f) return clipped;
+    float clippedLo = min3(clipped.r, clipped.g, clipped.b);
+    float clippedHi = max3(clipped.r, clipped.g, clipped.b);
+    return clippedLo + (clippedHi - clippedLo) * (rgb - lo) / (hi - lo);
 }
 
 static inline float hueDistance(float a, float b) {
@@ -188,15 +231,12 @@ kernel void rl_develop(
         + localTone2.y * 0.9f * (1.0f - smoothstep(-8.0f, -2.5f, ev));
     scene *= exp2(adjustedEV - ev);
 
-    // Black and white points, then the filmic tone map to display-referred.
+    // Black and white points, then the tone curve to display-referred (still Rec.2020 primaries).
     float blackPoint = p.tone2.y;
     scene = max((scene - blackPoint) / (1.0f - blackPoint), 0.0f);
-    float whiteNorm = filmic(1.0f);
-    float3 x = scene / p.tone2.x;
-    float3 display = float3(filmic(x.r), filmic(x.g), filmic(x.b)) / whiteNorm;
-    float3 linearRGB = mul3(p.workToDisplay0, p.workToDisplay1, p.workToDisplay2, display);
+    float3 display = toneCurve(scene / p.tone2.x);
     // Perceptual color work in OKLCh.
-    float3 lab = linearSRGBToOKLab(linearRGB);
+    float3 lab = rec2020ToOKLab(display);
     float chroma = length(lab.yz);
     float hue = atan2(lab.z, lab.y) * (180.0f / M_PI_F);
     if (hue < 0.0f) hue += 360.0f;
@@ -254,8 +294,9 @@ kernel void rl_develop(
         lab.x += offset.z;
     }
 
-    linearRGB = clamp(okLabToLinearSRGB(lab), 0.0f, 1.0f);
-    float3 encoded = srgbEncode3(linearRGB);
+    // Curve, vignette and grain work on sRGB-transfer-encoded Rec.2020 values; the gamut is
+    // only reduced to the output's at the end.
+    float3 encoded = srgbEncode3(max(okLabToRec2020(lab), 0.0f));
 
     if (p.tone2.z > 0.5f) {
         encoded = float3(sampleLUT(toneLUT, encoded.r), sampleLUT(toneLUT, encoded.g), sampleLUT(toneLUT, encoded.b));
@@ -295,7 +336,8 @@ kernel void rl_develop(
         encoded += noise * p.grain.x * 0.16f * midtoneWeight;
     }
 
-    encoded = clamp(encoded, 0.0f, 1.0f);
+    // Into the output gamut, sRGB-transfer encoded (sRGB and Display P3 share the curve).
+    encoded = srgbEncode3(gamutMap(srgbDecode3(max(encoded, 0.0f)), p));
 
     if (p.tone2.w > 0.5f) {
         if (any(encoded >= 0.998f)) encoded = float3(1.0f, 0.1f, 0.1f);
@@ -311,15 +353,8 @@ kernel void rl_develop(
         encoded = mix(encoded, tint, coverage[overlay] * 0.55f);
     }
 
-    // Output encoding: 0 linear (extended) display primaries, 1 sRGB-encoded, 2 P3-encoded.
-    int encoding = int(p.geometry.z);
-    float3 result;
-    if (encoding == 1) {
-        result = encoded;
-    } else {
-        float3 outputLinear = mul3(p.displayToOutput0, p.displayToOutput1, p.displayToOutput2, srgbDecode3(encoded));
-        result = encoding == 2 ? srgbEncode3(clamp(outputLinear, 0.0f, 1.0f)) : outputLinear;
-    }
+    // Output encoding: 0 linear output primaries, 1 sRGB-encoded sRGB, 2 sRGB-encoded Display P3.
+    float3 result = int(p.geometry.z) == 0 ? srgbDecode3(encoded) : encoded;
     out.write(float4(result, 1.0f), gid);
 }
 

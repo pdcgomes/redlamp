@@ -346,7 +346,7 @@ flowchart LR
 1. LibRaw unpacks the sensor data.
 2. The GPU applies black and white levels and the as-shot white balance.
 3. The image is demosaiced and cached as a mip pyramid.
-4. The fused develop kernel first evaluates every mask's coverage for the pixel. It then applies, in order, each with its local (masked) adjustments where they exist: the white-balance ratio, the camera matrix to linear Rec.2020 (scene-referred), exposure and tone in log space, a filmic tone map, OKLCh color work (vibrance, saturation, mixer, grading, profile look), the tone-curve lookup, vignette, grain, and the output encoding.
+4. The fused develop kernel first evaluates every mask's coverage for the pixel. It then applies, in order, each with its local (masked) adjustments where they exist: the white-balance ratio, the camera matrix to linear Rec.2020 (scene-referred), exposure and tone in log space, a hue-preserving tone curve that rolls highlights off smoothly to white at +4 EV above middle grey, OKLCh color work (vibrance, saturation, mixer, grading, profile look), the tone-curve lookup, vignette and grain, all still in Rec.2020 primaries, and finally a hue-preserving fit into the output gamut (sRGB or Display P3) and the output encoding.
 
 **Packages** (`packages/`; `Tuist/ProjectDescriptionHelpers/Module.swift` is the single source of truth for which package may depend on which):
 
