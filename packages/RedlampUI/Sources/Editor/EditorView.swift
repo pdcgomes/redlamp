@@ -32,17 +32,23 @@ public struct EditorView: View {
 
                 HStack(spacing: 0) {
                     if model.leftPanelVisible {
-                        SidebarView()
-                            .frame(width: model.sidebarWidth)
-                            .background(PanelBackground(edge: .trailing))
-                            .overlay(alignment: .trailing) {
-                                PanelResizeHandle(
-                                    width: $model.sidebarWidth,
-                                    range: PanelMetrics.sidebarRange,
-                                    direction: 1,
-                                )
+                        Group {
+                            if DevelopPanels.usesSwiftUI {
+                                SidebarView()
+                            } else {
+                                SidebarColumnHost(model: model)
                             }
-                            .transition(.move(edge: .leading))
+                        }
+                        .frame(width: model.sidebarWidth)
+                        .background(PanelBackground(edge: .trailing))
+                        .overlay(alignment: .trailing) {
+                            PanelResizeHandle(
+                                width: $model.sidebarWidth,
+                                range: PanelMetrics.sidebarRange,
+                                direction: 1,
+                            )
+                        }
+                        .transition(.move(edge: .leading))
                     }
                     Spacer(minLength: 0)
                     if model.rightPanelVisible {

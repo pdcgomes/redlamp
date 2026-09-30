@@ -32,6 +32,15 @@ public final class FrameFeed {
         await withCheckedContinuation { waiters.append($0) }
     }
 
+    /// A canvas showing this feed's frames, for AppKit layouts (SwiftUI uses `CanvasView`).
+    public func makeView(controller: CanvasController, interactive: Bool = true) -> CanvasMetalView {
+        let view = CanvasMetalView(controller: controller)
+        view.interactive = interactive
+        view.clickAction = interactive ? .zoom : .none
+        attach(view)
+        return view
+    }
+
     func attach(_ view: CanvasMetalView) {
         views.add(view)
         view.display(current)

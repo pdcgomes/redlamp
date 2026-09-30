@@ -3,101 +3,110 @@ import RedlampDocument
 import SwiftUI
 
 /// Left column: Navigator, Presets, Snapshots and History, as in Lightroom Classic.
-struct SidebarView: View {
-    @Environment(EditorModel.self) private var model
-    @State private var presetsExpanded: Set<String> = ["Essentials"]
+@_spi(Harness) public struct SidebarView: View {
     @State private var navigatorController = CanvasController()
 
-    var body: some View {
+    public init() {}
+
+    public var body: some View {
         VStack(spacing: 0) {
             NavigatorView(controller: navigatorController)
                 .padding(.horizontal, 12)
                 .padding(.bottom, 10)
+            SidebarLists()
+        }
+    }
+}
 
-            List {
-                Section("Presets") {
-                    ForEach(BuiltInPresets.groups, id: \.name) { group in
-                        DisclosureGroup(
-                            isExpanded: Binding(
-                                get: { presetsExpanded.contains(group.name) },
-                                set: { expanded in
-                                    if expanded {
-                                        presetsExpanded.insert(group.name)
-                                    } else {
-                                        presetsExpanded.remove(group.name)
-                                    }
-                                },
-                            ),
-                        ) {
-                            ForEach(group.presets) { preset in
-                                PresetRow(preset: preset)
-                            }
-                        } label: {
-                            Label(group.name, systemImage: "folder")
-                        }
-                    }
-                }
+/// Presets, Snapshots and History.
+struct SidebarLists: View {
+    @Environment(EditorModel.self) private var model
+    @State private var presetsExpanded: Set<String> = ["Essentials"]
 
-                Section {
-                    if model.snapshots.isEmpty {
-                        Text("No snapshots")
-                            .foregroundStyle(Theme.tertiaryLabel)
-                    }
-                    ForEach(model.snapshots) { snapshot in
-                        Button {
-                            model.applySnapshot(snapshot)
-                        } label: {
-                            Label(snapshot.name, systemImage: "camera.viewfinder")
+    var body: some View {
+        List {
+            Section("Presets") {
+                ForEach(BuiltInPresets.groups, id: \.name) { group in
+                    DisclosureGroup(
+                        isExpanded: Binding(
+                            get: { presetsExpanded.contains(group.name) },
+                            set: { expanded in
+                                if expanded {
+                                    presetsExpanded.insert(group.name)
+                                } else {
+                                    presetsExpanded.remove(group.name)
+                                }
+                            },
+                        ),
+                    ) {
+                        ForEach(group.presets) { preset in
+                            PresetRow(preset: preset)
                         }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button("Delete Snapshot", role: .destructive) { model.deleteSnapshot(snapshot) }
-                        }
-                    }
-                } header: {
-                    HStack {
-                        Text("Snapshots")
-                        Spacer()
-                        Button {
-                            model.createSnapshot()
-                        } label: {
-                            Image(systemName: "plus")
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(model.info == nil)
-                        .help("Create Snapshot (⌘N)")
-                    }
-                }
-
-                Section {
-                    ForEach(Array(model.history.enumerated()).reversed(), id: \.element.id) { index, step in
-                        HistoryRow(
-                            step: step,
-                            isCurrent: index == model.historyIndex,
-                            isFuture: index > model.historyIndex,
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture { model.goToHistory(index) }
-                    }
-                } header: {
-                    HStack {
-                        Text("History")
-                        Spacer()
-                        Button {
-                            model.clearHistory()
-                        } label: {
-                            Image(systemName: "xmark")
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(model.history.count <= 1)
-                        .help("Clear History")
+                    } label: {
+                        Label(group.name, systemImage: "folder")
                     }
                 }
             }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
-            .font(Theme.labelFont)
+
+            Section {
+                if model.snapshots.isEmpty {
+                    Text("No snapshots")
+                        .foregroundStyle(Theme.tertiaryLabel)
+                }
+                ForEach(model.snapshots) { snapshot in
+                    Button {
+                        model.applySnapshot(snapshot)
+                    } label: {
+                        Label(snapshot.name, systemImage: "camera.viewfinder")
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("Delete Snapshot", role: .destructive) { model.deleteSnapshot(snapshot) }
+                    }
+                }
+            } header: {
+                HStack {
+                    Text("Snapshots")
+                    Spacer()
+                    Button {
+                        model.createSnapshot()
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(model.info == nil)
+                    .help("Create Snapshot (⌘N)")
+                }
+            }
+
+            Section {
+                ForEach(Array(model.history.enumerated()).reversed(), id: \.element.id) { index, step in
+                    HistoryRow(
+                        step: step,
+                        isCurrent: index == model.historyIndex,
+                        isFuture: index > model.historyIndex,
+                    )
+                    .contentShape(Rectangle())
+                    .onTapGesture { model.goToHistory(index) }
+                }
+            } header: {
+                HStack {
+                    Text("History")
+                    Spacer()
+                    Button {
+                        model.clearHistory()
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(model.history.count <= 1)
+                    .help("Clear History")
+                }
+            }
         }
+        .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+        .font(Theme.labelFont)
     }
 }
 
@@ -142,15 +151,17 @@ private struct HistoryRow: View {
 
 /// A live, fitted view of the current render, with the zoomed viewport outlined (drag it,
 /// or click, to move around the photo) and Lightroom's FIT / FILL / 1:1 / ratio zoom buttons.
-struct NavigatorView: View {
+@_spi(Harness) public struct NavigatorView: View {
     let controller: CanvasController
     @Environment(EditorModel.self) private var model
-    /// The ratio behind the fourth zoom button, chosen from its menu as in Lightroom.
-    @State private var ratio = 2.0
     /// Where the viewport was grabbed, relative to its centre, while dragging.
     @State private var grab: CGPoint?
 
-    var body: some View {
+    public init(controller: CanvasController) {
+        self.controller = controller
+    }
+
+    public var body: some View {
         VStack(spacing: 6) {
             HStack(spacing: 10) {
                 Text("NAVIGATOR")
@@ -161,7 +172,7 @@ struct NavigatorView: View {
                 zoomButton("Fit", .fit)
                 zoomButton("Fill", .fill)
                 zoomButton("1:1", .oneToOne)
-                ratioMenu
+                NavigatorRatioMenu()
             }
             GeometryReader { geometry in
                 CanvasView(feed: model.frames, controller: controller, clickAction: .none, interactive: false)
@@ -201,27 +212,6 @@ struct NavigatorView: View {
         .foregroundStyle(model.canvas.zoom == zoom ? Theme.labelHover : Theme.secondaryLabel)
     }
 
-    private var ratioMenu: some View {
-        Menu {
-            ForEach(CanvasController.zoomRatios, id: \.self) { choice in
-                Button(CanvasController.ratioLabel(choice)) {
-                    ratio = choice
-                    model.canvas.zoom = .scale(choice)
-                }
-            }
-        } label: {
-            Text(CanvasController.ratioLabel(ratio))
-        } primaryAction: {
-            model.canvas.zoom = .scale(ratio)
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .fixedSize()
-        .font(Theme.captionFont)
-        .foregroundStyle(model.canvas.zoom == .scale(ratio) ? Theme.labelHover : Theme.secondaryLabel)
-        .help("Zoom ratio")
-    }
-
     /// Dragging the outline moves it from where it was grabbed; clicking elsewhere centres
     /// the view on that point, as in Lightroom.
     private func viewportDrag(in size: CGSize) -> some Gesture {
@@ -243,5 +233,33 @@ struct NavigatorView: View {
                 model.canvas.centerOn(CGPoint(x: point.x - offset.x, y: point.y - offset.y))
             }
             .onEnded { _ in grab = nil }
+    }
+}
+
+/// The Navigator's fourth zoom button: a ratio chosen from its menu, as in Lightroom.
+/// Shared by the SwiftUI Navigator and its AppKit port.
+struct NavigatorRatioMenu: View {
+    @Environment(EditorModel.self) private var model
+    @State private var ratio = 2.0
+
+    var body: some View {
+        Menu {
+            ForEach(CanvasController.zoomRatios, id: \.self) { choice in
+                Button(CanvasController.ratioLabel(choice)) {
+                    ratio = choice
+                    model.canvas.zoom = .scale(choice)
+                }
+            }
+        } label: {
+            Text(CanvasController.ratioLabel(ratio))
+        } primaryAction: {
+            model.canvas.zoom = .scale(ratio)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .fixedSize()
+        .font(Theme.captionFont)
+        .foregroundStyle(model.canvas.zoom == .scale(ratio) ? Theme.labelHover : Theme.secondaryLabel)
+        .help("Zoom ratio")
     }
 }

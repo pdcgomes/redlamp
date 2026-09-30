@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import RedlampCanvas
 import RedlampDesign
 import RedlampEngineAPI
 @_spi(Harness) import RedlampUI
@@ -173,6 +174,11 @@ extension HarnessScene {
                 InspectorView().frame(height: 760)
             }) {
                 FixedHeightView(InspectorColumnViews.make(model: $0), height: 760)
+            },
+            panelParity(id: "navigator", title: "Navigator", symbol: "map", reference: {
+                NavigatorView(controller: CanvasController())
+            }) {
+                NavigatorPanelViews.make(model: $0)
             },
             panelParity(id: "detail", title: "Detail", symbol: "triangle", reference: { DetailPanel() }) {
                 ReferencePanelViews.detail(model: $0)
