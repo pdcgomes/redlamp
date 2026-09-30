@@ -150,25 +150,32 @@ enum ECCAligner {
         var correlation: Float = 0
         let width = template.width
         let height = template.height
-        // Image gradients, central differences.
-        var gx = [Float](repeating: 0, count: width * height)
-        var gy = [Float](repeating: 0, count: width * height)
+        // The image and its central-difference gradients, interleaved so one bilinear lookup
+        // fetches all three.
+        var packed = [SIMD4<Float>](repeating: .zero, count: image.width * image.height)
         for y in 0 ..< image.height {
             for x in 0 ..< image.width {
                 let xl = max(x - 1, 0)
                 let xr = min(x + 1, image.width - 1)
                 let yu = max(y - 1, 0)
                 let yd = min(y + 1, image.height - 1)
-                gx[y * image.width + x] = 0.5 * (image[xr, y] - image[xl, y])
-                gy[y * image.width + x] = 0.5 * (image[x, yd] - image[x, yu])
+                packed[y * image.width + x] = SIMD4(
+                    image[x, y], 0.5 * (image[xr, y] - image[xl, y]), 0.5 * (image[x, yd] - image[x, yu]), 0,
+                )
             }
         }
-        let gradX = LumaImage(width: image.width, height: image.height, pixels: gx)
-        let gradY = LumaImage(width: image.width, height: image.height, pixels: gy)
+        let maxU = Float(image.width - 1)
+        let maxV = Float(image.height - 1)
+        // Above a megapixel every other pixel each way is plenty: the fit stays heavily
+        // overdetermined at a quarter of the cost.
+        let step = width * height > 1_000_000 ? 2 : 1
+        let columns = (width + step - 1) / step
+        let rows = (height + step - 1) / step
 
-        var warped = [Float](repeating: 0, count: width * height)
-        var valid = [Bool](repeating: false, count: width * height)
-        var steepest = [SIMD4<Float>](repeating: .zero, count: width * height)
+        var warped = [Float](repeating: 0, count: columns * rows)
+        var templated = [Float](repeating: 0, count: columns * rows)
+        var valid = [Bool](repeating: false, count: columns * rows)
+        var steepest = [SIMD4<Float>](repeating: .zero, count: columns * rows)
         for _ in 0 ..< iterations {
             // Warped image, its gradients and the steepest-descent images over the valid overlap.
             var count = 0
@@ -177,19 +184,31 @@ enum ECCAligner {
             for index in valid.indices {
                 valid[index] = false
             }
-            for y in 0 ..< height {
-                for x in 0 ..< width {
+            for row in 0 ..< rows {
+                let y = row * step
+                for column in 0 ..< columns {
+                    let x = column * step
                     let (u, v) = p.apply(Float(x), Float(y))
-                    guard let value = image.sample(u, v), let ix = gradX.sample(u, v), let iy = gradY.sample(u, v)
-                    else { continue }
-                    let index = y * width + x
+                    guard u >= 0, v >= 0, u <= maxU, v <= maxV else { continue }
+                    let x0 = min(Int(u), image.width - 2)
+                    let y0 = min(Int(v), image.height - 2)
+                    let fx = u - Float(x0)
+                    let fy = v - Float(y0)
+                    let at = y0 * image.width + x0
+                    let top = packed[at] + fx * (packed[at + 1] - packed[at])
+                    let bottom = packed[at + image.width] + fx *
+                        (packed[at + image.width + 1] - packed[at + image.width])
+                    let sample = top + fy * (bottom - top)
+                    let (value, ix, iy) = (sample.x, sample.y, sample.z)
+                    let index = row * columns + column
                     // Image gradient times d(u, v)/d(a, b, tx, ty), for u = a x - b y + tx, v = b x + a y + ty.
                     steepest[index] = SIMD4(
                         ix * Float(x) + iy * Float(y), -ix * Float(y) + iy * Float(x), ix, iy,
                     )
                     warped[index] = value
+                    templated[index] = template.pixels[y * width + x]
                     valid[index] = true
-                    sumT += Double(template.pixels[index])
+                    sumT += Double(templated[index])
                     sumI += Double(value)
                     count += 1
                 }
@@ -204,14 +223,14 @@ enum ECCAligner {
             var normT: Float = 0
             var dot: Float = 0
             var meanG = SIMD4<Float>.zero
-            for index in 0 ..< width * height where valid[index] {
+            for index in valid.indices where valid[index] {
                 meanG += steepest[index]
             }
             meanG /= Float(count)
-            for index in 0 ..< width * height where valid[index] {
+            for index in valid.indices where valid[index] {
                 let g = steepest[index] - meanG
                 let i = warped[index] - meanI
-                let t = template.pixels[index] - meanT
+                let t = templated[index] - meanT
                 hessian += simd_float4x4(columns: (g * g.x, g * g.y, g * g.z, g * g.w))
                 projI += g * i
                 projT += g * t
