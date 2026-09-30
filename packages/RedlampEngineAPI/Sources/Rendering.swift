@@ -89,23 +89,35 @@ public enum OutputColorSpace: String, Sendable, Hashable, CaseIterable {
 }
 
 /// A full-quality render for export or for the CLI.
+/// What a still is for, which decides how a reduced size is reached.
+public enum StillPurpose: Sendable, Hashable {
+    /// Rendered straight at the requested size: fast, for thumbnails and previews.
+    case preview
+    /// Processed at full resolution and downscaled last, so sharpening, noise reduction and
+    /// texture look the same at every export size.
+    case export
+}
+
 public struct StillRequest: Sendable, Hashable {
     public var recipe: EditRecipe
     /// Long edge limit in pixels; `nil` renders at full resolution.
     public var maxLongEdge: Int?
     public var colorSpace: OutputColorSpace
     public var bitsPerComponent: Int
+    public var purpose: StillPurpose
 
     public init(
         recipe: EditRecipe,
         maxLongEdge: Int? = nil,
         colorSpace: OutputColorSpace = .sRGB,
         bitsPerComponent: Int = 8,
+        purpose: StillPurpose = .preview,
     ) {
         self.recipe = recipe
         self.maxLongEdge = maxLongEdge
         self.colorSpace = colorSpace
         self.bitsPerComponent = bitsPerComponent
+        self.purpose = purpose
     }
 }
 

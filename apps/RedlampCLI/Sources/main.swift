@@ -56,7 +56,7 @@ func run(_ arguments: [String]) async throws {
 
     var recipe = EditRecipe()
     var output: URL?
-    var request = StillRequest(recipe: recipe)
+    var request = StillRequest(recipe: recipe, purpose: .export)
     var index = 2
     func value() throws -> String {
         index += 1

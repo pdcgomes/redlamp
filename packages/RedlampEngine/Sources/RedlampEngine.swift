@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import Metal
+import MetalPerformanceShaders
 import os
 import RedlampEngineAPI
 import RedlampKernels
@@ -315,16 +316,11 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         descriptor.usage = [.shaderWrite, .shaderRead]
         descriptor.storageMode = .shared
         guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
-        let encoding: OutputEncoding = request.colorSpace == .sRGB ? .sRGB : .displayP3
-        if DetailStage.isActive(request.recipe) {
-            try renderTiles(request.recipe, session: session, into: texture, size: size, encoding: encoding)
+        if request.purpose == .export, size != session.orientedSize {
+            try developDownscaled(request, session: session, into: texture, size: size)
         } else {
-            guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
-            try encodeDevelop(
-                request.recipe, session: session, into: texture, size: size,
-                encoding: encoding, showClipping: false, commands: commands,
-            )
-            try finish(commands)
+            let encoding: OutputEncoding = request.colorSpace == .sRGB ? .sRGB : .displayP3
+            try developStill(request.recipe, session: session, into: texture, size: size, encoding: encoding)
         }
 
         let bytesPerPixel = sixteenBit ? 8 : 4
@@ -397,6 +393,61 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
 // MARK: - Tiled stills
 
 extension RedlampEngine {
+    /// Develops a still at `size`, in tiles when a spatial stage needs them.
+    private func developStill(
+        _ recipe: EditRecipe,
+        session: ImageSession,
+        into texture: any MTLTexture,
+        size: PixelSize,
+        encoding: OutputEncoding,
+    ) throws {
+        if DetailStage.isActive(recipe) {
+            try renderTiles(recipe, session: session, into: texture, size: size, encoding: encoding)
+        } else {
+            guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
+            try encodeDevelop(
+                recipe, session: session, into: texture, size: size,
+                encoding: encoding, showClipping: false, commands: commands,
+            )
+            try finish(commands)
+        }
+    }
+
+    /// An export below full size: developed at full resolution in linear light, downscaled
+    /// (Lanczos), then encoded.
+    private func developDownscaled(
+        _ request: StillRequest,
+        session: ImageSession,
+        into texture: any MTLTexture,
+        size: PixelSize,
+    ) throws {
+        let full = session.orientedSize
+        func linearTexture(_ size: PixelSize) throws -> any MTLTexture {
+            let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+                pixelFormat: .rgba16Float, width: size.width, height: size.height, mipmapped: false,
+            )
+            descriptor.usage = [.shaderWrite, .shaderRead]
+            descriptor.storageMode = .private
+            guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
+            return texture
+        }
+        let fullTexture = try linearTexture(full)
+        let encoding: OutputEncoding = request.colorSpace == .sRGB ? .linearSRGB : .linear
+        try developStill(request.recipe, session: session, into: fullTexture, size: full, encoding: encoding)
+        let scaled = try linearTexture(size)
+        guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
+        MPSImageLanczosScale(device: device).encode(
+            commandBuffer: commands, sourceTexture: fullTexture, destinationTexture: scaled,
+        )
+        guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
+        encoder.setComputePipelineState(kernels.encodeSRGB)
+        encoder.setTexture(scaled, index: 0)
+        encoder.setTexture(texture, index: 1)
+        encoder.dispatchGrid(width: size.width, height: size.height, pipeline: kernels.encodeSRGB)
+        encoder.endEncoding()
+        try finish(commands)
+    }
+
     /// Develops a still in tiles, so spatial stages only ever need a tile's worth of memory.
     private func renderTiles(
         _ recipe: EditRecipe,

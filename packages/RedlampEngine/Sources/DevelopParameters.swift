@@ -52,7 +52,8 @@ enum DevelopParameters {
         p.setCameraToWorking(session.cameraToWorking)
         // Display-referred work stays in Rec.2020 primaries; the kernel gamut-maps into these.
         p.setDisplayToOutput(
-            encoding == .sRGB ? ColorMatrices.rec2020ToSRGB.floatMatrix : ColorMatrices.rec2020ToDisplayP3.floatMatrix,
+            encoding == .sRGB || encoding == .linearSRGB
+                ? ColorMatrices.rec2020ToSRGB.floatMatrix : ColorMatrices.rec2020ToDisplayP3.floatMatrix,
         )
 
         // Camera-style fine-tuning: ±100 is ±0.3 EV on the red or blue channel.

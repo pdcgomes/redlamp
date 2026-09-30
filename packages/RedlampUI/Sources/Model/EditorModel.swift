@@ -813,6 +813,7 @@ public final class EditorModel {
             recipe: recipe,
             colorSpace: .sRGB,
             bitsPerComponent: bits,
+            purpose: .export,
         ))
         try await Task.detached(priority: .userInitiated) {
             try ImageExporter.write(image, to: url, format: format)

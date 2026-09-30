@@ -28,6 +28,7 @@ public final class KernelLibrary: @unchecked Sendable {
     public let detailLocal: any MTLComputePipelineState
     public let hazeDark: any MTLComputePipelineState
     public let hazeFilter: any MTLComputePipelineState
+    public let encodeSRGB: any MTLComputePipelineState
 
     public init(device: any MTLDevice) throws {
         self.device = device
@@ -62,6 +63,7 @@ public final class KernelLibrary: @unchecked Sendable {
         detailLocal = try pipeline("rl_detail_local")
         hazeDark = try pipeline("rl_haze_dark")
         hazeFilter = try pipeline("rl_haze_filter")
+        encodeSRGB = try pipeline("rl_encode_srgb")
     }
 }
 

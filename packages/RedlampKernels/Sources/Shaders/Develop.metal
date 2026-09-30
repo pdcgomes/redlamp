@@ -418,7 +418,8 @@ kernel void rl_develop(
     }
 
     // Output encoding: 0 linear output primaries, 1 sRGB-encoded sRGB, 2 sRGB-encoded Display P3.
-    float3 result = int(p.geometry.z) == 0 ? srgbDecode3(encoded) : encoded;
+    int encoding = int(p.geometry.z);
+    float3 result = encoding == 0 || encoding == 3 ? srgbDecode3(encoded) : encoded;
     out.write(float4(result, 1.0f), gid);
 }
 
@@ -463,4 +464,14 @@ kernel void rl_histogram(
         uint value = atomic_load_explicit(&local[i], memory_order_relaxed);
         if (value > 0) atomic_fetch_add_explicit(&bins[i], value, memory_order_relaxed);
     }
+}
+
+// A linear export, downscaled, to the sRGB transfer curve (which Display P3 shares).
+kernel void rl_encode_srgb(
+    texture2d<float, access::read> linear [[texture(0)]],
+    texture2d<float, access::write> out [[texture(1)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    if (gid.x >= out.get_width() || gid.y >= out.get_height()) return;
+    out.write(float4(srgbEncode3(clamp(linear.read(gid).rgb, 0.0f, 1.0f)), 1.0f), gid);
 }

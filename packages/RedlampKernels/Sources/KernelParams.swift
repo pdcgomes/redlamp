@@ -275,4 +275,6 @@ public enum OutputEncoding: Float {
     case sRGB = 1
     /// sRGB-encoded (Display P3 transfer) Display P3.
     case displayP3 = 2
+    /// Linear values in sRGB primaries (for downscaling an sRGB export before encoding it).
+    case linearSRGB = 3
 }
