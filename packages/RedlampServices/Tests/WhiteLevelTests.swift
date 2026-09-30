@@ -1,5 +1,5 @@
-@testable import RedlampServices
 import Testing
+@testable import RedlampServices
 
 /// Clip-spike white levels (CAM-02).
 struct WhiteLevelTests {

@@ -342,11 +342,17 @@ struct SessionBuilder {
             gains += map.gains
         }
         if descriptors.isEmpty {
-            descriptors = [GainMapGPU(area: .zero, grid: SIMD4(1, 1, 1, 1), placement: SIMD4(1, 1, 0, 0), planes: .zero)]
+            descriptors = [GainMapGPU(
+                area: .zero,
+                grid: SIMD4(1, 1, 1, 1),
+                placement: SIMD4(1, 1, 0, 0),
+                planes: .zero,
+            )]
             gains = [1]
         }
         guard let mapBuffer = device.makeBuffer(
-            bytes: descriptors, length: descriptors.count * MemoryLayout<GainMapGPU>.stride, options: .storageModeShared,
+            bytes: descriptors, length: descriptors.count * MemoryLayout<GainMapGPU>.stride,
+            options: .storageModeShared,
         ),
             let gainBuffer = device.makeBuffer(
                 bytes: gains, length: gains.count * MemoryLayout<Float>.stride, options: .storageModeShared,

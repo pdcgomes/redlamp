@@ -1,6 +1,6 @@
 import Foundation
-@testable import RedlampServices
 import Testing
+@testable import RedlampServices
 
 /// DNG OpcodeList2 gain maps (CAM-03).
 struct DNGGainMapTests {
