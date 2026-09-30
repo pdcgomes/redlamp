@@ -12,7 +12,7 @@ enum RawDecoder {
         defer { libraw_close(raw) }
 
         try check(url.withUnsafeFileSystemRepresentation { libraw_open_file(raw, $0) }, url: url)
-        try check(libraw_unpack(raw), url: url)
+        let jpegXL = try unpack(raw, url: url)
 
         let sizes = raw.pointee.sizes
         let width = Int(sizes.width)
@@ -31,7 +31,11 @@ enum RawDecoder {
         let samples: [UInt16]
         let blackLevels: [Float]
 
-        if let rawImage = raw.pointee.rawdata.raw_image, filters != 0 {
+        if let jpegXL {
+            layout = .linearRGB
+            samples = try cropped(jpegXL, to: sizes)
+            blackLevels = (0 ..< 3).map { black + Float(rl_cblack(raw, Int32($0))) }
+        } else if let rawImage = raw.pointee.rawdata.raw_image, filters != 0 {
             let pattern = try cfaPattern(raw, filters: filters)
             layout = .mosaic(pattern)
             var dataMaximum: UInt16 = 0
@@ -123,14 +127,41 @@ enum RawDecoder {
 
     // MARK: - Helpers
 
-    /// A DNG's own ColorMatrix, preferring the D65 calibration (EXIF LightSource 21).
+    /// Unpacks the sensor data into LibRaw, or returns the JPEG XL raw image LibRaw can't read.
+    /// A failed unpack clears everything LibRaw read, so JPEG XL is caught before unpacking.
+    private static func unpack(_ raw: UnsafeMutablePointer<libraw_data_t>, url: URL) throws -> DNGJPEGXL.Image? {
+        if raw.pointee.idata.dng_version != 0, let image = try DNGJPEGXL.decode(url) {
+            return image
+        }
+        try check(libraw_unpack(raw), url: url)
+        return nil
+    }
+
+    /// The JPEG XL image cropped to the ActiveArea LibRaw read.
+    private static func cropped(_ image: DNGJPEGXL.Image, to sizes: libraw_image_sizes_t) throws -> [UInt16] {
+        guard image.width == Int(sizes.raw_width), image.height == Int(sizes.raw_height) else {
+            throw EngineError.decodeFailed("the JPEG XL image size doesn't match the DNG's")
+        }
+        return image.samples.withUnsafeBytes { stored in
+            copyRGB(
+                stored.baseAddress!, channels: 3, width: Int(sizes.width), height: Int(sizes.height),
+                top: Int(sizes.top_margin), left: Int(sizes.left_margin),
+                pitchBytes: image.width * 3 * MemoryLayout<UInt16>.size,
+            )
+        }
+    }
+
+    /// A DNG's own ColorMatrix, preferring the D65 calibration (EXIF LightSource 21), scaled by
+    /// the AnalogBalance gains already applied to the stored values (XYZ → camera = AB · CM).
     /// LibRaw leaves `cam_xyz` empty for some DNGs, notably linear (ProRAW) files.
     private static func dngColorMatrix(_ raw: UnsafeMutablePointer<libraw_data_t>) -> [Double]? {
         let d65: Int32 = 21
         let order: [Int32] = rl_dng_illuminant(raw, 0) == d65 ? [0, 1] : [1, 0]
+        let balance = raw.pointee.color.dng_levels.analogbalance
+        let gains = [balance.0, balance.1, balance.2].map { $0 > 0 ? Double($0) : 1 }
         for index in order {
             let matrix = (0 ..< 3).flatMap { row in
-                (0 ..< 3).map { col in Double(rl_dng_colormatrix(raw, index, Int32(row), Int32(col))) }
+                (0 ..< 3).map { col in gains[row] * Double(rl_dng_colormatrix(raw, index, Int32(row), Int32(col))) }
             }
             if matrix.contains(where: { $0 != 0 }) {
                 return matrix
