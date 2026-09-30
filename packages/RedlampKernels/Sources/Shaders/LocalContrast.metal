@@ -7,7 +7,7 @@ struct LocalContrastParams {
     int4 origin;              // xy source texel of the work area's first texel, z source level
     int4 size;                // xy work area size, z masks' Texture and Clarity in `local`
     int4 place;               // xy work area origin in pyramid texels at the work level, z work level
-    int4 levels;              // xy Texture's fine and coarse pyramid levels, zw Clarity's
+    int4 levels;              // xy Texture's fine and coarse pyramid levels (0 0 for none), zw Clarity's
     float4 luma;              // xyz pyramid RGB to luminance, w floor added before the log
     float4 shape;             // x Texture, y Clarity (slider / 100), z Clarity limit (stops)
 };
@@ -59,8 +59,12 @@ kernel void rl_local_contrast(
     float texture = amounts.x > 0.0f ? amounts.x : 0.5f * amounts.x;
     float clarity = 0.7f * amounts.y;
     float boost = 0.0f;
-    if (texture != 0.0f && p.levels.x < p.levels.y) {
-        boost += texture * (logLumaAt(pyramid, uv, p.levels.x, p.luma) - logLumaAt(pyramid, uv, p.levels.y, p.luma));
+    if (texture != 0.0f && p.levels.x <= p.levels.y && p.levels.y > 0) {
+        // Rendering at or below the band's fine level, the texels themselves are the fine detail:
+        // the smoothed level would lose the octave a downscaled full-resolution result keeps.
+        float fine = p.levels.x <= int(workLevel) ? log2(max(dot(rgb, p.luma.xyz), 0.0f) + p.luma.w)
+                                                  : logLumaAt(pyramid, uv, p.levels.x, p.luma);
+        boost += texture * (fine - logLumaAt(pyramid, uv, p.levels.y, p.luma));
     }
     if (clarity != 0.0f && p.levels.z < p.levels.w) {
         float detail = logLumaAt(pyramid, uv, p.levels.z, p.luma) - logLumaAt(pyramid, uv, p.levels.w, p.luma);

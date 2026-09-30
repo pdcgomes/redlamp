@@ -116,11 +116,16 @@ struct LocalContrastSettings: Hashable {
     }
 
     /// A band's pyramid levels when rendering at `level`: detail finer than the rendered
-    /// texels drops out, as it would when a full-resolution result is downscaled.
-    static func band(_ levels: ClosedRange<Int>, renderedAt level: Int, levelCount: Int) -> ClosedRange<Int>? {
+    /// texels drops out, as it would when a full-resolution result is downscaled. With
+    /// `keepsRendered`, a band reaching the rendered level keeps the texels' own detail (the
+    /// kernel reads them rather than their smoothed level), down to the band's coarse level: a
+    /// downscaled full-resolution result keeps that octave of fine bands such as Texture.
+    static func band(
+        _ levels: ClosedRange<Int>, renderedAt level: Int, levelCount: Int, keepsRendered: Bool = false,
+    ) -> ClosedRange<Int>? {
         let fine = max(levels.lowerBound, level)
         let coarse = min(levels.upperBound, levelCount - 1)
-        return fine < coarse ? fine ... coarse : nil
+        return fine < coarse || (keepsRendered && fine == coarse && level > 0) ? fine ... coarse : nil
     }
 }
 
@@ -421,7 +426,7 @@ final class DetailStage {
     ) {
         let levelCount = session.pyramid.mipmapLevelCount
         let texture = LocalContrastSettings.band(
-            LocalContrastSettings.textureLevels, renderedAt: work.level, levelCount: levelCount,
+            LocalContrastSettings.textureLevels, renderedAt: work.level, levelCount: levelCount, keepsRendered: true,
         )
         let clarity = LocalContrastSettings.band(
             LocalContrastSettings.clarityLevels, renderedAt: work.level, levelCount: levelCount,

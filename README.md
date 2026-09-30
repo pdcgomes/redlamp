@@ -185,6 +185,7 @@ With both side panels in AppKit, most of what remains is Core Animation committi
 - Non-DNG raws use a single-illuminant Adobe-derived matrix (LibRaw's). DNGs interpolate their two calibrations by white balance, but the Temperature and Tint model still converts with one matrix, and DCP profiles (HueSatMap, LookTable) come later in Phase 2.
 - Masks support linear and radial gradients only. Brush, range, and AI masks come in Phases 2 and 3.
 - Local Whites and Blacks are approximated with tonal-region gains.
+- Grain is drawn at display pixels, so the fitted preview shows it about four times stronger than a downscaled export does (tracked with film grain v2, TON-19).
 - The app is not sandboxed yet (required later for the Mac App Store), and there is no iPad or iPhone app yet.
 
 **Fixed in iteration 2:**
