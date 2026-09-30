@@ -151,7 +151,7 @@ These block other rows. Most need the project owner; the ones marked *counsel* n
 | EDT-10 | Publish the sidecar format as a documented schema | Adopt | P2 | S | P1-01 | Accepted (2026-09-30) | In progress: the `.redrecipe` format is published ([docs](../recipes/recipe-format.md), [JSON Schema](../recipes/recipe-format.schema.json)); the sidecar itself not yet | [DT §6](darktable-findings.md#6-edits-presets-styles-and-versioning) |
 | EDT-11 | Lightroom XMP preset import: read `crs:ProcessVersion`, response curves fitted by rendering in both apps, a mapped/approximated/ignored report | Do better | P2 | L | EDT-07 | Proposed | Not started | [DT §6](darktable-findings.md#6-edits-presets-styles-and-versioning) |
 | EDT-12 | Lightroom XMP sidecar import, converting once and never writing Lightroom's XMP | Do better | P4 | L | EDT-11 | Proposed | Not started | [DT §6](darktable-findings.md#6-edits-presets-styles-and-versioning) |
-| EDT-13 | Export processes at full resolution and downscales last | Adopt | P2 | S | — | Proposed | Not started | [DT §6](darktable-findings.md#6-edits-presets-styles-and-versioning) |
+| EDT-13 | Export processes at full resolution and downscales last | Adopt | P2 | S | — | Accepted (2026-09-30) | Done (683f2a8): StillRequest.purpose; exports below full size develop at full resolution in linear light, then MPS Lanczos, then encode; previews keep the direct path. A 1000 px export matches the area-averaged full render within 1.5 levels | [DT §6](darktable-findings.md#6-edits-presets-styles-and-versioning) |
 | EDT-14 | Embed the edit recipe in exported files | Adopt | P4 | S | EDT-10 | Proposed | Not started | [DT §6](darktable-findings.md#6-edits-presets-styles-and-versioning) |
 
 ---
