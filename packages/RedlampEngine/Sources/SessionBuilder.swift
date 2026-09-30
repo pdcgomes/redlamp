@@ -99,6 +99,18 @@ struct SessionBuilder {
             SIMD3<Float>(Float(halves[index * 4]), Float(halves[index * 4 + 1]), Float(halves[index * 4 + 2]))
         }
         let analysis = AnalysisImage(width: analysisWidth, height: analysisHeight, pixels: pixels)
+        let airlight = Haze.airlight(analysis)
+        guard let hazeCommands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
+        hazeCommands.label = "Haze map"
+        let hazeMap = try Haze.encodeMap(
+            pyramid: pyramid, airlight: airlight, device: device, kernels: kernels, commands: hazeCommands,
+        )
+        // Renders run on another queue, so the map must be finished before the session is.
+        hazeCommands.commit()
+        hazeCommands.waitUntilCompleted()
+        if let error = hazeCommands.error {
+            throw EngineError.renderFailed(error.localizedDescription)
+        }
         let colorModel = decoded.isRaw ? decoded.xyzToCamera.flatMap(CameraColorModel.init(xyzToCameraRowMajor:)) : nil
         var info = decoded.info
         info.asShotWhiteBalance = colorModel?.whiteBalance(forMultipliers: decoded.asShotMultipliers)
@@ -112,6 +124,8 @@ struct SessionBuilder {
             analysis: analysis,
             noise: noise,
             repairedPixels: Int(repairedCount.contents().load(as: UInt32.self)),
+            airlight: airlight,
+            hazeMap: hazeMap,
         )
     }
 

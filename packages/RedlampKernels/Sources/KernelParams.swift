@@ -137,6 +137,7 @@ public struct DevelopParams {
     public var denoised = SIMD4<Float>(0, 0, 0, 0)
     public var lookTable = SIMD4<Float>(0, 2, 0, 0)
     public var recipe = SIMD4<Float>(0, 0, 0, 0)
+    public var haze = SIMD4<Float>(0, 0, 0, 0)
 
     public init() {}
 
@@ -225,6 +226,17 @@ public struct DetailLocalParams {
     }
 }
 
+public struct HazeParams {
+    public var size: SIMD4<Int32>
+    public var mode = SIMD4<Int32>(0, 0, 0, 0)
+    public var airlight: SIMD4<Float>
+
+    public init(size: SIMD4<Int32>, airlight: SIMD4<Float>) {
+        self.size = size
+        self.airlight = airlight
+    }
+}
+
 public struct MaskComponentGPU: Sendable {
     public var geometry: SIMD4<Float>
     public var shape: SIMD4<Float>
@@ -243,11 +255,13 @@ public struct MaskLayerGPU: Sendable {
     public var color: SIMD4<Float>
     public var tone: SIMD4<Float>
     public var tone2: SIMD4<Float>
+    public var detail: SIMD4<Float>
 
-    public init(color: SIMD4<Float>, tone: SIMD4<Float>, tone2: SIMD4<Float>) {
+    public init(color: SIMD4<Float>, tone: SIMD4<Float>, tone2: SIMD4<Float>, detail: SIMD4<Float> = .zero) {
         self.color = color
         self.tone = tone
         self.tone2 = tone2
+        self.detail = detail
     }
 
     public static let empty = MaskLayerGPU(color: .zero, tone: .zero, tone2: .zero)

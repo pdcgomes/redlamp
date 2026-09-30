@@ -210,6 +210,7 @@ kernel void rl_develop(
     constant MaskLayerGPU *layers [[buffer(3)]],
     constant MaskComponentGPU *components [[buffer(4)]],
     texture3d<half, access::read> lookTable [[texture(3)]],
+    texture2d<float, access::sample> hazeMap [[texture(4)]],
     uint2 gid [[thread_position_in_grid]])
 {
     uint width = uint(p.outputSize.x);
@@ -235,14 +236,32 @@ kernel void rl_develop(
     float4 localColor = 0.0f;
     float4 localTone = 0.0f;
     float2 localTone2 = 0.0f;
+    float localDehaze = 0.0f;
     for (int i = 0; i < layerCount; i++) {
         coverage[i] = evaluateMaskLayer(layers[i], components, maskPosition);
         localColor += coverage[i] * layers[i].color;
         localTone += coverage[i] * layers[i].tone;
         localTone2 += coverage[i] * layers[i].tone2.xy;
+        localDehaze += coverage[i] * layers[i].detail.x;
     }
 
     // Scene-referred: white balance (global and local), camera matrix, exposure.
+    // Dehaze, in the camera RGB the haze map was measured in: invert I = J t + A (1 - t), with the
+    // transmission t from the dark channel prior; negative values add a neutral veil a little
+    // darker than the airlight.
+    float dehaze = p.haze.w + localDehaze;
+    if (dehaze != 0.0f) {
+        constexpr sampler hazeSampler(coord::normalized, filter::linear, address::clamp_to_edge);
+        float3 airlight = p.haze.xyz;
+        if (dehaze > 0.0f) {
+            float dark = hazeMap.sample(hazeSampler, sourceUV).r;
+            float transmission = max(1.0f - 0.95f * min(dehaze, 1.0f) * dark, 0.2f);
+            camera = max((camera - airlight) / transmission + airlight, 0.0f);
+        } else {
+            float veil = 0.8f * (airlight.r + airlight.g + airlight.b) / 3.0f;
+            camera += (veil - camera) * (0.3f * min(-dehaze, 1.0f));
+        }
+    }
     camera *= p.wbRatio.xyz;
     camera *= float3(exp2(localColor.x * 0.6f), exp2(-localColor.y * 0.4f), exp2(-localColor.x * 0.6f));
     float3 scene = max(mul3(p.camToWork0, p.camToWork1, p.camToWork2, camera), 0.0f);

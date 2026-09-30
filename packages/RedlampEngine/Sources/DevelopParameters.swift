@@ -143,6 +143,7 @@ enum DevelopParameters {
         )
         p.outputSize = SIMD4(Float(outputSize.width), Float(outputSize.height), Float(scale), 0)
         p.region = SIMD4(Float(region.x), Float(region.y), Float(region.width), Float(region.height))
+        p.haze = SIMD4(session.airlight, Float(recipe[.dehaze] / 100))
 
         let (layers, components, overlayIndex) = maskBuffers(
             recipe.masks, aspect: full.aspectRatio, overlay: maskOverlay,
@@ -200,6 +201,7 @@ enum DevelopParameters {
                     value(.localShadows),
                 ),
                 tone2: SIMD4(value(.localWhites), value(.localBlacks), Float(first), Float(components.count - first)),
+                detail: SIMD4(value(.localDehaze), 0, 0, 0),
             ))
         }
         return (layers, components, overlayIndex)

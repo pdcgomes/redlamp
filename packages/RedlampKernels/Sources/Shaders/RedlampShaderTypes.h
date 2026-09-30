@@ -44,6 +44,7 @@ struct DevelopParams {
     float4 denoised;          // area covered by the denoised texture: xy origin, zw size (normalized, source); z 0 = none
     float4 lookTable;         // x Base Look table amount (0 = none, 1 = 100%), y table size
     float4 recipe;            // x color chrome, y chrome FX blue (0...1), z dynamic-range highlight compression
+    float4 haze;              // xyz airlight (pyramid camera RGB), w Dehaze (slider / 100); needs the haze map
 };
 
 // Noise reduction over one work area of the pyramid.
@@ -79,6 +80,7 @@ struct MaskLayerGPU {
     float4 color;             // x temperature, y tint, z hue shift (degrees), w saturation
     float4 tone;              // x exposure (EV), y contrast, z highlights, w shadows
     float4 tone2;             // x whites, y blacks, z first component index, w component count
+    float4 detail;            // x Dehaze (slider / 100)
 };
 
 #endif

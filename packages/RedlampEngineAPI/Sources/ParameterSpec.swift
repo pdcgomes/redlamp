@@ -162,7 +162,6 @@ public extension ParameterID {
 
 public enum ParameterCatalog {
     private static let detail = Availability.planned(phase: "Phase 2")
-    private static let texture = Availability.planned(phase: "Phase 2")
     private static let geometry = Availability.planned(phase: "Phase 2")
 
     public static let all: [ParameterSpec] = [
@@ -189,7 +188,7 @@ public enum ParameterCatalog {
 
         ParameterSpec(.texture, "Texture"),
         ParameterSpec(.clarity, "Clarity"),
-        ParameterSpec(.dehaze, "Dehaze", availability: texture),
+        ParameterSpec(.dehaze, "Dehaze"),
         ParameterSpec(.vibrance, "Vibrance"),
         ParameterSpec(.saturation, "Saturation"),
 
@@ -312,7 +311,7 @@ public enum ParameterCatalog {
             ParameterSpec(.localBlacks, "Blacks"),
             ParameterSpec(.localTexture, "Texture"),
             ParameterSpec(.localClarity, "Clarity"),
-            ParameterSpec(.localDehaze, "Dehaze", availability: texture),
+            ParameterSpec(.localDehaze, "Dehaze"),
             ParameterSpec(
                 .localHue,
                 "Hue",

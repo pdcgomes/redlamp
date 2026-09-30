@@ -26,6 +26,8 @@ public final class KernelLibrary: @unchecked Sendable {
     public let sharpenApply: any MTLComputePipelineState
     public let localContrast: any MTLComputePipelineState
     public let detailLocal: any MTLComputePipelineState
+    public let hazeDark: any MTLComputePipelineState
+    public let hazeFilter: any MTLComputePipelineState
 
     public init(device: any MTLDevice) throws {
         self.device = device
@@ -58,6 +60,8 @@ public final class KernelLibrary: @unchecked Sendable {
         sharpenApply = try pipeline("rl_sharpen_apply")
         localContrast = try pipeline("rl_local_contrast")
         detailLocal = try pipeline("rl_detail_local")
+        hazeDark = try pipeline("rl_haze_dark")
+        hazeFilter = try pipeline("rl_haze_filter")
     }
 }
 

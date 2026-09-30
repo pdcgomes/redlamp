@@ -29,6 +29,9 @@ final class ImageSession: @unchecked Sendable {
     let sensor: SensorKind
     /// Hot photosites replaced before demosaicing.
     let repairedPixels: Int
+    /// Dehaze's airlight and haze map (see `Haze`), in the pyramid's camera RGB.
+    let airlight: SIMD3<Float>
+    let hazeMap: any MTLTexture
 
     init(
         info: ImageInfo,
@@ -39,8 +42,12 @@ final class ImageSession: @unchecked Sendable {
         analysis: AnalysisImage,
         noise: NoiseModel,
         repairedPixels: Int,
+        airlight: SIMD3<Float>,
+        hazeMap: any MTLTexture,
     ) {
         self.repairedPixels = repairedPixels
+        self.airlight = airlight
+        self.hazeMap = hazeMap
         self.noise = noise.scaled(by: SIMD3<Float>(balanceMultipliers))
         sensor = SensorKind(decoded.layout)
         self.info = info
