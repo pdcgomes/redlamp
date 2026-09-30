@@ -43,8 +43,8 @@ struct CanvasArea: View {
             }
         }
         .overlay(alignment: .top) {
-            if model.lightsOut == 0,
-               model.showBefore || model.previewingPreset != nil || model.eyedropperActive || model.drawingKind != nil {
+            if model.lightsOut == 0, model.showBefore || model.previewingPreset != nil || model.eyedropperActive
+                || model.drawingKind != nil || model.isReadOnly {
                 StatusPill(text: statusText)
                     .padding(.top, 14)
                     .padding(stagePadding)
@@ -129,7 +129,10 @@ struct CanvasArea: View {
         if let preset = model.previewingPreset {
             return "Preview: \(preset.name)"
         }
-        return "Before"
+        if model.showBefore {
+            return "Before"
+        }
+        return "Edited in a newer version of Redlamp  ·  Changes won't be saved"
     }
 }
 

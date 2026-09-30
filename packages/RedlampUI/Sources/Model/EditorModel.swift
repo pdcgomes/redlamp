@@ -27,6 +27,9 @@ public final class EditorModel {
     public private(set) var info: ImageInfo?
     public private(set) var isLoading = false
     public private(set) var errorMessage: String?
+    /// The photo's sidecar was written by a newer Redlamp. Its edit is shown, but changes aren't
+    /// saved: this version would lose settings it doesn't understand.
+    public private(set) var isReadOnly = false
     /// Reading `recipe` observes every change to it. Views observe only what they show —
     /// `value(_:)` for one parameter, or `masks`, `pointCurve`, … — so a slider drag
     /// re-evaluates a single row rather than every panel.
@@ -288,6 +291,7 @@ public final class EditorModel {
         // sets it again before the UI updates.
         info = nil
         errorMessage = nil
+        isReadOnly = false
         eyedropperActive = false
         previewingPreset = nil
         selectedMaskID = nil
@@ -344,6 +348,7 @@ public final class EditorModel {
 
     private func didOpen(_ opened: ImageInfo, sidecar: Sidecar?) {
         info = opened
+        isReadOnly = sidecars.isWrittenByNewerVersion(for: opened.url)
         var loaded = sidecar?.recipe ?? EditRecipe()
         if loaded.whiteBalanceMode == .asShot, let wb = opened.asShotWhiteBalance {
             loaded[.temperature] = wb.temperature
@@ -868,7 +873,7 @@ public final class EditorModel {
         saveTask?.cancel()
         saveTask = nil
         saveDeadline = nil
-        guard let url = selection, info != nil else { return }
+        guard let url = selection, info != nil, !isReadOnly else { return }
         let metadata = items.first { $0.url == url }?.metadata ?? PhotoMetadata()
         let sidecar = Sidecar(recipe: recipe, snapshots: snapshots, metadata: metadata.isEmpty ? nil : metadata)
         let pristine = sidecar.isPristine
