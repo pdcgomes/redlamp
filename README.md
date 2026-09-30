@@ -100,6 +100,14 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] **Fast by design:** masks are evaluated analytically, per pixel, inside the same fused GPU kernel. Up to 16 masks cost well under a millisecond extra at Fit.
 - [x] The **Create New Mask** grid already lists every Lightroom mask type (Subject, Sky, Background, Objects, People, Landscape, Brush, Color, Luminance, and Depth Range). Each shows the phase it arrives in.
 
+**Focus stacking** (a separate Stack workspace)
+- [x] **Stacks are found for you:** runs of frames with the same camera settings a moment apart, whose sharp region moves from frame to frame, get a "Focus stack detected: N frames" banner with **Merge**. Bursts, time-lapses and pans aren't offered.
+- [x] **The result develops like a raw.** Frames are stacked as demosaiced camera RGB before any edit, so every Develop slider, white balance included, works on it. The stack is a small `.redlampstack` document beside the frames; the merged pixels are cached and rebuilt when needed.
+- [x] Alignment follows focus breathing, rotation and shift, brightness is matched frame to frame, and a depth map records which frame is sharpest where.
+- [x] **Auto, Smooth and Detail:** Auto takes tone and color from the depth map and fine detail from the sharpest frames near it; Smooth blends between frames for clean surfaces; Detail keeps the sharpest detail from anywhere, for hair and bristles.
+- [x] **The Stack workspace:** leave frames out, switch methods (each merge is cached), view the depth map, and **retouch** by painting the frame under the cursor, a chosen frame or another method's result over the merge.
+- [x] One frame is in memory at a time, and `redlamp stack` does the same from the command line.
+
 **Workspace**
 - [x] A Lightroom-style layout. On the left: Navigator, Recipes, Snapshots, and History. In the center: the photo, with the filmstrip below. On the right: histogram, tool strip, and the Develop panels in Lightroom's order.
 - [x] **Sliders:** click to jump, drag to adjust, Shift-drag for fine control, double-click to reset, and click the value to type one in. Option-dragging a tone slider shows clipping, as in Lightroom.
@@ -134,7 +142,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 
 ### In progress
 
-- **Focus stacking:** the engine decodes, aligns (ECC, for focus breathing, rotation and shift) and warps the frames, solves a depth map, and fuses them with Auto, Smooth and Detail strategies, one frame at a time; the merge develops like any raw. `redlamp stack` runs it from the command line (a 25-frame R5 II stack takes about 24 s). The app's UI is next.
+- **Focus stacking:** lens corrections before alignment, halo handling, vendor focus-bracketing tags for detection, and baking a stack to DNG.
 - **Panels laid out but not yet rendering** (shown dimmed, with the phase they arrive in): Moiré and Defringe in masks, and the Lens Corrections, Transform, and Calibration panels. The Crop, Healing, and Red Eye tools show what is coming and when.
 
 ### Measured performance
@@ -149,6 +157,9 @@ Measured on an Apple M1 Ultra with a Release build.
 | Interactive render at 1:1 (full 26 MP frame) | ~13 ms |
 | Full-resolution export render (24–26 MP) | ~45 ms |
 | Full-resolution export render with noise reduction (24 MP, tiled) | ~100 ms |
+| Focus stack of 25 × 17 MP Canon CR3 frames (decode, align, depth map, fuse) | ~8 s |
+| Focus stack of 109 × 4 MP JPEG frames | ~15 s |
+| Reopen a merged focus stack from its cache | ~0.1 s |
 | Detail stage on a 1:1 region (about 10 MP of pyramid texels), GPU time: noise reduction, Texture and Clarity | ~5 ms, ~1 ms |
 | Detail stage for a 2560 × 1600 view at 1:1 of a 24 MP frame, GPU time: noise reduction alone; default sharpening, first render; while dragging Radius; while dragging Amount, Detail, Masking or a noise slider (cached analysis) | ~1.9 ms, ~7.2 ms, ~5.5 ms, ~2.2 ms |
 
@@ -335,6 +346,8 @@ mise run render -- info ~/Pictures/DSC01234.ARW
 mise run render -- render ~/Pictures/DSC01234.ARW -o out.jpg --size 2048 \
   --set exposure=0.5 --set shadows=30 --wb auto --base-look vivid
 ```
+
+`redlamp stack <frames or folder> -o out.jpg [--strategy auto|smooth|detail] [--depth depth.png]` merges a focus stack; `--save stack.redlampstack` writes a stack document instead, which `render` and the app open like any photo, and `--detect <folder>` lists the stacks the library would suggest.
 
 `redlamp recipe …` holds the look-development tools: list, lint, render, contact sheets, `.cube` and HaldCLUT import, export, style fingerprints and fitting, golden renders, and rebuilding the bundled looks. `redlamp mcp` serves the engine and recipe library as an MCP server for agents. See [look development](docs/recipes/look-development.md) and the [agent recipe studio](docs/recipes/agent-studio.md).
 
