@@ -319,6 +319,15 @@ A [study of darktable](docs/research/darktable-findings.md), the most complete o
 
 ## Getting started
 
+### Install with Homebrew
+
+```bash
+brew tap pdcgomes/redlamp https://github.com/pdcgomes/redlamp
+brew install --cask redlamp
+```
+
+This installs the latest signed and notarized release of Redlamp.app and puts the `redlamp` CLI on your `PATH`. `brew upgrade` picks up new releases.
+
 ### Requirements
 
 - An Apple Silicon Mac running **macOS 26** or later
@@ -367,8 +376,19 @@ mise run render -- render ~/Pictures/DSC01234.ARW -o out.jpg --size 2048 \
 | `mise run render` | Build and run the `redlamp` CLI |
 | `mise run screenshots` | Regenerate the README screenshots of the app and the harness, on temporary copies of the fixtures (needs Screen Recording permission, the fixtures and the look-development set) |
 | `mise run harness` (`h`) | Build and launch the UI component harness |
+| `mise run release` | Build, sign, notarize and publish the version in `Version.xcconfig` as a GitHub release (see [Releasing](#releasing)). `DRY_RUN=1` stops after signing |
 | `scripts/perf-sweep.sh [Debug\|Release] [parameter] [script]` | Drag a slider for 3 s and report main-thread smoothness. `PROFILE=1` adds a main-thread profile; `PANELS=swiftui` measures the SwiftUI panels |
 | `scripts/harness-capture.sh <scene> <png> [mode]` | Screenshot a harness scene; with `side` mode, `swift scripts/parity-diff.swift <png>` scores it and `scripts/parity-rows.swift` compares it row by row |
+
+### Releasing
+
+Releases are built and notarized on a Mac with the team's Developer ID Application certificate in the keychain. Store notarization credentials once, using an [app-specific password](https://support.apple.com/102654):
+
+```bash
+xcrun notarytool store-credentials redlamp-notary --apple-id <apple-id> --team-id 3JP75Z3F98
+```
+
+Then bump `MARKETING_VERSION` in `Version.xcconfig`, commit and push to `main`, and run `mise run release`. It builds the app and CLI, puts the CLI in `Redlamp.app/Contents/Helpers`, signs, notarizes and staples, then tags `v<version>` and publishes `Redlamp-<version>.zip` as a GitHub release. The **Update cask** workflow then points `Casks/redlamp.rb` at the new release, so `brew upgrade` finds it.
 
 ## Component harness
 
