@@ -147,6 +147,7 @@ struct StackWorkspaceView: View {
         HStack(spacing: 12) {
             Text("Paint from")
                 .foregroundStyle(Theme.tertiaryLabel)
+                .fixedSize()
             Picker("Source", selection: $workspace.brushSource) {
                 Text("Frame under cursor").tag(StackWorkspaceModel.BrushSource.underCursor)
                 Divider()
@@ -159,16 +160,27 @@ struct StackWorkspaceView: View {
                 }
             }
             .labelsHidden()
-            .frame(width: 190)
+            .frame(width: 180)
+            .help("Or click a frame below to paint from it")
             Text("Size")
                 .foregroundStyle(Theme.tertiaryLabel)
+                .fixedSize()
             Slider(value: $workspace.brushRadius, in: 0.005 ... 0.1)
-                .frame(width: 140)
-            Text("Click a frame below to paint from it")
+                .frame(width: 110)
+            Text("Hardness")
                 .foregroundStyle(Theme.tertiaryLabel)
+                .fixedSize()
+            Slider(value: $workspace.brushHardness, in: 0 ... 1)
+                .frame(width: 80)
+            Text("Opacity")
+                .foregroundStyle(Theme.tertiaryLabel)
+                .fixedSize()
+            Slider(value: $workspace.brushOpacity, in: 0.1 ... 1)
+                .frame(width: 80)
             Spacer()
             Text(workspace.strokes.count == 1 ? "1 stroke" : "\(workspace.strokes.count) strokes")
                 .foregroundStyle(Theme.tertiaryLabel)
+                .fixedSize()
             Button("Undo") { Task { await workspace.undoStroke() } }
                 .keyboardShortcut("z")
                 .disabled(workspace.strokes.isEmpty || workspace.isMerging)

@@ -36,6 +36,9 @@ public final class StackWorkspaceModel: Identifiable {
     public var brushSource = BrushSource.underCursor
     /// Fraction of the image's long edge.
     public var brushRadius = 0.02
+    /// 1: full strength to the edge; 0: fades from the centre.
+    public var brushHardness = 0.5
+    public var brushOpacity = 1.0
 
     @ObservationIgnored private let engine: any EditingEngine
     /// What `preview` was merged from.
@@ -152,7 +155,8 @@ public final class StackWorkspaceModel: Identifiable {
             source = .strategy(other)
         }
         strokes.append(FocusStackStroke(
-            source: source, radius: brushRadius, points: points.map { SIMD2(Double($0.x), Double($0.y)) },
+            source: source, radius: brushRadius, hardness: brushHardness, opacity: brushOpacity,
+            points: points.map { SIMD2(Double($0.x), Double($0.y)) },
         ))
         await merge()
     }
