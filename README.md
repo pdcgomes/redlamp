@@ -61,7 +61,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] A single fused Metal kernel applies every per-pixel adjustment. Frames are delivered as IOSurfaces, so pixels are never copied between engine and UI.
 - [x] Latest-wins render scheduling: a burst of slider events collapses to the newest one.
 - [x] Rendering stays off the main thread while you drag a slider. Frames go straight to the canvas, which a dedicated display-link thread presents, and each view observes only the values it shows.
-- [x] AppKit Develop panels (Basic, Tone Curve and the histogram so far) that match the SwiftUI originals pixel for pixel, and a component harness for building and reviewing them (see [Component harness](#component-harness)).
+- [x] Both side panels are AppKit: the histogram, tool strip and every Develop and Masking panel on the right, and the Navigator, Presets, Snapshots and History on the left. They match the SwiftUI originals pixel for pixel, and a component harness is used to build and review them (see [Component harness](#component-harness)).
 - [x] Temperature and tint use a proper camera white-balance model (Robertson's method with the camera's color matrix). As Shot, Auto, and the illuminant presets all work.
 
 **Develop adjustments that render**
@@ -119,7 +119,7 @@ Dragging a slider at 120 events a second (`scripts/perf-sweep.sh`), with every p
 | Slowest 5% of iterations | 157 ms | ~8 ms | ~5 ms |
 | Slowest 1% of iterations | — | ~13 ms | ~8 ms |
 
-The AppKit panels are Basic, Tone Curve and the histogram. Most of what remains is Core Animation committing the redrawn layers and the engine's frames arriving; SwiftUI is down to about 2% of the main thread.
+With both side panels in AppKit, most of what remains is Core Animation committing the redrawn layers and the engine's frames arriving; SwiftUI is down to about 2% of the main thread.
 
 ### Known limitations
 
@@ -364,7 +364,7 @@ flowchart LR
 
 **Apps** (`apps/`): `RedlampMac`, the macOS app and composition root; `RedlampCLI`, the headless `redlamp` tool; and `RedlampHarness`, the UI component harness (see [Component harness](#component-harness)).
 
-**The panels are AppKit, drawn to match SwiftUI pixel for pixel.** SwiftUI re-walks its whole view tree on every change, however small, so dragging one slider in a window full of panels kept the main thread busy. The Develop panels are built from `RedlampDesign`'s AppKit components instead: each control observes only the values it shows (a small `Tracker` over Swift Observation) and redraws only itself. Native controls such as menus and segmented pickers stay SwiftUI, each hosted on its own. Panels not yet ported are hosted one per view, and the SwiftUI originals are kept as the reference the ports are checked against.
+**The panels are AppKit, drawn to match SwiftUI pixel for pixel.** SwiftUI re-walks its whole view tree on every change, however small, so dragging one slider in a window full of panels kept the main thread busy. The Develop panels are built from `RedlampDesign`'s AppKit components instead: each control observes only the values it shows (a small `Tracker` over Swift Observation) and redraws only itself. Native controls such as menus and segmented pickers stay SwiftUI, each hosted on its own. The SwiftUI originals are kept as the reference the ports are checked against (`--swiftui-panels` runs the app with them).
 
 **Engineering principles:**
 - **Swift for everything on the CPU side, Metal for every pixel.** C and C++ appear only in vendored libraries.
