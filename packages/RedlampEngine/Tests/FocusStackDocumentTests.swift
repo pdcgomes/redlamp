@@ -85,6 +85,76 @@ extension FocusStackTests {
         #expect(try pixels(detail) != pixels(image))
     }
 
+    @Test func `a stroke blends its source in with a soft edge`() {
+        let (width, height) = (100, 50)
+        let zero = Float16(0).bitPattern
+        let one = Float16(1).bitPattern
+        var samples = [UInt16](repeating: zero, count: width * height * 4)
+        let source = [UInt16](repeating: one, count: width * height * 4)
+        // A dot of radius 20 px (0.2 of the long edge) at the centre, full strength to half radius.
+        let stroke = FocusStackStroke(source: .strategy(.detail), radius: 0.2, hardness: 0.5, points: [SIMD2(0.5, 0.5)])
+        FocusStackCache.paint(
+            stroke, from: source, into: &samples, size: PixelSize(width: width, height: height), orientation: 0,
+        )
+        func red(_ x: Int, _ y: Int) -> Float {
+            Float(Float16(bitPattern: samples[(y * width + x) * 4]))
+        }
+        #expect(red(50, 25) == 1 && red(55, 25) == 1)
+        #expect(red(65, 25) > 0.05 && red(65, 25) < 0.95)
+        #expect(red(75, 25) == 0 && red(50, 8) > 0 && red(50, 2) == 0)
+        // Rotated 90° clockwise, the image's top-left is the sensor's bottom-left.
+        var rotated = [UInt16](repeating: zero, count: width * height * 4)
+        let corner = FocusStackStroke(source: .strategy(.detail), radius: 0.05, hardness: 1, points: [SIMD2(0, 0)])
+        FocusStackCache.paint(
+            corner, from: source, into: &rotated, size: PixelSize(width: width, height: height), orientation: 6,
+        )
+        #expect(Float(Float16(bitPattern: rotated[((height - 1) * width) * 4])) == 1)
+    }
+
+    /// Strokes from a frame and from another method paint exactly those pixels, and only under
+    /// the stroke.
+    @Test func `retouching paints a frame or another method over the merge`() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let (width, height) = (240, 160)
+        let frames = syntheticStack(frames: 3, width: width, height: height) { x, _ in x < width / 2 ? 0 : 2 }
+        let urls = try frames.enumerated().map { index, frame in
+            let url = folder.appendingPathComponent("frame\(index).png")
+            try writePNG(frame, to: url)
+            return url
+        }
+        let documentURL = folder.appendingPathComponent("stack.redlampstack")
+        var document = FocusStackDocument(frames: urls, at: documentURL)
+        try document.write(to: documentURL)
+        let engine = try RedlampEngine(stillTile: 2048, stackCache: folder.appendingPathComponent("cache"))
+        let base = try engine.stacks.stack(at: documentURL)
+        let smooth = try engine.stacks.merged(urls, strategy: .smooth, documentURL: documentURL)
+
+        document.retouch = [
+            FocusStackStroke(source: .frame("frame2.png"), radius: 0.1, hardness: 1, points: [SIMD2(0.25, 0.5)]),
+            FocusStackStroke(source: .strategy(.smooth), radius: 0.1, hardness: 1, points: [SIMD2(0.75, 0.5)]),
+        ]
+        try document.write(to: documentURL)
+        let retouched = try engine.stacks.stack(at: documentURL)
+        let w = retouched.decoded.width
+        func pixel(_ stack: [UInt16], _ x: Int, _ y: Int) -> UInt16 {
+            stack[(y * w + x) * 4 + 1]
+        }
+        let (h, cy) = (retouched.decoded.height, retouched.decoded.height / 2)
+        #expect(retouched.decoded.width == base.decoded.width && h == base.decoded.height)
+        // Under the frame stroke: frame 2 (blurred on the left) replaces the sharp merge.
+        #expect(pixel(retouched.decoded.samples, w / 4, cy) != pixel(base.decoded.samples, w / 4, cy))
+        // Under the method stroke: Smooth's pixel exactly.
+        #expect(pixel(retouched.decoded.samples, 3 * w / 4, cy) == pixel(smooth.decoded.samples, 3 * w / 4, cy))
+        // Away from both: untouched.
+        #expect(pixel(retouched.decoded.samples, w / 2, 5) == pixel(base.decoded.samples, w / 2, 5))
+        // A second engine reads the retouched result from the cache.
+        let reopened = try RedlampEngine(stillTile: 2048, stackCache: folder.appendingPathComponent("cache"))
+            .stacks.stack(at: documentURL)
+        #expect(reopened.decoded.samples == retouched.decoded.samples)
+    }
+
     /// The RGBA8 bytes of an image.
     func pixels(_ image: CGImage) throws -> [UInt8] {
         var bytes = [UInt8](repeating: 0, count: image.width * image.height * 4)

@@ -11,6 +11,10 @@ struct StackWorkspaceView: View {
         VStack(spacing: 0) {
             header
             Divider()
+            if workspace.isRetouching {
+                brushBar
+                Divider()
+            }
             result
             Divider()
             frameStrip
@@ -45,6 +49,12 @@ struct StackWorkspaceView: View {
             .help(
                 "Auto: detail from the sharpest frames near the depth map · Smooth: clean surfaces · Detail: hair and bristles, more halos",
             )
+            Toggle(isOn: $workspace.isRetouching) {
+                Label("Retouch", systemImage: "paintbrush.pointed")
+            }
+            .toggleStyle(.button)
+            .disabled(workspace.preview == nil)
+            .help("Paint a frame, or another method's result, over the merge")
             Toggle("Depth", isOn: $workspace.showsDepth)
                 .toggleStyle(.button)
                 .disabled(workspace.preview == nil)
@@ -67,6 +77,11 @@ struct StackWorkspaceView: View {
                     .resizable()
                     .interpolation(.high)
                     .scaledToFit()
+                    .overlay {
+                        if workspace.isRetouching, !workspace.isMerging {
+                            RetouchCanvas(workspace: workspace)
+                        }
+                    }
                     .padding(16)
                     .opacity(workspace.isMerging ? 0.4 : 1)
             }
@@ -110,8 +125,15 @@ struct StackWorkspaceView: View {
                         thumbnail: workspace.thumbnails[frame],
                         isIncluded: !workspace.excluded.contains(frame),
                         isReference: frame == workspace.referenceFrame,
+                        isSource: workspace.isRetouching && workspace.brushSource == .frame(frame),
                     )
-                    .onTapGesture { workspace.toggle(frame) }
+                    .onTapGesture {
+                        if workspace.isRetouching {
+                            workspace.brushSource = .frame(frame)
+                        } else {
+                            workspace.toggle(frame)
+                        }
+                    }
                     .task { await workspace.loadThumbnail(for: frame) }
                 }
             }
@@ -119,6 +141,43 @@ struct StackWorkspaceView: View {
         }
         .frame(height: 96)
         .disabled(workspace.isMerging)
+    }
+
+    private var brushBar: some View {
+        HStack(spacing: 12) {
+            Text("Paint from")
+                .foregroundStyle(Theme.tertiaryLabel)
+            Picker("Source", selection: $workspace.brushSource) {
+                Text("Frame under cursor").tag(StackWorkspaceModel.BrushSource.underCursor)
+                Divider()
+                ForEach(FocusStackStrategy.allCases.filter { $0 != workspace.strategy }, id: \.self) { method in
+                    Text("\(method.rawValue.capitalized) merge").tag(StackWorkspaceModel.BrushSource.strategy(method))
+                }
+                if case let .frame(frame) = workspace.brushSource {
+                    Divider()
+                    Text(frame.lastPathComponent).tag(workspace.brushSource)
+                }
+            }
+            .labelsHidden()
+            .frame(width: 190)
+            Text("Size")
+                .foregroundStyle(Theme.tertiaryLabel)
+            Slider(value: $workspace.brushRadius, in: 0.005 ... 0.1)
+                .frame(width: 140)
+            Text("Click a frame below to paint from it")
+                .foregroundStyle(Theme.tertiaryLabel)
+            Spacer()
+            Text(workspace.strokes.count == 1 ? "1 stroke" : "\(workspace.strokes.count) strokes")
+                .foregroundStyle(Theme.tertiaryLabel)
+            Button("Undo") { Task { await workspace.undoStroke() } }
+                .keyboardShortcut("z")
+                .disabled(workspace.strokes.isEmpty || workspace.isMerging)
+            Button("Clear") { Task { await workspace.clearStrokes() } }
+                .disabled(workspace.strokes.isEmpty || workspace.isMerging)
+        }
+        .font(Theme.captionFont)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
     }
 
     private func summary(_ report: FocusStackReport) -> String {
@@ -135,6 +194,7 @@ private struct StackFrameCell: View {
     let thumbnail: CGImage?
     let isIncluded: Bool
     let isReference: Bool
+    let isSource: Bool
 
     var body: some View {
         ZStack {
@@ -153,6 +213,10 @@ private struct StackFrameCell: View {
         }
         .frame(width: 96, height: 70)
         .opacity(isIncluded ? 1 : 0.4)
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .strokeBorder(isSource ? Color.accentColor : .clear, lineWidth: 2),
+        )
         .overlay(alignment: .topLeading) {
             if isReference {
                 Text("R")
@@ -166,5 +230,75 @@ private struct StackFrameCell: View {
             }
         }
         .help("\(frame.lastPathComponent) — click to \(isIncluded ? "leave out" : "include")")
+    }
+}
+
+/// Brush strokes painted over the preview, in the image's own (fitted) frame.
+private struct RetouchCanvas: View {
+    let workspace: StackWorkspaceModel
+    @State private var points: [CGPoint] = []
+    @State private var hover: CGPoint?
+
+    var body: some View {
+        GeometryReader { geometry in
+            let size = geometry.size
+            let width = 2 * workspace.brushRadius * max(size.width, size.height)
+            ZStack(alignment: .topLeading) {
+                Path { path in
+                    path.addLines(points.map { CGPoint(x: $0.x * size.width, y: $0.y * size.height) })
+                    if points.count == 1, let point = points.first {
+                        path.addLine(to: CGPoint(x: point.x * size.width + 0.1, y: point.y * size.height))
+                    }
+                }
+                .stroke(
+                    Color.accentColor.opacity(0.4),
+                    style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round),
+                )
+                if let hover {
+                    Circle()
+                        .strokeBorder(Color.white.opacity(0.8), lineWidth: 1)
+                        .frame(width: width, height: width)
+                        .position(x: hover.x * size.width, y: hover.y * size.height)
+                    if workspace.brushSource == .underCursor, let frame = workspace.frame(at: hover) {
+                        Text(frame.deletingPathExtension().lastPathComponent)
+                            .font(Theme.captionFont)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.black.opacity(0.6)))
+                            .foregroundStyle(Color.white)
+                            .position(x: hover.x * size.width, y: hover.y * size.height - width / 2 - 12)
+                    }
+                }
+            }
+            .frame(width: size.width, height: size.height)
+            .contentShape(Rectangle())
+            .onContinuousHover { phase in
+                if case let .active(location) = phase {
+                    hover = CGPoint(x: location.x / size.width, y: location.y / size.height)
+                } else {
+                    hover = nil
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { drag in
+                        let point = CGPoint(
+                            x: min(max(drag.location.x / size.width, 0), 1),
+                            y: min(max(drag.location.y / size.height, 0), 1),
+                        )
+                        hover = point
+                        if let last = points.last,
+                           hypot(point.x - last.x, point.y - last.y) < workspace.brushRadius / 4 {
+                            return
+                        }
+                        points.append(point)
+                    }
+                    .onEnded { _ in
+                        let stroke = points
+                        points = []
+                        Task { await workspace.addStroke(stroke) }
+                    },
+            )
+        }
     }
 }

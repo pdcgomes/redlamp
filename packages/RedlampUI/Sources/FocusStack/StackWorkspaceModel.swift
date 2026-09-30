@@ -23,9 +23,37 @@ public final class StackWorkspaceModel: Identifiable {
     public private(set) var errorMessage: String?
     public private(set) var thumbnails: [URL: CGImage] = [:]
 
+    /// Where a retouch stroke takes its pixels from.
+    public enum BrushSource: Hashable {
+        /// The frame sharpest where the stroke starts, from the depth map.
+        case underCursor
+        case frame(URL)
+        case strategy(FocusStackStrategy)
+    }
+
+    public private(set) var strokes: [FocusStackStroke] = []
+    public var isRetouching = false
+    public var brushSource = BrushSource.underCursor
+    /// Fraction of the image's long edge.
+    public var brushRadius = 0.02
+
     @ObservationIgnored private let engine: any EditingEngine
     /// What `preview` was merged from.
-    @ObservationIgnored private var merged: (strategy: FocusStackStrategy, excluded: Set<URL>)?
+    @ObservationIgnored private var merged: Settings?
+    /// The preview's depth map, for "frame under cursor".
+    @ObservationIgnored private var depthMap: DepthMap?
+
+    private struct Settings: Equatable {
+        var strategy: FocusStackStrategy
+        var excluded: Set<URL>
+        var strokes: [FocusStackStroke]
+    }
+
+    private struct DepthMap {
+        let width: Int
+        let height: Int
+        let bytes: [UInt8]
+    }
 
     init(documentURL: URL, engine: any EditingEngine) {
         self.documentURL = documentURL
@@ -37,6 +65,7 @@ public final class StackWorkspaceModel: Identifiable {
                 $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
             }
             strategy = document.strategy
+            strokes = document.retouch ?? []
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -48,8 +77,7 @@ public final class StackWorkspaceModel: Identifiable {
 
     /// Whether the settings differ from what the preview shows.
     public var hasChanges: Bool {
-        guard let merged else { return true }
-        return merged.strategy != strategy || merged.excluded != excluded
+        merged != Settings(strategy: strategy, excluded: excluded, strokes: strokes)
     }
 
     public var isMerging: Bool {
@@ -74,25 +102,88 @@ public final class StackWorkspaceModel: Identifiable {
     /// Saves the document and merges it, or reads the merge from the cache.
     public func merge() async {
         guard !isMerging else { return }
-        let settings = (strategy: strategy, excluded: excluded)
+        let settings = Settings(strategy: strategy, excluded: excluded, strokes: strokes)
         errorMessage = nil
         progress = 0
         defer { progress = nil }
         do {
-            try FocusStackDocument(
+            var document = FocusStackDocument(
                 frames: included, excluded: frames.filter(excluded.contains), strategy: strategy, at: documentURL,
-            ).write(to: documentURL)
-            preview = try await engine.focusStack(at: documentURL, maxLongEdge: Self.previewLongEdge) { value in
+            )
+            document.retouch = strokes.isEmpty ? nil : strokes
+            try document.write(to: documentURL)
+            let preview = try await engine.focusStack(at: documentURL, maxLongEdge: Self.previewLongEdge) { value in
                 Task { @MainActor [weak self] in
                     if self?.progress != nil {
                         self?.progress = value
                     }
                 }
             }
+            self.preview = preview
+            depthMap = Self.depthMap(preview.depth)
             merged = settings
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    // MARK: - Retouching
+
+    /// The frame sharpest at `point` (oriented, normalised), from the preview's depth map.
+    public func frame(at point: CGPoint) -> URL? {
+        guard let depth = depthMap, !included.isEmpty else { return nil }
+        let x = min(max(Int(point.x * CGFloat(depth.width)), 0), depth.width - 1)
+        let y = min(max(Int(point.y * CGFloat(depth.height)), 0), depth.height - 1)
+        let value = Double(depth.bytes[y * depth.width + x]) / 255
+        return included[Int((value * Double(included.count - 1)).rounded())]
+    }
+
+    /// Adds a stroke along `points` (oriented, normalised) from the brush's source, and applies it.
+    public func addStroke(_ points: [CGPoint]) async {
+        guard let first = points.first, !isMerging else { return }
+        let source: FocusStackStroke.Source
+        switch brushSource {
+        case .underCursor:
+            guard let frame = frame(at: first) else { return }
+            source = .frame(relativePath(frame))
+        case let .frame(frame):
+            source = .frame(relativePath(frame))
+        case let .strategy(other):
+            source = .strategy(other)
+        }
+        strokes.append(FocusStackStroke(
+            source: source, radius: brushRadius, points: points.map { SIMD2(Double($0.x), Double($0.y)) },
+        ))
+        await merge()
+    }
+
+    public func undoStroke() async {
+        guard !strokes.isEmpty else { return }
+        strokes.removeLast()
+        await merge()
+    }
+
+    public func clearStrokes() async {
+        guard !strokes.isEmpty else { return }
+        strokes.removeAll()
+        await merge()
+    }
+
+    /// A frame's path as the document stores it.
+    private func relativePath(_ frame: URL) -> String {
+        FocusStackDocument(frames: [frame], at: documentURL).frames[0]
+    }
+
+    private static func depthMap(_ image: CGImage) -> DepthMap? {
+        var bytes = [UInt8](repeating: 0, count: image.width * image.height)
+        guard let context = CGContext(
+            data: &bytes, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: image.width,
+            space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue,
+        ) else {
+            return nil
+        }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        return DepthMap(width: image.width, height: image.height, bytes: bytes)
     }
 
     public func loadThumbnail(for frame: URL) async {

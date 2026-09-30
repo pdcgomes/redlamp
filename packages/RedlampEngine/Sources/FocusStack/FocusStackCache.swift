@@ -21,6 +21,25 @@ struct MergedStack: Sendable {
     let frameHeight: Int
     /// The reference frame, for thumbnails.
     let referenceURL: URL
+    /// Where each frame sits in the reference, for retouching from a frame.
+    let alignment: StackAlignment
+
+    /// The same stack with other pixels.
+    func with(samples: [UInt16]) -> MergedStack {
+        var image = DecodedImage(
+            width: decoded.width, height: decoded.height, layout: decoded.layout, samples: samples,
+            blackLevels: decoded.blackLevels, whiteLevel: decoded.whiteLevel,
+            asShotMultipliers: decoded.asShotMultipliers,
+            cameraToSRGB: decoded.cameraToSRGB, xyzToCamera: decoded.xyzToCamera, orientation: decoded.orientation,
+            baselineExposure: decoded.baselineExposure, info: decoded.info,
+        )
+        image.noiseProfile = decoded.noiseProfile
+        return MergedStack(
+            decoded: image, report: report, depth: depth, depthWidth: depthWidth, depthHeight: depthHeight,
+            crop: crop, frameWidth: frameWidth, frameHeight: frameHeight, referenceURL: referenceURL,
+            alignment: alignment,
+        )
+    }
 }
 
 struct PixelRect: Codable, Hashable, Sendable {
@@ -35,7 +54,7 @@ struct PixelRect: Codable, Hashable, Sendable {
 /// frames' paths, sizes and modification dates and the strategy, so changing any of them merges
 /// again; the cache can be deleted at any time.
 final class FocusStackCache: Sendable {
-    static let formatVersion = 1
+    static let formatVersion = 2
 
     static var defaultRoot: URL {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
@@ -43,8 +62,8 @@ final class FocusStackCache: Sendable {
     }
 
     let root: URL
-    private let device: any MTLDevice
-    private let kernels: KernelLibrary
+    let device: any MTLDevice
+    let kernels: KernelLibrary
 
     init(device: any MTLDevice, kernels: KernelLibrary, root: URL = FocusStackCache.defaultRoot) {
         self.device = device
@@ -61,12 +80,33 @@ final class FocusStackCache: Sendable {
     func stack(at url: URL, progress: (Double) -> Void = { _ in }) throws -> MergedStack {
         let document = try FocusStackDocument.read(url)
         let frames = document.frameURLs(at: url)
-        let folder = try root.appendingPathComponent(Self.key(frames: frames, strategy: document.strategy))
+        let strokes = document.retouch ?? []
+        let folder = try root.appendingPathComponent(Self.key(
+            frames: frames,
+            strategy: document.strategy,
+            retouch: strokes,
+        ))
         if let cached = try? load(folder, documentURL: url) {
             progress(1)
             return cached
         }
-        let merged = try merge(frames, strategy: document.strategy, documentURL: url, progress: progress)
+        let merged = try merged(frames, strategy: document.strategy, documentURL: url, progress: progress)
+        guard !strokes.isEmpty else { return merged }
+        let retouched = try retouch(merged, with: strokes, document: document, at: url)
+        try? save(retouched, to: folder)
+        return retouched
+    }
+
+    /// `frames` merged by `strategy` without retouching, from the cache or merged and cached now.
+    func merged(
+        _ frames: [URL], strategy: FocusStackStrategy, documentURL: URL, progress: (Double) -> Void = { _ in },
+    ) throws -> MergedStack {
+        let folder = try root.appendingPathComponent(Self.key(frames: frames, strategy: strategy))
+        if let cached = try? load(folder, documentURL: documentURL) {
+            progress(1)
+            return cached
+        }
+        let merged = try merge(frames, strategy: strategy, documentURL: documentURL, progress: progress)
         try? save(merged, to: folder)
         return merged
     }
@@ -85,8 +125,13 @@ final class FocusStackCache: Sendable {
         return frames.isEmpty ? nil : frames[frames.count / 2]
     }
 
-    static func key(frames: [URL], strategy: FocusStackStrategy) throws -> String {
+    static func key(frames: [URL], strategy: FocusStackStrategy, retouch: [FocusStackStroke] = []) throws -> String {
         var description = "v\(formatVersion) \(strategy.rawValue)"
+        if !retouch.isEmpty {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .sortedKeys
+            try description += " " + (String(bytes: encoder.encode(retouch), encoding: .utf8) ?? "")
+        }
         for frame in frames {
             let values = try frame.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
             let modified = values.contentModificationDate?.timeIntervalSince1970 ?? 0
@@ -135,7 +180,7 @@ final class FocusStackCache: Sendable {
         return MergedStack(
             decoded: decoded, report: report, depth: result.depth.depth, depthWidth: result.depth.width,
             depthHeight: result.depth.height, crop: crop, frameWidth: result.fused.width,
-            frameHeight: result.fused.height, referenceURL: urls[alignment.reference],
+            frameHeight: result.fused.height, referenceURL: urls[alignment.reference], alignment: alignment,
         )
     }
 
@@ -202,7 +247,7 @@ final class FocusStackCache: Sendable {
 
     // MARK: - Storage
 
-    private func save(_ stack: MergedStack, to folder: URL) throws {
+    func save(_ stack: MergedStack, to folder: URL) throws {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try stack.decoded.samples
             .withUnsafeBytes { try Data($0).write(to: folder.appendingPathComponent("fused.half")) }
@@ -211,7 +256,7 @@ final class FocusStackCache: Sendable {
         try JSONEncoder().encode(metadata).write(to: folder.appendingPathComponent("stack.json"), options: .atomic)
     }
 
-    private func load(_ folder: URL, documentURL: URL) throws -> MergedStack {
+    func load(_ folder: URL, documentURL: URL) throws -> MergedStack {
         let metadata = try JSONDecoder().decode(
             StackMetadata.self, from: Data(contentsOf: folder.appendingPathComponent("stack.json")),
         )
@@ -226,7 +271,7 @@ final class FocusStackCache: Sendable {
             decoded: metadata.decoded(samples: samples, url: documentURL), report: metadata.report, depth: depth,
             depthWidth: metadata.depthWidth, depthHeight: metadata.depthHeight, crop: metadata.crop,
             frameWidth: metadata.frameWidth, frameHeight: metadata.frameHeight,
-            referenceURL: URL(fileURLWithPath: metadata.referencePath),
+            referenceURL: URL(fileURLWithPath: metadata.referencePath), alignment: metadata.alignment,
         )
     }
 
@@ -270,114 +315,6 @@ private extension DecodedImage {
             orientation: orientation, baselineExposure: baselineExposure, info: info,
         )
         decoded.noiseProfile = noiseProfile
-        return decoded
-    }
-}
-
-/// Everything but the pixels, as stored in `stack.json`.
-private struct StackMetadata: Codable {
-    var width: Int
-    var height: Int
-    /// "bitmap", "linear" or a CFA description; `patternColors` holds a mosaic's pattern.
-    var source: String
-    var patternWidth: Int?
-    var patternHeight: Int?
-    var patternColors: [UInt8]?
-    var asShotMultipliers: [Double]
-    var cameraToSRGB: [Double]
-    var xyzToCamera: [Double]?
-    var orientation: Int
-    var baselineExposure: Double
-    var noiseA: [Float]?
-    var noiseB: [Float]?
-    var sensorDescription: String
-    var make: String?
-    var model: String?
-    var lens: String?
-    var iso: Double?
-    var exposureTime: Double?
-    var aperture: Double?
-    var focalLength: Double?
-    var captureDate: Date?
-    var report: FocusStackReport
-    var depthWidth: Int
-    var depthHeight: Int
-    var crop: PixelRect
-    var frameWidth: Int
-    var frameHeight: Int
-    var referencePath: String
-
-    init(_ stack: MergedStack) {
-        let decoded = stack.decoded
-        width = decoded.width
-        height = decoded.height
-        switch decoded.layout {
-        case let .balancedCameraHalf(pattern?), let .mosaic(pattern):
-            source = pattern.description
-            patternWidth = pattern.width
-            patternHeight = pattern.height
-            patternColors = pattern.colors
-        case .balancedCameraHalf(nil), .linearRGB:
-            source = "linear"
-        case .linearSRGBHalf:
-            source = "bitmap"
-        }
-        let multipliers = decoded.asShotMultipliers
-        asShotMultipliers = [multipliers.x, multipliers.y, multipliers.z]
-        cameraToSRGB = decoded.cameraToSRGB
-        xyzToCamera = decoded.xyzToCamera
-        orientation = decoded.orientation
-        baselineExposure = decoded.baselineExposure
-        if let noise = decoded.noiseProfile {
-            noiseA = [noise.a.x, noise.a.y, noise.a.z]
-            noiseB = [noise.b.x, noise.b.y, noise.b.z]
-        }
-        let info = decoded.info
-        sensorDescription = info.sensorDescription
-        make = info.make
-        model = info.model
-        lens = info.lens
-        iso = info.iso
-        exposureTime = info.exposureTime
-        aperture = info.aperture
-        focalLength = info.focalLength
-        captureDate = info.captureDate
-        report = stack.report
-        depthWidth = stack.depthWidth
-        depthHeight = stack.depthHeight
-        crop = stack.crop
-        frameWidth = stack.frameWidth
-        frameHeight = stack.frameHeight
-        referencePath = stack.referenceURL.path
-    }
-
-    func decoded(samples: [UInt16], url: URL) -> DecodedImage {
-        let layout: DecodedImage.Layout = switch source {
-        case "bitmap": .linearSRGBHalf
-        case "linear": .balancedCameraHalf(nil)
-        default: .balancedCameraHalf(patternColors.map {
-                CFAPattern(width: patternWidth ?? 2, height: patternHeight ?? 2, colors: $0)
-            })
-        }
-        let pixelSize = orientation == 5 || orientation == 6
-            ? PixelSize(width: height, height: width)
-            : PixelSize(width: width, height: height)
-        let info = ImageInfo(
-            url: url, pixelSize: pixelSize, isRaw: source != "bitmap", sensorDescription: sensorDescription,
-            make: make, model: model, lens: lens, iso: iso, exposureTime: exposureTime, aperture: aperture,
-            focalLength: focalLength, captureDate: captureDate,
-        )
-        var decoded = DecodedImage(
-            width: width, height: height, layout: layout, samples: samples, blackLevels: [0, 0, 0], whiteLevel: 1,
-            asShotMultipliers: SIMD3(asShotMultipliers[0], asShotMultipliers[1], asShotMultipliers[2]),
-            cameraToSRGB: cameraToSRGB, xyzToCamera: xyzToCamera, orientation: orientation,
-            baselineExposure: baselineExposure, info: info,
-        )
-        if let noiseA, let noiseB {
-            decoded.noiseProfile = NoiseModel(
-                a: SIMD3(noiseA[0], noiseA[1], noiseA[2]), b: SIMD3(noiseB[0], noiseB[1], noiseB[2]),
-            )
-        }
         return decoded
     }
 }

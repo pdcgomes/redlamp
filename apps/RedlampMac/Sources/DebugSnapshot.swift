@@ -10,8 +10,9 @@
     /// - `--snapshot <path.png> [--snapshot-delay <s>] [--snapshot-quit]` writes an image of
     ///   the window without Screen Recording permission (glass materials are approximated;
     ///   `scripts/capture-screenshots.sh` uses real window captures instead). An open sheet is
-    ///   captured instead of the window; `stack=open` (or `stack=depth`, showing the depth map)
-    ///   in a script opens the Stack workspace on the selected stack document.
+    ///   captured instead of the window; `stack=open` in a script opens the Stack workspace on
+    ///   the selected stack document (`stack=depth` showing the depth map, `stack=retouch`
+    ///   painting one stroke from the frame under the cursor).
     @MainActor
     enum DebugSnapshot {
         static func scheduleIfRequested(model: EditorModel) {
@@ -50,7 +51,16 @@
                     }
                     if key == "stack", let selection = model.selection {
                         model.openStackWorkspace(selection)
-                        model.stackWorkspace?.showsDepth = value == "depth"
+                        guard let workspace = model.stackWorkspace else { continue }
+                        workspace.showsDepth = value == "depth"
+                        workspace.isRetouching = value == "retouch"
+                        if value == "retouch" {
+                            while workspace.preview == nil || workspace.isMerging {
+                                try? await Task.sleep(for: .milliseconds(100))
+                            }
+                            workspace.brushRadius = 0.04
+                            await workspace.addStroke((0 ... 20).map { CGPoint(x: 0.15 + 0.03 * Double($0), y: 0.3) })
+                        }
                         continue
                     }
                     model.applyDebugCommand(key, value)

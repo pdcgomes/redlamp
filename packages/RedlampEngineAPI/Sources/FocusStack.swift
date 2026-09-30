@@ -23,6 +23,8 @@ public struct FocusStackDocument: Codable, Sendable, Hashable {
     /// Frames the user left out, kept so they can be put back.
     public var excluded: [String]?
     public var strategy: FocusStackStrategy
+    /// Brush strokes over the merge, applied in order.
+    public var retouch: [FocusStackStroke]?
 
     public init(frames: [String], excluded: [String]? = nil, strategy: FocusStackStrategy = .auto) {
         self.frames = frames
@@ -66,6 +68,34 @@ public struct FocusStackDocument: Codable, Sendable, Hashable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(self).write(to: url, options: .atomic)
+    }
+}
+
+/// A retouch stroke: paints an aligned source over the merged stack, for halos, crossing hairs
+/// or anything the merge got wrong.
+public struct FocusStackStroke: Codable, Sendable, Hashable {
+    public enum Source: Codable, Sendable, Hashable {
+        /// One frame, by its path in the document's `frames`.
+        case frame(String)
+        /// The stack merged by another method.
+        case strategy(FocusStackStrategy)
+    }
+
+    public var source: Source
+    /// Brush radius as a fraction of the image's long edge.
+    public var radius: Double
+    /// 1: full strength to the edge; 0: fades from the centre.
+    public var hardness: Double
+    public var opacity: Double
+    /// The path, in oriented image coordinates normalised to 0 ... 1 (origin top-left).
+    public var points: [SIMD2<Double>]
+
+    public init(source: Source, radius: Double, hardness: Double = 0.5, opacity: Double = 1, points: [SIMD2<Double>]) {
+        self.source = source
+        self.radius = radius
+        self.hardness = hardness
+        self.opacity = opacity
+        self.points = points
     }
 }
 
