@@ -59,8 +59,11 @@ struct FocusStackTests {
         }
 
         var blobs: [Blob] = []
+        /// Amplitude of fine, pixel-scale texture everywhere (0 = smooth between blobs).
+        var detail: Float = 0
 
-        init(seed: UInt64, width: Float, height: Float) {
+        init(seed: UInt64, width: Float, height: Float, detail: Float = 0) {
+            self.detail = detail
             var state = seed
             func next() -> Float {
                 state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
@@ -78,6 +81,9 @@ struct FocusStackTests {
 
         func value(_ x: Float, _ y: Float) -> Float {
             var sum: Float = 0.5 + 0.05 * sin(x / 7) * cos(y / 11)
+            if detail > 0 {
+                sum += detail * (sin(1.9 * x + 0.7 * y) * cos(1.3 * y - 0.4 * x) + 0.5 * sin(2.6 * y + 1.1 * x))
+            }
             for blob in blobs {
                 let d2 = (x - blob.x) * (x - blob.x) + (y - blob.y) * (y - blob.y)
                 sum += blob.amplitude * exp(-d2 / (2 * blob.sigma * blob.sigma))
@@ -215,6 +221,77 @@ struct FocusStackTests {
             }
         }
         #expect(worst < 0.01, "worst difference \(worst)")
+    }
+
+    // MARK: - Depth
+
+    /// A synthetic stack at quarter resolution: frame k of the scene is blurred by a box of radius
+    /// `2 |k - depth|` at each pixel (interpolated between whole radii), as defocus grows away
+    /// from the plane of focus.
+    func syntheticStack(frames: Int, width: Int, height: Int, depth: (Int, Int) -> Float) -> [LumaImage] {
+        let scene = Scene(seed: 21, width: Float(width), height: Float(height), detail: 0.08)
+        let sharp = scene.render(width: width, height: height)
+        // Blur levels by radius; two box passes make each close to a Gaussian.
+        let maximumRadius = 2 * frames
+        let levels = (0 ... maximumRadius).map { radius -> [Float] in
+            guard radius > 0 else { return sharp.pixels }
+            let once = StackDepthSolver.boxMean(sharp.pixels, width: width, height: height, radius: radius)
+            return StackDepthSolver.boxMean(once, width: width, height: height, radius: radius)
+        }
+        return (0 ..< frames).map { frame in
+            var pixels = [Float](repeating: 0, count: width * height)
+            for y in 0 ..< height {
+                for x in 0 ..< width {
+                    let radius = min(2 * abs(Float(frame) - depth(x, y)), Float(maximumRadius))
+                    let low = Int(radius)
+                    let high = min(low + 1, maximumRadius)
+                    let t = radius - Float(low)
+                    let index = y * width + x
+                    pixels[index] = levels[low][index] * (1 - t) + levels[high][index] * t
+                }
+            }
+            return LumaImage(width: width, height: height, pixels: pixels)
+        }
+    }
+
+    /// Two planes: the left half is sharpest in frame 1, the right half in frame 3.
+    @Test func `the depth solve finds two planes`() {
+        let (width, height) = (256, 192)
+        let stack = syntheticStack(frames: 5, width: width, height: height) { x, _ in x < width / 2 ? 1 : 3 }
+        let map = StackDepthSolver.solve(stack)
+        func medianDepth(_ columns: Range<Int>) -> Float {
+            let values = (20 ..< height - 20).flatMap { y in columns.map { map.depth[y * width + $0] } }.sorted()
+            return values[values.count / 2]
+        }
+        #expect(abs(medianDepth(20 ..< width / 2 - 20) - 1) < 0.25, "left \(medianDepth(20 ..< width / 2 - 20))")
+        #expect(abs(medianDepth(width / 2 + 20 ..< width - 20) - 3) < 0.25)
+        #expect(map.confidentFraction > 0.5, "confident \(map.confidentFraction)")
+    }
+
+    /// A depth ramp across the frame, from frame 0 at the left to frame 4 at the right: sub-frame
+    /// refinement tracks it between whole frames.
+    @Test func `the depth solve follows a ramp between frames`() {
+        let (width, height) = (256, 192)
+        let ramp = { (x: Int, _: Int) in 4 * Float(x) / Float(width - 1) }
+        let stack = syntheticStack(frames: 5, width: width, height: height, depth: ramp)
+        let map = StackDepthSolver.solve(stack)
+        var error: Float = 0
+        var count = 0
+        for y in 20 ..< height - 20 {
+            for x in 20 ..< width - 20 {
+                error += abs(map.depth[y * width + x] - ramp(x, y))
+                count += 1
+            }
+        }
+        #expect(error / Float(count) < 0.4, "mean depth error \(error / Float(count)) frames")
+    }
+
+    @Test func `box mean reflects at the borders`() {
+        let values: [Float] = [1, 2, 3, 4]
+        let mean = StackDepthSolver.boxMean(values, width: 4, height: 1, radius: 1)
+        // Reflected row: 1 | 1 2 3 4 | 4.
+        let expected: [Float] = [4 / 3, 2, 3, 11 / 3]
+        #expect(zip(mean, expected).allSatisfy { abs($0 - $1) < 1e-6 })
     }
 
     /// A grey `.rgba32Float` texture of a luma image, readable by the kernels.

@@ -21,9 +21,11 @@ final class FocusStacker {
         self.kernels = kernels
     }
 
-    /// A Lanczos-downscaled copy of `frame` (or the frame itself if already small) on the CPU.
-    func analyse(_ frame: any MTLTexture) throws -> FrameAnalysis {
-        let factor = max(1, Float(max(frame.width, frame.height)) / Float(Self.analysisLongEdge))
+    /// A Lanczos-downscaled copy of `frame` (or the frame itself if already small) on the CPU, with
+    /// a long edge of at most `longEdge`: the alignment copy by default, a quarter of the frame
+    /// for the depth solve.
+    func analyse(_ frame: any MTLTexture, longEdge: Int = FocusStacker.analysisLongEdge) throws -> FrameAnalysis {
+        let factor = max(1, Float(max(frame.width, frame.height)) / Float(longEdge))
         let width = max(1, Int((Float(frame.width) / factor).rounded()))
         let height = max(1, Int((Float(frame.height) / factor).rounded()))
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
