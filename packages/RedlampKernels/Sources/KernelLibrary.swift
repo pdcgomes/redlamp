@@ -25,6 +25,7 @@ public final class KernelLibrary: @unchecked Sendable {
     public let sharpenBlur: any MTLComputePipelineState
     public let sharpenApply: any MTLComputePipelineState
     public let localContrast: any MTLComputePipelineState
+    public let detailLocal: any MTLComputePipelineState
 
     public init(device: any MTLDevice) throws {
         self.device = device
@@ -56,6 +57,7 @@ public final class KernelLibrary: @unchecked Sendable {
         sharpenBlur = try pipeline("rl_sharpen_blur")
         sharpenApply = try pipeline("rl_sharpen_apply")
         localContrast = try pipeline("rl_local_contrast")
+        detailLocal = try pipeline("rl_detail_local")
     }
 }
 

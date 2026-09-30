@@ -5,7 +5,7 @@
 
 struct SharpenParams {
     int4 origin;              // xy source texel of the work area's first texel, z source level
-    int4 size;                // xy work area size, z blur direction (0 rows, 1 columns)
+    int4 size;                // xy work area size, z blur direction (0 rows, 1 columns), w masks' Sharpness in `local`
     float4 luma;              // xyz source RGB to luminance, w floor added before the log
     float4 shape;             // x gain, y halo scale (stops), z edge threshold (stops per texel), w blur sigma (texels)
 };
@@ -54,15 +54,18 @@ kernel void rl_sharpen_apply(
     texture2d<float, access::read> logLuma [[texture(1)]],
     texture2d<float, access::read> blurred [[texture(2)]],
     texture2d<float, access::write> out [[texture(3)]],
+    texture2d<float, access::read> local [[texture(4)]],
     constant SharpenParams &p [[buffer(0)]],
     uint2 gid [[thread_position_in_grid]])
 {
     if (int(gid.x) >= p.size.x || int(gid.y) >= p.size.y) return;
     int2 at = int2(gid);
     float detail = logLuma.read(gid).r - blurred.read(gid).r;
+    // Masks add to the gain; below zero it softens.
+    float gain = max(p.shape.x + (p.size.w != 0 ? local.read(gid).z : 0.0f), -1.0f);
     // Small detail is boosted by the full gain; large (edge) detail saturates at the halo scale.
     float halo = p.shape.y;
-    float boost = p.shape.x * halo * tanh(detail / halo);
+    float boost = gain * halo * tanh(detail / halo);
     if (p.shape.z > 0.0f) {
         int2 last = p.size.xy - 1;
         float dx = blurred.read(uint2(clamp(at + int2(1, 0), int2(0), last))).r

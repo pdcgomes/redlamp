@@ -5,11 +5,11 @@
 
 struct LocalContrastParams {
     int4 origin;              // xy source texel of the work area's first texel, z source level
-    int4 size;                // xy work area size
+    int4 size;                // xy work area size, z masks' Texture and Clarity in `local`
     int4 place;               // xy work area origin in pyramid texels at the work level, z work level
     int4 levels;              // xy Texture's fine and coarse pyramid levels, zw Clarity's
     float4 luma;              // xyz pyramid RGB to luminance, w floor added before the log
-    float4 shape;             // x Texture gain, y Clarity gain, z Clarity limit (stops)
+    float4 shape;             // x Texture, y Clarity (slider / 100), z Clarity limit (stops)
 };
 
 // Log luminance of a pyramid level at `uv`, cubic B-spline interpolated (four bilinear taps), so
@@ -42,6 +42,7 @@ kernel void rl_local_contrast(
     texture2d<float, access::read> source [[texture(0)]],
     texture2d<float, access::sample> pyramid [[texture(1)]],
     texture2d<float, access::write> out [[texture(2)]],
+    texture2d<float, access::read> local [[texture(3)]],
     constant LocalContrastParams &p [[buffer(0)]],
     uint2 gid [[thread_position_in_grid]])
 {
@@ -53,14 +54,18 @@ kernel void rl_local_contrast(
     uint workLevel = uint(p.place.z);
     float2 levelSize = float2(pyramid.get_width(workLevel), pyramid.get_height(workLevel));
     float2 uv = (float2(p.place.xy) + float2(gid) + 0.5f) / levelSize;
+    float2 amounts = p.shape.xy + (p.size.z != 0 ? local.read(gid).xy : float2(0.0f));
+    // Removing all of Texture's band looks blurred, so negative Texture only softens it.
+    float texture = amounts.x > 0.0f ? amounts.x : 0.5f * amounts.x;
+    float clarity = 0.7f * amounts.y;
     float boost = 0.0f;
-    if (p.shape.x != 0.0f) {
-        boost += p.shape.x * (logLumaAt(pyramid, uv, p.levels.x, p.luma) - logLumaAt(pyramid, uv, p.levels.y, p.luma));
+    if (texture != 0.0f && p.levels.x < p.levels.y) {
+        boost += texture * (logLumaAt(pyramid, uv, p.levels.x, p.luma) - logLumaAt(pyramid, uv, p.levels.y, p.luma));
     }
-    if (p.shape.y != 0.0f) {
+    if (clarity != 0.0f && p.levels.z < p.levels.w) {
         float detail = logLumaAt(pyramid, uv, p.levels.z, p.luma) - logLumaAt(pyramid, uv, p.levels.w, p.luma);
         float limit = p.shape.z;
-        boost += p.shape.y * limit * tanh(detail / limit);
+        boost += clarity * limit * tanh(detail / limit);
     }
     out.write(float4(rgb * exp2(boost), 1.0f), gid);
 }

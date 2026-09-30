@@ -211,6 +211,18 @@ public struct LocalContrastParams {
     }
 }
 
+public struct DetailLocalParams {
+    public var place: SIMD4<Int32>
+    public var size: SIMD4<Int32>
+    public var geometry: SIMD4<Float>
+
+    public init(place: SIMD4<Int32>, size: SIMD4<Int32>, geometry: SIMD4<Float>) {
+        self.place = place
+        self.size = size
+        self.geometry = geometry
+    }
+}
+
 public struct MaskComponentGPU: Sendable {
     public var geometry: SIMD4<Float>
     public var shape: SIMD4<Float>

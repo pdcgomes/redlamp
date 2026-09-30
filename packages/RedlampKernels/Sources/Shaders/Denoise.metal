@@ -82,12 +82,14 @@ kernel void rl_denoise_rows(
 }
 
 // Finishes this scale's blur, keeps what of its detail isn't noise, and on the coarsest scale
-// writes the result back in pyramid units.
+// writes the result back in pyramid units. threshold.x is the luma threshold per unit of
+// Luminance strength, threshold.w that strength; with scale.w set, masks' Noise (local.w) adds to it.
 kernel void rl_denoise_columns(
     texture2d<half, access::read> rows [[texture(0)]],
     texture2d<half, access::read> current [[texture(1)]],
     texture2d<half, access::write> next [[texture(2)]],
     texture2d<half, access::read_write> result [[texture(3)]],
+    texture2d<float, access::read> local [[texture(4)]],
     constant DenoiseParams &p [[buffer(0)]],
     uint2 gid [[thread_position_in_grid]])
 {
@@ -98,7 +100,9 @@ kernel void rl_denoise_columns(
         coarse += kB3[i + 2] * float3(rows.read(uint2(gid.x, y)).rgb);
     }
     float3 detail = float3(current.read(gid).rgb) - coarse;
-    float3 total = shrink(detail, p.threshold.xyz);
+    float strength = p.threshold.w + (p.scale.w != 0 ? local.read(gid).w : 0.0f);
+    float3 threshold = float3(p.threshold.x * max(strength, 0.0f), p.threshold.yz);
+    float3 total = shrink(detail, threshold);
     if (p.scale.y == 0) total += float3(result.read(gid).rgb);
     if (p.scale.z != 0) {
         float3 value = unstabilize(fromOpponent(total + coarse), p.a.xyz, p.b.xyz);

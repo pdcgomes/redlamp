@@ -184,7 +184,7 @@ enum DevelopParameters {
         return (layers, components, overlayIndex)
     }
 
-    private static func gpuComponent(_ component: MaskComponent, aspect: Double) -> MaskComponentGPU {
+    static func gpuComponent(_ component: MaskComponent, aspect: Double) -> MaskComponentGPU {
         let operation: Float = switch component.operation {
         case .add: 0
         case .subtract: 1

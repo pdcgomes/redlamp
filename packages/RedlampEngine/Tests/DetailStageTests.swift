@@ -197,6 +197,51 @@ struct DetailStageTests {
         #expect(try gain(stripes(period: 48), recipe) > 1.1)
     }
 
+    // MARK: - Masks
+
+    /// A mask covering the left 45% of the photo, fading out by 55%.
+    private func leftHalf(_ parameter: ParameterID, _ value: Double) -> MaskLayer {
+        let gradient = LinearMask(start: ImagePoint(x: 0.45, y: 0.5), end: ImagePoint(x: 0.55, y: 0.5))
+        return MaskLayer(
+            name: "Left",
+            components: [MaskComponent(shape: .linear(gradient))],
+            adjustments: [parameter: value],
+        )
+    }
+
+    private func amplitude(_ pixels: [SIMD3<Float>], columns: Range<Int>) -> Float {
+        let logs = columns.map { log2(pixels[128 * 768 + $0].y) }
+        let mean = logs.reduce(0, +) / Float(logs.count)
+        return (logs.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Float(logs.count)).squareRoot()
+    }
+
+    @Test func `a mask's texture only works inside it`() throws {
+        let session = try stripes(period: 6)
+        var recipe = Self.untouched
+        recipe.masks = [leftHalf(.localTexture, 100)]
+        let before = try readLevel(session, level: 0)
+        let after = try processed(session, recipe: recipe)
+        let inside = amplitude(after, columns: 64 ..< 300) / amplitude(before, columns: 64 ..< 300)
+        let outside = amplitude(after, columns: 468 ..< 704) / amplitude(before, columns: 468 ..< 704)
+        #expect(inside > 1.2, "inside \(inside)")
+        #expect(abs(outside - 1) < 0.02, "outside \(outside)")
+    }
+
+    @Test func `a mask's noise reduction only works inside it`() throws {
+        let session = try makeSession(.bayer, width: 768, height: 256)
+        var recipe = Self.untouched
+        recipe.masks = [leftHalf(.localNoise, 100)]
+        let after = try processed(session, recipe: recipe)
+        let deviation = { (columns: Range<Int>) -> Float in
+            let values = (32 ..< 224).flatMap { y in columns.map { after[y * 768 + $0].y } }
+            let mean = values.reduce(0, +) / Float(values.count)
+            return (values.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Float(values.count)).squareRoot()
+        }
+        let inside = deviation(32 ..< 300)
+        let outside = deviation(468 ..< 736)
+        #expect(inside < outside * 0.6, "inside \(inside), outside \(outside)")
+    }
+
     // MARK: - Sensor cleanup
 
     @Test func `hot pixels are repaired`() throws {
