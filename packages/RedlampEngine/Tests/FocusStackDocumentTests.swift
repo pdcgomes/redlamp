@@ -74,6 +74,26 @@ extension FocusStackTests {
         #expect(reopened.crop == merged.crop)
         let thumbnail = await engine.thumbnail(for: documentURL, maxPixelSize: 128)
         #expect(thumbnail != nil)
+
+        // The Stack workspace changes the method: a new merge, which opening then shows.
+        try FocusStackDocument(frames: urls, strategy: .detail, at: documentURL).write(to: documentURL)
+        let preview = try await engine.focusStack(at: documentURL, maxLongEdge: 128) { _ in }
+        #expect(max(preview.image.width, preview.image.height) == 128)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: cacheRoot.path).count == 2)
+        _ = try await engine.open(documentURL)
+        let detail = try await engine.renderStill(StillRequest(recipe: EditRecipe()))
+        #expect(try pixels(detail) != pixels(image))
+    }
+
+    /// The RGBA8 bytes of an image.
+    func pixels(_ image: CGImage) throws -> [UInt8] {
+        var bytes = [UInt8](repeating: 0, count: image.width * image.height * 4)
+        let context = try #require(CGContext(
+            data: &bytes, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: image.width * 4,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue,
+        ))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        return bytes
     }
 
     /// A 16-bit sRGB PNG of a luma image.

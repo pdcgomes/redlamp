@@ -21,9 +21,11 @@ public final class EditorModel {
     public private(set) var folder: URL?
     public internal(set) var items: [LibraryItem] = []
     public private(set) var thumbnails: [URL: CGImage] = [:]
-    public private(set) var selection: URL?
+    public internal(set) var selection: URL?
     /// Focus stacks found in the folder that have no stack document yet.
     public internal(set) var stackSuggestions: [StackSuggestion] = []
+    /// The Stack workspace, when open over the editor.
+    public var stackWorkspace: StackWorkspaceModel?
 
     // MARK: Current image
 

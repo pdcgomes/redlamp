@@ -99,6 +99,10 @@ public struct EditorView: View {
                 AdjustmentSearchView()
             }
         }
+        .sheet(item: $model.stackWorkspace) { workspace in
+            StackWorkspaceView(workspace: workspace, onDone: model.finishStackWorkspace)
+                .environment(theme)
+        }
         .animation(.easeOut(duration: 0.15), value: model.showShortcuts)
         .animation(.easeOut(duration: 0.12), value: model.showAdjustmentSearch)
         .animation(.easeInOut(duration: 0.3), value: model.lightsOut)

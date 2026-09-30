@@ -14,9 +14,9 @@ public extension EditorModel {
         }
     }
 
-    /// Saves the stack as a document beside its frames and opens it; opening merges it.
+    /// Saves the stack as a document beside its frames, adds it to the library and opens the
+    /// Stack workspace on it, which merges it.
     func mergeStack(_ suggestion: StackSuggestion) {
-        guard let folder else { return }
         let url = suggestion.documentURL()
         do {
             try suggestion.save(to: url)
@@ -25,10 +25,32 @@ public extension EditorModel {
             return
         }
         stackSuggestions.removeAll { $0 == suggestion }
-        openFolder(folder, select: url)
+        if !items.contains(where: { $0.url == url }) {
+            items.append(LibraryItem(url: url, hasEdits: false, metadata: PhotoMetadata()))
+            items
+                .sort {
+                    $0.url.lastPathComponent.localizedStandardCompare($1.url.lastPathComponent) == .orderedAscending
+                }
+        }
+        openStackWorkspace(url)
     }
 
     func dismissStack(_ suggestion: StackSuggestion) {
         stackSuggestions.removeAll { $0 == suggestion }
+    }
+
+    func openStackWorkspace(_ url: URL) {
+        saveNow()
+        stackWorkspace = StackWorkspaceModel(documentURL: url, engine: engine)
+    }
+
+    /// Closes the workspace and develops the merged photo, reopening it if it was showing.
+    func finishStackWorkspace() {
+        guard let url = stackWorkspace?.documentURL else { return }
+        stackWorkspace = nil
+        if selection == url {
+            selection = nil
+        }
+        select(url)
     }
 }

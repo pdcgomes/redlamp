@@ -109,6 +109,16 @@ final class SessionCache: Sendable {
         }
     }
 
+    /// Forgets `url`'s session, so the next request decodes the file again.
+    func invalidate(_ url: URL) {
+        state.withLock { state in
+            if let entry = state.ready.removeValue(forKey: url) {
+                state.bytes -= entry.bytes
+            }
+            state.failed.remove(url)
+        }
+    }
+
     func prefetch(_ urls: [URL]) {
         let work = state.withLock { state -> Work in
             var seen = Set<URL>()

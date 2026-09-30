@@ -17,6 +17,11 @@ struct FilmstripView: View {
                     StackSuggestionBanner(suggestion: suggestion)
                 }
                 Spacer()
+                if let selection = model.selection, SupportedFormats.isStack(selection) {
+                    Button("Stack…") { model.openStackWorkspace(selection) }
+                        .buttonStyle(.link)
+                        .help("Change the stack's frames or method")
+                }
                 if let info = model.info {
                     Text(info.fileName)
                     Text("\(info.pixelSize.width) × \(info.pixelSize.height)  ·  \(info.sensorDescription)")

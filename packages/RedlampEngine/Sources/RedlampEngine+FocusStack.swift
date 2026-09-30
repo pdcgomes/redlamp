@@ -23,15 +23,37 @@ extension RedlampEngine {
                 })
             }
         }
+        return try await preview(merged, recipe: recipe, maxLongEdge: maxLongEdge)
+    }
+
+    public func focusStack(
+        at url: URL, maxLongEdge: Int, progress: @escaping @Sendable (Double) -> Void,
+    ) async throws -> FocusStackPreview {
+        sessions.invalidate(url)
+        let stacks = stacks
+        let merged = try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                continuation.resume(with: Result { try stacks.stack(at: url, progress: progress) })
+            }
+        }
+        return try await preview(merged, recipe: EditRecipe(), maxLongEdge: maxLongEdge)
+    }
+
+    /// `stack` developed with `recipe`, off the interactive session.
+    private func preview(
+        _ stack: MergedStack,
+        recipe: EditRecipe,
+        maxLongEdge: Int?,
+    ) async throws -> FocusStackPreview {
         guard let queue = device.makeCommandQueue() else { throw EngineError.gpuUnavailable }
-        let session = try SessionBuilder(device: device, queue: queue, kernels: kernels).build(merged.decoded)
+        let session = try SessionBuilder(device: device, queue: queue, kernels: kernels).build(stack.decoded)
         let request = StillRequest(recipe: recipe, maxLongEdge: maxLongEdge, purpose: .export)
         let image = try await withCheckedThrowingContinuation { continuation in
             renderQueue.async { [self] in
                 continuation.resume(with: Result { try renderStillNow(request, session: session) })
             }
         }
-        return FocusStackPreview(image: image, depth: depthImage(merged), report: merged.report)
+        return FocusStackPreview(image: image, depth: depthImage(stack), report: stack.report)
     }
 
     /// The depth map over the cropped stack as an oriented grey image: black at the first frame,

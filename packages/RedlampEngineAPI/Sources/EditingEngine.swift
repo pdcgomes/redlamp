@@ -49,4 +49,11 @@ public protocol EditingEngine: AnyObject, Sendable {
 
     /// Whether the engine can render `reference` exactly as pinned.
     func canRender(_ reference: BaseLookReference) -> Bool
+
+    /// The focus stack document at `url`, merged now or read from the cache, developed with the
+    /// default edit within `maxLongEdge`. `progress` gets 0 ... 1 from any thread. Opening the
+    /// document afterwards shows this merge, even if it changed since it was last opened.
+    func focusStack(
+        at url: URL, maxLongEdge: Int, progress: @escaping @Sendable (Double) -> Void,
+    ) async throws -> FocusStackPreview
 }

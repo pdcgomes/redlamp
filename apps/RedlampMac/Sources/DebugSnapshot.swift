@@ -9,7 +9,9 @@
     ///   `EditorModel.applyDebugCommand`), e.g. `select=3,exposure=0.5,panel=all`.
     /// - `--snapshot <path.png> [--snapshot-delay <s>] [--snapshot-quit]` writes an image of
     ///   the window without Screen Recording permission (glass materials are approximated;
-    ///   `scripts/capture-screenshots.sh` uses real window captures instead).
+    ///   `scripts/capture-screenshots.sh` uses real window captures instead). An open sheet is
+    ///   captured instead of the window; `stack=open` (or `stack=depth`, showing the depth map)
+    ///   in a script opens the Stack workspace on the selected stack document.
     @MainActor
     enum DebugSnapshot {
         static func scheduleIfRequested(model: EditorModel) {
@@ -46,6 +48,11 @@
                     while model.info == nil || model.isLoading {
                         try? await Task.sleep(for: .milliseconds(100))
                     }
+                    if key == "stack", let selection = model.selection {
+                        model.openStackWorkspace(selection)
+                        model.stackWorkspace?.showsDepth = value == "depth"
+                        continue
+                    }
                     model.applyDebugCommand(key, value)
                     if key == "select" {
                         try? await Task.sleep(for: .milliseconds(200))
@@ -55,7 +62,8 @@
         }
 
         static func capture(to url: URL) {
-            guard let window = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }),
+            guard let main = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }),
+                  let window = Optional(main.attachedSheet ?? main),
                   let root = window.contentView?.superview ?? window.contentView,
                   let rep = root.bitmapImageRepForCachingDisplay(in: root.bounds)
             else { return }

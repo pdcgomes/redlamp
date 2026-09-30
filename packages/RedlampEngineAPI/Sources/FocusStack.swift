@@ -20,28 +20,42 @@ public struct FocusStackDocument: Codable, Sendable, Hashable {
     public var version = 1
     /// Frame paths in focus order, relative to the document's folder when inside it.
     public var frames: [String]
+    /// Frames the user left out, kept so they can be put back.
+    public var excluded: [String]?
     public var strategy: FocusStackStrategy
 
-    public init(frames: [String], strategy: FocusStackStrategy = .auto) {
+    public init(frames: [String], excluded: [String]? = nil, strategy: FocusStackStrategy = .auto) {
         self.frames = frames
+        self.excluded = excluded
         self.strategy = strategy
     }
 
     /// A document at `url` for `frames`, storing each path relative to `url`'s folder.
-    public init(frames: [URL], strategy: FocusStackStrategy = .auto, at url: URL) {
+    public init(frames: [URL], excluded: [URL] = [], strategy: FocusStackStrategy = .auto, at url: URL) {
         let folder = url.deletingLastPathComponent().standardizedFileURL.path
         let prefix = folder.hasSuffix("/") ? folder : folder + "/"
-        let paths = frames.map { frame in
+        func relative(_ frame: URL) -> String {
             let path = frame.standardizedFileURL.path
             return path.hasPrefix(prefix) ? String(path.dropFirst(prefix.count)) : path
         }
-        self.init(frames: paths, strategy: strategy)
+        self.init(
+            frames: frames.map(relative), excluded: excluded.isEmpty ? nil : excluded.map(relative), strategy: strategy,
+        )
     }
 
     /// The frames of the document at `url`.
     public func frameURLs(at url: URL) -> [URL] {
+        Self.resolve(frames, at: url)
+    }
+
+    /// The frames left out of the document at `url`.
+    public func excludedURLs(at url: URL) -> [URL] {
+        Self.resolve(excluded ?? [], at: url)
+    }
+
+    private static func resolve(_ paths: [String], at url: URL) -> [URL] {
         let folder = url.deletingLastPathComponent()
-        return frames.map { $0.hasPrefix("/") ? URL(fileURLWithPath: $0) : folder.appendingPathComponent($0) }
+        return paths.map { $0.hasPrefix("/") ? URL(fileURLWithPath: $0) : folder.appendingPathComponent($0) }
     }
 
     public static func read(_ url: URL) throws -> FocusStackDocument {

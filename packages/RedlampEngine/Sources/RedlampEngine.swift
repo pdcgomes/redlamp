@@ -25,7 +25,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     }
 
     private let session = Mutex<ImageSession?>(nil)
-    private let sessions: SessionCache
+    let sessions: SessionCache
     private let openGeneration = Mutex<UInt64>(0)
     private let renderState = Mutex(RenderState())
     private let continuation = Mutex<AsyncStream<RenderedFrame>.Continuation?>(nil)
