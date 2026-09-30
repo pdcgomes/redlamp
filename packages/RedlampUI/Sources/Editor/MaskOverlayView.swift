@@ -35,7 +35,8 @@ struct MaskOverlayView: View {
                     }
                 }
 
-                if model.showMaskPins, let mask = model.selectedMask, drawingKind == nil {
+                // Shown while a shape is being drawn too, so its guides follow the drag.
+                if model.showMaskPins, let mask = model.selectedMask {
                     ForEach(mask.components) { component in
                         ComponentHandles(
                             mask: mask,
