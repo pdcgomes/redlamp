@@ -84,7 +84,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
   - Draw them on the photo.
   - Drag the handles to move, resize, and rotate; radial gradients also have a Feather control.
   - Pins select the other masks.
-- [x] **Local adjustments:** Temp, Tint, Exposure, Contrast, Highlights, Shadows, Whites, Blacks, Hue, and Saturation, plus the mask's Amount (0–200%).
+- [x] **Local adjustments:** Temp, Tint, Exposure, Contrast, Highlights, Shadows, Whites, Blacks, Texture, Clarity, Hue, Saturation, Sharpness, and Noise, plus the mask's Amount (0–200%).
 - [x] **Mask management:** a red mask overlay (`O`), and a mask list where you can show and hide, rename, duplicate, "duplicate and invert", reset, and delete masks.
 - [x] **Fast by design:** masks are evaluated analytically, per pixel, inside the same fused GPU kernel. Up to 16 masks cost well under a millisecond extra at Fit.
 - [x] The **Create New Mask** grid already lists every Lightroom mask type (Subject, Sky, Background, Objects, People, Landscape, Brush, Color, Luminance, and Depth Range). Each shows the phase it arrives in.
@@ -101,7 +101,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] Non-destructive edits, saved automatically to a sidecar file next to each photo (`IMG_1234.ARW.redlamp`).
 - [x] Export to JPEG, plus a headless `redlamp` command-line tool for rendering and export.
 
-**Panels laid out but not yet rendering** (shown dimmed, with the phase they arrive in): Dehaze, Texture and Clarity in masks, and the Lens Corrections, Transform, and Calibration panels. The Crop, Healing, and Red Eye tools show what is coming and when.
+**Panels laid out but not yet rendering** (shown dimmed, with the phase they arrive in): Dehaze (global and in masks), Moiré and Defringe in masks, and the Lens Corrections, Transform, and Calibration panels. The Crop, Healing, and Red Eye tools show what is coming and when.
 
 ### Measured performance
 
