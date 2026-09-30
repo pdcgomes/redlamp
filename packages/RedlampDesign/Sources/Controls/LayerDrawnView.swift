@@ -17,6 +17,10 @@ open class LayerDrawnView: NSView, @preconcurrency CALayerDelegate {
         contentLayer.delegate = self
         contentLayer.needsDisplayOnBoundsChange = true
         contentLayer.anchorPoint = .zero
+        // A fixed format spares Core Animation a first pass over the drawing to choose one,
+        // and drawing asynchronously rasterizes off the main thread.
+        contentLayer.contentsFormat = .RGBA8Uint
+        contentLayer.drawsAsynchronously = true
         layer?.addSublayer(contentLayer)
     }
 
@@ -67,7 +71,10 @@ open class LayerDrawnView: NSView, @preconcurrency CALayerDelegate {
         }
         let previous = NSGraphicsContext.current
         NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)
-        drawContent(in: bounds)
+        // Dynamic colors (the accent, system blue) resolve for this view's appearance.
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            drawContent(in: bounds)
+        }
         NSGraphicsContext.current = previous
     }
 

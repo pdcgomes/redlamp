@@ -20,6 +20,11 @@ func pixel(_ x: Int, _ y: Int) -> (Int, Int, Int) {
 }
 
 let panel = 29 // Palette.panelBackground, 0.115 × 255
+/// Captures use a black stage; the panels are everything else.
+func isStageColor(_ p: (Int, Int, Int)) -> Bool {
+    p.0 <= 3 && p.1 <= 3 && p.2 <= 3
+}
+
 func isPanel(_ p: (Int, Int, Int)) -> Bool {
     abs(p.0 - panel) <= 1 && abs(p.1 - panel) <= 1 && abs(p.2 - panel) <= 1
 }
@@ -31,9 +36,9 @@ func boxes() -> [(x: Int, y: Int, w: Int, h: Int)] {
         var x = 0
         var runs: [(Int, Int)] = []
         while x < width {
-            if isPanel(pixel(x, y)) {
+            if !isStageColor(pixel(x, y)) {
                 let start = x
-                while x < width, isPanel(pixel(x, y)) {
+                while x < width, !isStageColor(pixel(x, y)) {
                     x += 1
                 }
                 if x - start > 200 {
@@ -43,10 +48,12 @@ func boxes() -> [(x: Int, y: Int, w: Int, h: Int)] {
                 x += 1
             }
         }
-        if runs.count == 2 {
-            for (x0, w) in runs {
+        // The two panels are the same width, 24 pt apart (the parity stage's gap).
+        if let pair = zip(runs, runs.dropFirst())
+            .first(where: { abs($0.0.1 - $0.1.1) <= 1 && $0.1.0 - ($0.0.0 + $0.0.1) == 24 }) {
+            for (x0, w) in [pair.0, pair.1] {
                 var y1 = y
-                while y1 < height, isPanel(pixel(x0 + 1, y1)) || isPanel(pixel(x0 + w - 2, y1)) {
+                while y1 < height, !isStageColor(pixel(x0 + 1, y1)) {
                     y1 += 1
                 }
                 found.append((x0, y, w, y1 - y))

@@ -20,19 +20,24 @@ func pixel(_ x: Int, _ y: Int) -> (Int, Int, Int) {
     return (Int(pixels[i]), Int(pixels[i + 1]), Int(pixels[i + 2]))
 }
 
+/// Captures use a black stage; the panels are everything else.
+func isStageColor(_ p: (Int, Int, Int)) -> Bool {
+    p.0 <= 3 && p.1 <= 3 && p.2 <= 3
+}
+
 func isPanel(_ p: (Int, Int, Int)) -> Bool {
     abs(p.0 - 29) <= 1 && abs(p.1 - 29) <= 1 && abs(p.2 - 29) <= 1
 }
 
-/// The two panels: the first row with two long runs of panel background.
+/// The two panels: the first row with two long runs of anything but the stage.
 var boxes: [(x: Int, y: Int, w: Int)] = []
 search: for y in 0 ..< height {
     var runs: [(Int, Int)] = []
     var x = 0
     while x < width {
-        if isPanel(pixel(x, y)) {
+        if !isStageColor(pixel(x, y)) {
             let start = x
-            while x < width, isPanel(pixel(x, y)) {
+            while x < width, !isStageColor(pixel(x, y)) {
                 x += 1
             }
             if x - start > 200 {
@@ -42,8 +47,9 @@ search: for y in 0 ..< height {
             x += 1
         }
     }
-    if runs.count == 2 {
-        boxes = runs.map { ($0.0, y, $0.1) }
+    // The two panels are the same width, 24 pt apart (the parity stage's gap).
+    for (a, b) in zip(runs, runs.dropFirst()) where abs(a.1 - b.1) <= 1 && b.0 - (a.0 + a.1) == 24 {
+        boxes = [(a.0, y, a.1), (b.0, y, b.1)]
         break search
     }
 }
@@ -56,10 +62,7 @@ guard boxes.count == 2 else {
 let (left, right) = (boxes[0], boxes[1])
 let boxWidth = min(left.w, right.w)
 var boxHeight = 0
-while left.y + boxHeight < height, isPanel(pixel(left.x + 1, left.y + boxHeight)) || isPanel(pixel(
-    left.x + boxWidth - 2,
-    left.y + boxHeight,
-)) {
+while left.y + boxHeight < height, !isStageColor(pixel(left.x + 1, left.y + boxHeight)) {
     boxHeight += 1
 }
 

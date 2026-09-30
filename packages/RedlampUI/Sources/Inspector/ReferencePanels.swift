@@ -149,7 +149,11 @@ struct InspectorView: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 10) {
-                HistogramView()
+                if DevelopPanels.usesSwiftUI {
+                    HistogramView()
+                } else {
+                    HistogramHost(model: model)
+                }
                 ToolStrip()
             }
             .padding(.horizontal, 12)

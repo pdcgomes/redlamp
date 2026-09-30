@@ -85,7 +85,8 @@ public enum TextLine {
     }
 }
 
-extension NSView {
+public extension NSView {
+    /// The window's pixel scale (2 on Retina), for drawing on the pixel grid.
     var backingScale: CGFloat {
         window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
     }

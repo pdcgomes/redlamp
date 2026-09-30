@@ -9,6 +9,8 @@ enum BuiltInScenes {
         catalog.register(.basicPanel)
         catalog.register(.sliderRowParity)
         catalog.register(.basicPanelParity)
+        catalog.register(.toneCurveParity)
+        catalog.register(.histogramParity)
         catalog.register(.panelPerformance)
         return catalog
     }

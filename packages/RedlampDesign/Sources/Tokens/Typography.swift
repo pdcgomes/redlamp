@@ -6,7 +6,7 @@ public struct FontSpec: Sendable, Hashable {
     public enum Weight: Sendable, Hashable {
         case regular, medium, semibold, bold
 
-        var nsWeight: NSFont.Weight {
+        public var nsWeight: NSFont.Weight {
             switch self {
             case .regular: .regular
             case .medium: .medium

@@ -1,7 +1,9 @@
 import RedlampEngineAPI
 import SwiftUI
 
-struct ToneCurvePanel: View {
+@_spi(Harness) public struct ToneCurvePanel: View {
+    public init() {}
+
     enum Mode: String, CaseIterable {
         case parametric = "Parametric"
         case point = "Point"
@@ -10,7 +12,7 @@ struct ToneCurvePanel: View {
     @Environment(EditorModel.self) private var model
     @State private var mode: Mode = .parametric
 
-    var body: some View {
+    public var body: some View {
         PanelSection(panel: .toneCurve) {
             Picker("Curve", selection: $mode) {
                 ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
@@ -36,37 +38,7 @@ struct ToneCurvePanel: View {
                 ParameterSlider(parameter: .curveDarks)
                 ParameterSlider(parameter: .curveShadows)
             } else {
-                HStack {
-                    Menu("Curve Presets") {
-                        Button("Linear") { model.resetPointCurve() }
-                        Button("Medium Contrast") {
-                            model.setPointCurve([
-                                .init(x: 0, y: 0),
-                                .init(x: 0.25, y: 0.21),
-                                .init(x: 0.75, y: 0.8),
-                                .init(x: 1, y: 1),
-                            ])
-                        }
-                        Button("Strong Contrast") {
-                            model.setPointCurve([
-                                .init(x: 0, y: 0),
-                                .init(x: 0.25, y: 0.17),
-                                .init(x: 0.75, y: 0.84),
-                                .init(x: 1, y: 1),
-                            ])
-                        }
-                        Button("Matte Fade") {
-                            model.setPointCurve([.init(x: 0, y: 0.08), .init(x: 0.3, y: 0.28), .init(x: 1, y: 0.96)])
-                        }
-                    }
-                    .controlSize(.small)
-                    .fixedSize()
-                    Spacer()
-                    Text("Click to add · double-click a point to remove")
-                        .font(Theme.captionFont)
-                        .foregroundStyle(Theme.tertiaryLabel)
-                }
-                .padding(.top, 6)
+                PointCurvePresets().padding(.top, 6)
             }
         }
     }
@@ -250,6 +222,44 @@ struct SplitHandles: View {
                     .onTapGesture(count: 2) { model.reset(parameter) }
                     .help("\(parameter.spec.label): drag to move, double-click to reset")
             }
+        }
+    }
+}
+
+/// The point curve's preset menu and hint, shared with the AppKit panel.
+struct PointCurvePresets: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        HStack {
+            Menu("Curve Presets") {
+                Button("Linear") { model.resetPointCurve() }
+                Button("Medium Contrast") {
+                    model.setPointCurve([
+                        .init(x: 0, y: 0),
+                        .init(x: 0.25, y: 0.21),
+                        .init(x: 0.75, y: 0.8),
+                        .init(x: 1, y: 1),
+                    ])
+                }
+                Button("Strong Contrast") {
+                    model.setPointCurve([
+                        .init(x: 0, y: 0),
+                        .init(x: 0.25, y: 0.17),
+                        .init(x: 0.75, y: 0.84),
+                        .init(x: 1, y: 1),
+                    ])
+                }
+                Button("Matte Fade") {
+                    model.setPointCurve([.init(x: 0, y: 0.08), .init(x: 0.3, y: 0.28), .init(x: 1, y: 0.96)])
+                }
+            }
+            .controlSize(.small)
+            .fixedSize()
+            Spacer()
+            Text("Click to add · double-click a point to remove")
+                .font(Theme.captionFont)
+                .foregroundStyle(Theme.tertiaryLabel)
         }
     }
 }

@@ -3,7 +3,7 @@ import RedlampEngineAPI
 import SwiftUI
 
 /// RGB histogram with Lightroom's clipping indicators and drag-to-adjust regions.
-struct HistogramView: View {
+@_spi(Harness) public struct HistogramView: View {
     @Environment(EditorModel.self) private var model
     @State private var hoverRegion: Region?
     @State private var dragRegion: Region?
@@ -38,7 +38,9 @@ struct HistogramView: View {
         }
     }
 
-    var body: some View {
+    public init() {}
+
+    public var body: some View {
         VStack(spacing: 6) {
             GeometryReader { geometry in
                 ZStack(alignment: .top) {

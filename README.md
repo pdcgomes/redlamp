@@ -61,7 +61,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] A single fused Metal kernel applies every per-pixel adjustment. Frames are delivered as IOSurfaces, so pixels are never copied between engine and UI.
 - [x] Latest-wins render scheduling: a burst of slider events collapses to the newest one.
 - [x] Rendering stays off the main thread while you drag a slider. Frames go straight to the canvas, which a dedicated display-link thread presents, and each view observes only the values it shows.
-- [x] AppKit Develop panels (Basic so far) that match the SwiftUI originals pixel for pixel, and a component harness for building and reviewing them (see [Component harness](#component-harness)).
+- [x] AppKit Develop panels (Basic, Tone Curve and the histogram so far) that match the SwiftUI originals pixel for pixel, and a component harness for building and reviewing them (see [Component harness](#component-harness)).
 - [x] Temperature and tint use a proper camera white-balance model (Robertson's method with the camera's color matrix). As Shot, Auto, and the illuminant presets all work.
 
 **Develop adjustments that render**
@@ -112,14 +112,14 @@ Measured on an Apple M1 Ultra with a Release build.
 
 Dragging a slider at 120 events a second (`scripts/perf-sweep.sh`), with every panel open:
 
-| Main thread during the drag | Iteration 2 | Off-main rendering | AppKit Basic panel |
+| Main thread during the drag | Iteration 2 | Off-main rendering | AppKit panels |
 | --- | --- | --- | --- |
-| Time busy | 100% | ~54% | ~36–41% |
-| Typical run-loop iteration (median) | — | 2.3 ms | 0.16–0.19 ms |
-| Slowest 5% of iterations | 157 ms | ~8 ms | ~6 ms |
-| Longest stall | 277 ms | ~20 ms | ~15–24 ms |
+| Time busy | 100% | ~54% | ~34% |
+| Typical run-loop iteration (median) | — | 2.3 ms | 0.17 ms |
+| Slowest 5% of iterations | 157 ms | ~8 ms | ~5 ms |
+| Slowest 1% of iterations | — | ~13 ms | ~8 ms |
 
-Most of what remains is the histogram and tone curve, still SwiftUI, redrawing at 30 Hz; they are the next panels to port.
+The AppKit panels are Basic, Tone Curve and the histogram. Most of what remains is Core Animation committing the redrawn layers and the engine's frames arriving; SwiftUI is down to about 2% of the main thread.
 
 ### Known limitations
 
@@ -277,7 +277,7 @@ mise run render -- render ~/Pictures/DSC01234.ARW -o out.jpg --size 2048 \
 
 ![The harness comparing the SwiftUI Basic panel with its AppKit port](docs/images/harness-parity.png)
 
-To add a component, write a scene in `apps/RedlampHarness/Sources/Scenes/` and register it in `BuiltInScenes.swift`. The Basic panel currently scores a mean difference of 0.1 grey levels against its SwiftUI original, with 99.97% of pixels within 24 levels (the rest is anti-aliasing on the slider thumbs).
+To add a component, write a scene in `apps/RedlampHarness/Sources/Scenes/` and register it in `BuiltInScenes.swift`. Against their SwiftUI originals, the ports score a mean difference of 0.05 (Tone Curve) to 0.12 (Basic) grey levels, with at least 99.97% of pixels within 24 levels; the rest is anti-aliasing on the slider thumbs.
 
 ## Using Redlamp
 

@@ -79,6 +79,48 @@ extension HarnessScene {
     }
 }
 
+extension HarnessScene {
+    static var toneCurveParity: HarnessScene {
+        HarnessScene(
+            id: "parity-tone-curve",
+            title: "Tone Curve panel",
+            symbol: "point.topleft.down.to.point.bottomright.curvepath",
+            synopsis: "SwiftUI ToneCurvePanel against the AppKit port: graph, luminance histogram, split handles, region sliders",
+            section: .parity,
+        ) {
+            ParitySceneView { width in
+                hostedReference(width: width) {
+                    ToneCurvePanel().environment(HarnessEditor.model)
+                }
+            } candidate: { _ in
+                ToneCurvePanelView.make(model: HarnessEditor.model)
+            }
+        } inspector: {
+            ParityInspector()
+        }
+    }
+
+    static var histogramParity: HarnessScene {
+        HarnessScene(
+            id: "parity-histogram",
+            title: "Histogram",
+            symbol: "chart.bar.xaxis",
+            synopsis: "SwiftUI HistogramView against the AppKit port — hover to see a region, drag to adjust it",
+            section: .parity,
+        ) {
+            ParitySceneView { width in
+                hostedReference(width: width) {
+                    HistogramView().environment(HarnessEditor.model)
+                }
+            } candidate: { _ in
+                HistogramPanelView.make(model: HarnessEditor.model)
+            }
+        } inspector: {
+            ParityInspector()
+        }
+    }
+}
+
 private struct ParitySceneView: View {
     let reference: @MainActor (CGFloat) -> NSView
     let candidate: @MainActor (CGFloat) -> NSView

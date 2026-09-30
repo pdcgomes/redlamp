@@ -73,6 +73,15 @@ enum MetricsProbe {
         if let chevron {
             lines.append("chevron alignmentRect \(chevron.alignmentRect)")
         }
+        for size in [8.0, 9.0] {
+            let triangle = NSImage(systemSymbolName: "arrowtriangle.up.fill", accessibilityDescription: nil)?
+                .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: size, weight: .regular))
+            row(
+                "triangle \(Int(size))",
+                swiftUI(Image(systemName: "arrowtriangle.up.fill").font(.system(size: size))),
+                triangle?.size ?? .zero,
+            )
+        }
         row("button Auto mini", swiftUI(Button("Auto") {}.controlSize(.mini)), appKit(auto))
         row(
             "picker segmented small",

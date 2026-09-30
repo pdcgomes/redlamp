@@ -16,7 +16,7 @@ final class InspectorPanelsView: NSView {
         }
         document = InspectorDocumentView(views: [
             BasicPanelView.make(model: model),
-            hosted(ToneCurvePanel()),
+            ToneCurvePanelView.make(model: model),
             hosted(ColorMixerPanel()),
             hosted(ColorGradingPanel()),
             hosted(DetailPanel()),

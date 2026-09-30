@@ -67,6 +67,12 @@ public final class PanelSectionView: NSView, HeightProviding {
         true
     }
 
+    /// Replaces the panel's rows (a panel whose content depends on a mode).
+    public func setRows(_ rows: [NSView]) {
+        body.setArrangedViews(rows)
+        invalidateColumnLayout()
+    }
+
     /// Builds the header's right-click menu when it opens.
     public var headerMenu: (@MainActor () -> NSMenu)? {
         get { header.menuProvider }
@@ -189,12 +195,6 @@ final class PanelHeaderView: NSView {
 
     private var hoverArea: NSTrackingArea?
 
-    static let chevronFrame = CGSize(width: 8, height: 11)
-
-    /// How far the 7-wide glyph sits from the leading edge of its 8-wide frame, tuned
-    /// against SwiftUI in the harness.
-    static var chevronInset: CGFloat = 0.5
-
     init(title: String, badge: String?) {
         self.title = title
         self.badge = badge
@@ -214,30 +214,17 @@ final class PanelHeaderView: NSView {
 
     override func draw(_: NSRect) {
         hasBeenDisplayed = true
-        guard let context = NSGraphicsContext.current?.cgContext else { return }
         let scale = backingScale
         var x = Metrics.panelPadding
         let midY = bounds.height / 2
 
-        // SwiftUI lays the chevron out in an 8 × 11 frame (the image is 7 wide) and turns the
-        // vector glyph about the frame's center; so does this.
-        let frame = PixelGrid.centered(
-            Self.chevronFrame,
-            at: CGPoint(x: x + Self.chevronFrame.width / 2, y: midY),
-            scale: scale,
+        // Turned about its frame's center, as SwiftUI's `rotationEffect` does.
+        let chevron = Symbol.layoutSize("chevron.right", pointSize: 9, weight: .bold)
+        Symbol.draw(
+            "chevron.right", pointSize: 9, weight: .bold, color: Palette.secondaryLabel,
+            centeredAt: CGPoint(x: x + chevron.width / 2, y: midY), rotation: isExpanded ? 90 : 0, scale: scale,
         )
-        if let chevron = Symbol.image("chevron.right", pointSize: 9, weight: .bold, color: Palette.secondaryLabel) {
-            let size = chevron.size
-            context.saveGState()
-            context.translateBy(x: frame.midX, y: frame.midY)
-            context.rotate(by: isExpanded ? .pi / 2 : 0)
-            let rect = CGRect(
-                x: -frame.width / 2 + Self.chevronInset, y: -size.height / 2, width: size.width, height: size.height,
-            )
-            Symbol.draw(chevron, in: rect, alpha: Palette.secondaryLabel.alpha)
-            context.restoreGState()
-        }
-        x += frame.width + 8
+        x += chevron.width + 8
 
         let titleWidth = TextLine.width(title, font: Typography.panelTitle)
         TextLine.draw(
