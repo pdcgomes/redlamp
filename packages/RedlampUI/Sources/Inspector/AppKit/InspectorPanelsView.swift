@@ -17,13 +17,13 @@ final class InspectorPanelsView: NSView {
         document = InspectorDocumentView(views: [
             BasicPanelView.make(model: model),
             ToneCurvePanelView.make(model: model),
-            hosted(ColorMixerPanel()),
+            ColorMixerPanelView.make(model: model),
             hosted(ColorGradingPanel()),
-            hosted(DetailPanel()),
-            hosted(LensPanel()),
-            hosted(TransformPanel()),
-            hosted(EffectsPanel()),
-            hosted(CalibrationPanel()),
+            ReferencePanelViews.detail(model: model),
+            ReferencePanelViews.lens(model: model),
+            ReferencePanelViews.transform(model: model),
+            ReferencePanelViews.effects(model: model),
+            ReferencePanelViews.calibration(model: model),
         ])
         super.init(frame: .zero)
         scrollView.drawsBackground = false

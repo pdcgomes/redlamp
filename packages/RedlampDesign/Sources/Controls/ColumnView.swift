@@ -50,10 +50,8 @@ open class ColumnView: NSView, HeightProviding {
     }
 
     public func height(forWidth width: CGFloat) -> CGFloat {
-        let content = width - insets.left - insets.right
-        let rows = arrangedViews.filter { !$0.isHidden }
-        let heights = rows.reduce(0) { $0 + Self.height(of: $1, width: content) }
-        return insets.top + heights + spacing * CGFloat(max(rows.count - 1, 0)) + insets.bottom
+        let frames = rowFrames(width: width)
+        return (frames.last?.maxY ?? insets.top) + insets.bottom
     }
 
     override open var intrinsicContentSize: NSSize {
@@ -62,16 +60,26 @@ open class ColumnView: NSView, HeightProviding {
 
     override open func layout() {
         super.layout()
-        let width = bounds.width - insets.left - insets.right
-        var y = insets.top
-        for view in arrangedViews where !view.isHidden {
-            let height = Self.height(of: view, width: width)
-            view.frame = CGRect(x: insets.left, y: y, width: width, height: height)
-            y += height + spacing
+        for (view, frame) in zip(arrangedViews.filter { !$0.isHidden }, rowFrames(width: bounds.width)) {
+            view.frame = frame
         }
     }
 
-    static func height(of view: NSView, width: CGFloat) -> CGFloat {
+    /// Rows stack at their exact (sometimes fractional) heights, and each frame's edges are
+    /// then put on the pixel grid, as SwiftUI does: a 14.125 pt checkbox row lands where
+    /// it does in the SwiftUI original.
+    private func rowFrames(width: CGFloat) -> [CGRect] {
+        let content = width - insets.left - insets.right
+        let scale = backingScale
+        var y = insets.top
+        return arrangedViews.filter { !$0.isHidden }.map { view in
+            let height = Self.height(of: view, width: content)
+            defer { y += height + spacing }
+            return PixelGrid.snap(CGRect(x: insets.left, y: y, width: content, height: height), scale: scale)
+        }
+    }
+
+    public static func height(of view: NSView, width: CGFloat) -> CGFloat {
         if let provider = view as? HeightProviding {
             return provider.height(forWidth: width)
         }

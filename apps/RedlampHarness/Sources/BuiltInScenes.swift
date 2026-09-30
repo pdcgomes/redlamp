@@ -11,6 +11,7 @@ enum BuiltInScenes {
         catalog.register(.basicPanelParity)
         catalog.register(.toneCurveParity)
         catalog.register(.histogramParity)
+        HarnessScene.referencePanelParity.forEach { catalog.register($0) }
         catalog.register(.panelPerformance)
         return catalog
     }

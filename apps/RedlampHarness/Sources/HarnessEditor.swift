@@ -15,6 +15,8 @@ enum HarnessEditor {
             fatalError("The harness needs a Metal GPU")
         }
         let model = EditorModel(engine: engine)
+        // Every panel open, so each one's rows are there to review.
+        model.expandedPanels = Set(PanelID.allCases)
         // No canvas on screen, but a size to render at, so frames (and the histogram) flow.
         model.canvas.updateView(size: CGSize(width: 800, height: 600), backingScale: 1)
         if let photo = samplePhoto() {

@@ -1,7 +1,8 @@
+import Observation
 import RedlampEngineAPI
 import SwiftUI
 
-struct ColorMixerPanel: View {
+@_spi(Harness) public struct ColorMixerPanel: View {
     enum Mixer: String, CaseIterable {
         case hsl = "HSL"
         case color = "Color"
@@ -22,34 +23,21 @@ struct ColorMixerPanel: View {
         }
     }
 
-    @Environment(EditorModel.self) private var model
-    @State private var mixer: Mixer = .hsl
-    @State private var attribute: Attribute = .hue
-    @State private var band: ColorBand = .orange
+    @State private var state = ColorMixerState()
 
-    var body: some View {
+    public init() {}
+
+    public var body: some View {
         PanelSection(panel: .colorMixer) {
-            ControlRow(label: "Mixer") {
-                Picker("Mixer", selection: $mixer) {
-                    ForEach(Mixer.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.small)
-            }
-            .padding(.bottom, 4)
-
-            switch mixer {
-            case .hsl:
-                Picker("Adjust", selection: $attribute) {
-                    ForEach(Attribute.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.small)
+            ControlRow(label: "Mixer") { MixerPicker(state: state) }
                 .padding(.bottom, 4)
 
-                if attribute == .all {
+            switch state.mixer {
+            case .hsl:
+                AttributePicker(state: state)
+                    .padding(.bottom, 4)
+
+                if state.attribute == .all {
                     ForEach([Attribute.hue, .saturation, .luminance], id: \.self) { group in
                         SubsectionHeader(
                             title: group.rawValue,
@@ -61,34 +49,100 @@ struct ColorMixerPanel: View {
                     }
                 } else {
                     ForEach(ColorBand.allCases, id: \.self) { band in
-                        ParameterSlider(parameter: attribute.parameter(for: band))
+                        ParameterSlider(parameter: state.attribute.parameter(for: band))
                     }
                 }
 
             case .color:
-                HStack(spacing: 0) {
-                    ForEach(ColorBand.allCases, id: \.self) { candidate in
-                        Button {
-                            band = candidate
-                        } label: {
+                BandSwatches(state: state)
+                    .padding(.bottom, 6)
+                ParameterSlider(parameter: state.band.hueParameter, label: "Hue")
+                ParameterSlider(parameter: state.band.saturationParameter, label: "Saturation")
+                ParameterSlider(parameter: state.band.luminanceParameter, label: "Luminance")
+            }
+        }
+    }
+}
+
+/// The Color Mixer's own view state (which mixer, attribute and band are showing), shared
+/// by the SwiftUI panel and its AppKit port.
+@MainActor @Observable
+final class ColorMixerState {
+    var mixer = ColorMixerPanel.Mixer.hsl {
+        didSet {
+            if mixer != oldValue {
+                onChange()
+            }
+        }
+    }
+
+    var attribute = ColorMixerPanel.Attribute.hue {
+        didSet {
+            if attribute != oldValue {
+                onChange()
+            }
+        }
+    }
+
+    var band = ColorBand.orange {
+        didSet {
+            if band != oldValue {
+                onChange()
+            }
+        }
+    }
+
+    @ObservationIgnored var onChange: () -> Void = {}
+}
+
+struct MixerPicker: View {
+    @Bindable var state: ColorMixerState
+
+    var body: some View {
+        Picker("Mixer", selection: $state.mixer) {
+            ForEach(ColorMixerPanel.Mixer.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.small)
+    }
+}
+
+struct AttributePicker: View {
+    @Bindable var state: ColorMixerState
+
+    var body: some View {
+        Picker("Adjust", selection: $state.attribute) {
+            ForEach(ColorMixerPanel.Attribute.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.small)
+    }
+}
+
+/// The eight color swatches of the per-color mixer.
+struct BandSwatches: View {
+    @Bindable var state: ColorMixerState
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(ColorBand.allCases, id: \.self) { candidate in
+                Button {
+                    state.band = candidate
+                } label: {
+                    Circle()
+                        .fill(candidate.color)
+                        .frame(width: 16, height: 16)
+                        .overlay(
                             Circle()
-                                .fill(candidate.color)
-                                .frame(width: 16, height: 16)
-                                .overlay(
-                                    Circle()
-                                        .strokeBorder(Color.white, lineWidth: band == candidate ? 2 : 0)
-                                        .padding(-3),
-                                )
-                                .frame(maxWidth: .infinity, minHeight: 26)
-                        }
-                        .buttonStyle(.plain)
-                        .help(candidate.name)
-                    }
+                                .strokeBorder(Color.white, lineWidth: state.band == candidate ? 2 : 0)
+                                .padding(-3),
+                        )
+                        .frame(maxWidth: .infinity, minHeight: 26)
                 }
-                .padding(.bottom, 6)
-                ParameterSlider(parameter: band.hueParameter, label: "Hue")
-                ParameterSlider(parameter: band.saturationParameter, label: "Saturation")
-                ParameterSlider(parameter: band.luminanceParameter, label: "Luminance")
+                .buttonStyle(.plain)
+                .help(candidate.name)
             }
         }
     }

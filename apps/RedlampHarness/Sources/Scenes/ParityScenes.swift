@@ -121,6 +121,66 @@ extension HarnessScene {
     }
 }
 
+extension HarnessScene {
+    /// A Develop panel's SwiftUI original against its AppKit port.
+    static func panelParity(
+        id: String,
+        title: String,
+        symbol: String,
+        reference: @escaping @MainActor () -> some View,
+        candidate: @escaping @MainActor (EditorModel) -> NSView,
+    ) -> HarnessScene {
+        HarnessScene(
+            id: "parity-\(id)",
+            title: title,
+            symbol: symbol,
+            synopsis: "The SwiftUI \(title) panel against its AppKit port",
+            section: .parity,
+        ) {
+            ParitySceneView { width in
+                hostedReference(width: width) { reference().environment(HarnessEditor.model) }
+            } candidate: { _ in
+                candidate(HarnessEditor.model)
+            }
+        } inspector: {
+            ParityInspector()
+        }
+    }
+
+    static var referencePanelParity: [HarnessScene] {
+        [
+            panelParity(
+                id: "color-mixer",
+                title: "Color Mixer",
+                symbol: "paintpalette",
+                reference: { ColorMixerPanel() },
+            ) {
+                ColorMixerPanelView.make(model: $0)
+            },
+            panelParity(id: "detail", title: "Detail", symbol: "triangle", reference: { DetailPanel() }) {
+                ReferencePanelViews.detail(model: $0)
+            },
+            panelParity(id: "lens", title: "Lens Corrections", symbol: "camera.aperture", reference: { LensPanel() }) {
+                ReferencePanelViews.lens(model: $0)
+            },
+            panelParity(id: "transform", title: "Transform", symbol: "perspective", reference: { TransformPanel() }) {
+                ReferencePanelViews.transform(model: $0)
+            },
+            panelParity(id: "effects", title: "Effects", symbol: "sparkles", reference: { EffectsPanel() }) {
+                ReferencePanelViews.effects(model: $0)
+            },
+            panelParity(
+                id: "calibration",
+                title: "Calibration",
+                symbol: "dial.medium",
+                reference: { CalibrationPanel() },
+            ) {
+                ReferencePanelViews.calibration(model: $0)
+            },
+        ]
+    }
+}
+
 private struct ParitySceneView: View {
     let reference: @MainActor (CGFloat) -> NSView
     let candidate: @MainActor (CGFloat) -> NSView

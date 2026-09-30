@@ -121,6 +121,17 @@ enum MetricsProbe {
             appKit(SliderRowView(parameter: .exposure, editor: model)),
         )
 
+        let toggles = NSHostingController(rootView: VStack(alignment: .leading, spacing: 3) {
+            Toggle("Remove Chromatic Aberration", isOn: .constant(false))
+            Toggle("Enable Profile Corrections", isOn: .constant(false))
+        }.font(Typography.label.font).toggleStyle(.checkbox).controlSize(.small))
+        let single = NSHostingController(rootView: Toggle("Remove", isOn: .constant(false))
+            .font(Typography.label.font).toggleStyle(.checkbox).controlSize(.small))
+        lines
+            .append(
+                "lens toggles sizeThatFits \(toggles.sizeThatFits(in: CGSize(width: 288, height: 10000))), single \(single.sizeThatFits(in: CGSize(width: 288, height: 10000)))",
+            )
+
         let report = lines.joined(separator: "\n") + "\n"
         try? report.write(toFile: "/tmp/redlamp-probe.txt", atomically: true, encoding: .utf8)
         NSApp.terminate(nil)

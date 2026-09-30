@@ -55,7 +55,7 @@ import SwiftUI
 /// A native control from SwiftUI, hosted on its own inside an AppKit panel. It is given
 /// the rest of its row and lays itself out in it, leading-aligned, exactly as SwiftUI
 /// does in the original row (a menu takes its ideal width, not its minimum).
-final class HostedControl: NSView, ProposalSizing {
+final class HostedControl: NSView, ProposalSizing, HeightProviding {
     private let controller: NSHostingController<AnyView>
     private var observation: NSKeyValueObservation?
 
@@ -80,7 +80,13 @@ final class HostedControl: NSView, ProposalSizing {
     }
 
     func size(proposing proposal: CGSize) -> CGSize {
-        CGSize(width: proposal.width, height: intrinsicContentSize.height)
+        CGSize(width: proposal.width, height: height(forWidth: proposal.width))
+    }
+
+    /// The height SwiftUI chooses at this width (not the minimum, which is shorter for
+    /// some controls, such as checkboxes).
+    func height(forWidth width: CGFloat) -> CGFloat {
+        controller.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude)).height
     }
 
     override var intrinsicContentSize: NSSize {
