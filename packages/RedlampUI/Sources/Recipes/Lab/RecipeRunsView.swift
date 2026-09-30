@@ -110,6 +110,27 @@ final class RecipeRunsModel {
         return NSImage(contentsOf: store.directory.appendingPathComponent(path))
     }
 
+    @ObservationIgnored private var referenceImages: [String: NSImage] = [:]
+
+    /// A brief's reference image; paths are relative to the checkout unless absolute.
+    func referenceImage(_ path: String) -> NSImage? {
+        if let cached = referenceImages[path] {
+            return cached
+        }
+        let url = path.hasPrefix("/") ? URL(fileURLWithPath: path) : root.appendingPathComponent(path)
+        let image = NSImage(contentsOf: url)
+        referenceImages[path] = image
+        return image
+    }
+
+    func recipe(_ candidate: String) -> Recipe? {
+        store?.recipe(for: candidate)
+    }
+
+    var selectedBriefValue: RecipeRun.Brief? {
+        briefs.first { $0.id == selectedBrief }
+    }
+
     var humanPairwiseCount: Int {
         verdicts.filter { $0.type == .pairwise && $0.rater != "agent" }.count
     }
@@ -189,7 +210,7 @@ struct RecipeRunsView: View {
     var body: some View {
         Group {
             if let runs {
-                RunsContent(runs: runs, catalog: model.catalog)
+                RunsContent(runs: runs, lab: model)
                     .task { await runs.watch() }
             } else {
                 ContentUnavailableView(
@@ -208,7 +229,7 @@ struct RecipeRunsView: View {
 
 private struct RunsContent: View {
     @Bindable var runs: RecipeRunsModel
-    let catalog: RecipeCatalog
+    let lab: RecipeLabModel
 
     var body: some View {
         HSplitView {
@@ -242,6 +263,12 @@ private struct RunsContent: View {
                     if let message = runs.message {
                         Text(message).font(.caption).foregroundStyle(.orange)
                     }
+                    if let brief = runs.selectedBriefValue {
+                        BriefDetail(brief: brief, status: runs.status(brief), image: runs.referenceImage) { approved in
+                            runs.decide(brief: brief, approved: approved)
+                        }
+                        Divider()
+                    }
                     progressChart
                     lineage
                     pairwise
@@ -274,6 +301,12 @@ private struct RunsContent: View {
     private var lineage: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Candidates").font(.headline)
+            if runs.candidates(for: runs.selectedBrief).isEmpty {
+                Text(runs.selectedBriefValue.map { runs.status($0) == .proposed } == true
+                    ? "None yet. Nothing is developed until the brief is approved."
+                    : "None yet. The colorist's candidates appear here as they're saved.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             ForEach(runs.lineage(for: runs.selectedBrief), id: \.candidate.id) { entry in
                 let candidate = entry.candidate
                 VStack(alignment: .leading, spacing: 4) {
@@ -292,14 +325,17 @@ private struct RunsContent: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button(runs.selectedCandidate == candidate.id ? "Hide" : "Show") {
+                        Button("Open in Compare") { open(candidate.id) }
+                            .controlSize(.mini)
+                            .help("Full-size split view against the original, on any look-dev image")
+                        Button(runs.selectedCandidate == candidate.id ? "Hide Sheet" : "Sheet") {
                             runs.selectedCandidate = runs.selectedCandidate == candidate.id ? nil : candidate.id
                         }
                         .controlSize(.mini)
                     }
                     if runs.selectedCandidate == candidate.id {
                         if let image = runs.renderImage(candidate) {
-                            Image(nsImage: image).resizable().aspectRatio(contentMode: .fit).frame(maxHeight: 320)
+                            Image(nsImage: image).resizable().aspectRatio(contentMode: .fit)
                         }
                         if let notes = candidate.notes {
                             Text(notes).font(.caption)
@@ -329,23 +365,18 @@ private struct RunsContent: View {
                 Text("Pairwise").font(.headline)
                 Button("Next Pair") { runs.nextPair() }.controlSize(.small)
             }
-            if let pair = runs.pair,
-               let a = runs.candidates.first(where: { $0.id == pair.a }),
-               let b = runs.candidates.first(where: { $0.id == pair.b }) {
-                HStack(alignment: .top, spacing: 8) {
-                    ForEach([a, b], id: \.id) { candidate in
-                        VStack {
-                            if let image = runs.renderImage(candidate) {
-                                Image(nsImage: image).resizable().aspectRatio(contentMode: .fit)
-                            }
-                            Button(candidate.id == a.id ? "Left is better" : "Right is better") {
-                                runs.pick(winner: candidate.id)
-                            }
-                        }
-                    }
+            if let pair = runs.pair, let left = runs.recipe(pair.a), let right = runs.recipe(pair.b) {
+                PairwiseJudge(lab: lab, left: left, right: right, pairKey: "\(pair.a)|\(pair.b)")
+                HStack {
+                    Button("Left is better") { runs.pick(winner: pair.a) }
+                    Button("About the same") { runs.pick(winner: nil) }
+                    Button("Right is better") { runs.pick(winner: pair.b) }
                 }
-                Button("About the same") { runs.pick(winner: nil) }.controlSize(.small)
-                Text("Order is random; names are hidden on purpose.").font(.caption2).foregroundStyle(.secondary)
+                Text("Order is random; names are hidden on purpose. Try a few photos before deciding.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            } else {
+                Text("Next Pair shows two candidates on the same photo, large, for you to pick the better one.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -368,9 +399,108 @@ private struct RunsContent: View {
                     Spacer()
                     Button("Pick") { runs.decide(final: id, approved: true) }
                     Button("Turn Down") { runs.decide(final: id, approved: false) }
-                    Button("Add to My Recipes") { runs.promote(id, into: catalog) }
+                    Button("Open in Compare") { open(id) }
+                    Button("Add to My Recipes") { runs.promote(id, into: lab.catalog) }
                 }
                 .controlSize(.small)
+            }
+        }
+    }
+}
+
+extension RunsContent {
+    func open(_ candidate: String) {
+        guard let recipe = runs.recipe(candidate), let run = runs.selectedRun else { return }
+        lab.openInCompare(candidate: recipe, id: candidate, run: run)
+    }
+}
+
+/// Two candidates on one photo at compare size, with the photo chosen from the look-dev set.
+private struct PairwiseJudge: View {
+    let lab: RecipeLabModel
+    let left: Recipe
+    let right: Recipe
+    let pairKey: String
+    @State private var image: LabImage?
+    @State private var renders: [CGImage?] = [nil, nil]
+
+    private var photos: [LabImage] {
+        lab.images.filter { !$0.categories.contains("chart") }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Picker("Photo", selection: $image) {
+                ForEach(photos) { photo in
+                    Text("\(photo.name) · \(photo.categories.prefix(2).joined(separator: ", "))").tag(Optional(photo))
+                }
+            }
+            .frame(maxWidth: 360)
+            HStack(alignment: .top, spacing: 6) {
+                ForEach(0 ..< 2, id: \.self) { index in
+                    ZStack {
+                        Rectangle().fill(.black.opacity(0.25))
+                        if let render = renders[index] {
+                            Image(decorative: render, scale: 2).resizable().interpolation(.high)
+                                .aspectRatio(contentMode: .fit)
+                        } else {
+                            ProgressView().controlSize(.small)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 320)
+                }
+            }
+        }
+        .onAppear { image = image ?? lab.selectedImage.flatMap { photos.contains($0) ? $0 : nil } ?? photos.first }
+        .task(id: "\(pairKey)|\(image?.id ?? "")") {
+            renders = [nil, nil]
+            guard let image else { return }
+            let first = await lab.renderLarge(left, on: image)
+            let second = await lab.renderLarge(right, on: image)
+            renders = [first, second]
+        }
+    }
+}
+
+/// The selected brief in full, with the references it was drawn from, so it can be judged
+/// before anything is developed against it.
+private struct BriefDetail: View {
+    let brief: RecipeRun.Brief
+    let status: RecipeRun.BriefStatus
+    let image: (String) -> NSImage?
+    let decide: (Bool) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(brief.title).font(.title3.weight(.semibold))
+                Text(status.rawValue).font(.caption)
+                    .foregroundStyle(status == .approved ? .green : (status == .rejected ? .red : .orange))
+                Spacer()
+                if status == .proposed {
+                    Button("Reject") { decide(false) }
+                    Button("Approve") { decide(true) }.buttonStyle(.borderedProminent)
+                }
+            }
+            Text(brief.description).font(.callout).fixedSize(horizontal: false, vertical: true)
+            if let requirements = brief.requirements, !requirements.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(requirements, id: \.self) { Text("• " + $0).font(.caption) }
+                }
+            }
+            Text("References (\(brief.references.count))").font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 8)], alignment: .leading, spacing: 8) {
+                ForEach(brief.references, id: \.self) { path in
+                    if let image = image(path) {
+                        Image(nsImage: image).resizable().aspectRatio(contentMode: .fit)
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                            .help(path)
+                    } else {
+                        Text(URL(fileURLWithPath: path).lastPathComponent + " (missing)")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
             }
         }
     }

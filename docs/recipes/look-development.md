@@ -67,7 +67,7 @@ redlamp recipe profile [--slots chrome,…] [--install]
 
 Each fit ships as the slot's next Base Look version. Earlier versions stay bundled for the edits that pinned them; menus offer only the newest; the Lab lists every version. Recipes built on a re-measured slot are published as a new version too.
 
-Results (ΔE to the camera JPEG, OKLab × 100, on scenes the fit never saw):
+Results (ΔE to the camera JPEG, OKLab × 100, on scenes the fit never saw). The first measured versions used the CC0 pairs alone:
 
 | Slot | Camera film simulation | Scenes | Redlamp Color | Hand-designed v1 | Measured v2 |
 | --- | --- | --- | --- | --- | --- |
@@ -75,9 +75,28 @@ Results (ΔE to the camera JPEG, OKLab × 100, on scenes the fit never saw):
 | `vivid-slide` | Velvia | 10 | 4.45 | 5.51 | **3.39** |
 | `chrome` | Classic Chrome | 4 | 6.19 | 6.24 | **3.43** (few scenes: provisional) |
 
-The other slots need data: Astia has one clean public scene, Eterna none (only files shot with Highlight and Shadow −2), and Classic Negative, Nostalgic Negative, Pro Neg, Acros and Reala Ace none at all. Twenty to forty varied scenes per simulation, from any Fujifilm body re-rendered in camera or in X RAW Studio, are enough; add them to the manifest and rerun `profile`. The approach isn't Fujifilm-specific: any camera that embeds its own full-size rendering can be profiled the same way.
+Adding the review-site pairs (`review-pairs.json`, below) gave a larger and harder test set, so the numbers aren't comparable with the table above. On it, the previous version is mostly scored on photos it never saw:
+
+| Slot | Photos (bodies) | Redlamp Color | Previous version | New version | Shipped |
+| --- | --- | --- | --- | --- | --- |
+| `standard` | 120 (50) | 5.38 | v2 4.21 | **v3 3.26** | yes |
+| `chrome` | 18 (5) | 5.72 | v2 5.52 | **v3 4.61** | yes |
+| `soft-slide` | 5 (3) | 12.84 | v1 12.77 | **v2 4.57** | yes, provisional |
+| `vivid-slide` | 13 (12) | 4.09 | v2 2.84 (seen 10 of 13) | v3 3.19 | no: not shown better |
+| `cinema` | 4 (1) | 4.76 | v1 2.69 | v2 0.88 | no: four night scenes only |
+
+The Soft Slide numbers include a large brightness difference between Redlamp and the camera on these bodies (TON-14). The other slots still need data: Eterna has only night scenes; Classic Negative, Nostalgic Negative, Pro Neg and Reala Ace none; Acros none; and the only Monochrome files were toned (Monochromatic Color), which the fetcher now rejects. Twenty to forty varied scenes per simulation, from any Fujifilm body re-rendered in camera or in X RAW Studio, are enough; add them to the manifest and rerun `profile`. The approach isn't Fujifilm-specific: any camera that embeds its own full-size rendering can be profiled the same way.
 
 **Legal check still open:** closely matching a camera maker's rendering is a grey area. The looks keep Redlamp's own slot names.
+
+### More data
+
+Surveyed 2026-09-30 ([TON-20](../research/research-tracker.md#4-color-tone-and-detail)):
+
+- **Review sites publish raw files.** Photography Blog's sample pages link 2,899 Fujifilm RAFs from 48 bodies (X-Pro1 to GFX100RF), each carrying the camera's JPEG. Reviewers shoot the default: 2,860 are Provia, and the rest are 17 Classic Chrome, 6 Astia, 4 Velvia, 4 Eterna (night only), 9 toned Monochrome and one Monochrome + Red. `research/profiler/fetch_review_pairs.py` surveys them (the first 512 KB of each file), selects neutral files (two Provia per body, up to eight of anything else) into `review-pairs.json`, and downloads them into `build/profiler/review/`; `redlamp recipe profile` reads both manifests. The files are copyrighted: they're used as references only, never shipped or committed ([DEC-17](../research/research-tracker.md#1-decisions-and-legal-questions)). Fetchers are slow (about one request a second), resumable, and stop at the first refusal: a faster first survey got us blocked for a while. Imaging Resource, DPReview and ePhotozine refuse automated requests outright.
+- **Simulation-to-simulation pairs.** Film-simulation bracketing, and blog posts showing one frame in every simulation, give JPEG pairs with no raw. A simulation can be fitted relative to one already measured (Provia): measured Provia, then the Provia-to-X table. Web-sized, already-clipped JPEGs make these weaker than raw pairs.
+- **Recipe cards.** Sites such as filmsimrecipes.com and Fuji X Weekly list settings cards that the `fujifilm-card` dialect imports directly ([DEC-18](../research/research-tracker.md#1-decisions-and-legal-questions)).
+- **A camera.** One Fujifilm body for a few days: 30–40 varied raws, each re-rendered in camera through every simulation, is still the cleanest set.
 
 ## Lint
 

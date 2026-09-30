@@ -121,6 +121,8 @@ extension StarterPack {
                 .contrast: 8, .highlights: -15, .whites: 8, .saturationOrange: -5,
             ],
             baseLook: look(.softSlide),
+            // Version 2: on the measured Soft Slide look.
+            version: 2,
         ),
         B.make(
             "portrait/film",
@@ -187,6 +189,8 @@ extension StarterPack {
             ],
             baseLook: look(.softSlide),
             pointCurve: fade(0.07, white: 0.97, mid: 0.52),
+            // Version 2: on the measured Soft Slide look.
+            version: 2,
         ),
     ]
 }
@@ -205,8 +209,8 @@ extension StarterPack {
                 .contrast: 20, .colorChrome: 60, .grainAmount: 25, .grainSize: 30, .vignetteAmount: -15,
             ],
             baseLook: look(.chrome),
-            // Version 2: on the measured Chrome look.
-            version: 2,
+            // Version 2: on the measured Chrome look; 3: re-measured from five cameras.
+            version: 3,
         ),
         B.make(
             "street/urban-teal",
@@ -339,8 +343,8 @@ extension StarterPack {
             "Chrome Street",
             summary: "Muted chrome color, hard shadows and deep blues.",
             tags: ["street"],
-            // Version 2: on the measured Chrome look.
-            version: 2,
+            // Version 2: on the measured Chrome look; 3: re-measured from five cameras.
+            version: 3,
             CameraRecipeCard(
                 filmSimulation: .chrome, dynamicRange: .dr400, highlight: -1, shadow: 1, color: -2,
                 colorChrome: .strong,

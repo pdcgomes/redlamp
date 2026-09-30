@@ -10,6 +10,7 @@ public struct LabItem: Identifiable, Hashable, Sendable {
         case recipe = "Recipes"
         case baseLook = "Base Looks"
         case imported = "Imported LUTs"
+        case candidate = "Studio Candidates"
     }
 
     public var id: String
@@ -153,7 +154,33 @@ public final class RecipeLabModel {
                 kind: .baseLook, recipe: BaseLookBrowser.previewRecipe(for: package), package: package,
             )
         }
-        return recipes + looks
+        return recipes + looks + candidates
+    }
+
+    /// Studio candidates opened from the Runs tab, so they can be compared at full size.
+    public private(set) var candidates: [LabItem] = []
+    /// Changes whenever the Runs tab asks the Lab to show the Compare tab.
+    public private(set) var compareRequest = 0
+
+    public func openInCompare(candidate recipe: Recipe, id: String, run: String) {
+        let item = LabItem(
+            id: "candidate:\(run)/\(id)", title: "\(id) · \(recipe.name)", group: "Run \(run)", kind: .candidate,
+            recipe: recipe,
+        )
+        candidates.removeAll { $0.id == item.id }
+        candidates.append(item)
+        thumbnails = thumbnails.filter { !$0.key.hasPrefix(item.id + "|") }
+        large = large.filter { !$0.key.hasPrefix(item.id + "|") }
+        selectedID = item.id
+        compareID = nil
+        compareMode = .split
+        compareRequest += 1
+        scheduleGallery()
+    }
+
+    /// Renders a recipe on one image at compare size, uncached, for pairwise judging.
+    public func renderLarge(_ recipe: Recipe, on image: LabImage) async -> CGImage? {
+        try? await renderer.render(recipe, image: image.url, maxLongEdge: 1800)
     }
 
     public var items: [LabItem] {

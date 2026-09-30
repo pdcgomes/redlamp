@@ -71,6 +71,7 @@ public struct RecipeLabView: View {
             .layoutPriority(1)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onChange(of: model.compareRequest) { tab = .compare }
     }
 }
 

@@ -1,0 +1,1207 @@
+{
+ "version": 1,
+ "description": "Builds a second camera-pair set for `redlamp recipe profile` from camera-review sample files.",
+ "folder": "build/profiler/review/files",
+ "pairs": [
+  {
+   "slot": "chrome",
+   "camera": "Fujifilm X-T2",
+   "look": "Classic Chrome",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t2/sample_images/fujifilm_x_t2_02.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t2_review/sample_images",
+   "file": "X-T2-chrome-fujifilm_x_t2_02.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "chrome",
+   "camera": "Fujifilm X-T2",
+   "look": "Classic Chrome",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t2/sample_images/fujifilm_x_t2_03.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t2_review/sample_images",
+   "file": "X-T2-chrome-fujifilm_x_t2_03.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "chrome",
+   "camera": "Fujifilm X-T2",
+   "look": "Classic Chrome",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t2/sample_images/fujifilm_x_t2_04.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t2_review/sample_images",
+   "file": "X-T2-chrome-fujifilm_x_t2_04.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "chrome",
+   "camera": "Fujifilm X-T2",
+   "look": "Classic Chrome",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t2/sample_images/fujifilm_x_t2_06.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t2_review/sample_images",
+   "file": "X-T2-chrome-fujifilm_x_t2_06.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "chrome",
+   "camera": "Fujifilm X-T2",
+   "look": "Classic Chrome",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t2/sample_images/fujifilm_x_t2_09.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t2_review/sample_images",
+   "file": "X-T2-chrome-fujifilm_x_t2_09.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "chrome",
+   "camera": "Fujifilm X-T2",
+   "look": "Classic Chrome",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t2/sample_images/fujifilm_x_t2_10.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t2_review/sample_images",
+   "file": "X-T2-chrome-fujifilm_x_t2_10.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "chrome",
+   "camera": "Fujifilm X-T2",
+   "look": "Classic Chrome",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t2/sample_images/fujifilm_x_t2_12.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t2_review/sample_images",
+   "file": "X-T2-chrome-fujifilm_x_t2_12.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "chrome",
+   "camera": "Fujifilm X-T2",
+   "look": "Classic Chrome",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t2/sample_images/fujifilm_x_t2_13.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t2_review/sample_images",
+   "file": "X-T2-chrome-fujifilm_x_t2_13.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "chrome",
+   "camera": "Fujifilm X100F",
+   "look": "Classic Chrome",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x100f/sample_images/fujifilm_x100f_11.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x100f_review/sample_images",
+   "file": "X100F-chrome-fujifilm_x100f_11.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "chrome",
+   "camera": "Fujifilm X100F",
+   "look": "Classic Chrome",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x100f/sample_images/fujifilm_x100f_12.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x100f_review/sample_images",
+   "file": "X100F-chrome-fujifilm_x100f_12.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "chrome",
+   "camera": "Fujifilm X100F",
+   "look": "Classic Chrome",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x100f/sample_images/fujifilm_x100f_13.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x100f_review/sample_images",
+   "file": "X100F-chrome-fujifilm_x100f_13.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "chrome",
+   "camera": "Fujifilm X100F",
+   "look": "Classic Chrome",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x100f/sample_images/fujifilm_x100f_29.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x100f_review/sample_images",
+   "file": "X100F-chrome-fujifilm_x100f_29.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "chrome",
+   "camera": "Fujifilm X100F",
+   "look": "Classic Chrome",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x100f/sample_images/fujifilm_x100f_30.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x100f_review/sample_images",
+   "file": "X100F-chrome-fujifilm_x100f_30.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "chrome",
+   "camera": "Fujifilm X100F",
+   "look": "Classic Chrome",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x100f/sample_images/fujifilm_x100f_31.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x100f_review/sample_images",
+   "file": "X100F-chrome-fujifilm_x100f_31.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "cinema",
+   "camera": "Fujifilm X-T4",
+   "look": "Eterna",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t4/sample_images/fujifilm_x_t4_17.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t4_review/sample_images",
+   "file": "X-T4-cinema-fujifilm_x_t4_17.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "cinema",
+   "camera": "Fujifilm X-T4",
+   "look": "Eterna",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t4/sample_images/fujifilm_x_t4_18.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t4_review/sample_images",
+   "file": "X-T4-cinema-fujifilm_x_t4_18.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "cinema",
+   "camera": "Fujifilm X-T4",
+   "look": "Eterna",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t4/sample_images/fujifilm_x_t4_19.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t4_review/sample_images",
+   "file": "X-T4-cinema-fujifilm_x_t4_19.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "cinema",
+   "camera": "Fujifilm X-T4",
+   "look": "Eterna",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t4/sample_images/fujifilm_x_t4_20.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t4_review/sample_images",
+   "file": "X-T4-cinema-fujifilm_x_t4_20.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "monochrome-red",
+   "camera": "Fujifilm X-T4",
+   "look": "Monochrome+R",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t4/sample_images/fujifilm_x_t4_15.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t4_review/sample_images",
+   "file": "X-T4-monochrome-red-fujifilm_x_t4_15.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "soft-slide",
+   "camera": "Fujifilm X-T30",
+   "look": "Astia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t30/photos/fujifilm_x_t30_52.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t30_review/sample_images",
+   "file": "X-T30-soft-slide-photos-fujifilm_x_t30_52.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "soft-slide",
+   "camera": "Fujifilm X-T30",
+   "look": "Astia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t30/photos/fujifilm_x_t30_54.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t30_review/sample_images",
+   "file": "X-T30-soft-slide-photos-fujifilm_x_t30_54.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "soft-slide",
+   "camera": "Fujifilm X100F",
+   "look": "Astia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x100f/sample_images/fujifilm_x100f_32.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x100f_review/sample_images",
+   "file": "X100F-soft-slide-fujifilm_x100f_32.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "soft-slide",
+   "camera": "Fujifilm X100F",
+   "look": "Astia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x100f/sample_images/fujifilm_x100f_33.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x100f_review/sample_images",
+   "file": "X100F-soft-slide-fujifilm_x100f_33.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm GFX 100",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_gfx_100/photos/fujifilm_gfx_100_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_gfx_100_review/sample_images",
+   "file": "GFX-100-standard-photos-fujifilm_gfx_100_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm GFX 100",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_gfx_100/photos/fujifilm_gfx_100_21.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_gfx_100_review/sample_images",
+   "file": "GFX-100-standard-photos-fujifilm_gfx_100_21.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm GFX 50R",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_gfx_50r/photos/fujifilm_gfx_50r_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_gfx_50r_review/sample_images",
+   "file": "GFX-50R-standard-photos-fujifilm_gfx_50r_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm GFX 50R",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_gfx_50r/photos/fujifilm_gfx_50r_27.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_gfx_50r_review/sample_images",
+   "file": "GFX-50R-standard-photos-fujifilm_gfx_50r_27.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm GFX 50S",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_gfx_50s/sample_images/fujifilm_gfx_50s_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_gfx_50s_review/sample_images",
+   "file": "GFX-50S-standard-fujifilm_gfx_50s_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm GFX 50S",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_gfx_50s/sample_images/fujifilm_gfx_50s_50.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_gfx_50s_review/sample_images",
+   "file": "GFX-50S-standard-fujifilm_gfx_50s_50.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm GFX100 II",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_gfx_100_ii/sample_images/fujifilm_gfx_100_ii_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_gfx_100_ii_review/sample_images",
+   "file": "GFX100-II-standard-fujifilm_gfx_100_ii_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm GFX100 II",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_gfx_100_ii/sample_images/fujifilm_gfx_100_ii_41.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_gfx_100_ii_review/sample_images",
+   "file": "GFX100-II-standard-fujifilm_gfx_100_ii_41.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm GFX100RF",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_gfx_100rf/sample_images/fujifilm_gfx_100rf_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_gfx_100rf_review/sample_images",
+   "file": "GFX100RF-standard-fujifilm_gfx_100rf_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm GFX100RF",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_gfx_100rf/sample_images/fujifilm_gfx_100rf_23.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_gfx_100rf_review/sample_images",
+   "file": "GFX100RF-standard-fujifilm_gfx_100rf_23.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm GFX100S",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_gfx_100s/photos/fujifilm_gfx_100s_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_gfx_100s_review/sample_images",
+   "file": "GFX100S-standard-photos-fujifilm_gfx_100s_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm GFX100S",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_gfx_100s/sample_images/fujifilm_gfx_100s_50.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_gfx_100s_review/sample_images",
+   "file": "GFX100S-standard-fujifilm_gfx_100s_50.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm GFX50S II",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_gfx_50s_ii/sample_images/fujifilm_gfx_50s_ii_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_gfx_50s_ii_review/sample_images",
+   "file": "GFX50S-II-standard-fujifilm_gfx_50s_ii_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm GFX50S II",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_gfx_50s_ii/sample_images/fujifilm_gfx_50s_ii_32.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_gfx_50s_ii_review/sample_images",
+   "file": "GFX50S-II-standard-fujifilm_gfx_50s_ii_32.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-A1",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_a1/sample_images/fujifilm_x_a1_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_a1_review/sample_images",
+   "file": "X-A1-standard-fujifilm_x_a1_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-A1",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_a1/sample_images/fujifilm_x_a1_10.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_a1_review/sample_images",
+   "file": "X-A1-standard-fujifilm_x_a1_10.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-A10",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_a10/sample_images/fujifilm_x_a10_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_a10_review/sample_images",
+   "file": "X-A10-standard-fujifilm_x_a10_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-A10",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_a10/sample_images/fujifilm_x_a10_06.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_a10_review/sample_images",
+   "file": "X-A10-standard-fujifilm_x_a10_06.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-A2",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_a2/sample_images/fujifilm_x_a2_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_a2_review/sample_images",
+   "file": "X-A2-standard-fujifilm_x_a2_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-A2",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_a2/sample_images/fujifilm_x_a2_11.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_a2_review/sample_images",
+   "file": "X-A2-standard-fujifilm_x_a2_11.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-A3",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_a3/sample_images/fujifilm_x_a3_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_a3_review/sample_images",
+   "file": "X-A3-standard-fujifilm_x_a3_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-A3",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_a3/sample_images/fujifilm_x_a3_11.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_a3_review/sample_images",
+   "file": "X-A3-standard-fujifilm_x_a3_11.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-A5",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_a5/photos/fujifilm_x_a5_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_a5_review/sample_images",
+   "file": "X-A5-standard-photos-fujifilm_x_a5_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-A5",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_a5/photos/fujifilm_x_a5_17.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_a5_review/sample_images",
+   "file": "X-A5-standard-photos-fujifilm_x_a5_17.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-E1",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_e1/sample_images/fujifilm_x_e1_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_e1_review/sample_images",
+   "file": "X-E1-standard-fujifilm_x_e1_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-E1",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_e1/sample_images/fujifilm_x_e1_11.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_e1_review/sample_images",
+   "file": "X-E1-standard-fujifilm_x_e1_11.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-E2",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_e2/sample_images/fujifilm_x_e2_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_e2_review/sample_images",
+   "file": "X-E2-standard-fujifilm_x_e2_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-E2",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_e2/sample_images/fujifilm_x_e2_11.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_e2_review/sample_images",
+   "file": "X-E2-standard-fujifilm_x_e2_11.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-E2S",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_e2s/sample_images/fujifilm_x_e2s_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_e2s_review/sample_images",
+   "file": "X-E2S-standard-fujifilm_x_e2s_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-E2S",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_e2s/sample_images/fujifilm_x_e2s_21.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_e2s_review/sample_images",
+   "file": "X-E2S-standard-fujifilm_x_e2s_21.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-E3",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_e3/photos/fujifilm_x_e3_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_e3_review/sample_images",
+   "file": "X-E3-standard-photos-fujifilm_x_e3_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-E3",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_e3/photos/fujifilm_x_e3_25.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_e3_review/sample_images",
+   "file": "X-E3-standard-photos-fujifilm_x_e3_25.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-E4",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_e4/sample_images/fujifilm_x_e4_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_e4_review/sample_images",
+   "file": "X-E4-standard-fujifilm_x_e4_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-E4",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_e4/sample_images/fujifilm_x_e4_25.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_e4_review/sample_images",
+   "file": "X-E4-standard-fujifilm_x_e4_25.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-E5",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_e5/sample_images/fujifilm_x_e5_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_e5_review/sample_images",
+   "file": "X-E5-standard-fujifilm_x_e5_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-E5",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_e5/sample_images/fujifilm_x_e5_21.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_e5_review/sample_images",
+   "file": "X-E5-standard-fujifilm_x_e5_21.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-H1",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_h1/photos/fujifilm_x_h1_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_h1_review/sample_images",
+   "file": "X-H1-standard-photos-fujifilm_x_h1_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-H1",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_h1/photos/fujifilm_x_h1_50.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_h1_review/sample_images",
+   "file": "X-H1-standard-photos-fujifilm_x_h1_50.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-H2",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_h2/sample_images/fujifilm_x_h2_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_h2_review/sample_images",
+   "file": "X-H2-standard-fujifilm_x_h2_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-H2",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_h2/sample_images/fujifilm_x_h2_33.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_h2_review/sample_images",
+   "file": "X-H2-standard-fujifilm_x_h2_33.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-H2S",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_h2s/photos/fujifilm_x_h2s_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_h2s_review/sample_images",
+   "file": "X-H2S-standard-photos-fujifilm_x_h2s_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-H2S",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_h2s/photos/fujifilm_x_h2s_31.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_h2s_review/sample_images",
+   "file": "X-H2S-standard-photos-fujifilm_x_h2s_31.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-M1",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_m1/sample_images/fujifilm_x_m1_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_m1_review/sample_images",
+   "file": "X-M1-standard-fujifilm_x_m1_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-M1",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_m1/sample_images/fujifilm_x_m1_11.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_m1_review/sample_images",
+   "file": "X-M1-standard-fujifilm_x_m1_11.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-M5",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_m5/sample_images/fujifilm_x_m5_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_m5_review/sample_images",
+   "file": "X-M5-standard-fujifilm_x_m5_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-M5",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_m5/sample_images/fujifilm_x_m5_28.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_m5_review/sample_images",
+   "file": "X-M5-standard-fujifilm_x_m5_28.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-Pro1",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_pro1/sample_images/fujifilm_x_pro1_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_pro1_review/sample_images",
+   "file": "X-Pro1-standard-fujifilm_x_pro1_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-Pro1",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_pro1/sample_images/fujifilm_x_pro1_16.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_pro1_review/sample_images",
+   "file": "X-Pro1-standard-fujifilm_x_pro1_16.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-Pro2",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_pro2/sample_images/fujifilm_x_pro2_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_pro2_review/sample_images",
+   "file": "X-Pro2-standard-fujifilm_x_pro2_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-Pro2",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_pro2/sample_images/fujifilm_x_pro2_11.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_pro2_review/sample_images",
+   "file": "X-Pro2-standard-fujifilm_x_pro2_11.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-Pro3",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_pro3/photos/fujifilm_x_pro3_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_pro3_review/sample_images",
+   "file": "X-Pro3-standard-photos-fujifilm_x_pro3_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-Pro3",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_pro3/photos/fujifilm_x_pro3_29.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_pro3_review/sample_images",
+   "file": "X-Pro3-standard-photos-fujifilm_x_pro3_29.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-S10",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_s10/photos/fujifilm_x_s10_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_s10_review/sample_images",
+   "file": "X-S10-standard-photos-fujifilm_x_s10_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-S10",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_s10/photos/fujifilm_x_s10_13.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_s10_review/sample_images",
+   "file": "X-S10-standard-photos-fujifilm_x_s10_13.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-S20",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_s20/sample_images/fujifilm_x_s20_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_s20_review/sample_images",
+   "file": "X-S20-standard-fujifilm_x_s20_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-S20",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_s20/sample_images/fujifilm_x_s20_50.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_s20_review/sample_images",
+   "file": "X-S20-standard-fujifilm_x_s20_50.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T1",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t1/sample_images/fujifilm_x_t1_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t1_review/sample_images",
+   "file": "X-T1-standard-fujifilm_x_t1_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T1",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t1/sample_images/fujifilm_x_t1_11.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t1_review/sample_images",
+   "file": "X-T1-standard-fujifilm_x_t1_11.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T10",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t10/sample_images/fujifilm_x_t10_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t10_review/sample_images",
+   "file": "X-T10-standard-fujifilm_x_t10_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T10",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t10/sample_images/fujifilm_x_t10_11.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t10_review/sample_images",
+   "file": "X-T10-standard-fujifilm_x_t10_11.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T100",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t100/photos/fujifilm_x_t100_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t100_review/sample_images",
+   "file": "X-T100-standard-photos-fujifilm_x_t100_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T100",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t100/photos/fujifilm_x_t100_20.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t100_review/sample_images",
+   "file": "X-T100-standard-photos-fujifilm_x_t100_20.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T2",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t2/sample_images/fujifilm_x_t2_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t2_review/sample_images",
+   "file": "X-T2-standard-fujifilm_x_t2_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T2",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t2/sample_images/fujifilm_x_t2_34.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t2_review/sample_images",
+   "file": "X-T2-standard-fujifilm_x_t2_34.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T20",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t20/sample_images/fujifilm_x_t20_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t20_review/sample_images",
+   "file": "X-T20-standard-fujifilm_x_t20_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T20",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t20/sample_images/fujifilm_x_t20_14.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t20_review/sample_images",
+   "file": "X-T20-standard-fujifilm_x_t20_14.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T200",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t200/sample_images/fujifilm_x_t200_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t200_review/sample_images",
+   "file": "X-T200-standard-fujifilm_x_t200_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T200",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t200/sample_images/fujifilm_x_t200_15.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t200_review/sample_images",
+   "file": "X-T200-standard-fujifilm_x_t200_15.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T3",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t3/photos/fujifilm_x_t3_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t3_review/sample_images",
+   "file": "X-T3-standard-photos-fujifilm_x_t3_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T3",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t3/photos/fujifilm_x_t3_50.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t3_review/sample_images",
+   "file": "X-T3-standard-photos-fujifilm_x_t3_50.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T30",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t30/photos/fujifilm_x_t30_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t30_review/sample_images",
+   "file": "X-T30-standard-photos-fujifilm_x_t30_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T30",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t30/photos/fujifilm_x_t30_49.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t30_review/sample_images",
+   "file": "X-T30-standard-photos-fujifilm_x_t30_49.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T30 II",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t30_ii/sample_images/fujifilm_x_t30_ii_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t30_ii_review/sample_images",
+   "file": "X-T30-II-standard-fujifilm_x_t30_ii_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T30 II",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t30_ii/sample_images/fujifilm_x_t30_ii_19.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t30_ii_review/sample_images",
+   "file": "X-T30-II-standard-fujifilm_x_t30_ii_19.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T30 III",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t30_iii/sample_images/fujifilm_x_t30_iii_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t30_iii_review/sample_images",
+   "file": "X-T30-III-standard-fujifilm_x_t30_iii_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T30 III",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t30_iii/sample_images/fujifilm_x_t30_iii_25.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t30_iii_review/sample_images",
+   "file": "X-T30-III-standard-fujifilm_x_t30_iii_25.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T4",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t4/photos/fujifilm_x_t4_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t4_review/sample_images",
+   "file": "X-T4-standard-photos-fujifilm_x_t4_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T4",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t4/photos/fujifilm_x_t4_32.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t4_review/sample_images",
+   "file": "X-T4-standard-photos-fujifilm_x_t4_32.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T5",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t5/sample_images/fujifilm_x_t5_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t5_review/sample_images",
+   "file": "X-T5-standard-fujifilm_x_t5_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T5",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t5/sample_images/fujifilm_x_t5_39.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t5_review/sample_images",
+   "file": "X-T5-standard-fujifilm_x_t5_39.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T50",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t50/sample_images/fujifilm_x_t50_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t50_review/sample_images",
+   "file": "X-T50-standard-fujifilm_x_t50_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X-T50",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t50/sample_images/fujifilm_x_t50_36.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t50_review/sample_images",
+   "file": "X-T50-standard-fujifilm_x_t50_36.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X100F",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x100f/sample_images/fujifilm_x100f_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x100f_review/sample_images",
+   "file": "X100F-standard-fujifilm_x100f_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X100F",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x100f/sample_images/fujifilm_x100f_20.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x100f_review/sample_images",
+   "file": "X100F-standard-fujifilm_x100f_20.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X100T",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x100t/sample_images/fujifilm_x100t_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x100t_review/sample_images",
+   "file": "X100T-standard-fujifilm_x100t_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X100T",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x100t/sample_images/fujifilm_x100t_11.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x100t_review/sample_images",
+   "file": "X100T-standard-fujifilm_x100t_11.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X100V",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x100v/sample_images/fujifilm_x100v_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x100v_review/sample_images",
+   "file": "X100V-standard-fujifilm_x100v_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X100V",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x100v/sample_images/fujifilm_x100v_20.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x100v_review/sample_images",
+   "file": "X100V-standard-fujifilm_x100v_20.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X100VI",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x100vi/sample_images/fujifilm_x100vi_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x100vi_review/sample_images",
+   "file": "X100VI-standard-fujifilm_x100vi_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X100VI",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x100vi/sample_images/fujifilm_x100vi_17.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x100vi_review/sample_images",
+   "file": "X100VI-standard-fujifilm_x100vi_17.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X30",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x30/sample_images/fujifilm_x30_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x30_review/sample_images",
+   "file": "X30-standard-fujifilm_x30_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X30",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x30/sample_images/fujifilm_x30_11.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x30_review/sample_images",
+   "file": "X30-standard-fujifilm_x30_11.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X70",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x70/sample_images/fujifilm_x70_01.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x70_review/sample_images",
+   "file": "X70-standard-fujifilm_x70_01.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "standard",
+   "camera": "Fujifilm X70",
+   "look": "Provia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x70/sample_images/fujifilm_x70_21.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x70_review/sample_images",
+   "file": "X70-standard-fujifilm_x70_21.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "vivid-slide",
+   "camera": "Fujifilm X-T2",
+   "look": "Velvia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t2/sample_images/fujifilm_x_t2_07.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t2_review/sample_images",
+   "file": "X-T2-vivid-slide-fujifilm_x_t2_07.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "vivid-slide",
+   "camera": "Fujifilm X-T2",
+   "look": "Velvia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t2/sample_images/fujifilm_x_t2_08.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t2_review/sample_images",
+   "file": "X-T2-vivid-slide-fujifilm_x_t2_08.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  },
+  {
+   "slot": "vivid-slide",
+   "camera": "Fujifilm X-T30",
+   "look": "Velvia",
+   "url": "https://img.photographyblog.com/reviews/fujifilm_x_t30/photos/fujifilm_x_t30_55.raf",
+   "page": "https://www.photographyblog.com/reviews/fujifilm_x_t30_review/sample_images",
+   "file": "X-T30-vivid-slide-photos-fujifilm_x_t30_55.raf",
+   "source": "photographyblog.com",
+   "license": "Copyright; reference only, never shipped or committed (DEC-17)"
+  }
+ ]
+}
