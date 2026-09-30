@@ -181,7 +181,7 @@ With both side panels in AppKit, most of what remains is Core Animation committi
 - Highlights and Shadows are per-pixel approximations for now. Lightroom-quality versions need edge-aware local tone mapping (an exposure-independent guided filter), planned for Phase 2.
 - X-Trans demosaicing is a first-generation interpolation. A Markesteijn-class demosaic comes in Phase 2.
 - Redlamp's exposure for Fujifilm raws differs from the camera's by up to ±0.9 EV depending on the body; the profiler removes it when measuring looks, and the engine fix is tracked (TON-14).
-- Color uses a single-illuminant Adobe-derived matrix: LibRaw's, or the DNG's own ColorMatrix. Dual-illuminant DCP profiles come in Phase 2.
+- Non-DNG raws use a single-illuminant Adobe-derived matrix (LibRaw's). DNGs interpolate their two calibrations by white balance, but the Temperature and Tint model still converts with one matrix, and DCP profiles (HueSatMap, LookTable) come later in Phase 2.
 - Masks support linear and radial gradients only. Brush, range, and AI masks come in Phases 2 and 3.
 - Local Whites and Blacks are approximated with tonal-region gains.
 - The app is not sandboxed yet (required later for the Mac App Store), and there is no iPad or iPhone app yet.

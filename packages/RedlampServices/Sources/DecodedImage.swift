@@ -65,6 +65,8 @@ public struct DecodedImage: Sendable {
     public var noiseProfile: NoiseModel?
     /// The file's gain maps (DNG OpcodeList2), usually lens shading, applied before demosaicing.
     public var gainMaps: [GainMap] = []
+    /// The file's DNG colour calibrations, interpolated by white balance when rendering.
+    public var dngColor: DNGColorCalibration?
 
     public init(
         width: Int,

@@ -121,6 +121,7 @@ enum RawDecoder {
         )
         decoded.noiseProfile = DNGNoiseProfile.read(url)
         decoded.gainMaps = DNGGainMaps.read(url)
+        decoded.dngColor = DNGColorCalibration.read(url)
         return decoded
     }
 

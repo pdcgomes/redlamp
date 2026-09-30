@@ -15,7 +15,11 @@ final class ImageSession: @unchecked Sendable {
     let pyramid: any MTLTexture
     let orientation: Int
     let orientedSize: PixelSize
+    /// Balanced camera RGB to linear Rec. 2020 at the as-shot white balance.
     let cameraToWorking: simd_float3x3
+    /// DNG calibrations, when the file has them, and the as-shot colour temperature they imply.
+    let dngColor: DNGColorCalibration?
+    let asShotTemperature: Double
     let colorModel: CameraColorModel?
     /// As-shot multipliers, green = 1.
     let asShotMultipliers: SIMD3<Double>
@@ -56,7 +60,15 @@ final class ImageSession: @unchecked Sendable {
         orientation = decoded.orientation
         orientedSize = decoded.orientedSize
         let cameraToSRGB = simd_double3x3(rowMajor: decoded.cameraToSRGB)
-        cameraToWorking = (ColorMatrices.sRGBToRec2020 * cameraToSRGB).floatMatrix
+        dngColor = decoded.isRaw ? decoded.dngColor : nil
+        if let dngColor {
+            let neutral = 1 / decoded.asShotMultipliers
+            asShotTemperature = dngColor.temperature(ofNeutral: neutral / neutral.y)
+            cameraToWorking = dngColor.cameraToWorking(temperature: asShotTemperature)
+        } else {
+            asShotTemperature = 6504
+            cameraToWorking = (ColorMatrices.sRGBToRec2020 * cameraToSRGB).floatMatrix
+        }
         self.colorModel = colorModel
         asShotMultipliers = decoded.asShotMultipliers
         self.balanceMultipliers = balanceMultipliers
@@ -72,6 +84,13 @@ final class ImageSession: @unchecked Sendable {
             tint: recipe[.tint],
         ))
         return target / asShotMultipliers
+    }
+
+    /// Balanced camera RGB to linear Rec. 2020 for the recipe's white balance: DNG calibrations
+    /// are interpolated by its colour temperature; other files have one matrix.
+    func cameraToWorking(for recipe: EditRecipe) -> simd_float3x3 {
+        guard let dngColor, recipe.whiteBalanceMode != .asShot else { return cameraToWorking }
+        return dngColor.cameraToWorking(temperature: recipe[.temperature])
     }
 }
 

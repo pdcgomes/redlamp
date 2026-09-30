@@ -49,7 +49,7 @@ enum DevelopParameters {
             0,
         )
 
-        p.setCameraToWorking(session.cameraToWorking)
+        p.setCameraToWorking(session.cameraToWorking(for: recipe))
         // Display-referred work stays in Rec.2020 primaries; the kernel gamut-maps into these.
         p.setDisplayToOutput(
             encoding == .sRGB || encoding == .linearSRGB
