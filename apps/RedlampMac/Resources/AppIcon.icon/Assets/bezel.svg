@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="bezel" x1="0" y1="14" x2="0" y2="80" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#57504E"/>
+      <stop offset="0.5" stop-color="#221C1A"/>
+      <stop offset="1" stop-color="#0B0908"/>
+    </linearGradient>
+    <linearGradient id="step" x1="0" y1="19.5" x2="0" y2="74.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0B0908"/>
+      <stop offset="1" stop-color="#57504E" stop-opacity="0.8"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="14.5" x2="0" y2="79.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.5"/>
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="screw" cx="0.35" cy="0.35" r="0.75">
+      <stop offset="0" stop-color="#57504E"/>
+      <stop offset="1" stop-color="#0B0908"/>
+    </radialGradient>
+  </defs>
+  <circle cx="50" cy="47" r="33" fill="url(#bezel)"/>
+  <circle cx="50" cy="47" r="32.5" fill="none" stroke="url(#rim)" stroke-width="0.9"/>
+  <circle cx="50" cy="47" r="27.5" fill="url(#step)"/>
+  <g>
+    <circle cx="50" cy="17.15" r="1.35" fill="#0B0908" fill-opacity="0.6"/>
+    <circle cx="50" cy="16.75" r="1.35" fill="url(#screw)"/>
+    <line x1="49.12" y1="17.16" x2="50.88" y2="16.34" stroke="#0B0908" stroke-width="0.45"/>
+  </g>
+  <g>
+    <circle cx="76.2" cy="62.53" r="1.35" fill="#0B0908" fill-opacity="0.6"/>
+    <circle cx="76.2" cy="62.13" r="1.35" fill="url(#screw)"/>
+    <line x1="75.32" y1="62.54" x2="77.08" y2="61.72" stroke="#0B0908" stroke-width="0.45"/>
+  </g>
+  <g>
+    <circle cx="23.8" cy="62.53" r="1.35" fill="#0B0908" fill-opacity="0.6"/>
+    <circle cx="23.8" cy="62.13" r="1.35" fill="url(#screw)"/>
+    <line x1="22.92" y1="62.54" x2="24.68" y2="61.72" stroke="#0B0908" stroke-width="0.45"/>
+  </g>
+</svg>

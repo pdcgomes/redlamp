@@ -26,6 +26,7 @@ let project = Project(
                 "NSHumanReadableCopyright": "Redlamp contributors. MPL-2.0.",
             ]),
             sources: ["Sources/**"],
+            resources: ["Resources/**"],
             dependencies: [
                 Module.engineAPI.dependency,
                 Module.engine.dependency,
@@ -41,6 +42,10 @@ let project = Project(
                 base: [
                     "CODE_SIGN_STYLE": "Automatic",
                     "CODE_SIGN_IDENTITY": "Apple Development",
+                    // Resources/AppIcon.icon; edit it with Icon Composer.
+                    "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
+                    // Controls follow the user's system accent; the app ships no accent color.
+                    "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "",
                 ],
                 configurations: [
                     // Debug builds stay attachable by sample/Instruments for profiling.

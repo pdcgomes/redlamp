@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 100 100">
+  <defs>
+    <radialGradient id="ruby" cx="50" cy="44" r="28" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFB08A"/>
+      <stop offset="0.38" stop-color="#E0402E"/>
+      <stop offset="0.8" stop-color="#9A1C14"/>
+      <stop offset="1" stop-color="#420A07"/>
+    </radialGradient>
+    <radialGradient id="filament" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFB08A" stop-opacity="0.6"/>
+      <stop offset="0.45" stop-color="#FFB08A" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#FFB08A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="50" cy="47" r="25" fill="url(#ruby)"/>
+  <g fill="none" stroke="#FFB08A" stroke-opacity="0.13" stroke-width="0.6">
+    <circle cx="50" cy="47" r="8"/>
+    <circle cx="50" cy="47" r="12.5"/>
+    <circle cx="50" cy="47" r="17"/>
+    <circle cx="50" cy="47" r="21"/>
+  </g>
+  <ellipse cx="50" cy="48" rx="12" ry="9.5" fill="url(#filament)"/>
+  <circle cx="50" cy="47" r="24.4" fill="none" stroke="#420A07" stroke-width="1.2" stroke-opacity="0.7"/>
+</svg>
