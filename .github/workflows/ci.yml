@@ -56,6 +56,7 @@ jobs:
       - name: Test
         run: |
           set -o pipefail
+          mkdir -p build
           xcodebuild test \
             -workspace Redlamp.xcworkspace \
             -scheme Redlamp-Workspace \
