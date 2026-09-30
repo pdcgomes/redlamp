@@ -22,12 +22,14 @@ public final class EditorModel {
     public internal(set) var items: [LibraryItem] = []
     public private(set) var thumbnails: [URL: CGImage] = [:]
     public private(set) var selection: URL?
+    /// Focus stacks found in the folder that have no stack document yet.
+    public internal(set) var stackSuggestions: [StackSuggestion] = []
 
     // MARK: Current image
 
     public private(set) var info: ImageInfo?
     public private(set) var isLoading = false
-    public private(set) var errorMessage: String?
+    public internal(set) var errorMessage: String?
     /// The photo's sidecar was written by a newer Redlamp. Its edit is shown, but changes aren't
     /// saved: this version would lose settings it doesn't understand.
     public private(set) var isReadOnly = false
@@ -293,8 +295,9 @@ public final class EditorModel {
         }
     }
 
-    private func openFolder(_ url: URL, select target: URL?) {
+    func openFolder(_ url: URL, select target: URL?) {
         folder = url
+        stackSuggestions = []
         onFolderChange?(url)
         let store = sidecars
         Task {
@@ -307,6 +310,7 @@ public final class EditorModel {
             guard folder == url else { return }
             items = found
             thumbnails = [:]
+            detectStacks(in: found.map(\.url), folder: url)
             if let next = target ?? found.first?.url {
                 select(next)
             }

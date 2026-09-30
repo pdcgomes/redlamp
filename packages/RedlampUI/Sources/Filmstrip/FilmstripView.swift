@@ -1,4 +1,5 @@
 import RedlampDocument
+import RedlampEngineAPI
 import SwiftUI
 
 struct FilmstripView: View {
@@ -12,6 +13,9 @@ struct FilmstripView: View {
                 }
                 Text("\(model.items.count) photos")
                     .foregroundStyle(Theme.tertiaryLabel)
+                if let suggestion = model.stackSuggestions.first {
+                    StackSuggestionBanner(suggestion: suggestion)
+                }
                 Spacer()
                 if let info = model.info {
                     Text(info.fileName)
@@ -49,6 +53,38 @@ struct FilmstripView: View {
     }
 }
 
+/// "Focus stack detected: 25 frames" with Merge and dismiss; the frame range shows as help.
+private struct StackSuggestionBanner: View {
+    let suggestion: StackSuggestion
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "square.stack.3d.down.right")
+            Text("Focus stack detected: \(suggestion.frames.count) frames")
+                .foregroundStyle(Theme.secondaryLabel)
+                .help(range)
+            Button("Merge") { model.mergeStack(suggestion) }
+                .buttonStyle(.link)
+            Button {
+                model.dismissStack(suggestion)
+            } label: {
+                Image(systemName: "xmark")
+            }
+            .buttonStyle(.plain)
+            .help("Dismiss")
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 2)
+        .background(Capsule().fill(Color.white.opacity(0.08)))
+    }
+
+    private var range: String {
+        let names = suggestion.frames.map { $0.deletingPathExtension().lastPathComponent }
+        return "\(names.first ?? "") – \(names.last ?? "")"
+    }
+}
+
 private struct FilmstripCell: View {
     let item: LibraryItem
     let isSelected: Bool
@@ -78,6 +114,15 @@ private struct FilmstripCell: View {
         }
         .frame(width: 96, height: 70)
         .overlay(alignment: .topLeading) { flagBadge }
+        .overlay(alignment: .topTrailing) {
+            if SupportedFormats.isStack(item.url) {
+                Image(systemName: "square.stack.3d.down.right.fill")
+                    .font(.system(size: 8))
+                    .foregroundStyle(Color.white.opacity(0.85))
+                    .padding(5)
+                    .help("Focus stack")
+            }
+        }
         .overlay(alignment: .bottomLeading) { stars }
         .overlay(alignment: .top) {
             if let label = item.metadata.label {

@@ -1,4 +1,5 @@
 import Foundation
+import RedlampDocument
 import RedlampEngine
 import RedlampEngineAPI
 
@@ -7,6 +8,7 @@ enum StackCommand {
     static let usage = """
     usage: redlamp stack <frame> <frame> … -o <output.{jpg,png,tif,heic}> [options]
            redlamp stack <frame> <frame> … --save <stack.redlampstack> [-o <output>] [options]
+           redlamp stack --detect <folder> …
 
     Frames are given in focus order (near to far or far to near); a directory means every
     image in it, sorted by name.
@@ -28,6 +30,10 @@ enum StackCommand {
         )
         guard !parsed.has("--help") else {
             print(usage)
+            return
+        }
+        if parsed.has("--detect") {
+            detect(parsed.positional)
             return
         }
         let strategyName = parsed.value("--strategy") ?? FocusStackStrategy.auto.rawValue
@@ -93,6 +99,21 @@ enum StackCommand {
         guard let output = parsed.value("--output") else { return }
         let request = try StillRequest(recipe: EditRecipe(), maxLongEdge: parsed.int("--size"), purpose: .export)
         try await ImageFile.write(engine.renderStill(request), to: URL(fileURLWithPath: output))
+    }
+
+    /// Prints the focus stacks the library would suggest in each folder.
+    private static func detect(_ folders: [String]) {
+        for folder in folders {
+            let clock = ContinuousClock()
+            let start = clock.now
+            let images = Library.images(in: URL(fileURLWithPath: folder))
+            let suggestions = StackDetector.suggestions(in: images)
+            print("\(folder): \(images.count) images, \(suggestions.count) stacks (\(clock.now - start))")
+            for suggestion in suggestions {
+                let names = suggestion.frames.map(\.lastPathComponent)
+                print("  \(names.count) frames: \(names.first ?? "") … \(names.last ?? "")")
+            }
+        }
     }
 
     /// A file, or every supported image in a directory sorted by name.
