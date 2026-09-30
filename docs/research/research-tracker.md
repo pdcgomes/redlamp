@@ -69,7 +69,7 @@ These block other rows. Most need the project owner; the ones marked *counsel* n
 | TON-04 | Tag the Metal canvas with extended linear Display P3 so ColorSync manages each screen | Do better | S | — | Accepted (2026-09-30) | Done (already in place: `CanvasMetalView` tags its layer extended linear Display P3) | [DT §8](darktable-findings.md#8-architecture-performance-and-ux) |
 | ARC-01 | Stage graph with about five barrier stages and hash-chained per-stage caches; the fused kernel stays for all per-pixel work | Adopt, do better | L | — | Accepted (2026-09-30) | Not started | [DT §8](darktable-findings.md#8-architecture-performance-and-ux) |
 | ARC-02 | Viewport-only rendering (visible region plus margin, low-resolution whole image underneath while panning) | Adopt | M | ARC-01 | Accepted (2026-09-30) | Not started | [DT §8](darktable-findings.md#8-architecture-performance-and-ux) |
-| CAM-01 | Per-camera decode regression suite on CC0 raw.pixls.us samples (CFA, black, white, crop, as-shot WB, matrix); "no sample, no support claim" | Adopt | M | — | Accepted (2026-09-30) | Not started | [DT §3](darktable-findings.md#3-cameras-and-raw-data) |
+| CAM-01 | Per-camera decode regression suite on CC0 raw.pixls.us samples (CFA, black, white, crop, as-shot WB, matrix); "no sample, no support claim" | Adopt | M | — | Accepted (2026-09-30) | Done for the harness (commit "Add a camera decode regression suite"): 5 cameras; wider coverage is P2 | [DT §3](darktable-findings.md#3-cameras-and-raw-data) |
 
 ---
 

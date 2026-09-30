@@ -1,0 +1,198 @@
+{
+  "AFXT2720.RAF" : {
+    "asShotMultipliers" : [
+      1.9305,
+      1,
+      1.9338
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022,
+      1022
+    ],
+    "height" : 4170,
+    "layout" : "X-Trans",
+    "make" : "Fujifilm",
+    "model" : "X-T3",
+    "orientation" : 0,
+    "sampleChecksum" : "dda5bb42d1c17d8c",
+    "whiteLevel" : 13201,
+    "width" : 6246,
+    "xyzToCamera" : [
+      1.3426,
+      -0.6334,
+      -0.1177,
+      -0.4244,
+      1.2136,
+      0.2371,
+      -0.058,
+      0.1303,
+      0.598
+    ]
+  },
+  "Canon_EOS_R6_RAW_ISO_100_nocrop_nodual.CR3" : {
+    "asShotMultipliers" : [
+      1.8057,
+      1,
+      1.6387
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      512,
+      512,
+      512,
+      512
+    ],
+    "height" : 3670,
+    "layout" : "Bayer RGGB",
+    "make" : "Canon",
+    "model" : "EOS R6",
+    "orientation" : 0,
+    "sampleChecksum" : "deb8cbf9b27e303b",
+    "whiteLevel" : 16383,
+    "width" : 5496,
+    "xyzToCamera" : [
+      0.8293,
+      -0.1611,
+      -0.1132,
+      -0.4759,
+      1.2711,
+      0.2275,
+      -0.1013,
+      0.2415,
+      0.5509
+    ]
+  },
+  "DSC_0750.NEF" : {
+    "asShotMultipliers" : [
+      1.1895,
+      1,
+      2.1211
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      1008,
+      1008,
+      1008,
+      1008
+    ],
+    "height" : 4040,
+    "layout" : "Bayer RGGB",
+    "make" : "Nikon",
+    "model" : "Z 6",
+    "orientation" : 0,
+    "sampleChecksum" : "396c7eb2af9b410f",
+    "whiteLevel" : 16383,
+    "width" : 6064,
+    "xyzToCamera" : [
+      0.9943,
+      -0.3269,
+      -0.0839,
+      -0.5323,
+      1.3269,
+      0.2259,
+      -0.1198,
+      0.2083,
+      0.7557
+    ]
+  },
+  "IMG_1361.DNG" : {
+    "asShotMultipliers" : [
+      2.2273,
+      1,
+      1.8489
+    ],
+    "baselineExposure" : -0.3022,
+    "blackLevels" : [
+      0,
+      0,
+      0
+    ],
+    "height" : 3024,
+    "layout" : "linear RGB",
+    "make" : "Apple",
+    "model" : "iPhone13,3 back camera",
+    "orientation" : 6,
+    "sampleChecksum" : "de4a25221841ddd9",
+    "whiteLevel" : 65535,
+    "width" : 4032,
+    "xyzToCamera" : [
+      0.9145,
+      -0.3222,
+      -0.1262,
+      -0.4289,
+      1.3095,
+      0.0947,
+      -0.1063,
+      0.235,
+      0.4307
+    ]
+  },
+  "_DSC0009.ARW" : {
+    "asShotMultipliers" : [
+      2.2188,
+      1,
+      1.7578
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      512,
+      512,
+      512,
+      512
+    ],
+    "height" : 4024,
+    "layout" : "Bayer RGGB",
+    "make" : "Sony",
+    "model" : "ILCE-7M3",
+    "orientation" : 0,
+    "sampleChecksum" : "cd059857e1e6be3a",
+    "whiteLevel" : 16383,
+    "width" : 6024,
+    "xyzToCamera" : [
+      0.7374,
+      -0.2389,
+      -0.0551,
+      -0.5435,
+      1.3162,
+      0.2519,
+      -0.1006,
+      0.1795,
+      0.6552
+    ]
+  }
+}
