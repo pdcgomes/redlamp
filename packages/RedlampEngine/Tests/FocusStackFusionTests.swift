@@ -12,7 +12,7 @@ extension FocusStackTests {
     /// upsampling in both directions agree.
     @Test func `a Laplacian pyramid collapses back to its image`() throws {
         let (width, height) = (203, 151)
-        let image = Scene(seed: 4, width: Float(width), height: Float(height), detail: 0.05)
+        let image = StackTestScene(seed: 4, width: Float(width), height: Float(height), detail: 0.05)
             .render(width: width, height: height)
         let input = try texture(image)
         var sizes = [(width, height)]
@@ -59,7 +59,7 @@ extension FocusStackTests {
         let (width, height) = (640, 480)
         let depth = { (x: Int, y: Int) -> Float in (x < width / 2) == (y < height / 2) ? 1 : 3 }
         let frames = syntheticStack(frames: 5, width: width, height: height, depth: depth)
-        let sharp = Scene(seed: 21, width: Float(width), height: Float(height), detail: 0.08)
+        let sharp = StackTestScene(seed: 21, width: Float(width), height: Float(height), detail: 0.08)
             .render(width: width, height: height)
         func psnr(_ values: [Float]) -> Double {
             var sum: Double = 0

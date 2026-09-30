@@ -49,84 +49,11 @@ struct FocusStackTests {
         #expect(abs(ix - 100) < 1e-3 && abs(iy - 50) < 1e-3)
     }
 
-    /// A textured scene as a continuous function, so any transform of it can be rendered exactly.
-    struct Scene {
-        struct Blob {
-            var x: Float
-            var y: Float
-            var sigma: Float
-            var amplitude: Float
-        }
-
-        var blobs: [Blob] = []
-        /// Amplitude of fine, pixel-scale texture everywhere (0 = smooth between blobs).
-        var detail: Float = 0
-
-        init(seed: UInt64, width: Float, height: Float, detail: Float = 0) {
-            self.detail = detail
-            var state = seed
-            func next() -> Float {
-                state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
-                return Float(state >> 40) / Float(1 << 24)
-            }
-            for _ in 0 ..< 60 {
-                blobs.append(Blob(
-                    x: next() * width,
-                    y: next() * height,
-                    sigma: 3 + 25 * next(),
-                    amplitude: next() - 0.3,
-                ))
-            }
-        }
-
-        func value(_ x: Float, _ y: Float) -> Float {
-            var sum: Float = 0.5 + 0.05 * sin(x / 7) * cos(y / 11)
-            if detail > 0 {
-                sum += detail * (sin(1.9 * x + 0.7 * y) * cos(1.3 * y - 0.4 * x) + 0.5 * sin(2.6 * y + 1.1 * x))
-            }
-            for blob in blobs {
-                let d2 = (x - blob.x) * (x - blob.x) + (y - blob.y) * (y - blob.y)
-                sum += blob.amplitude * exp(-d2 / (2 * blob.sigma * blob.sigma))
-            }
-            return sum
-        }
-
-        /// The scene seen through `transform` (reference to frame coordinates), blurred by a box of
-        /// `blur` pixels and scaled by `gain`.
-        func render(width: Int, height: Int, transform: Similarity = .identity, blur: Int = 0, gain: Float = 1)
-            -> LumaImage {
-            let inverse = transform.inverse
-            var sharp = [Float](repeating: 0, count: width * height)
-            for y in 0 ..< height {
-                for x in 0 ..< width {
-                    let (sx, sy) = inverse.apply(Float(x), Float(y))
-                    sharp[y * width + x] = value(sx, sy)
-                }
-            }
-            var pixels = sharp
-            for y in 0 ..< height {
-                for x in 0 ..< width {
-                    var sum: Float = 0
-                    var count: Float = 0
-                    for dy in -blur ... blur {
-                        for dx in -blur ... blur {
-                            let (sx, sy) = (min(max(x + dx, 0), width - 1), min(max(y + dy, 0), height - 1))
-                            sum += sharp[sy * width + sx]
-                            count += 1
-                        }
-                    }
-                    pixels[y * width + x] = gain * sum / count
-                }
-            }
-            return LumaImage(width: width, height: height, pixels: pixels)
-        }
-    }
-
     /// Focus breathing (2% scale), a slight rotation and a shift are recovered to a few hundredths
     /// of a pixel, although the frame is blurrier and brighter than the template.
     @Test func `ECC recovers a known similarity despite blur and gain`() {
         let (width, height) = (640, 480)
-        let scene = Scene(seed: 5, width: Float(width), height: Float(height))
+        let scene = StackTestScene(seed: 5, width: Float(width), height: Float(height))
         let truth = Similarity(a: 1.02 * cos(0.004), b: 1.02 * sin(0.004), tx: 3.3, ty: -2.1)
         let template = scene.render(width: width, height: height)
         let frame = scene.render(width: width, height: height, transform: truth, blur: 1, gain: 1.15)
@@ -147,7 +74,7 @@ struct FocusStackTests {
     /// magnified end becomes the reference, and every frame's transform to it is recovered.
     @Test func `the aligner picks the narrowest view and recovers each frame`() {
         let (width, height) = (480, 360)
-        let scene = Scene(seed: 9, width: Float(width), height: Float(height))
+        let scene = StackTestScene(seed: 9, width: Float(width), height: Float(height))
         let truths = (0 ..< 6).map { index in
             let scale = 1 + 0.008 * Float(index)
             return Similarity(
@@ -190,7 +117,7 @@ struct FocusStackTests {
     /// Warping a frame by its true transform reproduces the reference, up to interpolation.
     @Test func `the GPU warp resamples a frame into the reference`() throws {
         let (width, height) = (320, 240)
-        let scene = Scene(seed: 3, width: Float(width), height: Float(height))
+        let scene = StackTestScene(seed: 3, width: Float(width), height: Float(height))
         let truth = Similarity(a: 0.97, b: 0.003, tx: 4.2, ty: -1.7)
         let reference = scene.render(width: width, height: height)
         let frame = scene.render(width: width, height: height, transform: truth)
@@ -229,7 +156,7 @@ struct FocusStackTests {
     /// `2 |k - depth|` at each pixel (interpolated between whole radii), as defocus grows away
     /// from the plane of focus.
     func syntheticStack(frames: Int, width: Int, height: Int, depth: (Int, Int) -> Float) -> [LumaImage] {
-        let scene = Scene(seed: 21, width: Float(width), height: Float(height), detail: 0.08)
+        let scene = StackTestScene(seed: 21, width: Float(width), height: Float(height), detail: 0.08)
         let sharp = scene.render(width: width, height: height)
         // Blur levels by radius; two box passes make each close to a Gaussian.
         let maximumRadius = 2 * frames
@@ -330,5 +257,78 @@ struct FocusStackTests {
         commands.waitUntilCompleted()
         let pointer = buffer.contents().assumingMemoryBound(to: UInt16.self)
         return Array(UnsafeBufferPointer(start: pointer, count: width * height * 4))
+    }
+}
+
+/// A textured scene as a continuous function, so any transform of it can be rendered exactly.
+struct StackTestScene {
+    struct Blob {
+        var x: Float
+        var y: Float
+        var sigma: Float
+        var amplitude: Float
+    }
+
+    var blobs: [Blob] = []
+    /// Amplitude of fine, pixel-scale texture everywhere (0 = smooth between blobs).
+    var detail: Float = 0
+
+    init(seed: UInt64, width: Float, height: Float, detail: Float = 0) {
+        self.detail = detail
+        var state = seed
+        func next() -> Float {
+            state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            return Float(state >> 40) / Float(1 << 24)
+        }
+        for _ in 0 ..< 60 {
+            blobs.append(Blob(
+                x: next() * width,
+                y: next() * height,
+                sigma: 3 + 25 * next(),
+                amplitude: next() - 0.3,
+            ))
+        }
+    }
+
+    func value(_ x: Float, _ y: Float) -> Float {
+        var sum: Float = 0.5 + 0.05 * sin(x / 7) * cos(y / 11)
+        if detail > 0 {
+            sum += detail * (sin(1.9 * x + 0.7 * y) * cos(1.3 * y - 0.4 * x) + 0.5 * sin(2.6 * y + 1.1 * x))
+        }
+        for blob in blobs {
+            let d2 = (x - blob.x) * (x - blob.x) + (y - blob.y) * (y - blob.y)
+            sum += blob.amplitude * exp(-d2 / (2 * blob.sigma * blob.sigma))
+        }
+        return sum
+    }
+
+    /// The scene seen through `transform` (reference to frame coordinates), blurred by a box of
+    /// `blur` pixels and scaled by `gain`.
+    func render(width: Int, height: Int, transform: Similarity = .identity, blur: Int = 0, gain: Float = 1)
+        -> LumaImage {
+        let inverse = transform.inverse
+        var sharp = [Float](repeating: 0, count: width * height)
+        for y in 0 ..< height {
+            for x in 0 ..< width {
+                let (sx, sy) = inverse.apply(Float(x), Float(y))
+                sharp[y * width + x] = value(sx, sy)
+            }
+        }
+        var pixels = sharp
+        for y in 0 ..< height {
+            for x in 0 ..< width {
+                var sum: Float = 0
+                var count: Float = 0
+                for dy in -blur ... blur {
+                    for dx in -blur ... blur {
+                        let (sx, sy) = (min(max(x + dx, 0), width - 1), min(max(y + dy, 0), height - 1))
+                        sum += sharp[sy * width + sx]
+                        count += 1
+                    }
+                }
+                pixels[y * width + x] = gain * sum / count
+            }
+        }
+        return LumaImage(width: width, height: height, pixels: pixels)
     }
 }

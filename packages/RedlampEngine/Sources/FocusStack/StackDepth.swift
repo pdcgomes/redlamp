@@ -60,13 +60,11 @@ enum StackDepthSolver {
         }
         let maximum = volume.reduce(0) { max($0, $1.max() ?? 0) }
         let epsilon = 1e-3 * maximum * maximum
-        let guidance = guide
+        let guidance = LumaImage(width: width, height: height, pixels: guide)
         let filtered = Parallel.map(2 * volume.count) { job in
             guidedFilter(
                 guide: guidance,
                 source: volume[job / 2],
-                width: width,
-                height: height,
                 radius: job.isMultiple(of: 2) ? smoothing : smoothing * 4,
                 epsilon: epsilon,
             )
@@ -106,7 +104,7 @@ enum StackDepthSolver {
         // edges; a step across flat texture (the synthetic two-plane test) does get softened.
         let last = Float(lumas.count - 1)
         let smoothed = guidedFilter(
-            guide: guidance, source: filled, width: width, height: height, radius: smoothing,
+            guide: guidance, source: filled, radius: smoothing,
             epsilon: settings.edgeEpsilon,
         ).map { min(max($0, 0), last) }
         return StackDepthMap(width: width, height: height, depth: smoothed, confident: confident)
@@ -196,9 +194,8 @@ enum StackDepthSolver {
     }
 
     /// The guided filter of `source` by `guide` (He, Sun & Tang, TPAMI 2013), single channel.
-    static func guidedFilter(
-        guide: [Float], source: [Float], width: Int, height: Int, radius: Int, epsilon: Float,
-    ) -> [Float] {
+    static func guidedFilter(guide image: LumaImage, source: [Float], radius: Int, epsilon: Float) -> [Float] {
+        let (guide, width, height) = (image.pixels, image.width, image.height)
         let count = width * height
         let meanI = boxMean(guide, width: width, height: height, radius: radius)
         let meanP = boxMean(source, width: width, height: height, radius: radius)
