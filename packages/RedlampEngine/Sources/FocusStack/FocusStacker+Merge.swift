@@ -47,11 +47,14 @@ extension FocusStacker {
         var analyses: [FrameAnalysis] = []
         var size = (width: 0, height: 0)
         for index in 0 ..< frameCount {
-            let frame = try load(index)
-            lap("decode")
-            size = (frame.width, frame.height)
-            try analyses.append(analyse(frame))
-            lap("align")
+            // Each frame's textures and buffers go as soon as it's done, not when the merge is.
+            try autoreleasepool {
+                let frame = try load(index)
+                lap("decode")
+                size = (frame.width, frame.height)
+                try analyses.append(analyse(frame))
+                lap("align")
+            }
             progress(0.4 * Double(index + 1) / Double(frameCount))
         }
         let alignment = StackAligner.align(analyses)
@@ -88,24 +91,26 @@ extension FocusStacker {
         )
         var grit: Float = 0
         for index in 0 ..< frameCount {
-            let frame = try load(index)
-            lap("decode")
-            guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
-            commands.label = "Stack fuse \(index)"
-            try encodeWarp(
-                frame, transform: alignment.transforms[index], gain: alignment.gains[index],
-                into: pyramid.warped, commands: commands,
-            )
-            try pyramid.encodeFrame(index, depth: depthTexture, settings: settings, commands: commands)
-            commands.commit()
-            commands.waitUntilCompleted()
-            if let error = commands.error {
-                throw EngineError.renderFailed(error.localizedDescription)
+            try autoreleasepool {
+                let frame = try load(index)
+                lap("decode")
+                guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
+                commands.label = "Stack fuse \(index)"
+                try encodeWarp(
+                    frame, transform: alignment.transforms[index], gain: alignment.gains[index],
+                    into: pyramid.warped, commands: commands,
+                )
+                try pyramid.encodeFrame(index, depth: depthTexture, settings: settings, commands: commands)
+                commands.commit()
+                commands.waitUntilCompleted()
+                if let error = commands.error {
+                    throw EngineError.renderFailed(error.localizedDescription)
+                }
+                if index == alignment.reference, settings.strategy == .auto {
+                    grit = try settings.noiseK * pyramid.finestNoiseSigma()
+                }
+                lap("fuse")
             }
-            if index == alignment.reference, settings.strategy == .auto {
-                grit = try settings.noiseK * pyramid.finestNoiseSigma()
-            }
-            lap("fuse")
             progress(0.5 + 0.45 * Double(index + 1) / Double(frameCount))
         }
         let fused = try pyramid.finish(frames: frameCount, settings: settings, grit: grit)
