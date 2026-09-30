@@ -310,6 +310,14 @@ Decode and I/O dominate, not GPU fusion, so the priorities are parallel decoding
 - **Raw-aware SR is better in principle and in the literature** (Adobe trains Super Resolution on raw jointly with Raw Details; Zhang et al. 2019; NTIRE raw SR), mainly on fine detail and X-Trans. But the published comparisons are against weak RGB baselines; the gap over a strong demosaic followed by a fidelity-trained RGB upscaler is plausibly moderate. That is why the recommended path adds SR to the raw network we train anyway, rather than a separate model.
 - **Hallucination is the core product risk.** GAN and diffusion upscalers invent texture by design (the perception–distortion trade-off). Our rules: regression-trained (L1/Charbonnier) models only; a consistency check that the output downsamples back to the input; a "where detail was added" overlay; cap at 2x.
 
+### 4.1 Supplement (30 September 2026): Topaz and a measured bake-off
+
+Source: [notes/H-topaz-upscale-sharpen.md](notes/H-topaz-upscale-sharpen.md), with appendices [H1](notes/H1-topaz-teardown.md) (Topaz teardown) and [H2](notes/H2-open-model-survey.md) (licences, including whether evaluation is allowed).
+
+- **How Topaz works.** Topaz has two tiers. The "Core" tier is non-generative and local-only: small CNNs trained on synthetic degradations (Standard, High Fidelity and the classic Sharpen models). The generative tier is diffusion (Wonder, Recover, Redefine, Super Focus). A user-posted log ties Wonder to the code of ByteDance's open SeedVR2 one-step diffusion transformer. Topaz models power Photoshop Generative Upscale and Lightroom AI Sharpen (credit-metered). **Adobe completed its acquisition of Topaz on 23 September 2026.**
+- **Bake-off** (14 crops from the CC0 fixtures and public-domain images; 8 synthetic degradations; M1 Ultra). **Apple's scaler was the best fidelity upscaler**: at 4x on clean input, LPIPS 0.233 against Lanczos's 0.340, and the best PSNR on realistic degraded input, in 30–90 ms per 512 px output. GAN and diffusion upscalers scored best on a no-reference quality model and worst on consistency with their input; S3Diff (diffusion) was at both extremes. "Real-world" L1 models lost 3.6–3.8 dB to Lanczos on clean camera crops. This confirms the recommendation above and SKIP-10.
+- **Proposed:** SR-03, which uses the bake-off's consistency PSNR as SR-01's fidelity-guard metric. Sharpening findings are in section 8.
+
 ---
 
 ## 5. C. Masking and segmentation
@@ -436,7 +444,8 @@ Owning a depth model outright would need a synthetic dataset we render ourselves
 | ML demosaic ("Raw Details") | **Later, only inside A's raw network** | 3–4 | 2–4 on top of A | The raw denoiser already does most of the work; the RCD description is GPL code, so classical RCD/AMaZE need clean-room care |
 | HDR merge with deghosting, panorama | **Later**, classical | 3–4 | 6–10 | Reuses G's alignment |
 | Chromatic aberration, defringe, moiré, dehaze | **Classical now** | 2 | 2–4 | No ML needed; dark-channel dehaze patent unverified |
-| Lens deblur / optical sharpening | **Later** | 4+ | 6–12 | Watch Lightroom's "AI Sharpen" (June 2026) |
+| Lens deblur / optical sharpening | **Split (revised 30 September 2026):** classical noise-aware capture sharpening **now**; learned "AI Sharpen" head **later** | 2 (SHP-01); 3–4 (SHP-03) | 2–3; 6–10 | Lightroom's AI Sharpen is Topaz's Noise-Aware Sharpen, whose published recipe is "Noise is detected and removed. Image is sharpened. Noise is added back". In the bake-off, deconvolution with a guessed Gaussian PSF gained 4.8 dB on mild softness (unsharp mask: 1.3 dB); with the true PSF it beat every blind network by 1.4–7.5 dB. Blind networks failed outside their training blur (NAFNet-GoPro −5.4 dB on defocus) and sharpened real bokeh into texture. The learned head goes on A's raw network with broad synthetic PSFs and blur-map gating (SHP-04). See [notes/H](notes/H-topaz-upscale-sharpen.md) |
+| Face restoration (GFPGAN, CodeFormer class) | **Skip** (SKIP-13) | — | — | In the bake-off it turned a dark eye blue and added stubble; every face model is trained on FFHQ (non-commercial); CodeFormer can't even be evaluated by a commercial project |
 | Sky replacement | **Skip** | — | — | Not in Lightroom; licensing of shipped skies; conflicts with "truthful" editing |
 | Relighting | **Skip** | — | — | Low value for a raw developer |
 
@@ -1039,6 +1048,31 @@ Consolidated from the research notes for every workstream, all checked on 29 Sep
 | FOSSA ViT-S [G] | BSD-3-Clause (GitHub API) | BSD-3-Clause (HF `venkatsubra/fossa-vits` cardData.license) | Synthetic stacks from Hypersim (CC BY-SA 3.0) and TartanAir (CC BY 4.0); ViT-S backbone Depth-Anything-V2-Small (Apache-2.0; see DA-V2 Small CONFLICT in C) | Attribution; ShareAlike question for derived weights. G: "leaning Shippable" after legal review | UNCLEAR | https://github.com/princeton-vl/FOSSA · https://huggingface.co/venkatsubra/fossa-vits |
 | FOSSA ViT-B [G] | BSD-3-Clause | BSD-3-Clause | DAv2-Base backbone (CC-BY-NC-4.0) | NC backbone | Avoid | as above |
 | RAFT / SEA-RAFT [G] | BSD-3-Clause | No separate licence | FlyingChairs, Things, Sintel, KITTI (terms not verified; KITTI commonly NC) | Only if DIS/Vision motion masks prove insufficient | Fine-tune only | arXiv 2003.12039 · 2405.14793 |
+
+#### H. Topaz-style upscaling, sharpening and faces (supplement, 30 September 2026)
+
+"Eval" says whether the terms let a commercial project evaluate the model internally. The full matrix is in [notes/H2-open-model-survey.md](notes/H2-open-model-survey.md) §10.
+
+| Candidate | Code license | Weights license | Training data (terms) | Obligations | Verdict | Source URLs |
+|---|---|---|---|---|---|---|
+| AuraSR v2 [H] | CC BY-SA 4.0 | Apache-2.0 (HF card) | Undisclosed → UNCLEAR | Attribution; SA on code adaptations. Eval yes | Fine-tune only | https://github.com/fal-ai/aura-sr · https://huggingface.co/fal/AuraSR-v2 |
+| OpenModelDB community upscalers (Nomos, RealWebPhoto, LSDIR) [H] | Apache/MIT architectures | CC BY 4.0 (per-model JSON), but distilled from research-only sets → UNCLEAR | Nomos-v2 / nomos_uni / LSDIR | CC BY. Eval yes | Fine-tune only | https://github.com/OpenModelDB/open-model-database |
+| 4x-UltraSharp / UltraSharpV2 [H] | Apache (ESRGAN/DAT) | CC BY-NC-SA 4.0 | Includes DIV2K, FiveK, "private" | NC-SA. **Eval no** | Research-only | https://huggingface.co/Kim2091/UltraSharpV2 |
+| S3Diff [H] | Apache-2.0 | Apache-2.0; base SD-Turbo (Stability AI Community Licence) | LSDIR + FFHQ 10k (NC) | Stability AUP and revenue cap. Eval yes | Fine-tune only | https://github.com/ArcticHare105/S3Diff |
+| AdcSR [H] | Apache-2.0 | Apache-2.0 (HF repo LICENSE); SD 2.1 derived | LSDIR | OpenRAIL use restrictions. Eval yes; 65 ms on a phone (paper) | Fine-tune only | https://github.com/Guaishou74851/AdcSR |
+| PiSA-SR [H] | **UNCLEAR** (README says Apache-2.0; no LICENSE file) | Google Drive/Baidu; SD 2.1 base | Not stated | Design reference for a fidelity/creativity dial | Fine-tune only (design ref) | arXiv 2412.03017 |
+| HYPIR [H] | SupPixel NC licence (HF card "apache-2.0" contradicts it) | NC | ~20 M patches + 70 k faces | **Eval no** | Research-only | https://github.com/XPixelGroup/HYPIR |
+| SeedVR / SeedVR2 (the lineage of Topaz Wonder) [H] | Apache-2.0 | Apache-2.0 (HF cardData) | Not checked → UNCLEAR | 3 B / 7 B DiT; far above the iPhone budget | Fine-tune only | https://github.com/ByteDance-Seed/SeedVR · arXiv 2506.05301 |
+| NAFNet GoPro / REDS [H] | MIT | Google Drive, none stated → UNCLEAR | GoPro / REDS: **CC BY 4.0** | MIT + CC BY attribution. Eval yes | **Shippable candidate** (confirm weights or retrain) | https://github.com/megvii-research/NAFNet |
+| Restormer motion / defocus [H] | MIT (since 2025-10-23; was Academic Public License) | Release v1.0 (2022), none stated → UNCLEAR | GoPro (CC BY 4.0) / DPDD (UNCLEAR) | MIT + CC BY. Eval yes | Motion: shippable candidate; defocus: fine-tune only | https://github.com/swz30/Restormer |
+| FFTformer [H] | MIT | Release asset, none stated → UNCLEAR | GoPro / RealBlur (CC BY 4.0) | MIT + CC BY. Eval yes | Shippable candidate | https://github.com/kkkls/FFTformer |
+| MPRNet, PromptIR, LoFormer, Stripformer [H] | Academic Public License / modified MIT "non-commercial usage" | — | — | **Eval no** | Research-only | H2 §4, §6 |
+| InstructIR [H] | MIT | MIT (HF) | Mixed, incl. MIT-Adobe FiveK (research) | MIT. Eval yes | Fine-tune only | https://github.com/mv-lab/InstructIR |
+| GFPGAN v1.3 / v1.4 [H] | Apache-2.0 except StyleGAN2 (NVIDIA NC) and DFDNet (CC BY-NC-SA) parts | Release assets | FFHQ (CC BY-NC-SA 4.0) | NVIDIA NC allows "research or evaluation". Changed identity details in the bake-off | Research-only | https://github.com/TencentARC/GFPGAN |
+| CodeFormer [H] | S-Lab License 1.0 (NC) | Same | FFHQ | **Eval no** | Research-only | https://github.com/sczhou/CodeFormer |
+| RestoreFormer / RestoreFormer++, PMRF [H] | Apache-2.0 / MIT | Release / HF (MIT for PMRF) | FFHQ (NC) | Eval yes | Fine-tune only | https://github.com/wzhouxiff/RestoreFormerPlusPlus · https://github.com/ohayonguy/PMRF |
+| pyiqa / IQA-PyTorch [H] | **PolyForm Noncommercial 1.0.0** (since 2026-04-09) | CC BY-NC-SA 4.0 | Various | **Eval no**: don't use in INF-05; use LPIPS, DISTS, MUSIQ, MANIQA, and zero-shot CLIP-IQA on OpenAI CLIP | Avoid | https://github.com/chaofengc/IQA-PyTorch |
+| GoPro, REDS, RealBlur datasets [H] | n/a | n/a | **CC BY 4.0** (dataset pages) | Attribution; counsel to confirm training use (DEC-15) | Candidate training data | https://seungjunnah.github.io/Datasets/gopro.html · https://github.com/rimchang/RealBlur |
 
 #### Infra: runtimes, delivery, tooling, evaluation metrics
 

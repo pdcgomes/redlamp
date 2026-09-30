@@ -1,0 +1,19 @@
+# Restoration bake-off only (research). Nothing here ships in Redlamp.
+torch
+torchvision
+spandrel
+spandrel_extra_arches
+lpips
+DISTS_pytorch
+transformers
+opencv-python-headless
+pillow
+numpy
+scipy
+scikit-image
+huggingface_hub
+gdown
+safetensors
+einops
+timm
+pyyaml

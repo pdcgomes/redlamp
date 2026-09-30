@@ -4,8 +4,9 @@ The single place where every recommendation from Redlamp's research gets a decis
 
 - [AI and computational photography findings](ai-findings.md) (source tag **AI**)
 - [darktable study](darktable-findings.md) (source tag **DT**)
+- [Topaz-style upscaling and sharpening supplement](notes/H-topaz-upscale-sharpen.md) (source tag **H**)
 
-Where both studies recommend the same thing, the row is merged and cites both. *Last updated: 30 September 2026.*
+Where studies recommend the same thing, the row is merged and cites each. *Last updated: 30 September 2026.*
 
 ## How to use this tracker
 
@@ -50,6 +51,8 @@ These block other rows. Most need the project owner; the ones marked *counsel* n
 | DEC-11 | Where mask and AI result blobs live: a companion directory or a sidecar package | Decide with iCloud sidecar coordination | EDT-12, INF-06 | Proposed | [AI §11.2](ai-findings.md#112-decisions-needed) |
 | DEC-12 | Budget: one ML engineer from Phase 2, a capture program, expert editing (about US$15–40k), cloud training (about US$26–71k per year at full scale) | Approve | DN-06, DN-07, AUT-04 | Proposed | [AI §1](ai-findings.md#1-executive-summary) |
 | DEC-13 | Get written confirmation of SIDD's MIT terms; ask LSFD and DND authors for evaluation rights; check Helicon, Zerene and DxO EULAs before publishing comparisons | Do all four | DN-09, FS-12 | Proposed | [AI §11.3](ai-findings.md#113-open-questions-to-verify) |
+| DEC-14 | Offer an opt-in, labelled, Mac-only generative "creative" upscale or refocus tier, for parity with Topaz Wonder and Lightroom Generative Upscale? (would reopen SKIP-10) | Not now; revisit if users ask. It would need our own diffusion training, or counsel clearing a base model such as SeedVR2 or AdcSR | — | Proposed | [H §7](notes/H-topaz-upscale-sharpen.md#7-how-redlamp-could-produce-similar-results) |
+| DEC-15 | May shipped models be trained on the CC BY 4.0 deblur datasets (GoPro, REDS, RealBlur) with attribution? *(counsel)* | Yes, if counsel agrees | SHP-03 | Proposed | [H §3](notes/H-topaz-upscale-sharpen.md#3-open-models-that-get-similar-effects) |
 
 ---
 
@@ -222,6 +225,12 @@ These block other rows. Most need the project owner; the ones marked *counsel* n
 | RM-06 | iPhone inpainting student, Remove People, wire removal | Build | P4 | 10–14 ew | RM-05 | Proposed | Not started | [AI §6](ai-findings.md#6-d-object-removal-healing-and-distraction-removal) |
 | SR-01 | Super Resolution 2x on Apple's VideoToolbox scaler, with a fidelity guard | Adopt | P4 (P3 stretch) | 3–4 ew | — | Proposed | Not started | [AI §4](ai-findings.md#4-b-super-resolution-and-upscaling) |
 | SR-02 | 2x output on the AI denoise raw network | Build | P4 | 10–16 ew | DN-07 | Proposed | Not started | [AI §4](ai-findings.md#4-b-super-resolution-and-upscaling) |
+| SR-03 | Use the restoration bake-off's consistency PSNR (downscale the output, compare with the input) as SR-01's fidelity-guard metric, with thresholds calibrated on the bake-off set | Adopt | P4 | S | SR-01 | Proposed | Not started | [H §6.1](notes/H-topaz-upscale-sharpen.md#61-upscaling) |
+| SHP-01 | Noise-aware capture sharpening: NR v1 separates the noise, a few Richardson–Lucy or Wiener iterations deconvolve the clean estimate (Gaussian PSF from Radius), and the residual is added back with a "keep noise" amount | Build | P2 | M (2–3 ew) | TON-06, DN-02 | Proposed | Not started | [H §6.2–6.3](notes/H-topaz-upscale-sharpen.md#62-sharpening-and-deblur) |
+| SHP-02 | Lens PSFs for deconvolution: slanted-edge measurement per lens, aperture and field position, and a per-tile defocus-radius estimate | Build | P3 | M | LNS-01, SHP-01 | Proposed | Not started | [H §7](notes/H-topaz-upscale-sharpen.md#7-how-redlamp-could-produce-similar-results) |
+| SHP-03 | "AI Sharpen" head on the AI denoise raw network (lens blur, motion blur, missed focus): broad synthetic PSFs and the calibrated noise model; L1 loss; noise-aware composition; strength blend; consistency guard | Build | P3–P4 | L (6–10 ew + compute) | DN-06, DN-07, DEC-15 | Proposed | Not started | [H §7](notes/H-topaz-upscale-sharpen.md#7-how-redlamp-could-produce-similar-results) |
+| SHP-04 | Blur-map and subject gating so that sharpening leaves intentional bokeh alone | Build | With SHP-03 | S–M | MSK-08 | Proposed | Not started | [H §6.2](notes/H-topaz-upscale-sharpen.md#62-sharpening-and-deblur) |
+| SHP-05 | Blind camera-shake kernel estimation feeding non-blind deconvolution (Levin 2011 / Pan 2016 class) | Build | P4 | M | DEC-05 (add these methods to the patent search) | Proposed | Not started | [H §2.2](notes/H-topaz-upscale-sharpen.md#22-sharpening-is-deconvolution) |
 | AUT-01 | Harden heuristic Auto and add a classical white-balance ensemble, evaluated on Cube++ | Build | P2–P3 | 4–5 ew | — | Proposed | Not started | [AI §7](ai-findings.md#7-e-auto-adjustments-and-personalization) |
 | AUT-02 | Per-camera histogram auto white balance (after the patent check) | Build | P3 | 3–4 ew | DEC-05 | Proposed | Not started | [AI §7](ai-findings.md#7-e-auto-adjustments-and-personalization) |
 | AUT-03 | Adaptive profile v1 as a cached parameter set with Amount 0–200 | Build | P3–P4 | 4–6 ew | TON-05, MSK-08 | Proposed | Not started | [AI §7](ai-findings.md#7-e-auto-adjustments-and-personalization) |
@@ -245,6 +254,7 @@ These block other rows. Most need the project owner; the ones marked *counsel* n
 | INF-06 | AI result cache, sidecar blob store, model-update UX | Build | P3 | 3–4 ew | DEC-11 | Proposed | Not started | [AI §9.3](ai-findings.md#93-determinism-versioning-and-caching) |
 | INF-07 | Apple-hosted Background Assets delivery, one immutable pack per model version | Build | P3 | 2–3 ew | INF-01 | Proposed | Not started | [AI §9.4](ai-findings.md#94-model-delivery-verified) |
 | INF-08 | Training infrastructure (data manifests, synthetic noise shared with DN-01, cloud runner) | Build | P2–P3 | 4–6 ew | DEC-12 | Proposed | Not started | [AI §9.8](ai-findings.md#98-training-and-evaluation) |
+| INF-09 | Fold the restoration bake-off into the shared harness: test-set generator, licence-checked model list, metrics without pyiqa (PolyForm Noncommercial) | Adopt | P2 | S | INF-05 | Proposed | Not started | [H §5](notes/H-topaz-upscale-sharpen.md#5-bake-off-method) |
 
 ---
 
@@ -266,3 +276,4 @@ Decisions not to do something, kept so they aren't reopened without new evidence
 | SKIP-10 | Diffusion upscalers and generative fill | Hallucination risk; non-commercial or restrictive licenses | [AI §4](ai-findings.md#4-b-super-resolution-and-upscaling) |
 | SKIP-11 | Sky replacement and relighting | Not in Lightroom; conflicts with truthful editing | [AI §8](ai-findings.md#8-f-other-opportunities) |
 | SKIP-12 | Studying vkdt for now | Owner decision, 30 September 2026 | Conversation |
+| SKIP-13 | Face-specific generative restoration (GFPGAN, CodeFormer, RestoreFormer, face diffusion) | Changes identity details (in the bake-off, a dark eye turned blue and stubble appeared); every model is trained on FFHQ (non-commercial) | [H §6.4](notes/H-topaz-upscale-sharpen.md#64-faces) |

@@ -37,6 +37,13 @@ source for the Core ML scripts).
 | `focus_stack/focus_stack.py` | Classical focus stacking: chained ECC alignment, sum-modified-Laplacian focus volume, guided-filter depth solve, streaming Smooth / Detail / Auto fusion |
 | `focus_stack/compare.py` | Contact sheet of crops, Tenengrad sharpness, PSNR/SSIM against a reference result |
 
+| `restoration/make_testset.py` | Upscaling and sharpening test set: CC0 fixture renders and a public-domain panel, 512 px ground truth, synthetic downscale, blur, shake and noise degradations with known ground truth, plus native "real" crops |
+| `restoration/fetch_models.py` | Downloads the bake-off weights (only models whose terms allow internal evaluation) |
+| `restoration/run_bakeoff.py` | Classical baselines, spandrel-loaded upscalers, deblur and face models, InstructIR and a noise-aware sharpen pipeline on PyTorch MPS; wall time per image |
+| `restoration/run_vt.py`, `restoration/vt_superres.swift` | Apple's VideoToolbox super-resolution scaler on the same items |
+| `restoration/run_s3diff.py` | S3Diff one-step diffusion upscaler (separate pinned environment, see its docstring) |
+| `restoration/score.py` | PSNR, SSIM, LPIPS, DISTS, back-projection consistency, zero-shot CLIP-IQA; summary tables and the contact sheets in `docs/research/images/restoration-*.jpg` |
+
 Outputs go to `build/proto-out/`.
 
 ```bash
@@ -48,6 +55,25 @@ build/research-venv/bin/python research/prototypes/focus_stack/compare.py build/
   --frames build/proto-data/stacks/pcb7 --reference build/proto-data/stacks/pcb7/expected.jpg \
   --crop 1330,760,360 --crop 1180,300,360 --crop 260,380,360
 ```
+
+The restoration bake-off uses its own environment (current torch plus spandrel, LPIPS, DISTS and
+transformers), because the Core ML scripts pin torch 2.7:
+
+```bash
+uv venv --python python3.12 build/restoration-venv
+VIRTUAL_ENV=build/restoration-venv uv pip install -r research/prototypes/restoration/requirements.txt
+cd research/prototypes/restoration
+../../../build/restoration-venv/bin/python make_testset.py   # renders the fixtures with the redlamp CLI
+../../../build/restoration-venv/bin/python fetch_models.py
+../../../build/restoration-venv/bin/python run_bakeoff.py
+../../../build/restoration-venv/bin/python run_vt.py
+../../../build/s3diff-venv/bin/python run_s3diff.py            # optional; setup in its docstring
+../../../build/restoration-venv/bin/python score.py
+```
+
+InstructIR and S3Diff need their repositories cloned into `build/oss/` (see each script's docstring).
+The test-set panel images are public domain (NASA) and CC0 Wikimedia Commons files; their URLs and
+licences are recorded in `make_testset.py` and the generated `manifest.json`.
 
 Run the Core ML scripts one at a time: running them in parallel skews the timings. The first
 Neural Engine load of each model compiles it (seconds for NAFNet, minutes for the SAM encoder); later
