@@ -32,10 +32,17 @@ struct Stage: View {
     @Binding var settings: StageSettings
 
     var body: some View {
-        ScrollView([.horizontal, .vertical]) {
-            scene.content()
-                .padding(32)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        Group {
+            if scene.fillsStage {
+                scene.content()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView([.horizontal, .vertical]) {
+                    scene.content()
+                        .padding(32)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }
+            }
         }
         .background(settings.background.color)
         .id(scene.id)

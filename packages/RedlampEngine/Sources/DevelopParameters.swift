@@ -1,4 +1,5 @@
 import Foundation
+import Metal
 import RedlampColor
 import RedlampEngineAPI
 import RedlampKernels
@@ -12,6 +13,8 @@ struct DevelopInputs {
     /// Never empty: Metal needs a bound buffer, so a zeroed element stands in.
     var layers: [MaskLayerGPU]
     var components: [MaskComponentGPU]
+    /// The Base Look's table; nil binds the identity table with the stage off.
+    var lookTable: (any MTLTexture)?
 }
 
 /// Translates an `EditRecipe` into the fused kernel's parameter block.
@@ -22,6 +25,7 @@ enum DevelopParameters {
     static func make(
         recipe: EditRecipe,
         session: ImageSession,
+        baseLook resolved: BaseLookRegistry.Resolved? = nil,
         outputSize: PixelSize,
         region: ImageRect = .full,
         encoding: OutputEncoding,
@@ -30,8 +34,20 @@ enum DevelopParameters {
         maskOverlayColor: MaskOverlayColor = .red,
     ) -> DevelopInputs {
         var p = DevelopParams()
-        let profile = BuiltInProfile(reference: recipe.profile) ?? .color
-        let look = profile.look
+        let baseLook = resolved ?? BaseLookRegistry.Resolved(
+            parameters: (BuiltInBaseLook(reference: recipe.baseLook) ?? .color).parameters,
+            table: nil, tableSize: 0, isAvailable: true,
+        )
+        let look = baseLook.parameters.scaled(by: recipe.baseLook.amount)
+        if baseLook.table != nil {
+            p.lookTable = SIMD4(Float(recipe.baseLook.amount / 100), Float(baseLook.tableSize), 0, 0)
+        }
+        p.recipe = SIMD4(
+            Float(recipe[.colorChrome] / 100),
+            Float(recipe[.colorChromeBlue] / 100),
+            Float(0.25 * log2(max(recipe[.dynamicRange], 100) / 100)),
+            0,
+        )
 
         p.setCameraToWorking(session.cameraToWorking)
         // Display-referred work stays in Rec.2020 primaries; the kernel gamut-maps into these.
@@ -39,7 +55,11 @@ enum DevelopParameters {
             encoding == .sRGB ? ColorMatrices.rec2020ToSRGB.floatMatrix : ColorMatrices.rec2020ToDisplayP3.floatMatrix,
         )
 
-        p.wbRatio = SIMD4(SIMD3<Float>(session.whiteBalanceRatio(for: recipe)), 0)
+        // Camera-style fine-tuning: ±100 is ±0.3 EV on the red or blue channel.
+        let shift = SIMD3<Float>(
+            Float(pow(2, 0.3 * recipe[.wbShiftRed] / 100)), 1, Float(pow(2, 0.3 * recipe[.wbShiftBlue] / 100)),
+        )
+        p.wbRatio = SIMD4(SIMD3<Float>(session.whiteBalanceRatio(for: recipe)) * shift, 0)
 
         let exposure = recipe[.exposure] + session.baselineExposure
         let contrast = recipe[.contrast] / 100 * 0.32 + (look.contrast - 1) * 0.6
@@ -138,6 +158,7 @@ enum DevelopParameters {
             mixer: mixer,
             layers: layers.isEmpty ? [.empty] : layers,
             components: components.isEmpty ? [.empty] : components,
+            lookTable: baseLook.table,
         )
     }
 

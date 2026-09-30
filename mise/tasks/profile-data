@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Download the CC0 Fujifilm raw + camera JPEG pairs the look profiler fits against (build/profiler)"
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+python3 research/profiler/fetch_pairs.py "$@"

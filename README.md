@@ -8,7 +8,7 @@ Redlamp is built from scratch in Swift and Metal for Apple Silicon. It focuses o
 
 > **Status: pre-alpha, iteration 2 (macOS).** The core RAW pipeline, the Develop workspace, and the Basic, Tone Curve, Color Mixer, Color Grading, and Effects adjustments and noise reduction work today, and so does **masking with linear and radial gradients** and local adjustments. Crop, healing, brush and AI masks, lens corrections, and the iPad and iPhone apps are next. See [Where we are](#where-we-are) and the [Roadmap](#roadmap).
 >
-> This README is the project's primary status page and is kept up to date as work lands. *Last updated: 29 September 2026.*
+> This README is the project's primary status page and is kept up to date as work lands. *Last updated: 30 September 2026.*
 
 ---
 
@@ -37,7 +37,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 
 ## Goals
 
-1. **Immediately familiar to Lightroom users.** The Develop module's layout, panel order, slider names, ranges and defaults, and single-key shortcuts all carry over. We copy conventions, never Adobe's assets.
+1. **Immediately familiar to Lightroom users.** The Develop module's layout, panel order, slider names, ranges and defaults, and single-key shortcuts all carry over. We copy conventions, never Adobe's assets. One deliberate exception: presets, profiles and LUTs are all **Recipes**, and a profile is a recipe's **Base Look**, because for most people they all do one thing, give a photo a look. Lightroom's words still work as tooltips and in search.
 2. **Best-in-class masks.** Masks are part of the architecture from day one. Every edit is a layer (adjustments plus a mask), with Lightroom's model of components combined by add, subtract, and intersect, and on-device AI masks built on Apple Vision and SAM-class models.
 3. **Modern, native UI and great UX.** The UI follows the macOS and iOS 26 design language. Liquid Glass is used only on floating chrome, and editing surfaces stay neutral grey so nothing distorts your color judgment. It is direct-manipulation first, every action can be undone, and there are no modal dialogs while you edit.
 4. **Extreme responsiveness.** Rendering and UI are strictly separated. Slider changes should reach the screen within a frame (under 16 ms), and the UI thread never waits on the engine, the disk, or the GPU.
@@ -63,13 +63,13 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] A single fused Metal kernel applies every per-pixel adjustment. Frames are delivered as IOSurfaces, so pixels are never copied between engine and UI.
 - [x] Latest-wins render scheduling: a burst of slider events collapses to the newest one.
 - [x] Rendering stays off the main thread while you drag a slider. Frames go straight to the canvas, which a dedicated display-link thread presents, and each view observes only the values it shows.
-- [x] Both side panels are AppKit: the histogram, tool strip and every Develop and Masking panel on the right, and the Navigator, Presets, Snapshots and History on the left. They match the SwiftUI originals pixel for pixel, and a component harness is used to build and review them (see [Component harness](#component-harness)).
+- [x] Both side panels are AppKit: the histogram, tool strip and every Develop and Masking panel on the right, and the Navigator, Recipes, Snapshots and History on the left. They match the SwiftUI originals pixel for pixel, and a component harness is used to build and review them (see [Component harness](#component-harness)).
 - [x] Temperature and tint use a proper camera white-balance model (Robertson's method with the camera's color matrix). As Shot, Auto, and the illuminant presets all work.
 
 **Develop adjustments that render**
 - [x] **White balance:** Temp and Tint, the presets, Auto, and the eyedropper.
 - [x] **Basic:** Exposure, Contrast, Highlights, Shadows, Whites, Blacks, Vibrance, and Saturation, plus the **Auto** button.
-- [x] **Treatment** (Color or B&W) and six built-in **profiles**: Redlamp Color, Neutral, Vivid, Landscape, Portrait, and Monochrome.
+- [x] **Treatment** (Color or B&W) and **Base Looks** (Lightroom's profiles) with an Amount slider (0–200) and a browser that renders every look on the photo. There are six built-in looks (Redlamp Color, Neutral, Vivid, Landscape, Portrait and Monochrome) and 15 film-style looks built on 3D look tables: slide, chrome, negative, cinema, bleach and black and white through color filters. Three of them (standard, vivid slide and chrome) are measured from cameras' own renderings by the look profiler, and land within ΔE 2.7–3.4 of the camera on photos the fit never saw.
 - [x] **Tone Curve:** a parametric curve with split points, and a point curve with presets.
 - [x] **Color Mixer:** HSL (Hue, Saturation, Luminance, and All) and a per-color mode, working in OKLCh.
 - [x] **Color Grading:** 3-way and individual wheels, Blending, and Balance. It also tints B&W images for split-toning.
@@ -90,11 +90,12 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] The **Create New Mask** grid already lists every Lightroom mask type (Subject, Sky, Background, Objects, People, Landscape, Brush, Color, Luminance, and Depth Range). Each shows the phase it arrives in.
 
 **Workspace**
-- [x] A Lightroom-style layout. On the left: Navigator, Presets, Snapshots, and History. In the center: the photo, with the filmstrip below. On the right: histogram, tool strip, and the Develop panels in Lightroom's order.
+- [x] A Lightroom-style layout. On the left: Navigator, Recipes, Snapshots, and History. In the center: the photo, with the filmstrip below. On the right: histogram, tool strip, and the Develop panels in Lightroom's order.
 - [x] **Sliders:** click to jump, drag to adjust, Shift-drag for fine control, double-click to reset, and click the value to type one in. Option-dragging a tone slider shows clipping, as in Lightroom.
 - [x] **Panels:** double-click a panel or group title to reset it, and Option-click a header for Solo Mode.
 - [x] **Histogram:** clipping indicators, and you can drag across it to adjust Blacks, Shadows, Exposure, Highlights, or Whites.
-- [x] **Presets:** hover to preview, click to apply. Snapshots and full undo/redo history are also available.
+- [x] **Recipes** (Lightroom's presets, profiles and LUTs, in one): 39 bundled recipes in eight groups, including camera-style ones built from Fujifilm-style recipe cards. Hover to preview, click to apply, then adjust the recipe's Amount. You can search (Lightroom's words work), mark favorites, save the current edit as a recipe with a settings checklist (⇧⌘N), and import or export `.redrecipe`, `.cube` and HaldCLUT files. Snapshots and full undo/redo history are also available.
+- [x] **Camera-recipe controls** in the Effects panel: Dynamic Range, Color Chrome, Chrome FX Blue, and red and blue white-balance shift.
 - [x] **Viewing:** Fit, Fill, 1:1, and 2:1 zoom, click to zoom, pan, pinch, before/after, and a clipping overlay.
 - [x] **Lightroom Classic's keyboard shortcuts**: 79 actions on 83 key bindings, from one registry that also drives the menus and an in-app ⌘/ reference (see [Keyboard shortcuts](#keyboard-shortcuts)).
 - [x] **Culling while you develop:** star ratings, pick/reject flags and color labels, shown on the filmstrip. There's also an Info overlay (`I`), Lights Out (`L`), full-screen preview (`F`), and Paste from Previous (`⌥⌘V` and the Previous button).
@@ -194,7 +195,7 @@ Every phase ships on Mac, iPad, and iPhone. The Lightroom feature inventory in [
 - [ ] Texture, Clarity, and Dehaze, plus edge-aware Highlights and Shadows
 - [ ] Detail panel: sharpening and **best-in-class classical noise reduction**, profiled per camera and ISO, on raw data, with Lightroom's luminance and color controls
 - [ ] Better X-Trans demosaicing (Markesteijn) and a dual demosaic for Bayer (Bayer demosaicing from the Menon paper and highlight reconstruction are done)
-- [ ] Full DCP camera profiles (dual and triple illuminant), ICC input profiles, **LUT import** (`.cube`, `.3dl`, HaldCLUT), and a Profile Browser
+- [ ] Full DCP camera profiles (dual and triple illuminant), ICC input profiles, and `.3dl` and log-space LUT import (`.cube`, HaldCLUT and the Base Look browser are done)
 - [ ] Lens corrections from the lensfun database, Adobe LCP import, and DNG opcodes
 - [ ] Crop and straighten, Transform and Upright
 - [ ] Brush, color range, and luminance range masks, and Vision AI masks (subject, sky, background, people)
@@ -207,7 +208,7 @@ Every phase ships on Mac, iPad, and iPhone. The Lightroom feature inventory in [
 - [ ] **AI Denoise:** an on-device model working on raw data, matching or beating the best commercial denoisers, with a fast 1:1 preview and non-destructive results
 - [ ] **Focus stacking v1:** stacks detected automatically in the filmstrip, alignment (including focus breathing and handheld sequences), depth-map and pyramid fusion strategies, a retouch brush, and results that stay fully editable
 - [ ] Manufacturer lens corrections embedded in RAW files (Sony, Fujifilm, Panasonic, OM System)
-- [ ] `redlamp-profiler`: look matching by black-box measurement (Fujifilm film simulation–inspired looks, Adobe-compatible looks), with a DCP and LUT writer
+- [ ] `redlamp-profiler`: look matching by black-box measurement (Fujifilm film simulation–inspired looks, Adobe-compatible looks), with a DCP and LUT writer. Fitted looks fill the camera-card film slots as new Base Look versions.
 
 ### Phase 4: 1.0
 - [ ] Lightroom XMP sidecar import, HDR/EDR editing and export, and batch export
@@ -253,8 +254,10 @@ The `redlamp` CLI uses the same engine API as the app. It is useful for scriptin
 ```bash
 mise run render -- info ~/Pictures/DSC01234.ARW
 mise run render -- render ~/Pictures/DSC01234.ARW -o out.jpg --size 2048 \
-  --set exposure=0.5 --set shadows=30 --wb auto --profile vivid
+  --set exposure=0.5 --set shadows=30 --wb auto --base-look vivid
 ```
+
+`redlamp recipe …` holds the look-development tools: list, lint, render, contact sheets, `.cube` and HaldCLUT import, export, style fingerprints and fitting, golden renders, and rebuilding the bundled looks. `redlamp mcp` serves the engine and recipe library as an MCP server for agents. See [look development](docs/recipes/look-development.md) and the [agent recipe studio](docs/recipes/agent-studio.md).
 
 ### Development tasks
 
@@ -267,6 +270,8 @@ mise run render -- render ~/Pictures/DSC01234.ARW -o out.jpg --size 2048 \
 | `mise run lint` (`l`) | Purity gate, SwiftFormat (lint mode), and SwiftLint |
 | `mise run vendor` (`v`) | Build the vendored C/C++ libraries (pinned version and SHA in `config/vendored-libs.json`) |
 | `mise run fixtures` | Download CC0 sample raw files |
+| `mise run lookdev` | Download the 40-image CC0 look-development set into `build/look-dev` (checksums verified) |
+| `mise run profile-data` | Download the CC0 Fujifilm raw and camera-JPEG pairs the look profiler fits against |
 | `mise run render` | Build and run the `redlamp` CLI |
 | `mise run screenshots` | Regenerate the README screenshots (needs Screen Recording permission) |
 | `mise run harness` (`h`) | Build and launch the UI component harness |
@@ -281,6 +286,7 @@ mise run render -- render ~/Pictures/DSC01234.ARW -o out.jpg --size 2048 \
 - **Controls and Panels:** every component in every state worth reviewing, each with a note on what would be wrong with it.
 - **Parity:** a SwiftUI original and its AppKit port at the same width, shown side by side, as a difference blend (identical pixels are black), as an onion skin, or flickering. The inspector has knobs for drawing constants and a **Copy values** button. `--probe` measures SwiftUI and AppKit elements one by one and writes the sizes to `/tmp/redlamp-probe.txt`.
 - **Performance:** drags a slider at 120 events a second through each implementation and reports how busy the main thread got.
+- **Recipe Lab:** every recipe, Base Look and imported LUT on the look-development set and a lint chart. It compares before and after, A against B, and one recipe across the set; it inspects settings, table statistics and lint; it creates recipes with the real Develop panels or a camera card; and it shows the agent studio's runs, where people approve briefs and make pairwise and final picks.
 
 ![The harness comparing the SwiftUI Basic panel with its AppKit port](docs/images/harness-parity.png)
 
@@ -324,7 +330,11 @@ Sidecars carry two version numbers:
 - The **format version** describes the file's syntax. Older formats are migrated silently when read.
 - The **process version** records the rendering behavior the edit was made with, like Lightroom's process versions. An edit keeps rendering the way it did when it was made; moving it to a newer process is always an explicit choice.
 
-Settings a newer Redlamp wrote, but this version doesn't know, are kept and written back unchanged. A sidecar written with a newer format or process version is never overwritten or deleted, and sidecars are only rewritten when their content changes.
+Settings a newer Redlamp wrote, but this version doesn't know, are kept and written back unchanged. A sidecar written with a newer format or process version is never overwritten or deleted, and sidecars are only rewritten when their content changes. Format 2 renamed `profile` to `baseLook`; format-1 sidecars still read.
+
+### Where recipes are stored
+
+Recipes are single `.redrecipe` JSON files ([format](docs/recipes/recipe-format.md)). Yours are in `~/Library/Application Support/Redlamp/Recipes/`, installed ones in `Recipes/Installed/`, and every Base Look ever installed in `Looks/`, by content. Applying a recipe writes its resolved values into the photo's edit, and a look table is pinned by its SHA-256, so deleting or updating a recipe never changes a photo already edited with it. If a pinned look is missing, the photo shows without it and says so. Recipe files are data, never code, and every value is checked when a file is read.
 
 ## Architecture
 
@@ -365,7 +375,8 @@ flowchart LR
 | `RedlampKernels` | Metal shaders (demosaic, develop, histogram) and their parameter layouts |
 | `RedlampColor` | Color spaces, color-temperature math (Robertson), camera color model, OKLab |
 | `RedlampServices` | Decoding (LibRaw, ImageIO) and thumbnails |
-| `RedlampDocument` | Sidecars, snapshots, presets, library scanning, export writers |
+| `RedlampDocument` | Sidecars, snapshots, library scanning, export writers |
+| `RedlampRecipes` | Recipes and Base Looks: the `.redrecipe` format and validator, the library and look store, camera recipe cards, `.cube` and HaldCLUT import, lint, style fingerprints and the fitter, and the agent studio's run format. Platform-neutral and UI-free, so the apps, the CLI and a future companion app share it |
 | `RedlampEngine` | Sessions, the GPU pyramid, render loop, analysis (auto WB, auto tone, eyedropper) |
 | `RedlampCanvas` | Metal canvas that samples frame IOSurfaces directly, presented from its own display-link thread; zoom and pan |
 | `RedlampDesign` | Design tokens (colors, type, metrics) for SwiftUI and AppKit, and the AppKit panel components: slider rows, panel sections, control rows |

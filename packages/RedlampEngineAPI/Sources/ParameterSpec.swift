@@ -171,6 +171,8 @@ public enum ParameterCatalog {
             format: .kelvin, track: .temperature, scale: .mired,
         ),
         ParameterSpec(.tint, "Tint", range: -150 ... 150, track: .tint),
+        ParameterSpec(.wbShiftRed, "Red Shift"),
+        ParameterSpec(.wbShiftBlue, "Blue Shift"),
 
         ParameterSpec(
             .exposure, "Exposure", range: -5 ... 5, step: 0.05, format: .signedDecimal(2),
@@ -181,6 +183,9 @@ public enum ParameterCatalog {
         ParameterSpec(.shadows, "Shadows"),
         ParameterSpec(.whites, "Whites"),
         ParameterSpec(.blacks, "Blacks"),
+        ParameterSpec(
+            .dynamicRange, "Dynamic Range", range: 100 ... 400, default: 100, step: 100, format: .integer,
+        ),
 
         ParameterSpec(.texture, "Texture"),
         ParameterSpec(.clarity, "Clarity"),
@@ -283,6 +288,8 @@ public enum ParameterCatalog {
             ParameterSpec(.grainAmount, "Amount", range: 0 ... 100, format: .integer),
             ParameterSpec(.grainSize, "Size", range: 0 ... 100, default: 25, format: .integer),
             ParameterSpec(.grainRoughness, "Roughness", range: 0 ... 100, default: 50, format: .integer),
+            ParameterSpec(.colorChrome, "Color Chrome", range: 0 ... 100, format: .integer),
+            ParameterSpec(.colorChromeBlue, "Chrome FX Blue", range: 0 ... 100, format: .integer),
 
             ParameterSpec(.calibrationShadowsTint, "Tint", track: .tint, availability: .planned(phase: "Phase 2")),
             ParameterSpec(.calibrationRedHue, "Hue", availability: .planned(phase: "Phase 2")),

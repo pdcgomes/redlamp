@@ -135,6 +135,8 @@ public struct DevelopParams {
     public var masks = SIMD4<Float>(0, -1, 0, 0)
     public var region = SIMD4<Float>(0, 0, 1, 1)
     public var denoised = SIMD4<Float>(0, 0, 0, 0)
+    public var lookTable = SIMD4<Float>(0, 2, 0, 0)
+    public var recipe = SIMD4<Float>(0, 0, 0, 0)
 
     public init() {}
 

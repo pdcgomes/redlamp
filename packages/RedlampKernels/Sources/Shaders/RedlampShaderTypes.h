@@ -42,6 +42,8 @@ struct DevelopParams {
     float4 masks;             // x layer count, y overlay layer index (-1 none), z component count, w overlay color
     float4 region;            // rendered part of the image: xy origin, zw size (normalized, oriented)
     float4 denoised;          // area covered by the denoised texture: xy origin, zw size (normalized, source); z 0 = none
+    float4 lookTable;         // x Base Look table amount (0 = none, 1 = 100%), y table size
+    float4 recipe;            // x color chrome, y chrome FX blue (0...1), z dynamic-range highlight compression
 };
 
 // Noise reduction over one work area of the pyramid.

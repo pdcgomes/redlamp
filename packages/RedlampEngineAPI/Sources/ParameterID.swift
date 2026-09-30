@@ -6,6 +6,9 @@ public enum ParameterID: String, CaseIterable, Codable, Sendable, Hashable {
     // White balance
     case temperature = "wb.temperature"
     case tint = "wb.tint"
+    /// Camera-style white-balance fine-tuning on the red and blue axes, on top of Temp and Tint.
+    case wbShiftRed = "wb.shift.red"
+    case wbShiftBlue = "wb.shift.blue"
 
     // Basic: tone
     case exposure = "basic.exposure"
@@ -14,6 +17,8 @@ public enum ParameterID: String, CaseIterable, Codable, Sendable, Hashable {
     case shadows = "basic.shadows"
     case whites = "basic.whites"
     case blacks = "basic.blacks"
+    /// Highlight headroom in percent (100, 200 or 400), like a camera's DR setting.
+    case dynamicRange = "basic.dynamicRange"
 
     // Basic: presence
     case texture = "basic.texture"
@@ -112,6 +117,10 @@ public enum ParameterID: String, CaseIterable, Codable, Sendable, Hashable {
     case grainAmount = "effects.grain.amount"
     case grainSize = "effects.grain.size"
     case grainRoughness = "effects.grain.roughness"
+    /// Deepens highly saturated colors, like a camera's color chrome effect.
+    case colorChrome = "effects.colorChrome"
+    /// The same, for blues only.
+    case colorChromeBlue = "effects.colorChromeBlue"
 
     // Calibration
     case calibrationShadowsTint = "calibration.shadowsTint"

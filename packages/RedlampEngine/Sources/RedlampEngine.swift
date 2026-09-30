@@ -40,6 +40,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     private let comparisonOverviews: SurfacePool
     private var comparison: CachedComparison?
     private let detailStage: DetailStage
+    private let baseLooks: BaseLookRegistry
     /// Output tile edge for stills, in pixels.
     let stillTile: Int
 
@@ -69,6 +70,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         comparisons = SurfacePool(device: device)
         comparisonOverviews = SurfacePool(device: device)
         detailStage = DetailStage(device: device, kernels: kernels)
+        baseLooks = try BaseLookRegistry(device: device)
 
         let builder = SessionBuilder(device: device, queue: buildQueue, kernels: kernels)
         let signposter = signposts
@@ -229,7 +231,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         )
         guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
         var inputs = DevelopParameters.make(
-            recipe: recipe, session: session, outputSize: size, region: region, encoding: encoding,
+            recipe: recipe, session: session, baseLook: baseLooks.resolve(recipe.baseLook), outputSize: size,
+            region: region, encoding: encoding,
             showClipping: showClipping, maskOverlay: maskOverlay, maskOverlayColor: maskOverlayColor,
         )
         inputs.params.denoised = processed?.area ?? .zero
@@ -237,6 +240,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         encoder.setTexture(session.pyramid, index: 0)
         encoder.setTexture(texture, index: 1)
         encoder.setTexture(processed?.texture ?? session.pyramid, index: 2)
+        encoder.setTexture(inputs.lookTable ?? baseLooks.identity, index: 3)
         encoder.setBytes(&inputs.params, length: MemoryLayout<DevelopParams>.stride, index: 0)
         encoder.setBytes(&inputs.toneLUT, length: inputs.toneLUT.count * MemoryLayout<Float>.stride, index: 1)
         encoder.setBytes(&inputs.mixer, length: inputs.mixer.count * MemoryLayout<Float>.stride, index: 2)
@@ -376,6 +380,16 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         await Task.detached(priority: .utility) {
             Thumbnails.thumbnail(for: url, maxPixelSize: maxPixelSize)
         }.value
+    }
+
+    // MARK: - Base Looks
+
+    public func registerBaseLook(_ look: BaseLookDefinition) {
+        baseLooks.register(look)
+    }
+
+    public func canRender(_ reference: BaseLookReference) -> Bool {
+        baseLooks.canRender(reference)
     }
 }
 

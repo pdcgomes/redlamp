@@ -1,0 +1,562 @@
+{
+  "version": 1,
+  "description": "The look-development set: CC0 raw files from raw.pixls.us, chosen for variety of cameras and scenes. Downloaded by `mise run lookdev` into build/look-dev/ (never committed).",
+  "gaps": [
+    "No portraits or skin tones: raw.pixls.us holds test shots, so skin is covered by the lint chart's skin patches until own or commissioned CC0 portraits are added.",
+    "No night portraits, concerts or stage light."
+  ],
+  "images": [
+    {
+      "file": "Canon_Canon-PowerShot-S3IS.DNG",
+      "url": "https://raw.pixls.us/getfile.php/5098/nice/Canon%20-%20Canon%20PowerShot%20S3IS%20-%2016bit%20%284:3%29.DNG",
+      "sha256": "d6feb57d64d59f91dfaae9cd1e8999664977cd82d78cfa0465cf236822afd596",
+      "camera": "Canon Canon PowerShot S3IS",
+      "mode": "16bit (4:3)",
+      "categories": [
+        "landscape",
+        "water",
+        "foliage",
+        "sky"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Canon_EOS-7D-Mark-II.dng",
+      "url": "https://raw.pixls.us/getfile.php/7023/nice/Canon%20-%20EOS%207D%20Mark%20II%20-%2016bit%20%283:2%29.dng",
+      "sha256": "090e01f9a7a860b2f2f0ead770b8a9ba3b17ea98dc1997835c6bda2fc0a2ae54",
+      "camera": "Canon EOS 7D Mark II",
+      "mode": "16bit (3:2)",
+      "categories": [
+        "animal",
+        "water"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Canon_EOS-Kiss-F.CR2",
+      "url": "https://raw.pixls.us/getfile.php/6457/nice/Canon%20-%20EOS%20Kiss%20F%20-%20RAW%20%283:2%29.CR2",
+      "sha256": "12402b46f3cfaa66a671c7b6524c741dd17d6a2add3bc6cc41dcaf1570b0e722",
+      "camera": "Canon EOS Kiss F",
+      "mode": "RAW (3:2)",
+      "categories": [
+        "night",
+        "street",
+        "tungsten"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Canon_EOS-R50.CR3",
+      "url": "https://raw.pixls.us/getfile.php/6647/nice/Canon%20-%20EOS%20R50%20-%20RAW%20%283:2%29.CR3",
+      "sha256": "979d27717906ce0d7b66132a68eb01cf63d22388de1808239ee65991184540c5",
+      "camera": "Canon EOS R50",
+      "mode": "RAW (3:2)",
+      "categories": [
+        "foliage",
+        "sky",
+        "landscape"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Canon_EOS-R6-Mark-II.cr3",
+      "url": "https://raw.pixls.us/getfile.php/6402/nice/Canon%20-%20EOS%20R6%20Mark%20II%20-%203:2.cr3",
+      "sha256": "1a93f96556aabbc4a7260750ab0a191ec7926bb978fe8428bf3465121da730d6",
+      "camera": "Canon EOS R6 Mark II",
+      "mode": "3:2",
+      "categories": [
+        "street",
+        "overcast",
+        "architecture"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Canon_EOS-R8.CR3",
+      "url": "https://raw.pixls.us/getfile.php/6585/nice/Canon%20-%20EOS%20R8%20-%203:2.CR3",
+      "sha256": "7d5c6dbb11ff7e6ee58715d90a20f5d801e8b103f4711ff6ea329ceafcef254c",
+      "camera": "Canon EOS R8",
+      "mode": "3:2",
+      "categories": [
+        "animal",
+        "soft-light"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Canon_IXY-220F.DNG",
+      "url": "https://raw.pixls.us/getfile.php/6984/nice/Canon%20-%20IXY%20220F%20-%2012bit%2012bit%20CHDK%20ver.%201.6.1%20%284:3%29.DNG",
+      "sha256": "9dd3f4c060d6dc27d95539e9f4c055ef5ec669c113382526449efe7c880ac263",
+      "camera": "Canon IXY 220F",
+      "mode": "12bit 12bit CHDK ver. 1.6.1 (4:3)",
+      "categories": [
+        "foliage",
+        "street",
+        "flowers"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Canon_PowerShot-SX130-IS.DNG",
+      "url": "https://raw.pixls.us/getfile.php/5126/nice/Canon%20-%20PowerShot%20SX130%20IS%20-%2012bit%2012bit%20CHDK%20ver.%201.5.1%20%284:3%29.DNG",
+      "sha256": "213eb921a08120f3163a89936036de6a8c5840562a22c7e5875f65560889c936",
+      "camera": "Canon PowerShot SX130 IS",
+      "mode": "12bit 12bit CHDK ver. 1.5.1 (4:3)",
+      "categories": [
+        "still-life",
+        "interior",
+        "window-light"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Fujifilm_FinePix-HS50EXR.RAF",
+      "url": "https://raw.pixls.us/getfile.php/6018/nice/Fujifilm%20-%20FinePix%20HS50EXR%20-%2012bit%2012bit%20uncompressed%20%284:3%29.RAF",
+      "sha256": "b5c4f3658dc686e535eeaf639729f2cb6b54e60a3e1ab206eabba1024c4dce83",
+      "camera": "Fujifilm FinePix HS50EXR",
+      "mode": "12bit 12bit uncompressed (4:3)",
+      "categories": [
+        "landscape",
+        "autumn",
+        "foliage",
+        "sky"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Fujifilm_FinePix-SL1000.RAF",
+      "url": "https://raw.pixls.us/getfile.php/5760/nice/Fujifilm%20-%20FinePix%20SL1000%20-%2012bit%2012bit%20uncompressed%20%284:3%29.RAF",
+      "sha256": "8bc9903cb1bff93376eb73b64f35861dcf3c66e2ca936cfac2d7c62435689dec",
+      "camera": "Fujifilm FinePix SL1000",
+      "mode": "12bit 12bit uncompressed (4:3)",
+      "categories": [
+        "sky",
+        "architecture"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Fujifilm_X-H2.RAF",
+      "url": "https://raw.pixls.us/getfile.php/6001/nice/Fujifilm%20-%20X-H2%20-%2014bit%2014bit%20compressed%20%283:2%29.RAF",
+      "sha256": "caeadb2666f6c5d9bbe32fbe692c2079b6a7e028f8514a13173f360656d08507",
+      "camera": "Fujifilm X-H2",
+      "mode": "14bit 14bit compressed (3:2)",
+      "categories": [
+        "flowers",
+        "foliage"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Fujifilm_X-H2S.raf",
+      "url": "https://raw.pixls.us/getfile.php/6007/nice/Fujifilm%20-%20X-H2S%20-%2014bit%2014bit%20compressed%20%283:2%29.raf",
+      "sha256": "6738634a3d7256a9d05f943a78f4f0f1e08d8f1730d8964c7a9cfdbf113654f5",
+      "camera": "Fujifilm X-H2S",
+      "mode": "14bit 14bit compressed (3:2)",
+      "categories": [
+        "still-life",
+        "autumn",
+        "overcast"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Fujifilm_X-S20.RAF",
+      "url": "https://raw.pixls.us/getfile.php/6666/nice/Fujifilm%20-%20X-S20%20-%2014bit%2014bit%20compressed%20%283:2%29.RAF",
+      "sha256": "737c1551843282d4963ccb351a4d6409f3eaf172928d563bbaf72fe0f1f74fdd",
+      "camera": "Fujifilm X-S20",
+      "mode": "14bit 14bit compressed (3:2)",
+      "categories": [
+        "sky",
+        "foliage",
+        "garden"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Fujifilm_X-T5.RAF",
+      "url": "https://raw.pixls.us/getfile.php/7271/nice/Fujifilm%20-%20X-T5%20-%2014bit%2014bit%20compressed%20%2816:9%29.RAF",
+      "sha256": "b77b0352a02c5a9272f5e4ee0bfb9ba270cf7482a727f5ffb91cf1d41a280e2c",
+      "camera": "Fujifilm X-T5",
+      "mode": "14bit 14bit compressed (16:9)",
+      "categories": [
+        "animal",
+        "high-dynamic-range",
+        "low-key"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Fujifilm_X100VI.RAF",
+      "url": "https://raw.pixls.us/getfile.php/7302/nice/Fujifilm%20-%20X100VI%20-%2014bit%2014bit%20compressed%20%283:2%29.RAF",
+      "sha256": "7f19c7c5914542b91829ac2e41c8d4c10e414b28b0f7a793001e1a979c8c6056",
+      "camera": "Fujifilm X100VI",
+      "mode": "14bit 14bit compressed (3:2)",
+      "categories": [
+        "architecture",
+        "sky",
+        "monochrome"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Google_Pixel-6-Pro.dng",
+      "url": "https://raw.pixls.us/getfile.php/5961/nice/Google%20-%20Pixel%206%20Pro%20-%2016bit%20%284:3%29.dng",
+      "sha256": "3a859e917a91698a3e15ce3b3721a48a1fb1296873e0697d3bf7c2793297200d",
+      "camera": "Google Pixel 6 Pro",
+      "mode": "16bit (4:3)",
+      "categories": [
+        "landscape",
+        "haze",
+        "sky"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Google_Pixel-7-Pro.dng",
+      "url": "https://raw.pixls.us/getfile.php/6168/nice/Google%20-%20Pixel%207%20Pro%20-%2016bit%20%284:3%29.dng",
+      "sha256": "6b921558944db5fdb4f1c63dc64919b6666ef700857a187e18500099c6e7c6c6",
+      "camera": "Google Pixel 7 Pro",
+      "mode": "16bit (4:3)",
+      "categories": [
+        "still-life",
+        "foliage"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Hasselblad_L2D-20c.DNG",
+      "url": "https://raw.pixls.us/getfile.php/5140/nice/Hasselblad%20-%20L2D-20c%20-%2016bit%20%284:3%29.DNG",
+      "sha256": "dbe98cb202f884ff11e0144899613b26d33cf9cddd9f1a62226f4352397f18e4",
+      "camera": "Hasselblad L2D-20c",
+      "mode": "16bit (4:3)",
+      "categories": [
+        "landscape",
+        "water",
+        "aerial"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Leica_D-LUX-6.RWL",
+      "url": "https://raw.pixls.us/getfile.php/6011/nice/Leica%20-%20D-LUX%206%20-%2016:9.RWL",
+      "sha256": "785127e959ba004b36e61d4153b11debe161dd98c45618aa561899795eea3888",
+      "camera": "Leica D-LUX 6",
+      "mode": "16:9",
+      "categories": [
+        "street",
+        "high-dynamic-range",
+        "sky",
+        "monochrome"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Nikon_Coolpix-P7700.NRW",
+      "url": "https://raw.pixls.us/getfile.php/5495/nice/Nikon%20-%20Coolpix%20P7700%20-%2012bit%2012bit%20compressed%20%28%287%29%29%20%284:3%29.NRW",
+      "sha256": "559aaf6616e092b363e72bb36422c4d1c024da3c0d4ba582126fa16d42e96cb8",
+      "camera": "Nikon Coolpix P7700",
+      "mode": "12bit 12bit compressed ((7)) (4:3)",
+      "categories": [
+        "snow",
+        "high-key",
+        "sky"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Nikon_D2H.NEF",
+      "url": "https://raw.pixls.us/getfile.php/5632/nice/Nikon%20-%20D2H%20-%2012bit%2012bit%20uncompressed%20%283:2%29.NEF",
+      "sha256": "27927b15a7145ceae6236b30472b533875d42e7bb2d8bf6f38e3a1babd80cd5b",
+      "camera": "Nikon D2H",
+      "mode": "12bit 12bit uncompressed (3:2)",
+      "categories": [
+        "foliage",
+        "low-key"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Nikon_Z-f.NEF",
+      "url": "https://raw.pixls.us/getfile.php/6885/nice/Nikon%20-%20Z%20f%20-%2014bit%2014bit%20compressed%20%283:2%29.NEF",
+      "sha256": "83c82be0be8865d796096dfbcc8ef2abf5af1bd37db44dfad6715070b0c99d15",
+      "camera": "Nikon Z f",
+      "mode": "14bit 14bit compressed (3:2)",
+      "categories": [
+        "autumn",
+        "foliage",
+        "landscape"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Panasonic_DC-G95D.RW2",
+      "url": "https://raw.pixls.us/getfile.php/6334/nice/Panasonic%20-%20DC-G95D%20-%204:3.RW2",
+      "sha256": "773fb77c1e71b03f44d351adfaa565c1aed5697aa9f103b2f0f19a2f0eb2c855",
+      "camera": "Panasonic DC-G95D",
+      "mode": "4:3",
+      "categories": [
+        "street",
+        "wet",
+        "autumn"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Panasonic_DC-S5.RW2",
+      "url": "https://raw.pixls.us/getfile.php/6339/nice/Panasonic%20-%20DC-S5%20-%203:2.RW2",
+      "sha256": "3615c85207097180b231f0c89d018eb3f1a71988780612921eb0a05246bca706",
+      "camera": "Panasonic DC-S5",
+      "mode": "3:2",
+      "categories": [
+        "still-life",
+        "saturated",
+        "low-light"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Panasonic_DC-TZ200D.RW2",
+      "url": "https://raw.pixls.us/getfile.php/6553/nice/Panasonic%20-%20DC-TZ200D%20-%2016:9.RW2",
+      "sha256": "a7275f6566de74557be5af00f64e65fba881a55c5dfbd8aec68dfe6d09091677",
+      "camera": "Panasonic DC-TZ200D",
+      "mode": "16:9",
+      "categories": [
+        "landscape",
+        "water",
+        "sky"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Panasonic_DC-TZ95D.RW2",
+      "url": "https://raw.pixls.us/getfile.php/7252/nice/Panasonic%20-%20DC-TZ95D%20-%204:3.RW2",
+      "sha256": "c7cb71d84567b0a966eda0a76d941ad89940e64d8baddb3ad92a289a8626ec77",
+      "camera": "Panasonic DC-TZ95D",
+      "mode": "4:3",
+      "categories": [
+        "landscape",
+        "foliage"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Panasonic_DMC-FX150.RW2",
+      "url": "https://raw.pixls.us/getfile.php/7410/nice/Panasonic%20-%20DMC-FX150%20-%204:3.RW2",
+      "sha256": "4394d98984924bbc9591631a757b423feb9702ab0f455df0c00864d1115e44b9",
+      "camera": "Panasonic DMC-FX150",
+      "mode": "4:3",
+      "categories": [
+        "street",
+        "sky",
+        "monochrome"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Panasonic_DMC-FZ28.RW2",
+      "url": "https://raw.pixls.us/getfile.php/7328/nice/Panasonic%20-%20DMC-FZ28%20-%204:3.RW2",
+      "sha256": "db0c5c585269247f4da4a3c57f36f235ff1a4ce3c00ecd94fac0f2505b84daae",
+      "camera": "Panasonic DMC-FZ28",
+      "mode": "4:3",
+      "categories": [
+        "architecture",
+        "sky",
+        "foliage"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Panasonic_DMC-GF8.RW2",
+      "url": "https://raw.pixls.us/getfile.php/6511/nice/Panasonic%20-%20DMC-GF8%20-%204:3.RW2",
+      "sha256": "5ac66fc2a78832aeff26dddfce69a35926cee3717a62fc1cc87aa5368e2276c8",
+      "camera": "Panasonic DMC-GF8",
+      "mode": "4:3",
+      "categories": [
+        "flowers",
+        "garden"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Pentax_K-1-Mark-II.PEF",
+      "url": "https://raw.pixls.us/getfile.php/7133/nice/Pentax%20-%20K-1%20Mark%20II%20-%2014bit%20%283:2%29.PEF",
+      "sha256": "fe2330254c5313d4dde97cbd01e2987f6f1137f1c9c687d30e951f4668979381",
+      "camera": "Pentax K-1 Mark II",
+      "mode": "14bit (3:2)",
+      "categories": [
+        "foliage",
+        "backlit",
+        "high-dynamic-range"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Pentax_KF.PEF",
+      "url": "https://raw.pixls.us/getfile.php/6664/nice/Pentax%20-%20KF%20-%2014bit%20%283:2%29.PEF",
+      "sha256": "ddc9cdf399a7210b203dee1765ab9f4165a2e695da59bce6bcabf75b77174a4b",
+      "camera": "Pentax KF",
+      "mode": "14bit (3:2)",
+      "categories": [
+        "flowers",
+        "garden",
+        "saturated"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Samsung_Galaxy-S21-Ultra.dng",
+      "url": "https://raw.pixls.us/getfile.php/6728/nice/Samsung%20-%20Galaxy%20S21%20Ultra%20-%204:3.dng",
+      "sha256": "5baeb5f0c4a125647df03b82c2d38b0f02784393bd39eff1a5b23d8f5308dc5e",
+      "camera": "Samsung Galaxy S21 Ultra",
+      "mode": "4:3",
+      "categories": [
+        "landscape",
+        "sky"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Samsung_Galaxy-S22-Ultra.dng",
+      "url": "https://raw.pixls.us/getfile.php/6625/nice/Samsung%20-%20Galaxy%20S22%20Ultra%20-%204:3.dng",
+      "sha256": "13ddd4b117299d16d47b6404ad1981258a00b6bce60382524a51cab15a41334d",
+      "camera": "Samsung Galaxy S22 Ultra",
+      "mode": "4:3",
+      "categories": [
+        "water",
+        "overcast",
+        "muted"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Sigma_fp.DNG",
+      "url": "https://raw.pixls.us/getfile.php/7273/nice/Sigma%20-%20fp%20-%2014bit%20%283:2%29.DNG",
+      "sha256": "0844bcf23a49e21b5c2f8489de55ce38fb7b594e3ed337d6b9af2dd9341354e9",
+      "camera": "Sigma fp",
+      "mode": "14bit (3:2)",
+      "categories": [
+        "color-chart",
+        "saturated",
+        "still-life"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Sony_ILCE-6700.ARW",
+      "url": "https://raw.pixls.us/getfile.php/6735/nice/Sony%20-%20ILCE-6700%20-%2014bit%20%283:2%29.ARW",
+      "sha256": "501666fd94cbc28176e9c03a40c1d8121319df6542bfcbef0ffcfebeb04a32bf",
+      "camera": "Sony ILCE-6700",
+      "mode": "14bit (3:2)",
+      "categories": [
+        "landscape",
+        "foliage",
+        "sky"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Sony_ILCE-7CM2.ARW",
+      "url": "https://raw.pixls.us/getfile.php/6866/nice/Sony%20-%20ILCE-7CM2%20-%2014bit%2014bit%20uncompressed%20%283:2%29.ARW",
+      "sha256": "b808fb96df421cfd152d00d3897cdde5a1670f83ada1a7620aab8b80b70804c6",
+      "camera": "Sony ILCE-7CM2",
+      "mode": "14bit 14bit uncompressed (3:2)",
+      "categories": [
+        "landscape",
+        "foliage"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Sony_ILCE-9M3.ARW",
+      "url": "https://raw.pixls.us/getfile.php/7361/nice/Sony%20-%20ILCE-9M3%20-%2014bit%20%283:2%29.ARW",
+      "sha256": "81b0b140f34356964fdb4adf5e202eb01d5e5e5a1b61b861954a183fc30d4bf0",
+      "camera": "Sony ILCE-9M3",
+      "mode": "14bit (3:2)",
+      "categories": [
+        "still-life",
+        "interior",
+        "saturated"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Sony_ILME-FX3.ARW",
+      "url": "https://raw.pixls.us/getfile.php/6874/nice/Sony%20-%20ILME-FX3%20-%2014bit%20%283:2%29.ARW",
+      "sha256": "394ceb1a356be8b17f18dc013bfd22895ba6ec7195f578b9be1c2fd0d5ea4773",
+      "camera": "Sony ILME-FX3",
+      "mode": "14bit (3:2)",
+      "categories": [
+        "low-light",
+        "interior",
+        "tungsten"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Sony_ILME-FX30.ARW",
+      "url": "https://raw.pixls.us/getfile.php/6499/nice/Sony%20-%20ILME-FX30%20-%2012bit%2012bit%20compressed%20%283:2%29.ARW",
+      "sha256": "87a187dd3f30d6704112bb1d5e8e4ef8ce2f30af3236acdabc85980aa8da3872",
+      "camera": "Sony ILME-FX30",
+      "mode": "12bit 12bit compressed (3:2)",
+      "categories": [
+        "animal",
+        "backlit",
+        "high-dynamic-range"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Sony_UMC-R10C.arw",
+      "url": "https://raw.pixls.us/getfile.php/7540/nice/Sony%20-%20UMC-R10C%20-%2012bit%20%283:2%29.arw",
+      "sha256": "b67055a69dc7adffbcd2d62fc438300f0a3ec219bd778cbd87994288eb2de7c5",
+      "camera": "Sony UMC-R10C",
+      "mode": "12bit (3:2)",
+      "categories": [
+        "architecture",
+        "overcast"
+      ],
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    }
+  ]
+}

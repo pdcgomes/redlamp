@@ -123,6 +123,8 @@ struct ProcessVersion: View {
             ParameterSlider(parameter: .grainAmount)
             ParameterSlider(parameter: .grainSize)
             ParameterSlider(parameter: .grainRoughness)
+            SubsectionHeader(title: "Camera Recipe", parameters: PanelID.cameraRecipeParameters)
+            ForEach(PanelID.cameraRecipeParameters, id: \.self) { ParameterSlider(parameter: $0) }
         }
     }
 }

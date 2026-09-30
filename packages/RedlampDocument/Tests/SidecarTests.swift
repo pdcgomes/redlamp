@@ -84,14 +84,24 @@ struct SidecarTests {
         #expect(try Data(contentsOf: store.url(for: image)) == Data(json.utf8))
     }
 
-    @Test func `presets only touch what they set`() throws {
-        var recipe = EditRecipe()
-        recipe[.exposure] = 1
-        let preset = try #require(BuiltInPresets.all.first { $0.id == "bw.contrast" })
-        let applied = preset.apply(to: recipe)
-        #expect(applied[.exposure] == 1)
-        #expect(applied.treatment == .blackAndWhite)
-        #expect(applied[.contrast] == 40)
+    @Test func `format 1 profiles read as base looks and are written back as format 2`() throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let json = #"""
+        {"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":1,
+         "profile":{"id":"redlamp.vivid","name":"Redlamp Vivid","amount":80}}}
+        """#
+        try Data(json.utf8).write(to: SidecarStore().url(for: image))
+        let store = SidecarStore()
+        let loaded = try #require(store.load(for: image))
+        #expect(loaded.recipe.baseLook == BuiltInBaseLook.vivid.reference.withAmount(80))
+        var edited = loaded
+        edited.recipe[.exposure] = 0.5
+        try store.save(edited, for: image)
+        let written = try String(contentsOf: store.url(for: image), encoding: .utf8)
+        #expect(written.contains(#""baseLook""#))
+        #expect(written.contains(#""redlamp/base/vivid""#))
+        #expect(!written.contains(#""profile""#))
     }
 
     private func temporaryImage() throws -> (URL, () -> Void) {

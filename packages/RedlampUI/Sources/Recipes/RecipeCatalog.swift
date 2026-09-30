@@ -1,0 +1,140 @@
+import Foundation
+import Observation
+import RedlampEngineAPI
+import RedlampRecipes
+
+/// The recipe library as the UI sees it: observable, and kept in step with the engine so
+/// every Base Look it lists can render.
+@MainActor
+@Observable
+public final class RecipeCatalog {
+    @ObservationIgnored public let library: RecipeLibrary
+    @ObservationIgnored private let engine: any EditingEngine
+    /// Bumped on every change; list views observe it through the accessors below.
+    public private(set) var revision = 0
+    public private(set) var lastError: String?
+
+    public init(engine: any EditingEngine, library: RecipeLibrary = RecipeLibrary()) {
+        self.engine = engine
+        self.library = library
+        registerLooks()
+    }
+
+    private func registerLooks() {
+        for definition in library.definitions() {
+            engine.registerBaseLook(definition)
+        }
+    }
+
+    private func changed() {
+        registerLooks()
+        revision &+= 1
+    }
+
+    public func reload() {
+        library.reload()
+        changed()
+    }
+
+    // MARK: - Reading
+
+    public var sections: [(name: String, recipes: [Recipe])] {
+        _ = revision
+        return library.sections
+    }
+
+    public var all: [Recipe] {
+        _ = revision
+        return library.all
+    }
+
+    /// Every Base Look version, including older ones edits have pinned.
+    public var baseLooks: [BaseLookPackage] {
+        _ = revision
+        return library.baseLooks
+    }
+
+    /// Each look once, at its newest version: what menus and the browser offer.
+    public var currentBaseLooks: [BaseLookPackage] {
+        BuiltInBaseLooks.newest(baseLooks)
+    }
+
+    public func recipe(id: String) -> Recipe? {
+        _ = revision
+        return library.recipe(id: id)
+    }
+
+    public func search(_ query: String) -> [Recipe] {
+        _ = revision
+        return library.search(query)
+    }
+
+    public func isFavorite(_ recipe: Recipe) -> Bool {
+        _ = revision
+        return library.isFavorite(recipe)
+    }
+
+    public func package(for reference: BaseLookReference) -> BaseLookPackage? {
+        library.package(for: reference)
+    }
+
+    public func isUserRecipe(_ recipe: Recipe) -> Bool {
+        library.userRecipes.contains { $0.id == recipe.id } || library.installed.contains { $0.id == recipe.id }
+    }
+
+    /// Whether an edit's Base Look can render exactly here.
+    public func isAvailable(_ reference: BaseLookReference) -> Bool {
+        engine.canRender(reference) || library.isAvailable(reference)
+    }
+
+    /// Makes a recipe's embedded looks renderable before it is previewed or applied.
+    public func prepare(_ recipe: Recipe) {
+        for package in recipe.embeddedBaseLooks {
+            if let definition = try? package.definition() {
+                engine.registerBaseLook(definition)
+            }
+        }
+    }
+
+    // MARK: - Changing
+
+    @discardableResult
+    public func save(_ recipe: Recipe) -> Recipe? {
+        perform { try library.save(recipe) }
+    }
+
+    @discardableResult
+    public func install(contentsOf url: URL, tableSpace: ImportedTableSpace = .sRGB) -> Recipe? {
+        perform { try library.install(contentsOf: url, tableSpace: tableSpace).recipe }
+    }
+
+    public func delete(_ recipe: Recipe) {
+        perform { try library.delete(recipe) }
+    }
+
+    public func setFavorite(_ recipe: Recipe, _ favorite: Bool) {
+        perform { try library.setFavorite(recipe, favorite) }
+    }
+
+    public func export(_ recipe: Recipe, to url: URL) {
+        perform { try library.export(recipe, to: url) }
+    }
+
+    public func clearError() {
+        lastError = nil
+    }
+
+    @discardableResult
+    private func perform<T>(_ work: () throws -> T) -> T? {
+        do {
+            let result = try work()
+            lastError = nil
+            changed()
+            return result
+        } catch {
+            lastError = "\(error)"
+            revision &+= 1
+            return nil
+        }
+    }
+}

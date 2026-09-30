@@ -30,6 +30,7 @@ let project = Project(
                 Module.engineAPI.dependency,
                 Module.engine.dependency,
                 Module.document.dependency,
+                Module.recipes.dependency,
                 Module.canvas.dependency,
                 Module.design.dependency,
                 Module.ui.dependency,

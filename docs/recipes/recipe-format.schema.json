@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://redlamp.app/schemas/redrecipe-1.json",
+  "title": "Redlamp recipe (.redrecipe), format 1",
+  "type": "object",
+  "required": ["id", "name"],
+  "properties": {
+    "format": { "type": "integer", "minimum": 1 },
+    "id": { "$ref": "#/$defs/id" },
+    "version": { "type": "integer", "minimum": 1 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "group": { "type": "string" },
+    "summary": { "type": "string" },
+    "author": {
+      "type": "object",
+      "required": ["name"],
+      "properties": { "name": { "type": "string" }, "url": { "type": "string" } }
+    },
+    "license": { "type": "string" },
+    "tags": { "type": "array", "items": { "type": "string" }, "maxItems": 32 },
+    "processVersion": { "type": "integer", "minimum": 1 },
+    "includes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "description": "treatment, baseLook, whiteBalance, tone, presence, toneCurve, colorMixer, colorGrading, colorChrome, effects, detail; others are kept for newer Redlamps"
+      }
+    },
+    "settings": {
+      "type": "object",
+      "properties": {
+        "values": { "type": "object", "additionalProperties": { "type": "number" } },
+        "treatment": { "enum": ["color", "blackAndWhite"] },
+        "whiteBalance": {
+          "enum": ["asShot", "auto", "daylight", "cloudy", "shade", "tungsten", "fluorescent", "flash", "custom"]
+        },
+        "pointCurve": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "required": ["x", "y"],
+            "properties": {
+              "x": { "type": "number", "minimum": 0, "maximum": 1 },
+              "y": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          }
+        }
+      }
+    },
+    "baseLook": { "$ref": "#/$defs/baseLookReference" },
+    "embeddedBaseLooks": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/baseLookPackage" } },
+    "source": {
+      "type": "object",
+      "required": ["dialect"],
+      "properties": {
+        "dialect": { "type": "string" },
+        "mappingVersion": { "type": "integer", "minimum": 1 },
+        "card": { "type": "object" }
+      }
+    },
+    "lintWaivers": { "type": "array", "items": { "type": "string" } },
+    "signature": { "type": "string" },
+    "created": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9._-]+(/[a-z0-9._-]+)+$", "maxLength": 200 },
+    "baseLookReference": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "type": "string" },
+        "version": { "type": "integer", "minimum": 1 },
+        "name": { "type": "string" },
+        "amount": { "type": "number", "minimum": 0, "maximum": 200 },
+        "contentHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "baseLookPackage": {
+      "type": "object",
+      "required": ["id", "version", "name", "look"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "version": { "type": "integer", "minimum": 1 },
+        "name": { "type": "string" },
+        "summary": { "type": "string" },
+        "slot": { "type": "string" },
+        "look": {
+          "type": "object",
+          "properties": {
+            "contrast": { "type": "number", "minimum": 0, "maximum": 3 },
+            "saturation": { "type": "number", "minimum": 0, "maximum": 3 },
+            "warmth": { "type": "number", "minimum": -0.2, "maximum": 0.2 },
+            "greenBoost": { "type": "number" },
+            "skinSoftening": { "type": "number" },
+            "monochrome": { "type": "boolean" }
+          }
+        },
+        "table": {
+          "type": "object",
+          "required": ["size", "space", "sha256", "data"],
+          "properties": {
+            "size": { "type": "integer", "minimum": 2, "maximum": 65 },
+            "space": { "type": "string", "description": "displayRec2020; others need a newer Redlamp" },
+            "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "data": { "type": "string", "contentEncoding": "base64" }
+          }
+        }
+      }
+    }
+  }
+}

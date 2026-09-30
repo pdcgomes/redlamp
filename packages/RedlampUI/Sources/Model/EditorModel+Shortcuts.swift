@@ -73,6 +73,7 @@ public extension EditorModel {
             guard info?.supportsWhiteBalance == true else { return false }
             eyedropperActive.toggle()
         case .newSnapshot: createSnapshot()
+        case .newPreset: RecipeActions.createRecipe(model: self)
         case .previousSetting: cycleFocusedParameter(by: -1)
         case .nextSetting: cycleFocusedParameter(by: 1)
         case .increaseSetting: nudgeFocusedParameter(direction: 1, large: shifted)

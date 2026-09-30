@@ -1,0 +1,40 @@
+{
+  "about": "Style buckets and the queries that fill them from public-domain and CC0 sources. Styles describe a look, never a photographer, brand or film stock; queries may name historical processes only to find examples.",
+  "styles": {
+    "mid-century-transparency": {
+      "tags": ["color", "vintage", "saturated"],
+      "sources": {"loc": ["fsa owi color transparency", "1940s color slide"], "wikimedia": ["1940s color photograph"]}
+    },
+    "early-color-plates": {
+      "tags": ["color", "historic", "soft"],
+      "sources": {"loc": ["autochrome"], "met": ["autochrome"], "wikimedia": ["autochrome lumiere"]}
+    },
+    "platinum-and-silver-prints": {
+      "tags": ["monochrome", "warm", "soft"],
+      "sources": {"met": ["platinum print", "gelatin silver print landscape"], "aic": ["platinum print"]}
+    },
+    "cyanotype-and-toned-prints": {
+      "tags": ["monochrome", "toned"],
+      "sources": {"met": ["cyanotype", "albumen print"], "aic": ["cyanotype"]}
+    },
+    "hard-documentary-monochrome": {
+      "tags": ["monochrome", "contrast", "street"],
+      "sources": {"loc": ["new york city street 1930s", "depression era photograph"], "wikimedia": ["street photography black and white public domain"]}
+    },
+    "expansive-landscape": {
+      "tags": ["landscape", "nature"],
+      "sources": {"nasa": ["astronaut photograph mountains", "yosemite"], "wikimedia": ["national park landscape public domain", "mountain lake landscape cc0"]}
+    },
+    "night-and-city-lights": {
+      "tags": ["night", "city"],
+      "sources": {"wikimedia": ["city at night public domain", "neon sign night"], "nasa": ["city lights night"]}
+    },
+    "soft-pastel-daylight": {
+      "tags": ["soft", "pastel", "modern"],
+      "sources": {"wikimedia": ["pastel colors photograph cc0", "beach pastel cc0"]}
+    }
+  },
+  "gaps": [
+    "Modern commercial styles (pastel lifestyle, teal-orange cinematic, moody editorial) are rare in public domain. Add own or commissioned CC0 photos with `python -m studio references add-own`, or write the brief in words only."
+  ]
+}

@@ -48,8 +48,8 @@ struct CanvasArea: View {
             }
         }
         .overlay(alignment: .top) {
-            if model.lightsOut == 0, model.isShowingOriginal || model.previewingPreset != nil || model.eyedropperActive
-                || model.drawingKind != nil || model.isReadOnly {
+            if model.lightsOut == 0, model.isShowingOriginal || model.previewingRecipe != nil || model.eyedropperActive
+                || model.drawingKind != nil || model.isReadOnly || (model.info != nil && model.isBaseLookMissing) {
                 StatusPill(text: statusText)
                     .padding(.top, 14)
                     .padding(stagePadding)
@@ -131,13 +131,16 @@ struct CanvasArea: View {
         if model.eyedropperActive {
             return "Click a neutral area to set white balance  ·  Esc to cancel"
         }
-        if let preset = model.previewingPreset {
-            return "Preview: \(preset.name)"
+        if let recipe = model.previewingRecipe {
+            return "Preview: \(recipe.name)"
         }
         if model.isShowingOriginal {
             return "Before"
         }
-        return "Edited in a newer version of Redlamp  ·  Changes won't be saved"
+        if model.isReadOnly {
+            return "Edited in a newer version of Redlamp  ·  Changes won't be saved"
+        }
+        return "Base Look “\(model.baseLook.name)” isn't installed  ·  Showing the photo without it"
     }
 }
 

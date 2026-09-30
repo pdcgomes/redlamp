@@ -12,25 +12,6 @@ public enum Treatment: String, Codable, Sendable, Hashable, CaseIterable {
     }
 }
 
-/// A reference to a profile, look or LUT.
-///
-/// Recipes never store file paths: `id` identifies the profile, `contentHash` pins the
-/// exact content for imported profiles so a missing or changed file is detectable.
-public struct ProfileReference: Codable, Sendable, Hashable {
-    public var id: String
-    public var name: String
-    /// Look strength in percent, 0...200. Calibration-only profiles ignore it.
-    public var amount: Double
-    public var contentHash: String?
-
-    public init(id: String, name: String, amount: Double = 100, contentHash: String? = nil) {
-        self.id = id
-        self.name = name
-        self.amount = amount
-        self.contentHash = contentHash
-    }
-}
-
 /// A point on the point tone curve, both coordinates in 0...1 (display-referred).
 public struct CurvePoint: Codable, Sendable, Hashable {
     public var x: Double
@@ -39,6 +20,22 @@ public struct CurvePoint: Codable, Sendable, Hashable {
     public init(x: Double, y: Double) {
         self.x = x
         self.y = y
+    }
+}
+
+/// Which shared recipe an edit came from. Provenance only: rendering never reads it.
+public struct AppliedRecipe: Codable, Sendable, Hashable {
+    public var id: String
+    public var version: Int
+    public var name: String
+    /// The recipe's Amount when it was applied, in percent.
+    public var amount: Double
+
+    public init(id: String, version: Int, name: String, amount: Double = 100) {
+        self.id = id
+        self.version = version
+        self.name = name
+        self.amount = amount
     }
 }
 
@@ -52,7 +49,8 @@ public struct CurvePoint: Codable, Sendable, Hashable {
 /// silently. `processVersion` is the rendering behavior the edit was made with: an edit
 /// must keep rendering the same way, so it is only ever changed by an explicit update.
 public struct EditRecipe: Sendable, Hashable {
-    public static let formatVersion = 1
+    /// Version 2 renamed `profile` to `baseLook` and namespaced built-in look ids.
+    public static let formatVersion = 2
     /// Bumped whenever a change to rendering math would make existing edits look different.
     public static let currentProcessVersion = 1
     public static let linearPointCurve = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]
@@ -60,12 +58,14 @@ public struct EditRecipe: Sendable, Hashable {
     /// Sidecars written before process versions existed are version 1.
     public var processVersion = EditRecipe.currentProcessVersion
     public var treatment: Treatment = .color
-    public var profile: ProfileReference = BuiltInProfile.color.reference
+    public var baseLook: BaseLookReference = BuiltInBaseLook.color.reference
     public var whiteBalanceMode: WhiteBalanceMode = .asShot
     public var pointCurve: [CurvePoint] = EditRecipe.linearPointCurve
     public private(set) var values: [ParameterID: Double] = [:]
     /// Local adjustments, applied in order on top of the global edit.
     public var masks: [MaskLayer] = []
+    /// The shared recipe this edit was last built from.
+    public var appliedRecipe: AppliedRecipe?
     /// Parameters and fields written by a newer Redlamp. They don't affect rendering here,
     /// but are written back unchanged so saving never erases them.
     public private(set) var unknownValues: [String: Double] = [:]
@@ -106,10 +106,11 @@ public struct EditRecipe: Sendable, Hashable {
     public var isPristine: Bool {
         values.filter { $0.key != .temperature && $0.key != .tint }.isEmpty
             && treatment == .color
-            && profile == BuiltInProfile.color.reference
+            && baseLook == BuiltInBaseLook.color.reference
             && whiteBalanceMode == .asShot
             && pointCurve == EditRecipe.linearPointCurve
             && masks.isEmpty
+            && appliedRecipe == nil
             && unknownValues.isEmpty
             && unknownFields.isEmpty
     }
@@ -133,15 +134,18 @@ public struct EditRecipe: Sendable, Hashable {
 
 extension EditRecipe: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case version, processVersion, treatment, profile, whiteBalance, pointCurve, values, masks
+        case version, processVersion, treatment, baseLook, whiteBalance, pointCurve, values, masks, appliedRecipe
+        /// Format version 1's name for `baseLook`; read, never written.
+        case profile
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         processVersion = try container.decodeIfPresent(Int.self, forKey: .processVersion) ?? 1
         treatment = try container.decodeIfPresent(Treatment.self, forKey: .treatment) ?? .color
-        profile = try container.decodeIfPresent(ProfileReference.self, forKey: .profile)
-            ?? BuiltInProfile.color.reference
+        baseLook = try container.decodeIfPresent(BaseLookReference.self, forKey: .baseLook)
+            ?? container.decodeIfPresent(BaseLookReference.self, forKey: .profile)
+            ?? BuiltInBaseLook.color.reference
         whiteBalanceMode = try container.decodeIfPresent(WhiteBalanceMode.self, forKey: .whiteBalance) ?? .asShot
         pointCurve = try container.decodeIfPresent([CurvePoint].self, forKey: .pointCurve)
             ?? EditRecipe.linearPointCurve
@@ -154,6 +158,7 @@ extension EditRecipe: Codable {
             }
         }
         masks = try container.decodeIfPresent([MaskLayer].self, forKey: .masks) ?? []
+        appliedRecipe = try container.decodeIfPresent(AppliedRecipe.self, forKey: .appliedRecipe)
         unknownFields = try decoder.container(keyedBy: DynamicCodingKey.self)
             .unknownFields(excluding: Set(CodingKeys.allCases.map(\.stringValue)))
     }
@@ -165,7 +170,7 @@ extension EditRecipe: Codable {
         try container.encode(EditRecipe.formatVersion, forKey: .version)
         try container.encode(processVersion, forKey: .processVersion)
         try container.encode(treatment, forKey: .treatment)
-        try container.encode(profile, forKey: .profile)
+        try container.encode(baseLook, forKey: .baseLook)
         try container.encode(whiteBalanceMode, forKey: .whiteBalance)
         if hasPointCurve {
             try container.encode(pointCurve, forKey: .pointCurve)
@@ -175,5 +180,6 @@ extension EditRecipe: Codable {
         if !masks.isEmpty {
             try container.encode(masks, forKey: .masks)
         }
+        try container.encodeIfPresent(appliedRecipe, forKey: .appliedRecipe)
     }
 }

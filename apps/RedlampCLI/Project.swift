@@ -14,6 +14,7 @@ let project = Project(
             dependencies: [
                 Module.engineAPI.dependency,
                 Module.engine.dependency,
+                Module.recipes.dependency,
             ],
             settings: .settings(base: redlampBaseSettings.merging([
                 // Frameworks sit next to the tool in the build products directory.

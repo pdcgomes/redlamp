@@ -13,6 +13,7 @@ enum BuiltInScenes {
         catalog.register(.histogramParity)
         HarnessScene.referencePanelParity.forEach { catalog.register($0) }
         catalog.register(.panelPerformance)
+        catalog.register(.recipeLab)
         return catalog
     }
 }

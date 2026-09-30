@@ -54,10 +54,15 @@ import SwiftUI
             .vignetteAmount, .vignetteMidpoint, .vignetteRoundness, .vignetteFeather, .vignetteHighlights,
         ]
         let grain: [ParameterID] = [.grainAmount, .grainSize, .grainRoughness]
-        return rows.panel(.effects, rows: [
-            rows.header("Post-Crop Vignetting", vignette),
-            rows.controls("Style", VignetteStylePicker()),
-        ] + rows.sliders(vignette) + [rows.header("Grain", grain)] + rows.sliders(grain))
+        return rows.panel(
+            .effects,
+            rows: [
+                rows.header("Post-Crop Vignetting", vignette),
+                rows.controls("Style", VignetteStylePicker()),
+            ] + rows.sliders(vignette) + [rows.header("Grain", grain)] + rows.sliders(grain)
+                + [rows.header("Camera Recipe", PanelID.cameraRecipeParameters)] + rows
+                .sliders(PanelID.cameraRecipeParameters),
+        )
     }
 
     public static func calibration(model: EditorModel) -> PanelSectionView {

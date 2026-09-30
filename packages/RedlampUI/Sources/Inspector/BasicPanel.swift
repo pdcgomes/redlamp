@@ -1,3 +1,4 @@
+import RedlampDesign
 import RedlampEngineAPI
 import SwiftUI
 
@@ -10,7 +11,8 @@ import SwiftUI
         let supported = model.info?.supportsWhiteBalance ?? false
         PanelSection(panel: .basic) {
             ControlRow(label: "Treatment") { TreatmentPicker() }
-            ControlRow(label: "Profile") { ProfileMenu() }
+            ControlRow(label: "Base Look") { BaseLookMenu() }
+            BaseLookAmountRow()
             ControlRow(label: "White Balance") { WhiteBalanceControls() }
             ParameterSlider(parameter: .temperature, enabled: supported)
             ParameterSlider(parameter: .tint, enabled: supported)
@@ -59,30 +61,73 @@ struct TreatmentPicker: View {
     }
 }
 
-struct ProfileMenu: View {
+/// The Base Look popup (Lightroom's Profile): built-in looks, the film-style looks, and
+/// installed ones, plus the browser.
+struct BaseLookMenu: View {
     @Environment(EditorModel.self) private var model
+    @State private var browsing = false
 
     var body: some View {
+        let current = model.baseLook
+        let groups = BaseLookGroups(model.recipes.currentBaseLooks)
         Menu {
-            ForEach(BuiltInProfile.allCases, id: \.self) { profile in
-                Button {
-                    model.setProfile(profile)
-                } label: {
-                    if model.profile.id == profile.rawValue {
-                        Label(profile.name, systemImage: "checkmark")
-                    } else {
-                        Text(profile.name)
+            ForEach(groups.sections, id: \.name) { section in
+                Section(section.name) {
+                    ForEach(section.looks, id: \.self) { look in
+                        Button {
+                            model.setBaseLook(look.reference)
+                        } label: {
+                            if look.matches(current) {
+                                Label(look.name, systemImage: "checkmark")
+                            } else {
+                                Text(look.name)
+                            }
+                        }
                     }
                 }
             }
             Divider()
-            Button("Browse Profiles, DCPs and LUTs…") {}.disabled(true)
+            Button("Browse Base Looks…") { browsing = true }
         } label: {
-            Text(model.profile.name).font(Theme.labelFont)
+            Text(current.name).font(Theme.labelFont)
         }
         .menuStyle(.button)
         .controlSize(.small)
-        .help("Profile Browser with DCP and LUT import arrives in Phase 2")
+        .help("The look under every slider (Lightroom: Profile). LUT looks can be imported from the Recipes panel.")
+        .popover(isPresented: $browsing, arrowEdge: .leading) {
+            BaseLookBrowser()
+                .environment(model)
+        }
+    }
+}
+
+/// The Base Look's strength, as Lightroom's profile Amount.
+struct BaseLookAmountRow: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        let amount = model.baseLook.amount
+        HStack(spacing: 8) {
+            Text("Amount").font(Theme.labelFont).foregroundStyle(Theme.secondaryLabel)
+                .frame(width: Metrics.labelWidth, alignment: .leading)
+            Slider(
+                value: Binding(get: { amount }, set: { model.setBaseLookAmount($0) }),
+                in: BaseLookReference.amountRange,
+            ) { editing in
+                if editing {
+                    model.beginEdit()
+                } else {
+                    model.endEdit(name: "Base Look Amount")
+                }
+            }
+            .controlSize(.mini)
+            Text("\(Int(amount.rounded()))").font(Theme.valueFont).monospacedDigit().frame(
+                width: 30,
+                alignment: .trailing,
+            )
+        }
+        .onTapGesture(count: 2) { model.setBaseLookAmount(100) }
+        .help("Base Look Amount: 0 turns the look off, 200 doubles it. Double-click to reset.")
     }
 }
 

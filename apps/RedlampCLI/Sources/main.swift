@@ -8,12 +8,14 @@ import UniformTypeIdentifiers
 let usage = """
 usage: redlamp info <image>
        redlamp render <image> -o <output.{jpg,png,tif,heic}> [options]
+       redlamp recipe <command> …   recipes and look development (redlamp recipe help)
+       redlamp mcp                  the engine as an MCP server on stdin/stdout
 
 options:
   --size <pixels>          long edge of the output (default: full resolution)
   --set <name>=<value>     set a parameter, e.g. --set exposure=0.5 --set basic.contrast=20
   --recipe <file.json>     start from a recipe (e.g. a .redlamp sidecar)
-  --profile <name>         color, neutral, vivid, landscape, portrait, monochrome
+  --base-look <name>       color, neutral, vivid, landscape, portrait, monochrome (--profile works too)
   --wb <mode>              asShot, auto, daylight, cloudy, shade, tungsten, fluorescent, flash
   --bw                     black & white treatment
   --p3                     encode in Display P3 instead of sRGB
@@ -81,12 +83,12 @@ func run(_ arguments: [String]) async throws {
                 throw CLIError(description: "bad --set \(arguments[index])")
             }
             recipe[id] = number
-        case "--profile":
+        case "--profile", "--base-look":
             let name = try value()
-            guard let profile = BuiltInProfile(rawValue: "redlamp.\(name)") else {
-                throw CLIError(description: "unknown profile \(name)")
+            guard let look = BuiltInBaseLook(legacyID: name) ?? BuiltInBaseLook(legacyID: "redlamp.\(name)") else {
+                throw CLIError(description: "unknown base look \(name)")
             }
-            recipe.profile = profile.reference
+            recipe.baseLook = look.reference
         case "--wb":
             let name = try value()
             guard let mode = WhiteBalanceMode(rawValue: name)
@@ -135,7 +137,17 @@ func run(_ arguments: [String]) async throws {
 }
 
 do {
-    try await run(Array(CommandLine.arguments.dropFirst()))
+    let arguments = Array(CommandLine.arguments.dropFirst())
+    switch arguments.first {
+    case "recipe":
+        try await RecipeCommands.run(Array(arguments.dropFirst()))
+    case "mcp":
+        try await MCPServer().run()
+    default:
+        try await run(arguments)
+    }
+} catch let exit as ExitCode {
+    Foundation.exit(exit.code)
 } catch {
     FileHandle.standardError.write(Data("error: \(error)\n".utf8))
     exit(1)

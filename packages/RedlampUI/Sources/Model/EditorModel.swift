@@ -4,6 +4,7 @@ import Observation
 import RedlampCanvas
 import RedlampDocument
 import RedlampEngineAPI
+import RedlampRecipes
 
 /// All editor state. Views read it; only its methods change it.
 ///
@@ -47,8 +48,11 @@ public final class EditorModel {
             if newValue.treatment != old.treatment {
                 withMutation(keyPath: \.treatment) {}
             }
-            if newValue.profile != old.profile {
-                withMutation(keyPath: \.profile) {}
+            if newValue.baseLook != old.baseLook {
+                withMutation(keyPath: \.baseLook) {}
+            }
+            if newValue.appliedRecipe != old.appliedRecipe {
+                withMutation(keyPath: \.appliedRecipe) {}
             }
             if newValue.whiteBalanceMode != old.whiteBalanceMode {
                 withMutation(keyPath: \.whiteBalanceMode) {}
@@ -70,6 +74,11 @@ public final class EditorModel {
 
     @ObservationIgnored private var storedRecipe = EditRecipe()
 
+    /// The edit, read without observing it (for lists that must not reload during drags).
+    var unobservedRecipe: EditRecipe {
+        storedRecipe
+    }
+
     private subscript(observing parameter: ParameterID) -> Double {
         access(keyPath: \.[observing: parameter])
         return storedRecipe[parameter]
@@ -80,9 +89,14 @@ public final class EditorModel {
         return storedRecipe.treatment
     }
 
-    public var profile: ProfileReference {
-        access(keyPath: \.profile)
-        return storedRecipe.profile
+    public var baseLook: BaseLookReference {
+        access(keyPath: \.baseLook)
+        return storedRecipe.baseLook
+    }
+
+    public var appliedRecipe: AppliedRecipe? {
+        access(keyPath: \.appliedRecipe)
+        return storedRecipe.appliedRecipe
     }
 
     public var whiteBalanceMode: WhiteBalanceMode {
@@ -221,7 +235,14 @@ public final class EditorModel {
     /// Live panel widths. The canvas deliberately ignores these (see `PanelMetrics`).
     public var sidebarWidth: CGFloat = 250
     public var inspectorWidth: CGFloat = 316
-    public private(set) var previewingPreset: Preset?
+    /// Every recipe and Base Look on this machine.
+    public let recipes: RecipeCatalog
+    /// The recipe under the pointer, rendered without being applied.
+    public internal(set) var previewingRecipe: Recipe?
+    /// The last applied recipe and the edit it was applied to, so its Amount stays adjustable.
+    var recipeApplication: (recipe: Recipe, base: EditRecipe)?
+    /// The photo's auto white balance, for recipes that ask for it.
+    @ObservationIgnored var autoWhiteBalance: WhiteBalanceValue?
     public private(set) var hasClipboard = false
 
     /// Called when the folder changes, so the app can remember it.
@@ -243,8 +264,9 @@ public final class EditorModel {
     @ObservationIgnored private var openTask: Task<Void, Never>?
     @ObservationIgnored private var framesTask: Task<Void, Never>?
 
-    public init(engine: any EditingEngine) {
+    public init(engine: any EditingEngine, recipes: RecipeCatalog? = nil) {
         self.engine = engine
+        self.recipes = recipes ?? RecipeCatalog(engine: engine)
         canvas.onRenderSizeChange = { [weak self] _ in self?.requestRender() }
         let frames = engine.frames()
         framesTask = Task { [weak self] in
@@ -309,7 +331,9 @@ public final class EditorModel {
         errorMessage = nil
         isReadOnly = false
         eyedropperActive = false
-        previewingPreset = nil
+        previewingRecipe = nil
+        recipeApplication = nil
+        autoWhiteBalance = nil
         selectedMaskID = nil
         selectedComponentID = nil
         drawingKind = nil
@@ -406,7 +430,7 @@ public final class EditorModel {
             ?? canvas.renderTarget
         guard target.size.width > 0 else { return }
         generation &+= 1
-        let displayed = isShowingOriginal ? beforeRecipe : (previewingPreset.map { $0.apply(to: recipe) } ?? recipe)
+        let displayed = isShowingOriginal ? beforeRecipe : (previewingRecipe.map { previewEdit(for: $0) } ?? recipe)
         let overlay = activeTool == .masking && showMaskOverlay && !isShowingOriginal ? selectedMaskID : nil
         var request = RenderRequest(
             recipe: displayed,
@@ -584,7 +608,7 @@ public final class EditorModel {
         requestRender()
     }
 
-    // MARK: - Profile, treatment, white balance
+    // MARK: - Base Look, treatment, white balance
 
     public func setTreatment(_ treatment: Treatment) {
         var next = recipe
@@ -592,13 +616,13 @@ public final class EditorModel {
         commit(next, name: "Treatment: \(treatment.name)")
     }
 
-    public func setProfile(_ profile: BuiltInProfile) {
+    public func setBaseLook(_ look: BaseLookReference) {
         var next = recipe
-        next.profile = profile.reference
-        if profile == .monochrome {
+        next.baseLook = look.withAmount(recipe.baseLook.isSameLook(as: look) ? recipe.baseLook.amount : look.amount)
+        if look == BuiltInBaseLook.monochrome.reference || recipes.package(for: look)?.parameters.isMonochrome == true {
             next.treatment = .blackAndWhite
         }
-        commit(next, name: "Profile: \(profile.name)")
+        commit(next, name: "Base Look: \(look.name)")
     }
 
     public func setWhiteBalanceMode(_ mode: WhiteBalanceMode) {
@@ -678,19 +702,7 @@ public final class EditorModel {
         commit(next, name: "Reset Point Curve")
     }
 
-    // MARK: - Presets and snapshots
-
-    public func applyPreset(_ preset: Preset) {
-        previewingPreset = nil
-        commit(preset.apply(to: recipe), name: "Preset: \(preset.name)")
-    }
-
-    /// Hover preview: renders the preset without committing it.
-    public func previewPreset(_ preset: Preset?) {
-        guard previewingPreset != preset else { return }
-        previewingPreset = preset
-        requestRender()
-    }
+    // MARK: - Snapshots
 
     public func createSnapshot() {
         let formatter = DateFormatter()
@@ -838,13 +850,15 @@ public final class EditorModel {
                 splitPosition = Double(value) ?? 0.5
             case "clipping":
                 showClipping = value == "1"
-            case "preset":
-                if let preset = BuiltInPresets.all.first(where: { $0.id == value }) {
-                    applyPreset(preset)
+            case "recipe", "preset":
+                if let recipe = recipes.recipe(id: value) ?? recipes.recipe(id: "redlamp/\(value)") {
+                    applyRecipe(recipe)
                 }
-            case "profile":
-                if let profile = BuiltInProfile(rawValue: "redlamp.\(value)") {
-                    setProfile(profile)
+            case "baseLook", "profile":
+                if let look = BuiltInBaseLook(legacyID: value) ?? BuiltInBaseLook(legacyID: "redlamp.\(value)") {
+                    setBaseLook(look.reference)
+                } else if let package = recipes.baseLooks.first(where: { $0.id == value || $0.slot == value }) {
+                    setBaseLook(package.reference)
                 }
             case "wb":
                 if let mode = WhiteBalanceMode(rawValue: value) {

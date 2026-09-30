@@ -44,6 +44,11 @@ public enum PanelID: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// Camera-style controls that Fujifilm-style recipe cards map onto, in the Effects panel.
+    public static let cameraRecipeParameters: [ParameterID] = [
+        .dynamicRange, .colorChrome, .colorChromeBlue, .wbShiftRed, .wbShiftBlue,
+    ]
+
     public var parameters: [ParameterID] {
         switch self {
         case .basic:
@@ -112,7 +117,7 @@ public enum PanelID: String, CaseIterable, Identifiable, Sendable {
                 .grainAmount,
                 .grainSize,
                 .grainRoughness,
-            ]
+            ] + PanelID.cameraRecipeParameters
         case .calibration:
             [
                 .calibrationShadowsTint,

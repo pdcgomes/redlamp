@@ -1,6 +1,7 @@
 import AppKit
 import RedlampDesign
 import RedlampDocument
+import RedlampRecipes
 
 /// One row, with the fonts, colors, icons and accessories of the SwiftUI rows.
 final class SidebarCellView: NSTableCellView {
@@ -25,6 +26,7 @@ final class SidebarCellView: NSTableCellView {
     private let label = NSTextField(labelWithString: "")
     private var icon: SymbolImageView?
     private var trailing: NSView?
+    private var amountSlider: NSSlider?
     private var hoverArea: NSTrackingArea?
 
     init(node: SidebarNode, model: EditorModel) {
@@ -47,10 +49,38 @@ final class SidebarCellView: NSTableCellView {
             label.stringValue = name
             label.textColor = .tertiaryLabelColor
             symbol = "folder"
-        case let .preset(preset):
-            label.stringValue = preset.name
+        case let .recipe(recipe):
+            label.stringValue = recipe.name
             label.textColor = Palette.label.nsColor
-            toolTip = "Hover to preview, click to apply"
+            toolTip = [recipe.summary, "Hover to preview, click to apply"].compactMap(\.self).joined(separator: "\n")
+            if model.recipes.isFavorite(recipe) {
+                trailing = SymbolImageView("star.fill", pointSize: 9, color: Palette.secondaryLabel.nsColor)
+            } else if recipe.usesLookTable {
+                trailing = SymbolImageView("cube", pointSize: 9, color: Palette.tertiaryLabel.nsColor)
+            }
+        case let .recipeAmount(title, amount):
+            label.stringValue = "Amount  \(Int(amount.rounded()))"
+            label.font = .systemFont(ofSize: 11)
+            label.textColor = Palette.secondaryLabel.nsColor
+            toolTip = "Strength of “\(title)”. 0 leaves the photo as it was; 200 goes twice as far."
+            let slider = NSSlider(value: amount, minValue: 0, maxValue: 200, target: nil, action: nil)
+            slider.controlSize = .small
+            slider.isContinuous = true
+            slider.setAccessibilityLabel("Recipe Amount")
+            let model = model
+            let label = label
+            slider.onAction { slider in
+                if model.editStart == nil {
+                    model.beginEdit()
+                }
+                model.setRecipeAmount(slider.doubleValue)
+                label.stringValue = "Amount  \(Int(slider.doubleValue.rounded()))"
+                if NSApp.currentEvent?.type == .leftMouseUp {
+                    model.endEdit(name: "Recipe Amount")
+                }
+            }
+            amountSlider = slider
+            addSubview(slider)
         case let .placeholder(text):
             label.stringValue = text
             label.textColor = Palette.tertiaryLabel.nsColor
@@ -103,8 +133,15 @@ final class SidebarCellView: NSTableCellView {
             PixelGrid.round((bounds.height - size.height) / 2, scale: scale)
         }
         var titleX: CGFloat = 0
-        if case .preset = node.kind {
-            titleX = Layout.nestedRowOffset
+        switch node.kind {
+        case .recipe, .recipeAmount: titleX = Layout.nestedRowOffset
+        default: break
+        }
+        if let amountSlider {
+            let width = min(max(bounds.width * 0.55, 80), 160)
+            amountSlider.frame = CGRect(
+                x: bounds.width - width - 2, y: centeredY(CGSize(width: width, height: 16)), width: width, height: 16,
+            )
         }
         if let image = icon {
             let size = image.intrinsicContentSize
@@ -114,7 +151,7 @@ final class SidebarCellView: NSTableCellView {
             )
             titleX = Layout.titleInset
         }
-        var titleMaxX = bounds.width
+        var titleMaxX = amountSlider.map { $0.frame.minX - 4 } ?? bounds.width
         if let trailing {
             let size = trailing.intrinsicContentSize
             trailing.frame = CGRect(
@@ -136,6 +173,8 @@ final class SidebarCellView: NSTableCellView {
     private func headerButton(_ button: SidebarNode.HeaderButton) -> NSView {
         let symbol: String, help: String, enabled: Bool
         switch button {
+        // Importing works without a photo; creating one is disabled in the menu instead.
+        case .recipes: (symbol, help, enabled) = ("plus", "Create or Import a Recipe", true)
         case let .createSnapshot(isEnabled): (symbol, help, enabled) = ("plus", "Create Snapshot (⌘N)", isEnabled)
         case let .clearHistory(isEnabled): (symbol, help, enabled) = ("xmark", "Clear History", isEnabled)
         }
@@ -147,8 +186,22 @@ final class SidebarCellView: NSTableCellView {
         control.setAccessibilityLabel(help)
         control.isEnabled = enabled
         let model = model
-        control.onClick = {
+        control.onClick = { [weak control] in
             switch button {
+            case let .recipes(hasPhoto):
+                guard let control else { return }
+                let menu = NSMenu()
+                let create = NSMenuItem(title: "Create Recipe from Current Edit…") {
+                    RecipeActions.createRecipe(model: model)
+                }
+                create.isEnabled = hasPhoto
+                menu.autoenablesItems = false
+                menu.addItem(create)
+                menu
+                    .addItem(NSMenuItem(title: "Import Recipe, .cube or HaldCLUT…") {
+                        RecipeActions.importRecipes(model: model)
+                    })
+                menu.popUp(positioning: nil, at: CGPoint(x: 0, y: control.bounds.height + 4), in: control)
             case .createSnapshot: model.createSnapshot()
             case .clearHistory: model.clearHistory()
             }
@@ -157,9 +210,32 @@ final class SidebarCellView: NSTableCellView {
     }
 
     func contextMenu() -> NSMenu? {
-        guard case let .snapshot(snapshot) = node.kind else { return nil }
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Delete Snapshot") { [model] in model.deleteSnapshot(snapshot) })
+        switch node.kind {
+        case let .snapshot(snapshot):
+            menu.addItem(NSMenuItem(title: "Delete Snapshot") { [model] in model.deleteSnapshot(snapshot) })
+        case let .recipe(recipe):
+            let favorite = model.recipes.isFavorite(recipe)
+            menu.addItem(NSMenuItem(title: favorite ? "Remove from Favorites" : "Add to Favorites") { [model] in
+                model.recipes.setFavorite(recipe, !favorite)
+            })
+            menu.addItem(NSMenuItem(title: "Export…") { [model] in RecipeActions.export(recipe, model: model) })
+            menu.addItem(NSMenuItem(title: "Duplicate to My Recipes") { [model] in
+                var copy = recipe
+                copy.id = RecipeNamespace.newLocalID()
+                copy.version = 1
+                copy.name = "\(recipe.name) Copy"
+                copy.group = "My Recipes"
+                copy.embeddedBaseLooks = model.recipes.library.exportable(recipe).embeddedBaseLooks
+                model.recipes.save(copy)
+            })
+            if model.recipes.isUserRecipe(recipe) {
+                menu.addItem(.separator())
+                menu.addItem(NSMenuItem(title: "Delete Recipe") { [model] in model.recipes.delete(recipe) })
+            }
+        default:
+            return nil
+        }
         return menu
     }
 
@@ -170,7 +246,7 @@ final class SidebarCellView: NSTableCellView {
         if let hoverArea {
             removeTrackingArea(hoverArea)
         }
-        guard case .preset = node.kind else { return }
+        guard case .recipe = node.kind else { return }
         let area = NSTrackingArea(
             rect: .zero,
             options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
@@ -182,13 +258,13 @@ final class SidebarCellView: NSTableCellView {
 
     override func mouseEntered(with _: NSEvent) {
         label.textColor = Palette.labelHover.nsColor
-        guard model.info != nil, case let .preset(preset) = node.kind else { return }
-        model.previewPreset(preset)
+        guard model.info != nil, case let .recipe(recipe) = node.kind else { return }
+        model.previewRecipe(recipe)
     }
 
     override func mouseExited(with _: NSEvent) {
         label.textColor = Palette.label.nsColor
         guard model.info != nil else { return }
-        model.previewPreset(nil)
+        model.previewRecipe(nil)
     }
 }

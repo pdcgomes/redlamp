@@ -138,6 +138,43 @@ static inline float sampleLUT(constant float *lut, float x) {
     return mix(lut[i], lut[j], position - float(i));
 }
 
+// MARK: - Base Look tables
+
+static inline float3 lookTableEntry(texture3d<half, access::read> table, int3 p) {
+    return float3(table.read(uint3(p)).rgb);
+}
+
+// Tetrahedral interpolation of a size³ table (matches LookTable.sample on the CPU).
+static inline float3 sampleLookTable(texture3d<half, access::read> table, float3 c, float size) {
+    float n = size - 1.0f;
+    float3 p = clamp(c, 0.0f, 1.0f) * n;
+    int3 b = min(int3(p), int3(int(n) - 1));
+    float3 f = p - float3(b);
+    float3 c000 = lookTableEntry(table, b);
+    float3 c111 = lookTableEntry(table, b + int3(1, 1, 1));
+    if (f.x > f.y) {
+        if (f.y > f.z) {
+            float3 c100 = lookTableEntry(table, b + int3(1, 0, 0)), c110 = lookTableEntry(table, b + int3(1, 1, 0));
+            return c000 + f.x * (c100 - c000) + f.y * (c110 - c100) + f.z * (c111 - c110);
+        } else if (f.x > f.z) {
+            float3 c100 = lookTableEntry(table, b + int3(1, 0, 0)), c101 = lookTableEntry(table, b + int3(1, 0, 1));
+            return c000 + f.x * (c100 - c000) + f.z * (c101 - c100) + f.y * (c111 - c101);
+        } else {
+            float3 c001 = lookTableEntry(table, b + int3(0, 0, 1)), c101 = lookTableEntry(table, b + int3(1, 0, 1));
+            return c000 + f.z * (c001 - c000) + f.x * (c101 - c001) + f.y * (c111 - c101);
+        }
+    }
+    if (f.z > f.y) {
+        float3 c001 = lookTableEntry(table, b + int3(0, 0, 1)), c011 = lookTableEntry(table, b + int3(0, 1, 1));
+        return c000 + f.z * (c001 - c000) + f.y * (c011 - c001) + f.x * (c111 - c011);
+    } else if (f.z > f.x) {
+        float3 c010 = lookTableEntry(table, b + int3(0, 1, 0)), c011 = lookTableEntry(table, b + int3(0, 1, 1));
+        return c000 + f.y * (c010 - c000) + f.z * (c011 - c010) + f.x * (c111 - c011);
+    }
+    float3 c010 = lookTableEntry(table, b + int3(0, 1, 0)), c110 = lookTableEntry(table, b + int3(1, 1, 0));
+    return c000 + f.y * (c010 - c000) + f.x * (c110 - c010) + f.z * (c111 - c110);
+}
+
 static inline float hash(uint2 p, uint seed) {
     uint n = p.x * 1973u + p.y * 9277u + seed * 26699u;
     n = (n << 13u) ^ n;
@@ -172,6 +209,7 @@ kernel void rl_develop(
     constant float *mixer [[buffer(2)]],
     constant MaskLayerGPU *layers [[buffer(3)]],
     constant MaskComponentGPU *components [[buffer(4)]],
+    texture3d<half, access::read> lookTable [[texture(3)]],
     uint2 gid [[thread_position_in_grid]])
 {
     uint width = uint(p.outputSize.x);
@@ -219,12 +257,22 @@ kernel void rl_develop(
         + (p.tone.w + localTone.w) * 1.6f * shadowWeight
         + localTone2.x * 0.9f * smoothstep(0.5f, 3.0f, ev)
         + localTone2.y * 0.9f * (1.0f - smoothstep(-8.0f, -2.5f, ev));
+    // Dynamic range: compress highlights above +0.5 EV (monotonic for compression <= 0.5).
+    if (p.recipe.z > 0.0f) {
+        adjustedEV -= p.recipe.z * smoothstep(0.5f, 4.5f, adjustedEV) * (adjustedEV - 0.5f);
+    }
     scene *= exp2(adjustedEV - ev);
 
     // Black and white points, then the tone curve to display-referred (still Rec.2020 primaries).
     float blackPoint = p.tone2.y;
     scene = max((scene - blackPoint) / (1.0f - blackPoint), 0.0f);
     float3 display = toneCurve(scene / p.tone2.x);
+
+    // The Base Look's table, on display-referred values under every user color control.
+    if (p.lookTable.x > 0.0f) {
+        float3 looked = sampleLookTable(lookTable, srgbEncode3(clamp(display, 0.0f, 1.0f)), p.lookTable.y);
+        display = max(mix(display, srgbDecode3(max(looked, 0.0f)), p.lookTable.x), 0.0f);
+    }
     // Perceptual color work in OKLCh.
     float3 lab = rec2020ToOKLab(display);
     float chroma = length(lab.yz);
@@ -264,6 +312,12 @@ kernel void rl_develop(
     saturation *= 1.0f + localColor.w;
     hue += localColor.z * smoothstep(0.0f, 0.04f, chroma);
     chroma = boostChroma(chroma, chroma * max(saturation, 0.0f), lab.x, hue * (M_PI_F / 180.0f), p);
+    // Color chrome: deeper, denser tones in strongly saturated colors (blues for FX Blue).
+    if ((p.recipe.x > 0.0f || p.recipe.y > 0.0f) && p.color.w < 0.5f) {
+        float depth = (p.recipe.x + p.recipe.y * hueBump(hue, 255.0f, 45.0f)) * smoothstep(0.05f, 0.2f, chroma);
+        lab.x *= 1.0f - 0.12f * depth;
+        chroma *= 1.0f + 0.06f * depth;
+    }
     if (p.color.w > 0.5f) chroma = 0.0f;
     float hueRadians = hue * (M_PI_F / 180.0f);
     lab.y = chroma * cos(hueRadians);

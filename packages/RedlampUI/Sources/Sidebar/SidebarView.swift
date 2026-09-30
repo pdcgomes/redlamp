@@ -1,8 +1,9 @@
 import RedlampCanvas
 import RedlampDocument
+import RedlampRecipes
 import SwiftUI
 
-/// Left column: Navigator, Presets, Snapshots and History, as in Lightroom Classic.
+/// Left column: Navigator, Recipes, Snapshots and History, as in Lightroom Classic.
 @_spi(Harness) public struct SidebarView: View {
     @State private var navigatorController = CanvasController()
 
@@ -18,31 +19,31 @@ import SwiftUI
     }
 }
 
-/// Presets, Snapshots and History.
+/// Recipes, Snapshots and History.
 @_spi(Harness) public struct SidebarLists: View {
     @Environment(EditorModel.self) private var model
-    @State private var presetsExpanded: Set<String> = ["Essentials"]
+    @State private var recipesExpanded: Set<String> = ["Favorites", "My Recipes", "Essentials"]
 
     public init() {}
 
     public var body: some View {
         List {
-            Section("Presets") {
-                ForEach(BuiltInPresets.groups, id: \.name) { group in
+            Section("Recipes") {
+                ForEach(model.recipes.sections, id: \.name) { group in
                     DisclosureGroup(
                         isExpanded: Binding(
-                            get: { presetsExpanded.contains(group.name) },
+                            get: { recipesExpanded.contains(group.name) },
                             set: { expanded in
                                 if expanded {
-                                    presetsExpanded.insert(group.name)
+                                    recipesExpanded.insert(group.name)
                                 } else {
-                                    presetsExpanded.remove(group.name)
+                                    recipesExpanded.remove(group.name)
                                 }
                             },
                         ),
                     ) {
-                        ForEach(group.presets) { preset in
-                            PresetRow(preset: preset)
+                        ForEach(group.recipes) { recipe in
+                            RecipeRow(recipe: recipe)
                         }
                     } label: {
                         Label(group.name, systemImage: "folder")
@@ -112,22 +113,25 @@ import SwiftUI
     }
 }
 
-private struct PresetRow: View {
-    let preset: Preset
+private struct RecipeRow: View {
+    let recipe: Recipe
     @Environment(EditorModel.self) private var model
     @State private var hovering = false
 
     var body: some View {
-        Text(preset.name)
+        Text(recipe.name)
             .foregroundStyle(hovering ? Theme.labelHover : Theme.label)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .onHover { inside in
                 hovering = inside
                 guard model.info != nil else { return }
-                model.previewPreset(inside ? preset : nil)
+                model.previewRecipe(inside ? recipe : nil)
             }
-            .onTapGesture { model.applyPreset(preset) }
+            .onTapGesture {
+                guard model.info != nil else { return }
+                model.applyRecipe(recipe)
+            }
             .help("Hover to preview, click to apply")
     }
 }

@@ -200,7 +200,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .toggleBlackAndWhite: "Convert to Black & White"
         case .whiteBalanceSelector: "White Balance Selector"
         case .newSnapshot: "New Snapshot"
-        case .newPreset: "New Preset"
+        case .newPreset: "New Recipe…"
         case .virtualCopy: "Create Virtual Copy"
         case .previousSetting: "Select Previous Setting"
         case .nextSetting: "Select Next Setting"
@@ -343,8 +343,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     /// Where the feature lands on the roadmap; `nil` once it works.
     public var plannedPhase: String? {
         switch self {
-        case .cropTool, .cropAspectLock, .brushMask, .colorRangeMask, .luminanceRangeMask, .newPreset,
-             .virtualCopy:
+        case .cropTool, .cropAspectLock, .brushMask, .colorRangeMask, .luminanceRangeMask, .virtualCopy:
             "Phase 2"
         case .healTool, .depthRangeMask: "Phase 3"
         default: nil

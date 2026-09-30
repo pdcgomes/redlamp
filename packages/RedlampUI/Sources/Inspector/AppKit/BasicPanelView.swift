@@ -3,7 +3,7 @@ import RedlampDesign
 import RedlampEngineAPI
 import SwiftUI
 
-/// The Basic panel: Treatment, Profile, White Balance, Tone and Presence.
+/// The Basic panel: Treatment, Base Look, White Balance, Tone and Presence.
 ///
 /// Sliders and chrome are AppKit. The native controls (segmented picker, menus, the Auto
 /// button) are the SwiftUI panel's own, each hosted on its own: they only update when their
@@ -20,7 +20,8 @@ import SwiftUI
         }
         return PanelSectionView(panel: .basic, model: model, rows: [
             controls("Treatment", TreatmentPicker()),
-            controls("Profile", ProfileMenu()),
+            controls("Base Look", BaseLookMenu()),
+            HostedControl(model: model, BaseLookAmountRow()),
             controls("White Balance", WhiteBalanceControls()),
             slider(.temperature, enabled: whiteBalanceSupported),
             slider(.tint, enabled: whiteBalanceSupported),

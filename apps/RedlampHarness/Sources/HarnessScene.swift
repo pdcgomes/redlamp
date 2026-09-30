@@ -7,6 +7,7 @@ enum HarnessSection: String, CaseIterable, Identifiable {
     case panels = "Panels"
     case parity = "Parity"
     case performance = "Performance"
+    case recipes = "Recipes"
 
     var id: String {
         rawValue
@@ -19,6 +20,7 @@ enum HarnessSection: String, CaseIterable, Identifiable {
         case .panels: "rectangle.split.1x2"
         case .parity: "square.on.square.dashed"
         case .performance: "gauge.with.dots.needle.67percent"
+        case .recipes: "wand.and.stars"
         }
     }
 }
@@ -35,6 +37,8 @@ struct HarnessScene: Identifiable {
     let content: @MainActor () -> AnyView
     /// An optional tuning pane, shown as the trailing inspector.
     let inspector: (@MainActor () -> AnyView)?
+    /// Whole-window tools (the Recipe Lab) fill the stage instead of sitting in its scroll view.
+    var fillsStage = false
 
     init(
         id: String, title: String, symbol: String, synopsis: String, section: HarnessSection,

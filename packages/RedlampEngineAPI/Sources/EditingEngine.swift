@@ -41,4 +41,12 @@ public protocol EditingEngine: AnyObject, Sendable {
 
     /// A fast preview for the filmstrip, usually the file's embedded thumbnail.
     func thumbnail(for url: URL, maxPixelSize: Int) async -> CGImage?
+
+    /// Makes a Base Look renderable. Edits reference it by id and version, and pin its
+    /// look table by content hash; built-in looks need no registration. Registering the
+    /// same look again is cheap. Edits whose look isn't registered render without it.
+    func registerBaseLook(_ look: BaseLookDefinition)
+
+    /// Whether the engine can render `reference` exactly as pinned.
+    func canRender(_ reference: BaseLookReference) -> Bool
 }

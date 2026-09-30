@@ -1,20 +1,26 @@
 import AppKit
 import RedlampDesign
 import RedlampDocument
+import RedlampRecipes
 import SwiftUI
 
-/// Presets, Snapshots and History in AppKit, on the same control as SwiftUI's sidebar
+/// Recipes, Snapshots and History in AppKit, on the same control as SwiftUI's sidebar
 /// `List`: a source-list outline view, with rows drawn like the SwiftUI rows.
 ///
-/// It reloads only when presets, snapshots or history change (once per finished edit),
-/// never while a slider moves.
-final class SidebarListView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate {
+/// It reloads only when recipes, snapshots or history change (once per finished edit),
+/// never while a slider moves. The recipe search field sits above the list so typing
+/// never loses focus to a reload.
+final class SidebarListView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate, NSSearchFieldDelegate {
     private let model: EditorModel
     private let scrollView = NSScrollView()
     private let outline = SidebarOutlineView()
+    private let searchField = NSSearchField()
     private var tracker: Tracker?
     private var sections: [SidebarNode] = []
-    private var expandedGroups: Set<String> = ["Essentials"]
+    private var expandedGroups: Set<String> = ["Favorites", "My Recipes", "Essentials"]
+    private var query = ""
+
+    static let searchHeight: CGFloat = 30
 
     init(model: EditorModel) {
         self.model = model
@@ -41,6 +47,15 @@ final class SidebarListView: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
         addSubview(scrollView)
+
+        searchField.placeholderString = "Search recipes"
+        searchField.controlSize = .small
+        searchField.font = .systemFont(ofSize: 11)
+        searchField.delegate = self
+        searchField.sendsSearchStringImmediately = true
+        searchField.toolTip = "Search recipes by name or tag. Lightroom words work too: preset, profile, LUT."
+        searchField.setAccessibilityLabel("Search recipes")
+        addSubview(searchField)
     }
 
     @available(*, unavailable)
@@ -48,9 +63,19 @@ final class SidebarListView: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
         fatalError("init(coder:) is not supported")
     }
 
+    override var isFlipped: Bool {
+        true
+    }
+
     override func layout() {
         super.layout()
-        scrollView.frame = bounds
+        searchField.frame = CGRect(x: 10, y: 4, width: max(bounds.width - 20, 0), height: Self.searchHeight - 8)
+        scrollView.frame = CGRect(
+            x: 0,
+            y: Self.searchHeight,
+            width: bounds.width,
+            height: max(bounds.height - Self.searchHeight, 0),
+        )
         outline.sizeLastColumnToFit()
     }
 
@@ -61,6 +86,8 @@ final class SidebarListView: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
         guard window != nil else { return }
         tracker = Tracker { [weak self] in
             guard let self else { return }
+            _ = model.recipes.revision
+            _ = model.recipeApplication?.recipe.id
             reload(
                 snapshots: model.snapshots,
                 history: model.history,
@@ -70,10 +97,37 @@ final class SidebarListView: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
         }
     }
 
+    func controlTextDidChange(_: Notification) {
+        query = searchField.stringValue
+        reload(
+            snapshots: model.snapshots,
+            history: model.history,
+            current: model.historyIndex,
+            hasPhoto: model.info != nil,
+        )
+    }
+
+    private func recipeSection(hasPhoto: Bool) -> SidebarNode {
+        var children: [SidebarNode] = []
+        if let amount = model.recipeAmount, let title = model.recipeAmountTitle {
+            children.append(SidebarNode(.recipeAmount(title, amount)))
+        }
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty {
+            children += model.recipes.sections.map { section in
+                SidebarNode(.group(section.name), children: section.recipes.map { SidebarNode(.recipe($0)) })
+            }
+        } else {
+            let found = model.recipes.search(trimmed)
+            children += found.isEmpty
+                ? [SidebarNode(.placeholder("No matching recipes"))]
+                : found.map { SidebarNode(.recipe($0)) }
+        }
+        return SidebarNode(.header("Recipes", button: .recipes(enabled: hasPhoto)), children: children)
+    }
+
     private func reload(snapshots: [Snapshot], history: [HistoryStep], current: Int, hasPhoto: Bool) {
-        let presets = SidebarNode(.header("Presets", button: nil), children: BuiltInPresets.groups.map { group in
-            SidebarNode(.group(group.name), children: group.presets.map { SidebarNode(.preset($0)) })
-        })
+        let recipes = recipeSection(hasPhoto: hasPhoto)
         let snapshotRows = snapshots.isEmpty
             ? [SidebarNode(.placeholder("No snapshots"))]
             : snapshots.map { SidebarNode(.snapshot($0)) }
@@ -88,7 +142,7 @@ final class SidebarListView: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
             .header("History", button: .clearHistory(enabled: history.count > 1)),
             children: historyRows,
         )
-        sections = [presets, snapshotSection, historySection]
+        sections = [recipes, snapshotSection, historySection]
         outline.reloadData()
         for section in sections {
             outline.expandItem(section)
@@ -149,8 +203,9 @@ final class SidebarListView: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
     @objc private func rowClicked() {
         guard let node = outline.item(atRow: outline.clickedRow) as? SidebarNode else { return }
         switch node.kind {
-        case let .preset(preset):
-            model.applyPreset(preset)
+        case let .recipe(recipe):
+            guard model.info != nil else { return }
+            model.applyRecipe(recipe)
         case let .snapshot(snapshot):
             model.applySnapshot(snapshot)
         case let .history(_, index, _, _):
@@ -167,18 +222,21 @@ final class SidebarListView: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
     }
 }
 
-/// A row of the sidebar lists: a section header, a preset group or one of their rows.
+/// A row of the sidebar lists: a section header, a recipe group or one of their rows.
 final class SidebarNode: NSObject {
     enum Kind {
         case header(String, button: HeaderButton?)
         case group(String)
-        case preset(Preset)
+        case recipe(Recipe)
+        /// The last applied recipe's Amount slider.
+        case recipeAmount(String, Double)
         case placeholder(String)
         case snapshot(Snapshot)
         case history(HistoryStep, index: Int, current: Bool, future: Bool)
     }
 
     enum HeaderButton {
+        case recipes(enabled: Bool)
         case createSnapshot(enabled: Bool)
         case clearHistory(enabled: Bool)
     }
@@ -192,11 +250,12 @@ final class SidebarNode: NSObject {
     }
 }
 
-/// The outline view, with the context menu for snapshot rows.
+/// The outline view, with the context menus for recipe and snapshot rows.
 final class SidebarOutlineView: NSOutlineView {
     /// A table view only passes clicks to controls in its rows; the header buttons aren't.
     override func validateProposedFirstResponder(_ responder: NSResponder, for event: NSEvent?) -> Bool {
-        responder is SymbolImageView || super.validateProposedFirstResponder(responder, for: event)
+        responder is SymbolImageView || responder is NSSlider
+            || super.validateProposedFirstResponder(responder, for: event)
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {
