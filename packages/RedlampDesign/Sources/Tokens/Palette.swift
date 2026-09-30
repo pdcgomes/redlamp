@@ -1,31 +1,175 @@
 import AppKit
 import SwiftUI
+import Synchronization
 
 /// Redlamp's colors. Editing surfaces stay neutral grey so nothing tints the user's
 /// judgment of color; the brand red never appears here.
+///
+/// The values come from `Palette.current`, which the default `standard` set fills with
+/// those greys. Themes swap in another set; views that already drew keep the old colors
+/// until they redraw.
 public enum Palette {
-    public static let label = RGBA(white: 1, alpha: 0.72)
-    public static let labelHover = RGBA(white: 1, alpha: 0.95)
-    public static let secondaryLabel = RGBA(white: 1, alpha: 0.45)
-    public static let tertiaryLabel = RGBA(white: 1, alpha: 0.28)
-    public static let value = RGBA(white: 1, alpha: 0.9)
-    public static let divider = RGBA(white: 1, alpha: 0.07)
-    public static let track = RGBA(white: 1, alpha: 0.16)
-    public static let well = RGBA(white: 0, alpha: 0.28)
-    public static let selection = RGBA(white: 1, alpha: 0.1)
-    public static let panelBackground = RGBA(white: 0.115)
+    private static let store = Mutex(PaletteTokens.standard)
+
+    public static var current: PaletteTokens {
+        get { store.withLock { $0 } }
+        set { store.withLock { $0 = newValue } }
+    }
+
+    public static var label: RGBA {
+        current.label
+    }
+
+    public static var labelHover: RGBA {
+        current.labelHover
+    }
+
+    public static var secondaryLabel: RGBA {
+        current.secondaryLabel
+    }
+
+    public static var tertiaryLabel: RGBA {
+        current.tertiaryLabel
+    }
+
+    public static var value: RGBA {
+        current.value
+    }
+
+    public static var divider: RGBA {
+        current.divider
+    }
+
+    public static var track: RGBA {
+        current.track
+    }
+
+    public static var well: RGBA {
+        current.well
+    }
+
+    public static var selection: RGBA {
+        current.selection
+    }
+
+    public static var panelBackground: RGBA {
+        current.panelBackground
+    }
 
     /// The filled part of a plain slider track, from the origin to the thumb.
-    public static let trackFill = RGBA(white: 1, alpha: 0.55)
-    public static let thumb = RGBA(white: 0.92)
-    public static let thumbStroke = RGBA(white: 0, alpha: 0.35)
-    public static let thumbShadow = RGBA(white: 0, alpha: 0.4)
-    /// The dot on a panel header whose panel has edits.
-    public static let editedDot = RGBA(white: 1, alpha: 0.55)
-
-    /// The system accent (focus, selection, "Reset" affordances), as SwiftUI's
-    /// `Color.accentColor` resolves it.
-    public static var accent: NSColor {
-        .controlAccentColor
+    public static var trackFill: RGBA {
+        current.trackFill
     }
+
+    public static var thumb: RGBA {
+        current.thumb
+    }
+
+    public static var thumbStroke: RGBA {
+        current.thumbStroke
+    }
+
+    public static var thumbShadow: RGBA {
+        current.thumbShadow
+    }
+
+    /// The dot on a panel header whose panel has edits.
+    public static var editedDot: RGBA {
+        current.editedDot
+    }
+
+    /// Focus, selection and "Reset" affordances. The system accent, as SwiftUI's
+    /// `Color.accentColor` resolves it, unless the theme sets its own.
+    public static var accent: NSColor {
+        current.accent?.nsColor ?? .controlAccentColor
+    }
+}
+
+/// One complete set of the colors `Palette` hands out.
+public struct PaletteTokens: Sendable, Hashable {
+    public var label: RGBA
+    public var labelHover: RGBA
+    public var secondaryLabel: RGBA
+    public var tertiaryLabel: RGBA
+    public var value: RGBA
+    public var divider: RGBA
+    public var track: RGBA
+    public var well: RGBA
+    public var selection: RGBA
+    public var panelBackground: RGBA
+    public var trackFill: RGBA
+    public var thumb: RGBA
+    public var thumbStroke: RGBA
+    public var thumbShadow: RGBA
+    public var editedDot: RGBA
+    /// `nil` follows the system accent.
+    public var accent: RGBA?
+    /// The tint for native macOS controls (checkboxes, segmented pickers, prominent
+    /// buttons). `nil` leaves them on the system accent the user chose.
+    public var nativeTint: RGBA?
+
+    public init(
+        label: RGBA, labelHover: RGBA, secondaryLabel: RGBA, tertiaryLabel: RGBA, value: RGBA,
+        divider: RGBA, track: RGBA, well: RGBA, selection: RGBA, panelBackground: RGBA,
+        trackFill: RGBA, thumb: RGBA, thumbStroke: RGBA, thumbShadow: RGBA, editedDot: RGBA,
+        accent: RGBA?, nativeTint: RGBA? = nil,
+    ) {
+        self.label = label
+        self.labelHover = labelHover
+        self.secondaryLabel = secondaryLabel
+        self.tertiaryLabel = tertiaryLabel
+        self.value = value
+        self.divider = divider
+        self.track = track
+        self.well = well
+        self.selection = selection
+        self.panelBackground = panelBackground
+        self.trackFill = trackFill
+        self.thumb = thumb
+        self.thumbStroke = thumbStroke
+        self.thumbShadow = thumbShadow
+        self.editedDot = editedDot
+        self.accent = accent
+        self.nativeTint = nativeTint
+    }
+
+    /// Redlamp's neutral greys on dark, the colors the editor ships with.
+    public static let standard = PaletteTokens(
+        label: RGBA(white: 1, alpha: 0.72),
+        labelHover: RGBA(white: 1, alpha: 0.95),
+        secondaryLabel: RGBA(white: 1, alpha: 0.45),
+        tertiaryLabel: RGBA(white: 1, alpha: 0.28),
+        value: RGBA(white: 1, alpha: 0.9),
+        divider: RGBA(white: 1, alpha: 0.07),
+        track: RGBA(white: 1, alpha: 0.16),
+        well: RGBA(white: 0, alpha: 0.28),
+        selection: RGBA(white: 1, alpha: 0.1),
+        panelBackground: RGBA(white: 0.115),
+        trackFill: RGBA(white: 1, alpha: 0.55),
+        thumb: RGBA(white: 0.92),
+        thumbStroke: RGBA(white: 0, alpha: 0.35),
+        thumbShadow: RGBA(white: 0, alpha: 0.4),
+        editedDot: RGBA(white: 1, alpha: 0.55),
+        accent: nil,
+    )
+
+    /// The same neutral greys on light.
+    public static let standardLight = PaletteTokens(
+        label: RGBA(white: 0, alpha: 0.75),
+        labelHover: RGBA(white: 0, alpha: 0.95),
+        secondaryLabel: RGBA(white: 0, alpha: 0.5),
+        tertiaryLabel: RGBA(white: 0, alpha: 0.3),
+        value: RGBA(white: 0, alpha: 0.88),
+        divider: RGBA(white: 0, alpha: 0.09),
+        track: RGBA(white: 0, alpha: 0.14),
+        well: RGBA(white: 0, alpha: 0.06),
+        selection: RGBA(white: 0, alpha: 0.08),
+        panelBackground: RGBA(white: 0.925),
+        trackFill: RGBA(white: 0, alpha: 0.5),
+        thumb: RGBA(white: 1),
+        thumbStroke: RGBA(white: 0, alpha: 0.25),
+        thumbShadow: RGBA(white: 0, alpha: 0.2),
+        editedDot: RGBA(white: 0, alpha: 0.5),
+        accent: nil,
+    )
 }

@@ -18,10 +18,15 @@ extension HarnessScene {
 
 private struct TokensScene: View {
     private let colors: [(String, RGBA)] = [
-        ("label", Palette.label), ("labelHover", Palette.labelHover), ("secondaryLabel", Palette.secondaryLabel),
-        ("tertiaryLabel", Palette.tertiaryLabel), ("value", Palette.value), ("divider", Palette.divider),
-        ("track", Palette.track), ("trackFill", Palette.trackFill), ("well", Palette.well),
-        ("selection", Palette.selection), ("thumb", Palette.thumb), ("editedDot", Palette.editedDot),
+        ("panelBackground", Palette.panelBackground), ("label", Palette.label), ("labelHover", Palette.labelHover),
+        ("secondaryLabel", Palette.secondaryLabel), ("tertiaryLabel", Palette.tertiaryLabel),
+        ("value", Palette.value), ("divider", Palette.divider), ("track", Palette.track),
+        ("trackFill", Palette.trackFill), ("well", Palette.well), ("selection", Palette.selection),
+        ("thumb", Palette.thumb), ("thumbStroke", Palette.thumbStroke), ("thumbShadow", Palette.thumbShadow),
+        ("editedDot", Palette.editedDot),
+        ("accent", Palette.accent.usingColorSpace(.sRGB).map {
+            RGBA(red: $0.redComponent, green: $0.greenComponent, blue: $0.blueComponent, alpha: $0.alphaComponent)
+        } ?? RGBA(white: 0.5)),
     ]
 
     private let fonts: [(String, FontSpec)] = [
@@ -33,7 +38,10 @@ private struct TokensScene: View {
         VStack(alignment: .leading, spacing: 0) {
             SpecimenGroup(
                 title: "Palette",
-                note: "Neutral greys only: nothing on an editing surface may tint the user's judgment of color.",
+                note: """
+                The current theme's tokens, over the panel background. Neutral is the shipping set: greys only, \
+                so nothing on an editing surface tints the user's judgment of color. Other themes are under evaluation.
+                """,
             ) {
                 LazyVGrid(
                     columns: Array(repeating: GridItem(.fixed(120), alignment: .leading), count: 6),
@@ -43,7 +51,7 @@ private struct TokensScene: View {
                         Specimen(caption: name) {
                             RoundedRectangle(cornerRadius: 6)
                                 .fill(color.color)
-                                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.08)))
+                                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.primary.opacity(0.1)))
                                 .frame(width: 100, height: 44)
                         }
                     }

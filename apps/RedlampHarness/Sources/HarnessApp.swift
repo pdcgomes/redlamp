@@ -6,7 +6,6 @@ struct HarnessApp: App {
         WindowGroup("Redlamp Harness") {
             HarnessRootView()
                 .frame(minWidth: 1000, minHeight: 640)
-                .preferredColorScheme(.dark)
         }
         .defaultSize(width: 1400, height: 900)
     }

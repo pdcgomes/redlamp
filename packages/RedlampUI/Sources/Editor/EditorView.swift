@@ -16,11 +16,17 @@ enum PanelMetrics {
 /// it, as in Lightroom and macOS 26's own full-bleed layouts.
 public struct EditorView: View {
     @Bindable var model: EditorModel
+    @Bindable var theme: ThemeSettings
     let onOpen: () -> Void
     let onExport: () -> Void
+    @State private var themeShown = false
 
-    public init(model: EditorModel, onOpen: @escaping () -> Void, onExport: @escaping () -> Void) {
+    public init(
+        model: EditorModel, theme: ThemeSettings,
+        onOpen: @escaping () -> Void, onExport: @escaping () -> Void,
+    ) {
         self.model = model
+        self.theme = theme
         self.onOpen = onOpen
         self.onExport = onExport
     }
@@ -39,6 +45,8 @@ public struct EditorView: View {
                                 SidebarColumnHost(model: model)
                             }
                         }
+                        // AppKit views take their colors when they are made, so a theme change rebuilds them.
+                        .id(theme.selection)
                         .frame(width: model.sidebarWidth)
                         .background(PanelBackground(edge: .trailing))
                         .overlay(alignment: .trailing) {
@@ -59,6 +67,7 @@ public struct EditorView: View {
                                 InspectorColumnHost(model: model)
                             }
                         }
+                        .id(theme.selection)
                         .frame(width: model.inspectorWidth)
                         .background(PanelBackground(edge: .leading))
                         .overlay(alignment: .leading) {
@@ -76,6 +85,7 @@ public struct EditorView: View {
             if model.filmstripVisible, !model.items.isEmpty {
                 Rectangle().fill(Theme.divider).frame(height: 1)
                 FilmstripView()
+                    .id(theme.selection)
                     .overlay { LightsOutShade(level: model.lightsOut, stage: nil) }
             }
         }
@@ -126,9 +136,21 @@ public struct EditorView: View {
                 }
                 .help("Show Develop Panels")
             }
+            ToolbarSpacer(.fixed, placement: .primaryAction)
+            ToolbarItem(placement: .primaryAction) {
+                Button("Theme", systemImage: "paintpalette") { themeShown.toggle() }
+                    .help("Theme")
+                    .popover(isPresented: $themeShown, arrowEdge: .bottom) {
+                        ThemeControls(theme: $theme.selection)
+                            .padding(14)
+                            .frame(width: 260)
+                    }
+            }
         }
         .environment(model)
-        .preferredColorScheme(.dark)
+        .environment(theme)
+        .tint(Theme.nativeTint)
+        .preferredColorScheme(theme.selection.appearance == .dark ? .dark : .light)
     }
 
     /// Showing or hiding a panel re-fits the photo to the space left; resizing never does.
@@ -171,9 +193,9 @@ private struct PanelBackground: View {
     let edge: HorizontalEdge
 
     var body: some View {
-        Color(white: 0.115)
+        Theme.panelBackground
             .overlay(alignment: edge == .leading ? .leading : .trailing) {
-                Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1)
+                Rectangle().fill(Color.primary.opacity(0.08)).frame(width: 1)
             }
             .shadow(color: .black.opacity(0.35), radius: 8)
     }

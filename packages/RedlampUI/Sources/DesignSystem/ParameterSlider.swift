@@ -35,7 +35,7 @@ import SwiftUI
         HStack(spacing: 6) {
             Text(label ?? spec.label)
                 .font(focused ? Theme.labelFont.weight(.semibold) : Theme.labelFont)
-                .foregroundStyle(focused ? Color.accentColor : (isHovering && live ? Theme.labelHover : Theme.label))
+                .foregroundStyle(focused ? Theme.accent : (isHovering && live ? Theme.labelHover : Theme.label))
                 .lineLimit(1)
                 .frame(width: Theme.labelWidth, alignment: .leading)
                 .contentShape(Rectangle())
@@ -67,7 +67,7 @@ import SwiftUI
         .background(alignment: .leading) {
             if focused {
                 // Lightroom-style marker for the slider `,` `.` select and `-` `=` nudge.
-                Capsule().fill(Color.accentColor).frame(width: 2, height: 12).offset(x: -8)
+                Capsule().fill(Theme.accent).frame(width: 2, height: 12).offset(x: -8)
             }
         }
         .opacity(live ? 1 : 0.35)
@@ -111,7 +111,7 @@ struct SliderTrack: View {
 
                 if spec.track.gradient == nil {
                     Capsule()
-                        .fill(Color.white.opacity(0.55))
+                        .fill(Theme.trackFill)
                         .frame(width: abs(thumbX - originX), height: 2)
                         .position(x: (thumbX + originX) / 2, y: midY)
                 }
@@ -124,9 +124,9 @@ struct SliderTrack: View {
                 }
 
                 Circle()
-                    .fill(Color(white: 0.92))
-                    .overlay(Circle().strokeBorder(Color.black.opacity(0.35), lineWidth: 0.5))
-                    .shadow(color: .black.opacity(0.4), radius: 1.5, y: 0.5)
+                    .fill(Theme.thumb)
+                    .overlay(Circle().strokeBorder(Theme.thumbStroke, lineWidth: 0.5))
+                    .shadow(color: Theme.thumbShadow, radius: 1.5, y: 0.5)
                     .frame(width: Theme.thumbSize, height: Theme.thumbSize)
                     .position(x: thumbX, y: midY)
             }
@@ -245,7 +245,7 @@ struct ValueField: View {
             Text(resetMode ? "RESET \(title.uppercased())" : title.uppercased())
                 .font(Theme.sectionFont)
                 .tracking(0.6)
-                .foregroundStyle(resetMode ? Color.accentColor : Theme.secondaryLabel)
+                .foregroundStyle(resetMode ? Theme.accent : Theme.secondaryLabel)
                 .contentShape(Rectangle())
                 .onTapGesture(count: 2) { model.resetParameters(parameters, name: "Reset \(title)") }
                 .onTapGesture {

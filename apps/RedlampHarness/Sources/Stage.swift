@@ -11,10 +11,11 @@ enum StageBackground: String, CaseIterable, Identifiable {
         rawValue
     }
 
-    var color: Color {
+    /// The canvas surround stays neutral under every theme, since the photo sits on it.
+    func color(appearance: ThemeAppearance) -> Color {
         switch self {
         case .panel: Palette.panelBackground.color
-        case .canvas: RGBA(white: 0.12).color
+        case .canvas: RGBA(white: appearance == .dark ? 0.12 : 0.78).color
         case .black: .black
         }
     }
@@ -24,6 +25,20 @@ struct StageSettings {
     var background = HarnessLaunch.value(after: "--background")
         .flatMap { name in StageBackground.allCases.first { $0.rawValue.lowercased() == name } } ?? .panel
     var inspectorShown = true
+    /// Setting it installs the theme's tokens straight away, before any view redraws, so
+    /// views rebuilt for the change read the new colors when they are made.
+    var theme = HarnessLaunch.themeSelection {
+        didSet { Palette.current = theme.tokens }
+    }
+
+    init() {
+        Palette.current = theme.tokens
+    }
+}
+
+private struct StageIdentity: Hashable {
+    let scene: String
+    let theme: ThemeSelection
 }
 
 /// Presents one scene: its content on the chosen background, and its tuning inspector.
@@ -44,8 +59,11 @@ struct Stage: View {
                 }
             }
         }
-        .background(settings.background.color)
-        .id(scene.id)
+        .background(settings.background.color(appearance: settings.theme.appearance))
+        .environment(\.themeSelection, settings.theme)
+        .tint(Palette.current.nativeTint?.color)
+        // AppKit views take their colors when they are made, so a theme change rebuilds them.
+        .id(StageIdentity(scene: scene.id, theme: settings.theme))
         .navigationTitle(scene.title)
         .navigationSubtitle(scene.synopsis)
         .inspector(isPresented: Binding(
@@ -55,21 +73,24 @@ struct Stage: View {
             scene.inspector?()
                 .inspectorColumnWidth(min: 260, ideal: 300, max: 420)
         }
-        .toolbar {
-            ToolbarItem {
-                Picker("Background", selection: $settings.background) {
-                    ForEach(StageBackground.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .help("The surface behind the scene")
+        .toolbar { toolbar }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbar: some ToolbarContent {
+        ToolbarItem {
+            Picker("Background", selection: $settings.background) {
+                ForEach(StageBackground.allCases) { Text($0.rawValue).tag($0) }
             }
-            if scene.inspector != nil {
-                ToolbarItem {
-                    Toggle(isOn: $settings.inspectorShown) {
-                        Label("Inspector", systemImage: "sidebar.right")
-                    }
-                    .help("Show the scene's tuning knobs")
+            .pickerStyle(.segmented)
+            .help("The surface behind the scene")
+        }
+        if scene.inspector != nil {
+            ToolbarItem {
+                Toggle(isOn: $settings.inspectorShown) {
+                    Label("Inspector", systemImage: "sidebar.right")
                 }
+                .help("Show the scene's tuning knobs")
             }
         }
     }

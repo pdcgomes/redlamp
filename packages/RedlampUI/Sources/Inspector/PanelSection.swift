@@ -74,7 +74,7 @@ private struct EditedDot: View {
     var body: some View {
         if panel.parameters.contains(where: model.isEdited) {
             Circle()
-                .fill(Color.white.opacity(0.55))
+                .fill(Theme.editedDot)
                 .frame(width: 4, height: 4)
                 .help("This panel has edits")
         }

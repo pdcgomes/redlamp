@@ -19,6 +19,7 @@ struct HarnessRootView: View {
                     }
                 }
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) { SidebarThemeControls(theme: $settings.theme) }
             .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 320)
         } detail: {
             if let scene = catalog.scene(id: selection) {
@@ -27,6 +28,7 @@ struct HarnessRootView: View {
                 ContentUnavailableView("Choose a scene", systemImage: "square.grid.2x2")
             }
         }
+        .preferredColorScheme(settings.theme.appearance == .dark ? .dark : .light)
         .task { MetricsProbe.runIfRequested() }
     }
 }

@@ -3,17 +3,77 @@ import RedlampEngineAPI
 import SwiftUI
 
 /// The design tokens as SwiftUI values. The tokens themselves live in `RedlampDesign`,
-/// shared with the AppKit panels, so both render identically.
+/// shared with the AppKit panels, so both render identically. The colors are read on
+/// every use, so they follow `Palette.current`.
 enum Theme {
-    static let label = Palette.label.color
-    static let labelHover = Palette.labelHover.color
-    static let secondaryLabel = Palette.secondaryLabel.color
-    static let tertiaryLabel = Palette.tertiaryLabel.color
-    static let value = Palette.value.color
-    static let divider = Palette.divider.color
-    static let track = Palette.track.color
-    static let well = Palette.well.color
-    static let selection = Palette.selection.color
+    static var label: Color {
+        Palette.label.color
+    }
+
+    static var labelHover: Color {
+        Palette.labelHover.color
+    }
+
+    static var secondaryLabel: Color {
+        Palette.secondaryLabel.color
+    }
+
+    static var tertiaryLabel: Color {
+        Palette.tertiaryLabel.color
+    }
+
+    static var value: Color {
+        Palette.value.color
+    }
+
+    static var divider: Color {
+        Palette.divider.color
+    }
+
+    static var track: Color {
+        Palette.track.color
+    }
+
+    static var well: Color {
+        Palette.well.color
+    }
+
+    static var selection: Color {
+        Palette.selection.color
+    }
+
+    static var panelBackground: Color {
+        Palette.panelBackground.color
+    }
+
+    static var trackFill: Color {
+        Palette.trackFill.color
+    }
+
+    static var thumb: Color {
+        Palette.thumb.color
+    }
+
+    static var thumbStroke: Color {
+        Palette.thumbStroke.color
+    }
+
+    static var thumbShadow: Color {
+        Palette.thumbShadow.color
+    }
+
+    static var editedDot: Color {
+        Palette.editedDot.color
+    }
+
+    static var accent: Color {
+        Palette.current.accent?.color ?? .accentColor
+    }
+
+    /// For `.tint(_:)` on native controls; `nil` keeps the system accent.
+    static var nativeTint: Color? {
+        Palette.current.nativeTint?.color
+    }
 
     static let labelFont = Typography.label.font
     static let valueFont = Typography.value.font

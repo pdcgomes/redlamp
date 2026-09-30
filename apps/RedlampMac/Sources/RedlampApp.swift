@@ -8,6 +8,7 @@ import SwiftUI
 struct RedlampApp: App {
     @State private var model: EditorModel
     @State private var keyboard = KeyboardShortcuts()
+    @State private var theme = ThemeSettings()
 
     init() {
         #if DEBUG || REDLAMP_PROFILING
@@ -36,7 +37,7 @@ struct RedlampApp: App {
 
     var body: some Scene {
         Window("Redlamp", id: "editor") {
-            EditorView(model: model, onOpen: openPanel, onExport: exportPanel)
+            EditorView(model: model, theme: theme, onOpen: openPanel, onExport: exportPanel)
                 .frame(minWidth: 1100, minHeight: 700)
                 .onAppear {
                     keyboard.install(model: model)

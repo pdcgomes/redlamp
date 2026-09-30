@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 struct CanvasArea: View {
     let onOpen: () -> Void
     @Environment(EditorModel.self) private var model
+    @Environment(ThemeSettings.self) private var theme
     @State private var dropTargeted = false
 
     var body: some View {
@@ -24,9 +25,11 @@ struct CanvasArea: View {
         }
         // Everything drawn over the photo lives in overlays: they render above the Metal
         // layer, whereas ZStack siblings of the canvas would be hidden beneath it.
+        // The chrome over the photo is rebuilt for a new theme; the Metal canvas is not.
         .overlay {
             statusLayer
                 .padding(stagePadding)
+                .id(theme.selection)
         }
         .overlay {
             // Full canvas: mask geometry uses the same coordinates as the Metal view.
@@ -53,6 +56,7 @@ struct CanvasArea: View {
                 StatusPill(text: statusText)
                     .padding(.top, 14)
                     .padding(stagePadding)
+                    .id(theme.selection)
             }
         }
         .overlay(alignment: .bottom) {
@@ -60,6 +64,7 @@ struct CanvasArea: View {
                 CanvasControls()
                     .padding(.bottom, 14)
                     .padding(stagePadding)
+                    .id(theme.selection)
             }
         }
         .overlay {

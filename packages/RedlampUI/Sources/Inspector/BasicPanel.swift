@@ -145,7 +145,7 @@ struct WhiteBalanceControls: View {
                 Image(systemName: "eyedropper")
                     .font(.system(size: 12))
                     .frame(width: 22, height: 20)
-                    .foregroundStyle(model.eyedropperActive ? Color.accentColor : Theme.label)
+                    .foregroundStyle(model.eyedropperActive ? Theme.accent : Theme.label)
                     .background(RoundedRectangle(cornerRadius: 5)
                         .fill(model.eyedropperActive ? Theme.selection : .clear))
             }

@@ -4,6 +4,7 @@ enum BuiltInScenes {
     static func catalog() -> HarnessCatalog {
         var catalog = HarnessCatalog()
         catalog.register(.tokens)
+        catalog.register(.themeGallery)
         catalog.register(.sliderRows)
         catalog.register(.panelChrome)
         catalog.register(.basicPanel)
