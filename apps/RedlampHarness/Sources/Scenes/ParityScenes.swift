@@ -157,6 +157,14 @@ extension HarnessScene {
             ) {
                 ColorMixerPanelView.make(model: $0)
             },
+            panelParity(
+                id: "color-grading",
+                title: "Color Grading",
+                symbol: "circle.grid.cross",
+                reference: { ColorGradingPanel() },
+            ) {
+                ColorGradingPanelView.make(model: $0)
+            },
             panelParity(id: "detail", title: "Detail", symbol: "triangle", reference: { DetailPanel() }) {
                 ReferencePanelViews.detail(model: $0)
             },

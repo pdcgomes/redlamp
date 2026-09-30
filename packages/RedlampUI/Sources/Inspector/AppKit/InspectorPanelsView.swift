@@ -2,23 +2,18 @@ import AppKit
 import RedlampDesign
 import SwiftUI
 
-/// The scrolling column of Develop panels, in AppKit.
-///
-/// Panels ported to AppKit update only the controls whose values change. Panels not yet
-/// ported are each hosted on their own, so their SwiftUI updates stay small.
+/// The scrolling column of Develop panels, in AppKit: each control updates only when a
+/// value it shows changes.
 final class InspectorPanelsView: NSView {
     private let scrollView = NSScrollView()
     private let document: InspectorDocumentView
 
     init(model: EditorModel) {
-        func hosted(_ panel: some View) -> NSView {
-            HostedPanelView(rootView: AnyView(panel.environment(model)))
-        }
         document = InspectorDocumentView(views: [
             BasicPanelView.make(model: model),
             ToneCurvePanelView.make(model: model),
             ColorMixerPanelView.make(model: model),
-            hosted(ColorGradingPanel()),
+            ColorGradingPanelView.make(model: model),
             ReferencePanelViews.detail(model: model),
             ReferencePanelViews.lens(model: model),
             ReferencePanelViews.transform(model: model),

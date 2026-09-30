@@ -148,7 +148,7 @@ struct BandSwatches: View {
     }
 }
 
-struct ColorGradingPanel: View {
+@_spi(Harness) public struct ColorGradingPanel: View {
     enum View3: String, CaseIterable {
         case threeWay = "3-Way"
         case shadows = "Shadows"
@@ -177,21 +177,16 @@ struct ColorGradingPanel: View {
         }
     }
 
-    @State private var view: View3 = .threeWay
+    @State private var state = ColorGradingState()
 
-    var body: some View {
+    public init() {}
+
+    public var body: some View {
         PanelSection(panel: .colorGrading) {
-            Picker("Grading", selection: $view) {
-                ForEach(View3.allCases, id: \.self) { option in
-                    Image(systemName: option.symbol).help(option.rawValue).tag(option)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.small)
-            .padding(.bottom, 8)
+            GradingViewPicker(state: state)
+                .padding(.bottom, 8)
 
-            if let range = view.range {
+            if let range = state.view.range {
                 HStack {
                     Spacer()
                     ColorWheel(range: range, diameter: 170)
@@ -226,6 +221,36 @@ struct ColorGradingPanel: View {
             CompactLuminanceSlider(parameter: range.luminanceParameter)
                 .frame(width: diameter)
         }
+    }
+}
+
+/// Which grading view shows (3-way or one range), shared by the SwiftUI panel and its
+/// AppKit port.
+@MainActor @Observable
+final class ColorGradingState {
+    var view = ColorGradingPanel.View3.threeWay {
+        didSet {
+            if view != oldValue {
+                onChange()
+            }
+        }
+    }
+
+    @ObservationIgnored var onChange: () -> Void = {}
+}
+
+struct GradingViewPicker: View {
+    @Bindable var state: ColorGradingState
+
+    var body: some View {
+        Picker("Grading", selection: $state.view) {
+            ForEach(ColorGradingPanel.View3.allCases, id: \.self) { option in
+                Image(systemName: option.symbol).help(option.rawValue).tag(option)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.small)
     }
 }
 
