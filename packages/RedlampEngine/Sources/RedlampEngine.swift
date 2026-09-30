@@ -156,7 +156,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         }
     }
 
-    private func renderFrame(_ request: RenderRequest, session: ImageSession) throws -> RenderedFrame {
+    func renderFrame(_ request: RenderRequest, session: ImageSession) throws -> RenderedFrame {
         let state = signposts.beginInterval("Render")
         defer { signposts.endInterval("Render", state) }
         let clock = ContinuousClock()
@@ -191,6 +191,12 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             )
             try encodeHistogram(texture: whole.texture, size: overviewSize, linear: true, commands: commands)
             overview = whole
+        }
+        // After the histogram, which describes the photo rather than the overlay.
+        if request.showRawClipping {
+            try encodeRawClipping(
+                request.recipe, session: session, into: target.texture, size: size, region: region, commands: commands,
+            )
         }
         let compared = try encodeComparison(
             request, session: session, size: size, overviewSize: overviewSize, commands: commands,
@@ -254,6 +260,36 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             &inputs.components, length: inputs.components.count * MemoryLayout<MaskComponentGPU>.stride, index: 4,
         )
         encoder.dispatchGrid(width: size.width, height: size.height, pipeline: kernels.develop)
+        encoder.endEncoding()
+    }
+
+    /// Paints photosites the sensor clipped over a developed frame (see RawClipping.metal).
+    private func encodeRawClipping(
+        _ recipe: EditRecipe,
+        session: ImageSession,
+        into texture: any MTLTexture,
+        size: PixelSize,
+        region: ImageRect,
+        commands: any MTLCommandBuffer,
+    ) throws {
+        guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
+        var inputs = DevelopParameters.make(
+            recipe: recipe, session: session, baseLook: baseLooks.resolve(recipe.baseLook), outputSize: size,
+            region: region, encoding: .linear, showClipping: false, maskOverlay: nil, maskOverlayColor: .red,
+        )
+        // Mosaics clip where highlight reconstruction says they did; linear raws were clamped at 1.
+        // Both just below, so values rounded to half floats still count.
+        let mosaic = session.sensor == .bayer || session.sensor == .xTrans
+        var clip = mosaic
+            ? SIMD4<Float>(SIMD3<Float>(session.balanceMultipliers) * HighlightModel.clipFraction * 0.998, 1)
+            : SIMD4<Float>(0.998, 0.998, 0.998, 0)
+        encoder.setComputePipelineState(kernels.rawClipping)
+        encoder.setTexture(session.pyramid, index: 0)
+        encoder.setTexture(texture, index: 1)
+        encoder.setTexture(session.noiseGain, index: 2)
+        encoder.setBytes(&inputs.params, length: MemoryLayout<DevelopParams>.stride, index: 0)
+        encoder.setBytes(&clip, length: MemoryLayout<SIMD4<Float>>.stride, index: 1)
+        encoder.dispatchGrid(width: size.width, height: size.height, pipeline: kernels.rawClipping)
         encoder.endEncoding()
     }
 

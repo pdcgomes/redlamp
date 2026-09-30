@@ -31,6 +31,9 @@ public struct RenderRequest: Sendable, Hashable {
     public var region: ImageRect?
     /// Paint clipped highlights red and clipped shadows blue.
     public var showClipping: Bool
+    /// Paint photosites the sensor clipped, in the colour of each clipped channel (black where
+    /// all three clipped), whatever the edit has done to them since.
+    public var showRawClipping = false
     /// Tints this mask's coverage (Lightroom's mask overlay).
     public var maskOverlay: UUID?
     public var maskOverlayColor: MaskOverlayColor = .red

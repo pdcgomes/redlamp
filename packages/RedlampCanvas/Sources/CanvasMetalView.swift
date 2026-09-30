@@ -11,6 +11,10 @@ import RedlampEngineAPI
 public final class CanvasMetalView: NSView {
     /// Neutral surround, linear. Matches Lightroom's default dark grey (#1f1f1f).
     public static let defaultSurround = 0.0137
+    /// The colour-assessment surround (ISO 12646): middle grey, L* 50.
+    public static let assessmentSurround = 0.184
+    /// The colour-assessment view's white frame, as a fraction of the photo's shorter side.
+    public static let assessmentFrame = 0.04
 
     let controller: CanvasController
     var clickAction: CanvasView.ClickAction = .zoom
@@ -23,6 +27,26 @@ public final class CanvasMetalView: NSView {
             }
         }
     }
+
+    /// A white frame around the photo, as a fraction of its shorter side (0 for none).
+    var whiteFrame = 0.0 {
+        didSet {
+            if whiteFrame != oldValue {
+                setNeedsRedraw()
+            }
+        }
+    }
+
+    private lazy var white: (any MTLTexture)? = {
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba16Float, width: 1, height: 1, mipmapped: false,
+        )
+        descriptor.usage = .shaderRead
+        guard let texture = device?.makeTexture(descriptor: descriptor) else { return nil }
+        var one = [Float16](repeating: 1, count: 4)
+        texture.replace(region: MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0, withBytes: &one, bytesPerRow: 8)
+        return texture
+    }()
 
     private let metalLayer: CAMetalLayer
     private let device: (any MTLDevice)?
@@ -118,7 +142,16 @@ public final class CanvasMetalView: NSView {
     /// The current textures, geometry and surround, for a drawable `scale` pixels per point.
     private func scene(scale: Double) -> CanvasRenderer.Scene {
         let nearest = controller.pixelScale >= 2
-        let layers = layers().map { layer in
+        var placed = layers()
+        if whiteFrame > 0, !placed.isEmpty, let white {
+            let image = controller.imageRect(in: bounds.size)
+            let border = max(6, whiteFrame * min(image.width, image.height))
+            placed.insert(
+                PlacedLayer(texture: white, rect: image.insetBy(dx: -border, dy: -border), isOverview: true),
+                at: 0,
+            )
+        }
+        let layers = placed.map { layer in
             CanvasRenderer.Layer(
                 texture: layer.texture,
                 rect: SIMD4<Float>(

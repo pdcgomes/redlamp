@@ -18,7 +18,10 @@ struct CanvasArea: View {
                     feed: model.frames,
                     controller: model.canvas,
                     clickAction: model.activeTool == .masking ? .none : (model.eyedropperActive ? .sample : .zoom),
-                    surround: [CanvasMetalView.defaultSurround, 0.003, 0][min(model.lightsOut, 2)],
+                    surround: model.colorAssessment
+                        ? CanvasMetalView.assessmentSurround
+                        : [CanvasMetalView.defaultSurround, 0.003, 0][min(model.lightsOut, 2)],
+                    whiteFrame: model.colorAssessment ? CanvasMetalView.assessmentFrame : 0,
                     onSample: { model.sampleWhiteBalance(at: $0) },
                 )
             }
@@ -240,6 +243,8 @@ private struct CanvasControls: View {
                         .help("Before / After Layout (Y)")
                     }
                     iconToggle("exclamationmark.triangle", isOn: $model.showClipping, help: "Show Clipping (J)")
+                    iconToggle("camera.aperture", isOn: $model.showRawClipping, help: "Show Sensor Clipping (⌥J)")
+                    iconToggle("square.dashed", isOn: $model.colorAssessment, help: "Color Assessment View (⇧L)")
                 }
                 .padding(.horizontal, 6)
                 .padding(.vertical, 5)

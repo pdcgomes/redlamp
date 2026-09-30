@@ -95,7 +95,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     // View
     case beforeAfter, nextCompareLayout, previousCompareLayout
     case toggleZoom, zoomIn, zoomOut
-    case clipping, infoOverlay, lightsOut, fullScreenPreview, toggleToolbar
+    case clipping, rawClipping, colorAssessment, infoOverlay, lightsOut, fullScreenPreview, toggleToolbar
 
     // Panels
     case toggleSidePanels, toggleAllPanels, toggleFilmstrip, toggleLeftPanel, toggleRightPanel
@@ -134,7 +134,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     public var category: ShortcutCategory {
         switch self {
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout,
-             .toggleZoom, .zoomIn, .zoomOut, .clipping, .infoOverlay, .lightsOut,
+             .toggleZoom, .zoomIn, .zoomOut, .clipping, .rawClipping, .colorAssessment, .infoOverlay, .lightsOut,
              .fullScreenPreview, .toggleToolbar:
             .view
         case .toggleSidePanels, .toggleAllPanels, .toggleFilmstrip, .toggleLeftPanel, .toggleRightPanel,
@@ -169,6 +169,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .zoomIn: "Zoom In"
         case .zoomOut: "Zoom Out"
         case .clipping: "Show Clipping"
+        case .rawClipping: "Show Sensor Clipping"
+        case .colorAssessment: "Color Assessment View"
         case .infoOverlay: "Cycle Info Overlay"
         case .lightsOut: "Cycle Lights Out"
         case .fullScreenPreview: "Full Screen Preview"
@@ -254,6 +256,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .zoomIn: [.char("=", command: true)]
         case .zoomOut: [.char("-", command: true)]
         case .clipping: [.char("j")]
+        case .rawClipping: [.char("j", option: true)]
+        case .colorAssessment: [.char("l", shift: true)]
         case .infoOverlay: [.char("i")]
         case .lightsOut: [.char("l")]
         case .fullScreenPreview: [.char("f")]

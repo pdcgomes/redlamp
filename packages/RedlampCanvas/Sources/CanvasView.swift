@@ -62,6 +62,8 @@ public struct CanvasView: NSViewRepresentable {
     let interactive: Bool
     /// Linear grey level around the photo (Lightroom's Lights Out dims it to black).
     let surround: Double
+    /// A white frame around the photo, as a fraction of its shorter side (0 for none).
+    let whiteFrame: Double
     let onSample: (CGPoint) -> Void
 
     public init(
@@ -70,9 +72,11 @@ public struct CanvasView: NSViewRepresentable {
         clickAction: ClickAction = .zoom,
         interactive: Bool = true,
         surround: Double = CanvasMetalView.defaultSurround,
+        whiteFrame: Double = 0,
         onSample: @escaping (CGPoint) -> Void = { _ in },
     ) {
         self.surround = surround
+        self.whiteFrame = whiteFrame
         self.feed = feed
         self.controller = controller
         revision = controller.revision
@@ -93,6 +97,7 @@ public struct CanvasView: NSViewRepresentable {
         view.clickAction = clickAction
         view.interactive = interactive
         view.surround = surround
+        view.whiteFrame = whiteFrame
         view.onSample = onSample
         view.setNeedsRedraw()
     }

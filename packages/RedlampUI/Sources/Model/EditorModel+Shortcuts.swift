@@ -26,6 +26,8 @@ public extension EditorModel {
         case .zoomIn: canvas.zoomIn()
         case .zoomOut: canvas.zoomOut()
         case .clipping: showClipping.toggle()
+        case .rawClipping: showRawClipping.toggle()
+        case .colorAssessment: colorAssessment.toggle()
         case .infoOverlay: infoOverlay = (infoOverlay + 1) % 3
         case .lightsOut: lightsOut = (lightsOut + 1) % 3
         case .fullScreenPreview: togglePresentation()

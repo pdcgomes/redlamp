@@ -180,6 +180,14 @@ public final class EditorModel {
         didSet { requestRender() }
     }
 
+    /// Marks photosites the sensor clipped, by channel (darktable's raw overexposed indicator).
+    public var showRawClipping = false {
+        didSet { requestRender() }
+    }
+
+    /// A middle-grey surround and white frame for judging colour (ISO 12646).
+    public var colorAssessment = false
+
     public var eyedropperActive = false
     public var activeTool: EditTool = .edit {
         didSet {
@@ -450,6 +458,7 @@ public final class EditorModel {
             generation: generation,
         )
         request.maskOverlayColor = maskOverlayColor
+        request.showRawClipping = showRawClipping
         request.comparison = isComparing ? beforeRecipe : nil
         engine.render(request)
     }
@@ -860,6 +869,10 @@ public final class EditorModel {
                 splitPosition = Double(value) ?? 0.5
             case "clipping":
                 showClipping = value == "1"
+            case "rawClipping":
+                showRawClipping = value == "1"
+            case "assessment":
+                colorAssessment = value == "1"
             case "recipe", "preset":
                 if let recipe = recipes.recipe(id: value) ?? recipes.recipe(id: "redlamp/\(value)") {
                     applyRecipe(recipe)
