@@ -24,6 +24,42 @@ struct CanvasControllerTests {
         #expect(abs(after.y - before.y) < 1e-9)
     }
 
+    @Test func `renders the whole photo at Fit`() {
+        let controller = makeController()
+        #expect(controller.renderTarget.region == nil)
+        #expect(controller.renderTarget.size == controller.renderSize)
+    }
+
+    @Test func `renders only around the visible part when zoomed in`() throws {
+        let controller = makeController()
+        controller.zoom = .oneToOne
+        let target = controller.renderTarget
+        let region = try #require(target.region)
+        let visible = controller.visibleImageRect
+        #expect(region.x <= visible.minX && region.y <= visible.minY)
+        #expect(region.x + region.width >= visible.maxX && region.y + region.height >= visible.maxY)
+        #expect(target.size.width * target.size.height < 6000 * 4000 * 6 / 10)
+        // On the output pixel grid, so successive regions line up exactly.
+        #expect(abs(region.x * 6000 - (region.x * 6000).rounded()) < 1e-6)
+        #expect(abs(region.width * 6000 - Double(target.size.width)) < 1e-6)
+    }
+
+    @Test func `panning inside the rendered margin keeps the target`() throws {
+        let controller = makeController()
+        controller.zoom = .oneToOne
+        let before = controller.renderTarget
+        controller.pan(byPoints: CGSize(width: 40, height: 30))
+        #expect(controller.renderTarget == before)
+
+        controller.pan(byPoints: CGSize(width: -900, height: 0))
+        let after = controller.renderTarget
+        let region = try #require(after.region)
+        #expect(after != before)
+        #expect(after.size == before.size)
+        #expect(region.x + region.width >= controller.visibleImageRect.maxX)
+        #expect(region.x <= controller.visibleImageRect.minX)
+    }
+
     @Test func `zoom is limited to Fit and 11:1`() {
         let controller = makeController()
         controller.zoom(toScale: 50, anchoredAt: CGPoint(x: 500, y: 400))

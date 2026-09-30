@@ -29,6 +29,10 @@ public final class CanvasMetalView: NSView {
     private let device: (any MTLDevice)?
     private let renderer: CanvasRenderer?
     private var texture: (any MTLTexture)?
+    /// The part of the photo `texture` shows.
+    private var region = ImageRect.full
+    /// With a region frame, the whole photo at low resolution, drawn underneath.
+    private var overview: (any MTLTexture)?
     /// Textures for the engine's few recycled surfaces, made once each.
     private var textures: [IOSurfaceID: any MTLTexture] = [:]
     private var dragOrigin: CGPoint?
@@ -75,48 +79,76 @@ public final class CanvasMetalView: NSView {
 
     func display(_ frame: RenderedFrame?) {
         defer { setNeedsRedraw() }
-        guard let frame, let device else {
+        guard let frame else {
             texture = nil
+            overview = nil
             return
         }
-        let id = IOSurfaceGetID(frame.surface)
-        if let cached = textures[id], cached.width == frame.size.width, cached.height == frame.size.height {
-            texture = cached
-            return
+        texture = makeTexture(frame.surface, size: frame.size)
+        region = frame.region
+        overview = frame.overview.flatMap { makeTexture($0, size: frame.overviewSize) }
+    }
+
+    private func makeTexture(_ surface: IOSurfaceRef, size: PixelSize) -> (any MTLTexture)? {
+        guard let device else { return nil }
+        let id = IOSurfaceGetID(surface)
+        if let cached = textures[id], cached.width == size.width, cached.height == size.height {
+            return cached
         }
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .rgba16Float, width: frame.size.width, height: frame.size.height, mipmapped: false,
+            pixelFormat: .rgba16Float, width: size.width, height: size.height, mipmapped: false,
         )
         descriptor.usage = .shaderRead
         descriptor.storageMode = .shared
-        texture = device.makeTexture(descriptor: descriptor, iosurface: frame.surface, plane: 0)
-        if textures.count >= 6 {
+        let texture = device.makeTexture(descriptor: descriptor, iosurface: surface, plane: 0)
+        if textures.count >= 8 {
             textures.removeAll()
         }
         textures[id] = texture
+        return texture
     }
 
-    /// Publishes the current texture, geometry and surround to the render thread.
+    private struct PlacedLayer {
+        let texture: any MTLTexture
+        let rect: CGRect
+        let isOverview: Bool
+    }
+
+    /// Where the current frame's layers go, in view points: the overview (if any) under the
+    /// rendered region.
+    private func layers() -> [PlacedLayer] {
+        guard let texture, bounds.width > 0, bounds.height > 0 else { return [] }
+        let image = controller.imageRect(in: bounds.size)
+        let part = CGRect(
+            x: image.minX + region.x * image.width,
+            y: image.minY + region.y * image.height,
+            width: region.width * image.width,
+            height: region.height * image.height,
+        )
+        return (overview.map { [PlacedLayer(texture: $0, rect: image, isOverview: true)] } ?? [])
+            + [PlacedLayer(texture: texture, rect: part, isOverview: false)]
+    }
+
+    /// Publishes the current textures, geometry and surround to the render thread.
     func setNeedsRedraw() {
         guard let renderer else { return }
-        var scene = CanvasRenderer.Scene(
-            texture: nil,
-            clearColor: MTLClearColor(red: surround, green: surround, blue: surround, alpha: 1),
-            rect: .zero,
-            nearest: false,
-        )
-        if let texture, bounds.width > 0, bounds.height > 0 {
-            let rect = controller.imageRect(in: bounds.size)
-            scene.texture = texture
-            scene.rect = SIMD4<Float>(
-                Float(rect.minX / bounds.width * 2 - 1),
-                Float(1 - rect.minY / bounds.height * 2),
-                Float(rect.maxX / bounds.width * 2 - 1),
-                Float(1 - rect.maxY / bounds.height * 2),
+        let nearest = controller.pixelScale >= 2
+        let layers = layers().map { layer in
+            CanvasRenderer.Layer(
+                texture: layer.texture,
+                rect: SIMD4<Float>(
+                    Float(layer.rect.minX / bounds.width * 2 - 1),
+                    Float(1 - layer.rect.minY / bounds.height * 2),
+                    Float(layer.rect.maxX / bounds.width * 2 - 1),
+                    Float(1 - layer.rect.maxY / bounds.height * 2),
+                ),
+                nearest: nearest && !layer.isOverview,
             )
-            scene.nearest = controller.pixelScale >= 2
         }
-        renderer.publish(scene)
+        renderer.publish(CanvasRenderer.Scene(
+            layers: layers,
+            clearColor: MTLClearColor(red: surround, green: surround, blue: surround, alpha: 1),
+        ))
     }
 
     /// The view's current contents (surround + image) as an sRGB image, for snapshots.
@@ -129,8 +161,9 @@ public final class CanvasMetalView: NSView {
         else { return nil }
         let surround = CIColor(red: surround, green: surround, blue: surround, alpha: 1, colorSpace: linearP3) ?? .black
         var composite = CIImage(color: surround).cropped(to: pixelBounds)
-        if let texture, let image = CIImage(mtlTexture: texture, options: [.colorSpace: linearP3]) {
-            let rect = controller.imageRect(in: bounds.size)
+        for layer in layers() {
+            guard let image = CIImage(mtlTexture: layer.texture, options: [.colorSpace: linearP3]) else { continue }
+            let rect = layer.rect
             let target = CGRect(
                 x: rect.minX * scale,
                 y: (bounds.height - rect.maxY) * scale,
@@ -236,12 +269,17 @@ public final class CanvasMetalView: NSView {
 /// Presents canvas scenes on its own thread. The display link runs only while there is
 /// something new to show, and pauses itself once the latest scene is on screen.
 final class CanvasRenderer: NSObject, CAMetalDisplayLinkDelegate, @unchecked Sendable {
-    struct Scene: @unchecked Sendable {
-        var texture: (any MTLTexture)?
-        var clearColor: MTLClearColor
-        /// The image quad in NDC: left, top, right, bottom.
+    struct Layer: @unchecked Sendable {
+        var texture: any MTLTexture
+        /// The quad in NDC: left, top, right, bottom.
         var rect: SIMD4<Float>
         var nearest: Bool
+    }
+
+    struct Scene: @unchecked Sendable {
+        /// Drawn in order, later layers on top.
+        var layers: [Layer]
+        var clearColor: MTLClearColor
     }
 
     private struct Shared {
@@ -331,12 +369,12 @@ final class CanvasRenderer: NSObject, CAMetalDisplayLinkDelegate, @unchecked Sen
         guard let commands = queue.makeCommandBuffer(),
               let encoder = commands.makeRenderCommandEncoder(descriptor: pass)
         else { return }
-        if let texture = scene.texture {
-            var rect = scene.rect
-            var nearest: UInt32 = scene.nearest ? 1 : 0
-            encoder.setRenderPipelineState(pipeline)
+        encoder.setRenderPipelineState(pipeline)
+        for layer in scene.layers {
+            var rect = layer.rect
+            var nearest: UInt32 = layer.nearest ? 1 : 0
             encoder.setVertexBytes(&rect, length: MemoryLayout<SIMD4<Float>>.stride, index: 0)
-            encoder.setFragmentTexture(texture, index: 0)
+            encoder.setFragmentTexture(layer.texture, index: 0)
             encoder.setFragmentBytes(&nearest, length: MemoryLayout<UInt32>.stride, index: 0)
             encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
         }

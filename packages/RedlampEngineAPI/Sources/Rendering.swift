@@ -153,6 +153,10 @@ public struct RenderedFrame: @unchecked Sendable {
     public let size: PixelSize
     /// The part of the photo the surface shows.
     public let region: ImageRect
+    /// With a region, a small render of the whole photo (same format), for showing behind the
+    /// region while the view pans.
+    public let overview: IOSurfaceRef?
+    public let overviewSize: PixelSize
     public let histogram: Histogram
     public let generation: UInt64
     public let renderDuration: Duration
@@ -161,6 +165,8 @@ public struct RenderedFrame: @unchecked Sendable {
         surface: IOSurfaceRef,
         size: PixelSize,
         region: ImageRect = .full,
+        overview: IOSurfaceRef? = nil,
+        overviewSize: PixelSize = .zero,
         histogram: Histogram,
         generation: UInt64,
         renderDuration: Duration,
@@ -168,6 +174,8 @@ public struct RenderedFrame: @unchecked Sendable {
         self.surface = surface
         self.size = size
         self.region = region
+        self.overview = overview
+        self.overviewSize = overviewSize
         self.histogram = histogram
         self.generation = generation
         self.renderDuration = renderDuration

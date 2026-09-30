@@ -263,6 +263,9 @@
             }
 
             let frames = model.debugFrameCount - framesBefore
+            let renders = model.debugRenderDurations.suffix(frames)
+                .map { Double($0.components.attoseconds) / 1e15 + Double($0.components.seconds) * 1000 }
+                .sorted()
             let report = [
                 monitor.report("main thread during \(label)", seconds: seconds),
                 String(
@@ -271,6 +274,11 @@
                     Double(events) / seconds,
                     frames,
                     Double(frames) / seconds,
+                ),
+                String(
+                    format: "engine render: p50 %.1f ms, p95 %.1f ms",
+                    renders.isEmpty ? 0 : renders[renders.count / 2],
+                    renders.isEmpty ? 0 : renders[min(renders.count - 1, renders.count * 95 / 100)],
                 ),
             ].joined(separator: "\n")
             print(report)

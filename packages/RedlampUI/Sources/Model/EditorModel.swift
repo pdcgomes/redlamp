@@ -381,14 +381,16 @@ public final class EditorModel {
 
     public func requestRender() {
         guard info != nil else { return }
-        let size = pendingCanvas.map { canvas.fitRenderSize(for: $0.imageSize) } ?? canvas.renderSize
-        guard size.width > 0 else { return }
+        let target = pendingCanvas.map { CanvasController.RenderTarget(size: canvas.fitRenderSize(for: $0.imageSize)) }
+            ?? canvas.renderTarget
+        guard target.size.width > 0 else { return }
         generation &+= 1
         let displayed = showBefore ? beforeRecipe : (previewingPreset.map { $0.apply(to: recipe) } ?? recipe)
         let overlay = activeTool == .masking && showMaskOverlay && !showBefore ? selectedMaskID : nil
         var request = RenderRequest(
             recipe: displayed,
-            targetSize: size,
+            targetSize: target.size,
+            region: target.region,
             showClipping: showClipping || temporaryClipping,
             maskOverlay: overlay,
             generation: generation,
@@ -397,8 +399,10 @@ public final class EditorModel {
         engine.render(request)
     }
 
-    /// Frames received from the engine (for performance diagnostics).
+    /// Frames received from the engine, and the latest ones' render times (for performance
+    /// diagnostics).
     @ObservationIgnored public private(set) var debugFrameCount = 0
+    @ObservationIgnored public private(set) var debugRenderDurations: [Duration] = []
 
     private func receive(_ frame: RenderedFrame) {
         guard info != nil else { return }
@@ -408,6 +412,10 @@ public final class EditorModel {
             showOnCanvas(pending.imageSize)
         }
         debugFrameCount += 1
+        debugRenderDurations.append(frame.renderDuration)
+        if debugRenderDurations.count > 4000 {
+            debugRenderDurations.removeFirst(2000)
+        }
         showFrame(frame)
         latestFrame = frame
         guard statsTask == nil else { return }

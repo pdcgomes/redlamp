@@ -32,8 +32,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     // Owned by `renderQueue`.
     private let surfaces: SurfacePool
     private let histogramBuffer: any MTLBuffer
-    /// A small whole-photo render, for the histogram when only a region is rendered.
-    private var histogramScratch: (any MTLTexture)?
+    /// Small whole-photo renders sent with region frames; they also feed the histogram.
+    private let overviews: SurfacePool
 
     public init() throws {
         guard let device = MTLCreateSystemDefaultDevice(),
@@ -52,6 +52,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         self.histogramBuffer = histogramBuffer
         kernels = try KernelLibrary(device: device)
         surfaces = SurfacePool(device: device)
+        overviews = SurfacePool(device: device)
 
         let builder = SessionBuilder(device: device, queue: buildQueue, kernels: kernels)
         let signposter = signposts
@@ -153,16 +154,21 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             maskOverlayColor: request.maskOverlayColor,
             commands: commands,
         )
+        var overview: SurfacePool.Target?
+        var overviewSize = PixelSize.zero
         if request.region == nil {
             try encodeHistogram(texture: target.texture, size: size, linear: true, commands: commands)
         } else {
-            let overview = try histogramTexture(for: session)
-            let overviewSize = PixelSize(width: overview.width, height: overview.height)
+            overviewSize = session.orientedSize.fitted(within: PixelSize(width: 1024, height: 1024))
+            let whole = try overviews.next(size: overviewSize)
             try encodeDevelop(
-                request.recipe, session: session, into: overview, size: overviewSize,
-                encoding: .linear, showClipping: false, commands: commands,
+                request.recipe, session: session, into: whole.texture, size: overviewSize,
+                encoding: .linear, showClipping: request.showClipping, maskOverlay: request.maskOverlay,
+                maskOverlayColor: request.maskOverlayColor,
+                commands: commands,
             )
-            try encodeHistogram(texture: overview, size: overviewSize, linear: true, commands: commands)
+            try encodeHistogram(texture: whole.texture, size: overviewSize, linear: true, commands: commands)
+            overview = whole
         }
         commands.commit()
         commands.waitUntilCompleted()
@@ -174,26 +180,12 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             surface: target.surface,
             size: size,
             region: region,
+            overview: overview?.surface,
+            overviewSize: overviewSize,
             histogram: readHistogram(),
             generation: request.generation,
             renderDuration: clock.now - started,
         )
-    }
-
-    /// Whole-photo histogram source, about 0.4 MP like the histogram's own sampling.
-    private func histogramTexture(for session: ImageSession) throws -> any MTLTexture {
-        let size = session.orientedSize.fitted(within: PixelSize(width: 768, height: 768))
-        if let texture = histogramScratch, texture.width == size.width, texture.height == size.height {
-            return texture
-        }
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .rgba16Float, width: size.width, height: size.height, mipmapped: false,
-        )
-        descriptor.usage = [.shaderWrite, .shaderRead]
-        descriptor.storageMode = .private
-        guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
-        histogramScratch = texture
-        return texture
     }
 
     private func encodeDevelop(

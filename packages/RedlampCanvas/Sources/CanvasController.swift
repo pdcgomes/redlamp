@@ -78,9 +78,23 @@ public final class CanvasController {
     /// Bumped on every change so views can observe one value.
     public private(set) var revision = 0
 
-    /// Called when the resolution the engine should render at changes.
+    /// What the engine should render for the current view.
+    public struct RenderTarget: Hashable, Sendable {
+        public var size: PixelSize
+        /// `nil` renders the whole photo; otherwise only this part, at `size`.
+        public var region: ImageRect?
+
+        public init(size: PixelSize, region: ImageRect? = nil) {
+            self.size = size
+            self.region = region
+        }
+    }
+
+    /// Called when the engine needs to render a different size or part of the photo.
     @ObservationIgnored public var onRenderSizeChange: ((PixelSize) -> Void)?
-    @ObservationIgnored private var lastRenderSize = PixelSize.zero
+    /// Updated only when the view needs pixels the last target didn't cover, so panning inside
+    /// the rendered margin doesn't re-render.
+    @ObservationIgnored public private(set) var renderTarget = RenderTarget(size: .zero, region: nil)
 
     public init() {}
 
@@ -300,10 +314,49 @@ public final class CanvasController {
 
     private func changed() {
         revision &+= 1
-        let size = renderSize
-        if size != lastRenderSize, size.width > 0 {
-            lastRenderSize = size
-            onRenderSizeChange?(size)
+        let next = plannedRenderTarget()
+        guard next.size.width > 0, next != renderTarget else { return }
+        if next.region != nil, next.size == renderTarget.size, let current = renderTarget.region,
+           Self.contains(current, visibleImageRect) {
+            return
         }
+        renderTarget = next
+        onRenderSizeChange?(next.size)
+    }
+}
+
+extension CanvasController {
+    /// When zoomed in, only the visible part plus a margin of half the visible size each way,
+    /// at the density the zoom needs. The region keeps its size while panning (it shifts
+    /// rather than shrinks at the edges), and its origin sits on the output pixel grid, so
+    /// successive regions line up exactly.
+    func plannedRenderTarget() -> RenderTarget {
+        let whole = RenderTarget(size: renderSize, region: nil)
+        guard isZoomedIn, imageSize.width > 0 else { return whole }
+        let visible = visibleImageRect
+        let width = min(visible.width * 2, 1)
+        let height = min(visible.height * 2, 1)
+        guard width * height < 0.6 else { return whole }
+        let density = min(pixelScale, 1)
+        let columns = Double(imageSize.width) * density
+        let rows = Double(imageSize.height) * density
+        let size = PixelSize(width: Int((width * columns).rounded(.up)), height: Int((height * rows).rounded(.up)))
+        func origin(_ center: Double, extent: Double, pixels: Double) -> Double {
+            let start = min(max(center - extent / 2, 0), 1 - extent)
+            return (start * pixels).rounded(.down) / pixels
+        }
+        let region = ImageRect(
+            x: origin(visible.midX, extent: width, pixels: columns),
+            y: origin(visible.midY, extent: height, pixels: rows),
+            width: Double(size.width) / columns,
+            height: Double(size.height) / rows,
+        )
+        return RenderTarget(size: size, region: region)
+    }
+
+    static func contains(_ region: ImageRect, _ visible: CGRect) -> Bool {
+        let slack = 1e-6
+        return visible.minX >= region.x - slack && visible.minY >= region.y - slack
+            && visible.maxX <= region.x + region.width + slack && visible.maxY <= region.y + region.height + slack
     }
 }
