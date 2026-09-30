@@ -36,6 +36,10 @@ public struct DecodedImage: Sendable {
         case linearRGB
         /// Four float16 samples per pixel (RGBA), linear sRGB. Bitmap files.
         case linearSRGBHalf
+        /// Four float16 samples per pixel (RGBA): camera RGB already demosaiced and multiplied by
+        /// the as-shot white balance over its smallest channel, as a session holds it. Focus
+        /// stacks; the pattern is the sensor's the frames were demosaiced from (`nil`: linear).
+        case balancedCameraHalf(CFAPattern?)
     }
 
     public let width: Int

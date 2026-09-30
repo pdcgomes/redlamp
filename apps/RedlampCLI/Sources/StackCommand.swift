@@ -6,6 +6,7 @@ import RedlampEngineAPI
 enum StackCommand {
     static let usage = """
     usage: redlamp stack <frame> <frame> … -o <output.{jpg,png,tif,heic}> [options]
+           redlamp stack <frame> <frame> … --save <stack.redlampstack> [-o <output>] [options]
 
     Frames are given in focus order (near to far or far to near); a directory means every
     image in it, sorted by name.
@@ -16,15 +17,19 @@ enum StackCommand {
       --depth <file>      also write the depth map (black = first frame, white = last)
       --every <n>         use every nth frame
       --json              print the report as JSON
+      --save <file>       write a stack document (frames relative to its folder) and merge it
+                          into the cache; open or render the document like any photo
     """
 
     static func run(_ arguments: [String]) async throws {
-        let parsed = try Arguments(arguments, valued: ["--output", "--strategy", "--size", "--depth", "--every"])
+        let parsed = try Arguments(
+            arguments,
+            valued: ["--output", "--strategy", "--size", "--depth", "--every", "--save"],
+        )
         guard !parsed.has("--help") else {
             print(usage)
             return
         }
-        guard let output = parsed.value("--output") else { throw CLIError(description: usage) }
         let strategyName = parsed.value("--strategy") ?? FocusStackStrategy.auto.rawValue
         guard let strategy = FocusStackStrategy(rawValue: strategyName) else {
             throw CLIError(description: "unknown strategy \(strategyName)")
@@ -34,6 +39,11 @@ enum StackCommand {
         guard frames.count >= 2
         else { throw CLIError(description: "a focus stack needs at least two frames\n\n\(usage)") }
 
+        if let save = parsed.value("--save") {
+            try await saveDocument(frames, strategy: strategy, to: URL(fileURLWithPath: save), parsed: parsed)
+            return
+        }
+        guard let output = parsed.value("--output") else { throw CLIError(description: usage) }
         let engine = try RedlampEngine()
         let clock = ContinuousClock()
         let start = clock.now
@@ -66,6 +76,23 @@ enum StackCommand {
         confident depth \(String(format: "%.0f%%", report.confidentDepthFraction * 100))
         \(phases.joined(separator: ", ")); total \(clock.now - start)
         """)
+    }
+
+    /// Writes the document, opens it (merging into the cache unless already there) and renders
+    /// it when an output is given.
+    private static func saveDocument(
+        _ frames: [URL], strategy: FocusStackStrategy, to url: URL, parsed: Arguments,
+    ) async throws {
+        try FocusStackDocument(frames: frames, strategy: strategy, at: url).write(to: url)
+        let engine = try RedlampEngine()
+        let clock = ContinuousClock()
+        let start = clock.now
+        let info = try await engine.open(url)
+        print("\(url.lastPathComponent): \(info.pixelSize.width)x\(info.pixelSize.height) \(info.sensorDescription), "
+            + "open \(clock.now - start)")
+        guard let output = parsed.value("--output") else { return }
+        let request = try StillRequest(recipe: EditRecipe(), maxLongEdge: parsed.int("--size"), purpose: .export)
+        try await ImageFile.write(engine.renderStill(request), to: URL(fileURLWithPath: output))
     }
 
     /// A file, or every supported image in a directory sorted by name.

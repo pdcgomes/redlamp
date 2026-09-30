@@ -122,13 +122,14 @@ struct SessionBuilder {
         }
         commands.label = "Demosaic frame"
         let balance = Self.balance(decoded)
-        _ = try encodeBase(decoded, balance: balance, noise: decoded.noise, into: texture, commands: commands)
+        let noise = decoded.noise
+        _ = try encodeBase(decoded, balance: balance, noise: noise, into: texture, commands: commands)
         commands.commit()
         commands.waitUntilCompleted()
         if let error = commands.error {
             throw EngineError.renderFailed(error.localizedDescription)
         }
-        return DemosaicedFrame(texture: texture, balance: balance, decoded: decoded)
+        return DemosaicedFrame(texture: texture, balance: balance, decoded: decoded, noise: noise)
     }
 
     /// As-shot white balance with the smallest channel at 1: what normalisation multiplies by, so
@@ -163,8 +164,8 @@ struct SessionBuilder {
             )
         case .linearRGB:
             try encodeLinearRGB(decoded, multipliers: multipliers, into: texture, commands: commands)
-        case .linearSRGBHalf:
-            try encodeBitmap(decoded, into: texture, commands: commands)
+        case .linearSRGBHalf, .balancedCameraHalf:
+            try encodeHalves(decoded, into: texture, commands: commands)
         }
         return repairedCount
     }
@@ -342,7 +343,8 @@ struct SessionBuilder {
         encoder.endEncoding()
     }
 
-    private func encodeBitmap(
+    /// Float16 RGBA samples copied straight into level 0.
+    private func encodeHalves(
         _ decoded: DecodedImage,
         into pyramid: any MTLTexture,
         commands: any MTLCommandBuffer,

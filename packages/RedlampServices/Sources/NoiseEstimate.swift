@@ -36,7 +36,7 @@ public enum NoiseEstimator {
         switch image.layout {
         case let .mosaic(pattern): layout = mosaicLayout(pattern, blackLevels: image.blackLevels)
         case .linearRGB: layout = rgbLayout(blackLevels: image.blackLevels)
-        case .linearSRGBHalf: return nil
+        case .linearSRGBHalf, .balancedCameraHalf: return nil
         }
         var lines: [(a: Float, b: Float)?] = [nil, nil, nil]
         if let levels = patchLevels(image) {

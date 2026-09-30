@@ -257,6 +257,7 @@ enum RawDecoder {
         case let .mosaic(pattern): pattern.description
         case .linearRGB: "Linear DNG"
         case .linearSRGBHalf: "Bitmap"
+        case .balancedCameraHalf: "Focus stack"
         }
     }
 }

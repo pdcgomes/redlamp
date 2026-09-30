@@ -88,6 +88,7 @@ struct DecodeSummary: Codable, Equatable {
         case let .mosaic(pattern): pattern.description
         case .linearRGB: "linear RGB"
         case .linearSRGBHalf: "linear sRGB half"
+        case .balancedCameraHalf: "balanced camera half"
         }
         blackLevels = image.blackLevels.map { rounded(Double($0)) }
         whiteLevel = rounded(Double(image.whiteLevel))

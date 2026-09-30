@@ -84,8 +84,9 @@ enum SensorKind: Sendable {
 
     init(_ layout: DecodedImage.Layout) {
         switch layout {
-        case let .mosaic(pattern): self = pattern.width == 2 && pattern.height == 2 ? .bayer : .xTrans
-        case .linearRGB: self = .linear
+        case let .mosaic(pattern), let .balancedCameraHalf(pattern?):
+            self = pattern.width == 2 && pattern.height == 2 ? .bayer : .xTrans
+        case .linearRGB, .balancedCameraHalf(nil): self = .linear
         case .linearSRGBHalf: self = .bitmap
         }
     }

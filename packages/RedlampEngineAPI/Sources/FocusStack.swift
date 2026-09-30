@@ -11,6 +11,50 @@ public enum FocusStackStrategy: String, Sendable, Hashable, Codable, CaseIterabl
     case detail
 }
 
+/// A focus stack as a file (`.redlampstack`, JSON) beside its frames: the recipe for the merge,
+/// which the engine opens like any photo. The merged pixels live in a cache and are rebuilt
+/// from the frames when missing.
+public struct FocusStackDocument: Codable, Sendable, Hashable {
+    public static let fileExtension = "redlampstack"
+
+    public var version = 1
+    /// Frame paths in focus order, relative to the document's folder when inside it.
+    public var frames: [String]
+    public var strategy: FocusStackStrategy
+
+    public init(frames: [String], strategy: FocusStackStrategy = .auto) {
+        self.frames = frames
+        self.strategy = strategy
+    }
+
+    /// A document at `url` for `frames`, storing each path relative to `url`'s folder.
+    public init(frames: [URL], strategy: FocusStackStrategy = .auto, at url: URL) {
+        let folder = url.deletingLastPathComponent().standardizedFileURL.path
+        let prefix = folder.hasSuffix("/") ? folder : folder + "/"
+        let paths = frames.map { frame in
+            let path = frame.standardizedFileURL.path
+            return path.hasPrefix(prefix) ? String(path.dropFirst(prefix.count)) : path
+        }
+        self.init(frames: paths, strategy: strategy)
+    }
+
+    /// The frames of the document at `url`.
+    public func frameURLs(at url: URL) -> [URL] {
+        let folder = url.deletingLastPathComponent()
+        return frames.map { $0.hasPrefix("/") ? URL(fileURLWithPath: $0) : folder.appendingPathComponent($0) }
+    }
+
+    public static func read(_ url: URL) throws -> FocusStackDocument {
+        try JSONDecoder().decode(FocusStackDocument.self, from: Data(contentsOf: url))
+    }
+
+    public func write(to url: URL) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(self).write(to: url, options: .atomic)
+    }
+}
+
 /// What a merge found and how long it took.
 public struct FocusStackReport: Sendable, Hashable, Codable {
     public var frames: Int

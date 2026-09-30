@@ -42,6 +42,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     private var comparison: CachedComparison?
     private let detailStage: DetailStage
     private let baseLooks: BaseLookRegistry
+    let stacks: FocusStackCache
     /// Output tile edge for stills, in pixels.
     let stillTile: Int
 
@@ -49,7 +50,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         try self.init(stillTile: 2048)
     }
 
-    init(stillTile: Int) throws {
+    init(stillTile: Int, stackCache: URL = FocusStackCache.defaultRoot) throws {
         self.stillTile = stillTile
         guard let device = MTLCreateSystemDefaultDevice(),
               let queue = device.makeCommandQueue(),
@@ -73,6 +74,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         detailStage = DetailStage(device: device, kernels: kernels)
         baseLooks = try BaseLookRegistry(device: device)
 
+        let stacks = FocusStackCache(device: device, kernels: kernels, root: stackCache)
+        self.stacks = stacks
         let builder = SessionBuilder(device: device, queue: buildQueue, kernels: kernels)
         let signposter = signposts
         sessions = SessionCache(
@@ -80,7 +83,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             build: { url in
                 let state = signposter.beginInterval("Open", "\(url.lastPathComponent)")
                 defer { signposter.endInterval("Open", state) }
-                return try builder.build(ImageDecoder.decode(url))
+                return try builder.build(stacks.decode(url))
             },
         )
     }
@@ -374,8 +377,10 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     }
 
     public func thumbnail(for url: URL, maxPixelSize: Int) async -> CGImage? {
-        await Task.detached(priority: .utility) {
-            Thumbnails.thumbnail(for: url, maxPixelSize: maxPixelSize)
+        let stacks = stacks
+        return await Task.detached(priority: .utility) {
+            let source = SupportedFormats.isStack(url) ? stacks.thumbnailFrame(for: url) : url
+            return source.flatMap { Thumbnails.thumbnail(for: $0, maxPixelSize: maxPixelSize) }
         }.value
     }
 

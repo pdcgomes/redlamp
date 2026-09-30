@@ -8,6 +8,8 @@ struct DemosaicedFrame {
     let texture: any MTLTexture
     /// What normalisation multiplied camera RGB by (smallest channel 1).
     let balance: SIMD3<Double>
-    /// The decode it came from, for metadata (white balance, colour matrices, noise, orientation).
+    /// The decode it came from, for metadata (white balance, colour matrices, orientation).
     let decoded: DecodedImage
+    /// The sensor noise the demosaic used, in normalised units before white balance.
+    let noise: NoiseModel
 }
