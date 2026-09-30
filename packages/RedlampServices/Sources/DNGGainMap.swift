@@ -49,6 +49,29 @@ public struct GainMap: Sendable, Hashable {
         self.mapPlanes = mapPlanes
         self.gains = gains
     }
+
+    /// The gain for one plane of a pixel, bilinear on the grid; nil where the map doesn't apply.
+    /// Mirrors `gainAt` in Demosaic.metal.
+    public func gain(x: Int, y: Int, plane: Int, width: Int, height: Int) -> Float? {
+        guard (top ..< bottom).contains(y), (left ..< right).contains(x),
+              (y - top) % rowPitch == 0, (x - left) % columnPitch == 0,
+              (self.plane ..< self.plane + planes).contains(plane)
+        else {
+            return nil
+        }
+        let v = min(max((Double(y) / Double(height) - originV) / spacingV, 0), Double(pointsV - 1))
+        let h = min(max((Double(x) / Double(width) - originH) / spacingH, 0), Double(pointsH - 1))
+        let (v0, h0) = (Int(v), Int(h))
+        let (v1, h1) = (min(v0 + 1, pointsV - 1), min(h0 + 1, pointsH - 1))
+        let base = min(plane - self.plane, mapPlanes - 1)
+        func at(_ row: Int, _ column: Int) -> Float {
+            gains[base + (row * pointsH + column) * mapPlanes]
+        }
+        let (fv, fh) = (Float(v - Double(v0)), Float(h - Double(h0)))
+        let upper = at(v0, h0) + (at(v0, h1) - at(v0, h0)) * fh
+        let lower = at(v1, h0) + (at(v1, h1) - at(v1, h0)) * fh
+        return upper + (lower - upper) * fv
+    }
 }
 
 /// Reads the GainMap opcodes of a DNG's OpcodeList2 (tag 0xC741). Opcode lists are big-endian

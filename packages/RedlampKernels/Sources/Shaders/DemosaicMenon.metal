@@ -139,12 +139,14 @@ static inline float differenceAt(texture2d<float, access::read> partial, int x, 
 
 // Pass 4: the missing colour at red and blue sites, from the colour difference at the green
 // neighbours along the chosen direction, then the dual-demosaic blend; written to the pyramid's
-// full-resolution level. `noise` holds the white-balanced noise model (a, b) per colour.
+// full-resolution level. `noise` holds the white-balanced noise model (a, b) per colour, before
+// the gain maps; `noiseGain` their gain (see NoiseGain).
 kernel void rl_menon_rb_at_rb(
     texture2d<float, access::read> partial [[texture(0)]],
     texture2d<float, access::read> directions [[texture(1)]],
     texture2d<float, access::write> out [[texture(2)]],
     texture2d<float, access::read> cfa [[texture(3)]],
+    texture2d<float, access::sample> noiseGain [[texture(4)]],
     constant MenonParams &p [[buffer(0)]],
     constant uchar *pattern [[buffer(1)]],
     constant float4 *noise [[buffer(2)]],
@@ -170,7 +172,9 @@ kernel void rl_menon_rb_at_rb(
         float range = max(max(greens.x, greens.y), max(greens.z, greens.w))
             - min(min(greens.x, greens.y), min(greens.z, greens.w));
         // Four samples of pure noise span about 2 sigmas.
-        float sigma = sqrt(max(noise[0].y * smooth + noise[1].y, 1e-12f));
+        constexpr sampler linear(filter::linear, address::clamp_to_edge, coord::normalized);
+        float gain = noiseGain.sample(linear, (float2(gid) + 0.5f) / float2(p.width, p.height)).g;
+        float sigma = sqrt(max(gain * noise[0].y * smooth + gain * gain * noise[1].y, 1e-12f));
         float detail = smoothstep(3.0f * sigma, 6.0f * sigma, range);
         rgb += (1.0f - detail) * (smooth - rgb.g);
     }

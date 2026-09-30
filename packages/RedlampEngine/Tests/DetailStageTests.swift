@@ -301,6 +301,53 @@ struct DetailStageTests {
         }
     }
 
+    @Test func `the noise gain follows each channel's maps`() {
+        // One map per Bayer site, as phones write them: R x2, greens x1.5 and x1.7, B x3.
+        let maps = zip([(0, 0), (0, 1), (1, 0), (1, 1)], [Float(2), 1.5, 1.7, 3]).map { site, gain in
+            GainMap(
+                top: site.0, left: site.1, bottom: 64, right: 96, plane: 0, planes: 1, rowPitch: 2, columnPitch: 2,
+                pointsV: 1, pointsH: 1, spacingV: 1, spacingH: 1, originV: 0, originH: 0, mapPlanes: 1,
+                gains: [gain],
+            )
+        }
+        let field = NoiseGain.field(
+            maps,
+            width: 96,
+            height: 64,
+            pattern: CFAPattern(width: 2, height: 2, colors: [0, 1, 1, 2]),
+        )
+        #expect(field.width == 64 && field.height == 43)
+        for gain in field.gains {
+            #expect(abs(gain.x - 2) < 1e-5 && abs(gain.y - 1.6) < 1e-5 && abs(gain.z - 3) < 1e-5, "\(gain)")
+        }
+        let none = NoiseGain.field([], width: 96, height: 64, pattern: nil)
+        #expect(none.gains == [SIMD4(1, 1, 1, 1)])
+    }
+
+    /// Lens shading amplifies the sensor noise with the signal; noise reduction must remove as
+    /// much of it where the gain is high as where there is none.
+    @Test func `noise reduction keeps up with gain-mapped noise`() throws {
+        let (width, height) = (1024, 512)
+        let right = GainMap(
+            top: 0, left: width / 2, bottom: height, right: width, plane: 0, planes: 1, rowPitch: 1, columnPitch: 1,
+            pointsV: 1, pointsH: 1, spacingV: 1, spacingH: 1, originV: 0, originH: 0, mapPlanes: 1, gains: [3],
+        )
+        let session = try makeSession(.bayer, width: width, height: height, gainMaps: [right])
+        var recipe = Self.unsharpened
+        recipe[.noiseLuminance] = 40
+        let before = try readLevel(session, level: 0)
+        let after = try processed(session, recipe: recipe)
+        func remaining(_ columns: Range<Int>) -> Float {
+            let rows = 32 ..< height - 32
+            let pick = { (pixels: [SIMD3<Float>]) in rows.flatMap { y in columns.map { pixels[y * width + $0] } } }
+            return statistics(of: pick(after)).deviation.y / statistics(of: pick(before)).deviation.y
+        }
+        let plain = remaining(32 ..< width / 2 - 64)
+        let shaded = remaining(width / 2 + 64 ..< width - 32)
+        #expect(plain < 0.6)
+        #expect(abs(shaded / plain - 1) < 0.15, "noise left: \(plain) plain, \(shaded) behind a 3x gain")
+    }
+
     // MARK: - Helpers
 
     /// `signal` is the scene per photosite (`level` by default), `noiseScale` scales the

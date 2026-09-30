@@ -49,7 +49,10 @@ struct SessionBuilder {
 
         let balance = Self.balance(decoded)
         let noise = decoded.noise
-        let repairedCount = try encodeBase(decoded, balance: balance, noise: noise, into: pyramid, commands: commands)
+        let noiseGain = try noiseGainTexture(decoded)
+        let repairedCount = try encodeBase(
+            decoded, balance: balance, noise: noise, noiseGain: noiseGain, into: pyramid, commands: commands,
+        )
 
         guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
         blit.generateMipmaps(for: pyramid)
@@ -106,6 +109,7 @@ struct SessionBuilder {
             repairedPixels: Int(repairedCount.contents().load(as: UInt32.self)),
             airlight: airlight,
             hazeMap: hazeMap,
+            noiseGain: noiseGain,
         )
     }
 
@@ -123,7 +127,10 @@ struct SessionBuilder {
         commands.label = "Demosaic frame"
         let balance = Self.balance(decoded)
         let noise = decoded.noise
-        _ = try encodeBase(decoded, balance: balance, noise: noise, into: texture, commands: commands)
+        _ = try encodeBase(
+            decoded, balance: balance, noise: noise, noiseGain: noiseGainTexture(decoded), into: texture,
+            commands: commands,
+        )
         commands.commit()
         commands.waitUntilCompleted()
         if let error = commands.error {
@@ -139,12 +146,26 @@ struct SessionBuilder {
         return minimum > 0 ? decoded.asShotMultipliers / minimum : SIMD3(1, 1, 1)
     }
 
+    /// The gain maps' gain per camera channel (see `NoiseGain`); 1 everywhere without them.
+    private func noiseGainTexture(_ decoded: DecodedImage) throws -> any MTLTexture {
+        let field = switch decoded.layout {
+        case let .mosaic(pattern):
+            NoiseGain.field(decoded.gainMaps, width: decoded.width, height: decoded.height, pattern: pattern)
+        case .linearRGB:
+            NoiseGain.field(decoded.gainMaps, width: decoded.width, height: decoded.height, pattern: nil)
+        case .linearSRGBHalf, .balancedCameraHalf:
+            NoiseGain.field([], width: decoded.width, height: decoded.height, pattern: nil)
+        }
+        return try NoiseGain.texture(field, device: device)
+    }
+
     /// Level 0 of `texture`: normalised, hot pixels repaired, highlights rebuilt and demosaiced.
     /// Returns the buffer counting repaired photosites, readable once `commands` completes.
     private func encodeBase(
         _ decoded: DecodedImage,
         balance: SIMD3<Double>,
         noise: NoiseModel,
+        noiseGain: any MTLTexture,
         into texture: any MTLTexture,
         commands: any MTLCommandBuffer,
     ) throws -> any MTLBuffer {
@@ -158,7 +179,7 @@ struct SessionBuilder {
         case let .mosaic(pattern):
             try encodeMosaic(
                 decoded, pattern: pattern, multipliers: multipliers,
-                noise: noise.scaled(by: SIMD3<Float>(balance)), repairedCount: repairedCount,
+                noise: noise.scaled(by: SIMD3<Float>(balance)), noiseGain: noiseGain, repairedCount: repairedCount,
                 highlights: HighlightModel.fit(decoded, balance: SIMD3<Float>(balance)),
                 into: texture, commands: commands,
             )
@@ -175,6 +196,7 @@ struct SessionBuilder {
         pattern: CFAPattern,
         multipliers: SIMD4<Float>,
         noise: NoiseModel,
+        noiseGain: any MTLTexture,
         repairedCount: any MTLBuffer,
         highlights: HighlightModel?,
         into pyramid: any MTLTexture,
@@ -266,7 +288,7 @@ struct SessionBuilder {
         if bayer, bayerDemosaic == .menon {
             try encodeMenon(
                 mosaic: mosaic, spare: mosaic === cfa ? repaired : cfa, colors: colors, params: demosaicParams,
-                noise: noise,
+                noise: noise, noiseGain: noiseGain,
                 into: pyramid, encoder: encoder,
             )
             encoder.endEncoding()
@@ -283,13 +305,14 @@ struct SessionBuilder {
     }
 
     /// The four Menon passes. `spare` is a free full-resolution float texture, reused for green;
-    /// `noise` (white-balanced) sets where the dual demosaic smooths.
+    /// `noise` (white-balanced) and `noiseGain` set where the dual demosaic smooths.
     private func encodeMenon(
         mosaic: any MTLTexture,
         spare: any MTLTexture,
         colors: [UInt8],
         params: DemosaicParams,
         noise: NoiseModel,
+        noiseGain: any MTLTexture,
         into pyramid: any MTLTexture,
         encoder: any MTLComputeCommandEncoder,
     ) throws {
@@ -325,7 +348,7 @@ struct SessionBuilder {
         let blend = dualDemosaic ? noise : NoiseModel(a: .zero, b: .zero)
         var model = [SIMD4<Float>(blend.a, 0), SIMD4<Float>(blend.b, 0)]
         encoder.setBytes(&model, length: model.count * MemoryLayout<SIMD4<Float>>.stride, index: 2)
-        dispatch(kernels.menonRBAtRB, [working, directions, pyramid, mosaic])
+        dispatch(kernels.menonRBAtRB, [working, directions, pyramid, mosaic, noiseGain])
     }
 
     /// Gain maps as kernel buffers; a neutral placeholder when there are none.

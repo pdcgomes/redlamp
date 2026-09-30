@@ -52,9 +52,22 @@ static inline float3 shrink(float3 d, float3 t) {
     return kept;
 }
 
+constexpr sampler kNoiseGainSampler(filter::linear, address::clamp_to_edge, coord::normalized);
+
+// The lens-shading gain the pyramid carries at a work texel (see NoiseGain): dividing it out
+// returns the values to the sensor's own noise, which the model describes.
+static inline float3 noiseGainAt(texture2d<float, access::sample> gain, texture2d<float, access::read> pyramid,
+                                 uint2 gid, constant DenoiseParams &p) {
+    uint level = uint(p.origin.z);
+    int2 levelSize = int2(pyramid.get_width(level), pyramid.get_height(level));
+    int2 at = clamp(int2(gid) + p.origin.xy, int2(0), levelSize - 1);
+    return max(gain.sample(kNoiseGainSampler, (float2(at) + 0.5f) / float2(levelSize)).rgb, 1e-3f);
+}
+
 kernel void rl_denoise_prepare(
     texture2d<float, access::read> pyramid [[texture(0)]],
     texture2d<half, access::write> out [[texture(1)]],
+    texture2d<float, access::sample> noiseGain [[texture(2)]],
     constant DenoiseParams &p [[buffer(0)]],
     uint2 gid [[thread_position_in_grid]])
 {
@@ -62,7 +75,7 @@ kernel void rl_denoise_prepare(
     uint level = uint(p.origin.z);
     int2 levelSize = int2(pyramid.get_width(level), pyramid.get_height(level));
     int2 at = clamp(int2(gid) + p.origin.xy, int2(0), levelSize - 1);
-    float3 value = pyramid.read(uint2(at), level).rgb;
+    float3 value = pyramid.read(uint2(at), level).rgb / noiseGainAt(noiseGain, pyramid, gid, p);
     out.write(half4(half3(toOpponent(stabilize(value, p.a.xyz, p.b.xyz))), 1.0h), gid);
 }
 
@@ -90,6 +103,8 @@ kernel void rl_denoise_columns(
     texture2d<half, access::write> next [[texture(2)]],
     texture2d<half, access::read_write> result [[texture(3)]],
     texture2d<float, access::read> local [[texture(4)]],
+    texture2d<float, access::read> pyramid [[texture(5)]],
+    texture2d<float, access::sample> noiseGain [[texture(6)]],
     constant DenoiseParams &p [[buffer(0)]],
     uint2 gid [[thread_position_in_grid]])
 {
@@ -105,7 +120,8 @@ kernel void rl_denoise_columns(
     float3 total = shrink(detail, threshold);
     if (p.scale.y == 0) total += float3(result.read(gid).rgb);
     if (p.scale.z != 0) {
-        float3 value = unstabilize(fromOpponent(total + coarse), p.a.xyz, p.b.xyz);
+        float3 value = unstabilize(fromOpponent(total + coarse), p.a.xyz, p.b.xyz)
+            * noiseGainAt(noiseGain, pyramid, gid, p);
         next.write(half4(half3(max(value, 0.0f)), 1.0h), gid);
     } else {
         result.write(half4(half3(total), 1.0h), gid);

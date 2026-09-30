@@ -377,6 +377,7 @@ final class DetailStage {
         encoder.setComputePipelineState(kernels.denoisePrepare)
         encoder.setTexture(session.pyramid, index: 0)
         encoder.setTexture(current, index: 1)
+        encoder.setTexture(session.noiseGain, index: 2)
         encoder.setBytes(&params, length: MemoryLayout<DenoiseParams>.stride, index: 0)
         encoder.dispatchGrid(width: work.size.x, height: work.size.y, pipeline: kernels.denoisePrepare)
 
@@ -401,6 +402,8 @@ final class DetailStage {
             encoder.setTexture(last ? output : next, index: 2)
             encoder.setTexture(result, index: 3)
             encoder.setTexture(local ?? output, index: 4)
+            encoder.setTexture(session.pyramid, index: 5)
+            encoder.setTexture(session.noiseGain, index: 6)
             encoder.setBytes(&params, length: MemoryLayout<DenoiseParams>.stride, index: 0)
             encoder.dispatchGrid(width: work.size.x, height: work.size.y, pipeline: kernels.denoiseColumns)
             swap(&current, &next)
