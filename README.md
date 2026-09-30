@@ -70,7 +70,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] Hot pixels are repaired before demosaicing, judged against each photo's own noise level.
 - [x] **DNG gain maps** (OpcodeList2), such as phones' lens shading correction, are applied before demosaicing.
 - [x] **Highlight reconstruction:** channels are no longer clipped at 1 after white balance, and photosites that did clip are rebuilt from their bright unclipped neighbours, using the colour measured around the clipped area. Fully blown areas stay neutral.
-- [x] Tested on Sony **ARW**, Canon **CR3**, Nikon **NEF**, Fujifilm **RAF** (X-Trans), and Apple **ProRAW DNG**, plus JPEG, HEIC, TIFF, and PNG.
+- [x] Tested on Sony **ARW**, Canon **CR3**, Nikon **NEF**, Fujifilm **RAF** (X-Trans), Apple **ProRAW DNG** and Google **Pixel DNG**, plus JPEG, HEIC, TIFF, and PNG.
 - [x] The demosaiced image is cached as a full mip pyramid, so interactive renders sample the right resolution for the zoom level.
 - [x] A single fused Metal kernel applies every per-pixel adjustment. Frames are delivered as IOSurfaces, so pixels are never copied between engine and UI.
 - [x] Latest-wins render scheduling: a burst of slider events collapses to the newest one.
