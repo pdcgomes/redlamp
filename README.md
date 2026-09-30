@@ -57,6 +57,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] Decodes RAW files through LibRaw (unpacking only). Black levels, white balance, demosaicing, and color are all done by Redlamp on the GPU.
 - [x] Bayer demosaic (Malvar–He–Cutler), a first-generation X-Trans demosaic, and linear DNG support (for example iPhone ProRAW).
 - [x] Hot pixels are repaired before demosaicing, judged against each photo's own noise level.
+- [x] **Highlight reconstruction:** channels are no longer clipped at 1 after white balance, and photosites that did clip are rebuilt from their bright unclipped neighbours, using the colour measured around the clipped area. Fully blown areas stay neutral.
 - [x] Tested on Sony **ARW**, Canon **CR3**, Nikon **NEF**, Fujifilm **RAF** (X-Trans), and Apple **ProRAW DNG**, plus JPEG, HEIC, TIFF, and PNG.
 - [x] The demosaiced image is cached as a full mip pyramid, so interactive renders sample the right resolution for the zoom level.
 - [x] A single fused Metal kernel applies every per-pixel adjustment. Frames are delivered as IOSurfaces, so pixels are never copied between engine and UI.
@@ -351,7 +352,7 @@ flowchart LR
 
 **The pipeline:**
 1. LibRaw unpacks the sensor data.
-2. The GPU applies black and white levels and the as-shot white balance, and repairs hot pixels.
+2. The GPU applies black and white levels and the as-shot white balance, repairs hot pixels, and rebuilds clipped highlights.
 3. The image is demosaiced and cached as a mip pyramid. Its noise level is read from the file or measured from the raw data.
 4. When noise reduction is on, a spatial stage denoises the pyramid texels behind the rendered region: an à-trous wavelet decomposition in a noise-stabilized opponent space, with each scale's detail shrunk where it is indistinguishable from noise. Sharpening follows, as an unsharp mask on log luminance, then Texture and Clarity, as gains on bands of log luminance between pyramid levels. The result is cached per region, pyramid level and settings.
 5. The fused develop kernel first evaluates every mask's coverage for the pixel. It then applies, in order, each with its local (masked) adjustments where they exist: the white-balance ratio, the camera matrix to linear Rec.2020 (scene-referred), exposure and tone in log space, a hue-preserving tone curve that rolls highlights off smoothly to white at +4 EV above middle grey, OKLCh color work (vibrance, saturation, mixer, grading, profile look), the tone-curve lookup, vignette and grain, all still in Rec.2020 primaries, and finally a hue-preserving fit into the output gamut (sRGB or Display P3) and the output encoding.
