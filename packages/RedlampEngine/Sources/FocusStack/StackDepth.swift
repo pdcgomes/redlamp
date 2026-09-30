@@ -26,6 +26,8 @@ enum StackDepthSolver {
         var radius = 5
         /// Guided-filter radius in the volume; the coarse solve uses four times this.
         var smoothing = 8
+        /// How strong an edge (luma variance, square-root encoded) must be to keep a depth jump.
+        var edgeEpsilon: Float = 1e-3
 
         var focusRadius: Int {
             max(1, Int((Float(radius) / 4).rounded()))
@@ -98,7 +100,16 @@ enum StackDepthSolver {
         // Where no frame is sharp, any choice is noise, and noise-driven choices make blotches:
         // follow the surroundings instead.
         let filled = fill(depth, known: known, width: width, height: height, empty: Float(lumas.count - 1) / 2)
-        return StackDepthMap(width: width, height: height, depth: filled, confident: confident)
+        // Then smooth the labels along the image: depth jumps survive only where the image has
+        // an edge too, so multi-peaked focus (transparent subjects) doesn't leave seams where
+        // neighbouring pixels chose far-apart frames. Real depth edges are almost always image
+        // edges; a step across flat texture (the synthetic two-plane test) does get softened.
+        let last = Float(lumas.count - 1)
+        let smoothed = guidedFilter(
+            guide: guidance, source: filled, width: width, height: height, radius: smoothing,
+            epsilon: settings.edgeEpsilon,
+        ).map { min(max($0, 0), last) }
+        return StackDepthMap(width: width, height: height, depth: smoothed, confident: confident)
     }
 
     /// `values` where `known`, elsewhere interpolated from the known values around (push-pull:
