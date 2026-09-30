@@ -2,14 +2,14 @@ import AppKit
 import RedlampDesign
 import SwiftUI
 
-/// The scrolling column of Develop panels, in AppKit: each control updates only when a
-/// value it shows changes.
+/// The inspector's scrolling column, in AppKit: the Develop panels, or the Masking tool's
+/// panel. Each control updates only when a value it shows changes.
 final class InspectorPanelsView: NSView {
     private let scrollView = NSScrollView()
     private let document: InspectorDocumentView
 
-    init(model: EditorModel) {
-        document = InspectorDocumentView(views: [
+    init(model: EditorModel, tool: EditTool) {
+        document = InspectorDocumentView(views: tool == .masking ? [MaskingPanelView(model: model)] : [
             BasicPanelView.make(model: model),
             ToneCurvePanelView.make(model: model),
             ColorMixerPanelView.make(model: model),
@@ -110,9 +110,10 @@ final class HostedPanelView: NSView, HeightProviding {
 /// Hosts the panel column in the SwiftUI inspector, filling the space it is given.
 struct InspectorPanelsHost: NSViewRepresentable {
     let model: EditorModel
+    let tool: EditTool
 
     func makeNSView(context _: Context) -> InspectorPanelsView {
-        InspectorPanelsView(model: model)
+        InspectorPanelsView(model: model, tool: tool)
     }
 
     func updateNSView(_: InspectorPanelsView, context _: Context) {}

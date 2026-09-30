@@ -55,6 +55,9 @@ public final class EditorModel {
             }
             if newValue.masks != old.masks {
                 withMutation(keyPath: \.masks) {}
+                if newValue.masks.map(MaskOutline.init) != old.masks.map(MaskOutline.init) {
+                    withMutation(keyPath: \.maskOutlines) {}
+                }
             }
         }
     }
@@ -89,6 +92,13 @@ public final class EditorModel {
     public var masks: [MaskLayer] {
         access(keyPath: \.masks)
         return storedRecipe.masks
+    }
+
+    /// The masks without their adjustment values: views that list masks and components
+    /// observe this, so dragging a mask's slider doesn't re-render them.
+    public var maskOutlines: [MaskOutline] {
+        access(keyPath: \.maskOutlines)
+        return storedRecipe.masks.map(MaskOutline.init)
     }
 
     /// Just the tone curve, observing only the parameters that shape it.

@@ -25,6 +25,18 @@ enum HarnessEditor {
         return model
     }()
 
+    /// Gives the Masking scenes a selected radial mask to show (the debug script draws it
+    /// through the same path a drag does).
+    static func ensureMask() {
+        Task {
+            while model.info == nil {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            guard model.masks.isEmpty else { return }
+            model.applyDebugCommand("radial", "0.5:0.5:0.2:0.15")
+        }
+    }
+
     /// `tests/fixtures/raw` in this checkout (`mise run fixtures` downloads it).
     private static let fixtures = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent()

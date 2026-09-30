@@ -184,3 +184,27 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
         }
     }
 }
+
+/// A mask's structure without its adjustments: name, visibility and components.
+public struct MaskOutline: Hashable, Identifiable, Sendable {
+    public struct Component: Hashable, Identifiable, Sendable {
+        public let id: UUID
+        public let kind: MaskKind
+        public let operation: MaskOperation
+        public let inverted: Bool
+    }
+
+    public let id: UUID
+    public let name: String
+    public let isVisible: Bool
+    public let components: [Component]
+
+    init(_ mask: MaskLayer) {
+        id = mask.id
+        name = mask.name
+        isVisible = mask.isVisible
+        components = mask.components.map {
+            Component(id: $0.id, kind: $0.shape.kind, operation: $0.operation, inverted: $0.inverted)
+        }
+    }
+}

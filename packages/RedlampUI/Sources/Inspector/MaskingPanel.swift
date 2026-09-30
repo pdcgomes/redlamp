@@ -2,27 +2,16 @@ import RedlampEngineAPI
 import SwiftUI
 
 /// The Masking tool's panel: masks list, create menu, components and local adjustments.
-struct MaskingPanel: View {
+@_spi(Harness) public struct MaskingPanel: View {
     @Environment(EditorModel.self) private var model
 
-    var body: some View {
-        @Bindable var model = model
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Masks")
-                    .font(Theme.panelTitleFont)
-                    .foregroundStyle(Theme.value)
-                Spacer()
-                Toggle("Show Overlay", isOn: $model.showMaskOverlay)
-                    .toggleStyle(.checkbox)
-                    .controlSize(.small)
-                    .font(Theme.captionFont)
-                    .help("Show Overlay (O)")
-            }
-            .padding(.horizontal, Theme.panelPadding)
-            .padding(.vertical, 10)
+    public init() {}
 
-            if model.masks.isEmpty {
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            MasksHeaderBar()
+
+            if model.maskOutlines.isEmpty {
                 CreateMaskGrid(title: "Create New Mask") { kind in model.startDrawing(kind) }
                     .padding(.horizontal, Theme.panelPadding)
                     .padding(.bottom, 12)
@@ -32,22 +21,7 @@ struct MaskingPanel: View {
             } else {
                 MaskList()
                     .padding(.horizontal, Theme.panelPadding)
-                HStack {
-                    CreateMaskMenu(title: "Create New Mask", systemImage: "plus") { kind in
-                        model.startDrawing(kind)
-                    }
-                    Spacer()
-                    Menu {
-                        Button("Delete All Masks", role: .destructive) { model.deleteAllMasks() }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                    .menuStyle(.button)
-                    .buttonStyle(.plain)
-                    .fixedSize()
-                }
-                .padding(.horizontal, Theme.panelPadding)
-                .padding(.vertical, 8)
+                MaskActionsBar()
 
                 if model.drawingKind != nil {
                     DrawingHint()
@@ -55,20 +29,73 @@ struct MaskingPanel: View {
 
                 Rectangle().fill(Theme.divider).frame(height: 1)
 
-                if let mask = model.selectedMask {
+                if let mask = model.selectedOutline {
                     SelectedMaskEditor(mask: mask)
                 } else {
-                    Text("Select a mask to edit its adjustments.")
-                        .font(Theme.labelFont)
-                        .foregroundStyle(Theme.secondaryLabel)
-                        .padding(Theme.panelPadding)
+                    NoMaskSelected()
                 }
             }
         }
     }
 }
 
-private struct DrawingHint: View {
+// The Masking panel's parts, shared by the SwiftUI panel and its AppKit port. The lists
+// read `maskOutlines`, so dragging a mask's sliders doesn't re-render them.
+
+struct MasksHeaderBar: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        HStack {
+            Text("Masks")
+                .font(Theme.panelTitleFont)
+                .foregroundStyle(Theme.value)
+            Spacer()
+            Toggle("Show Overlay", isOn: $model.showMaskOverlay)
+                .toggleStyle(.checkbox)
+                .controlSize(.small)
+                .font(Theme.captionFont)
+                .help("Show Overlay (O)")
+        }
+        .padding(.horizontal, Theme.panelPadding)
+        .padding(.vertical, 10)
+    }
+}
+
+struct MaskActionsBar: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        HStack {
+            CreateMaskMenu(title: "Create New Mask", systemImage: "plus") { kind in
+                model.startDrawing(kind)
+            }
+            Spacer()
+            Menu {
+                Button("Delete All Masks", role: .destructive) { model.deleteAllMasks() }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .fixedSize()
+        }
+        .padding(.horizontal, Theme.panelPadding)
+        .padding(.vertical, 8)
+    }
+}
+
+struct NoMaskSelected: View {
+    var body: some View {
+        Text("Select a mask to edit its adjustments.")
+            .font(Theme.labelFont)
+            .foregroundStyle(Theme.secondaryLabel)
+            .padding(Theme.panelPadding)
+    }
+}
+
+struct DrawingHint: View {
     @Environment(EditorModel.self) private var model
 
     var body: some View {
@@ -157,17 +184,17 @@ struct CreateMaskMenu: View {
     }
 }
 
-private struct MaskList: View {
+struct MaskList: View {
     @Environment(EditorModel.self) private var model
     @State private var renaming: UUID?
     @State private var draftName = ""
 
     var body: some View {
         VStack(spacing: 2) {
-            ForEach(model.masks.reversed()) { mask in
+            ForEach(model.maskOutlines.reversed()) { mask in
                 let selected = mask.id == model.selectedMaskID
                 HStack(spacing: 8) {
-                    Image(systemName: mask.components.first?.shape.kind.symbol ?? "circle.dashed")
+                    Image(systemName: mask.components.first?.kind.symbol ?? "circle.dashed")
                         .font(.system(size: 12))
                         .frame(width: 18)
                         .foregroundStyle(selected ? Theme.value : Theme.secondaryLabel)
@@ -221,7 +248,7 @@ private struct MaskList: View {
 }
 
 private struct SelectedMaskEditor: View {
-    let mask: MaskLayer
+    let mask: MaskOutline
     @Environment(EditorModel.self) private var model
 
     var body: some View {
@@ -230,29 +257,22 @@ private struct SelectedMaskEditor: View {
             ForEach(mask.components) { component in
                 ComponentRow(mask: mask, component: component)
             }
-            HStack(spacing: 6) {
-                ForEach([MaskOperation.add, .subtract, .intersect], id: \.self) { operation in
-                    CreateMaskMenu(title: operation.name, systemImage: operation.symbol) { kind in
-                        model.startDrawing(kind, operation: operation, addingTo: mask.id)
-                    }
-                }
-            }
-            .padding(.top, 4)
+            ComponentOperationMenus(mask: mask)
+                .padding(.top, 4)
 
-            if case .radial = model.selectedComponent?.shape {
+            if model.selectedComponentOutline?.kind == .radial {
                 ParameterSlider(parameter: .maskFeather)
                     .padding(.top, 6)
             }
 
             SubsectionHeader(title: mask.name, parameters: []) {
-                Button("Reset") { model.resetMaskAdjustments(mask.id) }
-                    .controlSize(.mini)
+                ResetMaskButton(mask: mask)
             }
             ParameterSlider(parameter: .maskAmount)
             Spacer().frame(height: 4)
             ForEach(ParameterID.localParameters, id: \.self) { parameter in
                 ParameterSlider(parameter: parameter)
-                if parameter == .localTint || parameter == .localBlacks || parameter == .localDehaze {
+                if MaskingPanel.gapAfter.contains(parameter) {
                     Spacer().frame(height: 4)
                 }
             }
@@ -262,13 +282,44 @@ private struct SelectedMaskEditor: View {
     }
 }
 
-private struct ComponentRow: View {
-    let mask: MaskLayer
-    let component: MaskComponent
+extension MaskingPanel {
+    /// Local adjustments come in groups, like the Basic panel's.
+    static let gapAfter: Set<ParameterID> = [.localTint, .localBlacks, .localDehaze]
+}
+
+/// Add, Subtract and Intersect: draw another component into the mask.
+struct ComponentOperationMenus: View {
+    let mask: MaskOutline
     @Environment(EditorModel.self) private var model
 
     var body: some View {
-        let selected = component.id == model.selectedComponent?.id
+        HStack(spacing: 6) {
+            ForEach([MaskOperation.add, .subtract, .intersect], id: \.self) { operation in
+                CreateMaskMenu(title: operation.name, systemImage: operation.symbol) { kind in
+                    model.startDrawing(kind, operation: operation, addingTo: mask.id)
+                }
+            }
+        }
+    }
+}
+
+struct ResetMaskButton: View {
+    let mask: MaskOutline
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        Button("Reset") { model.resetMaskAdjustments(mask.id) }
+            .controlSize(.mini)
+    }
+}
+
+struct ComponentRow: View {
+    let mask: MaskOutline
+    let component: MaskOutline.Component
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        let selected = component.id == model.selectedComponentOutline?.id
         let index = (mask.components.firstIndex(of: component) ?? 0) + 1
         HStack(spacing: 8) {
             Image(systemName: component.operation.symbol)
@@ -276,9 +327,9 @@ private struct ComponentRow: View {
                 .frame(width: 14)
                 .foregroundStyle(Theme.secondaryLabel)
                 .help(component.operation.name)
-            Image(systemName: component.shape.kind.symbol)
+            Image(systemName: component.kind.symbol)
                 .font(.system(size: 11))
-            Text("\(component.shape.kind.name) \(index)")
+            Text("\(component.kind.name) \(index)")
                 .font(Theme.labelFont)
             Spacer()
             Toggle("Invert", isOn: Binding(

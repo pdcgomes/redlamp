@@ -8,6 +8,16 @@ public extension EditorModel {
         selectedMaskID.flatMap { id in masks.first { $0.id == id } }
     }
 
+    var selectedOutline: MaskOutline? {
+        selectedMaskID.flatMap { id in maskOutlines.first { $0.id == id } }
+    }
+
+    /// The selected component's structure, observing only mask structure.
+    var selectedComponentOutline: MaskOutline.Component? {
+        guard let mask = selectedOutline else { return nil }
+        return mask.components.first { $0.id == selectedComponentID } ?? mask.components.last
+    }
+
     var selectedComponent: MaskComponent? {
         guard let mask = selectedMask else { return nil }
         return mask.components.first { $0.id == selectedComponentID } ?? mask.components.last

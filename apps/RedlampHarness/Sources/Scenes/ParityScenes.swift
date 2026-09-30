@@ -165,6 +165,10 @@ extension HarnessScene {
             ) {
                 ColorGradingPanelView.make(model: $0)
             },
+            panelParity(id: "masking", title: "Masking", symbol: "circle.dashed", reference: { MaskingPanel() }) {
+                HarnessEditor.ensureMask()
+                return MaskingPanelViews.make(model: $0)
+            },
             panelParity(id: "detail", title: "Detail", symbol: "triangle", reference: { DetailPanel() }) {
                 ReferencePanelViews.detail(model: $0)
             },

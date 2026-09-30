@@ -194,8 +194,9 @@ struct InspectorView: View {
 
             Rectangle().fill(Theme.divider).frame(height: 1)
 
-            if model.activeTool == .edit, !DevelopPanels.usesSwiftUI {
-                InspectorPanelsHost(model: model)
+            if model.activeTool == .edit || model.activeTool == .masking, !DevelopPanels.usesSwiftUI {
+                InspectorPanelsHost(model: model, tool: model.activeTool)
+                    .id(model.activeTool)
             } else {
                 ScrollView {
                     if model.activeTool == .edit {
