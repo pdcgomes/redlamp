@@ -91,7 +91,7 @@ These block other rows. Most need the project owner; the ones marked *counsel* n
 | CAM-07 | Markesteijn X-Trans demosaic from LibRaw's CDDL source *(counsel to confirm)* | Adopt | P2 | M | — | Proposed | Not started | [DT §9](darktable-findings.md#9-licensing-of-reusable-pieces) |
 | CAM-08 | CFA-domain highlight reconstruction (estimate clipped channels from unclipped neighbors) | Adopt | P2 | M | P1-01 | Accepted (2026-09-30) | Done (6789502): no clip at 1 after white balance; clipped photosites rebuilt from bright unclipped neighbours in cube-root space with a colour offset from the bright rim (constant-chromaticity Zhang & Brainard 2004); fully blown areas become the lowest consistent neutral. One-photosite detail against a rebuilt sky shows more demosaic false colour (CAM-05, CAM-06) | [DT §3](darktable-findings.md#3-cameras-and-raw-data) |
 | CAM-09 | Segmentation-based reconstruction of fully blown highlights | Adopt | P3 | M | CAM-08 | Proposed | Not started | [DT §3](darktable-findings.md#3-cameras-and-raw-data) |
-| CAM-10 | JPEG XL DNG reading via libjxl (moved from P4) | Adopt | P2 | M | — | Proposed | Not started | [DT §3](darktable-findings.md#3-cameras-and-raw-data) |
+| CAM-10 | JPEG XL DNG reading via libjxl (moved from P4) | Adopt | P2 | M | — | Proposed | In progress (57ba38e): linear JPEG XL DNGs (iPhone ProRAW) decode through ImageIO rather than libjxl, mapped through the LinearizationTable; JPEG XL mosaic DNGs are refused with an error for now | [DT §3](darktable-findings.md#3-cameras-and-raw-data) |
 | CAM-11 | Keep LibRaw for decoding; don't adopt rawspeed | Skip rawspeed | — | — | — | Proposed | — | [DT §3](darktable-findings.md#3-cameras-and-raw-data) |
 
 ---
