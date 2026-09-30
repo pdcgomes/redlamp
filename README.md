@@ -402,7 +402,9 @@ Redlamp builds on the work of others:
 - [raw.pixls.us](https://raw.pixls.us) for CC0 sample files
 - Björn Ottosson's [OKLab](https://bottosson.github.io/posts/oklab/) color space
 - Robertson's method for correlated color temperature
-- The Malvar–He–Cutler demosaicing paper
+- The Malvar–He–Cutler demosaicing paper, and Menon, Andriani and Calvagno's directional-filtering demosaic (2007)
+- Zhang and Brainard's estimation of saturated pixel values (2004), for highlight reconstruction
+- The à-trous wavelet and generalized Anscombe transform literature, for noise reduction
 - Krzysztof Narkowicz's filmic curve fit
 
 Redlamp is not affiliated with Adobe. Lightroom is a trademark of Adobe Inc. and is referenced only to describe familiar workflows.
