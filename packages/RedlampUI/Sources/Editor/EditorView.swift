@@ -46,17 +46,23 @@ public struct EditorView: View {
                     }
                     Spacer(minLength: 0)
                     if model.rightPanelVisible {
-                        InspectorView()
-                            .frame(width: model.inspectorWidth)
-                            .background(PanelBackground(edge: .leading))
-                            .overlay(alignment: .leading) {
-                                PanelResizeHandle(
-                                    width: $model.inspectorWidth,
-                                    range: PanelMetrics.inspectorRange,
-                                    direction: -1,
-                                )
+                        Group {
+                            if DevelopPanels.usesSwiftUI {
+                                InspectorView()
+                            } else {
+                                InspectorColumnHost(model: model)
                             }
-                            .transition(.move(edge: .trailing))
+                        }
+                        .frame(width: model.inspectorWidth)
+                        .background(PanelBackground(edge: .leading))
+                        .overlay(alignment: .leading) {
+                            PanelResizeHandle(
+                                width: $model.inspectorWidth,
+                                range: PanelMetrics.inspectorRange,
+                                direction: -1,
+                            )
+                        }
+                        .transition(.move(edge: .trailing))
                     }
                 }
                 .overlay { LightsOutShade(level: model.lightsOut, stage: model.canvas.stageInsets) }

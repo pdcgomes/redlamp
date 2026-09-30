@@ -174,18 +174,17 @@ struct ProcessVersion: View {
     }
 }
 
-/// The right-hand column: histogram, tool strip and the Develop panels.
-struct InspectorView: View {
+/// The right-hand column in SwiftUI: the reference the AppKit column (`InspectorColumnView`)
+/// is checked against.
+@_spi(Harness) public struct InspectorView: View {
     @Environment(EditorModel.self) private var model
 
-    var body: some View {
+    public init() {}
+
+    public var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 10) {
-                if DevelopPanels.usesSwiftUI {
-                    HistogramView()
-                } else {
-                    HistogramHost(model: model)
-                }
+                HistogramView()
                 ToolStrip()
             }
             .padding(.horizontal, 12)
@@ -194,34 +193,38 @@ struct InspectorView: View {
 
             Rectangle().fill(Theme.divider).frame(height: 1)
 
-            if model.activeTool == .edit || model.activeTool == .masking, !DevelopPanels.usesSwiftUI {
-                InspectorPanelsHost(model: model, tool: model.activeTool)
-                    .id(model.activeTool)
-            } else {
-                ScrollView {
-                    if model.activeTool == .edit {
-                        SwiftUIDevelopPanels()
-                    } else if model.activeTool == .masking {
-                        MaskingPanel()
-                    } else {
-                        PlannedToolCard(tool: model.activeTool)
-                    }
+            ScrollView {
+                if model.activeTool == .edit {
+                    SwiftUIDevelopPanels()
+                } else if model.activeTool == .masking {
+                    MaskingPanel()
+                } else {
+                    PlannedToolCard(tool: model.activeTool)
                 }
-                .scrollIndicators(.automatic)
             }
+            .scrollIndicators(.automatic)
 
             Rectangle().fill(Theme.divider).frame(height: 1)
-            HStack {
-                Button("Previous") { model.pasteFromPrevious() }
-                    .disabled(model.previousSelection == nil || model.info == nil)
-                    .help("Apply the previously viewed photo's settings (⌥⌘V)")
-                Spacer()
-                Button("Reset") { model.resetAll() }
-                    .disabled(model.info == nil)
-                    .help("Reset all settings (⇧⌘R)")
-            }
-            .controlSize(.small)
-            .padding(10)
+            InspectorFooter()
         }
+    }
+}
+
+/// Previous and Reset, under the panels.
+struct InspectorFooter: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        HStack {
+            Button("Previous") { model.pasteFromPrevious() }
+                .disabled(model.previousSelection == nil || model.info == nil)
+                .help("Apply the previously viewed photo's settings (⌥⌘V)")
+            Spacer()
+            Button("Reset") { model.resetAll() }
+                .disabled(model.info == nil)
+                .help("Reset all settings (⇧⌘R)")
+        }
+        .controlSize(.small)
+        .padding(10)
     }
 }

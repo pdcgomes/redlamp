@@ -325,19 +325,3 @@ extension FontSpec {
         HistogramGraphView(model: model)
     }
 }
-
-/// Hosts the AppKit histogram in the SwiftUI inspector. SwiftUI never updates it: it
-/// follows the histogram itself.
-struct HistogramHost: NSViewRepresentable {
-    let model: EditorModel
-
-    func makeNSView(context _: Context) -> NSView {
-        HistogramGraphView(model: model)
-    }
-
-    func updateNSView(_: NSView, context _: Context) {}
-
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView _: NSView, context _: Context) -> CGSize? {
-        CGSize(width: proposal.width ?? 290, height: HistogramGraphView.height)
-    }
-}

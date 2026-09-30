@@ -169,6 +169,11 @@ extension HarnessScene {
                 HarnessEditor.ensureMask()
                 return MaskingPanelViews.make(model: $0)
             },
+            panelParity(id: "inspector", title: "Inspector column", symbol: "sidebar.right", reference: {
+                InspectorView().frame(height: 760)
+            }) {
+                FixedHeightView(InspectorColumnViews.make(model: $0), height: 760)
+            },
             panelParity(id: "detail", title: "Detail", symbol: "triangle", reference: { DetailPanel() }) {
                 ReferencePanelViews.detail(model: $0)
             },
@@ -236,5 +241,32 @@ private struct ParityInspector: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+/// Gives a view that fills whatever it is given a fixed height, for comparing whole columns.
+final class FixedHeightView: NSView, HeightProviding {
+    private let content: NSView
+    private let fixedHeight: CGFloat
+
+    init(_ content: NSView, height: CGFloat) {
+        self.content = content
+        fixedHeight = height
+        super.init(frame: .zero)
+        addSubview(content)
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    func height(forWidth _: CGFloat) -> CGFloat {
+        fixedHeight
+    }
+
+    override func layout() {
+        super.layout()
+        content.frame = bounds
     }
 }
