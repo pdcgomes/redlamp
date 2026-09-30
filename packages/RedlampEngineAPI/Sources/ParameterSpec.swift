@@ -146,11 +146,79 @@ public struct ParameterSpec: Sendable, Hashable, Identifiable {
         }
     }
 
-    /// Parses user-typed text back into a value.
-    public func parse(_ text: String) -> Double? {
-        let trimmed = text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "+", with: "")
-        guard let value = Double(trimmed) else { return nil }
+    /// Parses user-typed text back into a value: a number or arithmetic (`+ - * /`, parentheses),
+    /// where `x` is `current`, so "x+10" or "x/2" adjust what's there. A trailing unit (K, %, EV)
+    /// is ignored.
+    public func parse(_ text: String, current: Double? = nil) -> Double? {
+        var expression = text.lowercased().filter { !$0.isWhitespace }
+        for unit in ["ev", "k", "%", "°"] where expression.hasSuffix(unit) {
+            expression.removeLast(unit.count)
+        }
+        var parser = ExpressionParser(characters: Array(expression), variable: current)
+        guard let value = parser.parse(), value.isFinite else { return nil }
         return clamp(value)
+    }
+}
+
+/// A small recursive-descent parser for value fields.
+private struct ExpressionParser {
+    let characters: [Character]
+    let variable: Double?
+    var index = 0
+
+    mutating func parse() -> Double? {
+        guard let value = sum(), index == characters.count else { return nil }
+        return value
+    }
+
+    private var next: Character? {
+        index < characters.count ? characters[index] : nil
+    }
+
+    private mutating func sum() -> Double? {
+        guard var value = product() else { return nil }
+        while let op = next, op == "+" || op == "-" {
+            index += 1
+            guard let right = product() else { return nil }
+            value = op == "+" ? value + right : value - right
+        }
+        return value
+    }
+
+    private mutating func product() -> Double? {
+        guard var value = unary() else { return nil }
+        while let op = next, op == "*" || op == "/" || op == "×" || op == "÷" {
+            index += 1
+            guard let right = unary() else { return nil }
+            value = op == "*" || op == "×" ? value * right : value / right
+        }
+        return value
+    }
+
+    private mutating func unary() -> Double? {
+        if let sign = next, sign == "+" || sign == "-" {
+            index += 1
+            return unary().map { sign == "-" ? -$0 : $0 }
+        }
+        return primary()
+    }
+
+    private mutating func primary() -> Double? {
+        if next == "(" {
+            index += 1
+            guard let value = sum(), next == ")" else { return nil }
+            index += 1
+            return value
+        }
+        if next == "x" {
+            index += 1
+            return variable
+        }
+        let start = index
+        while let c = next, c.isNumber || c == "." || c == "," {
+            index += 1
+        }
+        return Double(String(characters[start ..< index]).replacingOccurrences(of: ",", with: "."))
     }
 }
 

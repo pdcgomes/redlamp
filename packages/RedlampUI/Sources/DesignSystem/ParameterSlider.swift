@@ -210,7 +210,7 @@ struct ValueField: View {
     }
 
     private func commit() {
-        if let parsed = spec.parse(text) {
+        if let parsed = spec.parse(text, current: value) {
             onCommit(parsed)
         }
         editing = false

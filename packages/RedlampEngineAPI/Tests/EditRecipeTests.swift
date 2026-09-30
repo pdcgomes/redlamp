@@ -129,4 +129,21 @@ struct EditRecipeTests {
         #expect(ParameterID.contrast.spec.formatted(8) == "+8")
         #expect(ParameterID.temperature.spec.formatted(5512) == "5500")
     }
+
+    @Test func `value fields accept arithmetic`() {
+        let exposure = ParameterID.exposure.spec
+        #expect(exposure.parse("0.5") == 0.5)
+        #expect(exposure.parse("+0.5") == 0.5)
+        #expect(exposure.parse("-1") == -1)
+        #expect(exposure.parse("2*0.5") == 1)
+        #expect(exposure.parse("(1+2)/3") == 1)
+        #expect(exposure.parse("x+0.5", current: 1) == 1.5)
+        #expect(exposure.parse("x/2", current: 3) == 1.5)
+        #expect(exposure.parse("0,5 EV") == 0.5)
+        #expect(exposure.parse("99") == 5, "clamped to the slider range")
+        #expect(exposure.parse("1/0") == nil)
+        #expect(exposure.parse("x+1") == nil, "no current value")
+        #expect(exposure.parse("1+") == nil)
+        #expect(ParameterID.temperature.spec.parse("5500 K") == 5500)
+    }
 }

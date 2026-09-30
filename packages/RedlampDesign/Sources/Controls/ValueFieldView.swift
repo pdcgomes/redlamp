@@ -80,7 +80,7 @@ public final class ValueFieldView: LayerDrawnView, NSTextFieldDelegate {
     private func endEditing(commit: Bool) {
         guard let field = editor else { return }
         editor = nil
-        if commit, let parsed = spec.parse(field.stringValue) {
+        if commit, let parsed = spec.parse(field.stringValue, current: value) {
             onCommit(parsed)
         }
         field.delegate = nil
