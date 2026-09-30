@@ -55,7 +55,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 
 **RAW pipeline (our own, GPU-first)**
 - [x] Decodes RAW files through LibRaw (unpacking only). Black levels, white balance, demosaicing, and color are all done by Redlamp on the GPU.
-- [x] Bayer demosaic (Malvar–He–Cutler), a first-generation X-Trans demosaic, and linear DNG support (for example iPhone ProRAW).
+- [x] Bayer demosaic by directional filtering with a posteriori decision (Menon, Andriani and Calvagno, 2007), a first-generation X-Trans demosaic, and linear DNG support (for example iPhone ProRAW).
 - [x] Hot pixels are repaired before demosaicing, judged against each photo's own noise level.
 - [x] **Highlight reconstruction:** channels are no longer clipped at 1 after white balance, and photosites that did clip are rebuilt from their bright unclipped neighbours, using the colour measured around the clipped area. Fully blown areas stay neutral.
 - [x] Tested on Sony **ARW**, Canon **CR3**, Nikon **NEF**, Fujifilm **RAF** (X-Trans), and Apple **ProRAW DNG**, plus JPEG, HEIC, TIFF, and PNG.
@@ -193,7 +193,7 @@ Every phase ships on Mac, iPad, and iPhone. The Lightroom feature inventory in [
 ### Phase 2: Develop parity
 - [ ] Texture, Clarity, and Dehaze, plus edge-aware Highlights and Shadows
 - [ ] Detail panel: sharpening and **best-in-class classical noise reduction**, profiled per camera and ISO, on raw data, with Lightroom's luminance and color controls
-- [ ] Better demosaicing (RCD and AMaZE for Bayer, Markesteijn for X-Trans) and highlight reconstruction
+- [ ] Better X-Trans demosaicing (Markesteijn) and a dual demosaic for Bayer (Bayer demosaicing from the Menon paper and highlight reconstruction are done)
 - [ ] Full DCP camera profiles (dual and triple illuminant), ICC input profiles, **LUT import** (`.cube`, `.3dl`, HaldCLUT), and a Profile Browser
 - [ ] Lens corrections from the lensfun database, Adobe LCP import, and DNG opcodes
 - [ ] Crop and straighten, Transform and Upright
