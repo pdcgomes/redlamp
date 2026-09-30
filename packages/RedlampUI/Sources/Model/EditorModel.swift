@@ -218,6 +218,9 @@ public final class EditorModel {
     @ObservationIgnored var visibilityBeforePresenting: (left: Bool, right: Bool, filmstrip: Bool)?
     /// The slider `,` `.` select and `-` `=` nudge; highlighted in the panels.
     public var focusedParameter: ParameterID?
+    public var revealedParameter: ParameterID?
+    /// The ⌘F adjustment search.
+    public var showAdjustmentSearch = false
     /// Holding Option turns group titles into "Reset …" buttons, as in Lightroom.
     public var optionKeyHeld = false
     public var showMaskPins = true

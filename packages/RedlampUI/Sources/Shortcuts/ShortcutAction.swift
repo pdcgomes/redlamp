@@ -109,7 +109,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case undo, redo, copySettings, pasteSettings, pastePrevious, resetAll
     case autoTone, autoWhiteBalance, toggleBlackAndWhite, whiteBalanceSelector
     case newSnapshot, newPreset, virtualCopy
-    case previousSetting, nextSetting, increaseSetting, decreaseSetting
+    case previousSetting, nextSetting, increaseSetting, decreaseSetting, findAdjustment
 
     // Tools
     case editTool, cropTool, healTool, maskingTool, cropAspectLock
@@ -145,7 +145,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
             .navigation
         case .undo, .redo, .copySettings, .pasteSettings, .pastePrevious, .resetAll, .autoTone,
              .autoWhiteBalance, .toggleBlackAndWhite, .whiteBalanceSelector, .newSnapshot, .newPreset,
-             .virtualCopy, .previousSetting, .nextSetting, .increaseSetting, .decreaseSetting:
+             .virtualCopy, .previousSetting, .nextSetting, .increaseSetting, .decreaseSetting, .findAdjustment:
             .develop
         case .editTool, .cropTool, .healTool, .maskingTool, .cropAspectLock, .brushMask, .linearMask,
              .radialMask, .colorRangeMask, .luminanceRangeMask, .depthRangeMask:
@@ -240,6 +240,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .openFolder: "Open Folder…"
         case .export: "Export…"
         case .showShortcuts: "Keyboard Shortcuts"
+        case .findAdjustment: "Find Adjustment…"
         }
     }
 
@@ -324,6 +325,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .openFolder: [.char("o", command: true)]
         case .export: [.char("e", shift: true, command: true)]
         case .showShortcuts: [.char("/", command: true)]
+        case .findAdjustment: [.char("f", command: true)]
         }
     }
 

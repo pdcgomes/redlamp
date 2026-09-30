@@ -127,6 +127,15 @@ public final class SliderRowView: NSView {
                 labelView.opacity = opacity
                 focusMarker.alphaValue = opacity
             },
+            Tracker { [weak self] in
+                guard let self, editor.revealedParameter == parameter else { return }
+                // After the panel has expanded and laid out.
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    scrollToVisible(bounds.insetBy(dx: 0, dy: -Metrics.rowHeight))
+                    editor.revealedParameter = nil
+                }
+            },
         ]
     }
 

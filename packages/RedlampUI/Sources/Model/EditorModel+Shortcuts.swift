@@ -113,6 +113,7 @@ public extension EditorModel {
         case .labelBlue: updateMetadata(advance: shifted) { $0.label = $0.label == .blue ? nil : .blue }
         // File & Edit (open and export are handled by the app, which owns the panels)
         case .showShortcuts: showShortcuts.toggle()
+        case .findAdjustment: showAdjustmentSearch.toggle()
         case .openFolder, .export: return false
         default:
             return false

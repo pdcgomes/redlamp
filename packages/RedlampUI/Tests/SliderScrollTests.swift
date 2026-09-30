@@ -10,6 +10,7 @@ struct SliderScrollTests {
         var values: [ParameterID: Double] = [:]
         var edits = 0
         var focusedParameter: ParameterID?
+        var revealedParameter: ParameterID?
         var optionKeyHeld: Bool {
             false
         }

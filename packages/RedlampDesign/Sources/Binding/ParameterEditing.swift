@@ -21,6 +21,8 @@ public protocol ParameterEditing: AnyObject {
 
     /// The slider `,` `.` select and `-` `=` nudge; highlighted in the panels.
     var focusedParameter: ParameterID? { get set }
+    /// Set to scroll a slider into view (⌘F adjustment search); its row clears it.
+    var revealedParameter: ParameterID? { get set }
     /// Holding Option turns group titles into "Reset …" buttons.
     var optionKeyHeld: Bool { get }
 }

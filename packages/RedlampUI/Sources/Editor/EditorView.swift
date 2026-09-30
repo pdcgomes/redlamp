@@ -84,7 +84,13 @@ public struct EditorView: View {
                 ShortcutsSheet()
             }
         }
+        .overlay {
+            if model.showAdjustmentSearch {
+                AdjustmentSearchView()
+            }
+        }
         .animation(.easeOut(duration: 0.15), value: model.showShortcuts)
+        .animation(.easeOut(duration: 0.12), value: model.showAdjustmentSearch)
         .animation(.easeInOut(duration: 0.3), value: model.lightsOut)
         .onAppear(perform: updateStage)
         .onChange(of: model.leftPanelVisible) { _, _ in updateStage() }

@@ -20,6 +20,11 @@ struct AppCommands: Commands {
             item(.redo).disabled(!model.canRedo)
         }
 
+        // Edit ▸ Find: the adjustment search takes ⌘F.
+        CommandGroup(replacing: .textEditing) {
+            item(.findAdjustment).disabled(model.info == nil)
+        }
+
         CommandMenu("Photo") {
             item(.copySettings).disabled(model.info == nil)
             item(.pasteSettings).disabled(!model.hasClipboard || model.info == nil)
