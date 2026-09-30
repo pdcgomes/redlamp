@@ -55,6 +55,8 @@ struct PixelRect: Codable, Hashable, Sendable {
 /// again; the cache can be deleted at any time.
 final class FocusStackCache: Sendable {
     static let formatVersion = 2
+    /// Frames decoding ahead of the one being merged (each holds its raw data, about 2 bytes a pixel).
+    static let decodesAhead = 3
 
     static var defaultRoot: URL {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
@@ -152,10 +154,28 @@ final class FocusStackCache: Sendable {
         let builder = SessionBuilder(device: device, queue: queue, kernels: kernels)
         let stacker = FocusStacker(device: device, queue: queue, kernels: kernels)
         var metadata: [Int: DecodedImage] = [:]
+        // The merge reads every frame twice, in order; the next few decode on other cores
+        // (with their noise estimates) while the GPU works on the current one.
+        let order = Array(urls.indices) + Array(urls.indices)
+        let decodes = DispatchQueue(label: "app.redlamp.stack.decode", qos: .userInitiated, attributes: .concurrent)
+        var pending: [Int: Prefetch<DecodedImage>] = [:]
+        var position = 0
         let result = try stacker.merge(
             frameCount: urls.count, settings: StackMergeSettings(strategy: strategy),
             load: { index in
-                let frame = try builder.demosaic(ImageDecoder.decode(urls[index]))
+                precondition(order[position] == index, "frames must load in stack order, twice")
+                for ahead in position ..< min(position + Self.decodesAhead + 1, order.count)
+                    where pending[ahead] == nil {
+                    let url = urls[order[ahead]]
+                    pending[ahead] = Prefetch(on: decodes) {
+                        var decoded = try ImageDecoder.decode(url)
+                        decoded.noiseProfile = decoded.noise
+                        return decoded
+                    }
+                }
+                let decoded = try pending.removeValue(forKey: position)!.value()
+                position += 1
+                let frame = try builder.demosaic(decoded)
                 metadata[index] = frame.decoded.calibration(noise: frame.noise)
                 return frame.texture
             },

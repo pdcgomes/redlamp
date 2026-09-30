@@ -102,13 +102,17 @@ enum ECCAligner {
 
     /// Aligns `image` to `template` (same size). `initial` maps template to image coordinates.
     /// Pyramid levels are built down to under 400 px; each level runs up to `iterations` steps,
-    /// stopping once no image corner moves more than `tolerance` pixels.
+    /// stopping once no image corner moves more than `tolerance` pixels. Refinement runs from
+    /// level `coarsest` (default: the smallest) to level `finest` (0: full size); a close
+    /// `initial` can skip the coarse levels, and a rough answer can skip the fine ones.
     static func align(
         template: LumaImage,
         image: LumaImage,
         initial: Similarity = .identity,
         iterations: Int = 50,
         tolerance: Float = 0.01,
+        finest: Int = 0,
+        coarsest: Int? = nil,
     ) -> Result {
         var templates = [template]
         var images = [image]
@@ -116,11 +120,12 @@ enum ECCAligner {
             templates.append(templates.last!.halved())
             images.append(images.last!.halved())
         }
-        let levels = templates.count
-        var transform = initial.scaled(by: 1 / Float(1 << (levels - 1)))
+        let top = min(coarsest ?? templates.count - 1, templates.count - 1)
+        let bottom = min(finest, top)
+        var transform = initial.scaled(by: 1 / Float(1 << top))
         var correlation: Float = 0
-        for level in (0 ..< levels).reversed() {
-            if level < levels - 1 {
+        for level in (bottom ... top).reversed() {
+            if level < top {
                 transform = transform.scaled(by: 2)
             }
             let result = refine(
@@ -130,7 +135,7 @@ enum ECCAligner {
             transform = result.transform
             correlation = result.correlation
         }
-        return Result(transform: transform, correlation: correlation)
+        return Result(transform: transform.scaled(by: Float(1 << bottom)), correlation: correlation)
     }
 
     /// Gauss-Newton ECC iterations at one scale.
@@ -161,14 +166,17 @@ enum ECCAligner {
         let gradX = LumaImage(width: image.width, height: image.height, pixels: gx)
         let gradY = LumaImage(width: image.width, height: image.height, pixels: gy)
 
+        var warped = [Float](repeating: 0, count: width * height)
+        var valid = [Bool](repeating: false, count: width * height)
+        var steepest = [SIMD4<Float>](repeating: .zero, count: width * height)
         for _ in 0 ..< iterations {
             // Warped image, its gradients and the steepest-descent images over the valid overlap.
             var count = 0
             var sumT: Double = 0
             var sumI: Double = 0
-            var warped = [Float](repeating: 0, count: width * height)
-            var valid = [Bool](repeating: false, count: width * height)
-            var steepest = [SIMD4<Float>](repeating: .zero, count: width * height)
+            for index in valid.indices {
+                valid[index] = false
+            }
             for y in 0 ..< height {
                 for x in 0 ..< width {
                     let (u, v) = p.apply(Float(x), Float(y))

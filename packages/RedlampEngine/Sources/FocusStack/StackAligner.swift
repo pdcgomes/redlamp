@@ -1,20 +1,35 @@
 import Foundation
 import simd
 
-/// What alignment needs from one frame: a small linear RGB copy and its encoded luminance.
+/// What alignment needs from one frame: its encoded luminance, and a smaller linear RGB copy
+/// for the brightness match.
 struct FrameAnalysis {
-    /// Linear, balanced camera RGB, downscaled.
-    let rgb: [SIMD3<Float>]
-    /// Square-root-encoded luminance of `rgb`: closer to perceptual, so dark detail counts.
+    /// Each `colour` pixel covers this many `luma` pixels a side.
+    static let colourScale = 4
+
+    /// Square-root-encoded luminance: closer to perceptual, so dark detail counts.
     let luma: LumaImage
-    /// Full-resolution pixels per analysis pixel.
+    /// Linear, balanced camera RGB at a quarter of `luma`'s size (area averages).
+    let colour: [SIMD3<Float>]
+    let colourWidth: Int
+    let colourHeight: Int
+    /// Full-resolution pixels per analysis (`luma`) pixel.
     let factor: Float
 
     init(width: Int, height: Int, rgb: [SIMD3<Float>], factor: Float) {
-        self.rgb = rgb
         self.factor = factor
         let weights = SIMD3<Float>(0.25, 0.5, 0.25)
         luma = LumaImage(width: width, height: height, pixels: rgb.map { simd_dot($0, weights).squareRoot() })
+        let scale = Self.colourScale
+        colourWidth = max(1, width / scale)
+        colourHeight = max(1, height / scale)
+        var colour = [SIMD3<Float>](repeating: .zero, count: colourWidth * colourHeight)
+        for y in 0 ..< colourHeight * scale where y < height {
+            for x in 0 ..< colourWidth * scale where x < width {
+                colour[(y / scale) * colourWidth + x / scale] += rgb[y * width + x]
+            }
+        }
+        self.colour = colour.map { $0 / Float(scale * scale) }
     }
 }
 
@@ -39,8 +54,9 @@ enum StackAligner {
     static func align(_ frames: [FrameAnalysis]) -> StackAlignment {
         precondition(!frames.isEmpty)
         // Chain: each frame to its neighbour, so consecutive frames (similar focus) do the matching.
+        // Neighbour steps only seed the direct refinement below, so half resolution will do.
         let steps = Parallel.map(frames.count - 1) { index in
-            ECCAligner.align(template: frames[index].luma, image: frames[index + 1].luma).transform
+            ECCAligner.align(template: frames[index].luma, image: frames[index + 1].luma, finest: 1).transform
         }
         var chained = [Similarity.identity]
         for step in steps {
@@ -54,7 +70,7 @@ enum StackAligner {
         let refined = Parallel.map(frames.count) { index -> (Similarity, Float) in
             guard index != reference else { return (.identity, 1) }
             let direct = ECCAligner.align(
-                template: frames[reference].luma, image: frames[index].luma, initial: initials[index],
+                template: frames[reference].luma, image: frames[index].luma, initial: initials[index], coarsest: 1,
             )
             let useDirect = direct.correlation >= minimumDirectCorrelation
             return (useDirect ? direct.transform : initials[index], direct.correlation)
@@ -109,18 +125,18 @@ enum StackAligner {
 
     /// Per-channel gain matching `frame` to `reference` over their overlap, in linear light.
     static func gain(_ frame: FrameAnalysis, to reference: FrameAnalysis, transform: Similarity) -> SIMD3<Float> {
-        let width = reference.luma.width
-        let height = reference.luma.height
+        // Colour pixel centres in analysis pixels: (c + 0.5) * scale - 0.5.
+        let scale = Float(FrameAnalysis.colourScale)
         var sumReference = SIMD3<Double>.zero
         var sumFrame = SIMD3<Double>.zero
-        for y in stride(from: 0, to: height, by: 2) {
-            for x in stride(from: 0, to: width, by: 2) {
-                let (u, v) = transform.apply(Float(x), Float(y))
-                let fx = Int(u.rounded())
-                let fy = Int(v.rounded())
-                guard fx >= 0, fy >= 0, fx < frame.luma.width, fy < frame.luma.height else { continue }
-                let r = reference.rgb[y * width + x]
-                let f = frame.rgb[fy * frame.luma.width + fx]
+        for y in 0 ..< reference.colourHeight {
+            for x in 0 ..< reference.colourWidth {
+                let (u, v) = transform.apply((Float(x) + 0.5) * scale - 0.5, (Float(y) + 0.5) * scale - 0.5)
+                let fx = Int(((u + 0.5) / scale - 0.5).rounded())
+                let fy = Int(((v + 0.5) / scale - 0.5).rounded())
+                guard fx >= 0, fy >= 0, fx < frame.colourWidth, fy < frame.colourHeight else { continue }
+                let r = reference.colour[y * reference.colourWidth + x]
+                let f = frame.colour[fy * frame.colourWidth + fx]
                 // Clipped or black areas say nothing about exposure.
                 guard r.max() < 0.95, f.max() < 0.95, r.min() > 0.002, f.min() > 0.002 else { continue }
                 sumReference += SIMD3<Double>(r)
