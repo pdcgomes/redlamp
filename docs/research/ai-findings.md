@@ -16,6 +16,7 @@
 - **Patent statements are not legal findings.** Patent databases were largely unreachable from the research environment. Where a patent number and status are given, they come from Google Patents' own non-legal status field. Everything patent-related needs counsel.
 - Effort is in engineer-weeks (ew) and excludes design and QA unless stated.
 - The full per-workstream evidence, with every citation and verification log, is in [notes/](notes/README.md).
+- Decisions and status for every recommendation are tracked in the [research intake tracker](research-tracker.md).
 
 ## Contents
 

@@ -2,6 +2,7 @@
 
 **Date:** 30 September 2026. **Subject:** darktable 5.8 (master of 29 September 2026), with rawspeed and lensfun.
 **Detail:** six notes in [darktable/notes/](darktable/notes/), about 37,000 words with every source path and citation.
+**Decisions and status:** every recommendation here has a row in the [research intake tracker](research-tracker.md).
 
 darktable is the most complete open-source raw developer: 74 current processing modules, a scene-referred pipeline, profiled denoise, lensfun corrections, drawn and parametric masks, styles, Lightroom import, an AI model pipeline and, as of 5.8, an MCP server. This study asked how it handles cameras, lenses, color science, modules, masks, presets, styles, profiles, sidecars, performance and UX, and what Redlamp should **adopt**, **do better** or **skip** as it packages the same capabilities in a native, Lightroom-familiar app.
 
