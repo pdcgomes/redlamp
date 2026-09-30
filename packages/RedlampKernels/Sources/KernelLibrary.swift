@@ -22,7 +22,10 @@ public final class KernelLibrary: @unchecked Sendable {
     public let denoiseRows: any MTLComputePipelineState
     public let denoiseColumns: any MTLComputePipelineState
     public let sharpenLog: any MTLComputePipelineState
+    public let sharpenLuma: any MTLComputePipelineState
     public let sharpenBlur: any MTLComputePipelineState
+    public let deconvolveColumns: any MTLComputePipelineState
+    public let sharpenAnalysis: any MTLComputePipelineState
     public let sharpenApply: any MTLComputePipelineState
     public let localContrast: any MTLComputePipelineState
     public let detailLocal: any MTLComputePipelineState
@@ -57,7 +60,10 @@ public final class KernelLibrary: @unchecked Sendable {
         denoiseRows = try pipeline("rl_denoise_rows")
         denoiseColumns = try pipeline("rl_denoise_columns")
         sharpenLog = try pipeline("rl_sharpen_log")
+        sharpenLuma = try pipeline("rl_sharpen_luma")
         sharpenBlur = try pipeline("rl_sharpen_blur")
+        deconvolveColumns = try pipeline("rl_deconvolve_columns")
+        sharpenAnalysis = try pipeline("rl_sharpen_analysis")
         sharpenApply = try pipeline("rl_sharpen_apply")
         localContrast = try pipeline("rl_local_contrast")
         detailLocal = try pipeline("rl_detail_local")

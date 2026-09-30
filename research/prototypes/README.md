@@ -42,6 +42,7 @@ source for the Core ML scripts).
 | `restoration/run_bakeoff.py` | Classical baselines, spandrel-loaded upscalers, deblur and face models, InstructIR and a noise-aware sharpen pipeline on PyTorch MPS; wall time per image |
 | `restoration/run_vt.py`, `restoration/vt_superres.swift` | Apple's VideoToolbox super-resolution scaler on the same items |
 | `restoration/run_s3diff.py` | S3Diff one-step diffusion upscaler (separate pinned environment, see its docstring) |
+| `restoration/shp01_calibrate.py` | SHP-01 noise-aware sharpening: the planned GPU algorithm in NumPy over the bake-off set, choosing the separator strength, Richardson–Lucy iterations and Detail blend (`build/proto-out/shp01/summary.md`, `docs/research/images/shp01-calibration.jpg`) |
 | `restoration/score.py` | PSNR, SSIM, LPIPS, DISTS, back-projection consistency, zero-shot CLIP-IQA; summary tables and the contact sheets in `docs/research/images/restoration-*.jpg` |
 
 Outputs go to `build/proto-out/`.

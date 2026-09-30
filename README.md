@@ -75,7 +75,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] **Color Grading:** 3-way and individual wheels, Blending, and Balance. It also tints B&W images for split-toning.
 - [x] **Effects:** post-crop vignette (amount, midpoint, roundness, feather) and zoom-stable film grain.
 - [x] **Noise reduction** (Detail panel): Luminance with Detail and Contrast, and Color with Detail and Smoothness. It is scaled to each photo's own noise, read from the DNG NoiseProfile tag or measured from the raw data when the file opens. It runs as a cached stage in front of the fused kernel, so other sliders stay as fast as before, and exports render in tiles.
-- [x] **Sharpening** (Detail panel): Amount, Radius, Detail and Masking, in the same cached stage after noise reduction. It boosts luminance detail in stops, so it doesn't depend on exposure and leaves colors alone; Detail holds back halos on strong edges, and Masking keeps flat areas untouched.
+- [x] **Sharpening** (Detail panel): Amount, Radius, Detail and Masking, in the same cached stage after noise reduction. It is noise-aware: detail is measured on a denoised copy of the luminance and applied to the untouched image, so the photo's noise and grain pass through as they were instead of being sharpened. Detail moves from a halo-limited unsharp mask towards Richardson–Lucy deconvolution of the Radius's blur, and holds back halos on strong edges; Masking keeps flat areas untouched. It boosts luminance detail in stops, so it doesn't depend on exposure and leaves colors alone.
 - [x] **Texture and Clarity** (global): gains on medium (about 2–8 px) and larger (about 8–64 px) luminance detail, taken from the image pyramid in the same cached stage, so tiles and zoom levels agree. Negative values soften.
 - [x] **Dehaze** (global and in masks): the dark channel prior (He, Sun and Tang, 2009) with the airlight and a haze map measured when the photo opens; negative values add a neutral veil.
 
@@ -118,7 +118,8 @@ Measured on an Apple M1 Ultra with a Release build.
 | Interactive render at 1:1 (full 26 MP frame) | ~13 ms |
 | Full-resolution export render (24–26 MP) | ~45 ms |
 | Full-resolution export render with noise reduction (24 MP, tiled) | ~100 ms |
-| Detail stage on a 1:1 region (about 10 MP of pyramid texels), GPU time: noise reduction, sharpening, Texture and Clarity, all three | ~5 ms, ~2 ms, ~1 ms, ~8.5 ms |
+| Detail stage on a 1:1 region (about 10 MP of pyramid texels), GPU time: noise reduction, Texture and Clarity | ~5 ms, ~1 ms |
+| Detail stage for a 2560 × 1600 view at 1:1 of a 24 MP frame, GPU time: noise reduction alone; default sharpening, first render or while dragging Radius; while dragging Amount, Detail, Masking or a noise slider (cached analysis) | ~1.9 ms, ~8.5 ms, ~2.3 ms |
 
 Dragging a slider at 120 events a second (`scripts/perf-sweep.sh`), with every panel open:
 
@@ -366,7 +367,7 @@ flowchart LR
 1. LibRaw unpacks the sensor data.
 2. The GPU applies black and white levels and the as-shot white balance, repairs hot pixels, and rebuilds clipped highlights.
 3. The image is demosaiced and cached as a mip pyramid. Its noise level is read from the file or measured from the raw data.
-4. When noise reduction is on, a spatial stage denoises the pyramid texels behind the rendered region: an à-trous wavelet decomposition in a noise-stabilized opponent space, with each scale's detail shrunk where it is indistinguishable from noise. Sharpening follows, as an unsharp mask on log luminance, then Texture and Clarity, as gains on bands of log luminance between pyramid levels. The result is cached per region, pyramid level and settings.
+4. When noise reduction is on, a spatial stage denoises the pyramid texels behind the rendered region: an à-trous wavelet decomposition in a noise-stabilized opponent space, with each scale's detail shrunk where it is indistinguishable from noise. Sharpening follows: a fixed-strength copy of the same denoiser gives a clean luminance, whose log detail (an unsharp mask mixed with four Richardson–Lucy iterations by the Detail slider) scales the untouched RGB, so noise isn't sharpened; that analysis is cached per region and Radius. Then Texture and Clarity, as gains on bands of log luminance between pyramid levels. The result is cached per region, pyramid level and settings.
 5. The fused develop kernel first evaluates every mask's coverage for the pixel. It then applies, in order, each with its local (masked) adjustments where they exist: the white-balance ratio, the camera matrix to linear Rec.2020 (scene-referred), exposure and tone in log space, a hue-preserving tone curve that rolls highlights off smoothly to white at +4 EV above middle grey, OKLCh color work (vibrance, saturation, mixer, grading, profile look), the tone-curve lookup, vignette and grain, all still in Rec.2020 primaries, and finally a hue-preserving fit into the output gamut (sRGB or Display P3) and the output encoding.
 
 **Packages** (`packages/`; `Tuist/ProjectDescriptionHelpers/Module.swift` is the single source of truth for which package may depend on which):

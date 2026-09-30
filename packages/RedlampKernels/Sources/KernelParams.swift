@@ -180,12 +180,18 @@ public struct SharpenParams {
     public var size: SIMD4<Int32>
     public var luma: SIMD4<Float>
     public var shape: SIMD4<Float>
+    /// x Detail's share of deconvolution, y Richardson-Lucy step (0 ratio, 1 update), z source softening available.
+    public var deconvolution: SIMD4<Float>
 
-    public init(origin: SIMD4<Int32>, size: SIMD4<Int32>, luma: SIMD4<Float>, shape: SIMD4<Float>) {
+    public init(
+        origin: SIMD4<Int32>, size: SIMD4<Int32>, luma: SIMD4<Float>, shape: SIMD4<Float>,
+        deconvolution: SIMD4<Float> = .zero,
+    ) {
         self.origin = origin
         self.size = size
         self.luma = luma
         self.shape = shape
+        self.deconvolution = deconvolution
     }
 }
 

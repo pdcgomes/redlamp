@@ -136,19 +136,6 @@ struct DetailStageTests {
         #expect(abs(mean(after) / mean(before) - 1) < 0.01)
     }
 
-    @Test func `masking keeps sharpening off flat noise`() throws {
-        let session = try makeSession(.bayer, width: 512, height: 384)
-        var sharpened = Self.untouched
-        sharpened[.sharpenAmount] = 100
-        var masked = sharpened
-        masked[.sharpenMasking] = 100
-        let before = try statistics(of: readLevel(session, level: 0)).deviation.y
-        let open = try statistics(of: processed(session, recipe: sharpened)).deviation.y
-        let protected = try statistics(of: processed(session, recipe: masked)).deviation.y
-        #expect(open > before * 1.05)
-        #expect(abs(protected / before - 1) < 0.01)
-    }
-
     @Test func `the stage is skipped when nothing needs it`() throws {
         let session = try makeSession(.bayer, width: 256, height: 256)
         let stage = DetailStage(device: device, kernels: kernels)
@@ -200,7 +187,7 @@ struct DetailStageTests {
     // MARK: - Masks
 
     /// A mask covering the left 45% of the photo, fading out by 55%.
-    private func leftHalf(_ parameter: ParameterID, _ value: Double) -> MaskLayer {
+    func leftHalf(_ parameter: ParameterID, _ value: Double) -> MaskLayer {
         let gradient = LinearMask(start: ImagePoint(x: 0.45, y: 0.5), end: ImagePoint(x: 0.55, y: 0.5))
         return MaskLayer(
             name: "Left",
@@ -302,7 +289,7 @@ struct DetailStageTests {
 
     /// `signal` is the scene per photosite (`level` by default), `noiseScale` scales the
     /// noise, and `spikes` overrides single photosites with a normalised value.
-    private func makeSession(
+    func makeSession(
         _ sensor: SensorKind,
         width: Int,
         height: Int,
@@ -356,13 +343,13 @@ struct DetailStageTests {
     }
 
     /// One pyramid level read back as camera RGB.
-    private func readLevel(_ session: ImageSession, level: Int) throws -> [SIMD3<Float>] {
+    func readLevel(_ session: ImageSession, level: Int) throws -> [SIMD3<Float>] {
         let width = max(1, session.pyramid.width >> level)
         let height = max(1, session.pyramid.height >> level)
         return try readBack(session.pyramid, level: level, width: width, height: height)
     }
 
-    private func readBack(_ texture: any MTLTexture, level: Int, width: Int, height: Int) throws -> [SIMD3<Float>] {
+    func readBack(_ texture: any MTLTexture, level: Int, width: Int, height: Int) throws -> [SIMD3<Float>] {
         let rowBytes = width * 8
         let buffer = try #require(device.makeBuffer(length: rowBytes * height, options: .storageModeShared))
         let commands = try #require(queue.makeCommandBuffer())
@@ -383,7 +370,7 @@ struct DetailStageTests {
     }
 
     /// The whole image through the detail stage at full resolution.
-    private func processed(_ session: ImageSession, recipe: EditRecipe) throws -> [SIMD3<Float>] {
+    func processed(_ session: ImageSession, recipe: EditRecipe) throws -> [SIMD3<Float>] {
         let stage = DetailStage(device: device, kernels: kernels)
         let commands = try #require(queue.makeCommandBuffer())
         let size = session.orientedSize
@@ -395,7 +382,7 @@ struct DetailStageTests {
         return try readBack(output.texture, level: 0, width: size.width, height: size.height)
     }
 
-    private func statistics(of pixels: [SIMD3<Float>]) -> (mean: SIMD3<Float>, deviation: SIMD3<Float>) {
+    func statistics(of pixels: [SIMD3<Float>]) -> (mean: SIMD3<Float>, deviation: SIMD3<Float>) {
         let count = Float(pixels.count)
         let mean = pixels.reduce(SIMD3<Float>.zero, +) / count
         let variance = pixels.reduce(SIMD3<Float>.zero) { $0 + ($1 - mean) * ($1 - mean) } / count

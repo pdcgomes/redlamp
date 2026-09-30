@@ -20,6 +20,22 @@ struct DenoiseSettings: Hashable {
         luma > 0 || chroma.contains { $0 > 0 }
     }
 
+    /// Sharpening's separator: noise removed at a fixed number of sigmas per scale, luma and chroma
+    /// (sharpening reads Rec. 2020 luminance, which picks up the chroma axes' noise too), so the
+    /// detail it boosts is detail, not noise. Chosen by `shp01_calibrate.py`: at 3 sigmas flat
+    /// noise grows under 1% at any Detail, where luma alone let it grow 17-29%.
+    static let separator = DenoiseSettings(
+        luma: 1,
+        lumaPerStrength: Array(repeating: 3, count: scaleCount),
+        chroma: Array(repeating: 3, count: scaleCount),
+    )
+
+    private init(luma: Float, lumaPerStrength: [Float], chroma: [Float]) {
+        self.luma = luma
+        self.lumaPerStrength = lumaPerStrength
+        self.chroma = chroma
+    }
+
     init(recipe: EditRecipe) {
         let luma = Float(recipe[.noiseLuminance] / 100)
         let lumaDetail = Float(recipe[.noiseLuminanceDetail] / 100)
@@ -40,8 +56,14 @@ struct DenoiseSettings: Hashable {
 }
 
 /// The Detail panel's sharpening sliders in rendering units. Sharpening boosts log-luminance
-/// detail, so it is independent of exposure and leaves colours alone.
+/// detail, so it is independent of exposure and leaves colours alone. The detail is measured on
+/// the separator's clean luminance and mixed between an unsharp mask and Richardson-Lucy
+/// deconvolution of a Gaussian of the Radius, so noise isn't boosted.
 struct SharpenSettings: Hashable {
+    /// Richardson-Lucy iterations; fixed, so previews and exports match (`shp01_calibrate.py`:
+    /// the gain levels off by 4, and noisy input peaks there).
+    static let iterations = 4
+
     /// Detail gain (Amount).
     var gain: Float
     /// Gaussian sigma in full-resolution pixels (Radius).
@@ -49,6 +71,8 @@ struct SharpenSettings: Hashable {
     /// Detail beyond about this many stops is boosted less and less, which holds back halos
     /// on strong edges (Detail).
     var haloScale: Float
+    /// Detail's share of deconvolution against unsharp masking (Detail).
+    var deconvolution: Float
     /// Local gradient, in stops per texel, below which nothing is sharpened (Masking).
     var edgeThreshold: Float
 
@@ -57,6 +81,7 @@ struct SharpenSettings: Hashable {
         sigma = Float(recipe[.sharpenRadius]) * 0.8
         let detail = Float(recipe[.sharpenDetail] / 100)
         haloScale = 0.08 + 0.9 * detail * detail
+        deconvolution = detail
         let masking = Float(recipe[.sharpenMasking] / 100)
         edgeThreshold = 0.3 * masking * masking
     }
@@ -161,7 +186,7 @@ final class DetailStage {
     }
 
     private let device: any MTLDevice
-    private let kernels: KernelLibrary
+    let kernels: KernelLibrary
 
     private struct Key: Equatable {
         var session: ObjectIdentifier
@@ -182,6 +207,8 @@ final class DetailStage {
     private var entries: [Entry] = []
     /// A region and its overview, and the same for a comparison render.
     private static let maximumEntries = 4
+
+    let sharpenCache = SharpenCache()
     private var scratch: [MTLPixelFormat: [any MTLTexture]] = [:]
 
     init(device: any MTLDevice, kernels: KernelLibrary) {
@@ -256,10 +283,10 @@ final class DetailStage {
         }
         if let sharpen {
             let output = try target()
-            try encodeSharpen(
-                session: session, settings: sharpen, work: work, source: source, local: amounts, into: output,
-                encoder: encoder,
-            )
+            try encodeSharpen(SharpenRequest(
+                session: session, settings: sharpen, work: work, source: source, local: amounts,
+                softens: local.layers.contains { $0.amounts[2] < 0 }, cache: cache,
+            ), into: output, encoder: encoder)
             source = Source(texture: output, origin: .zero, level: 0)
         }
         if let contrast {
@@ -321,13 +348,13 @@ final class DetailStage {
 
     /// Where a pass reads the work area from: the pyramid at the work level, or an earlier
     /// pass's texture.
-    private struct Source {
+    struct Source {
         var texture: any MTLTexture
         var origin: SIMD2<Int>
         var level: Int
     }
 
-    private func encodeDenoise(
+    func encodeDenoise(
         session: ImageSession,
         settings: DenoiseSettings,
         work: WorkArea,
@@ -378,44 +405,6 @@ final class DetailStage {
             encoder.dispatchGrid(width: work.size.x, height: work.size.y, pipeline: kernels.denoiseColumns)
             swap(&current, &next)
         }
-    }
-
-    private func encodeSharpen(
-        session: ImageSession,
-        settings: SharpenSettings,
-        work: WorkArea,
-        source: Source,
-        local: (any MTLTexture)?,
-        into output: any MTLTexture,
-        encoder: any MTLComputeCommandEncoder,
-    ) throws {
-        let textures = try scratchTextures(.r32Float, 3, work)
-        let (logLuma, rows, blurred) = (textures[0], textures[1], textures[2])
-        var params = SharpenParams(
-            origin: SIMD4(Int32(source.origin.x), Int32(source.origin.y), Int32(source.level), 0),
-            size: SIMD4(Int32(work.size.x), Int32(work.size.y), 0, 0),
-            luma: Self.luma(session),
-            shape: SIMD4(
-                settings.gain, settings.haloScale, settings.edgeThreshold,
-                settings.sigma(atLevel: work.level) ?? 0,
-            ),
-        )
-        let size = params.size
-        func dispatch(_ pipeline: any MTLComputePipelineState, _ textures: [any MTLTexture]) {
-            encoder.setComputePipelineState(pipeline)
-            for (index, texture) in textures.enumerated() {
-                encoder.setTexture(texture, index: index)
-            }
-            encoder.setBytes(&params, length: MemoryLayout<SharpenParams>.stride, index: 0)
-            encoder.dispatchGrid(width: Int(size.x), height: Int(size.y), pipeline: pipeline)
-        }
-        dispatch(kernels.sharpenLog, [source.texture, logLuma])
-        params.size.z = 0
-        dispatch(kernels.sharpenBlur, [logLuma, rows])
-        params.size.z = 1
-        dispatch(kernels.sharpenBlur, [rows, blurred])
-        params.size.w = local == nil ? 0 : 1
-        dispatch(kernels.sharpenApply, [source.texture, logLuma, blurred, output, local ?? output])
     }
 
     private func encodeLocalContrast(
@@ -489,12 +478,12 @@ final class DetailStage {
     }
 
     /// Rec. 2020 luminance weights for the pyramid's camera RGB, and a floor for its log.
-    private static func luma(_ session: ImageSession) -> SIMD4<Float> {
+    static func luma(_ session: ImageSession) -> SIMD4<Float> {
         SIMD4(session.cameraToWorking.transpose * SIMD3<Float>(0.2627, 0.6780, 0.0593), 1.0 / 1024)
     }
 
     /// `count` working textures of `format` covering the work area, reused across renders.
-    private func scratchTextures(_ format: MTLPixelFormat, _ count: Int, _ work: WorkArea) throws -> [any MTLTexture] {
+    func scratchTextures(_ format: MTLPixelFormat, _ count: Int, _ work: WorkArea) throws -> [any MTLTexture] {
         let existing = scratch[format] ?? []
         if existing.count >= count, let first = existing.first,
            first.width >= work.size.x, first.height >= work.size.y {
