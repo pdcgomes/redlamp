@@ -35,8 +35,15 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     /// Small whole-photo renders sent with region frames; they also feed the histogram.
     private let overviews: SurfacePool
     private let denoiser: Denoiser
+    /// Output tile edge for stills, in pixels.
+    let stillTile: Int
 
-    public init() throws {
+    public convenience init() throws {
+        try self.init(stillTile: 2048)
+    }
+
+    init(stillTile: Int) throws {
+        self.stillTile = stillTile
         guard let device = MTLCreateSystemDefaultDevice(),
               let queue = device.makeCommandQueue(),
               // Background decodes get their own queue so they never delay an interactive render.
@@ -361,8 +368,6 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
 // MARK: - Tiled stills
 
 extension RedlampEngine {
-    static let stillTile = 2048
-
     /// Develops a still in tiles, so spatial stages only ever need a tile's worth of memory.
     private func renderTiles(
         _ recipe: EditRecipe,
@@ -371,7 +376,7 @@ extension RedlampEngine {
         size: PixelSize,
         encoding: OutputEncoding,
     ) throws {
-        let tile = Self.stillTile
+        let tile = stillTile
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: texture.pixelFormat, width: min(tile, size.width), height: min(tile, size.height),
             mipmapped: false,

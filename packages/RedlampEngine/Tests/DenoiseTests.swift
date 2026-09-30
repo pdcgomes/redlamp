@@ -73,6 +73,33 @@ struct DenoiseTests {
         #expect(worst < 2e-3)
     }
 
+    /// Tiles denoise with enough margin that seams can't show: small tiles must give the same
+    /// still as one tile covering everything.
+    @Test(.enabled(if: !EngineSmokeTests.fixtures.isEmpty))
+    func `tiled stills match untiled`() async throws {
+        let url = try #require(EngineSmokeTests.fixtures.first { SupportedFormats.isRaw($0) })
+        var recipe = EditRecipe()
+        recipe[.noiseLuminance] = 80
+        recipe[.noiseColor] = 60
+        recipe[.grainAmount] = 30
+        let request = StillRequest(recipe: recipe, maxLongEdge: 1500)
+        var renders: [Data] = []
+        for tile in [256, 4096] {
+            let engine = try RedlampEngine(stillTile: tile)
+            _ = try await engine.open(url)
+            let image = try await engine.renderStill(request)
+            try renders.append(#require(image.dataProvider?.data) as Data)
+        }
+        #expect(renders[0].count == renders[1].count)
+        var worst = 0
+        var differing = 0
+        for (a, b) in zip(renders[0], renders[1]) where a != b {
+            worst = max(worst, abs(Int(a) - Int(b)))
+            differing += 1
+        }
+        #expect(worst <= 1, "largest difference \(worst) in \(differing) bytes")
+    }
+
     // MARK: - Helpers
 
     private func makeSession(_ sensor: SensorKind, width: Int, height: Int) throws -> ImageSession {

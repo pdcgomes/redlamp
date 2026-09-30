@@ -173,7 +173,7 @@ These block other rows. Most need the project owner; the ones marked *counsel* n
 
 | ID | Item | Recommended | Phase | Size | Depends on | Decision | Status | Source |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ARC-03 | CI gates: preview equals downscaled export, tiled equals untiled, viewport equals a crop of a full render, per-process-version stability; run on every pull request on Apple Silicon | Do better | P0–P2 | M | EDT-02 | Accepted (2026-09-30) | In progress: the viewport-equals-a-crop-of-a-full-render gate is an engine test | [DT §8](darktable-findings.md#8-architecture-performance-and-ux) |
+| ARC-03 | CI gates: preview equals downscaled export, tiled equals untiled, viewport equals a crop of a full render, per-process-version stability; run on every pull request on Apple Silicon | Do better | P0–P2 | M | EDT-02 | Accepted (2026-09-30) | In progress: two gates are engine tests, viewport equals a crop of a full render, and tiled stills equal untiled ones with noise reduction on (verified to catch seams) | [DT §8](darktable-findings.md#8-architecture-performance-and-ux) |
 | ARC-04 | Define every filter radius in full-resolution pixels | Adopt | P2 | S | — | Proposed | Not started | [DT §8](darktable-findings.md#8-architecture-performance-and-ux) |
 | ARC-05 | Tiled rendering for large exports on iPhone and iPad, each stage declaring its overlap | Adopt | P2 | M | ARC-01 | Proposed | Not started | [DT §8](darktable-findings.md#8-architecture-performance-and-ux) |
 | UX-01 | Typed values beyond the slider range, and arithmetic in value fields | Adopt | P2 | S | — | Proposed | Not started | [DT §8](darktable-findings.md#8-architecture-performance-and-ux) |
