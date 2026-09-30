@@ -10,22 +10,24 @@ import UniformTypeIdentifiers
 /// Built in RedlampUI so the harness, the app and a companion app can all host it.
 public struct RecipeLabView: View {
     @Bindable var model: RecipeLabModel
-    @State private var tab = Tab.compare
-    @State private var showGallery = true
+    @State private var tab: Tab
+    @State private var showGallery: Bool
 
-    enum Tab: String, CaseIterable, Identifiable {
+    public enum Tab: String, CaseIterable, Identifiable, Sendable {
         case compare = "Compare"
         case inspect = "Inspect"
         case create = "Create"
         case runs = "Runs"
 
-        var id: String {
+        public var id: String {
             rawValue
         }
     }
 
-    public init(model: RecipeLabModel) {
+    public init(model: RecipeLabModel, tab: Tab = .compare, showsGallery: Bool = true) {
         self.model = model
+        _tab = State(initialValue: tab)
+        _showGallery = State(initialValue: showsGallery)
     }
 
     public var body: some View {

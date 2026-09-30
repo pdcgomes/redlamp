@@ -1,12 +1,21 @@
-# Redlamp
+<p align="center">
+  <img src="docs/brand/images/app-icon.png" width="128" height="128" alt="The Redlamp app icon: a glowing ruby safelight lens in a steel bezel">
+</p>
 
-**A native, open-source RAW photo editor for Mac, iPad, and iPhone that anyone who knows Lightroom will find familiar.**
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="docs/brand/logo/redlamp-lockup-light.svg">
+    <img src="docs/brand/logo/redlamp-lockup.svg" width="288" alt="Redlamp">
+  </picture>
+</h1>
+
+<p align="center"><b>A native, open-source RAW photo editor for Mac, iPad, and iPhone that anyone who knows Lightroom will find familiar.</b></p>
 
 Redlamp is built from scratch in Swift and Metal for Apple Silicon. It focuses on one thing, *developing* photos, and aims to do it faster and more natively than anything else on the platform.
 
 ![Redlamp editing a Nikon Z 6 raw file](docs/images/editor.png)
 
-> **Status: pre-alpha, iteration 2 (macOS).** The core RAW pipeline, the Develop workspace, and the Basic, Tone Curve, Color Mixer, Color Grading, and Effects adjustments and noise reduction work today, and so does **masking with linear and radial gradients** and local adjustments. Crop, healing, brush and AI masks, lens corrections, and the iPad and iPhone apps are next. See [Where we are](#where-we-are) and the [Roadmap](#roadmap).
+> **Status: pre-alpha, iteration 2 (macOS).** The core RAW pipeline and the Develop workspace work today: Basic (with Texture, Clarity and Dehaze), Tone Curve, Color Mixer, Color Grading, Detail (noise reduction and sharpening) and Effects, **masking with linear and radial gradients** and local adjustments, and **Recipes**, Redlamp's presets, profiles and LUTs in one, with film looks measured from cameras' own renderings. Crop, healing, brush and AI masks, lens corrections, focus stacking, and the iPad and iPhone apps are next. See [Where we are](#where-we-are) and the [Roadmap](#roadmap).
 >
 > This README is the project's primary status page and is kept up to date as work lands. *Last updated: 30 September 2026.*
 
@@ -20,6 +29,7 @@ Redlamp is built from scratch in Swift and Metal for Apple Silicon. It focuses o
 - [Screenshots](#screenshots)
 - [Roadmap](#roadmap)
 - [Getting started](#getting-started)
+- [Component harness](#component-harness)
 - [Using Redlamp](#using-redlamp)
 - [Architecture](#architecture)
 - [Contributing](#contributing)
@@ -55,7 +65,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 
 **RAW pipeline (our own, GPU-first)**
 - [x] Decodes RAW files through LibRaw (unpacking only). Black levels, white balance, demosaicing, and color are all done by Redlamp on the GPU.
-- [x] Bayer demosaic by directional filtering with a posteriori decision (Menon, Andriani and Calvagno, 2007), a first-generation X-Trans demosaic, and linear DNG support (for example iPhone ProRAW).
+- [x] Bayer demosaic by directional filtering with a posteriori decision (Menon, Andriani and Calvagno, 2007), with a dual pass that takes plain green where the neighbours differ only by noise, a first-generation X-Trans demosaic, and linear DNG support (for example iPhone ProRAW).
 - [x] Hot pixels are repaired before demosaicing, judged against each photo's own noise level.
 - [x] **Highlight reconstruction:** channels are no longer clipped at 1 after white balance, and photosites that did clip are rebuilt from their bright unclipped neighbours, using the colour measured around the clipped area. Fully blown areas stay neutral.
 - [x] Tested on Sony **ARW**, Canon **CR3**, Nikon **NEF**, Fujifilm **RAF** (X-Trans), and Apple **ProRAW DNG**, plus JPEG, HEIC, TIFF, and PNG.
@@ -69,7 +79,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 **Develop adjustments that render**
 - [x] **White balance:** Temp and Tint, the presets, Auto, and the eyedropper.
 - [x] **Basic:** Exposure, Contrast, Highlights, Shadows, Whites, Blacks, Vibrance, and Saturation, plus the **Auto** button.
-- [x] **Treatment** (Color or B&W) and **Base Looks** (Lightroom's profiles) with an Amount slider (0–200) and a browser that renders every look on the photo. There are six built-in looks (Redlamp Color, Neutral, Vivid, Landscape, Portrait and Monochrome) and 15 film-style looks built on 3D look tables: slide, chrome, negative, cinema, bleach and black and white through color filters. Three of them (standard, vivid slide and chrome) are measured from cameras' own renderings by the look profiler, and land within ΔE 2.7–3.4 of the camera on photos the fit never saw.
+- [x] **Treatment** (Color or B&W) and **Base Looks** (Lightroom's profiles) with an Amount slider (0–200) and a browser that renders every look on the photo. There are six built-in looks (Redlamp Color, Neutral, Vivid, Landscape, Portrait and Monochrome) and 15 film-style looks built on 3D look tables: slide, chrome, negative, cinema, bleach and black and white through color filters. Four of them are measured from cameras' own renderings by the look profiler (see [Recipes and looks](#recipes-and-looks)).
 - [x] **Tone Curve:** a parametric curve with split points, and a point curve with presets.
 - [x] **Color Mixer:** HSL (Hue, Saturation, Luminance, and All) and a per-color mode, working in OKLCh.
 - [x] **Color Grading:** 3-way and individual wheels, Blending, and Balance. It also tints B&W images for split-toning.
@@ -97,14 +107,35 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] **Histogram:** clipping indicators, and you can drag across it to adjust Blacks, Shadows, Exposure, Highlights, or Whites.
 - [x] **Recipes** (Lightroom's presets, profiles and LUTs, in one): 39 bundled recipes in eight groups, including camera-style ones built from Fujifilm-style recipe cards. Hover to preview, click to apply, then adjust the recipe's Amount. You can search (Lightroom's words work), mark favorites, save the current edit as a recipe with a settings checklist (⇧⌘N), and import or export `.redrecipe`, `.cube` and HaldCLUT files. Snapshots and full undo/redo history are also available.
 - [x] **Camera-recipe controls** in the Effects panel: Dynamic Range, Color Chrome, Chrome FX Blue, and red and blue white-balance shift.
-- [x] **Viewing:** Fit, Fill, 1:1, and 2:1 zoom, click to zoom, pan, pinch, before/after, and a clipping overlay.
+- [x] **Viewing:** Fit, Fill, 1:1, and 2:1 zoom, click to zoom, pan, pinch, and a clipping overlay. **Before/After** (`\`) in three layouts, full frame, side by side and a diagonal split, cycled with `Y` and `⇧Y`; the original is rendered once and cached, so edits don't re-render it.
+- [x] **Themes:** Neutral greys by default, so nothing tints your judgment of color, plus a Redlamp theme and 20 dark and light families with a tint control, from the toolbar's Theme button or **Settings** (⌘,), which also has an About tab.
 - [x] **Lightroom Classic's keyboard shortcuts**: 80 actions on 84 key bindings, from one registry that also drives the menus and an in-app ⌘/ reference (see [Keyboard shortcuts](#keyboard-shortcuts)).
 - [x] **Find an adjustment** (⌘F): search the Develop sliders by name or the words people use (Lightroom's older names too), then jump to it; ⌘-scroll over any slider adjusts it (Shift coarse, Option fine), and value fields accept arithmetic such as `x+10`.
 - [x] **Culling while you develop:** star ratings, pick/reject flags and color labels, shown on the filmstrip. There's also an Info overlay (`I`), Lights Out (`L`), full-screen preview (`F`), and Paste from Previous (`⌥⌘V` and the Previous button).
 - [x] Non-destructive edits, saved automatically to a sidecar file next to each photo (`IMG_1234.ARW.redlamp`).
-- [x] Export to JPEG, plus a headless `redlamp` command-line tool for rendering and export.
+- [x] Export to JPEG, plus a headless `redlamp` command-line tool for rendering and export. Exports smaller than the photo are developed at full resolution and downscaled last, so sharpening, noise reduction and texture look the same at every size.
 
-**Panels laid out but not yet rendering** (shown dimmed, with the phase they arrive in): Moiré and Defringe in masks, and the Lens Corrections, Transform, and Calibration panels. The Crop, Healing, and Red Eye tools show what is coming and when.
+### Recipes and looks
+
+- [x] **One `.redrecipe` format** for presets, profiles and LUTs: an explicit list of setting groups, an optional Base Look pinned by content hash, immutable versions, and namespaced ids ready for sharing ([format](docs/recipes/recipe-format.md), [JSON Schema](docs/recipes/recipe-format.schema.json)).
+- [x] **Camera recipe cards:** Fujifilm-style recipes (film simulation, dynamic range, highlight and shadow tone, color, Color Chrome, white balance shift, grain) are a recipe dialect you can type in as the card lists them ([mapping](docs/recipes/camera-card-mapping.md)).
+- [x] **Measured film looks.** The profiler fits a look to cameras' own JPEGs of the same raw files: Fujifilm raws carry the camera's rendering inside. On photos the fit never saw:
+
+  | Base Look | Like | Measured from | ΔE to the camera (lower is closer) |
+  | --- | --- | --- | --- |
+  | Standard v3 | Provia | 120 photos, 50 bodies | 3.26 (Redlamp Color: 5.38) |
+  | Vivid Slide v2 | Velvia | 10 bodies | 3.39 (4.45) |
+  | Chrome v3 | Classic Chrome | 18 photos, 5 bodies | 4.61 (5.72) |
+  | Soft Slide v2 | Astia | 5 photos, 3 bodies, provisional | 4.57 (12.84) |
+
+  The others are hand-designed until there's data for them ([look development](docs/recipes/look-development.md#measured-base-looks-the-profiler)). Looks keep Redlamp's own names.
+- [x] **Look-development tools:** lint (neutral axis, skin hue, monotonic lightness, banding, clipping) on a synthetic chart, golden renders per recipe version, style fingerprints and a fitter, and the **Recipe Lab** in the [component harness](#component-harness).
+- [x] **An agent recipe studio** ([docs](docs/recipes/agent-studio.md)): curator, colorist and critic agents work through `redlamp mcp` on briefs drawn from public-domain references. People approve the briefs and pick the winners in the Recipe Lab, and the critics are only trusted after they agree with human picks on held-out pairs.
+
+### In progress
+
+- **Focus stacking:** the engine decodes, aligns (ECC, for focus breathing, rotation and shift) and warps the frames, solves a depth map, and fuses them with Auto, Smooth and Detail strategies, one frame at a time; the merge develops like any raw. `redlamp stack` runs it from the command line (a 25-frame R5 II stack takes about 24 s). The app's UI is next.
+- **Panels laid out but not yet rendering** (shown dimmed, with the phase they arrive in): Moiré and Defringe in masks, and the Lens Corrections, Transform, and Calibration panels. The Crop, Healing, and Red Eye tools show what is coming and when.
 
 ### Measured performance
 
@@ -134,8 +165,9 @@ With both side panels in AppKit, most of what remains is Core Animation committi
 
 ### Known limitations
 
-- Highlights and Shadows are per-pixel approximations for now. Lightroom-quality versions need edge-aware local tone mapping, which arrives with Clarity and Texture in Phase 2.
-- X-Trans demosaicing is a first-generation interpolation. A Markesteijn-class demosaic (and AMaZE and RCD for Bayer sensors) comes in Phase 2.
+- Highlights and Shadows are per-pixel approximations for now. Lightroom-quality versions need edge-aware local tone mapping (an exposure-independent guided filter), planned for Phase 2.
+- X-Trans demosaicing is a first-generation interpolation. A Markesteijn-class demosaic comes in Phase 2.
+- Redlamp's exposure for Fujifilm raws differs from the camera's by up to ±0.9 EV depending on the body; the profiler removes it when measuring looks, and the engine fix is tracked (TON-14).
 - Color uses a single-illuminant Adobe-derived matrix: LibRaw's, or the DNG's own ColorMatrix. Dual-illuminant DCP profiles come in Phase 2.
 - Masks support linear and radial gradients only. Brush, range, and AI masks come in Phases 2 and 3.
 - Local Whites and Blacks are approximated with tonal-region gains.
@@ -157,9 +189,21 @@ With both side panels in AppKit, most of what remains is Core Animation committi
 
 ![Color grading](docs/images/color-grading.png)
 
-**Black & white on a Sony A7 III ARW.** The Selenium preset plus vignette and grain, with every step in History.
+**A camera recipe on a Fujifilm X-T3 RAF.** Chrome Street, built from a Fujifilm-style recipe card, on the measured Chrome Base Look. The recipe's Amount is in the Recipes panel, and its tone, Color Chrome and grain settings land in the Basic and Effects panels like any other edit.
+
+![A camera recipe](docs/images/recipes.png)
+
+**Black & white on a Sony A7 III ARW.** The Selenium recipe plus vignette and grain, with every step in History.
 
 ![Black and white](docs/images/black-and-white.png)
+
+**Detail at 1:1 on a Canon EOS R6 CR3.** Noise reduction scaled to the photo's measured noise, and noise-aware sharpening that measures detail on a denoised copy, so grain isn't sharpened.
+
+![Detail at 1:1](docs/images/detail.png)
+
+**Before and after, side by side, on a Nikon Z 6 NEF.** Exposure, Highlights, Shadows, Dehaze, Clarity and Vibrance; the original renders once and is cached.
+
+![Before and after](docs/images/before-after.png)
 
 **Fujifilm X-T3 X-Trans RAF at 1:1.** The full-resolution frame renders in about 13 ms, and the Color Mixer is shown in HSL mode.
 
@@ -169,7 +213,31 @@ With both side panels in AppKit, most of what remains is Core Animation committi
 
 ![ProRAW](docs/images/proraw.png)
 
-<sub>Sample images are CC0 files from [raw.pixls.us](https://raw.pixls.us). The screenshots are generated by `mise run screenshots`.</sub>
+### The Recipe Lab
+
+The Lab lives in the [component harness](#component-harness). It renders every recipe, Base Look and imported LUT on a 40-image CC0 look-development set.
+
+**Gallery and split compare.** Thumbnails of every item on the chosen photo, filtered by kind, group, tag and lint result. On the right, the selected recipe (Chrome Street) against the original, with a draggable divider.
+
+![The Recipe Lab gallery and split compare](docs/images/lab-gallery.png)
+
+**One recipe across the set.** Gritty Street on landscapes, animals, night streets, foliage and interiors at once, to catch a look that only works on one kind of photo.
+
+![A recipe across the look-development set](docs/images/lab-across-set.png)
+
+**A against B.** Two camera recipes, Chrome Street and Bright Slide, on the same photo.
+
+![Two recipes side by side](docs/images/lab-side-by-side.png)
+
+**Inspect.** Every included setting with its key, the camera card the recipe was built from, and the Base Look's table statistics and lint.
+
+![Inspecting a recipe](docs/images/lab-inspect.png)
+
+**Agent studio runs.** A brief with the public-domain references it was drawn from, and the candidates developed against it with their lineage, lint and distance to the references. Each candidate opens in Compare at full size; pairwise picks and final picks are recorded for the critics' evals.
+
+![A studio run in the Recipe Lab](docs/images/lab-runs.png)
+
+<sub>Sample images are CC0 files from [raw.pixls.us](https://raw.pixls.us); the brief's references are public-domain and CC0 photos from Wikimedia Commons. The screenshots are generated by `mise run screenshots`.</sub>
 
 ## Roadmap
 
@@ -182,7 +250,7 @@ Every phase ships on Mac, iPad, and iPhone. The Lightroom feature inventory in [
 - [x] Lightroom feature inventory
 - [x] GitHub Actions CI: purity gate, SwiftFormat lint, build, and tests, with cached LibRaw and fixtures
 - [ ] Performance lab: CI runner plus tethered iPhone and iPad, with per-tier regression gates that block merges
-- [ ] Golden-image color regression tests (ΔE2000)
+- [ ] Golden-image color regression tests (ΔE2000) for camera files (every bundled recipe version already has a golden render, never regenerated)
 - [ ] Written clean-room policy and a license-audit gate in CI
 
 ### Phase 1: First light *(in progress; macOS iterations 1 and 2 done)*
@@ -194,11 +262,17 @@ Every phase ships on Mac, iPad, and iPhone. The Lightroom feature inventory in [
 - [ ] iPad and iPhone shells (compact layout, touch, Apple Pencil)
 - [ ] Coordinated sidecar I/O for iCloud Drive and Files
 
-### Phase 2: Develop parity
-- [ ] Edge-aware Highlights and Shadows, and edge-refined Dehaze (Texture, Clarity and Dehaze are done)
-- [ ] Detail panel: sharpening and **best-in-class classical noise reduction**, profiled per camera and ISO, on raw data, with Lightroom's luminance and color controls
-- [ ] Better X-Trans demosaicing (Markesteijn) and a dual demosaic for Bayer (Bayer demosaicing from the Menon paper and highlight reconstruction are done)
-- [ ] Full DCP camera profiles (dual and triple illuminant), ICC input profiles, and `.3dl` and log-space LUT import (`.cube`, HaldCLUT and the Base Look browser are done)
+### Phase 2: Develop parity *(in progress)*
+- [x] Texture, Clarity and Dehaze, globally and inside masks
+- [x] Detail panel: noise reduction scaled to each photo's measured noise, and noise-aware sharpening, with Lightroom's controls
+- [x] Menon Bayer demosaic with a dual pass for flat noisy areas, hot-pixel repair and highlight reconstruction
+- [x] **Recipes:** one format for presets, profiles and LUTs, Base Look tables, camera recipe cards, `.cube` and HaldCLUT import, 39 bundled recipes, and the Recipe Lab
+- [x] Before/After layouts, themes and a Settings window
+- [ ] Edge-aware Highlights and Shadows, and edge-refined Dehaze
+- [ ] **Best-in-class classical noise reduction** on raw data, profiled per camera and ISO
+- [ ] Better X-Trans demosaicing (Markesteijn)
+- [ ] Full DCP camera profiles (dual and triple illuminant), ICC input profiles, and `.3dl` and log-space LUT import
+- [ ] **Film effects for recipes:** halation (the red glow around bright lights), bloom and diffusion, and film grain that varies with density and scales with output size
 - [ ] Lens corrections from the lensfun database, Adobe LCP import, and DNG opcodes
 - [ ] Crop and straighten, Transform and Upright
 - [ ] Brush, color range, and luminance range masks, and Vision AI masks (subject, sky, background, people)
@@ -209,9 +283,11 @@ Every phase ships on Mac, iPad, and iPhone. The Lightroom feature inventory in [
 - [ ] SAM-class object and people-part masks, mask refinement, mask presets, and syncing masks across photos
 - [ ] Healing, clone, and content-aware remove, with AI inpainting on the device
 - [ ] **AI Denoise:** an on-device model working on raw data, matching or beating the best commercial denoisers, with a fast 1:1 preview and non-destructive results
-- [ ] **Focus stacking v1:** stacks detected automatically in the filmstrip, alignment (including focus breathing and handheld sequences), depth-map and pyramid fusion strategies, a retouch brush, and results that stay fully editable
+- [ ] **Focus stacking v1:** stacks detected automatically in the filmstrip, alignment (including focus breathing and handheld sequences), depth-map and pyramid fusion strategies, a retouch brush, and results that stay fully editable *(alignment, depth solve, fusion and `redlamp stack` done)*
 - [ ] Manufacturer lens corrections embedded in RAW files (Sony, Fujifilm, Panasonic, OM System)
-- [ ] `redlamp-profiler`: look matching by black-box measurement (Fujifilm film simulation–inspired looks, Adobe-compatible looks), with a DCP and LUT writer. Fitted looks fill the camera-card film slots as new Base Look versions.
+- [ ] `redlamp-profiler`: look matching by black-box measurement *(raw-against-camera-JPEG fitting done: four measured film looks ship)*. Still to do: the remaining film simulations (Eterna, Classic Negative, Nostalgic Negative, Pro Neg, Acros, Reala Ace), which need a shoot with one camera, a chart matrix solve, and a DCP writer
+- [ ] **Analogue film stocks:** film and digital shot side by side with charts, scanned and fitted by the profiler, with halation, bloom and grain per stock
+- [ ] **The agent recipe studio at scale:** many more recipes developed from briefs, once the critics agree with human picks (about 200 pairwise verdicts)
 
 ### Phase 4: 1.0
 - [ ] Lightroom XMP sidecar import, HDR/EDR editing and export, and batch export
@@ -228,7 +304,7 @@ Every phase ships on Mac, iPad, and iPhone. The Lightroom feature inventory in [
 
 The [AI and computational photography brief](docs/research/ai-and-computational-photography-brief.md) covers denoise, AI across the product (upscaling, masks, removal, auto settings), and focus stacking. Its first round of [findings](docs/research/ai-findings.md) gives a verdict for each workstream, a license matrix for every candidate model and dataset, the engine AI architecture, measured Core ML and focus-stacking prototypes (in [`research/prototypes/`](research/prototypes/README.md)), and proposed changes to the phases above.
 
-A [study of darktable](docs/research/darktable-findings.md), the most complete open-source raw developer, covers how it handles cameras, color science, modules and masks, presets and sidecars, lenses, performance and UX, and what Redlamp should adopt, do better or skip in each area. Every recommendation from both studies is tracked, with its decision, phase and status, in the [research intake tracker](docs/research/research-tracker.md).
+A [study of darktable](docs/research/darktable-findings.md), the most complete open-source raw developer, covers how it handles cameras, color science, modules and masks, presets and sidecars, lenses, performance and UX, and what Redlamp should adopt, do better or skip in each area. A [study of Topaz-style upscaling and sharpening](docs/research/notes/H-topaz-upscale-sharpen.md) includes a measured bake-off of open models. Every recommendation from these studies is tracked, with its decision, phase and status, in the [research intake tracker](docs/research/research-tracker.md).
 
 ## Getting started
 
@@ -276,24 +352,39 @@ mise run render -- render ~/Pictures/DSC01234.ARW -o out.jpg --size 2048 \
 | `mise run lookdev` | Download the 40-image CC0 look-development set into `build/look-dev` (checksums verified) |
 | `mise run profile-data` | Download the CC0 Fujifilm raw and camera-JPEG pairs the look profiler fits against |
 | `mise run render` | Build and run the `redlamp` CLI |
-| `mise run screenshots` | Regenerate the README screenshots (needs Screen Recording permission) |
+| `mise run screenshots` | Regenerate the README screenshots of the app and the harness, on temporary copies of the fixtures (needs Screen Recording permission, the fixtures and the look-development set) |
 | `mise run harness` (`h`) | Build and launch the UI component harness |
 | `scripts/perf-sweep.sh [Debug\|Release] [parameter] [script]` | Drag a slider for 3 s and report main-thread smoothness. `PROFILE=1` adds a main-thread profile; `PANELS=swiftui` measures the SwiftUI panels |
 | `scripts/harness-capture.sh <scene> <png> [mode]` | Screenshot a harness scene; with `side` mode, `swift scripts/parity-diff.swift <png>` scores it and `scripts/parity-rows.swift` compares it row by row |
 
-### Component harness
+## Component harness
 
-`mise run harness` opens Redlamp Harness, a development app for building and reviewing UI components in isolation, in the spirit of a design-system workbench. It hosts the real frameworks and the real editor (with a sample photo open, copied to a temporary folder so reviews never write sidecars):
+`mise run harness` opens **Redlamp Harness**, a development app for building and reviewing Redlamp's UI in isolation, in the spirit of a design-system workbench. It links the real frameworks and hosts the real editor, with a sample photo copied to a temporary folder so reviews never write sidecars. Scenes are listed on the left by section. The stage in the middle can sit on the panel background, the canvas grey or black (top right), and the theme, dark or light appearance and tint are under the scene list, so every scene can be checked in every theme.
 
-- **Foundations:** the palette, the type ramp (SwiftUI and AppKit side by side), and metrics.
-- **Controls and Panels:** every component in every state worth reviewing, each with a note on what would be wrong with it.
-- **Parity:** a SwiftUI original and its AppKit port at the same width, shown side by side, as a difference blend (identical pixels are black), as an onion skin, or flickering. The inspector has knobs for drawing constants and a **Copy values** button. `--probe` measures SwiftUI and AppKit elements one by one and writes the sizes to `/tmp/redlamp-probe.txt`.
-- **Performance:** drags a slider at 120 events a second through each implementation and reports how busy the main thread got.
-- **Recipe Lab:** every recipe, Base Look and imported LUT on the look-development set and a lint chart. It compares before and after, A against B, and one recipe across the set; it inspects settings, table statistics and lint; it creates recipes with the real Develop panels or a camera card; and it shows the agent studio's runs, where people approve briefs and make pairwise and final picks.
+| Section | Scenes | What they're for |
+| --- | --- | --- |
+| **Foundations** | Tokens, Theme gallery | The palette, the type ramp (SwiftUI and AppKit side by side) and metrics; every theme at once |
+| **Controls** | Slider row, Panel chrome | Each component in every state worth reviewing, with a note on what would be wrong with it |
+| **Panels** | Basic | A panel wired to the live editor |
+| **Parity** | Slider rows, Basic, Tone Curve, Histogram, Color Mixer, Color Grading, Detail, Effects, Lens Corrections, Transform, Calibration, Masking, Inspector column, Navigator, the sidebar lists | A SwiftUI original and its AppKit port at the same width: side by side, as a difference blend (identical pixels are black), as an onion skin, or flickering. The inspector has knobs for drawing constants and a **Copy values** button |
+| **Performance** | Basic panel drag | Drags a slider at 120 events a second through each implementation and reports how busy the main thread got |
+| **Recipes** | Recipe Lab | Every recipe, Base Look and imported LUT on the look-development set and a lint chart (see below) |
+
+![Tokens in the harness: the palette, type ramp and metrics](docs/images/harness-tokens.png)
 
 ![The harness comparing the SwiftUI Basic panel with its AppKit port](docs/images/harness-parity.png)
 
-To add a component, write a scene in `apps/RedlampHarness/Sources/Scenes/` and register it in `BuiltInScenes.swift`. Against their SwiftUI originals, the ports score a mean difference of 0.05 (Tone Curve) to 0.12 (Basic) grey levels, with at least 99.97% of pixels within 24 levels; the rest is anti-aliasing on the slider thumbs.
+Against their SwiftUI originals, the AppKit ports score a mean difference of 0.05 (Tone Curve) to 0.12 (Basic) grey levels, with at least 99.97% of pixels within 24 levels; the rest is anti-aliasing on the slider thumbs.
+
+**The Recipe Lab** (screenshots [above](#the-recipe-lab)) has four tabs:
+- **Compare:** the selected item against the original with a draggable split, before and after, A against B, flickering between them, or one recipe across the whole set. Double-click a comparison to hide the gallery.
+- **Inspect:** included settings with their keys, the camera card, Base Look table statistics, and lint with each check's measurements.
+- **Create:** a new recipe from the real Develop panels ("Edit in Develop", then "Capture"), a camera card, or an imported `.cube` or HaldCLUT, saved to My Recipes.
+- **Runs:** the agent studio's runs. Approve briefs next to their references, open candidates in Compare, judge pairs large on any photo, and pick finals or add them to My Recipes.
+
+**Launch options,** for reviews and scripted screenshots: `--scene <id>`, `--background panel|canvas|black`, `--parity-mode`, `--theme <id>`, `--appearance dark|light`, `--tint <0…1>`, and for the Lab `--lab-tab`, `--lab-select <recipe id>`, `--lab-compare <recipe id>`, `--lab-mode split|beforeAfter|sideBySide|flicker|acrossSet`, `--lab-image <camera>`, `--lab-run <run>` and `--lab-hide-gallery`. `--probe` measures SwiftUI and AppKit elements one by one and writes the sizes to `/tmp/redlamp-probe.txt`. `scripts/harness-capture.sh <scene> <png> [mode] [options…]` screenshots a scene; `scripts/theme-sweep.sh` captures scenes in every theme.
+
+To add a component, write a scene in `apps/RedlampHarness/Sources/Scenes/` and register it in `BuiltInScenes.swift`.
 
 ## Using Redlamp
 

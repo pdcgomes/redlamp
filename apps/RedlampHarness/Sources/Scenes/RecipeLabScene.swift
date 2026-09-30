@@ -13,7 +13,13 @@ extension HarnessScene {
                 + "compare, inspect, lint, create, and review agent runs",
             section: .recipes,
         ) {
-            RecipeLabView(model: HarnessLab.model)
+            RecipeLabView(
+                model: HarnessLab.model,
+                tab: HarnessLaunch.value(after: "--lab-tab").flatMap { name in
+                    RecipeLabView.Tab.allCases.first { $0.rawValue.lowercased() == name.lowercased() }
+                } ?? .compare,
+                showsGallery: !HarnessLaunch.arguments.contains("--lab-hide-gallery"),
+            )
         }
         scene.fillsStage = true
         return scene
@@ -29,10 +35,25 @@ enum HarnessLab {
             fatalError("The harness needs a Metal GPU")
         }
         let model = RecipeLabModel(engine: engine, editor: HarnessEditor.model, root: repositoryRoot)
-        // `--lab-select <recipe id>` preselects a recipe, for scripted screenshots.
+        // For scripted screenshots: `--lab-select <recipe id>` and `--lab-compare <recipe id>`
+        // pick A and B, `--lab-mode <split|beforeAfter|sideBySide|flicker|acrossSet>` the
+        // comparison, `--lab-image <camera>` the photo, `--lab-tab <tab>` and
+        // `--lab-hide-gallery` the layout, and `--lab-run <run>` the studio run.
         if let id = HarnessLaunch.value(after: "--lab-select") {
             model.selectedID = model.allItems.first { $0.recipe.id == id }?.id
         }
+        if let id = HarnessLaunch.value(after: "--lab-compare") {
+            model.compareID = model.allItems.first { $0.recipe.id == id }?.id
+        }
+        if let name = HarnessLaunch.value(after: "--lab-mode"),
+           let mode = LabCompareMode.allCases.first(where: { "\($0)".lowercased() == name.lowercased() }) {
+            model.compareMode = mode
+        }
+        if let name = HarnessLaunch.value(after: "--lab-image"),
+           let image = model.images.first(where: { $0.name.localizedCaseInsensitiveContains(name) }) {
+            model.selectedImage = image
+        }
+        model.preferredRun = HarnessLaunch.value(after: "--lab-run")
         return model
     }()
 

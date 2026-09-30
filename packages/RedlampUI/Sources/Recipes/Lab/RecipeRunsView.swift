@@ -30,11 +30,11 @@ final class RecipeRunsModel {
     private(set) var message: String?
     @ObservationIgnored private var lastModified = Date.distantPast
 
-    init(root: URL, rater: String = NSUserName()) {
+    init(root: URL, rater: String = NSUserName(), preferredRun: String? = nil) {
         self.root = root
         self.rater = rater
         runs = RunStore.all(root: root)
-        selectedRun = runs.first?.id
+        selectedRun = runs.first { $0.id == preferredRun }?.id ?? runs.first?.id
         reload()
     }
 
@@ -221,7 +221,7 @@ struct RecipeRunsView: View {
         }
         .onAppear {
             if runs == nil, let root = model.root {
-                runs = RecipeRunsModel(root: root)
+                runs = RecipeRunsModel(root: root, preferredRun: model.preferredRun)
             }
         }
     }

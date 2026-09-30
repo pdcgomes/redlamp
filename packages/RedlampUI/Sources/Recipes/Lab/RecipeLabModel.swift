@@ -157,6 +157,9 @@ public final class RecipeLabModel {
         return recipes + looks + candidates
     }
 
+    /// The studio run the Runs tab opens on; the first run when nil.
+    public var preferredRun: String?
+
     /// Studio candidates opened from the Runs tab, so they can be compared at full size.
     public private(set) var candidates: [LabItem] = []
     /// Changes whenever the Runs tab asks the Lab to show the Compare tab.
