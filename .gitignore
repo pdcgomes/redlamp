@@ -28,6 +28,9 @@ vendor/cache/
 # Test fixtures that are downloaded, not committed (CC0 samples from raw.pixls.us)
 tests/fixtures/raw/
 
+# Python bytecode from research prototypes
+__pycache__/
+
 # Sidecars written while testing against fixtures
 *.redlamp
 
