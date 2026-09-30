@@ -3,6 +3,9 @@ import RedlampEngineAPI
 import SwiftUI
 
 /// Mask drawing and handles, layered over the canvas while the Masking tool is active.
+///
+/// Reads `maskOutlines` (geometry, not adjustments), so dragging a mask's sliders doesn't
+/// re-render the guides.
 struct MaskOverlayView: View {
     @Environment(EditorModel.self) private var model
     @State private var drawingKind: MaskKind?
@@ -25,7 +28,7 @@ struct MaskOverlayView: View {
                         }
                 }
 
-                ForEach(model.masks) { mask in
+                ForEach(model.maskOutlines) { mask in
                     if model.showMaskPins, mask.id != model.selectedMaskID,
                        let center = mask.components.first?.shape.center {
                         Pin(selected: false)
@@ -36,13 +39,13 @@ struct MaskOverlayView: View {
                 }
 
                 // Shown while a shape is being drawn too, so its guides follow the drag.
-                if model.showMaskPins, let mask = model.selectedMask {
+                if model.showMaskPins, let mask = model.selectedOutline {
                     ForEach(mask.components) { component in
                         ComponentHandles(
                             mask: mask,
                             component: component,
                             frame: frame,
-                            isSelected: component.id == model.selectedComponent?.id,
+                            isSelected: component.id == model.selectedComponentOutline?.id,
                         )
                     }
                 }
@@ -152,8 +155,8 @@ private struct Handle: View {
 
 /// Guides and draggable handles for one component.
 private struct ComponentHandles: View {
-    let mask: MaskLayer
-    let component: MaskComponent
+    let mask: MaskOutline
+    let component: MaskOutline.Component
     let frame: ImageFrame
     let isSelected: Bool
 
