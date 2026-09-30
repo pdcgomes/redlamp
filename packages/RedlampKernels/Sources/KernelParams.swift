@@ -170,6 +170,31 @@ public struct SharpenParams {
     }
 }
 
+public struct LocalContrastParams {
+    public var origin: SIMD4<Int32>
+    public var size: SIMD4<Int32>
+    public var place: SIMD4<Int32>
+    public var levels: SIMD4<Int32>
+    public var luma: SIMD4<Float>
+    public var shape: SIMD4<Float>
+
+    public init(
+        origin: SIMD4<Int32>,
+        size: SIMD4<Int32>,
+        place: SIMD4<Int32>,
+        levels: SIMD4<Int32>,
+        luma: SIMD4<Float>,
+        shape: SIMD4<Float>,
+    ) {
+        self.origin = origin
+        self.size = size
+        self.place = place
+        self.levels = levels
+        self.luma = luma
+        self.shape = shape
+    }
+}
+
 public struct MaskComponentGPU: Sendable {
     public var geometry: SIMD4<Float>
     public var shape: SIMD4<Float>

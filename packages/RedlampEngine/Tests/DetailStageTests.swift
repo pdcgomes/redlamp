@@ -9,7 +9,7 @@ import Testing
 
 /// Flat synthetic sensors with exact Poisson–Gaussian noise, through the real session builder.
 @Suite(.enabled(if: MTLCreateSystemDefaultDevice() != nil))
-struct DenoiseTests {
+struct DetailStageTests {
     static let noise = NoiseModel(a: SIMD3(repeating: 4e-4), b: SIMD3(repeating: 2e-6))
     static let level: Float = 0.25
 
@@ -82,6 +82,8 @@ struct DenoiseTests {
         recipe[.noiseLuminance] = 80
         recipe[.noiseColor] = 60
         recipe[.grainAmount] = 30
+        recipe[.texture] = 40
+        recipe[.clarity] = 30
         let request = StillRequest(recipe: recipe, maxLongEdge: 1500)
         var renders: [Data] = []
         for tile in [256, 4096] {
@@ -158,6 +160,43 @@ struct DenoiseTests {
         #expect(!DetailStage.isActive(Self.untouched))
     }
 
+    // MARK: - Texture and Clarity
+
+    /// A neutral scene whose log luminance is a vertical-stripe sinusoid of `period` pixels.
+    private func stripes(period: Double) throws -> ImageSession {
+        try makeSession(.bayer, width: 768, height: 256, noiseScale: 0) { x, _ in
+            Float(0.2 * pow(2, 0.5 * sin(2 * .pi * Double(x) / period)))
+        }
+    }
+
+    /// The stripes' amplitude in stops, away from the borders.
+    private func amplitude(_ pixels: [SIMD3<Float>]) -> Float {
+        let logs = (128 ..< 640).map { log2(pixels[128 * 768 + $0].y) }
+        let mean = logs.reduce(0, +) / Float(logs.count)
+        return (logs.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Float(logs.count)).squareRoot()
+    }
+
+    private func gain(_ session: ImageSession, _ recipe: EditRecipe) throws -> Float {
+        try amplitude(processed(session, recipe: recipe)) / amplitude(readLevel(session, level: 0))
+    }
+
+    @Test func `texture works on medium detail`() throws {
+        var more = Self.untouched
+        more[.texture] = 100
+        var less = Self.untouched
+        less[.texture] = -100
+        let medium = try stripes(period: 6)
+        #expect(try gain(medium, more) > 1.2)
+        #expect(try gain(medium, less) < 0.85)
+        #expect(try abs(gain(stripes(period: 128), more) - 1) < 0.05)
+    }
+
+    @Test func `clarity works on larger detail`() throws {
+        var recipe = Self.untouched
+        recipe[.clarity] = 100
+        #expect(try gain(stripes(period: 48), recipe) > 1.1)
+    }
+
     // MARK: - Sensor cleanup
 
     @Test func `hot pixels are repaired`() throws {
@@ -192,7 +231,7 @@ struct DenoiseTests {
         height: Int,
         noiseScale: Float = 1,
         spikes: [(SIMD2<Int>, Float)] = [],
-        signal: (Int, Int) -> Float = { _, _ in DenoiseTests.level },
+        signal: (Int, Int) -> Float = { _, _ in DetailStageTests.level },
     ) throws -> ImageSession {
         let layout: DecodedImage.Layout
         let channels: Int

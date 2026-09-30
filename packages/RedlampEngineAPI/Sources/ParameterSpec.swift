@@ -182,8 +182,8 @@ public enum ParameterCatalog {
         ParameterSpec(.whites, "Whites"),
         ParameterSpec(.blacks, "Blacks"),
 
-        ParameterSpec(.texture, "Texture", availability: texture),
-        ParameterSpec(.clarity, "Clarity", availability: texture),
+        ParameterSpec(.texture, "Texture"),
+        ParameterSpec(.clarity, "Clarity"),
         ParameterSpec(.dehaze, "Dehaze", availability: texture),
         ParameterSpec(.vibrance, "Vibrance"),
         ParameterSpec(.saturation, "Saturation"),

@@ -64,8 +64,40 @@ struct SharpenSettings: Hashable {
     }
 }
 
-/// The Detail panel as a cached spatial stage in front of the fused develop kernel: noise
-/// reduction, then sharpening.
+/// Texture and Clarity in rendering units: gains on two bands of log-luminance detail, taken
+/// from the session's pyramid. Texture's band spans about 2 to 8 full-resolution pixels,
+/// Clarity's about 8 to 64; negative values smooth instead.
+struct LocalContrastSettings: Hashable {
+    static let textureLevels = 1 ... 3
+    static let clarityLevels = 3 ... 6
+
+    var texture: Float
+    var clarity: Float
+    /// Clarity's detail saturates at about this many stops, which holds back halos.
+    static let clarityLimit: Float = 0.5
+
+    init(recipe: EditRecipe) {
+        let textureAmount = Float(recipe[.texture] / 100)
+        // Removing the whole band looks blurred; negative Texture only softens it.
+        texture = textureAmount > 0 ? textureAmount : 0.5 * textureAmount
+        clarity = Float(recipe[.clarity] / 100) * 0.7
+    }
+
+    var isActive: Bool {
+        texture != 0 || clarity != 0
+    }
+
+    /// A band's pyramid levels when rendering at `level`: detail finer than the rendered
+    /// texels drops out, as it would when a full-resolution result is downscaled.
+    static func band(_ levels: ClosedRange<Int>, renderedAt level: Int, levelCount: Int) -> ClosedRange<Int>? {
+        let fine = max(levels.lowerBound, level)
+        let coarse = min(levels.upperBound, levelCount - 1)
+        return fine < coarse ? fine ... coarse : nil
+    }
+}
+
+/// The Detail panel, plus Texture and Clarity, as a cached spatial stage in front of the fused
+/// develop kernel: noise reduction, then sharpening, then local contrast.
 ///
 /// It works on exact pyramid texels (the level whose texels are at least as dense as the
 /// output), so the noise it removes is known from the session's noise model. The develop
@@ -85,6 +117,7 @@ final class DetailStage {
     /// Whether the recipe needs the stage at full resolution.
     static func isActive(_ recipe: EditRecipe) -> Bool {
         DenoiseSettings(recipe: recipe).isActive || SharpenSettings(recipe: recipe).sigma(atLevel: 0) != nil
+            || LocalContrastSettings(recipe: recipe).isActive
     }
 
     private let device: any MTLDevice
@@ -95,6 +128,7 @@ final class DetailStage {
         var work: WorkArea
         var denoise: DenoiseSettings?
         var sharpen: SharpenSettings?
+        var contrast: LocalContrastSettings?
     }
 
     private struct Entry {
@@ -128,10 +162,14 @@ final class DetailStage {
         let work = Self.workArea(session: session, region: region, outputSize: outputSize)
         let denoiseSettings = DenoiseSettings(recipe: recipe)
         let sharpenSettings = SharpenSettings(recipe: recipe)
+        let contrastSettings = LocalContrastSettings(recipe: recipe)
         let denoise = denoiseSettings.isActive ? denoiseSettings : nil
         let sharpen = sharpenSettings.sigma(atLevel: work.level) != nil ? sharpenSettings : nil
-        guard denoise != nil || sharpen != nil else { return nil }
-        let key = Key(session: ObjectIdentifier(session), work: work, denoise: denoise, sharpen: sharpen)
+        let contrast = contrastSettings.isActive ? contrastSettings : nil
+        guard denoise != nil || sharpen != nil || contrast != nil else { return nil }
+        let key = Key(
+            session: ObjectIdentifier(session), work: work, denoise: denoise, sharpen: sharpen, contrast: contrast,
+        )
         if let index = entries.firstIndex(where: { $0.key == key }) {
             let entry = entries.remove(at: index)
             entries.append(entry)
@@ -149,20 +187,31 @@ final class DetailStage {
             throw EngineError.gpuUnavailable
         }
         encoder.label = "Detail"
+        // Each pass reads the previous one's result; the last writes the output.
+        var remaining = [denoise != nil, sharpen != nil, contrast != nil].filter(\.self).count
         var source = Source(texture: session.pyramid, origin: work.origin, level: work.level)
+        func target() throws -> any MTLTexture {
+            remaining -= 1
+            guard remaining > 0 else { return texture }
+            let intermediates = try scratchTextures(.rgba16Float, 6, work)
+            // Alternate between two intermediates, never the one being read.
+            return intermediates[4] === source.texture ? intermediates[5] : intermediates[4]
+        }
         if let denoise {
-            let target = sharpen == nil ? texture : try scratchTextures(.rgba16Float, 5, work)[4]
-            try encodeDenoise(session: session, settings: denoise, work: work, into: target, encoder: encoder)
-            source = Source(texture: target, origin: .zero, level: 0)
+            let output = try target()
+            try encodeDenoise(session: session, settings: denoise, work: work, into: output, encoder: encoder)
+            source = Source(texture: output, origin: .zero, level: 0)
         }
         if let sharpen {
+            let output = try target()
             try encodeSharpen(
-                session: session,
-                settings: sharpen,
-                work: work,
-                source: source,
-                into: texture,
-                encoder: encoder,
+                session: session, settings: sharpen, work: work, source: source, into: output, encoder: encoder,
+            )
+            source = Source(texture: output, origin: .zero, level: 0)
+        }
+        if let contrast {
+            try encodeLocalContrast(
+                session: session, settings: contrast, work: work, source: source, into: target(), encoder: encoder,
             )
         }
         encoder.endEncoding()
@@ -282,12 +331,10 @@ final class DetailStage {
     ) throws {
         let textures = try scratchTextures(.r32Float, 3, work)
         let (logLuma, rows, blurred) = (textures[0], textures[1], textures[2])
-        // Rec. 2020 luminance of the camera RGB the pyramid holds.
-        let luma = session.cameraToWorking.transpose * SIMD3<Float>(0.2627, 0.6780, 0.0593)
         var params = SharpenParams(
             origin: SIMD4(Int32(source.origin.x), Int32(source.origin.y), Int32(source.level), 0),
             size: SIMD4(Int32(work.size.x), Int32(work.size.y), 0, 0),
-            luma: SIMD4(luma, 1.0 / 1024),
+            luma: Self.luma(session),
             shape: SIMD4(
                 settings.gain, settings.haloScale, settings.edgeThreshold,
                 settings.sigma(atLevel: work.level) ?? 0,
@@ -308,6 +355,48 @@ final class DetailStage {
         params.size.z = 1
         dispatch(kernels.sharpenBlur, [rows, blurred])
         dispatch(kernels.sharpenApply, [source.texture, logLuma, blurred, output])
+    }
+
+    private func encodeLocalContrast(
+        session: ImageSession,
+        settings: LocalContrastSettings,
+        work: WorkArea,
+        source: Source,
+        into output: any MTLTexture,
+        encoder: any MTLComputeCommandEncoder,
+    ) {
+        let levelCount = session.pyramid.mipmapLevelCount
+        let texture = LocalContrastSettings.band(
+            LocalContrastSettings.textureLevels, renderedAt: work.level, levelCount: levelCount,
+        )
+        let clarity = LocalContrastSettings.band(
+            LocalContrastSettings.clarityLevels, renderedAt: work.level, levelCount: levelCount,
+        )
+        var params = LocalContrastParams(
+            origin: SIMD4(Int32(source.origin.x), Int32(source.origin.y), Int32(source.level), 0),
+            size: SIMD4(Int32(work.size.x), Int32(work.size.y), 0, 0),
+            place: SIMD4(Int32(work.origin.x), Int32(work.origin.y), Int32(work.level), 0),
+            levels: SIMD4(
+                Int32(texture?.lowerBound ?? 0), Int32(texture?.upperBound ?? 0),
+                Int32(clarity?.lowerBound ?? 0), Int32(clarity?.upperBound ?? 0),
+            ),
+            luma: Self.luma(session),
+            shape: SIMD4(
+                texture == nil ? 0 : settings.texture, clarity == nil ? 0 : settings.clarity,
+                LocalContrastSettings.clarityLimit, 0,
+            ),
+        )
+        encoder.setComputePipelineState(kernels.localContrast)
+        encoder.setTexture(source.texture, index: 0)
+        encoder.setTexture(session.pyramid, index: 1)
+        encoder.setTexture(output, index: 2)
+        encoder.setBytes(&params, length: MemoryLayout<LocalContrastParams>.stride, index: 0)
+        encoder.dispatchGrid(width: work.size.x, height: work.size.y, pipeline: kernels.localContrast)
+    }
+
+    /// Rec. 2020 luminance weights for the pyramid's camera RGB, and a floor for its log.
+    private static func luma(_ session: ImageSession) -> SIMD4<Float> {
+        SIMD4(session.cameraToWorking.transpose * SIMD3<Float>(0.2627, 0.6780, 0.0593), 1.0 / 1024)
     }
 
     /// `count` working textures of `format` covering the work area, reused across renders.
@@ -338,7 +427,7 @@ final class DetailStage {
 /// unit noise per raw sample, at pyramid levels 0 to 2.
 ///
 /// Demosaicing correlates the channels and low-passes the noise, and the pyramid's box filter
-/// reshapes it again, so these are measured (`DenoiseTests`, with `REDLAMP_CALIBRATE_NOISE=1`)
+/// reshapes it again, so these are measured (`DetailStageTests`, with `REDLAMP_CALIBRATE_NOISE=1`)
 /// rather than taken from white-noise theory. Linear raw is the white-noise case.
 enum NoiseCalibration {
     static let bayer: [[SIMD3<Float>]] = [
