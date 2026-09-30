@@ -28,6 +28,7 @@ let project = Project(
                 "LSApplicationCategoryType": "public.app-category.developer-tools",
             ]),
             sources: ["Sources/**"],
+            resources: [.glob(pattern: .relativeToRoot("apps/RedlampMac/Resources/AppIcon.icon"))],
             dependencies: [
                 Module.engineAPI.dependency,
                 Module.engine.dependency,
@@ -37,11 +38,17 @@ let project = Project(
                 Module.design.dependency,
                 Module.ui.dependency,
             ],
-            settings: .settings(base: [
-                "CODE_SIGN_STYLE": "Automatic",
-                "CODE_SIGN_IDENTITY": "Apple Development",
-                "ENABLE_HARDENED_RUNTIME": "NO",
-            ]),
+            settings: .settings(
+                base: [
+                    "CODE_SIGN_STYLE": "Automatic",
+                    "CODE_SIGN_IDENTITY": "Apple Development",
+                    "ENABLE_HARDENED_RUNTIME": "NO",
+                    // Shares the app's icon; edit apps/RedlampMac/Resources/AppIcon.icon.
+                    "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
+                ],
+                // Controls follow the user's system accent; the harness ships no accent color.
+                defaultSettings: .recommended(excluding: ["ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME"]),
+            ),
         ),
     ],
 )
