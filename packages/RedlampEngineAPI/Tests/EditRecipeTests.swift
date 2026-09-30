@@ -56,11 +56,40 @@ struct EditRecipeTests {
         #expect(recipe.values.isEmpty)
     }
 
-    @Test func `ignores unknown keys`() throws {
-        let json = #"{"version":1,"values":{"basic.exposure":0.5,"future.parameter":3}}"#
-        let decoded = try JSONDecoder().decode(EditRecipe.self, from: Data(json.utf8))
+    @Test func `keeps unknown keys through a round trip`() throws {
+        let json = #"""
+        {"version":1,"values":{"basic.exposure":0.5,"future.parameter":3},
+         "futureStage":{"model":"denoise","strength":[1,2]}}
+        """#
+        var decoded = try JSONDecoder().decode(EditRecipe.self, from: Data(json.utf8))
         #expect(decoded[.exposure] == 0.5)
         #expect(decoded.values.count == 1)
+        #expect(!decoded.isPristine)
+
+        decoded[.contrast] = 10
+        let written = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(decoded))
+        guard case let .object(root) = written, case let .object(values) = root["values"] else {
+            Issue.record("recipe did not encode as an object")
+            return
+        }
+        #expect(values["future.parameter"] == .number(3))
+        #expect(values["basic.contrast"] == .number(10))
+        #expect(root["futureStage"] == .object([
+            "model": .string("denoise"),
+            "strength": .array([.number(1), .number(2)]),
+        ]))
+    }
+
+    @Test func `process version defaults and round trips`() throws {
+        #expect(EditRecipe().processVersion == EditRecipe.currentProcessVersion)
+        let legacy = try JSONDecoder().decode(EditRecipe.self, from: Data(#"{"version":1}"#.utf8))
+        #expect(legacy.processVersion == 1)
+        #expect(!legacy.requiresNewerProcess)
+
+        let future = try JSONDecoder().decode(EditRecipe.self, from: Data(#"{"version":1,"processVersion":99}"#.utf8))
+        #expect(future.requiresNewerProcess)
+        let reencoded = try JSONDecoder().decode(EditRecipe.self, from: JSONEncoder().encode(future))
+        #expect(reencoded.processVersion == 99)
     }
 
     @Test func `mired scale round trips`() {

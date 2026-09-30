@@ -47,10 +47,18 @@ public struct CurvePoint: Codable, Sendable, Hashable {
 /// Scalar parameters are stored sparsely: only values that differ from their schema
 /// default are kept, which keeps sidecars small and lets new parameters be added
 /// without migrating old files.
+///
+/// Two versions describe an edit. `formatVersion` is the file syntax and can be migrated
+/// silently. `processVersion` is the rendering behavior the edit was made with: an edit
+/// must keep rendering the same way, so it is only ever changed by an explicit update.
 public struct EditRecipe: Sendable, Hashable {
     public static let formatVersion = 1
+    /// Bumped whenever a change to rendering math would make existing edits look different.
+    public static let currentProcessVersion = 1
     public static let linearPointCurve = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]
 
+    /// Sidecars written before process versions existed are version 1.
+    public var processVersion = EditRecipe.currentProcessVersion
     public var treatment: Treatment = .color
     public var profile: ProfileReference = BuiltInProfile.color.reference
     public var whiteBalanceMode: WhiteBalanceMode = .asShot
@@ -58,8 +66,17 @@ public struct EditRecipe: Sendable, Hashable {
     public private(set) var values: [ParameterID: Double] = [:]
     /// Local adjustments, applied in order on top of the global edit.
     public var masks: [MaskLayer] = []
+    /// Parameters and fields written by a newer Redlamp. They don't affect rendering here,
+    /// but are written back unchanged so saving never erases them.
+    public private(set) var unknownValues: [String: Double] = [:]
+    public private(set) var unknownFields: [String: JSONValue] = [:]
 
     public init() {}
+
+    /// The edit was made with rendering behavior this build doesn't have.
+    public var requiresNewerProcess: Bool {
+        processVersion > EditRecipe.currentProcessVersion
+    }
 
     public subscript(parameter: ParameterID) -> Double {
         get { values[parameter] ?? parameter.spec.defaultValue }
@@ -93,6 +110,8 @@ public struct EditRecipe: Sendable, Hashable {
             && whiteBalanceMode == .asShot
             && pointCurve == EditRecipe.linearPointCurve
             && masks.isEmpty
+            && unknownValues.isEmpty
+            && unknownFields.isEmpty
     }
 
     /// Parameters whose value differs from `other`.
@@ -113,12 +132,13 @@ public struct EditRecipe: Sendable, Hashable {
 // MARK: - Codable
 
 extension EditRecipe: Codable {
-    private enum CodingKeys: String, CodingKey {
-        case version, treatment, profile, whiteBalance, pointCurve, values, masks
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case version, processVersion, treatment, profile, whiteBalance, pointCurve, values, masks
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        processVersion = try container.decodeIfPresent(Int.self, forKey: .processVersion) ?? 1
         treatment = try container.decodeIfPresent(Treatment.self, forKey: .treatment) ?? .color
         profile = try container.decodeIfPresent(ProfileReference.self, forKey: .profile)
             ?? BuiltInProfile.color.reference
@@ -127,25 +147,31 @@ extension EditRecipe: Codable {
             ?? EditRecipe.linearPointCurve
         let raw = try container.decodeIfPresent([String: Double].self, forKey: .values) ?? [:]
         for (key, value) in raw {
-            // Unknown keys come from newer versions; ignore them rather than fail.
             if let parameter = ParameterID(rawValue: key) {
                 self[parameter] = value
+            } else {
+                unknownValues[key] = value
             }
         }
         masks = try container.decodeIfPresent([MaskLayer].self, forKey: .masks) ?? []
+        unknownFields = try decoder.container(keyedBy: DynamicCodingKey.self)
+            .unknownFields(excluding: Set(CodingKeys.allCases.map(\.stringValue)))
     }
 
     public func encode(to encoder: Encoder) throws {
+        var unknown = encoder.container(keyedBy: DynamicCodingKey.self)
+        try unknown.encode(unknownFields)
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(EditRecipe.formatVersion, forKey: .version)
+        try container.encode(processVersion, forKey: .processVersion)
         try container.encode(treatment, forKey: .treatment)
         try container.encode(profile, forKey: .profile)
         try container.encode(whiteBalanceMode, forKey: .whiteBalance)
         if hasPointCurve {
             try container.encode(pointCurve, forKey: .pointCurve)
         }
-        let raw = Dictionary(uniqueKeysWithValues: values.map { ($0.key.rawValue, $0.value) })
-        try container.encode(raw, forKey: .values)
+        let known = Dictionary(uniqueKeysWithValues: values.map { ($0.key.rawValue, $0.value) })
+        try container.encode(unknownValues.merging(known) { _, value in value }, forKey: .values)
         if !masks.isEmpty {
             try container.encode(masks, forKey: .masks)
         }
