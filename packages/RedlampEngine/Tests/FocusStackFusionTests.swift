@@ -86,6 +86,48 @@ extension FocusStackTests {
         }
     }
 
+    /// Frames that darken through the stack (focus breathing changes exposure) over a flat, noisy
+    /// scene: nothing is sharp, so no frame should win the depth solve by being brighter.
+    @Test func `brightness differences don't decide the depth`() throws {
+        let (width, height) = (320, 240)
+        var state: UInt64 = 11
+        func noise() -> Float {
+            state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            return Float(state >> 40) / Float(1 << 24) - 0.5
+        }
+        let frames = (0 ..< 5).map { index in
+            let gain = 1 - 0.06 * Float(index)
+            return LumaImage(width: width, height: height, pixels: (0 ..< width * height).map { _ in
+                gain * (0.3 + 0.02 * noise())
+            })
+        }
+        let textures = try frames.map(texture)
+        let stacker = FocusStacker(device: device, queue: queue, kernels: kernels)
+        let result = try stacker.merge(frameCount: 5, settings: StackMergeSettings(strategy: .smooth)) { textures[$0] }
+        let brightest = Float(result.depth.depth.count { $0 < 0.5 }) / Float(result.depth.depth.count)
+        #expect(brightest < 0.5, "\(brightest) of the depth map chose the brightest frame")
+    }
+
+    @Test func `unknown depth is filled from its surroundings`() {
+        // Known: frame 0 in the left quarter, frame 4 in the right quarter; the middle is unknown.
+        let (width, height) = (40, 10)
+        let known = (0 ..< width * height).map { $0 % width < 10 || $0 % width >= 30 }
+        let values = (0 ..< width * height).map { $0 % width < 10 ? Float(0) : 4 }
+        let filled = StackDepthSolver.fill(values, known: known, width: width, height: height, empty: 2)
+        let row = Array(filled[5 * width ..< 6 * width])
+        #expect(row[0 ..< 10].allSatisfy { $0 == 0 } && row[30...].allSatisfy { $0 == 4 })
+        #expect(zip(row[10 ..< 29], row[11 ..< 30]).allSatisfy { $0 <= $1 + 1e-4 }, "\(row)")
+        #expect(row[12] < 2 && row[27] > 2)
+        let nothing = StackDepthSolver.fill(
+            values,
+            known: known.map { _ in false },
+            width: width,
+            height: height,
+            empty: 2,
+        )
+        #expect(nothing.allSatisfy { $0 == 2 })
+    }
+
     /// The red channel of a float texture.
     func read(_ texture: any MTLTexture) -> [Float] {
         var pixels = [SIMD4<Float>](repeating: .zero, count: texture.width * texture.height)

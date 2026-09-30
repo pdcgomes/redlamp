@@ -58,11 +58,14 @@ extension FocusStacker {
         lap("align")
         // Sharpness is measured where each frame was captured and only then resampled: warping
         // softens every frame but the reference, which would then look sharpest everywhere.
-        // Where a frame doesn't reach, it has no sharpness to offer.
+        // Brightness is matched first (focus breathing changes exposure too), or where nothing
+        // is sharp the brightest frame wins. Where a frame doesn't reach, it offers nothing.
         let depthSettings = StackDepthSolver.Settings()
         let aligned = Parallel.map(frameCount) { [analyses] index in
             let analysis = analyses[index]
-            let luma = analysis.luma.halved().halved()
+            let gain = dot(alignment.gains[index], SIMD3<Float>(0.25, 0.5, 0.25)).squareRoot()
+            var luma = analysis.luma.halved().halved()
+            luma.pixels = luma.pixels.map { $0 * gain }
             let factor = analysis.factor * Float(analysis.luma.width) / Float(luma.width)
             let transform = StackAligner.analysisResolution(alignment.transforms[index], factor: factor)
             let focus = LumaImage(

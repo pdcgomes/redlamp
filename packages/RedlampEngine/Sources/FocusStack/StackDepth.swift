@@ -73,20 +73,83 @@ enum StackDepthSolver {
         let coarse = stride(from: 1, to: filtered.count, by: 2).map { filtered[$0] }
 
         let noiseFloor = median(of: volume)
-        var depth = [Float](repeating: 0, count: count)
-        var confident = [Bool](repeating: false, count: count)
-        for index in 0 ..< count {
+        func standsOut(_ cost: [[Float]], at index: Int) -> Bool {
             var best: Float = -.greatestFiniteMagnitude
             var sum: Float = 0
-            for slice in fine {
+            for slice in cost {
                 best = max(best, slice[index])
                 sum += slice[index]
             }
-            let confidence = (best - sum / Float(fine.count)) / (best + 1e-12)
-            confident[index] = best > 2 * noiseFloor && confidence > 0.15
-            depth[index] = refinedArgmax(confident[index] ? fine : coarse, at: index)
+            return best > 2 * noiseFloor && (best - sum / Float(cost.count)) / (best + 1e-12) > 0.15
         }
-        return StackDepthMap(width: width, height: height, depth: depth, confident: confident)
+        var depth = [Float](repeating: 0, count: count)
+        var confident = [Bool](repeating: false, count: count)
+        var known = [Bool](repeating: true, count: count)
+        for index in 0 ..< count {
+            confident[index] = standsOut(fine, at: index)
+            if confident[index] {
+                depth[index] = refinedArgmax(fine, at: index)
+            } else if standsOut(coarse, at: index) {
+                depth[index] = refinedArgmax(coarse, at: index)
+            } else {
+                known[index] = false
+            }
+        }
+        // Where no frame is sharp, any choice is noise, and noise-driven choices make blotches:
+        // follow the surroundings instead.
+        let filled = fill(depth, known: known, width: width, height: height, empty: Float(lumas.count - 1) / 2)
+        return StackDepthMap(width: width, height: height, depth: filled, confident: confident)
+    }
+
+    /// `values` where `known`, elsewhere interpolated from the known values around (push-pull:
+    /// averages of known values down a pyramid, blended back up); `empty` if nothing is known.
+    static func fill(_ values: [Float], known: [Bool], width: Int, height: Int, empty: Float) -> [Float] {
+        guard known.contains(true) else { return [Float](repeating: empty, count: values.count) }
+        guard known.contains(false) else { return values }
+        // Push: weighted sums and weights, halving until one pixel remains.
+        var levels = [(
+            width: width,
+            height: height,
+            sums: zip(values, known).map { $1 ? $0 : 0 },
+            weights: known.map { $0 ? Float(1) : 0 },
+        )]
+        while levels.last!.width > 1 || levels.last!.height > 1 {
+            let fine = levels.last!
+            let (w, h) = ((fine.width + 1) / 2, (fine.height + 1) / 2)
+            var sums = [Float](repeating: 0, count: w * h)
+            var weights = [Float](repeating: 0, count: w * h)
+            for y in 0 ..< fine.height {
+                for x in 0 ..< fine.width {
+                    sums[(y / 2) * w + x / 2] += fine.sums[y * fine.width + x]
+                    weights[(y / 2) * w + x / 2] += fine.weights[y * fine.width + x]
+                }
+            }
+            levels.append((w, h, sums, weights))
+        }
+        // Pull: each level's average, with gaps taken from the coarser level (bilinear).
+        var coarse = levels.last!.sums.indices.map { levels.last!.sums[$0] / max(levels.last!.weights[$0], 1e-12) }
+        for level in levels.dropLast().reversed() {
+            let (cw, ch) = ((level.width + 1) / 2, (level.height + 1) / 2)
+            var out = [Float](repeating: 0, count: level.width * level.height)
+            for y in 0 ..< level.height {
+                for x in 0 ..< level.width {
+                    let fx = min(max((Float(x) + 0.5) / 2 - 0.5, 0), Float(cw - 1))
+                    let fy = min(max((Float(y) + 0.5) / 2 - 0.5, 0), Float(ch - 1))
+                    let (x0, y0) = (Int(fx), Int(fy))
+                    let (x1, y1) = (min(x0 + 1, cw - 1), min(y0 + 1, ch - 1))
+                    let (tx, ty) = (fx - Float(x0), fy - Float(y0))
+                    let top = coarse[y0 * cw + x0] * (1 - tx) + coarse[y0 * cw + x1] * tx
+                    let bottom = coarse[y1 * cw + x0] * (1 - tx) + coarse[y1 * cw + x1] * tx
+                    let up = top * (1 - ty) + bottom * ty
+                    let index = y * level.width + x
+                    let weight = min(level.weights[index], 1)
+                    let own = level.sums[index] / max(level.weights[index], 1e-12)
+                    out[index] = weight * own + (1 - weight) * up
+                }
+            }
+            coarse = out
+        }
+        return zip(coarse, zip(values, known)).map { filled, original in original.1 ? original.0 : filled }
     }
 
     /// The best frame at `index`, refined by the parabola through it and its neighbours.
