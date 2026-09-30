@@ -24,6 +24,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     }
 
     private let session = Mutex<ImageSession?>(nil)
+    private let sessions: SessionCache
     private let openGeneration = Mutex<UInt64>(0)
     private let renderState = Mutex(RenderState())
     private let continuation = Mutex<AsyncStream<RenderedFrame>.Continuation?>(nil)
@@ -35,6 +36,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     public init() throws {
         guard let device = MTLCreateSystemDefaultDevice(),
               let queue = device.makeCommandQueue(),
+              // Background decodes get their own queue so they never delay an interactive render.
+              let buildQueue = device.makeCommandQueue(),
               let histogramBuffer = device.makeBuffer(
                   length: 1024 * MemoryLayout<UInt32>.stride,
                   options: .storageModeShared,
@@ -47,6 +50,17 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         self.histogramBuffer = histogramBuffer
         kernels = try KernelLibrary(device: device)
         surfaces = SurfacePool(device: device)
+
+        let builder = SessionBuilder(device: device, queue: buildQueue, kernels: kernels)
+        let signposter = signposts
+        sessions = SessionCache(
+            budget: min(Int(device.recommendedMaxWorkingSetSize) / 4, 3 << 30),
+            build: { url in
+                let state = signposter.beginInterval("Open", "\(url.lastPathComponent)")
+                defer { signposter.endInterval("Open", state) }
+                return try builder.build(ImageDecoder.decode(url))
+            },
+        )
     }
 
     // MARK: - Opening
@@ -56,18 +70,21 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             value += 1
             return value
         }
-        let builder = SessionBuilder(device: device, queue: queue, kernels: kernels)
-        let signposter = signposts
-        let built = try await Task.detached(priority: .userInitiated) {
-            let state = signposter.beginInterval("Open", "\(url.lastPathComponent)")
-            defer { signposter.endInterval("Open", state) }
-            let decoded = try ImageDecoder.decode(url)
-            return try builder.build(decoded)
-        }.value
-
+        let built = try await sessions.session(for: url)
         guard openGeneration.withLock({ $0 == generation }) else { throw CancellationError() }
         session.withLock { $0 = built }
         return built.info
+    }
+
+    public func openIfReady(_ url: URL) -> ImageInfo? {
+        guard let ready = sessions.cached(url) else { return nil }
+        openGeneration.withLock { $0 += 1 }
+        session.withLock { $0 = ready }
+        return ready.info
+    }
+
+    public func prefetch(_ urls: [URL]) {
+        sessions.prefetch(urls)
     }
 
     // MARK: - Interactive rendering

@@ -46,6 +46,39 @@ struct EngineSmokeTests {
         #expect(frame.histogram.totalCount > 0)
     }
 
+    @Test(.enabled(if: canRender))
+    func `prefetched image opens without waiting`() async throws {
+        let engine = try RedlampEngine()
+        let url = Self.fixtures[0]
+        #expect(engine.openIfReady(url) == nil)
+
+        engine.prefetch([url])
+        let clock = ContinuousClock()
+        let deadline = clock.now + .seconds(10)
+        var ready: ImageInfo?
+        while ready == nil, clock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+            ready = engine.openIfReady(url)
+        }
+        let info = try #require(ready)
+        #expect(info.url == url)
+
+        let started = clock.now
+        _ = try await engine.open(url)
+        #expect(clock.now - started < .milliseconds(20))
+    }
+
+    @Test(.enabled(if: canRender && fixtures.count >= 2))
+    func `open cancels when the image is no longer wanted`() async throws {
+        let engine = try RedlampEngine()
+        let first = Self.fixtures[0]
+        let second = Self.fixtures[1]
+        let opened = Task { try await engine.open(first) }
+        try await Task.sleep(for: .milliseconds(1))
+        _ = try await engine.open(second)
+        await #expect(throws: CancellationError.self) { try await opened.value }
+    }
+
     /// A linear gradient darkening the top darkens the top rows and leaves the bottom
     /// rows untouched.
     @Test(.enabled(if: canRender))

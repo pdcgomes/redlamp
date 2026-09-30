@@ -116,6 +116,9 @@ public final class EditorModel {
     @ObservationIgnored var editStart: EditRecipe?
     @ObservationIgnored var editParameter: ParameterID?
     @ObservationIgnored private var generation: UInt64 = 0
+    /// Canvas geometry for a photo whose first frame hasn't arrived yet. Until it does, the
+    /// previous photo stays on screen rather than flashing the placeholder in between.
+    @ObservationIgnored private var pendingCanvas: (imageSize: PixelSize, firstGeneration: UInt64)?
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored private var openTask: Task<Void, Never>?
     @ObservationIgnored private var framesTask: Task<Void, Never>?
@@ -175,23 +178,31 @@ public final class EditorModel {
     public func select(_ url: URL) {
         guard url != selection else { return }
         saveNow()
+        engine.prefetch(workingSet(around: url, comingFrom: selection))
         if let selection {
             previousSelection = selection
         }
         selection = url
+        // Cleared first so the resets below don't render the outgoing photo; a ready photo
+        // sets it again before the UI updates.
         info = nil
-        frame = nil
-        histogram = .empty
         errorMessage = nil
-        isLoading = true
         eyedropperActive = false
         previewingPreset = nil
         selectedMaskID = nil
         selectedComponentID = nil
         drawingKind = nil
         openTask?.cancel()
+        if let opened = engine.openIfReady(url) {
+            didOpen(opened, sidecar: sidecars.load(for: url))
+            return
+        }
+        frame = nil
+        pendingCanvas = nil
+        histogram = .empty
+        isLoading = true
+        Task { await loadThumbnail(for: url) }
         openTask = Task { [engine, sidecars] in
-            await loadThumbnail(for: url)
             do {
                 let opened = try await engine.open(url)
                 guard selection == url else { return }
@@ -221,6 +232,14 @@ public final class EditorModel {
         select(items[next].url)
     }
 
+    /// The photo being opened, then its neighbours, the direction of travel first.
+    private func workingSet(around url: URL, comingFrom previous: URL?) -> [URL] {
+        guard let index = items.firstIndex(where: { $0.url == url }) else { return [url] }
+        let backward = previous.flatMap { previous in items.firstIndex { $0.url == previous } }.map { $0 > index }
+        let offsets = backward == true ? [-1, 1, -2] : [1, -1, 2]
+        return [url] + offsets.map { index + $0 }.filter(items.indices.contains).map { items[$0].url }
+    }
+
     private func didOpen(_ opened: ImageInfo, sidecar: Sidecar?) {
         info = opened
         var loaded = sidecar?.recipe ?? EditRecipe()
@@ -232,11 +251,19 @@ public final class EditorModel {
         snapshots = sidecar?.snapshots ?? []
         history = [HistoryStep(name: sidecar == nil ? "Import" : "Opened with edits", recipe: loaded)]
         historyIndex = 0
+        isLoading = false
+        if frame == nil {
+            showOnCanvas(opened.pixelSize)
+        } else {
+            pendingCanvas = (opened.pixelSize, generation &+ 1)
+        }
+        requestRender()
+    }
+
+    private func showOnCanvas(_ imageSize: PixelSize) {
         canvas.zoom = .fit
         canvas.center = CGPoint(x: 0.5, y: 0.5)
-        canvas.imageSize = opened.pixelSize
-        isLoading = false
-        requestRender()
+        canvas.imageSize = imageSize
     }
 
     // MARK: - Rendering
@@ -252,7 +279,7 @@ public final class EditorModel {
 
     public func requestRender() {
         guard info != nil else { return }
-        let size = canvas.renderSize
+        let size = pendingCanvas.map { canvas.fitRenderSize(for: $0.imageSize) } ?? canvas.renderSize
         guard size.width > 0 else { return }
         generation &+= 1
         let displayed = showBefore ? beforeRecipe : (previewingPreset.map { $0.apply(to: recipe) } ?? recipe)
@@ -270,6 +297,11 @@ public final class EditorModel {
 
     private func receive(_ frame: RenderedFrame) {
         guard info != nil else { return }
+        if let pending = pendingCanvas {
+            guard frame.generation >= pending.firstGeneration else { return }
+            pendingCanvas = nil
+            showOnCanvas(pending.imageSize)
+        }
         self.frame = frame
         histogram = frame.histogram
         lastRenderTime = frame.renderDuration

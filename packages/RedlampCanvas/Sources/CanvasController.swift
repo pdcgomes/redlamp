@@ -92,10 +92,14 @@ public final class CanvasController {
     }
 
     public var fitScale: Double {
-        guard imageSize.width > 0, viewPixels.width > 0 else { return 1 }
+        fitScale(for: imageSize)
+    }
+
+    private func fitScale(for size: PixelSize) -> Double {
+        guard size.width > 0, viewPixels.width > 0 else { return 1 }
         return min(
-            Double(viewPixels.width) / Double(imageSize.width),
-            Double(viewPixels.height) / Double(imageSize.height),
+            Double(viewPixels.width) / Double(size.width),
+            Double(viewPixels.height) / Double(size.height),
         )
     }
 
@@ -126,11 +130,20 @@ public final class CanvasController {
 
     /// The image resolution the engine needs to render for the current view.
     public var renderSize: PixelSize {
-        guard imageSize.width > 0 else { return .zero }
-        let scale = min(pixelScale, 1)
+        renderSize(for: imageSize, scale: pixelScale)
+    }
+
+    /// The resolution an image of `size` needs at Fit, before it is shown.
+    public func fitRenderSize(for size: PixelSize) -> PixelSize {
+        renderSize(for: size, scale: fitScale(for: size))
+    }
+
+    private func renderSize(for size: PixelSize, scale: Double) -> PixelSize {
+        guard size.width > 0 else { return .zero }
+        let scale = min(scale, 1)
         return PixelSize(
-            width: max(1, Int((Double(imageSize.width) * scale).rounded(.up))),
-            height: max(1, Int((Double(imageSize.height) * scale).rounded(.up))),
+            width: max(1, Int((Double(size.width) * scale).rounded(.up))),
+            height: max(1, Int((Double(size.height) * scale).rounded(.up))),
         )
     }
 
