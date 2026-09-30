@@ -23,6 +23,7 @@ Downloaded into `build/proto-data/` (gitignored). Nothing is committed.
 | SAM 2.1 tiny Core ML packages | [apple/coreml-sam2.1-tiny](https://huggingface.co/apple/coreml-sam2.1-tiny) | Apache-2.0 |
 | PCB focus stacks (`examples/pcb`, `examples/depthmap`) | [PetteriAimonen/focus-stack](https://github.com/PetteriAimonen/focus-stack) | MIT |
 | Mite in Burmese amber, `26E_tubercules_dorsal_100x.zip` (109 frames) | [figshare 10.6084/m9.figshare.14707077](https://doi.org/10.6084/m9.figshare.14707077) | CC BY 4.0 |
+| Raw focus stack, Canon EOS R5 Mark II + RF 100 mm macro, 25 of 999 CR3 frames (`focus_stack/fetch_raw_stacks.sh`) | [jjjsood/focus-stack-sample](https://huggingface.co/datasets/jjjsood/focus-stack-sample) (Johannes Sood), revision `0f8256ed` | CC BY 4.0 |
 
 Expected layout: `build/proto-data/NAFNet-SIDD-width32.pth`, `build/proto-data/sam2.1-tiny/`,
 `build/proto-data/stacks/{pcb7,pcb10,mite}/`, and `build/proto-data/stacks/pcb_000.JPG` (the test crop
