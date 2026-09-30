@@ -24,7 +24,7 @@ struct SharpenRequest {
 /// Owned by the engine's render queue, through `DetailStage`.
 final class SharpenCache {
     /// The view and its overview. At 1:1 on a 5K display an area is about 15 MP, and the two
-    /// caches hold 12 bytes per texel of it.
+    /// caches hold 10 bytes per texel of it.
     static let maximumEntries = 2
 
     struct Analysis {
@@ -96,7 +96,8 @@ extension DetailStage {
     ) throws {
         let (session, settings, work, source) = (request.session, request.settings, request.work, request.source)
         let sigma = settings.sigma(atLevel: work.level) ?? 0
-        let textures = try scratchTextures(.r32Float, 9, work)
+        // 0 source log, 1 clean log, 2 blur rows, 3 blurred clean log, 4 blurred source log.
+        let textures = try scratchTextures(.r32Float, 5, work)
         var passes = SharpenPasses(encoder: encoder, kernels: kernels, rows: textures[2], params: SharpenParams(
             origin: SIMD4(Int32(source.origin.x), Int32(source.origin.y), Int32(source.level), 0),
             size: SIMD4(Int32(work.size.x), Int32(work.size.y), 0, 0),
@@ -116,7 +117,7 @@ extension DetailStage {
             }
         }
 
-        let (sourceLog, sourceBlurred) = (textures[7], textures[8])
+        let (sourceLog, sourceBlurred) = (textures[0], textures[4])
         if request.softens {
             passes.dispatch(kernels.sharpenLog, [source.texture, sourceLog])
             passes.blur(sourceLog, into: sourceBlurred)
@@ -138,17 +139,16 @@ extension DetailStage {
         passes: inout SharpenPasses,
     ) throws {
         let (session, work) = (request.session, request.work)
-        let (logLuma, rows, blurred) = (textures[1], textures[2], textures[3])
-        let estimates = [textures[4], textures[5]]
-        let ratio = textures[6]
+        let (logLuma, blurred) = (textures[1], textures[3])
+        // The deconvolution reads a texture for every tap of every pass, so its images are half
+        // floats (half the traffic); its detail changes by under 1/1000 of a stop. The log detail
+        // stays in 32-bit floats: the unsharp mask measures differences of hundredths of a stop.
+        let halves = try scratchTextures(.r16Float, 5, work)
+        let (rows, ratio) = (halves[4], halves[3])
+        let estimates = [halves[1], halves[2]]
         let linear: any MTLTexture
         if let cached = sharpenCache.separation(session, work) {
             linear = cached
-            // The luma kernel on the cached luminance itself (weights 1, 0, 0, no floor) rewrites its log.
-            let weights = passes.params.luma
-            passes.params.luma = SIMD4(1, 0, 0, 0)
-            passes.dispatch(kernels.sharpenLuma, [linear, textures[0], logLuma])
-            passes.params.luma = weights
         } else {
             // The separator denoises from the pyramid, whatever the user's own noise reduction did.
             let separated = try scratchTextures(.rgba16Float, 8, work)[7]
@@ -156,12 +156,18 @@ extension DetailStage {
                 session: session, settings: .separator, work: work, local: nil, into: separated,
                 encoder: passes.encoder,
             )
-            linear = request.cache ? try makeWorkTexture(.r32Float, work) : textures[0]
+            linear = request.cache ? try makeWorkTexture(.r16Float, work) : halves[0]
             passes.dispatch(kernels.sharpenLuma, [separated, linear, logLuma])
             if request.cache {
                 sharpenCache.store(separation: linear, session, work)
             }
         }
+        // The log always comes from the stored half-float luminance, so a cached separation renders
+        // exactly what a fresh one does: the luma kernel on it (weights 1, 0, 0, no floor).
+        let weights = passes.params.luma
+        passes.params.luma = SIMD4(1, 0, 0, 0)
+        passes.dispatch(kernels.sharpenLuma, [linear, estimates[1], logLuma])
+        passes.params.luma = weights
 
         // Richardson-Lucy from the observed clean luminance: estimate *= blur(D / blur(estimate)).
         var estimate = linear
@@ -202,6 +208,21 @@ private struct SharpenPasses {
     /// Scratch for the first direction of a blur.
     let rows: any MTLTexture
     var params: SharpenParams
+    /// The blurs' Gaussian, once per area instead of per tap: the radius, then the normalised
+    /// weight at each offset 0 ... radius.
+    private var weights: [Float]
+
+    init(encoder: any MTLComputeCommandEncoder, kernels: KernelLibrary, rows: any MTLTexture, params: SharpenParams) {
+        self.encoder = encoder
+        self.kernels = kernels
+        self.rows = rows
+        self.params = params
+        let sigma = max(params.shape.w, 1e-3)
+        let radius = min(Int((3 * sigma).rounded(.up)), 12)
+        let raw = (0 ... radius).map { exp(-0.5 * Float($0 * $0) / (sigma * sigma)) }
+        let total = raw.dropFirst().reduce(raw[0]) { $0 + 2 * $1 }
+        weights = [Float(radius)] + raw.map { $0 / total }
+    }
 
     mutating func dispatch(_ pipeline: any MTLComputePipelineState, _ textures: [any MTLTexture]) {
         encoder.setComputePipelineState(pipeline)
@@ -209,6 +230,7 @@ private struct SharpenPasses {
             encoder.setTexture(texture, index: index)
         }
         encoder.setBytes(&params, length: MemoryLayout<SharpenParams>.stride, index: 0)
+        encoder.setBytes(weights, length: weights.count * MemoryLayout<Float>.stride, index: 1)
         encoder.dispatchGrid(width: Int(params.size.x), height: Int(params.size.y), pipeline: pipeline)
     }
 

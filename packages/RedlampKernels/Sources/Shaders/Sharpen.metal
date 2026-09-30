@@ -20,17 +20,19 @@ static inline float3 readSource(texture2d<float, access::read> source, constant 
     return source.read(uint2(clamp(at + p.origin.xy, int2(0), levelSize - 1)), level).rgb;
 }
 
-static inline float gaussianRow(texture2d<float, access::read> input, constant SharpenParams &p, int2 at, int2 step) {
-    float sigma = p.shape.w;
-    int radius = min(int(ceil(3.0f * sigma)), 12);
-    float sum = 0.0f;
-    float total = 0.0f;
-    for (int i = -radius; i <= radius; i++) {
-        float weight = exp(-0.5f * float(i * i) / (sigma * sigma));
-        sum += weight * input.read(uint2(clamp(at + i * step, int2(0), p.size.xy - 1))).r;
-        total += weight;
+// The Gaussian of the Radius, computed once per dispatch on the CPU: weights[0] is the radius,
+// weights[1 + i] the weight at offset ±i, already divided by the total.
+static inline float gaussianRow(
+    texture2d<float, access::read> input, constant SharpenParams &p, constant float *weights, int2 at, int2 step)
+{
+    int radius = int(weights[0]);
+    int2 last = p.size.xy - 1;
+    float sum = weights[1] * input.read(uint2(at)).r;
+    for (int i = 1; i <= radius; i++) {
+        sum += weights[1 + i] * (input.read(uint2(clamp(at + i * step, int2(0), last))).r
+            + input.read(uint2(clamp(at - i * step, int2(0), last))).r);
     }
-    return sum / total;
+    return sum;
 }
 
 // Log luminance of the source (for masks' negative Sharpness, which softens it).
@@ -64,11 +66,12 @@ kernel void rl_sharpen_blur(
     texture2d<float, access::read> input [[texture(0)]],
     texture2d<float, access::write> output [[texture(1)]],
     constant SharpenParams &p [[buffer(0)]],
+    constant float *weights [[buffer(1)]],
     uint2 gid [[thread_position_in_grid]])
 {
     if (int(gid.x) >= p.size.x || int(gid.y) >= p.size.y) return;
     int2 step = p.size.z == 0 ? int2(1, 0) : int2(0, 1);
-    output.write(float4(gaussianRow(input, p, int2(gid), step)), gid);
+    output.write(float4(gaussianRow(input, p, weights, int2(gid), step)), gid);
 }
 
 // Half a Richardson-Lucy iteration: finishes a Gaussian blur down the columns of `rows`, then either
@@ -80,10 +83,11 @@ kernel void rl_deconvolve_columns(
     texture2d<float, access::read> operand [[texture(1)]],
     texture2d<float, access::write> output [[texture(2)]],
     constant SharpenParams &p [[buffer(0)]],
+    constant float *weights [[buffer(1)]],
     uint2 gid [[thread_position_in_grid]])
 {
     if (int(gid.x) >= p.size.x || int(gid.y) >= p.size.y) return;
-    float blurred = gaussianRow(rows, p, int2(gid), int2(0, 1));
+    float blurred = gaussianRow(rows, p, weights, int2(gid), int2(0, 1));
     float value = operand.read(gid).r;
     output.write(float4(p.deconvolution.y == 0.0f ? value / max(blurred, 1e-6f) : value * blurred), gid);
 }

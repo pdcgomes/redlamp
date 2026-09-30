@@ -119,7 +119,7 @@ Measured on an Apple M1 Ultra with a Release build.
 | Full-resolution export render (24–26 MP) | ~45 ms |
 | Full-resolution export render with noise reduction (24 MP, tiled) | ~100 ms |
 | Detail stage on a 1:1 region (about 10 MP of pyramid texels), GPU time: noise reduction, Texture and Clarity | ~5 ms, ~1 ms |
-| Detail stage for a 2560 × 1600 view at 1:1 of a 24 MP frame, GPU time: noise reduction alone; default sharpening, first render or while dragging Radius; while dragging Amount, Detail, Masking or a noise slider (cached analysis) | ~1.9 ms, ~8.5 ms, ~2.3 ms |
+| Detail stage for a 2560 × 1600 view at 1:1 of a 24 MP frame, GPU time: noise reduction alone; default sharpening, first render; while dragging Radius; while dragging Amount, Detail, Masking or a noise slider (cached analysis) | ~1.9 ms, ~7.2 ms, ~5.5 ms, ~2.2 ms |
 
 Dragging a slider at 120 events a second (`scripts/perf-sweep.sh`), with every panel open:
 
