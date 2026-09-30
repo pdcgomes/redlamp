@@ -8,6 +8,8 @@ import RedlampEngineAPI
 /// - Double-click the label or thumb to reset.
 /// - Option-drag on tone sliders previews clipping.
 /// - Click the value to type; arrow keys step (Shift for ×10).
+/// - ⌘-scroll adjusts the slider under the pointer (Shift ×10, Option ×0.1); plain scrolling
+///   still scrolls the panels.
 ///
 /// While it is in a window, the row keeps itself in step with `editor`: a drag redraws
 /// the track and the readout, and nothing else.
@@ -23,6 +25,9 @@ public final class SliderRowView: NSView {
     private let focusMarker = FocusMarkerView()
     private var trackers: [Tracker] = []
     private var hoverArea: NSTrackingArea?
+    /// Scroll distance not yet turned into steps, and the pending end of the scroll's edit.
+    private var scrollRemainder: CGFloat = 0
+    private var scrollEnd: Task<Void, Never>?
 
     private static let clippingParameters: Set<ParameterID> = [
         .exposure, .highlights, .shadows, .whites, .blacks,
@@ -50,7 +55,7 @@ public final class SliderRowView: NSView {
         }
         focusMarker.isHidden = true
         toolTip = spec.availability.isLive
-            ? "Double-click to reset. Shift-drag for fine control."
+            ? "Double-click to reset. Shift-drag for fine control. ⌘-scroll to adjust."
             : "\(spec.label) is laid out for reference and renders in \(Self.phase(spec))."
         wireActions()
     }
@@ -144,6 +149,41 @@ public final class SliderRowView: NSView {
         }
         trackView.onReset = { [weak self] in self?.editor.resetSlider(parameter) }
         valueView.onCommit = { [weak self] in self?.editor.setSliderValue(parameter, $0) }
+    }
+
+    // MARK: - Scroll
+
+    override public func scrollWheel(with event: NSEvent) {
+        guard event.modifierFlags.contains(.command), spec.availability.isLive, enabled() else {
+            super.scrollWheel(with: event)
+            return
+        }
+        // Shift turns vertical scrolling horizontal; the device's own direction means up is more.
+        var delta = event.scrollingDeltaY != 0 ? event.scrollingDeltaY : event.scrollingDeltaX
+        if event.isDirectionInvertedFromDevice {
+            delta = -delta
+        }
+        scrollRemainder += event.hasPreciseScrollingDeltas ? delta / 8 : delta
+        let steps = scrollRemainder.rounded(.towardZero)
+        guard steps != 0 else { return }
+        scrollRemainder -= steps
+        if scrollEnd == nil {
+            editor.focusedParameter = parameter
+            editor.beginEdit(parameter)
+        }
+        let flags = event.modifierFlags
+        let multiplier = flags.contains(.shift) ? 10.0 : flags.contains(.option) ? 0.1 : 1.0
+        let value = editor.sliderValue(parameter) + Double(steps) * spec.step * multiplier
+        editor.setSliderValue(parameter, spec.clamp(value))
+        // One history step per gesture: it ends once scrolling pauses.
+        scrollEnd?.cancel()
+        scrollEnd = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled, let self else { return }
+            scrollEnd = nil
+            scrollRemainder = 0
+            editor.endEdit(name: nil)
+        }
     }
 
     // MARK: - Hover
