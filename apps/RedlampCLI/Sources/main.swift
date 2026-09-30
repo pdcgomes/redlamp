@@ -9,6 +9,7 @@ let usage = """
 usage: redlamp info <image>
        redlamp render <image> -o <output.{jpg,png,tif,heic}> [options]
        redlamp recipe <command> …   recipes and look development (redlamp recipe help)
+       redlamp stack <frames…> …    merge a focus stack (redlamp stack --help)
        redlamp mcp                  the engine as an MCP server on stdin/stdout
 
 options:
@@ -141,6 +142,8 @@ do {
     switch arguments.first {
     case "recipe":
         try await RecipeCommands.run(Array(arguments.dropFirst()))
+    case "stack":
+        try await StackCommand.run(Array(arguments.dropFirst()))
     case "mcp":
         try await MCPServer().run()
     default:

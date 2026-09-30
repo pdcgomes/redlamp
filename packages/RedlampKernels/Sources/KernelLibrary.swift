@@ -22,6 +22,15 @@ public final class KernelLibrary: @unchecked Sendable {
     public let denoiseRows: any MTLComputePipelineState
     public let denoiseColumns: any MTLComputePipelineState
     public let stackWarp: any MTLComputePipelineState
+    public let stackPyramidDown: any MTLComputePipelineState
+    public let stackLaplacian: any MTLComputePipelineState
+    public let stackCollapse: any MTLComputePipelineState
+    public let stackFuseAuto: any MTLComputePipelineState
+    public let stackChooseAuto: any MTLComputePipelineState
+    public let stackFuseDetail: any MTLComputePipelineState
+    public let stackFuseSmooth: any MTLComputePipelineState
+    public let stackFinish: any MTLComputePipelineState
+    public let stackScale: any MTLComputePipelineState
     public let sharpenLog: any MTLComputePipelineState
     public let sharpenLuma: any MTLComputePipelineState
     public let sharpenBlur: any MTLComputePipelineState
@@ -61,6 +70,15 @@ public final class KernelLibrary: @unchecked Sendable {
         denoiseRows = try pipeline("rl_denoise_rows")
         denoiseColumns = try pipeline("rl_denoise_columns")
         stackWarp = try pipeline("rl_stack_warp")
+        stackPyramidDown = try pipeline("rl_stack_pyr_down")
+        stackLaplacian = try pipeline("rl_stack_laplacian")
+        stackCollapse = try pipeline("rl_stack_collapse")
+        stackFuseAuto = try pipeline("rl_stack_fuse_auto")
+        stackChooseAuto = try pipeline("rl_stack_choose_auto")
+        stackFuseDetail = try pipeline("rl_stack_fuse_detail")
+        stackFuseSmooth = try pipeline("rl_stack_fuse_smooth")
+        stackFinish = try pipeline("rl_stack_finish")
+        stackScale = try pipeline("rl_stack_scale")
         sharpenLog = try pipeline("rl_sharpen_log")
         sharpenLuma = try pipeline("rl_sharpen_luma")
         sharpenBlur = try pipeline("rl_sharpen_blur")

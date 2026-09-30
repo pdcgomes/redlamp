@@ -19,20 +19,32 @@ struct StackDepthMap: Equatable {
 /// Tang 2013) guided by the sharpest frame's luminance, winner-takes-all with parabolic sub-frame
 /// refinement, and a coarser solve where the peak doesn't stand out.
 enum StackDepthSolver {
+    /// Sizes relative to the image being stacked, not the sensor: the prototype's, validated on
+    /// ~2000-pixel frames, so the solve runs at a quarter of the 2048-pixel analysis copy.
     struct Settings {
-        /// Focus window radius at full resolution (the volume is at quarter resolution).
+        /// Focus window radius at the analysis resolution (a quarter of it in the volume).
         var radius = 5
-        /// Guided-filter radius at quarter resolution; the coarse solve uses four times this.
+        /// Guided-filter radius in the volume; the coarse solve uses four times this.
         var smoothing = 8
+
+        var focusRadius: Int {
+            max(1, Int((Float(radius) / 4).rounded()))
+        }
     }
 
     /// `lumas`: every aligned frame's encoded luminance at quarter resolution, in stack order.
     static func solve(_ lumas: [LumaImage], settings: Settings = Settings()) -> StackDepthMap {
-        precondition(!lumas.isEmpty)
+        let volume = Parallel.map(lumas.count) { sumModifiedLaplacian(lumas[$0], radius: settings.focusRadius) }
+        return solve(volume: volume, lumas: lumas, settings: settings)
+    }
+
+    /// Solves from a precomputed focus `volume` (one sum-modified-Laplacian slice per frame, in
+    /// the reference's geometry) and the aligned `lumas` that guide the regularisation.
+    static func solve(volume: [[Float]], lumas: [LumaImage], settings: Settings = Settings()) -> StackDepthMap {
+        precondition(!lumas.isEmpty && volume.count == lumas.count)
         let width = lumas[0].width
         let height = lumas[0].height
-        let quarterRadius = max(1, Int((Float(settings.radius) * 0.25).rounded()))
-        let volume = lumas.map { sumModifiedLaplacian($0, radius: quarterRadius) }
+        let smoothing = settings.smoothing
         let count = width * height
 
         // The guide: at each pixel, the luminance of the frame that is sharpest there.
@@ -46,22 +58,19 @@ enum StackDepthSolver {
         }
         let maximum = volume.reduce(0) { max($0, $1.max() ?? 0) }
         let epsilon = 1e-3 * maximum * maximum
-        let fine = volume.map { guidedFilter(
-            guide: guide,
-            source: $0,
-            width: width,
-            height: height,
-            radius: settings.smoothing,
-            epsilon: epsilon,
-        ) }
-        let coarse = volume.map { guidedFilter(
-            guide: guide,
-            source: $0,
-            width: width,
-            height: height,
-            radius: settings.smoothing * 4,
-            epsilon: epsilon,
-        ) }
+        let guidance = guide
+        let filtered = Parallel.map(2 * volume.count) { job in
+            guidedFilter(
+                guide: guidance,
+                source: volume[job / 2],
+                width: width,
+                height: height,
+                radius: job.isMultiple(of: 2) ? smoothing : smoothing * 4,
+                epsilon: epsilon,
+            )
+        }
+        let fine = stride(from: 0, to: filtered.count, by: 2).map { filtered[$0] }
+        let coarse = stride(from: 1, to: filtered.count, by: 2).map { filtered[$0] }
 
         let noiseFloor = median(of: volume)
         var depth = [Float](repeating: 0, count: count)

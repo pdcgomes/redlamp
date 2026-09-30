@@ -13,10 +13,10 @@ import Synchronization
 /// Threading: interactive renders run on one dedicated serial queue. `render(_:)` only
 /// swaps the pending request, so a burst of slider events collapses to the newest one.
 public final class RedlampEngine: EditingEngine, @unchecked Sendable {
-    private let device: any MTLDevice
+    let device: any MTLDevice
     private let queue: any MTLCommandQueue
-    private let kernels: KernelLibrary
-    private let renderQueue = DispatchQueue(label: "app.redlamp.engine.render", qos: .userInteractive)
+    let kernels: KernelLibrary
+    let renderQueue = DispatchQueue(label: "app.redlamp.engine.render", qos: .userInteractive)
     private let signposts = OSSignposter(subsystem: "app.redlamp.engine", category: .pointsOfInterest)
 
     private struct RenderState {
@@ -303,7 +303,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         }
     }
 
-    private func renderStillNow(_ request: StillRequest, session: ImageSession) throws -> CGImage {
+    func renderStillNow(_ request: StillRequest, session: ImageSession) throws -> CGImage {
         var size = session.orientedSize
         if let limit = request.maxLongEdge, limit < size.longEdge {
             size = size.fitted(within: PixelSize(width: limit, height: limit))

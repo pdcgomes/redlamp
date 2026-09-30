@@ -39,29 +39,28 @@ enum StackAligner {
     static func align(_ frames: [FrameAnalysis]) -> StackAlignment {
         precondition(!frames.isEmpty)
         // Chain: each frame to its neighbour, so consecutive frames (similar focus) do the matching.
+        let steps = Parallel.map(frames.count - 1) { index in
+            ECCAligner.align(template: frames[index].luma, image: frames[index + 1].luma).transform
+        }
         var chained = [Similarity.identity]
-        for index in 1 ..< frames.count {
-            let step = ECCAligner.align(template: frames[index - 1].luma, image: frames[index].luma)
-            chained.append(step.transform.composed(after: chained[index - 1]))
+        for step in steps {
+            chained.append(step.composed(after: chained.last!))
         }
         // The frame whose content appears largest has the narrowest view (focus breathing).
         let reference = chained.last!.scale > 1 ? frames.count - 1 : 0
         let toReference = chained[reference].inverse
+        let initials = chained.map { $0.composed(after: toReference) }
 
-        var transforms: [Similarity] = []
-        var correlations: [Float] = []
-        for index in frames.indices {
-            let initial = chained[index].composed(after: toReference)
-            if index == reference {
-                transforms.append(.identity)
-                correlations.append(1)
-                continue
-            }
-            let direct = ECCAligner.align(template: frames[reference].luma, image: frames[index].luma, initial: initial)
+        let refined = Parallel.map(frames.count) { index -> (Similarity, Float) in
+            guard index != reference else { return (.identity, 1) }
+            let direct = ECCAligner.align(
+                template: frames[reference].luma, image: frames[index].luma, initial: initials[index],
+            )
             let useDirect = direct.correlation >= minimumDirectCorrelation
-            transforms.append(useDirect ? direct.transform : initial)
-            correlations.append(direct.correlation)
+            return (useDirect ? direct.transform : initials[index], direct.correlation)
         }
+        let transforms = refined.map(\.0)
+        let correlations = refined.map(\.1)
         let gains = frames.indices.map { gain(frames[$0], to: frames[reference], transform: transforms[$0]) }
         let fullTransforms = transforms.enumerated().map { index, transform in
             fullResolution(transform, factor: frames[index].factor)
@@ -79,6 +78,33 @@ enum StackAligner {
     static func fullResolution(_ transform: Similarity, factor: Float) -> Similarity {
         let toAnalysis = Similarity(a: 1 / factor, b: 0, tx: 0.5 / factor - 0.5, ty: 0.5 / factor - 0.5)
         return toAnalysis.inverse.composed(after: transform.composed(after: toAnalysis))
+    }
+
+    /// The inverse of `fullResolution(_:factor:)`: a full-resolution transform at analysis resolution.
+    static func analysisResolution(_ transform: Similarity, factor: Float) -> Similarity {
+        let toAnalysis = Similarity(a: 1 / factor, b: 0, tx: 0.5 / factor - 0.5, ty: 0.5 / factor - 0.5)
+        return toAnalysis.composed(after: transform.composed(after: toAnalysis.inverse))
+    }
+
+    /// `image` resampled into the reference's geometry (bilinear): `transform` maps reference
+    /// pixels to the image's. Outside the image, `outside` if given, else the nearest edge.
+    static func warp(_ image: LumaImage, by transform: Similarity, outside: Float? = nil) -> LumaImage {
+        let width = image.width
+        let height = image.height
+        var pixels = [Float](repeating: 0, count: width * height)
+        for y in 0 ..< height {
+            for x in 0 ..< width {
+                let (u, v) = transform.apply(Float(x), Float(y))
+                if let outside, image.sample(u, v) == nil {
+                    pixels[y * width + x] = outside
+                    continue
+                }
+                let cu = min(max(u, 0), Float(width - 1))
+                let cv = min(max(v, 0), Float(height - 1))
+                pixels[y * width + x] = image.sample(cu, cv) ?? 0
+            }
+        }
+        return LumaImage(width: width, height: height, pixels: pixels)
     }
 
     /// Per-channel gain matching `frame` to `reference` over their overlap, in linear light.

@@ -190,6 +190,19 @@ public struct StackWarpParams {
     }
 }
 
+public struct StackFuseParams {
+    /// x frame index (or a scale factor), y Auto window in frames, z Auto release ratio on root
+    /// salience, w grit level on root salience.
+    public var frame: SIMD4<Float>
+    /// x level selects per coefficient, y level suppresses grit, z first frame.
+    public var flags: SIMD4<Int32>
+
+    public init(frame: SIMD4<Float>, flags: SIMD4<Int32> = .zero) {
+        self.frame = frame
+        self.flags = flags
+    }
+}
+
 public struct SharpenParams {
     public var origin: SIMD4<Int32>
     public var size: SIMD4<Int32>
