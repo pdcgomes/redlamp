@@ -50,7 +50,7 @@
     "model" : "X-T3",
     "orientation" : 0,
     "sampleChecksum" : "dda5bb42d1c17d8c",
-    "whiteLevel" : 13201,
+    "whiteLevel" : 16383,
     "width" : 6246,
     "xyzToCamera" : [
       1.3426,

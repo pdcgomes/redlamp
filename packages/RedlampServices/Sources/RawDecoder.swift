@@ -38,16 +38,14 @@ enum RawDecoder {
         } else if let rawImage = raw.pointee.rawdata.raw_image, filters != 0 {
             let pattern = try cfaPattern(raw, filters: filters)
             layout = .mosaic(pattern)
-            var dataMaximum: UInt16 = 0
+            var histogram = [UInt32](repeating: 0, count: 65536)
             samples = copyMosaic(
                 rawImage, width: width, height: height, top: top, left: left,
-                pitchBytes: pitch, maximum: &dataMaximum,
+                pitchBytes: pitch, histogram: &histogram,
             )
             blackLevels = blackPattern(raw, filters: filters, pattern: pattern, base: black)
-            // LibRaw's adjust_maximum heuristic: the true clip point is often a little
-            // below the nominal white level, which otherwise tints clipped highlights.
-            if Float(dataMaximum) > whiteLevel * 0.75, Float(dataMaximum) < whiteLevel {
-                whiteLevel = Float(dataMaximum)
+            whiteLevel = histogram.withUnsafeBufferPointer {
+                WhiteLevel.measured(histogram: $0, nominal: whiteLevel, total: width * height)
             }
         } else if colors >= 3, let pixels = raw.pointee.rawdata.color3_image {
             layout = .linearRGB
@@ -241,23 +239,22 @@ enum RawDecoder {
         top: Int,
         left: Int,
         pitchBytes: Int,
-        maximum: inout UInt16,
+        histogram: inout [UInt32],
     ) -> [UInt16] {
         let stride = pitchBytes / MemoryLayout<UInt16>.size
-        var peak: UInt16 = 0
-        let result = [UInt16](unsafeUninitializedCapacity: width * height) { buffer, count in
-            for y in 0 ..< height {
-                let row = source + (y + top) * stride + left
-                let destination = buffer.baseAddress! + y * width
-                destination.update(from: row, count: width)
-                for x in 0 ..< width where row[x] > peak {
-                    peak = row[x]
+        return histogram.withUnsafeMutableBufferPointer { counts in
+            [UInt16](unsafeUninitializedCapacity: width * height) { buffer, count in
+                for y in 0 ..< height {
+                    let row = source + (y + top) * stride + left
+                    let destination = buffer.baseAddress! + y * width
+                    destination.update(from: row, count: width)
+                    for x in 0 ..< width {
+                        counts[Int(row[x])] &+= 1
+                    }
                 }
+                count = width * height
             }
-            count = width * height
         }
-        maximum = peak
-        return result
     }
 
     private static func copyRGB(
