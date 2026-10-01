@@ -265,7 +265,7 @@ Every phase ships on Mac, iPad, and iPhone. The Lightroom feature inventory in [
 - [x] Lightroom feature inventory
 - [x] GitHub Actions CI: purity gate, SwiftFormat lint, build, and tests, with cached LibRaw and fixtures
 - [ ] Performance lab: CI runner plus tethered iPhone and iPad, with per-tier regression gates that block merges
-- [ ] Golden-image color regression tests (ΔE2000) for camera files (every bundled recipe version already has a golden render, never regenerated)
+- [x] Golden-image color regression tests (ΔE2000) for camera files, and a golden render for every bundled recipe version
 - [ ] Written clean-room policy and a license-audit gate in CI
 
 ### Phase 1: First light *(in progress; macOS iterations 1 and 2 done)*
