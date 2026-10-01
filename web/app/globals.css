@@ -1,0 +1,164 @@
+@import "tailwindcss";
+
+/*
+ * Redlamp's brand (docs/brand/README.md): a warm near-black room lit by one red light.
+ * The red is always light coming from something; it is never a flat fill, and it appears
+ * once per view at most: the glow, the mark and the one primary button.
+ */
+@theme {
+  --color-wall: #0a0707;
+  --color-wall-raised: #120d0c;
+  --color-bakelite: #1c1615;
+  --color-bakelite-hi: #262019;
+  --color-steel: #57504e;
+  --color-safelight: #e0402e;
+  --color-safelight-deep: #9a1c14;
+  --color-filament: #ffb08a;
+  --color-ring: #d9d0cb;
+  --color-paper: #f3eee8;
+  --color-ink: #1a1414;
+  --color-mute: #a89d98;
+  --color-dim: #6f6561;
+  --color-hairline: rgb(243 238 232 / 0.09);
+  --color-hairline-strong: rgb(243 238 232 / 0.16);
+
+  --font-sans: var(--font-inter), -apple-system, "SF Pro Text", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  --radius-card: 1.25rem;
+  --radius-pill: 999px;
+
+  --animate-warm-up: warm-up 2.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-rise: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-breathe: breathe 7s ease-in-out infinite;
+}
+
+@keyframes warm-up {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  35% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.88;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@layer base {
+  html {
+    background: var(--color-wall);
+    color: var(--color-paper);
+    color-scheme: dark;
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: rgb(224 64 46 / 0.35);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-filament);
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+}
+
+@layer components {
+  /* Inter at its display optical size: the face the wordmark is drawn in. */
+  .font-display {
+    font-family: var(--font-sans);
+    font-variation-settings: "opsz" 32;
+    font-weight: 600;
+    letter-spacing: -0.022em;
+  }
+
+  .eyebrow {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-mute);
+  }
+
+  /* The one light on the page, falling from the top like a safelight above the bench. */
+  .lamp-glow {
+    background:
+      radial-gradient(60% 55% at 50% 0%, rgb(224 64 46 / 0.3), rgb(224 64 46 / 0.08) 45%, transparent 75%),
+      radial-gradient(25% 22% at 50% 4%, rgb(255 176 138 / 0.16), transparent 70%);
+  }
+
+  .surface {
+    background: linear-gradient(180deg, rgb(38 32 29 / 0.72), rgb(22 17 16 / 0.72));
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-card);
+    box-shadow: inset 0 1px 0 rgb(243 238 232 / 0.05);
+  }
+
+  .glass {
+    background: rgb(28 22 21 / 0.62);
+    border: 1px solid var(--color-hairline);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+  }
+
+  .shot {
+    filter: drop-shadow(0 30px 60px rgb(0 0 0 / 0.55)) drop-shadow(0 6px 14px rgb(0 0 0 / 0.4));
+  }
+
+  .button-primary {
+    background: linear-gradient(180deg, #e8513f, var(--color-safelight) 55%, #c9301f);
+    color: #fff4ee;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.25),
+      0 8px 28px rgb(224 64 46 / 0.35);
+  }
+
+  .button-secondary {
+    background: rgb(243 238 232 / 0.06);
+    border: 1px solid var(--color-hairline-strong);
+    color: var(--color-paper);
+  }
+
+  .button-secondary:hover {
+    background: rgb(243 238 232 / 0.1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

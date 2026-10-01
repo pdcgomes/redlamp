@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+#MISE description="Run the redlamp.app website (web/) locally; pass `build` to build it instead"
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)/web"
+
+[ -d node_modules ] || npm ci
+
+case "${1:-dev}" in
+dev) npm run dev ;;
+build) npm run build ;;
+*)
+    echo "usage: mise run site [-- dev|build]" >&2
+    exit 1
+    ;;
+esac

@@ -1,0 +1,5 @@
+node_modules/
+out/
+
+# Copied from docs/ by ../web/scripts/sync-assets.mjs before every studio session and render.
+public/synced/

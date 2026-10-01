@@ -1,0 +1,10 @@
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+.vercel
+.env*.local
+
+# Copied from docs/ by scripts/sync-assets.mjs before every dev and build.
+public/synced/

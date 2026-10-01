@@ -2,6 +2,8 @@
 tuist = "4.197.3"
 swiftformat = "0.62.1"
 swiftlint = "0.65.0"
+# The website (web/) and the explainer video (video/).
+node = "24"
 
 [env]
 # Signing / project identity. Override per-machine in .mise.local.toml if needed.

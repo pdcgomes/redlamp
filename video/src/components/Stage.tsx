@@ -1,0 +1,48 @@
+import type { ReactNode } from "react";
+import { AbsoluteFill, useCurrentFrame } from "remotion";
+import { noise2D } from "@remotion/noise";
+import { color } from "../theme";
+
+type Props = {
+  children: ReactNode;
+  /** Where the one red light sits, in fractions of the frame. */
+  glowX?: number;
+  glowY?: number;
+  glow?: number;
+};
+
+/** The dark room every scene happens in: warm near-black, one red light, a breath of grain. */
+export function Stage({ children, glowX = 0.5, glowY = 0.12, glow = 1 }: Props) {
+  const frame = useCurrentFrame();
+  const breathe = 0.9 + 0.1 * noise2D("stage", frame / 90, 0);
+  const strength = glow * breathe;
+  return (
+    <AbsoluteFill style={{ background: color.wall, overflow: "hidden" }}>
+      <AbsoluteFill
+        style={{
+          background: `radial-gradient(60% 55% at ${glowX * 100}% ${glowY * 100}%, rgba(224,64,46,${0.3 * strength}), rgba(224,64,46,${0.07 * strength}) 45%, transparent 75%)`,
+        }}
+      />
+      <AbsoluteFill style={{ background: "radial-gradient(120% 90% at 50% 50%, transparent 55%, rgba(0,0,0,0.55))" }} />
+      {children}
+      <Grain />
+    </AbsoluteFill>
+  );
+}
+
+/** Film grain that changes every two frames, so the dark never looks digital and flat. */
+export function Grain({ opacity = 0.07 }: { opacity?: number }) {
+  const frame = useCurrentFrame();
+  const seed = Math.floor(frame / 2) % 24;
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none", mixBlendMode: "overlay", opacity }}>
+      <svg width="100%" height="100%">
+        <filter id={`grain-${seed}`}>
+          <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed={seed} stitchTiles="stitch" />
+          <feColorMatrix type="saturate" values="0" />
+        </filter>
+        <rect width="100%" height="100%" filter={`url(#grain-${seed})`} />
+      </svg>
+    </AbsoluteFill>
+  );
+}

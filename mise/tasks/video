@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+#MISE description="Open the explainer video (video/) in Remotion Studio; pass `render` to render the MP4s and stills into video/out"
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)/video"
+
+[ -d node_modules ] || npm ci
+
+case "${1:-studio}" in
+studio) npm run studio ;;
+render) npm run render ;;
+*)
+    echo "usage: mise run video [-- studio|render]" >&2
+    exit 1
+    ;;
+esac
