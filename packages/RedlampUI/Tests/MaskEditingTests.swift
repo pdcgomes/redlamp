@@ -22,8 +22,25 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         AsyncStream { _ in }
     }
 
-    func renderStill(_: StillRequest) async throws -> CGImage {
-        throw CancellationError()
+    /// Every still asked for, most recent last.
+    var stills: [StillRequest] = []
+
+    /// A grey still at the requested size, or the photo's.
+    func renderStill(_ request: StillRequest) async throws -> CGImage {
+        stills.append(request)
+        let size = request.maxLongEdge.map { PixelSize(width: 600, height: 400).fitted(within: PixelSize(
+            width: $0,
+            height: $0,
+        )) }
+            ?? PixelSize(width: 600, height: 400)
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB), let context = CGContext(
+            data: nil, width: size.width, height: size.height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue,
+        ) else { throw CancellationError() }
+        context.setFillColor(gray: 0.5, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: size.width, height: size.height))
+        guard let image = context.makeImage() else { throw CancellationError() }
+        return image
     }
 
     func autoWhiteBalance() async -> WhiteBalanceValue? {

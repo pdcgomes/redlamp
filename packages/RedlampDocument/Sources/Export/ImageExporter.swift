@@ -1,0 +1,158 @@
+import CoreGraphics
+import Foundation
+import ImageIO
+
+/// Encodes rendered stills and writes them to disk.
+public enum ImageExporter {
+    /// Writes `image` to `url` as `settings` describe, replacing any file there. The file is
+    /// written beside the target first and moved into place, so a failure never leaves a
+    /// partial file or loses the one it would have replaced.
+    public static func write(
+        _ image: CGImage,
+        to url: URL,
+        settings: ExportSettings,
+        metadata: [CFString: Any] = [:],
+    ) throws {
+        let fileManager = FileManager.default
+        let folder = url.deletingLastPathComponent()
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: folder.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            throw ExportError.folderMissing(folder)
+        }
+        let staging: URL
+        do {
+            staging = try fileManager.url(
+                for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: url, create: true,
+            )
+        } catch {
+            throw ExportError.writeFailed(url)
+        }
+        defer { try? fileManager.removeItem(at: staging) }
+        let temporary = staging.appending(path: url.lastPathComponent, directoryHint: .notDirectory)
+
+        if settings.appliesFileSizeLimit {
+            let data = try encodeWithinLimit(image, settings: settings, metadata: metadata)
+            do {
+                try data.write(to: temporary)
+            } catch {
+                throw ExportError.writeFailed(url)
+            }
+        } else {
+            guard let destination = CGImageDestinationCreateWithURL(
+                temporary as CFURL, settings.format.typeIdentifier as CFString, 1, nil,
+            ) else {
+                throw ExportError.cannotEncode(settings.format)
+            }
+            try finish(destination, image, properties(settings: settings, metadata: metadata), settings.format)
+        }
+
+        do {
+            if fileManager.fileExists(atPath: url.path) {
+                _ = try fileManager.replaceItemAt(url, withItemAt: temporary)
+            } else {
+                try fileManager.moveItem(at: temporary, to: url)
+            }
+        } catch {
+            throw ExportError.writeFailed(url)
+        }
+    }
+
+    /// The encoded file, in memory.
+    public static func encode(
+        _ image: CGImage,
+        settings: ExportSettings,
+        metadata: [CFString: Any] = [:],
+    ) throws -> Data {
+        if settings.appliesFileSizeLimit {
+            return try encodeWithinLimit(image, settings: settings, metadata: metadata)
+        }
+        return try encode(image, settings: settings, quality: quality(settings), metadata: metadata)
+    }
+
+    /// The highest quality that fits the size limit, found by bisection in at most seven encodes.
+    static func encodeWithinLimit(
+        _ image: CGImage,
+        settings: ExportSettings,
+        metadata: [CFString: Any],
+    ) throws -> Data {
+        let limit = settings.fileSizeLimitKB * 1000
+        let smallest = try encode(image, settings: settings, quality: 0, metadata: metadata)
+        guard smallest.count <= limit else {
+            throw ExportError.fileSizeLimitUnreachable(
+                format: settings.format,
+                limitKB: settings.fileSizeLimitKB,
+                smallestKB: (smallest.count + 999) / 1000,
+            )
+        }
+        var best = smallest
+        var low = 0.0
+        var high = settings.format.maximumQuality
+        for _ in 0 ..< 6 {
+            let middle = (low + high) / 2
+            let data = try encode(image, settings: settings, quality: middle, metadata: metadata)
+            if data.count <= limit {
+                best = data
+                low = middle
+            } else {
+                high = middle
+            }
+        }
+        return best
+    }
+
+    private static func encode(
+        _ image: CGImage,
+        settings: ExportSettings,
+        quality: Double,
+        metadata: [CFString: Any],
+    ) throws -> Data {
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            data as CFMutableData, settings.format.typeIdentifier as CFString, 1, nil,
+        ) else {
+            throw ExportError.cannotEncode(settings.format)
+        }
+        let properties = properties(settings: settings, quality: quality, metadata: metadata)
+        try finish(destination, image, properties, settings.format)
+        return data as Data
+    }
+
+    private static func finish(
+        _ destination: CGImageDestination,
+        _ image: CGImage,
+        _ properties: [CFString: Any],
+        _ format: ExportFormat,
+    ) throws {
+        CGImageDestinationAddImage(destination, image, properties as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else { throw ExportError.cannotEncode(format) }
+    }
+
+    private static func quality(_ settings: ExportSettings) -> Double {
+        min(Double(settings.quality) / 100, settings.format.maximumQuality)
+    }
+
+    /// The ImageIO properties for one encode: metadata, then quality, compression and resolution.
+    static func properties(
+        settings: ExportSettings,
+        quality: Double? = nil,
+        metadata: [CFString: Any],
+    ) -> [CFString: Any] {
+        var properties = metadata
+        if !settings.format.isLossless {
+            properties[kCGImageDestinationLossyCompressionQuality] = min(
+                quality ?? Self.quality(settings),
+                settings.format.maximumQuality,
+            )
+        }
+        if settings.format == .tiff {
+            var tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any] ?? [:]
+            tiff[kCGImagePropertyTIFFCompression] = settings.tiffCompression.tag
+            properties[kCGImagePropertyTIFFDictionary] = tiff
+        }
+        // The pixels are rendered upright, whatever the source's orientation tag said.
+        properties[kCGImagePropertyOrientation] = 1
+        properties[kCGImagePropertyDPIWidth] = settings.sizing.ppi
+        properties[kCGImagePropertyDPIHeight] = settings.sizing.ppi
+        return properties
+    }
+}

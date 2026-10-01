@@ -1,4 +1,5 @@
 import Foundation
+import RedlampDocument
 import RedlampEngine
 import RedlampEngineAPI
 import RedlampUI
@@ -51,7 +52,7 @@ enum HarnessEditor {
                 while model.info == nil, model.errorMessage == nil {
                     try? await Task.sleep(for: .milliseconds(50))
                 }
-                try? await model.exportCurrent(to: jpeg, format: .jpeg)
+                try? await model.export(ExportSettings(), to: jpeg)
             }
             model.select(jpeg)
         case .none:

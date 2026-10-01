@@ -130,7 +130,7 @@ public extension EditorModel {
             } else {
                 toggleCommandPalette(scope: .sliders)
             }
-        case .openFolder, .export, .filmLooks: return false
+        case .openFolder, .export, .exportWithPrevious, .filmLooks: return false
         default:
             return false
         }
@@ -163,7 +163,8 @@ public extension EditorModel {
         case .pasteSettings: return hasClipboard && photo
         case .pastePrevious: return previousSelection != nil && photo
         case .copySettings, .resetAll, .autoTone, .toggleBlackAndWhite, .newSnapshot, .newPreset,
-             .previousSetting, .nextSetting, .increaseSetting, .decreaseSetting, .findAdjustment, .export:
+             .previousSetting, .nextSetting, .increaseSetting, .decreaseSetting, .findAdjustment, .export,
+             .exportWithPrevious:
             return photo
         case .autoWhiteBalance, .whiteBalanceSelector: return whiteBalance
         case .editTool, .maskingTool, .cancel, .showShortcuts, .openFolder, .filmLooks, .commandPalette:

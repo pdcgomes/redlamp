@@ -7,6 +7,7 @@ struct AppCommands: Commands {
     let model: EditorModel
     let onOpen: () -> Void
     let onExport: () -> Void
+    let onExportWithPrevious: () -> Void
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openURL) private var openURL
 
@@ -15,6 +16,7 @@ struct AppCommands: Commands {
             item(.openFolder, perform: onOpen)
             Divider()
             item(.export, perform: onExport)
+            item(.exportWithPrevious, perform: onExportWithPrevious)
         }
 
         CommandGroup(replacing: .undoRedo) {

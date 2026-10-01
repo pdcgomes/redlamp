@@ -67,7 +67,8 @@ extension ShortcutAction {
         .labelGreen: ["label", "color label"],
         .labelBlue: ["label", "color label"],
         .openFolder: ["import", "open", "folder", "photos"],
-        .export: ["save", "jpeg", "export"],
+        .export: ["save", "jpeg", "heic", "avif", "png", "tiff", "export"],
+        .exportWithPrevious: ["save", "again", "repeat", "last", "export"],
         .showShortcuts: ["keys", "help", "shortcuts", "keyboard"],
         .filmLooks: ["film", "stocks", "looks"],
     ]
@@ -135,6 +136,7 @@ extension ShortcutAction {
         case .labelRed, .labelYellow, .labelGreen, .labelBlue: "circle.fill"
         case .openFolder: "folder"
         case .export: "square.and.arrow.up"
+        case .exportWithPrevious: "square.and.arrow.up.on.square"
         case .showShortcuts: "keyboard"
         case .filmLooks: "film"
         default: "command"

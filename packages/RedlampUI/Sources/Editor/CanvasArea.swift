@@ -56,7 +56,8 @@ struct CanvasArea: View {
         .overlay(alignment: .top) {
             // The command palette says what it's previewing beside its own hint bar.
             if model.lightsOut == 0, model.commandPalette == nil,
-               model.isShowingOriginal || model.previewingRecipe != nil || model.previewingEdit != nil
+               model.exportStatus != nil
+               || model.isShowingOriginal || model.previewingRecipe != nil || model.previewingEdit != nil
                || model.eyedropperActive || model.drawingKind != nil || model.isReadOnly
                || (model.info != nil && model.isBaseLookMissing) {
                 StatusPill(text: statusText)
@@ -136,6 +137,9 @@ struct CanvasArea: View {
     }
 
     private var statusText: String {
+        if let status = model.exportStatus {
+            return status
+        }
         if let kind = model.drawingKind {
             return "Drag on the photo to draw a \(kind.name)  ·  Esc to cancel"
         }

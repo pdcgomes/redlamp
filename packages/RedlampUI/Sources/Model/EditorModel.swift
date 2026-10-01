@@ -293,6 +293,9 @@ public final class EditorModel {
     /// The photo's auto white balance, for recipes that ask for it.
     @ObservationIgnored var autoWhiteBalance: WhiteBalanceValue?
     public private(set) var hasClipboard = false
+    /// What a background export is doing ("Exporting…", then "Exported…" for a moment).
+    public internal(set) var exportStatus: String?
+    @ObservationIgnored var exportStatusTask: Task<Void, Never>?
 
     /// Called when the folder changes, so the app can remember it.
     @ObservationIgnored public var onFolderChange: ((URL) -> Void)?
@@ -836,21 +839,6 @@ public final class EditorModel {
         } else {
             expandedPanels.insert(panel)
         }
-    }
-
-    // MARK: - Export
-
-    public func exportCurrent(to url: URL, format: ImageExporter.Format) async throws {
-        let bits = format == .tiff || format == .png ? 16 : 8
-        let image = try await engine.renderStill(StillRequest(
-            recipe: recipe,
-            colorSpace: .sRGB,
-            bitsPerComponent: bits,
-            purpose: .export,
-        ))
-        try await Task.detached(priority: .userInitiated) {
-            try ImageExporter.write(image, to: url, format: format)
-        }.value
     }
 
     #if DEBUG || REDLAMP_PROFILING

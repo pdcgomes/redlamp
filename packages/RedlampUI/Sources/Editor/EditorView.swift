@@ -64,6 +64,7 @@ struct EditorOverlays: View {
     @Bindable var theme: ThemeSettings
     let onOpen: () -> Void
     let onExport: () -> Void
+    let onExportWithPrevious: () -> Void
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -88,6 +89,7 @@ struct EditorOverlays: View {
         switch action {
         case .openFolder: onOpen()
         case .export: onExport()
+        case .exportWithPrevious: onExportWithPrevious()
         case .filmLooks: openWindow(id: FilmCatalogView.windowID)
         default: model.perform(action)
         }

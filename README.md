@@ -142,7 +142,8 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] **Sliders by hand:** ⌘-scroll over any slider adjusts it (Shift coarse, Option fine), and value fields accept arithmetic such as `x+10`.
 - [x] **Culling while you develop:** star ratings, pick/reject flags and color labels, shown on the filmstrip. There's also an Info overlay (`I`), Lights Out (`L`), full-screen preview (`F`), and Paste from Previous (`⌥⌘V` and the Previous button).
 - [x] Non-destructive edits, saved automatically to a sidecar file next to each photo (`IMG_1234.ARW.redlamp`).
-- [x] Export to JPEG, plus a headless `redlamp` command-line tool for rendering and export. Exports smaller than the photo are developed at full resolution and downscaled last, so sharpening, noise reduction and texture look the same at every size.
+- [x] **Export dialog** (`⇧⌘E`): JPEG, HEIC and AVIF (lossy, with quality and an optional file size limit) or PNG and TIFF (lossless, with TIFF compression), 8, 10 or 16 bits, sRGB or Display P3. Resize by long edge, short edge, width and height, megapixels or percentage, keep all metadata, all but the location, or none, and choose the folder and file name. Built-in and saved presets, and Export with Previous (`⌥⇧⌘E`) repeats the last export without the dialog.
+- [x] A headless `redlamp` command-line tool for rendering and export. Exports smaller than the photo are developed at full resolution and downscaled last, so sharpening, noise reduction and texture look the same at every size.
 
 ### Recipes and looks
 
@@ -982,6 +983,7 @@ To release, bump `MARKETING_VERSION` in `Version.xcconfig`, commit and push to `
 | **Performance** | Basic panel drag | Drags a slider at 120 events a second through each implementation and reports how busy the main thread got |
 | **Recipes** | Recipe Lab | Every recipe, Base Look and imported LUT on the look-development set and a lint chart (see below) |
 | **Command Palette** | Live, States | Live: the palette over the sample photo on the real editor, with its state, a log of every key and what it did, a checklist that ticks each interaction as it's tried, conditions (photo, clipboard, Masking tool, transparency, its own theme, tip), timing knobs and a Play walkthrough. States: every state as a still specimen |
+| **Export** | Live, States | Live: the real Export dialog on the harness window, exporting the sample photo to a temporary folder, and Export with Previous. States: the dialog for each format, size mode and problem |
 
 ![Tokens in the harness: the palette, type ramp and metrics](docs/images/harness-tokens.png)
 
@@ -1019,7 +1021,7 @@ Redlamp follows Lightroom Classic's Develop-module shortcuts. Press **⌘/** in 
 | **Tools** | `D` Edit · `⇧W` Masking · `M` linear gradient · `⇧M` radial gradient · `K` brush · `⇧J` color range · `⇧Q` luminance range · `⇧Z` depth range · `R` crop, `A` crop aspect lock *(Phase 2)* · `Q` healing *(Phase 3)* |
 | **Masking** | `O` show/hide overlay · `⇧O` cycle overlay color · `H` show/hide pins · `⌫` delete selected mask · `Esc` finish drawing or leave the tool · brushing: `[` `]` size (`⇧` feather), hold `⌥` to erase · Objects: `⌥`-click to take away |
 | **Rating & flags** | `0`–`5` star rating · `[` `]` decrease/increase rating · `P` pick · `X` reject · `U` unflag · `6`–`9` red, yellow, green, blue label · add `⇧` to any of these to also move to the next photo |
-| **File** | `⌘O` open folder · `⇧⌘E` export · `⌘/` keyboard shortcuts · `⇧⌘L` Film Looks window · `⌘K` command palette (`⌘F` for sliders only) |
+| **File** | `⌘O` open folder · `⇧⌘E` export · `⌥⇧⌘E` export with previous · `⌘/` keyboard shortcuts · `⇧⌘L` Film Looks window · `⌘K` command palette (`⌘F` for sliders only) |
 
 Ratings, flags and color labels are saved in the photo's sidecar and shown on the filmstrip.
 

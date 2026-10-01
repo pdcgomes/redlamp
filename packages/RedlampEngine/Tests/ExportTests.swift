@@ -65,4 +65,18 @@ struct ExportTests {
         }
         #expect(difference / samples < 1.5, "mean difference \(difference / samples) levels")
     }
+
+    @Test(.enabled(if: EngineSmokeTests.canRender))
+    func `a still of a photo that is no longer open fails`() async throws {
+        let url = try #require(EngineSmokeTests.fixtures.first)
+        let engine = try RedlampEngine()
+        _ = try await engine.open(url)
+        var request = StillRequest(recipe: EditRecipe(), maxLongEdge: 64, purpose: .export)
+        request.source = url
+        #expect(try await engine.renderStill(request).width <= 64)
+        request.source = url.deletingLastPathComponent().appending(path: "other.NEF")
+        await #expect(throws: EngineError.self) {
+            _ = try await engine.renderStill(request)
+        }
+    }
 }

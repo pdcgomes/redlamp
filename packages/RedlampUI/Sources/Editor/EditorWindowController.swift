@@ -26,6 +26,7 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
     public init(
         model: EditorModel, theme: ThemeSettings,
         onOpen: @escaping () -> Void, onExport: @escaping () -> Void,
+        onExportWithPrevious: @escaping () -> Void,
     ) {
         self.model = model
         self.theme = theme
@@ -37,7 +38,10 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
         let split = EditorSplitViewController(model: model, theme: theme, content: content)
         let root = EditorRootViewController(
             split: split,
-            overlays: EditorOverlays(model: model, theme: theme, onOpen: onOpen, onExport: onExport),
+            overlays: EditorOverlays(
+                model: model, theme: theme,
+                onOpen: onOpen, onExport: onExport, onExportWithPrevious: onExportWithPrevious,
+            ),
         )
 
         let window = NSWindow(

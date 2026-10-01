@@ -9,6 +9,7 @@ struct RedlampApp: App {
     @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
     @State private var model: EditorModel
     @State private var theme: ThemeSettings
+    @State private var exports: ExportPresetStore
 
     init() {
         #if DEBUG || REDLAMP_PROFILING
@@ -33,14 +34,18 @@ struct RedlampApp: App {
         model.onToggleFullScreen = { NSApp.keyWindow?.toggleFullScreen(nil) }
         model.onToggleToolbar = { NSApp.keyWindow?.toggleToolbarShown(nil) }
         let theme = ThemeSettings()
+        let exports = ExportPresetStore()
         _model = State(initialValue: model)
         _theme = State(initialValue: theme)
+        _exports = State(initialValue: exports)
 
         let keyboard = KeyboardShortcuts()
         AppDelegate.launch = {
             let editor = EditorWindowController(
                 model: model, theme: theme,
-                onOpen: { Self.openPanel(model: model) }, onExport: { Self.exportPanel(model: model) },
+                onOpen: { Self.openPanel(model: model) },
+                onExport: { ExportActions.present(model: model, store: exports) },
+                onExportWithPrevious: { ExportActions.exportWithPrevious(model: model, store: exports) },
             )
             editor.showWindow(nil)
             keyboard.install(model: model)
@@ -66,7 +71,9 @@ struct RedlampApp: App {
         .commands {
             AppCommands(
                 model: model,
-                onOpen: { Self.openPanel(model: model) }, onExport: { Self.exportPanel(model: model) },
+                onOpen: { Self.openPanel(model: model) },
+                onExport: { ExportActions.present(model: model, store: exports) },
+                onExportWithPrevious: { ExportActions.exportWithPrevious(model: model, store: exports) },
             )
         }
 
@@ -98,23 +105,6 @@ struct RedlampApp: App {
         panel.message = "Choose a folder of photos, or individual images."
         if panel.runModal() == .OK {
             model.open(panel.urls)
-        }
-    }
-
-    private static func exportPanel(model: EditorModel) {
-        guard let info = model.info else { return }
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.jpeg]
-        panel.nameFieldStringValue = info.url.deletingPathExtension().lastPathComponent + "-redlamp.jpg"
-        panel.directoryURL = info.url.deletingLastPathComponent()
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        Task {
-            do {
-                try await model.exportCurrent(to: url, format: .jpeg)
-                NSWorkspace.shared.activateFileViewerSelecting([url])
-            } catch {
-                NSAlert(error: error).runModal()
-            }
         }
     }
 }

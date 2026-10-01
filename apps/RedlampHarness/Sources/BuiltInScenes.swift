@@ -17,6 +17,8 @@ enum BuiltInScenes {
         catalog.register(.recipeLab)
         catalog.register(.commandPalette)
         catalog.register(.commandPaletteStates)
+        catalog.register(.exportLive)
+        catalog.register(.exportStates)
         return catalog
     }
 }

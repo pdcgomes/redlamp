@@ -268,7 +268,7 @@ public final class CommandPaletteModel {
         }
     }
 
-    private static let appActions: Set<ShortcutAction> = [.openFolder, .export, .filmLooks]
+    private static let appActions: Set<ShortcutAction> = [.openFolder, .export, .exportWithPrevious, .filmLooks]
 
     private func run(_ action: ShortcutAction) {
         report(.ran(action))

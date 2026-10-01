@@ -361,6 +361,9 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
 
     public func renderStill(_ request: StillRequest) async throws -> CGImage {
         guard let current = session.withLock({ $0 }) else { throw EngineError.noImageOpen }
+        if let source = request.source, source.standardizedFileURL != current.info.url.standardizedFileURL {
+            throw EngineError.imageChanged
+        }
         return try await withCheckedThrowingContinuation { continuation in
             renderQueue.async { [self] in
                 continuation.resume(with: Result { try renderStillNow(request, session: current) })

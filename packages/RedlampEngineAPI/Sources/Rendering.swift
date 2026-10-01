@@ -102,7 +102,7 @@ public enum MaskOverlayColor: Int, Sendable, Hashable, CaseIterable {
     }
 }
 
-public enum OutputColorSpace: String, Sendable, Hashable, CaseIterable {
+public enum OutputColorSpace: String, Codable, Sendable, Hashable, CaseIterable {
     case sRGB
     case displayP3
 
@@ -131,6 +131,9 @@ public struct StillRequest: Sendable, Hashable {
     public var colorSpace: OutputColorSpace
     public var bitsPerComponent: Int
     public var purpose: StillPurpose
+    /// The image this still is of. When set, the render fails with `imageChanged` if another
+    /// image has been opened since, rather than rendering that one.
+    public var source: URL?
 
     public init(
         recipe: EditRecipe,
@@ -239,10 +242,12 @@ public enum EngineError: Error, LocalizedError, Sendable {
     case decodeFailed(String)
     case gpuUnavailable
     case renderFailed(String)
+    case imageChanged
 
     public var errorDescription: String? {
         switch self {
         case .noImageOpen: "No image is open."
+        case .imageChanged: "Another photo was opened before this one could be rendered."
         case let .unsupportedFile(name): "\(name) is not a supported image."
         case let .decodeFailed(reason): "The image could not be decoded: \(reason)"
         case .gpuUnavailable: "No Metal GPU is available."

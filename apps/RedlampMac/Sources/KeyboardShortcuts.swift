@@ -28,8 +28,10 @@ final class KeyboardShortcuts {
     }
 
     private static func handle(_ event: NSEvent, model: EditorModel) -> Bool {
-        // The command palette handles its own keys, even if focus has left its field.
-        if NSApp.keyWindow?.firstResponder is NSTextView || model.commandPalette != nil {
+        // The command palette handles its own keys, even if focus has left its field, and a
+        // sheet (the Export dialog) keeps its keys from the editor behind it.
+        if NSApp.keyWindow?.firstResponder is NSTextView || model.commandPalette != nil
+            || NSApp.keyWindow?.sheetParent != nil || NSApp.keyWindow?.attachedSheet != nil {
             return false
         }
         let flags = event.modifierFlags
