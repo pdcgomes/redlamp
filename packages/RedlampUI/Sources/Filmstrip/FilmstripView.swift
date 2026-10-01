@@ -32,6 +32,7 @@ struct FilmstripView: View {
             .foregroundStyle(Theme.secondaryLabel)
             .padding(.horizontal, 12)
             .frame(height: 22)
+            .padding(.top, 6)
 
             ScrollViewReader { proxy in
                 ScrollView(.horizontal) {
@@ -53,7 +54,7 @@ struct FilmstripView: View {
                 }
             }
         }
-        .frame(height: 104)
+        .frame(height: 110)
     }
 }
 
