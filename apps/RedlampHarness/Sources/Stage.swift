@@ -24,7 +24,7 @@ enum StageBackground: String, CaseIterable, Identifiable {
 struct StageSettings {
     var background = HarnessLaunch.value(after: "--background")
         .flatMap { name in StageBackground.allCases.first { $0.rawValue.lowercased() == name } } ?? .panel
-    var inspectorShown = true
+    var inspectorShown = !HarnessLaunch.stageOnly
     /// Setting it installs the theme's tokens straight away, before any view redraws, so
     /// views rebuilt for the change read the new colors when they are made.
     var theme = HarnessLaunch.themeSelection {

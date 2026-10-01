@@ -18,10 +18,11 @@ const harness = (file: string, alt: string, caption: string): Shot => ({
   height: 850,
 });
 
+/** Captured by hand, so `mise run screenshots` leaves it alone. */
 export const heroShot = app(
-  "editor.png",
-  "Redlamp editing a Nikon Z 6 raw file, with the Develop panels on the right",
-  "Editing a Nikon Z 6 raw file.",
+  "hero.png",
+  "Redlamp editing a Sony α7R V raw file of a dancer at a street parade, with the Develop panels on the right",
+  "Editing a Sony α7R V raw file.",
 );
 
 export type Feature = {

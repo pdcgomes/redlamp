@@ -5,9 +5,10 @@ struct HarnessRootView: View {
     @State private var selection: String? = HarnessLaunch.value(after: "--scene") ?? HarnessCatalog.shared.scenes.first?
         .id
     @State private var settings = StageSettings()
+    @State private var columns: NavigationSplitViewVisibility = HarnessLaunch.stageOnly ? .detailOnly : .automatic
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columns) {
             List(selection: $selection) {
                 ForEach(catalog.sections) { section in
                     Section {
@@ -29,6 +30,9 @@ struct HarnessRootView: View {
             }
         }
         .preferredColorScheme(settings.theme.appearance == .dark ? .dark : .light)
-        .task { MetricsProbe.runIfRequested() }
+        .task {
+            MetricsProbe.runIfRequested()
+            await HarnessLaunch.placeWindowIfRequested()
+        }
     }
 }
