@@ -6,9 +6,9 @@ cover: /synced/images/hero.png
 coverAlt: Redlamp editing a raw photo of a dancer in a street parade, with Lightroom-style panels on the right
 ---
 
-I shoot raw on a Sony A7R V, and like most people who shoot raw, I edit the way Lightroom taught us to: the same panels, the same sliders, the same shortcuts. Lightroom works, but it has never felt at home on the Mac, and it comes with a subscription and a cloud I don't need. I wanted that way of working in an app that belongs on macOS, so I started building one.
+I shoot raw on a Sony A7R V, and I've watched Adobe's software get more bloated, slow and sluggish, with a subscription on top and a cloud I don't want my photos in. I kept wondering how fast a raw editor could be if it were built for Apple Silicon from scratch, and whether film looks could be done properly, from the film stocks' own datasheets. So I started building one. It's the app I want for myself, and building it has been a lot of fun.
 
-That's Redlamp. It's a raw photo editor for the Mac, written from scratch in Swift and Metal for Apple Silicon, and it's free and open source.
+That's Redlamp. It's a raw photo editor for the Mac, written from scratch in Swift and Metal, and it's free and open source.
 
 ## What it is
 
