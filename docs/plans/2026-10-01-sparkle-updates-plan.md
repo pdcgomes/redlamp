@@ -10,7 +10,9 @@ Work in the checkout is shared with other in-progress changes, so every commit n
 
 ## Changes during implementation
 
-None yet.
+- **Signing key:** `SUPublicEDKey` is the key `generate_keys --account redlamp -p` prints, the pair of the private key the release signs with. The release fails before notarizing if they ever differ.
+- **The update test:** other apps run Sparkle installers too (Arc's was running), so the script waits for `Autoupdate <test bundle ID>`, not any `Autoupdate`. It quits the old copy through `NSRunningApplication` by process ID: AppleScript, by bundle ID or by path, reaches the new copy, which has the same bundle ID and isn't running. Killing the app instead doesn't work, because Sparkle's installer waits for the message the app sends as it quits and gives up without it. The temporary folder is resolved to `/private/var/…`, where `pgrep` finds the running app.
+- **Where it was verified:** the dry run, its signatures and the feed's redirect were checked from the agent's sandbox. Notarizing the dry run and the update test's install need the owner's terminal: the sandbox can't read notarytool's keychain profile or send an app the quit event, though Sparkle there did fetch the feed, download the update and start its installer.
 
 ## Step 1: Sparkle through Tuist
 
