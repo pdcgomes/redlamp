@@ -1,95 +1,67 @@
 import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
-import { Caption } from "../components/Caption";
-import { Photo } from "../components/Media";
+import { Words } from "../components/Kinetic";
+import { Landscape } from "../components/Landscape";
 import { Stage } from "../components/Stage";
-import { appear, useLayout } from "../layout";
-import { color, easeInOut } from "../theme";
+import { Chip } from "../components/UI";
+import { useLayout, useSprings } from "../layout";
 
-/**
- * A linear gradient is drawn down over the sky under the red overlay, then applied; a radial
- * gradient blooms over the big tree and warms it. The overlay is the app's own mask view.
- */
-export function Masks({ dur }: { dur: number }) {
+const kinds = ["Linear", "Radial", "Brush", "Range", "Subject", "Sky", "Background", "People", "Objects", "Depth"];
+const SKY = 10;
+const SUBJECT = 48;
+
+/** Sky, then Subject: each detected on-device, shown under the red overlay, then adjusted. */
+export function Masks() {
   const frame = useCurrentFrame();
+  const s = useSprings();
   const layout = useLayout();
-  const w = layout.wide ? 1180 : 960;
-  const h = w * (layout.tall ? 1.25 : 0.667);
-  // The big tree sits further left once the landscape is cropped to 4:5.
-  const cx = layout.tall ? 30 : 38;
+  const box = layout.wide ? { w: 1300, h: 640 } : layout.tall ? { w: 980, h: 1060 } : { w: 960, h: 600 };
   const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
-  const linearDraw = interpolate(frame, [24, 70], [0, 1], { ...clamp, easing: easeInOut });
-  const linearOverlay = interpolate(frame, [24, 40, 82, 100], [0, 1, 1, 0], clamp);
-  const linearApply = appear(frame, 84, 30);
-  const radialDraw = interpolate(frame, [116, 156], [0, 1], { ...clamp, easing: easeInOut });
-  const radialOverlay = interpolate(frame, [116, 130, 168, 186], [0, 1, 1, 0], clamp);
-  const radialApply = appear(frame, 170, 30);
-  const edge = 18 + linearDraw * 34;
-  const linearMask = `linear-gradient(180deg, black 0%, black ${edge - 14}%, transparent ${edge + 10}%)`;
-  const radialMask = `radial-gradient(${18 + radialDraw * 16}% ${22 + radialDraw * 20}% at ${cx}% 42%, black 45%, transparent 100%)`;
+
+  const skyEdge = s(SKY + 2, "drag");
+  const skyOverlay = interpolate(frame, [SKY, SKY + 2, SKY + 22, SKY + 28], [0, 1, 1, 0], clamp);
+  const skyApply = s(SKY + 22, "snap");
+  const scan = interpolate(frame, [SUBJECT, SUBJECT + 10], [0.05, 0.8], clamp);
+  const treeOverlay = interpolate(frame, [SUBJECT + 8, SUBJECT + 11, SUBJECT + 24, SUBJECT + 30], [0, 1, 1, 0], clamp);
+  const treePop = s(SUBJECT + 8, "pop");
+  const treeApply = s(SUBJECT + 24, "snap");
+  const card = s(0, "pop");
+  const punch = (at: number) => 1 + 0.025 * (1 - s(at, "pop")) * (frame >= at ? 1 : 0);
+  const wave = (i: number) => interpolate(frame, [84 + i * 1.5, 87 + i * 1.5, 92 + i * 1.5], [0, 1, 0], clamp);
 
   return (
-    <Stage glowX={0.5} glowY={0.05}>
-      <AbsoluteFill
-        style={{
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: layout.wide ? 48 : 60,
-          padding: layout.wide ? "40px 100px 0" : "140px 60px 80px",
-        }}
-      >
-        <Caption
-          title="Masks, built in from day one."
-          sub="Add, subtract and intersect, evaluated per pixel on the GPU."
-          start={4}
-          end={dur - 16}
-          align="center"
-          size={layout.wide ? 56 : 64}
-        />
-        <div style={{ position: "relative", width: w, height: h, borderRadius: 16, overflow: "hidden", boxShadow: "0 30px 80px rgba(0,0,0,0.6)" }}>
-          <Photo />
-          {/* Applied: a darker, cooler sky. */}
-          <AbsoluteFill style={{ opacity: linearApply, maskImage: linearMask, WebkitMaskImage: linearMask }}>
-            <Photo style={{ filter: "brightness(0.62) saturate(1.45) hue-rotate(-10deg) contrast(1.15)" }} />
-          </AbsoluteFill>
-          {/* Applied: the tree lifted and warmed. */}
-          <AbsoluteFill style={{ opacity: radialApply, maskImage: radialMask, WebkitMaskImage: radialMask }}>
-            <Photo style={{ filter: "brightness(1.32) saturate(1.2) sepia(0.28)" }} />
-          </AbsoluteFill>
-          {/* The red overlays while each mask is drawn. */}
-          <AbsoluteFill style={{ background: "rgba(224,64,46,0.5)", opacity: linearOverlay, maskImage: linearMask, WebkitMaskImage: linearMask }} />
-          <AbsoluteFill style={{ background: "rgba(224,64,46,0.5)", opacity: radialOverlay, maskImage: radialMask, WebkitMaskImage: radialMask }} />
-          <svg width={w} height={h} style={{ position: "absolute", inset: 0 }}>
-            <g opacity={linearOverlay}>
-              {[-12, 0, 12].map((d, i) => (
-                <line
-                  key={d}
-                  x1={0}
-                  x2={w}
-                  y1={(h * (edge + d * 0.8)) / 100}
-                  y2={(h * (edge + d * 0.8)) / 100}
-                  stroke={color.paper}
-                  strokeOpacity={i === 1 ? 0.9 : 0.45}
-                  strokeWidth={i === 1 ? 2.5 : 1.5}
-                  strokeDasharray={i === 1 ? undefined : "8 8"}
-                />
-              ))}
-              <circle cx={w / 2} cy={(h * edge) / 100} r="9" fill={color.paper} />
-            </g>
-            <g opacity={radialOverlay}>
-              <ellipse
-                cx={(w * cx) / 100}
-                cy={h * 0.42}
-                rx={(w * (18 + radialDraw * 16)) / 100}
-                ry={(h * (22 + radialDraw * 20)) / 100}
-                fill="none"
-                stroke={color.paper}
-                strokeOpacity="0.85"
-                strokeWidth="2.5"
-              />
-              <circle cx={(w * cx) / 100} cy={h * 0.42} r="9" fill={color.paper} />
-            </g>
-          </svg>
+    <Stage glowY={0.06} pulses={[SKY + 22, SUBJECT + 24]}>
+      <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", flexDirection: "column", gap: layout.wide ? 40 : 50, padding: "0 50px" }}>
+        <Words text={layout.wide ? "Masks, with on-device AI." : "Masks, with\non-device AI."} size={layout.wide ? 78 : layout.tall ? 84 : 62} stagger={2} />
+        <div
+          style={{
+            width: box.w,
+            height: box.h,
+            borderRadius: 22,
+            overflow: "hidden",
+            boxShadow: "0 30px 80px rgba(0,0,0,0.6)",
+            transform: `translateY(${(1 - card) * 200}px) scale(${(0.9 + 0.1 * card) * punch(SKY + 22) * punch(SUBJECT + 24)})`,
+          }}
+        >
+          <Landscape
+            sky={{ exposure: -0.55 * skyApply, saturation: 0.35 * skyApply, warmth: -0.12 * skyApply }}
+            tree={{ exposure: 0.22 * treeApply, warmth: 0.55 * treeApply, highlights: 0.6 * treeApply }}
+            skyOverlay={{ edge: skyEdge, opacity: skyOverlay }}
+            treeOverlay={treeOverlay * Math.min(1, treePop * 1.5)}
+            scan={frame >= SUBJECT && frame <= SUBJECT + 10 ? scan : -1}
+          />
+        </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center", maxWidth: layout.wide ? 1500 : 980 }}>
+          {kinds.map((kind, i) => {
+            const pop = s(4 + i * 1.2, "pop");
+            const on = kind === "Sky" ? interpolate(frame, [SKY - 2, SKY, SKY + 30, SKY + 34], [0, 1, 1, 0], clamp) : kind === "Subject" ? interpolate(frame, [SUBJECT - 2, SUBJECT, SUBJECT + 30, SUBJECT + 34], [0, 1, 1, 0], clamp) : 0;
+            return (
+              <div key={kind} style={{ transform: `scale(${(0.5 + 0.5 * pop) * (1 + 0.08 * on + 0.08 * wave(i))})`, opacity: Math.min(1, pop * 2) }}>
+                <Chip active={Math.max(on, wave(i))} size={layout.wide ? 24 : 26}>
+                  {kind}
+                </Chip>
+              </div>
+            );
+          })}
         </div>
       </AbsoluteFill>
     </Stage>

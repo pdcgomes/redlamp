@@ -1,4 +1,4 @@
-import { interpolate, useVideoConfig } from "remotion";
+import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { easeOut } from "./theme";
 
 export type Layout = { width: number; height: number; wide: boolean; tall: boolean; square: boolean };
@@ -9,8 +9,27 @@ export function useLayout(): Layout {
   return { width, height, wide: width > height, tall: height > width, square: width === height };
 }
 
+/**
+ * The film's three springs. Everything that arrives pops and overshoots; everything that
+ * leaves or travels snaps; slider thumbs drag with a little settle.
+ */
+export const springs = {
+  pop: { damping: 11, stiffness: 240, mass: 0.7 },
+  snap: { damping: 26, stiffness: 340, mass: 0.6 },
+  drag: { damping: 15, stiffness: 260, mass: 0.6 },
+} as const;
+
+export type SpringName = keyof typeof springs;
+
+/** `s(start)` is a spring that starts at frame `start` of the current sequence. */
+export function useSprings() {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  return (start: number, name: SpringName = "pop") => spring({ frame: frame - start, fps, config: springs[name] });
+}
+
 /** 0 → 1 over `duration` frames from `start`, with the brand's soft ease. */
-export function appear(frame: number, start: number, duration = 24): number {
+export function appear(frame: number, start: number, duration = 10): number {
   return interpolate(frame, [start, start + duration], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -18,7 +37,5 @@ export function appear(frame: number, start: number, duration = 24): number {
   });
 }
 
-/** 1 → 0 over the last `duration` frames of a scene lasting `dur` frames. */
-export function leave(frame: number, dur: number, duration = 14): number {
-  return interpolate(frame, [dur - duration, dur], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-}
+/** The music grid: 120 BPM at 30 fps is a beat every 15 frames. */
+export const BEAT = 15;

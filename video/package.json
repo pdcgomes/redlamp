@@ -5,7 +5,6 @@
   "description": "Redlamp's animated explainer, built with Remotion and rendered to MP4.",
   "scripts": {
     "sync-assets": "node ../web/scripts/sync-assets.mjs",
-    "photos": "bash scripts/render-photos.sh",
     "prestudio": "npm run sync-assets",
     "studio": "remotion studio src/index.ts",
     "prerender": "npm run sync-assets",

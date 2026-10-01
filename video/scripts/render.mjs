@@ -14,9 +14,9 @@ const web = path.resolve(root, "../web/public/video");
 const out = path.join(root, "out");
 
 const jobs = [
-  { id: "Explainer", file: "redlamp-explainer-16x9", poster: 165 },
-  { id: "Social9x16", file: "redlamp-explainer-9x16", poster: 125 },
-  { id: "Social1x1", file: "redlamp-explainer-1x1", poster: 125 },
+  { id: "Explainer", file: "redlamp-explainer-16x9", poster: 196 },
+  { id: "Social9x16", file: "redlamp-explainer-9x16", poster: 196 },
+  { id: "Social1x1", file: "redlamp-explainer-1x1", poster: 196 },
 ];
 
 const only = process.argv.slice(2);

@@ -9,13 +9,16 @@ type Props = {
   glowX?: number;
   glowY?: number;
   glow?: number;
+  /** Frames where the light flares and decays, on the beat. */
+  pulses?: number[];
 };
 
 /** The dark room every scene happens in: warm near-black, one red light, a breath of grain. */
-export function Stage({ children, glowX = 0.5, glowY = 0.12, glow = 1 }: Props) {
+export function Stage({ children, glowX = 0.5, glowY = 0.12, glow = 1, pulses = [] }: Props) {
   const frame = useCurrentFrame();
-  const breathe = 0.9 + 0.1 * noise2D("stage", frame / 90, 0);
-  const strength = glow * breathe;
+  const breathe = 0.92 + 0.08 * noise2D("stage", frame / 60, 0);
+  const flare = pulses.reduce((sum, p) => (frame >= p ? sum + 0.7 * Math.exp(-(frame - p) / 5) : sum), 0);
+  const strength = glow * breathe + flare;
   return (
     <AbsoluteFill style={{ background: color.wall, overflow: "hidden" }}>
       <AbsoluteFill
@@ -31,7 +34,7 @@ export function Stage({ children, glowX = 0.5, glowY = 0.12, glow = 1 }: Props) 
 }
 
 /** Film grain that changes every two frames, so the dark never looks digital and flat. */
-export function Grain({ opacity = 0.07 }: { opacity?: number }) {
+export function Grain({ opacity = 0.06 }: { opacity?: number }) {
   const frame = useCurrentFrame();
   const seed = Math.floor(frame / 2) % 24;
   return (

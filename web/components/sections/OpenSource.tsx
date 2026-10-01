@@ -12,9 +12,9 @@ const video = { src: "/video/redlamp-explainer.mp4", poster: "/video/redlamp-exp
 export function ExplainerVideo() {
   if (!existsSync(path.join(process.cwd(), "public", video.src))) return null;
   return (
-    <section id="film-explainer" aria-label="Redlamp in 72 seconds" className="px-6 pb-24">
+    <section id="film-explainer" aria-label="Redlamp in 24 seconds" className="px-6 pb-24">
       <div className="mx-auto max-w-5xl">
-        <p className="eyebrow text-center">Redlamp in 72 seconds</p>
+        <p className="eyebrow text-center">Redlamp in 24 seconds</p>
         <video
           className="shot mt-6 aspect-video w-full rounded-2xl border border-hairline bg-bakelite"
           controls

@@ -1,6 +1,6 @@
-# Redlamp explainer video
+# Redlamp promo video
 
-A ~72-second animated explainer, built in React with [Remotion](https://www.remotion.dev) and rendered to MP4, plus 9:16 and 1:1 cut-downs of about 29 seconds for social.
+A 24-second promotional film for photographers who know Lightroom, built in React with [Remotion](https://www.remotion.dev) and rendered to MP4, plus a 20-second cut for 9:16 and 1:1 social feeds.
 
 ```bash
 mise run video             # open Remotion Studio to preview and scrub every scene
@@ -19,19 +19,19 @@ mise run video -- render   # render every cut into video/out/
 
 ## How it's built
 
-- `src/Explainer.tsx` lists the scenes in each cut and their lengths; scenes cross-fade into each other.
-- `src/scenes/` holds the ten scenes, from the safelight warming up to the end card. Each lays itself out for 16:9, 9:16 or 1:1 from the composition's size (`src/layout.ts`).
-- `src/components/` holds the shared pieces: the dark stage with its one red light and grain, the word-by-word captions, and the app icon's lens drawn in SVG so its filament can warm up.
-- The brand comes from `docs/brand/README.md`: Inter Display (bundled in `public/fonts`, SIL Open Font License), the wall, steel and ruby colours, and one light per frame.
+- `src/Explainer.tsx` lists the scenes in each cut, their lengths, and whether each arrives with a zoom or a whip pan (`src/transitions.tsx`).
+- `src/scenes/` holds the eight beats: the hook, the editor with a cursor making slider moves, speed, masks, film, originals, the essentials, and the end card. Each lays itself out for 16:9, 9:16 or 1:1 from the composition's size.
+- Motion uses three springs in `src/layout.ts`: `pop` for arrivals (with overshoot), `snap` for exits and travel, and `drag` for slider thumbs. Beats sit on a 120 BPM grid (a beat every 15 frames), and the red light flares on them.
+- Everything on screen is drawn: `src/components/Landscape.tsx` is a vector landscape whose palette runs through the small colour grade in `src/grade.ts`, so slider edits, masks and film looks all change the same drawing. Interface that isn't the point of a shot is skeleton bars.
+- The brand comes from `docs/brand/README.md`: Inter Display (bundled in `public/fonts`, SIL Open Font License), the wall, steel and ruby colours, and one light per frame. The only address shown is redlamp.app.
 
 ## Assets
 
-- **Logos and film icons** are copied from `docs/` by `../web/scripts/sync-assets.mjs` before every studio session and render.
-- **Photos** in `public/photos` are a CC0 landscape from the look-development set, developed by Redlamp itself as its default rendering and through five film stocks. `npm run photos` regenerates them; it needs the CLI (`SCHEME=redlamp mise run build`) and `mise run lookdev`.
+The logo, the app icon's lens and the film icons are copied from `docs/` by `../web/scripts/sync-assets.mjs` before every studio session and render.
 
 ## Music
 
-The film is silent until you add a track. Put a licensed file in `public/audio/` and set `musicSrc` (for example `"audio/music.mp3"`) in the compositions' `defaultProps` in `src/Root.tsx`, or pass `--props='{"cut":"explainer","musicSrc":"audio/music.mp3"}'` to `remotion render`. It fades in and out with the film.
+The film is silent until you add a track. Pick one at 120 BPM so the cuts land on the beat, put the licensed file in `public/audio/`, and set `musicSrc` (for example `"audio/music.mp3"`) in the compositions' `defaultProps` in `src/Root.tsx`, or pass `--props='{"cut":"explainer","musicSrc":"audio/music.mp3"}'` to `remotion render`.
 
 ## Licence
 
