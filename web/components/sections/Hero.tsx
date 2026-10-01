@@ -42,6 +42,7 @@ export function Hero() {
           <Badge label="AI" value="on-device" />
           <Badge label="runs on" value="macOS 26 · Apple Silicon" />
           <Badge label="built with" value="Swift · Metal" />
+          <Badge label="support" value="Ko-fi" href={site.support} />
         </div>
       </div>
       <figure className="animate-rise mx-auto mt-16 max-w-6xl [animation-delay:520ms]">

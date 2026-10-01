@@ -11,6 +11,10 @@
 
 <p align="center"><b>A native, open-source RAW photo editor for Mac, iPad, and iPhone that anyone who knows Lightroom will find familiar.</b></p>
 
+<p align="center">
+  <a href="https://ko-fi.com/pdcgomes"><img src="https://img.shields.io/badge/support-Ko--fi-E0402E?style=flat&logo=kofi&logoColor=white&labelColor=57504E" alt="Support Redlamp on Ko-fi"></a>
+</p>
+
 Redlamp is built from scratch in Swift and Metal for Apple Silicon. It focuses on one thing, *developing* photos, and aims to do it faster and more natively than anything else on the platform.
 
 ![Redlamp editing a Nikon Z 6 raw file](docs/images/editor.png)
