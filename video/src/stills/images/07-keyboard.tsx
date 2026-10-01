@@ -5,6 +5,7 @@ import { floating } from "../components/Card";
 import { Headline, Typed } from "../components/Headline";
 import { Shot } from "../components/Shot";
 import { StillFrame } from "../components/StillFrame";
+import { regions } from "../regions";
 
 /** The command palette: every action and slider from the keyboard. Waits for a release that has it. */
 export function Keyboard() {
@@ -24,14 +25,8 @@ export function Keyboard() {
           <Key label="K" />
         </div>
       </div>
-      <div style={{ position: "absolute", left: 690, top: 206 }}>
-        <Shot
-          name="palette"
-          region={{ x: 400, y: 50, width: 800, height: 540 }}
-          width={680}
-          radius={20}
-          style={{ boxShadow: floating }}
-        />
+      <div style={{ position: "absolute", left: 680, top: 216 }}>
+        <Shot name="palette" region={regions.palette} width={664} radius={16} style={{ boxShadow: floating }} />
       </div>
     </StillFrame>
   );

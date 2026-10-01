@@ -47,6 +47,28 @@ export function Leader({ from, to }: { from: [number, number]; to: [number, numb
   );
 }
 
+/** A small dark pill naming what a card shows, set in its top-left corner. */
+export function Label({ children, side = "left" }: { children: ReactNode; side?: "left" | "right" }) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 14,
+        [side]: 14,
+        padding: "5px 13px",
+        borderRadius: 999,
+        background: "rgba(10,7,7,0.66)",
+        fontFamily: font.family,
+        fontSize: type.small + 2,
+        color: color.paper,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 /** A drawn pill naming a feature. */
 export function Chip({ children, size = type.text, style }: { children: ReactNode; size?: number; style?: CSSProperties }) {
   return (

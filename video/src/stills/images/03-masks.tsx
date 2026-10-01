@@ -1,10 +1,9 @@
 import { margin } from "../canvas";
 import { floating } from "../components/Card";
 import { Headline } from "../components/Headline";
-import { Chip } from "../components/Marks";
+import { Chip, Label } from "../components/Marks";
 import { Shot } from "../components/Shot";
 import { StillFrame } from "../components/StillFrame";
-import { regions } from "../regions";
 
 const kinds = ["Subject", "Sky", "Background", "People", "Face skin", "Eyes", "Lips", "Teeth"];
 
@@ -12,7 +11,7 @@ const kinds = ["Subject", "Sky", "Background", "People", "Face skin", "Eyes", "L
 export function Masks() {
   return (
     <StillFrame index={2}>
-      <div style={{ position: "absolute", left: margin, top: 92, width: 540 }}>
+      <div style={{ position: "absolute", left: margin, top: 92, width: 520 }}>
         <Headline
           title="Masks that know what's in the photo."
           sub="Subject, Sky, Background and People, down to eyes and teeth. All on your Mac."
@@ -26,14 +25,39 @@ export function Masks() {
           ))}
         </div>
       </div>
-      <div style={{ position: "absolute", left: 690, top: 70 }}>
-        <Shot name="masks-sky" region={regions.photo43} width={660} radius={20} style={{ boxShadow: floating }} />
+      {/* People shown as Image on Black, beside the Masks panel that holds the mask. */}
+      <div style={{ position: "absolute", left: 646, top: 64 }}>
+        <Shot
+          name="masks-people"
+          region={{ x: 457.5, y: 150, width: 1140, height: 640 }}
+          width={700}
+          radius={20}
+          style={{ boxShadow: floating }}
+        >
+          <Label>People</Label>
+        </Shot>
       </div>
-      <div style={{ position: "absolute", left: 1010, top: 470 }}>
-        <Shot name="masks-people" region={regions.photo32} width={400} radius={20} style={{ boxShadow: floating }} />
+      <div style={{ position: "absolute", left: 646, top: 478 }}>
+        <Shot
+          name="masks-face"
+          region={{ x: 622, y: 398, width: 400, height: 400 }}
+          width={340}
+          radius={18}
+          style={{ boxShadow: floating }}
+        >
+          <Label>Face skin</Label>
+        </Shot>
       </div>
-      <div style={{ position: "absolute", left: 640, top: 560 }}>
-        <Shot name="masks-sky" region={regions.masks} width={420} radius={20} style={{ boxShadow: floating }} />
+      <div style={{ position: "absolute", left: 1006, top: 478 }}>
+        <Shot
+          name="masks-subject"
+          region={{ x: 457.5, y: 200, width: 627, height: 627 }}
+          width={340}
+          radius={18}
+          style={{ boxShadow: floating }}
+        >
+          <Label>Subject</Label>
+        </Shot>
       </div>
     </StillFrame>
   );

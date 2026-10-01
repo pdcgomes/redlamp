@@ -9,6 +9,8 @@ export const regions = {
   photo43: { x: 266, y: 143.5, width: 1010, height: 757 },
   /** A 3:2 photo at Fit. */
   photo32: { x: 266, y: 185.5, width: 1010, height: 673 },
+  /** A 2:3 portrait photo at Fit, stopping above the zoom controls that float over its foot. */
+  photo23: { x: 457.5, y: 52, width: 627, height: 885 },
   /** The right-hand panel column: histogram, tool strip and the Develop panels. */
   inspector: { x: 1284, y: 0, width: 311, height: 1000 },
   histogram: { x: 1290, y: 36, width: 300, height: 140 },
@@ -20,8 +22,8 @@ export const regions = {
   filmEffects: { x: 1284, y: 680, width: 311, height: 268 },
   /** The Keyboard Shortcuts overlay. */
   shortcuts: { x: 260, y: 166, width: 1080, height: 718 },
-  /** The command palette, open over the photo. */
-  palette: { x: 490, y: 64, width: 620, height: 424 },
+  /** The command palette, open over the photo: just the panel, which the photo shows through. */
+  palette: { x: 490, y: 64, width: 620, height: 423 },
 } satisfies Record<string, Region>;
 
 /** The Effects panel's Camera Recipe group, in the 1600 × 1410 `fujifilm-effects` capture. */

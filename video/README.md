@@ -36,9 +36,10 @@ scripts/capture-promo.sh ~/Pictures/promo   # capture the app from a folder of y
 ```
 
 - `src/stills/images/` holds one component per image and `src/stills/components/` the pieces they share. They appear in Remotion Studio under **Stills**. Each render writes a PNG master and a JPEG for uploading.
-- The captures come from `scripts/capture-promo.sh`. It opens the Debug app on a copy of the folder at a 1600 × 1000 window on a Retina screen, applies a script per shot, and saves the window into `public/promo/`, which is never committed. A `promo.txt` in the folder names the photo for each role; the script's header lists them.
+- The captures come from `scripts/capture-promo.sh`. It opens the Debug app on a copy of the folder at a 1600 × 1000 window on a Retina screen, applies a script per shot, and saves the window into `public/promo/`, which is never committed. A `promo.txt` in the folder names the photo for each role; the script's header lists them. Shots use the app's default theme and only the models testers get, and your own preferences come back afterwards.
 - `src/stills/regions.ts` says where things sit in a 1600 × 1000 capture, such as the photo at Fit or the Masks panel, so crops survive new photos.
 - A capture that doesn't exist yet shows as a labelled placeholder with its name and region. The hero falls back to the README's `hero.png`.
+- Stills whose id starts with `held-` wait for captures nobody has yet, such as a focus stack, and only render when named.
 
 ## Assets
 

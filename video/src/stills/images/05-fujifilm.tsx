@@ -3,6 +3,7 @@ import { color, font } from "../../theme";
 import { margin, type } from "../canvas";
 import { floating } from "../components/Card";
 import { Headline } from "../components/Headline";
+import { Label } from "../components/Marks";
 import { Shot } from "../components/Shot";
 import { StillFrame } from "../components/StillFrame";
 import { cameraRecipe, regions } from "../regions";
@@ -37,14 +38,16 @@ export function Fujifilm() {
         size={80}
         style={{ position: "absolute", left: margin, top: 80, width: 700 }}
       />
-      <div style={{ position: "absolute", left: 850, top: 72 }}>
-        <Shot name="fujifilm" region={regions.photo32} width={494} radius={20} style={{ boxShadow: floating }} />
+      <div style={{ position: "absolute", left: 1054, top: 60 }}>
+        <Shot name="fujifilm" region={regions.photo23} width={290} radius={20} style={{ boxShadow: floating }}>
+          <Label>Chrome Street</Label>
+        </Shot>
       </div>
       <RecipeCard style={{ position: "absolute", left: margin + 6, top: 478 }} />
       <div style={{ position: "absolute", left: 548, top: 528 }}>
         <Shot name="fujifilm-effects" region={cameraRecipe} width={404} radius={18} style={{ boxShadow: floating }} />
       </div>
-      <DeltaE style={{ position: "absolute", left: 1000, top: 478, width: 344 }} />
+      <DeltaE style={{ position: "absolute", left: 1000, top: 506, width: 344 }} />
       <div
         style={{
           position: "absolute",
