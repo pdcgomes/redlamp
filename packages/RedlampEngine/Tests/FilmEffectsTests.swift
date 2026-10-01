@@ -217,16 +217,23 @@ struct FilmEffectsTests {
             }
         }
         let data = words.withUnsafeBufferPointer { Data(buffer: $0) }
+        let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+        let provider = try #require(CGDataProvider(data: data as CFData))
         let image = try #require(CGImage(
             width: size, height: size, bitsPerComponent: 16, bitsPerPixel: 64, bytesPerRow: size * 8,
-            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            space: space,
             bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue | CGImageByteOrderInfo
                 .order16Little.rawValue),
-            provider: CGDataProvider(data: data as CFData)!, decode: nil, shouldInterpolate: false,
+            provider: provider, decode: nil, shouldInterpolate: false,
             intent: .defaultIntent,
         ))
         let url = FileManager.default.temporaryDirectory.appending(path: "redlamp-sky-\(UUID().uuidString).png")
-        let destination = try #require(CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil))
+        let destination = try #require(CGImageDestinationCreateWithURL(
+            url as CFURL,
+            UTType.png.identifier as CFString,
+            1,
+            nil,
+        ))
         CGImageDestinationAddImage(destination, image, nil)
         #expect(CGImageDestinationFinalize(destination))
         defer { try? FileManager.default.removeItem(at: url) }
@@ -318,12 +325,14 @@ struct FilmEffectsTests {
             }
         }
         let data = words.withUnsafeBufferPointer { Data(buffer: $0) }
+        let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+        let provider = try #require(CGDataProvider(data: data as CFData))
         let image = try #require(CGImage(
             width: size, height: size, bitsPerComponent: 16, bitsPerPixel: 64, bytesPerRow: size * 8,
-            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            space: space,
             bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue | CGImageByteOrderInfo
                 .order16Little.rawValue),
-            provider: CGDataProvider(data: data as CFData)!, decode: nil, shouldInterpolate: false,
+            provider: provider, decode: nil, shouldInterpolate: false,
             intent: .defaultIntent,
         ))
         let url = FileManager.default.temporaryDirectory.appending(path: "redlamp-lights-\(UUID().uuidString).png")
@@ -340,7 +349,10 @@ struct FilmEffectsTests {
         let engine = try RedlampEngine()
         _ = try await engine.open(url)
         var mask = MaskLayer(name: "Glow", components: [
-            MaskComponent(shape: .linear(LinearMask(start: ImagePoint(x: 0.45, y: 0.5), end: ImagePoint(x: 0.55, y: 0.5)))),
+            MaskComponent(shape: .linear(LinearMask(
+                start: ImagePoint(x: 0.45, y: 0.5),
+                end: ImagePoint(x: 0.55, y: 0.5),
+            ))),
         ])
         mask[.localHalation] = 100
         var masked = EditRecipe()

@@ -41,7 +41,7 @@ extension FilmStock {
             let variants = characteristic["variants"] as? [[String: Any]] ?? []
             guard let match = variants.first(where: { candidate in
                 variant.allSatisfy { key, value in
-                    candidate[key].map { "\($0)" == value || ("\($0)").contains(value) } ?? false
+                    candidate[key].map { value == "\($0)" || "\($0)".contains(value) } ?? false
                 }
             }) else { throw DataError.missing(id, "variant \(variant)") }
             characteristic.merge(match) { $1 }
@@ -164,7 +164,7 @@ extension FilmStock {
         func shaped(_ i: Int, shift: Double, width: Double) -> [Double] {
             Spectrum.wavelengths.map { nm in sample(templates[i], at: peaks[i] + (nm - peaks[i] - shift) / width) }
         }
-        // Each dye's amount by least squares, given the shapes; the error of that fit.
+        /// Each dye's amount by least squares, given the shapes; the error of that fit.
         func fit(_ shapes: [[Double]]) -> (amounts: SIMD3<Double>, error: Double) {
             var normal = simd_double3x3()
             var right = SIMD3<Double>()

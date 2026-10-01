@@ -294,7 +294,10 @@ final class FilmModel {
         let frameBase = 0.18 * SIMD3(pow(10, base.x), pow(10, base.y), pow(10, base.z))
         let normalValue = 0.18 * SIMD3(pow(10, normalBase.x), pow(10, normalBase.y), pow(10, normalBase.z))
         let grey = SIMD3<Double>(repeating: 0.18)
-        frameBlack = simd_max(grey * (frameBase - normalValue) / simd_max(grey - normalValue, SIMD3(repeating: 1e-4)), .zero)
+        frameBlack = simd_max(
+            grey * (frameBase - normalValue) / simd_max(grey - normalValue, SIMD3(repeating: 1e-4)),
+            .zero,
+        )
         scanMatrix = film.kind.isMonochrome ? matrix_identity_double3x3 : fitScanMatrix()
         // The scene value that Redlamp's curve shows at `displayGrey`, by bisection.
         var lo = 0.001, hi = 4.0
@@ -410,7 +413,8 @@ final class FilmModel {
                 log10(max((printerLight * viewed).dot(pair.0) / pair.1, 1e-12)) + balance[j]
             }
             let amounts = densities(print, logExposures: logE, interlayer: false)
-            viewed = (spectralDensity(print.base, dyes: print.dyes, amounts) + silver(amounts, stock: print)).transmittance
+            viewed = (spectralDensity(print.base, dyes: print.dyes, amounts) + silver(amounts, stock: print))
+                .transmittance
         }
         let xyz = Colorimetry.xyz(viewed * viewing) / whiteY
         var rgb = Colorimetry.xyzToRec2020 * (toD65 * xyz)

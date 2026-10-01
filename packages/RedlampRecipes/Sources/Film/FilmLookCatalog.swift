@@ -90,7 +90,8 @@ public enum FilmLookCatalog {
             grain: (27, 34, 40), halation: (9, 40),
         ),
         look(
-            "portra-800-1600", "Portra 800 · Pushed to 1600", "Portra 800 rated at 1600 and pushed a stop: denser shadows, more contrast",
+            "portra-800-1600", "Portra 800 · Pushed to 1600",
+            "Portra 800 rated at 1600 and pushed a stop: denser shadows, more contrast",
             maker: "Kodak", format: "Colour negative · ISO 800 pushed to 1600", icon: FilmIcon(
                 .canister,
                 body: .init(0.96, 0.93, 0.85),
@@ -182,7 +183,8 @@ public enum FilmLookCatalog {
             grain: (26, 34, 45), halation: (70, 55), bloom: (8, 50),
         ),
         look(
-            "cinestill-50d", "CineStill 50D", "Daylight cinema negative without anti-halation: fine grain, glowing highlights",
+            "cinestill-50d", "CineStill 50D",
+            "Daylight cinema negative without anti-halation: fine grain, glowing highlights",
             maker: "CineStill", format: "Daylight colour negative · ISO 50", icon: FilmIcon(
                 .canister,
                 body: .init(0.13, 0.13, 0.14),
@@ -231,7 +233,8 @@ public enum FilmLookCatalog {
             grain: (12, 22, 35), halation: (10, 45), bloom: (5, 50),
         ),
         look(
-            "eterna-vivid-250d-2383", "Eterna Vivid 250D · 2383", "Fujifilm's vivid daylight cinema negative, printed on 2383",
+            "eterna-vivid-250d-2383", "Eterna Vivid 250D · 2383",
+            "Fujifilm's vivid daylight cinema negative, printed on 2383",
             maker: "Fujifilm", format: "Cinema negative on print film · ISO 250 (discontinued)", icon: FilmIcon(
                 .reel,
                 body: .init(0.1, 0.36, 0.3),
@@ -462,7 +465,8 @@ public enum FilmLookCatalog {
             grain: (46, 44, 0), roughness: 70, halation: (6, 40),
         ),
         look(
-            "tri-x-multigrade-soft", "Tri-X · Soft Print", "Tri-X printed on Multigrade paper at grade 1: gentle and open",
+            "tri-x-multigrade-soft", "Tri-X · Soft Print",
+            "Tri-X printed on Multigrade paper at grade 1: gentle and open",
             maker: "Kodak · Ilford", format: "Black and white print · grade 1", icon: FilmIcon(
                 .paper,
                 body: .init(0.97, 0.96, 0.93),
@@ -475,7 +479,8 @@ public enum FilmLookCatalog {
             grain: (34, 36, 0), roughness: 65, halation: (5, 40),
         ),
         look(
-            "tri-x-multigrade-hard", "Tri-X · Hard Print", "Tri-X printed on Multigrade paper at grade 4: deep blacks, bright whites",
+            "tri-x-multigrade-hard", "Tri-X · Hard Print",
+            "Tri-X printed on Multigrade paper at grade 4: deep blacks, bright whites",
             maker: "Kodak · Ilford", format: "Black and white print · grade 4", icon: FilmIcon(
                 .paper,
                 body: .init(0.97, 0.96, 0.93),
@@ -507,7 +512,8 @@ public enum FilmLookCatalog {
         // Cross-processing keeps most of the stock's crossovers: the scanner can't neutralise a
         // slide emulsion developed as a negative.
         look(
-            "velvia-50-cross", "Velvia 50 · Cross-Processed", "Velvia developed as a negative: punchy, with wild colour shifts",
+            "velvia-50-cross", "Velvia 50 · Cross-Processed",
+            "Velvia developed as a negative: punchy, with wild colour shifts",
             maker: "Fujifilm", format: "Slide film in C-41 · ISO 50", icon: FilmIcon(
                 .slide,
                 body: .init(0.94, 0.93, 0.96),
@@ -519,7 +525,8 @@ public enum FilmLookCatalog {
             grain: (12, 20, 35), halation: (5, 35),
         ),
         look(
-            "provia-100f-cross", "Provia 100F · Cross-Processed", "Provia developed as a negative: contrasty, with cool shadows",
+            "provia-100f-cross", "Provia 100F · Cross-Processed",
+            "Provia developed as a negative: contrasty, with cool shadows",
             maker: "Fujifilm", format: "Slide film in C-41 · ISO 100", icon: FilmIcon(
                 .slide,
                 body: .init(0.95, 0.95, 0.93),
@@ -554,7 +561,6 @@ public enum FilmLookCatalog {
             )
         }
     }
-
 
     private static func look(
         _ id: String,

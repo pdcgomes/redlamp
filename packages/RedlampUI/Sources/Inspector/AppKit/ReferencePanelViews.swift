@@ -68,8 +68,11 @@ import SwiftUI
                 + [rows.header("Bloom", bloom)] + rows.sliders(bloom)
                 + [rows.header("Light Leak", leak)] + rows.sliders(leak)
                 + [rows.header("Dust & Scratches", dust)] + rows.sliders(dust)
-                + [rows.header("Frame", [.frameStyle, .frameSize]), rows.controls("Style", FrameStylePicker()),
-                   rows.slider(.frameSize)]
+                + [
+                    rows.header("Frame", [.frameStyle, .frameSize]),
+                    rows.controls("Style", FrameStylePicker()),
+                    rows.slider(.frameSize),
+                ]
                 + [rows.header("Camera Recipe", PanelID.cameraRecipeParameters)] + rows
                 .sliders(PanelID.cameraRecipeParameters),
         )

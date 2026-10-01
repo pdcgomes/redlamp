@@ -251,7 +251,8 @@ public struct FilmCatalogView: View {
     /// The photo before any film look: the edit a film recipe was applied over, or the edit.
     private func renderBefore() async {
         guard model.info != nil else { return }
-        let applied = model.recipeApplication.flatMap { FilmLookCatalog.look(forBundledID: $0.recipe.id) != nil ? $0 : nil }
+        let applied = model.recipeApplication
+            .flatMap { FilmLookCatalog.look(forBundledID: $0.recipe.id) != nil ? $0 : nil }
         var request = StillRequest(recipe: applied?.base ?? model.recipe)
         request.maxLongEdge = Self.previewEdge
         before = try? await model.engine.renderStill(request)

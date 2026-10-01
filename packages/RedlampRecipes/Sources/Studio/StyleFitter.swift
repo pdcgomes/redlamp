@@ -129,7 +129,13 @@ public final class StyleFitter {
     /// The candidate as a recipe the renderer can apply.
     /// `base` keeps another recipe's Base Look, effects and treatment underneath the candidate's
     /// sliders, so a fit tunes a look rather than replacing it.
-    func recipe(_ candidate: Candidate, name: String, useLookTable: Bool, id: String, base: Recipe? = nil) throws -> Recipe {
+    func recipe(
+        _ candidate: Candidate,
+        name: String,
+        useLookTable: Bool,
+        id: String,
+        base: Recipe? = nil,
+    ) throws -> Recipe {
         var values = (base?.settings.values ?? [:]).merging(candidate.values) { $1 }
         func grade(_ tint: (a: Double, b: Double), hue: ParameterID, saturation: ParameterID) {
             let length = (tint.a * tint.a + tint.b * tint.b).squareRoot()
@@ -228,8 +234,14 @@ public final class StyleFitter {
         var evaluations = 0
         func score(_ candidate: Candidate) async throws -> Double {
             evaluations += 1
-            return try await fingerprint(of: recipe(candidate, name: name, useLookTable: useLookTable, id: id, base: base))
-                .distance(to: target)
+            return try await fingerprint(of: recipe(
+                candidate,
+                name: name,
+                useLookTable: useLookTable,
+                id: id,
+                base: base,
+            ))
+            .distance(to: target)
         }
         var bestScore = try await score(best)
         let startDistance = bestScore

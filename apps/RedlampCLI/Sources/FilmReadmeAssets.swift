@@ -59,9 +59,9 @@ enum FilmReadmeAssets {
     /// The README's catalogue table, one row per look, in catalogue order.
     private static func catalogueTable(_ looks: [FilmLookDefinition]) -> String {
         let rows = looks.map { look in
-            let rendered: String = switch (look.print, look.icon.shape, look.process) {
+            let rendered = switch (look.print, look.icon.shape, look.process) {
             case (_, _, .crossProcessed): "Developed in C-41, scanned"
-            case (.some(let print), _, _) where print.contains("2383"): "Printed on 2383 and projected"
+            case let (.some(print), _, _) where print.contains("2383"): "Printed on 2383 and projected"
             case (.some, _, _): "Printed on paper"
             case (nil, .slide, _): "Slide, viewed on a light box"
             default:
