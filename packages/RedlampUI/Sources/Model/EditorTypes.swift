@@ -44,6 +44,21 @@ public enum PanelID: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// The glyph beside the panel's title.
+    public var symbol: String {
+        switch self {
+        case .basic: "sun.max"
+        case .toneCurve: "point.bottomleft.forward.to.point.topright.scurvepath"
+        case .colorMixer: "swatchpalette"
+        case .colorGrading: "camera.filters"
+        case .detail: "magnifyingglass"
+        case .lens: "camera.aperture"
+        case .transform: "perspective"
+        case .effects: "sparkles"
+        case .calibration: "dial.medium"
+        }
+    }
+
     /// Camera-style controls that Fujifilm-style recipe cards map onto, in the Effects panel.
     public static let cameraRecipeParameters: [ParameterID] = [
         .dynamicRange, .colorChrome, .colorChromeBlue, .wbShiftRed, .wbShiftBlue,

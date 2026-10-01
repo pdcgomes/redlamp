@@ -54,7 +54,6 @@ struct FilmstripView: View {
             }
         }
         .frame(height: 104)
-        .background(Color(white: 0.09))
     }
 }
 

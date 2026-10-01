@@ -12,7 +12,7 @@ import SwiftUI
 /// never loses focus to a reload.
 final class SidebarListView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate, NSSearchFieldDelegate {
     private let model: EditorModel
-    private let scrollView = NSScrollView()
+    private let scrollView = OverlayScrollView()
     private let outline = SidebarOutlineView()
     private let searchField = NSSearchField()
     private var tracker: Tracker?
@@ -43,9 +43,6 @@ final class SidebarListView: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
         outline.target = self
         outline.action = #selector(rowClicked)
         scrollView.documentView = outline
-        scrollView.drawsBackground = false
-        scrollView.hasVerticalScroller = true
-        scrollView.autohidesScrollers = true
         addSubview(scrollView)
 
         searchField.placeholderString = "Search recipes"

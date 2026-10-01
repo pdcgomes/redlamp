@@ -121,7 +121,7 @@ private struct PanelChromeScene: View {
             SliderRowView(parameter: .contrast, editor: model),
         ]
         return ColumnView(views: [
-            PanelSectionView(title: title, badge: badge, rows: rows, actions: .init(
+            PanelSectionView(title: title, symbol: "sun.max", badge: badge, rows: rows, actions: .init(
                 isExpanded: { state.expanded },
                 isEdited: { state.edited },
                 toggle: { _ in state.expanded.toggle() },

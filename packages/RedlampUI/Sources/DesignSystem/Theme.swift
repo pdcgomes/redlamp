@@ -85,6 +85,7 @@ enum Theme {
     static let valueWidth = Metrics.valueWidth
     static let rowHeight = Metrics.rowHeight
     static let panelPadding = Metrics.panelPadding
+    static let panelSymbolSlot = Metrics.panelSymbolSlot
     static let thumbSize = Metrics.thumbSize
 }
 

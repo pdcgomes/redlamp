@@ -62,7 +62,8 @@ final class HostedControl: NSView, ProposalSizing, HeightProviding {
 
     init(model: EditorModel, _ view: some View) {
         controller = NSHostingController(rootView: AnyView(
-            view.environment(model).tint(Theme.nativeTint).frame(maxWidth: .infinity, alignment: .leading),
+            view.environment(model).tint(Theme.nativeTint).focusEffectDisabled()
+                .frame(maxWidth: .infinity, alignment: .leading),
         ))
         controller.sizingOptions = [.preferredContentSize]
         super.init(frame: .zero)

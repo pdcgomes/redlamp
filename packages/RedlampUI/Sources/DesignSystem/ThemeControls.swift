@@ -1,12 +1,15 @@
 import RedlampDesign
 import SwiftUI
 
-/// Theme, appearance and tint, compact, for the toolbar's Theme popover and the harness.
+/// Theme, appearance and tint, compact, for the toolbar's Theme popover and the harness;
+/// with `transparency`, the panels' transparency too.
 public struct ThemeControls: View {
     @Binding var theme: ThemeSelection
+    var transparency: Binding<Double>?
 
-    public init(theme: Binding<ThemeSelection>) {
+    public init(theme: Binding<ThemeSelection>, transparency: Binding<Double>? = nil) {
         _theme = theme
+        self.transparency = transparency
     }
 
     public var body: some View {
@@ -23,6 +26,12 @@ public struct ThemeControls: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Tint").font(.callout)
                 TintSlider(tint: $theme.tint)
+            }
+            if let transparency {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Transparency").font(.callout)
+                    TransparencySlider(transparency: transparency)
+                }
             }
             Toggle("Tint native controls", isOn: $theme.tintsNativeControls)
                 .toggleStyle(.checkbox)
@@ -85,6 +94,28 @@ public struct TintSlider: View {
                 .frame(width: 40, alignment: .trailing)
         }
         .help("How much of the theme's hue to keep. 0 % keeps its tones in neutral grey.")
+    }
+}
+
+/// How much of the system's blurred glass shows through the floating panels, with its
+/// percentage. It only recolors the panels, so it applies live.
+public struct TransparencySlider: View {
+    @Binding var transparency: Double
+
+    public init(transparency: Binding<Double>) {
+        _transparency = transparency
+    }
+
+    public var body: some View {
+        HStack(spacing: 8) {
+            Slider(value: $transparency, in: 0 ... 1)
+                .controlSize(.small)
+            Text("\(Int((transparency * 100).rounded())) %")
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .frame(width: 40, alignment: .trailing)
+        }
+        .help("How much of the blurred window background shows through the panels. 0 % paints them solid.")
     }
 }
 

@@ -247,9 +247,6 @@ public final class EditorModel {
     @ObservationIgnored public var onToggleFullScreen: (() -> Void)?
     @ObservationIgnored public var onToggleToolbar: (() -> Void)?
 
-    /// Live panel widths. The canvas deliberately ignores these (see `PanelMetrics`).
-    public var sidebarWidth: CGFloat = 250
-    public var inspectorWidth: CGFloat = 316
     /// Every recipe and Base Look on this machine.
     public let recipes: RecipeCatalog
     /// The recipe under the pointer, rendered without being applied.
@@ -857,10 +854,6 @@ public final class EditorModel {
                 if let action = ShortcutAction(rawValue: value) {
                     perform(action)
                 }
-            case "sidebarWidth":
-                sidebarWidth = CGFloat(Double(value) ?? 250)
-            case "inspectorWidth":
-                inspectorWidth = CGFloat(Double(value) ?? 316)
             case "before":
                 showBefore = value == "1"
             case "compare":

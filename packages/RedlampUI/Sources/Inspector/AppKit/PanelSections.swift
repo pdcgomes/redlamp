@@ -10,6 +10,7 @@ extension PanelSectionView {
     convenience init(panel: PanelID, model: EditorModel, badge: String? = nil, rows: [NSView]) {
         self.init(
             title: panel.title,
+            symbol: panel.symbol,
             badge: badge,
             rows: rows,
             actions: Actions(

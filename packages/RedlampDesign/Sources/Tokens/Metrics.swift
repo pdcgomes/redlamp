@@ -12,6 +12,8 @@ public enum Metrics {
     public static let panelPadding: CGFloat = 14
     public static let panelBottomPadding: CGFloat = 14
     public static let panelHeaderHeight: CGFloat = 32
+    /// The width a panel header's glyph is centered in.
+    public static let panelSymbolSlot: CGFloat = 16
     public static let controlRowMinHeight: CGFloat = 24
     public static let thumbSize: CGFloat = 11
     public static let trackHeight: CGFloat = 16

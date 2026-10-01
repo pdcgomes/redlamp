@@ -5,26 +5,15 @@ import SwiftUI
 /// The inspector's scrolling column, in AppKit: the Develop panels, or the Masking tool's
 /// panel. Each control updates only when a value it shows changes.
 final class InspectorPanelsView: NSView {
-    private let scrollView = NSScrollView()
+    private let scrollView = OverlayScrollView()
     private let document: InspectorDocumentView
 
     init(model: EditorModel, tool: EditTool) {
         document = InspectorDocumentView(views: Self.content(for: tool, model: model))
         super.init(frame: .zero)
-        scrollView.drawsBackground = false
-        scrollView.borderType = .noBorder
-        scrollView.hasVerticalScroller = true
-        scrollView.autohidesScrollers = true
         scrollView.documentView = document
         addSubview(scrollView)
         document.onHeightChange = { [weak self] in self?.sizeDocument() }
-        // A scroller that appears (with "always show scroll bars") narrows the visible area;
-        // the panels then re-fit, as SwiftUI's ScrollView content does.
-        scrollView.contentView.postsFrameChangedNotifications = true
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(clipViewDidResize), name: NSView.frameDidChangeNotification,
-            object: scrollView.contentView,
-        )
     }
 
     @available(*, unavailable)
@@ -56,10 +45,6 @@ final class InspectorPanelsView: NSView {
     override func layout() {
         super.layout()
         scrollView.frame = bounds
-        sizeDocument()
-    }
-
-    @objc private func clipViewDidResize() {
         sizeDocument()
     }
 

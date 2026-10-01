@@ -47,6 +47,18 @@ private struct AppearanceSettings: View {
                 .formFooter()
             }
             Section {
+                LabeledContent("Transparency") {
+                    TransparencySlider(transparency: $theme.panelTransparency)
+                }
+            } footer: {
+                Text("""
+                How much of the blurred window background shows through the panels and the \
+                filmstrip. At 0 % they are solid, so a zoomed-in photo passing beneath them \
+                can't tint them. Reduce Transparency in Accessibility settings makes them solid.
+                """)
+                .formFooter()
+            }
+            Section {
                 Toggle("Tint native controls", isOn: $theme.selection.tintsNativeControls)
             } footer: {
                 Text("""

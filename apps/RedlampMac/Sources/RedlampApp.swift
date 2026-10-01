@@ -6,9 +6,9 @@ import SwiftUI
 
 @main
 struct RedlampApp: App {
+    @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
     @State private var model: EditorModel
-    @State private var keyboard = KeyboardShortcuts()
-    @State private var theme = ThemeSettings()
+    @State private var theme: ThemeSettings
 
     init() {
         #if DEBUG || REDLAMP_PROFILING
@@ -32,43 +32,53 @@ struct RedlampApp: App {
         }
         model.onToggleFullScreen = { NSApp.keyWindow?.toggleFullScreen(nil) }
         model.onToggleToolbar = { NSApp.keyWindow?.toggleToolbarShown(nil) }
+        let theme = ThemeSettings()
         _model = State(initialValue: model)
+        _theme = State(initialValue: theme)
+
+        let keyboard = KeyboardShortcuts()
+        AppDelegate.launch = {
+            let editor = EditorWindowController(
+                model: model, theme: theme,
+                onOpen: { Self.openPanel(model: model) }, onExport: { Self.exportPanel(model: model) },
+            )
+            editor.showWindow(nil)
+            keyboard.install(model: model)
+            Self.openInitialFolder(model: model)
+            #if DEBUG || REDLAMP_PROFILING
+                DebugSnapshot.scheduleIfRequested(model: model)
+                DebugPerformance.scheduleIfRequested(model: model)
+            #endif
+            return editor
+        }
     }
 
+    /// The editor is an AppKit window (`EditorWindowController`), opened by `AppDelegate`.
     var body: some Scene {
-        Window("Redlamp", id: "editor") {
-            EditorView(model: model, theme: theme, onOpen: openPanel, onExport: exportPanel)
-                .frame(minWidth: 1100, minHeight: 700)
-                .onAppear {
-                    keyboard.install(model: model)
-                    openInitialFolder()
-                    #if DEBUG || REDLAMP_PROFILING
-                        DebugSnapshot.scheduleIfRequested(model: model)
-                        DebugPerformance.scheduleIfRequested(model: model)
-                    #endif
-                }
-        }
-        .windowToolbarStyle(.unified)
-        .defaultSize(width: 1600, height: 1000)
-        .commands {
-            AppCommands(model: model, onOpen: openPanel, onExport: exportPanel)
-        }
-
         Window("Film Looks", id: FilmCatalogView.windowID) {
             FilmCatalogView()
                 .environment(model)
                 .frame(minWidth: 760, minHeight: 520)
+                .focusEffectDisabled()
         }
         .defaultSize(width: 1180, height: 820)
+        .defaultLaunchBehavior(.suppressed)
+        .commands {
+            AppCommands(
+                model: model,
+                onOpen: { Self.openPanel(model: model) }, onExport: { Self.exportPanel(model: model) },
+            )
+        }
 
         Settings {
             SettingsView(theme: theme)
+                .focusEffectDisabled()
         }
     }
 
     /// Opens paths passed on the command line (`mise run run -- <folder>`), otherwise the
     /// folder from the previous session.
-    private func openInitialFolder() {
+    private static func openInitialFolder(model: EditorModel) {
         let arguments = LaunchArguments.all.dropFirst().prefix { !$0.hasPrefix("-") }
         let paths = arguments.isEmpty
             ? [UserDefaults.standard.string(forKey: "lastFolder")].compactMap(\.self)
@@ -79,7 +89,7 @@ struct RedlampApp: App {
         }
     }
 
-    private func openPanel() {
+    private static func openPanel(model: EditorModel) {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
@@ -91,7 +101,7 @@ struct RedlampApp: App {
         }
     }
 
-    private func exportPanel() {
+    private static func exportPanel(model: EditorModel) {
         guard let info = model.info else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.jpeg]
@@ -106,6 +116,25 @@ struct RedlampApp: App {
                 NSAlert(error: error).runModal()
             }
         }
+    }
+}
+
+/// Opens the editor window once the app has launched, and again when the Dock icon is
+/// clicked with no window open.
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    static var launch: (@MainActor () -> EditorWindowController)?
+    private var editor: EditorWindowController?
+
+    func applicationDidFinishLaunching(_: Notification) {
+        editor = Self.launch?()
+    }
+
+    func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        if !hasVisibleWindows {
+            editor?.showWindow(nil)
+        }
+        return true
     }
 }
 

@@ -28,7 +28,7 @@ public enum RecipeActions {
         sheetWindow.contentViewController = NSHostingController(rootView: CreateRecipeSheet(
             model: model,
             dismiss: close,
-        ))
+        ).focusEffectDisabled())
         window.beginSheet(sheetWindow)
     }
 

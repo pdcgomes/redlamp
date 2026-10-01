@@ -1,6 +1,6 @@
 import AppKit
 
-/// A collapsible Develop panel: a header (chevron, title, optional badge, and a dot when
+/// A collapsible Develop panel: a header (chevron, glyph, title, optional badge, and a dot when
 /// the panel has edits), its rows, and a divider.
 ///
 /// Click the header to expand or collapse (Option-click for Solo Mode), double-click to
@@ -32,8 +32,8 @@ public final class PanelSectionView: NSView, HeightProviding {
     private var trackers: [Tracker] = []
     private(set) var isExpanded = false
 
-    public init(title: String, badge: String? = nil, rows: [NSView], actions: Actions) {
-        header = PanelHeaderView(title: title, badge: badge)
+    public init(title: String, symbol: String? = nil, badge: String? = nil, rows: [NSView], actions: Actions) {
+        header = PanelHeaderView(title: title, symbol: symbol, badge: badge)
         body = ColumnView(
             spacing: Metrics.panelRowSpacing,
             insets: NSEdgeInsets(
@@ -159,6 +159,7 @@ public final class PanelSectionView: NSView, HeightProviding {
 /// The panel title bar.
 final class PanelHeaderView: NSView {
     let title: String
+    let symbol: String?
     let badge: String?
     var onClick: (_ solo: Bool) -> Void = { _ in }
     var onDoubleClick: () -> Void = {}
@@ -195,8 +196,9 @@ final class PanelHeaderView: NSView {
 
     private var hoverArea: NSTrackingArea?
 
-    init(title: String, badge: String?) {
+    init(title: String, symbol: String?, badge: String?) {
         self.title = title
+        self.symbol = symbol
         self.badge = badge
         super.init(frame: .zero)
         wantsLayer = true
@@ -225,6 +227,16 @@ final class PanelHeaderView: NSView {
             centeredAt: CGPoint(x: x + chevron.width / 2, y: midY), rotation: isExpanded ? 90 : 0, scale: scale,
         )
         x += chevron.width + 8
+
+        if let symbol {
+            // A fixed slot, so titles line up whatever each glyph's width.
+            let slot = Metrics.panelSymbolSlot
+            Symbol.draw(
+                symbol, pointSize: 11, color: Palette.secondaryLabel,
+                centeredAt: CGPoint(x: x + slot / 2, y: midY), scale: scale,
+            )
+            x += slot + 6
+        }
 
         let titleWidth = TextLine.width(title, font: Typography.panelTitle)
         TextLine.draw(

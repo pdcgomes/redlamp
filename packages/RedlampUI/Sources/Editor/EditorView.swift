@@ -2,244 +2,141 @@ import AppKit
 import RedlampCanvas
 import SwiftUI
 
-/// Panel widths. The canvas reserves the *nominal* width for each visible panel, never
-/// the live width, so resizing a panel (or its content changing size) cannot move the photo.
+/// Panel widths and spacing.
 enum PanelMetrics {
     static let sidebarNominal: CGFloat = 250
     static let sidebarRange: ClosedRange<CGFloat> = 220 ... 380
     static let inspectorNominal: CGFloat = 316
     static let inspectorRange: ClosedRange<CGFloat> = 290 ... 440
+    /// The gap macOS 26 leaves around a floating sidebar, kept around the filmstrip too.
+    static let inset: CGFloat = 8
+    /// How close to the bottom edge the pointer brings the filmstrip in.
+    static let filmstripTrigger: CGFloat = 14
 }
 
-/// The Develop workspace. The photo's canvas spans the whole area between the toolbar and
-/// the filmstrip; the Navigator/Presets/History sidebar and the Develop panels float over
-/// it, as in Lightroom and macOS 26's own full-bleed layouts.
-public struct EditorView: View {
+/// The canvas layer of the editor window (see `EditorWindowController`): the photo spans the
+/// whole window, under the toolbar and both panels, which float over it. The photo is
+/// fitted to a fixed stage that keeps clear of the panels' nominal widths whether they are
+/// showing or not, so showing, hiding or resizing a panel never moves it. Only presenting
+/// (full screen with every panel hidden) gives it the whole window.
+struct EditorContentView: View {
     @Bindable var model: EditorModel
     @Bindable var theme: ThemeSettings
     let onOpen: () -> Void
-    let onExport: () -> Void
-    @State private var themeShown = false
+    @State private var toolbarHeight: CGFloat = 0
 
-    public init(
-        model: EditorModel, theme: ThemeSettings,
-        onOpen: @escaping () -> Void, onExport: @escaping () -> Void,
-    ) {
-        self.model = model
-        self.theme = theme
-        self.onOpen = onOpen
-        self.onExport = onExport
+    var body: some View {
+        CanvasArea(onOpen: onOpen)
+            .ignoresSafeArea()
+            .overlay(alignment: .bottom) {
+                if model.filmstripVisible, !model.items.isEmpty, model.lightsOut == 0 {
+                    FloatingFilmstrip()
+                        .id(theme.selection)
+                }
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { toolbarHeight = $0 }
+            .sheet(item: $model.stackWorkspace) { workspace in
+                StackWorkspaceView(workspace: workspace, onDone: model.finishStackWorkspace)
+                    .environment(theme)
+            }
+            .onAppear(perform: updateStage)
+            .onChange(of: toolbarHeight) { _, _ in updateStage() }
+            .onChange(of: model.isPresenting) { _, _ in updateStage() }
+            .environment(model)
+            .environment(theme)
+            .tint(Theme.nativeTint)
+            .focusEffectDisabled()
     }
 
-    public var body: some View {
-        VStack(spacing: 0) {
-            ZStack {
-                CanvasArea(onOpen: onOpen)
+    private func updateStage() {
+        model.canvas.stageInsets = model.isPresenting ? .zero : StageInsets(
+            leading: PanelMetrics.inset + PanelMetrics.sidebarNominal + PanelMetrics.inset,
+            trailing: PanelMetrics.inspectorNominal + PanelMetrics.inset,
+            top: toolbarHeight,
+            bottom: PanelMetrics.inset,
+        )
+    }
+}
 
-                HStack(spacing: 0) {
-                    if model.leftPanelVisible {
-                        Group {
-                            if DevelopPanels.usesSwiftUI {
-                                SidebarView()
-                            } else {
-                                SidebarColumnHost(model: model)
-                            }
-                        }
-                        // AppKit views take their colors when they are made, so a theme change rebuilds them.
-                        .id(theme.selection)
-                        .frame(width: model.sidebarWidth)
-                        .background(PanelBackground(edge: .trailing))
-                        .overlay(alignment: .trailing) {
-                            PanelResizeHandle(
-                                width: $model.sidebarWidth,
-                                range: PanelMetrics.sidebarRange,
-                                direction: 1,
-                            )
-                        }
-                        .transition(.move(edge: .leading))
-                    }
-                    Spacer(minLength: 0)
-                    if model.rightPanelVisible {
-                        Group {
-                            if DevelopPanels.usesSwiftUI {
-                                InspectorView()
-                            } else {
-                                InspectorColumnHost(model: model)
-                            }
-                        }
-                        .id(theme.selection)
-                        .frame(width: model.inspectorWidth)
-                        .background(PanelBackground(edge: .leading))
-                        .overlay(alignment: .leading) {
-                            PanelResizeHandle(
-                                width: $model.inspectorWidth,
-                                range: PanelMetrics.inspectorRange,
-                                direction: -1,
-                            )
-                        }
-                        .transition(.move(edge: .trailing))
-                    }
-                }
-                .overlay { LightsOutShade(level: model.lightsOut, stage: model.canvas.stageInsets) }
-            }
-            if model.filmstripVisible, !model.items.isEmpty {
-                Rectangle().fill(Theme.divider).frame(height: 1)
-                FilmstripView()
-                    .id(theme.selection)
-                    .overlay { LightsOutShade(level: model.lightsOut, stage: nil) }
-            }
-        }
-        .overlay {
+/// The ⌘/ shortcuts and ⌘F adjustment search, laid over the whole window, panels included.
+struct EditorOverlays: View {
+    @Bindable var model: EditorModel
+    @Bindable var theme: ThemeSettings
+
+    var body: some View {
+        ZStack {
             if model.showShortcuts {
                 ShortcutsSheet()
             }
-        }
-        .overlay {
             if model.showAdjustmentSearch {
                 AdjustmentSearchView()
-            }
-        }
-        .sheet(item: $model.stackWorkspace) { workspace in
-            StackWorkspaceView(workspace: workspace, onDone: model.finishStackWorkspace)
-                .environment(theme)
-        }
-        .animation(.easeOut(duration: 0.15), value: model.showShortcuts)
-        .animation(.easeOut(duration: 0.12), value: model.showAdjustmentSearch)
-        .animation(.easeInOut(duration: 0.3), value: model.lightsOut)
-        .onAppear(perform: updateStage)
-        .onChange(of: model.leftPanelVisible) { _, _ in updateStage() }
-        .onChange(of: model.rightPanelVisible) { _, _ in updateStage() }
-        .navigationTitle(model.info?.fileName ?? "Redlamp")
-        .navigationSubtitle(model.info?.cameraName ?? "")
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Toggle(isOn: $model.leftPanelVisible.animation(.snappy(duration: 0.25))) {
-                    Label("Sidebar", systemImage: "sidebar.left")
-                }
-                .help("Show Navigator, Presets and History")
-            }
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button("Open Folder", systemImage: "folder", action: onOpen)
-                    .help("Open Folder (⌘O)")
-                Button("Export", systemImage: "square.and.arrow.up", action: onExport)
-                    .disabled(model.info == nil)
-                    .help("Export (⇧⌘E)")
-            }
-            ToolbarSpacer(.fixed, placement: .primaryAction)
-            ToolbarItemGroup(placement: .primaryAction) {
-                Toggle(isOn: $model.showBefore) {
-                    Label("Before / After", systemImage: model.compareLayout.symbol)
-                }
-                .help("Before / After (\\)")
-                Toggle(isOn: $model.filmstripVisible) {
-                    Label("Filmstrip", systemImage: "film.stack")
-                }
-                .help("Show Filmstrip")
-                Toggle(isOn: $model.rightPanelVisible.animation(.snappy(duration: 0.25))) {
-                    Label("Panels", systemImage: "sidebar.right")
-                }
-                .help("Show Develop Panels")
-            }
-            ToolbarSpacer(.fixed, placement: .primaryAction)
-            ToolbarItem(placement: .primaryAction) {
-                Button("Theme", systemImage: "paintpalette") { themeShown.toggle() }
-                    .help("Theme")
-                    .popover(isPresented: $themeShown, arrowEdge: .bottom) {
-                        ThemeControls(theme: $theme.selection)
-                            .padding(14)
-                            .frame(width: 260)
-                    }
             }
         }
         .environment(model)
         .environment(theme)
         .tint(Theme.nativeTint)
-        .preferredColorScheme(theme.selection.appearance == .dark ? .dark : .light)
-    }
-
-    /// Showing or hiding a panel re-fits the photo to the space left; resizing never does.
-    private func updateStage() {
-        model.canvas.stageInsets = StageInsets(
-            leading: model.leftPanelVisible ? PanelMetrics.sidebarNominal : 0,
-            trailing: model.rightPanelVisible ? PanelMetrics.inspectorNominal : 0,
-        )
+        .focusEffectDisabled()
     }
 }
 
-/// Lightroom's Lights Out: dims (level 1) or blacks out (level 2) everything but the photo.
-/// Over the panel layer the stage is left clear; the canvas darkens its own surround.
-private struct LightsOutShade: View {
-    let level: Int
-    let stage: StageInsets?
+/// The filmstrip floats at the bottom between the panels, in the same kind of pane, and
+/// keeps out of the way of editing: it slides in while the pointer is at the bottom edge or
+/// over it, and away shortly after the pointer leaves. With nothing selected it stays, as
+/// it is the way to pick a photo.
+private struct FloatingFilmstrip: View {
+    @Environment(EditorModel.self) private var model
+    @State private var revealed = false
+    @State private var hiding: Task<Void, Never>?
 
     var body: some View {
-        if level > 0 {
-            let color = Color.black.opacity(level == 1 ? 0.8 : 1)
-            GeometryReader { geometry in
-                if let stage {
-                    HStack(spacing: 0) {
-                        color.frame(width: stage.leading)
-                        Spacer(minLength: 0)
-                        color.frame(width: stage.trailing)
-                    }
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-                } else {
-                    color
-                }
+        let shown = revealed || model.selection == nil
+        ZStack(alignment: .bottom) {
+            Color.clear
+                .frame(height: PanelMetrics.filmstripTrigger)
+                .contentShape(Rectangle())
+                .onHover { inside in inside ? reveal() : scheduleHide() }
+            if shown {
+                FilmstripView()
+                    .modifier(FloatingPane())
+                    .onHover { inside in inside ? reveal() : scheduleHide() }
+                    .padding(.horizontal, PanelMetrics.inset)
+                    .padding(.bottom, PanelMetrics.inset)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            .allowsHitTesting(level == 2)
+        }
+        .ignoresSafeArea(edges: .bottom)
+        .animation(.snappy(duration: 0.25), value: shown)
+    }
+
+    private func reveal() {
+        hiding?.cancel()
+        hiding = nil
+        revealed = true
+    }
+
+    private func scheduleHide() {
+        hiding?.cancel()
+        hiding = Task {
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            revealed = false
         }
     }
 }
 
-/// The neutral backing of a floating panel, with a hairline on its inner edge.
-private struct PanelBackground: View {
-    let edge: HorizontalEdge
+/// A floating pane matching macOS 26's sidebar: Liquid Glass with corners concentric with
+/// the window's, washed with the theme's panel color as the panels are.
+private struct FloatingPane: ViewModifier {
+    @Environment(ThemeSettings.self) private var theme
 
-    var body: some View {
-        Theme.panelBackground
-            .overlay(alignment: edge == .leading ? .leading : .trailing) {
-                Rectangle().fill(Color.primary.opacity(0.08)).frame(width: 1)
-            }
-            .shadow(color: .black.opacity(0.35), radius: 8)
+    private var shape: ConcentricRectangle {
+        ConcentricRectangle(corners: .concentric(minimum: .fixed(18)), isUniform: true)
     }
-}
 
-/// A drag strip on a panel's inner edge. `direction` is +1 when dragging right widens the
-/// panel (the sidebar) and -1 when dragging left does (the inspector).
-private struct PanelResizeHandle: View {
-    @Binding var width: CGFloat
-    let range: ClosedRange<CGFloat>
-    let direction: CGFloat
-
-    @State private var startWidth: CGFloat?
-
-    var body: some View {
-        Color.clear
-            .frame(width: 7)
-            .contentShape(Rectangle())
-            .onHover { inside in
-                if inside {
-                    NSCursor.resizeLeftRight.push()
-                } else {
-                    NSCursor.pop()
-                }
-            }
-            .gesture(
-                DragGesture(minimumDistance: 1, coordinateSpace: .global)
-                    .onChanged { gesture in
-                        let start = startWidth ?? width
-                        startWidth = start
-                        width = min(
-                            max(start + gesture.translation.width * direction, range.lowerBound),
-                            range.upperBound,
-                        )
-                    }
-                    .onEnded { _ in startWidth = nil },
-            )
-            .onTapGesture(count: 2) {
-                width = direction > 0 ? PanelMetrics.sidebarNominal : PanelMetrics.inspectorNominal
-            }
-            .help("Drag to resize, double-click to reset")
+    func body(content: Content) -> some View {
+        content
+            .clipShape(shape)
+            .background(Theme.panelBackground.opacity(theme.panelOpacity), in: shape)
+            .glassEffect(.regular, in: shape)
     }
 }
