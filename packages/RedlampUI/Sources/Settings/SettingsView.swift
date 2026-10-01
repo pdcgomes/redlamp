@@ -10,10 +10,14 @@ public struct SettingsView: View {
 
     @Bindable var theme: ThemeSettings
     let engine: (any EditingEngine)?
+    let checksForUpdates: Binding<Bool>?
 
-    public init(theme: ThemeSettings, engine: (any EditingEngine)? = nil) {
+    /// `checksForUpdates` is Sparkle's automatic-check setting, from builds that update
+    /// themselves; the app passes it in because this package doesn't link Sparkle.
+    public init(theme: ThemeSettings, engine: (any EditingEngine)? = nil, checksForUpdates: Binding<Bool>? = nil) {
         self.theme = theme
         self.engine = engine
+        self.checksForUpdates = checksForUpdates
     }
 
     public var body: some View {
@@ -27,7 +31,7 @@ public struct SettingsView: View {
                 }
             }
             Tab("About", systemImage: "info.circle") {
-                AboutSettings()
+                AboutSettings(checksForUpdates: checksForUpdates)
             }
         }
         .frame(width: 500)
@@ -131,6 +135,7 @@ private struct CommandPaletteThemeSettings: View {
 }
 
 private struct AboutSettings: View {
+    let checksForUpdates: Binding<Bool>?
     private let info = Bundle.main.infoDictionary ?? [:]
 
     var body: some View {
@@ -144,6 +149,10 @@ private struct AboutSettings: View {
             Text(version)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
+            if let checksForUpdates {
+                Toggle("Automatically check for updates", isOn: checksForUpdates)
+                    .padding(.top, 4)
+            }
             Text("Redlamp develops your raw photos without ever touching the originals.")
                 .multilineTextAlignment(.center)
                 .padding(.top, 10)

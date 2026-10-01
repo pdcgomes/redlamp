@@ -5,6 +5,7 @@ import SwiftUI
 /// Items are enabled when `canPerform` says so, as the command palette dims its rows.
 struct AppCommands: Commands {
     let model: EditorModel
+    let updates: Updates?
     let onOpen: () -> Void
     let onExport: () -> Void
     let onExportWithPrevious: () -> Void
@@ -12,6 +13,13 @@ struct AppCommands: Commands {
     @Environment(\.openURL) private var openURL
 
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            if let updates {
+                Button("Check for Updates…") { updates.check() }
+                    .disabled(!updates.canCheck)
+            }
+        }
+
         CommandGroup(replacing: .newItem) {
             item(.openFolder, perform: onOpen)
             Divider()

@@ -71,6 +71,7 @@ struct RedlampApp: App {
         .commands {
             AppCommands(
                 model: model,
+                updates: appDelegate.updates,
                 onOpen: { Self.openPanel(model: model) },
                 onExport: { ExportActions.present(model: model, store: exports) },
                 onExportWithPrevious: { ExportActions.exportWithPrevious(model: model, store: exports) },
@@ -78,8 +79,14 @@ struct RedlampApp: App {
         }
 
         Settings {
-            SettingsView(theme: theme, engine: model.engine)
-                .focusEffectDisabled()
+            SettingsView(
+                theme: theme,
+                engine: model.engine,
+                checksForUpdates: appDelegate.updates.map { updates in
+                    Binding(get: { updates.checksAutomatically }, set: { updates.setChecksAutomatically($0) })
+                },
+            )
+            .focusEffectDisabled()
         }
     }
 
@@ -114,6 +121,7 @@ struct RedlampApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static var launch: (@MainActor () -> EditorWindowController)?
+    let updates = Updates()
     private var editor: EditorWindowController?
 
     func applicationDidFinishLaunching(_: Notification) {
