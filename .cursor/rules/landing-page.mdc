@@ -1,0 +1,39 @@
+---
+description: Keep the redlamp.app landing page (web/) in step with the README whenever work lands
+globs: README.md,docs/images/**,docs/brand/**,packages/RedlampRecipes/Sources/Film/**,web/**
+alwaysApply: false
+---
+
+# Keep the landing page current
+
+The README is the status page, and `web/` (redlamp.app) presents it. When you update the README for something that landed, check the site in the same change.
+
+## Updates itself (don't duplicate)
+
+- **Roadmap** and **Everything that works today** are parsed from the README at build time by `web/lib/readme.ts`.
+- **Screenshots, film icons, sample sheets and logos** are copied from `docs/` by `web/scripts/sync-assets.mjs`.
+
+Keep the shapes the parser relies on, or update `web/lib/readme.ts` with them:
+- `## Roadmap` with `### Phase N: Title *(status)*` sections and `- [x]` / `- [ ]` items (`### Later` uses plain `-` items).
+- `### What works today` with `**Group title**` lines, each followed by `- [x]` items.
+
+## Edit by hand when the README changes
+
+| README change | Update |
+| --- | --- |
+| A headline feature lands, or a feature row's claims change | The matching entry in `web/content/features.ts` (title, body, points, screenshot) |
+| Measured performance numbers change | `performance` in `web/content/features.ts`, and the speed feature's points |
+| A film stock is added, renamed or re-tuned | `web/content/films.ts` (with its icon and `look-<id>.jpg` in `docs/images/film/`) |
+| Goals change | `principles` in `web/content/features.ts` |
+| Status changes (beta, first release, iPad/iPhone) | `status` and `homebrew` in `web/lib/site.ts`, and the hero copy in `web/components/sections/Hero.tsx` |
+| A new screenshot is added to `docs/images` | Use it in a feature row or add it to `gallery` in `web/content/features.ts` |
+
+Write site copy in the brand voice from `docs/brand/README.md`: calm, plain and precise, with no exclamation marks or superlatives, and only claims the README makes.
+
+## Check
+
+```bash
+cd web && npm run typecheck && npm run build
+```
+
+The build fails if the README sections the parser needs are missing.
