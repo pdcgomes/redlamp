@@ -13,7 +13,11 @@ enum FilmReadmeAssets {
     static let tile = CGSize(width: 420, height: 280)
     static let gap: CGFloat = 6
 
-    static func write(recipes: [(FilmLookDefinition, Recipe)], renderer: RecipeRenderer, into folder: URL) async throws {
+    static func write(
+        recipes: [(FilmLookDefinition, Recipe)],
+        renderer: RecipeRenderer,
+        into folder: URL,
+    ) async throws {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let photos = examplePhotos.map { Repository.root.appendingPathComponent("build/look-dev/\($0)") }
         guard photos.allSatisfy({ FileManager.default.fileExists(atPath: $0.path) }) else {
@@ -37,7 +41,11 @@ enum FilmReadmeAssets {
         }
 
         let photo = Repository.root.appendingPathComponent("build/look-dev/\(overviewPhoto)")
-        var cells: [(CGImage, String, FilmIcon?)] = try await [(renderer.render(nil, image: photo, maxLongEdge: 900), "Original", nil)]
+        var cells: [(CGImage, String, FilmIcon?)] = try await [(
+            renderer.render(nil, image: photo, maxLongEdge: 900),
+            "Original",
+            nil,
+        )]
         for (look, recipe) in recipes {
             try await cells.append((renderer.render(recipe, image: photo, maxLongEdge: 900), look.name, look.icon))
         }

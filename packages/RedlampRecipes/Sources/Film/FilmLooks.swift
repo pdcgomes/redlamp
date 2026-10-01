@@ -28,10 +28,13 @@ public enum FilmLooks {
     }
 
     static func stock(_ id: String, in directory: URL?) throws -> FilmStock {
-        if let stock = synthetic[id] { return stock }
+        if let stock = synthetic[id] {
+            return stock
+        }
         guard let directory, FileManager.default.fileExists(atPath: directory.appendingPathComponent("\(id).json").path)
         else { throw FilmLookError.unknownStock(id, known: stockIDs(in: directory)) }
-        let fallback = id == fallbackDyes ? nil : try? FilmStock.load(directory.appendingPathComponent("\(fallbackDyes).json"))
+        let fallback = id == fallbackDyes ? nil : try? FilmStock
+            .load(directory.appendingPathComponent("\(fallbackDyes).json"))
         return try FilmStock.load(directory.appendingPathComponent("\(id).json"), dyesFrom: fallback)
     }
 

@@ -116,7 +116,12 @@ public struct FilmIcon: Sendable, Hashable {
         if let gradient = CGGradient(
             colorsSpace: CGColorSpace(name: CGColorSpace.sRGB), colors: [band.cg, top.cg] as CFArray, locations: [0, 1],
         ) {
-            c.drawLinearGradient(gradient, start: CGPoint(x: 0, y: window.minY), end: CGPoint(x: 0, y: window.maxY), options: [])
+            c.drawLinearGradient(
+                gradient,
+                start: CGPoint(x: 0, y: window.minY),
+                end: CGPoint(x: 0, y: window.maxY),
+                options: [],
+            )
         }
         c.restoreGState()
         drawLabel(c, in: CGRect(x: 10, y: 8, width: 44, height: 13), colour: text)
@@ -163,10 +168,19 @@ public struct FilmIcon: Sendable, Hashable {
         c.clip()
         if let gradient = CGGradient(
             colorsSpace: CGColorSpace(name: CGColorSpace.sRGB),
-            colors: [CGColor(gray: 0.08, alpha: 1), CGColor(gray: 0.55, alpha: 1), CGColor(gray: 0.9, alpha: 1)] as CFArray,
+            colors: [
+                CGColor(gray: 0.08, alpha: 1),
+                CGColor(gray: 0.55, alpha: 1),
+                CGColor(gray: 0.9, alpha: 1),
+            ] as CFArray,
             locations: [0, 0.55, 1],
         ) {
-            c.drawLinearGradient(gradient, start: CGPoint(x: 0, y: image.minY), end: CGPoint(x: 0, y: image.maxY), options: [])
+            c.drawLinearGradient(
+                gradient,
+                start: CGPoint(x: 0, y: image.minY),
+                end: CGPoint(x: 0, y: image.maxY),
+                options: [],
+            )
         }
         c.restoreGState()
         c.saveGState()

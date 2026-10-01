@@ -88,7 +88,12 @@ struct SessionBuilder {
         let hazeMap = try Haze.encodeMap(
             pyramid: pyramid, airlight: airlight, device: device, kernels: kernels, commands: hazeCommands,
         )
-        let glowSource = try Glow.encodeSource(pyramid: pyramid, device: device, kernels: kernels, commands: hazeCommands)
+        let glowSource = try Glow.encodeSource(
+            pyramid: pyramid,
+            device: device,
+            kernels: kernels,
+            commands: hazeCommands,
+        )
         // Renders run on another queue, so the maps must be finished before the session is.
         hazeCommands.commit()
         hazeCommands.waitUntilCompleted()

@@ -156,7 +156,11 @@ public struct FilmCatalogView: View {
     }
 
     private func effectsLine(_ look: FilmLookDefinition) -> String {
-        let parts: [(String, ParameterID)] = [("Grain", .grainAmount), ("Halation", .halationAmount), ("Bloom", .bloomAmount)]
+        let parts: [(String, ParameterID)] = [
+            ("Grain", .grainAmount),
+            ("Halation", .halationAmount),
+            ("Bloom", .bloomAmount),
+        ]
         return parts.compactMap { name, parameter in
             look.effects[parameter].map { "\(name) \(Int($0))" }
         }.joined(separator: " · ")

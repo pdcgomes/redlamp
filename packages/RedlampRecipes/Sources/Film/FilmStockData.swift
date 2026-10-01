@@ -38,7 +38,9 @@ extension FilmStock {
             // A channel drawn only in part (Provia's green and blue) follows the red curve where
             // the chart shows the three as one line.
             var values = optionalNumbers(characteristic[channel])
-            if values.allSatisfy({ $0 == nil }) { throw DataError.missing(id, "\(channel) curve") }
+            if values.allSatisfy({ $0 == nil }) {
+                throw DataError.missing(id, "\(channel) curve")
+            }
             let red = optionalNumbers(characteristic["red"])
             if channel != "red", red.count == values.count {
                 values = zip(values, red).map { $0 ?? $1 }
@@ -87,8 +89,13 @@ extension FilmStock {
         }
 
         let minimumDensities = channels.map { channel -> Double in
-            if let dMin = characteristic["dMin"] as? [String: Any], let value = dMin[channel] as? Double { return value }
-            if let value = characteristic["dMin"] as? Double { return value }
+            if let dMin = characteristic["dMin"] as? [String: Any],
+               let value = dMin[channel] as? Double {
+                return value
+            }
+            if let value = characteristic["dMin"] as? Double {
+                return value
+            }
             return curves[channels.firstIndex(of: channel) ?? 0].minimum
         }
         let base = dye("minimum").map { minimum in

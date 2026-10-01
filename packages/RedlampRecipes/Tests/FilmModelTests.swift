@@ -33,7 +33,10 @@ struct FilmModelTests {
                 ("Portra scan", FilmModel(film: stock("kodak-portra-400"))),
                 ("Vision3 on 2383", FilmModel(film: stock("kodak-vision3-500t"), print: stock("kodak-2383"))),
                 ("Provia", FilmModel(film: stock("fuji-provia-100f"))),
-                ("Tri-X on Multigrade", FilmModel(film: stock("kodak-tri-x-400"), print: stock("ilford-multigrade-rc"))),
+                (
+                    "Tri-X on Multigrade",
+                    FilmModel(film: stock("kodak-tri-x-400"), print: stock("ilford-multigrade-rc")),
+                ),
                 ("HP5 scan", FilmModel(film: stock("ilford-hp5-plus"))),
             ]
         }
@@ -94,7 +97,10 @@ struct FilmModelTests {
             #expect(recipe.baseLook == shipped.reference)
             #expect(recipe.group == "Film Stocks")
             #expect(FilmLookCatalog.look(forBundledID: shipped.id) == look)
-            #expect(look.isMonochrome == (try FilmLooks.stock(look.film, in: Self.data).kind.isMonochrome), "\(look.id)")
+            #expect(
+                try look.isMonochrome == (FilmLooks.stock(look.film, in: Self.data).kind.isMonochrome),
+                "\(look.id)",
+            )
         }
     }
 

@@ -266,7 +266,11 @@ final class FilmModel {
         var lo = 0.001, hi = 4.0
         for _ in 0 ..< 60 {
             let mid = (lo + hi) / 2
-            if Double(RedlampToneCurve.channel(Float(mid))) < parameters.displayGrey { lo = mid } else { hi = mid }
+            if Double(RedlampToneCurve.channel(Float(mid))) < parameters.displayGrey {
+                lo = mid
+            } else {
+                hi = mid
+            }
         }
         scanGain = (lo + hi) / 2 / 0.18
     }

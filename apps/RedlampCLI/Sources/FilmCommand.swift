@@ -67,7 +67,9 @@ enum FilmCommand {
         let looks = arguments.has("--all") ? FilmLookCatalog.looks
             : try arguments.value("--look").map { id in
                 guard let look = FilmLookCatalog.look(id) else {
-                    throw CLIError(description: "no film look \(id) (known: \(FilmLookCatalog.looks.map(\.id).joined(separator: ", ")))")
+                    throw CLIError(
+                        description: "no film look \(id) (known: \(FilmLookCatalog.looks.map(\.id).joined(separator: ", ")))",
+                    )
                 }
                 return [look]
             } ?? []

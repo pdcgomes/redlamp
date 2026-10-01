@@ -33,7 +33,12 @@ struct FilmEffectsTests {
             intent: .defaultIntent,
         ))
         let url = FileManager.default.temporaryDirectory.appending(path: "redlamp-glow-\(UUID().uuidString).png")
-        let destination = try #require(CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil))
+        let destination = try #require(CGImageDestinationCreateWithURL(
+            url as CFURL,
+            UTType.png.identifier as CFString,
+            1,
+            nil,
+        ))
         CGImageDestinationAddImage(destination, image, nil)
         #expect(CGImageDestinationFinalize(destination))
         return url
