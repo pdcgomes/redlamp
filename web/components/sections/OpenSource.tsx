@@ -58,6 +58,7 @@ export function OpenSource() {
                 Star on GitHub
               </LinkButton>
               <LinkButton href={site.contributing}>How to contribute</LinkButton>
+              <LinkButton href={site.support}>Support Redlamp</LinkButton>
             </div>
           </div>
           <div className="flex flex-col gap-5">

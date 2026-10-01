@@ -7,6 +7,7 @@ struct AppCommands: Commands {
     let onOpen: () -> Void
     let onExport: () -> Void
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openURL) private var openURL
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
@@ -84,6 +85,8 @@ struct AppCommands: Commands {
 
         CommandGroup(after: .help) {
             item(.showShortcuts)
+            Divider()
+            Button("Support Redlamp") { openURL(SettingsView.supportURL) }
         }
     }
 

@@ -5,6 +5,9 @@ import SwiftUI
 
 /// The Settings window (⌘,): one tab per section, each a grouped form.
 public struct SettingsView: View {
+    /// Where donations go. App Review rejects links to outside payment, so an App Store build needs a tip jar instead.
+    public static let supportURL = URL(string: "https://ko-fi.com/pdcgomes")!
+
     @Bindable var theme: ThemeSettings
     let engine: (any EditingEngine)?
 
@@ -98,6 +101,8 @@ private struct AboutSettings: View {
             Text("Redlamp develops your raw photos without ever touching the originals.")
                 .multilineTextAlignment(.center)
                 .padding(.top, 10)
+            Link("Support Redlamp", destination: SettingsView.supportURL)
+                .padding(.top, 4)
             if let copyright = info["NSHumanReadableCopyright"] as? String {
                 Text(copyright)
                     .font(.caption)

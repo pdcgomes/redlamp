@@ -15,6 +15,7 @@ export const site = {
   githubRepo: "pdcgomes/redlamp",
   readme: `${github}#readme`,
   contributing: `${github}#contributing`,
+  support: "https://ko-fi.com/pdcgomes",
   license: { name: "MPL-2.0", long: "Mozilla Public License 2.0", url: `${github}/blob/main/LICENSE` },
   rawPixls: "https://raw.pixls.us",
   buildFromSource: [

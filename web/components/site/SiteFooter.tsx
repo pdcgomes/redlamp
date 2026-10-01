@@ -24,6 +24,9 @@ export function SiteFooter() {
           <a className="text-mute hover:text-paper" href={site.contributing}>
             Contributing
           </a>
+          <a className="text-mute hover:text-paper" href={site.support}>
+            Support Redlamp
+          </a>
         </nav>
         <div className="flex flex-col gap-2 text-[14px]">
           <p className="eyebrow mb-1">License</p>

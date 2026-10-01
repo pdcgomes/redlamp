@@ -35,6 +35,7 @@ Redlamp is built from scratch in Swift and Metal for Apple Silicon. It focuses o
 - [Using Redlamp](#using-redlamp)
 - [Architecture](#architecture)
 - [Contributing](#contributing)
+- [Support Redlamp](#support-redlamp)
 - [License and acknowledgements](#license-and-acknowledgements)
 
 ---
@@ -1042,6 +1043,10 @@ Redlamp is at an early stage and moving quickly. Issues and discussion are very 
   - Keep engine code free of UI imports.
   - New parameters go into the schema in `RedlampEngineAPI/Sources/ParameterSpec.swift`.
 - **Fixtures:** `mise run fixtures` downloads CC0 samples. Please don't commit RAW files.
+
+## Support Redlamp
+
+Redlamp is free, with no subscription and no cloud. If you'd like to support its development, you can do so on [Ko-fi](https://ko-fi.com/pdcgomes).
 
 ## License and acknowledgements
 
