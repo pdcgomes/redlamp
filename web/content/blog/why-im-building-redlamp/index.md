@@ -6,9 +6,38 @@ cover: /synced/images/hero.png
 coverAlt: Redlamp editing a raw photo of a dancer in a street parade, with Lightroom-style panels on the right
 ---
 
-I shoot raw on a Sony A7R V, and I've watched Adobe's software get more bloated, slow and sluggish, with a subscription on top and a cloud I don't want my photos in. I kept wondering how fast a raw editor could be if it were built for Apple Silicon from scratch, and whether film looks could be done properly, from the film stocks' own datasheets. So I started building one. It's the app I want for myself, and building it has been a lot of fun.
+Hello everyone,
 
-That's Redlamp. It's a raw photo editor for the Mac, written from scratch in Swift and Metal, and it's free and open source.
+My name is Pedro, I'm originally from Portugal but have called the UK (London) my home for the past 14 years. My career as a Software Engineer started in 2003 but my interest in computers and technology started probably back in 1987-1988.
+I also happen to love photography and have been a hobbyist photographer, on and off, for a great many years now. I love shooting and the editing process. 
+
+Like so many others I used to edit my photos in Adobe Photoshop and eventually moved on to Lightroom - it was a simpler, more focused tool. Felt less powerful (and it was), but it was arguably the better tool **for me**.
+
+Adobe is a very large company (todo: add references here). I've worked for very large companies through my career, I understand how poor product decisions come to be, I understand how hard it is to do the right thing, even if it's obvious.
+I'm not really here to criticise Adobe - they have a very successful business and have essentially defined the gold standard for various industries. I'm not here to change that.
+
+I was happy with buying their software and using it. I owned it, I could upgrade to a new version (and pay for it), if I saw value in it. Then things got confusing.
+Lightroom Classic, Lightroom, Lightroom Mobile, a web version, different feature sets, cloud, no cloud. I was happy with how things were, I did adapt, but I wasn't happy.
+
+Enter the new era of Software Engineering - we can now essentially do anything (given enough tokens, persistency and some patience). This past year, I've been trying to adapt. I've always been productive and able to jump between product thinking and fast execution.
+Execution and execution volume no longer matter. Everyone is, or can be, an absolute machine. So I doubled down on the former. There are many itches I've yet to scratch and many that I've been scratching this past year.
+
+Building a legitimate Lightroom alternative is most certainly up there. It's certainly not easy, and I have no illusions that a great deal of what makes Lightroom good isn't something that can just be outsourced to a bunch of agents. There's real research, access to specialist hardware (cameras, scanners, film stock, lenses, experts, etc.). All of that is part of Adobe's IP and arguably where a lot of their value comes from, although most of us only really see and think of "Lightroom".
+So the challenge - how close can we really get? At the time of writing getting any decent model to write the shell of a Lightroom-like application that looks good, feels good, is responsive, offers the same UI is not a problem at all. But the real value isn't there. 
+
+I'll be really honest here - I know almost nothing about color science, little about chemistry, I may have heard of a few algorithms that tools like Lightroom and Photoshop may have used, but beyond a flood fill (which has many other uses), I've never really dabbled into any of that. This is all new territory for me, but that's undoubtedly the beauty of the era we live in.
+Any fool (like me) can wield great power and pretend they are an expert in many many (many!) domains.
+
+Here's the hard truth. It takes a village. Always (or almost always). Most products I've worked on in the past that have been successful or moderately successful had different people with different skillsets, strenghts and weekeness making all sorts of decisions I wasn't involved in, or I had, at best _some_ influence in. The reality is, it is rare for a single person to be able to continuously wear many hats and be equally productive across many domains. Even if you could do it, there's the small matter of biology. Sleep, food, energy, mood, family, friends, responsibilities, days off. All of that competes for your time, and there's only much you can achieve.
+
+It never even crossed my mind to attempt to build something like this out of the all the itches I wanted to scratch. It's simply too much for a single person. Turns out, not anymore (well, within reason). 
+
+So here we are. It's the 1st of October and the first pre-alpha version of Redlamp is out. What's absolutely crazy is that it took literally *two days* to get to this point. Think about it. In two days a single person can produce a competent photo editor with a lot of advanced and non-trivial functionality that we now take for granted. I'm not suggesting everyone should go out and build their own version of everything, but it does mean that it is now possible to genuinely compete with larger players and offer legitimate alternatives to consumers.
+Yes, there will always be trade-offs, but probably not as many as you'd like to believe. Just two years ago this would have been impossible to achieve any of this with a substantial team of engineers and researches, significant funding and at least a few years of development.
+
+Two. Days.
+
+So here we have it. Redlamp. 
 
 ## What it is
 
