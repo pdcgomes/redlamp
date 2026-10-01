@@ -6,31 +6,27 @@ cover: /synced/images/hero.png
 coverAlt: Redlamp editing a raw photo of a dancer in a street parade, with Lightroom-style panels on the right
 ---
 
-Hello, I'm Pedro. I'm originally from Portugal, and London has been my home for the past 14 years. I've worked as a software engineer since 2003, and I've been fascinated by computers since around 1987.
+Hello, I'm Pedro. I'm originally from Portugal, London has been my home for the past 14 years, and I've been a software engineer since 2003. I'm also a hobbyist photographer, and I love the editing as much as the shooting.
 
-I'm also a hobbyist photographer, on and off, and have been for a great many years. I love both the shooting and the editing.
+Like so many others, I started out editing in Photoshop and moved to Lightroom. It was simpler and more focused. It felt less powerful, and it was, but it was the better tool **for me**. I owned it, and I paid to upgrade whenever a new version was worth it. Then Lightroom became a subscription, and things got confusing: Lightroom Classic, Lightroom, Lightroom Mobile, a web version, different feature sets, cloud and no cloud. I adapted, but I wasn't happy.
 
-Like so many others, I started out editing my photos in Photoshop and eventually moved to Lightroom. It was a simpler, more focused tool. It felt less powerful, and it was, but it was the better tool **for me**.
+This isn't about criticising Adobe, which has essentially defined the gold standard in several industries. I've worked for very large companies myself, and I understand how decisions like these come about, and how hard it can be to do the right thing even when it's obvious. I just want there to be a real alternative.
 
-Adobe is a very large company. I've worked for very large companies myself, so I understand how poor product decisions come about, and how hard it can be to do the right thing, even when it's obvious. I'm not here to criticise Adobe: it has a very successful business and has essentially defined the gold standard in several industries, and I'm not out to change that.
+Meanwhile, software engineering has changed. Given enough tokens, persistence and patience, we can build almost anything now. Execution, and how much of it you can do, no longer sets anyone apart: everyone is, or can be, an absolute machine. So I've doubled down on product thinking, and on the itches I've always wanted to scratch. A legitimate alternative to Lightroom is near the top of that list, and it comes with a question I couldn't resist: how close can one person really get?
 
-I was happy buying their software and using it. I owned it, and I could pay to upgrade to a new version when I saw value in one. Then things got confusing: Lightroom Classic, Lightroom, Lightroom Mobile, a web version, different feature sets, cloud and no cloud. I adapted, but I wasn't happy.
+The shell is the easy part. Any decent model can write a Lightroom-like application that looks good, feels good, responds quickly and offers the same interface. But that isn't where the real value is. Behind Lightroom is real research, and access to specialist equipment and people: cameras, scanners, film stock, lenses and experts. That's Adobe's IP, and arguably where most of its value lies.
 
-Enter the new era of software engineering, in which we can do almost anything, given enough tokens, persistence and patience. I've spent this past year adapting to it. I've always been productive, and able to move between product thinking and fast execution, but execution, and how much of it you can do, no longer sets anyone apart: everyone is, or can be, an absolute machine. So I've doubled down on product thinking. There are many itches I've yet to scratch, and many I've been scratching this past year.
+To be completely honest, I know almost nothing about color science and little about chemistry, and beyond a flood fill, I'd never dabbled in the kind of algorithms tools like Lightroom use. That's the beauty of the era we live in: any fool, like me, can wield great power and pretend to be an expert in many, many domains.
 
-Building a legitimate alternative to Lightroom is near the top of that list. It isn't easy, and I have no illusions: a great deal of what makes Lightroom good can't simply be handed to a bunch of agents. Behind it is real research, and access to specialist equipment and people: cameras, scanners, film stock, lenses and experts. All of that is Adobe's IP, and arguably where much of its value lies, even if most of us only ever see "Lightroom".
+Still, I'd never seriously considered attempting it. Products like Lightroom take a village: people with different skills, strengths and weaknesses, and more hours between them than one person has once sleep, family and friends have had their share. It turns out that, within reason, that's no longer true.
 
-So the challenge is: how close can we really get? At the time of writing, getting any decent model to write the shell of a Lightroom-like application, one that looks good, feels good, responds quickly and offers the same interface, isn't a problem at all. But that isn't where the real value is.
-
-To be completely honest, I know almost nothing about color science and little about chemistry. I may have heard of a few of the algorithms that tools like Lightroom and Photoshop use, but beyond a flood fill (which has plenty of other uses), I'd never really dabbled in any of it. This is all new territory for me, and that's the beauty of the era we live in: any fool, like me, can wield great power and pretend to be an expert in many, many domains.
-
-Here's the hard truth: it takes a village, always or almost always. The successful, or moderately successful, products I've worked on all had people with different skills, strengths and weaknesses making all sorts of decisions I wasn't involved in, or had at best *some* influence over. It's rare for one person to keep wearing many hats and be equally productive in all of them. Even if you could, there's the small matter of biology: sleep, food, energy, mood, family, friends, responsibilities and days off all compete for your time, and there's only so much you can achieve.
-
-Of all the itches I wanted to scratch, it never even crossed my mind to try building something like this. It was simply too much for one person. It turns out it isn't anymore, within reason.
-
-So here we are. It's the 1st of October, and the first pre-alpha of Redlamp is out. What still astonishes me is that it took *two days* to get here. Think about that: in two days, one person can produce a competent photo editor, with a lot of the advanced, non-trivial functionality we now take for granted. I'm not suggesting everyone should go and build their own version of everything, but it does mean it's now possible to compete with much larger players and offer people legitimate alternatives. There will always be trade-offs, but probably fewer than you might think. Just two years ago, getting this far would have taken a substantial team of engineers and researchers, significant funding and at least a few years of work.
+So here we are. It's the 1st of October, and the first pre-alpha of Redlamp is out, two days after I started. It's a competent raw editor, with a lot of the advanced, non-trivial functionality we now take for granted. Two years ago, getting this far would have taken a substantial team of engineers and researchers, significant funding and at least a few years of work.
 
 Two. Days.
+
+I'm not suggesting everyone should go and build their own version of everything, but it does mean one person can now offer a legitimate alternative to software that used to need a large company behind it. Two days gets you a pre-alpha, though, not a Lightroom.
+
+The parts that take real expertise, like the color science, the cameras I don't own and how each film stock really looks, are exactly where one person runs out. That's where the village comes back in: people who shoot raw trying it on their own photos, and people who know this field far better than I do telling me where it's wrong.
 
 Here it is: Redlamp.
 
@@ -67,11 +63,17 @@ Or download the app from the [latest release](https://github.com/pdcgomes/redlam
 
 ## How you can help
 
-What I need most is people opening their own raws and telling me what breaks or looks wrong. Only a handful of cameras have been properly checked so far, so whatever you shoot is useful.
+Open your own raws, edit them the way you normally would, and tell me what breaks or looks wrong. Only a handful of cameras have been properly checked so far, so whatever you shoot is useful.
 
-Please file anything you find as a [GitHub issue](https://github.com/pdcgomes/redlamp/issues). The camera model, your macOS version and, if you can share it, the raw file make a big difference. Feature requests are welcome too.
+Please report what you find as a [GitHub issue](https://github.com/pdcgomes/redlamp/issues); a free GitHub account is all you need. These make a report much easier to act on:
 
-If you can share sample files under CC0, [raw.pixls.us](https://raw.pixls.us) collects them, and samples there are how cameras get added to Redlamp's test suite.
+- your camera model and macOS version
+- the raw file, if you can share it
+- for a photo that looks wrong, a screenshot alongside your camera's JPEG or Lightroom's version
+
+If you know color science, film or cameras far better than I do, I'd especially like to hear where Redlamp gets them wrong, and [the code is open](https://github.com/pdcgomes/redlamp#contributing) if you'd like to dig in. Feature requests are welcome too.
+
+And if you can share sample files under CC0, [raw.pixls.us](https://raw.pixls.us) collects them; that's how cameras get added to Redlamp's test suite.
 
 ## What's next
 
