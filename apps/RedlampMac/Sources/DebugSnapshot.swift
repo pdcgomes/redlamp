@@ -8,8 +8,9 @@
     ///
     /// - `--script "<key=value,…>"` applies scripted state after launch (see
     ///   `EditorModel.applyDebugCommand`), e.g. `select=3,exposure=0.5,panel=all`. `select`
-    ///   also takes a file name, and `mask=<kind>[:<part>]` computes an AI mask, such as
-    ///   `mask=sky` or `mask=people:faceSkin`.
+    ///   also takes a file name, `mask=<kind>[:<part>]` computes an AI mask, such as
+    ///   `mask=sky` or `mask=people:faceSkin`, and `overlay=<style>` shows masks in one of
+    ///   `MaskOverlayStyle`'s modes, such as `overlay=imageOnBlack`.
     /// - `--snapshot <path.png> [--snapshot-delay <s>] [--snapshot-quit]` writes an image of
     ///   the window without Screen Recording permission (glass materials are approximated;
     ///   `scripts/capture-screenshots.sh` uses real window captures instead). An open sheet is
@@ -81,18 +82,29 @@
             case "window":
                 await openWindow(titled: value.split(separator: "-").map(\.capitalized).joined(separator: " "))
             case "select" where Int(value) == nil:
-                guard let item = model.items.first(where: { $0.url.lastPathComponent == value }) else { return true }
-                model.select(item.url)
-                try? await Task.sleep(for: .milliseconds(200))
+                await select(named: value, model: model)
             case "mask":
-                let parts = value.split(separator: ":").map(String.init)
-                guard let kind = MaskKind(rawValue: parts[0]) else { return true }
-                let part = parts.count > 1 ? PersonPart(rawValue: parts[1]) : nil
-                await model.createAIMask(kind, part: part ?? .entirePerson)
+                await createMask(value, model: model)
+            case "overlay":
+                model.maskOverlayStyle = MaskOverlayStyle.allCases.first { value == "\($0)" } ?? model.maskOverlayStyle
             default:
                 return false
             }
             return true
+        }
+
+        private static func select(named name: String, model: EditorModel) async {
+            guard let item = model.items.first(where: { $0.url.lastPathComponent == name }) else { return }
+            model.select(item.url)
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+
+        /// `sky`, `people`, or a person's part such as `people:faceSkin`.
+        private static func createMask(_ value: String, model: EditorModel) async {
+            let parts = value.split(separator: ":").map(String.init)
+            guard let kind = MaskKind(rawValue: parts[0]) else { return }
+            let part = parts.count > 1 ? PersonPart(rawValue: parts[1]) : nil
+            await model.createAIMask(kind, part: part ?? .entirePerson)
         }
 
         private static func openStack(_ selection: URL, showing value: String, model: EditorModel) async {

@@ -3,23 +3,28 @@
 # Captures the editor for the Reddit stills (video/src/stills) from a folder of your own photos:
 #
 #   scripts/capture-promo.sh ~/Pictures/redlamp-promo
-#   ONLY="masks-sky film-looks" scripts/capture-promo.sh ~/Pictures/redlamp-promo
+#   ONLY="masks-people film-looks" scripts/capture-promo.sh ~/Pictures/redlamp-promo
 #
 # The folder needs a promo.txt naming the photo for each role, one `role = file name` per line:
 #
-#   hero = DSC04439.ARW        the editor in images 1 and 8, and the panels and shortcuts in 2
-#   portrait = DSC01207.ARW    People masks (image 3): a clear face
+#   hero = DSC04439.ARW        the editor in images 1 and 8, and the panels, shortcuts and palette
+#   portrait = DSC02005.jpg    People masks (image 3): a clear face
+#   subject = DSC02035.jpg     the Subject mask (image 3)
 #   landscape = DSC00310.ARW   the Sky mask (image 3): a big sky
-#   night = DSC02088.ARW       CineStill 800T and the Film Looks window (image 4): bright lights
-#   fujifilm = DSCF4410.RAF    the Chrome Street recipe (image 5)
+#   night = DSC01968.jpg       CineStill 800T and the Film Looks window (image 4): bright lights
+#   fujifilm = DSC01545.jpg    the Chrome Street recipe (image 5)
 #   stack = stack              a subfolder of 10 to 30 focus-bracketed frames (image 6)
 #
-# A role left out skips its shots. Each shot launches the Debug app (`mise run build`; the stack
-# needs the CLI too, `SCHEME=redlamp mise run build`) on a temporary copy of the folder, with the
-# editor at 1600 × 1000 points on a Retina screen. It applies a --script of edits on top of the
-# edits already in your sidecars, and keeps the 3200 × 2000 window capture in
-# video/public/promo/<shot>.png (PROMO_OUT overrides it), where the stills pick it up. Nothing in
-# the folder itself is changed. The terminal running this needs the Screen Recording permission.
+# A role left out skips its shots. `<role>.edit = <script>` adds edits to every shot of a role, such
+# as `hero.edit = recipe=local/<id>,exposure=0.75` for a raw that has no sidecar here.
+#
+# Each shot launches the Debug app (`mise run build`; the stack needs the CLI too,
+# `SCHEME=redlamp mise run build`) on a temporary copy of the folder, with the editor at
+# 1600 × 1000 points on a Retina screen. It applies a --script of edits on top of the edits already
+# in your sidecars, and keeps the 3200 × 2000 window capture in video/public/promo/<shot>.png
+# (PROMO_OUT overrides it), where the stills pick it up. Shots use the app's default theme and only
+# the models testers get; your preferences are put back afterwards, and nothing in the folder
+# itself changes. The terminal running this needs the Screen Recording permission.
 
 set -euo pipefail
 
@@ -28,6 +33,7 @@ PRODUCTS="$ROOT/build/DerivedData/Build/Products/Debug"
 BUNDLE="$PRODUCTS/Redlamp.app"
 APP="$BUNDLE/Contents/MacOS/Redlamp"
 CLI="$PRODUCTS/redlamp"
+DOMAIN="app.redlamp.mac"
 OUT="${PROMO_OUT:-$ROOT/video/public/promo}"
 WAIT="${WAIT:-10}"
 
@@ -36,9 +42,12 @@ SOURCE="$(cd "$1" && pwd)"
 [[ -x "$APP" ]] || { echo "error: build the app first (mise run build)" >&2; exit 1; }
 [[ -f "$SOURCE/promo.txt" ]] || { echo "error: $SOURCE/promo.txt is missing; see the top of this script" >&2; exit 1; }
 
+setting() {
+    sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$SOURCE/promo.txt" | head -1 | sed 's/[[:space:]]*$//'
+}
 role() {
     local name
-    name="$(sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$SOURCE/promo.txt" | head -1 | sed 's/[[:space:]]*$//')"
+    name="$(setting "$1")"
     # The launch arguments are split on whitespace and scripts on commas.
     if [[ "$name" =~ [[:space:],=] ]]; then
         echo "error: rename \"$name\" ($1) without spaces, commas or =" >&2
@@ -50,8 +59,15 @@ role() {
     fi
     echo "$name"
 }
+# `select=<file>` plus the role's own edits, to start each shot's script with.
+open_role() {
+    local edit
+    edit="$(setting "$2\\.edit")"
+    echo "select=$1${edit:+,$edit}"
+}
 HERO="$(role hero)"
 PORTRAIT="$(role portrait)"
+SUBJECT="$(role subject)"
 LANDSCAPE="$(role landscape)"
 NIGHT="$(role night)"
 FUJIFILM="$(role fujifilm)"
@@ -72,18 +88,25 @@ refresh() {
     mkdir -p "$PHOTOS"
     rsync -a --delete --exclude promo.txt --exclude '*.redlampstack' "$SOURCE/" "$PHOTOS/"
 }
-# The app remembers the last folder it opened; put the user's back afterwards.
-LAST_FOLDER="$(defaults read app.redlamp.mac lastFolder 2>/dev/null || true)"
+
+# The app's preferences, including the last folder it opened, are saved now and put back on exit.
+PREFS="$WORK/preferences.plist"
+defaults export "$DOMAIN" "$PREFS" 2>/dev/null || PREFS=""
 restore() {
     pkill -f "$APP" 2>/dev/null || true
-    rm -rf "$WORK"
-    if [[ -n "$LAST_FOLDER" ]]; then
-        defaults write app.redlamp.mac lastFolder "$LAST_FOLDER"
-    else
-        defaults delete app.redlamp.mac lastFolder 2>/dev/null || true
+    sleep 1
+    # Import merges, so clear the domain first: keys the run added, such as the last folder, go too.
+    defaults delete "$DOMAIN" 2>/dev/null || true
+    if [[ -n "$PREFS" ]]; then
+        defaults import "$DOMAIN" "$PREFS"
     fi
+    rm -rf "$WORK"
 }
 trap restore EXIT
+for key in themeFamily themeAppearance themeTint themeTintsNativeControls panelTransparency \
+    commandPaletteThemeFamily commandPaletteThemeAppearance commandPaletteThemeTint app.redlamp.evaluationModels; do
+    defaults delete "$DOMAIN" "$key" 2>/dev/null || true
+done
 
 # capture <shot> <folder> <script> [window title] [seconds to wait] [window size]
 capture() {
@@ -112,29 +135,37 @@ capture() {
 }
 
 if [[ -n "$HERO" ]]; then
-    capture hero "$PHOTOS" "select=$HERO,panel=basic+toneCurve"
-    capture panels "$PHOTOS" "select=$HERO,panel=basic"
-    capture shortcuts "$PHOTOS" "select=$HERO,action=showShortcuts"
+    hero="$(open_role "$HERO" hero)"
+    capture hero "$PHOTOS" "$hero,panel=basic+toneCurve"
+    capture panels "$PHOTOS" "$hero,panel=basic"
+    capture shortcuts "$PHOTOS" "$hero,action=showShortcuts"
     # Image 7 waits for a release with the command palette; builds without it capture the editor.
-    capture palette "$PHOTOS" "select=$HERO,action=commandPalette"
+    capture palette "$PHOTOS" "$hero,action=commandPalette"
 fi
-# The overlay is never red in the stills: the glow is each image's one red light.
+# Masks show as Image on Black, or in green: never the default red, since the glow is each
+# image's one red light.
 if [[ -n "$PORTRAIT" ]]; then
-    capture masks-people "$PHOTOS" "select=$PORTRAIT,mask=people,action=maskOverlayColor" "" 18
-    capture masks-face "$PHOTOS" "select=$PORTRAIT,mask=people:faceSkin,action=maskOverlayColor" "" 18
+    portrait="$(open_role "$PORTRAIT" portrait)"
+    capture masks-people "$PHOTOS" "$portrait,mask=people,overlay=imageOnBlack,action=maskPins" "" 18
+    capture masks-face "$PHOTOS" "$portrait,mask=people:faceSkin,action=maskOverlayColor,action=maskPins" "" 18
+fi
+if [[ -n "$SUBJECT" ]]; then
+    capture masks-subject "$PHOTOS" "$(open_role "$SUBJECT" subject),mask=subject,overlay=imageOnBlack,action=maskPins" "" 18
 fi
 if [[ -n "$LANDSCAPE" ]]; then
-    capture masks-sky "$PHOTOS" "select=$LANDSCAPE,mask=sky,action=maskOverlayColor" "" 18
+    capture masks-sky "$PHOTOS" "$(open_role "$LANDSCAPE" landscape),mask=sky,action=maskOverlayColor,action=maskPins" "" 18
 fi
 if [[ -n "$NIGHT" ]]; then
-    capture film-before "$PHOTOS" "select=$NIGHT"
-    capture film-after "$PHOTOS" "select=$NIGHT,recipe=stock/cinestill-800t,panel=effects"
-    capture film-looks "$PHOTOS" "select=$NIGHT,recipe=stock/cinestill-800t,window=film-looks" "Film Looks" 14
+    night="$(open_role "$NIGHT" night)"
+    capture film-before "$PHOTOS" "$night"
+    capture film-after "$PHOTOS" "$night,recipe=stock/cinestill-800t,panel=effects"
+    capture film-looks "$PHOTOS" "$night,recipe=stock/cinestill-800t,window=film-looks" "Film Looks" 14
 fi
 if [[ -n "$FUJIFILM" ]]; then
-    capture fujifilm "$PHOTOS" "select=$FUJIFILM,panel=effects,recipe=camera/chrome-street"
+    fujifilm="$(open_role "$FUJIFILM" fujifilm)"
+    capture fujifilm "$PHOTOS" "$fujifilm,panel=effects,recipe=camera/chrome-street"
     # Tall enough for the Effects panel's camera-recipe controls, which sit below its effects.
-    capture fujifilm-effects "$PHOTOS" "select=$FUJIFILM,panel=effects,recipe=camera/chrome-street" "" "$WAIT" 1600x1440
+    capture fujifilm-effects "$PHOTOS" "$fujifilm,panel=effects,recipe=camera/chrome-street" "" "$WAIT" 1600x1440
 fi
 if [[ -n "$STACK" ]]; then
     # The banner only shows while the frames have no stack document.
