@@ -46,7 +46,7 @@ struct DevelopParams {
     float4 recipe;            // x color chrome, y chrome FX blue (0...1), z dynamic-range highlight compression
     float4 haze;              // xyz airlight (pyramid camera RGB), w Dehaze (slider / 100); needs the haze map
     float4 glow;              // x halation amount, y halation radius, z bloom amount, w bloom radius (radii as fractions of the long side)
-    float4 grain2;            // x colour grain (0 monochrome, 1 independent per layer)
+    float4 grain2;            // x colour grain (0 monochrome, 1 independent per layer), y 1 = process 2 grain
 };
 
 // Noise reduction over one work area of the pyramid.

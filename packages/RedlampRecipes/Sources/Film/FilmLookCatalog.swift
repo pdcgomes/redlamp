@@ -13,8 +13,15 @@ public struct FilmLookDefinition: Sendable, Hashable {
     public var icon: FilmIcon
     public var isMonochrome: Bool
     public var film: String
+    /// One of the film's datasheet variants, such as a development time.
+    public var filmVariant: [String: String]?
     /// The print stock; nil scans a negative or projects a slide.
     public var print: String?
+    /// One of the print's datasheet variants, such as a paper grade.
+    public var printVariant: [String: String]?
+    public var process: FilmProcess
+    /// Published looks never change: a new design is a new version.
+    public var version: Int
     public var parameters: FilmLookParameters
     /// Grain, halation and bloom, as Effects panel values.
     public var effects: [ParameterID: Double]
@@ -49,7 +56,8 @@ public enum FilmLookCatalog {
                 text: .init(0.28, 0.16, 0.07),
                 label: "400",
             ),
-            film: "kodak-portra-400", scanner: .frontier,
+            // 2: dyes fitted to the stock's own published neutral rather than borrowed.
+            film: "kodak-portra-400", version: 2, scanner: .frontier,
             grain: (20, 30, 35), halation: (8, 40),
         ),
         look(
@@ -61,7 +69,8 @@ public enum FilmLookCatalog {
                 text: .init(0.22, 0.1, 0.05),
                 label: "100",
             ),
-            film: "kodak-ektar-100", scanner: .frontier,
+            // 2: dyes fitted to the stock's own published neutral rather than borrowed.
+            film: "kodak-ektar-100", version: 2, scanner: .frontier,
             grain: (8, 22, 30), halation: (6, 40),
         ),
         look(
@@ -73,7 +82,8 @@ public enum FilmLookCatalog {
                 text: .init(1, 0.95, 0.85),
                 label: "200",
             ),
-            film: "kodak-gold-200", scanner: .frontier,
+            // 2: dyes fitted to the stock's own published neutral rather than borrowed.
+            film: "kodak-gold-200", version: 2, scanner: .frontier,
             grain: (23, 30, 40), halation: (9, 40),
         ),
         // Superia's rms granularity is on Fujifilm's negative scale, which doesn't compare with
@@ -87,7 +97,8 @@ public enum FilmLookCatalog {
                 text: .init(0.05, 0.36, 0.2),
                 label: "400",
             ),
-            film: "fuji-superia-xtra-400", scanner: .frontier,
+            // 2: dyes fitted to the stock's own published neutral rather than borrowed.
+            film: "fuji-superia-xtra-400", version: 2, scanner: .frontier,
             grain: (24, 32, 45), halation: (8, 40),
         ),
         // Vision3 publishes granularity only as curves; 500T is a fast stock, set a little
@@ -184,6 +195,101 @@ public enum FilmLookCatalog {
             film: "kodak-tri-x-400", print: "ilford-multigrade-rc", flare: 0.004,
             grain: (34, 36, 0), roughness: 65, halation: (5, 40),
         ),
+        // Variants and processes, from the same datasheets.
+        look(
+            "portra-400-overexposed", "Portra 400 · +2", "Portra overexposed two stops: airy, pastel and soft",
+            maker: "Kodak", format: "Colour negative · ISO 400 rated 100", icon: FilmIcon(
+                .canister,
+                body: .init(0.96, 0.93, 0.85),
+                band: .init(0.93, 0.6, 0.16),
+                text: .init(0.28, 0.16, 0.07),
+                label: "+2",
+            ),
+            film: "kodak-portra-400", scanner: .frontier, exposure: 2,
+            grain: (16, 28, 35), halation: (8, 40),
+        ),
+        // Push processing: rated two stops fast and developed longer (the datasheet's longest
+        // D-76 time), so shadows thin out and contrast and grain rise.
+        look(
+            "tri-x-1600", "Tri-X 400 · Pushed to 1600", "Tri-X rated at 1600 and push-processed: gritty and hard",
+            maker: "Kodak", format: "Black and white negative · ISO 400 pushed to 1600", icon: FilmIcon(
+                .canister,
+                body: .init(0.98, 0.8, 0.1),
+                band: .init(0.08, 0.08, 0.08),
+                text: .init(0.98, 0.8, 0.1),
+                label: "1600",
+                leader: .init(0.3, 0.3, 0.3),
+            ),
+            monochrome: true,
+            film: "kodak-tri-x-400", filmVariant: ["format": "135", "developer": "D-76", "timeMin": "12"],
+            scanContrast: 1.1, exposure: -2,
+            grain: (46, 44, 0), roughness: 70, halation: (6, 40),
+        ),
+        look(
+            "tri-x-multigrade-soft", "Tri-X · Soft Print", "Tri-X printed on Multigrade paper at grade 1: gentle and open",
+            maker: "Kodak · Ilford", format: "Black and white print · grade 1", icon: FilmIcon(
+                .paper,
+                body: .init(0.97, 0.96, 0.93),
+                band: .init(0.5, 0.5, 0.5),
+                text: .init(0.15, 0.15, 0.15),
+                label: "G1",
+            ),
+            monochrome: true,
+            film: "kodak-tri-x-400", print: "ilford-multigrade-rc", printVariant: ["filter": "1"], flare: 0.004,
+            grain: (34, 36, 0), roughness: 65, halation: (5, 40),
+        ),
+        look(
+            "tri-x-multigrade-hard", "Tri-X · Hard Print", "Tri-X printed on Multigrade paper at grade 4: deep blacks, bright whites",
+            maker: "Kodak · Ilford", format: "Black and white print · grade 4", icon: FilmIcon(
+                .paper,
+                body: .init(0.97, 0.96, 0.93),
+                band: .init(0.5, 0.5, 0.5),
+                text: .init(0.15, 0.15, 0.15),
+                label: "G4",
+            ),
+            monochrome: true,
+            film: "kodak-tri-x-400", print: "ilford-multigrade-rc", printVariant: ["filter": "4"], flare: 0.004,
+            grain: (34, 36, 0), roughness: 65, halation: (5, 40),
+        ),
+        look(
+            "vision3-2383-bleach-bypass", "Vision3 500T · 2383 Bleach Bypass",
+            "Cinema print with its silver left in: desaturated, dense and hard",
+            maker: "Kodak", format: "Cinema negative on print film, bleach bypass · ISO 500", icon: FilmIcon(
+                .reel,
+                body: .init(0.2, 0.21, 0.24),
+                band: .init(0.7, 0.71, 0.72),
+                text: .init(0.1, 0.1, 0.1),
+                label: "BB",
+            ),
+            film: "kodak-vision3-500t", print: "kodak-2383", process: .bleachBypass, flare: 0.004,
+            grain: (26, 32, 30), halation: (12, 45), bloom: (6, 50),
+        ),
+        // Cross-processing keeps most of the stock's crossovers: the scanner can't neutralise a
+        // slide emulsion developed as a negative.
+        look(
+            "velvia-50-cross", "Velvia 50 · Cross-Processed", "Velvia developed as a negative: punchy, with wild colour shifts",
+            maker: "Fujifilm", format: "Slide film in C-41 · ISO 50", icon: FilmIcon(
+                .slide,
+                body: .init(0.94, 0.93, 0.96),
+                band: .init(0.55, 0.75, 0.2),
+                text: .init(0.36, 0.12, 0.5),
+                label: "XPRO",
+            ),
+            film: "fuji-velvia-50", process: .crossProcessed, scanNeutral: 0.75,
+            grain: (12, 20, 35), halation: (5, 35),
+        ),
+        look(
+            "provia-100f-cross", "Provia 100F · Cross-Processed", "Provia developed as a negative: contrasty, with cool shadows",
+            maker: "Fujifilm", format: "Slide film in C-41 · ISO 100", icon: FilmIcon(
+                .slide,
+                body: .init(0.95, 0.95, 0.93),
+                band: .init(0.2, 0.62, 0.55),
+                text: .init(0.08, 0.4, 0.48),
+                label: "XPRO",
+            ),
+            film: "fuji-provia-100f", process: .crossProcessed, scanNeutral: 0.55,
+            grain: (11, 20, 35), halation: (5, 35),
+        ),
     ]
 
     public static func look(_ id: String) -> FilmLookDefinition? {
@@ -199,17 +305,16 @@ public enum FilmLookCatalog {
     /// table isn't bundled is left out.
     public static var bundledRecipes: [Recipe] {
         looks.compactMap { look in
-            guard let package = BuiltInBaseLooks.package(id: look.baseLookID, version: bundledVersion)
+            guard let package = BuiltInBaseLooks.package(id: look.baseLookID, version: look.version)
             else { return nil }
             return BuiltInRecipes.make(
                 "stock/\(look.id)", look.name, group: "Film Stocks", summary: look.summary, tags: ["film"],
                 values: look.effects, treatment: look.isMonochrome ? .blackAndWhite : nil, baseLook: package.reference,
+                // Cross-processing shifts skin by design.
+                lintWaivers: look.process == .crossProcessed ? ["skin-hue"] : [], version: look.version,
             )
         }
     }
-
-    /// The bundled tables' version. Published looks never change: a new design is a new version.
-    public static let bundledVersion = 1
 
     /// The table size the bundled looks ship at (0.5 EV a step across the scene range).
     public static let bundledTableSize = 33
@@ -223,9 +328,15 @@ public enum FilmLookCatalog {
         icon: FilmIcon,
         monochrome: Bool = false,
         film: String,
+        version: Int = 1,
+        filmVariant: [String: String]? = nil,
         print: String? = nil,
+        printVariant: [String: String]? = nil,
+        process: FilmProcess = .standard,
         scanner: ScannerProfile = .neutral,
         scanContrast: Double = 1,
+        scanNeutral: Double? = nil,
+        exposure: Double = 0,
         flare: Double = 0,
         displayGrey: Double? = nil,
         grain: (amount: Double, size: Double, color: Double),
@@ -236,6 +347,8 @@ public enum FilmLookCatalog {
         var parameters = FilmLookParameters()
         parameters.scanner = scanner
         parameters.scanContrast = scanContrast
+        parameters.scanNeutral = scanNeutral ?? parameters.scanNeutral
+        parameters.exposure = exposure
         parameters.flare = flare
         parameters.displayGrey = displayGrey ?? parameters.displayGrey
         var effects: [ParameterID: Double] = [
@@ -248,20 +361,25 @@ public enum FilmLookCatalog {
         }
         return FilmLookDefinition(
             id: id, name: name, summary: summary, maker: maker, format: format, icon: icon, isMonochrome: monochrome,
-            film: film, print: print, parameters: parameters, effects: effects,
+            film: film, filmVariant: filmVariant, print: print, printVariant: printVariant, process: process,
+            version: version, parameters: parameters, effects: effects,
         )
     }
 }
 
 public extension FilmLooks {
+    static func table(for look: FilmLookDefinition, size: Int, data directory: URL?) throws -> LookTable {
+        try table(
+            film: look.film, filmVariant: look.filmVariant, print: look.print, printVariant: look.printVariant,
+            process: look.process, parameters: look.parameters, size: size, data: directory,
+        )
+    }
+
     /// The look's bundled Base Look package, built from the datasheets.
     static func bundledPackage(for look: FilmLookDefinition, data directory: URL?) throws -> BaseLookPackage {
-        let table = try table(
-            film: look.film, print: look.print, parameters: look.parameters, size: FilmLookCatalog.bundledTableSize,
-            data: directory,
-        )
+        let table = try table(for: look, size: FilmLookCatalog.bundledTableSize, data: directory)
         return BaseLookPackage(
-            id: look.baseLookID, version: FilmLookCatalog.bundledVersion, name: look.name,
+            id: look.baseLookID, version: look.version, name: look.name,
             summary: "\(look.summary). Built from \(look.maker)'s published datasheet.", parameters: .identity,
             table: table,
         )
@@ -271,9 +389,7 @@ public extension FilmLooks {
     static func recipe(
         for look: FilmLookDefinition, size: Int = 33, data directory: URL?,
     ) throws -> Recipe {
-        let table = try table(
-            film: look.film, print: look.print, parameters: look.parameters, size: size, data: directory,
-        )
+        let table = try table(for: look, size: size, data: directory)
         var recipe = LookTableImport.recipe(for: table, name: look.name, id: "local/film/\(look.id)")
         recipe.group = "Film"
         recipe.summary = look.summary

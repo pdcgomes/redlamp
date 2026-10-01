@@ -1,4 +1,5 @@
 import Foundation
+import simd
 
 /// Reads the digitised datasheets in `research/film-data/` (see its README for the schema).
 extension FilmStock {
@@ -17,8 +18,12 @@ extension FilmStock {
     private static let statusM = [645.0, 540, 440]
     private static let statusA = [615.0, 540, 440]
 
-    /// Loads a stock. `dyesFrom` supplies dye curves for datasheets that don't publish them.
-    static func load(_ url: URL, dyesFrom fallback: FilmStock? = nil) throws -> FilmStock {
+    /// Loads a stock. `dyesFrom` supplies dye shapes for datasheets that don't publish dyes.
+    /// `variant` picks one of a datasheet's alternative characteristic curves (a development
+    /// time, a paper grade) by its fields; a string field matches if it contains the value.
+    static func load(
+        _ url: URL, dyesFrom fallback: FilmStock? = nil, variant: [String: String]? = nil,
+    ) throws -> FilmStock {
         let json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any] ?? [:]
         let id = json["id"] as? String ?? url.deletingPathExtension().lastPathComponent
         let kind: Kind = switch json["type"] as? String {
@@ -29,9 +34,21 @@ extension FilmStock {
         default: .negative
         }
         let channels = kind.isMonochrome ? ["neutral"] : ["red", "green", "blue"]
-        guard let characteristic = json["characteristicCurves"] as? [String: Any],
-              let logH = numbers(characteristic["logExposure"])
-        else { throw DataError.missing(id, "characteristic curves") }
+        guard var characteristic = json["characteristicCurves"] as? [String: Any] else {
+            throw DataError.missing(id, "characteristic curves")
+        }
+        if let variant {
+            let variants = characteristic["variants"] as? [[String: Any]] ?? []
+            guard let match = variants.first(where: { candidate in
+                variant.allSatisfy { key, value in
+                    candidate[key].map { "\($0)" == value || ("\($0)").contains(value) } ?? false
+                }
+            }) else { throw DataError.missing(id, "variant \(variant)") }
+            characteristic.merge(match) { $1 }
+        }
+        guard let logH = numbers(characteristic["logExposure"]) else {
+            throw DataError.missing(id, "characteristic curves")
+        }
 
         var curves: [SampledCurve] = []
         for channel in channels {
@@ -74,6 +91,8 @@ extension FilmStock {
             dyes = [.constant(1)]
         } else if let c = dye("cyan"), let m = dye("magenta"), let y = dye("yellow") {
             dyes = [c, m, y]
+        } else if let fallback, fallback.dyes.count == 3, let neutral = dye("midscaleNeutral") {
+            dyes = fitDyes(templates: fallback.dyes, neutral: neutral, minimum: dye("minimum"))
         } else if let fallback, fallback.dyes.count == 3 {
             dyes = fallback.dyes
         } else {
@@ -109,6 +128,86 @@ extension FilmStock {
         )
         stock.referenceLogExposure = characteristic["logHRef"] as? Double
         return stock
+    }
+
+    /// The slide film developed in C-41 as a negative ("cross-processed"). Each layer's curve
+    /// is mirrored, so density rises with exposure, at `contrast` of the slide's (C-41 takes a
+    /// slide emulsion to about gamma 1). There is no orange mask, so the dyes' crosstalk stays.
+    /// An approximation: E-6 datasheets don't publish C-41 curves.
+    func crossProcessed(contrast: Double = 0.55) -> FilmStock {
+        var stock = self
+        stock.id = id + "+c41"
+        stock.kind = .negative
+        stock.curves = curves.map { curve in
+            SampledCurve(x: curve.x, y: curve.y.map { curve.minimum + contrast * (curve.maximum - $0) })
+        }
+        stock.referenceLogExposure = nil
+        return stock
+    }
+
+    /// Dyes for a stock that publishes only a mid-scale neutral: another stock's dye shapes,
+    /// each moved along the spectrum, widened or narrowed and scaled until together they make
+    /// this stock's own neutral (less its D-min). Peak-normalised.
+    static func fitDyes(templates: [Spectrum], neutral: Spectrum, minimum: Spectrum?) -> [Spectrum] {
+        let floor = minimum ?? .constant(neutral.values.min() ?? 0)
+        let target = zip(neutral.values, floor.values).map { max($0 - $1, 0) }
+        let peaks = templates.map { template in
+            Spectrum.wavelengths[template.values.indices.max { template.values[$0] < template.values[$1] } ?? 0]
+        }
+        func sample(_ template: Spectrum, at nm: Double) -> Double {
+            let position = (nm - Spectrum.wavelengths[0]) / Spectrum.step
+            guard position >= 0, position <= Double(Spectrum.count - 1) else { return 0 }
+            let index = min(Int(position), Spectrum.count - 2)
+            let t = position - Double(index)
+            return template.values[index] * (1 - t) + template.values[index + 1] * t
+        }
+        func shaped(_ i: Int, shift: Double, width: Double) -> [Double] {
+            Spectrum.wavelengths.map { nm in sample(templates[i], at: peaks[i] + (nm - peaks[i] - shift) / width) }
+        }
+        // Each dye's amount by least squares, given the shapes; the error of that fit.
+        func fit(_ shapes: [[Double]]) -> (amounts: SIMD3<Double>, error: Double) {
+            var normal = simd_double3x3()
+            var right = SIMD3<Double>()
+            for k in target.indices {
+                let v = SIMD3(shapes[0][k], shapes[1][k], shapes[2][k])
+                for a in 0 ..< 3 {
+                    for b in 0 ..< 3 {
+                        normal[b][a] += v[a] * v[b]
+                    }
+                    right[a] += v[a] * target[k]
+                }
+            }
+            let amounts = simd_max(normal.inverse * right, SIMD3(repeating: 0))
+            var error = 0.0
+            for k in target.indices {
+                let modelled = amounts.x * shapes[0][k] + amounts.y * shapes[1][k] + amounts.z * shapes[2][k]
+                error += (modelled - target[k]) * (modelled - target[k])
+            }
+            return (amounts, error)
+        }
+        var shifts = [0.0, 0, 0], widths = [1.0, 1, 1]
+        var shapes = (0 ..< 3).map { shaped($0, shift: 0, width: 1) }
+        for _ in 0 ..< 4 {
+            for i in 0 ..< 3 {
+                var best = (fit(shapes).error, shifts[i], widths[i])
+                for shift in stride(from: -30.0, through: 30, by: 2) {
+                    for width in stride(from: 0.8, through: 1.3, by: 0.05) {
+                        var trial = shapes
+                        trial[i] = shaped(i, shift: shift, width: width)
+                        let error = fit(trial).error
+                        if error < best.0 {
+                            best = (error, shift, width)
+                        }
+                    }
+                }
+                (shifts[i], widths[i]) = (best.1, best.2)
+                shapes[i] = shaped(i, shift: shifts[i], width: widths[i])
+            }
+        }
+        return shapes.map { values in
+            let peak = max(values.max() ?? 1, 1e-6)
+            return Spectrum(values: values.map { $0 / peak })
+        }
     }
 
     private static func numbers(_ value: Any?) -> [Double]? {

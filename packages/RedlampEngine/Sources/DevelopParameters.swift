@@ -135,7 +135,7 @@ enum DevelopParameters {
             Float(recipe[.grainRoughness] / 100),
             7,
         )
-        p.grain2 = SIMD4(Float(recipe[.grainColor] / 100), 0, 0, 0)
+        p.grain2 = SIMD4(Float(recipe[.grainColor] / 100), recipe.processVersion >= 2 ? 1 : 0, 0, 0)
         // Radii as fractions of the long side, so the glow is the same at any resolution: halation
         // about 0.2-2% (a 35 mm frame's 0.1-0.7 mm), bloom about 0.5-6%.
         p.glow = SIMD4(

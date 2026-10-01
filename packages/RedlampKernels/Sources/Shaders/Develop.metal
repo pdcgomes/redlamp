@@ -203,6 +203,19 @@ static inline float valueNoise(float2 p, uint seed) {
     return mix(mix(a, b, f.x), mix(cc, d, f.x), f.y);
 }
 
+// One channel of grain: a coarse and a fine octave of value noise, `size` full-resolution
+// pixels across. With a `footprint` (full-resolution pixels per output pixel, 0 at full
+// resolution or above) octaves finer than a pixel are sampled at the pixel and attenuated by
+// how many grains it averages.
+static inline float grainNoise(float2 position, float size, float footprint, float roughness, uint coarseSeed, uint fineSeed) {
+    float fineSize = size * 0.5f;
+    float coarse = (valueNoise(position / max(size, footprint), coarseSeed) - 0.5f)
+        * (footprint > 0.0f ? min(1.0f, size / footprint) : 1.0f);
+    float fine = (valueNoise(position / max(fineSize, footprint), fineSeed) - 0.5f)
+        * (footprint > 0.0f ? min(1.0f, fineSize / footprint) : 1.0f);
+    return mix(coarse, fine, roughness);
+}
+
 // MARK: - Glow
 
 // A wide, smooth blur with a long tail, as a point spread falls off: six half-octave levels
@@ -476,24 +489,32 @@ kernel void rl_develop(
         float2 fullSize = p.outputSize.z * p.outputSize.xy / p.region.zw;
         float2 fullPosition = p.region.xy * fullSize + float2(gid) * p.outputSize.z;
         float size = mix(0.6f, 3.5f, p.grain.y);
-        float coarse = valueNoise(fullPosition / size, uint(p.grain.w));
-        float fine = valueNoise(fullPosition / (size * 0.5f), uint(p.grain.w) + 17u);
-        float3 noise = mix(coarse, fine, p.grain.z * 0.6f) - 0.5f;
+        // Process 2 sizes grain to the frame: the same on a 24 MP photo (6000 pixels long), and
+        // proportionally larger or smaller on others, as film's grain is to its frame.
+        if (p.grain2.y > 0.5f) size *= max(fullSize.x, fullSize.y) / 6000.0f;
+        // Below full resolution each output pixel averages several grains, as downscaling an
+        // export does, so the preview shows the grain the export will have. Process 2's grain
+        // can be finer than a pixel, so it averages at full resolution too.
+        float footprint = p.grain2.y > 0.5f ? max(p.outputSize.z, 1.0f)
+            : (p.outputSize.z > 1.001f ? p.outputSize.z : 0.0f);
+        float roughness = p.grain.z * 0.6f;
+        uint seed = uint(p.grain.w);
+        float3 noise = grainNoise(fullPosition, size, footprint, roughness, seed, seed + 17u);
         // Colour grain: each dye layer has its own grains, so the noise decorrelates per channel.
         if (p.grain2.x > 0.0f) {
             float3 layers = float3(
-                mix(valueNoise(fullPosition / size, uint(p.grain.w) + 31u),
-                    valueNoise(fullPosition / (size * 0.5f), uint(p.grain.w) + 47u), p.grain.z * 0.6f),
-                mix(valueNoise(fullPosition / size, uint(p.grain.w) + 59u),
-                    valueNoise(fullPosition / (size * 0.5f), uint(p.grain.w) + 71u), p.grain.z * 0.6f),
-                mix(valueNoise(fullPosition / size, uint(p.grain.w) + 83u),
-                    valueNoise(fullPosition / (size * 0.5f), uint(p.grain.w) + 97u), p.grain.z * 0.6f)
-            ) - 0.5f;
+                grainNoise(fullPosition, size, footprint, roughness, seed + 31u, seed + 47u),
+                grainNoise(fullPosition, size, footprint, roughness, seed + 59u, seed + 71u),
+                grainNoise(fullPosition, size, footprint, roughness, seed + 83u, seed + 97u));
             noise = mix(noise, layers, p.grain2.x);
         }
         float L = dot(encoded, float3(0.2126f, 0.7152f, 0.0722f));
-        float midtoneWeight = 0.35f + 2.6f * L * (1.0f - L);
-        encoded += noise * p.grain.x * 0.16f * midtoneWeight;
+        // Process 2 follows film: grain shows most in the low midtones and shadows, where a
+        // negative is thin, and fades in the highlights; process 1 peaks evenly in the midtones.
+        float weight = p.grain2.y > 0.5f
+            ? 0.25f + 3.2f * pow(max(L, 0.0f), 0.75f) * pow(max(1.0f - L, 0.0f), 1.4f)
+            : 0.35f + 2.6f * L * (1.0f - L);
+        encoded += noise * p.grain.x * 0.16f * weight;
     }
 
     // Into the output gamut, sRGB-transfer encoded (sRGB and Display P3 share the curve).

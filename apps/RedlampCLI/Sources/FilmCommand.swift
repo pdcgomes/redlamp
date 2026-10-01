@@ -107,12 +107,14 @@ enum FilmCommand {
         let folder = Repository.root.appendingPathComponent("packages/RedlampRecipes/Resources/BaseLooks")
         for look in looks {
             let package = try FilmLooks.bundledPackage(for: look, data: data)
-            let url = folder.appendingPathComponent("stock-\(look.id).json")
+            let url = folder.appendingPathComponent(
+                look.version == 1 ? "stock-\(look.id).json" : "stock-\(look.id)@\(look.version).json",
+            )
             if let existing = try? RecipeFile.decoder.decode(BaseLookPackage.self, from: Data(contentsOf: url)),
                existing.version == package.version, existing.table?.sha256 != package.table?.sha256 {
                 throw CLIError(description: """
                 \(look.id): the look changed but its version didn't. Published looks never change; bump \
-                FilmLookCatalog.bundledVersion instead.
+                the look's version in FilmLookCatalog instead.
                 """)
             }
             try RecipeFile.encoder.encode(package).write(to: url, options: .atomic)

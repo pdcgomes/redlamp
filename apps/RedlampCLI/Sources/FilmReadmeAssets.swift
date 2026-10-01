@@ -28,7 +28,7 @@ enum FilmReadmeAssets {
             try await originals.append(renderer.render(nil, image: photo, maxLongEdge: 1200))
         }
         for (look, recipe) in recipes {
-            if let icon = look.icon.image(pixels: 128) {
+            if let icon = look.icon.image(pixels: 256) {
                 try ImageFile.write(icon, to: folder.appendingPathComponent("icon-\(look.id).png"))
             }
             var rendered: [CGImage] = []

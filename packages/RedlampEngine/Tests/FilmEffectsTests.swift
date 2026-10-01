@@ -106,9 +106,82 @@ struct FilmEffectsTests {
         #expect(abs(glowing.y - plain.y) < 6, "brightness \(plain) → \(glowing)")
     }
 
+    /// The standard deviation of the green channel, in 8-bit levels.
+    static func noise(_ pixels: [UInt8]) -> Double {
+        let values = stride(from: 1, to: pixels.count, by: 4).map { Double(pixels[$0]) }
+        let mean = values.reduce(0, +) / Double(values.count)
+        return (values.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(values.count)).squareRoot()
+    }
+
+    /// A flat grey frame `size` pixels square.
+    static func flat(_ value: Double, size: Int) throws -> URL {
+        var words = [UInt16](repeating: 65535, count: size * size * 4)
+        for i in 0 ..< size * size {
+            for c in 0 ..< 3 {
+                words[i * 4 + c] = UInt16(value * 65535)
+            }
+        }
+        let data = words.withUnsafeBufferPointer { Data(buffer: $0) }
+        let image = try #require(CGImage(
+            width: size, height: size, bitsPerComponent: 16, bitsPerPixel: 64, bytesPerRow: size * 8,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue | CGImageByteOrderInfo
+                .order16Little.rawValue),
+            provider: CGDataProvider(data: data as CFData)!, decode: nil, shouldInterpolate: false,
+            intent: .defaultIntent,
+        ))
+        let url = FileManager.default.temporaryDirectory.appending(path: "redlamp-flat-\(UUID().uuidString).png")
+        let destination = try #require(CGImageDestinationCreateWithURL(
+            url as CFURL,
+            UTType.png.identifier as CFString,
+            1,
+            nil,
+        ))
+        CGImageDestinationAddImage(destination, image, nil)
+        #expect(CGImageDestinationFinalize(destination))
+        return url
+    }
+
+    @Test(.enabled(if: BaseLookTests.canRender))
+    func `a downscaled preview shows the grain a downscaled export has`() async throws {
+        let url = try Self.flat(0.45, size: 2048)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let engine = try RedlampEngine()
+        _ = try await engine.open(url)
+        var recipe = EditRecipe()
+        recipe[.grainAmount] = 80
+        recipe[.grainSize] = 100
+        func render(_ purpose: StillPurpose) async throws -> Double {
+            let image = try await engine.renderStill(StillRequest(recipe: recipe, maxLongEdge: 256, purpose: purpose))
+            return Self.noise(BaseLookTests.pixels(image))
+        }
+        let preview = try await render(.preview)
+        let export = try await render(.export)
+        #expect(export > 0.2, "the export has no grain: \(export)")
+        #expect(abs(preview - export) < 0.5 * export, "preview \(preview) against export \(export)")
+    }
+
+    @Test(.enabled(if: BaseLookTests.canRender))
+    func `process 2 grain shows most in the shadows; process 1's is even`() async throws {
+        func noise(_ value: Double, process: Int) async throws -> Double {
+            let url = try Self.flat(value, size: 256)
+            defer { try? FileManager.default.removeItem(at: url) }
+            let engine = try RedlampEngine()
+            _ = try await engine.open(url)
+            var recipe = EditRecipe()
+            recipe.processVersion = process
+            recipe[.grainAmount] = 60
+            return try await Self.noise(BaseLookTests.pixels(engine.renderStill(StillRequest(recipe: recipe))))
+        }
+        let film = try await noise(0.25, process: 2) / noise(0.85, process: 2)
+        let even = try await noise(0.25, process: 1) / noise(0.85, process: 1)
+        #expect(film > 1.5 * even, "shadow to highlight grain: process 2 \(film), process 1 \(even)")
+    }
+
     @Test(.enabled(if: BaseLookTests.canRender))
     func `colour grain differs between the layers; monochrome grain doesn't`() async throws {
-        let url = try Self.image(background: 0.45, radius: 0)
+        // Large enough that frame-sized grain is bigger than a pixel.
+        let url = try Self.flat(0.45, size: 1536)
         defer { try? FileManager.default.removeItem(at: url) }
         func spread(_ pixels: [UInt8]) -> Double {
             var total = 0
@@ -117,8 +190,8 @@ struct FilmEffectsTests {
             }
             return Double(total) / Double(pixels.count / 4)
         }
-        let mono = try await spread(Self.render(url, [.grainAmount: 60]))
-        let color = try await spread(Self.render(url, [.grainAmount: 60, .grainColor: 100]))
+        let mono = try await spread(Self.render(url, [.grainAmount: 60, .grainSize: 100]))
+        let color = try await spread(Self.render(url, [.grainAmount: 60, .grainSize: 100, .grainColor: 100]))
         #expect(mono < 1.5, "monochrome grain spread \(mono)")
         #expect(color > 3 * max(mono, 0.5), "colour grain spread \(color) against \(mono)")
     }

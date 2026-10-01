@@ -15,7 +15,7 @@ Redlamp is built from scratch in Swift and Metal for Apple Silicon. It focuses o
 
 ![Redlamp editing a Nikon Z 6 raw file](docs/images/editor.png)
 
-> **Status: pre-alpha, iteration 2 (macOS).** The core RAW pipeline and the Develop workspace work today: Basic (with Texture, Clarity and Dehaze), Tone Curve, Color Mixer, Color Grading, Detail (noise reduction and sharpening) and Effects, **masking with linear and radial gradients** and local adjustments, and **Recipes**, Redlamp's presets, profiles and LUTs in one, with film looks measured from cameras' own renderings and **[film simulations](#film-simulations)** of 11 film stocks built from the manufacturers' datasheets. Crop, healing, brush and AI masks, lens corrections, focus stacking, and the iPad and iPhone apps are next. See [Where we are](#where-we-are) and the [Roadmap](#roadmap).
+> **Status: pre-alpha, iteration 2 (macOS).** The core RAW pipeline and the Develop workspace work today: Basic (with Texture, Clarity and Dehaze), Tone Curve, Color Mixer, Color Grading, Detail (noise reduction and sharpening) and Effects, **masking with linear and radial gradients** and local adjustments, and **Recipes**, Redlamp's presets, profiles and LUTs in one, with film looks measured from cameras' own renderings and **[film simulations](#film-simulations)** of 18 film looks from 13 stocks, built from the manufacturers' datasheets. Crop, healing, brush and AI masks, lens corrections, focus stacking, and the iPad and iPhone apps are next. See [Where we are](#where-we-are) and the [Roadmap](#roadmap).
 >
 > This README is the project's primary status page and is kept up to date as work lands. *Last updated: 1 October 2026.*
 
@@ -141,7 +141,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
   | Soft Slide v2 | Astia | 5 photos, 3 bodies, provisional | 4.57 (12.84) |
 
   The others are hand-designed until there's data for them ([look development](docs/recipes/look-development.md#measured-base-looks-the-profiler)). Looks keep Redlamp's own names.
-- [x] **Film simulations** of 11 stocks, built physically from the manufacturers' datasheets, with halation, bloom and colour grain, a **Film Looks** window and film icons in the Base Look menu ([details](#film-simulations)).
+- [x] **Film simulations:** 18 looks from 13 stocks, built physically from the manufacturers' datasheets, including pushed, overexposed, bleach-bypass and cross-processed variants, with halation, bloom and film grain, a **Film Looks** window and film icons in the Base Look menu ([details](#film-simulations)).
 - [x] **Look-development tools:** lint (neutral axis, skin hue, monotonic lightness, banding, clipping) on a synthetic chart, golden renders per recipe version, style fingerprints and a fitter, and the **Recipe Lab** in the [component harness](#component-harness).
 - [x] **An agent recipe studio** ([docs](docs/recipes/agent-studio.md)): curator, colorist and critic agents work through `redlamp mcp` on briefs drawn from public-domain references. People approve the briefs and pick the winners in the Recipe Lab, and the critics are only trusted after they agree with human picks on held-out pairs.
 
@@ -187,7 +187,6 @@ With both side panels in AppKit, most of what remains is Core Animation committi
 - Non-DNG raws use a single-illuminant Adobe-derived matrix (LibRaw's). DNGs interpolate their two calibrations by white balance, but the Temperature and Tint model still converts with one matrix, and DCP profiles (HueSatMap, LookTable) come later in Phase 2.
 - Masks support linear and radial gradients only. Brush, range, and AI masks come in Phases 2 and 3.
 - Local Whites and Blacks are approximated with tonal-region gains.
-- Grain is drawn at display pixels, so the fitted preview shows it about four times stronger than a downscaled export does (tracked with film grain v2, TON-19).
 - The app is not sandboxed yet (required later for the Mac App Store). iPad and iPhone come in Phase 5.
 
 **Fixed in iteration 2:**
@@ -208,6 +207,55 @@ The [film model](docs/plans/2026-09-30-film-looks-design.md) follows the scene's
 5. The result is seen through the colour-matching functions of human vision.
 
 Each look ships as a scene-referred Base Look. It takes the place of Redlamp's tone curve, so the film's own toe, shoulder and colour crossovers reach the photo. Each look also comes with the film's **grain, halation and bloom** in the Effects panel. Grain follows each datasheet's published granularity, and halation is strongest on CineStill, which has no anti-halation layer.
+<table>
+  <tr>
+    <td align="center" width="16%"><a href="#portra-400"><img src="docs/images/film/icon-portra-400.png" width="72" alt="Portra 400 icon"></a><br><b>Portra 400</b><br><sub>Colour negative</sub></td>
+    <td align="center" width="16%"><a href="#ektar-100"><img src="docs/images/film/icon-ektar-100.png" width="72" alt="Ektar 100 icon"></a><br><b>Ektar 100</b><br><sub>Colour negative</sub></td>
+    <td align="center" width="16%"><a href="#gold-200"><img src="docs/images/film/icon-gold-200.png" width="72" alt="Gold 200 icon"></a><br><b>Gold 200</b><br><sub>Colour negative</sub></td>
+    <td align="center" width="16%"><a href="#superia-400"><img src="docs/images/film/icon-superia-400.png" width="72" alt="Superia 400 icon"></a><br><b>Superia 400</b><br><sub>Colour negative</sub></td>
+    <td align="center" width="16%"><a href="#portra-400-overexposed"><img src="docs/images/film/icon-portra-400-overexposed.png" width="72" alt="Portra 400 · +2 icon"></a><br><b>Portra 400 · +2</b><br><sub>Colour negative</sub></td>
+    <td align="center" width="16%"><a href="#cinestill-800t"><img src="docs/images/film/icon-cinestill-800t.png" width="72" alt="CineStill 800T icon"></a><br><b>CineStill 800T</b><br><sub>Tungsten negative</sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="16%"><a href="#vision3-500t-2383"><img src="docs/images/film/icon-vision3-500t-2383.png" width="72" alt="Vision3 500T · 2383 icon"></a><br><b>Vision3 500T · 2383</b><br><sub>Cinema print</sub></td>
+    <td align="center" width="16%"><a href="#vision3-2383-bleach-bypass"><img src="docs/images/film/icon-vision3-2383-bleach-bypass.png" width="72" alt="2383 Bleach Bypass icon"></a><br><b>2383 Bleach Bypass</b><br><sub>Cinema print</sub></td>
+    <td align="center" width="16%"><a href="#provia-100f"><img src="docs/images/film/icon-provia-100f.png" width="72" alt="Provia 100F icon"></a><br><b>Provia 100F</b><br><sub>Slide</sub></td>
+    <td align="center" width="16%"><a href="#velvia-50"><img src="docs/images/film/icon-velvia-50.png" width="72" alt="Velvia 50 icon"></a><br><b>Velvia 50</b><br><sub>Slide</sub></td>
+    <td align="center" width="16%"><a href="#velvia-50-cross"><img src="docs/images/film/icon-velvia-50-cross.png" width="72" alt="Velvia 50 · Cross icon"></a><br><b>Velvia 50 · Cross</b><br><sub>Cross-processed slide</sub></td>
+    <td align="center" width="16%"><a href="#provia-100f-cross"><img src="docs/images/film/icon-provia-100f-cross.png" width="72" alt="Provia 100F · Cross icon"></a><br><b>Provia 100F · Cross</b><br><sub>Cross-processed slide</sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="16%"><a href="#tri-x-400"><img src="docs/images/film/icon-tri-x-400.png" width="72" alt="Tri-X 400 icon"></a><br><b>Tri-X 400</b><br><sub>Black and white</sub></td>
+    <td align="center" width="16%"><a href="#tri-x-1600"><img src="docs/images/film/icon-tri-x-1600.png" width="72" alt="Tri-X · 1600 icon"></a><br><b>Tri-X · 1600</b><br><sub>Black and white, pushed</sub></td>
+    <td align="center" width="16%"><a href="#hp5-plus"><img src="docs/images/film/icon-hp5-plus.png" width="72" alt="HP5 Plus icon"></a><br><b>HP5 Plus</b><br><sub>Black and white</sub></td>
+    <td align="center" width="16%"><a href="#tri-x-multigrade"><img src="docs/images/film/icon-tri-x-multigrade.png" width="72" alt="Darkroom Print icon"></a><br><b>Darkroom Print</b><br><sub>Grade 2 print</sub></td>
+    <td align="center" width="16%"><a href="#tri-x-multigrade-soft"><img src="docs/images/film/icon-tri-x-multigrade-soft.png" width="72" alt="Soft Print icon"></a><br><b>Soft Print</b><br><sub>Grade 1 print</sub></td>
+    <td align="center" width="16%"><a href="#tri-x-multigrade-hard"><img src="docs/images/film/icon-tri-x-multigrade-hard.png" width="72" alt="Hard Print icon"></a><br><b>Hard Print</b><br><sub>Grade 4 print</sub></td>
+  </tr>
+</table>
+
+### How the film engine works
+
+The datasheets drive an offline model that bakes each film into a Base Look table and its effects settings. Only those ship, and the GPU applies them while you edit:
+
+```mermaid
+flowchart LR
+    pdf["Makers' datasheets<br/>Kodak · Fujifilm · Ilford"] --> data["research/film-data<br/>curves · sensitivities · dyes · granularity"]
+    subgraph model["Film model (offline)"]
+        direction LR
+        spectrum["Scene colour<br/>to spectrum"] --> layers["Layer exposures<br/>spectral sensitivities"]
+        layers --> density["Dye density<br/>curves · interlayer · masking"]
+        density --> view["Print, scan<br/>or light box"]
+        view --> eye["Colour as seen<br/>CIE observer"]
+    end
+    data --> model
+    eye --> table["Base Look<br/>scene-referred 33³ table"]
+    data -- granularity --> effects["Grain · halation · bloom"]
+    table --> recipe["Bundled film recipe"]
+    effects --> recipe
+    recipe --> engine["Develop kernel (Metal)<br/>halation and bloom → film table → grain"]
+```
+
 
 ![The Film Looks window: the open photo in every film, with Portra 400 applied](docs/images/film-catalog.png)
 
@@ -242,6 +290,13 @@ Every look on the same photo:
 ### Examples
 
 Each example shows three CC0 photos from the [look-development set](docs/recipes/look-development.md#the-look-development-set): a landscape, flowers and a night street. The top row is Redlamp's default rendering, the bottom row the film look with its grain, halation and bloom.
+| <img src="docs/images/film/icon-portra-400-overexposed.png" width="32" alt=""> | [Portra 400 · +2](#portra-400-overexposed) | Kodak Portra 400 overexposed two stops (rated 100) | Scanned, Frontier-like | 16 / 8 |
+| <img src="docs/images/film/icon-tri-x-1600.png" width="32" alt=""> | [Tri-X 400 · Pushed to 1600](#tri-x-1600) | Kodak Tri-X rated at 1600, D-76 for 12 minutes | Scanned | 46 / 6 |
+| <img src="docs/images/film/icon-tri-x-multigrade-soft.png" width="32" alt=""> | [Tri-X · Soft Print](#tri-x-multigrade-soft) | Kodak Tri-X on Ilford Multigrade, grade 1 | Printed on paper | 34 / 5 |
+| <img src="docs/images/film/icon-tri-x-multigrade-hard.png" width="32" alt=""> | [Tri-X · Hard Print](#tri-x-multigrade-hard) | Kodak Tri-X on Ilford Multigrade, grade 4 | Printed on paper | 34 / 5 |
+| <img src="docs/images/film/icon-vision3-2383-bleach-bypass.png" width="32" alt=""> | [Vision3 500T · 2383 Bleach Bypass](#vision3-2383-bleach-bypass) | Kodak Vision3 500T on 2383, bleach bypass | Printed on 2383 and projected | 26 / 12, bloom 6 |
+| <img src="docs/images/film/icon-velvia-50-cross.png" width="32" alt=""> | [Velvia 50 · Cross-Processed](#velvia-50-cross) | Fujifilm Velvia 50 developed in C-41 | Scanned | 12 / 5 |
+| <img src="docs/images/film/icon-provia-100f-cross.png" width="32" alt=""> | [Provia 100F · Cross-Processed](#provia-100f-cross) | Fujifilm Provia 100F developed in C-41 | Scanned | 11 / 5 |
 
 <a id="portra-400"></a>
 
@@ -335,10 +390,75 @@ A darkroom print: deeper blacks and the paper's own contrast.
 
 - **The colour comes from the datasheets.** It follows each stock's own curves, sensitivities and dyes, and the stocks keep their published order of contrast and grain.
 - **A lab's scan or print timing shapes the rest.** Negatives are scanned by a modelled lab scanner calibrated on a grey scale. Its Frontier-like and Noritsu-like profiles are characterised from how labs describe the two scanners, not measured from them. The 2383 print is timed partway back to neutral, as a colourist would.
-- **Some data is borrowed or uncertain.** Portra, Ektar, Gold and Superia publish no individual dye curves and borrow Vision3's. The 2383 sensitivity curve is the least certain trace in the data.
-- **Grain doesn't yet vary with density** and is sized in pixels rather than relative to the frame (TON-19).
+- **Some data is fitted or uncertain.** Portra, Ektar, Gold and Superia publish no individual dye curves. Their dyes are Vision3's shapes, fitted until together they match the stock's own published mid-scale neutral. The 2383 sensitivity curve is the least certain trace in the data.
+- **Grain follows film** (process 2, TON-19). It's sized to the frame, so it looks the same on any camera's resolution, and it's strongest in the low midtones and shadows. The fitted preview shows the grain the export will have.
 
 Kodak, Portra, Ektar, Gold, Vision3, Tri-X, Fujifilm, Superia, Provia, Velvia, Ilford, HP5, Multigrade and CineStill are trademarks of their owners. Redlamp isn't affiliated with them: its looks are built from the published technical data.
+### Variants and processes
+
+The same datasheets also describe how a film behaves when it's exposed or processed differently, and the model follows them:
+- **Exposure.** A lab calibrates its scanner at box speed and prints each frame up or down until mid-grey is right. Overexposed highlights crowd onto the film's shoulder, and underexposed shadows block up at the film base.
+- **Push processing** uses the datasheet's own curves for longer development.
+- **Paper grades** use Ilford's published curve for each Multigrade filter.
+- **Bleach bypass** leaves the developed silver in with the dyes, as neutral density where dye formed.
+- **Cross-processing** develops a slide emulsion as a negative: its curves are mirrored and there's no orange mask. Slide datasheets don't publish C-41 curves, so this one is an approximation.
+
+<a id="portra-400-overexposed"></a>
+
+#### <img src="docs/images/film/icon-portra-400-overexposed.png" width="24" alt=""> Portra 400 · +2
+
+The popular overexposed Portra: two stops of extra exposure crowd the highlights onto the film's shoulder, for an airy, pastel, soft look.
+
+![Portra 400 · +2: the original above, the look below](docs/images/film/look-portra-400-overexposed.jpg)
+
+<a id="tri-x-1600"></a>
+
+#### <img src="docs/images/film/icon-tri-x-1600.png" width="24" alt=""> Tri-X 400 · Pushed to 1600
+
+Push processing: two stops underexposed and developed longer, using the datasheet's own longest D-76 curve. The shadows block up and grain and contrast rise.
+
+![Tri-X 400 · Pushed to 1600: the original above, the look below](docs/images/film/look-tri-x-1600.jpg)
+
+<a id="tri-x-multigrade-soft"></a>
+
+#### <img src="docs/images/film/icon-tri-x-multigrade-soft.png" width="24" alt=""> Tri-X · Soft Print
+
+A gentle, open darkroom print on a soft grade, using Ilford's published grade 1 curve.
+
+![Tri-X · Soft Print: the original above, the look below](docs/images/film/look-tri-x-multigrade-soft.jpg)
+
+<a id="tri-x-multigrade-hard"></a>
+
+#### <img src="docs/images/film/icon-tri-x-multigrade-hard.png" width="24" alt=""> Tri-X · Hard Print
+
+A hard grade: deep blacks and bright whites, using Ilford's published grade 4 curve.
+
+![Tri-X · Hard Print: the original above, the look below](docs/images/film/look-tri-x-multigrade-hard.jpg)
+
+<a id="vision3-2383-bleach-bypass"></a>
+
+#### <img src="docs/images/film/icon-vision3-2383-bleach-bypass.png" width="24" alt=""> Vision3 500T · 2383 Bleach Bypass
+
+The bleach-bypass print: the silver is left in with the dyes, so the image is desaturated, dense and hard, the look of many war films.
+
+![Vision3 500T · 2383 Bleach Bypass: the original above, the look below](docs/images/film/look-vision3-2383-bleach-bypass.jpg)
+
+<a id="velvia-50-cross"></a>
+
+#### <img src="docs/images/film/icon-velvia-50-cross.png" width="24" alt=""> Velvia 50 · Cross-Processed
+
+Slide film developed as a negative: punchy, with the colour shifts that a slide emulsion with no orange mask gives.
+
+![Velvia 50 · Cross-Processed: the original above, the look below](docs/images/film/look-velvia-50-cross.jpg)
+
+<a id="provia-100f-cross"></a>
+
+#### <img src="docs/images/film/icon-provia-100f-cross.png" width="24" alt=""> Provia 100F · Cross-Processed
+
+Provia cross-processed: contrasty, with cool green-cyan shadows.
+
+![Provia 100F · Cross-Processed: the original above, the look below](docs/images/film/look-provia-100f-cross.jpg)
+
 
 **Rebuilding them:** `redlamp recipe film --all --install --readme` builds every look from the datasheets, installs the tables the app bundles, and regenerates the icons and images on this page. Bundled looks are versioned and never change once published; a test fails if the datasheets or the model would build a different look under the same version.
 
@@ -651,7 +771,7 @@ Edits are saved as JSON next to the photo, in `IMG_1234.ARW.redlamp`. The file h
 
 Sidecars carry two version numbers:
 - The **format version** describes the file's syntax. Older formats are migrated silently when read.
-- The **process version** records the rendering behavior the edit was made with, like Lightroom's process versions. An edit keeps rendering the way it did when it was made; moving it to a newer process is always an explicit choice.
+- The **process version** records the rendering behavior the edit was made with, like Lightroom's process versions. An edit keeps rendering the way it did when it was made; moving it to a newer process is always an explicit choice. Process 2 (October 2026) sizes grain to the frame and makes it strongest in the shadows, as film's is; edits made before it keep process 1's grain.
 
 Settings a newer Redlamp wrote, but this version doesn't know, are kept and written back unchanged. A sidecar written with a newer format or process version is never overwritten or deleted, and sidecars are only rewritten when their content changes. Format 2 renamed `profile` to `baseLook`; format-1 sidecars still read.
 

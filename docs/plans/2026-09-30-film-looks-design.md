@@ -42,7 +42,15 @@ Offline, in Swift, generating Base Look tables:
    - has a colour matrix fitted on moderate colours;
    - has a scanner profile for its signature: Frontier-like (punchier, saturated, green-cyan shadows, warm highlights) or Noritsu-like (softer, near neutral). Both are characterised from how labs describe them, not measured.
 
-Datasheets come from `research/film-data/`. Portra, Ektar, Gold and Superia publish no individual dye curves and borrow Vision3's.
+Datasheets come from `research/film-data/`. Portra, Ektar, Gold and Superia publish no individual dye curves. Their dyes are Vision3's shapes, each shifted along the spectrum, widened or narrowed and scaled until together they match the stock's own mid-scale neutral less its D-min (`FilmStock.fitDyes`).
+
+**Variants and processes:**
+- *Exposure:* the scanner is calibrated at box speed and reads absolute density. Each frame is printed up or down by exposure until its mid-grey is right, with its black point where a normal frame's base prints. Overexposure crowds the shoulder; underexposure blocks the toe.
+- *Datasheet variants:* development times and paper grades, chosen by their fields.
+- *Bleach bypass* (`silverRetention`): retained silver adds neutral density, half the mean dye density, in the final stage.
+- *Cross-processing:* a slide emulsion in C-41, its curves mirrored at 0.55 of the slide's contrast, with no masking. This is an approximation, since E-6 datasheets publish no C-41 curves.
+
+Each look has its own version. A changed look installs as `stock-<id>@<version>.json` beside the old one, so pinned edits keep rendering.
 
 **The catalogue** (`FilmLookCatalog`) pairs each stock with its rendering, scanner, print timing and effects. That's 11 looks:
 - colour negatives: Portra 400, Ektar 100, Gold 200, Superia 400 and CineStill 800T;
@@ -65,6 +73,6 @@ Lint (neutral axis, monotonic lightness, banding, clipping) on every generated t
 
 1. Scene-referred Base Looks in the engine, and the film model on synthetic data. *Done.*
 2. Datasheet curves for the nine stocks, 2383 and a colour paper; masking; the first measured stocks. *Done:* 13 stocks, with masking, print timing and the lab scanner.
-3. Halation, bloom and grain v2; film-stock recipes that use them. *Done apart from density-dependent grain:* halation, bloom, colour grain and the 11-look catalogue.
+3. Halation, bloom and grain v2; film-stock recipes that use them. *Done:* halation, bloom, colour grain, process-2 grain (sized to the frame, by tone), and an 18-look catalogue, including the variants and processes below.
 4. The app capture kit and importer; the owner's first ten app looks.
 5. Mood looks with texture effects; everyday presets.

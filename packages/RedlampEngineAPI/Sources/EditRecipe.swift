@@ -52,7 +52,9 @@ public struct EditRecipe: Sendable, Hashable {
     /// Version 2 renamed `profile` to `baseLook` and namespaced built-in look ids.
     public static let formatVersion = 2
     /// Bumped whenever a change to rendering math would make existing edits look different.
-    public static let currentProcessVersion = 1
+    /// 2: grain is sized to the frame rather than the sensor's pixels, and is strongest in the
+    /// low midtones and shadows, as film's is.
+    public static let currentProcessVersion = 2
     public static let linearPointCurve = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]
 
     /// Sidecars written before process versions existed are version 1.

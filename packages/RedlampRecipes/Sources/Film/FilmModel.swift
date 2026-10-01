@@ -31,6 +31,10 @@ public struct FilmLookParameters: Sendable, Hashable, Codable {
     /// For a print: how far the colourist's timing pulls the grey scale's colour crossovers
     /// (cool shadows, warm highlights on 2383) back to neutral. 0 leaves the stocks' own.
     public var printNeutral = 0.6
+    /// Bleach bypass: the share of the developed silver left in the final stage (the print, or
+    /// the film when there's none). Silver adds neutral density where dye formed, so the image
+    /// gets denser, harder and less saturated. 0 is a normal process.
+    public var silverRetention = 0.0
 
     public init() {}
 }
@@ -110,9 +114,14 @@ final class FilmModel {
     }
 
     private var scanSensors: [Spectrum] = []
-    private var scanGrey: [Double] = []
     private var scanGammas: [Double] = []
     private var scanGain = 1.0
+    /// The scanner's readings of a box-speed mid-grey, which its calibration is relative to.
+    private var calibrationGrey: [Double] = []
+    /// The exposed frame's mid-grey tone per channel, which printing the frame takes out.
+    private var frameOffset = SIMD3<Double>.zero
+    /// The film base's linear scan value, which the frame's black point takes out.
+    private var frameBlack = SIMD3<Double>.zero
     /// Per scanner channel: density read to log10 scene value, calibrated on a grey scale.
     private var greyScale: [SampledCurve] = []
     private var scanMatrix = matrix_identity_double3x3
@@ -218,14 +227,23 @@ final class FilmModel {
         zip(dyes, amounts).reduce(base) { $0 + $1.0 * $1.1 }
     }
 
-    private func transmittance(of radiance: Spectrum) -> Spectrum {
-        let shift = parameters.exposure * log10(2.0)
+    /// Retained silver's density for dye `amounts`, as a flat (neutral) spectrum.
+    private func silver(_ amounts: [Double], stock: FilmStock) -> Spectrum {
+        guard parameters.silverRetention > 0, !stock.kind.isMonochrome else { return .constant(0) }
+        return .constant(0.5 * parameters.silverRetention * amounts.reduce(0, +) / Double(max(amounts.count, 1)))
+    }
+
+    /// The film's transmittance for scene `radiance`, at the look's exposure or (`exposed: false`)
+    /// at box speed.
+    private func transmittance(of radiance: Spectrum, exposed: Bool = true) -> Spectrum {
+        let shift = exposed ? parameters.exposure * log10(2.0) : 0
         let logH = zip(film.sensitivities, layerNorms).enumerated().map { i, pair in
             log10(max(radiance.dot(pair.0) / pair.1, 1e-12)) + greyLogExposure + shift
                 + (film.kind == .reversal ? balance[i] : 0)
         }
         let amounts = densities(film, logExposures: logH, interlayer: true)
-        return spectralDensity(film.base, dyes: filmDyes, amounts).transmittance
+        let retained = print == nil ? silver(amounts, stock: film) : .constant(0)
+        return (spectralDensity(film.base, dyes: filmDyes, amounts) + retained).transmittance
     }
 
     /// A scanner with Status M-like narrow sensors (or visual luminance for black and white)
@@ -236,8 +254,12 @@ final class FilmModel {
         scanSensors = film.kind.isMonochrome ? [Colorimetry.cmf.y] : [650.0, 545, 450].map { peak in
             Spectrum { exp(-0.5 * pow(($0 - peak) / 20, 2)) }
         }
-        let negative = Colorimetry.daylight50 * transmittance(of: grey)
-        scanGrey = scanSensors.map { negative.dot($0) }
+        // A lab calibrates its scanner per film at box speed and reads absolute density, then
+        // prints each frame up or down by exposure until its mid-grey is right: so an
+        // overexposed negative's highlights crowd onto the shoulder, and an underexposed one's
+        // shadows block up at the film base.
+        let normal = Colorimetry.daylight50 * transmittance(of: grey, exposed: false)
+        calibrationGrey = scanSensors.map { normal.dot($0) }
         scanGammas = film.curves.map { curve in
             let slope = (curve(greyLogExposure + 0.1) - curve(greyLogExposure - 0.1)) / 0.2
             return parameters.scanContrast * parameters.scanner.contrast / max(slope, 0.2)
@@ -245,8 +267,8 @@ final class FilmModel {
         // The grey scale the scanner is calibrated on: each channel's reading against exposure.
         let stops = stride(from: -14.0, through: 10.0, by: 0.1).map(\.self)
         let readings = stops.map { stop -> [Double] in
-            let lit = Colorimetry.daylight50 * transmittance(of: grey * pow(2, stop))
-            return zip(scanSensors, scanGrey).map { -log10(max(lit.dot($0.0) / $0.1, 1e-12)) }
+            let lit = Colorimetry.daylight50 * transmittance(of: grey * pow(2, stop), exposed: false)
+            return zip(scanSensors, calibrationGrey).map { -log10(max(lit.dot($0.0) / $0.1, 1e-12)) }
         }
         let middleCurve = film.curves[middle]
         let greyDensity = middleCurve(greyLogExposure)
@@ -261,6 +283,18 @@ final class FilmModel {
             }
             return SampledCurve(x: density, y: tone)
         }
+        let exposedGrey = transmittance(of: grey)
+        frameOffset = .zero
+        frameOffset = rawTone(exposedGrey)
+        // Printing a thin negative up lifts its film base too; the lab sets black back where a
+        // normally exposed frame's base prints, so the shadows block up rather than fog.
+        let base = rawTone(transmittance(of: grey * pow(2, -24.0))) - frameOffset
+        let normalBase = rawTone(transmittance(of: grey * pow(2, -24.0), exposed: false))
+        // The black point that takes this frame's base to a normal frame's base, mid-grey fixed.
+        let frameBase = 0.18 * SIMD3(pow(10, base.x), pow(10, base.y), pow(10, base.z))
+        let normalValue = 0.18 * SIMD3(pow(10, normalBase.x), pow(10, normalBase.y), pow(10, normalBase.z))
+        let grey = SIMD3<Double>(repeating: 0.18)
+        frameBlack = simd_max(grey * (frameBase - normalValue) / simd_max(grey - normalValue, SIMD3(repeating: 1e-4)), .zero)
         scanMatrix = film.kind.isMonochrome ? matrix_identity_double3x3 : fitScanMatrix()
         // The scene value that Redlamp's curve shows at `displayGrey`, by bisection.
         var lo = 0.001, hi = 4.0
@@ -285,7 +319,8 @@ final class FilmModel {
                 for chroma in [0.25, 0.5] {
                     let direction = SIMD3(cos(hue), cos(hue - 2 * .pi / 3), cos(hue + 2 * .pi / 3))
                     let scene = 0.18 * pow(2, stop) * (1 + chroma * direction)
-                    pairs.append((rawScan(transmittance(of: upsampler.radiance(scene))), scene))
+                    let negative = transmittance(of: upsampler.radiance(scene), exposed: false)
+                    pairs.append((rawScan(negative, printedForFrame: false), scene))
                 }
             }
         }
@@ -315,16 +350,27 @@ final class FilmModel {
     }
 
     /// Linear scanner values, before the colour matrix and display curve.
-    private func rawScan(_ negative: Spectrum) -> SIMD3<Double> {
+    /// Each channel's tone (log10 scene value against mid-grey), from its density against the
+    /// calibration's mid-grey.
+    private func rawTone(_ negative: Spectrum) -> SIMD3<Double> {
         let lit = Colorimetry.daylight50 * negative
-        let values = zip(scanSensors, scanGrey).enumerated().map { i, pair in
+        let tones = zip(scanSensors, calibrationGrey).enumerated().map { i, pair in
             let density = -log10(max(lit.dot(pair.0) / pair.1, 1e-12))
             let ownCurve = density * scanGammas[min(i, scanGammas.count - 1)]
             let calibrated = greyScale[i](density)
-            let tone = ownCurve + parameters.scanNeutral * (calibrated - ownCurve)
-            return 0.18 * pow(10, tone)
+            return ownCurve + parameters.scanNeutral * (calibrated - ownCurve)
         }
-        return values.count == 1 ? SIMD3(repeating: values[0]) : SIMD3(values[0], values[1], values[2])
+        return tones.count == 1 ? SIMD3(repeating: tones[0]) : SIMD3(tones[0], tones[1], tones[2])
+    }
+
+    /// Linear scanner values. Printed for the frame, the frame's mid-grey comes out at mid-grey.
+    private func rawScan(_ negative: Spectrum, printedForFrame: Bool = true) -> SIMD3<Double> {
+        let tone = rawTone(negative) - (printedForFrame ? frameOffset : .zero)
+        let value = 0.18 * SIMD3(pow(10, tone.x), pow(10, tone.y), pow(10, tone.z))
+        guard printedForFrame else { return value }
+        // Black at the film base, mid-grey where it was.
+        let grey = SIMD3<Double>(repeating: 0.18)
+        return simd_max(value - frameBlack, .zero) * grey / simd_max(grey - frameBlack, SIMD3(repeating: 1e-4))
     }
 
     private func scan(_ negative: Spectrum) -> SIMD3<Double> {
@@ -364,7 +410,7 @@ final class FilmModel {
                 log10(max((printerLight * viewed).dot(pair.0) / pair.1, 1e-12)) + balance[j]
             }
             let amounts = densities(print, logExposures: logE, interlayer: false)
-            viewed = spectralDensity(print.base, dyes: print.dyes, amounts).transmittance
+            viewed = (spectralDensity(print.base, dyes: print.dyes, amounts) + silver(amounts, stock: print)).transmittance
         }
         let xyz = Colorimetry.xyz(viewed * viewing) / whiteY
         var rgb = Colorimetry.xyzToRec2020 * (toD65 * xyz)

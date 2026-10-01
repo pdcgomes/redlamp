@@ -85,14 +85,14 @@ struct FilmModelTests {
     @Test func `every film look ships, matching what its datasheets build`() throws {
         for look in FilmLookCatalog.looks {
             let shipped = try #require(
-                BuiltInBaseLooks.package(id: look.baseLookID, version: FilmLookCatalog.bundledVersion),
+                BuiltInBaseLooks.package(id: look.baseLookID, version: look.version),
                 "\(look.id) isn't bundled; run `redlamp recipe film --all --install`",
             )
             let built = try FilmLooks.bundledPackage(for: look, data: Self.data)
             // Values rather than hashes: libm may round differently on another OS release.
             let a = try #require(try shipped.definition().table), b = try #require(try built.definition().table)
             let worst = zip(a.values, b.values).map { abs(Float($0) - Float($1)) }.max() ?? 0
-            #expect(worst < 2e-3, "\(look.id): the look changed; bump FilmLookCatalog.bundledVersion and reinstall")
+            #expect(worst < 2e-3, "\(look.id): the look changed; bump its version and reinstall")
             let recipe = try #require(BuiltInRecipes.recipe(id: look.recipeID), "\(look.id) has no bundled recipe")
             #expect(recipe.baseLook == shipped.reference)
             #expect(recipe.group == "Film Stocks")
