@@ -30,11 +30,28 @@ IDENTITY="$(security find-identity -v -p codesigning \
     | awk -v team="($TEAM)\"" '/"Developer ID Application:/ && index($0, team) { print $2; exit }')"
 [ -n "$IDENTITY" ] || fail "no Developer ID Application identity for team $TEAM in the keychain"
 
-WORK="$(mktemp -d)"
+# The resolved path (/private/var/…), which is how the running app is known to LaunchServices.
+WORK="$(cd "$(mktemp -d)" && pwd -P)"
+OLD="$WORK/old/Redlamp.app"
 SERVER=""
+
+# By process: both copies have the test bundle ID, and an app named by ID or path resolves to the
+# newer one, which isn't running.
+quit_old() {
+    local pid
+    pid="$(pgrep -f "$OLD/Contents/MacOS/Redlamp")" || return 0
+    osascript -l JavaScript \
+        -e "ObjC.import('AppKit'); \$.NSRunningApplication.runningApplicationWithProcessIdentifier($pid).terminate"
+}
+
 cleanup() {
     [ -z "$SERVER" ] || kill "$SERVER" 2>/dev/null || true
-    osascript -e "tell application id \"$ID\" to quit" >/dev/null 2>&1 || true
+    ! pgrep -f "$OLD/Contents/MacOS/Redlamp" >/dev/null || quit_old >/dev/null 2>&1 || true
+    for _ in $(seq 30); do
+        pgrep -f "Autoupdate $ID" >/dev/null || break
+        sleep 1
+    done
+    pkill -f "$(basename "$WORK")/" 2>/dev/null || true
     defaults delete "$ID" >/dev/null 2>&1 || true
     rm -rf "$WORK" "$HOME/Library/Caches/$ID" "$HOME/Library/HTTPStorages/$ID" \
         "$HOME/Library/Saved Application State/$ID.savedState"
@@ -60,7 +77,6 @@ build_of() {
 NEW_BUILD="$(build_of "$SOURCE")"
 copy new "$NEW_BUILD"
 copy old 1
-OLD="$WORK/old/Redlamp.app"
 
 mkdir -p "$WORK/feed"
 ditto -c -k --keepParent "$WORK/new/Redlamp.app" "$WORK/feed/Redlamp.zip"
@@ -77,12 +93,13 @@ if [ "$AUTO" = 1 ]; then
     defaults write "$ID" SUAutomaticallyUpdate -bool YES
     open -n "$OLD"
     echo "==> Opened build 1; waiting for Sparkle to download build $NEW_BUILD and stage it..."
+    # Sparkle's installer takes the app's bundle ID as its first argument; other apps run their own.
     for _ in $(seq 90); do
-        pgrep -x Autoupdate >/dev/null && break
+        pgrep -f "Autoupdate $ID" >/dev/null && break
         sleep 2
     done
-    pgrep -x Autoupdate >/dev/null || fail "Sparkle didn't stage the update (see Console, subsystem org.sparkle-project.Sparkle)"
-    osascript -e "tell application id \"$ID\" to quit"
+    pgrep -f "Autoupdate $ID" >/dev/null || fail "Sparkle didn't stage the update (see Console, subsystem org.sparkle-project.Sparkle)"
+    quit_old
 else
     open -n "$OLD"
     echo "==> Opened build 1. Choose Redlamp > Check for Updates…, then Install Update."
