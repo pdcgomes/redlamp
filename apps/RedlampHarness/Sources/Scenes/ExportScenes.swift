@@ -68,6 +68,16 @@ private struct ExportLiveScene: View {
             }
         }
         .frame(maxWidth: 640, alignment: .leading)
+        .task {
+            guard HarnessLaunch.arguments.contains("--open-export") else { return }
+            for _ in 0 ..< 100 where model.info == nil {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            // Out of the task: the modal sheet runs its own event loop until it closes.
+            DispatchQueue.main.async {
+                ExportActions.present(model: model, store: harnessExportStore)
+            }
+        }
     }
 
     private var previous: String {

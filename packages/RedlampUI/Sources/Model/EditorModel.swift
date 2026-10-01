@@ -293,6 +293,9 @@ public final class EditorModel {
     /// The photo's auto white balance, for recipes that ask for it.
     @ObservationIgnored var autoWhiteBalance: WhiteBalanceValue?
     public private(set) var hasClipboard = false
+    /// An app-modal dialog (Export) is open: every action is unavailable, so menus, keys and
+    /// the palette can't change the photo behind it.
+    public internal(set) var isModalDialogOpen = false
     /// What a background export is doing ("Exporting…", then "Exported…" for a moment).
     public internal(set) var exportStatus: String?
     @ObservationIgnored var exportStatusTask: Task<Void, Never>?

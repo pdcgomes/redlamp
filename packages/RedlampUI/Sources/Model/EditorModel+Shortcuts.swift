@@ -8,6 +8,7 @@ public extension EditorModel {
     /// the key event can continue to the rest of the app.
     @discardableResult
     func perform(_ action: ShortcutAction, shifted: Bool = false) -> Bool {
+        guard !isModalDialogOpen else { return false }
         guard action.isAvailable else {
             // Planned tools still open their tool card, so the shortcut is discoverable.
             switch action {
@@ -140,6 +141,7 @@ public extension EditorModel {
     /// Whether `perform` would do something now. The command palette dims what it can't run,
     /// and the menus disable it.
     func canPerform(_ action: ShortcutAction) -> Bool {
+        guard !isModalDialogOpen else { return false }
         guard action.isAvailable else {
             return action == .cropTool || action == .healTool
         }

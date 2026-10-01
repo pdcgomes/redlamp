@@ -32,18 +32,21 @@ public enum ExportActions {
         return step(for: settings, photo: info.url)
     }
 
-    /// Shows the Export dialog on the editor window.
+    /// Shows the Export dialog as an app-modal sheet on the editor window: until it closes, no
+    /// other window gets events and every editor action is unavailable. Returns when it closes.
     public static func present(model: EditorModel, store: ExportPresetStore) {
-        guard let info = model.info, let window = NSApp.keyWindow ?? NSApp.mainWindow,
-              window.attachedSheet == nil
+        guard let info = model.info, !model.isModalDialogOpen,
+              let window = NSApp.keyWindow ?? NSApp.mainWindow, window.attachedSheet == nil
         else { return }
-        let sheetWindow = NSWindow(
+        let sheetWindow = RinglessWindow(
             contentRect: CGRect(origin: .zero, size: ExportSheet.size),
             styleMask: [.titled],
             backing: .buffered,
             defer: false,
         )
         let close = { [weak window, weak sheetWindow] in
+            NSApp.stopModal()
+            model.isModalDialogOpen = false
             if let window, let sheetWindow {
                 window.endSheet(sheetWindow)
             }
@@ -58,7 +61,9 @@ public enum ExportActions {
                 run(Job(settings: settings, presetID: presetID, url: url), model: model, store: store, window: window)
             },
         ).focusEffectDisabled())
+        model.isModalDialogOpen = true
         window.beginSheet(sheetWindow)
+        NSApp.runModal(for: sheetWindow)
     }
 
     /// Exports the open photo with the last export's settings, or shows the dialog if there

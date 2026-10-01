@@ -13,7 +13,6 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
     private let onOpen: () -> Void
     private let onExport: () -> Void
     private var trackers: [Tracker] = []
-    private var focusObservation: NSKeyValueObservation?
     private weak var exportItem: NSToolbarItem?
     private weak var viewGroup: NSToolbarItemGroup?
     private lazy var themePopover: NSPopover = {
@@ -44,7 +43,7 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
             ),
         )
 
-        let window = NSWindow(
+        let window = RinglessWindow(
             contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false,
@@ -67,23 +66,8 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
         window.toolbar = toolbar
         startTracking(root: root)
 
-        // No focus rings: with keyboard navigation on, every slider, picker and button that
-        // takes focus would draw one. AppKit draws a ring only around the first responder,
-        // so each view loses its ring as it takes focus (a text field's ring belongs to the
-        // field, not to the field editor that becomes first responder). The window starts
-        // focused on its own content rather than the first toolbar button.
+        // The window starts focused on its own content rather than the first toolbar button.
         window.initialFirstResponder = root.view
-        focusObservation = window.observe(\.firstResponder, options: [.initial, .new]) { [weak self] _, _ in
-            MainActor.assumeIsolated { self?.removeFocusRing() }
-        }
-    }
-
-    private func removeFocusRing() {
-        var view = window?.firstResponder as? NSView
-        if let editor = view as? NSTextView, editor.isFieldEditor {
-            view = editor.delegate as? NSView
-        }
-        view?.focusRingType = .none
     }
 
     @available(*, unavailable)

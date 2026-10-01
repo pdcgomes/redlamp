@@ -75,6 +75,20 @@ struct ExportTests {
         #expect(model.exportStatus == nil)
     }
 
+    @Test func `nothing in the editor runs while the dialog is open`() async throws {
+        let fixture = try await openEditor()
+        defer { fixture.cleanup() }
+        let model = fixture.model
+        #expect(model.canPerform(.export))
+        model.isModalDialogOpen = true
+        let runnable = ShortcutAction.allCases.filter { model.canPerform($0) }
+        #expect(runnable.isEmpty, "\(runnable)")
+        #expect(!model.perform(.toggleBlackAndWhite))
+        #expect(model.recipe.treatment == EditRecipe().treatment)
+        model.isModalDialogOpen = false
+        #expect(model.perform(.toggleBlackAndWhite))
+    }
+
     @Test func `the store remembers the last export and the user's presets`() {
         let defaults = defaults()
         let store = ExportPresetStore(defaults: defaults)

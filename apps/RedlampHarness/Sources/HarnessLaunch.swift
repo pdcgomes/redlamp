@@ -10,6 +10,7 @@ import RedlampDesign
 /// - `--theme <id>`, `--appearance dark|light` and `--tint 0...1` pick the theme, and
 ///   `--native-tint` gives native controls its accent.
 /// - `--stage-only` hides the scene list and the inspector.
+/// - `--open-export` opens the Export dialog once the Export ▸ Live scene's photo is open.
 /// - `--window <width>x<height>` sizes the window in points and moves it to a Retina screen
 ///   when one is connected, so captures come out at 2x even when the main display is 1x.
 enum HarnessLaunch {

@@ -68,7 +68,7 @@ struct AppCommands: Commands {
                     ForEach(CompareLayout.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.inline)
-                .disabled(model.selection == nil)
+                .disabled(model.selection == nil || model.isModalDialogOpen)
                 Divider()
                 mouseItem(.nextCompareLayout)
                 mouseItem(.previousCompareLayout)

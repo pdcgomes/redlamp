@@ -40,33 +40,12 @@ public struct ExportSheet: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            Form {
-                Section {
-                    PresetMenu(
-                        store: store, settings: $settings, presetID: $presetID,
-                        onSaveAs: {
-                            presetName = store.preset(presetID).map { $0.isBuiltIn ? "" : $0.name } ?? ""
-                            isNamingPreset = true
-                        },
-                    )
-                }
-                ExportLocationSection(photo: photo, settings: $settings)
-                ExportFileSection(settings: $settings)
-                ExportSizeSection(photoSize: photoSize, sizing: $settings.sizing)
-                Section {
-                    Picker("Metadata", selection: $settings.metadata) {
-                        ForEach(ExportMetadataPolicy.allCases, id: \.self) { Text($0.name).tag($0) }
-                    }
-                    Toggle("Show in Finder after export", isOn: $settings.revealInFinder)
-                } footer: {
-                    Text("""
-                    Camera, lens, exposure and capture date come from the original. Location is \
-                    its GPS position and the city and country fields.
-                    """)
-                    .formFooter()
-                }
+            OverlayScroll {
+                form
+                    .fixedSize(horizontal: false, vertical: true)
+                    .tint(Theme.nativeTint)
+                    .focusEffectDisabled()
             }
-            .formStyle(.grouped)
             Divider()
             HStack {
                 if let problem {
@@ -84,6 +63,7 @@ public struct ExportSheet: View {
             .padding(16)
         }
         .frame(width: Self.size.width, height: Self.size.height)
+        .tint(Theme.nativeTint)
         .alert(conflict.map(Self.conflictTitle) ?? "", isPresented: Binding(
             get: { conflict != nil },
             set: {
@@ -109,6 +89,36 @@ public struct ExportSheet: View {
         } message: {
             Text("Saving under the name of one of your presets replaces it.")
         }
+    }
+
+    private var form: some View {
+        Form {
+            Section {
+                PresetMenu(
+                    store: store, settings: $settings, presetID: $presetID,
+                    onSaveAs: {
+                        presetName = store.preset(presetID).map { $0.isBuiltIn ? "" : $0.name } ?? ""
+                        isNamingPreset = true
+                    },
+                )
+            }
+            ExportLocationSection(photo: photo, settings: $settings)
+            ExportFileSection(settings: $settings)
+            ExportSizeSection(photoSize: photoSize, sizing: $settings.sizing)
+            Section {
+                Picker("Metadata", selection: $settings.metadata) {
+                    ForEach(ExportMetadataPolicy.allCases, id: \.self) { Text($0.name).tag($0) }
+                }
+                Toggle("Show in Finder after export", isOn: $settings.revealInFinder)
+            } footer: {
+                Text("""
+                Camera, lens, exposure and capture date come from the original. Location is \
+                its GPS position and the city and country fields.
+                """)
+                .formFooter()
+            }
+        }
+        .formStyle(.grouped)
     }
 
     /// Why Export is unavailable, if it is.
