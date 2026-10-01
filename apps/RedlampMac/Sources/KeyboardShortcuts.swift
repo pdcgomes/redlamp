@@ -1,5 +1,5 @@
 import AppKit
-import RedlampUI
+@_spi(Harness) import RedlampUI
 
 /// Routes Develop shortcuts from the keyboard to the registry (`ShortcutAction`).
 ///
@@ -28,7 +28,8 @@ final class KeyboardShortcuts {
     }
 
     private static func handle(_ event: NSEvent, model: EditorModel) -> Bool {
-        if NSApp.keyWindow?.firstResponder is NSTextView {
+        // The command palette handles its own keys, even if focus has left its field.
+        if NSApp.keyWindow?.firstResponder is NSTextView || model.commandPalette != nil {
             return false
         }
         let flags = event.modifierFlags

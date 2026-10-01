@@ -31,29 +31,34 @@ public struct KeyCombo: Hashable, Sendable {
 
     /// `⇧⌘C`, `Tab`, `F6`, `←`.
     public var display: String {
-        var text = ""
+        keys.joined()
+    }
+
+    /// One entry per key, modifiers first: `["⇧", "⌘", "C"]`, as keycaps draw them.
+    public var keys: [String] {
+        var keys: [String] = []
         if option {
-            text += "⌥"
+            keys.append("⌥")
         }
         if shift {
-            text += "⇧"
+            keys.append("⇧")
         }
         if command {
-            text += "⌘"
+            keys.append("⌘")
         }
         switch key {
-        case let .character(character): text += character == " " ? "Space" : String(character).uppercased()
-        case .tab: text += "Tab"
-        case .escape: text += "Esc"
-        case .delete: text += "⌫"
-        case .space: text += "Space"
-        case .left: text += "←"
-        case .right: text += "→"
-        case .up: text += "↑"
-        case .down: text += "↓"
-        case let .function(number): text += "F\(number)"
+        case let .character(character): keys.append(character == " " ? "Space" : String(character).uppercased())
+        case .tab: keys.append("Tab")
+        case .escape: keys.append("Esc")
+        case .delete: keys.append("⌫")
+        case .space: keys.append("Space")
+        case .left: keys.append("←")
+        case .right: keys.append("→")
+        case .up: keys.append("↑")
+        case .down: keys.append("↓")
+        case let .function(number): keys.append("F\(number)")
         }
-        return text
+        return keys
     }
 
     /// The SwiftUI shortcut for menu items (only combos with ⌘ go through menus).
@@ -125,7 +130,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case labelRed, labelYellow, labelGreen, labelBlue
 
     /// File & Edit
-    case openFolder, export, showShortcuts, filmLooks
+    case openFolder, export, showShortcuts, filmLooks, commandPalette
 
     public var id: String {
         rawValue
@@ -155,7 +160,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .rating0, .rating1, .rating2, .rating3, .rating4, .rating5, .decreaseRating, .increaseRating,
              .flagPick, .flagReject, .unflag, .labelRed, .labelYellow, .labelGreen, .labelBlue:
             .rating
-        case .openFolder, .export, .showShortcuts, .filmLooks:
+        case .openFolder, .export, .showShortcuts, .filmLooks, .commandPalette:
             .file
         }
     }
@@ -244,6 +249,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .showShortcuts: "Keyboard Shortcuts"
         case .filmLooks: "Film Looks"
         case .findAdjustment: "Find Adjustment…"
+        case .commandPalette: "Command Palette…"
         }
     }
 
@@ -332,6 +338,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .showShortcuts: [.char("/", command: true)]
         case .filmLooks: [.char("l", shift: true, command: true)]
         case .findAdjustment: [.char("f", command: true)]
+        case .commandPalette: [.char("k", command: true)]
         }
     }
 

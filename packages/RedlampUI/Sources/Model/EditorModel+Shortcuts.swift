@@ -122,12 +122,65 @@ public extension EditorModel {
         case .labelBlue: updateMetadata(advance: shifted) { $0.label = $0.label == .blue ? nil : .blue }
         // File & Edit (open and export are handled by the app, which owns the panels)
         case .showShortcuts: showShortcuts.toggle()
-        case .findAdjustment: showAdjustmentSearch.toggle()
+        case .commandPalette: toggleCommandPalette()
+        case .findAdjustment:
+            // ⌘F over the full palette narrows it to sliders; otherwise it opens or closes.
+            if commandPalette?.scope == .all {
+                openCommandPalette(scope: .sliders)
+            } else {
+                toggleCommandPalette(scope: .sliders)
+            }
         case .openFolder, .export, .filmLooks: return false
         default:
             return false
         }
         return true
+    }
+
+    /// Whether `perform` would do something now. The command palette dims what it can't run,
+    /// and the menus disable it.
+    func canPerform(_ action: ShortcutAction) -> Bool {
+        guard action.isAvailable else {
+            return action == .cropTool || action == .healTool
+        }
+        let photo = info != nil
+        let whiteBalance = info?.supportsWhiteBalance == true
+        let masking = activeTool == .masking
+        switch action {
+        case .beforeAfter, .nextCompareLayout, .previousCompareLayout, .toggleZoom, .zoomIn, .zoomOut,
+             .clipping, .rawClipping, .colorAssessment, .infoOverlay:
+            return photo
+        case .lightsOut, .fullScreenPreview, .toggleToolbar, .toggleSidePanels, .toggleAllPanels, .toggleFilmstrip,
+             .toggleLeftPanel, .toggleRightPanel, .panelBasic, .panelToneCurve, .panelColorMixer, .panelColorGrading,
+             .panelDetail, .panelLens, .panelTransform, .panelEffects, .panelCalibration:
+            return true
+        case .previousPhoto, .nextPhoto:
+            guard let selection, let index = items.firstIndex(where: { $0.url == selection }) else { return false }
+            return items.indices.contains(index + (action == .nextPhoto ? 1 : -1))
+        // A burst of arrow presses in the palette is a step not yet recorded, and ⌘Z undoes it.
+        case .undo: return canUndo || commandPalette?.hasOpenStep == true
+        case .redo: return canRedo
+        case .pasteSettings: return hasClipboard && photo
+        case .pastePrevious: return previousSelection != nil && photo
+        case .copySettings, .resetAll, .autoTone, .toggleBlackAndWhite, .newSnapshot, .newPreset,
+             .previousSetting, .nextSetting, .increaseSetting, .decreaseSetting, .findAdjustment, .export:
+            return photo
+        case .autoWhiteBalance, .whiteBalanceSelector: return whiteBalance
+        case .editTool, .maskingTool, .cancel, .showShortcuts, .openFolder, .filmLooks, .commandPalette:
+            return true
+        case .linearMask: return photo && canCreateMask(.linear)
+        case .radialMask: return photo && canCreateMask(.radial)
+        case .brushMask: return photo && canCreateMask(.brush)
+        case .colorRangeMask: return photo && canCreateMask(.colorRange)
+        case .luminanceRangeMask: return photo && canCreateMask(.luminanceRange)
+        case .maskOverlay, .maskOverlayColor, .maskPins: return masking
+        case .deleteMask: return masking && selectedMaskID != nil
+        case .rating0, .rating1, .rating2, .rating3, .rating4, .rating5, .decreaseRating, .increaseRating,
+             .flagPick, .flagReject, .unflag, .labelRed, .labelYellow, .labelGreen, .labelBlue:
+            return selection != nil
+        default:
+            return false
+        }
     }
 
     // MARK: - View

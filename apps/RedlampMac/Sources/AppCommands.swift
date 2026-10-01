@@ -2,6 +2,7 @@ import RedlampUI
 import SwiftUI
 
 /// The menu bar, built from `ShortcutAction` so menus, keys and the ⌘/ sheet always agree.
+/// Items are enabled when `canPerform` says so, as the command palette dims its rows.
 struct AppCommands: Commands {
     let model: EditorModel
     let onOpen: () -> Void
@@ -14,29 +15,29 @@ struct AppCommands: Commands {
             item(.openFolder, perform: onOpen)
             Divider()
             item(.export, perform: onExport)
-                .disabled(model.info == nil)
         }
 
         CommandGroup(replacing: .undoRedo) {
-            item(.undo).disabled(!model.canUndo)
-            item(.redo).disabled(!model.canRedo)
+            item(.undo)
+            item(.redo)
         }
 
-        // Edit ▸ Find: the adjustment search takes ⌘F.
+        // Edit ▸ Find: the command palette, and ⌘F for its sliders.
         CommandGroup(replacing: .textEditing) {
-            item(.findAdjustment).disabled(model.info == nil)
+            item(.commandPalette)
+            item(.findAdjustment)
         }
 
         CommandMenu("Photo") {
-            item(.copySettings).disabled(model.info == nil)
-            item(.pasteSettings).disabled(!model.hasClipboard || model.info == nil)
-            item(.pastePrevious).disabled(model.previousSelection == nil || model.info == nil)
+            item(.copySettings)
+            item(.pasteSettings)
+            item(.pastePrevious)
             Divider()
-            item(.autoTone).disabled(model.info == nil)
-            item(.autoWhiteBalance).disabled(model.info?.supportsWhiteBalance != true)
-            item(.resetAll).disabled(model.info == nil)
+            item(.autoTone)
+            item(.autoWhiteBalance)
+            item(.resetAll)
             Divider()
-            item(.newSnapshot).disabled(model.info == nil)
+            item(.newSnapshot)
             item(.newPreset)
             item(.virtualCopy)
             Divider()
@@ -100,13 +101,13 @@ struct AppCommands: Commands {
             }
         }
         .keyboardShortcut(action.combos.first?.keyboardShortcut)
-        .disabled(!action.isAvailable)
+        .disabled(!action.isAvailable || !model.canPerform(action))
     }
 
     /// A menu item for a single-key shortcut: the key is shown in the title, because a
     /// modifier-free key equivalent would also fire while typing in a text field.
     private func mouseItem(_ action: ShortcutAction) -> some View {
         Button("\(action.title)    \(action.combos.first?.display ?? "")") { model.perform(action) }
-            .disabled(model.selection == nil)
+            .disabled(!model.canPerform(action))
     }
 }

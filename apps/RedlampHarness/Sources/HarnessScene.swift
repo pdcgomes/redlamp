@@ -8,6 +8,7 @@ enum HarnessSection: String, CaseIterable, Identifiable {
     case parity = "Parity"
     case performance = "Performance"
     case recipes = "Recipes"
+    case palette = "Command Palette"
 
     var id: String {
         rawValue
@@ -21,6 +22,7 @@ enum HarnessSection: String, CaseIterable, Identifiable {
         case .parity: "square.on.square.dashed"
         case .performance: "gauge.with.dots.needle.67percent"
         case .recipes: "wand.and.stars"
+        case .palette: "command"
         }
     }
 }

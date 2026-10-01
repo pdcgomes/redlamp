@@ -15,6 +15,8 @@ enum BuiltInScenes {
         HarnessScene.referencePanelParity.forEach { catalog.register($0) }
         catalog.register(.panelPerformance)
         catalog.register(.recipeLab)
+        catalog.register(.commandPalette)
+        catalog.register(.commandPaletteStates)
         return catalog
     }
 }

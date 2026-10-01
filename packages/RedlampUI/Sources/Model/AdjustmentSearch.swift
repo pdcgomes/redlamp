@@ -1,7 +1,7 @@
 import RedlampEngineAPI
 
-/// ⌘F adjustment search: finds a Develop slider by its name, its panel, or the words people use
-/// for it (Lightroom's older names among them).
+/// Finds a Develop slider by its name, its panel, or the words people use for it (Lightroom's
+/// older names among them). The command palette's slider rows, and ⌘F, search with it.
 public enum AdjustmentSearch {
     public struct Result: Hashable, Identifiable, Sendable {
         public var parameter: ParameterID
@@ -11,11 +11,9 @@ public enum AdjustmentSearch {
             parameter
         }
 
-        /// "Dehaze", or "Luminance · Detail" where the name alone is ambiguous.
+        /// "Dehaze", "Orange Saturation", "Grain Size".
         public var title: String {
-            let label = parameter.spec.label
-            let shared = Self.ambiguousLabels.contains(label)
-            return shared ? "\(label) · \(context)" : label
+            parameter.displayName
         }
 
         /// Where the slider lives, for the second line.
@@ -35,28 +33,14 @@ public enum AdjustmentSearch {
             }
             return panel.title
         }
-
-        private static let ambiguousLabels: Set<String> = {
-            var counts: [String: Int] = [:]
-            for parameter in AdjustmentSearch.searchable.map(\.parameter) {
-                counts[parameter.spec.label, default: 0] += 1
-            }
-            return Set(counts.filter { $0.value > 1 }.keys)
-        }()
     }
 
     /// The best matches for `query`, most relevant first.
     public static func results(for query: String, limit: Int = 8) -> [Result] {
-        let words = normalized(query).split(separator: " ").map(String.init)
+        let words = SearchMatcher.words(query)
         guard !words.isEmpty else { return [] }
         let scored = searchable.compactMap { result -> (Result, Int)? in
-            let terms = searchTerms(result)
-            var total = 0
-            for word in words {
-                guard let best = terms.map({ score(word, $0) }).max(), best > 0 else { return nil }
-                total += best
-            }
-            return (result, total)
+            SearchMatcher.score(words, terms: searchTerms(result)).map { (result, $0) }
         }
         return scored
             .sorted { $0.1 != $1.1 ? $0.1 > $1.1 : order[$0.0.parameter]! < order[$1.0.parameter]! }
@@ -73,29 +57,9 @@ public enum AdjustmentSearch {
         uniqueKeysWithValues: searchable.enumerated().map { ($0.element.parameter, $0.offset) },
     )
 
-    private static func searchTerms(_ result: Result) -> [String] {
-        ([result.parameter.spec.label, result.context] + (synonyms[result.parameter] ?? [])).map(normalized)
-    }
-
-    /// Exact word 3, word prefix 2, substring 1.
-    private static func score(_ word: String, _ term: String) -> Int {
-        let termWords = term.split(separator: " ").map(String.init)
-        if termWords.contains(word) {
-            return 3
-        }
-        if termWords.contains(where: { $0.hasPrefix(word) }) {
-            return 2
-        }
-        return word.count >= 3 && term.contains(word) ? 1 : 0
-    }
-
-    private static func normalized(_ text: String) -> String {
-        text.lowercased()
-            .replacingOccurrences(of: "colour", with: "color")
-            .replacingOccurrences(of: "-", with: " ")
-            .replacingOccurrences(of: "·", with: " ")
-            .replacingOccurrences(of: ",", with: " ")
-            .trimmingCharacters(in: .whitespaces)
+    static func searchTerms(_ result: Result) -> [String] {
+        [result.parameter.spec.label, result.parameter.displayName, result.context]
+            + (synonyms[result.parameter] ?? [])
     }
 
     /// Groups within a panel, for the context line.
@@ -178,17 +142,5 @@ public enum AdjustmentSearch {
             }
         }
         return result
-    }
-}
-
-public extension EditorModel {
-    /// Opens the slider's panel, focuses it and scrolls it into view.
-    func reveal(_ parameter: ParameterID) {
-        if let panel = PanelID.allCases.first(where: { $0.parameters.contains(parameter) }) {
-            expandedPanels.insert(panel)
-        }
-        focusedParameter = parameter
-        revealedParameter = parameter
-        showAdjustmentSearch = false
     }
 }

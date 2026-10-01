@@ -89,6 +89,77 @@ enum Theme {
     static let thumbSize = Metrics.thumbSize
 }
 
+/// The theme's colors from a given set of tokens: `Palette.current`, unless a subtree has
+/// its own (`\.themeTokens`, the command palette's theme).
+struct ThemeColors {
+    let tokens: PaletteTokens
+
+    init(_ override: PaletteTokens?) {
+        tokens = override ?? Palette.current
+    }
+
+    var label: Color {
+        tokens.label.color
+    }
+
+    var secondaryLabel: Color {
+        tokens.secondaryLabel.color
+    }
+
+    var tertiaryLabel: Color {
+        tokens.tertiaryLabel.color
+    }
+
+    var value: Color {
+        tokens.value.color
+    }
+
+    var divider: Color {
+        tokens.divider.color
+    }
+
+    var track: Color {
+        tokens.track.color
+    }
+
+    var trackFill: Color {
+        tokens.trackFill.color
+    }
+
+    var selection: Color {
+        tokens.selection.color
+    }
+
+    var panelBackground: Color {
+        tokens.panelBackground.color
+    }
+
+    var thumb: Color {
+        tokens.thumb.color
+    }
+
+    var thumbStroke: Color {
+        tokens.thumbStroke.color
+    }
+
+    var thumbShadow: Color {
+        tokens.thumbShadow.color
+    }
+
+    var editedDot: Color {
+        tokens.editedDot.color
+    }
+
+    var accent: Color {
+        tokens.accent?.color ?? .accentColor
+    }
+}
+
+extension EnvironmentValues {
+    /// Tokens a subtree draws in instead of the app's theme; `nil` follows it.
+    @Entry var themeTokens: PaletteTokens?
+}
+
 extension ColorBand {
     var color: Color {
         displayColor.color

@@ -39,6 +39,7 @@ struct ShortcutsSheet: View {
                         ForEach(ShortcutAction.byCategory, id: \.0) { category, actions in
                             ShortcutGroup(title: category.rawValue, actions: actions)
                         }
+                        PaletteKeysGroup()
                     }
                 }
             }
@@ -50,6 +51,29 @@ struct ShortcutsSheet: View {
             .padding(40)
         }
         .transition(.opacity)
+    }
+}
+
+/// The command palette's own keys, from the definitions its hint bar shows.
+private struct PaletteKeysGroup: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("COMMAND PALETTE")
+                .font(Theme.sectionFont)
+                .tracking(0.6)
+                .foregroundStyle(Theme.secondaryLabel)
+                .padding(.bottom, 2)
+            ForEach(PaletteKeyReference.keys, id: \.self) { hint in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(hint.title)
+                        .font(Theme.labelFont)
+                        .foregroundStyle(Theme.value)
+                    Spacer(minLength: 8)
+                    KeyCaps(hint.keys)
+                }
+            }
+        }
+        .padding(.trailing, 12)
     }
 }
 
@@ -75,14 +99,9 @@ private struct ShortcutGroup: View {
                             .foregroundStyle(Theme.tertiaryLabel)
                     }
                     Spacer(minLength: 8)
-                    HStack(spacing: 3) {
+                    HStack(spacing: 6) {
                         ForEach(action.combos, id: \.self) { combo in
-                            Text(combo.display)
-                                .font(.system(size: 10.5, weight: .medium, design: .rounded).monospacedDigit())
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(RoundedRectangle(cornerRadius: 4).fill(Theme.selection))
-                                .foregroundStyle(action.isAvailable ? Theme.value : Theme.tertiaryLabel)
+                            KeyCaps(combo.keys, dimmed: !action.isAvailable)
                         }
                     }
                 }

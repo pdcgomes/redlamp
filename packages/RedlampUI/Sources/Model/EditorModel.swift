@@ -254,8 +254,10 @@ public final class EditorModel {
     /// The slider `,` `.` select and `-` `=` nudge; highlighted in the panels.
     public var focusedParameter: ParameterID?
     public var revealedParameter: ParameterID?
-    /// The ⌘F adjustment search.
-    public var showAdjustmentSearch = false
+    /// The command palette (⌘K, or ⌘F for sliders), while it's open.
+    var presentedPalette: CommandPaletteModel?
+    /// Everything the command palette does, for the harness's log and the tests.
+    @ObservationIgnored @_spi(Harness) public var onCommandPaletteEvent: ((PaletteEvent) -> Void)?
     /// Holding Option turns group titles into "Reset …" buttons, as in Lightroom.
     public var optionKeyHeld = false
     public var showMaskPins = true
@@ -283,6 +285,9 @@ public final class EditorModel {
     public let recipes: RecipeCatalog
     /// The recipe under the pointer, rendered without being applied.
     public internal(set) var previewingRecipe: Recipe?
+    /// An edit rendered in place of the photo's without being applied: the command
+    /// palette's white balance, treatment, snapshot and history previews.
+    public internal(set) var previewingEdit: EditRecipe?
     /// The last applied recipe and the edit it was applied to, so its Amount stays adjustable.
     var recipeApplication: (recipe: Recipe, base: EditRecipe)?
     /// The photo's auto white balance, for recipes that ask for it.
@@ -378,6 +383,7 @@ public final class EditorModel {
         isReadOnly = false
         eyedropperActive = false
         previewingRecipe = nil
+        previewingEdit = nil
         recipeApplication = nil
         autoWhiteBalance = nil
         selectedMaskID = nil
@@ -478,7 +484,9 @@ public final class EditorModel {
             ?? canvas.renderTarget
         guard target.size.width > 0 else { return }
         generation &+= 1
-        let displayed = isShowingOriginal ? beforeRecipe : (previewingRecipe.map { previewEdit(for: $0) } ?? recipe)
+        let displayed = isShowingOriginal
+            ? beforeRecipe
+            : (previewingEdit ?? previewingRecipe.map { previewEdit(for: $0) } ?? recipe)
         let overlay = activeTool == .masking && showMaskOverlay && !isShowingOriginal ? selectedMaskID : nil
         var request = RenderRequest(
             recipe: displayed,
@@ -617,38 +625,10 @@ public final class EditorModel {
 
     func historyName(for parameter: ParameterID) -> String {
         let spec = parameter.spec
-        let key = parameter.rawValue
         if parameter.isMaskScoped {
             return "\(selectedMask?.name ?? "Mask") \(spec.label) \(spec.formatted(maskValue(parameter)))"
         }
-        let prefix: String = if PanelID.colorMixer.parameters.contains(parameter) {
-            "\(spec.label) \(mixerAttribute(parameter))"
-        } else if PanelID.toneCurve.parameters.contains(parameter) {
-            "Curve \(spec.label)"
-        } else if let range = GradingRange.allCases.first(where: { key.hasPrefix("grading.\($0.rawValue).") }) {
-            "\(range.name) \(spec.label)"
-        } else if key.hasPrefix("effects.vignette.") {
-            "Vignette \(spec.label)"
-        } else if key.hasPrefix("effects.grain.") {
-            "Grain \(spec.label)"
-        } else if key.hasPrefix("detail.sharpen.") {
-            "Sharpening \(spec.label)"
-        } else if key.hasPrefix("detail.noise.") {
-            "Noise Reduction \(spec.label)"
-        } else {
-            spec.label
-        }
-        return "\(prefix) \(spec.formatted(recipe[parameter]))"
-    }
-
-    private func mixerAttribute(_ parameter: ParameterID) -> String {
-        if parameter.rawValue.contains(".hue.") {
-            return "Hue"
-        }
-        if parameter.rawValue.contains(".saturation.") {
-            return "Saturation"
-        }
-        return "Luminance"
+        return "\(parameter.displayName) \(spec.formatted(recipe[parameter]))"
     }
 
     /// Alt-drag on tone sliders previews clipping, like Lightroom.
@@ -782,11 +762,13 @@ public final class EditorModel {
     }
 
     public func undo() {
+        commandPalette?.endBurst()
         guard canUndo else { return }
         goToHistory(historyIndex - 1)
     }
 
     public func redo() {
+        commandPalette?.endBurst()
         guard canRedo else { return }
         goToHistory(historyIndex + 1)
     }

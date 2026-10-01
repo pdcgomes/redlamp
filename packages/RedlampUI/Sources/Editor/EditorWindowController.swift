@@ -35,7 +35,10 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
         let content = NSHostingController(rootView: EditorContentView(model: model, theme: theme, onOpen: onOpen))
         content.sizingOptions = []
         let split = EditorSplitViewController(model: model, theme: theme, content: content)
-        let root = EditorRootViewController(split: split, overlays: EditorOverlays(model: model, theme: theme))
+        let root = EditorRootViewController(
+            split: split,
+            overlays: EditorOverlays(model: model, theme: theme, onOpen: onOpen, onExport: onExport),
+        )
 
         let window = NSWindow(
             contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000),
@@ -104,7 +107,7 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
             },
             Tracker { [weak self] in
                 guard let self else { return }
-                root.showsOverlays = model.showShortcuts || model.showAdjustmentSearch
+                root.showsOverlays = model.showShortcuts || model.commandPalette != nil
             },
         ]
     }
@@ -224,7 +227,7 @@ private extension NSToolbarItem.Identifier {
     static let theme = Self("theme")
 }
 
-/// The window's content: the split view, and the ⌘/ and ⌘F overlays above it, which must
+/// The window's content: the split view, and the ⌘/ and ⌘K overlays above it, which must
 /// cover the panels too. The overlays' view is only in the window while one is showing, so
 /// it never takes clicks meant for the canvas or the panels.
 private final class EditorRootViewController: NSViewController {
@@ -239,6 +242,9 @@ private final class EditorRootViewController: NSViewController {
                 view.addSubview(overlays)
             } else {
                 overlays.removeFromSuperview()
+                // The palette's field had focus: hand it back to the window's own view, so
+                // single-key shortcuts work again straight away.
+                view.window?.makeFirstResponder(view)
             }
         }
     }

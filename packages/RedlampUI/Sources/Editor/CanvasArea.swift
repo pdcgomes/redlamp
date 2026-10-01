@@ -54,8 +54,11 @@ struct CanvasArea: View {
             }
         }
         .overlay(alignment: .top) {
-            if model.lightsOut == 0, model.isShowingOriginal || model.previewingRecipe != nil || model.eyedropperActive
-                || model.drawingKind != nil || model.isReadOnly || (model.info != nil && model.isBaseLookMissing) {
+            // The command palette says what it's previewing beside its own hint bar.
+            if model.lightsOut == 0, model.commandPalette == nil,
+               model.isShowingOriginal || model.previewingRecipe != nil || model.previewingEdit != nil
+               || model.eyedropperActive || model.drawingKind != nil || model.isReadOnly
+               || (model.info != nil && model.isBaseLookMissing) {
                 StatusPill(text: statusText)
                     .padding(.top, 14)
                     .padding(stagePadding)
@@ -141,6 +144,9 @@ struct CanvasArea: View {
         }
         if let recipe = model.previewingRecipe {
             return "Preview: \(recipe.name)"
+        }
+        if model.previewingEdit != nil {
+            return "Preview"
         }
         if model.isShowingOriginal {
             return "Before"

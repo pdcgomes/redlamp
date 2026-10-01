@@ -58,24 +58,39 @@ struct EditorContentView: View {
     }
 }
 
-/// The ⌘/ shortcuts and ⌘F adjustment search, laid over the whole window, panels included.
+/// The ⌘/ shortcuts and the ⌘K command palette, laid over the whole window, panels included.
 struct EditorOverlays: View {
     @Bindable var model: EditorModel
     @Bindable var theme: ThemeSettings
+    let onOpen: () -> Void
+    let onExport: () -> Void
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         ZStack {
             if model.showShortcuts {
                 ShortcutsSheet()
             }
-            if model.showAdjustmentSearch {
-                AdjustmentSearchView()
+            if let palette = model.commandPalette {
+                CommandPaletteOverlay(
+                    palette: palette, panelOpacity: theme.panelOpacity, theme: theme.paletteSelection, onAppAction: run,
+                )
             }
         }
         .environment(model)
         .environment(theme)
         .tint(Theme.nativeTint)
         .focusEffectDisabled()
+    }
+
+    /// The palette's actions that the app, not the editor, performs.
+    private func run(_ action: ShortcutAction) {
+        switch action {
+        case .openFolder: onOpen()
+        case .export: onExport()
+        case .filmLooks: openWindow(id: FilmCatalogView.windowID)
+        default: model.perform(action)
+        }
     }
 }
 
@@ -85,6 +100,7 @@ struct EditorOverlays: View {
 /// it is the way to pick a photo.
 private struct FloatingFilmstrip: View {
     @Environment(EditorModel.self) private var model
+    @Environment(ThemeSettings.self) private var theme
     @State private var revealed = false
     @State private var hiding: Task<Void, Never>?
 
@@ -97,7 +113,7 @@ private struct FloatingFilmstrip: View {
                 .onHover { inside in inside ? reveal() : scheduleHide() }
             if shown {
                 FilmstripView()
-                    .modifier(FloatingPane())
+                    .modifier(FloatingPane(opacity: theme.panelOpacity))
                     .onHover { inside in inside ? reveal() : scheduleHide() }
                     .padding(.horizontal, PanelMetrics.inset)
                     .padding(.bottom, PanelMetrics.inset)
@@ -125,9 +141,11 @@ private struct FloatingFilmstrip: View {
 }
 
 /// A floating pane matching macOS 26's sidebar: Liquid Glass with corners concentric with
-/// the window's, washed with the theme's panel color as the panels are.
-private struct FloatingPane: ViewModifier {
-    @Environment(ThemeSettings.self) private var theme
+/// the window's, washed with the theme's panel color (`ThemeSettings.panelOpacity`) as the
+/// panels are.
+struct FloatingPane: ViewModifier {
+    let opacity: Double
+    @Environment(\.themeTokens) private var themeTokens
 
     private var shape: ConcentricRectangle {
         ConcentricRectangle(corners: .concentric(minimum: .fixed(18)), isUniform: true)
@@ -136,7 +154,7 @@ private struct FloatingPane: ViewModifier {
     func body(content: Content) -> some View {
         content
             .clipShape(shape)
-            .background(Theme.panelBackground.opacity(theme.panelOpacity), in: shape)
+            .background(ThemeColors(themeTokens).panelBackground.opacity(opacity), in: shape)
             .glassEffect(.regular, in: shape)
     }
 }

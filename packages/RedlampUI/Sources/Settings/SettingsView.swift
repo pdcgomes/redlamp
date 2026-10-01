@@ -78,9 +78,55 @@ private struct AppearanceSettings: View {
                 """)
                 .formFooter()
             }
+            CommandPaletteThemeSettings(theme: theme)
         }
         .formStyle(.grouped)
         .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// The command palette's theme: the app's, or one of its own from the same themes.
+private struct CommandPaletteThemeSettings: View {
+    @Bindable var theme: ThemeSettings
+
+    var body: some View {
+        Section {
+            Picker("Theme", selection: Binding(
+                get: { theme.paletteSelection != nil },
+                // Starts from the app's theme, so choosing one changes only what's picked.
+                set: { theme.paletteSelection = $0 ? (theme.paletteSelection ?? theme.selection) : nil },
+            )) {
+                Text("Same as the app").tag(false)
+                Text("Its own").tag(true)
+            }
+            .pickerStyle(.segmented)
+            if theme.paletteSelection != nil {
+                ThemePicker(selection: paletteSelection)
+                Picker("Appearance", selection: paletteSelection.appearance) {
+                    Label("Dark", systemImage: "moon.fill").tag(ThemeAppearance.dark)
+                    Label("Light", systemImage: "sun.max.fill").tag(ThemeAppearance.light)
+                }
+                .pickerStyle(.segmented)
+                LabeledContent("Tint") {
+                    TintSlider(tint: paletteSelection.tint)
+                }
+            }
+        } header: {
+            Text("Command Palette")
+        } footer: {
+            Text("""
+            The command palette (⌘K) floats over the photo. Give it its own theme to set it \
+            apart from the panels, for example a light palette over a dark editor.
+            """)
+            .formFooter()
+        }
+    }
+
+    private var paletteSelection: Binding<ThemeSelection> {
+        Binding(
+            get: { theme.paletteSelection ?? theme.selection },
+            set: { theme.paletteSelection = $0 },
+        )
     }
 }
 

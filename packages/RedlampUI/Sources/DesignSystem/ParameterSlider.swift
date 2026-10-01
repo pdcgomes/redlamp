@@ -93,8 +93,10 @@ struct SliderTrack: View {
     var onReset: () -> Void = {}
 
     @State private var dragStartPosition: Double?
+    @Environment(\.themeTokens) private var themeTokens
 
     var body: some View {
+        let colors = ThemeColors(themeTokens)
         GeometryReader { geometry in
             let inset = Theme.thumbSize / 2
             let usable = max(geometry.size.width - Theme.thumbSize, 1)
@@ -105,28 +107,28 @@ struct SliderTrack: View {
             let originX = inset + originPosition * usable
 
             ZStack {
-                trackShape
+                trackShape(colors)
                     .frame(width: usable, height: spec.track.gradient == nil ? 2 : 3)
                     .position(x: geometry.size.width / 2, y: midY)
 
                 if spec.track.gradient == nil {
                     Capsule()
-                        .fill(Theme.trackFill)
+                        .fill(colors.trackFill)
                         .frame(width: abs(thumbX - originX), height: 2)
                         .position(x: (thumbX + originX) / 2, y: midY)
                 }
 
                 if spec.isBipolar {
                     Rectangle()
-                        .fill(Theme.secondaryLabel)
+                        .fill(colors.secondaryLabel)
                         .frame(width: 1, height: 7)
                         .position(x: originX, y: midY)
                 }
 
                 Circle()
-                    .fill(Theme.thumb)
-                    .overlay(Circle().strokeBorder(Theme.thumbStroke, lineWidth: 0.5))
-                    .shadow(color: Theme.thumbShadow, radius: 1.5, y: 0.5)
+                    .fill(colors.thumb)
+                    .overlay(Circle().strokeBorder(colors.thumbStroke, lineWidth: 0.5))
+                    .shadow(color: colors.thumbShadow, radius: 1.5, y: 0.5)
                     .frame(width: Theme.thumbSize, height: Theme.thumbSize)
                     .position(x: thumbX, y: midY)
             }
@@ -159,12 +161,12 @@ struct SliderTrack: View {
     }
 
     @ViewBuilder
-    private var trackShape: some View {
+    private func trackShape(_ colors: ThemeColors) -> some View {
         if let gradient = spec.track.gradient {
             Capsule().fill(LinearGradient(gradient: gradient, startPoint: .leading, endPoint: .trailing))
                 .opacity(0.9)
         } else {
-            Capsule().fill(Theme.track)
+            Capsule().fill(colors.track)
         }
     }
 }
