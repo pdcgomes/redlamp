@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Lints the staged Swift files with SwiftFormat, as CI does, so a commit can't break the build's
+# lint step. It reads the staged contents, not the working copy, so partly staged files are
+# judged on what is committed. Fix with `swiftformat <file>`; skip once with `--no-verify`.
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+swiftformat=(swiftformat)
+if command -v mise >/dev/null 2>&1; then
+    swiftformat=(mise exec -- swiftformat)
+fi
+
+failed=()
+while IFS= read -r -d '' file; do
+    case "$file" in
+        .build/* | build/* | vendor/* | */Derived/* | *.generated.swift) continue ;;
+    esac
+    if ! git show ":$file" | "${swiftformat[@]}" stdin --lint --stdinpath "$file" --quiet >/dev/null 2>&1; then
+        failed+=("$file")
+    fi
+done < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.swift')
+
+if ((${#failed[@]} > 0)); then
+    echo "SwiftFormat lint failed for these staged files:" >&2
+    printf '  %s\n' "${failed[@]}" >&2
+    echo "Run \`swiftformat <file>\`, stage the result and commit again (or commit with --no-verify)." >&2
+    exit 1
+fi

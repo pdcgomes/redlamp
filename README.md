@@ -945,6 +945,7 @@ mise run render -- render ~/Pictures/DSC01234.ARW -o out.jpg --size 2048 \
 
 | Task | What it does |
 | --- | --- |
+| `mise run setup` | Once per clone: use the repository's git hooks, whose pre-commit hook lints the staged Swift files with SwiftFormat as CI does |
 | `mise run generate` (`g`) | Vendor LibRaw and generate the Xcode workspace |
 | `mise run build` (`b`) | Build the macOS app |
 | `mise run run` (`r`) | Build and launch; pass a folder after `--` |
@@ -1124,7 +1125,7 @@ Redlamp is at an early stage and moving quickly. Issues and discussion are very 
 - **Clean-room policy.** No GPL or LGPL code or data. Algorithms are implemented from published papers and specifications. Reading GPL projects such as darktable and RawTherapee to understand an idea is fine, but never port, translate or paraphrase their code, and never copy their data (profiles, tables, presets).
 - **Third-party components:** LibRaw is used under its CDDL-1.0 option. Planned additions are lcms2 (MIT) and the lensfun database (CC-BY-SA, data only).
 - **Conventions:**
-  - Run `mise run lint` and `mise run test` before sending changes.
+  - Run `mise run setup` once, so commits are linted, and `mise run lint` and `mise run test` before sending changes.
   - Keep engine code free of UI imports.
   - New parameters go into the schema in `RedlampEngineAPI/Sources/ParameterSpec.swift`.
 - **Fixtures:** `mise run fixtures` downloads CC0 samples. Please don't commit RAW files.

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE description="One-time setup for a clone: use the repository's git hooks (.githooks)"
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+git config core.hooksPath .githooks
+echo "==> Git hooks enabled from .githooks (pre-commit: SwiftFormat lint of staged Swift files)"
