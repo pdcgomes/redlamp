@@ -4,6 +4,7 @@ import { AppIcon } from "@/components/brand/Logo";
 import { Badge } from "@/components/ui/Badge";
 import { GitHubGlyph, LinkButton } from "@/components/ui/Buttons";
 import { SectionHeading } from "@/components/ui/SectionHeading";
+import { latestRelease } from "@/lib/github";
 import { site } from "@/lib/site";
 
 const video = { src: "/video/redlamp-explainer.mp4", poster: "/video/redlamp-explainer-poster.jpg" };
@@ -29,7 +30,8 @@ export function ExplainerVideo() {
   );
 }
 
-export function OpenSource() {
+export async function OpenSource() {
+  const release = await latestRelease();
   return (
     <section id="open-source" className="scroll-mt-24 px-6 pb-28">
       <div className="surface relative mx-auto max-w-6xl overflow-hidden px-6 py-14 sm:px-12">
@@ -71,7 +73,7 @@ export function OpenSource() {
             </div>
             <div>
               <p className="text-[14px] font-semibold text-paper">
-                Homebrew <span className="font-normal text-mute">(with the first release)</span>
+                Homebrew {release ? null : <span className="font-normal text-mute">(with the first release)</span>}
               </p>
               <pre className="mt-3 overflow-x-auto rounded-xl border border-hairline bg-wall/80 p-4 font-mono text-[12.5px] leading-relaxed text-ring">
                 {site.homebrew.map((line) => `$ ${line}`).join("\n")}

@@ -9,17 +9,22 @@ DRY_RUN="${DRY_RUN:-0}"
 NOTARY_PROFILE="${REDLAMP_NOTARY_PROFILE:?REDLAMP_NOTARY_PROFILE is not set (run through mise)}"
 TEAM_ID="${REDLAMP_TEAM_ID:?REDLAMP_TEAM_ID is not set (run through mise)}"
 
-VERSION="$(sed -nE 's/^MARKETING_VERSION *= *([^ ]+).*/\1/p' Version.xcconfig)"
+fail() {
+    echo "error: $*" >&2
+    exit 1
+}
+
+# A release is origin/main, built in a clean worktree, so nothing uncommitted or untracked
+# in this checkout can end up in it.
+git fetch --quiet origin
+COMMIT="$(git rev-parse origin/main)"
+VERSION="$(git show "$COMMIT:Version.xcconfig" | sed -nE 's/^MARKETING_VERSION *= *([^ ]+).*/\1/p')"
+BUILD="$(git rev-list --count "$COMMIT")"
 TAG="v$VERSION"
 OUT="build/release"
 PRODUCTS="$OUT/DerivedData/Build/Products/Release"
 APP="$OUT/Redlamp.app"
 ZIP="$OUT/Redlamp-$VERSION.zip"
-
-fail() {
-    echo "error: $*" >&2
-    exit 1
-}
 
 # The keychain can hold several Developer ID certificates with the same name, which
 # codesign rejects as ambiguous, so sign by SHA-1.
@@ -28,30 +33,38 @@ IDENTITY="${REDLAMP_SIGN_IDENTITY:-$(security find-identity -v -p codesigning \
 [ -n "$IDENTITY" ] || fail "no Developer ID Application identity for team $TEAM_ID in the keychain"
 
 if [ "$DRY_RUN" != 1 ]; then
-    [ -z "$(git status --porcelain --untracked-files=no)" ] || fail "working tree has uncommitted changes"
-    git fetch --quiet origin
-    [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] || fail "HEAD is not origin/main; push or check out main first"
+    git diff --quiet "$COMMIT" -- Version.xcconfig \
+        || fail "Version.xcconfig has changes that aren't on origin/main, which is what gets released; push them first"
     if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || [ -n "$(git ls-remote --tags origin "refs/tags/$TAG")" ]; then
-        fail "$TAG already exists; bump MARKETING_VERSION in Version.xcconfig"
+        fail "$TAG already exists; bump MARKETING_VERSION in Version.xcconfig and push it"
     fi
     xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
         || fail "no notarytool keychain profile '$NOTARY_PROFILE' (see README: Releasing)"
     gh auth status >/dev/null 2>&1 || fail "gh is not signed in"
 fi
 
-echo "==> Releasing Redlamp $VERSION"
-mise run generate
+echo "==> Releasing Redlamp $VERSION (build $BUILD) from origin/main: $(git log -1 --format='%h %s' "$COMMIT")"
 rm -rf "$OUT"
 mkdir -p "$OUT"
+WORK="$(mktemp -d)"
+SRC="$WORK/redlamp"
+trap 'rm -rf "$WORK"; git worktree prune' EXIT
+git worktree add --quiet --detach "$SRC" "$COMMIT"
+# Reusing the vendored LibRaw saves a rebuild; generate still rebuilds it if its stamp doesn't
+# match the pinned version and shim.
+[ ! -d vendor/build/LibRaw.xcframework ] \
+    || ditto vendor/build/LibRaw.xcframework "$SRC/vendor/build/LibRaw.xcframework"
+(cd "$SRC" && mise run generate)
 
 for scheme in Redlamp redlamp; do
     echo "==> Building $scheme (Release, Developer ID)..."
     xcodebuild build \
-        -workspace Redlamp.xcworkspace \
+        -workspace "$SRC/Redlamp.xcworkspace" \
         -scheme "$scheme" \
         -configuration Release \
         -destination 'platform=macOS,arch=arm64' \
         -derivedDataPath "$OUT/DerivedData" \
+        CURRENT_PROJECT_VERSION="$BUILD" \
         CODE_SIGN_STYLE=Manual \
         CODE_SIGN_IDENTITY="$IDENTITY" \
         CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
@@ -87,8 +100,9 @@ mise run notarize -- "$APP"
 ditto -c -k --keepParent "$APP" "$ZIP"
 
 echo "==> Publishing $TAG..."
-git tag -a "$TAG" -m "Redlamp $VERSION"
+git tag -a "$TAG" "$COMMIT" -m "Redlamp $VERSION"
 git push origin "$TAG"
-gh release create "$TAG" "$ZIP" --verify-tag --title "Redlamp $VERSION" --generate-notes
+# redlamp.app's download button and the Homebrew cask follow the release marked Latest.
+gh release create "$TAG" "$ZIP" --verify-tag --latest --title "Redlamp $VERSION" --generate-notes
 
 echo "==> Released $TAG. The Update cask workflow points Casks/redlamp.rb at it."

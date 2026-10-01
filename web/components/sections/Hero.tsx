@@ -1,11 +1,16 @@
 import Image from "next/image";
 import { AppIcon } from "@/components/brand/Logo";
 import { Badge } from "@/components/ui/Badge";
-import { GitHubGlyph, LinkButton } from "@/components/ui/Buttons";
+import { DownloadGlyph, GitHubGlyph, LinkButton } from "@/components/ui/Buttons";
 import { heroShot } from "@/content/features";
+import { latestRelease } from "@/lib/github";
 import { site } from "@/lib/site";
 
-export function Hero() {
+export async function Hero() {
+  const release = await latestRelease();
+  // The pill already names the stage, so the version drops its -prealpha suffix.
+  const version = release?.version?.split("-")[0];
+  const status = `${site.status.stage}${version ? ` ${version}` : ""} · ${site.status.platform}`;
   return (
     <section className="px-6 pt-16 pb-10 sm:pt-24">
       <div className="mx-auto flex max-w-5xl flex-col items-center text-center">
@@ -15,7 +20,7 @@ export function Hero() {
         </div>
         <p className="animate-rise mt-8 inline-flex items-center gap-2 rounded-pill border border-hairline bg-paper/5 px-3 py-1 text-[12px] font-medium text-mute [animation-delay:120ms]">
           <span className="size-1.5 rounded-full bg-filament" />
-          {site.status}
+          {status}
         </p>
         <h1 className="font-display animate-rise mt-6 text-[clamp(2.3rem,6vw,4.25rem)] leading-[1.04] text-balance [animation-delay:200ms]">
           Lightroom&apos;s workflow.
@@ -28,7 +33,13 @@ export function Hero() {
           originals.
         </p>
         <div className="animate-rise mt-9 flex flex-wrap items-center justify-center gap-3 [animation-delay:360ms]">
-          <LinkButton href={site.github} variant="primary">
+          {release ? (
+            <LinkButton href={release.url} variant="primary">
+              <DownloadGlyph />
+              Download for Mac
+            </LinkButton>
+          ) : null}
+          <LinkButton href={site.github} variant={release ? "secondary" : "primary"}>
             <GitHubGlyph />
             View on GitHub
           </LinkButton>

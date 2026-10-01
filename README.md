@@ -911,7 +911,7 @@ mise run render -- render ~/Pictures/DSC01234.ARW -o out.jpg --size 2048 \
 | `mise run render` | Build and run the `redlamp` CLI |
 | `mise run screenshots` | Regenerate the README screenshots of the app and the harness, on temporary copies of the fixtures (needs Screen Recording permission, the fixtures and the look-development set) |
 | `mise run harness` (`h`) | Build and launch the UI component harness |
-| `mise run release` | Build, sign, notarize and publish the version in `Version.xcconfig` as a GitHub release (see [Releasing](#releasing)). `DRY_RUN=1` stops after signing |
+| `mise run release` | Build `origin/main` in a clean worktree, then sign, notarize and publish it as a GitHub release (see [Releasing](#releasing)). `DRY_RUN=1` stops after signing |
 | `mise run notarize -- <path>` | Notarize a signed `.app`, `.dmg` or `.zip`, then staple and check it with Gatekeeper |
 | `scripts/perf-sweep.sh [Debug\|Release] [parameter] [script]` | Drag a slider for 3 s and report main-thread smoothness. `PROFILE=1` adds a main-thread profile; `PANELS=swiftui` measures the SwiftUI panels |
 | `scripts/harness-capture.sh <scene> <png> [mode]` | Screenshot a harness scene; with `side` mode, `swift scripts/parity-diff.swift <png>` scores it and `scripts/parity-rows.swift` compares it row by row |
@@ -924,7 +924,9 @@ Releases are built and notarized on a Mac with the team's Developer ID Applicati
 xcrun notarytool store-credentials driftstation-notarize --apple-id <apple-id> --team-id 3JP75Z3F98
 ```
 
-Then bump `MARKETING_VERSION` in `Version.xcconfig`, commit and push to `main`, and run `mise run release`. It builds the app and CLI, puts the CLI in `Redlamp.app/Contents/Helpers`, and signs everything. It then notarizes and staples through `mise run notarize`, tags `v<version>`, and publishes `Redlamp-<version>.zip` as a GitHub release. The **Update cask** workflow then points `Casks/redlamp.rb` at the new release, so `brew upgrade` finds it.
+Versions follow semver, with the stage as a pre-release suffix until 1.0: `0.1.0-prealpha`, then `-alpha` and `-beta`. The build number is the count of commits on `main`, so it only goes up.
+
+To release, bump `MARKETING_VERSION` in `Version.xcconfig`, commit and push to `main`, and run `mise run release`. It always builds `origin/main` in a clean worktree, so uncommitted or untracked work in your checkout never ships. It builds the app and CLI, puts the CLI in `Redlamp.app/Contents/Helpers`, and signs everything. It then notarizes and staples through `mise run notarize`, tags `v<version>`, and publishes `Redlamp-<version>.zip` as the latest GitHub release. The **Update cask** workflow then points `Casks/redlamp.rb` at the new release, so `brew upgrade` finds it, and the download button on [redlamp.app](https://redlamp.app) links to it within the hour.
 
 ## Component harness
 

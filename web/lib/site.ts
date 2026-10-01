@@ -9,8 +9,8 @@ export const site = {
     "A native, open-source RAW photo editor for the Mac that anyone who knows Lightroom will find familiar.",
   description:
     "Redlamp is a native, open-source RAW photo editor for Apple Silicon, built from scratch in Swift and Metal. Lightroom's workflow, with no subscription and no cloud.",
-  status: "Pre-alpha · macOS 26",
-  stage: "early alpha preview",
+  status: { stage: "Pre-alpha", platform: "macOS 26" },
+  stage: "pre-alpha",
   github,
   githubRepo: "pdcgomes/redlamp",
   readme: `${github}#readme`,
