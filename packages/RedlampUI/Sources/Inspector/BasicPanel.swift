@@ -93,11 +93,7 @@ struct BaseLookMenu: View {
             Button("Browse Base Looks…") { browsing = true }
             Button("Film Looks…") { openWindow(id: FilmCatalogView.windowID) }
         } label: {
-            if let icon = FilmIconImage.image(for: current.id, points: 14) {
-                Label { Text(current.name).font(Theme.labelFont) } icon: { Image(nsImage: icon) }
-            } else {
-                Text(current.name).font(Theme.labelFont)
-            }
+            Text(current.name).font(Theme.labelFont)
         }
         .menuStyle(.button)
         .controlSize(.small)

@@ -641,29 +641,3 @@ public extension FilmLooks {
         return recipe
     }
 }
-
-/// Quick variations of a film look, set on top of it with standard sliders: what a lab or a
-/// photographer would ask of the same film. Natural is the film as it is.
-public enum FilmLookStyle: String, CaseIterable, Sendable {
-    case natural, soft, warm, punchy, faded
-
-    public var name: String {
-        rawValue.prefix(1).uppercased() + rawValue.dropFirst()
-    }
-
-    /// Every slider a style sets, so switching styles resets the others.
-    public static let parameters: [ParameterID] = [
-        .contrast, .highlights, .shadows, .blacks, .vibrance, .saturation, .clarity, .wbShiftRed, .wbShiftBlue,
-    ]
-
-    /// The style's values; any of `parameters` it doesn't list is at its default.
-    public var values: [ParameterID: Double] {
-        switch self {
-        case .natural: [:]
-        case .soft: [.contrast: -15, .highlights: -25, .shadows: 20]
-        case .warm: [.wbShiftRed: 25, .wbShiftBlue: -25]
-        case .punchy: [.contrast: 18, .vibrance: 18, .clarity: 10]
-        case .faded: [.blacks: 30, .contrast: -12, .saturation: -12]
-        }
-    }
-}
