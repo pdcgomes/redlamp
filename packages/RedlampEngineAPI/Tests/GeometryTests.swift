@@ -129,6 +129,34 @@ struct GeometryTests {
         #expect(GeometryMap(recipe: recipe, imageSize: size).staysInsideImage)
     }
 
+    @Test func `guided upright finds the correction that makes the guides vertical`() {
+        // A frame that needs Vertical −40: two building edges that are vertical once corrected.
+        var truth = Transform()
+        truth.vertical = -40
+        let map = GeometryMap(imageSize: size, transform: truth)
+        let guides = [0.25, 0.75].map { x in
+            let top = map.imagePoint(SIMD2(x, 0.15)) ?? .zero
+            let bottom = map.imagePoint(SIMD2(x, 0.85)) ?? .zero
+            return GuideLine(start: ImagePoint(x: top.x, y: top.y), end: ImagePoint(x: bottom.x, y: bottom.y))
+        }
+        let solved = Transform().guided(by: guides, imageSize: size, orientation: .identity)
+        #expect(abs(solved.vertical + 40) < 0.5, "vertical \(solved.vertical)")
+        #expect(abs(solved.horizontal) < 0.5 && abs(solved.rotate) < 0.05, "\(solved.horizontal), \(solved.rotate)")
+    }
+
+    @Test func `guided upright levels a tilted horizon with Rotate`() {
+        let radians = 3.0 * .pi / 180
+        let horizon = GuideLine(
+            start: ImagePoint(x: 0.1, y: 0.5 - 0.4 * tan(radians) * 1.5),
+            end: ImagePoint(x: 0.9, y: 0.5 + 0.4 * tan(radians) * 1.5),
+        )
+        let solved = Transform().guided(by: [horizon], imageSize: size, orientation: .identity)
+        let map = GeometryMap(imageSize: size, transform: solved)
+        let a = map.outputPoint(SIMD2(horizon.start.x, horizon.start.y)) ?? .zero
+        let b = map.outputPoint(SIMD2(horizon.end.x, horizon.end.y)) ?? .zero
+        #expect(abs((b.y - a.y) * 400) < 0.5, "the horizon is level: \((b.y - a.y) * 400) px")
+    }
+
     @Test func `crop and orientation are kept in the sidecar only when set`() throws {
         var recipe = EditRecipe()
         let plain = try JSONEncoder().encode(recipe)

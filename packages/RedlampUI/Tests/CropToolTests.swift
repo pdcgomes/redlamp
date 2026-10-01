@@ -126,6 +126,22 @@ struct CropToolTests {
         #expect(!model.isStraightening)
     }
 
+    @Test func `guided upright corrects from drawn guides, and Off removes it`() async throws {
+        let model = try await openModel()
+        model.activeTool = .edit
+        model.isPlacingGuides = true
+        // Two edges that lean in towards the top, as a building shot from below.
+        model.addGuide(GuideLine(start: ImagePoint(x: 0.27, y: 0.15), end: ImagePoint(x: 0.25, y: 0.85)))
+        model.addGuide(GuideLine(start: ImagePoint(x: 0.73, y: 0.15), end: ImagePoint(x: 0.75, y: 0.85)))
+        #expect(model.recipe[.transformVertical] < -5, "vertical \(model.recipe[.transformVertical])")
+        #expect(model.history.last?.name == "Guided Upright")
+        #expect(model.uprightGuides.count == 2)
+        #expect(model.perform(.cancel))
+        #expect(!model.isPlacingGuides)
+        model.clearUpright()
+        #expect(model.recipe.isDefault(.transformVertical) && model.uprightGuides.isEmpty)
+    }
+
     @Test func `reset removes the crop, angle and turns`() async throws {
         let model = try await openModel()
         model.setValue(.cropAngle, 3)

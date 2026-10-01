@@ -190,6 +190,39 @@ public extension EditorModel {
         commit(next, name: "Straighten")
     }
 
+    /// Adds a Guided Upright guide (up to four, the oldest giving way) and solves again.
+    func addGuide(_ guide: GuideLine) {
+        uprightGuides.append(guide)
+        if uprightGuides.count > 4 {
+            uprightGuides.removeFirst()
+        }
+        applyGuidedUpright()
+    }
+
+    /// The Vertical, Horizontal and Rotate that make the guides upright or level.
+    func applyGuidedUpright() {
+        guard let info, !uprightGuides.isEmpty else { return }
+        let solved = Transform(recipe: recipe).guided(
+            by: uprightGuides, imageSize: info.pixelSize, orientation: recipe.orientation,
+        )
+        var next = recipe
+        next[.transformVertical] = solved.vertical
+        next[.transformHorizontal] = solved.horizontal
+        next[.transformRotate] = solved.rotate
+        constrainCrop(&next)
+        commit(next, name: "Guided Upright")
+    }
+
+    /// Upright off: no guides, and no perspective or rotation correction.
+    func clearUpright() {
+        uprightGuides = []
+        isPlacingGuides = false
+        var next = recipe
+        next.reset([.transformVertical, .transformHorizontal, .transformRotate])
+        constrainCrop(&next)
+        commit(next, name: "Upright: Off")
+    }
+
     /// Removes the crop, angle and orientation.
     func resetCrop() {
         var next = recipe

@@ -17,7 +17,7 @@ struct CanvasArea: View {
                 CanvasView(
                     feed: model.frames,
                     controller: model.canvas,
-                    clickAction: model.activeTool == .masking || model.activeTool == .crop
+                    clickAction: model.activeTool == .masking || model.activeTool == .crop || model.isPlacingGuides
                         ? .none : (model.eyedropperActive ? .sample : .zoom),
                     surround: model.colorAssessment
                         ? CanvasMetalView.assessmentSurround
@@ -44,6 +44,11 @@ struct CanvasArea: View {
         .overlay {
             if model.activeTool == .crop, model.info != nil, !model.isShowingOriginal {
                 CropOverlayView()
+            }
+        }
+        .overlay {
+            if model.isPlacingGuides, model.activeTool == .edit, model.info != nil, !model.isShowingOriginal {
+                GuidesOverlayView()
             }
         }
         .overlay {

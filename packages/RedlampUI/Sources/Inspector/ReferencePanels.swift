@@ -64,13 +64,31 @@ struct LensToggle: View {
     }
 }
 
+/// Upright: Off and Guided work today; the automatic modes need a line detector (LNS-07).
 struct UprightButtons: View {
+    @Environment(EditorModel.self) private var model
+
     var body: some View {
         HStack(spacing: 4) {
-            ForEach(["Off", "Auto", "Guided", "Level", "Vertical", "Full"], id: \.self) { mode in
+            Button("Off") { model.clearUpright() }
+                .controlSize(.mini)
+                .help("Remove Upright's perspective and rotation")
+            ForEach(["Auto"], id: \.self) { mode in
                 Button(mode) {}
                     .controlSize(.mini)
                     .disabled(true)
+                    .help("Automatic Upright needs line detection, which comes later in Phase 2")
+            }
+            Button("Guided") { model.isPlacingGuides.toggle() }
+                .controlSize(.mini)
+                .tint(model.isPlacingGuides ? Color.accentColor : nil)
+                .buttonStyle(.bordered)
+                .help("Draw up to four guides along edges that should be vertical or horizontal")
+            ForEach(["Level", "Vertical", "Full"], id: \.self) { mode in
+                Button(mode) {}
+                    .controlSize(.mini)
+                    .disabled(true)
+                    .help("Automatic Upright needs line detection, which comes later in Phase 2")
             }
         }
     }

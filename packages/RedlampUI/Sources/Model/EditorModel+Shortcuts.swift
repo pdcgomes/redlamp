@@ -239,6 +239,10 @@ public extension EditorModel {
             cancelDrawing()
         } else if eyedropperActive {
             eyedropperActive = false
+        } else if isPlacingGuides {
+            isPlacingGuides = false
+        } else if isStraightening {
+            isStraightening = false
         } else if isPresenting {
             togglePresentation()
         } else if lightsOut > 0 {

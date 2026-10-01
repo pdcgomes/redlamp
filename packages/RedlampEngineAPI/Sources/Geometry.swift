@@ -378,3 +378,83 @@ public extension EditRecipe {
         GeometryMap(recipe: self, imageSize: imageSize).outputSize
     }
 }
+
+/// A Guided Upright guide: a line along an edge that should be vertical or horizontal, in the
+/// photo's own coordinates (EXIF-oriented), so it stays on its edge as the correction applies.
+public struct GuideLine: Codable, Sendable, Hashable {
+    public var start: ImagePoint
+    public var end: ImagePoint
+
+    public init(start: ImagePoint, end: ImagePoint) {
+        self.start = start
+        self.end = end
+    }
+}
+
+public extension Transform {
+    /// Lightroom's Guided Upright: the Vertical, Horizontal and Rotate that turn each guide
+    /// upright or level (whichever it is nearer, as shown), keeping `self`'s other sliders. A
+    /// few Levenberg–Marquardt steps on the guides' angles, damped towards the smallest
+    /// correction, so two verticals don't invent a horizontal turn.
+    func guided(by guides: [GuideLine], imageSize: PixelSize, orientation: ImageOrientation) -> Transform {
+        let canvas = orientation.swapsAxes ? PixelSize(width: imageSize.height, height: imageSize.width) : imageSize
+        let (w, h) = (Double(canvas.width), Double(canvas.height))
+        // The guides in the oriented photo, in pixels about its centre: what Transform maps.
+        let lines = guides.compactMap { guide -> (SIMD3<Double>, SIMD3<Double>, Bool)? in
+            func oriented(_ point: ImagePoint) -> SIMD3<Double> {
+                let mapped = orientation.matrix * SIMD3(point.x, point.y, 1)
+                return SIMD3((mapped.x / mapped.z - 0.5) * w, (mapped.y / mapped.z - 0.5) * h, 1)
+            }
+            let a = oriented(guide.start), b = oriented(guide.end)
+            guard simd_distance(SIMD2(a.x, a.y), SIMD2(b.x, b.y)) > 1 else { return nil }
+            return (a, b, abs(b.y - a.y) >= abs(b.x - a.x))
+        }
+        guard !lines.isEmpty else { return self }
+
+        func candidate(_ p: SIMD3<Double>) -> Transform {
+            var transform = self
+            transform.vertical = min(max(p.x, -100), 100)
+            transform.horizontal = min(max(p.y, -100), 100)
+            transform.rotate = min(max(p.z, -10), 10)
+            return transform
+        }
+        func residuals(_ p: SIMD3<Double>) -> [Double] {
+            let matrix = candidate(p).matrix(canvas: canvas)
+            return lines.map { a, b, vertical in
+                let pa = matrix * a, pb = matrix * b
+                let dx = pb.x / pb.z - pa.x / pa.z, dy = pb.y / pb.z - pa.y / pa.z
+                // The angle away from vertical or level, whichever way the guide was drawn.
+                let angle = vertical ? atan2(dx, dy) : atan2(dy, dx)
+                return remainder(angle, .pi)
+            }
+        }
+        // Far below the guides' sensitivity (about 2e-4 radians per slider unit, squared), so it
+        // only holds still what the guides don't determine.
+        let damping = 1e-12
+        var p = SIMD3(vertical, horizontal, rotate)
+        for _ in 0 ..< 50 {
+            let r = residuals(p)
+            let step = 1e-3
+            let columns = (0 ..< 3).map { axis -> [Double] in
+                var moved = p
+                moved[axis] += step
+                return zip(residuals(moved), r).map { ($0 - $1) / step }
+            }
+            // (JᵀJ + λI) δ = −Jᵀr − λp: the damping also pulls towards no correction.
+            var normal = simd_double3x3(diagonal: SIMD3(repeating: damping))
+            var gradient = -damping * p
+            for i in 0 ..< 3 {
+                for j in 0 ..< 3 {
+                    normal[j][i] += zip(columns[i], columns[j]).map(*).reduce(0, +)
+                }
+                gradient[i] -= zip(columns[i], r).map(*).reduce(0, +)
+            }
+            let delta = normal.inverse * gradient
+            p += delta
+            if simd_length(delta) < 1e-7 {
+                break
+            }
+        }
+        return candidate(p)
+    }
+}

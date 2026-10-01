@@ -207,6 +207,12 @@ public final class EditorModel {
     public var cropOverlayTurns = 0
     /// The next drag in the Crop tool draws a line to level (as ⌘-drag always does).
     public var isStraightening = false
+    /// Guided Upright: drags on the canvas draw guides, in the photo's coordinates.
+    public var isPlacingGuides = false {
+        didSet { requestRender() }
+    }
+
+    public internal(set) var uprightGuides: [GuideLine] = []
     public var constrainCropToImage = true {
         didSet {
             guard constrainCropToImage, !oldValue else { return }
@@ -493,6 +499,8 @@ public final class EditorModel {
         historyIndex = 0
         isLoading = false
         cropIntent = loaded.crop
+        uprightGuides = []
+        isPlacingGuides = false
         let frameSize = loaded.developedSize(imageSize: opened.pixelSize)
         if !hasFrame {
             showOnCanvas(frameSize)
