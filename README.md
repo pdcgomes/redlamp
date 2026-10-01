@@ -80,7 +80,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] Tested on Sony **ARW**, Canon **CR3**, Nikon **NEF**, Fujifilm **RAF** (X-Trans), Apple **ProRAW DNG** and Google **Pixel DNG**, plus JPEG, HEIC, TIFF, and PNG.
 - [x] The demosaiced image is cached as a full mip pyramid, so interactive renders sample the right resolution for the zoom level.
 - [x] A single fused Metal kernel applies every per-pixel adjustment. Frames are delivered as IOSurfaces, so pixels are never copied between engine and UI.
-- [x] Latest-wins render scheduling: a burst of slider events collapses to the newest one.
+- [x] Latest-wins render scheduling: a burst of slider events collapses to the newest one. Stills wait in two lanes, previews (look thumbnails) ahead of exports, and yield to the canvas between tiles, so an export never holds up a frame by more than a tile; a cancelled still stops at its next tile, and exports rest between tiles when the Mac runs hot.
 - [x] Rendering stays off the main thread while you drag a slider. Frames go straight to the canvas, which a dedicated display-link thread presents, and each view observes only the values it shows.
 - [x] Both side panels are AppKit: the histogram, tool strip and every Develop and Masking panel on the right, and the Navigator, Recipes, Snapshots and History on the left. They match the SwiftUI originals pixel for pixel, and a component harness is used to build and review them (see [Component harness](#component-harness)).
 - [x] Temperature and tint use a proper camera white-balance model (Robertson's method with the camera's color matrix). As Shot, Auto, and the illuminant presets all work.
@@ -804,7 +804,7 @@ The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on mac
 - [x] Develop workspace on macOS, Basic panel, histogram, before/after, sidecars, undo, and export
 - [x] Layer and mask engine, with linear and radial gradient masks, local adjustments, and the Masking panel
 - [ ] Sandboxed XPC decode helper
-- [ ] Render scheduler with priority lanes, tile cancellation, and thermal awareness
+- [x] Render scheduler with priority lanes, tile cancellation, and thermal awareness
 - [ ] Coordinated sidecar I/O for iCloud Drive
 
 ### Phase 2: Develop parity *(in progress)*

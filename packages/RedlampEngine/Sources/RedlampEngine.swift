@@ -11,13 +11,16 @@ import Synchronization
 
 /// The concrete rendering engine. UI code only ever sees it as an `EditingEngine`.
 ///
-/// Threading: interactive renders run on one dedicated serial queue. `render(_:)` only
-/// swaps the pending request, so a burst of slider events collapses to the newest one.
+/// Threading: all GPU encoding runs on one dedicated serial queue, which owns the caches and
+/// scratch textures. `render(_:)` only swaps the pending request, so a burst of slider events
+/// collapses to the newest one. Stills wait in two lanes (previews before exports) and yield
+/// between tiles, so the canvas never waits for more than a tile (see `yieldBetweenTiles`).
 public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     let device: any MTLDevice
     let queue: any MTLCommandQueue
     let kernels: KernelLibrary
     let renderQueue = DispatchQueue(label: "app.redlamp.engine.render", qos: .userInteractive)
+    static let renderQueueKey = DispatchSpecificKey<Bool>()
     private let signposts = OSSignposter(subsystem: "app.redlamp.engine", category: .pointsOfInterest)
 
     private struct RenderState {
@@ -42,6 +45,11 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     let sessions: SessionCache
     private let openGeneration = Mutex<UInt64>(0)
     private let renderState = Mutex(RenderState())
+    let stillLanes = Mutex(StillLanes())
+    /// The stills being rendered, innermost last (a preview can run inside an export's yield).
+    /// Owned by `renderQueue`.
+    var runningStills: [StillJob] = []
+    let thermalState: @Sendable () -> ProcessInfo.ThermalState
     private let continuation = Mutex<AsyncStream<RenderedFrame>.Continuation?>(nil)
 
     // Owned by `renderQueue`.
@@ -65,8 +73,14 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         try self.init(stillTile: 2048)
     }
 
-    init(stillTile: Int, stackCache: URL = FocusStackCache.defaultRoot) throws {
+    init(
+        stillTile: Int,
+        stackCache: URL = FocusStackCache.defaultRoot,
+        thermalState: @escaping @Sendable () -> ProcessInfo.ThermalState = { ProcessInfo.processInfo.thermalState },
+    ) throws {
         self.stillTile = stillTile
+        self.thermalState = thermalState
+        renderQueue.setSpecific(key: Self.renderQueueKey, value: true)
         guard let device = MTLCreateSystemDefaultDevice(),
               let queue = device.makeCommandQueue(),
               // Background decodes get their own queue so they never delay an interactive render.
@@ -153,15 +167,24 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
 
     private func drainRenders() {
         while true {
-            let next = renderState.withLock { state -> RenderRequest? in
-                if let pending = state.pending {
-                    state.pending = nil
-                    return pending
-                }
+            serveInteractive()
+            let done = renderState.withLock { state -> Bool in
+                guard state.pending == nil else { return false }
                 state.isRunning = false
-                return nil
+                return true
             }
-            guard let request = next else { return }
+            if done {
+                return
+            }
+        }
+    }
+
+    /// Renders pending interactive requests until none is left. On `renderQueue` only.
+    func serveInteractive() {
+        while let request = renderState.withLock({ state -> RenderRequest? in
+            defer { state.pending = nil }
+            return state.pending
+        }) {
             guard let current = session.withLock({ $0 }) else { continue }
             do {
                 let frame = try renderFrame(request, session: current)
@@ -364,10 +387,14 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         if let source = request.source, source.standardizedFileURL != current.info.url.standardizedFileURL {
             throw EngineError.imageChanged
         }
-        return try await withCheckedThrowingContinuation { continuation in
-            renderQueue.async { [self] in
-                continuation.resume(with: Result { try renderStillNow(request, session: current) })
+        let job = StillJob(request: request, session: current)
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                job.continuation.withLock { $0 = continuation }
+                schedule(job)
             }
+        } onCancel: { [self] in
+            cancel(job)
         }
     }
 
@@ -513,6 +540,7 @@ extension RedlampEngine {
         let fullTexture = try linearTexture(full)
         let encoding: OutputEncoding = request.colorSpace == .sRGB ? .linearSRGB : .linear
         try developStill(request.recipe, session: session, into: fullTexture, size: full, encoding: encoding)
+        try yieldBetweenTiles()
         let scaled = try linearTexture(size)
         guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
         MPSImageLanczosScale(device: device).encode(
@@ -566,6 +594,7 @@ extension RedlampEngine {
                 )
                 blit.endEncoding()
                 try finish(commands)
+                try yieldBetweenTiles()
             }
         }
     }
