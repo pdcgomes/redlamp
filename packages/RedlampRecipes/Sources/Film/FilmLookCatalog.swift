@@ -24,6 +24,9 @@ public struct FilmLookDefinition: Sendable, Hashable {
     public var version: Int
     /// Lint checks the look fails by design, such as a cross-processed look's skin.
     public var lintWaivers: Set<String> = []
+    /// The bundled table's size: 33 (0.5 EV a step across the scene range), more for a steep
+    /// look, whose curve would otherwise show the steps.
+    public var tableSize = 33
     public var parameters: FilmLookParameters
     /// Grain, halation and bloom, as Effects panel values.
     public var effects: [ParameterID: Double]
@@ -474,10 +477,11 @@ public enum FilmLookCatalog {
                 label: "G4",
             ),
             monochrome: true,
-            film: "kodak-tri-x-400", print: "ilford-multigrade-rc", printVariant: ["filter": "4"], flare: 0.004,
+            // 2: a 49-sample table, since grade 4's steep curve showed a 33-sample table's steps.
+            film: "kodak-tri-x-400", version: 2, print: "ilford-multigrade-rc", printVariant: ["filter": "4"],
+            flare: 0.004,
             grain: (34, 36, 0), roughness: 65, halation: (5, 40),
-            // Grade 4's steep curve shows the table's 0.5 EV steps on a full-range gradient (TON-24).
-            lintWaivers: ["banding"],
+            tableSize: 49,
         ),
         look(
             "vision3-2383-bleach-bypass", "Vision3 500T · 2383 Bleach Bypass",
@@ -544,8 +548,6 @@ public enum FilmLookCatalog {
         }
     }
 
-    /// The table size the bundled looks ship at (0.5 EV a step across the scene range).
-    public static let bundledTableSize = 33
 
     private static func look(
         _ id: String,
@@ -572,6 +574,7 @@ public enum FilmLookCatalog {
         halation: (amount: Double, size: Double),
         bloom: (amount: Double, size: Double)? = nil,
         lintWaivers: Set<String> = [],
+        tableSize: Int = 33,
     ) -> FilmLookDefinition {
         var parameters = FilmLookParameters()
         parameters.scanner = scanner
@@ -594,7 +597,7 @@ public enum FilmLookCatalog {
             version: version,
             // Cross-processing shifts skin by design.
             lintWaivers: lintWaivers.union(process == .crossProcessed ? ["skin-hue"] : []),
-            parameters: parameters, effects: effects,
+            tableSize: tableSize, parameters: parameters, effects: effects,
         )
     }
 }
@@ -609,7 +612,7 @@ public extension FilmLooks {
 
     /// The look's bundled Base Look package, built from the datasheets.
     static func bundledPackage(for look: FilmLookDefinition, data directory: URL?) throws -> BaseLookPackage {
-        let table = try table(for: look, size: FilmLookCatalog.bundledTableSize, data: directory)
+        let table = try table(for: look, size: look.tableSize, data: directory)
         return BaseLookPackage(
             id: look.baseLookID, version: look.version, name: look.name,
             summary: "\(look.summary). Built from \(look.maker)'s published datasheet.", parameters: .identity,
