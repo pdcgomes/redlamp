@@ -397,6 +397,16 @@ public final class EditorModel {
         drawingKind = nil
         openTask?.cancel()
         if let opened = engine.openIfReady(url) {
+            // A sidecar iCloud Drive evicted downloads first, which mustn't block the main thread.
+            guard sidecars.isAvailableLocally(for: url) else {
+                isLoading = true
+                openTask = Task { [sidecars] in
+                    let sidecar = await Task.detached(priority: .userInitiated) { sidecars.load(for: url) }.value
+                    guard selection == url, !Task.isCancelled else { return }
+                    didOpen(opened, sidecar: sidecar)
+                }
+                return
+            }
             didOpen(opened, sidecar: sidecars.load(for: url))
             return
         }
@@ -407,10 +417,12 @@ public final class EditorModel {
         isLoading = true
         Task { await loadThumbnail(for: url) }
         openTask = Task { [engine, sidecars] in
+            let loading = Task.detached(priority: .userInitiated) { sidecars.load(for: url) }
             do {
                 let opened = try await engine.open(url)
+                let sidecar = await loading.value
                 guard selection == url else { return }
-                didOpen(opened, sidecar: sidecars.load(for: url))
+                didOpen(opened, sidecar: sidecar)
             } catch is CancellationError {
                 return
             } catch {

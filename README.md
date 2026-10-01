@@ -208,6 +208,7 @@ With both side panels in AppKit, most of what remains is Core Animation committi
 - AI mask edges are snapped to the photo when the mask is made (a guided filter, freedom-to-operate pending as DEC-05), not refined again at render time.
 - Local Whites and Blacks are approximated with tonal-region gains.
 - The app is not sandboxed yet (required later for the Mac App Store). iPad and iPhone come in Phase 5.
+- Sidecars are read and written under file coordination, so iCloud Drive syncs them safely and conflicting copies merge (the newest edit wins, the others become snapshots). A photo that is open doesn't reload yet when another Mac changes its edit.
 
 **Fixed in iteration 2:**
 - White balance now works for linear DNGs such as iPhone ProRAW.
@@ -805,7 +806,7 @@ The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on mac
 - [x] Layer and mask engine, with linear and radial gradient masks, local adjustments, and the Masking panel
 - [ ] Sandboxed XPC decode helper
 - [x] Render scheduler with priority lanes, tile cancellation, and thermal awareness
-- [ ] Coordinated sidecar I/O for iCloud Drive
+- [x] Coordinated sidecar I/O for iCloud Drive
 
 ### Phase 2: Develop parity *(in progress)*
 - [x] Texture, Clarity and Dehaze, globally and inside masks

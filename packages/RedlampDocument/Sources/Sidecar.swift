@@ -121,6 +121,10 @@ public enum SidecarStoreError: Error, Equatable {
 /// the same path; they are read as they are and become packages on their next save. The JSON is
 /// written atomically, and bitmaps are content-addressed and written before the JSON that
 /// names them, so a crash never leaves an edit pointing at a missing or torn file.
+///
+/// Every read and write is coordinated (`NSFileCoordinator`), so iCloud Drive and other
+/// presenters never see a half-written package, and a read waits for a sidecar iCloud Drive
+/// has evicted to download. Conflicting copies from two Macs are resolved on load (see `merge`).
 public struct SidecarStore: Sendable {
     public static let editFile = "edit.json"
     public static let masksDirectory = "masks"
@@ -134,41 +138,168 @@ public struct SidecarStore: Sendable {
 
     /// The edit's JSON: `edit.json` in a package, or the single-file sidecar itself.
     public func editURL(for image: URL) -> URL {
-        let sidecar = url(for: image)
-        return isPackage(sidecar) ? sidecar.appending(path: Self.editFile) : sidecar
+        Self.editURL(inSidecar: url(for: image))
     }
 
     public func bitmapURL(_ sha256: String, for image: URL) -> URL {
-        url(for: image).appending(path: Self.masksDirectory).appending(path: "\(sha256).png")
+        Self.bitmapURL(sha256, inSidecar: url(for: image))
+    }
+
+    /// Whether reading the sidecar can't block on a download: it is missing, local, or
+    /// already downloaded from iCloud Drive.
+    public func isAvailableLocally(for image: URL) -> Bool {
+        let status = try? url(for: image).resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey])
+            .ubiquitousItemDownloadingStatus
+        return status == nil || status == .current || status == .downloaded
     }
 
     public func load(for image: URL) -> Sidecar? {
-        guard let data = try? Data(contentsOf: editURL(for: image)),
-              var sidecar = try? JSONDecoder.sidecar.decode(Sidecar.self, from: data)
-        else { return nil }
-        let bitmaps = { (sha: String) in try? Data(contentsOf: bitmapURL(sha, for: image)) }
-        sidecar.recipe.loadMaskBitmaps(bitmaps)
-        for index in sidecar.snapshots.indices {
-            sidecar.snapshots[index].recipe.loadMaskBitmaps(bitmaps)
-        }
-        return sidecar
+        let sidecar = url(for: image)
+        guard let loaded = (try? Self.reading(sidecar) { Self.decode(sidecar: $0) }) ?? nil else { return nil }
+        return resolveConflicts(loaded, for: image) ?? loaded
     }
 
     /// Whether the image's sidecar uses a file format or process version this build
     /// doesn't have. Such edits can be shown, but saving would lose information.
     public func isWrittenByNewerVersion(for image: URL) -> Bool {
-        guard let data = try? Data(contentsOf: editURL(for: image)) else { return false }
-        return Self.isNewer(data)
+        let sidecar = url(for: image)
+        return (try? Self.reading(sidecar) { url in
+            (try? Data(contentsOf: Self.editURL(inSidecar: url))).map(Self.isNewer) ?? false
+        }) ?? false
     }
 
     /// Writes the sidecar unless nothing but `modified` changed, so unchanged edits don't
     /// wake up sync services. Fields a newer Redlamp added to the file on disk are kept.
     public func save(_ sidecar: Sidecar, for image: URL) throws {
         let destination = url(for: image)
+        let options: NSFileCoordinator.WritingOptions = Self.isPackage(destination) ? [] : .forReplacing
+        try Self.writing(destination, options: options) { destination in
+            try Self.write(sidecar, to: destination)
+        }
+    }
+
+    /// Removes the sidecar, unless a newer Redlamp wrote it.
+    public func delete(for image: URL) {
+        let sidecar = url(for: image)
+        try? Self.writing(sidecar, options: .forDeleting) { url in
+            if let data = try? Data(contentsOf: Self.editURL(inSidecar: url)), Self.isNewer(data) {
+                return
+            }
+            try FileManager.default.removeItem(at: url)
+        }
+    }
+
+    // MARK: - Conflicts
+
+    /// Conflicting copies, made when the same photo was edited on two Macs before iCloud Drive
+    /// synced them. The most recently modified edit wins, and every other distinct edit is kept
+    /// as a snapshot of the winner, so nothing is lost; snapshots of every copy are kept too.
+    public static func merge(_ current: Sidecar, _ conflicts: [Sidecar]) -> Sidecar {
+        let copies = [current] + conflicts
+        var winner = copies.reduce(current) { $1.modified > $0.modified ? $1 : $0 }
+        var snapshots = winner.snapshots
+        for copy in copies {
+            for snapshot in copy.snapshots where !snapshots.contains(where: { $0.id == snapshot.id }) {
+                snapshots.append(snapshot)
+            }
+        }
+        for copy in copies
+            where copy.recipe != winner.recipe && !snapshots.contains(where: { $0.recipe == copy.recipe }) {
+            snapshots.append(Snapshot(
+                name: "Edit from another Mac, \(copy.modified.formatted(date: .abbreviated, time: .shortened))",
+                created: copy.modified,
+                recipe: copy.recipe,
+            ))
+        }
+        winner.snapshots = snapshots
+        for copy in copies {
+            winner.unknownFields.merge(copy.unknownFields) { kept, _ in kept }
+        }
+        return winner
+    }
+
+    /// Merges and saves the sidecar's unresolved conflict versions, then marks them resolved;
+    /// nil when there are none (or they can't be merged now, so they stay for the next load).
+    private func resolveConflicts(_ current: Sidecar, for image: URL) -> Sidecar? {
+        let sidecar = url(for: image)
+        guard let versions = NSFileVersion.unresolvedConflictVersionsOfItem(at: sidecar), !versions.isEmpty
+        else { return nil }
+        let merged = Self.merge(current, versions.compactMap { Self.decode(sidecar: $0.url) })
+        do {
+            try save(merged, for: image)
+            for version in versions {
+                version.isResolved = true
+            }
+            try Self.writing(sidecar, options: []) { url in
+                try NSFileVersion.removeOtherVersionsOfItem(at: url)
+            }
+            return merged
+        } catch {
+            return nil
+        }
+    }
+
+    // MARK: - Files
+
+    /// Runs `body` with coordinated read access to `url`.
+    static func reading<T>(_ url: URL, _ body: (URL) throws -> T) throws -> T {
+        var result: Result<T, any Error>?
+        var coordinationError: NSError?
+        NSFileCoordinator(filePresenter: nil).coordinate(readingItemAt: url, error: &coordinationError) { url in
+            result = Result { try body(url) }
+        }
+        if let coordinationError {
+            throw coordinationError
+        }
+        return try (result ?? .failure(CocoaError(.fileReadUnknown))).get()
+    }
+
+    /// Runs `body` with coordinated write access to `url`.
+    static func writing<T>(
+        _ url: URL,
+        options: NSFileCoordinator.WritingOptions,
+        _ body: (URL) throws -> T,
+    ) throws -> T {
+        var result: Result<T, any Error>?
+        var coordinationError: NSError?
+        NSFileCoordinator(filePresenter: nil).coordinate(
+            writingItemAt: url, options: options, error: &coordinationError,
+        ) { url in
+            result = Result { try body(url) }
+        }
+        if let coordinationError {
+            throw coordinationError
+        }
+        return try (result ?? .failure(CocoaError(.fileWriteUnknown))).get()
+    }
+
+    private static func editURL(inSidecar sidecar: URL) -> URL {
+        isPackage(sidecar) ? sidecar.appending(path: editFile) : sidecar
+    }
+
+    private static func bitmapURL(_ sha256: String, inSidecar sidecar: URL) -> URL {
+        sidecar.appending(path: masksDirectory).appending(path: "\(sha256).png")
+    }
+
+    /// The sidecar at `sidecar` (a package or a single file), with its mask bitmaps.
+    private static func decode(sidecar: URL) -> Sidecar? {
+        guard let data = try? Data(contentsOf: editURL(inSidecar: sidecar)),
+              var decoded = try? JSONDecoder.sidecar.decode(Sidecar.self, from: data)
+        else { return nil }
+        let bitmaps = { (sha: String) in try? Data(contentsOf: bitmapURL(sha, inSidecar: sidecar)) }
+        decoded.recipe.loadMaskBitmaps(bitmaps)
+        for index in decoded.snapshots.indices {
+            decoded.snapshots[index].recipe.loadMaskBitmaps(bitmaps)
+        }
+        return decoded
+    }
+
+    /// The write itself, under coordination.
+    private static func write(_ sidecar: Sidecar, to destination: URL) throws {
         let existingPackage = isPackage(destination)
         var sidecar = sidecar
-        if let data = try? Data(contentsOf: editURL(for: image)) {
-            if Self.isNewer(data) {
+        if let data = try? Data(contentsOf: editURL(inSidecar: destination)) {
+            if isNewer(data) {
                 throw SidecarStoreError.writtenByNewerVersion(destination)
             }
             if let existing = try? JSONDecoder.sidecar.decode(Sidecar.self, from: data) {
@@ -182,7 +313,7 @@ public struct SidecarStore: Sendable {
         let fileManager = FileManager.default
         if existingPackage {
             try writeBitmaps(of: sidecar, into: destination)
-            try json.write(to: destination.appending(path: Self.editFile), options: .atomic)
+            try json.write(to: destination.appending(path: editFile), options: .atomic)
             removeUnusedBitmaps(of: sidecar, in: destination)
             return
         }
@@ -192,7 +323,7 @@ public struct SidecarStore: Sendable {
         try fileManager.createDirectory(at: staging, withIntermediateDirectories: false)
         do {
             try writeBitmaps(of: sidecar, into: staging)
-            try json.write(to: staging.appending(path: Self.editFile), options: .atomic)
+            try json.write(to: staging.appending(path: editFile), options: .atomic)
             if fileManager.fileExists(atPath: destination.path) {
                 _ = try fileManager.replaceItemAt(destination, withItemAt: staging)
             } else {
@@ -204,13 +335,7 @@ public struct SidecarStore: Sendable {
         }
     }
 
-    /// Removes the sidecar, unless a newer Redlamp wrote it.
-    public func delete(for image: URL) {
-        guard !isWrittenByNewerVersion(for: image) else { return }
-        try? FileManager.default.removeItem(at: url(for: image))
-    }
-
-    private func isPackage(_ url: URL) -> Bool {
+    private static func isPackage(_ url: URL) -> Bool {
         var isDirectory: ObjCBool = false
         return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
     }
@@ -219,19 +344,17 @@ public struct SidecarStore: Sendable {
         sidecar.recipe.maskBitmaps + sidecar.snapshots.flatMap(\.recipe.maskBitmaps)
     }
 
-    private func hasEveryBitmap(_ sidecar: Sidecar, in package: URL) -> Bool {
-        Self.bitmaps(of: sidecar).allSatisfy { bitmap in
-            FileManager.default.fileExists(
-                atPath: package.appending(path: Self.masksDirectory).appending(path: "\(bitmap.sha256).png").path,
-            )
+    private static func hasEveryBitmap(_ sidecar: Sidecar, in package: URL) -> Bool {
+        bitmaps(of: sidecar).allSatisfy { bitmap in
+            FileManager.default.fileExists(atPath: bitmapURL(bitmap.sha256, inSidecar: package).path)
         }
     }
 
     /// Writes the bitmaps the package doesn't have yet. A bitmap whose bytes weren't loaded is
     /// left as it is.
-    private func writeBitmaps(of sidecar: Sidecar, into package: URL) throws {
-        let masks = package.appending(path: Self.masksDirectory)
-        for bitmap in Self.bitmaps(of: sidecar) {
+    private static func writeBitmaps(of sidecar: Sidecar, into package: URL) throws {
+        let masks = package.appending(path: masksDirectory)
+        for bitmap in bitmaps(of: sidecar) {
             let file = masks.appending(path: "\(bitmap.sha256).png")
             guard let png = bitmap.png, !FileManager.default.fileExists(atPath: file.path) else { continue }
             try FileManager.default.createDirectory(at: masks, withIntermediateDirectories: true)
@@ -240,9 +363,9 @@ public struct SidecarStore: Sendable {
     }
 
     /// Bitmaps no edit or snapshot names any more.
-    private func removeUnusedBitmaps(of sidecar: Sidecar, in package: URL) {
-        let masks = package.appending(path: Self.masksDirectory)
-        let used = Set(Self.bitmaps(of: sidecar).map { "\($0.sha256).png" })
+    private static func removeUnusedBitmaps(of sidecar: Sidecar, in package: URL) {
+        let masks = package.appending(path: masksDirectory)
+        let used = Set(bitmaps(of: sidecar).map { "\($0.sha256).png" })
         let files = (try? FileManager.default.contentsOfDirectory(atPath: masks.path)) ?? []
         for file in files where file.hasSuffix(".png") && !used.contains(file) {
             try? FileManager.default.removeItem(at: masks.appending(path: file))
