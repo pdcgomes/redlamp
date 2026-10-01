@@ -119,10 +119,17 @@ struct ProcessVersion: View {
             ParameterSlider(parameter: .vignetteRoundness)
             ParameterSlider(parameter: .vignetteFeather)
             ParameterSlider(parameter: .vignetteHighlights)
-            SubsectionHeader(title: "Grain", parameters: [.grainAmount, .grainSize, .grainRoughness])
+            SubsectionHeader(title: "Grain", parameters: [.grainAmount, .grainSize, .grainRoughness, .grainColor])
             ParameterSlider(parameter: .grainAmount)
             ParameterSlider(parameter: .grainSize)
             ParameterSlider(parameter: .grainRoughness)
+            ParameterSlider(parameter: .grainColor)
+            SubsectionHeader(title: "Halation", parameters: [.halationAmount, .halationSize])
+            ParameterSlider(parameter: .halationAmount)
+            ParameterSlider(parameter: .halationSize)
+            SubsectionHeader(title: "Bloom", parameters: [.bloomAmount, .bloomSize])
+            ParameterSlider(parameter: .bloomAmount)
+            ParameterSlider(parameter: .bloomSize)
             SubsectionHeader(title: "Camera Recipe", parameters: PanelID.cameraRecipeParameters)
             ForEach(PanelID.cameraRecipeParameters, id: \.self) { ParameterSlider(parameter: $0) }
         }

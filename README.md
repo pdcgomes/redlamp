@@ -15,9 +15,9 @@ Redlamp is built from scratch in Swift and Metal for Apple Silicon. It focuses o
 
 ![Redlamp editing a Nikon Z 6 raw file](docs/images/editor.png)
 
-> **Status: pre-alpha, iteration 2 (macOS).** The core RAW pipeline and the Develop workspace work today: Basic (with Texture, Clarity and Dehaze), Tone Curve, Color Mixer, Color Grading, Detail (noise reduction and sharpening) and Effects, **masking with linear and radial gradients** and local adjustments, and **Recipes**, Redlamp's presets, profiles and LUTs in one, with film looks measured from cameras' own renderings. Crop, healing, brush and AI masks, lens corrections, focus stacking, and the iPad and iPhone apps are next. See [Where we are](#where-we-are) and the [Roadmap](#roadmap).
+> **Status: pre-alpha, iteration 2 (macOS).** The core RAW pipeline and the Develop workspace work today: Basic (with Texture, Clarity and Dehaze), Tone Curve, Color Mixer, Color Grading, Detail (noise reduction and sharpening) and Effects, **masking with linear and radial gradients** and local adjustments, and **Recipes**, Redlamp's presets, profiles and LUTs in one, with film looks measured from cameras' own renderings and **[film simulations](#film-simulations)** of 11 film stocks built from the manufacturers' datasheets. Crop, healing, brush and AI masks, lens corrections, focus stacking, and the iPad and iPhone apps are next. See [Where we are](#where-we-are) and the [Roadmap](#roadmap).
 >
-> This README is the project's primary status page and is kept up to date as work lands. *Last updated: 30 September 2026.*
+> This README is the project's primary status page and is kept up to date as work lands. *Last updated: 1 October 2026.*
 
 ---
 
@@ -26,6 +26,7 @@ Redlamp is built from scratch in Swift and Metal for Apple Silicon. It focuses o
 - [Why Redlamp](#why-redlamp)
 - [Goals](#goals)
 - [Where we are](#where-we-are)
+- [Film simulations](#film-simulations)
 - [Screenshots](#screenshots)
 - [Roadmap](#roadmap)
 - [Installation](#installation)
@@ -140,6 +141,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
   | Soft Slide v2 | Astia | 5 photos, 3 bodies, provisional | 4.57 (12.84) |
 
   The others are hand-designed until there's data for them ([look development](docs/recipes/look-development.md#measured-base-looks-the-profiler)). Looks keep Redlamp's own names.
+- [x] **Film simulations** of 11 stocks, built physically from the manufacturers' datasheets, with halation, bloom and colour grain, a **Film Looks** window and film icons in the Base Look menu ([details](#film-simulations)).
 - [x] **Look-development tools:** lint (neutral axis, skin hue, monotonic lightness, banding, clipping) on a synthetic chart, golden renders per recipe version, style fingerprints and a fitter, and the **Recipe Lab** in the [component harness](#component-harness).
 - [x] **An agent recipe studio** ([docs](docs/recipes/agent-studio.md)): curator, colorist and critic agents work through `redlamp mcp` on briefs drawn from public-domain references. People approve the briefs and pick the winners in the Recipe Lab, and the critics are only trusted after they agree with human picks on held-out pairs.
 
@@ -193,6 +195,152 @@ With both side panels in AppKit, most of what remains is Core Animation committi
 - The Navigator outlines the zoomed viewport.
 - The loading placeholder now shows while a photo decodes.
 - Dragging a slider no longer stutters. Every change used to re-render every panel and wait on the canvas's drawable on the main thread.
+
+## Film simulations
+
+Redlamp's film looks are **physical simulations**, built from the data in each manufacturer's own datasheet: characteristic curves, spectral sensitivities and dye spectra, digitised into [`research/film-data/`](research/film-data/). Most film presets are tuned by eye.
+
+The [film model](docs/plans/2026-09-30-film-looks-design.md) follows the scene's light through the film:
+1. Each colour becomes a spectrum.
+2. The film's three layers record that spectrum through their own sensitivities.
+3. The characteristic curves turn exposure into dye, with interlayer effects and colour masking.
+4. A negative is printed on its print stock or scanned the way a lab scanner reads it. A slide is lit on a light box.
+5. The result is seen through the colour-matching functions of human vision.
+
+Each look ships as a scene-referred Base Look. It takes the place of Redlamp's tone curve, so the film's own toe, shoulder and colour crossovers reach the photo. Each look also comes with the film's **grain, halation and bloom** in the Effects panel. Grain follows each datasheet's published granularity, and halation is strongest on CineStill, which has no anti-halation layer.
+
+![The Film Looks window: the open photo in every film, with Portra 400 applied](docs/images/film-catalog.png)
+
+**Using them:**
+- **Window ▸ Film Looks** (`⇧⌘L`) shows the open photo in every film. Hover over a card to preview the look in the editor; click to apply it with its grain, halation and bloom. An Amount slider adjusts the applied look's strength, and tabs filter the cards by colour negative, cinema, slide, and black and white.
+- **Basic ▸ Base Look ▸ Film Stocks**, with each film's icon, sets only the look, as a Lightroom profile does.
+- **Recipes ▸ Film Stocks** in the sidebar applies the look with its effects.
+- **Effects ▸ Grain** (with a new **Color** slider for grain in each dye layer), **Halation** and **Bloom** work on any photo.
+
+![CineStill 800T applied in the editor, with its grain, halation and bloom in the Effects panel](docs/images/film-editor.png)
+
+### The catalogue
+
+| | Look | Film | Rendered as | Grain / halation |
+| --- | --- | --- | --- | --- |
+| <img src="docs/images/film/icon-portra-400.png" width="32" alt=""> | [Portra 400](#portra-400) | Kodak colour negative, ISO 400 | Scanned, Frontier-like | 20 / 8 |
+| <img src="docs/images/film/icon-ektar-100.png" width="32" alt=""> | [Ektar 100](#ektar-100) | Kodak colour negative, ISO 100 | Scanned, Frontier-like | 8 / 6 |
+| <img src="docs/images/film/icon-gold-200.png" width="32" alt=""> | [Gold 200](#gold-200) | Kodak colour negative, ISO 200 | Scanned, Frontier-like | 23 / 9 |
+| <img src="docs/images/film/icon-superia-400.png" width="32" alt=""> | [Superia 400](#superia-400) | Fujifilm colour negative, ISO 400 | Scanned, Frontier-like | 24 / 8 |
+| <img src="docs/images/film/icon-cinestill-800t.png" width="32" alt=""> | [CineStill 800T](#cinestill-800t) | CineStill tungsten colour negative, ISO 800 | Scanned, Noritsu-like | 26 / 70, bloom 8 |
+| <img src="docs/images/film/icon-vision3-500t-2383.png" width="32" alt=""> | [Vision3 500T · 2383](#vision3-500t-2383) | Kodak cinema negative on 2383 print film, ISO 500 | Printed on 2383 and projected | 24 / 14, bloom 6 |
+| <img src="docs/images/film/icon-provia-100f.png" width="32" alt=""> | [Provia 100F](#provia-100f) | Fujifilm slide film, ISO 100 | Slide, viewed on a light box | 8 / 4 |
+| <img src="docs/images/film/icon-velvia-50.png" width="32" alt=""> | [Velvia 50](#velvia-50) | Fujifilm slide film, ISO 50 | Slide, viewed on a light box | 9 / 4 |
+| <img src="docs/images/film/icon-tri-x-400.png" width="32" alt=""> | [Tri-X 400](#tri-x-400) | Kodak black and white negative, ISO 400 | Scanned | 37 / 5 |
+| <img src="docs/images/film/icon-hp5-plus.png" width="32" alt=""> | [HP5 Plus](#hp5-plus) | Ilford black and white negative, ISO 400 | Scanned | 40 / 5 |
+| <img src="docs/images/film/icon-tri-x-multigrade.png" width="32" alt=""> | [Tri-X · Darkroom Print](#tri-x-multigrade) | Kodak Tri-X printed on Ilford Multigrade paper, grade 2 | Printed on paper | 34 / 5 |
+
+Every look on the same photo:
+
+![Every film look on one photo](docs/images/film/overview.jpg)
+
+### Examples
+
+Each example shows three CC0 photos from the [look-development set](docs/recipes/look-development.md#the-look-development-set): a landscape, flowers and a night street. The top row is Redlamp's default rendering, the bottom row the film look with its grain, halation and bloom.
+
+<a id="portra-400"></a>
+
+#### <img src="docs/images/film/icon-portra-400.png" width="24" alt=""> Portra 400
+
+Warm and gentle. Kind to skin, with soft greens and a little extra warmth in the highlights, as a Frontier lab scan renders it.
+
+![Portra 400: the original above, the look below](docs/images/film/look-portra-400.jpg)
+
+<a id="ektar-100"></a>
+
+#### <img src="docs/images/film/icon-ektar-100.png" width="24" alt=""> Ektar 100
+
+Kodak's finest-grained colour negative: richer reds and deeper colour than Portra.
+
+![Ektar 100: the original above, the look below](docs/images/film/look-ektar-100.jpg)
+
+<a id="gold-200"></a>
+
+#### <img src="docs/images/film/icon-gold-200.png" width="24" alt=""> Gold 200
+
+Warm consumer film. Golden yellows, slightly greener foliage and more grain.
+
+![Gold 200: the original above, the look below](docs/images/film/look-gold-200.jpg)
+
+<a id="superia-400"></a>
+
+#### <img src="docs/images/film/icon-superia-400.png" width="24" alt=""> Superia 400
+
+Cooler than the Kodak stocks, with Fujifilm's greens.
+
+![Superia 400: the original above, the look below](docs/images/film/look-superia-400.jpg)
+
+<a id="cinestill-800t"></a>
+
+#### <img src="docs/images/film/icon-cinestill-800t.png" width="24" alt=""> CineStill 800T
+
+Vision3 500T without its anti-halation backing. Bright lights glow red-orange, the look of night streets and neon.
+
+![CineStill 800T: the original above, the look below](docs/images/film/look-cinestill-800t.jpg)
+
+<a id="vision3-500t-2383"></a>
+
+#### <img src="docs/images/film/icon-vision3-500t-2383.png" width="24" alt=""> Vision3 500T · 2383
+
+The motion-picture look: a cinema negative printed on release print film. Softer and denser, with cool shadows and warm highlights.
+
+![Vision3 500T · 2383: the original above, the look below](docs/images/film/look-vision3-500t-2383.jpg)
+
+<a id="provia-100f"></a>
+
+#### <img src="docs/images/film/icon-provia-100f.png" width="24" alt=""> Provia 100F
+
+Clean, natural slide film. Contrasty, with deep skies and dense shadows, exposed for the highlights.
+
+![Provia 100F: the original above, the look below](docs/images/film/look-provia-100f.jpg)
+
+<a id="velvia-50"></a>
+
+#### <img src="docs/images/film/icon-velvia-50.png" width="24" alt=""> Velvia 50
+
+The landscape slide: saturated greens, yellows and blues, and more contrast still.
+
+![Velvia 50: the original above, the look below](docs/images/film/look-velvia-50.jpg)
+
+<a id="tri-x-400"></a>
+
+#### <img src="docs/images/film/icon-tri-x-400.png" width="24" alt=""> Tri-X 400
+
+Classic black and white. Bright and crisp, with pronounced, sharp grain.
+
+![Tri-X 400: the original above, the look below](docs/images/film/look-tri-x-400.jpg)
+
+<a id="hp5-plus"></a>
+
+#### <img src="docs/images/film/icon-hp5-plus.png" width="24" alt=""> HP5 Plus
+
+Softer and grainier than Tri-X, with a gentler shoulder.
+
+![HP5 Plus: the original above, the look below](docs/images/film/look-hp5-plus.jpg)
+
+<a id="tri-x-multigrade"></a>
+
+#### <img src="docs/images/film/icon-tri-x-multigrade.png" width="24" alt=""> Tri-X · Darkroom Print
+
+A darkroom print: deeper blacks and the paper's own contrast.
+
+![Tri-X · Darkroom Print: the original above, the look below](docs/images/film/look-tri-x-multigrade.jpg)
+
+### How faithful are they?
+
+- **The colour comes from the datasheets.** It follows each stock's own curves, sensitivities and dyes, and the stocks keep their published order of contrast and grain.
+- **A lab's scan or print timing shapes the rest.** Negatives are scanned by a modelled lab scanner calibrated on a grey scale. Its Frontier-like and Noritsu-like profiles are characterised from how labs describe the two scanners, not measured from them. The 2383 print is timed partway back to neutral, as a colourist would.
+- **Some data is borrowed or uncertain.** Portra, Ektar, Gold and Superia publish no individual dye curves and borrow Vision3's. The 2383 sensitivity curve is the least certain trace in the data.
+- **Grain doesn't yet vary with density** and is sized in pixels rather than relative to the frame (TON-19).
+
+Kodak, Portra, Ektar, Gold, Vision3, Tri-X, Fujifilm, Superia, Provia, Velvia, Ilford, HP5, Multigrade and CineStill are trademarks of their owners. Redlamp isn't affiliated with them: its looks are built from the published technical data.
+
+**Rebuilding them:** `redlamp recipe film --all --install --readme` builds every look from the datasheets, installs the tables the app bundles, and regenerates the icons and images on this page. Bundled looks are versioned and never change once published; a test fails if the datasheets or the model would build a different look under the same version.
 
 ## Screenshots
 
@@ -481,7 +629,7 @@ Redlamp follows Lightroom Classic's Develop-module shortcuts. Press **⌘/** in 
 | **Tools** | `D` Edit · `⇧W` Masking · `M` linear gradient · `⇧M` radial gradient · `R` crop, `A` crop aspect lock *(Phase 2)* · `Q` healing *(Phase 3)* · `K` brush, `⇧J` color range, `⇧Q` luminance range *(Phase 2)* · `⇧Z` depth range *(Phase 3)* |
 | **Masking** | `O` show/hide overlay · `⇧O` cycle overlay color · `H` show/hide pins · `⌫` delete selected mask · `Esc` cancel drawing or leave the tool |
 | **Rating & flags** | `0`–`5` star rating · `[` `]` decrease/increase rating · `P` pick · `X` reject · `U` unflag · `6`–`9` red, yellow, green, blue label · add `⇧` to any of these to also move to the next photo |
-| **File** | `⌘O` open folder · `⇧⌘E` export · `⌘/` keyboard shortcuts |
+| **File** | `⌘O` open folder · `⇧⌘E` export · `⌘/` keyboard shortcuts · `⇧⌘L` Film Looks window |
 
 Ratings, flags and color labels are saved in the photo's sidecar and shown on the filmstrip.
 

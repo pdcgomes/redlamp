@@ -125,7 +125,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case labelRed, labelYellow, labelGreen, labelBlue
 
     /// File & Edit
-    case openFolder, export, showShortcuts
+    case openFolder, export, showShortcuts, filmLooks
 
     public var id: String {
         rawValue
@@ -155,7 +155,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .rating0, .rating1, .rating2, .rating3, .rating4, .rating5, .decreaseRating, .increaseRating,
              .flagPick, .flagReject, .unflag, .labelRed, .labelYellow, .labelGreen, .labelBlue:
             .rating
-        case .openFolder, .export, .showShortcuts:
+        case .openFolder, .export, .showShortcuts, .filmLooks:
             .file
         }
     }
@@ -242,6 +242,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .openFolder: "Open Folder…"
         case .export: "Export…"
         case .showShortcuts: "Keyboard Shortcuts"
+        case .filmLooks: "Film Looks"
         case .findAdjustment: "Find Adjustment…"
         }
     }
@@ -329,6 +330,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .openFolder: [.char("o", command: true)]
         case .export: [.char("e", shift: true, command: true)]
         case .showShortcuts: [.char("/", command: true)]
+        case .filmLooks: [.char("l", shift: true, command: true)]
         case .findAdjustment: [.char("f", command: true)]
         }
     }

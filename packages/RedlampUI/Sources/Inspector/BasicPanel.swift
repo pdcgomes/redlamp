@@ -65,6 +65,7 @@ struct TreatmentPicker: View {
 /// installed ones, plus the browser.
 struct BaseLookMenu: View {
     @Environment(EditorModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
     @State private var browsing = false
 
     var body: some View {
@@ -79,6 +80,8 @@ struct BaseLookMenu: View {
                         } label: {
                             if look.matches(current) {
                                 Label(look.name, systemImage: "checkmark")
+                            } else if let icon = FilmIconImage.image(for: look.id, points: 18) {
+                                Label { Text(look.name) } icon: { Image(nsImage: icon) }
                             } else {
                                 Text(look.name)
                             }
@@ -88,6 +91,7 @@ struct BaseLookMenu: View {
             }
             Divider()
             Button("Browse Base Looks…") { browsing = true }
+            Button("Film Looks…") { openWindow(id: FilmCatalogView.windowID) }
         } label: {
             Text(current.name).font(Theme.labelFont)
         }

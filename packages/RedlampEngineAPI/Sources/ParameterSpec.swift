@@ -355,6 +355,11 @@ public enum ParameterCatalog {
             ParameterSpec(.grainAmount, "Amount", range: 0 ... 100, format: .integer),
             ParameterSpec(.grainSize, "Size", range: 0 ... 100, default: 25, format: .integer),
             ParameterSpec(.grainRoughness, "Roughness", range: 0 ... 100, default: 50, format: .integer),
+            ParameterSpec(.grainColor, "Color", range: 0 ... 100, format: .integer),
+            ParameterSpec(.halationAmount, "Amount", range: 0 ... 100, format: .integer),
+            ParameterSpec(.halationSize, "Size", range: 0 ... 100, default: 50, format: .integer),
+            ParameterSpec(.bloomAmount, "Amount", range: 0 ... 100, format: .integer),
+            ParameterSpec(.bloomSize, "Size", range: 0 ... 100, default: 50, format: .integer),
             ParameterSpec(.colorChrome, "Color Chrome", range: 0 ... 100, format: .integer),
             ParameterSpec(.colorChromeBlue, "Chrome FX Blue", range: 0 ... 100, format: .integer),
 

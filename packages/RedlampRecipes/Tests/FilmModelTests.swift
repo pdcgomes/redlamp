@@ -67,6 +67,57 @@ struct FilmModelTests {
         }
     }
 
+    @Test func `every catalogue look builds a recipe with its effects`() throws {
+        for look in FilmLookCatalog.looks {
+            let recipe = try FilmLooks.recipe(for: look, size: 9, data: Self.data)
+            #expect(recipe.includes.isSuperset(of: [.baseLook, .effects]), "\(look.id)")
+            #expect(recipe.settings[.grainAmount] > 0, "\(look.id)")
+            #expect(recipe.embeddedBaseLooks.first?.table != nil, "\(look.id)")
+            let monochrome = try FilmLooks.stock(look.film, in: Self.data).kind.isMonochrome
+            #expect((recipe.settings.treatment == .blackAndWhite) == monochrome, "\(look.id)")
+        }
+        #expect(Set(FilmLookCatalog.looks.map(\.id)).count == FilmLookCatalog.looks.count)
+    }
+
+    @Test func `every film look ships, matching what its datasheets build`() throws {
+        for look in FilmLookCatalog.looks {
+            let shipped = try #require(
+                BuiltInBaseLooks.package(id: look.baseLookID, version: FilmLookCatalog.bundledVersion),
+                "\(look.id) isn't bundled; run `redlamp recipe film --all --install`",
+            )
+            let built = try FilmLooks.bundledPackage(for: look, data: Self.data)
+            // Values rather than hashes: libm may round differently on another OS release.
+            let a = try #require(try shipped.definition().table), b = try #require(try built.definition().table)
+            let worst = zip(a.values, b.values).map { abs(Float($0) - Float($1)) }.max() ?? 0
+            #expect(worst < 2e-3, "\(look.id): the look changed; bump FilmLookCatalog.bundledVersion and reinstall")
+            let recipe = try #require(BuiltInRecipes.recipe(id: look.recipeID), "\(look.id) has no bundled recipe")
+            #expect(recipe.baseLook == shipped.reference)
+            #expect(recipe.group == "Film Stocks")
+            #expect(FilmLookCatalog.look(forBundledID: shipped.id) == look)
+            #expect(look.isMonochrome == (try FilmLooks.stock(look.film, in: Self.data).kind.isMonochrome), "\(look.id)")
+        }
+    }
+
+    @Test func `every film icon draws`() throws {
+        for look in FilmLookCatalog.looks {
+            let image = try #require(look.icon.image(pixels: 64), "\(look.id)")
+            #expect(image.width == 64 && image.height == 64)
+            let data = try #require(image.dataProvider?.data as Data?)
+            let opaque = stride(from: 3, to: data.count, by: 4).count { data[$0] > 200 }
+            #expect(opaque > 64 * 64 / 4, "\(look.id): the icon is mostly empty")
+        }
+    }
+
+    @Test func `scanner profiles keep mid-grey neutral`() throws {
+        for scanner in ScannerProfile.allCases {
+            var parameters = FilmLookParameters()
+            parameters.scanner = scanner
+            let grey = try FilmModel(film: Self.stock("kodak-portra-400"), parameters: parameters)
+                .display(SIMD3(repeating: 0.18))
+            #expect(grey.max() - grey.min() < 2e-3, "\(scanner): \(grey)")
+        }
+    }
+
     @Test func `the look is a scene-referred table`() throws {
         let table = try FilmModel(film: .syntheticNegative, print: .syntheticPrint).table(size: 9)
         #expect(table.space == .sceneLog)

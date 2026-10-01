@@ -6,6 +6,7 @@ struct AppCommands: Commands {
     let model: EditorModel
     let onOpen: () -> Void
     let onExport: () -> Void
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
@@ -73,6 +74,11 @@ struct AppCommands: Commands {
             Menu("Develop Panels") {
                 ForEach(ShortcutAction.allCases.filter { $0.category == .panels && $0.isMenuShortcut }) { item($0) }
             }
+            Divider()
+        }
+
+        CommandGroup(before: .windowList) {
+            item(.filmLooks) { openWindow(id: FilmCatalogView.windowID) }
             Divider()
         }
 

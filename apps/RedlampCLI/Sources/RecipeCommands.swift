@@ -30,6 +30,9 @@ enum RecipeCommands {
       film [--film <stock>] [--print <stock>] [--exposure <ev>] [--interlayer <k>] [--grey <display>]
            [--negative-density <d>] [--flare <f>] [--name <name>] [--count <images>] [--out <dir>]
                                                build a look with the film model (no --film lists stocks)
+      film --all | --look <id> [--install] [--readme]
+                                               build the film catalogue's looks; --install bundles their
+                                               tables, --readme writes docs/images/film
       app-kit [--compact] [-o <folder>]        write the phone capture kit for app filters (--compact:
                                                one image per filter instead of 3 charts and 8 photos)
       app-import <folder|export> --name <name> [--app prequel|lightroom] [--filter <name>] [--kit <folder>]

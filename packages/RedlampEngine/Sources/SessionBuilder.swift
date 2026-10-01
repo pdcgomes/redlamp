@@ -88,7 +88,8 @@ struct SessionBuilder {
         let hazeMap = try Haze.encodeMap(
             pyramid: pyramid, airlight: airlight, device: device, kernels: kernels, commands: hazeCommands,
         )
-        // Renders run on another queue, so the map must be finished before the session is.
+        let glowSource = try Glow.encodeSource(pyramid: pyramid, device: device, kernels: kernels, commands: hazeCommands)
+        // Renders run on another queue, so the maps must be finished before the session is.
         hazeCommands.commit()
         hazeCommands.waitUntilCompleted()
         if let error = hazeCommands.error {
@@ -109,6 +110,7 @@ struct SessionBuilder {
             repairedPixels: Int(repairedCount.contents().load(as: UInt32.self)),
             airlight: airlight,
             hazeMap: hazeMap,
+            glowSource: glowSource,
             noiseGain: noiseGain,
         )
     }

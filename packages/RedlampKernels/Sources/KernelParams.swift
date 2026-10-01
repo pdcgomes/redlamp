@@ -152,6 +152,8 @@ public struct DevelopParams {
     public var lookTable = SIMD4<Float>(0, 2, 0, 0)
     public var recipe = SIMD4<Float>(0, 0, 0, 0)
     public var haze = SIMD4<Float>(0, 0, 0, 0)
+    public var glow = SIMD4<Float>(0, 0, 0, 0)
+    public var grain2 = SIMD4<Float>(0, 0, 0, 0)
 
     public init() {}
 
@@ -271,6 +273,16 @@ public struct DetailLocalParams {
         self.place = place
         self.size = size
         self.geometry = geometry
+    }
+}
+
+public struct GlowParams {
+    public var size: SIMD4<Int32>
+    public var shape: SIMD4<Float>
+
+    public init(size: SIMD4<Int32>, shape: SIMD4<Float>) {
+        self.size = size
+        self.shape = shape
     }
 }
 

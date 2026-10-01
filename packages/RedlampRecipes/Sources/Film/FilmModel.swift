@@ -26,8 +26,57 @@ public struct FilmLookParameters: Sendable, Hashable, Codable {
     /// grey neutral, with the middle layer's toe and shoulder; 0 keeps each layer's own curve, so
     /// the stock's colour crossovers show in shadows and highlights.
     public var scanNeutral = 0.8
+    /// For a scanned negative: the lab scanner's own rendering.
+    public var scanner = ScannerProfile.neutral
+    /// For a print: how far the colourist's timing pulls the grey scale's colour crossovers
+    /// (cool shadows, warm highlights on 2383) back to neutral. 0 leaves the stocks' own.
+    public var printNeutral = 0.6
 
     public init() {}
+}
+
+/// A lab scanner's signature on top of its calibration: contrast, saturation, and the tints its
+/// rendering gives shadows and highlights (log2 per channel, none at mid-grey). The Frontier and
+/// Noritsu profiles are characterised from how labs and photographers describe the two
+/// scanners, not measured; measured scans of a target would replace them.
+public enum ScannerProfile: String, Sendable, Hashable, Codable, CaseIterable {
+    case neutral
+    /// Fujifilm Frontier-like: punchier and more saturated, green-cyan shadows, warm highlights.
+    case frontier
+    /// Noritsu-like: softer, close to neutral, a touch warm in the highlights.
+    case noritsu
+
+    var contrast: Double {
+        switch self {
+        case .neutral: 1
+        case .frontier: 1.08
+        case .noritsu: 0.96
+        }
+    }
+
+    var saturation: Double {
+        switch self {
+        case .neutral: 1
+        case .frontier: 1.12
+        case .noritsu: 1.02
+        }
+    }
+
+    var shadowTint: SIMD3<Double> {
+        switch self {
+        case .neutral: .zero
+        case .frontier: SIMD3(-0.07, 0.03, 0.03)
+        case .noritsu: SIMD3(0, 0, 0.015)
+        }
+    }
+
+    var highlightTint: SIMD3<Double> {
+        switch self {
+        case .neutral: .zero
+        case .frontier: SIMD3(0.04, 0.01, -0.06)
+        case .noritsu: SIMD3(0.02, 0.01, -0.025)
+        }
+    }
 }
 
 /// Scene light through a film (and, for negatives, a print) to display colour.
@@ -88,6 +137,11 @@ final class FilmModel {
         1 / (1 + exp(-x))
     }
 
+    private static func smoothstep(_ edge0: Double, _ edge1: Double, _ x: Double) -> Double {
+        let t = min(max((x - edge0) / (edge1 - edge0), 0), 1)
+        return t * t * (3 - 2 * t)
+    }
+
     private func setUp() {
         filmDyes = film.dyes
         if film.kind == .negative, film.dyes.count == 3 {
@@ -126,6 +180,27 @@ final class FilmModel {
             balance = Array(repeating: 0, count: film.layerCount)
         }
         solveBalance()
+        if print != nil, !film.kind.isMonochrome, parameters.printNeutral > 0 {
+            setUpPrintTiming()
+        }
+    }
+
+    /// Per channel, the print's display value against the grey scale's luminance there, so a
+    /// grey maps to neutral.
+    private var printTiming: [SampledCurve] = []
+
+    private func setUpPrintTiming() {
+        let ramp = stride(from: -12.0, through: 8.0, by: 0.1).map { stop in
+            printed(SIMD3(repeating: 0.18 * pow(2, stop)))
+        }
+        let luminance = ramp.map { simd_dot($0, SIMD3(0.2627, 0.6780, 0.0593)) }
+        printTiming = (0 ..< 3).map { channel in
+            var values = ramp.map { $0[channel] }
+            for i in 1 ..< values.count {
+                values[i] = max(values[i], values[i - 1] + 1e-9)
+            }
+            return SampledCurve(x: values, y: luminance)
+        }
     }
 
     // MARK: - The chain
@@ -165,7 +240,7 @@ final class FilmModel {
         scanGrey = scanSensors.map { negative.dot($0) }
         scanGammas = film.curves.map { curve in
             let slope = (curve(greyLogExposure + 0.1) - curve(greyLogExposure - 0.1)) / 0.2
-            return parameters.scanContrast / max(slope, 0.2)
+            return parameters.scanContrast * parameters.scanner.contrast / max(slope, 0.2)
         }
         // The grey scale the scanner is calibrated on: each channel's reading against exposure.
         let stops = stride(from: -14.0, through: 10.0, by: 0.1).map(\.self)
@@ -249,7 +324,18 @@ final class FilmModel {
     }
 
     private func scan(_ negative: Spectrum) -> SIMD3<Double> {
-        let scene = simd_clamp(scanGain * (scanMatrix * rawScan(negative)), SIMD3(repeating: 0), SIMD3(repeating: 64))
+        var scanned = simd_max(scanMatrix * rawScan(negative), SIMD3(repeating: 0))
+        let scanner = parameters.scanner
+        if scanner != .neutral, !film.kind.isMonochrome {
+            let luma = max(simd_dot(scanned, SIMD3(0.2627, 0.6780, 0.0593)), 1e-9)
+            scanned = simd_max(luma + scanner.saturation * (scanned - luma), SIMD3(repeating: 0))
+            let ev = log2(luma / 0.18)
+            let shadows = 1 - Self.smoothstep(-4, 0, ev)
+            let highlights = Self.smoothstep(0, 3, ev)
+            let tint = shadows * scanner.shadowTint + highlights * scanner.highlightTint
+            scanned *= SIMD3(pow(2, tint.x), pow(2, tint.y), pow(2, tint.z))
+        }
+        let scene = simd_clamp(scanGain * scanned, SIMD3(repeating: 0), SIMD3(repeating: 64))
         return SIMD3<Double>(RedlampToneCurve.apply(SIMD3<Float>(scene)))
     }
 
@@ -258,6 +344,16 @@ final class FilmModel {
         if isScan {
             return parameters.flare + (1 - parameters.flare) * scan(transmittance(of: upsampler.radiance(scene)))
         }
+        var rgb = printed(scene)
+        if !printTiming.isEmpty {
+            let timed = SIMD3(printTiming[0](rgb.x), printTiming[1](rgb.y), printTiming[2](rgb.z))
+            rgb += parameters.printNeutral * (timed - rgb)
+        }
+        return parameters.flare + (1 - parameters.flare) * rgb
+    }
+
+    /// The print (or slide) as viewed, before timing and flare.
+    private func printed(_ scene: SIMD3<Double>) -> SIMD3<Double> {
         var viewed = transmittance(of: upsampler.radiance(scene))
         if let print {
             let logE = zip(print.sensitivities, printNorms).enumerated().map { j, pair in
@@ -271,7 +367,7 @@ final class FilmModel {
         if film.kind.isMonochrome {
             rgb = SIMD3(repeating: (Colorimetry.rec2020ToXYZ * rgb).y)
         }
-        return parameters.flare + (1 - parameters.flare) * rgb
+        return rgb
     }
 
     /// Newton's method on the balance so mid-grey displays neutral at `displayGrey`.

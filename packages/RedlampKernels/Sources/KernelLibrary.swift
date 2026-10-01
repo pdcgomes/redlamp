@@ -42,6 +42,7 @@ public final class KernelLibrary: @unchecked Sendable {
     public let detailLocal: any MTLComputePipelineState
     public let hazeDark: any MTLComputePipelineState
     public let hazeFilter: any MTLComputePipelineState
+    public let glowSource: any MTLComputePipelineState
     public let rawClipping: any MTLComputePipelineState
     public let encodeSRGB: any MTLComputePipelineState
 
@@ -92,6 +93,7 @@ public final class KernelLibrary: @unchecked Sendable {
         detailLocal = try pipeline("rl_detail_local")
         hazeDark = try pipeline("rl_haze_dark")
         hazeFilter = try pipeline("rl_haze_filter")
+        glowSource = try pipeline("rl_glow_source")
         rawClipping = try pipeline("rl_raw_clipping")
         encodeSRGB = try pipeline("rl_encode_srgb")
     }

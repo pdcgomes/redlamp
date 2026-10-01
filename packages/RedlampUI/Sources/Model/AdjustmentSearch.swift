@@ -107,7 +107,8 @@ public enum AdjustmentSearch {
         .noiseColorDetail: "Noise Reduction", .noiseColorSmoothness: "Noise Reduction",
         .vignetteAmount: "Post-Crop Vignetting", .vignetteMidpoint: "Post-Crop Vignetting",
         .vignetteRoundness: "Post-Crop Vignetting", .vignetteFeather: "Post-Crop Vignetting",
-        .grainAmount: "Grain", .grainSize: "Grain", .grainRoughness: "Grain",
+        .grainAmount: "Grain", .grainSize: "Grain", .grainRoughness: "Grain", .grainColor: "Grain",
+        .halationAmount: "Halation", .halationSize: "Halation", .bloomAmount: "Bloom", .bloomSize: "Bloom",
     ]
 
     /// The words people use: Lightroom's current and older names, and plain descriptions.
@@ -146,6 +147,11 @@ public enum AdjustmentSearch {
         .grainAmount: ["grain", "film grain", "film"],
         .grainSize: ["grain", "film grain"],
         .grainRoughness: ["grain", "film grain"],
+        .grainColor: ["grain", "film grain", "color grain", "chroma grain"],
+        .halationAmount: ["halation", "glow", "film", "cinestill", "red glow"],
+        .halationSize: ["halation", "glow"],
+        .bloomAmount: ["bloom", "glow", "diffusion", "mist", "pro-mist", "soft"],
+        .bloomSize: ["bloom", "glow", "diffusion", "mist"],
         .gradeBlending: ["split toning", "color grading", "toning"],
         .gradeBalance: ["split toning", "color grading", "toning"],
     ].merging(mixerAndGradingSynonyms) { $0 + $1 }

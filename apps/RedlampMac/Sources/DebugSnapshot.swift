@@ -12,7 +12,8 @@
     ///   `scripts/capture-screenshots.sh` uses real window captures instead). An open sheet is
     ///   captured instead of the window; `stack=open` in a script opens the Stack workspace on
     ///   the selected stack document (`stack=depth` showing the depth map, `stack=retouch`
-    ///   painting one stroke from the frame under the cursor).
+    ///   painting one stroke from the frame under the cursor). `window=<name>` opens a window
+    ///   from the Window menu by its title in kebab case, such as `window=film-looks`.
     @MainActor
     enum DebugSnapshot {
         static func scheduleIfRequested(model: EditorModel) {
@@ -63,12 +64,32 @@
                         }
                         continue
                     }
+                    if key == "window" {
+                        openWindow(titled: value.split(separator: "-").map(\.capitalized).joined(separator: " "))
+                        continue
+                    }
                     model.applyDebugCommand(key, value)
                     if key == "select" {
                         try? await Task.sleep(for: .milliseconds(200))
                     }
                 }
             }
+        }
+
+        private static func openWindow(titled title: String) {
+            func find(_ menu: NSMenu) -> (NSMenu, Int)? {
+                for (index, item) in menu.items.enumerated() {
+                    if item.title == title {
+                        return (menu, index)
+                    }
+                    if let found = item.submenu.flatMap(find) {
+                        return found
+                    }
+                }
+                return nil
+            }
+            guard let menu = NSApp.mainMenu, let (owner, index) = find(menu) else { return }
+            owner.performActionForItem(at: index)
         }
 
         static func capture(to url: URL) {

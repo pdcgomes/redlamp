@@ -203,6 +203,45 @@ static inline float valueNoise(float2 p, uint seed) {
     return mix(mix(a, b, f.x), mix(cc, d, f.x), f.y);
 }
 
+// MARK: - Glow
+
+// A wide, smooth blur with a long tail, as a point spread falls off: six half-octave levels
+// from `radius` (a fraction of the long side), each a hexagon of taps around the centre so the
+// coarse mip levels' blocks don't show. `core` gets the first three levels only, a tighter spread.
+static inline float3 wideGlow(texture2d<float, access::sample> map, float2 uv, float radius, thread float3 &core) {
+    constexpr sampler mipSampler(coord::normalized, filter::linear, mip_filter::linear, address::clamp_to_edge);
+    float2 size = float2(map.get_width(0), map.get_height(0));
+    float baseLevel = log2(max(radius * max(size.x, size.y), 1.0f));
+    float maxLevel = float(map.get_num_mip_levels() - 1);
+    const float2 hexagon[6] = {
+        float2(1.0f, 0.0f), float2(0.5f, 0.866f), float2(-0.5f, 0.866f),
+        float2(-1.0f, 0.0f), float2(-0.5f, -0.866f), float2(0.5f, -0.866f),
+    };
+    float3 sum = 0.0f;
+    float total = 0.0f;
+    core = 0.0f;
+    float coreTotal = 0.0f;
+    for (int step = 0; step < 6; step++) {
+        float lod = min(baseLevel + 0.5f * float(step), maxLevel);
+        float2 texel = exp2(lod) / size;
+        float rotation = 0.5f * float(step);
+        float2x2 turn = float2x2(float2(cos(rotation), sin(rotation)), float2(-sin(rotation), cos(rotation)));
+        float3 taps = map.sample(mipSampler, uv, level(lod)).rgb;
+        for (int i = 0; i < 6; i++) {
+            taps += map.sample(mipSampler, uv + texel * 1.2f * (turn * hexagon[i]), level(lod)).rgb;
+        }
+        float weight = exp2(-0.35f * float(step));
+        sum += weight * taps / 7.0f;
+        total += weight;
+        if (step < 3) {
+            core += weight * taps / 7.0f;
+            coreTotal += weight;
+        }
+    }
+    core /= coreTotal;
+    return sum / total;
+}
+
 // MARK: - Masks
 
 #include "Masks.h"
@@ -220,6 +259,7 @@ kernel void rl_develop(
     constant MaskComponentGPU *components [[buffer(4)]],
     texture3d<half, access::read> lookTable [[texture(3)]],
     texture2d<float, access::sample> hazeMap [[texture(4)]],
+    texture2d<float, access::sample> glowSource [[texture(5)]],
     uint2 gid [[thread_position_in_grid]])
 {
     uint width = uint(p.outputSize.x);
@@ -275,6 +315,36 @@ kernel void rl_develop(
     camera *= float3(exp2(localColor.x * 0.6f), exp2(-localColor.y * 0.4f), exp2(-localColor.x * 0.6f));
     float3 scene = max(mul3(p.camToWork0, p.camToWork1, p.camToWork2, camera), 0.0f);
     scene *= p.tone.x * exp2(localTone.x);
+    // Halation and bloom: highlight light scattered on its way to the image (see Glow.metal),
+    // added in scene light. Halation reflects off the film base behind the emulsion, so it
+    // reaches the red layer widest, the green a little and the blue (on top) not at all; its
+    // colour is the light's own red. Bloom spreads every colour, and a diffusion filter also
+    // spreads a little of all the light, which lowers contrast.
+    if (p.glow.x > 0.0f || p.glow.z > 0.0f) {
+        float3 toScene = p.wbRatio.xyz * p.tone.x * exp2(localTone.x);
+        constexpr sampler glowSampler(coord::normalized, filter::linear, address::clamp_to_edge);
+        // Inside an evenly bright area the scattered light is the area's own, which a print or
+        // scan balances out; only light spilling past edges shows. So glow is what the
+        // surroundings send beyond the pixel's own highlight light.
+        float3 own = glowSource.sample(glowSampler, sourceUV, level(0.0f)).rgb;
+        float3 core;
+        if (p.glow.x > 0.0f) {
+            float3 wide = wideGlow(glowSource, sourceUV, p.glow.y, core);
+            wide = max(mul3(p.camToWork0, p.camToWork1, p.camToWork2, max(wide - own, 0.0f) * toScene), 0.0f);
+            core = max(mul3(p.camToWork0, p.camToWork1, p.camToWork2, max(core - own, 0.0f) * toScene), 0.0f);
+            float h = 0.12f * p.glow.x;
+            scene.r += h * mix(dot(wide, kRec2020Luma), wide.r, 0.5f);
+            scene.g += 0.25f * h * mix(dot(core, kRec2020Luma), core.g, 0.5f);
+        }
+        if (p.glow.z > 0.0f) {
+            float3 spread = wideGlow(glowSource, sourceUV, p.glow.w, core);
+            float3 highlights = max(mul3(p.camToWork0, p.camToWork1, p.camToWork2,
+                max(spread - own, 0.0f) * toScene), 0.0f);
+            float3 all = max(mul3(p.camToWork0, p.camToWork1, p.camToWork2,
+                wideGlow(source, sourceUV, p.glow.w, core) * toScene), 0.0f);
+            scene = mix(scene, all, 0.1f * p.glow.z) + 0.08f * p.glow.z * highlights;
+        }
+    }
     // Tone controls in log space around middle grey, applied as a luminance ratio.
     float luma = max(dot(scene, kRec2020Luma), 1e-7f);
     float ev = log2(luma / kMiddleGrey);
@@ -408,7 +478,19 @@ kernel void rl_develop(
         float size = mix(0.6f, 3.5f, p.grain.y);
         float coarse = valueNoise(fullPosition / size, uint(p.grain.w));
         float fine = valueNoise(fullPosition / (size * 0.5f), uint(p.grain.w) + 17u);
-        float noise = mix(coarse, fine, p.grain.z * 0.6f) - 0.5f;
+        float3 noise = mix(coarse, fine, p.grain.z * 0.6f) - 0.5f;
+        // Colour grain: each dye layer has its own grains, so the noise decorrelates per channel.
+        if (p.grain2.x > 0.0f) {
+            float3 layers = float3(
+                mix(valueNoise(fullPosition / size, uint(p.grain.w) + 31u),
+                    valueNoise(fullPosition / (size * 0.5f), uint(p.grain.w) + 47u), p.grain.z * 0.6f),
+                mix(valueNoise(fullPosition / size, uint(p.grain.w) + 59u),
+                    valueNoise(fullPosition / (size * 0.5f), uint(p.grain.w) + 71u), p.grain.z * 0.6f),
+                mix(valueNoise(fullPosition / size, uint(p.grain.w) + 83u),
+                    valueNoise(fullPosition / (size * 0.5f), uint(p.grain.w) + 97u), p.grain.z * 0.6f)
+            ) - 0.5f;
+            noise = mix(noise, layers, p.grain2.x);
+        }
         float L = dot(encoded, float3(0.2126f, 0.7152f, 0.0722f));
         float midtoneWeight = 0.35f + 2.6f * L * (1.0f - L);
         encoded += noise * p.grain.x * 0.16f * midtoneWeight;

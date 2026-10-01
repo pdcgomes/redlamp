@@ -64,7 +64,7 @@ public enum BuiltInBaseLooks {
         let nested = bundle.urls(forResourcesWithExtension: "json", subdirectory: "BaseLooks") ?? []
         let urls = !nested.isEmpty ? nested
             : (bundle.urls(forResourcesWithExtension: "json", subdirectory: nil) ?? [])
-            .filter { $0.lastPathComponent.hasPrefix("base-") }
+            .filter { $0.lastPathComponent.hasPrefix("base-") || $0.lastPathComponent.hasPrefix("stock-") }
         return urls.sorted { $0.lastPathComponent < $1.lastPathComponent }.compactMap { url in
             guard let data = try? Data(contentsOf: url),
                   let package = try? RecipeFile.decoder.decode(BaseLookPackage.self, from: data)

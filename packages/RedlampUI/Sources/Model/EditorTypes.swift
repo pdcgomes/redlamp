@@ -117,6 +117,11 @@ public enum PanelID: String, CaseIterable, Identifiable, Sendable {
                 .grainAmount,
                 .grainSize,
                 .grainRoughness,
+                .grainColor,
+                .halationAmount,
+                .halationSize,
+                .bloomAmount,
+                .bloomSize,
             ] + PanelID.cameraRecipeParameters
         case .calibration:
             [

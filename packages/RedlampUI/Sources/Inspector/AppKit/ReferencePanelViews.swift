@@ -53,13 +53,17 @@ import SwiftUI
         let vignette: [ParameterID] = [
             .vignetteAmount, .vignetteMidpoint, .vignetteRoundness, .vignetteFeather, .vignetteHighlights,
         ]
-        let grain: [ParameterID] = [.grainAmount, .grainSize, .grainRoughness]
+        let grain: [ParameterID] = [.grainAmount, .grainSize, .grainRoughness, .grainColor]
+        let halation: [ParameterID] = [.halationAmount, .halationSize]
+        let bloom: [ParameterID] = [.bloomAmount, .bloomSize]
         return rows.panel(
             .effects,
             rows: [
                 rows.header("Post-Crop Vignetting", vignette),
                 rows.controls("Style", VignetteStylePicker()),
             ] + rows.sliders(vignette) + [rows.header("Grain", grain)] + rows.sliders(grain)
+                + [rows.header("Halation", halation)] + rows.sliders(halation)
+                + [rows.header("Bloom", bloom)] + rows.sliders(bloom)
                 + [rows.header("Camera Recipe", PanelID.cameraRecipeParameters)] + rows
                 .sliders(PanelID.cameraRecipeParameters),
         )

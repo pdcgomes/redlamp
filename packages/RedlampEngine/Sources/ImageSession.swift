@@ -36,6 +36,8 @@ final class ImageSession: @unchecked Sendable {
     /// Dehaze's airlight and haze map (see `Haze`), in the pyramid's camera RGB.
     let airlight: SIMD3<Float>
     let hazeMap: any MTLTexture
+    /// The light halation and bloom spread (see `Glow`), mipmapped.
+    let glowSource: any MTLTexture
     /// The gain maps' gain per camera channel, which scaled the sensor noise (see `NoiseGain`).
     let noiseGain: any MTLTexture
 
@@ -50,12 +52,14 @@ final class ImageSession: @unchecked Sendable {
         repairedPixels: Int,
         airlight: SIMD3<Float>,
         hazeMap: any MTLTexture,
+        glowSource: any MTLTexture,
         noiseGain: any MTLTexture,
     ) {
         self.noiseGain = noiseGain
         self.repairedPixels = repairedPixels
         self.airlight = airlight
         self.hazeMap = hazeMap
+        self.glowSource = glowSource
         self.noise = noise.scaled(by: SIMD3<Float>(balanceMultipliers))
         sensor = SensorKind(decoded.layout)
         self.info = info

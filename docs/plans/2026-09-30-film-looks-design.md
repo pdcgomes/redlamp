@@ -20,7 +20,10 @@ Mood and everyday looks are built on the film and print model where they can be.
 ## Engine
 
 - **Scene-referred Base Looks** (done): a look table indexed by log scene exposure (`sceneLog`, −10 to +6.5 EV around middle grey) that takes the place of Redlamp's tone curve, mixed with it by the look's Amount. Film latitude, shoulder and toe, and colour crossovers are functions of exposure, which a display-referred table after the tone map can't express.
-- **Physical effects** (next, tracker TON-17 to TON-19): halation (red glow around bright lights, strong for CineStill, which has no anti-halation layer), bloom and diffusion, and grain v2 (density-dependent, per dye layer, sized relative to a 35 mm frame).
+- **Physical effects** (tracker TON-17 to TON-19), in the develop kernel as Effects settings:
+  - **Halation** (Amount, Size): red glow around bright lights, strong for CineStill, which has no anti-halation layer. It's added in scene-linear light from a per-session glow source, the pyramid's highlights at up to 1024 px. Near-clipped highlights get back up to 4 stops, because a sensor clips a street light that film records many stops brighter. It's read as a round, long-tailed blur over half-octave mip levels. Only light spilling past an edge glows, so an evenly bright area keeps its colour. It reaches red widest and green a quarter as much.
+  - **Bloom** (Amount, Size): the same glow in every colour, plus a share of all the light, for a mist filter's lower contrast.
+  - **Grain Color**: decorrelates the grain per dye layer. Still to do: grain strength by density, and size relative to the frame.
 - **Texture effects** for mood looks (later): light leaks, dust and frames as procedural or bundled textures.
 
 ## The film model (`packages/RedlampRecipes/Sources/Film/`)
@@ -32,9 +35,27 @@ Offline, in Swift, generating Base Look tables:
 3. Characteristic curves to density; interlayer effects in the density domain; colour masking (coloured couplers cancelling unwanted dye absorption).
 4. Negative transmittance from dyes and base; printer light through it onto the print stock; the print's curves and dyes.
 5. Viewing illuminant (xenon for cinema print, D50 for paper and slides) and CIE colour matching to display Rec.2020.
-6. Mid-grey balanced neutral by solving the printer lights (or slide layer exposures), so crossovers away from grey remain.
+6. Mid-grey balanced neutral by solving the printer lights (or slide layer exposures), so crossovers away from grey remain. Print timing (`printNeutral`, 0.6 by default) then pulls the print's grey scale partly back to neutral, as a colourist times a print. Without it, Vision3 on 2383 has shadows 1.7 times bluer than red.
+7. A negative with no print is **scanned** instead. A print carries print-system contrast (about 1.7), which reads too hard on a screen, and the familiar look of stocks such as Portra comes from lab scans anyway. The scanner:
+   - reads the negative through Status M-like sensors;
+   - is calibrated on a grey scale (`scanNeutral`), so greys stay neutral and keep the middle layer's toe and shoulder;
+   - has a colour matrix fitted on moderate colours;
+   - has a scanner profile for its signature: Frontier-like (punchier, saturated, green-cyan shadows, warm highlights) or Noritsu-like (softer, near neutral). Both are characterised from how labs describe them, not measured.
 
-A look definition (stock, print, exposure, interlayer, grey density, display grey, flare, plus recipe settings for grain, halation and colour) is data in the repo; `redlamp recipe film` builds it and a contact sheet.
+Datasheets come from `research/film-data/`. Portra, Ektar, Gold and Superia publish no individual dye curves and borrow Vision3's.
+
+**The catalogue** (`FilmLookCatalog`) pairs each stock with its rendering, scanner, print timing and effects. That's 11 looks:
+- colour negatives: Portra 400, Ektar 100, Gold 200, Superia 400 and CineStill 800T;
+- Vision3 500T printed on 2383;
+- slides: Provia 100F and Velvia 50;
+- black and white: Tri-X 400, HP5 Plus, and Tri-X printed on Multigrade.
+
+Grain follows each datasheet's granularity. Kodak's Print Grain Index converts as (PGI − 25) × 0.6; slide rms is used as is; black-and-white rms is multiplied by 2.2. Where a datasheet gives no figure, the look is set beside its nearest peer. `redlamp recipe film --all` (or `--look <id>`) writes each look as a recipe with its Base Look and Effects into `build/film/looks/`, with one contact sheet. `--install` writes the bundled tables (`packages/RedlampRecipes/Resources/BaseLooks/stock-<id>.json`, 33³). `--readme` writes the icons and examples in `docs/images/film/`.
+
+**In the app:**
+- All 11 looks ship under their stock names; the owner will take the trademark question to counsel.
+- The Base Look menu and browser list them under Film Stocks, with icons. The icons are drawn in CoreGraphics (`FilmIcon`): a canister, slide mount, reel or paper print in the stock's colours, in Redlamp's own design.
+- Window ▸ Film Looks (`⇧⌘L`, `FilmCatalogView`) shows the open photo in every film; click applies a look with its effects.
 
 ## Checking quality
 
@@ -43,7 +64,7 @@ Lint (neutral axis, monotonic lightness, banding, clipping) on every generated t
 ## Milestones
 
 1. Scene-referred Base Looks in the engine, and the film model on synthetic data. *Done.*
-2. Datasheet curves for the nine stocks, 2383 and a colour paper; masking; the first measured stocks.
-3. Halation, bloom and grain v2; film-stock recipes that use them.
+2. Datasheet curves for the nine stocks, 2383 and a colour paper; masking; the first measured stocks. *Done:* 13 stocks, with masking, print timing and the lab scanner.
+3. Halation, bloom and grain v2; film-stock recipes that use them. *Done apart from density-dependent grain:* halation, bloom, colour grain and the 11-look catalogue.
 4. The app capture kit and importer; the owner's first ten app looks.
 5. Mood looks with texture effects; everyday presets.

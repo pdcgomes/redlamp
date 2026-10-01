@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# Regenerates the README screenshots in docs/images from the Debug app and the harness,
+# Regenerates the README screenshots in docs/images from the Debug app and the harness
+# (`ONLY="editor film-catalog"` regenerates just those),
 # using the CC0 fixtures in tests/fixtures/raw (fetch them with `mise run fixtures`) and,
 # for the Recipe Lab, the look-development set (`mise run lookdev`).
 #
@@ -42,7 +43,8 @@ restore() {
 trap restore EXIT
 
 capture() {
-    local name="$1" script="$2"
+    local name="$1" script="$2" title="${3:-}"
+    [[ -n "${ONLY:-}" && " $ONLY " != *" $name "* ]] && return 0
     pkill -f "$APP" 2>/dev/null || true
     sleep 1
     find "$FIXTURES" -name '*.redlamp' -delete
@@ -58,7 +60,7 @@ capture() {
     done
     sleep "$WAIT"
     local id
-    id="$(swift "$ROOT/scripts/window-id.swift" "$pid")"
+    id="$(swift "$ROOT/scripts/window-id.swift" "$pid" ${title:+"$title"})"
     screencapture -x -o -l "$id" "$OUT/$name.png"
     sips -Z 1800 "$OUT/$name.png" >/dev/null
     kill "$pid" 2>/dev/null || true
@@ -74,12 +76,15 @@ capture masking "select=0,tool=masking,linear=0.5:0.02:0.5:0.42,localExposure=-1
 capture recipes "select=1,panel=basic+effects,recipe=camera/chrome-street"
 capture detail "select=2,panel=detail,zoom=1:1,sharpenAmount=70,sharpenDetail=40,noiseLuminance=30,noiseColor=30,texture=15"
 capture before-after "select=3,compare=sideBySide,before=1,exposure=0.35,highlights=-45,shadows=40,dehaze=15,vibrance=25,clarity=10,vignetteAmount=-20"
+capture film-catalog "select=3,recipe=stock/portra-400,window=film-looks" "Film Looks"
+capture film-editor "select=0,panel=basic+effects,recipe=stock/cinestill-800t"
 
 pkill -f "$APP" 2>/dev/null || true
 
 # The harness: the Recipe Lab on the look-development set, and the design foundations.
 harness() {
     local name="$1" scene="$2"
+    [[ -n "${ONLY:-}" && " $ONLY " != *" $name "* ]] && return 0
     shift 2
     SKIP_BUILD=1 WAIT="${HARNESS_WAIT:-18}" "$ROOT/scripts/harness-capture.sh" "$scene" "$OUT/$name.png" side "$@" >/dev/null
     sips -Z 1800 "$OUT/$name.png" >/dev/null

@@ -9,10 +9,16 @@ struct BaseLookGroups {
 
     init(_ looks: [BaseLookPackage]) {
         let builtIn = looks.filter { BuiltInBaseLook(rawValue: $0.id) != nil }
-        let film = looks
-            .filter { BuiltInBaseLook(rawValue: $0.id) == nil && $0.id.hasPrefix(RecipeNamespace.bundled + "/") }
+        let catalogue = FilmLookCatalog.looks.map(\.baseLookID)
+        let stocks = looks.filter { catalogue.contains($0.id) }
+            .sorted { (catalogue.firstIndex(of: $0.id) ?? 0) < (catalogue.firstIndex(of: $1.id) ?? 0) }
+        let film = looks.filter {
+            BuiltInBaseLook(rawValue: $0.id) == nil && $0.id.hasPrefix(RecipeNamespace.bundled + "/")
+                && !catalogue.contains($0.id)
+        }
         let other = looks.filter { !$0.id.hasPrefix(RecipeNamespace.bundled + "/") }
-        sections = [("Redlamp", builtIn), ("Film Styles", film), ("Installed", other)].filter { !$0.1.isEmpty }
+        sections = [("Redlamp", builtIn), ("Film Stocks", stocks), ("Film Styles", film), ("Installed", other)]
+            .filter { !$0.1.isEmpty }
     }
 }
 
@@ -62,6 +68,11 @@ struct BaseLookBrowser: View {
             }
             .frame(height: 78)
             .overlay(RoundedRectangle(cornerRadius: 6).stroke(selected ? Color.accentColor : .clear, lineWidth: 2))
+            .overlay(alignment: .topLeading) {
+                if let icon = FilmIconImage.image(for: look.id, points: 22) {
+                    Image(nsImage: icon).padding(3)
+                }
+            }
             Text(look.name).font(.caption).lineLimit(1)
         }
         .help(look.summary ?? look.name)

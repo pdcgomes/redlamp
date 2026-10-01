@@ -54,6 +54,13 @@ struct RedlampApp: App {
             AppCommands(model: model, onOpen: openPanel, onExport: exportPanel)
         }
 
+        Window("Film Looks", id: FilmCatalogView.windowID) {
+            FilmCatalogView()
+                .environment(model)
+                .frame(minWidth: 760, minHeight: 520)
+        }
+        .defaultSize(width: 1180, height: 820)
+
         Settings {
             SettingsView(theme: theme)
         }

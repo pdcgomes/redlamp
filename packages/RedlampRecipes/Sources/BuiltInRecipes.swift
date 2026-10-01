@@ -10,7 +10,7 @@ public enum BuiltInRecipes {
     public static let license = "CC0-1.0"
 
     public static var all: [Recipe] {
-        StarterPack.recipes
+        StarterPack.recipes + FilmLookCatalog.bundledRecipes
     }
 
     public static func recipe(id: String) -> Recipe? {

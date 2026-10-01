@@ -1,9 +1,10 @@
-// Prints the CGWindowID of the largest on-screen window owned by the given process id.
+// Prints the CGWindowID of the largest on-screen window owned by the given process id, or of
+// the one with the given title.
 import CoreGraphics
 import Foundation
 
 guard CommandLine.arguments.count > 1, let pid = Int(CommandLine.arguments[1]) else {
-    FileHandle.standardError.write(Data("usage: window-id.swift <pid>\n".utf8))
+    FileHandle.standardError.write(Data("usage: window-id.swift <pid> [title]\n".utf8))
     exit(1)
 }
 
@@ -11,8 +12,10 @@ let windows = CGWindowListCopyWindowInfo(
     [.optionOnScreenOnly, .excludeDesktopElements],
     kCGNullWindowID,
 ) as? [[String: Any]] ?? []
+let title = CommandLine.arguments.count > 2 ? CommandLine.arguments[2] : nil
 let owned = windows
     .filter { ($0[kCGWindowOwnerPID as String] as? Int) == pid && ($0[kCGWindowLayer as String] as? Int) == 0 }
+    .filter { title == nil || ($0[kCGWindowName as String] as? String) == title }
 let largest = owned.max { lhs, rhs in
     func area(_ window: [String: Any]) -> Double {
         let bounds = window[kCGWindowBounds as String] as? [String: Double] ?? [:]

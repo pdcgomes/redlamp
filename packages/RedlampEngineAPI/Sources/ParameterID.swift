@@ -117,6 +117,14 @@ public enum ParameterID: String, CaseIterable, Codable, Sendable, Hashable {
     case grainAmount = "effects.grain.amount"
     case grainSize = "effects.grain.size"
     case grainRoughness = "effects.grain.roughness"
+    /// How much the grain differs between the dye layers: 0 is monochrome grain, 100 independent.
+    case grainColor = "effects.grain.color"
+    /// The red-orange glow film gets around bright light, from light reflecting off its base.
+    case halationAmount = "effects.halation.amount"
+    case halationSize = "effects.halation.size"
+    /// Highlights glowing into their surroundings, as through a diffusion (mist) filter.
+    case bloomAmount = "effects.bloom.amount"
+    case bloomSize = "effects.bloom.size"
     /// Deepens highly saturated colors, like a camera's color chrome effect.
     case colorChrome = "effects.colorChrome"
     /// The same, for blues only.
