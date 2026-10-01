@@ -26,7 +26,6 @@ export const metadata: Metadata = {
     locale: "en_GB",
   },
   twitter: { card: "summary_large_image", title, description: site.description },
-  alternates: { canonical: "/" },
 };
 
 export const viewport: Viewport = {

@@ -147,6 +147,164 @@
   .button-secondary:hover {
     background: rgb(243 238 232 / 0.1);
   }
+
+  /* A blog post's Markdown: a reading column, with figures wider than the text. */
+  .post > * {
+    max-width: 42rem;
+    margin-inline: auto;
+  }
+
+  .post > * + * {
+    margin-top: 1.25rem;
+  }
+
+  .post p,
+  .post li {
+    font-size: 17px;
+    line-height: 1.75;
+    color: var(--color-mute);
+  }
+
+  .post p img {
+    display: inline;
+    vertical-align: middle;
+  }
+
+  .post h2,
+  .post h3 {
+    scroll-margin-top: 6rem;
+    font-family: var(--font-sans);
+    font-variation-settings: "opsz" 32;
+    font-weight: 600;
+    letter-spacing: -0.022em;
+    color: var(--color-paper);
+  }
+
+  .post h2 {
+    margin-top: 3.25rem;
+    font-size: clamp(1.5rem, 3vw, 1.9rem);
+    line-height: 1.15;
+  }
+
+  .post h3 {
+    margin-top: 2.25rem;
+    font-size: 1.25rem;
+    line-height: 1.25;
+  }
+
+  .post > :is(h2, h3) + * {
+    margin-top: 0.85rem;
+  }
+
+  .post strong {
+    font-weight: 600;
+    color: var(--color-paper);
+  }
+
+  .post a {
+    color: var(--color-paper);
+    text-decoration: underline;
+    text-decoration-color: var(--color-hairline-strong);
+    text-underline-offset: 3px;
+  }
+
+  .post a:hover {
+    text-decoration-color: var(--color-paper);
+  }
+
+  .post :not(pre) > code {
+    border-radius: 4px;
+    background: rgb(243 238 232 / 0.08);
+    padding: 1px 4px;
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+    color: var(--color-ring);
+  }
+
+  .post pre {
+    overflow-x: auto;
+    border: 1px solid var(--color-hairline);
+    border-radius: 14px;
+    background: var(--color-wall-raised);
+    padding: 16px 20px;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--color-ring);
+  }
+
+  .post ul,
+  .post ol {
+    padding-left: 1.25rem;
+  }
+
+  .post ul {
+    list-style: disc;
+  }
+
+  .post ol {
+    list-style: decimal;
+  }
+
+  .post li + li {
+    margin-top: 0.4rem;
+  }
+
+  .post li::marker {
+    color: var(--color-dim);
+  }
+
+  .post blockquote {
+    border-left: 2px solid var(--color-hairline-strong);
+    padding-left: 1.25rem;
+  }
+
+  .post blockquote p {
+    color: var(--color-paper);
+  }
+
+  .post > figure {
+    max-width: 64rem;
+    margin-block: 2.75rem;
+  }
+
+  .post figure :is(img, video) {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--color-hairline);
+    border-radius: 16px;
+  }
+
+  .post figcaption {
+    margin-top: 0.75rem;
+    text-align: center;
+    font-size: 13px;
+    color: var(--color-dim);
+  }
+
+  .post hr {
+    margin-block: 3rem;
+    border-color: var(--color-hairline);
+  }
+
+  .post table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 15px;
+  }
+
+  .post :is(th, td) {
+    border-bottom: 1px solid var(--color-hairline);
+    padding: 0.55rem 0.75rem;
+    text-align: left;
+    color: var(--color-mute);
+  }
+
+  .post th {
+    font-weight: 600;
+    color: var(--color-paper);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

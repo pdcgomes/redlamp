@@ -16,6 +16,9 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Next writes its own AGENTS.md/CLAUDE.md on dev start; this repo doesn't want them.
   agentRules: false,
+  // The header's star count refreshes hourly, so the blog's pages are rendered again on the
+  // server, where they read the posts.
+  outputFileTracingIncludes: { "/blog": ["./content/blog/**/*.md"], "/blog/**": ["./content/blog/**/*.md"] },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

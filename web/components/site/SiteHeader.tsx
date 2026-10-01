@@ -3,10 +3,12 @@ import { GitHubGlyph, StarGlyph } from "@/components/ui/Buttons";
 import { formatCount, starCount } from "@/lib/github";
 import { site } from "@/lib/site";
 
+// Absolute, so they also work from the blog.
 const links = [
-  { href: "#features", label: "Features" },
-  { href: "#film", label: "Film" },
-  { href: "#roadmap", label: "Roadmap" },
+  { href: "/#features", label: "Features" },
+  { href: "/#film", label: "Film" },
+  { href: "/#roadmap", label: "Roadmap" },
+  { href: "/blog", label: "Blog" },
 ];
 
 export async function SiteHeader() {
@@ -18,7 +20,7 @@ export async function SiteHeader() {
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[calc(100%+12px)] bg-linear-to-b from-wall via-wall/70 to-transparent"
       />
       <div className="glass mx-auto flex max-w-6xl items-center justify-between rounded-pill py-2 pr-2 pl-4">
-        <a href="#main" aria-label="Redlamp, back to the top">
+        <a href="/#main" aria-label="Redlamp home">
           <Lockup className="h-6 w-auto" />
         </a>
         <nav className="flex items-center gap-1 text-[13px]">

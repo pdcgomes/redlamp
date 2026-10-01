@@ -15,6 +15,9 @@ export function SiteFooter() {
         </div>
         <nav aria-label="Project" className="flex flex-col gap-2 text-[14px]">
           <p className="eyebrow mb-1">Project</p>
+          <a className="text-mute hover:text-paper" href="/blog">
+            Blog
+          </a>
           <a className="text-mute hover:text-paper" href={site.github}>
             Source on GitHub
           </a>
@@ -26,6 +29,9 @@ export function SiteFooter() {
           </a>
           <a className="text-mute hover:text-paper" href={site.support}>
             Support Redlamp
+          </a>
+          <a className="text-mute hover:text-paper" href="/blog/feed.xml">
+            RSS feed
           </a>
         </nav>
         <div className="flex flex-col gap-2 text-[14px]">
