@@ -73,9 +73,15 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         try self.init(stillTile: 2048)
     }
 
+    /// An engine that decodes photos with `decoder`, such as the Mac app's sandboxed decode service.
+    public convenience init(decoder: any ImageDecoding) throws {
+        try self.init(stillTile: 2048, decoder: decoder)
+    }
+
     init(
         stillTile: Int,
         stackCache: URL = FocusStackCache.defaultRoot,
+        decoder: any ImageDecoding = InProcessDecoder(),
         thermalState: @escaping @Sendable () -> ProcessInfo.ThermalState = { ProcessInfo.processInfo.thermalState },
     ) throws {
         self.stillTile = stillTile
@@ -113,7 +119,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             build: { url in
                 let state = signposter.beginInterval("Open", "\(url.lastPathComponent)")
                 defer { signposter.endInterval("Open", state) }
-                return try builder.build(stacks.decode(url))
+                return try builder.build(SupportedFormats.isStack(url) ? stacks.decode(url) : decoder.decode(url))
             },
         )
     }

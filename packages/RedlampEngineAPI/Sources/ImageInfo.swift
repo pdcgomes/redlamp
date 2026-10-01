@@ -36,7 +36,7 @@ public struct PixelSize: Codable, Sendable, Hashable {
 }
 
 /// What the engine knows about an opened image.
-public struct ImageInfo: Sendable, Hashable {
+public struct ImageInfo: Codable, Sendable, Hashable {
     public var url: URL
     /// Size after orientation is applied.
     public var pixelSize: PixelSize

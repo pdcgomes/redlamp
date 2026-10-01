@@ -8,11 +8,29 @@ import RedlampEngineAPI
 /// are all done by Redlamp's own GPU pipeline.
 enum RawDecoder {
     static func decode(_ url: URL) throws -> DecodedImage {
+        try decode(url: url, data: nil) { raw in
+            url.withUnsafeFileSystemRepresentation { libraw_open_file(raw, $0) }
+        }
+    }
+
+    /// The same from the file's bytes (as the decode service gets them), `url` naming the file.
+    static func decode(_ data: Data, url: URL) throws -> DecodedImage {
+        try data.withUnsafeBytes { bytes in
+            try decode(url: url, data: data) { raw in libraw_open_buffer(raw, bytes.baseAddress, bytes.count) }
+        }
+    }
+
+    /// `open` hands the file to LibRaw; `data` is the file's bytes when they're already in memory.
+    private static func decode(
+        url: URL,
+        data: Data?,
+        open: (UnsafeMutablePointer<libraw_data_t>) -> Int32,
+    ) throws -> DecodedImage {
         guard let raw = libraw_init(0) else { throw EngineError.decodeFailed("LibRaw failed to initialise") }
         defer { libraw_close(raw) }
 
-        try check(url.withUnsafeFileSystemRepresentation { libraw_open_file(raw, $0) }, url: url)
-        let jpegXL = try unpack(raw, url: url)
+        try check(open(raw), url: url)
+        let jpegXL = try unpack(raw, url: url, data: data)
 
         let sizes = raw.pointee.sizes
         let width = Int(sizes.width)
@@ -128,9 +146,11 @@ enum RawDecoder {
             baselineExposure: plausibleBaselineExposure(rl_baseline_exposure(raw)),
             info: info,
         )
-        decoded.noiseProfile = DNGNoiseProfile.read(url)
-        decoded.gainMaps = DNGGainMaps.read(url)
-        decoded.dngColor = DNGColorCalibration.read(url)
+        if let data = data ?? (try? Data(contentsOf: url, options: .alwaysMapped)) {
+            decoded.noiseProfile = DNGNoiseProfile.read(data, url: url)
+            decoded.gainMaps = DNGGainMaps.read(data, url: url)
+            decoded.dngColor = DNGColorCalibration.read(data, url: url)
+        }
         decoded.banding = banding
         return decoded
     }
@@ -139,8 +159,12 @@ enum RawDecoder {
 
     /// Unpacks the sensor data into LibRaw, or returns the JPEG XL raw image LibRaw can't read.
     /// A failed unpack clears everything LibRaw read, so JPEG XL is caught before unpacking.
-    private static func unpack(_ raw: UnsafeMutablePointer<libraw_data_t>, url: URL) throws -> DNGJPEGXL.Image? {
-        if raw.pointee.idata.dng_version != 0, let image = try DNGJPEGXL.decode(url) {
+    private static func unpack(
+        _ raw: UnsafeMutablePointer<libraw_data_t>,
+        url: URL,
+        data: Data?,
+    ) throws -> DNGJPEGXL.Image? {
+        if raw.pointee.idata.dng_version != 0, let image = try data.map(DNGJPEGXL.decode) ?? DNGJPEGXL.decode(url) {
             return image
         }
         try check(libraw_unpack(raw), url: url)

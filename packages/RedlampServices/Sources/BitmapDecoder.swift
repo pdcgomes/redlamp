@@ -6,8 +6,22 @@ import RedlampEngineAPI
 /// Decodes JPEG, HEIC, PNG and TIFF files into linear sRGB float16 through ImageIO.
 enum BitmapDecoder {
     static func decode(_ url: URL) throws -> DecodedImage {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
+            throw EngineError.unsupportedFile(url.lastPathComponent)
+        }
+        return try decode(source, url: url)
+    }
+
+    /// The same from the file's bytes, `url` naming the file.
+    static func decode(_ data: Data, url: URL) throws -> DecodedImage {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
+            throw EngineError.unsupportedFile(url.lastPathComponent)
+        }
+        return try decode(source, url: url)
+    }
+
+    private static func decode(_ source: CGImageSource, url: URL) throws -> DecodedImage {
+        guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
         else {
             throw EngineError.unsupportedFile(url.lastPathComponent)
         }

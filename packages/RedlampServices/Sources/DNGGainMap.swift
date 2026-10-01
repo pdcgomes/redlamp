@@ -3,7 +3,7 @@ import Foundation
 /// A GainMap opcode (DNG 1.3, opcode 9): a grid of gains over part of the image, applied to the
 /// linear raw values of some planes before demosaicing. Phones and some converters store their
 /// lens shading correction this way, one map per Bayer position.
-public struct GainMap: Sendable, Hashable {
+public struct GainMap: Codable, Sendable, Hashable {
     /// The area it applies to, in image pixels: rows `top ..< bottom`, columns `left ..< right`.
     public var top: Int
     public var left: Int
@@ -84,6 +84,14 @@ enum DNGGainMaps {
         guard url.pathExtension.lowercased() == "dng",
               let data = try? Data(contentsOf: url, options: .alwaysMapped)
         else {
+            return []
+        }
+        return read(data, url: url)
+    }
+
+    /// The same from the file's bytes, `url` naming the file.
+    static func read(_ data: Data, url: URL) -> [GainMap] {
+        guard url.pathExtension.lowercased() == "dng" else {
             return []
         }
         return data.withUnsafeBytes { bytes in

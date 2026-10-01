@@ -1,6 +1,7 @@
 import AppKit
 import RedlampEngine
 import RedlampEngineAPI
+import RedlampServices
 @_spi(Harness) import RedlampUI
 import SwiftUI
 
@@ -13,11 +14,13 @@ struct RedlampApp: App {
 
     init() {
         #if DEBUG || REDLAMP_PROFILING
+            DebugDecodeCheck.runIfRequested()
             DevelopPanels.usesSwiftUI = LaunchArguments.all.contains("--swiftui-panels")
         #endif
         let engine: any EditingEngine
         do {
-            engine = try RedlampEngine()
+            // Photos decode in the sandboxed decode service, so a damaged file can't crash the editor.
+            engine = try RedlampEngine(decoder: DecodeServiceClient())
         } catch {
             fatalError("Redlamp needs a Metal GPU: \(error.localizedDescription)")
         }

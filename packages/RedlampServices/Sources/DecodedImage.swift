@@ -2,7 +2,7 @@ import Foundation
 import RedlampEngineAPI
 
 /// The repeating color-filter layout of a sensor. Colors are 0 = red, 1 = green, 2 = blue.
-public struct CFAPattern: Sendable, Hashable {
+public struct CFAPattern: Codable, Sendable, Hashable {
     public let width: Int
     public let height: Int
     public let colors: [UInt8]
@@ -29,7 +29,7 @@ public struct CFAPattern: Sendable, Hashable {
 
 /// Sensor data ready for upload to the GPU, plus the calibration needed to develop it.
 public struct DecodedImage: Sendable {
-    public enum Layout: Sendable {
+    public enum Layout: Codable, Sendable {
         /// One `UInt16` sample per pixel behind a color filter array.
         case mosaic(CFAPattern)
         /// Three `UInt16` samples per pixel (linear DNG, e.g. ProRAW).
@@ -125,5 +125,14 @@ public enum ImageDecoder {
             return try RawDecoder.decode(url)
         }
         return try BitmapDecoder.decode(url)
+    }
+
+    /// Decodes a file from its bytes, `url` naming it (for its type and the photo's info): how
+    /// the decode service works, since it has no access to the file system.
+    public static func decode(_ data: Data, url: URL) throws -> DecodedImage {
+        if SupportedFormats.isRaw(url) {
+            return try RawDecoder.decode(data, url: url)
+        }
+        return try BitmapDecoder.decode(data, url: url)
     }
 }

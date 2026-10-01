@@ -4,8 +4,8 @@ import Foundation
 /// Space"): usually two, each for an illuminant, with a ColorMatrix (XYZ to camera), an optional
 /// CameraCalibration and an optional ForwardMatrix (white-balanced camera to XYZ D50). Rendering
 /// interpolates them by the white balance's colour temperature.
-public struct DNGColorCalibration: Sendable, Hashable {
-    public struct Calibration: Sendable, Hashable {
+public struct DNGColorCalibration: Codable, Sendable, Hashable {
+    public struct Calibration: Codable, Sendable, Hashable {
         /// The calibration illuminant's correlated colour temperature, in kelvin.
         public var temperature: Double
         /// Row-major 3 x 3, XYZ to reference camera RGB.
@@ -44,6 +44,14 @@ public struct DNGColorCalibration: Sendable, Hashable {
         guard url.pathExtension.lowercased() == "dng",
               let data = try? Data(contentsOf: url, options: .alwaysMapped)
         else {
+            return nil
+        }
+        return read(data, url: url)
+    }
+
+    /// The same from the file's bytes, `url` naming the file.
+    static func read(_ data: Data, url: URL) -> DNGColorCalibration? {
+        guard url.pathExtension.lowercased() == "dng" else {
             return nil
         }
         return data.withUnsafeBytes { bytes -> DNGColorCalibration? in

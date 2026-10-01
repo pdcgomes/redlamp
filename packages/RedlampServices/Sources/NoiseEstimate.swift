@@ -2,7 +2,7 @@ import Foundation
 
 /// Signal-dependent sensor noise (the Poisson–Gaussian model): per channel,
 /// variance = a · value + b, with values in normalised sensor units (black = 0, white = 1).
-public struct NoiseModel: Sendable, Hashable {
+public struct NoiseModel: Codable, Sendable, Hashable {
     public var a: SIMD3<Float>
     public var b: SIMD3<Float>
 

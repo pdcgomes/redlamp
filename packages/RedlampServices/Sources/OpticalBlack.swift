@@ -3,7 +3,7 @@ import Foundation
 /// Row and column banding measured in the sensor's optical-black margins (DN-03): masked
 /// photosites beside and above the image, read out with it, so a row's or column's readout
 /// offset shows in their mean. Subtracted with the black level.
-public struct BandingCorrection: Sendable, Hashable {
+public struct BandingCorrection: Codable, Sendable, Hashable {
     /// Per image row, in raw units; empty when rows need nothing.
     public var rows: [Float]
     /// Per image column, in raw units; empty when columns need nothing.

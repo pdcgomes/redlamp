@@ -207,7 +207,7 @@ With both side panels in AppKit, most of what remains is Core Animation committi
 - Objects and Depth Range estimation use open models still under licence review (tracker DEC-02), offered only with evaluation models turned on. Vision's own tap-to-segment arrives with macOS 27.
 - AI mask edges are snapped to the photo when the mask is made (a guided filter, freedom-to-operate pending as DEC-05), not refined again at render time.
 - Local Whites and Blacks are approximated with tonal-region gains.
-- The app is not sandboxed yet (required later for the Mac App Store). iPad and iPhone come in Phase 5.
+- The app is not sandboxed yet (required later for the Mac App Store), but photos decode in a sandboxed service with no file access (`RedlampDecoder.xpc`, sent each file's bytes), so a damaged file can't crash the editor. Focus-stack frames and filmstrip thumbnails still decode in the app. iPad and iPhone come in Phase 5.
 - Sidecars are read and written under file coordination, so iCloud Drive syncs them safely and conflicting copies merge (the newest edit wins, the others become snapshots). A photo that is open doesn't reload yet when another Mac changes its edit.
 
 **Fixed in iteration 2:**
@@ -804,7 +804,7 @@ The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on mac
 - [x] RAW pipeline core, fused develop kernel, cached pyramid, and latest-wins rendering
 - [x] Develop workspace on macOS, Basic panel, histogram, before/after, sidecars, undo, and export
 - [x] Layer and mask engine, with linear and radial gradient masks, local adjustments, and the Masking panel
-- [ ] Sandboxed XPC decode helper
+- [x] Sandboxed XPC decode helper
 - [x] Render scheduler with priority lanes, tile cancellation, and thermal awareness
 - [x] Coordinated sidecar I/O for iCloud Drive
 

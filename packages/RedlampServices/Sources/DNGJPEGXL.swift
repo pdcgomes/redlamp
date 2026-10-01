@@ -40,8 +40,11 @@ enum DNGJPEGXL {
 
     /// The raw image, or nil when the file's raw image isn't JPEG XL-compressed.
     static func decode(_ url: URL) throws -> Image? {
-        let data = try Data(contentsOf: url, options: .alwaysMapped)
-        return try data.withUnsafeBytes { bytes in
+        try decode(Data(contentsOf: url, options: .alwaysMapped))
+    }
+
+    static func decode(_ data: Data) throws -> Image? {
+        try data.withUnsafeBytes { bytes in
             guard let reader = TIFFReader(bytes: bytes) else { return nil }
             return try decode(reader)
         }

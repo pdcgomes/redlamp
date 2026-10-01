@@ -11,6 +11,14 @@ enum DNGNoiseProfile {
         else {
             return nil
         }
+        return read(data, url: url)
+    }
+
+    /// The same from the file's bytes, `url` naming the file.
+    static func read(_ data: Data, url: URL) -> NoiseModel? {
+        guard url.pathExtension.lowercased() == "dng" else {
+            return nil
+        }
         return data.withUnsafeBytes { bytes in
             guard let reader = TIFFReader(bytes: bytes) else { return nil }
             for entries in reader.imageFileDirectories() {

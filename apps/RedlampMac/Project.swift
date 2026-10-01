@@ -45,12 +45,14 @@ let project = Project(
             dependencies: [
                 Module.engineAPI.dependency,
                 Module.engine.dependency,
+                Module.services.dependency,
                 Module.document.dependency,
                 Module.recipes.dependency,
                 Module.canvas.dependency,
                 Module.design.dependency,
                 Module.ui.dependency,
                 .external(name: "Sparkle"),
+                .target(name: "RedlampDecoder"),
             ],
             // Signed with the same team as the frameworks: with the hardened runtime,
             // library validation refuses frameworks from a different team (or ad-hoc).
@@ -66,6 +68,39 @@ let project = Project(
                 ],
                 configurations: [
                     // Debug builds stay attachable by sample/Instruments for profiling.
+                    .debug(name: .debug, settings: ["ENABLE_HARDENED_RUNTIME": "NO"]),
+                    .release(name: .release, settings: ["ENABLE_HARDENED_RUNTIME": "YES"]),
+                ],
+            ),
+        ),
+        // Decodes photos in a sandboxed process with no file access; the app sends each file's
+        // bytes. Embedded in Contents/XPCServices with its own copies of the two frameworks it uses.
+        .target(
+            name: "RedlampDecoder",
+            destinations: [.mac],
+            product: .xpc,
+            bundleId: "\(redlampBundlePrefix).mac.decoder",
+            deploymentTargets: .macOS(redlampMacOSVersion),
+            infoPlist: .extendingDefault(with: [
+                "CFBundleName": "RedlampDecoder",
+                "CFBundleShortVersionString": "$(MARKETING_VERSION)",
+                "CFBundleVersion": "$(CURRENT_PROJECT_VERSION)",
+                "XPCService": ["ServiceType": "Application"],
+            ]),
+            sources: ["DecoderService/**/*.swift"],
+            entitlements: .file(path: "DecoderService/RedlampDecoder.entitlements"),
+            dependencies: [
+                Module.engineAPI.dependency,
+                Module.services.dependency,
+            ],
+            settings: .settings(
+                base: [
+                    "CODE_SIGN_STYLE": "Automatic",
+                    "CODE_SIGN_IDENTITY": "Apple Development",
+                    // XPC services get no runpath by default; this one loads its own copies.
+                    "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/../Frameworks",
+                ],
+                configurations: [
                     .debug(name: .debug, settings: ["ENABLE_HARDENED_RUNTIME": "NO"]),
                     .release(name: .release, settings: ["ENABLE_HARDENED_RUNTIME": "YES"]),
                 ],
