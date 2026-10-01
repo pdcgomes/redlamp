@@ -306,6 +306,10 @@ public struct MaskComponentGPU: Sendable {
     public var geometry: SIMD4<Float>
     public var shape: SIMD4<Float>
     public var rotation: SIMD4<Float>
+    public var extra0: SIMD4<Float> = .zero
+    public var extra1: SIMD4<Float> = .zero
+    public var extra2: SIMD4<Float> = .zero
+    public var extra3: SIMD4<Float> = .zero
 
     public init(geometry: SIMD4<Float>, shape: SIMD4<Float>, rotation: SIMD4<Float>) {
         self.geometry = geometry
@@ -314,6 +318,20 @@ public struct MaskComponentGPU: Sendable {
     }
 
     public static let empty = MaskComponentGPU(geometry: .zero, shape: .zero, rotation: .zero)
+}
+
+public struct MaskRasterParams {
+    public var box: SIMD4<Int32>
+    public var info: SIMD4<Int32>
+    public var brush: SIMD4<Float>
+    public var raster: SIMD4<Float>
+
+    public init(box: SIMD4<Int32>, info: SIMD4<Int32>, brush: SIMD4<Float> = .zero, raster: SIMD4<Float>) {
+        self.box = box
+        self.info = info
+        self.brush = brush
+        self.raster = raster
+    }
 }
 
 public struct MaskLayerGPU: Sendable {
@@ -342,4 +360,6 @@ public enum OutputEncoding: Float {
     case displayP3 = 2
     /// Linear values in sRGB primaries (for downscaling an sRGB export before encoding it).
     case linearSRGB = 3
+    /// OKLab of the Rec.2020 result, for the guides range masks and Auto Mask select on.
+    case okLab = 4
 }

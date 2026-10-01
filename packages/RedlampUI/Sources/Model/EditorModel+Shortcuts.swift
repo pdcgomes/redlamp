@@ -85,6 +85,10 @@ public extension EditorModel {
         case .maskingTool: activeTool = activeTool == .masking ? .edit : .masking
         case .linearMask: startDrawing(.linear)
         case .radialMask: startDrawing(.radial)
+        case .brushMask: startDrawing(.brush)
+        case .colorRangeMask: startDrawing(.colorRange)
+        case .luminanceRangeMask: startDrawing(.luminanceRange)
+        case .depthRangeMask: startDrawing(.depthRange)
         // Masking
         case .maskOverlay:
             guard activeTool == .masking else { return false }
@@ -104,6 +108,9 @@ public extension EditorModel {
             let stars = [ShortcutAction.rating0, .rating1, .rating2, .rating3, .rating4, .rating5]
                 .firstIndex(of: action) ?? 0
             updateMetadata(advance: shifted) { $0.rating = stars }
+        // While brushing, [ and ] size the brush (Shift: feather), as in Lightroom.
+        case .decreaseRating where isBrushing: nudgeBrush(direction: -1, feather: shifted)
+        case .increaseRating where isBrushing: nudgeBrush(direction: 1, feather: shifted)
         case .decreaseRating: updateMetadata(advance: shifted) { $0.rating = max($0.rating - 1, 0) }
         case .increaseRating: updateMetadata(advance: shifted) { $0.rating = min($0.rating + 1, 5) }
         case .flagPick: updateMetadata(advance: shifted) { $0.flag = $0.flag == .pick ? nil : .pick }
@@ -219,6 +226,7 @@ public extension EditorModel {
               let sidecar = SidecarStore().load(for: previous)
         else { return }
         commit(sidecar.recipe, name: "Paste from Previous")
+        updatePastedAIMasks()
     }
 
     // MARK: - Rating, flags and labels

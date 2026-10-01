@@ -297,6 +297,8 @@ kernel void rl_develop(
     texture2d<float, access::sample> hazeMap [[texture(4)]],
     texture2d<float, access::sample> glowSource [[texture(5)]],
     texture2d<float, access::sample> glowLights [[texture(8)]],
+    texture2d_array<float, access::sample> maskRasters [[texture(6)]],
+    texture2d<float, access::sample> maskGuide [[texture(7)]],
     uint2 gid [[thread_position_in_grid]])
 {
     uint width = uint(p.outputSize.x);
@@ -323,8 +325,16 @@ kernel void rl_develop(
     float4 localTone = 0.0f;
     float2 localTone2 = 0.0f;
     float localDehaze = 0.0f;
+    MaskImages maskImages = { maskRasters, maskGuide };
+    float textureMagnitude = -1.0f;
     for (int i = 0; i < layerCount; i++) {
-        coverage[i] = evaluateMaskLayer(layers[i], components, maskPosition);
+        coverage[i] = evaluateMaskLayer(layers[i], components, maskPosition, maskImages);
+        if (layers[i].detail.y != 0.0f) {
+            if (textureMagnitude < 0.0f) {
+                textureMagnitude = maskTextureMagnitude(source, sourceUV, uint(layers[i].detail.z));
+            }
+            coverage[i] *= maskDetailFactor(textureMagnitude, layers[i].detail.y);
+        }
         localColor += coverage[i] * layers[i].color;
         localTone += coverage[i] * layers[i].tone;
         localTone2 += coverage[i] * layers[i].tone2.xy;
@@ -558,18 +568,36 @@ kernel void rl_develop(
         else if (all(encoded <= 0.002f)) encoded = float3(0.15f, 0.35f, 1.0f);
     }
 
+    // The selected mask's overlay: masks.w is the colour plus 8 × the style (MaskOverlayStyle).
     int overlay = int(p.masks.y);
     if (overlay >= 0 && overlay < layerCount) {
         const float3 overlayColors[4] = {
             float3(0.95f, 0.18f, 0.18f), float3(0.2f, 0.9f, 0.3f), float3(0.25f, 0.45f, 1.0f), float3(1.0f),
         };
-        float3 tint = overlayColors[clamp(int(p.masks.w), 0, 3)];
-        encoded = mix(encoded, tint, coverage[overlay] * 0.55f);
+        int code = int(p.masks.w);
+        float3 tint = overlayColors[clamp(code & 7, 0, 3)];
+        float cover = coverage[overlay];
+        float grey = dot(encoded, float3(0.2126f, 0.7152f, 0.0722f));
+        switch (code >> 3) {
+        case 1: encoded = mix(float3(grey), tint, cover * 0.55f); break;
+        case 2: encoded *= cover; break;
+        case 3: encoded = mix(float3(1.0f), encoded, cover); break;
+        case 4: encoded = float3(cover); break;
+        case 5: {
+            constexpr sampler guideSampler(coord::normalized, filter::linear, address::clamp_to_edge);
+            float lightness = maskGuide.sample(guideSampler, uv).x;
+            encoded = mix(float3(lightness), tint, cover * 0.55f);
+            break;
+        }
+        default: encoded = mix(encoded, tint, cover * 0.55f); break;
+        }
     }
 
-    // Output encoding: 0 linear output primaries, 1 sRGB-encoded sRGB, 2 sRGB-encoded Display P3.
+    // Output encoding: 0 linear output primaries, 1 sRGB-encoded sRGB, 2 sRGB-encoded Display P3,
+    // 4 OKLab (the output primaries are Rec.2020 then).
     int encoding = int(p.geometry.z);
-    float3 result = encoding == 0 || encoding == 3 ? srgbDecode3(encoded) : encoded;
+    float3 result = encoding == 4 ? rec2020ToOKLab(srgbDecode3(encoded))
+        : encoding == 0 || encoding == 3 ? srgbDecode3(encoded) : encoded;
     out.write(float4(result, 1.0f), gid);
 }
 

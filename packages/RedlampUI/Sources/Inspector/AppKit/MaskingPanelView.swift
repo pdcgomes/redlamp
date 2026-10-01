@@ -18,8 +18,10 @@ final class MaskingPanelView: ColumnView {
     private struct Structure: Equatable {
         var outlines: [MaskOutline]
         var selected: MaskOutline?
-        var componentKind: MaskKind?
+        /// Which component settings show (see `MaskingPanel.componentTools`).
+        var tools: MaskKind?
         var drawing: Bool
+        var status: Bool
     }
 
     init(model: EditorModel) {
@@ -42,8 +44,10 @@ final class MaskingPanelView: ColumnView {
             let next = Structure(
                 outlines: model.maskOutlines,
                 selected: model.selectedOutline,
-                componentKind: model.selectedComponentOutline?.kind,
+                tools: MaskingPanel.componentTools(model),
                 drawing: model.drawingKind != nil,
+                status: model.aiMaskProgress != nil || model.maskMessage != nil || model.pendingModel != nil
+                    || model.modelDownloadProgress != nil,
             )
             guard next != structure else { return }
             structure = next
@@ -53,7 +57,8 @@ final class MaskingPanelView: ColumnView {
 
     private func rows(for structure: Structure) -> [NSView] {
         let rows = PanelRows(model: model)
-        let hint: [NSView] = structure.drawing ? [rows.native(DrawingHint())] : []
+        let hint: [NSView] = (structure.status ? [rows.native(MaskStatus())] : [])
+            + (structure.drawing ? [rows.native(DrawingHint())] : [])
         guard !structure.outlines.isEmpty else {
             return [
                 rows.native(MasksHeaderBar()),
@@ -63,7 +68,7 @@ final class MaskingPanelView: ColumnView {
             ] + hint
         }
         let editor: NSView = if let mask = structure.selected {
-            editorColumn(mask, radial: structure.componentKind == .radial, rows: rows)
+            editorColumn(mask, tools: structure.tools, rows: rows)
         } else {
             rows.native(NoMaskSelected())
         }
@@ -74,15 +79,29 @@ final class MaskingPanelView: ColumnView {
         ] + hint + [DividerView(), editor]
     }
 
-    private func editorColumn(_ mask: MaskOutline, radial: Bool, rows: PanelRows) -> ColumnView {
+    private func editorColumn(_ mask: MaskOutline, tools: MaskKind?, rows: PanelRows) -> ColumnView {
         var views: [NSView] = [rows.header("Components", [])]
         views += mask.components.map { rows.native(ComponentRow(mask: mask, component: $0)) }
         views.append(rows.native(ComponentOperationMenus(mask: mask).padding(.top, 4)))
-        if radial {
+        switch tools {
+        case .radial:
             views.append(PaddingView(rows.slider(.maskFeather), top: 6))
+        case .brush:
+            views.append(PaddingView(rows.native(BrushChoicePicker()), top: 6))
+            views += ParameterID.brushParameters.map { rows.slider($0) }
+            views.append(rows.native(AutoMaskToggle()))
+        case .colorRange:
+            views.append(PaddingView(rows.slider(.maskColorRefine), top: 6))
+            views.append(rows.native(ColorSampleList()))
+        case .luminanceRange:
+            views.append(PaddingView(rows.native(LuminanceRangeEditor()), top: 6))
+        case .depthRange:
+            views.append(PaddingView(rows.native(DepthRangeEditor()), top: 6))
+        default:
+            break
         }
         views.append(rows.header(mask.name, [], accessory: rows.native(ResetMaskButton(mask: mask))))
-        views += [rows.slider(.maskAmount), rows.gap()]
+        views += [rows.slider(.maskAmount), rows.slider(.maskDetail), rows.gap()]
         for parameter in ParameterID.localParameters {
             views.append(rows.slider(parameter))
             if MaskingPanel.gapAfter.contains(parameter) {

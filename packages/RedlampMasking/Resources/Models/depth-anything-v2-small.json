@@ -1,0 +1,44 @@
+{
+  "id": "depth-anything-v2-small",
+  "version": 1,
+  "name": "Depth Anything V2 (small)",
+  "purpose": "Depth Range masks for photos without an embedded depth map.",
+  "provider": "redlamp.depth-anything-v2-small",
+  "assetPack": "models.depth-anything-v2-small.v1",
+  "source": "https://huggingface.co/apple/coreml-depth-anything-v2-small/resolve/main/",
+  "computeUnits": "all",
+  "files": [
+    {
+      "path": "DepthAnythingV2SmallF16.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+      "bytes": 399433,
+      "sha256": "44ac97a3efcfd52113183fb2862ff59cd0368e9ec2e30a90a54980dd11407042"
+    },
+    {
+      "path": "DepthAnythingV2SmallF16.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+      "bytes": 49419072,
+      "sha256": "fa60d9b6a155734f59029ebb882fd54e549bfaee3539c1a9cbd2cbbab64a0fed"
+    },
+    {
+      "path": "DepthAnythingV2SmallF16.mlpackage/Manifest.json",
+      "bytes": 617,
+      "sha256": "2883ae290c48fe916dc5ececac03a7d847fa277165a49ef5652fa1d2b9cb55f7"
+    }
+  ],
+  "licenses": {
+    "code": "Apache-2.0",
+    "weights": "Apache-2.0",
+    "data": [
+      "Virtual KITTI 2",
+      "SA-1B",
+      "ImageNet-21K",
+      "Places365",
+      "LSUN",
+      "BDD100K",
+      "Open Images V7"
+    ]
+  },
+  "decision": "DEC-02",
+  "evaluationOnly": true,
+  "notes": "Apple's Core ML conversion (fp16, 518x392 input). Its teacher was trained on Virtual KITTI 2 (CC BY-NC-SA 3.0), so it is evaluation-only until counsel decides DEC-02.",
+  "cleared": false
+}

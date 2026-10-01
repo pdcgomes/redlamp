@@ -214,6 +214,29 @@ public final class EditorModel {
     public internal(set) var drawingOperation: MaskOperation = .add
     /// When set, the drawn shape is added to this mask instead of creating a new one.
     public internal(set) var drawingTarget: UUID?
+    /// While brushing: the brush component strokes go into, once the first stroke made it.
+    public internal(set) var drawingComponentID: UUID?
+    /// Lightroom's A and B brushes and Erase, saved across launches.
+    public var brushes = BrushSettingsSet.saved() {
+        didSet { brushes.save() }
+    }
+
+    public var activeBrush: BrushChoice = .a
+    /// The AI mask being computed, for a progress indicator.
+    public internal(set) var aiMaskProgress: MaskKind?
+    /// Why the last AI mask couldn't be made, shown in the Masking panel.
+    public var maskMessage: String?
+    /// The AI mask kinds the engine can make for the open photo.
+    public internal(set) var availableAIMaskKinds: Set<MaskKind> = []
+    /// A model the chosen mask needs, waiting for the user to agree to download it.
+    public internal(set) var pendingModel: (model: ModelInfo, kind: MaskKind)?
+    /// The model being downloaded, 0...1.
+    public internal(set) var modelDownloadProgress: Double?
+    /// What a click would select while choosing an object (a low-resolution mask).
+    public internal(set) var objectPreview: MaskBitmap?
+    @ObservationIgnored var objectHoverTask: Task<Void, Never>?
+    /// Bumped when the user's mask presets change, so menus listing them update.
+    var maskPresetsVersion = 0
     public var expandedPanels: Set<PanelID> = [.basic, .toneCurve, .colorMixer]
     public var soloMode = false
     public var leftPanelVisible = true
@@ -237,6 +260,15 @@ public final class EditorModel {
     public var optionKeyHeld = false
     public var showMaskPins = true
     public var maskOverlayColor: MaskOverlayColor = .red {
+        didSet { requestRender() }
+    }
+
+    public var maskOverlayStyle: MaskOverlayStyle = .colorOverlay {
+        didSet { requestRender() }
+    }
+
+    /// Luminance Range's "Show Luminance Map": the photo's lightness in grey, the range tinted.
+    public var showLuminanceMap = false {
         didSet { requestRender() }
     }
 
@@ -402,6 +434,8 @@ public final class EditorModel {
 
     private func didOpen(_ opened: ImageInfo, sidecar: Sidecar?) {
         info = opened
+        availableAIMaskKinds = engine.availableMaskKinds()
+        maskMessage = nil
         isReadOnly = sidecars.isWrittenByNewerVersion(for: opened.url)
         var loaded = sidecar?.recipe ?? EditRecipe()
         if loaded.whiteBalanceMode == .asShot, let wb = opened.asShotWhiteBalance {
@@ -455,6 +489,7 @@ public final class EditorModel {
             generation: generation,
         )
         request.maskOverlayColor = maskOverlayColor
+        request.maskOverlayStyle = showLuminanceMap && overlay != nil ? .luminanceMap : maskOverlayStyle
         request.showRawClipping = showRawClipping
         request.comparison = isComparing ? beforeRecipe : nil
         engine.render(request)
@@ -806,6 +841,7 @@ public final class EditorModel {
     public func pasteSettings() {
         guard let clipboard else { return }
         commit(clipboard, name: "Paste Settings")
+        updatePastedAIMasks()
     }
 
     // MARK: - Panels

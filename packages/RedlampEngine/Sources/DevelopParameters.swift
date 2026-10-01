@@ -32,6 +32,8 @@ enum DevelopParameters {
         showClipping: Bool,
         maskOverlay: UUID? = nil,
         maskOverlayColor: MaskOverlayColor = .red,
+        maskOverlayStyle: MaskOverlayStyle = .colorOverlay,
+        masks: MaskBindings = .none,
     ) -> DevelopInputs {
         var p = DevelopParams()
         let baseLook = resolved ?? BaseLookRegistry.Resolved(
@@ -160,10 +162,18 @@ enum DevelopParameters {
         p.haze = SIMD4(session.airlight, Float(recipe[.dehaze] / 100))
 
         let (layers, components, overlayIndex) = maskBuffers(
-            recipe.masks, aspect: full.aspectRatio, overlay: maskOverlay,
+            recipe.masks, aspect: full.aspectRatio, overlay: maskOverlay, masks: masks,
+            detailLevel: detailLevel(session),
         )
+        if encoding == .okLab {
+            // A guide: Rec.2020 output, and no grain for range masks to speckle on.
+            p.setDisplayToOutput(matrix_identity_float3x3)
+            p.grain.x = 0
+            p.tone2.w = 0
+        }
         p.masks = SIMD4(
-            Float(layers.count), Float(overlayIndex ?? -1), Float(components.count), Float(maskOverlayColor.rawValue),
+            Float(layers.count), Float(overlayIndex ?? -1), Float(components.count),
+            Float(maskOverlayColor.rawValue + 8 * maskOverlayStyle.rawValue),
         )
 
         let lut = ToneCurveMath.isIdentity(recipe) ? [Float](repeating: 0, count: 4) : ToneCurveMath.lut(for: recipe)
@@ -180,20 +190,23 @@ enum DevelopParameters {
     /// Visible masks (plus the overlaid one, even if hidden) as kernel buffers.
     /// Coordinates are aspect-corrected so gradients stay perpendicular and circles round.
     private static func maskBuffers(
-        _ masks: [MaskLayer],
+        _ layerList: [MaskLayer],
         aspect: Double,
         overlay: UUID?,
+        masks: MaskBindings,
+        detailLevel: Int,
     ) -> (layers: [MaskLayerGPU], components: [MaskComponentGPU], overlayIndex: Int?) {
         var layers: [MaskLayerGPU] = []
-        var components: [MaskComponentGPU] = []
         var overlayIndex: Int?
+        var encoder = MaskComponentEncoder(aspect: aspect, masks: masks, layers: layerList)
 
-        for mask in masks where mask.isVisible || mask.id == overlay {
+        for mask in layerList where mask.isVisible || mask.id == overlay {
             guard layers.count < MaskLayer.maximumLayers else { break }
-            let first = components.count
-            for component in mask.components where components.count < MaskLayer.maximumComponents {
-                components.append(gpuComponent(component, aspect: aspect))
+            let first = encoder.components.count
+            for component in mask.components where encoder.components.count < MaskLayer.maximumComponents {
+                encoder.append(component)
             }
+            let count = encoder.components.count - first
             let scale = mask.isVisible ? mask.amount / 100 : 0
             func value(_ parameter: ParameterID, _ divisor: Double = 100) -> Float {
                 Float(mask[parameter] / divisor * scale)
@@ -214,20 +227,37 @@ enum DevelopParameters {
                     value(.localHighlights),
                     value(.localShadows),
                 ),
-                tone2: SIMD4(value(.localWhites), value(.localBlacks), Float(first), Float(components.count - first)),
-                detail: SIMD4(value(.localDehaze), 0, 0, 0),
+                tone2: SIMD4(value(.localWhites), value(.localBlacks), Float(first), Float(count)),
+                detail: SIMD4(value(.localDehaze), Float(mask.detail / 100), Float(detailLevel), 0),
             ))
         }
-        return (layers, components, overlayIndex)
+        return (layers, encoder.finished(), overlayIndex)
     }
 
-    static func gpuComponent(_ component: MaskComponent, aspect: Double) -> MaskComponentGPU {
+    /// The pyramid level a mask's Detail measures texture at: about 2048 px on the long side,
+    /// whatever the zoom.
+    static func detailLevel(_ session: ImageSession) -> Int {
+        max(
+            0,
+            min(
+                Int(log2(Double(session.orientedSize.longEdge) / 2048).rounded()),
+                session.pyramid.mipmapLevelCount - 1,
+            ),
+        )
+    }
+
+    /// The kernel's form of a component; `nil` for one written by a newer Redlamp, which is
+    /// left out. A raster component without its bitmap covers nothing.
+    static func gpuComponent(
+        _ component: MaskComponent, aspect: Double, masks: MaskBindings = .none,
+    ) -> MaskComponentGPU? {
         let operation: Float = switch component.operation {
         case .add: 0
         case .subtract: 1
         case .intersect: 2
         }
         let inverted: Float = component.inverted ? 1 : 0
+        let inverseAspect = Float(1 / max(aspect, 1e-6))
         switch component.shape {
         case let .linear(gradient):
             return MaskComponentGPU(
@@ -248,6 +278,121 @@ enum DevelopParameters {
                 shape: SIMD4(2, operation, inverted, Float(gradient.feather / 100)),
                 rotation: SIMD4(Float(cos(radians)), Float(sin(radians)), 0, 0),
             )
+        case .brush, .ai:
+            guard let slice = masks.slices[component.id] else {
+                return MaskComponentGPU(geometry: .zero, shape: SIMD4(0, operation, inverted, 0), rotation: .zero)
+            }
+            return MaskComponentGPU(
+                geometry: SIMD4(Float(slice), inverseAspect, 0, 0),
+                shape: SIMD4(3, operation, inverted, 0),
+                rotation: .zero,
+            )
+        case let .luminanceRange(range):
+            let r = range.normalized
+            return MaskComponentGPU(
+                geometry: SIMD4(
+                    Float((r.lower - r.lowerFeather) / 100), Float(r.lower / 100),
+                    Float(r.upper / 100), Float((r.upper + r.upperFeather) / 100),
+                ),
+                shape: SIMD4(4, operation, inverted, 0),
+                rotation: SIMD4(inverseAspect, 0, 0, 0),
+            )
+        case let .colorRange(range):
+            var gpu = MaskComponentGPU(
+                geometry: SIMD4(
+                    Float(range.samples.count), Float(ColorRangeMath.tolerance(refine: range.refine)), inverseAspect, 0,
+                ),
+                shape: SIMD4(5, operation, inverted, 0),
+                rotation: .zero,
+            )
+            let samples = range.samples.map { sample in
+                SIMD3<Float>(
+                    Float(sample.center.x), Float(sample.center.y),
+                    Float(ColorRangeMath.level(radius: sample.radius, guideHeight: masks.guideSize.height)),
+                )
+            }
+            func sample(_ index: Int) -> SIMD3<Float> {
+                index < samples.count ? samples[index] : .zero
+            }
+            gpu.extra0 = SIMD4(sample(0).x, sample(0).y, sample(1).x, sample(1).y)
+            gpu.extra1 = SIMD4(sample(2).x, sample(2).y, sample(3).x, sample(3).y)
+            gpu.extra2 = SIMD4(sample(4).x, sample(4).y, sample(4).z, 0)
+            gpu.extra3 = SIMD4(sample(0).z, sample(1).z, sample(2).z, sample(3).z)
+            return gpu
+        case let .depthRange(depth):
+            let r = depth.range.normalized
+            guard let slice = masks.slices[component.id] else {
+                return MaskComponentGPU(geometry: .zero, shape: SIMD4(0, operation, inverted, 0), rotation: .zero)
+            }
+            return MaskComponentGPU(
+                geometry: SIMD4(
+                    Float((r.lower - r.lowerFeather) / 100), Float(r.lower / 100),
+                    Float(r.upper / 100), Float((r.upper + r.upperFeather) / 100),
+                ),
+                shape: SIMD4(7, operation, inverted, 0),
+                rotation: SIMD4(Float(slice), inverseAspect, 0, 0),
+            )
+        case .maskReference:
+            // Filled in by MaskComponentEncoder with the referenced mask's components.
+            return MaskComponentGPU(geometry: .zero, shape: SIMD4(6, operation, inverted, 0), rotation: .zero)
+        case .unknown:
+            return nil
         }
+    }
+}
+
+/// A recipe's components for the kernel. A reference component points at the referenced
+/// mask's components, appended after every layer's own.
+struct MaskComponentEncoder {
+    let aspect: Double
+    let masks: MaskBindings
+    let layers: [MaskLayer]
+    private(set) var components: [MaskComponentGPU] = []
+    private var references: [(index: Int, maskID: UUID)] = []
+
+    init(aspect: Double, masks: MaskBindings, layers: [MaskLayer]) {
+        self.aspect = aspect
+        self.masks = masks
+        self.layers = layers
+    }
+
+    mutating func append(_ component: MaskComponent) {
+        guard let gpu = DevelopParameters.gpuComponent(component, aspect: aspect, masks: masks) else { return }
+        if case let .maskReference(reference) = component.shape {
+            references.append((components.count, reference.maskID))
+        }
+        components.append(gpu)
+    }
+
+    /// The components, with every reference resolved. A missing mask covers nothing.
+    func finished() -> [MaskComponentGPU] {
+        var result = components
+        for (index, maskID) in references {
+            guard let referenced = layers.first(where: { $0.id == maskID }) else { continue }
+            let first = result.count
+            for component in referenced.components {
+                if case .maskReference = component.shape {
+                    continue
+                }
+                if let gpu = DevelopParameters.gpuComponent(component, aspect: aspect, masks: masks) {
+                    result.append(gpu)
+                }
+            }
+            result[index].geometry = SIMD4(Float(first), Float(result.count - first), 0, 0)
+        }
+        return result
+    }
+}
+
+/// Color Range's slider units, shared with the CPU reference in tests.
+enum ColorRangeMath {
+    /// The OKLab distance at which a colour stops being selected, from Refine (0...100).
+    static func tolerance(refine: Double) -> Double {
+        0.02 + 0.2 * pow(min(max(refine, 0), 100) / 100, 1.5)
+    }
+
+    /// The guide level whose texels average a sample's disc (at least a few texels).
+    static func level(radius: Double, guideHeight: Int) -> Double {
+        max(0, log2(max(radius * Double(guideHeight), 1.5)))
     }
 }

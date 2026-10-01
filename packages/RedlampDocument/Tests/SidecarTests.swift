@@ -29,14 +29,14 @@ struct SidecarTests {
         recipe[.exposure] = 0.5
         let store = SidecarStore()
         try store.save(Sidecar(recipe: recipe, modified: Date(timeIntervalSince1970: 1000)), for: image)
-        let first = try Data(contentsOf: store.url(for: image))
+        let first = try Data(contentsOf: store.editURL(for: image))
 
         try store.save(Sidecar(recipe: recipe, modified: Date(timeIntervalSince1970: 2000)), for: image)
-        #expect(try Data(contentsOf: store.url(for: image)) == first)
+        #expect(try Data(contentsOf: store.editURL(for: image)) == first)
 
         recipe[.exposure] = 1
         try store.save(Sidecar(recipe: recipe, modified: Date(timeIntervalSince1970: 3000)), for: image)
-        #expect(try Data(contentsOf: store.url(for: image)) != first)
+        #expect(try Data(contentsOf: store.editURL(for: image)) != first)
     }
 
     @Test func `saving keeps fields a newer version added`() throws {
@@ -55,7 +55,7 @@ struct SidecarTests {
         recipe[.exposure] = 1
         try store.save(Sidecar(recipe: recipe), for: image)
 
-        let written = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: store.url(for: image)))
+        let written = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: store.editURL(for: image)))
         guard case let .object(root) = written,
               case let .object(savedRecipe) = root["recipe"],
               case let .object(values) = savedRecipe["values"]
@@ -81,7 +81,7 @@ struct SidecarTests {
             try store.save(Sidecar(recipe: EditRecipe()), for: image)
         }
         store.delete(for: image)
-        #expect(try Data(contentsOf: store.url(for: image)) == Data(json.utf8))
+        #expect(try Data(contentsOf: store.editURL(for: image)) == Data(json.utf8))
     }
 
     @Test func `format 1 profiles read as base looks and are written back as format 2`() throws {
@@ -98,10 +98,92 @@ struct SidecarTests {
         var edited = loaded
         edited.recipe[.exposure] = 0.5
         try store.save(edited, for: image)
-        let written = try String(contentsOf: store.url(for: image), encoding: .utf8)
+        let written = try String(contentsOf: store.editURL(for: image), encoding: .utf8)
         #expect(written.contains(#""baseLook""#))
         #expect(written.contains(#""redlamp/base/vivid""#))
         #expect(!written.contains(#""profile""#))
+    }
+
+    // MARK: - Packages
+
+    private func subjectMask(_ png: Data) -> MaskLayer {
+        MaskLayer(name: "Subject", components: [MaskComponent(shape: .ai(AIMask(
+            kind: .subject, provider: "test", revision: 1, analysisHash: "0", center: ImagePoint(x: 0.5, y: 0.5),
+            bitmap: MaskBitmap(png: png, width: 4, height: 2),
+        )))])
+    }
+
+    @Test func `saves a package with its mask bitmaps`() throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        let png = Data("fake png".utf8)
+        var recipe = EditRecipe()
+        recipe.masks = [subjectMask(png)]
+        try store.save(Sidecar(recipe: recipe), for: image)
+
+        #expect(store.editURL(for: image).lastPathComponent == SidecarStore.editFile)
+        let sha = MaskBitmap.hash(png)
+        #expect(try Data(contentsOf: store.bitmapURL(sha, for: image)) == png)
+        let json = try String(contentsOf: store.editURL(for: image), encoding: .utf8)
+        #expect(json.contains(sha))
+        #expect(!json.contains(png.base64EncodedString()))
+
+        let loaded = try #require(store.load(for: image))
+        #expect(loaded.recipe.maskBitmaps.first?.png == png)
+    }
+
+    @Test func `a single file sidecar becomes a package on save`() throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        let json = #"{"format":"app.redlamp.edit","recipe":{"version":2,"processVersion":1,"values":{"basic.exposure":0.5}}}"#
+        try Data(json.utf8).write(to: store.url(for: image))
+        #expect(store.editURL(for: image) == store.url(for: image))
+
+        var sidecar = try #require(store.load(for: image))
+        #expect(sidecar.recipe[.exposure] == 0.5)
+        sidecar.recipe[.exposure] = 1
+        try store.save(sidecar, for: image)
+
+        var isDirectory: ObjCBool = false
+        #expect(FileManager.default.fileExists(atPath: store.url(for: image).path, isDirectory: &isDirectory))
+        #expect(isDirectory.boolValue)
+        #expect(store.load(for: image)?.recipe[.exposure] == 1)
+        let siblings = try FileManager.default.contentsOfDirectory(atPath: image.deletingLastPathComponent().path)
+        #expect(siblings == ["IMG_0001.ARW.redlamp"])
+    }
+
+    @Test func `bitmaps no edit uses are removed`() throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        let first = Data("first".utf8)
+        let second = Data("second".utf8)
+        var recipe = EditRecipe()
+        recipe.masks = [subjectMask(first)]
+        let snapshot = Snapshot(name: "Before", recipe: recipe)
+        try store.save(Sidecar(recipe: recipe), for: image)
+
+        recipe.masks = [subjectMask(second)]
+        try store.save(Sidecar(recipe: recipe, snapshots: [snapshot]), for: image)
+        #expect(FileManager.default.fileExists(atPath: store.bitmapURL(MaskBitmap.hash(first), for: image).path))
+
+        try store.save(Sidecar(recipe: recipe), for: image)
+        #expect(!FileManager.default.fileExists(atPath: store.bitmapURL(MaskBitmap.hash(first), for: image).path))
+        #expect(FileManager.default.fileExists(atPath: store.bitmapURL(MaskBitmap.hash(second), for: image).path))
+        #expect(store.load(for: image)?.recipe.maskBitmaps.first?.png == second)
+    }
+
+    @Test func `deleting removes the package`() throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        var recipe = EditRecipe()
+        recipe.masks = [subjectMask(Data("x".utf8))]
+        try store.save(Sidecar(recipe: recipe), for: image)
+        store.delete(for: image)
+        #expect(!FileManager.default.fileExists(atPath: store.url(for: image).path))
     }
 
     private func temporaryImage() throws -> (URL, () -> Void) {

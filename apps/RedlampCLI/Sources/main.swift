@@ -10,12 +10,17 @@ usage: redlamp info <image>
        redlamp render <image> -o <output.{jpg,png,tif,heic}> [options]
        redlamp recipe <command> …   recipes and look development (redlamp recipe help)
        redlamp stack <frames…> …    merge a focus stack (redlamp stack --help)
+       redlamp mask <image> …       write an AI mask as a PNG (redlamp mask --help)
        redlamp mcp                  the engine as an MCP server on stdin/stdout
 
 options:
   --size <pixels>          long edge of the output (default: full resolution)
   --set <name>=<value>     set a parameter, e.g. --set exposure=0.5 --set basic.contrast=20
-  --recipe <file.json>     start from a recipe (e.g. a .redlamp sidecar)
+  --recipe <file.json>     start from a recipe (e.g. a .redlamp sidecar, file or package)
+  --mask <kind>            add an AI mask: subject, background, sky, people, or people:<part>
+                           (faceSkin, eyebrows, eyeSclera, iris, lips, teeth, hair)
+  --mask-set <name>=<v>    set a local adjustment of the last mask, e.g. --mask-set local.exposure=-1
+  --mask-invert            invert the last mask's components
   --base-look <name>       color, neutral, vivid, landscape, portrait, monochrome (--profile works too)
   --wb <mode>              asShot, auto, daylight, cloudy, shade, tungsten, fluorescent, flash
   --bw                     black & white treatment
@@ -71,12 +76,42 @@ func run(_ arguments: [String]) async throws {
         case "--size":
             request.maxLongEdge = try Int(value())
         case "--recipe":
-            let data = try Data(contentsOf: URL(fileURLWithPath: value()))
+            let path = try URL(fileURLWithPath: value())
+            var isDirectory: ObjCBool = false
+            FileManager.default.fileExists(atPath: path.path, isDirectory: &isDirectory)
+            let package = isDirectory.boolValue ? path : nil
+            let data = try Data(contentsOf: package?.appending(path: "edit.json") ?? path)
             if let sidecar = try? JSONDecoder().decode([String: EditRecipe].self, from: data),
                let stored = sidecar["recipe"] {
                 recipe = stored
             } else {
                 recipe = try JSONDecoder().decode(EditRecipe.self, from: data)
+            }
+            if let package {
+                recipe.loadMaskBitmaps { sha in try? Data(contentsOf: package.appending(path: "masks/\(sha).png")) }
+            }
+        case "--mask":
+            let spec = try value().split(separator: ":").map(String.init)
+            guard let kind = MaskKind(rawValue: spec[0]), kind.isAI else {
+                throw CLIError(description: "unknown AI mask \(spec[0])")
+            }
+            let part = spec.count > 1 ? PersonPart(rawValue: spec[1]) : .entirePerson
+            guard let part else { throw CLIError(description: "unknown person part \(spec[1])") }
+            let masks = try await engine.computeMasks(MaskRequest(kind: kind, part: part))
+            let name = kind == .people && part != .entirePerson ? part.name : kind.name
+            recipe.masks.append(MaskLayer(name: name, components: masks.map { MaskComponent(shape: .ai($0)) }))
+        case "--mask-set":
+            let pair = try value().split(separator: "=", maxSplits: 1).map(String.init)
+            guard pair.count == 2, let id = parameter(named: pair[0]), id.isLocal, let number = Double(pair[1]),
+                  !recipe.masks.isEmpty
+            else {
+                throw CLIError(description: "bad --mask-set \(arguments[index]) (it needs a --mask before it)")
+            }
+            recipe.masks[recipe.masks.count - 1][id] = number
+        case "--mask-invert":
+            guard !recipe.masks.isEmpty else { throw CLIError(description: "--mask-invert needs a --mask before it") }
+            for index in recipe.masks[recipe.masks.count - 1].components.indices {
+                recipe.masks[recipe.masks.count - 1].components[index].inverted.toggle()
             }
         case "--set":
             let pair = try value().split(separator: "=", maxSplits: 1).map(String.init)
@@ -144,6 +179,8 @@ do {
         try await RecipeCommands.run(Array(arguments.dropFirst()))
     case "stack":
         try await StackCommand.run(Array(arguments.dropFirst()))
+    case "mask":
+        try await MaskCommand.run(Array(arguments.dropFirst()))
     case "mcp":
         try await MCPServer().run()
     default:

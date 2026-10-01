@@ -15,7 +15,7 @@ Redlamp is built from scratch in Swift and Metal for Apple Silicon. It focuses o
 
 ![Redlamp editing a Nikon Z 6 raw file](docs/images/editor.png)
 
-> **Status: pre-alpha, iteration 2 (macOS).** The core RAW pipeline and the Develop workspace work today: Basic (with Texture, Clarity and Dehaze), Tone Curve, Color Mixer, Color Grading, Detail (noise reduction and sharpening) and Effects, **masking with linear and radial gradients** and local adjustments, and **Recipes**, Redlamp's presets, profiles and LUTs in one, with film looks measured from cameras' own renderings and **[film simulations](#film-simulations)** of 36 film looks from 30 stocks, built from the manufacturers' datasheets. Crop, healing, brush and AI masks, lens corrections, focus stacking, and the iPad and iPhone apps are next. See [Where we are](#where-we-are) and the [Roadmap](#roadmap).
+> **Status: pre-alpha, iteration 2 (macOS).** The core RAW pipeline and the Develop workspace work today: Basic (with Texture, Clarity and Dehaze), Tone Curve, Color Mixer, Color Grading, Detail (noise reduction and sharpening) and Effects, **masking** (gradients, brush, color and luminance range, Subject, Sky, Background, People and its parts, Objects, and Depth Range) with local adjustments, and **Recipes**, Redlamp's presets, profiles and LUTs in one, with film looks measured from cameras' own renderings and **[film simulations](#film-simulations)** of 36 film looks from 30 stocks, built from the manufacturers' datasheets. Crop, healing, Landscape masks, lens corrections, focus stacking, and the iPad and iPhone apps are next. See [Where we are](#where-we-are) and the [Roadmap](#roadmap).
 >
 > This README is the project's primary status page and is kept up to date as work lands. *Last updated: 1 October 2026.*
 
@@ -99,10 +99,16 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
   - Draw them on the photo.
   - Drag the handles to move, resize, and rotate; radial gradients also have a Feather control.
   - Pins select the other masks.
+- [x] **Brush** (`K`): A and B brushes and Erase (hold Option), with Size, Feather, Flow, Density and Auto Mask, and pen pressure. Strokes are kept as vectors in the edit and painted on the GPU in mask space (up to 4096 px), redrawing only the stroke being painted. `[` and `]` change the size, with Shift the feather.
+- [x] **Luminance Range** (`⇧Q`) and **Color Range** (`⇧J`): sample with the eyedropper, then shape the range with four handles (Show Luminance Map) or Refine up to five color samples. They select on the photo with its global edit, so the selection follows white balance and exposure.
+- [x] **AI masks:** Subject, Background, People (each person, or parts: face skin, eyebrows, eye sclera, iris, lips, teeth, and hair from iPhone mattes) and Sky, with Apple Vision's built-in models and nothing to download. **Objects:** hover to preview, click to select, click again to add and Option-click to take away (Segment Anything 2.1, an 80 MB download on first use). **Depth Range:** from a photo's own depth map (iPhone), or estimated by Depth Anything V2. Sky is Segment Anything prompted inside a classical sky estimate, the best candidate that is cleared to evaluate today; in the [bake-off](docs/research/notes/MSK-17-sky-bakeoff.md), averaging it with Depth Anything 3 did better still, and that model is next to evaluate.
+- [x] AI masks are computed from the photo without its edit and kept as bitmaps in the edit, so they never move when you edit and render the same everywhere. **Update AI Masks** recomputes them with today's models, pasted settings recompute them for the new photo, and **Refine Edges** snaps them harder to the photo.
+- [x] **Mask presets:** Blue Sky, Brighten Subject, Darken Background, Smooth Skin, Whiten Teeth and Pop Eyes compute their masks for each photo; save your own from any mask.
+- [x] **Beyond Lightroom:** a mask's **Detail** keeps only its textured (or only its flat) areas, and any mask can be reused as a component of another (**Existing Mask** in Add, Subtract and Intersect).
 - [x] **Local adjustments:** Temp, Tint, Exposure, Contrast, Highlights, Shadows, Whites, Blacks, Texture, Clarity, Dehaze, Hue, Saturation, Sharpness, and Noise, plus the mask's Amount (0–200%).
-- [x] **Mask management:** a red mask overlay (`O`), and a mask list where you can show and hide, rename, duplicate, "duplicate and invert", reset, and delete masks.
-- [x] **Fast by design:** masks are evaluated analytically, per pixel, inside the same fused GPU kernel. Up to 16 masks cost well under a millisecond extra at Fit.
-- [x] The **Create New Mask** grid already lists every Lightroom mask type (Subject, Sky, Background, Objects, People, Landscape, Brush, Color, Luminance, and Depth Range). Each shows the phase it arrives in.
+- [x] **Mask management:** a mask overlay (`O`) in Lightroom's modes (Color Overlay, on B&W, Image on Black or White, B&W) and colors, and a mask list where you can show and hide, rename, duplicate, "duplicate and invert", reset, and delete masks.
+- [x] **Fast by design:** gradients and ranges are evaluated per pixel inside the same fused GPU kernel, and brush and AI masks are read from GPU textures. Up to 16 masks cost well under a millisecond extra at Fit.
+- [x] **Models on demand:** Settings › Models lists the downloadable models with their size, and removes them. Every model runs on the Mac; photos are never uploaded. Models whose training data is still under licence review are offered only when you turn on evaluation models.
 
 **Focus stacking** (a separate Stack workspace)
 - [x] **Stacks are found for you:** runs of frames with the same camera settings a moment apart, whose sharp region moves from frame to frame, get a "Focus stack detected: N frames" banner with **Merge**. Bursts, time-lapses and pans aren't offered.
@@ -185,7 +191,9 @@ With both side panels in AppKit, most of what remains is Core Animation committi
 - X-Trans demosaicing is a first-generation interpolation. A Markesteijn-class demosaic comes in Phase 2.
 - Redlamp's exposure for Fujifilm raws differs from the camera's by up to ±0.9 EV depending on the body; the profiler removes it when measuring looks, and the engine fix is tracked (TON-14).
 - Non-DNG raws use a single-illuminant Adobe-derived matrix (LibRaw's). DNGs interpolate their two calibrations by white balance, but the Temperature and Tint model still converts with one matrix, and DCP profiles (HueSatMap, LookTable) come later in Phase 2.
-- Masks support linear and radial gradients only. Brush, range, and AI masks come in Phases 2 and 3.
+- Landscape masks (mountains, water, vegetation, ground, architecture) and people parts beyond the face (body skin, clothes, and hair without an iPhone matte) need a model trained on data Redlamp has rights to, which doesn't exist yet ([plan](docs/plans/2026-10-01-masking-plan.md#m8-trained-heads-msk-12-msk-13-only-if-m7-says-so)).
+- Objects and Depth Range estimation use open models still under licence review (tracker DEC-02), offered only with evaluation models turned on. Vision's own tap-to-segment arrives with macOS 27.
+- AI mask edges are snapped to the photo when the mask is made (a guided filter, freedom-to-operate pending as DEC-05), not refined again at render time.
 - Local Whites and Blacks are approximated with tonal-region gains.
 - The app is not sandboxed yet (required later for the Mac App Store). iPad and iPhone come in Phase 5.
 
@@ -744,12 +752,13 @@ The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on mac
 - [ ] **Film effects for recipes:** halation (the red glow around bright lights), bloom and diffusion, and film grain that varies with density and scales with output size
 - [ ] Lens corrections from the lensfun database, Adobe LCP import, and DNG opcodes
 - [ ] Crop and straighten, Transform and Upright
-- [ ] Brush, color range, and luminance range masks, and Vision AI masks (subject, sky, background, people)
+- [x] Brush, color range, and luminance range masks, and Vision AI masks (subject, sky, background, people)
 - [ ] Slider-feel calibration against Lightroom, and Lightroom XMP preset import
 - [ ] Photos library integration and a Photos editing extension
 
 ### Phase 3: Pro masking, healing, AI denoise, focus stacking, and looks
-- [ ] SAM-class object and people-part masks, mask refinement, mask presets, and syncing masks across photos
+- [x] SAM-class object and face-part masks, depth range, mask refinement, mask presets, and recomputing AI masks for pasted settings
+- [ ] Landscape and body-part masks on a model trained on data we have rights to, and batch updating AI masks across photos
 - [ ] Healing, clone, and content-aware remove, with AI inpainting on the device
 - [ ] **AI Denoise:** an on-device model working on raw data, matching or beating the best commercial denoisers, with a fast 1:1 preview and non-destructive results
 - [ ] **Focus stacking v1:** stacks detected automatically in the filmstrip, alignment (including focus breathing and handheld sequences), depth-map and pyramid fusion strategies, a retouch brush, and results that stay fully editable *(alignment, depth solve, fusion and `redlamp stack` done)*
@@ -939,8 +948,8 @@ Redlamp follows Lightroom Classic's Develop-module shortcuts. Press **⌘/** in 
 | **Panels** | `Tab` hide side panels · `⇧Tab` hide all · `F6` filmstrip · `F7` left panel · `F8` right panel · `⌘1`–`⌘9` open or close Basic, Tone Curve, Color Mixer, Color Grading, Detail, Lens Corrections, Transform, Effects, Calibration |
 | **Navigation** | `←` `→` or `⌘←` `⌘→` previous/next photo |
 | **Develop** | `,` `.` select previous/next setting · `-` `=` decrease/increase it (`⇧` for larger steps) · `V` black & white · `W` white-balance selector · `⌘U` auto settings · `⇧⌘U` auto white balance · `⇧⌘C` / `⇧⌘V` copy/paste settings · `⌥⌘V` paste from previous · `⇧⌘R` reset all · `⌘N` new snapshot · `⌘Z` / `⇧⌘Z` undo/redo · hold `⌥` to turn group titles into "Reset …" |
-| **Tools** | `D` Edit · `⇧W` Masking · `M` linear gradient · `⇧M` radial gradient · `R` crop, `A` crop aspect lock *(Phase 2)* · `Q` healing *(Phase 3)* · `K` brush, `⇧J` color range, `⇧Q` luminance range *(Phase 2)* · `⇧Z` depth range *(Phase 3)* |
-| **Masking** | `O` show/hide overlay · `⇧O` cycle overlay color · `H` show/hide pins · `⌫` delete selected mask · `Esc` cancel drawing or leave the tool |
+| **Tools** | `D` Edit · `⇧W` Masking · `M` linear gradient · `⇧M` radial gradient · `K` brush · `⇧J` color range · `⇧Q` luminance range · `⇧Z` depth range · `R` crop, `A` crop aspect lock *(Phase 2)* · `Q` healing *(Phase 3)* |
+| **Masking** | `O` show/hide overlay · `⇧O` cycle overlay color · `H` show/hide pins · `⌫` delete selected mask · `Esc` finish drawing or leave the tool · brushing: `[` `]` size (`⇧` feather), hold `⌥` to erase · Objects: `⌥`-click to take away |
 | **Rating & flags** | `0`–`5` star rating · `[` `]` decrease/increase rating · `P` pick · `X` reject · `U` unflag · `6`–`9` red, yellow, green, blue label · add `⇧` to any of these to also move to the next photo |
 | **File** | `⌘O` open folder · `⇧⌘E` export · `⌘/` keyboard shortcuts · `⇧⌘L` Film Looks window |
 
@@ -954,13 +963,13 @@ Ratings, flags and color labels are saved in the photo's sidecar and shown on th
 
 ### Where edits are stored
 
-Edits are saved as JSON next to the photo, in `IMG_1234.ARW.redlamp`. The file holds the edit recipe and any snapshots. Only values that differ from the defaults are stored, so sidecars stay small. Resetting a photo completely deletes its sidecar.
+Edits are saved next to the photo, in `IMG_1234.ARW.redlamp`. It is a package (Finder shows it as one file): `edit.json` holds the edit recipe and any snapshots, and `masks/` holds the bitmaps of AI masks as 8-bit PNGs named by their SHA-256, which the JSON refers to. Brush strokes and range masks are part of the JSON. Only values that differ from the defaults are stored, so sidecars stay small. Resetting a photo completely deletes its sidecar.
 
 Sidecars carry two version numbers:
 - The **format version** describes the file's syntax. Older formats are migrated silently when read.
 - The **process version** records the rendering behavior the edit was made with, like Lightroom's process versions. An edit keeps rendering the way it did when it was made; moving it to a newer process is always an explicit choice. Process 2 (October 2026) sizes grain to the frame and makes it strongest in the shadows, as film's is. Process 3 shows a JPEG, HEIC, PNG or TIFF as the file at default settings, and gives halation's extra glow only to small lights. Edits made before each keep the behaviour they were made with.
 
-Settings a newer Redlamp wrote, but this version doesn't know, are kept and written back unchanged. A sidecar written with a newer format or process version is never overwritten or deleted, and sidecars are only rewritten when their content changes. Format 2 renamed `profile` to `baseLook`; format-1 sidecars still read.
+Settings a newer Redlamp wrote, but this version doesn't know, are kept and written back unchanged. A sidecar written with a newer format or process version is never overwritten or deleted, and sidecars are only rewritten when their content changes. Format 2 renamed `profile` to `baseLook`; format-1 sidecars still read. Format 3 added brush, range and AI mask components and made sidecars packages; a single-file sidecar is read as it is and becomes a package on its next save.
 
 ### Where recipes are stored
 

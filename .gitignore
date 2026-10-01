@@ -40,3 +40,6 @@ __pycache__/
 *.mobileprovision
 .env
 .env.local
+
+# Python environments for research prototypes
+.venv/

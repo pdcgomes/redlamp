@@ -14,7 +14,14 @@ import SwiftUI
             if model.maskOutlines.isEmpty {
                 CreateMaskGrid(title: "Create New Mask") { kind in model.startDrawing(kind) }
                     .padding(.horizontal, Theme.panelPadding)
-                    .padding(.bottom, 12)
+                    .padding(.bottom, 8)
+                HStack {
+                    MaskPresetsMenu()
+                    Spacer()
+                }
+                .padding(.horizontal, Theme.panelPadding)
+                .padding(.bottom, 12)
+                MaskStatus()
                 if model.drawingKind != nil {
                     DrawingHint()
                 }
@@ -22,6 +29,7 @@ import SwiftUI
                 MaskList()
                     .padding(.horizontal, Theme.panelPadding)
                 MaskActionsBar()
+                MaskStatus()
 
                 if model.drawingKind != nil {
                     DrawingHint()
@@ -57,6 +65,26 @@ struct MasksHeaderBar: View {
                 .controlSize(.small)
                 .font(Theme.captionFont)
                 .help("Show Overlay (O)")
+            Menu {
+                Picker("Overlay Mode", selection: $model.maskOverlayStyle) {
+                    ForEach(MaskOverlayStyle.menu, id: \.self) { style in
+                        Text(style.name).tag(style)
+                    }
+                }
+                .pickerStyle(.inline)
+                Picker("Overlay Color", selection: $model.maskOverlayColor) {
+                    ForEach(MaskOverlayColor.allCases, id: \.self) { color in
+                        Text(color.name).tag(color)
+                    }
+                }
+                .pickerStyle(.inline)
+            } label: {
+                Image(systemName: "circle.lefthalf.striped.horizontal")
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .fixedSize()
+            .help("Overlay mode and color")
         }
         .padding(.horizontal, Theme.panelPadding)
         .padding(.vertical, 10)
@@ -68,11 +96,18 @@ struct MaskActionsBar: View {
 
     var body: some View {
         HStack {
-            CreateMaskMenu(title: "Create New Mask", systemImage: "plus") { kind in
+            CreateMaskMenu(
+                title: "Create New Mask", systemImage: "plus",
+                onPersonPart: { part in Task { await model.createAIMask(.people, part: part) } },
+            ) { kind in
                 model.startDrawing(kind)
             }
+            MaskPresetsMenu()
             Spacer()
             Menu {
+                Button("Update AI Masks") { Task { await model.updateAIMasks() } }
+                    .disabled(model.aiMaskCount == 0 || model.aiMaskProgress != nil)
+                Divider()
                 Button("Delete All Masks", role: .destructive) { model.deleteAllMasks() }
             } label: {
                 Image(systemName: "ellipsis.circle")
@@ -95,17 +130,130 @@ struct NoMaskSelected: View {
     }
 }
 
+/// Mask presets: Lightroom-style adaptive ones, which compute their masks for the photo, and
+/// the user's own.
+struct MaskPresetsMenu: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        let presets = model.maskPresets
+        let builtIn = Set(MaskPreset.builtIn.map(\.id))
+        Menu {
+            ForEach(presets) { preset in
+                Button(preset.name) { Task { await model.applyMaskPreset(preset) } }
+                    .disabled(!model.canApply(preset) || model.aiMaskProgress != nil)
+            }
+            let own = presets.filter { !builtIn.contains($0.id) }
+            if !own.isEmpty {
+                Divider()
+                Menu("Delete Preset") {
+                    ForEach(own) { preset in
+                        Button(preset.name, role: .destructive) { model.deleteMaskPreset(preset.id) }
+                    }
+                }
+            }
+        } label: {
+            Label("Presets", systemImage: "wand.and.stars").font(Theme.labelFont)
+        }
+        .menuStyle(.button)
+        .controlSize(.small)
+        .fixedSize()
+        .help("Apply a mask preset")
+    }
+}
+
+/// An AI mask being computed, or why the last one couldn't be.
+struct MaskStatus: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        if let pending = model.pendingModel {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("\(pending.kind.name) masks use \(pending.model.name), a \(pending.model.formattedSize) download.")
+                    .font(Theme.labelFont)
+                    .foregroundStyle(Theme.value)
+                Text("It runs on this Mac; your photos are never uploaded. You can remove it in Settings › Models.")
+                    .font(Theme.captionFont)
+                    .foregroundStyle(Theme.secondaryLabel)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Spacer()
+                    Button("Not Now") { model.declinePendingModel() }
+                    Button("Download") { Task { await model.downloadPendingModel() } }
+                        .keyboardShortcut(.defaultAction)
+                }
+                .controlSize(.small)
+            }
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Theme.selection))
+            .padding(.horizontal, Theme.panelPadding)
+            .padding(.bottom, 10)
+        } else if let progress = model.modelDownloadProgress {
+            HStack(spacing: 8) {
+                ProgressView(value: progress).controlSize(.small)
+                Text("Downloading model… \(Int(progress * 100))%")
+            }
+            .font(Theme.captionFont)
+            .foregroundStyle(Theme.label)
+            .padding(.horizontal, Theme.panelPadding)
+            .padding(.bottom, 10)
+        } else if let kind = model.aiMaskProgress {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text(kind == .subject && model
+                    .aiMaskCount > 0 ? "Updating AI masks…" : "Finding \(kind.name.lowercased())…")
+                Spacer()
+            }
+            .font(Theme.captionFont)
+            .foregroundStyle(Theme.label)
+            .padding(.horizontal, Theme.panelPadding)
+            .padding(.bottom, 10)
+        } else if let message = model.maskMessage {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle")
+                Text(message).fixedSize(horizontal: false, vertical: true)
+                Spacer()
+                Button {
+                    model.maskMessage = nil
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.plain)
+            }
+            .font(Theme.captionFont)
+            .foregroundStyle(Theme.label)
+            .padding(.horizontal, Theme.panelPadding)
+            .padding(.bottom, 10)
+        }
+    }
+}
+
 struct DrawingHint: View {
     @Environment(EditorModel.self) private var model
+
+    private var hint: String {
+        switch model.drawingKind {
+        case .radial: "Drag on the photo to draw the radial gradient. Shift keeps it circular."
+        case .brush: "Paint on the photo. Hold Option to erase; [ and ] change the size, with Shift the feather."
+        case .colorRange: "Click or drag on the photo to sample a color. Shift-click adds a sample (up to 5)."
+        case .luminanceRange: "Click on the photo to select tones like the one there."
+        case .objects: "Click an object to select it. Click again to add to it, Option-click to take away."
+        default: "Drag on the photo from full effect to no effect."
+        }
+    }
+
+    /// Tools that stay armed until Done: each stroke or sample adds to the same component.
+    private var staysArmed: Bool {
+        [.brush, .colorRange, .luminanceRange, .objects].contains(model.drawingKind)
+    }
 
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: model.drawingKind?.symbol ?? "hand.draw")
-            Text(model.drawingKind == .radial
-                ? "Drag on the photo to draw the radial gradient. Shift keeps it circular."
-                : "Drag on the photo from full effect to no effect.")
+            Text(hint)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer()
-            Button("Cancel") { model.cancelDrawing() }
+            Button(staysArmed && model.drawingComponentID != nil ? "Done" : "Cancel") { model.cancelDrawing() }
                 .controlSize(.mini)
         }
         .font(Theme.captionFont)
@@ -122,6 +270,7 @@ struct DrawingHint: View {
 struct CreateMaskGrid: View {
     let title: String
     let onCreate: (MaskKind) -> Void
+    @Environment(EditorModel.self) private var model
 
     private let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
 
@@ -132,25 +281,30 @@ struct CreateMaskGrid: View {
                 .tracking(0.6)
                 .foregroundStyle(Theme.secondaryLabel)
             LazyVGrid(columns: columns, spacing: 6) {
-                ForEach(MaskKind.allCases, id: \.self) { kind in
+                ForEach(MaskKind.creatable, id: \.self) { kind in
                     Button {
                         onCreate(kind)
                     } label: {
                         VStack(spacing: 5) {
-                            Image(systemName: kind.symbol).font(.system(size: 16))
+                            if model.aiMaskProgress == kind {
+                                ProgressView().controlSize(.small).frame(height: 16)
+                            } else {
+                                Image(systemName: kind.symbol).font(.system(size: 16))
+                            }
                             Text(kind.name)
                                 .font(.system(size: 9.5))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
                         }
                         .frame(maxWidth: .infinity, minHeight: 52)
-                        .foregroundStyle(kind.isAvailable ? Theme.value : Theme.tertiaryLabel)
+                        .foregroundStyle(model.canCreateMask(kind) ? Theme.value : Theme.tertiaryLabel)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.well))
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .disabled(!kind.isAvailable)
-                    .help(kind.plannedPhase.map { "\(kind.name) arrives in \($0)" } ?? kind.name)
+                    .disabled(!model.canCreateMask(kind) || model.aiMaskProgress != nil)
+                    .help(kind.plannedPhase.map { "\(kind.name) arrives in \($0)" }
+                        ?? (model.canCreateMask(kind) ? kind.name : "\(kind.name) isn't available for this photo"))
                 }
             }
         }
@@ -160,20 +314,44 @@ struct CreateMaskGrid: View {
 struct CreateMaskMenu: View {
     let title: String
     let systemImage: String
+    /// Other masks that can be reused as a component.
+    var others: [MaskOutline] = []
+    var onReuse: (UUID) -> Void = { _ in }
+    /// People parts; the plain People item selects entire people.
+    var onPersonPart: ((PersonPart) -> Void)?
     let onCreate: (MaskKind) -> Void
+    @Environment(EditorModel.self) private var model
 
     var body: some View {
         Menu {
-            ForEach(MaskKind.allCases, id: \.self) { kind in
-                Button {
-                    onCreate(kind)
-                } label: {
-                    Label(
-                        kind.plannedPhase.map { "\(kind.name) (\($0))" } ?? kind.name,
-                        systemImage: kind.symbol,
-                    )
+            if !others.isEmpty {
+                Menu("Existing Mask") {
+                    ForEach(others) { other in
+                        Button(other.name) { onReuse(other.id) }
+                    }
                 }
-                .disabled(!kind.isAvailable)
+                Divider()
+            }
+            ForEach(MaskKind.creatable, id: \.self) { kind in
+                if kind == .people, let onPersonPart, model.canCreateMask(.people) {
+                    Menu {
+                        ForEach(PersonPart.allCases, id: \.self) { part in
+                            Button(part.name) { onPersonPart(part) }
+                        }
+                    } label: {
+                        Label(kind.name, systemImage: kind.symbol)
+                    }
+                } else {
+                    Button {
+                        onCreate(kind)
+                    } label: {
+                        Label(
+                            kind.plannedPhase.map { "\(kind.name) (\($0))" } ?? kind.name,
+                            systemImage: kind.symbol,
+                        )
+                    }
+                    .disabled(!model.canCreateMask(kind))
+                }
             }
         } label: {
             Label(title, systemImage: systemImage).font(Theme.labelFont)
@@ -194,7 +372,7 @@ struct MaskList: View {
             ForEach(model.maskOutlines.reversed()) { mask in
                 let selected = mask.id == model.selectedMaskID
                 HStack(spacing: 8) {
-                    Image(systemName: mask.components.first?.kind.symbol ?? "circle.dashed")
+                    Image(systemName: mask.components.first?.kind?.symbol ?? "circle.dashed")
                         .font(.system(size: 12))
                         .frame(width: 18)
                         .foregroundStyle(selected ? Theme.value : Theme.secondaryLabel)
@@ -239,6 +417,7 @@ struct MaskList: View {
                     Button("Duplicate") { model.duplicateMask(mask.id) }
                     Button("Duplicate and Invert") { model.duplicateMask(mask.id, inverted: true) }
                     Button("Reset Adjustments") { model.resetMaskAdjustments(mask.id) }
+                    Button("Save as Mask Preset") { model.saveMaskPreset(from: mask.id, name: mask.name) }
                     Divider()
                     Button("Delete \(mask.name)", role: .destructive) { model.deleteMask(mask.id) }
                 }
@@ -260,15 +439,36 @@ private struct SelectedMaskEditor: View {
             ComponentOperationMenus(mask: mask)
                 .padding(.top, 4)
 
-            if model.selectedComponentOutline?.kind == .radial {
+            switch MaskingPanel.componentTools(model) {
+            case .radial:
                 ParameterSlider(parameter: .maskFeather)
                     .padding(.top, 6)
+            case .brush:
+                BrushChoicePicker()
+                    .padding(.top, 6)
+                ForEach(ParameterID.brushParameters, id: \.self) { parameter in
+                    ParameterSlider(parameter: parameter)
+                }
+                AutoMaskToggle()
+            case .colorRange:
+                ParameterSlider(parameter: .maskColorRefine)
+                    .padding(.top, 6)
+                ColorSampleList()
+            case .luminanceRange:
+                LuminanceRangeEditor()
+                    .padding(.top, 6)
+            case .depthRange:
+                DepthRangeEditor()
+                    .padding(.top, 6)
+            default:
+                EmptyView()
             }
 
             SubsectionHeader(title: mask.name, parameters: []) {
                 ResetMaskButton(mask: mask)
             }
             ParameterSlider(parameter: .maskAmount)
+            ParameterSlider(parameter: .maskDetail)
             Spacer().frame(height: 4)
             ForEach(ParameterID.localParameters, id: \.self) { parameter in
                 ParameterSlider(parameter: parameter)
@@ -285,6 +485,192 @@ private struct SelectedMaskEditor: View {
 extension MaskingPanel {
     /// Local adjustments come in groups, like the Basic panel's.
     static let gapAfter: Set<ParameterID> = [.localTint, .localBlacks, .localDehaze]
+
+    /// Which component settings to show: the brush while brushing, otherwise the selected
+    /// component's own.
+    @MainActor static func componentTools(_ model: EditorModel) -> MaskKind? {
+        if model.isBrushing {
+            return .brush
+        }
+        let kind = model.selectedComponentOutline?.kind
+        return [.radial, .brush, .colorRange, .luminanceRange, .depthRange].contains(kind) ? kind : nil
+    }
+}
+
+/// Lightroom's A, B and Erase brushes.
+struct BrushChoicePicker: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        Picker("Brush", selection: $model.activeBrush) {
+            ForEach(BrushChoice.allCases, id: \.self) { choice in
+                Text(choice.rawValue).tag(choice)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.small)
+    }
+}
+
+struct AutoMaskToggle: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        Toggle("Auto Mask", isOn: Binding(
+            get: { model.brushes[model.activeBrush].autoMask },
+            set: { model.brushes[model.activeBrush].autoMask = $0 },
+        ))
+        .toggleStyle(.checkbox)
+        .controlSize(.small)
+        .font(Theme.labelFont)
+        .help("Keeps the brush to colors like the one under its center")
+    }
+}
+
+/// The selected Color Range's samples, removable while more than one is left.
+struct ColorSampleList: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        let samples = model.selectedColorRange?.samples ?? []
+        HStack(spacing: 6) {
+            Text("\(samples.count) of \(ColorRangeMask.maximumSamples) samples")
+                .font(Theme.captionFont)
+                .foregroundStyle(Theme.secondaryLabel)
+            Spacer()
+            if samples.count > 1 {
+                Button("Remove Last") { model.removeColorSample(at: samples.count - 1) }
+                    .controlSize(.mini)
+            }
+        }
+    }
+}
+
+/// Luminance Range: a lightness bar with four handles, and the luminance map.
+struct LuminanceRangeEditor: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        VStack(alignment: .leading, spacing: 6) {
+            RangeBar(
+                title: "Luminance Range", colors: [.black, .white],
+                range: model.selectedLuminanceRange ?? LuminanceRangeMask(),
+                onChange: { model.setLuminanceRange($0) }, historyName: "Luminance Range",
+            )
+            Toggle("Show Luminance Map", isOn: $model.showLuminanceMap)
+                .toggleStyle(.checkbox)
+                .controlSize(.small)
+                .font(Theme.labelFont)
+        }
+    }
+}
+
+/// Depth Range: the same bar over depth, far on the left.
+struct DepthRangeEditor: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        RangeBar(
+            title: "Depth Range", colors: [Color(white: 0.15), Color(white: 0.95)],
+            range: model.selectedDepthRange ?? LuminanceRangeMask(),
+            onChange: { model.setDepthRange($0) }, historyName: "Depth Range", ends: ("Far", "Near"),
+        )
+    }
+}
+
+/// A 0...100 bar with four handles: where the range starts, is full, stops being full, ends.
+struct RangeBar: View {
+    let title: String
+    let colors: [Color]
+    let range: LuminanceRangeMask
+    let onChange: (LuminanceRangeMask) -> Void
+    let historyName: String
+    var ends: (String, String)?
+    @Environment(EditorModel.self) private var model
+    @State private var dragging: Int?
+
+    var body: some View {
+        let stops = [range.lower - range.lowerFeather, range.lower, range.upper, range.upper + range.upperFeather]
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(title)
+                    .font(Theme.labelFont)
+                    .foregroundStyle(Theme.label)
+                Spacer()
+                Text("\(Int(range.lower.rounded())) – \(Int(range.upper.rounded()))")
+                    .font(Theme.captionFont)
+                    .foregroundStyle(Theme.secondaryLabel)
+            }
+            GeometryReader { geometry in
+                let width = geometry.size.width
+                ZStack(alignment: .topLeading) {
+                    LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing)
+                        .frame(height: 10)
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                        .offset(y: 4)
+                    Path { path in
+                        let xs = stops.map { $0 / 100 * width }
+                        path.move(to: CGPoint(x: xs[0], y: 22))
+                        path.addLine(to: CGPoint(x: xs[1], y: 16))
+                        path.addLine(to: CGPoint(x: xs[2], y: 16))
+                        path.addLine(to: CGPoint(x: xs[3], y: 22))
+                    }
+                    .stroke(Color.accentColor, lineWidth: 1.5)
+                    ForEach(0 ..< 4, id: \.self) { index in
+                        let inner = index == 1 || index == 2
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(inner ? Color.white : Color.white.opacity(0.6))
+                            .overlay(RoundedRectangle(cornerRadius: 1.5).strokeBorder(Color.black.opacity(0.6)))
+                            .frame(width: inner ? 7 : 5, height: 18)
+                            .position(x: stops[index] / 100 * width, y: 9)
+                            .gesture(handleDrag(index, width: width))
+                    }
+                }
+            }
+            .frame(height: 24)
+            if let ends {
+                HStack {
+                    Text(ends.0)
+                    Spacer()
+                    Text(ends.1)
+                }
+                .font(Theme.captionFont)
+                .foregroundStyle(Theme.secondaryLabel)
+            }
+        }
+    }
+
+    private func handleDrag(_ index: Int, width: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { gesture in
+                var range = range
+                if dragging == nil {
+                    dragging = index
+                    model.beginEdit()
+                }
+                let value = min(max(gesture.location.x / max(width, 1) * 100, 0), 100)
+                switch index {
+                case 0: range.lowerFeather = max(range.lower - value, 0)
+                case 1:
+                    let start = range.lower - range.lowerFeather
+                    range.lower = min(max(value, start), range.upper)
+                    range.lowerFeather = range.lower - start
+                case 2:
+                    let end = range.upper + range.upperFeather
+                    range.upper = max(min(value, end), range.lower)
+                    range.upperFeather = end - range.upper
+                default: range.upperFeather = max(value - range.upper, 0)
+                }
+                onChange(range)
+            }
+            .onEnded { _ in
+                dragging = nil
+                model.endEdit(name: historyName)
+            }
+    }
 }
 
 /// Add, Subtract and Intersect: draw another component into the mask.
@@ -295,7 +681,14 @@ struct ComponentOperationMenus: View {
     var body: some View {
         HStack(spacing: 6) {
             ForEach([MaskOperation.add, .subtract, .intersect], id: \.self) { operation in
-                CreateMaskMenu(title: operation.name, systemImage: operation.symbol) { kind in
+                CreateMaskMenu(
+                    title: operation.name, systemImage: operation.symbol,
+                    others: model.maskOutlines.filter { $0.id != mask.id },
+                    onReuse: { model.addMaskReference($0, to: mask.id, operation: operation) },
+                    onPersonPart: { part in
+                        Task { await model.createAIMask(.people, part: part, operation: operation, addingTo: mask.id) }
+                    },
+                ) { kind in
                     model.startDrawing(kind, operation: operation, addingTo: mask.id)
                 }
             }
@@ -327,11 +720,26 @@ struct ComponentRow: View {
                 .frame(width: 14)
                 .foregroundStyle(Theme.secondaryLabel)
                 .help(component.operation.name)
-            Image(systemName: component.kind.symbol)
+            Image(systemName: component.kind?.symbol ?? "questionmark.square.dashed")
                 .font(.system(size: 11))
-            Text("\(component.kind.name) \(index)")
+            Text("\(component.kind?.name ?? "Newer Component") \(index)")
                 .font(Theme.labelFont)
             Spacer()
+            if component.kind == .brush || component.kind == .colorRange || component.kind == .luminanceRange {
+                Button {
+                    if component.kind == .brush {
+                        model.editBrush(component.id, in: mask.id)
+                    } else {
+                        model.resampleRange(component.id, in: mask.id)
+                    }
+                } label: {
+                    Image(systemName: component.kind == .brush ? "paintbrush.pointed" : "eyedropper")
+                        .font(.system(size: 10))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.secondaryLabel)
+                .help(component.kind == .brush ? "Paint into this brush" : "Sample again")
+            }
             Toggle("Invert", isOn: Binding(
                 get: { component.inverted },
                 set: { model.setComponentInverted(component.id, in: mask.id, $0) },
@@ -357,6 +765,10 @@ struct ComponentRow: View {
         .contextMenu {
             ForEach(MaskOperation.allCases, id: \.self) { operation in
                 Button("Set to \(operation.name)") { model.setComponentOperation(component.id, in: mask.id, operation) }
+            }
+            if let kind = component.kind, kind.isAI, kind != .depthRange {
+                Divider()
+                Button("Refine Edges") { Task { await model.refineEdges(component.id, in: mask.id) } }
             }
         }
     }

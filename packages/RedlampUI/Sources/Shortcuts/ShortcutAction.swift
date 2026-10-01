@@ -351,9 +351,9 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     /// Where the feature lands on the roadmap; `nil` once it works.
     public var plannedPhase: String? {
         switch self {
-        case .cropTool, .cropAspectLock, .brushMask, .colorRangeMask, .luminanceRangeMask, .virtualCopy:
+        case .cropTool, .cropAspectLock, .virtualCopy:
             "Phase 2"
-        case .healTool, .depthRangeMask: "Phase 3"
+        case .healTool: "Phase 3"
         default: nil
         }
     }

@@ -27,16 +27,22 @@ public extension EditorModel {
 
     /// Arms the canvas: the next drag draws a shape of `kind`.
     func startDrawing(_ kind: MaskKind, operation: MaskOperation = .add, addingTo target: UUID? = nil) {
-        guard kind.isAvailable, info != nil else { return }
+        guard canCreateMask(kind), info != nil else { return }
+        if kind.isAI {
+            Task { await startAIMask(kind, operation: operation, addingTo: target) }
+            return
+        }
         activeTool = .masking
         drawingKind = kind
         drawingOperation = operation
         drawingTarget = target
+        drawingComponentID = nil
     }
 
     func cancelDrawing() {
         drawingKind = nil
         drawingTarget = nil
+        drawingComponentID = nil
     }
 
     /// Creates the armed shape and starts a live edit; call `updateComponent` while
@@ -67,16 +73,40 @@ public extension EditorModel {
         pendingDrawingName = nil
     }
 
-    private var nextMaskNumber: Int {
+    /// Adds a component made with a tool that stays armed (brush, range samplers): to
+    /// `drawingTarget` with `drawingOperation`, or as a new mask. Selects it and makes it the
+    /// one later strokes or samples go into. Returns the history name, or nil when no mask fits.
+    internal func addDrawnComponent(_ shape: MaskShape, kind: MaskKind, to next: inout EditRecipe) -> String? {
+        let component = MaskComponent(shape: shape, operation: drawingTarget == nil ? .add : drawingOperation)
+        let name: String
+        if let target = drawingTarget, let index = next.masks.firstIndex(where: { $0.id == target }) {
+            next.masks[index].components.append(component)
+            selectedMaskID = target
+            name = "Add \(kind.name)"
+        } else {
+            guard next.masks.count < MaskLayer.maximumLayers else { return nil }
+            let mask = MaskLayer(name: "Mask \(nextMaskNumber)", components: [component])
+            next.masks.append(mask)
+            selectedMaskID = mask.id
+            name = "New \(kind.name)"
+        }
+        selectedComponentID = component.id
+        drawingComponentID = component.id
+        drawingTarget = nil
+        return name
+    }
+
+    internal var nextMaskNumber: Int {
         let numbers = recipe.masks.compactMap { Int($0.name.replacingOccurrences(of: "Mask ", with: "")) }
         return (numbers.max() ?? 0) + 1
     }
 
     // MARK: - Editing shapes
 
-    /// Live shape update during a drag (inside a `beginEdit` / `endEdit` pair).
-    func updateComponent(_ componentID: UUID, in maskID: UUID, shape: MaskShape) {
-        mutateMask(maskID, name: nil) { mask in
+    /// Live shape update during a drag (inside a `beginEdit` / `endEdit` pair), or with a `name`
+    /// a step of its own.
+    func updateComponent(_ componentID: UUID, in maskID: UUID, shape: MaskShape, name: String? = nil) {
+        mutateMask(maskID, name: name) { mask in
             if let index = mask.components.firstIndex(where: { $0.id == componentID }) {
                 mask.components[index].shape = shape
             }
@@ -97,6 +127,17 @@ public extension EditorModel {
                 mask.components[index].operation = operation
             }
         }
+    }
+
+    /// Reuses another mask's coverage as a component of `maskID`.
+    func addMaskReference(_ referencedID: UUID, to maskID: UUID, operation: MaskOperation) {
+        guard referencedID != maskID, let referenced = recipe.mask(referencedID) else { return }
+        let component = MaskComponent(shape: .maskReference(MaskReference(maskID: referencedID)), operation: operation)
+        mutateMask(maskID, name: "\(operation.name) \(referenced.name)") { mask in
+            mask.components.append(component)
+        }
+        selectedMaskID = maskID
+        selectedComponentID = component.id
     }
 
     func deleteComponent(_ componentID: UUID, in maskID: UUID) {
@@ -124,6 +165,17 @@ public extension EditorModel {
         guard let mask = recipe.mask(id) else { return }
         var next = recipe
         next.masks.removeAll { $0.id == id }
+        // Masks that reused it lose that component.
+        for index in next.masks.indices {
+            next.masks[index].components.removeAll { component in
+                if case let .maskReference(reference) = component.shape {
+                    reference.maskID == id
+                } else {
+                    false
+                }
+            }
+        }
+        next.masks.removeAll { $0.components.isEmpty }
         if selectedMaskID == id {
             selectedMaskID = next.masks.last?.id
             selectedComponentID = nil
@@ -177,13 +229,23 @@ public extension EditorModel {
 
     /// Values for mask-scoped sliders (local adjustments, Amount, Feather).
     func maskValue(_ parameter: ParameterID) -> Double {
+        if ParameterID.brushParameters.contains(parameter) {
+            return brushes[activeBrush][parameter]
+        }
         guard let mask = selectedMask else { return parameter.spec.defaultValue }
         switch parameter {
         case .maskAmount:
             return mask.amount
+        case .maskDetail:
+            return mask.detail
         case .maskFeather:
             if case let .radial(gradient) = selectedComponent?.shape {
                 return gradient.feather
+            }
+            return parameter.spec.defaultValue
+        case .maskColorRefine:
+            if case let .colorRange(range) = selectedComponent?.shape {
+                return range.refine
             }
             return parameter.spec.defaultValue
         default:
@@ -192,19 +254,31 @@ public extension EditorModel {
     }
 
     func setMaskValue(_ parameter: ParameterID, _ value: Double) {
-        guard let maskID = selectedMaskID else { return }
         let quantized = parameter.spec.quantize(value)
+        if ParameterID.brushParameters.contains(parameter) {
+            brushes[activeBrush][parameter] = quantized
+            return
+        }
+        guard let maskID = selectedMaskID else { return }
         let componentID = selectedComponent?.id
         let before = recipe
         mutateMask(maskID, name: nil) { mask in
             switch parameter {
             case .maskAmount:
                 mask.amount = quantized
+            case .maskDetail:
+                mask.detail = quantized
             case .maskFeather:
                 if let index = mask.components.firstIndex(where: { $0.id == componentID }),
                    case var .radial(gradient) = mask.components[index].shape {
                     gradient.feather = quantized
                     mask.components[index].shape = .radial(gradient)
+                }
+            case .maskColorRefine:
+                if let index = mask.components.firstIndex(where: { $0.id == componentID }),
+                   case var .colorRange(range) = mask.components[index].shape {
+                    range.refine = quantized
+                    mask.components[index].shape = .colorRange(range)
                 }
             default:
                 mask[parameter] = quantized

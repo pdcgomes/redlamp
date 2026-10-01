@@ -400,6 +400,12 @@ public enum ParameterCatalog {
             ParameterSpec(.localDefringe, "Defringe", range: -100 ... 100, availability: geometry),
             ParameterSpec(.maskAmount, "Amount", range: 0 ... 200, default: 100, format: .integer),
             ParameterSpec(.maskFeather, "Feather", range: 0 ... 100, default: 50, format: .integer),
+            ParameterSpec(.maskBrushSize, "Size", range: 1 ... 100, default: 25, format: .integer),
+            ParameterSpec(.maskBrushFeather, "Feather", range: 0 ... 100, default: 50, format: .integer),
+            ParameterSpec(.maskBrushFlow, "Flow", range: 1 ... 100, default: 100, format: .integer),
+            ParameterSpec(.maskBrushDensity, "Density", range: 1 ... 100, default: 100, format: .integer),
+            ParameterSpec(.maskDetail, "Detail", range: -100 ... 100),
+            ParameterSpec(.maskColorRefine, "Refine", range: 0 ... 100, default: 50, format: .integer),
         ]
 
     public static let specs: [ParameterID: ParameterSpec] = Dictionary(

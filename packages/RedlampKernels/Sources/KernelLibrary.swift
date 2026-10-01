@@ -45,6 +45,10 @@ public final class KernelLibrary: @unchecked Sendable {
     public let glowSource: any MTLComputePipelineState
     public let rawClipping: any MTLComputePipelineState
     public let encodeSRGB: any MTLComputePipelineState
+    public let maskClear: any MTLComputePipelineState
+    public let maskStroke: any MTLComputePipelineState
+    public let maskStrokeApply: any MTLComputePipelineState
+    public let maskUpload: any MTLComputePipelineState
 
     public init(device: any MTLDevice) throws {
         self.device = device
@@ -96,20 +100,44 @@ public final class KernelLibrary: @unchecked Sendable {
         glowSource = try pipeline("rl_glow_source")
         rawClipping = try pipeline("rl_raw_clipping")
         encodeSRGB = try pipeline("rl_encode_srgb")
+        maskClear = try pipeline("rl_mask_clear")
+        maskStroke = try pipeline("rl_mask_stroke")
+        maskStrokeApply = try pipeline("rl_mask_stroke_apply")
+        maskUpload = try pipeline("rl_mask_upload")
     }
 }
 
 public enum KernelError: Error, CustomStringConvertible {
     case missingFunction(String)
+    case bufferAllocation
 
     public var description: String {
         switch self {
         case let .missingFunction(name): "Metal function \(name) is missing from the kernel library"
+        case .bufferAllocation: "A Metal buffer could not be allocated"
         }
     }
 }
 
 public extension MTLComputeCommandEncoder {
+    /// Binds an array of plain values: inline when small enough, otherwise in a new buffer.
+    func setArray<T>(_ values: [T], index: Int, device: any MTLDevice) throws {
+        let length = values.count * MemoryLayout<T>.stride
+        try values.withUnsafeBytes { bytes in
+            if length <= 4096 {
+                setBytes(bytes.baseAddress!, length: length, index: index)
+            } else {
+                guard let buffer = device.makeBuffer(
+                    bytes: bytes.baseAddress!,
+                    length: length,
+                    options: .storageModeShared,
+                )
+                else { throw KernelError.bufferAllocation }
+                setBuffer(buffer, offset: 0, index: index)
+            }
+        }
+    }
+
     /// Dispatches one thread per pixel of a `width` x `height` grid.
     func dispatchGrid(width: Int, height: Int, pipeline: any MTLComputePipelineState) {
         let w = pipeline.threadExecutionWidth

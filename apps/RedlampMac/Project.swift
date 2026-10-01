@@ -24,6 +24,15 @@ let project = Project(
                 "CFBundleVersion": "$(CURRENT_PROJECT_VERSION)",
                 "LSApplicationCategoryType": "public.app-category.photography",
                 "NSHumanReadableCopyright": "Redlamp contributors. MPL-2.0.",
+                // Sidecars are packages (edit.json plus mask bitmaps), shown as one file.
+                "UTExportedTypeDeclarations": [
+                    [
+                        "UTTypeIdentifier": "app.redlamp.edit",
+                        "UTTypeDescription": "Redlamp Edit",
+                        "UTTypeConformsTo": ["com.apple.package"],
+                        "UTTypeTagSpecification": ["public.filename-extension": ["redlamp"]],
+                    ],
+                ],
             ]),
             sources: ["Sources/**"],
             resources: ["Resources/**"],

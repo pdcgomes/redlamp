@@ -39,6 +39,35 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// Suggested Basic-panel values for the current image (the "Auto" tone button).
     func autoTone(for recipe: EditRecipe) async -> [ParameterID: Double]
 
+    /// OKLab (lightness 0...1) of the current image with `recipe`'s global edit, averaged over a
+    /// small area around `point` (normalised, oriented): the colours Color and Luminance Range
+    /// masks select on.
+    func maskColor(sampledAt point: CGPoint, recipe: EditRecipe) async -> SIMD3<Double>?
+
+    /// Computes AI masks of the current image: one for Subject, Background or Sky, one per person
+    /// for People. Throws `MaskComputationError` when the mask can't be made.
+    func computeMasks(_ request: MaskRequest) async throws -> [AIMask]
+
+    /// A quick, low-resolution Objects mask for hovering, or nil when its model isn't ready.
+    func previewObjectMask(_ request: MaskRequest) async throws -> MaskBitmap?
+
+    /// An AI mask's bitmap with its edges snapped harder to the current photo's.
+    func refineMaskEdges(_ bitmap: MaskBitmap) async throws -> MaskBitmap
+
+    /// The AI mask kinds this device can compute now.
+    func availableMaskKinds() -> Set<MaskKind>
+
+    /// The AI mask kinds that need a model downloaded first, and that model.
+    func modelNeeded(for kind: MaskKind) async -> ModelInfo?
+
+    /// The downloadable models and their state.
+    func models() async -> [ModelInfo]
+
+    /// Downloads a model (`progress` gets 0...1 from any thread).
+    func downloadModel(_ id: String, progress: @escaping @Sendable (Double) -> Void) async throws
+
+    func removeModel(_ id: String) async throws
+
     /// A fast preview for the filmstrip, usually the file's embedded thumbnail.
     func thumbnail(for url: URL, maxPixelSize: Int) async -> CGImage?
 

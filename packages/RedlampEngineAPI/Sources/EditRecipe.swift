@@ -49,8 +49,9 @@ public struct AppliedRecipe: Codable, Sendable, Hashable {
 /// silently. `processVersion` is the rendering behavior the edit was made with: an edit
 /// must keep rendering the same way, so it is only ever changed by an explicit update.
 public struct EditRecipe: Sendable, Hashable {
-    /// Version 2 renamed `profile` to `baseLook` and namespaced built-in look ids.
-    public static let formatVersion = 2
+    /// Version 2 renamed `profile` to `baseLook` and namespaced built-in look ids. Version 3
+    /// added brush, range and AI mask components, whose bitmaps live in a sidecar package.
+    public static let formatVersion = 3
     /// Bumped whenever a change to rendering math would make existing edits look different.
     /// 2: grain is sized to the frame rather than the sensor's pixels, and is strongest in the
     /// low midtones and shadows, as film's is.

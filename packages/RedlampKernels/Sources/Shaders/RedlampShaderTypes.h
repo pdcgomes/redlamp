@@ -76,9 +76,21 @@ static inline float2 orient(float2 uv, int orientation) {
 // One mask component. Coordinates are aspect-corrected: x is scaled by width/height so
 // distances are isotropic.
 struct MaskComponentGPU {
-    float4 geometry;          // linear: start.xy, end.xy; radial: center.xy, radius.xy
-    float4 shape;             // x kind (1 linear, 2 radial), y operation (0 add, 1 subtract, 2 intersect), z inverted, w feather 0...1
-    float4 rotation;          // x cos, y sin of the radial rotation
+    float4 geometry;          // linear: start.xy, end.xy; radial: center.xy, radius.xy; others: see Masks.h
+    float4 shape;             // x kind (1 linear, 2 radial, 3 raster, 4 luminance, 5 color, 6 mask reference, 7 depth), y operation (0 add, 1 subtract, 2 intersect), z inverted, w feather 0...1
+    float4 rotation;          // radial: x cos, y sin of the rotation; luminance: x 1 / aspect, y guide level
+    float4 extra0;            // color range samples: 0 and 1 positions (mask UV)
+    float4 extra1;            // samples 2 and 3 positions
+    float4 extra2;            // sample 4 position and guide level
+    float4 extra3;            // guide levels of samples 0 to 3
+};
+
+// One run of brush segments, or one raster operation, over an area of a mask raster.
+struct MaskRasterParams {
+    int4 box;                 // xy first pixel, zw size of the area touched
+    int4 info;                // x slice, y point count (1 = a single dab), z auto mask, w erase
+    float4 brush;             // x radius in raster pixels, y feather 0...1, z flow 0...1, w density 0...1
+    float4 raster;            // xy raster size in pixels
 };
 
 // One mask layer's local adjustments, already scaled by the mask's Amount.
@@ -86,7 +98,7 @@ struct MaskLayerGPU {
     float4 color;             // x temperature, y tint, z hue shift (degrees), w saturation
     float4 tone;              // x exposure (EV), y contrast, z highlights, w shadows
     float4 tone2;             // x whites, y blacks, z first component index, w component count
-    float4 detail;            // x Dehaze (slider / 100)
+    float4 detail;            // x Dehaze (slider / 100), y Detail refinement (-1...1), z pyramid level it measures texture at
 };
 
 #endif

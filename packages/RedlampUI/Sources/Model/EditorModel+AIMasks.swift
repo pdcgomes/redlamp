@@ -1,0 +1,150 @@
+import Foundation
+import RedlampEngineAPI
+
+/// Subject, Sky, Background, People and Depth Range: computed by the engine, kept as bitmaps,
+/// and only recomputed when the user asks (Update AI Masks).
+public extension EditorModel {
+    /// Whether the Create New Mask menu can make `kind` for this photo.
+    func canCreateMask(_ kind: MaskKind) -> Bool {
+        guard kind.isAvailable else { return false }
+        return !kind.isAI || availableAIMaskKinds.contains(kind)
+    }
+
+    /// Computes an AI mask: a new mask, or a component of `target` with `operation`. People
+    /// adds one component per person (one for all of them when subtracting or intersecting).
+    func createAIMask(
+        _ kind: MaskKind, part: PersonPart = .entirePerson, operation: MaskOperation = .add,
+        addingTo target: UUID? = nil,
+    ) async {
+        guard info != nil, aiMaskProgress == nil else { return }
+        let photo = selection
+        activeTool = .masking
+        cancelDrawing()
+        aiMaskProgress = kind
+        maskMessage = nil
+        defer { aiMaskProgress = nil }
+        let request = MaskRequest(kind: kind, part: part, combined: target != nil && operation != .add)
+        do {
+            let masks = try await engine.computeMasks(request)
+            guard selection == photo, !masks.isEmpty else { return }
+            var next = recipe
+            let components = masks.enumerated().map { index, mask in
+                MaskComponent(
+                    shape: kind == .depthRange ? .depthRange(DepthRangeMask(depth: mask)) : .ai(mask),
+                    operation: index == 0 && target != nil ? operation : .add,
+                )
+            }
+            let title = kind == .people && part != .entirePerson ? part.name : kind.name
+            if let target, let index = next.masks.firstIndex(where: { $0.id == target }) {
+                next.masks[index].components += components
+                selectedMaskID = target
+                commit(next, name: "\(operation.name) \(title)")
+            } else {
+                guard next.masks.count < MaskLayer.maximumLayers else { return }
+                let mask = MaskLayer(name: title, components: components)
+                next.masks.append(mask)
+                selectedMaskID = mask.id
+                commit(next, name: "New \(title)")
+            }
+            selectedComponentID = components.last?.id
+        } catch {
+            maskMessage = (error as? MaskComputationError)?.description ?? error.localizedDescription
+        }
+    }
+
+    /// Starts an AI mask, asking first when its model needs downloading (App Review 4.2.3: the
+    /// size is shown and nothing downloads without consent).
+    func startAIMask(_ kind: MaskKind, operation: MaskOperation = .add, addingTo target: UUID? = nil) async {
+        if let model = await engine.modelNeeded(for: kind) {
+            pendingModel = (model, kind)
+            drawingOperation = operation
+            drawingTarget = target
+            return
+        }
+        if kind == .objects {
+            armObjectSelection(operation: operation, addingTo: target)
+        } else {
+            await createAIMask(kind, operation: operation, addingTo: target)
+        }
+    }
+
+    /// The user agreed: downloads the pending model, then carries on with the mask.
+    func downloadPendingModel() async {
+        guard let (model, kind) = pendingModel else { return }
+        let operation = drawingOperation
+        let target = drawingTarget
+        pendingModel = nil
+        modelDownloadProgress = 0
+        maskMessage = nil
+        defer { modelDownloadProgress = nil }
+        do {
+            try await engine.downloadModel(model.id) { fraction in
+                Task { @MainActor [weak self] in self?.modelDownloadProgress = fraction }
+            }
+            availableAIMaskKinds = engine.availableMaskKinds()
+            modelDownloadProgress = nil
+            await startAIMask(kind, operation: operation, addingTo: target)
+        } catch {
+            maskMessage = "\(model.name) couldn't be downloaded: \(error)"
+        }
+    }
+
+    func declinePendingModel() {
+        pendingModel = nil
+        drawingTarget = nil
+    }
+
+    /// The AI components of the edit.
+    var aiMaskCount: Int {
+        masks.flatMap(\.components).count { component in
+            switch component.shape {
+            case .ai, .depthRange: true
+            default: false
+            }
+        }
+    }
+
+    /// Recomputes every AI mask of the edit with today's models, keeping each component's place,
+    /// operation and inversion. A person is matched by their index.
+    func updateAIMasks() async {
+        guard info != nil, aiMaskProgress == nil else { return }
+        let photo = selection
+        aiMaskProgress = .subject
+        maskMessage = nil
+        defer { aiMaskProgress = nil }
+        var next = recipe
+        var results: [MaskRequest: [AIMask]] = [:]
+        var failed = 0
+        for layer in next.masks.indices {
+            for index in next.masks[layer].components.indices {
+                let shape = next.masks[layer].components[index].shape
+                let old: AIMask
+                switch shape {
+                case let .ai(mask): old = mask
+                case let .depthRange(range): old = range.depth
+                default: continue
+                }
+                let request = MaskRequest(updating: old)
+                if results[request] == nil {
+                    results[request] = await (try? engine.computeMasks(request)) ?? []
+                }
+                let found = results[request] ?? []
+                guard let fresh = found.first(where: { $0.instance == old.instance }) ?? found.first else {
+                    failed += 1
+                    continue
+                }
+                if case var .depthRange(range) = shape {
+                    range.depth = fresh
+                    next.masks[layer].components[index].shape = .depthRange(range)
+                } else {
+                    next.masks[layer].components[index].shape = .ai(fresh)
+                }
+            }
+        }
+        guard selection == photo else { return }
+        if failed > 0 {
+            maskMessage = "\(failed) AI mask\(failed == 1 ? "" : "s") couldn't be updated and kept their previous result."
+        }
+        commit(next, name: "Update AI Masks")
+    }
+}

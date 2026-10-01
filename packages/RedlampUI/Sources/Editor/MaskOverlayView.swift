@@ -15,7 +15,13 @@ struct MaskOverlayView: View {
         GeometryReader { geometry in
             let frame = ImageFrame(rect: model.canvas.imageRect(in: geometry.size))
             ZStack {
-                if model.drawingKind != nil || drawingKind != nil {
+                if model.isBrushing {
+                    BrushCanvas(frame: frame)
+                } else if model.drawingKind == .colorRange || model.drawingKind == .luminanceRange {
+                    RangeSampler(frame: frame)
+                } else if model.drawingKind == .objects {
+                    ObjectPicker(frame: frame)
+                } else if model.drawingKind != nil || drawingKind != nil {
                     Color.clear
                         .contentShape(Rectangle())
                         .gesture(drawGesture(frame))
@@ -110,6 +116,191 @@ struct MaskOverlayView: View {
     }
 }
 
+/// Brushing: each drag paints a stroke; a ring shows the brush's size and feather.
+private struct BrushCanvas: View {
+    let frame: ImageFrame
+    @Environment(EditorModel.self) private var model
+    @State private var pointer: CGPoint?
+    @State private var painting = false
+    @State private var erasing = false
+
+    var body: some View {
+        let choice = model.strokeBrush(erasing: erasing || NSEvent.modifierFlags.contains(.option))
+        let settings = model.brushes[choice]
+        let radius = CGFloat(settings.radius) * frame.heightScale
+        let core = max(radius * 2 * CGFloat(1 - settings.feather / 100), 1)
+        ZStack {
+            Color.clear
+                .contentShape(Rectangle())
+                .gesture(paint)
+                .onContinuousHover { phase in
+                    switch phase {
+                    case let .active(location):
+                        pointer = location
+                        erasing = NSEvent.modifierFlags.contains(.option)
+                    case .ended:
+                        pointer = nil
+                    }
+                }
+                .onHover { inside in
+                    if inside {
+                        NSCursor.crosshair.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
+            if let pointer {
+                Circle()
+                    .stroke(Color.white.opacity(0.9), lineWidth: 1)
+                    .frame(width: radius * 2, height: radius * 2)
+                    .shadow(color: .black.opacity(0.7), radius: 1)
+                    .position(pointer)
+                    .allowsHitTesting(false)
+                Circle()
+                    .stroke(Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                    .frame(width: core, height: core)
+                    .position(pointer)
+                    .allowsHitTesting(false)
+                if choice == .erase {
+                    Image(systemName: "minus")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black, radius: 1)
+                        .position(pointer)
+                        .allowsHitTesting(false)
+                }
+            }
+        }
+    }
+
+    private var paint: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { gesture in
+                pointer = gesture.location
+                let point = frame.image(gesture.location)
+                if painting {
+                    model.continueStroke(to: point, pressure: Self.penPressure)
+                } else {
+                    painting = true
+                    model.beginStroke(
+                        at: point, pressure: Self.penPressure, erasing: NSEvent.modifierFlags.contains(.option),
+                    )
+                }
+            }
+            .onEnded { _ in
+                painting = false
+                model.endStroke()
+            }
+    }
+
+    /// The pen's pressure when the stroke comes from a tablet; mice paint at full pressure.
+    private static var penPressure: Double? {
+        guard let event = NSApp.currentEvent, event.subtype == .tabletPoint else { return nil }
+        return Double(event.pressure)
+    }
+}
+
+/// The Color and Luminance Range eyedroppers: click a spot, or drag out a disc to average.
+/// Shift adds a colour sample instead of replacing the samples.
+private struct RangeSampler: View {
+    let frame: ImageFrame
+    @Environment(EditorModel.self) private var model
+    @State private var drag: (start: CGPoint, end: CGPoint)?
+
+    var body: some View {
+        ZStack {
+            Color.clear
+                .contentShape(Rectangle())
+                .gesture(sample)
+                .onHover { inside in
+                    if inside {
+                        NSCursor.crosshair.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
+            if let drag {
+                let radius = hypot(drag.end.x - drag.start.x, drag.end.y - drag.start.y)
+                Circle()
+                    .stroke(Color.white, lineWidth: 1)
+                    .frame(width: radius * 2, height: radius * 2)
+                    .shadow(color: .black.opacity(0.7), radius: 1)
+                    .position(drag.start)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    private var sample: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { gesture in
+                drag = (gesture.startLocation, gesture.location)
+            }
+            .onEnded { gesture in
+                drag = nil
+                let start = frame.image(gesture.startLocation)
+                let distance = hypot(gesture.translation.width, gesture.translation.height)
+                let radius = distance < 4 ? 0 : distance / frame.heightScale
+                if model.drawingKind == .colorRange {
+                    model.sampleColorRange(at: start, radius: radius, adding: NSEvent.modifierFlags.contains(.shift))
+                } else {
+                    Task { await model.sampleLuminanceRange(at: start) }
+                }
+            }
+    }
+}
+
+/// Objects: hovering tints what a click would select; clicks select and refine.
+private struct ObjectPicker: View {
+    let frame: ImageFrame
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        ZStack {
+            if let preview = model.objectPreview, let image = Self.tint(preview) {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.medium)
+                    .frame(width: frame.rect.width, height: frame.rect.height)
+                    .position(x: frame.rect.midX, y: frame.rect.midY)
+                    .allowsHitTesting(false)
+            }
+            Color.clear
+                .contentShape(Rectangle())
+                .onContinuousHover { phase in
+                    switch phase {
+                    case let .active(location): model.hoverObject(at: frame.image(location))
+                    case .ended: model.hoverObject(at: nil)
+                    }
+                }
+                .onTapGesture(coordinateSpace: .local) { location in
+                    let excluding = NSEvent.modifierFlags.contains(.option)
+                    Task { await model.selectObject(at: frame.image(location), excluding: excluding) }
+                }
+                .onHover { inside in
+                    if inside {
+                        NSCursor.crosshair.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
+        }
+    }
+
+    /// The preview mask as translucent accent over the photo.
+    private static func tint(_ bitmap: MaskBitmap) -> NSImage? {
+        guard let png = bitmap.png, let mask = NSBitmapImageRep(data: png)?.cgImage else { return nil }
+        let size = NSSize(width: mask.width, height: mask.height)
+        return NSImage(size: size, flipped: false) { rect in
+            guard let context = NSGraphicsContext.current?.cgContext else { return false }
+            context.clip(to: rect, mask: mask)
+            context.setFillColor(NSColor.controlAccentColor.withAlphaComponent(0.45).cgColor)
+            context.fill(rect)
+            return true
+        }
+    }
+}
+
 /// Converts between normalised image coordinates and view points.
 struct ImageFrame {
     let rect: CGRect
@@ -174,6 +365,28 @@ private struct ComponentHandles: View {
             linear(gradient)
         case let .radial(gradient):
             radial(gradient)
+        case let .colorRange(range):
+            if isSelected {
+                ForEach(range.samples.indices, id: \.self) { index in
+                    let sample = range.samples[index]
+                    Circle()
+                        .stroke(Color.white, lineWidth: 1.5)
+                        .frame(
+                            width: max(sample.radius * frame.heightScale * 2, 10),
+                            height: max(sample.radius * frame.heightScale * 2, 10),
+                        )
+                        .shadow(color: .black.opacity(0.6), radius: 1)
+                        .position(frame.view(sample.center))
+                        .allowsHitTesting(false)
+                }
+            }
+            Pin(selected: isSelected)
+                .position(frame.view(shape.center))
+                .onTapGesture { model.selectedComponentID = component.id }
+        default:
+            Pin(selected: isSelected)
+                .position(frame.view(shape.center))
+                .onTapGesture { model.selectedComponentID = component.id }
         }
     }
 

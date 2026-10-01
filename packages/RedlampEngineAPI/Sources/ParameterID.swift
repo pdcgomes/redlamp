@@ -168,6 +168,20 @@ public enum ParameterID: String, CaseIterable, Codable, Sendable, Hashable {
     // Mask properties shown as sliders (stored on the mask or component, not as adjustments).
     case maskAmount = "mask.amount"
     case maskFeather = "mask.feather"
+    /// The brush being painted with (A, B or Erase): a tool setting, not part of the edit.
+    case maskBrushSize = "mask.brush.size"
+    case maskBrushFeather = "mask.brush.feather"
+    case maskBrushFlow = "mask.brush.flow"
+    case maskBrushDensity = "mask.brush.density"
+    /// The selected mask's Detail refinement (textured or flat areas only).
+    case maskDetail = "mask.detail"
+    /// The selected Color Range component's Refine.
+    case maskColorRefine = "mask.colorRange.refine"
+
+    /// The brush settings, in Lightroom's order.
+    public static let brushParameters: [ParameterID] = [
+        .maskBrushSize, .maskBrushFeather, .maskBrushFlow, .maskBrushDensity,
+    ]
 
     /// A per-mask adjustment, stored in `MaskLayer.adjustments`.
     public var isLocal: Bool {

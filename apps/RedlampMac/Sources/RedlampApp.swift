@@ -71,7 +71,7 @@ struct RedlampApp: App {
         }
 
         Settings {
-            SettingsView(theme: theme)
+            SettingsView(theme: theme, engine: model.engine)
                 .focusEffectDisabled()
         }
     }

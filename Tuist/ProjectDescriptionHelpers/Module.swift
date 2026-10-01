@@ -13,6 +13,7 @@ public enum Module: String, CaseIterable {
     case services = "RedlampServices"
     case document = "RedlampDocument"
     case recipes = "RedlampRecipes"
+    case masking = "RedlampMasking"
     case engine = "RedlampEngine"
     case canvas = "RedlampCanvas"
     case design = "RedlampDesign"
@@ -33,7 +34,7 @@ public enum Module: String, CaseIterable {
     /// Whether the module belongs to the platform-neutral engine side of the boundary.
     public var isEngineLayer: Bool {
         switch self {
-        case .engineAPI, .kernels, .color, .services, .document, .recipes, .engine: true
+        case .engineAPI, .kernels, .color, .services, .document, .recipes, .masking, .engine: true
         case .canvas, .design, .ui: false
         }
     }
@@ -64,7 +65,9 @@ public enum Module: String, CaseIterable {
         // Recipes are pure values plus analysis: shared by the apps, the CLI and a future
         // companion app, so they may never reach the engine or any UI layer.
         case .recipes: [.engineAPI]
-        case .engine: [.engineAPI, .kernels, .color, .services]
+        // Masks computed from the photo (Apple Vision, embedded mattes) and mask bitmaps.
+        case .masking: [.engineAPI]
+        case .engine: [.engineAPI, .kernels, .color, .services, .masking]
         case .canvas: [.engineAPI]
         case .design: [.engineAPI]
         case .ui: [.engineAPI, .canvas, .design, .document, .recipes]

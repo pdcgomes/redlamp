@@ -114,23 +114,50 @@ public enum SidecarStoreError: Error, Equatable {
     case writtenByNewerVersion(URL)
 }
 
-/// Reads and writes sidecars. Writes are atomic so a crash never leaves a torn file.
+/// Reads and writes sidecars.
+///
+/// A sidecar is a package, `IMG_1234.CR3.redlamp/`, holding the edit as `edit.json` and mask
+/// bitmaps as `masks/<sha256>.png`. Sidecars written before packages are a single JSON file at
+/// the same path; they are read as they are and become packages on their next save. The JSON is
+/// written atomically, and bitmaps are content-addressed and written before the JSON that
+/// names them, so a crash never leaves an edit pointing at a missing or torn file.
 public struct SidecarStore: Sendable {
+    public static let editFile = "edit.json"
+    public static let masksDirectory = "masks"
+
     public init() {}
 
+    /// The sidecar: a package, or a single file written before packages.
     public func url(for image: URL) -> URL {
         image.appendingPathExtension("redlamp")
     }
 
+    /// The edit's JSON: `edit.json` in a package, or the single-file sidecar itself.
+    public func editURL(for image: URL) -> URL {
+        let sidecar = url(for: image)
+        return isPackage(sidecar) ? sidecar.appending(path: Self.editFile) : sidecar
+    }
+
+    public func bitmapURL(_ sha256: String, for image: URL) -> URL {
+        url(for: image).appending(path: Self.masksDirectory).appending(path: "\(sha256).png")
+    }
+
     public func load(for image: URL) -> Sidecar? {
-        guard let data = try? Data(contentsOf: url(for: image)) else { return nil }
-        return try? JSONDecoder.sidecar.decode(Sidecar.self, from: data)
+        guard let data = try? Data(contentsOf: editURL(for: image)),
+              var sidecar = try? JSONDecoder.sidecar.decode(Sidecar.self, from: data)
+        else { return nil }
+        let bitmaps = { (sha: String) in try? Data(contentsOf: bitmapURL(sha, for: image)) }
+        sidecar.recipe.loadMaskBitmaps(bitmaps)
+        for index in sidecar.snapshots.indices {
+            sidecar.snapshots[index].recipe.loadMaskBitmaps(bitmaps)
+        }
+        return sidecar
     }
 
     /// Whether the image's sidecar uses a file format or process version this build
     /// doesn't have. Such edits can be shown, but saving would lose information.
     public func isWrittenByNewerVersion(for image: URL) -> Bool {
-        guard let data = try? Data(contentsOf: url(for: image)) else { return false }
+        guard let data = try? Data(contentsOf: editURL(for: image)) else { return false }
         return Self.isNewer(data)
     }
 
@@ -138,25 +165,88 @@ public struct SidecarStore: Sendable {
     /// wake up sync services. Fields a newer Redlamp added to the file on disk are kept.
     public func save(_ sidecar: Sidecar, for image: URL) throws {
         let destination = url(for: image)
+        let existingPackage = isPackage(destination)
         var sidecar = sidecar
-        if let data = try? Data(contentsOf: destination) {
+        if let data = try? Data(contentsOf: editURL(for: image)) {
             if Self.isNewer(data) {
                 throw SidecarStoreError.writtenByNewerVersion(destination)
             }
             if let existing = try? JSONDecoder.sidecar.decode(Sidecar.self, from: data) {
                 sidecar.unknownFields = existing.unknownFields.merging(sidecar.unknownFields) { _, new in new }
-                if existing.hasSameContent(as: sidecar) {
+                if existing.hasSameContent(as: sidecar), existingPackage, hasEveryBitmap(sidecar, in: destination) {
                     return
                 }
             }
         }
-        try JSONEncoder.sidecar.encode(sidecar).write(to: destination, options: .atomic)
+        let json = try JSONEncoder.sidecar.encode(sidecar)
+        let fileManager = FileManager.default
+        if existingPackage {
+            try writeBitmaps(of: sidecar, into: destination)
+            try json.write(to: destination.appending(path: Self.editFile), options: .atomic)
+            removeUnusedBitmaps(of: sidecar, in: destination)
+            return
+        }
+        // A new package, or a single-file sidecar becoming one: built beside it, then moved in.
+        let staging = destination.deletingLastPathComponent()
+            .appending(path: ".\(destination.lastPathComponent).\(UUID().uuidString)")
+        try fileManager.createDirectory(at: staging, withIntermediateDirectories: false)
+        do {
+            try writeBitmaps(of: sidecar, into: staging)
+            try json.write(to: staging.appending(path: Self.editFile), options: .atomic)
+            if fileManager.fileExists(atPath: destination.path) {
+                _ = try fileManager.replaceItemAt(destination, withItemAt: staging)
+            } else {
+                try fileManager.moveItem(at: staging, to: destination)
+            }
+        } catch {
+            try? fileManager.removeItem(at: staging)
+            throw error
+        }
     }
 
     /// Removes the sidecar, unless a newer Redlamp wrote it.
     public func delete(for image: URL) {
         guard !isWrittenByNewerVersion(for: image) else { return }
         try? FileManager.default.removeItem(at: url(for: image))
+    }
+
+    private func isPackage(_ url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
+    }
+
+    private static func bitmaps(of sidecar: Sidecar) -> [MaskBitmap] {
+        sidecar.recipe.maskBitmaps + sidecar.snapshots.flatMap(\.recipe.maskBitmaps)
+    }
+
+    private func hasEveryBitmap(_ sidecar: Sidecar, in package: URL) -> Bool {
+        Self.bitmaps(of: sidecar).allSatisfy { bitmap in
+            FileManager.default.fileExists(
+                atPath: package.appending(path: Self.masksDirectory).appending(path: "\(bitmap.sha256).png").path,
+            )
+        }
+    }
+
+    /// Writes the bitmaps the package doesn't have yet. A bitmap whose bytes weren't loaded is
+    /// left as it is.
+    private func writeBitmaps(of sidecar: Sidecar, into package: URL) throws {
+        let masks = package.appending(path: Self.masksDirectory)
+        for bitmap in Self.bitmaps(of: sidecar) {
+            let file = masks.appending(path: "\(bitmap.sha256).png")
+            guard let png = bitmap.png, !FileManager.default.fileExists(atPath: file.path) else { continue }
+            try FileManager.default.createDirectory(at: masks, withIntermediateDirectories: true)
+            try png.write(to: file, options: .atomic)
+        }
+    }
+
+    /// Bitmaps no edit or snapshot names any more.
+    private func removeUnusedBitmaps(of sidecar: Sidecar, in package: URL) {
+        let masks = package.appending(path: Self.masksDirectory)
+        let used = Set(Self.bitmaps(of: sidecar).map { "\($0.sha256).png" })
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: masks.path)) ?? []
+        for file in files where file.hasSuffix(".png") && !used.contains(file) {
+            try? FileManager.default.removeItem(at: masks.appending(path: file))
+        }
     }
 
     private static func isNewer(_ data: Data) -> Bool {

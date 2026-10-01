@@ -1,19 +1,27 @@
 import AppKit
 import RedlampDesign
+import RedlampEngineAPI
 import SwiftUI
 
 /// The Settings window (⌘,): one tab per section, each a grouped form.
 public struct SettingsView: View {
     @Bindable var theme: ThemeSettings
+    let engine: (any EditingEngine)?
 
-    public init(theme: ThemeSettings) {
+    public init(theme: ThemeSettings, engine: (any EditingEngine)? = nil) {
         self.theme = theme
+        self.engine = engine
     }
 
     public var body: some View {
         TabView {
             Tab("Appearance", systemImage: "paintpalette") {
                 AppearanceSettings(theme: theme)
+            }
+            if let engine {
+                Tab("Models", systemImage: "cpu") {
+                    ModelsSettings(engine: engine)
+                }
             }
             Tab("About", systemImage: "info.circle") {
                 AboutSettings()
@@ -109,7 +117,7 @@ private struct AboutSettings: View {
     }
 }
 
-private extension Text {
+extension Text {
     func formFooter() -> some View {
         font(.callout)
             .foregroundStyle(.secondary)

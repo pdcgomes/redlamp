@@ -5,6 +5,7 @@ import MetalPerformanceShaders
 import os
 import RedlampEngineAPI
 import RedlampKernels
+import RedlampMasking
 import RedlampServices
 import Synchronization
 
@@ -14,7 +15,7 @@ import Synchronization
 /// swaps the pending request, so a burst of slider events collapses to the newest one.
 public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     let device: any MTLDevice
-    private let queue: any MTLCommandQueue
+    let queue: any MTLCommandQueue
     let kernels: KernelLibrary
     let renderQueue = DispatchQueue(label: "app.redlamp.engine.render", qos: .userInteractive)
     private let signposts = OSSignposter(subsystem: "app.redlamp.engine", category: .pointsOfInterest)
@@ -25,6 +26,17 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     }
 
     private let session = Mutex<ImageSession?>(nil)
+    /// The current photo's analysis render, for AI masks.
+    let analysisCache = Mutex<AnalysisCache?>(nil)
+    /// Segment Anything, once loaded, and the open photo's embedding.
+    let segmenter = Mutex<SAMSegmenter?>(nil)
+    let depthModel = Mutex<DepthEstimator?>(nil)
+    let objectEmbeddingCache = Mutex<(hash: String, embedding: SAMSegmenter.Embedding)?>(nil)
+
+    func currentSession() -> ImageSession? {
+        session.withLock { $0 }
+    }
+
     let sessions: SessionCache
     private let openGeneration = Mutex<UInt64>(0)
     private let renderState = Mutex(RenderState())
@@ -41,6 +53,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     private let comparisonOverviews: SurfacePool
     private var comparison: CachedComparison?
     private let detailStage: DetailStage
+    let masks: MaskResources
     private let baseLooks: BaseLookRegistry
     let stacks: FocusStackCache
     /// Output tile edge for stills, in pixels.
@@ -72,6 +85,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         comparisons = SurfacePool(device: device)
         comparisonOverviews = SurfacePool(device: device)
         detailStage = DetailStage(device: device, kernels: kernels)
+        masks = try MaskResources(device: device, kernels: kernels)
         baseLooks = try BaseLookRegistry(device: device)
 
         let stacks = FocusStackCache(device: device, kernels: kernels, root: stackCache)
@@ -173,7 +187,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         try encodeDevelop(
             request.recipe, session: session, into: target.texture, size: size, region: region,
             encoding: .linear, showClipping: request.showClipping, maskOverlay: request.maskOverlay,
-            maskOverlayColor: request.maskOverlayColor,
+            maskOverlayColor: request.maskOverlayColor, maskOverlayStyle: request.maskOverlayStyle,
             commands: commands,
         )
         var overview: SurfacePool.Target?
@@ -186,7 +200,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             try encodeDevelop(
                 request.recipe, session: session, into: whole.texture, size: overviewSize,
                 encoding: .linear, showClipping: request.showClipping, maskOverlay: request.maskOverlay,
-                maskOverlayColor: request.maskOverlayColor,
+                maskOverlayColor: request.maskOverlayColor, maskOverlayStyle: request.maskOverlayStyle,
                 commands: commands,
             )
             try encodeHistogram(texture: whole.texture, size: overviewSize, linear: true, commands: commands)
@@ -223,7 +237,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         )
     }
 
-    private func encodeDevelop(
+    func encodeDevelop(
         _ recipe: EditRecipe,
         session: ImageSession,
         into texture: any MTLTexture,
@@ -233,17 +247,25 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         showClipping: Bool,
         maskOverlay: UUID? = nil,
         maskOverlayColor: MaskOverlayColor = .red,
+        maskOverlayStyle: MaskOverlayStyle = .colorOverlay,
         commands: any MTLCommandBuffer,
         cacheDetail: Bool = true,
+        detail: Bool = true,
     ) throws {
-        let processed = try detailStage.process(
-            recipe, session: session, region: region, outputSize: size, commands: commands, cache: cacheDetail,
+        let maskBindings = try prepareMasks(
+            recipe, session: session, commands: commands,
+            needsGuide: maskOverlay != nil && maskOverlayStyle == .luminanceMap,
         )
+        let processed = detail ? try detailStage.process(
+            recipe, session: session, region: region, outputSize: size, commands: commands, cache: cacheDetail,
+            masks: maskBindings,
+        ) : nil
         guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
         var inputs = DevelopParameters.make(
             recipe: recipe, session: session, baseLook: baseLooks.resolve(recipe.baseLook), outputSize: size,
             region: region, encoding: encoding,
             showClipping: showClipping, maskOverlay: maskOverlay, maskOverlayColor: maskOverlayColor,
+            maskOverlayStyle: maskOverlayStyle, masks: maskBindings,
         )
         inputs.params.denoised = processed?.area ?? .zero
         encoder.setComputePipelineState(kernels.develop)
@@ -254,13 +276,13 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         encoder.setTexture(session.hazeMap, index: 4)
         encoder.setTexture(session.glowSource, index: 5)
         encoder.setTexture(session.glowLights, index: 8)
+        encoder.setTexture(maskBindings.rasters ?? masks.emptyRasters, index: 6)
+        encoder.setTexture(maskBindings.guide ?? masks.emptyGuide, index: 7)
         encoder.setBytes(&inputs.params, length: MemoryLayout<DevelopParams>.stride, index: 0)
         encoder.setBytes(&inputs.toneLUT, length: inputs.toneLUT.count * MemoryLayout<Float>.stride, index: 1)
         encoder.setBytes(&inputs.mixer, length: inputs.mixer.count * MemoryLayout<Float>.stride, index: 2)
         encoder.setBytes(&inputs.layers, length: inputs.layers.count * MemoryLayout<MaskLayerGPU>.stride, index: 3)
-        encoder.setBytes(
-            &inputs.components, length: inputs.components.count * MemoryLayout<MaskComponentGPU>.stride, index: 4,
-        )
+        try encoder.setArray(inputs.components, index: 4, device: device)
         encoder.dispatchGrid(width: size.width, height: size.height, pipeline: kernels.develop)
         encoder.endEncoding()
     }
@@ -414,6 +436,15 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         return ImageAnalysis.autoTone(session: current, recipe: recipe)
     }
 
+    public func maskColor(sampledAt point: CGPoint, recipe: EditRecipe) async -> SIMD3<Double>? {
+        guard let current = session.withLock({ $0 }) else { return nil }
+        return await withCheckedContinuation { continuation in
+            renderQueue.async { [self] in
+                continuation.resume(returning: try? sampleEditGuide(at: point, recipe: recipe, session: current))
+            }
+        }
+    }
+
     public func thumbnail(for url: URL, maxPixelSize: Int) async -> CGImage? {
         let stacks = stacks
         return await Task.detached(priority: .utility) {
@@ -534,7 +565,7 @@ extension RedlampEngine {
         }
     }
 
-    private func finish(_ commands: any MTLCommandBuffer) throws {
+    func finish(_ commands: any MTLCommandBuffer) throws {
         commands.commit()
         commands.waitUntilCompleted()
         if let error = commands.error {

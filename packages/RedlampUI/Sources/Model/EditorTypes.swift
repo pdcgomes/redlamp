@@ -251,7 +251,8 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
 public struct MaskOutline: Hashable, Identifiable, Sendable {
     public struct Component: Hashable, Identifiable, Sendable {
         public let id: UUID
-        public let kind: MaskKind
+        /// `nil` for a component written by a newer Redlamp.
+        public let kind: MaskKind?
         public let operation: MaskOperation
         public let inverted: Bool
     }

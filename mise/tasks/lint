@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-#MISE description="Run the engine purity gate, SwiftFormat (lint mode) and SwiftLint"
+#MISE description="Run the engine purity gate, the model licence gate, SwiftFormat (lint mode) and SwiftLint"
 #MISE alias="l"
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
 scripts/check-engine-purity.sh
+scripts/check-model-licenses.py
 swiftformat --lint .
 swiftlint --quiet

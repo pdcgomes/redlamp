@@ -1,0 +1,334 @@
+import CoreGraphics
+import Foundation
+import RedlampEngineAPI
+import Testing
+@testable import RedlampUI
+
+/// An engine that opens anything instantly and renders nothing: enough to drive the editor.
+final class StubEngine: EditingEngine, @unchecked Sendable {
+    var sampledColor = SIMD3<Double>(0.62, 0, 0)
+
+    func open(_ url: URL) async throws -> ImageInfo {
+        ImageInfo(url: url, pixelSize: PixelSize(width: 600, height: 400), isRaw: true, sensorDescription: "stub")
+    }
+
+    func openIfReady(_: URL) -> ImageInfo? {
+        nil
+    }
+
+    func prefetch(_: [URL]) {}
+    func render(_: RenderRequest) {}
+    func frames() -> AsyncStream<RenderedFrame> {
+        AsyncStream { _ in }
+    }
+
+    func renderStill(_: StillRequest) async throws -> CGImage {
+        throw CancellationError()
+    }
+
+    func autoWhiteBalance() async -> WhiteBalanceValue? {
+        nil
+    }
+
+    func whiteBalance(sampledAt _: CGPoint) async -> WhiteBalanceValue? {
+        nil
+    }
+
+    func autoTone(for _: EditRecipe) async -> [ParameterID: Double] {
+        [:]
+    }
+
+    func maskColor(sampledAt _: CGPoint, recipe _: EditRecipe) async -> SIMD3<Double>? {
+        sampledColor
+    }
+
+    var computed: [AIMask] = []
+
+    func computeMasks(_ request: MaskRequest) async throws -> [AIMask] {
+        computed.map { mask in
+            var mask = mask
+            mask.kind = request.kind
+            if !request.prompts.isEmpty {
+                mask.prompts = request.prompts
+            }
+            return mask
+        }
+    }
+
+    func availableMaskKinds() -> Set<MaskKind> {
+        [.subject, .background, .people, .sky, .objects]
+    }
+
+    var neededModel: ModelInfo?
+    var downloaded: [String] = []
+
+    func modelNeeded(for kind: MaskKind) async -> ModelInfo? {
+        kind == .objects ? neededModel : nil
+    }
+
+    func models() async -> [ModelInfo] {
+        neededModel.map { [$0] } ?? []
+    }
+
+    func downloadModel(_ id: String, progress: @escaping @Sendable (Double) -> Void) async throws {
+        progress(1)
+        downloaded.append(id)
+        neededModel = nil
+    }
+
+    func removeModel(_: String) async throws {}
+
+    func previewObjectMask(_: MaskRequest) async throws -> MaskBitmap? {
+        nil
+    }
+
+    func refineMaskEdges(_ bitmap: MaskBitmap) async throws -> MaskBitmap {
+        MaskBitmap(sha256: bitmap.sha256 + "-refined", width: bitmap.width, height: bitmap.height)
+    }
+
+    func thumbnail(for _: URL, maxPixelSize _: Int) async -> CGImage? {
+        nil
+    }
+
+    func registerBaseLook(_: BaseLookDefinition) {}
+    func canRender(_: BaseLookReference) -> Bool {
+        true
+    }
+
+    func focusStack(
+        at _: URL, maxLongEdge _: Int, progress _: @escaping @Sendable (Double) -> Void,
+    ) async throws -> FocusStackPreview {
+        throw CancellationError()
+    }
+}
+
+@MainActor
+struct MaskEditingTests {
+    /// An editor with a photo open, in a temporary folder its sidecar can be written to.
+    private func openEditor() async throws -> (EditorModel, () -> Void) {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let model = EditorModel(engine: StubEngine())
+        model.select(folder.appending(path: "IMG_0001.ARW"))
+        for _ in 0 ..< 200 where model.info == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(model.info != nil)
+        return (model, { try? FileManager.default.removeItem(at: folder) })
+    }
+
+    @Test func `strokes paint into one brush component`() async throws {
+        let (model, cleanup) = try await openEditor()
+        defer { cleanup() }
+        model.startDrawing(.brush)
+        model.beginStroke(at: ImagePoint(x: 0.2, y: 0.2))
+        model.continueStroke(to: ImagePoint(x: 0.4, y: 0.25))
+        model.continueStroke(to: ImagePoint(x: 0.4001, y: 0.25)) // too close: skipped
+        model.endStroke()
+        model.beginStroke(at: ImagePoint(x: 0.6, y: 0.6))
+        model.endStroke()
+
+        #expect(model.recipe.masks.count == 1)
+        let components = model.recipe.masks[0].components
+        #expect(components.count == 1)
+        guard case let .brush(brush) = components[0].shape else {
+            Issue.record("expected a brush")
+            return
+        }
+        #expect(brush.strokes.count == 2)
+        #expect(brush.strokes[0].points.count == 2)
+        #expect(brush.strokes[0].size == model.brushes.a.radius)
+        #expect(model.history.map(\.name).suffix(2) == ["New Brush", "Brush Stroke"])
+        #expect(model.isBrushing)
+    }
+
+    @Test func `erasing needs a brush and uses the erase settings`() async throws {
+        let (model, cleanup) = try await openEditor()
+        defer { cleanup() }
+        model.startDrawing(.brush)
+        model.beginStroke(at: ImagePoint(x: 0.5, y: 0.5), erasing: true)
+        model.endStroke()
+        #expect(model.recipe.masks.isEmpty)
+
+        model.beginStroke(at: ImagePoint(x: 0.5, y: 0.5))
+        model.endStroke()
+        model.brushes.erase.flow = 40
+        model.beginStroke(at: ImagePoint(x: 0.5, y: 0.5), erasing: true)
+        model.endStroke()
+        guard case let .brush(brush) = model.recipe.masks.first?.components.first?.shape else {
+            Issue.record("expected a brush")
+            return
+        }
+        #expect(brush.strokes.map(\.erase) == [false, true])
+        #expect(brush.strokes[1].flow == 40)
+    }
+
+    @Test func `brush keys size the brush while brushing`() async throws {
+        let (model, cleanup) = try await openEditor()
+        defer { cleanup() }
+        model.brushes.a.size = 20
+        model.startDrawing(.brush)
+        model.nudgeBrush(direction: 1, feather: false)
+        #expect(model.brushes.a.size > 20)
+        model.setSliderValue(.maskBrushFlow, 30)
+        #expect(model.brushes.a.flow == 30)
+        #expect(model.sliderValue(.maskBrushFlow) == 30)
+    }
+
+    @Test func `color samples replace or add`() async throws {
+        let (model, cleanup) = try await openEditor()
+        defer { cleanup() }
+        model.startDrawing(.colorRange)
+        model.sampleColorRange(at: ImagePoint(x: 0.1, y: 0.1), adding: false)
+        model.sampleColorRange(at: ImagePoint(x: 0.2, y: 0.2), adding: true)
+        model.sampleColorRange(at: ImagePoint(x: 0.3, y: 0.3), radius: 0.05, adding: true)
+        #expect(model.selectedColorRange?.samples.count == 3)
+        model.sampleColorRange(at: ImagePoint(x: 0.9, y: 0.9), adding: false)
+        #expect(model.selectedColorRange?.samples == [ColorSample(center: ImagePoint(x: 0.9, y: 0.9))])
+        model.setSliderValue(.maskColorRefine, 80)
+        #expect(model.selectedColorRange?.refine == 80)
+        #expect(model.recipe.masks.count == 1)
+    }
+
+    @Test func `luminance eyedropper centres a range on the sampled tone`() async throws {
+        let (model, cleanup) = try await openEditor()
+        defer { cleanup() }
+        model.startDrawing(.luminanceRange, operation: .intersect)
+        await model.sampleLuminanceRange(at: ImagePoint(x: 0.5, y: 0.5))
+        let range = try #require(model.selectedLuminanceRange)
+        #expect(abs(range.lower - 52) < 1e-6)
+        #expect(abs(range.upper - 72) < 1e-6)
+
+        var edited = range
+        edited.upper = 90
+        model.beginEdit()
+        model.setLuminanceRange(edited)
+        model.endEdit(name: "Luminance Range")
+        #expect(model.selectedLuminanceRange?.upper == 90)
+    }
+
+    @Test func `AI masks become components and update in place`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let engine = StubEngine()
+        func person(_ index: Int, sha: String) -> AIMask {
+            AIMask(
+                kind: .people, provider: "stub", revision: 1, instance: index, analysisHash: "h",
+                center: ImagePoint(x: 0.5, y: 0.5), bitmap: MaskBitmap(sha256: sha, width: 4, height: 4),
+            )
+        }
+        engine.computed = [person(0, sha: "a"), person(1, sha: "b")]
+        let model = EditorModel(engine: engine)
+        model.select(folder.appending(path: "IMG_0002.ARW"))
+        for _ in 0 ..< 200 where model.info == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(model.canCreateMask(.people))
+        #expect(!model.canCreateMask(.landscape))
+
+        await model.createAIMask(.people)
+        #expect(model.recipe.masks.count == 1)
+        #expect(model.recipe.masks[0].components.count == 2)
+        #expect(model.recipe.masks[0].name == "People")
+        #expect(model.aiMaskCount == 2)
+
+        engine.computed = [person(1, sha: "b2"), person(0, sha: "a2")]
+        let ids = model.recipe.masks[0].components.map(\.id)
+        await model.updateAIMasks()
+        let updated = model.recipe.masks[0].components
+        #expect(updated.map(\.id) == ids)
+        let hashes = updated.compactMap { component -> String? in
+            if case let .ai(mask) = component.shape {
+                mask.bitmap.sha256
+            } else {
+                nil
+            }
+        }
+        #expect(hashes == ["a2", "b2"])
+        #expect(model.history.last?.name == "Update AI Masks")
+    }
+
+    @Test func `objects ask before downloading their model, then refine with clicks`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let engine = StubEngine()
+        engine.neededModel = ModelInfo(
+            id: "sam2.1-tiny", name: "Segment Anything 2.1 (tiny)", purpose: "Objects", downloadBytes: 79_644_968,
+            state: .notDownloaded,
+        )
+        engine.computed = [AIMask(
+            kind: .objects, provider: "stub", revision: 1, prompts: [ImagePoint(x: 0.5, y: 0.5)], analysisHash: "h",
+            center: ImagePoint(x: 0.5, y: 0.5), bitmap: MaskBitmap(sha256: "o", width: 4, height: 4),
+        )]
+        let model = EditorModel(engine: engine)
+        model.select(folder.appending(path: "IMG_0003.ARW"))
+        for _ in 0 ..< 200 where model.info == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        await model.startAIMask(.objects)
+        #expect(model.pendingModel?.model.id == "sam2.1-tiny")
+        #expect(model.drawingKind == nil)
+        #expect(engine.downloaded.isEmpty)
+
+        await model.downloadPendingModel()
+        #expect(engine.downloaded == ["sam2.1-tiny"])
+        #expect(model.drawingKind == .objects)
+
+        await model.selectObject(at: ImagePoint(x: 0.5, y: 0.5))
+        #expect(model.recipe.masks.count == 1)
+        await model.selectObject(at: ImagePoint(x: 0.6, y: 0.5))
+        #expect(model.recipe.masks.count == 1)
+        #expect(model.recipe.masks[0].components.count == 1)
+        #expect(model.history.map(\.name).suffix(2) == ["New Objects", "Add to Object"])
+    }
+
+    @Test func `adaptive presets compute their masks and carry their adjustments`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let engine = StubEngine()
+        engine.computed = [AIMask(
+            kind: .sky, provider: "stub", revision: 1, analysisHash: "h", center: ImagePoint(x: 0.5, y: 0.2),
+            bitmap: MaskBitmap(sha256: "s", width: 4, height: 4),
+        )]
+        let model = EditorModel(engine: engine)
+        model.select(folder.appending(path: "IMG_0004.ARW"))
+        for _ in 0 ..< 200 where model.info == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let blueSky = try #require(MaskPreset.builtIn.first { $0.name == "Blue Sky" })
+        #expect(model.canApply(blueSky))
+        await model.applyMaskPreset(blueSky)
+        let mask = try #require(model.recipe.masks.first)
+        #expect(mask.name == "Blue Sky")
+        #expect(mask[.localTemperature] == -12)
+        guard case let .ai(sky) = mask.components.first?.shape else {
+            Issue.record("expected an AI component")
+            return
+        }
+        #expect(sky.kind == .sky)
+
+        // Saved as a preset, the sky becomes a request again.
+        let preset = MaskPreset(mask, name: "My Sky")
+        #expect(preset.aiKinds == [.sky])
+        #expect(preset.localAdjustments[.localExposure] == -0.3)
+        let decoded = try JSONDecoder().decode(MaskPreset.self, from: JSONEncoder().encode(preset))
+        #expect(decoded == preset)
+    }
+
+    @Test func `ranges add to an existing mask with the chosen operation`() async throws {
+        let (model, cleanup) = try await openEditor()
+        defer { cleanup() }
+        model.startDrawing(.brush)
+        model.beginStroke(at: ImagePoint(x: 0.5, y: 0.5))
+        model.endStroke()
+        let mask = try #require(model.selectedMaskID)
+        model.startDrawing(.colorRange, operation: .intersect, addingTo: mask)
+        model.sampleColorRange(at: ImagePoint(x: 0.5, y: 0.5), adding: false)
+        let components = model.recipe.masks[0].components
+        #expect(components.count == 2)
+        #expect(components[1].operation == .intersect)
+    }
+}

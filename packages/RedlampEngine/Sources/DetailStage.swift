@@ -135,9 +135,18 @@ struct LocalDetail: Hashable {
     struct Layer: Hashable {
         var components: [MaskComponent]
         var amounts: SIMD4<Float>
+        var detail: Double = 0
     }
 
     var layers: [Layer] = []
+    /// The masks the layers reuse as components.
+    var referenced: [MaskLayer] = []
+    /// The edit guide's version, when a range component reads it.
+    var guideGeneration = 0
+
+    var readsEditGuide: Bool {
+        (layers.flatMap(\.components) + referenced.flatMap(\.components)).contains { $0.shape.readsEditGuide }
+    }
 
     init(recipe: EditRecipe) {
         var components = 0
@@ -151,9 +160,11 @@ struct LocalDetail: Hashable {
             else {
                 continue
             }
-            layers.append(Layer(components: mask.components, amounts: amounts))
+            layers.append(Layer(components: mask.components, amounts: amounts, detail: mask.detail))
             components += mask.components.count
         }
+        let ids = Set(layers.flatMap { MaskLayer(name: "", components: $0.components).referencedMasks })
+        referenced = recipe.masks.filter { ids.contains($0.id) }
     }
 
     var isEmpty: Bool {
@@ -216,9 +227,20 @@ final class DetailStage {
     let sharpenCache = SharpenCache()
     private var scratch: [MTLPixelFormat: [any MTLTexture]] = [:]
 
+    private var emptyMasks: (rasters: any MTLTexture, guide: any MTLTexture)?
+
     init(device: any MTLDevice, kernels: KernelLibrary) {
         self.device = device
         self.kernels = kernels
+    }
+
+    private func emptyMaskImages() throws -> (rasters: any MTLTexture, guide: any MTLTexture) {
+        if let emptyMasks {
+            return emptyMasks
+        }
+        let images = try MaskResources.emptyImages(device: device)
+        emptyMasks = images
+        return images
     }
 
     /// The processed pyramid texels behind `region` rendered at `outputSize`, encoding the work
@@ -230,13 +252,17 @@ final class DetailStage {
         outputSize: PixelSize,
         commands: any MTLCommandBuffer,
         cache: Bool = true,
+        masks: MaskBindings = .none,
     ) throws -> Output? {
         guard outputSize.width > 0 else { return nil }
         let work = Self.workArea(session: session, region: region, outputSize: outputSize)
         let denoiseSettings = DenoiseSettings(recipe: recipe)
         let sharpenSettings = SharpenSettings(recipe: recipe)
         let contrastSettings = LocalContrastSettings(recipe: recipe)
-        let local = LocalDetail(recipe: recipe)
+        var local = LocalDetail(recipe: recipe)
+        if local.readsEditGuide {
+            local.guideGeneration = masks.guideGeneration
+        }
         let denoise = denoiseSettings.isActive || local.uses(3) ? denoiseSettings : nil
         let sharpen = sharpenSettings.sigma(atLevel: work.level) != nil && (sharpenSettings.gain > 0 || local.uses(2))
             ? sharpenSettings : nil
@@ -267,6 +293,7 @@ final class DetailStage {
             session: session,
             local: local,
             work: work,
+            masks: masks,
             encoder: encoder,
         )
         // Each pass reads the previous one's result; the last writes the output.
@@ -456,20 +483,24 @@ final class DetailStage {
         session: ImageSession,
         local: LocalDetail,
         work: WorkArea,
+        masks: MaskBindings,
         encoder: any MTLComputeCommandEncoder,
     ) throws -> any MTLTexture {
         let output = try scratchTextures(.rgba16Float, 7, work)[6]
         let aspect = session.orientedSize.aspectRatio
         var layers: [MaskLayerGPU] = []
-        var components: [MaskComponentGPU] = []
+        var maskComponents = MaskComponentEncoder(aspect: aspect, masks: masks, layers: local.referenced)
+        let detailLevel = DevelopParameters.detailLevel(session)
         for layer in local.layers {
-            let first = components.count
-            components += layer.components.map { DevelopParameters.gpuComponent($0, aspect: aspect) }
+            let first = maskComponents.components.count
+            layer.components.forEach { maskComponents.append($0) }
             layers.append(MaskLayerGPU(
                 color: layer.amounts, tone: .zero,
-                tone2: SIMD4(0, 0, Float(first), Float(layer.components.count)),
+                tone2: SIMD4(0, 0, Float(first), Float(maskComponents.components.count - first)),
+                detail: SIMD4(0, Float(layer.detail / 100), Float(detailLevel), 0),
             ))
         }
+        var components = maskComponents.finished()
         var params = DetailLocalParams(
             place: SIMD4(Int32(work.origin.x), Int32(work.origin.y), Int32(work.level), Int32(session.orientation)),
             size: SIMD4(Int32(work.size.x), Int32(work.size.y), Int32(layers.count), 0),
@@ -478,9 +509,15 @@ final class DetailStage {
         encoder.setComputePipelineState(kernels.detailLocal)
         encoder.setTexture(session.pyramid, index: 0)
         encoder.setTexture(output, index: 1)
+        let empty = try emptyMaskImages()
+        encoder.setTexture(masks.rasters ?? empty.rasters, index: 2)
+        encoder.setTexture(masks.guide ?? empty.guide, index: 3)
+        if components.isEmpty {
+            components = [.empty]
+        }
         encoder.setBytes(&params, length: MemoryLayout<DetailLocalParams>.stride, index: 0)
         encoder.setBytes(&layers, length: layers.count * MemoryLayout<MaskLayerGPU>.stride, index: 1)
-        encoder.setBytes(&components, length: components.count * MemoryLayout<MaskComponentGPU>.stride, index: 2)
+        try encoder.setArray(components, index: 2, device: device)
         encoder.dispatchGrid(width: work.size.x, height: work.size.y, pipeline: kernels.detailLocal)
         return output
     }

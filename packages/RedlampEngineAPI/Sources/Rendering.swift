@@ -37,6 +37,7 @@ public struct RenderRequest: Sendable, Hashable {
     /// Tints this mask's coverage (Lightroom's mask overlay).
     public var maskOverlay: UUID?
     public var maskOverlayColor: MaskOverlayColor = .red
+    public var maskOverlayStyle: MaskOverlayStyle = .colorOverlay
     /// Also renders this recipe at the same size and region (the "before" of a before/after
     /// view). It is re-rendered only when it, the geometry or clipping change, so edits to
     /// `recipe` cost no more than without it.
@@ -59,6 +60,28 @@ public struct RenderRequest: Sendable, Hashable {
         self.maskOverlay = maskOverlay
         self.generation = generation
     }
+}
+
+/// How the selected mask is shown: Lightroom's overlay modes, plus the luminance map that
+/// Luminance Range shows while it is edited.
+public enum MaskOverlayStyle: Int, Sendable, Hashable, CaseIterable {
+    case colorOverlay, colorOverlayOnBlackAndWhite, imageOnBlack, imageOnWhite, blackAndWhite, luminanceMap
+
+    public var name: String {
+        switch self {
+        case .colorOverlay: "Color Overlay"
+        case .colorOverlayOnBlackAndWhite: "Color Overlay on B&W"
+        case .imageOnBlack: "Image on Black"
+        case .imageOnWhite: "Image on White"
+        case .blackAndWhite: "B&W"
+        case .luminanceMap: "Luminance Map"
+        }
+    }
+
+    /// The modes offered in the overlay menu (the luminance map belongs to Luminance Range).
+    public static let menu: [MaskOverlayStyle] = [
+        .colorOverlay, .colorOverlayOnBlackAndWhite, .imageOnBlack, .imageOnWhite, .blackAndWhite,
+    ]
 }
 
 /// Mask overlay colors, cycled with Shift-O as in Lightroom.

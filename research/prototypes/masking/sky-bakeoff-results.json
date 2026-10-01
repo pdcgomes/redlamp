@@ -1,0 +1,408 @@
+[
+  {
+    "photo": "Canon_Canon-PowerShot-S3IS",
+    "skyFraction": 0.19424591561482085,
+    "classical": {
+      "iou": 0.942,
+      "boundaryF": 0.937,
+      "seconds": 0
+    },
+    "sam": {
+      "iou": 0.963,
+      "boundaryF": 0.998,
+      "seconds": 0
+    },
+    "sam3-text-sky": {
+      "iou": 0.949,
+      "boundaryF": 0.998,
+      "seconds": 3.2
+    },
+    "florence-2-base": {
+      "iou": 0.138,
+      "boundaryF": 0.487,
+      "seconds": 0
+    },
+    "da3-mono-large-sky": {
+      "iou": 0.946,
+      "boundaryF": 0.891,
+      "seconds": 0.61
+    }
+  },
+  {
+    "photo": "Canon_EOS-R50",
+    "skyFraction": 0.2330797132554945,
+    "classical": {
+      "iou": 0.939,
+      "boundaryF": 0.847,
+      "seconds": 0
+    },
+    "sam": {
+      "iou": 0.919,
+      "boundaryF": 0.863,
+      "seconds": 0
+    },
+    "sam3-text-sky": {
+      "iou": 0.932,
+      "boundaryF": 0.892,
+      "seconds": 0.99
+    },
+    "florence-2-base": {
+      "iou": 0.935,
+      "boundaryF": 0.876,
+      "seconds": 0
+    },
+    "da3-mono-large-sky": {
+      "iou": 0.952,
+      "boundaryF": 0.872,
+      "seconds": 0.28
+    }
+  },
+  {
+    "photo": "Fujifilm_FinePix-HS50EXR",
+    "skyFraction": 0.19524301625161708,
+    "classical": {
+      "iou": 0.963,
+      "boundaryF": 0.968,
+      "seconds": 0
+    },
+    "sam": {
+      "iou": 0.967,
+      "boundaryF": 0.998,
+      "seconds": 0
+    },
+    "sam3-text-sky": {
+      "iou": 0.963,
+      "boundaryF": 0.998,
+      "seconds": 0.95
+    },
+    "florence-2-base": {
+      "iou": 0.957,
+      "boundaryF": 0.992,
+      "seconds": 0
+    },
+    "da3-mono-large-sky": {
+      "iou": 0.965,
+      "boundaryF": 0.979,
+      "seconds": 0.29
+    }
+  },
+  {
+    "photo": "Fujifilm_FinePix-SL1000",
+    "skyFraction": 0.48732184246909566,
+    "classical": {
+      "iou": 0.904,
+      "boundaryF": 0.809,
+      "seconds": 0
+    },
+    "sam": {
+      "iou": 0.967,
+      "boundaryF": 0.997,
+      "seconds": 0
+    },
+    "sam3-text-sky": {
+      "iou": 0.979,
+      "boundaryF": 1.0,
+      "seconds": 0.94
+    },
+    "florence-2-base": {
+      "iou": 0.926,
+      "boundaryF": 0.894,
+      "seconds": 0
+    },
+    "da3-mono-large-sky": {
+      "iou": 0.98,
+      "boundaryF": 0.99,
+      "seconds": 0.28
+    }
+  },
+  {
+    "photo": "Fujifilm_X-S20",
+    "skyFraction": 0.3252285070586623,
+    "classical": {
+      "iou": 0.978,
+      "boundaryF": 1.0,
+      "seconds": 0
+    },
+    "sam": {
+      "iou": 0.971,
+      "boundaryF": 0.988,
+      "seconds": 0
+    },
+    "sam3-text-sky": {
+      "iou": 0.98,
+      "boundaryF": 0.999,
+      "seconds": 0.94
+    },
+    "florence-2-base": {
+      "iou": 0.323,
+      "boundaryF": 0.486,
+      "seconds": 0
+    },
+    "da3-mono-large-sky": {
+      "iou": 0.981,
+      "boundaryF": 0.998,
+      "seconds": 0.31
+    }
+  },
+  {
+    "photo": "Fujifilm_X100VI",
+    "skyFraction": 0.15858182851334066,
+    "classical": {
+      "iou": 0.978,
+      "boundaryF": 0.991,
+      "seconds": 0
+    },
+    "sam": {
+      "iou": 0.973,
+      "boundaryF": 1.0,
+      "seconds": 0
+    },
+    "sam3-text-sky": {
+      "iou": 0.988,
+      "boundaryF": 1.0,
+      "seconds": 0.95
+    },
+    "florence-2-base": {
+      "iou": 0.977,
+      "boundaryF": 1.0,
+      "seconds": 0
+    },
+    "da3-mono-large-sky": {
+      "iou": 0.981,
+      "boundaryF": 1.0,
+      "seconds": 0.38
+    }
+  },
+  {
+    "photo": "Google_Pixel-6-Pro",
+    "skyFraction": 0.4074358711292153,
+    "classical": {
+      "iou": 0.876,
+      "boundaryF": 0.78,
+      "seconds": 0
+    },
+    "sam": {
+      "iou": 0.976,
+      "boundaryF": 0.934,
+      "seconds": 0
+    },
+    "sam3-text-sky": {
+      "iou": 0.99,
+      "boundaryF": 1.0,
+      "seconds": 0.94
+    },
+    "florence-2-base": {
+      "iou": 0.542,
+      "boundaryF": 0.383,
+      "seconds": 0
+    },
+    "da3-mono-large-sky": {
+      "iou": 0.992,
+      "boundaryF": 0.998,
+      "seconds": 0.28
+    }
+  },
+  {
+    "photo": "Leica_D-LUX-6",
+    "skyFraction": 0.33517677808715396,
+    "classical": {
+      "iou": 0.982,
+      "boundaryF": 0.984,
+      "seconds": 0
+    },
+    "sam": {
+      "iou": 0.976,
+      "boundaryF": 0.999,
+      "seconds": 0
+    },
+    "sam3-text-sky": {
+      "iou": 0.984,
+      "boundaryF": 1.0,
+      "seconds": 0.95
+    },
+    "florence-2-base": {
+      "iou": 0.208,
+      "boundaryF": 0.271,
+      "seconds": 0
+    },
+    "da3-mono-large-sky": {
+      "iou": 0.987,
+      "boundaryF": 0.995,
+      "seconds": 0.35
+    }
+  },
+  {
+    "photo": "Nikon_Coolpix-P7700",
+    "skyFraction": 0.1624628702799479,
+    "classical": {
+      "iou": 0.622,
+      "boundaryF": 0.42,
+      "seconds": 0
+    },
+    "sam": {
+      "iou": 0.937,
+      "boundaryF": 0.912,
+      "seconds": 0
+    },
+    "sam3-text-sky": {
+      "iou": 0.935,
+      "boundaryF": 0.845,
+      "seconds": 0.95
+    },
+    "florence-2-base": {
+      "iou": 0.701,
+      "boundaryF": 0.676,
+      "seconds": 0
+    },
+    "da3-mono-large-sky": {
+      "iou": 0.697,
+      "boundaryF": 0.385,
+      "seconds": 0.28
+    }
+  },
+  {
+    "photo": "Panasonic_DC-TZ200D",
+    "skyFraction": 0.3462281970098756,
+    "classical": {
+      "iou": 0.869,
+      "boundaryF": 0.577,
+      "seconds": 0
+    },
+    "sam": {
+      "iou": 0.947,
+      "boundaryF": 0.899,
+      "seconds": 0
+    },
+    "sam3-text-sky": {
+      "iou": 0.949,
+      "boundaryF": 0.899,
+      "seconds": 0.95
+    },
+    "florence-2-base": {
+      "iou": 0.868,
+      "boundaryF": 0.82,
+      "seconds": 0
+    },
+    "da3-mono-large-sky": {
+      "iou": 0.885,
+      "boundaryF": 0.61,
+      "seconds": 0.26
+    }
+  },
+  {
+    "photo": "Panasonic_DMC-FX150",
+    "skyFraction": 0.4281943823194535,
+    "classical": {
+      "iou": 0.761,
+      "boundaryF": 0.428,
+      "seconds": 0
+    },
+    "sam": {
+      "iou": 0.779,
+      "boundaryF": 0.429,
+      "seconds": 0
+    },
+    "sam3-text-sky": {
+      "iou": 0.773,
+      "boundaryF": 0.395,
+      "seconds": 0.96
+    },
+    "florence-2-base": {
+      "iou": 0.798,
+      "boundaryF": 0.403,
+      "seconds": 0
+    },
+    "da3-mono-large-sky": {
+      "iou": 0.855,
+      "boundaryF": 0.888,
+      "seconds": 0.28
+    }
+  },
+  {
+    "photo": "Panasonic_DMC-FZ28",
+    "skyFraction": 0.2576722658788174,
+    "classical": {
+      "iou": 0.808,
+      "boundaryF": 0.756,
+      "seconds": 0
+    },
+    "sam": {
+      "iou": 0.585,
+      "boundaryF": 0.519,
+      "seconds": 0
+    },
+    "sam3-text-sky": {
+      "iou": 0.579,
+      "boundaryF": 0.5,
+      "seconds": 0.95
+    },
+    "florence-2-base": {
+      "iou": 0.392,
+      "boundaryF": 0.374,
+      "seconds": 0
+    },
+    "da3-mono-large-sky": {
+      "iou": 0.839,
+      "boundaryF": 0.881,
+      "seconds": 0.33
+    }
+  },
+  {
+    "photo": "Samsung_Galaxy-S21-Ultra",
+    "skyFraction": 0.3849468231201172,
+    "classical": {
+      "iou": 0.991,
+      "boundaryF": 0.999,
+      "seconds": 0
+    },
+    "sam": {
+      "iou": 0.975,
+      "boundaryF": 0.988,
+      "seconds": 0
+    },
+    "sam3-text-sky": {
+      "iou": 0.986,
+      "boundaryF": 0.998,
+      "seconds": 0.95
+    },
+    "florence-2-base": {
+      "iou": 0.531,
+      "boundaryF": 0.547,
+      "seconds": 0
+    },
+    "da3-mono-large-sky": {
+      "iou": 0.988,
+      "boundaryF": 0.984,
+      "seconds": 0.35
+    }
+  },
+  {
+    "photo": "Sony_ILCE-6700",
+    "skyFraction": 0.20046122590003654,
+    "classical": {
+      "iou": 0.966,
+      "boundaryF": 1.0,
+      "seconds": 0
+    },
+    "sam": {
+      "iou": 0.949,
+      "boundaryF": 0.997,
+      "seconds": 0
+    },
+    "sam3-text-sky": {
+      "iou": 0.954,
+      "boundaryF": 0.993,
+      "seconds": 0.96
+    },
+    "florence-2-base": {
+      "iou": 0.956,
+      "boundaryF": 0.993,
+      "seconds": 0
+    },
+    "da3-mono-large-sky": {
+      "iou": 0.96,
+      "boundaryF": 0.948,
+      "seconds": 0.26
+    }
+  }
+]
