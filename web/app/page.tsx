@@ -1,3 +1,4 @@
+import { CommandPalette } from "@/components/sections/CommandPalette";
 import { EverythingToday, Features, Performance } from "@/components/sections/Features";
 import { Films } from "@/components/sections/Films";
 import { Gallery } from "@/components/sections/Gallery";
@@ -13,6 +14,7 @@ export default function HomePage() {
       <Hero />
       <Story />
       <Principles />
+      <CommandPalette />
       <Features />
       <Performance />
       <EverythingToday />

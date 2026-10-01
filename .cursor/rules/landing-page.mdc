@@ -23,6 +23,7 @@ Keep the shapes the parser relies on, or update `web/lib/readme.ts` with them:
 | README change | Update |
 | --- | --- |
 | A headline feature lands, or a feature row's claims change | The matching entry in `web/content/features.ts` (title, body, points, screenshot) |
+| The command palette's keys or behaviour change | `commandPalette` and `paletteSteps` in `web/content/features.ts`, and its close-ups (`palette-*` in `scripts/capture-screenshots.sh`) |
 | Measured performance numbers change | `performance` in `web/content/features.ts`, and the speed feature's points |
 | A film stock is added, renamed or re-tuned | `web/content/films.ts` (with its icon and `look-<id>.jpg` in `docs/images/film/`) |
 | Goals change | `principles` in `web/content/features.ts` |

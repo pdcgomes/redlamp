@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Regenerates the README screenshots in docs/images from the Debug app and the harness
+# Regenerates the README and website screenshots in docs/images from the Debug app and the harness
 # (`ONLY="editor film-catalog"` regenerates just those),
 # using the CC0 fixtures in tests/fixtures/raw (fetch them with `mise run fixtures`) and,
 # for the Recipe Lab, the look-development set (`mise run lookdev`).
@@ -101,3 +101,31 @@ harness lab-inspect recipe-lab --lab-tab inspect --lab-select redlamp/camera/chr
 harness lab-runs recipe-lab --lab-tab runs --lab-run night-city --lab-hide-gallery
 harness harness-parity parity-basic
 harness harness-tokens tokens
+
+# The command palette, scripted in the harness's Live scene, for the website: the stage alone,
+# at 2x on a Retina screen when there is one, cropped to 800 x 500 pt around the palette.
+# Launched directly rather than through `open`, because its steps can contain spaces.
+HARNESS="$ROOT/build/DerivedData/Build/Products/Debug/RedlampHarness.app/Contents/MacOS/RedlampHarness"
+palette() {
+    local name="$1" steps="$2"
+    [[ -n "${ONLY:-}" && " $ONLY " != *" $name "* ]] && return 0
+    "$HARNESS" --scene command-palette --stage-only --window 1280x860 --background black \
+        --palette-steps "$steps" >/dev/null 2>&1 &
+    local pid=$!
+    sleep "${HARNESS_WAIT:-18}"
+    local window
+    window="$(swift "$ROOT/scripts/window-id.swift" "$pid" || true)"
+    rm -f "$OUT/$name.png"
+    [[ -n "$window" ]] && screencapture -x -o -l "$window" "$OUT/$name.png" || true
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    [[ -f "$OUT/$name.png" ]] || { echo "error: no harness window to capture for $name" >&2; return 1; }
+    local scale=$(($(sips -g pixelWidth "$OUT/$name.png" | awk '/pixelWidth/ { print $2 }') / 1280))
+    sips -c $((500 * scale)) $((800 * scale)) --cropOffset $((52 * scale)) $((240 * scale)) "$OUT/$name.png" >/dev/null
+    echo "==> $OUT/$name.png"
+}
+
+palette palette-search "open;type:white"
+palette palette-slider "open;type:exposure;enter;shift-right;shift"
+palette palette-picker "open;type:base look;enter;down;down;down;down;down"
+palette palette-value "open;type:temp 5600k"

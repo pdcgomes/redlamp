@@ -181,6 +181,54 @@ export const focusStacking = {
   ],
 };
 
+export const commandPalette = {
+  eyebrow: "Command palette",
+  title: "Find anything, then adjust it without leaving the keyboard.",
+  body: "⌘K opens one search for every action, every Develop slider and every picker. Choosing a slider or a picker doesn't close the palette: it turns into that control, over the photo.",
+  footer: "A hint bar always shows the keys that work right now, and each opening shows a tip.",
+};
+
+/** Close-ups of the palette in the harness's Live scene, cropped by `mise run screenshots`. */
+const closeUp = (file: string, alt: string) => ({ src: `/synced/images/${file}`, alt, width: 1600, height: 1000 });
+
+export type PaletteStep = { keys: string[]; title: string; body: string; image: ReturnType<typeof closeUp> };
+
+export const paletteSteps: PaletteStep[] = [
+  {
+    keys: ["⌘K"],
+    title: "Search everything",
+    body: "Every action with its shortcut beside it, every slider, and pickers for white balance, treatment, Base Looks, recipes, Before / After, snapshots and history. ⌘F searches the sliders alone.",
+    image: closeUp(
+      "palette-search.png",
+      "The command palette searching for “white”: the White Balance and Treatment pickers, the Temp, Tint, Whites and Saturation sliders with their values, and actions with their shortcuts",
+    ),
+  },
+  {
+    keys: ["↵", "← →", "↑ ↓"],
+    title: "Adjust from the keyboard",
+    body: "↵ on a slider shrinks the palette to a slider bar over the photo. ← → step it, ⇧ ten times as far and ⌥ finer, ↑ ↓ move to the next slider, and a run of presses is one history step.",
+    image: closeUp(
+      "palette-slider.png",
+      "The palette shrunk to a slider bar for Exposure at +0.50 over the photo, with its keys beside the track and in a hint bar",
+    ),
+  },
+  {
+    keys: ["↑ ↓", "↵", "Esc"],
+    title: "Preview before you apply",
+    body: "Moving through a picker previews each choice on the photo. ↵ applies the choice, and Esc goes back one level.",
+    image: closeUp(
+      "palette-picker.png",
+      "The Base Look picker with Redlamp Monochrome highlighted and previewing on the photo, which shows in black and white",
+    ),
+  },
+  {
+    keys: ["↵"],
+    title: "Type the value",
+    body: "A name and a value, such as `exposure 0.7` or `temp 5600k`, sets the slider straight from the search. In the slider bar, type a value or `x+0.3`.",
+    image: closeUp("palette-value.png", "The palette with “temp 5600k” typed, offering to set Temp from 5000 to 5600"),
+  },
+];
+
 export const performance = [
   { value: "70–250 ms", label: "to open a 24–26 MP raw file" },
   { value: "0.6–3 ms", label: "per interactive render at Fit" },
