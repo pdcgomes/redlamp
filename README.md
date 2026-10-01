@@ -58,7 +58,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
    - **Best-in-class denoise:** a classical, noise-profiled denoiser plus an on-device AI denoiser that runs directly on raw data.
    - **Focus stacking in one click,** from detecting a bracketed sequence to an editable result, with pro-level strategies and retouching. This is something Lightroom doesn't offer at all, and dedicated tools only offer with a lot of friction.
    - **AI where it clearly wins:** masks, removal and upscaling, running on the device with no cloud and no credits.
-7. **Mac, iPad, and iPhone from one engine.** A single platform-neutral engine sits under thin, native shells for each platform. Edits move between devices through iCloud Drive, Files, and Photos.
+7. **Mac first, then iPad and iPhone from the same engine.** A single platform-neutral engine sits under thin, native shells. The Mac editor comes first; iPad and iPhone follow once the main features are complete, and edits will move between devices through iCloud Drive, Files, and Photos.
 8. **Open source (MPL-2.0).** The license is compatible with the App Store. Algorithms are implemented clean-room from papers and specifications.
 
 ## Where we are
@@ -188,7 +188,7 @@ With both side panels in AppKit, most of what remains is Core Animation committi
 - Masks support linear and radial gradients only. Brush, range, and AI masks come in Phases 2 and 3.
 - Local Whites and Blacks are approximated with tonal-region gains.
 - Grain is drawn at display pixels, so the fitted preview shows it about four times stronger than a downscaled export does (tracked with film grain v2, TON-19).
-- The app is not sandboxed yet (required later for the Mac App Store), and there is no iPad or iPhone app yet.
+- The app is not sandboxed yet (required later for the Mac App Store). iPad and iPhone come in Phase 5.
 
 **Fixed in iteration 2:**
 - White balance now works for linear DNGs such as iPhone ProRAW.
@@ -404,7 +404,7 @@ The Lab lives in the [component harness](#component-harness). It renders every r
 
 ## Roadmap
 
-Every phase ships on Mac, iPad, and iPhone. The Lightroom feature inventory in [`docs/lightroom-feature-inventory.md`](docs/lightroom-feature-inventory.md) tags every Lightroom feature with the phase that delivers it.
+The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on macOS, and iPad and iPhone follow in Phase 5, once the main features are complete. The engine stays platform-neutral throughout, so the port is a new shell rather than a rewrite. The Lightroom feature inventory in [`docs/lightroom-feature-inventory.md`](docs/lightroom-feature-inventory.md) tags every Lightroom feature with the phase that delivers it.
 
 ### Phase 0: Foundations *(largely done)*
 - [x] mise and Tuist workspace, module graph with enforced boundaries, and an engine purity gate
@@ -412,18 +412,17 @@ Every phase ships on Mac, iPad, and iPhone. The Lightroom feature inventory in [
 - [x] Engine API contract, headless CLI, and a unit and engine smoke-test suite
 - [x] Lightroom feature inventory
 - [x] GitHub Actions CI: purity gate, SwiftFormat lint, build, and tests, with cached LibRaw and fixtures
-- [ ] Performance lab: CI runner plus tethered iPhone and iPad, with per-tier regression gates that block merges
+- [ ] Performance lab: a CI runner on Apple Silicon with regression gates that block merges (iPhone and iPad tiers come with Phase 5)
 - [x] Golden-image color regression tests (ΔE2000) for camera files, and a golden render for every bundled recipe version
 - [ ] Written clean-room policy and a license-audit gate in CI
 
-### Phase 1: First light *(in progress; macOS iterations 1 and 2 done)*
+### Phase 1: First light *(in progress; iterations 1 and 2 done)*
 - [x] RAW pipeline core, fused develop kernel, cached pyramid, and latest-wins rendering
 - [x] Develop workspace on macOS, Basic panel, histogram, before/after, sidecars, undo, and export
 - [x] Layer and mask engine, with linear and radial gradient masks, local adjustments, and the Masking panel
-- [ ] Sandboxed XPC decode helper on macOS and in-process decoding on iOS
+- [ ] Sandboxed XPC decode helper
 - [ ] Render scheduler with priority lanes, tile cancellation, and thermal awareness
-- [ ] iPad and iPhone shells (compact layout, touch, Apple Pencil)
-- [ ] Coordinated sidecar I/O for iCloud Drive and Files
+- [ ] Coordinated sidecar I/O for iCloud Drive
 
 ### Phase 2: Develop parity *(in progress)*
 - [x] Texture, Clarity and Dehaze, globally and inside masks
@@ -456,7 +455,14 @@ Every phase ships on Mac, iPad, and iPhone. The Lightroom feature inventory in [
 - [ ] Lightroom XMP sidecar import, HDR/EDR editing and export, and batch export
 - [ ] **AI-assisted focus stacking:** learned fusion and halo suppression, occlusion and motion handling, and good stacks from fewer or handheld frames
 - [ ] **AI Super Resolution** (2x and 4x) that stays faithful and doesn't invent detail
-- [ ] Accessibility, usability testing on every platform, and App Store releases
+- [ ] Accessibility, usability testing, and the Mac App Store release
+
+### Phase 5: iPad and iPhone
+- [ ] iPad and iPhone shells on the same engine (compact layout, touch, Apple Pencil), with in-process decoding
+- [ ] Coordinated sidecar I/O through Files, and edits moving between devices
+- [ ] Tiled rendering for large exports within iPhone and iPad memory
+- [ ] On-device timing of the AI models on iPhone and iPad, and performance-lab tiers for both
+- [ ] App Store releases for iPad and iPhone
 
 ### Later
 - CloudKit sync with lightweight proxy RAW files
@@ -659,7 +665,7 @@ The rendering engine and the UI are completely separate. The UI talks to the eng
 
 ```mermaid
 flowchart LR
-    subgraph ui [UI - macOS today, iPad and iPhone next]
+    subgraph ui [UI - macOS; iPad and iPhone in Phase 5]
         Views["AppKit panels + RedlampDesign"] --> Model["EditorModel"]
         Canvas["Metal canvas"]
     end
