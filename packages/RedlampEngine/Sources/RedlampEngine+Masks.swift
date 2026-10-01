@@ -9,22 +9,94 @@ import RedlampMasking
 /// don't move when the edit changes, and kept in the edit as bitmaps.
 extension RedlampEngine {
     static let analysisLongEdge = 2048
-    /// Sky: `auto` (the default) seeds Segment Anything inside the classical estimate when that
-    /// model is on this Mac, as the bake-off chose (MSK-17); `classical` or `sam` force one.
+    /// Sky's method. `auto` (the default) uses what's on this Mac, best first, as the bake-off
+    /// (MSK-17) measured it: the mean of Segment Anything (seeded inside the classical estimate,
+    /// with the sky between bare branches given back) and Depth Anything 3's sky (IoU 0.945);
+    /// either alone (0.940, 0.931); else the classical estimate (0.898). `sam`, `da3` and
+    /// `classical` force one.
     static var skyMethod: String {
         ProcessInfo.processInfo.environment["REDLAMP_SKY_METHOD"] ?? "auto"
     }
 
-    func usesSegmentAnythingForSky() async -> Bool {
-        switch Self.skyMethod {
-        case "sam": return true
-        case "classical": return false
-        default:
-            guard let id = Self.modelID(for: .objects),
-                  let manifest = ModelCatalog.offered.first(where: { $0.id == id })
-            else { return false }
-            return await ModelStore.shared.location(of: manifest) != nil
+    /// Sky from the models, or nil to fall back to the classical estimate.
+    func modelSky(_ analysis: (image: CGImage, hash: String)) async throws -> AIMask? {
+        let method = Self.skyMethod
+        guard method != "classical" else { return nil }
+        let image = analysis.image
+        var sam: GrayMask?
+        if method == "auto" || method == "sam", await isReady(Self.modelID(for: .objects)),
+           let seeds = try? SkyEstimator.seeds(image),
+           let object = try await computeMasks(MaskRequest(kind: .objects, prompts: seeds)).first,
+           let png = object.bitmap.png, let mask = GrayMask.decode(png) {
+            // SAM cuts around bare tree crowns; give back the sky seen through them.
+            sam = await Task.detached(priority: .userInitiated) {
+                SkyEstimator.refineBetweenBranches(mask, image: image)
+            }.value
         }
+        var da3: GrayMask?
+        if method == "auto" || method == "da3", let model = await depthAnything3() {
+            da3 = try? await depthAnything3Result(analysis, model: model).sky
+        }
+        let sky: GrayMask
+        let provider: String
+        switch (sam, da3) {
+        case let (sam?, da3?):
+            let resized = da3.resized(to: PixelSize(width: sam.width, height: sam.height))
+            sky = GrayMask(
+                width: sam.width, height: sam.height,
+                pixels: zip(sam.pixels, resized.pixels).map { UInt8((Int($0) + Int($1)) / 2) },
+            )
+            provider = "redlamp.sky.sam2.1-tiny+depth-anything-3"
+        case let (sam?, nil):
+            (sky, provider) = (sam, "redlamp.sky.sam2.1-tiny")
+        case let (nil, da3?):
+            (sky, provider) = (
+                GuidedFilter.refine(da3, guide: image, radius: 6, epsilon: 2e-3),
+                "redlamp.sky.depth-anything-3",
+            )
+        case (nil, nil):
+            return nil
+        }
+        guard sky.coveredFraction > 0.005, let bitmap = sky.bitmap() else { return nil }
+        return AIMask(
+            kind: .sky, provider: provider, revision: 2, analysisHash: analysis.hash, center: sky.centroid,
+            bitmap: bitmap,
+        )
+    }
+
+    func isReady(_ id: String?) async -> Bool {
+        guard let id, let manifest = ModelCatalog.offered.first(where: { $0.id == id }) else { return false }
+        return await ModelStore.shared.location(of: manifest) != nil
+    }
+
+    /// Depth Anything 3, when it's on this Mac and offered (it is evaluation only).
+    func depthAnything3() async -> DepthAnything3? {
+        if let loaded = depthAnything3Model.withLock({ $0 }) {
+            return loaded
+        }
+        guard let manifest = ModelCatalog.offered.first(where: { $0.id == Self.depthAnything3ID }),
+              let directory = await ModelStore.shared.location(of: manifest),
+              let loaded = try? await Task.detached(priority: .userInitiated, operation: {
+                  try DepthAnything3(manifest: manifest, directory: directory)
+              }).value
+        else { return nil }
+        depthAnything3Model.withLock { $0 = loaded }
+        return loaded
+    }
+
+    static let depthAnything3ID = "depth-anything-3-mono-large"
+
+    /// One inference gives both depth and sky; kept for the open photo.
+    func depthAnything3Result(
+        _ analysis: (image: CGImage, hash: String), model: DepthAnything3,
+    ) async throws -> DepthAnything3.Result {
+        if let cached = depthAnything3Cache.withLock({ $0 }), cached.hash == analysis.hash {
+            return cached.result
+        }
+        let image = analysis.image
+        let result = try await Task.detached(priority: .userInitiated) { try model.predict(image) }.value
+        depthAnything3Cache.withLock { $0 = (analysis.hash, result) }
+        return result
     }
 
     /// Draws the recipe's brush and AI rasters and renders the guides its masks read, all ahead
@@ -96,7 +168,8 @@ extension RedlampEngine {
             kinds.insert(.objects)
         }
         let embeddedDepth = currentSession().map { EmbeddedMattes.available(in: $0.info.url).contains(.depth) } ?? false
-        if embeddedDepth || ModelCatalog.offered.contains(where: { $0.id == Self.modelID(for: .depthRange) }) {
+        let depthModels = [Self.modelID(for: .depthRange), Self.depthAnything3ID]
+        if embeddedDepth || ModelCatalog.offered.contains(where: { depthModels.contains($0.id) }) {
             kinds.insert(.depthRange)
         }
         return kinds
@@ -106,22 +179,25 @@ extension RedlampEngine {
         guard let session = currentSession() else { throw EngineError.noImageOpen }
         let analysis = try await analysisImage(for: session)
         let url = session.info.url
-        if request.kind == .sky, await usesSegmentAnythingForSky(), EmbeddedMattes.read(.sky, from: url) == nil,
-           let seeds = try? SkyEstimator.seeds(analysis.image) {
-            // The bake-off's auto-prompted candidate: Segment Anything seeded inside the estimate.
-            var objects = try await computeMasks(MaskRequest(kind: .objects, prompts: seeds))
-            for index in objects.indices {
-                objects[index].kind = .sky
-            }
-            return objects
+        if request.kind == .sky, EmbeddedMattes.read(.sky, from: url) == nil, let sky = try await modelSky(analysis) {
+            return [sky]
         }
         if request.kind == .depthRange, !EmbeddedMattes.available(in: url).contains(.depth) {
-            let estimator = try await depthEstimator()
             let image = analysis.image
-            let depth = try await Task.detached(priority: .userInitiated) { try estimator.depth(of: image) }.value
+            let depth: GrayMask
+            let provider: String
+            let revision: Int
+            if let model = await depthAnything3(),
+               let result = try? await depthAnything3Result(analysis, model: model) {
+                (depth, provider, revision) = (result.depth, model.manifest.provider, model.manifest.version)
+            } else {
+                let estimator = try await depthEstimator()
+                depth = try await Task.detached(priority: .userInitiated) { try estimator.depth(of: image) }.value
+                (provider, revision) = (estimator.manifest.provider, estimator.manifest.version)
+            }
             guard let bitmap = depth.bitmap() else { throw MaskComputationError.unsupported(.depthRange) }
             return [AIMask(
-                kind: .depthRange, provider: estimator.manifest.provider, revision: estimator.manifest.version,
+                kind: .depthRange, provider: provider, revision: revision,
                 analysisHash: analysis.hash, center: ImagePoint(x: 0.5, y: 0.5), bitmap: bitmap,
             )]
         }

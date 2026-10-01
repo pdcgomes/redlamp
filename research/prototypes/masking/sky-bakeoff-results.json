@@ -8,14 +8,24 @@
       "seconds": 0
     },
     "sam": {
-      "iou": 0.963,
-      "boundaryF": 0.998,
-      "seconds": 0
+      "iou": 0.97,
+      "boundaryF": 0.989,
+      "seconds": 5.41
     },
     "sam3-text-sky": {
       "iou": 0.949,
       "boundaryF": 0.998,
       "seconds": 3.2
+    },
+    "redlamp-auto": {
+      "iou": 0.963,
+      "boundaryF": 0.977,
+      "seconds": 8.83
+    },
+    "redlamp-da3": {
+      "iou": 0.947,
+      "boundaryF": 0.912,
+      "seconds": 4.57
     },
     "florence-2-base": {
       "iou": 0.138,
@@ -37,14 +47,24 @@
       "seconds": 0
     },
     "sam": {
-      "iou": 0.919,
-      "boundaryF": 0.863,
-      "seconds": 0
+      "iou": 0.961,
+      "boundaryF": 0.95,
+      "seconds": 2.02
     },
     "sam3-text-sky": {
       "iou": 0.932,
       "boundaryF": 0.892,
       "seconds": 0.99
+    },
+    "redlamp-auto": {
+      "iou": 0.969,
+      "boundaryF": 0.97,
+      "seconds": 5.58
+    },
+    "redlamp-da3": {
+      "iou": 0.956,
+      "boundaryF": 0.885,
+      "seconds": 4.73
     },
     "florence-2-base": {
       "iou": 0.935,
@@ -66,14 +86,24 @@
       "seconds": 0
     },
     "sam": {
-      "iou": 0.967,
-      "boundaryF": 0.998,
-      "seconds": 0
+      "iou": 0.974,
+      "boundaryF": 0.997,
+      "seconds": 1.92
     },
     "sam3-text-sky": {
       "iou": 0.963,
       "boundaryF": 0.998,
       "seconds": 0.95
+    },
+    "redlamp-auto": {
+      "iou": 0.97,
+      "boundaryF": 0.982,
+      "seconds": 5.46
+    },
+    "redlamp-da3": {
+      "iou": 0.962,
+      "boundaryF": 0.973,
+      "seconds": 4.49
     },
     "florence-2-base": {
       "iou": 0.957,
@@ -95,14 +125,24 @@
       "seconds": 0
     },
     "sam": {
-      "iou": 0.967,
-      "boundaryF": 0.997,
-      "seconds": 0
+      "iou": 0.977,
+      "boundaryF": 0.996,
+      "seconds": 2.12
     },
     "sam3-text-sky": {
       "iou": 0.979,
       "boundaryF": 1.0,
       "seconds": 0.94
+    },
+    "redlamp-auto": {
+      "iou": 0.982,
+      "boundaryF": 0.997,
+      "seconds": 5.74
+    },
+    "redlamp-da3": {
+      "iou": 0.981,
+      "boundaryF": 0.99,
+      "seconds": 4.56
     },
     "florence-2-base": {
       "iou": 0.926,
@@ -124,14 +164,24 @@
       "seconds": 0
     },
     "sam": {
-      "iou": 0.971,
-      "boundaryF": 0.988,
-      "seconds": 0
+      "iou": 0.985,
+      "boundaryF": 0.995,
+      "seconds": 2.68
     },
     "sam3-text-sky": {
       "iou": 0.98,
       "boundaryF": 0.999,
       "seconds": 0.94
+    },
+    "redlamp-auto": {
+      "iou": 0.984,
+      "boundaryF": 1.0,
+      "seconds": 6.16
+    },
+    "redlamp-da3": {
+      "iou": 0.981,
+      "boundaryF": 0.997,
+      "seconds": 5.25
     },
     "florence-2-base": {
       "iou": 0.323,
@@ -153,14 +203,24 @@
       "seconds": 0
     },
     "sam": {
-      "iou": 0.973,
-      "boundaryF": 1.0,
-      "seconds": 0
+      "iou": 0.983,
+      "boundaryF": 0.994,
+      "seconds": 3.15
     },
     "sam3-text-sky": {
       "iou": 0.988,
       "boundaryF": 1.0,
       "seconds": 0.95
+    },
+    "redlamp-auto": {
+      "iou": 0.982,
+      "boundaryF": 0.991,
+      "seconds": 6.63
+    },
+    "redlamp-da3": {
+      "iou": 0.981,
+      "boundaryF": 0.991,
+      "seconds": 5.72
     },
     "florence-2-base": {
       "iou": 0.977,
@@ -182,14 +242,24 @@
       "seconds": 0
     },
     "sam": {
-      "iou": 0.976,
-      "boundaryF": 0.934,
-      "seconds": 0
+      "iou": 0.995,
+      "boundaryF": 1.0,
+      "seconds": 2.04
     },
     "sam3-text-sky": {
       "iou": 0.99,
       "boundaryF": 1.0,
       "seconds": 0.94
+    },
+    "redlamp-auto": {
+      "iou": 0.993,
+      "boundaryF": 1.0,
+      "seconds": 5.62
+    },
+    "redlamp-da3": {
+      "iou": 0.992,
+      "boundaryF": 1.0,
+      "seconds": 4.71
     },
     "florence-2-base": {
       "iou": 0.542,
@@ -211,14 +281,24 @@
       "seconds": 0
     },
     "sam": {
-      "iou": 0.976,
+      "iou": 0.993,
       "boundaryF": 0.999,
-      "seconds": 0
+      "seconds": 1.88
     },
     "sam3-text-sky": {
       "iou": 0.984,
       "boundaryF": 1.0,
       "seconds": 0.95
+    },
+    "redlamp-auto": {
+      "iou": 0.992,
+      "boundaryF": 0.995,
+      "seconds": 5.33
+    },
+    "redlamp-da3": {
+      "iou": 0.988,
+      "boundaryF": 0.992,
+      "seconds": 4.66
     },
     "florence-2-base": {
       "iou": 0.208,
@@ -240,14 +320,24 @@
       "seconds": 0
     },
     "sam": {
-      "iou": 0.937,
-      "boundaryF": 0.912,
-      "seconds": 0
+      "iou": 0.92,
+      "boundaryF": 0.884,
+      "seconds": 1.98
     },
     "sam3-text-sky": {
       "iou": 0.935,
       "boundaryF": 0.845,
       "seconds": 0.95
+    },
+    "redlamp-auto": {
+      "iou": 0.911,
+      "boundaryF": 0.871,
+      "seconds": 5.54
+    },
+    "redlamp-da3": {
+      "iou": 0.699,
+      "boundaryF": 0.387,
+      "seconds": 5.27
     },
     "florence-2-base": {
       "iou": 0.701,
@@ -269,14 +359,24 @@
       "seconds": 0
     },
     "sam": {
-      "iou": 0.947,
-      "boundaryF": 0.899,
-      "seconds": 0
+      "iou": 0.958,
+      "boundaryF": 0.902,
+      "seconds": 1.94
     },
     "sam3-text-sky": {
       "iou": 0.949,
       "boundaryF": 0.899,
       "seconds": 0.95
+    },
+    "redlamp-auto": {
+      "iou": 0.907,
+      "boundaryF": 0.702,
+      "seconds": 5.35
+    },
+    "redlamp-da3": {
+      "iou": 0.885,
+      "boundaryF": 0.585,
+      "seconds": 5.75
     },
     "florence-2-base": {
       "iou": 0.868,
@@ -298,14 +398,24 @@
       "seconds": 0
     },
     "sam": {
-      "iou": 0.779,
-      "boundaryF": 0.429,
-      "seconds": 0
+      "iou": 0.799,
+      "boundaryF": 0.484,
+      "seconds": 2.0
     },
     "sam3-text-sky": {
       "iou": 0.773,
       "boundaryF": 0.395,
       "seconds": 0.96
+    },
+    "redlamp-auto": {
+      "iou": 0.86,
+      "boundaryF": 0.886,
+      "seconds": 5.47
+    },
+    "redlamp-da3": {
+      "iou": 0.851,
+      "boundaryF": 0.874,
+      "seconds": 4.75
     },
     "florence-2-base": {
       "iou": 0.798,
@@ -327,14 +437,24 @@
       "seconds": 0
     },
     "sam": {
-      "iou": 0.585,
-      "boundaryF": 0.519,
-      "seconds": 0
+      "iou": 0.695,
+      "boundaryF": 0.669,
+      "seconds": 1.94
     },
     "sam3-text-sky": {
       "iou": 0.579,
       "boundaryF": 0.5,
       "seconds": 0.95
+    },
+    "redlamp-auto": {
+      "iou": 0.757,
+      "boundaryF": 0.765,
+      "seconds": 5.75
+    },
+    "redlamp-da3": {
+      "iou": 0.855,
+      "boundaryF": 0.9,
+      "seconds": 4.67
     },
     "florence-2-base": {
       "iou": 0.392,
@@ -356,14 +476,24 @@
       "seconds": 0
     },
     "sam": {
-      "iou": 0.975,
-      "boundaryF": 0.988,
-      "seconds": 0
+      "iou": 0.984,
+      "boundaryF": 0.996,
+      "seconds": 2.41
     },
     "sam3-text-sky": {
       "iou": 0.986,
       "boundaryF": 0.998,
       "seconds": 0.95
+    },
+    "redlamp-auto": {
+      "iou": 0.992,
+      "boundaryF": 1.0,
+      "seconds": 6.92
+    },
+    "redlamp-da3": {
+      "iou": 0.989,
+      "boundaryF": 0.987,
+      "seconds": 4.94
     },
     "florence-2-base": {
       "iou": 0.531,
@@ -385,14 +515,24 @@
       "seconds": 0
     },
     "sam": {
-      "iou": 0.949,
-      "boundaryF": 0.997,
-      "seconds": 0
+      "iou": 0.972,
+      "boundaryF": 0.998,
+      "seconds": 1.94
     },
     "sam3-text-sky": {
       "iou": 0.954,
       "boundaryF": 0.993,
       "seconds": 0.96
+    },
+    "redlamp-auto": {
+      "iou": 0.968,
+      "boundaryF": 0.99,
+      "seconds": 5.37
+    },
+    "redlamp-da3": {
+      "iou": 0.961,
+      "boundaryF": 0.962,
+      "seconds": 4.65
     },
     "florence-2-base": {
       "iou": 0.956,

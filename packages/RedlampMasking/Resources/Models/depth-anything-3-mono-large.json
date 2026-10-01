@@ -1,0 +1,39 @@
+{
+  "id": "depth-anything-3-mono-large",
+  "version": 1,
+  "name": "Depth Anything 3 (mono, large)",
+  "purpose": "Sky masks (with Segment Anything) and Depth Range masks, from one model.",
+  "provider": "redlamp.depth-anything-3-mono-large",
+  "assetPack": "models.depth-anything-3-mono-large.v1",
+  "source": "https://github.com/pdcgomes/redlamp/releases/download/models-depth-anything-3-mono-large-v1/",
+  "computeUnits": "cpuAndGPU",
+  "files": [
+    {
+      "path": "DepthAnything3MonoLargeW8.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+      "bytes": 334346,
+      "sha256": "b74238ddcee60077e8d01365ab0d4a4d5b965629d3b5ecd2d4bf5d8dc0784206"
+    },
+    {
+      "path": "DepthAnything3MonoLargeW8.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+      "bytes": 334535936,
+      "sha256": "430fee3b2ec86dca62a0c64268966102651cf21a9884da3762fb964b028e3c03"
+    },
+    {
+      "path": "DepthAnything3MonoLargeW8.mlpackage/Manifest.json",
+      "bytes": 617,
+      "sha256": "59ae3b82d41dd899b4f73edb4a9523d036be574b6539428f03c4d2f5049c2b41"
+    }
+  ],
+  "licenses": {
+    "code": "Apache-2.0",
+    "weights": "Apache-2.0",
+    "data": [
+      "Depth Anything 3 academic mix (unaudited)"
+    ]
+  },
+  "decision": "DEC-02",
+  "evaluationOnly": true,
+  "cleared": false,
+  "notes": "Converted by research/prototypes/masking/convert_da3.py (504x336, fixed) and compress_da3.py (8-bit weights; sky agreement with fp16 >= 0.997). Not yet published: the source URL is where a release would go. GPU 126 ms per photo on an M1 Ultra; the Neural Engine is slower. Training data ('public academic datasets') unaudited.",
+  "published": false
+}

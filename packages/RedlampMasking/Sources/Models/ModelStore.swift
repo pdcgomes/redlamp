@@ -87,6 +87,9 @@ public actor ModelStore {
         if let ready = location(of: manifest) {
             return ready
         }
+        guard manifest.isPublished else {
+            throw ModelStoreError.download("\(manifest.name) isn't published yet; its notes say how to build it")
+        }
         progress[manifest.id] = 0
         defer { progress[manifest.id] = nil }
         if Self.usesAssetPacks, let pack = try? await AssetPackManager.shared.assetPack(withID: manifest.assetPack) {

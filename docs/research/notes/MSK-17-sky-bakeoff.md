@@ -25,12 +25,17 @@ Redlamp's Sky mask has no Apple API behind it. Can an open model, or Segment Any
 
 | Candidate | Found sky | Mean IoU | Mean boundary F | Worst IoU | Time per photo |
 | --- | --- | --- | --- | --- | --- |
-| Mean of auto-prompted SAM 2.1 and DA3 | 14 / 14 | **0.945** | **0.937** | 0.709 (FZ28) | both, below |
-| Depth Anything 3 Mono-L sky | 14 / 14 | 0.929 | 0.887 | 0.697 (Coolpix P7700) | 0.26–0.61 s warm (MPS) |
+| **Redlamp, both models** (`REDLAMP_SKY_METHOD=auto`): refined SAM 2.1 averaged with DA3, in Swift | 14 / 14 | **0.945** | **0.938** | 0.757 (FZ28) | 5.5–8.8 s (CLI, cold) |
+| **Redlamp, SAM 2.1 refined between branches**, in Swift | 14 / 14 | 0.940 | 0.918 | 0.695 (FZ28) | 1.9–5.4 s (CLI, cold) |
+| **Redlamp, Depth Anything 3** (Core ML, 8-bit weights), in Swift | 14 / 14 | 0.931 | 0.888 | 0.699 (Coolpix P7700) | 4.5–5.8 s (CLI, cold); 0.13 s once loaded |
+| Mean of unrefined SAM 2.1 and DA3 (Python) | 14 / 14 | 0.945 | 0.937 | 0.709 (FZ28) | both |
+| Depth Anything 3 Mono-L sky (PyTorch) | 14 / 14 | 0.929 | 0.887 | 0.697 (Coolpix P7700) | 0.26–0.61 s warm (MPS) |
 | SAM 3, text prompt "sky" | 14 / 14 | 0.924 | 0.894 | 0.579 (FZ28) | 0.95 s warm (MPS), 72 s to load |
-| Auto-prompted SAM 2.1 | 14 / 14 | 0.920 | 0.894 | 0.585 (FZ28) | 1.6–3.1 s (CLI, cold) |
+| Auto-prompted SAM 2.1, unrefined | 14 / 14 | 0.920 | 0.894 | 0.585 (FZ28) | 1.6–3.1 s (CLI, cold) |
 | Classical estimate | 14 / 14 | 0.898 | 0.821 | 0.622 (Coolpix P7700) | 1.3–6.5 s (CLI, cold) |
 | Florence-2 base | 14 / 14 | 0.661 | 0.657 | 0.138 | 19–80 s (CPU) |
+
+The rows in bold are what Redlamp computes today, measured through `redlamp mask` and scored against the same reference. The other rows are the first round, run in Python.
 
 The SAM–DA3 combination averages the two soft masks. Their union scores 0.931 / 0.892 and their intersection 0.918 / 0.888, so neither helps. Adding SAM 3 to any mix doesn't help either: SAM 2.1 with SAM 3 scores 0.924 / 0.895, DA3 with SAM 3 0.923 / 0.889, and all three 0.930 / 0.902.
 
@@ -50,10 +55,32 @@ The columns of the contact sheet are the render, OneFormer, the classical estima
 - **Averaging the two is clearly best:** 0.945 / 0.937, with a worst case of 0.709. Each covers the other's failure.
 - **Florence-2 is not competitive.** Its polygons are coarse and it often selects only part of the sky. It is also far too slow on the CPU to be interactive.
 
+## Second round: sky between branches, and Depth Anything 3 in Swift
+
+Two follow-ups to the bare-tree failure, both now in Redlamp.
+
+**Refining SAM between branches** (`SkyEstimator.refineBetweenBranches`, prototyped in `branch_refine.py`). The sky's colour is learnt in OKLab from where SAM is sure (above 0.9), as a median per band of rows, because skies brighten towards the horizon. Pixels of that colour are then added if they are four-connected to SAM's sky and lie no lower than the sky reaches in nearby columns, plus 4% of the height. The falloff is soft, so pixels mixed with thin twigs get partial coverage. It needs no model. It raises SAM from 0.920 / 0.894 to 0.940 / 0.918.
+
+- On the two bare-tree photos, the FX150 goes from 0.779 / 0.429 to 0.799 / 0.484 and the FZ28 from 0.585 / 0.519 to 0.695 / 0.669. The rest of the FZ28's loss is the part of its cloudy sky SAM leaves out, whose colour is too far from the sure sky for the rule to add safely.
+- Letting the fill cross small gaps (bridging) was tried and rejected: it leaked into the Coolpix tree line.
+
+**Depth Anything 3 on Core ML** (`DepthAnything3`, converted by `convert_da3.py` and `compress_da3.py`). There is no official conversion. DA3 Mono-L exports through `torch.export` with PyTorch 2.7 and coremltools 9 (`.venv-coreml`), at a fixed 504 × 336 input; portrait photos are turned a quarter for it and the outputs turned back. One model gives both a sky mask and relative depth, so Depth Range uses it too when it is installed.
+
+| Package | Size | GPU, once loaded | Neural Engine |
+| --- | --- | --- | --- |
+| fp16 | 637 MB | 89 ms | slower, and 5–20 minutes to compile on first load |
+| 8-bit weights (shipped manifest) | 319 MB | 126 ms | as above |
+
+It runs on the GPU. In Swift it scores 0.931 / 0.888, matching PyTorch's 0.929 / 0.887, after reading its output with the multi-array's strides (row padding first gave streaks and 0.663).
+
+**Both together** (`auto`, the default when both models are present): the mean of refined SAM and DA3 scores 0.945 / 0.938. The worst photo improves from 0.709 to 0.757 (FZ28, where DA3 alone gets 0.855 but the sky SAM leaves out pulls the mean down). On the FX150 it is 0.860 / 0.886. On the Coolpix tree line it is 0.911, against DA3's 0.699 and the classical estimate's 0.622.
+
+The method can be forced with `REDLAMP_SKY_METHOD` set to `sam`, `da3` or `classical`.
+
 ## Decision
 
-- **Depth Anything 3 is the candidate to evaluate next.** Mixed with SAM it is the best Sky by a clear margin, and Depth Range could use it too. Before it can ship it needs a training-data audit (counsel, with DEC-02). It also needs a Core ML conversion: there is no official one, and at 0.35B parameters it is about 700 MB in fp16.
-- **Until then, ship Sky as auto-prompted SAM 2.1** (default `REDLAMP_SKY_METHOD=auto`) when its model is on the Mac, with the classical estimate as the fallback. An embedded sky matte, when the file has one, wins over both.
+- **Sky ships as SAM 2.1 refined between branches** (0.940 / 0.918) when its model is on the Mac, with the classical estimate as the fallback. An embedded sky matte, when the file has one, wins over both.
+- **Depth Anything 3 is an evaluation model** (Settings › Models, with evaluation models turned on), behind the same gate as SAM 2.1. With it installed, Sky averages both models (0.945 / 0.938). It is not published: its manifest is marked `published: false`, so the app won't download it, and the licence gate refuses to clear it. Before it can be cleared it needs a training-data audit ("public academic datasets", unaudited) by counsel, with DEC-02, and a hosted copy of the converted package.
 - **No Sky head training (MSK-12) for now.** Revisit it if hand-labelled scores show tree lines and hair need better than SAM's edges.
 - **Landscape classes and people parts still need a trained head (MSK-13).** Unlike sky, there is no classical estimate to seed SAM with for water, vegetation or skin. Every open model that knows those classes (OneFormer, Mask2Former, SegFormer) is trained on non-commercial data.
 

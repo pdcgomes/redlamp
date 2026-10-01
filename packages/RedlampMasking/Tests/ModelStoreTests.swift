@@ -55,6 +55,16 @@ struct ModelStoreTests {
         #expect(await store.location(of: model) == nil)
     }
 
+    @Test func `an unpublished model can't be downloaded`() async throws {
+        let root = try temporary()
+        defer { try? FileManager.default.removeItem(at: root) }
+        var model = try #require(ModelCatalog.manifest("depth-anything-3-mono-large"))
+        #expect(!model.isPublished)
+        model.cleared = true
+        model.evaluationOnly = false
+        await #expect(throws: ModelStoreError.self) { try await ModelStore(root: root).download(model) }
+    }
+
     @Test func `refuses a damaged download`() async throws {
         let root = try temporary()
         let source = try temporary()

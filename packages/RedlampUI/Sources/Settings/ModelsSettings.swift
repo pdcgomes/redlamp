@@ -65,6 +65,8 @@ struct ModelsSettings: View {
                     Button("Remove") { Task { await remove(model) } }
                 case .downloading:
                     ProgressView().controlSize(.small)
+                case .notDownloaded where !model.isPublished:
+                    Text("Not published").foregroundStyle(.secondary)
                 case .notDownloaded:
                     Button("Download \(model.formattedSize)") { Task { await download(model) } }
                 }

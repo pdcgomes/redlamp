@@ -147,6 +147,24 @@ struct MaskRenderTests {
         #expect(abs(after[dark].y - reference[dark].y) < 2e-3)
     }
 
+    /// Hiding a mask hides it from the photo and from the overlay, even while it's selected.
+    @Test func `a hidden mask shows neither its effect nor its overlay`() throws {
+        let session = try makeSession(width: 200, height: 100) { _, _ in SIMD3(repeating: 0.18) }
+        var hidden = MaskLayer(
+            name: "Hidden", components: [MaskComponent(shape: .radial(RadialMask(
+                center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.4, radiusY: 0.4,
+            )))],
+            isVisible: false,
+        )
+        hidden[.localExposure] = 2
+        var recipe = EditRecipe()
+        recipe.masks = [hidden]
+        let shown = try render(recipe, session: session, overlay: hidden.id)
+        let plain = try render(EditRecipe(), session: session)
+        let worst = zip(shown, plain).map { simd_abs($0 - $1).max() }.max() ?? 1
+        #expect(worst < 1e-4, "differs by \(worst)")
+    }
+
     // MARK: - Refinements
 
     /// A layer reusing another's coverage covers the same area, even when that mask is hidden.
@@ -308,12 +326,6 @@ struct MaskRenderTests {
         #expect(preview != nil)
     }
 
-    static var samIsInstalled: Bool {
-        FileManager.default.fileExists(atPath: FileManager.default.urls(
-            for: .applicationSupportDirectory, in: .userDomainMask,
-        )[0].appending(path: "Redlamp/Models/sam2.1-tiny/1").path)
-    }
-
     // MARK: - Helpers
 
     private func raster(_ brush: BrushMask, resources: MaskResources) throws -> [Float] {
@@ -346,12 +358,12 @@ struct MaskRenderTests {
 
     /// The whole photo at full size, as linear output.
     private func render(
-        _ recipe: EditRecipe, session: ImageSession, engine: RedlampEngine? = nil,
+        _ recipe: EditRecipe, session: ImageSession, engine: RedlampEngine? = nil, overlay: UUID? = nil,
     ) throws -> [SIMD3<Float>] {
         let engine = try engine ?? RedlampEngine()
         let size = session.orientedSize
         let frame = try engine.renderFrame(
-            RenderRequest(recipe: recipe, targetSize: size, generation: 0), session: session,
+            RenderRequest(recipe: recipe, targetSize: size, maskOverlay: overlay, generation: 0), session: session,
         )
         let surface = frame.surface
         IOSurfaceLock(surface, .readOnly, nil)
@@ -397,6 +409,35 @@ struct MaskRenderTests {
         )
         decoded.noiseProfile = DetailStageTests.noise
         return try SessionBuilder(device: device, queue: queue, kernels: kernels).build(decoded)
+    }
+}
+
+extension MaskRenderTests {
+    /// With Depth Anything 3 on this Mac: on the Nikon sample the front of the table is nearer
+    /// than the wall behind the objects.
+    @Test(.enabled(if: EngineSmokeTests.canRender && Self.isInstalled("depth-anything-3-mono-large")))
+    func `depth anything 3 gives depth`() async throws {
+        setenv("REDLAMP_EVALUATION_MODELS", "1", 1)
+        let engine = try RedlampEngine()
+        let url = try #require(EngineSmokeTests.fixtures.first { $0.lastPathComponent == "DSC_0750.NEF" })
+        _ = try await engine.open(url)
+        let mask = try #require(try await engine.computeMasks(MaskRequest(kind: .depthRange)).first)
+        #expect(mask.provider == "redlamp.depth-anything-3-mono-large")
+        let png = try #require(mask.bitmap.png)
+        let depth = try #require(GrayMask.decode(png))
+        let table = depth[depth.width / 2, depth.height * 95 / 100]
+        let wall = depth[depth.width * 9 / 10, depth.height / 10]
+        #expect(table > wall + 60, "table \(table), wall \(wall)")
+    }
+
+    static func isInstalled(_ id: String) -> Bool {
+        FileManager.default.fileExists(atPath: FileManager.default.urls(
+            for: .applicationSupportDirectory, in: .userDomainMask,
+        )[0].appending(path: "Redlamp/Models/\(id)/1").path)
+    }
+
+    static var samIsInstalled: Bool {
+        isInstalled("sam2.1-tiny")
     }
 }
 

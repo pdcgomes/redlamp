@@ -31,6 +31,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     /// Segment Anything, once loaded, and the open photo's embedding.
     let segmenter = Mutex<SAMSegmenter?>(nil)
     let depthModel = Mutex<DepthEstimator?>(nil)
+    let depthAnything3Model = Mutex<DepthAnything3?>(nil)
+    let depthAnything3Cache = Mutex<(hash: String, result: DepthAnything3.Result)?>(nil)
     let objectEmbeddingCache = Mutex<(hash: String, embedding: SAMSegmenter.Embedding)?>(nil)
 
     func currentSession() -> ImageSession? {

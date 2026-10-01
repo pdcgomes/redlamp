@@ -38,7 +38,13 @@ public struct ModelManifest: Codable, Sendable, Hashable, Identifiable {
     /// Its decision is accepted, so everyone is offered it. Until then (and always for
     /// evaluation-only models) it is offered only with evaluation models turned on.
     public var cleared: Bool
+    /// `false` while its files are only on the machine that converted them (nil means published).
+    public var published: Bool?
     public var notes: String?
+
+    public var isPublished: Bool {
+        published ?? true
+    }
 
     public var downloadBytes: Int {
         files.reduce(0) { $0 + $1.bytes }

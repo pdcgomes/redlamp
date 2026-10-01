@@ -42,6 +42,8 @@ DATASETS = {
     "ADE20K": "non-commercial",
     "Cityscapes": "non-commercial",
     "DIS5K": "non-commercial",
+    # "Public academic datasets", unlisted: treated as non-commercial until audited.
+    "Depth Anything 3 academic mix (unaudited)": "non-commercial",
 }
 
 REQUIRED = ["id", "version", "name", "purpose", "provider", "assetPack", "source", "computeUnits", "files", "licenses"]
@@ -85,6 +87,8 @@ def check(path, accepted):
     if "non-commercial" in verdicts.values() and not evaluation_only:
         tainted = [d for d, v in verdicts.items() if v == "non-commercial"]
         problems.append(f"trained on non-commercial data ({', '.join(tainted)}) but not evaluationOnly")
+    if manifest.get("cleared") and manifest.get("published") is False:
+        problems.append("cleared models must be published (downloadable)")
     if "publisher-grant" in verdicts.values() and not decision:
         problems.append("publisher-granted data needs a decision id")
     cleared = manifest.get("cleared", False)

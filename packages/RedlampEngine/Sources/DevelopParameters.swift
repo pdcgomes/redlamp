@@ -192,7 +192,7 @@ enum DevelopParameters {
         )
     }
 
-    /// Visible masks (plus the overlaid one, even if hidden) as kernel buffers.
+    /// Visible masks as kernel buffers. A hidden mask has no overlay either, even when selected.
     /// Coordinates are aspect-corrected so gradients stay perpendicular and circles round.
     private static func maskBuffers(
         _ layerList: [MaskLayer],
@@ -205,14 +205,14 @@ enum DevelopParameters {
         var overlayIndex: Int?
         var encoder = MaskComponentEncoder(aspect: aspect, masks: masks, layers: layerList)
 
-        for mask in layerList where mask.isVisible || mask.id == overlay {
+        for mask in layerList where mask.isVisible {
             guard layers.count < MaskLayer.maximumLayers else { break }
             let first = encoder.components.count
             for component in mask.components where encoder.components.count < MaskLayer.maximumComponents {
                 encoder.append(component)
             }
             let count = encoder.components.count - first
-            let scale = mask.isVisible ? mask.amount / 100 : 0
+            let scale = mask.amount / 100
             func value(_ parameter: ParameterID, _ divisor: Double = 100) -> Float {
                 Float(mask[parameter] / divisor * scale)
             }

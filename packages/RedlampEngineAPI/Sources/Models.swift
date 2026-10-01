@@ -18,13 +18,16 @@ public struct ModelInfo: Sendable, Hashable, Identifiable {
     public var isEvaluationOnly: Bool
     /// Cleared for everyone; otherwise offered only while evaluating (Settings › Models).
     public var isCleared: Bool
+    /// Downloadable; otherwise only usable where it was built.
+    public var isPublished: Bool
     public var decision: String?
 
     public init(
         id: String, name: String, purpose: String, downloadBytes: Int, state: State, isEvaluationOnly: Bool = false,
-        isCleared: Bool = true, decision: String? = nil,
+        isCleared: Bool = true, isPublished: Bool = true, decision: String? = nil,
     ) {
         self.isCleared = isCleared
+        self.isPublished = isPublished
         self.id = id
         self.name = name
         self.purpose = purpose

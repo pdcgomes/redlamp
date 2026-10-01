@@ -27,6 +27,21 @@ struct GrayMaskTests {
         #expect(oriented[x, y] == 255, "orientation \(orientation)")
     }
 
+    /// Undoes the clockwise turn Depth Anything 3's input makes for portrait photos: the top-left
+    /// of the portrait, turned clockwise, is the top-right of the landscape, and comes back.
+    @Test func `turns a quarter counter clockwise`() {
+        var landscape = [UInt8](repeating: 0, count: 4 * 2)
+        landscape[3] = 255 // top right
+        let portrait = GrayMask(width: 4, height: 2, pixels: landscape).rotatedCounterClockwise()
+        #expect(portrait.width == 2 && portrait.height == 4)
+        #expect(portrait[0, 0] == 255)
+        var turned = portrait
+        for _ in 0 ..< 3 {
+            turned = turned.rotatedCounterClockwise()
+        }
+        #expect(turned == GrayMask(width: 4, height: 2, pixels: landscape), "four quarter turns")
+    }
+
     @Test func `combines like mask operations`() {
         let a = GrayMask(width: 2, height: 1, pixels: [255, 0])
         let b = GrayMask(width: 2, height: 1, pixels: [255, 255])
@@ -64,6 +79,42 @@ struct GrayMaskTests {
         let row = 4 * width
         #expect(refined[row + 28] < 0.25)
         #expect(refined[row + 35] > 0.75)
+    }
+
+    /// A sky with a bare crown (dark branches, open to the sky between them) that the mask cut
+    /// around: the sky between the branches comes back, the branches and the ground don't. (Gaps
+    /// branches close off completely stay out: the pass only grows from the sky.)
+    @Test func `sky between bare branches comes back`() throws {
+        let width = 400
+        let height = 300
+        var pixels = [UInt8](repeating: 255, count: width * height * 4)
+        var mask = [UInt8](repeating: 0, count: width * height)
+        let crown = (x: 150 ..< 250, y: 60 ..< 180)
+        for y in 0 ..< height {
+            for x in 0 ..< width {
+                let index = (y * width + x) * 4
+                let ground = y >= 200
+                let branch = crown.x.contains(x) && crown.y.contains(y) && x % 10 < 2
+                let rgb: (UInt8, UInt8, UInt8) = ground ? (60, 110, 40) : branch ? (50, 40, 30) : (110, 160, 235)
+                (pixels[index], pixels[index + 1], pixels[index + 2]) = rgb
+                let insideCrown = crown.x.contains(x) && crown.y.contains(y)
+                mask[y * width + x] = !ground && !insideCrown ? 255 : 0
+            }
+        }
+        let provider = try #require(CGDataProvider(data: Data(pixels) as CFData))
+        let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+        let image = try #require(CGImage(
+            width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: width * 4,
+            space: space, bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
+            provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent,
+        ))
+        let refined = SkyEstimator.refineBetweenBranches(
+            GrayMask(width: width, height: height, pixels: mask),
+            image: image,
+        )
+        #expect(refined[205, 125] > 200, "sky between branches")
+        #expect(refined[200, 120] < 40, "a branch")
+        #expect(refined[200, 250] < 40, "the ground")
     }
 
     /// Clear sky above, grass below: the estimate covers the sky and leaves the grass.
