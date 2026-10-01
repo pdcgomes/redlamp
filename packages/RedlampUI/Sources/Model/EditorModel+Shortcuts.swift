@@ -94,10 +94,19 @@ public extension EditorModel {
         case .luminanceRangeMask: startDrawing(.luminanceRange)
         case .depthRangeMask: startDrawing(.depthRange)
         // Masking
+        // In the Crop tool, O and ⇧O cycle and turn its overlay, as in Lightroom.
         case .maskOverlay:
+            if activeTool == .crop {
+                cropOverlay = cropOverlay.next
+                return true
+            }
             guard activeTool == .masking else { return false }
             showMaskOverlay.toggle()
         case .maskOverlayColor:
+            if activeTool == .crop {
+                cropOverlayTurns = (cropOverlayTurns + 1) % 4
+                return true
+            }
             guard activeTool == .masking else { return false }
             maskOverlayColor = maskOverlayColor.next
         case .maskPins:
@@ -118,6 +127,8 @@ public extension EditorModel {
         case .decreaseRating: updateMetadata(advance: shifted) { $0.rating = max($0.rating - 1, 0) }
         case .increaseRating: updateMetadata(advance: shifted) { $0.rating = min($0.rating + 1, 5) }
         case .flagPick: updateMetadata(advance: shifted) { $0.flag = $0.flag == .pick ? nil : .pick }
+        // In the Crop tool, X swaps the crop's orientation rather than rejecting the photo.
+        case .flagReject where activeTool == .crop: swapCropOrientation()
         case .flagReject: updateMetadata(advance: shifted) { $0.flag = $0.flag == .reject ? nil : .reject }
         case .unflag: updateMetadata(advance: shifted) { $0.flag = nil }
         case .labelRed: updateMetadata(advance: shifted) { $0.label = $0.label == .red ? nil : .red }
@@ -189,7 +200,8 @@ public extension EditorModel {
         case .brushMask: return photo && canCreateMask(.brush)
         case .colorRangeMask: return photo && canCreateMask(.colorRange)
         case .luminanceRangeMask: return photo && canCreateMask(.luminanceRange)
-        case .maskOverlay, .maskOverlayColor, .maskPins: return masking
+        case .maskOverlay, .maskOverlayColor: return masking || activeTool == .crop
+        case .maskPins: return masking
         case .deleteMask: return masking && selectedMaskID != nil
         case .rating0, .rating1, .rating2, .rating3, .rating4, .rating5, .decreaseRating, .increaseRating,
              .flagPick, .flagReject, .unflag, .labelRed, .labelYellow, .labelGreen, .labelBlue:

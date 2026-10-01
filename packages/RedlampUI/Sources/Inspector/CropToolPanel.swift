@@ -41,6 +41,20 @@ struct CropToolPanel: View {
                 .help(model.cropAspectLocked ? "Unlock the aspect (A)" : "Lock the aspect (A)")
             }
 
+            HStack(spacing: 6) {
+                Text("Overlay")
+                    .font(Theme.labelFont)
+                    .foregroundStyle(Theme.label)
+                Picker("Overlay", selection: $model.cropOverlay) {
+                    ForEach(CropOverlay.allCases, id: \.self) { overlay in
+                        Text(overlay.title).tag(overlay)
+                    }
+                }
+                .labelsHidden()
+                .controlSize(.small)
+                .help("O cycles the overlay, ⇧O turns it, X swaps the crop's orientation")
+            }
+
             Toggle("Constrain to Image", isOn: $model.constrainCropToImage)
                 .toggleStyle(.checkbox)
                 .font(Theme.labelFont)

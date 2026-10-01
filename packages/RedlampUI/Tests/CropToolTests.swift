@@ -86,6 +86,27 @@ struct CropToolTests {
         expectNear(point.y, 0.5)
     }
 
+    @Test func `in the crop tool O cycles the overlay and X swaps the crop instead of rejecting`() async throws {
+        let model = try await openModel()
+        #expect(model.cropOverlay == .thirds)
+        #expect(model.perform(.maskOverlay))
+        #expect(model.cropOverlay == .grid)
+        #expect(model.perform(.maskOverlayColor))
+        #expect(model.cropOverlayTurns == 1)
+
+        model.setCropAspect(.square)
+        model.setCrop(CropRect(left: 0.2, top: 0, right: 0.6, bottom: 0.9))
+        let before = model.pixelAspect(of: model.recipe.crop)
+        #expect(model.perform(.flagReject))
+        expectNear(model.pixelAspect(of: model.recipe.crop), 1 / before, "portrait and landscape trade places")
+        #expect(model.currentMetadata.flag == nil, "the photo isn't rejected")
+
+        let swapped = model.recipe.crop
+        model.activeTool = .edit
+        model.perform(.flagReject)
+        #expect(model.recipe.crop == swapped, "outside the crop tool X is Reject again")
+    }
+
     @Test func `reset removes the crop, angle and turns`() async throws {
         let model = try await openModel()
         model.setValue(.cropAngle, 3)

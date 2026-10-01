@@ -2,7 +2,7 @@ import RedlampEngineAPI
 import SwiftUI
 
 /// The crop frame, drawn over the whole straightened frame while the Crop tool is active:
-/// the outside dimmed, a rule-of-thirds grid, and handles on the corners and edges. Dragging a
+/// the outside dimmed, a composition guide (`O` cycles it), and handles on the corners and edges. Dragging a
 /// handle resizes (keeping the aspect when it is locked), dragging inside moves the crop.
 struct CropOverlayView: View {
     @Environment(EditorModel.self) private var model
@@ -35,16 +35,9 @@ struct CropOverlayView: View {
                 .fill(Color.black.opacity(0.55), style: FillStyle(eoFill: true))
                 .allowsHitTesting(false)
 
-                Path { path in
-                    for third in [1.0 / 3, 2.0 / 3] {
-                        path.move(to: CGPoint(x: rect.minX + rect.width * third, y: rect.minY))
-                        path.addLine(to: CGPoint(x: rect.minX + rect.width * third, y: rect.maxY))
-                        path.move(to: CGPoint(x: rect.minX, y: rect.minY + rect.height * third))
-                        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + rect.height * third))
-                    }
-                }
-                .stroke(Color.white.opacity(0.35), lineWidth: 0.5)
-                .allowsHitTesting(false)
+                Self.overlay(model.cropOverlay, turns: model.cropOverlayTurns, in: rect)
+                    .stroke(Color.white.opacity(0.35), lineWidth: 0.5)
+                    .allowsHitTesting(false)
 
                 Rectangle()
                     .path(in: rect)
@@ -67,6 +60,51 @@ struct CropOverlayView: View {
                             y: handle.y < 0 ? rect.minY : (handle.y > 0 ? rect.maxY : rect.midY),
                         )
                         .gesture(dragGesture(handle, frame: frame))
+                }
+            }
+        }
+    }
+
+    /// The guide, turned `turns` times where it isn't symmetric.
+    private nonisolated static func overlay(_ kind: CropOverlay, turns: Int, in rect: CGRect) -> Path {
+        @Sendable func point(_ x: Double, _ y: Double) -> CGPoint {
+            CGPoint(x: rect.minX + rect.width * x, y: rect.minY + rect.height * y)
+        }
+        return Path { path in
+            func line(_ a: CGPoint, _ b: CGPoint) {
+                path.move(to: a)
+                path.addLine(to: b)
+            }
+            func grid(_ stops: [Double]) {
+                for stop in stops {
+                    line(point(stop, 0), point(stop, 1))
+                    line(point(0, stop), point(1, stop))
+                }
+            }
+            switch kind {
+            case .thirds:
+                grid([1.0 / 3, 2.0 / 3])
+            case .grid:
+                grid((1 ..< 8).map { Double($0) / 8 })
+            case .goldenRatio:
+                grid([0.382, 0.618])
+            case .diagonal:
+                // From each corner at 45° on screen, until it meets an edge.
+                let side = min(rect.width, rect.height)
+                let dx = side / rect.width, dy = side / rect.height
+                line(point(0, 0), point(dx, dy))
+                line(point(1, 0), point(1 - dx, dy))
+                line(point(0, 1), point(dx, 1 - dy))
+                line(point(1, 1), point(1 - dx, 1 - dy))
+            case .goldenTriangle:
+                // A diagonal, and from the other corners the perpendiculars onto it.
+                let flipped = turns % 2 == 1
+                let a = point(0, flipped ? 1 : 0), b = point(1, flipped ? 0 : 1)
+                line(a, b)
+                for corner in flipped ? [point(0, 0), point(1, 1)] : [point(1, 0), point(0, 1)] {
+                    let ab = CGPoint(x: b.x - a.x, y: b.y - a.y)
+                    let t = ((corner.x - a.x) * ab.x + (corner.y - a.y) * ab.y) / (ab.x * ab.x + ab.y * ab.y)
+                    line(corner, CGPoint(x: a.x + ab.x * t, y: a.y + ab.y * t))
                 }
             }
         }

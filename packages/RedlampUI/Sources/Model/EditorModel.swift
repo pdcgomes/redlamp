@@ -202,6 +202,9 @@ public final class EditorModel {
     /// (Lightroom's Constrain to Image).
     public var cropAspect: CropAspect = .original
     public var cropAspectLocked = true
+    /// The guide drawn in the crop (`O` cycles it, `⇧O` turns it).
+    public var cropOverlay: CropOverlay = .thirds
+    public var cropOverlayTurns = 0
     public var constrainCropToImage = true {
         didSet {
             guard constrainCropToImage, !oldValue else { return }

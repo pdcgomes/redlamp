@@ -31,7 +31,55 @@ public enum CropAspect: Hashable, Sendable, CaseIterable {
     }
 }
 
+/// The composition guides drawn in the crop, Lightroom's.
+public enum CropOverlay: Hashable, Sendable, CaseIterable {
+    case thirds, grid, diagonal, goldenRatio, goldenTriangle
+
+    public var title: String {
+        switch self {
+        case .thirds: "Thirds"
+        case .grid: "Grid"
+        case .diagonal: "Diagonal"
+        case .goldenRatio: "Golden Ratio"
+        case .goldenTriangle: "Golden Triangle"
+        }
+    }
+
+    public var next: CropOverlay {
+        let all = Self.allCases
+        return all[(all.firstIndex(of: self)! + 1) % all.count]
+    }
+}
+
 public extension EditorModel {
+    /// Swaps the crop between portrait and landscape about its centre (Lightroom's `X`), as
+    /// large as it can be inside the frame.
+    func swapCropOrientation() {
+        let crop = recipe.crop
+        let frame = cropFrameSize
+        let toNormalized = Double(frame.width) / max(Double(frame.height), 1)
+        // The same pixel size with width and height traded, scaled down to fit the frame.
+        var width = crop.height / toNormalized
+        var height = crop.width * toNormalized
+        let fit = min(1, 1 / max(width, 1e-9), 1 / max(height, 1e-9))
+        width *= fit
+        height *= fit
+        let center = crop.center
+        var next = recipe
+        next.crop = Self.shifted(
+            CropRect(
+                left: center.x - width / 2,
+                top: center.y - height / 2,
+                right: center.x + width / 2,
+                bottom: center.y + height / 2,
+            ),
+            inside: .full,
+        )
+        cropIntent = next.crop
+        constrainCrop(&next)
+        commit(next, name: "Swap Crop Orientation")
+    }
+
     /// The geometry of the frame on the canvas: the developed frame, or in the crop tool the
     /// whole straightened frame the crop is drawn on.
     var canvasGeometry: GeometryMap? {

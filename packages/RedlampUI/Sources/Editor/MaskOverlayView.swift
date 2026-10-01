@@ -320,6 +320,19 @@ struct ImageFrame {
         return ImagePoint(x: image.x, y: image.y)
     }
 
+    /// How the photo's axes appear on screen at the frame's centre: the angle of its x axis
+    /// (degrees, clockwise) and whether it is mirrored.
+    var axes: (angle: Double, mirrored: Bool) {
+        guard geometry?.isIdentity == false else { return (0, false) }
+        let centre = image(CGPoint(x: rect.midX, y: rect.midY))
+        let origin = view(centre)
+        let alongX = view(ImagePoint(x: centre.x + 0.01, y: centre.y))
+        let alongY = view(ImagePoint(x: centre.x, y: centre.y + 0.01))
+        let x = CGPoint(x: alongX.x - origin.x, y: alongX.y - origin.y)
+        let y = CGPoint(x: alongY.x - origin.x, y: alongY.y - origin.y)
+        return (atan2(x.y, x.x) * 180 / .pi, x.x * y.y - x.y * y.x < 0)
+    }
+
     /// View points per unit of image height (radial radii are in image heights), at the
     /// frame's centre.
     var heightScale: CGFloat {
@@ -460,7 +473,10 @@ private struct ComponentHandles: View {
         let center = frame.view(gradient.center)
         let rx = gradient.radiusX * frame.heightScale
         let ry = gradient.radiusY * frame.heightScale
-        let angle = Angle.degrees(gradient.rotation)
+        let axes = frame.axes
+        // The shape's rotation is in the photo; on screen the photo may be turned or mirrored.
+        let screenDegrees = axes.angle + (axes.mirrored ? -gradient.rotation : gradient.rotation)
+        let angle = Angle.degrees(screenDegrees)
         let inner = 1 - gradient.feather / 100
 
         Ellipse()
@@ -478,7 +494,7 @@ private struct ComponentHandles: View {
             .allowsHitTesting(false)
 
         if isSelected {
-            let radians = gradient.rotation * .pi / 180
+            let radians = screenDegrees * .pi / 180
             let axisX = CGPoint(x: cos(radians), y: sin(radians))
             let axisY = CGPoint(x: -sin(radians), y: cos(radians))
             Handle().position(CGPoint(x: center.x + axisX.x * rx, y: center.y + axisX.y * rx))
@@ -503,7 +519,8 @@ private struct ComponentHandles: View {
     // MARK: Gestures
 
     private func offset(_ point: ImagePoint, by delta: CGSize) -> ImagePoint {
-        ImagePoint(x: point.x + delta.width / frame.rect.width, y: point.y + delta.height / frame.rect.height)
+        let shown = frame.view(point)
+        return frame.image(CGPoint(x: shown.x + delta.width, y: shown.y + delta.height))
     }
 
     /// A drag that transforms the shape captured at the start of the gesture.
@@ -554,8 +571,9 @@ private struct ComponentHandles: View {
                     model.beginEdit()
                 }
                 guard case var .radial(value) = shape else { return }
-                let degrees = atan2(gesture.location.y - center.y, gesture.location.x - center.x) * 180 / .pi + 90
-                value.rotation = degrees
+                let screen = atan2(gesture.location.y - center.y, gesture.location.x - center.x) * 180 / .pi + 90
+                let axes = frame.axes
+                value.rotation = axes.mirrored ? axes.angle - screen : screen - axes.angle
                 model.updateComponent(component.id, in: mask.id, shape: .radial(value))
             }
             .onEnded { _ in
