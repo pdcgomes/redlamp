@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-#MISE description="Vendor dependencies and generate the Xcode workspace from Tuist manifests"
+#MISE description="Vendor dependencies, resolve Swift packages and generate the Xcode workspace from Tuist manifests"
 #MISE alias="g"
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
 scripts/vendor-libraw.sh
+echo "==> Resolving Swift packages (Tuist/Package.swift)..."
+tuist install
 echo "==> Generating Xcode workspace with Tuist..."
 tuist generate --no-open

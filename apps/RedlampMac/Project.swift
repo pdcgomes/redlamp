@@ -44,6 +44,7 @@ let project = Project(
                 Module.canvas.dependency,
                 Module.design.dependency,
                 Module.ui.dependency,
+                .external(name: "Sparkle"),
             ],
             // Signed with the same team as the frameworks: with the hardened runtime,
             // library validation refuses frameworks from a different team (or ad-hoc).
