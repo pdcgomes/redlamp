@@ -81,8 +81,11 @@ func run(_ arguments: [String]) async throws {
             FileManager.default.fileExists(atPath: path.path, isDirectory: &isDirectory)
             let package = isDirectory.boolValue ? path : nil
             let data = try Data(contentsOf: package?.appending(path: "edit.json") ?? path)
-            if let sidecar = try? JSONDecoder().decode([String: EditRecipe].self, from: data),
-               let stored = sidecar["recipe"] {
+            // A sidecar holds the edit under "recipe" beside its other fields.
+            struct Stored: Decodable {
+                var recipe: EditRecipe?
+            }
+            if let stored = try? JSONDecoder().decode(Stored.self, from: data).recipe {
                 recipe = stored
             } else {
                 recipe = try JSONDecoder().decode(EditRecipe.self, from: data)
