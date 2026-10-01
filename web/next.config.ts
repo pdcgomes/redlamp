@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { site } from "./lib/site";
 
 /**
  * The site is static marketing. It takes no input, sets no cookies and has no API, so
@@ -21,6 +22,18 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: { "/blog": ["./content/blog/**/*.md"], "/blog/**": ["./content/blog/**/*.md"] },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
+  },
+  // The update feed every installed copy checks (FEED in mise/tasks/release): the appcast
+  // published with the latest release. Temporary, so clients don't cache it and the feed can
+  // move without stranding them.
+  async redirects() {
+    return [
+      {
+        source: "/appcast.xml",
+        destination: `${site.github}/releases/latest/download/appcast.xml`,
+        permanent: false,
+      },
+    ];
   },
 };
 
