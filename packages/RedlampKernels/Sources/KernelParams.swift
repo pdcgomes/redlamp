@@ -158,6 +158,8 @@ public struct DevelopParams {
     public var workToCam0 = SIMD4<Float>(1, 0, 0, 0)
     public var workToCam1 = SIMD4<Float>(0, 1, 0, 0)
     public var workToCam2 = SIMD4<Float>(0, 0, 1, 0)
+    public var mood0 = SIMD4<Float>(0, 0, 0, 0)
+    public var mood1 = SIMD4<Float>(0, 0, 0, 0)
 
     public init() {}
 

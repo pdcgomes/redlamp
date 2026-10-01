@@ -125,6 +125,16 @@ public enum ParameterID: String, CaseIterable, Codable, Sendable, Hashable {
     /// Highlights glowing into their surroundings, as through a diffusion (mist) filter.
     case bloomAmount = "effects.bloom.amount"
     case bloomSize = "effects.bloom.size"
+    /// Light leaking in at the frame's edges, as from a camera's back or a film change.
+    case leakAmount = "effects.leak.amount"
+    case leakWarmth = "effects.leak.warmth"
+    case leakVariation = "effects.leak.variation"
+    /// Dust and scratches on the film.
+    case dustAmount = "effects.dust.amount"
+    case scratchAmount = "effects.scratches.amount"
+    /// A border drawn over the photo's edges: `FrameStyle`.
+    case frameStyle = "effects.frame.style"
+    case frameSize = "effects.frame.size"
     /// Deepens highly saturated colors, like a camera's color chrome effect.
     case colorChrome = "effects.colorChrome"
     /// The same, for blues only.
@@ -277,6 +287,21 @@ public enum GradingRange: String, CaseIterable, Codable, Sendable, Hashable {
         case .midtones: .gradeMidtonesLuminance
         case .highlights: .gradeHighlightsLuminance
         case .global: .gradeGlobalLuminance
+        }
+    }
+}
+
+/// The borders `ParameterID.frameStyle` draws over the photo's edges.
+public enum FrameStyle: Int, CaseIterable, Sendable {
+    case none, keyline, printBorder, filmRebate, slideMount
+
+    public var name: String {
+        switch self {
+        case .none: "None"
+        case .keyline: "Keyline"
+        case .printBorder: "Print Border"
+        case .filmRebate: "35 mm Rebate"
+        case .slideMount: "Slide Mount"
         }
     }
 }

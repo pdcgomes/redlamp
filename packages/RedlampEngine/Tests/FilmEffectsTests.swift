@@ -258,6 +258,53 @@ struct FilmEffectsTests {
     }
 
     @Test(.enabled(if: BaseLookTests.canRender))
+    func `mood effects: frames paint the edges, leaks warm them, dust adds a few specks`() async throws {
+        let url = try Self.flat(0.45, size: 600)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let engine = try RedlampEngine()
+        _ = try await engine.open(url)
+        func render(_ values: [ParameterID: Double]) async throws -> [UInt8] {
+            var recipe = EditRecipe()
+            for (parameter, value) in values {
+                recipe[parameter] = value
+            }
+            return try await BaseLookTests.pixels(engine.renderStill(StillRequest(recipe: recipe)))
+        }
+        func pixel(_ pixels: [UInt8], _ x: Int, _ y: Int) -> SIMD3<Int> {
+            let o = (y * 600 + x) * 4
+            return SIMD3(Int(pixels[o]), Int(pixels[o + 1]), Int(pixels[o + 2]))
+        }
+        let plain = try await render([:])
+        let centre = pixel(plain, 300, 300)
+
+        let border = try await render([.frameStyle: Double(FrameStyle.printBorder.rawValue)])
+        #expect(pixel(border, 3, 300).x > 230, "print border edge: \(pixel(border, 3, 300))")
+        #expect(pixel(border, 300, 300) == centre)
+        let rebate = try await render([.frameStyle: Double(FrameStyle.filmRebate.rawValue)])
+        // The holes' centre row: half of the rebate band (0.13 of the frame's height) from the edge.
+        let band = (0 ..< 600).map { pixel(rebate, $0, 39).x }
+        #expect(band.min() ?? 255 < 20 && band.max() ?? 0 > 200, "rebate band has black film and lit sprocket holes")
+        #expect(pixel(rebate, 300, 300) == centre)
+
+        let leak = try await render([.leakAmount: 90, .leakWarmth: 100])
+        var edge = SIMD3<Int>.zero
+        for i in 0 ..< 600 {
+            for sample in [pixel(leak, 4, i), pixel(leak, 595, i), pixel(leak, i, 4), pixel(leak, i, 595)]
+                where sample.x - sample.z > edge.x - edge.z {
+                edge = sample
+            }
+        }
+        #expect(edge.x - edge.z > 40, "a warm leak at the edge: \(edge)")
+        #expect(abs(pixel(leak, 300, 300).x - centre.x) < 25, "the middle barely changes: \(pixel(leak, 300, 300))")
+
+        let dusty = try await render([.dustAmount: 100])
+        let specks = zip(stride(from: 0, to: plain.count, by: 4), stride(from: 0, to: dusty.count, by: 4))
+            .count { abs(Int(plain[$0.0 + 1]) - Int(dusty[$0.1 + 1])) > 30 }
+        let share = Double(specks) / Double(600 * 600)
+        #expect(share > 0.0005 && share < 0.05, "dust covers \(share) of the frame")
+    }
+
+    @Test(.enabled(if: BaseLookTests.canRender))
     func `colour grain differs between the layers; monochrome grain doesn't`() async throws {
         // Large enough that frame-sized grain is bigger than a pixel.
         let url = try Self.flat(0.45, size: 1536)

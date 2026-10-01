@@ -139,6 +139,11 @@ enum DevelopParameters {
         )
         p.grain2 = SIMD4(Float(recipe[.grainColor] / 100), recipe.processVersion >= 2 ? 1 : 0, 0, 0)
         p.render = SIMD4(recipe.processVersion >= 3 && !session.isRaw ? 1 : 0, recipe.processVersion >= 3 ? 1 : 0, 0, 0)
+        p.mood0 = SIMD4(
+            Float(recipe[.leakAmount] / 100), Float(recipe[.leakWarmth] / 100),
+            Float(recipe[.leakVariation] / 100), Float(recipe[.dustAmount] / 100),
+        )
+        p.mood1 = SIMD4(Float(recipe[.scratchAmount] / 100), Float(recipe[.frameStyle]), Float(recipe[.frameSize] / 100), 0)
         // Radii as fractions of the long side, so the glow is the same at any resolution: halation
         // about 0.2-2% (a 35 mm frame's 0.1-0.7 mm), bloom about 0.5-6%.
         p.glow = SIMD4(

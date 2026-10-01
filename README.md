@@ -650,6 +650,25 @@ Provia cross-processed: contrasty, with cool green-cyan shadows.
 
 ![Provia 100F · Cross-Processed: the original above, the look below](docs/images/film/look-provia-100f-cross.jpg)
 
+### Mood looks
+
+Ten one-tap looks in the spirit of Prequel's filters. Each starts from a film look, with its grain, halation and bloom, and adds the new Effects: **Light Leak** (Amount, Warmth and Variation), **Dust & Scratches**, and a **Frame**. Frames come as a keyline, a white print border, a 35 mm rebate with its sprocket holes, or a slide mount. They're in the sidebar under **Recipes ▸ Mood**, and the effects work on any photo.
+
+| Mood | Built on | Adds |
+| --- | --- | --- |
+| Golden Leak | Portra 400 · +2 | a warm light leak and soft bloom |
+| Lost Roll | Gold 200 | leaks, dust, scratches and the 35 mm rebate |
+| Summer '98 | UltraMax 400 | a warm leak and a white print border |
+| Night Glow | CineStill 800T | strong halation, bloom and a little dust |
+| Blue Hour | Pro 400H | a cool leak and a soft mist |
+| Mist | Portra 160 | a diffusion filter's glow and gentler contrast |
+| Home Movie | Vision3 50D · 2383 | projector scratches, dust, a dark edge and a keyline |
+| Slide Show | Kodachrome 64 | a slide mount and a few specks of dust |
+| Contact Sheet | Tri-X · Hard Print | the 35 mm rebate and darkroom dust |
+| Neon Rain | Provia 100F · Cross-Processed | halation and a cool leak |
+
+![The ten mood looks on three photos, beside the original](docs/images/film/moods.jpg)
+
 ### How faithful are they?
 
 - **The colour comes from the datasheets.** It follows each stock's own curves, sensitivities and dyes, and the stocks keep their published order of contrast and grain.

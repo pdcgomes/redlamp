@@ -239,6 +239,133 @@ static inline float grainNoise(float2 position, float size, float footprint, flo
     return mix(coarse, fine, roughness);
 }
 
+// MARK: - Mood effects
+
+// Two or three soft, coloured glows from just outside the frame's edges (mostly the sides, where
+// light gets in at a camera's film gate), screened over the image. `mood.y` turns them from cool
+// (-1) to warm (+1); `mood.z` picks a different arrangement.
+static inline float3 lightLeak(float3 encoded, float2 q, float aspect, float4 mood) {
+    uint seed = uint(mood.z * 997.0f) + 3u;
+    float3 leak = 0.0f;
+    for (uint i = 0; i < 3; i++) {
+        if (i == 2 && hash(uint2(i, 9u), seed) < 0.5f) break;
+        float side = hash(uint2(i, 1u), seed);
+        float along = mix(0.1f, 0.9f, hash(uint2(i, 2u), seed));
+        float size = mix(0.3f, 0.75f, hash(uint2(i, 3u), seed));
+        float2 centre, scale;
+        if (side < 0.42f) { centre = float2(-0.1f, along); scale = float2(size * 0.55f, size); }
+        else if (side < 0.84f) { centre = float2(aspect + 0.1f, along); scale = float2(size * 0.55f, size); }
+        else if (side < 0.92f) { centre = float2(along * aspect, -0.1f); scale = float2(size, size * 0.55f); }
+        else { centre = float2(along * aspect, 1.1f); scale = float2(size, size * 0.55f); }
+        float2 d = (q - centre) / scale;
+        float w = exp(-2.0f * dot(d, d));
+        float3 warm = mix(float3(1.0f, 0.42f, 0.08f), float3(1.0f, 0.15f, 0.2f), hash(uint2(i, 4u), seed));
+        warm = mix(warm, float3(1.0f, 0.82f, 0.32f), 0.35f * hash(uint2(i, 5u), seed));
+        float3 cool = mix(float3(0.25f, 0.55f, 1.0f), float3(0.6f, 0.3f, 1.0f), hash(uint2(i, 4u), seed));
+        leak += mix(cool, warm, 0.5f + 0.5f * mood.y) * w;
+    }
+    leak = min(leak * mood.x * 1.2f, 1.0f);
+    return 1.0f - (1.0f - encoded) * (1.0f - leak);
+}
+
+// Dust: at most one speck per cell of 60 frame pixels, mostly small and dark (dust on a scanned
+// negative or slide), a few bright. A speck smaller than an output pixel fades by its share of it.
+static inline float3 dust(float3 encoded, float2 position, float framePixel, float footprint, float amount) {
+    float cell = 60.0f * framePixel;
+    int2 c = int2(floor(position / cell));
+    for (int dy = -1; dy <= 1; dy++) {
+        for (int dx = -1; dx <= 1; dx++) {
+            int2 at = c + int2(dx, dy);
+            uint2 key = uint2(at + 100000);
+            if (hash(key, 41u) >= 0.06f * amount) continue;
+            float2 centre = (float2(at) + float2(hash(key, 43u), hash(key, 47u))) * cell;
+            float radius = mix(1.2f, 9.0f, pow(hash(key, 53u), 2.5f)) * framePixel;
+            float2 offset = position - centre;
+            float stretch = mix(1.0f, 2.5f, hash(key, 61u));
+            float angle = hash(key, 67u) * 6.2831853f;
+            float2 axis = float2(cos(angle), sin(angle));
+            float along = dot(offset, axis) / stretch;
+            float across = dot(offset, float2(-axis.y, axis.x));
+            float distance = length(float2(along, across));
+            float soft = max(radius * 0.35f, footprint * 0.5f);
+            float coverage = (1.0f - smoothstep(radius - soft, radius + soft, distance))
+                * min(1.0f, radius * radius / (footprint * footprint));
+            float3 speck = hash(key, 59u) < 0.75f ? float3(0.04f) : float3(0.96f);
+            encoded = mix(encoded, speck, coverage * 0.85f);
+        }
+    }
+    return encoded;
+}
+
+// Scratches: fine vertical lines down the frame, as a film's travel through a camera or
+// projector leaves them, flickering in strength along their length.
+static inline float3 scratches(float3 encoded, float2 position, float2 fullSize, float framePixel, float footprint, float amount) {
+    float bucket = 45.0f * framePixel;
+    int b = int(floor(position.x / bucket));
+    for (int db = -1; db <= 1; db++) {
+        uint2 key = uint2(uint(b + db + 100000), 7u);
+        if (hash(key, 71u) >= 0.05f * amount) continue;
+        float x = (float(b + db) + hash(key, 73u)) * bucket;
+        float width = mix(1.0f, 3.0f, hash(key, 79u)) * framePixel;
+        float start = hash(key, 83u) * fullSize.y * 0.7f;
+        float extent = mix(0.3f, 1.0f, hash(key, 89u)) * fullSize.y;
+        float inside = smoothstep(start, start + 40.0f * framePixel, position.y)
+            * (1.0f - smoothstep(start + extent - 40.0f * framePixel, start + extent, position.y));
+        float soft = max(width * 0.5f, footprint * 0.5f);
+        float coverage = (1.0f - smoothstep(width - soft, width + soft, abs(position.x - x)))
+            * min(1.0f, width / footprint) * inside;
+        float flicker = 0.45f + 0.55f * valueNoise(float2(x, position.y / (180.0f * framePixel)), 97u);
+        float3 line = hash(key, 101u) < 0.6f ? float3(0.95f) : float3(0.08f);
+        encoded = mix(encoded, line, coverage * flicker * 0.7f);
+    }
+    return encoded;
+}
+
+// A border over the photo's edges (FrameStyle): a keyline, a white print border, a 35 mm film
+// rebate with its sprocket holes, or a slide mount. `q` is in frame heights; `pixel` is an output
+// pixel in the same units, for antialiasing.
+static inline float3 frameBorder(float3 encoded, float2 q, float aspect, int style, float size, float pixel) {
+    float toEdge = min(min(q.x, aspect - q.x), min(q.y, 1.0f - q.y));
+    if (style == 1) {
+        float width = 0.006f * size;
+        return mix(encoded, float3(0.02f), 1.0f - smoothstep(width - pixel, width + pixel, toEdge));
+    }
+    if (style == 2) {
+        float width = 0.035f * size;
+        float paper = 1.0f - smoothstep(width - pixel, width + pixel, toEdge);
+        return mix(encoded, float3(0.96f, 0.955f, 0.94f), paper);
+    }
+    if (style == 3) {
+        // The rebate runs along the long sides with the sprocket holes in it (a 35 mm frame is
+        // eight perforations long), with a thin black edge on the short sides.
+        bool landscape = aspect >= 1.0f;
+        float2 r = landscape ? q : float2(q.y * aspect, q.x / aspect);
+        float span = landscape ? aspect : 1.0f / aspect;
+        float band = 0.13f * size, side = 0.02f * size;
+        float alongEdge = min(r.y, 1.0f - r.y);
+        float black = max(1.0f - smoothstep(band - pixel, band + pixel, alongEdge),
+                          1.0f - smoothstep(side - pixel, side + pixel, min(r.x, span - r.x)));
+        float pitch = span / 8.0f;
+        float2 hole = float2(fmod(r.x + pitch * 0.5f, pitch) - pitch * 0.5f, alongEdge - band * 0.5f);
+        float2 halfSize = float2(pitch * 0.29f, band * 0.3f);
+        float2 outside = abs(hole) - halfSize + 0.01f * size;
+        float holeDistance = length(max(outside, 0.0f)) + min(max(outside.x, outside.y), 0.0f) - 0.01f * size;
+        float lit = (1.0f - smoothstep(-pixel, pixel, holeDistance)) * step(alongEdge, band);
+        float3 rebate = mix(float3(0.015f, 0.012f, 0.01f), float3(0.98f, 0.93f, 0.84f), lit);
+        return mix(encoded, rebate, black);
+    }
+    if (style == 4) {
+        float inset = 0.06f * size, radius = 0.035f * size;
+        float2 halfWindow = float2(aspect * 0.5f - inset, 0.5f - inset);
+        float2 outside = abs(q - float2(aspect * 0.5f, 0.5f)) - halfWindow + radius;
+        float distance = length(max(outside, 0.0f)) + min(max(outside.x, outside.y), 0.0f) - radius;
+        float mount = smoothstep(-pixel, pixel, distance);
+        float bevel = smoothstep(0.0f, 0.012f * size, distance);
+        return mix(encoded, mix(float3(0.8f, 0.79f, 0.77f), float3(0.93f, 0.925f, 0.91f), bevel), mount);
+    }
+    return encoded;
+}
+
 // MARK: - Glow
 
 // A wide, smooth blur with a long tail, as a point spread falls off: six half-octave levels
@@ -527,6 +654,25 @@ kernel void rl_develop(
         }
     }
 
+    // Mood effects, in whole-photo coordinates so they stay put as you zoom, and sized to the
+    // frame (a "frame pixel" is 1/3000 of the long side) so they look the same at any resolution.
+    float2 framePosition = float2(uv.x * p.geometry.w, uv.y);
+    if (p.mood0.x > 0.0f) {
+        encoded = lightLeak(encoded, framePosition, p.geometry.w, p.mood0);
+    }
+    if (p.mood0.w > 0.0f || p.mood1.x > 0.0f) {
+        float2 fullSize = p.outputSize.z * p.outputSize.xy / p.region.zw;
+        float2 fullPosition = p.region.xy * fullSize + float2(gid) * p.outputSize.z;
+        float framePixel = max(fullSize.x, fullSize.y) / 3000.0f;
+        float footprint = max(p.outputSize.z, 1.0f);
+        if (p.mood0.w > 0.0f) {
+            encoded = dust(encoded, fullPosition, framePixel, footprint, p.mood0.w);
+        }
+        if (p.mood1.x > 0.0f) {
+            encoded = scratches(encoded, fullPosition, fullSize, framePixel, footprint, p.mood1.x);
+        }
+    }
+
     // Film grain, anchored to full-resolution pixel coordinates so it is zoom-stable.
     if (p.grain.x > 0.0f) {
         float2 fullSize = p.outputSize.z * p.outputSize.xy / p.region.zw;
@@ -558,6 +704,12 @@ kernel void rl_develop(
             ? 0.25f + 3.2f * pow(max(L, 0.0f), 0.75f) * pow(max(1.0f - L, 0.0f), 1.4f)
             : 0.35f + 2.6f * L * (1.0f - L);
         encoded += noise * p.grain.x * 0.16f * weight;
+    }
+
+    // The frame is drawn last, over the grain, so its edges stay clean.
+    if (p.mood1.y > 0.5f) {
+        float pixel = p.region.w / max(float(height), 1.0f);
+        encoded = frameBorder(encoded, framePosition, p.geometry.w, int(p.mood1.y + 0.5f), mix(0.4f, 1.6f, p.mood1.z), pixel);
     }
 
     // Into the output gamut, sRGB-transfer encoded (sRGB and Display P3 share the curve).

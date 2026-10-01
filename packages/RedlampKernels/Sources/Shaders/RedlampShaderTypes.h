@@ -51,6 +51,8 @@ struct DevelopParams {
     float4 workToCam0;        // linear Rec.2020 -> camera RGB (rows), the inverse of camToWork
     float4 workToCam1;
     float4 workToCam2;
+    float4 mood0;             // x light leak amount, y leak warmth (-1 cool...1 warm), z leak variation (0...1), w dust
+    float4 mood1;             // x scratches, y frame style (FrameStyle), z frame size (0...1)
 };
 
 // Noise reduction over one work area of the pyramid.

@@ -76,12 +76,12 @@ public enum RecipeLint {
     }
 
     /// The edit lint renders: the recipe on a fresh photo, without the spatial effects
-    /// (vignette, grain) that would swamp the chart measurements.
+    /// (vignette, grain, light leaks, dust and scratches, frames) that would swamp the chart
+    /// measurements.
     public static func lintEdit(for recipe: Recipe) -> EditRecipe {
         var edit = recipe.edit()
-        edit
-            .reset(ParameterID.allCases
-                .filter { $0.rawValue.hasPrefix("effects.vignette.") || $0.rawValue.hasPrefix("effects.grain.") })
+        let spatial = ["vignette", "grain", "leak", "dust", "scratches", "frame"].map { "effects.\($0)." }
+        edit.reset(ParameterID.allCases.filter { parameter in spatial.contains { parameter.rawValue.hasPrefix($0) } })
         return edit
     }
 

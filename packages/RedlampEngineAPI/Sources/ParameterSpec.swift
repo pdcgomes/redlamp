@@ -360,6 +360,13 @@ public enum ParameterCatalog {
             ParameterSpec(.halationSize, "Size", range: 0 ... 100, default: 50, format: .integer),
             ParameterSpec(.bloomAmount, "Amount", range: 0 ... 100, format: .integer),
             ParameterSpec(.bloomSize, "Size", range: 0 ... 100, default: 50, format: .integer),
+            ParameterSpec(.leakAmount, "Amount", range: 0 ... 100, format: .integer),
+            ParameterSpec(.leakWarmth, "Warmth", range: -100 ... 100, default: 60, format: .integer, track: .temperature),
+            ParameterSpec(.leakVariation, "Variation", range: 0 ... 100, format: .integer),
+            ParameterSpec(.dustAmount, "Dust", range: 0 ... 100, format: .integer),
+            ParameterSpec(.scratchAmount, "Scratches", range: 0 ... 100, format: .integer),
+            ParameterSpec(.frameStyle, "Style", range: 0 ... 4, format: .integer),
+            ParameterSpec(.frameSize, "Size", range: 0 ... 100, default: 50, format: .integer),
             ParameterSpec(.colorChrome, "Color Chrome", range: 0 ... 100, format: .integer),
             ParameterSpec(.colorChromeBlue, "Chrome FX Blue", range: 0 ... 100, format: .integer),
 
