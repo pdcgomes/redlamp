@@ -880,6 +880,10 @@ brew uninstall --zap --cask redlamp  # also remove your recipes, looks and prefe
 
 Edits live in sidecars next to your photos (see [where edits are stored](#where-edits-are-stored)), so no uninstall touches them.
 
+### Updates
+
+From 0.2.0-prealpha, Redlamp keeps itself up to date with [Sparkle](https://sparkle-project.org), however you installed it. On its second launch it asks whether to check for updates automatically. **Redlamp › Check for Updates…** checks at any time, and **Settings › About** turns the automatic checks on or off. Copies of 0.1.0-prealpha and 0.1.1-prealpha can't update themselves, so download the latest release once more or run `brew upgrade --cask redlamp`. Builds from source never check for updates.
+
 ### Build from source
 
 You need **Xcode 26** or later and [**mise**](https://mise.jdx.dev). Then:
@@ -953,8 +957,9 @@ mise run render -- render ~/Pictures/DSC01234.ARW -o out.jpg --size 2048 \
 | `mise run render` | Build and run the `redlamp` CLI |
 | `mise run screenshots` | Regenerate the README screenshots of the app and the harness, on temporary copies of the fixtures (needs Screen Recording permission, the fixtures and the look-development set) |
 | `mise run harness` (`h`) | Build and launch the UI component harness |
-| `mise run release` | Build `origin/main` in a clean worktree, then sign, notarize and publish it as a GitHub release (see [Releasing](#releasing)). `DRY_RUN=1` stops after signing |
+| `mise run release` | Build `origin/main` in a clean worktree, then sign, notarize and publish it as a GitHub release with its update feed (see [Releasing](#releasing)). `DRY_RUN=1` stops after signing, and with it `REF=<commit>` builds another commit |
 | `mise run notarize -- <path>` | Notarize a signed `.app`, `.dmg` or `.zip`, then staple and check it with Gatekeeper |
+| `scripts/test-update.sh [--auto]` | Update an old copy of a dry run to the dry run itself through Sparkle, from a feed on 127.0.0.1 (see [Releasing](#releasing)) |
 | `scripts/perf-sweep.sh [Debug\|Release] [parameter] [script]` | Drag a slider for 3 s and report main-thread smoothness. `PROFILE=1` adds a main-thread profile; `PANELS=swiftui` measures the SwiftUI panels |
 | `scripts/harness-capture.sh <scene> <png> [mode]` | Screenshot a harness scene; with `side` mode, `swift scripts/parity-diff.swift <png>` scores it and `scripts/parity-rows.swift` compares it row by row |
 
@@ -966,9 +971,20 @@ Releases are built and notarized on a Mac with the team's Developer ID Applicati
 xcrun notarytool store-credentials driftstation-notarize --apple-id <apple-id> --team-id 3JP75Z3F98
 ```
 
+Updates are signed with an EdDSA key that only the release Mac holds, in its login keychain. Installed copies check every update against its public half, `SUPublicEDKey` in `apps/RedlampMac/Project.swift`. Create the key once with Sparkle's `generate_keys`, which `mise run generate` installs, and keep a backup in your password manager:
+
+```bash
+Tuist/.build/artifacts/sparkle/Sparkle/bin/generate_keys --account redlamp      # create it, or print its public half
+Tuist/.build/artifacts/sparkle/Sparkle/bin/generate_keys --account redlamp -x redlamp-sparkle.key   # export a backup, then delete the file
+```
+
+Import the backup on another Mac with `-f`. If the key is ever lost, the next release has to carry a new public key, which Sparkle accepts only from an app signed by the same Developer ID team.
+
 Versions follow semver, with the stage as a pre-release suffix until 1.0: `0.1.0-prealpha`, then `-alpha` and `-beta`. The build number is the count of commits on `main`, so it only goes up.
 
-To release, bump `MARKETING_VERSION` in `Version.xcconfig`, commit and push to `main`, and run `mise run release`. It always builds `origin/main` in a clean worktree, so uncommitted or untracked work in your checkout never ships. It builds the app and CLI, puts the CLI in `Redlamp.app/Contents/Helpers`, and signs everything. It then notarizes and staples through `mise run notarize`, tags `v<version>`, and publishes `Redlamp-<version>.zip` as the latest GitHub release. The **Update cask** workflow then points `Casks/redlamp.rb` at the new release, so `brew upgrade` finds it, and the download button on [redlamp.app](https://redlamp.app) links to it within the hour.
+To release, bump `MARKETING_VERSION` in `Version.xcconfig`, commit and push to `main`, and run `mise run release`. It always builds `origin/main` in a clean worktree, so uncommitted or untracked work in your checkout never ships. It builds the app and CLI, puts the CLI in `Redlamp.app/Contents/Helpers`, and signs everything, Sparkle's helpers included. It then notarizes and staples through `mise run notarize`, tags `v<version>`, and publishes `Redlamp-<version>.zip` as the latest GitHub release, with `appcast.xml` beside it. That's the update feed: installed copies check `https://redlamp.app/appcast.xml`, which the site redirects to the latest release's `appcast.xml`, and the release fails if the feed doesn't offer the new build. The update window and the GitHub release show the same notes, the subjects of the commits since the previous release. The **Update cask** workflow then points `Casks/redlamp.rb` at the new release, so `brew upgrade` finds it, and the download button on [redlamp.app](https://redlamp.app) links to it within the hour.
+
+To try a change to releasing or updating before it's on `main`, `REF=HEAD DRY_RUN=1 mise run release` builds your latest local commit. `scripts/test-update.sh` then updates an old copy of that build to it, from a feed on 127.0.0.1 and under a bundle ID of its own: choose **Check for Updates…** in the copy it opens, or pass `--auto` to let Sparkle install the update when the app quits.
 
 ## Component harness
 
