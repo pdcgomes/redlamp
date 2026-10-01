@@ -1,6 +1,6 @@
 # Look development
 
-How recipes are made, checked and shipped. The format is in [recipe-format.md](recipe-format.md), camera cards in [camera-card-mapping.md](camera-card-mapping.md), and the agent studio in [agent-studio.md](agent-studio.md).
+How recipes are made, checked and shipped. The format is in [recipe-format.md](recipe-format.md), camera cards in [camera-card-mapping.md](camera-card-mapping.md), the agent studio in [agent-studio.md](agent-studio.md), and measuring phone-app filters with the capture kit in [app-looks.md](app-looks.md).
 
 ## The look-development set
 

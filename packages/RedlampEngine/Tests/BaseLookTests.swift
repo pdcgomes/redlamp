@@ -95,6 +95,42 @@ struct BaseLookTests {
     }
 
     @Test(.enabled(if: canRender))
+    func `a scene-referred table of Redlamp's own tone curve changes nothing, and Amount 0 turns it off`() async throws {
+        let url = try Self.chart()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let engine = try RedlampEngine()
+        _ = try await engine.open(url)
+        let plain = try await render(engine, EditRecipe())
+        let table = try LookTable(size: 33, space: .sceneLog) { encoded in
+            let display = RedlampToneCurve.apply(SceneLogEncoding.decode(encoded))
+            return SIMD3(Self.srgbEncode(display.x), Self.srgbEncode(display.y), Self.srgbEncode(display.z))
+        }
+        let film = look(table, id: "local/test/scene")
+        engine.registerBaseLook(film)
+        var recipe = EditRecipe()
+        recipe.baseLook = film.reference
+        // Channels that land near zero at the edge of the sRGB gamut differ by a few levels:
+        // the Rec.2020-to-sRGB step subtracts large values, magnifying interpolation error.
+        let differences = try await zip(Self.pixels(plain), Self.pixels(render(engine, recipe))).enumerated()
+            .filter { $0.offset % 4 != 3 }.map { abs(Int($0.element.0) - Int($0.element.1)) }.sorted()
+        let mean = Double(differences.reduce(0, +)) / Double(differences.count)
+        #expect(mean < 0.5)
+        #expect(differences[differences.count * 99 / 100] <= 3)
+
+        let dark = try look(LookTable(size: 9, space: .sceneLog) { _ in SIMD3(repeating: 0.2) }, id: "local/test/dark")
+        engine.registerBaseLook(dark)
+        recipe.baseLook = dark.reference
+        let flat = try await Self.pixels(render(engine, recipe))
+        #expect(flat.enumerated().filter { $0.offset % 4 != 3 }.allSatisfy { abs(Int($0.element) - 51) <= 3 })
+        recipe.baseLook = dark.reference.withAmount(0)
+        #expect(try await Self.maxDifference(plain, render(engine, recipe)) <= 1)
+    }
+
+    static func srgbEncode(_ x: Float) -> Float {
+        x <= 0.0031308 ? 12.92 * x : 1.055 * pow(x, 1 / 2.4) - 0.055
+    }
+
+    @Test(.enabled(if: canRender))
     func `a table reaches every pixel, and Amount 0 turns it off`() async throws {
         let url = try Self.chart()
         defer { try? FileManager.default.removeItem(at: url) }

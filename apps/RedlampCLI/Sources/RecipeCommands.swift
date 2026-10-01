@@ -27,6 +27,13 @@ enum RecipeCommands {
           [--evaluations <n>]
       profile [--pairs <manifest.json>] [--slots <slot,…>] [--install]
                                                fit film-slot Base Looks to camera JPEGs in raw files
+      film [--film <stock>] [--print <stock>] [--exposure <ev>] [--interlayer <k>] [--grey <display>]
+           [--negative-density <d>] [--flare <f>] [--name <name>] [--count <images>] [--out <dir>]
+                                               build a look with the film model (no --film lists stocks)
+      app-kit [--compact] [-o <folder>]        write the phone capture kit for app filters (--compact:
+                                               one image per filter instead of 3 charts and 8 photos)
+      app-import <folder|export> --name <name> [--app prequel|lightroom] [--filter <name>] [--kit <folder>]
+                 [--install]                   measure a phone app's filter from exports of the kit
 
     <recipe> is a .redrecipe path, an id (redlamp/essentials/punchy), a bundled slug
     (essentials/punchy) or a name. <list> is `all`, `group:<Group>` or comma-separated recipes.
@@ -51,7 +58,10 @@ enum RecipeCommands {
         guard let command = raw.first else { throw CLIError(description: usage) }
         // `--images` and `--references` take every following non-option argument.
         let rest = expandLists(Array(raw.dropFirst()), for: ["--images", "--references"])
-        let context = try Context(arguments: Arguments(rest, valued: valued), library: RecipeLibrary())
+        let context = try Context(
+            arguments: Arguments(rest, valued: valued.union(FilmCommand.valued).union(AppLookCommands.valued)),
+            library: RecipeLibrary(),
+        )
         switch command {
         case "list": list(context)
         case "show": try show(context)
@@ -70,6 +80,9 @@ enum RecipeCommands {
         case "fingerprint": try fingerprint(context)
         case "fit": try await fit(context)
         case "profile": try await ProfileCommand.run(context)
+        case "film": try await FilmCommand.run(context)
+        case "app-kit": try await AppLookCommands.kit(context)
+        case "app-import": try await AppLookCommands.importLook(context)
         default: throw CLIError(description: usage)
         }
     }

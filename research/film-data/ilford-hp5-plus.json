@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "id": "ilford-hp5-plus",
+  "name": "ILFORD HP5 PLUS",
+  "manufacturer": "HARMAN technology Ltd (ILFORD PHOTO)",
+  "type": "bw-negative",
+  "process": "ILFORD ILFOTEC HC (1+31), 6½ min at 20°C/68°F, intermittent agitation (curve); many developers per datasheet",
+  "exposureIndex": 400,
+  "source": {
+    "title": "ILFORD HP5 PLUS — Technical Information (HARMAN technology)",
+    "document": "HP5 PLUS Technical Information",
+    "edition": "Nov 2018",
+    "url": "https://www.ilfordphoto.com/amfile/file/download/file/1903/product/691/",
+    "fetchedVia": "direct",
+    "retrieved": "2026-09-30",
+    "sha256": "f06f383d714bc9d13033f9e30a6aedf29d9b9f4d25c4a353d69e6526cb2f037f",
+    "pages": [1, 5]
+  },
+  "characteristicCurves": {
+    "densityType": null,
+    "logExposureUnits": "relative log exposure (arbitrary origin, as labelled on the chart)",
+    "exposure": null,
+    "condition": "ILFORD ILFOTEC HC (1+31) stock, 6½ min at 20°C/68°F, intermittent agitation",
+    "logExposure": [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4, 1.45, 1.5, 1.55, 1.6, 1.65, 1.7, 1.75, 1.8, 1.85, 1.9, 1.95, 2.0, 2.05, 2.1, 2.15, 2.2, 2.25, 2.3, 2.35, 2.4, 2.45, 2.5, 2.55, 2.6, 2.65, 2.7, 2.75, 2.8, 2.85, 2.9, 2.95, 3.0, 3.05, 3.1, 3.15, 3.2, 3.25, 3.3, 3.35, 3.4, 3.45, 3.5, 3.55, 3.6, 3.65, 3.7, 3.75, 3.8, 3.85, 3.9, 3.95, 4.0, 4.05, 4.1],
+    "neutral": [0.178, 0.178, 0.178, 0.178, 0.178, 0.178, 0.178, 0.178, 0.178, 0.178, 0.18, 0.187, 0.189, 0.195, 0.203, 0.21, 0.22, 0.229, 0.243, 0.254, 0.267, 0.282, 0.301, 0.319, 0.34, 0.361, 0.385, 0.408, 0.436, 0.482, 0.494, 0.507, 0.554, 0.587, 0.621, 0.655, 0.688, 0.723, 0.768, 0.792, 0.81, 0.857, 0.89, 0.921, 0.954, 1.005, 1.02, 1.035, 1.083, 1.113, 1.144, 1.179, 1.213, 1.244, 1.277, 1.308, 1.34, 1.374, 1.404, 1.486, 1.499, 1.512, 1.525, 1.561, 1.595, 1.625, 1.658, 1.688, 1.725, 1.751, 1.781, 1.816, 1.849, 1.881, 1.913, 1.946, 1.984, 1.999, 2.039, 2.072, 2.096, 2.126],
+    "dMin": 0.178,
+    "variants": [],
+    "notes": "Single published curve, \"also representative of roll film and sheet film formats\". The x axis is relative log exposure 0-4.5 with no absolute origin, so the curve cannot be placed against lux-seconds from this datasheet. Density type and exposure illuminant are not stated. dMin = base + fog at the lowest plotted exposure."
+  },
+  "spectralSensitivity": {
+    "units": "relative sensitivity as labelled (ticks 0.5 and 1.0; zero at the chart floor)",
+    "densityCriterion": null,
+    "exposure": "wedge spectrogram to tungsten light (2850 K)",
+    "wavelength": [360, 365, 370, 375, 380, 385, 390, 395, 400, 405, 410, 415, 420, 425, 430, 435, 440, 445, 450, 455, 460, 465, 470, 475, 480, 485, 490, 495, 500, 505, 510, 515, 520, 525, 530, 535, 540, 545, 550, 555, 560, 565, 570, 575, 580, 585, 590, 595, 600, 605, 610, 615, 620, 625, 630, 635, 640, 645, 650, 655],
+    "neutral": [0.092, 0.171, 0.244, 0.329, 0.405, 0.482, 0.552, 0.618, 0.666, 0.698, 0.723, 0.743, 0.762, 0.775, 0.787, 0.798, 0.806, 0.815, 0.819, 0.825, 0.825, 0.825, 0.824, 0.819, 0.816, 0.81, 0.8, 0.788, 0.781, 0.781, 0.788, 0.801, 0.819, 0.838, 0.857, 0.878, 0.897, 0.916, 0.936, 0.953, 0.967, 0.975, 0.98, 0.982, 0.974, 0.963, 0.942, 0.922, 0.912, 0.908, 0.909, 0.916, 0.929, 0.932, 0.907, 0.79, 0.573, 0.367, 0.183, 0.044],
+    "notes": "Ilford publishes a wedge-spectrogram outline with a \"Sensitivity\" axis marked 0.5 and 1.0 and does not say whether the scale is linear or logarithmic (a wedge spectrogram's height is proportional to log sensitivity). Values are read on the printed scale. No density criterion is given. x calibrated on the centres of the wavelength labels (no tick marks drawn)."
+  },
+  "dyeDensity": null,
+  "granularity": {
+    "rmsDiffuse": null,
+    "printGrainIndex": null,
+    "notes": "No granularity figure is published in the HP5 Plus datasheet (Nov 2018)."
+  },
+  "mtf": null,
+  "interlayer": null,
+  "notes": ["ISO 400/27°. Rated EI 400; Ilford gives meter settings from EI 400/27 to EI 3200/36 with extended development (not foot-speed based).", "No MTF, resolving power or granularity data are published (mtf and granularity null).", "35 mm on 0.125 mm acetate base; roll film on 0.110 mm clear acetate with anti-halation backing that clears in development; sheet film on 0.180 mm polyester base with anti-halation backing."],
+  "derived": {
+    "note": "Computed by extract.py from the digitised curves as sanity checks; not published values.",
+    "gamma": {
+      "neutral": 0.651
+    },
+    "gammaMethod": "least-squares slope over the central 25-75% of each curve's density range",
+    "monotonic": {
+      "neutral": true
+    },
+    "sensitivityPeakNm": {
+      "neutral": 575
+    }
+  },
+  "extraction": {
+    "method": "raster",
+    "tool": "research/film-data/extract.py",
+    "notes": "Both charts are embedded ~2.1-2.4 px/pt bitmaps. Characteristic axes from the grid lines (0.5 log E, 0.5 D, checked against the 1/2/3/4 and 1.0/2.0 labels).",
+    "confidence": "medium (characteristic), medium-low (sensitivity: scale type unstated)",
+    "checks": []
+  }
+}

@@ -14,6 +14,7 @@ final class BaseLookRegistry: @unchecked Sendable {
         var tableSize: Int
         /// False when the edit's look isn't registered and renders without it.
         var isAvailable: Bool
+        var tableSpace: LookTableSpace = .displayRec2020
     }
 
     private struct Key: Hashable {
@@ -71,7 +72,10 @@ final class BaseLookRegistry: @unchecked Sendable {
         guard let table = look.table, table.contentHash == hash, let texture = texture(for: table) else {
             return Resolved(parameters: look.parameters, table: nil, tableSize: 0, isAvailable: false)
         }
-        return Resolved(parameters: look.parameters, table: texture, tableSize: table.size, isAvailable: true)
+        return Resolved(
+            parameters: look.parameters, table: texture, tableSize: table.size, isAvailable: true,
+            tableSpace: table.space,
+        )
     }
 
     /// The table's texture, uploading it if needed. Call with `lock` held.

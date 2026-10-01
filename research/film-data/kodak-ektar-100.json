@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 1,
+  "id": "kodak-ektar-100",
+  "name": "KODAK PROFESSIONAL EKTAR 100 Film",
+  "manufacturer": "Kodak Alaris (KODAK PROFESSIONAL / KODAK brand)",
+  "type": "negative",
+  "process": "C-41 (KODAK FLEXICOLOR chemicals)",
+  "exposureIndex": 100,
+  "source": {
+    "title": "KODAK PROFESSIONAL EKTAR 100 Film — Technical Data",
+    "document": "E-4046",
+    "edition": "Revised 1/25 (January 2025)",
+    "url": "https://kodakprofessional.com/sites/default/files/2025-07/e4046.pdf",
+    "fetchedVia": "direct",
+    "retrieved": "2026-09-30",
+    "sha256": "38a41d47ad006cd563793033f83c8f9ef6cdd3c8300695c31facfc71d368f8db",
+    "pages": [3, 4]
+  },
+  "characteristicCurves": {
+    "densityType": "status-M",
+    "exposure": "Daylight",
+    "logHRef": -0.84,
+    "logExposureUnits": "log10 exposure in lux-seconds",
+    "logExposure": [-2.8, -2.75, -2.7, -2.65, -2.6, -2.55, -2.5, -2.45, -2.4, -2.35, -2.3, -2.25, -2.2, -2.15, -2.1, -2.05, -2.0, -1.95, -1.9, -1.85, -1.8, -1.75, -1.7, -1.65, -1.6, -1.55, -1.5, -1.45, -1.4, -1.35, -1.3, -1.25, -1.2, -1.15, -1.1, -1.05, -1.0, -0.95, -0.9, -0.85, -0.8, -0.75, -0.7, -0.65, -0.6, -0.55, -0.5, -0.45, -0.4, -0.35, -0.3, -0.25, -0.2, -0.15, -0.1, -0.05, 0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15],
+    "red": [0.21, 0.212, 0.214, 0.215, 0.217, 0.218, 0.219, 0.221, 0.224, 0.228, 0.233, 0.239, 0.246, 0.255, 0.266, 0.28, 0.296, 0.314, 0.334, 0.357, 0.381, 0.406, 0.431, 0.456, 0.482, 0.508, 0.534, 0.561, 0.589, 0.617, 0.645, 0.674, 0.703, 0.734, 0.766, 0.798, 0.829, 0.861, 0.893, 0.924, 0.954, 0.983, 1.011, 1.039, 1.067, 1.094, 1.121, 1.148, 1.175, 1.202, 1.229, 1.257, 1.285, 1.314, 1.343, 1.37, 1.396, 1.422, 1.448, 1.473, 1.499, 1.526, 1.552, 1.578, 1.603, 1.628, 1.653, 1.678, 1.702, 1.725, 1.747, 1.769, 1.79, 1.809, 1.829, 1.849, 1.869, 1.889, 1.909, 1.929],
+    "green": [0.635, 0.636, 0.637, 0.638, 0.639, 0.64, 0.641, 0.643, 0.645, 0.649, 0.653, 0.66, 0.668, 0.678, 0.69, 0.705, 0.721, 0.74, 0.762, 0.786, 0.812, 0.84, 0.868, 0.898, 0.927, 0.957, 0.987, 1.016, 1.046, 1.076, 1.106, 1.135, 1.164, 1.194, 1.222, 1.251, 1.28, 1.309, 1.338, 1.368, 1.397, 1.427, 1.456, 1.486, 1.515, 1.545, 1.574, 1.603, 1.632, 1.661, 1.689, 1.716, 1.743, 1.77, 1.797, 1.823, 1.85, 1.876, 1.902, 1.927, 1.953, 1.978, 2.003, 2.028, 2.053, 2.078, 2.102, 2.126, 2.15, 2.174, 2.198, 2.222, 2.246, 2.269, 2.293, 2.316, 2.339, 2.362, 2.385, 2.408],
+    "blue": [0.85, 0.857, 0.863, 0.868, 0.871, 0.871, 0.871, 0.873, 0.878, 0.885, 0.894, 0.906, 0.922, 0.942, 0.965, 0.989, 1.017, 1.049, 1.081, 1.112, 1.142, 1.169, 1.197, 1.227, 1.262, 1.301, 1.341, 1.38, 1.413, 1.446, 1.478, 1.51, 1.543, 1.575, 1.607, 1.639, 1.672, 1.704, 1.737, 1.769, 1.802, 1.835, 1.869, 1.902, 1.936, 1.97, 2.005, 2.039, 2.073, 2.107, 2.141, 2.174, 2.208, 2.241, 2.274, 2.307, 2.338, 2.37, 2.4, 2.431, 2.46, 2.49, 2.519, 2.548, 2.577, 2.606, 2.635, 2.665, 2.694, 2.724, 2.754, 2.785, 2.816, 2.847, 2.88, 2.913, 2.948, 2.984, 3.021, 3.058],
+    "dMin": {
+      "red": 0.21,
+      "green": 0.635,
+      "blue": 0.85
+    },
+    "notes": "Status M densities of the processed negative (includes the orange mask). dMin = density at the lowest plotted exposure (base + fog + mask). \"Log H Ref\" is printed on the chart."
+  },
+  "spectralSensitivity": {
+    "units": "log10 spectral sensitivity; sensitivity = reciprocal of the exposure (erg/cm^2) required to produce the stated density",
+    "densityCriterion": "0.2 above D-min (Status M)",
+    "exposure": "Daylight, effective exposure 1/25 s",
+    "wavelength": [380, 385, 390, 395, 400, 405, 410, 415, 420, 425, 430, 435, 440, 445, 450, 455, 460, 465, 470, 475, 480, 485, 490, 495, 500, 505, 510, 515, 520, 525, 530, 535, 540, 545, 550, 555, 560, 565, 570, 575, 580, 585, 590, 595, 600, 605, 610, 615, 620, 625, 630, 635, 640, 645, 650, 655, 660, 665, 670, 675, 680, 685, 690],
+    "red": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 0.205, 0.305, 0.358, 0.375, 0.69, 1.094, 1.384, 1.521, 1.606, 1.682, 1.754, 1.764, 1.761, 1.785, 1.806, 1.842, 1.902, 1.952, 2.0, 2.05, 2.035, 1.941, 1.727, 1.421, 1.196, 1.033, 0.899, 0.646],
+    "green": [null, null, null, 0.85, 0.946, 0.971, 0.946, 0.913, 0.862, 0.812, 0.768, 0.704, 0.643, 0.613, 0.614, 0.607, 0.611, 0.608, 0.612, 0.697, 0.862, 1.086, 1.223, 1.311, 1.381, 1.422, 1.461, 1.515, 1.567, 1.637, 1.7, 1.751, 1.793, 1.838, 1.815, 1.777, 1.775, 1.738, 1.66, 1.616, 1.344, 0.845, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "blue": [1.115, 1.32, 1.572, 1.81, 1.951, 2.029, 2.045, 2.033, 2.011, 2.029, 2.043, 2.063, 2.084, 2.045, 2.018, 2.026, 2.065, 2.118, 2.149, 2.064, 1.746, 1.269, 0.737, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "notes": "red = red-sensitive (cyan-forming) layer, green = green-sensitive (magenta-forming), blue = blue-sensitive (yellow-forming). Curves end where the published curves end."
+  },
+  "dyeDensity": {
+    "units": "diffuse spectral density",
+    "wavelength": [405, 410, 415, 420, 425, 430, 435, 440, 445, 450, 455, 460, 465, 470, 475, 480, 485, 490, 495, 500, 505, 510, 515, 520, 525, 530, 535, 540, 545, 550, 555, 560, 565, 570, 575, 580, 585, 590, 595, 600, 605, 610, 615, 620, 625, 630, 635, 640, 645, 650, 655, 660, 665, 670, 675, 680],
+    "cyan": null,
+    "magenta": null,
+    "yellow": null,
+    "minimum": [0.711, 0.725, 0.759, 0.798, 0.829, 0.85, 0.862, 0.865, 0.861, 0.851, 0.838, 0.821, 0.802, 0.782, 0.763, 0.743, 0.723, 0.704, 0.693, 0.692, 0.702, 0.708, 0.7, 0.677, 0.649, 0.631, 0.621, 0.615, 0.606, 0.598, 0.595, 0.594, 0.593, 0.584, 0.563, 0.524, 0.468, 0.396, 0.334, 0.283, 0.248, 0.226, 0.213, 0.206, 0.203, 0.202, 0.204, 0.207, 0.212, 0.217, 0.223, 0.229, 0.235, 0.24, 0.245, 0.25],
+    "midscaleNeutral": [1.478, 1.561, 1.667, 1.782, 1.89, 1.979, 2.038, 2.074, 2.093, 2.093, 2.073, 2.041, 1.992, 1.924, 1.843, 1.766, 1.689, 1.625, 1.585, 1.571, 1.582, 1.591, 1.596, 1.601, 1.604, 1.605, 1.611, 1.62, 1.608, 1.578, 1.528, 1.468, 1.397, 1.316, 1.224, 1.125, 1.025, 0.933, 0.863, 0.818, 0.796, 0.793, 0.805, 0.828, 0.86, 0.896, 0.936, 0.979, 1.024, 1.069, 1.113, 1.155, 1.194, 1.229, 1.258, 1.287],
+    "notes": "Not published per dye: the datasheet shows only \"typical densities for a midscale neutral subject and D-min\". cyan/magenta/yellow are therefore null."
+  },
+  "granularity": {
+    "rmsDiffuse": null,
+    "printGrainIndex": [
+      {
+        "negativeFormat": "135 (24x36 mm)",
+        "printSize": "4x6 in",
+        "magnification": "4.4X",
+        "printGrainIndex": "<25"
+      },
+      {
+        "negativeFormat": "135 (24x36 mm)",
+        "printSize": "8x10 in",
+        "magnification": "8.8X",
+        "printGrainIndex": 38
+      },
+      {
+        "negativeFormat": "135 (24x36 mm)",
+        "printSize": "16x20 in",
+        "magnification": "17.8X",
+        "printGrainIndex": 66
+      },
+      {
+        "negativeFormat": "120 (6x6 cm)",
+        "printSize": "4x6 in",
+        "magnification": "2.6X",
+        "printGrainIndex": "<25"
+      },
+      {
+        "negativeFormat": "120 (6x6 cm)",
+        "printSize": "8x10 in",
+        "magnification": "4.4X",
+        "printGrainIndex": "<25"
+      },
+      {
+        "negativeFormat": "120 (6x6 cm)",
+        "printSize": "16x20 in",
+        "magnification": "8.8X",
+        "printGrainIndex": 38
+      },
+      {
+        "negativeFormat": "4x5 in sheet",
+        "printSize": "4x6 in",
+        "magnification": "1.2X",
+        "printGrainIndex": "<25"
+      },
+      {
+        "negativeFormat": "4x5 in sheet",
+        "printSize": "8x10 in",
+        "magnification": "4X (as printed)",
+        "printGrainIndex": "<25"
+      },
+      {
+        "negativeFormat": "4x5 in sheet",
+        "printSize": "16x20 in",
+        "magnification": "8X (as printed)",
+        "printGrainIndex": "<25"
+      },
+      {
+        "negativeFormat": "8x10 in sheet",
+        "printSize": "4x6 in",
+        "magnification": "0.6X",
+        "printGrainIndex": "<25"
+      },
+      {
+        "negativeFormat": "8x10 in sheet",
+        "printSize": "8x10 in",
+        "magnification": "1X",
+        "printGrainIndex": "<25"
+      },
+      {
+        "negativeFormat": "8x10 in sheet",
+        "printSize": "16x20 in",
+        "magnification": "2X",
+        "printGrainIndex": "<25"
+      }
+    ],
+    "notes": "Kodak Print Grain Index: perceptual graininess of a print made with diffuse printing illumination viewed at 14 in; 25 is the approximate visual threshold, 4 units is one just-noticeable difference. Not comparable with rms granularity. Values as printed (\"<25\" = less than 25). Kodak no longer publishes rms granularity for this film."
+  },
+  "mtf": {
+    "units": "percent response",
+    "frequencyUnits": "cycles/mm",
+    "exposure": "Daylight",
+    "process": "C-41",
+    "frequency": [3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 25, 30, 35, 40, 50, 60, 70, 80],
+    "red": [107.9, 109.5, 110.6, 111.4, 111.9, 112.5, 112.5, 110.7, 106.3, 94.7, 77.2, 61.6, 50.6, 42.1, 29.0, 21.5, 17.4, 14.7],
+    "green": [108.2, 110.7, 112.7, 114.3, 115.7, 116.9, 118.7, 117.3, 114.0, 108.7, 93.7, 81.1, 73.3, 66.5, 52.7, 42.9, 33.4, 26.7],
+    "blue": [104.4, 104.6, 104.9, 105.2, 105.6, 106.3, 107.4, 105.6, 102.4, 95.3, 84.3, 73.0, 67.0, 62.4, 54.4, 46.1, 41.8, 38.7]
+  },
+  "interlayer": null,
+  "notes": [],
+  "derived": {
+    "note": "Computed by extract.py from the digitised curves as sanity checks; not published values.",
+    "gamma": {
+      "red": 0.569,
+      "green": 0.57,
+      "blue": 0.661
+    },
+    "gammaMethod": "least-squares slope over the central 25-75% of each curve's density range",
+    "monotonic": {
+      "red": true,
+      "green": true,
+      "blue": true
+    },
+    "sensitivityPeakNm": {
+      "red": 650,
+      "green": 545,
+      "blue": 470
+    }
+  },
+  "extraction": {
+    "method": "vector",
+    "tool": "research/film-data/extract.py",
+    "notes": "All charts are vector paths in the PDF; curves were sampled directly from the path geometry (Bezier segments flattened), axes calibrated by snapping tick labels to the tick marks (max calibration residual < 0.002 units).",
+    "confidence": "high",
+    "checks": ["characteristic red: gamma 0.571, D-min 0.210, monotonic True", "characteristic green: gamma 0.570, D-min 0.635, monotonic True", "characteristic blue: gamma 0.661, D-min 0.850, monotonic True", "sensitivity red: peak 650 nm, folds 0", "sensitivity green: peak 545 nm, folds 0", "sensitivity blue: peak 470 nm, folds 0", "dye midscaleNeutral: peak 450 nm, range 0.793..2.093", "dye minimum: peak 440 nm, range 0.202..0.865", "mtf: blue 38.7% at 80 c/mm, green 26.7% at 80 c/mm, red 14.7% at 80 c/mm"]
+  }
+}

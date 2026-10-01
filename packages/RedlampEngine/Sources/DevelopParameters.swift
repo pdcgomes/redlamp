@@ -40,7 +40,10 @@ enum DevelopParameters {
         )
         let look = baseLook.parameters.scaled(by: recipe.baseLook.amount)
         if baseLook.table != nil {
-            p.lookTable = SIMD4(Float(recipe.baseLook.amount / 100), Float(baseLook.tableSize), 0, 0)
+            p.lookTable = SIMD4(
+                Float(recipe.baseLook.amount / 100), Float(baseLook.tableSize),
+                baseLook.tableSpace == .sceneLog ? 1 : 0, 0,
+            )
         }
         p.recipe = SIMD4(
             Float(recipe[.colorChrome] / 100),

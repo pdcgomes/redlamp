@@ -140,6 +140,15 @@ static inline float sampleLUT(constant float *lut, float x) {
 
 // MARK: - Base Look tables
 
+// SceneLogEncoding in RedlampEngineAPI: stops from middle grey, -10...+6.5 EV to 0...1.
+constant float kSceneLogMinimumEV = -10.0f;
+constant float kSceneLogRangeEV = 16.5f;
+
+static inline float3 sceneLogEncode3(float3 linear) {
+    float3 ev = log2(max(linear, 1e-9f) / kMiddleGrey);
+    return clamp((ev - kSceneLogMinimumEV) / kSceneLogRangeEV, 0.0f, 1.0f);
+}
+
 static inline float3 lookTableEntry(texture3d<half, access::read> table, int3 p) {
     return float3(table.read(uint3(p)).rgb);
 }
@@ -287,8 +296,13 @@ kernel void rl_develop(
     scene = max((scene - blackPoint) / (1.0f - blackPoint), 0.0f);
     float3 display = toneCurve(scene / p.tone2.x);
 
-    // The Base Look's table, on display-referred values under every user color control.
-    if (p.lookTable.x > 0.0f) {
+    // A scene-referred Base Look (a film model) takes the place of the tone curve.
+    if (p.lookTable.x > 0.0f && p.lookTable.z > 0.5f) {
+        float3 film = sampleLookTable(lookTable, sceneLogEncode3(scene / p.tone2.x), p.lookTable.y);
+        display = max(mix(display, srgbDecode3(max(film, 0.0f)), p.lookTable.x), 0.0f);
+    }
+    // A display-referred Base Look's table, on the tone curve's output, under every user color control.
+    if (p.lookTable.x > 0.0f && p.lookTable.z < 0.5f) {
         float3 looked = sampleLookTable(lookTable, srgbEncode3(clamp(display, 0.0f, 1.0f)), p.lookTable.y);
         display = max(mix(display, srgbDecode3(max(looked, 0.0f)), p.lookTable.x), 0.0f);
     }

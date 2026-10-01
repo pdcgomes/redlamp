@@ -7,6 +7,35 @@ public enum LookTableSpace: String, Codable, Sendable, Hashable, CaseIterable {
     /// Display-referred linear Rec.2020, sRGB-transfer encoded: the values right after
     /// Redlamp's tone map. Nearly every creative `.cube` file expects an encoding like this.
     case displayRec2020
+    /// Scene-referred: input is linear Rec.2020 scene light in `SceneLogEncoding`, output is
+    /// display Rec.2020, sRGB-transfer encoded. The table replaces Redlamp's tone map, so a film
+    /// model can shape highlights and shadows from exposure, as film does.
+    case sceneLog
+}
+
+/// The log encoding of scene-referred tables' input: each channel's stops from middle grey,
+/// mapped from `minimumEV...maximumEV` to 0...1. The GPU uses the same constants.
+public enum SceneLogEncoding {
+    public static let middleGrey: Float = 0.18
+    public static let minimumEV: Float = -10
+    public static let maximumEV: Float = 6.5
+
+    public static func encode(_ linear: Float) -> Float {
+        let ev = log2(max(linear, 1e-9) / middleGrey)
+        return min(max((ev - minimumEV) / (maximumEV - minimumEV), 0), 1)
+    }
+
+    public static func decode(_ encoded: Float) -> Float {
+        middleGrey * exp2(minimumEV + encoded * (maximumEV - minimumEV))
+    }
+
+    public static func encode(_ linear: SIMD3<Float>) -> SIMD3<Float> {
+        SIMD3(encode(linear.x), encode(linear.y), encode(linear.z))
+    }
+
+    public static func decode(_ encoded: SIMD3<Float>) -> SIMD3<Float> {
+        SIMD3(decode(encoded.x), decode(encoded.y), decode(encoded.z))
+    }
 }
 
 /// A 3D lookup table: `size`³ RGB entries, red varying fastest (the `.cube` order).

@@ -1,0 +1,55 @@
+{
+  "description": "The photos in the app-look capture kit (`redlamp recipe app-kit`). Look-development raws (research/look-dev/manifest.json, CC0, downloaded by `mise run lookdev`) are rendered neutrally at 2048 px; the portraits fill the look-dev set's skin gap and are fetched from Wikimedia Commons into build/app-looks/sources/, checked against the SHA-1 Commons publishes, and resized. Licences were checked on each file page on 2026-09-30. Only this list is committed, never the photos.",
+  "photos": [
+    {
+      "name": "sky",
+      "subject": "landscape with foliage and blue sky",
+      "raw": "Sony_ILCE-6700.ARW"
+    },
+    {
+      "name": "foliage",
+      "subject": "autumn foliage",
+      "raw": "Nikon_Z-f.NEF"
+    },
+    {
+      "name": "night",
+      "subject": "night street under tungsten light",
+      "raw": "Canon_EOS-Kiss-F.CR2"
+    },
+    {
+      "name": "interior",
+      "subject": "interior still life in window light",
+      "raw": "Canon_PowerShot-SX130-IS.DNG"
+    },
+    {
+      "name": "contrast",
+      "subject": "high dynamic range street and sky",
+      "raw": "Leica_D-LUX-6.RWL"
+    },
+    {
+      "name": "colours",
+      "subject": "colour chart and saturated still life",
+      "raw": "Sigma_fp.DNG"
+    },
+    {
+      "name": "skin-deep",
+      "subject": "close portrait, deep skin tone, soft daylight",
+      "title": "Face portrait (Unsplash)",
+      "author": "William Stitt (unsplash.com/@willpower)",
+      "license": "CC0-1.0",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/0/04/Face_portrait_%28Unsplash%29.jpg",
+      "page": "https://commons.wikimedia.org/wiki/File:Face_portrait_(Unsplash).jpg",
+      "sha1": "d7ac58077d135b823e71e7b38e763f082e2053bc"
+    },
+    {
+      "name": "skin-light",
+      "subject": "portrait, light skin tone, blonde hair, city background",
+      "title": "Outdoor portrait (Unsplash)",
+      "author": "Anthony Ginsbrook (unsplash.com/@aginsbrook)",
+      "license": "CC0-1.0",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/3/36/Outdoor_portrait_%28Unsplash%29.jpg",
+      "page": "https://commons.wikimedia.org/wiki/File:Outdoor_portrait_(Unsplash).jpg",
+      "sha1": "d5ef64a689a2d885096f43c4e7942f6dad93884f"
+    }
+  ]
+}
