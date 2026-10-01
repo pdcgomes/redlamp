@@ -159,13 +159,16 @@ enum DevelopParameters {
         )
 
         let full = session.orientedSize
-        // Full-resolution pixels per output pixel; picks the pyramid level to sample.
-        let scale = region.width * Double(full.width) / Double(max(outputSize.width, 1))
+        let map = GeometryMap(recipe: recipe, imageSize: full)
+        p.setOutputToImage(map.toImage.floatMatrix, imageAspect: Float(full.aspectRatio))
+        // Developed-frame pixels per output pixel, and photo pixels per output pixel, which
+        // picks the pyramid level to sample.
+        let scale = region.width * Double(map.outputSize.width) / Double(max(outputSize.width, 1))
         p.geometry = SIMD4(
             Float(session.orientation),
-            Float(max(0, log2(scale))),
+            Float(max(0, log2(scale * map.pixelScale))),
             encoding.rawValue,
-            Float(full.aspectRatio),
+            Float(map.outputSize.aspectRatio),
         )
         p.outputSize = SIMD4(Float(outputSize.width), Float(outputSize.height), Float(scale), 0)
         p.region = SIMD4(Float(region.x), Float(region.y), Float(region.width), Float(region.height))

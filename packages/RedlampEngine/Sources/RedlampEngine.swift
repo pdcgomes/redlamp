@@ -208,7 +208,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         let started = clock.now
 
         let region = request.region ?? .full
-        let size = request.region == nil ? session.orientedSize.fitted(within: request.targetSize) : request.targetSize
+        let developed = request.recipe.developedSize(imageSize: session.orientedSize)
+        let size = request.region == nil ? developed.fitted(within: request.targetSize) : request.targetSize
         guard size.width > 0, size.height > 0 else { throw EngineError.renderFailed("empty target") }
         let target = try surfaces.next(size: size)
         memset(histogramBuffer.contents(), 0, histogramBuffer.length)
@@ -226,7 +227,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         if request.region == nil {
             try encodeHistogram(texture: target.texture, size: size, linear: true, commands: commands)
         } else {
-            overviewSize = session.orientedSize.fitted(within: PixelSize(width: 1024, height: 1024))
+            overviewSize = developed.fitted(within: PixelSize(width: 1024, height: 1024))
             let whole = try overviews.next(size: overviewSize)
             try encodeDevelop(
                 request.recipe, session: session, into: whole.texture, size: overviewSize,
@@ -405,7 +406,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     }
 
     func renderStillNow(_ request: StillRequest, session: ImageSession) throws -> CGImage {
-        var size = session.orientedSize
+        let developed = request.recipe.developedSize(imageSize: session.orientedSize)
+        var size = developed
         if let limit = request.maxLongEdge, limit < size.longEdge {
             size = size.fitted(within: PixelSize(width: limit, height: limit))
         }
@@ -417,7 +419,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         descriptor.usage = [.shaderWrite, .shaderRead]
         descriptor.storageMode = .shared
         guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
-        if request.purpose == .export, size != session.orientedSize {
+        if request.purpose == .export, size != developed {
             try developDownscaled(request, session: session, into: texture, size: size)
         } else {
             let encoding: OutputEncoding = request.colorSpace == .sRGB ? .sRGB : .displayP3
@@ -533,7 +535,7 @@ extension RedlampEngine {
         into texture: any MTLTexture,
         size: PixelSize,
     ) throws {
-        let full = session.orientedSize
+        let full = request.recipe.developedSize(imageSize: session.orientedSize)
         func linearTexture(_ size: PixelSize) throws -> any MTLTexture {
             let descriptor = MTLTextureDescriptor.texture2DDescriptor(
                 pixelFormat: .rgba16Float, width: size.width, height: size.height, mipmapped: false,
@@ -641,7 +643,7 @@ extension RedlampEngine {
         overviewSize: PixelSize,
         commands: any MTLCommandBuffer,
     ) throws -> CachedComparison? {
-        guard let recipe = request.comparison else {
+        guard let recipe = request.comparison?.withGeometry(of: request.recipe) else {
             if comparison != nil {
                 comparison = nil
                 comparisons.removeAll()

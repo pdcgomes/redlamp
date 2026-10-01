@@ -37,10 +37,10 @@ struct DevelopParams {
     float4 gradeShape;        // x blending, y balance, z grading on
     float4 vignette;          // amount, midpoint, roundness, feather
     float4 grain;             // amount, size, roughness, seed
-    float4 geometry;          // x orientation, y source LOD, z output encoding, w aspect
+    float4 geometry;          // x orientation, y source LOD, z output encoding, w output frame aspect
     float4 outputSize;        // x width, y height, z full-resolution scale
     float4 masks;             // x layer count, y overlay layer index (-1 none), z component count, w overlay color
-    float4 region;            // rendered part of the image: xy origin, zw size (normalized, oriented)
+    float4 region;            // rendered part of the output frame: xy origin, zw size (normalized)
     float4 denoised;          // area covered by the denoised texture: xy origin, zw size (normalized, source); z 0 = none
     float4 lookTable;         // x Base Look table amount (0 = none, 1 = 100%), y table size, z 1 = scene-referred
     float4 recipe;            // x color chrome, y chrome FX blue (0...1), z dynamic-range highlight compression
@@ -53,6 +53,9 @@ struct DevelopParams {
     float4 workToCam2;
     float4 mood0;             // x light leak amount, y leak warmth (-1 cool...1 warm), z leak variation (0...1), w dust
     float4 mood1;             // x scratches, y frame style (FrameStyle), z frame size (0...1)
+    float4 toImage0;          // output frame (0...1) to the photo (0...1, EXIF-oriented): homography rows
+    float4 toImage1;          // (crop, straighten, Transform, user orientation; see GeometryMap);
+    float4 toImage2;          // toImage0.w is the photo's aspect, which masks are shaped in
 };
 
 // Noise reduction over one work area of the pyramid.
@@ -64,6 +67,15 @@ struct DenoiseParams {
     float4 b;
     float4 threshold;         // x luma, yz chroma: detail below these is removed (0 keeps it)
 };
+
+// The photo point (0...1, EXIF-oriented) behind an output-frame point, through the geometry
+// homography; returns whether it falls outside the photo (or behind the virtual camera).
+static inline bool outputToImage(float2 uv, constant DevelopParams &p, thread float2 &imageUV) {
+    float3 point = float3(uv, 1.0f);
+    float3 mapped = float3(dot(p.toImage0.xyz, point), dot(p.toImage1.xyz, point), dot(p.toImage2.xyz, point));
+    imageUV = mapped.xy / max(mapped.z, 1e-9f);
+    return mapped.z <= 0.0f || any(imageUV < 0.0f) || any(imageUV > 1.0f);
+}
 
 // Maps oriented output coordinates to source texture coordinates (LibRaw flip codes).
 static inline float2 orient(float2 uv, int orientation) {

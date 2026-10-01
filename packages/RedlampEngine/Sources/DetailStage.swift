@@ -255,7 +255,8 @@ final class DetailStage {
         masks: MaskBindings = .none,
     ) throws -> Output? {
         guard outputSize.width > 0 else { return nil }
-        let work = Self.workArea(session: session, region: region, outputSize: outputSize)
+        let geometry = GeometryMap(recipe: recipe, imageSize: session.orientedSize)
+        let work = Self.workArea(session: session, geometry: geometry, region: region, outputSize: outputSize)
         let denoiseSettings = DenoiseSettings(recipe: recipe)
         let sharpenSettings = SharpenSettings(recipe: recipe)
         let contrastSettings = LocalContrastSettings(recipe: recipe)
@@ -352,23 +353,29 @@ final class DetailStage {
         var size: SIMD2<Int>
     }
 
-    /// The pyramid level and texel rectangle (with margin) behind an oriented region.
-    static func workArea(session: ImageSession, region: ImageRect, outputSize: PixelSize) -> WorkArea {
-        let full = session.orientedSize
-        let scale = region.width * Double(full.width) / Double(max(outputSize.width, 1))
+    /// The pyramid level and texel rectangle (with margin) behind a region of the developed
+    /// frame: the bounds of its corners mapped into the photo (a homography keeps lines straight).
+    static func workArea(
+        session: ImageSession,
+        geometry: GeometryMap,
+        region: ImageRect,
+        outputSize: PixelSize,
+    ) -> WorkArea {
+        let developed = geometry.outputSize
+        let scale = region.width * Double(developed.width) / Double(max(outputSize.width, 1)) * geometry.pixelScale
         let level = min(max(Int(floor(log2(max(scale, 1)) + 0.01)), 0), session.pyramid.mipmapLevelCount - 1)
         let levelWidth = max(1, session.pyramid.width >> level)
         let levelHeight = max(1, session.pyramid.height >> level)
 
         let corners = [
-            sourceCoordinate(SIMD2(region.x, region.y), orientation: session.orientation),
-            sourceCoordinate(
-                SIMD2(region.x + region.width, region.y + region.height),
-                orientation: session.orientation,
-            ),
-        ]
-        let low = simd_min(corners[0], corners[1])
-        let high = simd_max(corners[0], corners[1])
+            SIMD2(region.x, region.y), SIMD2(region.x + region.width, region.y),
+            SIMD2(region.x, region.y + region.height), SIMD2(region.x + region.width, region.y + region.height),
+        ].map { corner in
+            let image = geometry.imagePoint(corner).map { simd_clamp($0, SIMD2(repeating: 0), SIMD2(repeating: 1)) }
+            return sourceCoordinate(image ?? corner, orientation: session.orientation)
+        }
+        let low = corners.dropFirst().reduce(corners[0], simd_min)
+        let high = corners.dropFirst().reduce(corners[0], simd_max)
         let x0 = max(0, Int(floor(low.x * Double(levelWidth))) - margin)
         let y0 = max(0, Int(floor(low.y * Double(levelHeight))) - margin)
         let x1 = min(levelWidth, Int(ceil(high.x * Double(levelWidth))) + margin)

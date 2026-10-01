@@ -71,6 +71,10 @@ public struct EditRecipe: Sendable, Hashable {
     public var masks: [MaskLayer] = []
     /// The shared recipe this edit was last built from.
     public var appliedRecipe: AppliedRecipe?
+    /// The crop, in the straightened frame (see `GeometryMap`); its angle is `cropAngle`.
+    public var crop: CropRect = .full
+    /// The user's rotation and flip, after the camera's orientation.
+    public var orientation: ImageOrientation = .identity
     /// Parameters and fields written by a newer Redlamp. They don't affect rendering here,
     /// but are written back unchanged so saving never erases them.
     public private(set) var unknownValues: [String: Double] = [:]
@@ -116,6 +120,8 @@ public struct EditRecipe: Sendable, Hashable {
             && pointCurve == EditRecipe.linearPointCurve
             && masks.isEmpty
             && appliedRecipe == nil
+            && crop.isFull
+            && orientation.isIdentity
             && unknownValues.isEmpty
             && unknownFields.isEmpty
     }
@@ -140,6 +146,7 @@ public struct EditRecipe: Sendable, Hashable {
 extension EditRecipe: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case version, processVersion, treatment, baseLook, whiteBalance, pointCurve, values, masks, appliedRecipe
+        case crop, orientation
         /// Format version 1's name for `baseLook`; read, never written.
         case profile
     }
@@ -164,6 +171,8 @@ extension EditRecipe: Codable {
         }
         masks = try container.decodeIfPresent([MaskLayer].self, forKey: .masks) ?? []
         appliedRecipe = try container.decodeIfPresent(AppliedRecipe.self, forKey: .appliedRecipe)
+        crop = try container.decodeIfPresent(CropRect.self, forKey: .crop) ?? .full
+        orientation = try container.decodeIfPresent(ImageOrientation.self, forKey: .orientation) ?? .identity
         unknownFields = try decoder.container(keyedBy: DynamicCodingKey.self)
             .unknownFields(excluding: Set(CodingKeys.allCases.map(\.stringValue)))
     }
@@ -186,5 +195,11 @@ extension EditRecipe: Codable {
             try container.encode(masks, forKey: .masks)
         }
         try container.encodeIfPresent(appliedRecipe, forKey: .appliedRecipe)
+        if !crop.isFull {
+            try container.encode(crop, forKey: .crop)
+        }
+        if !orientation.isIdentity {
+            try container.encode(orientation, forKey: .orientation)
+        }
     }
 }

@@ -160,8 +160,17 @@ public struct DevelopParams {
     public var workToCam2 = SIMD4<Float>(0, 0, 1, 0)
     public var mood0 = SIMD4<Float>(0, 0, 0, 0)
     public var mood1 = SIMD4<Float>(0, 0, 0, 0)
+    public var toImage0 = SIMD4<Float>(1, 0, 0, 1)
+    public var toImage1 = SIMD4<Float>(0, 1, 0, 0)
+    public var toImage2 = SIMD4<Float>(0, 0, 1, 0)
 
     public init() {}
+
+    /// The output frame to the photo (see `GeometryMap.toImage`), and the photo's aspect.
+    public mutating func setOutputToImage(_ matrix: simd_float3x3, imageAspect: Float) {
+        (toImage0, toImage1, toImage2) = Self.rows(matrix)
+        toImage0.w = imageAspect
+    }
 
     public mutating func setCameraToWorking(_ matrix: simd_float3x3) {
         (camToWork0, camToWork1, camToWork2) = Self.rows(matrix)

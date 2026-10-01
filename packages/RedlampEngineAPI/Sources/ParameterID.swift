@@ -99,6 +99,9 @@ public enum ParameterID: String, CaseIterable, Codable, Sendable, Hashable {
     case lensVignetting = "lens.vignetting"
     case lensVignettingMidpoint = "lens.vignettingMidpoint"
 
+    /// Crop
+    case cropAngle = "crop.angle"
+
     // Transform
     case transformVertical = "transform.vertical"
     case transformHorizontal = "transform.horizontal"

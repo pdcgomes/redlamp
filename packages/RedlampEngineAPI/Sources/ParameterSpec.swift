@@ -324,24 +324,24 @@ public enum ParameterCatalog {
                 availability: geometry,
             ),
 
-            ParameterSpec(.transformVertical, "Vertical", availability: geometry),
-            ParameterSpec(.transformHorizontal, "Horizontal", availability: geometry),
+            ParameterSpec(
+                .cropAngle, "Angle", range: -45 ... 45, step: 0.01, format: .signedDecimal(2),
+            ),
+
+            ParameterSpec(.transformVertical, "Vertical"),
+            ParameterSpec(.transformHorizontal, "Horizontal"),
             ParameterSpec(
                 .transformRotate, "Rotate", range: -10 ... 10, step: 0.1, format: .signedDecimal(1),
-                availability: geometry,
             ),
-            ParameterSpec(.transformAspect, "Aspect", availability: geometry),
+            ParameterSpec(.transformAspect, "Aspect"),
             ParameterSpec(
                 .transformScale, "Scale", range: 50 ... 150, default: 100, format: .integer,
-                availability: geometry,
             ),
             ParameterSpec(
                 .transformOffsetX, "X Offset", range: -100 ... 100, step: 0.1, format: .signedDecimal(1),
-                availability: geometry,
             ),
             ParameterSpec(
                 .transformOffsetY, "Y Offset", range: -100 ... 100, step: 0.1, format: .signedDecimal(1),
-                availability: geometry,
             ),
 
             ParameterSpec(.vignetteAmount, "Amount", track: .monochrome),

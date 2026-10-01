@@ -18,7 +18,9 @@ kernel void rl_raw_clipping(
     if (gid.x >= width || gid.y >= height) return;
     constexpr sampler linearSampler(coord::normalized, filter::linear, mip_filter::linear, address::clamp_to_edge);
     float2 uv = p.region.xy + (float2(gid) + 0.5f) / float2(width, height) * p.region.zw;
-    float2 sourceUV = orient(uv, int(p.geometry.x));
+    float2 imageUV;
+    if (outputToImage(uv, p, imageUV)) return;
+    float2 sourceUV = orient(imageUV, int(p.geometry.x));
     float3 camera = source.sample(linearSampler, sourceUV, level(p.geometry.y)).rgb;
     float3 limit = clip.xyz;
     if (clip.w > 0.5f) limit *= noiseGain.sample(linearSampler, sourceUV).rgb;

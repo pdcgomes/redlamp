@@ -433,9 +433,12 @@ kernel void rl_develop(
     if (gid.x >= width || gid.y >= height) return;
 
     constexpr sampler linearSampler(coord::normalized, filter::linear, mip_filter::linear, address::clamp_to_edge);
-    // Image coordinates of the whole photo, so masks, vignette and grain don't depend on the region.
+    // The whole developed (cropped) frame, so vignette and grain don't depend on the region...
     float2 uv = p.region.xy + (float2(gid) + 0.5f) / float2(width, height) * p.region.zw;
-    float2 sourceUV = orient(uv, int(p.geometry.x));
+    // ...and the photo point behind it, which masks are placed in.
+    float2 imageUV;
+    bool outsideImage = outputToImage(uv, p, imageUV);
+    float2 sourceUV = orient(imageUV, int(p.geometry.x));
     float3 camera;
     if (p.denoised.z > 0.0f) {
         constexpr sampler areaSampler(coord::normalized, filter::linear, address::clamp_to_edge);
@@ -447,7 +450,7 @@ kernel void rl_develop(
     // Mask coverage for every layer, then the summed local adjustments.
     int layerCount = min(int(p.masks.x), kMaxMaskLayers);
     float coverage[kMaxMaskLayers];
-    float2 maskPosition = float2(uv.x * p.geometry.w, uv.y);
+    float2 maskPosition = float2(imageUV.x * p.toImage0.w, imageUV.y);
     float4 localColor = 0.0f;
     float4 localTone = 0.0f;
     float2 localTone2 = 0.0f;
@@ -742,7 +745,7 @@ kernel void rl_develop(
         case 4: encoded = float3(cover); break;
         case 5: {
             constexpr sampler guideSampler(coord::normalized, filter::linear, address::clamp_to_edge);
-            float lightness = maskGuide.sample(guideSampler, uv).x;
+            float lightness = maskGuide.sample(guideSampler, imageUV).x;
             encoded = mix(float3(lightness), tint, cover * 0.55f);
             break;
         }
@@ -753,6 +756,8 @@ kernel void rl_develop(
     // Output encoding: 0 linear output primaries, 1 sRGB-encoded sRGB, 2 sRGB-encoded Display P3,
     // 4 OKLab (the output primaries are Rec.2020 then).
     int encoding = int(p.geometry.z);
+    // Where rotation or Transform leaves no photo, the frame is white, as Lightroom's is.
+    if (outsideImage) encoded = float3(1.0f);
     float3 result = encoding == 4 ? rec2020ToOKLab(srgbDecode3(encoded))
         : encoding == 0 || encoding == 3 ? srgbDecode3(encoded) : encoded;
     out.write(float4(result, 1.0f), gid);
