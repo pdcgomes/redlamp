@@ -9,6 +9,8 @@
     "studio": "remotion studio src/index.ts",
     "prerender": "npm run sync-assets",
     "render": "node scripts/render.mjs",
+    "prestills": "npm run sync-assets",
+    "stills": "node scripts/stills.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -1,5 +1,8 @@
 node_modules/
 out/
 
+# Window captures for the stills, made from the owner's photos by scripts/capture-promo.sh.
+public/promo/
+
 # Copied from docs/ by ../web/scripts/sync-assets.mjs before every studio session and render.
 public/synced/

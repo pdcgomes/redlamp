@@ -11,10 +11,12 @@ type Props = {
   glow?: number;
   /** Frames where the light flares and decays, on the beat. */
   pulses?: number[];
+  /** Grain over everything. Stills turn it off and lay their own under the captures. */
+  grain?: boolean;
 };
 
 /** The dark room every scene happens in: warm near-black, one red light, a breath of grain. */
-export function Stage({ children, glowX = 0.5, glowY = 0.12, glow = 1, pulses = [] }: Props) {
+export function Stage({ children, glowX = 0.5, glowY = 0.12, glow = 1, pulses = [], grain = true }: Props) {
   const frame = useCurrentFrame();
   const breathe = 0.92 + 0.08 * noise2D("stage", frame / 60, 0);
   const flare = pulses.reduce((sum, p) => (frame >= p ? sum + 0.7 * Math.exp(-(frame - p) / 5) : sum), 0);
@@ -28,7 +30,7 @@ export function Stage({ children, glowX = 0.5, glowY = 0.12, glow = 1, pulses = 
       />
       <AbsoluteFill style={{ background: "radial-gradient(120% 90% at 50% 50%, transparent 55%, rgba(0,0,0,0.55))" }} />
       {children}
-      <Grain />
+      {grain ? <Grain /> : null}
     </AbsoluteFill>
   );
 }

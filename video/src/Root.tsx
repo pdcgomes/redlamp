@@ -1,5 +1,7 @@
-import { Composition } from "remotion";
+import { Composition, Folder, Still } from "remotion";
 import { durationOf, Explainer, type ExplainerProps } from "./Explainer";
+import { stills } from "./stills";
+import { canvas } from "./stills/canvas";
 import "./theme";
 
 const FPS = 30;
@@ -36,6 +38,11 @@ export function RemotionRoot() {
         height={1080}
         defaultProps={social}
       />
+      <Folder name="Stills">
+        {stills.map(({ id, component }) => (
+          <Still key={id} id={id} component={component} width={canvas.width} height={canvas.height} />
+        ))}
+      </Folder>
     </>
   );
 }

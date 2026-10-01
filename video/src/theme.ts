@@ -15,6 +15,7 @@ export const color = {
   amber: "#f6a04a",
   ring: "#d9d0cb",
   paper: "#f3eee8",
+  ink: "#1a1414",
   mute: "#a89d98",
   dim: "#6f6561",
   hairline: "rgba(243,238,232,0.12)",

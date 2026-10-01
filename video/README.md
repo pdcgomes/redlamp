@@ -25,6 +25,21 @@ mise run video -- render   # render every cut into video/out/
 - Everything on screen is drawn: `src/components/Landscape.tsx` is a vector landscape whose palette runs through the small colour grade in `src/grade.ts`, so slider edits, masks and film looks all change the same drawing. Interface that isn't the point of a shot is skeleton bars.
 - The brand comes from `docs/brand/README.md`: Inter Display (bundled in `public/fonts`, SIL Open Font License), the wall, steel and ruby colours, and one light per frame. The only address shown is redlamp.app.
 
+## Stills
+
+Nine product-brief images for the Reddit announcement, at 2880 × 1800 (a Mac App Store size), each a headline and a few words over real captures of the app. The [design](../docs/plans/2026-10-01-reddit-screenshots-design.md) has their copy and which posts use them.
+
+```bash
+mise run video -- stills                    # render every still into video/out/stills/
+mise run video -- stills still-04-film      # or just some
+scripts/capture-promo.sh ~/Pictures/promo   # capture the app from a folder of your photos
+```
+
+- `src/stills/images/` holds one component per image and `src/stills/components/` the pieces they share. They appear in Remotion Studio under **Stills**. Each render writes a PNG master and a JPEG for uploading.
+- The captures come from `scripts/capture-promo.sh`. It opens the Debug app on a copy of the folder at a 1600 × 1000 window on a Retina screen, applies a script per shot, and saves the window into `public/promo/`, which is never committed. A `promo.txt` in the folder names the photo for each role; the script's header lists them.
+- `src/stills/regions.ts` says where things sit in a 1600 × 1000 capture, such as the photo at Fit or the Masks panel, so crops survive new photos.
+- A capture that doesn't exist yet shows as a labelled placeholder with its name and region. The hero falls back to the README's `hero.png`.
+
 ## Assets
 
 The logo, the app icon's lens and the film icons are copied from `docs/` by `../web/scripts/sync-assets.mjs` before every studio session and render.

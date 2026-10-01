@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Open the explainer video (video/) in Remotion Studio; pass `render` to render the MP4s and stills into video/out"
+#MISE description="Open the explainer video (video/) in Remotion Studio; pass `render` to render the MP4s into video/out, or `stills [id…]` for the Reddit stills"
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)/video"
@@ -9,8 +9,12 @@ cd "$(git rev-parse --show-toplevel)/video"
 case "${1:-studio}" in
 studio) npm run studio ;;
 render) npm run render ;;
+stills)
+    shift
+    npm run stills -- "$@"
+    ;;
 *)
-    echo "usage: mise run video [-- studio|render]" >&2
+    echo "usage: mise run video [-- studio|render|stills [id…]]" >&2
     exit 1
     ;;
 esac
