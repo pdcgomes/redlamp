@@ -80,6 +80,29 @@ static inline float3 toneCurve(float3 x) {
     return yLo + (yHi - yLo) * (x - lo) / (hi - lo);
 }
 
+// The tone curve's exact inverse, for input that is already display-referred (a JPEG): the
+// filmic part is a quadratic in x, the shoulder a power in log2.
+static inline float inverseToneCurveChannel(float y) {
+    y = clamp(y, 0.0f, 1.0f);
+    if (y <= kShoulderStartY) {
+        float t = y * kFilmicAtOne;
+        float a = 2.43f * t - 2.51f, b = 0.59f * t - 0.03f, c = 0.14f * t;
+        return max((-b - sqrt(max(b * b - 4.0f * a * c, 0.0f))) / (2.0f * a), 0.0f);
+    }
+    float u = 1.0f - pow((1.0f - y) / (1.0f - kShoulderStartY), 1.0f / kShoulderPower);
+    return kShoulderStart * exp2(u * kShoulderWidthEV);
+}
+
+static inline float3 inverseToneCurve(float3 y) {
+    float3 x = float3(inverseToneCurveChannel(y.r), inverseToneCurveChannel(y.g), inverseToneCurveChannel(y.b));
+    float lo = min3(y.r, y.g, y.b);
+    float hi = max3(y.r, y.g, y.b);
+    if (hi - lo < 1e-7f) return x;
+    float xLo = inverseToneCurveChannel(lo);
+    float xHi = inverseToneCurveChannel(hi);
+    return xLo + (xHi - xLo) * (y - lo) / (hi - lo);
+}
+
 // Fits a linear Rec.2020 color into the output gamut: channels are clipped to [0, 1], then each
 // channel's position between the smallest and largest is restored. That keeps hue and nearly all
 // saturation; mapping at constant OKLab lightness instead visibly dulls vivid colors.
@@ -273,6 +296,7 @@ kernel void rl_develop(
     texture3d<half, access::read> lookTable [[texture(3)]],
     texture2d<float, access::sample> hazeMap [[texture(4)]],
     texture2d<float, access::sample> glowSource [[texture(5)]],
+    texture2d<float, access::sample> glowLights [[texture(8)]],
     uint2 gid [[thread_position_in_grid]])
 {
     uint width = uint(p.outputSize.x);
@@ -324,6 +348,14 @@ kernel void rl_develop(
             camera += (veil - camera) * (0.3f * min(-dehaze, 1.0f));
         }
     }
+    // Process 3: a bitmap is already rendered, so it stands in for the tone curve's output: undo
+    // the curve here and the default edit shows the file as it is (as Lightroom does).
+    if (p.render.x > 0.5f) {
+        float3 shown = clamp(mul3(p.camToWork0, p.camToWork1, p.camToWork2, camera), 0.0f, 1.0f);
+        // Undoing the curve saturates bright colours beyond the camera's (sRGB) primaries, so a
+        // channel may go negative here; working space takes it back.
+        camera = mul3(p.workToCam0, p.workToCam1, p.workToCam2, inverseToneCurve(shown));
+    }
     camera *= p.wbRatio.xyz;
     camera *= float3(exp2(localColor.x * 0.6f), exp2(-localColor.y * 0.4f), exp2(-localColor.x * 0.6f));
     float3 scene = max(mul3(p.camToWork0, p.camToWork1, p.camToWork2, camera), 0.0f);
@@ -342,7 +374,8 @@ kernel void rl_develop(
         float3 own = glowSource.sample(glowSampler, sourceUV, level(0.0f)).rgb;
         float3 core;
         if (p.glow.x > 0.0f) {
-            float3 wide = wideGlow(glowSource, sourceUV, p.glow.y, core);
+            float3 wide = p.render.y > 0.5f ? wideGlow(glowLights, sourceUV, p.glow.y, core)
+                : wideGlow(glowSource, sourceUV, p.glow.y, core);
             wide = max(mul3(p.camToWork0, p.camToWork1, p.camToWork2, max(wide - own, 0.0f) * toScene), 0.0f);
             core = max(mul3(p.camToWork0, p.camToWork1, p.camToWork2, max(core - own, 0.0f) * toScene), 0.0f);
             float h = 0.12f * p.glow.x;

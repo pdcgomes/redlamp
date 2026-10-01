@@ -38,6 +38,8 @@ final class ImageSession: @unchecked Sendable {
     let hazeMap: any MTLTexture
     /// The light halation and bloom spread (see `Glow`), mipmapped.
     let glowSource: any MTLTexture
+    /// The same, boosting only small lights (process 3).
+    let glowLights: any MTLTexture
     /// The gain maps' gain per camera channel, which scaled the sensor noise (see `NoiseGain`).
     let noiseGain: any MTLTexture
 
@@ -53,6 +55,7 @@ final class ImageSession: @unchecked Sendable {
         airlight: SIMD3<Float>,
         hazeMap: any MTLTexture,
         glowSource: any MTLTexture,
+        glowLights: any MTLTexture,
         noiseGain: any MTLTexture,
     ) {
         self.noiseGain = noiseGain
@@ -60,6 +63,7 @@ final class ImageSession: @unchecked Sendable {
         self.airlight = airlight
         self.hazeMap = hazeMap
         self.glowSource = glowSource
+        self.glowLights = glowLights
         self.noise = noise.scaled(by: SIMD3<Float>(balanceMultipliers))
         sensor = SensorKind(decoded.layout)
         self.info = info

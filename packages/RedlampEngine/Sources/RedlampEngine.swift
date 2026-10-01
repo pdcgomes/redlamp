@@ -253,6 +253,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         encoder.setTexture(inputs.lookTable ?? baseLooks.identity, index: 3)
         encoder.setTexture(session.hazeMap, index: 4)
         encoder.setTexture(session.glowSource, index: 5)
+        encoder.setTexture(session.glowLights, index: 8)
         encoder.setBytes(&inputs.params, length: MemoryLayout<DevelopParams>.stride, index: 0)
         encoder.setBytes(&inputs.toneLUT, length: inputs.toneLUT.count * MemoryLayout<Float>.stride, index: 1)
         encoder.setBytes(&inputs.mixer, length: inputs.mixer.count * MemoryLayout<Float>.stride, index: 2)

@@ -54,7 +54,9 @@ public struct EditRecipe: Sendable, Hashable {
     /// Bumped whenever a change to rendering math would make existing edits look different.
     /// 2: grain is sized to the frame rather than the sensor's pixels, and is strongest in the
     /// low midtones and shadows, as film's is.
-    public static let currentProcessVersion = 2
+    /// 3: a bitmap (JPEG, HEIC, PNG, TIFF) renders as the file at default settings, and halation
+    /// boosts only small clipped lights, not a clipped sky.
+    public static let currentProcessVersion = 3
     public static let linearPointCurve = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]
 
     /// Sidecars written before process versions existed are version 1.

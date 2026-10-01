@@ -15,11 +15,13 @@ enum Glow {
     /// Where the clip point's extra energy starts.
     static let clipKnee: Float = 0.9
 
+    /// `lightsOnly` (process 3) withholds the clip boost from large bright areas such as a sky.
     static func encodeSource(
         pyramid: any MTLTexture,
         device: any MTLDevice,
         kernels: KernelLibrary,
         commands: any MTLCommandBuffer,
+        lightsOnly: Bool = false,
     ) throws -> any MTLTexture {
         let longEdge = max(pyramid.width, pyramid.height)
         let mapLevel = max(1, Int(ceil(log2(Double(longEdge) / Double(mapLongEdge)))))
@@ -38,7 +40,7 @@ enum Glow {
         }
         encoder.label = "Glow source"
         var params = GlowParams(
-            size: SIMD4(Int32(width), Int32(height), Int32(level), 0),
+            size: SIMD4(Int32(width), Int32(height), Int32(level), lightsOnly ? 1 : 0),
             shape: SIMD4(clipGain, threshold.lowerBound, threshold.upperBound, clipKnee),
         )
         encoder.setComputePipelineState(kernels.glowSource)

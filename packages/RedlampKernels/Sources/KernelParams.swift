@@ -154,11 +154,16 @@ public struct DevelopParams {
     public var haze = SIMD4<Float>(0, 0, 0, 0)
     public var glow = SIMD4<Float>(0, 0, 0, 0)
     public var grain2 = SIMD4<Float>(0, 0, 0, 0)
+    public var render = SIMD4<Float>(0, 0, 0, 0)
+    public var workToCam0 = SIMD4<Float>(1, 0, 0, 0)
+    public var workToCam1 = SIMD4<Float>(0, 1, 0, 0)
+    public var workToCam2 = SIMD4<Float>(0, 0, 1, 0)
 
     public init() {}
 
     public mutating func setCameraToWorking(_ matrix: simd_float3x3) {
         (camToWork0, camToWork1, camToWork2) = Self.rows(matrix)
+        (workToCam0, workToCam1, workToCam2) = Self.rows(matrix.inverse)
     }
 
     public mutating func setDisplayToOutput(_ matrix: simd_float3x3) {

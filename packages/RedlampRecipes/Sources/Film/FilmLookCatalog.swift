@@ -22,6 +22,8 @@ public struct FilmLookDefinition: Sendable, Hashable {
     public var process: FilmProcess
     /// Published looks never change: a new design is a new version.
     public var version: Int
+    /// Lint checks the look fails by design, such as a cross-processed look's skin.
+    public var lintWaivers: Set<String> = []
     public var parameters: FilmLookParameters
     /// Grain, halation and bloom, as Effects panel values.
     public var effects: [ParameterID: Double]
@@ -250,6 +252,8 @@ public enum FilmLookCatalog {
             monochrome: true,
             film: "kodak-tri-x-400", print: "ilford-multigrade-rc", printVariant: ["filter": "4"], flare: 0.004,
             grain: (34, 36, 0), roughness: 65, halation: (5, 40),
+            // Grade 4's steep curve shows the table's 0.5 EV steps on a full-range gradient (TON-24).
+            lintWaivers: ["banding"],
         ),
         look(
             "vision3-2383-bleach-bypass", "Vision3 500T · 2383 Bleach Bypass",
@@ -310,8 +314,7 @@ public enum FilmLookCatalog {
             return BuiltInRecipes.make(
                 "stock/\(look.id)", look.name, group: "Film Stocks", summary: look.summary, tags: ["film"],
                 values: look.effects, treatment: look.isMonochrome ? .blackAndWhite : nil, baseLook: package.reference,
-                // Cross-processing shifts skin by design.
-                lintWaivers: look.process == .crossProcessed ? ["skin-hue"] : [], version: look.version,
+                lintWaivers: look.lintWaivers, version: look.version,
             )
         }
     }
@@ -343,6 +346,7 @@ public enum FilmLookCatalog {
         roughness: Double = 50,
         halation: (amount: Double, size: Double),
         bloom: (amount: Double, size: Double)? = nil,
+        lintWaivers: Set<String> = [],
     ) -> FilmLookDefinition {
         var parameters = FilmLookParameters()
         parameters.scanner = scanner
@@ -362,7 +366,10 @@ public enum FilmLookCatalog {
         return FilmLookDefinition(
             id: id, name: name, summary: summary, maker: maker, format: format, icon: icon, isMonochrome: monochrome,
             film: film, filmVariant: filmVariant, print: print, printVariant: printVariant, process: process,
-            version: version, parameters: parameters, effects: effects,
+            version: version,
+            // Cross-processing shifts skin by design.
+            lintWaivers: lintWaivers.union(process == .crossProcessed ? ["skin-hue"] : []),
+            parameters: parameters, effects: effects,
         )
     }
 }

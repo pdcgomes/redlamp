@@ -179,6 +179,85 @@ struct FilmEffectsTests {
     }
 
     @Test(.enabled(if: BaseLookTests.canRender))
+    func `process 3 shows a bitmap as the file at default settings; process 2 still tone-maps it`() async throws {
+        let url = try BaseLookTests.chart()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil).flatMap {
+            CGImageSourceCreateImageAtIndex($0, 0, nil)
+        })
+        let file = BaseLookTests.pixels(source)
+        let engine = try RedlampEngine()
+        _ = try await engine.open(url)
+        func difference(process: Int) async throws -> (mean: Double, max: Int) {
+            var recipe = EditRecipe()
+            recipe.processVersion = process
+            let rendered = try await BaseLookTests.pixels(engine.renderStill(StillRequest(recipe: recipe)))
+            let differences = zip(file, rendered).enumerated().filter { $0.offset % 4 != 3 }
+                .map { abs(Int($0.element.0) - Int($0.element.1)) }
+            return (Double(differences.reduce(0, +)) / Double(differences.count), differences.max() ?? 0)
+        }
+        let asFile = try await difference(process: 3)
+        let toneMapped = try await difference(process: 2)
+        #expect(asFile.mean < 0.5 && asFile.max <= 3, "process 3 against the file: \(asFile)")
+        #expect(toneMapped.mean > 3, "process 2 should still tone-map: \(toneMapped)")
+    }
+
+    @Test(.enabled(if: BaseLookTests.canRender))
+    func `process 3 halation boosts a small light, not a clipped sky`() async throws {
+        // A clipped band across the top (a sky) and, below it, a small clipped light.
+        let size = Self.size
+        var words = [UInt16](repeating: 65535, count: size * size * 4)
+        for y in 0 ..< size {
+            for x in 0 ..< size {
+                let light = hypot(Double(x) - 128, Double(y) - 190) < 5
+                let value = y < 90 || light ? 1.0 : 0.03
+                for c in 0 ..< 3 {
+                    words[(y * size + x) * 4 + c] = UInt16(value * 65535)
+                }
+            }
+        }
+        let data = words.withUnsafeBufferPointer { Data(buffer: $0) }
+        let image = try #require(CGImage(
+            width: size, height: size, bitsPerComponent: 16, bitsPerPixel: 64, bytesPerRow: size * 8,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue | CGImageByteOrderInfo
+                .order16Little.rawValue),
+            provider: CGDataProvider(data: data as CFData)!, decode: nil, shouldInterpolate: false,
+            intent: .defaultIntent,
+        ))
+        let url = FileManager.default.temporaryDirectory.appending(path: "redlamp-sky-\(UUID().uuidString).png")
+        let destination = try #require(CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, image, nil)
+        #expect(CGImageDestinationFinalize(destination))
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        /// The red lift from halation in a band of rows.
+        func lift(process: Int, rows: Range<Int>) async throws -> Double {
+            let engine = try RedlampEngine()
+            _ = try await engine.open(url)
+            var plain = EditRecipe()
+            plain.processVersion = process
+            var glowing = plain
+            glowing[.halationAmount] = 80
+            let a = try await BaseLookTests.pixels(engine.renderStill(StillRequest(recipe: plain)))
+            let b = try await BaseLookTests.pixels(engine.renderStill(StillRequest(recipe: glowing)))
+            var total = 0.0
+            for y in rows {
+                for x in 40 ..< 216 where hypot(Double(x) - 128, Double(y) - 190) > 8 {
+                    total += Double(b[(y * size + x) * 4]) - Double(a[(y * size + x) * 4])
+                }
+            }
+            return total / Double(rows.count * 176)
+        }
+        let skyEdge = 92 ..< 110
+        let skyBefore = try await lift(process: 2, rows: skyEdge)
+        let skyNow = try await lift(process: 3, rows: skyEdge)
+        let lightNow = try await lift(process: 3, rows: 180 ..< 200)
+        #expect(skyNow < 0.5 * skyBefore, "red lift under the sky: process 2 \(skyBefore), process 3 \(skyNow)")
+        #expect(lightNow > 2, "the small light still glows: \(lightNow)")
+    }
+
+    @Test(.enabled(if: BaseLookTests.canRender))
     func `colour grain differs between the layers; monochrome grain doesn't`() async throws {
         // Large enough that frame-sized grain is bigger than a pixel.
         let url = try Self.flat(0.45, size: 1536)

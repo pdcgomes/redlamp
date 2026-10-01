@@ -47,6 +47,10 @@ struct DevelopParams {
     float4 haze;              // xyz airlight (pyramid camera RGB), w Dehaze (slider / 100); needs the haze map
     float4 glow;              // x halation amount, y halation radius, z bloom amount, w bloom radius (radii as fractions of the long side)
     float4 grain2;            // x colour grain (0 monochrome, 1 independent per layer), y 1 = process 2 grain
+    float4 render;            // process 3: x 1 = bitmap input is display-referred, y 1 = halation from small lights only
+    float4 workToCam0;        // linear Rec.2020 -> camera RGB (rows), the inverse of camToWork
+    float4 workToCam1;
+    float4 workToCam2;
 };
 
 // Noise reduction over one work area of the pyramid.
