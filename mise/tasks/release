@@ -4,10 +4,14 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-# DRY_RUN=1 builds, signs and zips without notarizing, tagging or publishing.
+# DRY_RUN=1 builds, signs and zips without notarizing, tagging or publishing. With it, REF builds
+# another commit, such as unpushed changes to this script.
 DRY_RUN="${DRY_RUN:-0}"
 NOTARY_PROFILE="${REDLAMP_NOTARY_PROFILE:?REDLAMP_NOTARY_PROFILE is not set (run through mise)}"
 TEAM_ID="${REDLAMP_TEAM_ID:?REDLAMP_TEAM_ID is not set (run through mise)}"
+# Every installed copy checks this feed for updates (Info.plist's SUFeedURL). The site redirects
+# it to the appcast.xml on the release marked Latest (web/next.config.ts).
+FEED="https://redlamp.app/appcast.xml"
 
 fail() {
     echo "error: $*" >&2
@@ -17,7 +21,7 @@ fail() {
 # A release is origin/main, built in a clean worktree, so nothing uncommitted or untracked
 # in this checkout can end up in it.
 git fetch --quiet origin
-COMMIT="$(git rev-parse origin/main)"
+COMMIT="$(git rev-parse "${REF:-origin/main}^{commit}")"
 VERSION="$(git show "$COMMIT:Version.xcconfig" | sed -nE 's/^MARKETING_VERSION *= *([^ ]+).*/\1/p')"
 BUILD="$(git rev-list --count "$COMMIT")"
 TAG="v$VERSION"
@@ -33,6 +37,7 @@ IDENTITY="${REDLAMP_SIGN_IDENTITY:-$(security find-identity -v -p codesigning \
 [ -n "$IDENTITY" ] || fail "no Developer ID Application identity for team $TEAM_ID in the keychain"
 
 if [ "$DRY_RUN" != 1 ]; then
+    [ "$COMMIT" = "$(git rev-parse origin/main)" ] || fail "a release builds origin/main; REF is only for dry runs"
     git diff --quiet "$COMMIT" -- Version.xcconfig \
         || fail "Version.xcconfig has changes that aren't on origin/main, which is what gets released; push them first"
     if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || [ -n "$(git ls-remote --tags origin "refs/tags/$TAG")" ]; then
@@ -43,7 +48,7 @@ if [ "$DRY_RUN" != 1 ]; then
     gh auth status >/dev/null 2>&1 || fail "gh is not signed in"
 fi
 
-echo "==> Releasing Redlamp $VERSION (build $BUILD) from origin/main: $(git log -1 --format='%h %s' "$COMMIT")"
+echo "==> Releasing Redlamp $VERSION (build $BUILD) from ${REF:-origin/main}: $(git log -1 --format='%h %s' "$COMMIT")"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 WORK="$(mktemp -d)"
@@ -65,6 +70,7 @@ for scheme in Redlamp redlamp; do
         -destination 'platform=macOS,arch=arm64' \
         -derivedDataPath "$OUT/DerivedData" \
         CURRENT_PROJECT_VERSION="$BUILD" \
+        REDLAMP_UPDATE_FEED="$FEED" \
         CODE_SIGN_STYLE=Manual \
         CODE_SIGN_IDENTITY="$IDENTITY" \
         CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
@@ -80,6 +86,13 @@ echo "==> Assembling $APP..."
 ditto "$PRODUCTS/Redlamp.app" "$APP"
 mkdir -p "$APP/Contents/Helpers"
 ditto "$PRODUCTS/redlamp" "$APP/Contents/Helpers/redlamp"
+# Sparkle ships its helpers ad-hoc signed, and Code Sign on Copy re-signs only the framework,
+# so they're signed here, inside out. Its XPC services are only for sandboxed apps.
+SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
+rm -rf "$SPARKLE/XPCServices" "$SPARKLE/Versions/B/XPCServices"
+for code in "$SPARKLE/Versions/B/Autoupdate" "$SPARKLE/Versions/B/Updater.app" "$SPARKLE"; do
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$code"
+done
 codesign --force --options runtime --timestamp \
     --preserve-metadata=entitlements,requirements,flags \
     --sign "$IDENTITY" "$APP"
@@ -94,15 +107,42 @@ if [ "$DRY_RUN" = 1 ]; then
     exit 0
 fi
 
+# Installed copies trust only the app's public key, so the zip must be signed with its pair.
+SPARKLE_BIN="$SRC/Tuist/.build/artifacts/sparkle/Sparkle/bin"
+KEY="$("$SPARKLE_BIN/generate_keys" --account redlamp -p)" \
+    || fail "no Sparkle signing key for account 'redlamp' in the keychain (see README: Releasing)"
+[ "$KEY" = "$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$APP/Contents/Info.plist")" ] \
+    || fail "the keychain's Sparkle key isn't the app's SUPublicEDKey"
+
 mise run notarize -- "$APP"
 
 # Zipped after stapling so the download carries its ticket and opens offline.
 ditto -c -k --keepParent "$APP" "$ZIP"
 
+# GitHub's generated notes are only a changelog link, since nothing lands through pull requests.
+NOTES="$OUT/notes.md"
+PREVIOUS="$(git describe --tags --abbrev=0 --match 'v*' "$COMMIT")"
+{
+    echo "Changes since ${PREVIOUS#v}:"
+    echo
+    git log --no-merges --format='- %s' --invert-grep --grep='^Cask: ' "$PREVIOUS..$COMMIT"
+} >"$NOTES"
+"$SRC/scripts/appcast.sh" "$APP" "$ZIP" \
+    "https://github.com/pdcgomes/redlamp/releases/download/$TAG/$(basename "$ZIP")" "$NOTES" >"$OUT/appcast.xml"
+xmllint --noout "$OUT/appcast.xml"
+
 echo "==> Publishing $TAG..."
 git tag -a "$TAG" "$COMMIT" -m "Redlamp $VERSION"
 git push origin "$TAG"
-# redlamp.app's download button and the Homebrew cask follow the release marked Latest.
-gh release create "$TAG" "$ZIP" --verify-tag --latest --title "Redlamp $VERSION" --generate-notes
+# redlamp.app's download button, the Homebrew cask and the update feed follow the release marked Latest.
+gh release create "$TAG" "$ZIP" "$OUT/appcast.xml" --verify-tag --latest --title "Redlamp $VERSION" \
+    --notes-file "$NOTES" --generate-notes
 
-echo "==> Released $TAG. The Update cask workflow points Casks/redlamp.rb at it."
+for _ in 1 2 3 4 5 6; do
+    if grep -q "<sparkle:version>$BUILD</sparkle:version>" <<<"$(curl -fsSL "$FEED" 2>/dev/null || true)"; then
+        echo "==> Released $TAG, and $FEED offers it. The Update cask workflow points Casks/redlamp.rb at it."
+        exit 0
+    fi
+    sleep 10
+done
+fail "released $TAG, but $FEED doesn't offer build $BUILD; check the redirect in web/next.config.ts"
