@@ -242,7 +242,9 @@ public enum FilmLookCatalog {
             film: "fuji-eterna-vivid-250d", print: "kodak-2383", flare: 0.004,
             grain: (21, 30, 40), halation: (12, 45), bloom: (6, 50),
         ),
-        // Slides are exposed for their highlights, so mid-grey sits a little lower.
+        // Slides are exposed for their highlights, so mid-grey sits a little lower. Their interimage
+        // effects are strong (Velvia's most of all), which gives slide film its saturation; the
+        // strengths are set so the stocks keep the order photographs shot on them show.
         look(
             "provia-100f", "Provia 100F", "Clean, natural slide film",
             maker: "Fujifilm", format: "Slide film · ISO 100", icon: FilmIcon(
@@ -252,7 +254,8 @@ public enum FilmLookCatalog {
                 text: .init(0.08, 0.4, 0.48),
                 label: "100F",
             ),
-            film: "fuji-provia-100f", displayGrey: 0.24,
+            // 2: stronger interimage effects and a brighter mid-grey, as photographs shot on it show.
+            film: "fuji-provia-100f", version: 2, displayGrey: 0.27, interlayer: 0.7,
             grain: (8, 18, 25), halation: (4, 35),
         ),
         look(
@@ -264,7 +267,8 @@ public enum FilmLookCatalog {
                 text: .init(0.36, 0.12, 0.5),
                 label: "50",
             ),
-            film: "fuji-velvia-50", displayGrey: 0.24,
+            // 2: stronger interimage effects and a brighter mid-grey, as photographs shot on it show.
+            film: "fuji-velvia-50", version: 2, displayGrey: 0.27, interlayer: 0.8,
             grain: (9, 16, 25), halation: (4, 35),
         ),
         look(
@@ -276,7 +280,8 @@ public enum FilmLookCatalog {
                 text: .init(0.4, 0.14, 0.52),
                 label: "100",
             ),
-            film: "fuji-velvia-100", displayGrey: 0.24,
+            // 2: stronger interimage effects and a brighter mid-grey, as photographs shot on it show.
+            film: "fuji-velvia-100", version: 2, displayGrey: 0.27, interlayer: 0.5,
             grain: (8, 18, 25), halation: (4, 35),
         ),
         look(
@@ -288,7 +293,8 @@ public enum FilmLookCatalog {
                 text: .init(0.6, 0.12, 0.08),
                 label: "E100",
             ),
-            film: "kodak-ektachrome-e100", displayGrey: 0.24,
+            // 2: stronger interimage effects and a brighter mid-grey, as photographs shot on it show.
+            film: "kodak-ektachrome-e100", version: 2, displayGrey: 0.27, interlayer: 0.4,
             grain: (8, 18, 25), halation: (4, 35),
         ),
         look(
@@ -300,7 +306,8 @@ public enum FilmLookCatalog {
                 text: .init(0.5, 0.08, 0.05),
                 label: "K64",
             ),
-            film: "kodak-kodachrome-64", displayGrey: 0.24,
+            // 2: stronger interimage effects and a brighter mid-grey, as photographs shot on it show.
+            film: "kodak-kodachrome-64", version: 2, displayGrey: 0.27, interlayer: 0.5,
             grain: (10, 20, 25), halation: (4, 35),
         ),
         look(
@@ -569,6 +576,7 @@ public enum FilmLookCatalog {
         exposure: Double = 0,
         flare: Double = 0,
         displayGrey: Double? = nil,
+        interlayer: Double? = nil,
         grain: (amount: Double, size: Double, color: Double),
         roughness: Double = 50,
         halation: (amount: Double, size: Double),
@@ -583,6 +591,7 @@ public enum FilmLookCatalog {
         parameters.exposure = exposure
         parameters.flare = flare
         parameters.displayGrey = displayGrey ?? parameters.displayGrey
+        parameters.interlayer = interlayer ?? parameters.interlayer
         var effects: [ParameterID: Double] = [
             .grainAmount: grain.amount, .grainSize: grain.size, .grainColor: grain.color, .grainRoughness: roughness,
             .halationAmount: halation.amount, .halationSize: halation.size,

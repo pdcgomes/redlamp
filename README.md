@@ -669,6 +669,26 @@ Ten one-tap looks in the spirit of Prequel's filters. Each starts from a film lo
 
 ![The ten mood looks on three photos, beside the original](docs/images/film/moods.jpg)
 
+### Checked against photographs shot on the films
+
+`research/film-references/` lists 477 photographs from Wikimedia Commons whose pages name the film. There are 8 to 20 per stock, licensed CC0, CC BY or CC BY-SA, and they're used as references only, never shipped or committed. `redlamp recipe film --validate` renders each look on the look-development set, and `research/film-references/analyse.py` compares them with the photographs in OKLab. It compares contrast and saturation, and the colour of foliage, sky, skin and near-neutral shadows and highlights.
+
+The two sets show different scenes, so the useful tests are relative ones:
+- **Ranking:** do the looks order the stocks as the photographs do?
+- **Same-scene comparison:** what does each look change against Redlamp's own rendering of the same photos?
+
+The check found one clear error, now fixed. The slides were *less* saturated than Redlamp's default, though in the photographs slide films are the most saturated of all. Slides get much of their saturation from strong interimage effects between their layers, which the model had set as mildly as for negatives. With stronger effects calibrated to the photographs' order (version 2 of the slide looks), saturation against the default rendering is:
+
+| Look | Saturation |
+| --- | --- |
+| Velvia 50 | +31% |
+| Velvia 100 | +20% |
+| Provia 100F | +10% |
+| Ektachrome E100 | +10% |
+| Kodachrome 64 | +7% |
+
+The colour negatives stay within a few percent of the default in saturation and are slightly softer, as lab scans are. The reference photographs differ too much in subject for finer conclusions: Pro 400H's are mostly weddings, CineStill's night streets, and Velvia's landscapes.
+
 ### How faithful are they?
 
 - **The colour comes from the datasheets.** It follows each stock's own curves, sensitivities and dyes, and the stocks keep their published order of contrast and grain.

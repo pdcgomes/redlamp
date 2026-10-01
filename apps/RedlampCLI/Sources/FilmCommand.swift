@@ -14,6 +14,10 @@ enum FilmCommand {
     static func run(_ context: RecipeCommands.Context) async throws {
         let arguments = context.arguments
         let data = Repository.root.appendingPathComponent("research/film-data")
+        if arguments.has("--validate") {
+            try await renderForValidation(context)
+            return
+        }
         if arguments.has("--all") || arguments.value("--look") != nil {
             try await buildCatalog(context, data: data)
             return
@@ -121,5 +125,38 @@ enum FilmCommand {
             print("installed \(package.id)@\(package.version) → \(url.lastPathComponent)")
         }
         print("Regenerate the workspace (mise run generate) so the app bundles the new files.")
+    }
+
+    /// `--validate`: each stock's plain look (and Redlamp's default) on the look-development set,
+    /// for comparing with photographs shot on the film (`research/film-references/analyse.py`).
+    private static func renderForValidation(_ context: RecipeCommands.Context) async throws {
+        let output = Repository.root.appendingPathComponent("build/film-validation")
+        let references = Repository.root.appendingPathComponent("build/film-references")
+        let renderer = try context.renderer()
+        let images = LookDev.images()
+        let looks = FilmLookCatalog.looks.filter { look in
+            look.process == .standard && look.parameters.exposure == 0 && look.filmVariant == nil
+                && look.printVariant == nil
+                && FileManager.default.fileExists(atPath: references.appendingPathComponent(look.film).path)
+        }
+        let recipes: [(String, Recipe?)] = [("default", nil)] + looks.compactMap { look in
+            BuiltInRecipes.recipe(id: look.recipeID).map { (look.id, $0) }
+        }
+        for (name, recipe) in recipes {
+            let folder = output.appendingPathComponent(name)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            for image in images {
+                let file = folder.appendingPathComponent(image.deletingPathExtension().lastPathComponent + ".jpg")
+                if FileManager.default.fileExists(atPath: file.path) {
+                    continue
+                }
+                try await ImageFile.write(renderer.render(recipe, image: image, maxLongEdge: 512), to: file)
+            }
+            print("\(name): \(images.count) renders")
+        }
+        let map = Dictionary(uniqueKeysWithValues: looks.map { ($0.id, $0.film) })
+        try JSONSerialization.data(withJSONObject: map, options: [.prettyPrinted, .sortedKeys])
+            .write(to: output.appendingPathComponent("looks.json"))
+        print("wrote \(output.path)")
     }
 }

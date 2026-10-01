@@ -12,6 +12,8 @@ public enum MoodLooks {
         var film: String
         /// Settings over the film's own effects.
         var values: [ParameterID: Double]
+        /// Published recipes never change: a new film look underneath is a new version.
+        var version = 1
     }
 
     static let moods: [Mood] = [
@@ -63,6 +65,8 @@ public enum MoodLooks {
             slug: "slide-show", name: "Slide Show", summary: "Kodachrome in a slide mount, with a few specks of dust",
             film: "kodachrome-64",
             values: [.dustAmount: 18, .frameStyle: Double(FrameStyle.slideMount.rawValue)],
+            // 2: Kodachrome 64's look moved to version 2.
+            version: 2,
         ),
         Mood(
             slug: "contact-sheet", name: "Contact Sheet", summary: "A hard Tri-X print with the film's rebate and darkroom dust",
@@ -86,7 +90,7 @@ public enum MoodLooks {
                 "mood/\(mood.slug)", mood.name, group: "Mood", summary: mood.summary, tags: ["mood", "film"],
                 values: look.effects.merging(mood.values) { $1 },
                 treatment: look.isMonochrome ? .blackAndWhite : nil, baseLook: package.reference,
-                lintWaivers: look.lintWaivers,
+                lintWaivers: look.lintWaivers, version: mood.version,
             )
         }
     }
