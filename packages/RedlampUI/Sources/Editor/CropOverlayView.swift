@@ -1,12 +1,15 @@
+import AppKit
 import RedlampEngineAPI
 import SwiftUI
 
 /// The crop frame, drawn over the whole straightened frame while the Crop tool is active:
 /// the outside dimmed, a composition guide (`O` cycles it), and handles on the corners and edges. Dragging a
-/// handle resizes (keeping the aspect when it is locked), dragging inside moves the crop.
+/// handle resizes (keeping the aspect when it is locked), dragging inside moves the crop, and
+/// ⌘-dragging (or any drag after Straighten) draws a line to level the photo along.
 struct CropOverlayView: View {
     @Environment(EditorModel.self) private var model
     @State private var dragStart: CropRect?
+    @State private var level: (start: CGPoint, end: CGPoint)?
 
     /// Which edges a handle moves: x −1 left, 1 right; y −1 top, 1 bottom; both 0 moves.
     private struct Handle: Hashable {
@@ -28,6 +31,11 @@ struct CropOverlayView: View {
                 width: crop.width * frame.width, height: crop.height * frame.height,
             )
             ZStack {
+                // Outside the crop a drag only draws a level line.
+                Color.clear
+                    .contentShape(Rectangle())
+                    .gesture(levelGesture)
+
                 Path { path in
                     path.addRect(CGRect(origin: .zero, size: geometry.size))
                     path.addRect(rect)
@@ -44,6 +52,15 @@ struct CropOverlayView: View {
                     .stroke(Color.white.opacity(0.9), lineWidth: 1)
                     .contentShape(Rectangle().path(in: rect))
                     .gesture(dragGesture(Handle(x: 0, y: 0), frame: frame))
+
+                if let level {
+                    Path { path in
+                        path.move(to: level.start)
+                        path.addLine(to: level.end)
+                    }
+                    .stroke(Color.yellow, style: StrokeStyle(lineWidth: 1.5, dash: [6, 3]))
+                    .allowsHitTesting(false)
+                }
 
                 ForEach(Self.handles, id: \.self) { handle in
                     Rectangle()
@@ -110,9 +127,36 @@ struct CropOverlayView: View {
         }
     }
 
+    private var isLevelling: Bool {
+        model.isStraightening || NSEvent.modifierFlags.contains(.command)
+    }
+
+    private var levelGesture: some Gesture {
+        DragGesture(minimumDistance: 2)
+            .onChanged { gesture in
+                guard level != nil || isLevelling else { return }
+                level = (gesture.startLocation, gesture.location)
+            }
+            .onEnded { _ in
+                finishLevel()
+            }
+    }
+
+    private func finishLevel() {
+        if let level {
+            model.straighten(from: level.start, to: level.end)
+        }
+        level = nil
+    }
+
     private func dragGesture(_ handle: Handle, frame: CGRect) -> some Gesture {
         DragGesture(minimumDistance: 1)
             .onChanged { gesture in
+                // Inside the crop, ⌘ (or Straighten) draws a level line instead of moving it.
+                if handle == Handle(x: 0, y: 0), dragStart == nil, level != nil || isLevelling {
+                    level = (gesture.startLocation, gesture.location)
+                    return
+                }
                 if dragStart == nil {
                     dragStart = model.recipe.crop
                     model.beginEdit()
@@ -123,6 +167,10 @@ struct CropOverlayView: View {
                 model.setCrop(resized(start, handle: handle, dx: dx, dy: dy))
             }
             .onEnded { _ in
+                if level != nil {
+                    finishLevel()
+                    return
+                }
                 dragStart = nil
                 model.endEdit(name: "Crop")
             }

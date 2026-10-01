@@ -205,6 +205,8 @@ public final class EditorModel {
     /// The guide drawn in the crop (`O` cycles it, `⇧O` turns it).
     public var cropOverlay: CropOverlay = .thirds
     public var cropOverlayTurns = 0
+    /// The next drag in the Crop tool draws a line to level (as ⌘-drag always does).
+    public var isStraightening = false
     public var constrainCropToImage = true {
         didSet {
             guard constrainCropToImage, !oldValue else { return }

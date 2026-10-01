@@ -107,6 +107,25 @@ struct CropToolTests {
         #expect(model.recipe.crop == swapped, "outside the crop tool X is Reject again")
     }
 
+    @Test func `straightening levels a drawn horizon or vertical`() async throws {
+        let model = try await openModel()
+        let radians = 10.0 * .pi / 180
+        // A horizon falling 10° to the right is levelled by turning 10° back.
+        model.straighten(from: .zero, to: CGPoint(x: 100 * cos(radians), y: 100 * sin(radians)))
+        expectNear(model.recipe[.cropAngle], -10)
+        #expect(model.history.last?.name == "Straighten")
+        #expect(model.recipe.crop.width < 1, "constrained to the photo")
+        // Drawn the other way, the same line.
+        model.straighten(from: CGPoint(x: 100 * cos(radians), y: 100 * sin(radians)), to: .zero)
+        expectNear(model.recipe[.cropAngle], -20)
+        // A near-vertical edge 10° off is made vertical.
+        model.setValue(.cropAngle, 0)
+        let steep = 80.0 * .pi / 180
+        model.straighten(from: .zero, to: CGPoint(x: 100 * cos(steep), y: 100 * sin(steep)))
+        expectNear(model.recipe[.cropAngle], 10)
+        #expect(!model.isStraightening)
+    }
+
     @Test func `reset removes the crop, angle and turns`() async throws {
         let model = try await openModel()
         model.setValue(.cropAngle, 3)

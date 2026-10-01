@@ -68,6 +68,15 @@ struct CropToolPanel: View {
                 iconButton("arrow.up.and.down.righttriangle.up.righttriangle.down", "Flip Vertical") {
                     model.flip(horizontally: false)
                 }
+                Button {
+                    model.isStraightening.toggle()
+                } label: {
+                    Image(systemName: "level")
+                        .frame(width: 24, height: 20)
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(model.isStraightening ? Color.accentColor : Theme.label)
+                .help("Straighten: draw along a horizon or vertical (or ⌘-drag in the crop)")
                 Spacer()
                 Button("Done") { model.activeTool = .edit }
                     .controlSize(.small)

@@ -167,6 +167,29 @@ public extension EditorModel {
         commit(next, name: horizontally ? "Flip Horizontal" : "Flip Vertical")
     }
 
+    /// Levels the photo along a line drawn on the canvas (view points, y down): nearer horizontal
+    /// it becomes horizontal, nearer vertical it becomes vertical, as Lightroom's Straighten tool.
+    func straighten(from start: CGPoint, to end: CGPoint) {
+        isStraightening = false
+        let dx = end.x - start.x, dy = end.y - start.y
+        guard hypot(dx, dy) > 4 else { return }
+        var tilt = atan2(dy, dx) * 180 / .pi
+        // The line's direction doesn't matter, only its slope.
+        if tilt > 90 {
+            tilt -= 180
+        } else if tilt < -90 {
+            tilt += 180
+        }
+        let correction = abs(tilt) <= 45 ? tilt : tilt - (tilt > 0 ? 90 : -90)
+        // A positive angle turns the photo clockwise on screen, so a line falling to the right
+        // needs a counterclockwise turn.
+        let angle = min(max(recipe[.cropAngle] - correction, -45), 45)
+        var next = recipe
+        next[.cropAngle] = angle
+        constrainCrop(&next)
+        commit(next, name: "Straighten")
+    }
+
     /// Removes the crop, angle and orientation.
     func resetCrop() {
         var next = recipe
