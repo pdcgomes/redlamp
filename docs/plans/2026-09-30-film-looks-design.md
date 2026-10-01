@@ -73,6 +73,6 @@ Lint (neutral axis, monotonic lightness, banding, clipping) on every generated t
 
 1. Scene-referred Base Looks in the engine, and the film model on synthetic data. *Done.*
 2. Datasheet curves for the nine stocks, 2383 and a colour paper; masking; the first measured stocks. *Done:* 13 stocks, with masking, print timing and the lab scanner.
-3. Halation, bloom and grain v2; film-stock recipes that use them. *Done:* halation, bloom, colour grain, process-2 grain (sized to the frame, by tone), and an 18-look catalogue, including the variants and processes below.
+3. Halation, bloom and grain v2; film-stock recipes that use them. *Done:* halation, bloom, colour grain, process-2 grain (sized to the frame, by tone), and a 36-look catalogue from 30 stocks, including the variants and processes below.
 4. The app capture kit and importer; the owner's first ten app looks.
 5. Mood looks with texture effects; everyday presets.

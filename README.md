@@ -15,7 +15,7 @@ Redlamp is built from scratch in Swift and Metal for Apple Silicon. It focuses o
 
 ![Redlamp editing a Nikon Z 6 raw file](docs/images/editor.png)
 
-> **Status: pre-alpha, iteration 2 (macOS).** The core RAW pipeline and the Develop workspace work today: Basic (with Texture, Clarity and Dehaze), Tone Curve, Color Mixer, Color Grading, Detail (noise reduction and sharpening) and Effects, **masking with linear and radial gradients** and local adjustments, and **Recipes**, Redlamp's presets, profiles and LUTs in one, with film looks measured from cameras' own renderings and **[film simulations](#film-simulations)** of 18 film looks from 13 stocks, built from the manufacturers' datasheets. Crop, healing, brush and AI masks, lens corrections, focus stacking, and the iPad and iPhone apps are next. See [Where we are](#where-we-are) and the [Roadmap](#roadmap).
+> **Status: pre-alpha, iteration 2 (macOS).** The core RAW pipeline and the Develop workspace work today: Basic (with Texture, Clarity and Dehaze), Tone Curve, Color Mixer, Color Grading, Detail (noise reduction and sharpening) and Effects, **masking with linear and radial gradients** and local adjustments, and **Recipes**, Redlamp's presets, profiles and LUTs in one, with film looks measured from cameras' own renderings and **[film simulations](#film-simulations)** of 36 film looks from 30 stocks, built from the manufacturers' datasheets. Crop, healing, brush and AI masks, lens corrections, focus stacking, and the iPad and iPhone apps are next. See [Where we are](#where-we-are) and the [Roadmap](#roadmap).
 >
 > This README is the project's primary status page and is kept up to date as work lands. *Last updated: 1 October 2026.*
 
@@ -141,7 +141,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
   | Soft Slide v2 | Astia | 5 photos, 3 bodies, provisional | 4.57 (12.84) |
 
   The others are hand-designed until there's data for them ([look development](docs/recipes/look-development.md#measured-base-looks-the-profiler)). Looks keep Redlamp's own names.
-- [x] **Film simulations:** 18 looks from 13 stocks, built physically from the manufacturers' datasheets, including pushed, overexposed, bleach-bypass and cross-processed variants, with halation, bloom and film grain, a **Film Looks** window and film icons in the Base Look menu ([details](#film-simulations)).
+- [x] **Film simulations:** 36 looks from 30 stocks, built physically from the manufacturers' datasheets, including pushed, overexposed, bleach-bypass and cross-processed variants, with halation, bloom and film grain, a **Film Looks** window and film icons in the Base Look menu ([details](#film-simulations)).
 - [x] **Look-development tools:** lint (neutral axis, skin hue, monotonic lightness, banding, clipping) on a synthetic chart, golden renders per recipe version, style fingerprints and a fitter, and the **Recipe Lab** in the [component harness](#component-harness).
 - [x] **An agent recipe studio** ([docs](docs/recipes/agent-studio.md)): curator, colorist and critic agents work through `redlamp mcp` on briefs drawn from public-domain references. People approve the briefs and pick the winners in the Recipe Lab, and the critics are only trusted after they agree with human picks on held-out pairs.
 
@@ -201,28 +201,52 @@ Redlamp's film looks are **physical simulations**, built from the data in each m
 
 <table>
   <tr>
+    <td align="center" width="16%"><a href="#portra-160"><img src="docs/images/film/icon-portra-160.png" width="72" alt="Portra 160 icon"></a><br><b>Portra 160</b><br><sub>Colour negative</sub></td>
     <td align="center" width="16%"><a href="#portra-400"><img src="docs/images/film/icon-portra-400.png" width="72" alt="Portra 400 icon"></a><br><b>Portra 400</b><br><sub>Colour negative</sub></td>
+    <td align="center" width="16%"><a href="#portra-800"><img src="docs/images/film/icon-portra-800.png" width="72" alt="Portra 800 icon"></a><br><b>Portra 800</b><br><sub>Colour negative</sub></td>
     <td align="center" width="16%"><a href="#ektar-100"><img src="docs/images/film/icon-ektar-100.png" width="72" alt="Ektar 100 icon"></a><br><b>Ektar 100</b><br><sub>Colour negative</sub></td>
     <td align="center" width="16%"><a href="#gold-200"><img src="docs/images/film/icon-gold-200.png" width="72" alt="Gold 200 icon"></a><br><b>Gold 200</b><br><sub>Colour negative</sub></td>
-    <td align="center" width="16%"><a href="#superia-400"><img src="docs/images/film/icon-superia-400.png" width="72" alt="Superia 400 icon"></a><br><b>Superia 400</b><br><sub>Colour negative</sub></td>
-    <td align="center" width="16%"><a href="#portra-400-overexposed"><img src="docs/images/film/icon-portra-400-overexposed.png" width="72" alt="Portra 400 · +2 icon"></a><br><b>Portra 400 · +2</b><br><sub>Colour negative</sub></td>
-    <td align="center" width="16%"><a href="#cinestill-800t"><img src="docs/images/film/icon-cinestill-800t.png" width="72" alt="CineStill 800T icon"></a><br><b>CineStill 800T</b><br><sub>Tungsten negative</sub></td>
+    <td align="center" width="16%"><a href="#ultramax-400"><img src="docs/images/film/icon-ultramax-400.png" width="72" alt="UltraMax 400 icon"></a><br><b>UltraMax 400</b><br><sub>Colour negative</sub></td>
   </tr>
   <tr>
-    <td align="center" width="16%"><a href="#vision3-500t-2383"><img src="docs/images/film/icon-vision3-500t-2383.png" width="72" alt="Vision3 500T · 2383 icon"></a><br><b>Vision3 500T · 2383</b><br><sub>Cinema print</sub></td>
-    <td align="center" width="16%"><a href="#vision3-2383-bleach-bypass"><img src="docs/images/film/icon-vision3-2383-bleach-bypass.png" width="72" alt="2383 Bleach Bypass icon"></a><br><b>2383 Bleach Bypass</b><br><sub>Cinema print</sub></td>
+    <td align="center" width="16%"><a href="#superia-400"><img src="docs/images/film/icon-superia-400.png" width="72" alt="Superia 400 icon"></a><br><b>Superia 400</b><br><sub>Colour negative</sub></td>
+    <td align="center" width="16%"><a href="#pro-400h"><img src="docs/images/film/icon-pro-400h.png" width="72" alt="Pro 400H icon"></a><br><b>Pro 400H</b><br><sub>Colour negative</sub></td>
+    <td align="center" width="16%"><a href="#cinestill-800t"><img src="docs/images/film/icon-cinestill-800t.png" width="72" alt="CineStill 800T icon"></a><br><b>CineStill 800T</b><br><sub>Tungsten negative</sub></td>
+    <td align="center" width="16%"><a href="#cinestill-50d"><img src="docs/images/film/icon-cinestill-50d.png" width="72" alt="CineStill 50D icon"></a><br><b>CineStill 50D</b><br><sub>Daylight negative</sub></td>
+    <td align="center" width="16%"><a href="#vision3-500t-2383"><img src="docs/images/film/icon-vision3-500t-2383.png" width="72" alt="Vision3 500T icon"></a><br><b>Vision3 500T</b><br><sub>Cinema print</sub></td>
+    <td align="center" width="16%"><a href="#vision3-250d-2383"><img src="docs/images/film/icon-vision3-250d-2383.png" width="72" alt="Vision3 250D icon"></a><br><b>Vision3 250D</b><br><sub>Cinema print</sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="16%"><a href="#vision3-50d-2383"><img src="docs/images/film/icon-vision3-50d-2383.png" width="72" alt="Vision3 50D icon"></a><br><b>Vision3 50D</b><br><sub>Cinema print</sub></td>
+    <td align="center" width="16%"><a href="#eterna-vivid-250d-2383"><img src="docs/images/film/icon-eterna-vivid-250d-2383.png" width="72" alt="Eterna Vivid icon"></a><br><b>Eterna Vivid</b><br><sub>Cinema print</sub></td>
     <td align="center" width="16%"><a href="#provia-100f"><img src="docs/images/film/icon-provia-100f.png" width="72" alt="Provia 100F icon"></a><br><b>Provia 100F</b><br><sub>Slide</sub></td>
     <td align="center" width="16%"><a href="#velvia-50"><img src="docs/images/film/icon-velvia-50.png" width="72" alt="Velvia 50 icon"></a><br><b>Velvia 50</b><br><sub>Slide</sub></td>
-    <td align="center" width="16%"><a href="#velvia-50-cross"><img src="docs/images/film/icon-velvia-50-cross.png" width="72" alt="Velvia 50 · Cross icon"></a><br><b>Velvia 50 · Cross</b><br><sub>Cross-processed slide</sub></td>
-    <td align="center" width="16%"><a href="#provia-100f-cross"><img src="docs/images/film/icon-provia-100f-cross.png" width="72" alt="Provia 100F · Cross icon"></a><br><b>Provia 100F · Cross</b><br><sub>Cross-processed slide</sub></td>
+    <td align="center" width="16%"><a href="#velvia-100"><img src="docs/images/film/icon-velvia-100.png" width="72" alt="Velvia 100 icon"></a><br><b>Velvia 100</b><br><sub>Slide</sub></td>
+    <td align="center" width="16%"><a href="#ektachrome-e100"><img src="docs/images/film/icon-ektachrome-e100.png" width="72" alt="Ektachrome icon"></a><br><b>Ektachrome</b><br><sub>Slide</sub></td>
   </tr>
   <tr>
+    <td align="center" width="16%"><a href="#kodachrome-64"><img src="docs/images/film/icon-kodachrome-64.png" width="72" alt="Kodachrome 64 icon"></a><br><b>Kodachrome 64</b><br><sub>Slide</sub></td>
     <td align="center" width="16%"><a href="#tri-x-400"><img src="docs/images/film/icon-tri-x-400.png" width="72" alt="Tri-X 400 icon"></a><br><b>Tri-X 400</b><br><sub>Black and white</sub></td>
-    <td align="center" width="16%"><a href="#tri-x-1600"><img src="docs/images/film/icon-tri-x-1600.png" width="72" alt="Tri-X · 1600 icon"></a><br><b>Tri-X · 1600</b><br><sub>Black and white, pushed</sub></td>
+    <td align="center" width="16%"><a href="#t-max-100"><img src="docs/images/film/icon-t-max-100.png" width="72" alt="T-Max 100 icon"></a><br><b>T-Max 100</b><br><sub>Black and white</sub></td>
+    <td align="center" width="16%"><a href="#t-max-400"><img src="docs/images/film/icon-t-max-400.png" width="72" alt="T-Max 400 icon"></a><br><b>T-Max 400</b><br><sub>Black and white</sub></td>
     <td align="center" width="16%"><a href="#hp5-plus"><img src="docs/images/film/icon-hp5-plus.png" width="72" alt="HP5 Plus icon"></a><br><b>HP5 Plus</b><br><sub>Black and white</sub></td>
+    <td align="center" width="16%"><a href="#delta-100"><img src="docs/images/film/icon-delta-100.png" width="72" alt="Delta 100 icon"></a><br><b>Delta 100</b><br><sub>Black and white</sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="16%"><a href="#delta-3200"><img src="docs/images/film/icon-delta-3200.png" width="72" alt="Delta 3200 icon"></a><br><b>Delta 3200</b><br><sub>Black and white</sub></td>
+    <td align="center" width="16%"><a href="#fp4-plus"><img src="docs/images/film/icon-fp4-plus.png" width="72" alt="FP4 Plus icon"></a><br><b>FP4 Plus</b><br><sub>Black and white</sub></td>
+    <td align="center" width="16%"><a href="#pan-f-plus"><img src="docs/images/film/icon-pan-f-plus.png" width="72" alt="Pan F Plus icon"></a><br><b>Pan F Plus</b><br><sub>Black and white</sub></td>
     <td align="center" width="16%"><a href="#tri-x-multigrade"><img src="docs/images/film/icon-tri-x-multigrade.png" width="72" alt="Darkroom Print icon"></a><br><b>Darkroom Print</b><br><sub>Grade 2 print</sub></td>
     <td align="center" width="16%"><a href="#tri-x-multigrade-soft"><img src="docs/images/film/icon-tri-x-multigrade-soft.png" width="72" alt="Soft Print icon"></a><br><b>Soft Print</b><br><sub>Grade 1 print</sub></td>
     <td align="center" width="16%"><a href="#tri-x-multigrade-hard"><img src="docs/images/film/icon-tri-x-multigrade-hard.png" width="72" alt="Hard Print icon"></a><br><b>Hard Print</b><br><sub>Grade 4 print</sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="16%"><a href="#portra-400-overexposed"><img src="docs/images/film/icon-portra-400-overexposed.png" width="72" alt="Portra 400 · +2 icon"></a><br><b>Portra 400 · +2</b><br><sub>Overexposed</sub></td>
+    <td align="center" width="16%"><a href="#portra-800-1600"><img src="docs/images/film/icon-portra-800-1600.png" width="72" alt="Portra 800 · 1600 icon"></a><br><b>Portra 800 · 1600</b><br><sub>Pushed</sub></td>
+    <td align="center" width="16%"><a href="#tri-x-1600"><img src="docs/images/film/icon-tri-x-1600.png" width="72" alt="Tri-X · 1600 icon"></a><br><b>Tri-X · 1600</b><br><sub>Pushed</sub></td>
+    <td align="center" width="16%"><a href="#vision3-2383-bleach-bypass"><img src="docs/images/film/icon-vision3-2383-bleach-bypass.png" width="72" alt="2383 Bleach Bypass icon"></a><br><b>2383 Bleach Bypass</b><br><sub>Cinema print</sub></td>
+    <td align="center" width="16%"><a href="#velvia-50-cross"><img src="docs/images/film/icon-velvia-50-cross.png" width="72" alt="Velvia 50 · Cross icon"></a><br><b>Velvia 50 · Cross</b><br><sub>Cross-processed</sub></td>
+    <td align="center" width="16%"><a href="#provia-100f-cross"><img src="docs/images/film/icon-provia-100f-cross.png" width="72" alt="Provia 100F · Cross icon"></a><br><b>Provia 100F · Cross</b><br><sub>Cross-processed</sub></td>
   </tr>
 </table>
 
@@ -271,24 +295,42 @@ Each look ships as a scene-referred Base Look. It takes the place of Redlamp's t
 
 | | Look | Film | Rendered as | Grain / halation |
 | --- | --- | --- | --- | --- |
-| <img src="docs/images/film/icon-portra-400.png" width="32" alt=""> | [Portra 400](#portra-400) | Kodak colour negative, ISO 400 | Scanned, Frontier-like | 20 / 8 |
-| <img src="docs/images/film/icon-ektar-100.png" width="32" alt=""> | [Ektar 100](#ektar-100) | Kodak colour negative, ISO 100 | Scanned, Frontier-like | 8 / 6 |
-| <img src="docs/images/film/icon-gold-200.png" width="32" alt=""> | [Gold 200](#gold-200) | Kodak colour negative, ISO 200 | Scanned, Frontier-like | 23 / 9 |
-| <img src="docs/images/film/icon-superia-400.png" width="32" alt=""> | [Superia 400](#superia-400) | Fujifilm colour negative, ISO 400 | Scanned, Frontier-like | 24 / 8 |
-| <img src="docs/images/film/icon-cinestill-800t.png" width="32" alt=""> | [CineStill 800T](#cinestill-800t) | CineStill tungsten colour negative, ISO 800 | Scanned, Noritsu-like | 26 / 70, bloom 8 |
-| <img src="docs/images/film/icon-vision3-500t-2383.png" width="32" alt=""> | [Vision3 500T · 2383](#vision3-500t-2383) | Kodak cinema negative on 2383 print film, ISO 500 | Printed on 2383 and projected | 24 / 14, bloom 6 |
-| <img src="docs/images/film/icon-provia-100f.png" width="32" alt=""> | [Provia 100F](#provia-100f) | Fujifilm slide film, ISO 100 | Slide, viewed on a light box | 8 / 4 |
-| <img src="docs/images/film/icon-velvia-50.png" width="32" alt=""> | [Velvia 50](#velvia-50) | Fujifilm slide film, ISO 50 | Slide, viewed on a light box | 9 / 4 |
-| <img src="docs/images/film/icon-tri-x-400.png" width="32" alt=""> | [Tri-X 400](#tri-x-400) | Kodak black and white negative, ISO 400 | Scanned | 37 / 5 |
-| <img src="docs/images/film/icon-hp5-plus.png" width="32" alt=""> | [HP5 Plus](#hp5-plus) | Ilford black and white negative, ISO 400 | Scanned | 40 / 5 |
-| <img src="docs/images/film/icon-tri-x-multigrade.png" width="32" alt=""> | [Tri-X · Darkroom Print](#tri-x-multigrade) | Kodak Tri-X printed on Ilford Multigrade paper, grade 2 | Printed on paper | 34 / 5 |
-| <img src="docs/images/film/icon-portra-400-overexposed.png" width="32" alt=""> | [Portra 400 · +2](#portra-400-overexposed) | Kodak Portra 400 overexposed two stops (rated 100) | Scanned, Frontier-like | 16 / 8 |
-| <img src="docs/images/film/icon-tri-x-1600.png" width="32" alt=""> | [Tri-X 400 · Pushed to 1600](#tri-x-1600) | Kodak Tri-X rated at 1600, D-76 for 12 minutes | Scanned | 46 / 6 |
-| <img src="docs/images/film/icon-tri-x-multigrade-soft.png" width="32" alt=""> | [Tri-X · Soft Print](#tri-x-multigrade-soft) | Kodak Tri-X on Ilford Multigrade, grade 1 | Printed on paper | 34 / 5 |
-| <img src="docs/images/film/icon-tri-x-multigrade-hard.png" width="32" alt=""> | [Tri-X · Hard Print](#tri-x-multigrade-hard) | Kodak Tri-X on Ilford Multigrade, grade 4 | Printed on paper | 34 / 5 |
-| <img src="docs/images/film/icon-vision3-2383-bleach-bypass.png" width="32" alt=""> | [Vision3 500T · 2383 Bleach Bypass](#vision3-2383-bleach-bypass) | Kodak Vision3 500T on 2383, bleach bypass | Printed on 2383 and projected | 26 / 12, bloom 6 |
-| <img src="docs/images/film/icon-velvia-50-cross.png" width="32" alt=""> | [Velvia 50 · Cross-Processed](#velvia-50-cross) | Fujifilm Velvia 50 developed in C-41 | Scanned | 12 / 5 |
-| <img src="docs/images/film/icon-provia-100f-cross.png" width="32" alt=""> | [Provia 100F · Cross-Processed](#provia-100f-cross) | Fujifilm Provia 100F developed in C-41 | Scanned | 11 / 5 |
+| <img src="docs/images/film/icon-portra-160.png" width="32" alt=""> | [Portra 160](#portra-160) | Kodak · Colour negative · ISO 160 | Scanned, Frontier-like | 15 / 7 |
+| <img src="docs/images/film/icon-portra-400.png" width="32" alt=""> | [Portra 400](#portra-400) | Kodak · Colour negative · ISO 400 | Scanned, Frontier-like | 20 / 8 |
+| <img src="docs/images/film/icon-portra-800.png" width="32" alt=""> | [Portra 800](#portra-800) | Kodak · Colour negative · ISO 800 | Scanned, Frontier-like | 27 / 9 |
+| <img src="docs/images/film/icon-portra-800-1600.png" width="32" alt=""> | [Portra 800 · Pushed to 1600](#portra-800-1600) | Kodak · Colour negative · ISO 800 pushed to 1600 | Scanned, Frontier-like | 32 / 9 |
+| <img src="docs/images/film/icon-ektar-100.png" width="32" alt=""> | [Ektar 100](#ektar-100) | Kodak · Colour negative · ISO 100 | Scanned, Frontier-like | 8 / 6 |
+| <img src="docs/images/film/icon-gold-200.png" width="32" alt=""> | [Gold 200](#gold-200) | Kodak · Colour negative · ISO 200 | Scanned, Frontier-like | 23 / 9 |
+| <img src="docs/images/film/icon-ultramax-400.png" width="32" alt=""> | [UltraMax 400](#ultramax-400) | Kodak · Colour negative · ISO 400 | Scanned, Frontier-like | 25 / 9 |
+| <img src="docs/images/film/icon-superia-400.png" width="32" alt=""> | [Superia 400](#superia-400) | Fujifilm · Colour negative · ISO 400 | Scanned, Frontier-like | 24 / 8 |
+| <img src="docs/images/film/icon-pro-400h.png" width="32" alt=""> | [Pro 400H](#pro-400h) | Fujifilm · Colour negative · ISO 400 (discontinued) | Scanned, Frontier-like | 24 / 8 |
+| <img src="docs/images/film/icon-cinestill-800t.png" width="32" alt=""> | [CineStill 800T](#cinestill-800t) | CineStill · Tungsten colour negative · ISO 800 | Scanned, Noritsu-like | 26 / 70, bloom 8 |
+| <img src="docs/images/film/icon-cinestill-50d.png" width="32" alt=""> | [CineStill 50D](#cinestill-50d) | CineStill · Daylight colour negative · ISO 50 | Scanned, Noritsu-like | 12 / 60, bloom 6 |
+| <img src="docs/images/film/icon-vision3-500t-2383.png" width="32" alt=""> | [Vision3 500T · 2383](#vision3-500t-2383) | Kodak · Cinema negative on print film · ISO 500 | Printed on 2383 and projected | 24 / 14, bloom 6 |
+| <img src="docs/images/film/icon-vision3-250d-2383.png" width="32" alt=""> | [Vision3 250D · 2383](#vision3-250d-2383) | Kodak · Cinema negative on print film · ISO 250 | Printed on 2383 and projected | 20 / 12, bloom 6 |
+| <img src="docs/images/film/icon-vision3-50d-2383.png" width="32" alt=""> | [Vision3 50D · 2383](#vision3-50d-2383) | Kodak · Cinema negative on print film · ISO 50 | Printed on 2383 and projected | 12 / 10, bloom 5 |
+| <img src="docs/images/film/icon-eterna-vivid-250d-2383.png" width="32" alt=""> | [Eterna Vivid 250D · 2383](#eterna-vivid-250d-2383) | Fujifilm · Cinema negative on print film · ISO 250 (discontinued) | Printed on 2383 and projected | 21 / 12, bloom 6 |
+| <img src="docs/images/film/icon-provia-100f.png" width="32" alt=""> | [Provia 100F](#provia-100f) | Fujifilm · Slide film · ISO 100 | Slide, viewed on a light box | 8 / 4 |
+| <img src="docs/images/film/icon-velvia-50.png" width="32" alt=""> | [Velvia 50](#velvia-50) | Fujifilm · Slide film · ISO 50 | Slide, viewed on a light box | 9 / 4 |
+| <img src="docs/images/film/icon-velvia-100.png" width="32" alt=""> | [Velvia 100](#velvia-100) | Fujifilm · Slide film · ISO 100 | Slide, viewed on a light box | 8 / 4 |
+| <img src="docs/images/film/icon-ektachrome-e100.png" width="32" alt=""> | [Ektachrome E100](#ektachrome-e100) | Kodak · Slide film · ISO 100 | Slide, viewed on a light box | 8 / 4 |
+| <img src="docs/images/film/icon-kodachrome-64.png" width="32" alt=""> | [Kodachrome 64](#kodachrome-64) | Kodak · Slide film · ISO 64 (discontinued) | Slide, viewed on a light box | 10 / 4 |
+| <img src="docs/images/film/icon-tri-x-400.png" width="32" alt=""> | [Tri-X 400](#tri-x-400) | Kodak · Black and white negative · ISO 400 | Scanned | 37 / 5 |
+| <img src="docs/images/film/icon-t-max-100.png" width="32" alt=""> | [T-Max 100](#t-max-100) | Kodak · Black and white negative · ISO 100 | Scanned | 18 / 4 |
+| <img src="docs/images/film/icon-t-max-400.png" width="32" alt=""> | [T-Max 400](#t-max-400) | Kodak · Black and white negative · ISO 400 | Scanned | 22 / 5 |
+| <img src="docs/images/film/icon-hp5-plus.png" width="32" alt=""> | [HP5 Plus](#hp5-plus) | Ilford · Black and white negative · ISO 400 | Scanned | 40 / 5 |
+| <img src="docs/images/film/icon-delta-100.png" width="32" alt=""> | [Delta 100](#delta-100) | Ilford · Black and white negative · ISO 100 | Scanned | 16 / 4 |
+| <img src="docs/images/film/icon-delta-3200.png" width="32" alt=""> | [Delta 3200](#delta-3200) | Ilford · Black and white negative · ISO 3200 | Scanned | 52 / 6 |
+| <img src="docs/images/film/icon-fp4-plus.png" width="32" alt=""> | [FP4 Plus](#fp4-plus) | Ilford · Black and white negative · ISO 125 | Scanned | 24 / 5 |
+| <img src="docs/images/film/icon-pan-f-plus.png" width="32" alt=""> | [Pan F Plus](#pan-f-plus) | Ilford · Black and white negative · ISO 50 | Scanned | 12 / 4 |
+| <img src="docs/images/film/icon-tri-x-multigrade.png" width="32" alt=""> | [Tri-X · Darkroom Print](#tri-x-multigrade) | Kodak · Ilford · Black and white print · grade 2 | Printed on paper | 34 / 5 |
+| <img src="docs/images/film/icon-portra-400-overexposed.png" width="32" alt=""> | [Portra 400 · +2](#portra-400-overexposed) | Kodak · Colour negative · ISO 400 rated 100 | Scanned, Frontier-like | 16 / 8 |
+| <img src="docs/images/film/icon-tri-x-1600.png" width="32" alt=""> | [Tri-X 400 · Pushed to 1600](#tri-x-1600) | Kodak · Black and white negative · ISO 400 pushed to 1600 | Scanned | 46 / 6 |
+| <img src="docs/images/film/icon-tri-x-multigrade-soft.png" width="32" alt=""> | [Tri-X · Soft Print](#tri-x-multigrade-soft) | Kodak · Ilford · Black and white print · grade 1 | Printed on paper | 34 / 5 |
+| <img src="docs/images/film/icon-tri-x-multigrade-hard.png" width="32" alt=""> | [Tri-X · Hard Print](#tri-x-multigrade-hard) | Kodak · Ilford · Black and white print · grade 4 | Printed on paper | 34 / 5 |
+| <img src="docs/images/film/icon-vision3-2383-bleach-bypass.png" width="32" alt=""> | [Vision3 500T · 2383 Bleach Bypass](#vision3-2383-bleach-bypass) | Kodak · Cinema negative on print film, bleach bypass · ISO 500 | Printed on 2383 and projected | 26 / 12, bloom 6 |
+| <img src="docs/images/film/icon-velvia-50-cross.png" width="32" alt=""> | [Velvia 50 · Cross-Processed](#velvia-50-cross) | Fujifilm · Slide film in C-41 · ISO 50 | Developed in C-41, scanned | 12 / 5 |
+| <img src="docs/images/film/icon-provia-100f-cross.png" width="32" alt=""> | [Provia 100F · Cross-Processed](#provia-100f-cross) | Fujifilm · Slide film in C-41 · ISO 100 | Developed in C-41, scanned | 11 / 5 |
 
 Every look on the same photo:
 
@@ -306,6 +348,30 @@ Warm and gentle. Kind to skin, with soft greens and a little extra warmth in the
 
 ![Portra 400: the original above, the look below](docs/images/film/look-portra-400.jpg)
 
+<a id="portra-160"></a>
+
+#### <img src="docs/images/film/icon-portra-160.png" width="24" alt=""> Portra 160
+
+Portra's slower sister: finer grain and an even gentler rendering, for portraits in good light.
+
+![Portra 160: the original above, the look below](docs/images/film/look-portra-160.jpg)
+
+<a id="portra-800"></a>
+
+#### <img src="docs/images/film/icon-portra-800.png" width="24" alt=""> Portra 800
+
+Fast Portra: warmer and richer, with more grain and a little more contrast.
+
+![Portra 800: the original above, the look below](docs/images/film/look-portra-800.jpg)
+
+<a id="portra-800-1600"></a>
+
+#### <img src="docs/images/film/icon-portra-800-1600.png" width="24" alt=""> Portra 800 · Pushed to 1600
+
+Portra 800 rated at 1600 and pushed a stop, from Kodak's own push curves: denser shadows, more contrast and grain.
+
+![Portra 800 · Pushed to 1600: the original above, the look below](docs/images/film/look-portra-800-1600.jpg)
+
 <a id="ektar-100"></a>
 
 #### <img src="docs/images/film/icon-ektar-100.png" width="24" alt=""> Ektar 100
@@ -322,6 +388,14 @@ Warm consumer film. Golden yellows, slightly greener foliage and more grain.
 
 ![Gold 200: the original above, the look below](docs/images/film/look-gold-200.jpg)
 
+<a id="ultramax-400"></a>
+
+#### <img src="docs/images/film/icon-ultramax-400.png" width="24" alt=""> UltraMax 400
+
+Kodak's punchy everyday film: warm, saturated and a little grainy.
+
+![UltraMax 400: the original above, the look below](docs/images/film/look-ultramax-400.jpg)
+
 <a id="superia-400"></a>
 
 #### <img src="docs/images/film/icon-superia-400.png" width="24" alt=""> Superia 400
@@ -329,6 +403,14 @@ Warm consumer film. Golden yellows, slightly greener foliage and more grain.
 Cooler than the Kodak stocks, with Fujifilm's greens.
 
 ![Superia 400: the original above, the look below](docs/images/film/look-superia-400.jpg)
+
+<a id="pro-400h"></a>
+
+#### <img src="docs/images/film/icon-pro-400h.png" width="24" alt=""> Pro 400H
+
+Fujifilm's discontinued wedding film, with its fourth colour layer: soft contrast, pastel skin and minty greens.
+
+![Pro 400H: the original above, the look below](docs/images/film/look-pro-400h.jpg)
 
 <a id="cinestill-800t"></a>
 
@@ -338,6 +420,14 @@ Vision3 500T without its anti-halation backing. Bright lights glow red-orange, t
 
 ![CineStill 800T: the original above, the look below](docs/images/film/look-cinestill-800t.jpg)
 
+<a id="cinestill-50d"></a>
+
+#### <img src="docs/images/film/icon-cinestill-50d.png" width="24" alt=""> CineStill 50D
+
+Vision3 50D without its anti-halation backing: very fine grain, daylight colour and glowing highlights.
+
+![CineStill 50D: the original above, the look below](docs/images/film/look-cinestill-50d.jpg)
+
 <a id="vision3-500t-2383"></a>
 
 #### <img src="docs/images/film/icon-vision3-500t-2383.png" width="24" alt=""> Vision3 500T · 2383
@@ -345,6 +435,30 @@ Vision3 500T without its anti-halation backing. Bright lights glow red-orange, t
 The motion-picture look: a cinema negative printed on release print film. Softer and denser, with cool shadows and warm highlights.
 
 ![Vision3 500T · 2383: the original above, the look below](docs/images/film/look-vision3-500t-2383.jpg)
+
+<a id="vision3-250d-2383"></a>
+
+#### <img src="docs/images/film/icon-vision3-250d-2383.png" width="24" alt=""> Vision3 250D · 2383
+
+Kodak's daylight cinema negative printed on 2383: the bright exterior look of feature films.
+
+![Vision3 250D · 2383: the original above, the look below](docs/images/film/look-vision3-250d-2383.jpg)
+
+<a id="vision3-50d-2383"></a>
+
+#### <img src="docs/images/film/icon-vision3-50d-2383.png" width="24" alt=""> Vision3 50D · 2383
+
+The finest-grained cinema negative on 2383: clean, saturated daylight.
+
+![Vision3 50D · 2383: the original above, the look below](docs/images/film/look-vision3-50d-2383.jpg)
+
+<a id="eterna-vivid-250d-2383"></a>
+
+#### <img src="docs/images/film/icon-eterna-vivid-250d-2383.png" width="24" alt=""> Eterna Vivid 250D · 2383
+
+Fujifilm's discontinued vivid daylight cinema negative, printed on 2383: more saturated than Vision3.
+
+![Eterna Vivid 250D · 2383: the original above, the look below](docs/images/film/look-eterna-vivid-250d-2383.jpg)
 
 <a id="provia-100f"></a>
 
@@ -362,6 +476,30 @@ The landscape slide: saturated greens, yellows and blues, and more contrast stil
 
 ![Velvia 50: the original above, the look below](docs/images/film/look-velvia-50.jpg)
 
+<a id="velvia-100"></a>
+
+#### <img src="docs/images/film/icon-velvia-100.png" width="24" alt=""> Velvia 100
+
+Velvia's faster sibling: just as saturated, a touch gentler in the shadows.
+
+![Velvia 100: the original above, the look below](docs/images/film/look-velvia-100.jpg)
+
+<a id="ektachrome-e100"></a>
+
+#### <img src="docs/images/film/icon-ektachrome-e100.png" width="24" alt=""> Ektachrome E100
+
+Kodak's modern slide film: clean, neutral to cool, with fine grain.
+
+![Ektachrome E100: the original above, the look below](docs/images/film/look-ektachrome-e100.jpg)
+
+<a id="kodachrome-64"></a>
+
+#### <img src="docs/images/film/icon-kodachrome-64.png" width="24" alt=""> Kodachrome 64
+
+The legendary K-14 slide film, from Kodak's archived datasheet: warm reds, deep blues and dense shadows.
+
+![Kodachrome 64: the original above, the look below](docs/images/film/look-kodachrome-64.jpg)
+
 <a id="tri-x-400"></a>
 
 #### <img src="docs/images/film/icon-tri-x-400.png" width="24" alt=""> Tri-X 400
@@ -370,6 +508,22 @@ Classic black and white. Bright and crisp, with pronounced, sharp grain.
 
 ![Tri-X 400: the original above, the look below](docs/images/film/look-tri-x-400.jpg)
 
+<a id="t-max-100"></a>
+
+#### <img src="docs/images/film/icon-t-max-100.png" width="24" alt=""> T-Max 100
+
+Kodak's finest-grained black and white: smooth, sharp and long in tone.
+
+![T-Max 100: the original above, the look below](docs/images/film/look-t-max-100.jpg)
+
+<a id="t-max-400"></a>
+
+#### <img src="docs/images/film/icon-t-max-400.png" width="24" alt=""> T-Max 400
+
+Modern fast black and white: tighter grain than Tri-X and a longer tonal range.
+
+![T-Max 400: the original above, the look below](docs/images/film/look-t-max-400.jpg)
+
 <a id="hp5-plus"></a>
 
 #### <img src="docs/images/film/icon-hp5-plus.png" width="24" alt=""> HP5 Plus
@@ -377,6 +531,38 @@ Classic black and white. Bright and crisp, with pronounced, sharp grain.
 Softer and grainier than Tri-X, with a gentler shoulder.
 
 ![HP5 Plus: the original above, the look below](docs/images/film/look-hp5-plus.jpg)
+
+<a id="delta-100"></a>
+
+#### <img src="docs/images/film/icon-delta-100.png" width="24" alt=""> Delta 100
+
+Ilford's fine-grained modern black and white.
+
+![Delta 100: the original above, the look below](docs/images/film/look-delta-100.jpg)
+
+<a id="delta-3200"></a>
+
+#### <img src="docs/images/film/icon-delta-3200.png" width="24" alt=""> Delta 3200
+
+Ilford's fastest film: big, gritty grain and hard contrast for low light.
+
+![Delta 3200: the original above, the look below](docs/images/film/look-delta-3200.jpg)
+
+<a id="fp4-plus"></a>
+
+#### <img src="docs/images/film/icon-fp4-plus.png" width="24" alt=""> FP4 Plus
+
+Classic medium-speed black and white with a gentle shoulder.
+
+![FP4 Plus: the original above, the look below](docs/images/film/look-fp4-plus.jpg)
+
+<a id="pan-f-plus"></a>
+
+#### <img src="docs/images/film/icon-pan-f-plus.png" width="24" alt=""> Pan F Plus
+
+Slow, ultra-fine black and white with rich contrast.
+
+![Pan F Plus: the original above, the look below](docs/images/film/look-pan-f-plus.jpg)
 
 <a id="tri-x-multigrade"></a>
 
@@ -455,7 +641,8 @@ Provia cross-processed: contrasty, with cool green-cyan shadows.
 
 - **The colour comes from the datasheets.** It follows each stock's own curves, sensitivities and dyes, and the stocks keep their published order of contrast and grain.
 - **A lab's scan or print timing shapes the rest.** Negatives are scanned by a modelled lab scanner calibrated on a grey scale. Its Frontier-like and Noritsu-like profiles are characterised from how labs describe the two scanners, not measured from them. The 2383 print is timed partway back to neutral, as a colourist would.
-- **Some data is fitted or uncertain.** Portra, Ektar, Gold and Superia publish no individual dye curves. Their dyes are Vision3's shapes, fitted until together they match the stock's own published mid-scale neutral. The 2383 sensitivity curve is the least certain trace in the data.
+- **Some data is fitted or uncertain.** Nine colour negatives publish no individual dye curves: Portra 160, 400 and 800, Ektar, Gold, UltraMax, Superia, Pro 400H and Eterna Vivid. Their dyes are Vision3's shapes, fitted until together they match the stock's own published mid-scale neutral. Kodak 2383's sensitivity was re-traced, and both 2383 looks are on version 2. Kodachrome 64 and Eterna Vivid come from Internet Archive copies of Kodak's and Fujifilm's own pages. Ilford publishes only relative scales, which the model's grey balance makes up for.
+- **CineStill is modelled with no anti-halation layer,** as CineStill sells it. Kodak's current Vision3 datasheets describe an anti-halation undercoat in place of the old rem-jet backing, and no document settles which current CineStill stock has.
 - **Grain follows film** (process 2, TON-19). It's sized to the frame, so it looks the same on any camera's resolution, and it's strongest in the low midtones and shadows. The fitted preview shows the grain the export will have.
 
 Kodak, Portra, Ektar, Gold, Vision3, Tri-X, Fujifilm, Superia, Provia, Velvia, Ilford, HP5, Multigrade and CineStill are trademarks of their owners. Redlamp isn't affiliated with them: its looks are built from the published technical data.

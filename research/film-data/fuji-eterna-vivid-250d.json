@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "id": "fuji-eterna-vivid-250d",
+  "name": "FUJICOLOR NEGATIVE FILM ETERNA Vivid 250D (Type 8546 / 8646)",
+  "manufacturer": "FUJIFILM Corporation",
+  "type": "negative",
+  "process": "ECN-2",
+  "exposureIndex": 250,
+  "source": {
+    "title": "FUJICOLOR NEGATIVE FILM ETERNA Vivid 250D — Fujifilm motion picture data sheet",
+    "document": "KB-1009E",
+    "edition": "©2010 (PDF created 2011-01-28)",
+    "url": "http://www.fujifilm.com/products/motion_picture/pdf/eterna_vivid250d.pdf",
+    "fetchedVia": "Internet Archive capture of the manufacturer URL: https://web.archive.org/web/20120216070558id_/http://www.fujifilm.com/products/motion_picture/pdf/eterna_vivid250d.pdf",
+    "retrieved": "2026-10-01",
+    "sha256": "54394f704d56f13864e2dec3ab4b39a627b4844cd0b0148600af6dc43f3828af",
+    "pages": [1, 2]
+  },
+  "characteristicCurves": {
+    "densityType": "status-M",
+    "exposure": "5400 K light source, 1/50 s, through a Fuji SC-41 UV filter",
+    "process": "ECN-2 (specified standard conditions)",
+    "logExposureUnits": "relative log exposure (arbitrary origin, as labelled on the chart)",
+    "logExposure": [-1.95, -1.9, -1.85, -1.8, -1.75, -1.7, -1.65, -1.6, -1.55, -1.5, -1.45, -1.4, -1.35, -1.3, -1.25, -1.2, -1.15, -1.1, -1.05, -1.0, -0.95, -0.9, -0.85, -0.8, -0.75, -0.7, -0.65, -0.6, -0.55, -0.5, -0.45, -0.4, -0.35, -0.3, -0.25, -0.2, -0.15, -0.1, -0.05, 0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4, 1.45, 1.5, 1.55, 1.6, 1.65, 1.7, 1.75, 1.8, 1.85, 1.9],
+    "blue": [0.739, 0.739, 0.738, 0.738, 0.738, 0.738, 0.738, 0.738, 0.738, 0.738, 0.739, 0.741, 0.742, 0.745, 0.748, 0.752, 0.757, 0.762, 0.769, 0.778, 0.789, 0.804, 0.824, 0.848, 0.874, 0.903, 0.933, 0.965, 0.996, 1.028, 1.058, 1.088, 1.117, 1.147, 1.176, 1.205, 1.234, 1.263, 1.292, 1.322, 1.351, 1.38, 1.409, 1.438, 1.465, 1.492, 1.518, 1.544, 1.57, 1.596, 1.622, 1.648, 1.674, 1.699, 1.725, 1.751, 1.777, 1.805, 1.832, 1.86, 1.888, 1.916, 1.943, 1.97, 1.997, 2.022, 2.047, 2.071, 2.094, 2.118, 2.141, 2.164, 2.186, 2.208, 2.23, 2.251, 2.27, null],
+    "green": [0.573, 0.572, 0.571, 0.571, 0.571, 0.572, 0.574, 0.576, 0.578, 0.582, 0.585, 0.589, 0.593, 0.598, 0.603, 0.611, 0.621, 0.634, 0.648, 0.665, 0.685, 0.709, 0.737, 0.766, 0.797, 0.827, 0.858, 0.89, 0.921, 0.953, 0.984, 1.014, 1.045, 1.075, 1.106, 1.137, 1.167, 1.198, 1.228, 1.257, 1.284, 1.311, 1.337, 1.363, 1.389, 1.414, 1.44, 1.466, 1.492, 1.516, 1.54, 1.563, 1.586, 1.61, 1.635, 1.66, 1.686, 1.711, 1.737, 1.764, 1.792, 1.82, 1.849, 1.877, 1.904, 1.932, 1.959, 1.985, 2.011, 2.037, 2.063, 2.088, 2.112, 2.136, 2.16, 2.182, 2.204, 2.225],
+    "red": [0.27, 0.271, 0.272, 0.273, 0.273, 0.274, 0.274, 0.275, 0.275, 0.276, 0.278, 0.28, 0.283, 0.287, 0.292, 0.298, 0.304, 0.31, 0.318, 0.327, 0.336, 0.348, 0.362, 0.377, 0.394, 0.414, 0.435, 0.458, 0.482, 0.508, 0.535, 0.562, 0.589, 0.615, 0.641, 0.667, 0.693, 0.719, 0.744, 0.769, 0.794, 0.818, 0.842, 0.866, 0.89, 0.913, 0.935, 0.958, 0.979, 0.999, 1.017, 1.036, 1.054, 1.072, 1.09, 1.108, 1.126, 1.144, 1.162, 1.181, 1.199, 1.218, 1.237, 1.256, 1.275, 1.295, 1.315, 1.335, 1.355, 1.376, 1.396, 1.416, 1.436, 1.456, 1.476, 1.496, 1.516, 1.535],
+    "dMin": {
+      "red": 0.27,
+      "green": 0.573,
+      "blue": 0.739
+    },
+    "notes": "The x axis is labelled in camera stops (-6..+6) relative to normal exposure, not in lux-seconds; converted here to log exposure at 0.30103 per stop (0 = normal exposure, no absolute origin). Status M densities including the orange mask; dMin = density at the lowest plotted exposure."
+  },
+  "spectralSensitivity": {
+    "units": "relative log10 spectral sensitivity (0-3 as labelled; arbitrary origin); sensitivity = reciprocal of the exposure (erg/cm^2) required to produce the stated density",
+    "densityCriterion": "0.40 above minimum density (arbitrary three-colour densities)",
+    "process": "ECN-2",
+    "wavelength": [385, 390, 395, 400, 405, 410, 415, 420, 425, 430, 435, 440, 445, 450, 455, 460, 465, 470, 475, 480, 485, 490, 495, 500, 505, 510, 515, 520, 525, 530, 535, 540, 545, 550, 555, 560, 565, 570, 575, 580, 585, 590, 595, 600, 605, 610, 615, 620, 625, 630, 635, 640, 645, 650, 655, 660, 665],
+    "blue": [0.408, 0.732, 1.043, 1.33, 1.552, 1.661, 1.707, 1.717, 1.714, 1.712, 1.708, 1.7, 1.695, 1.706, 1.745, 1.82, 1.92, 2.005, 2.007, 1.801, 1.411, 1.053, 0.771, 0.554, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "green": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 0.37, 0.667, 0.871, 1.031, 1.161, 1.269, 1.37, 1.471, 1.572, 1.673, 1.773, 1.871, 1.96, 2.008, 2.022, 2.023, 2.013, 1.989, 1.946, 1.859, 1.676, 1.353, 0.887, 0.579, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "red": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 0.274, 0.439, 0.62, 0.833, 1.038, 1.192, 1.298, 1.367, 1.398, 1.407, 1.413, 1.421, 1.431, 1.442, 1.453, 1.461, 1.455, 1.417, 1.319, 1.122, 0.749],
+    "notes": "Curves end where the published curves end."
+  },
+  "dyeDensity": {
+    "units": "spectral density",
+    "wavelength": [405, 410, 415, 420, 425, 430, 435, 440, 445, 450, 455, 460, 465, 470, 475, 480, 485, 490, 495, 500, 505, 510, 515, 520, 525, 530, 535, 540, 545, 550, 555, 560, 565, 570, 575, 580, 585, 590, 595, 600, 605, 610, 615, 620, 625, 630, 635, 640, 645, 650, 655, 660, 665, 670, 675, 680, 685, 690, 695, 700],
+    "cyan": null,
+    "magenta": null,
+    "yellow": null,
+    "minimum": [0.761, 0.712, 0.704, 0.703, 0.709, 0.712, 0.708, 0.7, 0.689, 0.687, 0.688, 0.689, 0.678, 0.649, 0.635, 0.633, 0.633, 0.64, 0.657, 0.669, 0.673, 0.665, 0.633, 0.609, 0.591, 0.579, 0.571, 0.565, 0.561, 0.557, 0.547, 0.529, 0.504, 0.474, 0.439, 0.4, 0.362, 0.335, 0.315, 0.3, 0.289, 0.281, 0.275, 0.272, 0.27, 0.27, 0.272, 0.275, 0.27, 0.257, 0.242, 0.226, 0.21, 0.194, 0.177, 0.161, 0.146, 0.134, 0.124, 0.117],
+    "midscaleNeutral": [1.197, 1.2, 1.259, 1.364, 1.433, 1.491, 1.519, 1.525, 1.521, 1.508, 1.486, 1.456, 1.411, 1.35, 1.292, 1.251, 1.224, 1.215, 1.223, 1.246, 1.27, 1.288, 1.295, 1.294, 1.3, 1.312, 1.326, 1.336, 1.325, 1.293, 1.239, 1.169, 1.084, 0.989, 0.891, 0.798, 0.727, 0.676, 0.637, 0.614, 0.602, 0.6, 0.607, 0.621, 0.641, 0.665, 0.695, 0.727, 0.755, 0.777, 0.789, 0.794, 0.793, 0.789, 0.782, 0.773, 0.763, 0.751, 0.735, 0.718],
+    "notes": "Only \"typical densities for a mid-scale neutral subject\" (solid) and \"minimum densities\" (dashed) are published; per-dye curves are not, so cyan/magenta/yellow are null."
+  },
+  "granularity": {
+    "rmsDiffuse": 3.5,
+    "printGrainIndex": null,
+    "notes": "RMS granularity 3.5: 1000x the value measured at a visual diffuse density of 1.0 above minimum density with a 48 µm aperture (same scale as Fujifilm still negative sheets)."
+  },
+  "mtf": {
+    "units": "percent response (contrast transfer function, square-wave)",
+    "frequencyUnits": "cycles/mm",
+    "process": "ECN-2",
+    "frequency": [2, 2.5, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 25, 30, 35, 40, 50],
+    "neutral": [102.7, 104.0, 104.9, 106.0, 106.2, 105.2, 103.8, 102.3, 98.5, 93.8, 85.8, 74.1, 63.1, 53.3, 45.0, 38.1, 27.6],
+    "notes": "Published as a contrast transfer function: \"spatial frequency attenuation characteristic of amplitude relative to rectangular wave chart\", normalised to zero frequency, at a visual diffuse density of 1.1. This is a square-wave response, not a sine-wave MTF (CTF exceeds MTF at mid frequencies); convert before mixing with MTF data."
+  },
+  "interlayer": "Fujifilm cites \"Super-Efficient DIR-Coupler Technology\" for colour separation; no interimage data are published.",
+  "notes": ["DISCONTINUED (Fujifilm ended motion-picture camera film production in 2013). Datasheet fetched from an Internet Archive capture (2012-02-16) of Fujifilm's own URL. ETERNA 250D (non-Vivid) was also sought; its only archived capture is a truncated PDF.", "Daylight balanced. EI 250 daylight, metal halide (HMI), ordinary fluorescent (white and daylight types) and three-band daylight fluorescent (5000 K), no filter; EI 64 under 3200 K tungsten with Kodak Daylight Filter No. 80A.", "Reciprocity: no correction from 1/1000 s to 1/10 s; at 1 s open 1/3 stop.", "Described as the highest-contrast film of the ETERNA colour negative series, with high saturation, \"optimised orange mask density\" for scanning, and designed to intercut with ETERNA Vivid 500.", "Base: triacetate, tinted light cyan (anti-light-piping). Process ECN-2 (persulfate, ferricyanide or PDTA-ferric bleach). Edge code FN46 / \"FUJI V250\"."],
+  "derived": {
+    "note": "Computed by extract.py from the digitised curves as sanity checks; not published values.",
+    "gamma": {
+      "red": 0.431,
+      "green": 0.525,
+      "blue": 0.544
+    },
+    "gammaMethod": "least-squares slope over the central 25-75% of each curve's density range",
+    "monotonic": {
+      "red": true,
+      "green": true,
+      "blue": true
+    },
+    "sensitivityPeakNm": {
+      "red": 640,
+      "green": 555,
+      "blue": 475
+    },
+    "gammaNote": "Gamma per log10 exposure (stops converted at 0.30103 log units per stop)."
+  },
+  "extraction": {
+    "method": "vector",
+    "tool": "research/film-data/extract.py",
+    "notes": "All four p1 charts are vector paths on a page stored rotated 90°; coordinates are mapped through the page rotation matrix. Axes from grid lines.",
+    "confidence": "high (characteristic, dye, CTF geometry); medium for sensitivity (relative scale)",
+    "checks": []
+  }
+}

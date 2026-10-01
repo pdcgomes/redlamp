@@ -72,7 +72,7 @@
     "notes": "Below ~8 c/mm the three curves are drawn as one line (~102-104 %); that shared value is stored in all three channels at 3-4 c/mm. From there until the curves separate (blue at ~12 c/mm, red and green at ~20 c/mm) the values are null."
   },
   "interlayer": null,
-  "notes": ["EI 500 under 3200 K tungsten (EI 320 daylight with a WRATTEN 85 filter per the datasheet)."],
+  "notes": ["EI 500 under 3200 K tungsten (EI 320 daylight with a WRATTEN 85 filter per the datasheet).", "The current Kodak datasheet (Revised 3-26) states that \"an Anti-halation undercoat replaces the traditional remjet backing layer\"; the curves are for that construction."],
   "derived": {
     "note": "Computed by extract.py from the digitised curves as sanity checks; not published values.",
     "gamma": {

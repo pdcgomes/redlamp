@@ -50,6 +50,18 @@ public struct FilmLookDefinition: Sendable, Hashable {
 public enum FilmLookCatalog {
     public static let looks: [FilmLookDefinition] = [
         look(
+            "portra-160", "Portra 160", "Portra's finer-grained, gentler sister",
+            maker: "Kodak", format: "Colour negative · ISO 160", icon: FilmIcon(
+                .canister,
+                body: .init(0.96, 0.93, 0.85),
+                band: .init(0.95, 0.76, 0.42),
+                text: .init(0.28, 0.16, 0.07),
+                label: "160",
+            ),
+            film: "kodak-portra-160", scanner: .frontier,
+            grain: (15, 26, 30), halation: (7, 40),
+        ),
+        look(
             "portra-400", "Portra 400", "Warm, gentle colour negative, as a Frontier scan renders it",
             maker: "Kodak", format: "Colour negative · ISO 400", icon: FilmIcon(
                 .canister,
@@ -61,6 +73,30 @@ public enum FilmLookCatalog {
             // 2: dyes fitted to the stock's own published neutral rather than borrowed.
             film: "kodak-portra-400", version: 2, scanner: .frontier,
             grain: (20, 30, 35), halation: (8, 40),
+        ),
+        look(
+            "portra-800", "Portra 800", "Fast Portra: warm and rich, with more grain",
+            maker: "Kodak", format: "Colour negative · ISO 800", icon: FilmIcon(
+                .canister,
+                body: .init(0.96, 0.93, 0.85),
+                band: .init(0.86, 0.36, 0.15),
+                text: .init(1, 0.96, 0.9),
+                label: "800",
+            ),
+            film: "kodak-portra-800", scanner: .frontier,
+            grain: (27, 34, 40), halation: (9, 40),
+        ),
+        look(
+            "portra-800-1600", "Portra 800 · Pushed to 1600", "Portra 800 rated at 1600 and pushed a stop: denser shadows, more contrast",
+            maker: "Kodak", format: "Colour negative · ISO 800 pushed to 1600", icon: FilmIcon(
+                .canister,
+                body: .init(0.96, 0.93, 0.85),
+                band: .init(0.86, 0.36, 0.15),
+                text: .init(1, 0.96, 0.9),
+                label: "1600",
+            ),
+            film: "kodak-portra-800", filmVariant: ["exposureIndex": "1600"], scanner: .frontier, exposure: -1,
+            grain: (32, 38, 42), halation: (9, 40),
         ),
         look(
             "ektar-100", "Ektar 100", "Fine-grained, saturated colour negative",
@@ -88,6 +124,18 @@ public enum FilmLookCatalog {
             film: "kodak-gold-200", version: 2, scanner: .frontier,
             grain: (23, 30, 40), halation: (9, 40),
         ),
+        look(
+            "ultramax-400", "UltraMax 400", "Punchy, warm everyday colour negative",
+            maker: "Kodak", format: "Colour negative · ISO 400", icon: FilmIcon(
+                .canister,
+                body: .init(0.18, 0.33, 0.72),
+                band: .init(0.98, 0.8, 0.15),
+                text: .init(0.12, 0.2, 0.5),
+                label: "400",
+            ),
+            film: "kodak-ultramax-400", scanner: .frontier,
+            grain: (25, 32, 42), halation: (9, 40),
+        ),
         // Superia's rms granularity is on Fujifilm's negative scale, which doesn't compare with
         // Kodak's index; set beside Gold.
         look(
@@ -102,6 +150,18 @@ public enum FilmLookCatalog {
             // 2: dyes fitted to the stock's own published neutral rather than borrowed.
             film: "fuji-superia-xtra-400", version: 2, scanner: .frontier,
             grain: (24, 32, 45), halation: (8, 40),
+        ),
+        look(
+            "pro-400h", "Pro 400H", "Fujifilm's pastel wedding film: soft contrast and minty greens",
+            maker: "Fujifilm", format: "Colour negative · ISO 400 (discontinued)", icon: FilmIcon(
+                .canister,
+                body: .init(0.96, 0.97, 0.98),
+                band: .init(0.36, 0.6, 0.86),
+                text: .init(0.08, 0.2, 0.45),
+                label: "400H",
+            ),
+            film: "fuji-pro-400h", scanner: .frontier,
+            grain: (24, 32, 40), halation: (8, 40),
         ),
         // Vision3 publishes granularity only as curves; 500T is a fast stock, set a little
         // above Portra. CineStill is the same emulsion without its anti-halation backing.
@@ -119,6 +179,18 @@ public enum FilmLookCatalog {
             grain: (26, 34, 45), halation: (70, 55), bloom: (8, 50),
         ),
         look(
+            "cinestill-50d", "CineStill 50D", "Daylight cinema negative without anti-halation: fine grain, glowing highlights",
+            maker: "CineStill", format: "Daylight colour negative · ISO 50", icon: FilmIcon(
+                .canister,
+                body: .init(0.13, 0.13, 0.14),
+                band: .init(0.2, 0.55, 0.86),
+                text: .init(1, 1, 1),
+                label: "50D",
+            ),
+            film: "cinestill-50d", scanner: .noritsu,
+            grain: (12, 22, 35), halation: (60, 50), bloom: (6, 50),
+        ),
+        look(
             "vision3-500t-2383", "Vision3 500T · 2383", "Cinema negative printed on 2383 print film",
             maker: "Kodak", format: "Cinema negative on print film · ISO 500", icon: FilmIcon(
                 .reel,
@@ -127,8 +199,45 @@ public enum FilmLookCatalog {
                 text: .init(0.12, 0.1, 0.08),
                 label: "500T",
             ),
-            film: "kodak-vision3-500t", print: "kodak-2383", flare: 0.004,
+            // 2: Kodak 2383's sensitivity re-traced.
+            film: "kodak-vision3-500t", version: 2, print: "kodak-2383", flare: 0.004,
             grain: (24, 32, 40), halation: (14, 45), bloom: (6, 50),
+        ),
+        look(
+            "vision3-250d-2383", "Vision3 250D · 2383", "Daylight cinema negative printed on 2383",
+            maker: "Kodak", format: "Cinema negative on print film · ISO 250", icon: FilmIcon(
+                .reel,
+                body: .init(0.24, 0.31, 0.44),
+                band: .init(0.95, 0.84, 0.4),
+                text: .init(0.12, 0.1, 0.08),
+                label: "250D",
+            ),
+            film: "kodak-vision3-250d", print: "kodak-2383", flare: 0.004,
+            grain: (20, 30, 40), halation: (12, 45), bloom: (6, 50),
+        ),
+        look(
+            "vision3-50d-2383", "Vision3 50D · 2383", "The finest-grained cinema negative, printed on 2383",
+            maker: "Kodak", format: "Cinema negative on print film · ISO 50", icon: FilmIcon(
+                .reel,
+                body: .init(0.24, 0.31, 0.44),
+                band: .init(0.96, 0.92, 0.66),
+                text: .init(0.12, 0.1, 0.08),
+                label: "50D",
+            ),
+            film: "kodak-vision3-50d", print: "kodak-2383", flare: 0.004,
+            grain: (12, 22, 35), halation: (10, 45), bloom: (5, 50),
+        ),
+        look(
+            "eterna-vivid-250d-2383", "Eterna Vivid 250D · 2383", "Fujifilm's vivid daylight cinema negative, printed on 2383",
+            maker: "Fujifilm", format: "Cinema negative on print film · ISO 250 (discontinued)", icon: FilmIcon(
+                .reel,
+                body: .init(0.1, 0.36, 0.3),
+                band: .init(0.92, 0.92, 0.86),
+                text: .init(0.08, 0.24, 0.2),
+                label: "ETV",
+            ),
+            film: "fuji-eterna-vivid-250d", print: "kodak-2383", flare: 0.004,
+            grain: (21, 30, 40), halation: (12, 45), bloom: (6, 50),
         ),
         // Slides are exposed for their highlights, so mid-grey sits a little lower.
         look(
@@ -156,6 +265,42 @@ public enum FilmLookCatalog {
             grain: (9, 16, 25), halation: (4, 35),
         ),
         look(
+            "velvia-100", "Velvia 100", "Velvia's faster, slightly gentler sibling",
+            maker: "Fujifilm", format: "Slide film · ISO 100", icon: FilmIcon(
+                .slide,
+                body: .init(0.94, 0.93, 0.96),
+                band: .init(0.55, 0.26, 0.66),
+                text: .init(0.4, 0.14, 0.52),
+                label: "100",
+            ),
+            film: "fuji-velvia-100", displayGrey: 0.24,
+            grain: (8, 18, 25), halation: (4, 35),
+        ),
+        look(
+            "ektachrome-e100", "Ektachrome E100", "Kodak's clean, cool slide film",
+            maker: "Kodak", format: "Slide film · ISO 100", icon: FilmIcon(
+                .slide,
+                body: .init(0.95, 0.95, 0.94),
+                band: .init(0.82, 0.24, 0.16),
+                text: .init(0.6, 0.12, 0.08),
+                label: "E100",
+            ),
+            film: "kodak-ektachrome-e100", displayGrey: 0.24,
+            grain: (8, 18, 25), halation: (4, 35),
+        ),
+        look(
+            "kodachrome-64", "Kodachrome 64", "The legendary K-14 slide: warm reds, deep blues, dense shadows",
+            maker: "Kodak", format: "Slide film · ISO 64 (discontinued)", icon: FilmIcon(
+                .slide,
+                body: .init(0.98, 0.83, 0.18),
+                band: .init(0.8, 0.16, 0.12),
+                text: .init(0.5, 0.08, 0.05),
+                label: "K64",
+            ),
+            film: "kodak-kodachrome-64", displayGrey: 0.24,
+            grain: (10, 20, 25), halation: (4, 35),
+        ),
+        look(
             "tri-x-400", "Tri-X 400", "Classic black and white, scanned",
             maker: "Kodak", format: "Black and white negative · ISO 400", icon: FilmIcon(
                 .canister,
@@ -168,6 +313,32 @@ public enum FilmLookCatalog {
             monochrome: true,
             film: "kodak-tri-x-400", scanContrast: 1.1,
             grain: (37, 38, 0), roughness: 65, halation: (5, 40),
+        ),
+        look(
+            "t-max-100", "T-Max 100", "Kodak's finest-grained black and white: smooth and sharp",
+            maker: "Kodak", format: "Black and white negative · ISO 100", icon: FilmIcon(
+                .canister,
+                body: .init(0.16, 0.26, 0.56),
+                band: .init(0.98, 0.8, 0.1),
+                text: .init(0.16, 0.26, 0.56),
+                label: "100",
+                leader: .init(0.3, 0.3, 0.3),
+            ),
+            monochrome: true,
+            film: "kodak-t-max-100", grain: (18, 24, 0), roughness: 45, halation: (4, 40),
+        ),
+        look(
+            "t-max-400", "T-Max 400", "Modern fast black and white: tight grain, long tonal range",
+            maker: "Kodak", format: "Black and white negative · ISO 400", icon: FilmIcon(
+                .canister,
+                body: .init(0.16, 0.26, 0.56),
+                band: .init(0.92, 0.92, 0.92),
+                text: .init(0.16, 0.26, 0.56),
+                label: "400",
+                leader: .init(0.3, 0.3, 0.3),
+            ),
+            monochrome: true,
+            film: "kodak-t-max-400", grain: (22, 30, 0), roughness: 50, halation: (5, 40),
         ),
         // HP5 Plus publishes no granularity; it is generally a touch coarser than Tri-X.
         look(
@@ -183,6 +354,59 @@ public enum FilmLookCatalog {
             monochrome: true,
             film: "ilford-hp5-plus",
             grain: (40, 42, 0), roughness: 60, halation: (5, 40),
+        ),
+        look(
+            "delta-100", "Delta 100", "Ilford's fine-grained modern black and white",
+            maker: "Ilford", format: "Black and white negative · ISO 100", icon: FilmIcon(
+                .canister,
+                body: .init(0.09, 0.09, 0.09),
+                band: .init(0.86, 0.2, 0.2),
+                text: .init(1, 1, 1),
+                label: "D100",
+                leader: .init(0.3, 0.3, 0.3),
+            ),
+            monochrome: true,
+            film: "ilford-delta-100", grain: (16, 24, 0), roughness: 45, halation: (4, 40),
+        ),
+        look(
+            "delta-3200", "Delta 3200", "Ilford's fastest film: big, gritty grain for low light",
+            maker: "Ilford", format: "Black and white negative · ISO 3200", icon: FilmIcon(
+                .canister,
+                body: .init(0.09, 0.09, 0.09),
+                band: .init(0.96, 0.56, 0.1),
+                text: .init(0.09, 0.09, 0.09),
+                label: "3200",
+                leader: .init(0.3, 0.3, 0.3),
+            ),
+            monochrome: true,
+            film: "ilford-delta-3200", scanContrast: 1.05,
+            grain: (52, 50, 0), roughness: 70, halation: (6, 40),
+        ),
+        look(
+            "fp4-plus", "FP4 Plus", "Classic medium-speed black and white with a gentle shoulder",
+            maker: "Ilford", format: "Black and white negative · ISO 125", icon: FilmIcon(
+                .canister,
+                body: .init(0.09, 0.09, 0.09),
+                band: .init(0.2, 0.6, 0.32),
+                text: .init(1, 1, 1),
+                label: "FP4",
+                leader: .init(0.3, 0.3, 0.3),
+            ),
+            monochrome: true,
+            film: "ilford-fp4-plus", grain: (24, 30, 0), roughness: 55, halation: (5, 40),
+        ),
+        look(
+            "pan-f-plus", "Pan F Plus", "Slow, ultra-fine black and white with rich contrast",
+            maker: "Ilford", format: "Black and white negative · ISO 50", icon: FilmIcon(
+                .canister,
+                body: .init(0.09, 0.09, 0.09),
+                band: .init(0.26, 0.46, 0.86),
+                text: .init(1, 1, 1),
+                label: "PAN F",
+                leader: .init(0.3, 0.3, 0.3),
+            ),
+            monochrome: true,
+            film: "ilford-pan-f-plus", grain: (12, 18, 0), roughness: 40, halation: (4, 40),
         ),
         look(
             "tri-x-multigrade", "Tri-X · Darkroom Print", "Tri-X printed on Multigrade paper, grade 2",
@@ -265,7 +489,8 @@ public enum FilmLookCatalog {
                 text: .init(0.1, 0.1, 0.1),
                 label: "BB",
             ),
-            film: "kodak-vision3-500t", print: "kodak-2383", process: .bleachBypass, flare: 0.004,
+            // 2: Kodak 2383's sensitivity re-traced.
+            film: "kodak-vision3-500t", version: 2, print: "kodak-2383", process: .bleachBypass, flare: 0.004,
             grain: (26, 32, 30), halation: (12, 45), bloom: (6, 50),
         ),
         // Cross-processing keeps most of the stock's crossovers: the scanner can't neutralise a

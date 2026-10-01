@@ -49,8 +49,35 @@ enum FilmReadmeAssets {
         for (look, recipe) in recipes {
             try await cells.append((renderer.render(recipe, image: photo, maxLongEdge: 900), look.name, look.icon))
         }
-        try ImageFile.write(overview(cells, columns: 4), to: folder.appendingPathComponent("overview.jpg"))
+        try ImageFile.write(overview(cells, columns: 6), to: folder.appendingPathComponent("overview.jpg"))
+        try catalogueTable(recipes.map(\.0)).write(
+            to: Repository.root.appendingPathComponent("build/film/catalogue.md"), atomically: true, encoding: .utf8,
+        )
         print("wrote \(folder.path)")
+    }
+
+    /// The README's catalogue table, one row per look, in catalogue order.
+    private static func catalogueTable(_ looks: [FilmLookDefinition]) -> String {
+        let rows = looks.map { look in
+            let rendered: String = switch (look.print, look.icon.shape, look.process) {
+            case (_, _, .crossProcessed): "Developed in C-41, scanned"
+            case (.some(let print), _, _) where print.contains("2383"): "Printed on 2383 and projected"
+            case (.some, _, _): "Printed on paper"
+            case (nil, .slide, _): "Slide, viewed on a light box"
+            default:
+                switch look.parameters.scanner {
+                case .frontier: "Scanned, Frontier-like"
+                case .noritsu: "Scanned, Noritsu-like"
+                case .neutral: "Scanned"
+                }
+            }
+            let grain = Int(look.effects[.grainAmount] ?? 0), halation = Int(look.effects[.halationAmount] ?? 0)
+            let bloom = look.effects[.bloomAmount].map { ", bloom \(Int($0))" } ?? ""
+            return "| <img src=\"docs/images/film/icon-\(look.id).png\" width=\"32\" alt=\"\"> | [\(look.name)](#\(look.id)) | "
+                + "\(look.maker) · \(look.format) | \(rendered) | \(grain) / \(halation)\(bloom) |"
+        }
+        return (["| | Look | Film | Rendered as | Grain / halation |", "| --- | --- | --- | --- | --- |"] + rows)
+            .joined(separator: "\n") + "\n"
     }
 
     /// Images cropped to the tile's 3:2 and laid out in rows.

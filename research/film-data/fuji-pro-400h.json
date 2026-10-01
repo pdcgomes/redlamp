@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "id": "fuji-pro-400h",
+  "name": "FUJICOLOR PRO400H Professional",
+  "manufacturer": "FUJIFILM Corporation",
+  "type": "negative",
+  "process": "CN-16 family or C-41",
+  "exposureIndex": 400,
+  "source": {
+    "title": "FUJICOLOR PRO 400H Professional — Fujifilm data sheet (Japanese; discontinued product)",
+    "document": "013AR0328A",
+    "edition": "神SF-13.02 (February 2013), Japanese",
+    "url": "https://asset.fujifilm.com/www/jp/files/2024-04/198fe31ee57628013d29171770b28218/datasheet_pro400h_01.pdf",
+    "fetchedVia": "direct",
+    "retrieved": "2026-10-01",
+    "sha256": "421e625bc24f9d9dfad01edc9d787f192934461e026e1c18527adc165a60229a",
+    "pages": [1, 2, 3, 5, 6]
+  },
+  "characteristicCurves": {
+    "densityType": "status-M equivalent",
+    "exposure": "Daylight, 1/125 s",
+    "process": "CN-16",
+    "logExposureUnits": "log10 exposure in lux-seconds",
+    "logExposure": [-3.55, -3.5, -3.45, -3.4, -3.35, -3.3, -3.25, -3.2, -3.15, -3.1, -3.05, -3.0, -2.95, -2.9, -2.85, -2.8, -2.75, -2.7, -2.65, -2.6, -2.55, -2.5, -2.45, -2.4, -2.35, -2.3, -2.25, -2.2, -2.15, -2.1, -2.05, -2.0, -1.95, -1.9, -1.85, -1.8, -1.75, -1.7, -1.65, -1.6, -1.55, -1.5, -1.45, -1.4, -1.35, -1.3, -1.25, -1.2, -1.15, -1.1, -1.05, -1.0, -0.95, -0.9, -0.85, -0.8, -0.75, -0.7, -0.65, -0.6, -0.55, -0.5, -0.45, -0.4, -0.35, -0.3, -0.25, -0.2, -0.15, -0.1, -0.05, 0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65],
+    "blue": [0.948, 0.948, 0.947, 0.947, 0.947, 0.947, 0.947, 0.947, 0.948, 0.948, 0.949, 0.951, 0.953, 0.955, 0.957, 0.961, 0.965, 0.97, 0.975, 0.983, 0.991, 1.001, 1.014, 1.029, 1.047, 1.066, 1.087, 1.108, 1.131, 1.154, 1.179, 1.204, 1.231, 1.258, 1.286, 1.314, 1.342, 1.37, 1.397, 1.424, 1.451, 1.478, 1.505, 1.532, 1.559, 1.586, 1.613, 1.639, 1.666, 1.693, 1.719, 1.745, 1.772, 1.798, 1.825, 1.851, 1.877, 1.904, 1.93, 1.956, 1.982, 2.008, 2.034, 2.061, 2.087, 2.112, 2.138, 2.164, 2.19, 2.216, 2.242, 2.267, 2.293, 2.319, 2.344, 2.37, 2.395, 2.42, 2.446, 2.471, 2.496, 2.521, 2.545, 2.57, 2.594],
+    "green": [0.687, 0.686, 0.685, 0.684, 0.683, 0.682, 0.681, 0.681, 0.681, 0.681, 0.681, 0.682, 0.683, 0.684, 0.686, 0.688, 0.691, 0.694, 0.699, 0.704, 0.711, 0.719, 0.731, 0.747, 0.764, 0.783, 0.804, 0.825, 0.848, 0.872, 0.896, 0.921, 0.946, 0.972, 0.998, 1.025, 1.053, 1.08, 1.108, 1.137, 1.166, 1.195, 1.224, 1.254, 1.283, 1.313, 1.342, 1.371, 1.4, 1.429, 1.458, 1.487, 1.515, 1.544, 1.572, 1.6, 1.629, 1.657, 1.684, 1.712, 1.74, 1.768, 1.795, 1.823, 1.85, 1.877, 1.904, 1.931, 1.957, 1.984, 2.011, 2.037, 2.063, 2.089, 2.115, 2.141, 2.166, 2.192, 2.217, 2.242, 2.266, 2.291, 2.315, 2.339, 2.363],
+    "red": [0.172, 0.172, 0.171, 0.171, 0.171, 0.171, 0.172, 0.172, 0.173, 0.174, 0.175, 0.176, 0.178, 0.18, 0.182, 0.185, 0.188, 0.192, 0.196, 0.2, 0.205, 0.212, 0.221, 0.233, 0.246, 0.261, 0.281, 0.3, 0.32, 0.343, 0.368, 0.392, 0.417, 0.443, 0.471, 0.498, 0.526, 0.553, 0.583, 0.612, 0.642, 0.671, 0.701, 0.731, 0.762, 0.793, 0.823, 0.854, 0.884, 0.915, 0.946, 0.977, 1.008, 1.039, 1.07, 1.101, 1.132, 1.163, 1.193, 1.224, 1.254, 1.284, 1.315, 1.345, 1.375, 1.405, 1.434, 1.463, 1.492, 1.521, 1.55, 1.579, 1.608, 1.635, 1.662, 1.69, 1.717, 1.744, 1.772, 1.797, 1.822, 1.848, 1.873, 1.898, 1.924],
+    "dMin": {
+      "red": 0.172,
+      "green": 0.687,
+      "blue": 0.948
+    },
+    "notes": "Status M (equivalent) densities including the orange mask; dMin = density at the lowest plotted exposure. The chart's axis numbers are drawn as outlines, so axes were calibrated on the grid lines (-4.0..+1.0 log H in 0.5 steps; 0..3.5 D in 0.5 steps)."
+  },
+  "spectralSensitivity": {
+    "units": "relative log10 spectral sensitivity (arbitrary common offset); sensitivity = reciprocal of the exposure (J/cm^2) required to produce the stated density",
+    "densityCriterion": "1.0 above D-min (Status M equivalent)",
+    "process": "CN-16",
+    "wavelength": [385, 390, 395, 400, 405, 410, 415, 420, 425, 430, 435, 440, 445, 450, 455, 460, 465, 470, 475, 480, 485, 490, 495, 500, 505, 510, 515, 520, 525, 530, 535, 540, 545, 550, 555, 560, 565, 570, 575, 580, 585, 590, 595, 600, 605, 610, 615, 620, 625, 630, 635, 640, 645, 650, 655, 660],
+    "red": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, -0.594, -0.413, -0.212, 0.037, 0.276, 0.498, 0.698, 0.867, 0.995, 1.048, 1.06, 1.049, 1.046, 1.056, 1.058, 1.033, 0.954, 0.761, 0.468, 0.141, -0.222],
+    "green": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, -0.718, -0.648, -0.576, -0.492, -0.365, -0.162, 0.065, 0.296, 0.513, 0.699, 0.817, 0.908, 0.994, 1.076, 1.15, 1.214, 1.261, 1.298, 1.328, 1.347, 1.349, 1.314, 1.225, 1.066, 0.789, 0.46, 0.069, -0.368, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "blue": [-0.714, -0.26, 0.272, 0.789, 1.129, 1.279, 1.331, 1.347, 1.348, 1.341, 1.33, 1.318, 1.308, 1.309, 1.326, 1.384, 1.471, 1.522, 1.432, 1.137, 0.763, 0.415, 0.156, -0.067, -0.27, -0.457, -0.622, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "fourthLayer": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, -0.108, -0.001, 0.093, 0.175, 0.247, 0.308, 0.357, 0.393, 0.414, 0.421, 0.411, 0.386, 0.342, 0.275, 0.18, 0.05, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "notes": "The chart has no absolute log-sensitivity scale, only a \"1.0\" scale bar between two horizontal lines; values are relative to the lower line (0.0). fourthLayer is the dashed curve labelled \"第4の感色層\" (fourth colour-sensitive layer). Fujifilm's layer diagram places it between the green- and red-sensitive layers and says it forms a light magenta image; it is not one of the three image-forming channels and its role (interimage/colour correction) is only described qualitatively. Inter-layer offsets are as published; the absolute level is unknown."
+  },
+  "dyeDensity": {
+    "units": "spectral diffuse density",
+    "wavelength": [400, 405, 410, 415, 420, 425, 430, 435, 440, 445, 450, 455, 460, 465, 470, 475, 480, 485, 490, 495, 500, 505, 510, 515, 520, 525, 530, 535, 540, 545, 550, 555, 560, 565, 570, 575, 580, 585, 590, 595, 600, 605, 610, 615, 620, 625, 630, 635, 640, 645, 650, 655, 660, 665, 670, 675, 680, 685, 690, 695, 700, 705, 710, 715],
+    "cyan": null,
+    "magenta": null,
+    "yellow": null,
+    "minimum": [1.43, 1.209, 1.087, 1.05, 1.041, 1.044, 1.046, 1.045, 1.039, 1.029, 1.017, 1.002, 0.986, 0.969, 0.951, 0.932, 0.912, 0.893, 0.873, 0.854, 0.838, 0.825, 0.813, 0.801, 0.789, 0.776, 0.764, 0.751, 0.737, 0.723, 0.707, 0.698, 0.69, 0.681, 0.666, 0.63, 0.576, 0.509, 0.439, 0.374, 0.318, 0.273, 0.244, 0.229, 0.224, 0.221, 0.22, 0.22, 0.221, 0.221, 0.221, 0.219, 0.216, 0.213, 0.21, 0.207, 0.204, 0.201, 0.198, 0.195, 0.192, 0.189, 0.187, 0.184],
+    "midscaleNeutral": [null, 1.77, 1.651, 1.658, 1.707, 1.772, 1.83, 1.872, 1.896, 1.907, 1.908, 1.899, 1.879, 1.845, 1.797, 1.737, 1.677, 1.629, 1.585, 1.549, 1.524, 1.514, 1.517, 1.529, 1.548, 1.569, 1.586, 1.594, 1.597, 1.585, 1.557, 1.517, 1.466, 1.406, 1.338, 1.263, 1.18, 1.086, 0.987, 0.895, 0.825, 0.78, 0.757, 0.753, 0.764, 0.785, 0.812, 0.844, 0.877, 0.912, 0.946, 0.98, 1.011, 1.04, 1.065, 1.085, 1.097, 1.107, 1.116, 1.12, 1.116, 1.108, 1.094, 1.074],
+    "notes": "Only \"densities given by a neutral subject and minimum density (example measurement)\" are published (中間濃度 / 最小濃度); per-dye curves are not, so cyan/magenta/yellow are null."
+  },
+  "granularity": {
+    "rmsDiffuse": 4,
+    "printGrainIndex": null,
+    "notes": "Fujifilm diffuse rms granularity (x1000), 48 µm aperture, at density 1.0 above D-min; Fujifilm notes it cannot be compared with colour reversal film values."
+  },
+  "resolvingPower": {
+    "linesPerMm": {
+      "1.6:1": 50,
+      "1000:1": 125
+    },
+    "notes": "Test-object contrast ratios."
+  },
+  "mtf": {
+    "units": "percent response",
+    "frequencyUnits": "cycles/mm",
+    "exposure": "Daylight",
+    "process": "CN-16",
+    "frequency": [2.5, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 25, 30, 35, 40, 50, 60, 70, 80, 100],
+    "neutral": [111.1, 111.0, 110.7, 110.3, 109.5, 108.6, 107.5, 104.9, 101.8, 96.8, 88.3, 80.5, 73.5, 67.3, 61.5, 51.4, 43.2, 36.5, 31.0, 22.0],
+    "notes": "A single curve is published; the layer/colour it refers to is not stated. The frequency grid lines are drawn unevenly (least-squares fit on 5-200 c/mm, residual up to ~2 pt ≈ 0.02 decade)."
+  },
+  "interlayer": "Layer structure (p5): blue-sensitive layer (colourless yellow coupler), yellow filter layer, green-sensitive layer (yellow-coloured magenta coupler), fourth colour-sensitive layer (forms a light magenta image), intermediate layer, red-sensitive layer (red-coloured cyan coupler), intermediate layer, anti-halation layer. Fujifilm cites an optimised interimage (\"重層効果\") effect; no interimage data are published.",
+  "notes": ["DISCONTINUED. Fetched from Fujifilm's own asset server (Fujifilm Japan datasheet index); Japanese-language datasheet, labels translated here.", "ISO 400/27° daylight; ISO 125/22° under 3200 K tungsten with Fuji LBB-12 (≈ Wratten 80A).", "Reciprocity: no correction from 1/4000 s to 2 s; at 4 s give +1/2 stop. No filter correction is needed from 1/4000 s to 4 s.", "Base: cellulose triacetate, 135 122 µm, 120 98 µm. Process CN-16 family or C-41."],
+  "derived": {
+    "note": "Computed by extract.py from the digitised curves as sanity checks; not published values.",
+    "gamma": {
+      "red": 0.612,
+      "green": 0.569,
+      "blue": 0.529
+    },
+    "gammaMethod": "least-squares slope over the central 25-75% of each curve's density range",
+    "monotonic": {
+      "red": true,
+      "green": true,
+      "blue": true
+    },
+    "sensitivityPeakNm": {
+      "red": 610,
+      "green": 555,
+      "blue": 470
+    }
+  },
+  "extraction": {
+    "method": "vector",
+    "tool": "research/film-data/extract.py",
+    "notes": "All four p6 charts are vector paths; sampled from path geometry. Axes from grid lines (the numbers are outlines, not text).",
+    "confidence": "high (characteristic, dye), medium (sensitivity: relative scale; MTF: uneven grid)",
+    "checks": []
+  }
+}

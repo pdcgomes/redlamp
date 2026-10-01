@@ -83,6 +83,78 @@ SOURCES = {
                  title='ILFORD MULTIGRADE RC PAPERS — Technical Information (HARMAN technology)',
                  url='https://www.ilfordphoto.com/amfile/file/download/file/1956/product/1701/',
                  sha256='62c93069b0ae5dc340444651dbbe8e1b17102f7e25f12449297504a8e1d391e1'),
+    # ---- batch 2 (retrieved 2026-10-01)
+    'e4051': dict(file='e4051_2025.pdf', document='E-4051', edition='Revised 1-25 (January 2025)',
+                  title='KODAK PROFESSIONAL PORTRA 160 Film — Technical Data',
+                  url='https://kodakprofessional.com/sites/default/files/2025-07/e4051.pdf',
+                  sha256='1f3430cd8e1b4ad370d8bbf8c648f6f5871a9911dfd5794613e9bbf3bbf9cb82', retrieved='2026-10-01'),
+    'e4040': dict(file='e4040_2025.pdf', document='E-4040', edition='Revised 1-25 (January 2025)',
+                  title='KODAK PROFESSIONAL PORTRA 800 Film — Technical Data',
+                  url='https://kodakprofessional.com/sites/default/files/2025-07/e4040.pdf',
+                  sha256='13581198dffa01c5a2a38ab87d96a73cf2e2755b6514d55c65206fe621a60b5a', retrieved='2026-10-01'),
+    'e7023': dict(file='ultramax400.pdf', document='E-7023', edition='Revised 2/16 (February 2016)',
+                  title='KODAK ULTRA MAX 400 Film — Technical Data',
+                  url='https://kodakprofessional.com/sites/default/files/wysiwyg/KodakUltraMax400TechSheet-1.pdf',
+                  sha256='6c22ba6d69e495d3e6f4160889512841b1e85e5007dbb7974446ba564fe41bf3', retrieved='2026-10-01'),
+    'e4000': dict(file='e4000_e100.pdf', document='E-4000', edition='Revised 8-18 (August 2018)',
+                  title='KODAK PROFESSIONAL EKTACHROME E100 Film — Technical Data',
+                  url='https://kodakprofessional.com/sites/default/files/wysiwyg/pro/resources/e4000_ektachrome_100.pdf',
+                  sha256='d6e6fa1497c4fc16010997b1a8510d9df3b4692e34c48599c8a4338d5768fab6', retrieved='2026-10-01'),
+    'f4016': dict(file='f4016_tmax100.pdf', document='F-4016', edition='Revised 6-18 (June 2018)',
+                  title='KODAK PROFESSIONAL T-MAX 100 Film — Technical Data',
+                  url='https://kodakprofessional.com/sites/default/files/wysiwyg/pro/resources/f4016_TMax_100.pdf',
+                  sha256='00518d7d1e296d6065f6e41ea3db999e5d8714679fb3d2b76d9a49eb207113be', retrieved='2026-10-01'),
+    'f4043': dict(file='f4043_tmax400.pdf', document='F-4043', edition='Revised 2-16 (February 2016)',
+                  title='KODAK PROFESSIONAL T-MAX 400 Film — Technical Data',
+                  url='https://kodakprofessional.com/sites/default/files/wysiwyg/pro/resources/f4043_TMax_400.pdf',
+                  sha256='9bd252fdcf37019dc4fb73f40f4d316b28b814190a333b28e7d6c339689c9171', retrieved='2026-10-01'),
+    'd100': dict(file='ilford_delta_100.pdf', document='DELTA 100 PROFESSIONAL Technical Information',
+                 edition='Apr 2023', title='ILFORD DELTA 100 PROFESSIONAL — Technical Information (HARMAN technology)',
+                 url='https://www.ilfordphoto.com/amfile/file/download/file/3/product/679/',
+                 sha256='f84dc976c4e879418cbbb5c318e37e8ef1400a7fdd319c1614077d598fe4fe4f', retrieved='2026-10-01'),
+    'd3200': dict(file='ilford_delta_3200.pdf', document='DELTA 3200 PROFESSIONAL Technical Information',
+                  edition='Jun 2025 (product page: "technical data sheet F25")',
+                  title='ILFORD DELTA 3200 PROFESSIONAL — Technical Information (HARMAN technology)',
+                  url='https://www.ilfordphoto.com/amfile/file/download/file/1913/product/682/',
+                  sha256='049f37bb3c959cee9598bc607d0bb54c614c942928a9b07d4431674c35be1aca', retrieved='2026-10-01'),
+    'fp4': dict(file='ilford_fp4_plus.pdf', document='FP4 PLUS Technical Information',
+                edition='Nov 2018 (product page: "technical data sheet I19")',
+                title='ILFORD FP4 PLUS — Technical Information (HARMAN technology)',
+                url='https://www.ilfordphoto.com/amfile/file/download/file/1919/product/688/',
+                sha256='466e5b20460b8eb9bc0b989f3244a4526b739ab91bad1368ad0114917b52171f', retrieved='2026-10-01'),
+    'panf': dict(file='ilford_panf_plus.pdf', document='PANF PLUS Technical Information',
+                 edition='B26 (product page: "technical data sheet 2026")',
+                 title='ILFORD PAN F PLUS — Technical Information (HARMAN technology)',
+                 url='https://www.ilfordphoto.com/amfile/file/download/file/1905/product/699/',
+                 sha256='2e78af92e38eb5bf9a8000c7cc01f714fcaf4d5426fda74c0a23dcfe76569146', retrieved='2026-10-01'),
+    'h15207': dict(file='vision3_5207_ti.pdf', document='H-1-5207', edition='Revised 3-26 (March 2026)',
+                   title='KODAK VISION3 250D Color Negative Film 5207 / 7207 — Technical Information',
+                   url='https://www.kodak.com/content/products-brochures/motion-picture/KODAK-VISION3-250D-5207-7207-technical-information.pdf',
+                   sha256='70adb298a7aabb285d986b720e07c87c27eb2361f0925aea2b15903c08282e16', retrieved='2026-10-01'),
+    'h15203': dict(file='vision3_5203_ti.pdf', document='H-1-5203', edition='Revised 3-26 (March 2026)',
+                   title='KODAK VISION3 50D Color Negative Film 5203 / 7203 — Technical Information',
+                   url='https://www.kodak.com/content/products-brochures/motion-picture/KODAK-VISION3-50D-5203-7203-technical-information.pdf',
+                   sha256='b4613661abed641671329eff3bd7d5686b268eb26b954ef1c27ea68f363caca6', retrieved='2026-10-01'),
+    'rvp100': dict(file='fuji_velvia100_jp.pdf', document='163AR0096C', edition='17.05-FFBX (May 2017), Japanese',
+                   title='FUJICHROME Velvia 100 Professional [RVP 100] — Fujifilm data sheet (Japanese)',
+                   url='https://asset.fujifilm.com/www/jp/files/2024-04/56c15e414d446997d6d609f5726df093/datasheet_velvia100_01.pdf',
+                   sha256='cdf1d8e4c659133f446f04622d1dbf86b2fc44041b976ad4de082c1637548b64', retrieved='2026-10-01'),
+    'pro400h': dict(file='fuji_pro400h_jp.pdf', document='013AR0328A', edition='神SF-13.02 (February 2013), Japanese',
+                    title='FUJICOLOR PRO 400H Professional — Fujifilm data sheet (Japanese; discontinued product)',
+                    url='https://asset.fujifilm.com/www/jp/files/2024-04/198fe31ee57628013d29171770b28218/datasheet_pro400h_01.pdf',
+                    sha256='421e625bc24f9d9dfad01edc9d787f192934461e026e1c18527adc165a60229a', retrieved='2026-10-01'),
+    'eternav250d': dict(file='fuji_eterna_vivid250d.pdf', document='KB-1009E', edition='©2010 (PDF created 2011-01-28)',
+                        title='FUJICOLOR NEGATIVE FILM ETERNA Vivid 250D — Fujifilm motion picture data sheet',
+                        url='http://www.fujifilm.com/products/motion_picture/pdf/eterna_vivid250d.pdf',
+                        fetchedVia='Internet Archive capture of the manufacturer URL: https://web.archive.org/web/'
+                                   '20120216070558id_/http://www.fujifilm.com/products/motion_picture/pdf/eterna_vivid250d.pdf',
+                        sha256='54394f704d56f13864e2dec3ab4b39a627b4844cd0b0148600af6dc43f3828af', retrieved='2026-10-01'),
+    'e55': dict(file='kodak_e55_kodachrome.pdf', document='E-55', edition='December 1996 (Major Revision 12-96)',
+                title='KODACHROME 25, 64, and 200 Professional Film — Kodak technical data',
+                url='http://www.kodak.com:80/global/en/professional/support/techPubs/e55/e55.pdf',
+                fetchedVia='Internet Archive capture of the manufacturer URL: https://web.archive.org/web/'
+                           '20000817190405id_/http://www.kodak.com:80/global/en/professional/support/techPubs/e55/e55.pdf',
+                sha256='6fdbfe53b181d34a5aaf6fb57fef90c79c97e7e315179ba22edfb187ca869b4a', retrieved='2026-10-01'),
 }
 
 _docs = {}
@@ -103,7 +175,8 @@ def doc(key):
 def source_block(key, pages):
     s = SOURCES[key]
     return {'title': s['title'], 'document': s['document'], 'edition': s['edition'], 'url': s['url'],
-            'fetchedVia': 'direct', 'retrieved': RETRIEVED, 'sha256': s['sha256'], 'pages': pages}
+            'fetchedVia': s.get('fetchedVia', 'direct'), 'retrieved': s.get('retrieved', RETRIEVED),
+            'sha256': s['sha256'], 'pages': pages}
 
 # ============================================================================ vector geometry
 
@@ -141,10 +214,30 @@ def path_polylines(dr):
     return lines
 
 
+def page_drawings(page):
+    """page.get_drawings() in displayed (rotated) page coordinates; PyMuPDF reports them unrotated."""
+    ds = page.get_drawings()
+    if not page.rotation:
+        return ds
+    m = page.rotation_matrix
+    out = []
+    for dr in ds:
+        items = []
+        for it in dr['items']:
+            if it[0] == 're':
+                items.append(('re', pymupdf.Rect(it[1]) * m) + tuple(it[2:]))
+            elif it[0] == 'qu':
+                items.append(('qu', pymupdf.Quad(it[1]) * m))
+            else:
+                items.append((it[0],) + tuple(pymupdf.Point(p) * m for p in it[1:]))
+        out.append(dict(dr, items=items, rect=pymupdf.Rect(dr['rect']) * m))
+    return out
+
+
 def page_segments(page):
     """Straight axis-aligned segments (ticks, grid, frames) as (x0, y0, x1, y1)."""
     segs = []
-    for dr in page.get_drawings():
+    for dr in page_drawings(page):
         for it in dr['items']:
             if it[0] == 'l':
                 segs.append((it[1].x, it[1].y, it[2].x, it[2].y))
@@ -166,7 +259,7 @@ def vector_curves(page, rect, min_pts=6, stroke_only=True):
     piecewise-drawn curves can contain flat pieces."""
     rect = pymupdf.Rect(rect)
     out = []
-    for i, dr in enumerate(page.get_drawings()):
+    for i, dr in enumerate(page_drawings(page)):
         if stroke_only and 's' not in dr['type']:
             continue
         for j, poly in enumerate(path_polylines(dr)):
@@ -251,10 +344,14 @@ def number_spans(page, rect):
 
 def _number_spans(page, rect):
     out = []
-    for b in page.get_text('dict', clip=pymupdf.Rect(rect))['blocks']:
+    m = page.rotation_matrix
+    clip = pymupdf.Rect(rect) * ~m if page.rotation else pymupdf.Rect(rect)
+    for b in page.get_text('dict', clip=clip)['blocks']:
         for l in b.get('lines', []):
             spans = []
             for s in l['spans']:   # merge touching spans ("5" + "0" → "50")
+                if page.rotation:
+                    s = dict(s, bbox=tuple(pymupdf.Rect(s['bbox']) * m))
                 if spans and s['bbox'][0] - spans[-1]['bbox'][2] < 0.6 and abs(s['bbox'][1] - spans[-1]['bbox'][1]) < 1:
                     p = spans[-1]
                     spans[-1] = {'text': p['text'] + s['text'], 'size': p['size'],
@@ -907,7 +1004,7 @@ def overlay(key, pno, rect, xa, ya, curves, name, title, scale=3.0, marks=()):
     out = pymupdf.open()
     pg = out.new_page(width=W, height=H + 26)
     tgt = pymupdf.Rect(0, 26, W, 26 + H)
-    pg.show_pdf_page(tgt, doc(key), pno - 1, clip=rect)
+    show_upright(pg, tgt, key, pno, rect)
     pg.draw_rect(tgt, color=None, fill=(1, 1, 1), fill_opacity=0.45)
 
     def P(x, y):
@@ -932,6 +1029,23 @@ def overlay(key, pno, rect, xa, ya, curves, name, title, scale=3.0, marks=()):
     pg.get_pixmap(dpi=110).save(os.path.join(CHECK_DIR, name + '.png'))
 
 
+def show_upright(pg, tgt, key, pno, rect):
+    """Embed region rect (displayed page coordinates) of the source page into tgt; show_pdf_page clips in
+    unrotated coordinates, ignores /Rotate and intersects the clip with the rotated page rect, so rotated pages
+    are embedded from an in-memory copy with /Rotate cleared."""
+    src = doc(key)[pno - 1]
+    if src.rotation:
+        if ('derot', key) not in _docs:
+            d = pymupdf.open(stream=doc(key).tobytes(), filetype='pdf')
+            for p in d:
+                p.set_rotation(0)
+            _docs[('derot', key)] = d
+        pg.show_pdf_page(tgt, _docs[('derot', key)], pno - 1, clip=pymupdf.Rect(rect) * ~src.rotation_matrix,
+                         rotate=-src.rotation)
+    else:
+        pg.show_pdf_page(tgt, doc(key), pno - 1, clip=rect)
+
+
 def debug_drawings(key, pno, rect, name):
     """Label every vector path intersecting rect (index + colour) → check/debug-<name>.png."""
     os.makedirs(CHECK_DIR, exist_ok=True)
@@ -940,10 +1054,10 @@ def debug_drawings(key, pno, rect, name):
     scale = 3.0
     out = pymupdf.open()
     pg = out.new_page(width=rect.width * scale, height=rect.height * scale)
-    pg.show_pdf_page(pg.rect, doc(key), pno - 1, clip=rect)
+    show_upright(pg, pg.rect, key, pno, rect)
     pg.draw_rect(pg.rect, color=None, fill=(1, 1, 1), fill_opacity=0.6)
     k = 0
-    for i, dr in enumerate(page.get_drawings()):
+    for i, dr in enumerate(page_drawings(page)):
         r = dr['rect']
         if not pymupdf.Rect(r.x0 - .5, r.y0 - .5, r.x1 + .5, r.y1 + .5).intersects(rect) or len(dr['items']) < 3:
             continue
@@ -1159,13 +1273,18 @@ class Checks(list):
 
 
 def kodak_colour_negative(key, pno, char_F, sens_F, dye_F, mtf_F, slug, char_xvalues=None,
-                          dye_names=None, mtf_names=('blue', 'green', 'red'), sens_extra=None):
-    """Kodak Alaris still-film layout (Portra/Ektar/Gold): four vector charts on one page."""
-    page = doc(key)[pno - 1]
+                          dye_names=None, mtf_names=('blue', 'green', 'red'), sens_extra=None, pages=None):
+    """Kodak Alaris still-film layout (Portra/Ektar/Gold): four vector charts, on page pno unless
+    pages = {'char'|'sens'|'dye'|'mtf': page} says otherwise."""
+    pages, pno0 = pages or {}, pno
+
+    def pg(n):
+        return doc(key)[pages.get(n, pno0) - 1], pages.get(n, pno0)
     chk = Checks()
     out = {}
 
     # characteristic curves
+    page, pno = pg('char')
     xa, ya = frame_axes(page, char_F, xvalues=char_xvalues)
     cs = chain_curves(vector_curves(page, char_F, min_pts=2))
     named = by_order_at(cs, xa, ya, curve_range(cs[0]['polys'], xa)[0] + 0.05, ['blue', 'green', 'red'])
@@ -1181,6 +1300,7 @@ def kodak_colour_negative(key, pno, char_F, sens_F, dye_F, mtf_F, slug, char_xva
             f'{slug}-characteristic', f'{SOURCES[key]["document"]} p{pno} characteristic curves')
 
     # spectral sensitivity
+    page, pno = pg('sens')
     xa, ya = frame_axes(page, sens_F)
     cs = [c for c in vector_curves(page, sens_F, min_pts=2) if c['rect'].width < 0.8 * (sens_F[2] - sens_F[0])]
     cs = chain_curves(cs)
@@ -1197,6 +1317,7 @@ def kodak_colour_negative(key, pno, char_F, sens_F, dye_F, mtf_F, slug, char_xva
             f'{slug}-sensitivity', f'{SOURCES[key]["document"]} p{pno} spectral sensitivity')
 
     # spectral dye density
+    page, pno = pg('dye')
     xa, ya = frame_axes(page, dye_F)
     cs = [c for c in chain_curves(vector_curves(page, dye_F, min_pts=2)) if c['rect'].width > 20]
     names = dye_names or ['midscaleNeutral', 'minimum']
@@ -1212,6 +1333,7 @@ def kodak_colour_negative(key, pno, char_F, sens_F, dye_F, mtf_F, slug, char_xva
 
     # MTF
     if mtf_F:
+        page, pno = pg('mtf')
         xa, ya = frame_axes(page, mtf_F, xlog=True, ylog=True)
         cs = [c for c in chain_curves(vector_curves(page, mtf_F, min_pts=2)) if 15 < c['rect'].width < 0.9 * (mtf_F[2] - mtf_F[0])]
         hi = max(curve_range(c['polys'], xa)[1] for c in cs)
@@ -1445,6 +1567,94 @@ def fuji_superia_xtra_400():
     return rec
 
 
+@stock
+def fuji_pro_400h():
+    slug, key = 'fuji-pro-400h', 'pro400h'
+    doc_ = SOURCES[key]['document']
+    # Axis numbers on this page are glyph outlines, not text: axes are taken from the grid lines.
+    ch = vchart(key, 6, (82.2, 216.4, 286.9, 384.4),
+                lambda cs, xa, ya: by_order_at(cs, xa, ya, lo_x(cs, xa) + 0.05, ['blue', 'green', 'red']),
+                0.05, slug + '-characteristic', f'{doc_} p6 characteristic curves', min_width=60,
+                xaxis=axis_from_pairs([(82.2 + i * (286.9 - 82.2) / 10, -4.0 + 0.5 * i) for i in range(11)],
+                                      name='logH'),
+                yaxis=axis_from_pairs([(216.4, 3.5), (240.0, 3.0), (264.5, 2.5), (288.0, 2.0), (312.2, 1.5),
+                                       (336.3, 1.0), (360.1, 0.5), (384.4, 0.0)], name='D'))
+    rel = axis_from_pairs([(328.7, 0.0), (272.6, 1.0)], name='relative log S')
+    wl = axis_from_pairs([(345.2, 400), (402.8, 500), (460.6, 600), (518.3, 700)], name='nm')
+
+    def sens_assign(cs, xa, ya):
+        solid = [c for c in cs if dash_key(c) == 'solid']
+        dashed = [c for c in cs if dash_key(c) != 'solid']
+        out = by_peak(solid, xa, ya, BANDS_RGB)
+        assert len(dashed) == 1, [dash_key(c) for c in cs]
+        out['fourthLayer'] = dashed[0]['polys']
+        return out
+    se = vchart(key, 6, (334.0, 216.5, 530.6, 384.9), sens_assign, 5, slug + '-sensitivity',
+                f'{doc_} p6 spectral sensitivity (relative)', yaxis=rel, xaxis=wl, min_width=10, max_width_frac=0.8)
+    dy = vchart(key, 6, (331.2, 462.3, 530.4, 627.5),
+                lambda cs, xa, ya: by_order_at(cs, xa, ya, 550, ['midscaleNeutral', 'minimum']),
+                5, slug + '-dye-density', f'{doc_} p6 spectral dye density',
+                xaxis=axis_from_pairs([(331.4, 400), (393.8, 500), (456.3, 600), (519.3, 700)], name='nm'),
+                yaxis=axis_from_pairs([(474.1, 2.0), (512.3, 1.5), (551.0, 1.0), (590.8, 0.5)], name='D'))
+    mt = vchart(key, 6, (83.0, 462.8, 286.4, 626.9), lambda cs, xa, ya: {'neutral': cs[0]['polys']},
+                'mtf', slug + '-mtf', f'{doc_} p6 MTF', nd=1, max_width_frac=0.9,
+                xaxis=axis_from_pairs([(148.2, 5), (173.5, 10), (199.3, 20), (231.3, 50), (257.7, 100),
+                                       (286.4, 200)], log=True, name='c/mm'),
+                yaxis=axis_from_pairs([(462.8, 150), (478.1, 100), (491.9, 70), (504.2, 50), (523.6, 30),
+                                       (539.8, 20), (565.4, 10), (578.7, 7), (591.8, 5), (611.3, 3), (626.9, 2)],
+                                      log=True, name='%'))
+    rec = base_record(slug, 'FUJICOLOR PRO400H Professional', 'FUJIFILM Corporation', 'negative',
+                      'CN-16 family or C-41', 400, key, [1, 2, 3, 5, 6])
+    rec['characteristicCurves'] = {
+        'densityType': 'status-M equivalent', 'exposure': 'Daylight, 1/125 s', 'process': 'CN-16',
+        'logExposureUnits': LOGH_UNITS, 'logExposure': ch['x'], **ch['ys'],
+        'dMin': {c: ch['ys'][c][0] for c in ('red', 'green', 'blue')},
+        'notes': 'Status M (equivalent) densities including the orange mask; dMin = density at the lowest plotted '
+                 'exposure. The chart\'s axis numbers are drawn as outlines, so axes were calibrated on the grid '
+                 'lines (-4.0..+1.0 log H in 0.5 steps; 0..3.5 D in 0.5 steps).'}
+    rec['spectralSensitivity'] = {
+        'units': 'relative log10 spectral sensitivity (arbitrary common offset); sensitivity = reciprocal of the '
+                 'exposure (J/cm^2) required to produce the stated density',
+        'densityCriterion': '1.0 above D-min (Status M equivalent)', 'process': 'CN-16', 'wavelength': se['x'],
+        **se['ys'],
+        'notes': 'The chart has no absolute log-sensitivity scale, only a "1.0" scale bar between two horizontal '
+                 'lines; values are relative to the lower line (0.0). fourthLayer is the dashed curve labelled '
+                 '"第4の感色層" (fourth colour-sensitive layer). Fujifilm\'s layer diagram places it between the '
+                 'green- and red-sensitive layers and says it forms a light magenta image; it is not one of the '
+                 'three image-forming channels and its role (interimage/colour correction) is only described '
+                 'qualitatively. Inter-layer offsets are as published; the absolute level is unknown.'}
+    rec['dyeDensity'] = {
+        'units': 'spectral diffuse density', 'wavelength': dy['x'], 'cyan': None, 'magenta': None, 'yellow': None,
+        'minimum': dy['ys']['minimum'], 'midscaleNeutral': dy['ys']['midscaleNeutral'],
+        'notes': 'Only "densities given by a neutral subject and minimum density (example measurement)" are '
+                 'published (中間濃度 / 最小濃度); per-dye curves are not, so cyan/magenta/yellow are null.'}
+    rec['granularity'] = {'rmsDiffuse': 4, 'printGrainIndex': None, 'notes': FUJI_GRAIN_NOTE}
+    rec['resolvingPower'] = {'linesPerMm': {'1.6:1': 50, '1000:1': 125}, 'notes': 'Test-object contrast ratios.'}
+    rec['mtf'] = {'units': 'percent response', 'frequencyUnits': 'cycles/mm', 'exposure': 'Daylight',
+                  'process': 'CN-16', 'frequency': mt['x'], 'neutral': mt['ys']['neutral'],
+                  'notes': 'A single curve is published; the layer/colour it refers to is not stated. The '
+                           'frequency grid lines are drawn unevenly (least-squares fit on 5-200 c/mm, residual up '
+                           'to ~2 pt ≈ 0.02 decade).'}
+    rec['interlayer'] = ('Layer structure (p5): blue-sensitive layer (colourless yellow coupler), yellow filter '
+                         'layer, green-sensitive layer (yellow-coloured magenta coupler), fourth colour-sensitive '
+                         'layer (forms a light magenta image), intermediate layer, red-sensitive layer (red-coloured '
+                         'cyan coupler), intermediate layer, anti-halation layer. Fujifilm cites an optimised '
+                         'interimage ("重層効果") effect; no interimage data are published.')
+    rec['notes'] = ['DISCONTINUED. Fetched from Fujifilm\'s own asset server (Fujifilm Japan datasheet index); '
+                    'Japanese-language datasheet, labels translated here.',
+                    'ISO 400/27° daylight; ISO 125/22° under 3200 K tungsten with Fuji LBB-12 (≈ Wratten 80A).',
+                    'Reciprocity: no correction from 1/4000 s to 2 s; at 4 s give +1/2 stop. No filter correction '
+                    'is needed from 1/4000 s to 4 s.',
+                    'Base: cellulose triacetate, 135 122 µm, 120 98 µm. Process CN-16 family or C-41.']
+    rec['derived'] = derived_block(rec['characteristicCurves'], rec['spectralSensitivity'])
+    rec['extraction'] = {'method': 'vector', 'tool': 'research/film-data/extract.py',
+                         'notes': 'All four p6 charts are vector paths; sampled from path geometry. Axes from grid '
+                                  'lines (the numbers are outlines, not text).',
+                         'confidence': 'high (characteristic, dye), medium (sensitivity: relative scale; MTF: '
+                                       'uneven grid)', 'checks': []}
+    return rec
+
+
 def dash_key(c):
     d = (c['dashes'] or '').split(']')[0].strip(' [')
     return 'solid' if not d else ' '.join(f'{float(v):.1f}' for v in d.split())
@@ -1535,6 +1745,164 @@ def kodak_tri_x_400():
     return rec
 
 
+def kodak_bw_series(key, pno, F, fmt, dev, agit, times, slug, tag, xvalues, legend=True):
+    """One Kodak B&W development-time chart: curves ordered by density where all are still drawn (longest
+    time highest). legend: compare each curve's dash style with the legend samples (listed top→bottom from
+    the longest time) and record the result."""
+    names = [f'{t} min' for t in times]
+    got, leg = {}, []
+
+    def assign(cs, xa, ya):
+        x = min(curve_range(c['polys'], xa)[1] for c in cs) - 0.02
+        named = by_order_at(cs, xa, ya, x, names[::-1])
+        for c in cs:
+            for n, p in named.items():
+                if p is c['polys']:
+                    got[n] = dash_key(c)
+        return named
+    page = doc(key)[pno - 1]
+    r = vchart(key, pno, F, assign, 0.05, f'{slug}-characteristic-{tag}',
+               f'{SOURCES[key]["document"]} p{pno} {dev.replace("KODAK PROFESSIONAL ", "")}', xvalues=xvalues,
+               min_width=60, order=names)
+    if legend:
+        leg = [dash_key(c) for c in sorted(vector_curves(page, F, min_pts=2), key=lambda c: c['rect'].y0)
+               if 8 < c['rect'].width < 40 and c['rect'].height < 1.5]
+    mine = [got[n] for n in names]
+    ok = None if not leg else leg == mine[::-1]
+    variants = []
+    for t, n in zip(times, names):
+        variants.append({'format': fmt, 'developer': dev, 'agitation': agit, 'timeMin': t,
+                         'logExposure': [x for x, y in zip(r['x'], r['ys'][n]) if y is not None],
+                         'neutral': [y for y in r['ys'][n] if y is not None],
+                         'gamma': round(gamma_fit(r['x'], r['ys'][n]), 3)})
+    chk = (f'{dev} ({agit}): curve dash styles by time {mine}; legend {leg}; match {ok}' if legend else
+           f'{dev} ({agit}): curves labelled by text beside each curve; ordered by density')
+    return variants, chk
+
+
+def kodak_bw_record(slug, name, key, pages, ei, variants, checks, primary, se, mt, grain, resolving, notes,
+                    sens_exposure, mtf_exposure):
+    rec = base_record(slug, name, 'Kodak Alaris (KODAK PROFESSIONAL)', 'bw-negative',
+                      'Black-and-white developer (D-76, T-MAX, T-MAX RS, XTOL, HC-110 ... see variants)', ei, key, pages)
+    p = next(v for v in variants if v['developer'] == primary[0] and v['timeMin'] == primary[1])
+    rec['characteristicCurves'] = {
+        'densityType': 'diffuse visual', 'logExposureUnits': LOGH_UNITS, 'exposure': 'Daylight',
+        'condition': f"{p['developer']} {p['timeMin']} min, {p['agitation']}",
+        'logExposure': p['logExposure'], 'neutral': p['neutral'], 'dMin': p['neutral'][0], 'variants': variants,
+        'notes': 'All published development series are in variants (each with its own logExposure grid); the '
+                 'primary curve is the one nearest the recommended time in D-76. dMin = gross fog + base at the '
+                 'lowest plotted exposure. Log-exposure labels in bar notation (3̄.0 = -3.0) where printed so.'}
+    rec['spectralSensitivity'] = {
+        'units': LOGS_UNITS, 'densityType': 'diffuse visual', 'exposure': sens_exposure,
+        'process': 'KODAK PROFESSIONAL Developer D-76, 20°C', 'wavelength': se['x'],
+        'neutral': se['ys']['D=1.0'], 'neutralD03': se['ys']['D=0.3'],
+        'densityCriterion': {'neutral': '1.0 above D-min', 'neutralD03': '0.3 above D-min'},
+        'notes': 'Two curves as labelled on the chart; the D=0.3 curve lies above the D=1.0 curve (less exposure '
+                 'is needed for the lower density), as expected. Curves end where the published curves end.'}
+    rec['dyeDensity'] = None
+    rec['granularity'] = grain
+    rec['resolvingPower'] = {'linesPerMm': resolving, 'notes': 'Test-object contrast (TOC) ratios; method similar '
+                                                                'to ISO 6328; D-76, 20°C.'}
+    rec['mtf'] = {'units': 'percent response', 'frequencyUnits': 'cycles/mm', 'exposure': mtf_exposure,
+                  'process': 'KODAK PROFESSIONAL Developer D-76, small tank, 20°C', 'densityType': 'diffuse visual',
+                  'frequency': mt['x'], 'neutral': mt['ys']['neutral']}
+    rec['interlayer'] = None
+    rec['notes'] = list(notes)
+    rec['derived'] = derived_block(rec['characteristicCurves'], rec['spectralSensitivity'])
+    rec['derived']['gammaByVariant'] = {f"{v['developer'].replace('KODAK PROFESSIONAL ', '')} {v['timeMin']} min":
+                                        v['gamma'] for v in variants}
+    for v in variants:
+        del v['gamma']
+    rec['extraction'] = {'method': 'vector', 'tool': 'research/film-data/extract.py',
+                         'notes': 'Vector paths; development-time curves identified by their order in density '
+                                  'where all are drawn (longest time densest), checked against the legend dash '
+                                  'styles or the time labels printed beside the curves.',
+                         'confidence': 'high', 'checks': checks}
+    return rec
+
+
+def bw_sens(key, pno, F, slug, title, yvalues=None):
+    return vchart(key, pno, F, lambda cs, xa, ya: by_order_at(cs, xa, ya, 500, ['D=0.3', 'D=1.0']), 5,
+                  slug + '-sensitivity', title, floor=True, max_width_frac=0.9, yvalues=yvalues)
+
+
+@stock
+def kodak_t_max_100():
+    slug, key = 'kodak-t-max-100', 'f4016'
+    bar = [-4.0, -3.0, -2.0, -1.0, 0.0, 1.0]
+    variants, checks = [], []
+    for F, dev, agit, times, tag in (
+            ((355.6, 57.0, 540.0, 241.5), 'KODAK PROFESSIONAL Developer D-76', 'small tank, 20°C (68°F)',
+             [6, 7.5, 10], 'd76'),
+            ((354.2, 289.7, 538.6, 474.2), 'KODAK PROFESSIONAL T-MAX RS Developer and Replenisher',
+             'large tank, 20°C (68°F)', [8, 10.5, 13, 15], 'tmaxrs'),
+            ((355.8, 519.8, 540.3, 704.3), 'KODAK PROFESSIONAL T-MAX Developer', 'small tank, 20°C (68°F)',
+             [6, 7, 10, 12], 'tmax')):
+        v, c = kodak_bw_series(key, 8, F, '135 / 120 / sheet (not stated)', dev, agit, times, slug, tag, bar)
+        variants += v
+        checks.append(c)
+    # log-sensitivity labels in bar notation: 2.0, 1.0, 0.0, 1̄.0, 2̄.0 (top to bottom)
+    se = bw_sens(key, 8, (74.6, 498.5, 275.1, 650.0), slug, 'F-4016 p8 spectral sensitivity',
+                 yvalues=[2.0, 1.0, 0.0, -1.0, -2.0])
+    mt = vchart(key, 8, (71.2, 260.1, 273.7, 413.1), lambda cs, xa, ya: {'neutral': cs[0]['polys']}, 'mtf',
+                slug + '-mtf', 'F-4016 p8 MTF', xlog=True, ylog=True, nd=1, max_width_frac=0.9)
+    return kodak_bw_record(
+        slug, 'KODAK PROFESSIONAL T-MAX 100 Film / TMX', key, [1, 2, 3, 5, 8], 100, variants, checks,
+        ('KODAK PROFESSIONAL Developer D-76', 7.5), se, mt,
+        {'rmsDiffuse': 8, 'printGrainIndex': None,
+         'notes': 'Diffuse rms granularity 8, read at a net diffuse density of 1.00 with a 48 µm aperture, 12x '
+                  'magnification; D-76, 20°C.'},
+        {'1.6:1': 63, '1000:1': 200},
+        ['EI 100 (ISO 100/21° in most developers).',
+         'Push (T-MAX or T-MAX RS developer): EI 200 = normal processing (1-stop under is within latitude), EI 400 '
+         '= 2-stop push, EI 800 = 3-stop push. Small-tank times at 20°C: T-MAX 7½ min (EI 200) / 12¼ min (EI 400); '
+         'XTOL 7½ / 9½; D-76 6½ / 8¼; HC-110 (B) 6 / 11½. EI 800: T-MAX 11¾ min at 24°C (D-76 and HC-110 not '
+         'recommended). Pushing raises contrast and graininess and loses shadow detail.',
+         'Reciprocity: +1/3 stop at 1/10,000 s; none 1/1,000-1/10 s; +1/3 stop at 1 s; +1/2 stop (or 15 s) at 10 s; '
+         '+1 stop (or 200 s) at 100 s.',
+         'Contrast-index-vs-time charts (p9) and development tables (p3-6) are not digitised; the characteristic '
+         'variants cover D-76 (small tank), T-MAX RS (large tank) and T-MAX Developer (small tank).',
+         'Chart 3 (T-MAX Developer): the 10 and 12 min curves leave the top of the chart (D 3.0) before log H 0.3; '
+         'they end there.'], 'effective exposure 1.4 s', 'Tungsten')
+
+
+@stock
+def kodak_t_max_400():
+    slug, key = 'kodak-t-max-400', 'f4043'
+    variants, checks = [], []
+    for F, dev, agit, times, tag in (
+            ((83.9, 56.5, 268.3, 241.0), 'KODAK PROFESSIONAL Developer D-76', 'small tank, 20°C (68°F)',
+             [6, 8, 11], 'd76'),
+            ((356.7, 55.8, 541.2, 240.3), 'KODAK PROFESSIONAL T-MAX Developer', 'small tank, 24°C (75°F)',
+             [5, 7, 9], 'tmax'),
+            ((83.2, 308.4, 267.7, 493.0), 'KODAK PROFESSIONAL T-MAX RS Developer and Replenisher',
+             'large tank, 24°C (75°F)', [5, 7, 9], 'tmaxrs')):
+        v, c = kodak_bw_series(key, 8, F, '135 / 120 / sheet (not stated)', dev, agit, times, slug, tag,
+                               [-4.0, -3.0, -2.0, -1.0, 0.0, 1.0], legend=False)
+        variants += v
+        checks.append(c)
+    se = bw_sens(key, 7, (361.6, 469.9, 562.1, 621.7), slug, 'F-4043 p7 spectral sensitivity')
+    mt = vchart(key, 7, (360.9, 248.6, 563.4, 401.6), lambda cs, xa, ya: {'neutral': cs[0]['polys']}, 'mtf',
+                slug + '-mtf', 'F-4043 p7 MTF', xlog=True, ylog=True, nd=1, max_width_frac=0.9)
+    return kodak_bw_record(
+        slug, 'KODAK PROFESSIONAL T-MAX 400 Film / TMY-2', key, [1, 2, 3, 7, 8], 400, variants, checks,
+        ('KODAK PROFESSIONAL Developer D-76', 8), se, mt,
+        {'rmsDiffuse': 10, 'printGrainIndex': None,
+         'notes': 'Diffuse rms granularity 10, read at a net diffuse density of 1.00 with a 48 µm aperture, 12x '
+                  'magnification; D-76, 20°C.'},
+        {'1.6:1': 50, '1000:1': 200},
+        ['EI 400 (ISO 400/27°) in T-MAX, T-MAX RS, XTOL, XTOL 1:1, D-76 and D-76 1:1; EI 320 in HC-110 (B).',
+         'Latitude: EI 800 with normal development still gives high quality (slight loss of shadow detail, about '
+         '½ paper grade less printing contrast). Push (T-MAX, T-MAX RS or XTOL): EI 1600 = 2-stop push, EI 3200 '
+         '= 3-stop push. Small-tank EI 1600 times at 20°C: T-MAX 8½ min, T-MAX RS 8½, XTOL 8½, XTOL 1:1 12¼, '
+         'D-76 9¼, HC-110 (B) 7½; EI 3200 at 24°C: T-MAX 8¼, T-MAX RS 7¼, XTOL 7¼, XTOL 1:1 10 (D-76 and HC-110 '
+         'not recommended).',
+         'Reciprocity: no correction 1/10,000 s to 1 s; +1/3 stop at 10 s; +1½ stops (or 300 s) at 100 s.',
+         'Characteristic variants: D-76 small tank 20°C (6/8/11 min), T-MAX Developer small tank 24°C (5/7/9 min), '
+         'T-MAX RS large tank 24°C (5/7/9 min). The time of each curve is printed beside it. Contrast-index '
+         'charts are not digitised.'], 'Daylight (effective exposure not stated)', 'Tungsten')
+
+
 def stencil_trace(key, pno, xref, seed, lo, hi, exclude=(), max_gap=60, max_jump=3.0, remove_grid=None):
     """Trace one curve drawn as its own 1-bit stencil image → [(page_x, page_y)]."""
     r = Raster.image(key, pno, xref)
@@ -1542,6 +1910,134 @@ def stencil_trace(key, pno, xref, seed, lo, hi, exclude=(), max_gap=60, max_jump
     if remove_grid:
         r.remove_lines(m, rows=remove_grid[0], cols=remove_grid[1], halfwidth=remove_grid[2])
     return track(r, m, {'c': seed}, lo, hi, max_gap=max_gap, max_jump=max_jump)['c']
+
+
+def mtf_by_runs(key, pno, xref, xa, ya, regions, slug, title, exclude=(), pred=None, nd=1, vrange=(5, 130)):
+    """MTF curves read column by column where the curves cross too tightly for a tracker: at each standard
+    frequency the ink runs between grid lines are listed top→bottom and named by the region's order
+    (regions: [(f_lo, f_hi, [name or (names merged in one line), ...])]). A column whose run count does not
+    match the region's order (curves touching at a crossing) is left null. Grid-line rows are removed from
+    each run; a run that is only grid line plus curve keeps its full centre. Columns within 1 pt of a
+    vertical grid line are read 1.5 pt to the side."""
+    r = Raster.image(key, pno, xref)
+    m = r.mask(pred or DARK, exclude=exclude)
+    hl, vl = r.lines(m, 'h', 0.3), r.lines(m, 'v', 0.3)
+    names = sorted({n for *_, order in regions for e in order for n in (e if isinstance(e, tuple) else (e,))})
+    xs = mtf_grid(regions[0][0], regions[-1][1])
+    ys = {n: [] for n in names}
+    for f in xs:
+        order = next((o for a, b, o in regions if a <= f <= b), None)
+        x = xa.pos(f)
+        near = [v for v in vl if abs(v - x) < 1.0]
+        if near:
+            x = near[0] + (1.5 if x >= near[0] else -1.5)
+        px = int(round(r.to_px(x, 0)[0]))
+        grid_rows = {yy for h in hl for yy in range(int(r.to_px(0, h - 0.6)[1]), int(r.to_px(0, h + 0.6)[1]) + 1)}
+        runs, cur = [], []
+        for yy in range(int(r.to_px(0, min(hl) + 0.8)[1]), int(r.to_px(0, max(hl) - 0.8)[1])):
+            if m[yy][px]:
+                cur.append(yy)
+            elif cur:
+                runs.append(cur)
+                cur = []
+        if cur:
+            runs.append(cur)
+        def centre(run):
+            # a curve lying on a grid line shows as a run clearly thicker than the bare line
+            k = [yy for yy in run if yy not in grid_rows]
+            if len(run) > 8 * r.sy:
+                return None
+            if len(k) >= 2:
+                return sum(k) / len(k)
+            if len(k) < len(run) and len(run) >= 4:
+                return sum(run) / len(run)
+            return None
+        runs = [r.to_page(0, c)[1] for c in map(centre, runs) if c is not None]
+        runs = [p for p in runs if vrange[0] <= ya.val(p) <= vrange[1]]
+        vals = {}
+        if order and len(runs) == len(order):
+            for p, e in zip(runs, order):
+                for n in (e if isinstance(e, tuple) else (e,)):
+                    vals[n] = round(ya.val(p), nd)
+        for n in names:
+            ys[n].append(vals.get(n))
+    overlay(key, pno, r.rect, xa, ya, [(k, xs, v) for k, v in ys.items()], slug, title)
+    return dict(x=xs, ys=ys, axes=(xa, ya), pts={})
+
+
+def curves_by_columns(key, pno, xref, xa, ya, regions, xs, slug, title, exclude=(), pred=None, nd=3,
+                      max_run_pt=30.0, gap_pt=2.5, frame=None):
+    """Curves read from every image column between the grid lines, for bitmaps whose curves and grid share
+    one colour. Each column's ink runs (grid rows removed) are named top→bottom by the first order in the
+    region (regions: [(x_lo, x_hi, [order, ...])], names starting with '_' are read but discarded) whose
+    length matches; other columns stay unnamed. Steep segments give long runs whose centre is used. A sample
+    on a vertical grid line is linearly interpolated between the nearest named columns on both sides, if
+    both lie within gap_pt of it; otherwise it is null. frame: plot frame (page coords) bounding the grid.
+    Returns dict(x, ys, axes, interpolated={name: [x]})."""
+    r = Raster.image(key, pno, xref)
+    m = r.mask(pred or DARK, exclude=exclude)
+    hl, vl = r.lines(m, 'h', 0.3), r.lines(m, 'v', 0.3)
+    if frame:
+        hl = [h for h in hl if frame[1] - 1 <= h <= frame[3] + 1]
+        vl = [v for v in vl if frame[0] - 1 <= v <= frame[2] + 1]
+    grid_rows = {yy for h in hl for yy in range(int(r.to_px(0, h - 0.6)[1]), int(r.to_px(0, h + 0.6)[1]) + 1)}
+    grid_cols = {xx for v in vl for xx in range(int(r.to_px(v - 0.75, 0)[0]), int(r.to_px(v + 0.75, 0)[0]) + 1)}
+    fx0, fy0, fx1, fy1 = frame or (min(vl), min(hl), max(vl), max(hl))
+    y_lo, y_hi = int(r.to_px(0, fy0 + 0.8)[1]), int(r.to_px(0, fy1 - 0.8)[1])
+    px_lo, px_hi = int(r.to_px(fx0 + 1.2, 0)[0]), int(r.to_px(fx1 - 1.2, 0)[0])
+    names = sorted({n for *_, orders in regions for o in orders for n in o if not n.startswith('_')})
+    cols = {n: {} for n in names}
+    for px in range(px_lo, px_hi + 1):
+        if px in grid_cols:
+            continue
+        xv = xa.val(r.to_page(px + 0.5, 0)[0])
+        orders = next((o for a, b, o in regions if a <= xv < b), None)
+        if not orders:
+            continue
+        runs, cur = [], []
+        for yy in range(y_lo, y_hi + 1):
+            if m[yy][px]:
+                cur.append(yy)
+            elif cur:
+                runs.append(cur)
+                cur = []
+        if cur:
+            runs.append(cur)
+        cen = []
+        for run in runs:
+            k = [yy for yy in run if yy not in grid_rows]
+            if len(run) > max_run_pt * r.sy:
+                continue
+            if len(k) >= 2:
+                cen.append(sum(k) / len(k))
+            elif len(k) < len(run) and len(run) >= 4:
+                cen.append(sum(run) / len(run))
+        order = next((o for o in orders if len(o) == len(cen)), None)
+        if order:
+            for n, c in zip(order, cen):
+                if not n.startswith('_'):
+                    cols[n][px] = r.to_page(0, c + 0.5)[1]
+    ys = {n: [] for n in names}
+    interp = {n: [] for n in names}
+    gap = gap_pt * r.sx
+    for x in xs:
+        px = int(r.to_px(xa.pos(x), 0)[0])
+        for n in names:
+            c = cols[n]
+            if px in c:
+                ys[n].append(round(ya.val(c[px]), nd))
+                continue
+            v = None
+            if px in grid_cols:
+                left = [p for p in c if px - gap <= p < px]
+                right = [p for p in c if px < p <= px + gap]
+                if left and right:
+                    a, b = max(left), min(right)
+                    v = round(ya.val(c[a] + (c[b] - c[a]) * (px - a) / (b - a)), nd)
+                    interp[n].append(x)
+            ys[n].append(v)
+    overlay(key, pno, r.rect, xa, ya, [(k, xs, v) for k, v in ys.items()], slug, title)
+    return dict(x=xs, ys=ys, axes=(xa, ya), interpolated=interp)
 
 
 def raster_overlay(key, pno, rect, xa, ya, series, xs, name, title):
@@ -1786,6 +2282,69 @@ def fuji_velvia_50():
                'The exposure time for the characteristic curves is not stated on the chart (only "Daylight").']))
 
 
+@stock
+def fuji_velvia_100():
+    slug, key, pno = 'fuji-velvia-100', 'rvp100', 6
+    doc_ = SOURCES[key]['document']
+    ink = lambda a, b, c: a < 50   # black ink on a mid-grey (127) image background
+    ident = lambda f: f
+    ch = raster_chart(key, pno, 778, ('v', ident, (-3.5, 1.0, 0.5), False),
+                      L_([144.3, 166.3, 188.2, 209.6, 231.4, 253.2, 274.9], [3.5, 3.0, 2.5, 2.0, 1.5, 1.0, 0.5],
+                         name='D'),
+                      {'red': (-2.63, 3.383), 'green': (-2.63, 3.821), 'blue': (-2.63, 3.684)}, 0.05,
+                      slug + '-characteristic', f'{doc_} p6 characteristic curves', pred=ink,
+                      exclude=[(181, 125.5, 271, 163.5), (89, 254, 125, 274.5), (61, 122, 85.5, 297)],
+                      lo=-3.35, hi=0.95, clip_frame=False)
+    se = raster_chart(key, pno, 764, L_([347.7, 407.0, 465.9, 524.9], [400, 500, 600, 700], name='nm'),
+                      L_([152.1, 211.4, 270.9], [1.0, 0.0, -1.0], name='logS'),
+                      {'blue': (431, 0.953), 'green': (545, 1.0), 'red': (640, 1.04)}, 5,
+                      slug + '-sensitivity', f'{doc_} p6 spectral sensitivity', pred=ink,
+                      exclude=[(408.5, 255, 533, 294.5), (364.5, 189, 388, 196.5), (425, 189, 447, 196.5),
+                               (475.5, 189, 497, 196.5), (307, 120, 335, 297)], clip_frame=False,
+                      lo={'blue': 394, 'green': 482, 'red': 549}, hi={'blue': 522, 'green': 602, 'red': 690},
+                      track_kw={'max_dtheta': 1.0})
+    dy = raster_chart(key, pno, 781, L_([348.3, 407.9, 466.7, 525.5], [400, 500, 600, 700], name='nm'),
+                      L_([404.1, 463.6, 523.2], [1.0, 0.5, 0.0], name='D'),
+                      {'yellow': (445, 0.99), 'magenta': (552, 0.99), 'cyan': (660, 0.99)}, 5,
+                      slug + '-dye-density', f'{doc_} p6 spectral dye density', pred=ink,
+                      exclude=[(469, 382, 519.5, 396.5), (357, 441, 382, 448.5), (425, 441, 449.5, 448.5),
+                               (489, 441, 508.5, 448.5), (307, 375, 336, 546), (307, 524.5, 539, 546)],
+                      clip_frame=False,
+                      lo={'yellow': 397, 'magenta': 397, 'cyan': 397}, hi={'yellow': 640, 'magenta': 700, 'cyan': 710})
+    mt = raster_chart(key, pno, 779, L_([83.2, 138.6, 161.9, 186.3, 216.5, 240.0, 264.1], [1, 5, 10, 20, 50, 100, 200],
+                                        log=True),
+                      L_([375.5, 390.0, 402.0, 413.6, 430.2, 444.7, 468.6, 480.3, 492.3, 508.5, 522.6],
+                         [150, 100, 70, 50, 30, 20, 10, 7, 5, 3, 2], log=True),
+                      {'neutral': (7, 109)}, 'mtf', slug + '-mtf', f'{doc_} p6 MTF', pred=ink, nd=1, lo=1.0, hi=100,
+                      exclude=[(88, 497.5, 154, 516.5)], track_kw={'max_dtheta': 0.25}, drop_lines=[('h', 108)])
+    return reversal_record(slug, 'FUJICHROME Velvia 100 Professional [RVP 100]', 100, key, [1, 2, 3, 5, 6],
+                           ch['x'], ch['ys'], se, dy['x'], dy['ys'], mt['x'], mt['ys'], dict(
+        method='raster', char_exposure='Daylight', process='CR-56 (or Kodak E-6)',
+        densitometry='Fuji FAD-30S, Status A equivalent', sens_criterion='1.0 above D-min (Status A equivalent)',
+        grain={'rmsDiffuse': 8, 'printGrainIndex': None, 'notes': 'Fujifilm diffuse rms granularity (x1000), 48 µm '
+               'aperture, at density 1.0 above minimum density.'},
+        resolving={'1.6:1': 80, '1000:1': 160},
+        char_note='All four charts are scanned bitmaps (~8 px/pt) on a mid-grey background with black curves '
+                  '(R solid, G dash-dot, B dashed); axis labels are separate bitmaps, so x was tied to the '
+                  'label positions (-3.0 and 1.0) and the 0.5 log H grid. Between log H ≈ -1.6 and +0.3 the three '
+                  'curves overlap within the line width and the traced values there are effectively a shared '
+                  'centreline (±0.03 D). The chart axis is "relative exposure [log H (lux-seconds)]".',
+        dye_note='Exposure: separated; process CR-56. Each dye curve is normalised to a peak of 1.0 (as drawn). The '
+                 'curves run from ~397 nm (yellow, magenta, cyan) to ~710 nm (cyan); tails lying on the 0.0 frame '
+                 'line cannot be separated from it and are null or approximate there.',
+        extraction_note='Raster tracing of the p6 bitmaps (Japanese datasheet; there is no English edition with '
+                        'curves on the Fujifilm site). Grid lines used for calibration.',
+        confidence='medium',
+        notes=['ISO 100 daylight; ISO 32 under 3200 K tungsten with Fuji LBB-12 (Wratten 80A).',
+               'Push/pull: Fujifilm states colour and tone change little from -1/2 stop (pull) to +1 stop (push) '
+               'and that up to +2 stops (EI 400) is possible for some scenes. No push curves are published.',
+               'Reciprocity: no correction from 1/4000 s to 1 min; 2 min: CC2.5M +1/3 stop; 4 min: CC2.5M +1/2 '
+               'stop; 8 min: CC2.5M +2/3 stop.',
+               'Base: 135 cellulose triacetate 127 µm; 120/220 98 µm; sheet polyester 175 µm.',
+               'Source is the Japanese-language datasheet (Fujifilm Japan datasheet index); labels were '
+               'translated here.']))
+
+
 L_ = axis_from_lines
 DARK = lambda a, b, c: (a + b + c) < 420   # anti-aliased black ink on white (mean < 140)
 LOWRES = {'base_pt': 2.0, 'keep': 32, 'dev': 1.5, 'max_dtheta': 0.8, 'gap_pen': 0.25}      # dp_track settings for ~2 px/pt bitmaps
@@ -1842,64 +2401,277 @@ def _vision3():
     return ch, dy, se, mt
 
 
-def vision3_record(slug, name, parts, cinestill=False):
+AHU_NOTE = ('The current Kodak datasheet (Revised 3-26) states that "an Anti-halation undercoat replaces the '
+            'traditional remjet backing layer"; the curves are for that construction.')
+
+
+def cinestill_notes(cs, kodak, kodak_ei, ei, tungsten):
+    return [
+        f'CineStill {cs} is sold as KODAK {kodak} with the rem-jet anti-halation backing removed; CineStill '
+        f'publishes no sensitometric data of its own. All curves are copied from the Kodak datasheet.',
+        'Kodak\'s current (Revised 3-26) VISION3 datasheets say an anti-halation undercoat (AHU) now replaces the '
+        'rem-jet backing. CineStill\'s "rem-jet removed" description refers to the rem-jet construction; no '
+        'manufacturer document found here says which construction current CineStill stock is made from or what '
+        'anti-halation protection it retains. The curves are Kodak\'s AHU-era data either way.',
+        'Model as having NO effective anti-halation layer (CineStill\'s stated product): strong halation (red/orange '
+        'glow around highlights, from light reflected at the base/back surface re-exposing mainly the '
+        'red-sensitive layer) should be modelled separately; it is not represented in these curves.',
+        (f'Rated EI {ei} by CineStill (Kodak: EI {kodak_ei}); the characteristic curves are unchanged and EI {ei} '
+         f'is an exposure-placement choice of {math.log2(ei / kodak_ei):.2f} stop less exposure.' if ei != kodak_ei
+         else f'Rated EI {ei} by CineStill, the same as Kodak\'s rating.') +
+        (' The stock is tungsten balanced (3200 K).' if tungsten else ' The stock is daylight balanced (5500 K).'),
+        'CineStill markets it for C-41 processing; the curves here are for ECN-2 as published by Kodak, so a '
+        'C-41 processed negative will differ (contrast, D-min) in ways not documented by either maker.']
+
+
+V3_500T = dict(
+    key='h15219', ei=500, char_exposure='3200 K tungsten, 1/50 s',
+    density_type='status-M (chart label: "Densitometry: ECN-2")', sens_exposure='effective exposure 1/25 s',
+    mtf_exposure='3200 K tungsten', doc='H-1-5219',
+    char_note='The bitmap chart has two x scales that disagree by ~4%: the log-exposure labels (-4.0..+1.0) span '
+              'the frame (5.0 log H) while the camera-stop ticks (-8..+8 stops = 4.82 log H) span the same '
+              'frame. Calibrated on the log-exposure ticks (least-squares, max residual 0.05 log H because '
+              'those ticks are drawn unevenly). If the stop scale is right, gammas are ~4% higher.',
+    sens_note='The red (cyan-forming) curve includes its secondary green-region lobe (~510-548 nm, log S '
+              '0.6-0.75) which joins the main curve. Curves end where the published curves end.',
+    dye_note='Traced from a bitmap; where the dashed minimum curve crosses the yellow (~475-500 nm) and magenta '
+             '(~580-620 nm) flanks it is null. The yellow curve continues as the flat ~0.00 line from ~620 nm and '
+             'magenta as the slightly negative (-0.02..-0.04) line below 455 nm.',
+    mtf_note='Below ~8 c/mm the three curves are drawn as one line (~102-104 %); that shared value is '
+             'stored in all three channels at 3-4 c/mm. From there until the curves separate (blue at '
+             '~12 c/mm, red and green at ~20 c/mm) the values are null.',
+    notes=['EI 500 under 3200 K tungsten (EI 320 daylight with a WRATTEN 85 filter per the datasheet).', AHU_NOTE],
+    cinestill=dict(cs='800T', kodak='VISION3 500T 5219', ei=800, tungsten=True))
+
+
+def vision3_record(slug, name, parts, cinestill=False, cfg=V3_500T):
     ch, dy, se, mt = parts
+    key = cfg['key']
     rec = base_record(slug, name, 'Eastman Kodak Company' if not cinestill else
                       'CineStill Film (film manufactured by Eastman Kodak)', 'negative',
                       'ECN-2' if not cinestill else 'C-41 (as marketed by CineStill); the published curves are for ECN-2',
-                      500 if not cinestill else 800, 'h15219', [1, 2, 3, 4])
+                      cfg['ei'] if not cinestill else cfg['cinestill']['ei'], key, [1, 2, 3, 4])
     rec['characteristicCurves'] = {
-        'densityType': 'status-M (chart label: "Densitometry: ECN-2")', 'exposure': '3200 K tungsten, 1/50 s',
-        'process': 'ECN-2', 'logExposureUnits': LOGH_UNITS, 'logExposure': ch['x'], **ch['ys'],
-        'dMin': {c: ch['ys'][c][0] for c in ('red', 'green', 'blue')},
-        'notes': 'The bitmap chart has two x scales that disagree by ~4%: the log-exposure labels (-4.0..+1.0) span '
-                 'the frame (5.0 log H) while the camera-stop ticks (-8..+8 stops = 4.82 log H) span the same '
-                 'frame. Calibrated on the log-exposure ticks (least-squares, max residual 0.05 log H because '
-                 'those ticks are drawn unevenly). If the stop scale is right, gammas are ~4% higher.'}
+        'densityType': cfg.get('density_type', 'status-M (chart label: "Densitometry: Status M")'),
+        'exposure': cfg['char_exposure'],
+        'process': 'ECN-2', 'logExposureUnits': cfg.get('char_units', LOGH_UNITS), 'logExposure': ch['x'], **ch['ys'],
+        'dMin': {c: next(v for v in ch['ys'][c] if v is not None) for c in ('red', 'green', 'blue')},
+        'notes': cfg['char_note']}
     rec['spectralSensitivity'] = {
         'units': LOGS_UNITS, 'densityCriterion': '0.2 above D-min (Status M)',
-        'exposure': 'effective exposure 1/25 s', 'process': 'ECN-2', 'wavelength': se['x'], **se['ys'],
-        'notes': 'The red (cyan-forming) curve includes its secondary green-region lobe (~510-548 nm, log S '
-                 '0.6-0.75) which joins the main curve. Curves end where the published curves end.'}
+        'exposure': cfg['sens_exposure'], 'process': 'ECN-2', 'wavelength': se['x'], **se['ys'],
+        'notes': cfg['sens_note']}
     rec['dyeDensity'] = {
         'units': 'diffuse spectral density', 'process': 'ECN-2; D-mins subtracted', 'wavelength': dy['x'],
         'cyan': dy['ys']['cyan'], 'magenta': dy['ys']['magenta'], 'yellow': dy['ys']['yellow'],
         'minimum': dy['ys']['minimum'], 'midscaleNeutral': dy['ys']['midscaleNeutral'],
         'notes': 'Cyan, magenta and yellow curves are peak-normalised (1.0) per the datasheet note. midscaleNeutral '
-                 'and minimum are as drawn ("D-mins subtracted" per the chart label). Traced from a bitmap; '
-                 'where the dashed minimum curve crosses the yellow (~475-500 nm) and magenta (~580-620 nm) flanks '
-                 'it is null. The yellow curve continues as the flat ~0.00 line from ~620 nm and magenta as the '
-                 'slightly negative (-0.02..-0.04) line below 455 nm.'}
+                 'and minimum are as drawn ("D-mins subtracted" per the chart label). ' + cfg['dye_note']}
     rec['granularity'] = {'rmsDiffuse': None, 'printGrainIndex': None,
                           'notes': 'Published only as "Diffuse rms Granularity Curves" (granularity sigma-D vs log '
                                    'relative exposure, 48 µm aperture, ECN-2) on p3; not digitised here.'}
-    rec['mtf'] = {'units': 'percent response', 'frequencyUnits': 'cycles/mm', 'exposure': '3200 K tungsten',
+    rec['mtf'] = {'units': 'percent response', 'frequencyUnits': 'cycles/mm', 'exposure': cfg['mtf_exposure'],
                   'process': 'ECN-2', 'densityType': 'status-M', 'frequency': mt['x'],
                   'red': mt['ys']['red'], 'green': mt['ys']['green'], 'blue': mt['ys']['blue'],
-                  'notes': 'Below ~8 c/mm the three curves are drawn as one line (~102-104 %); that shared value is '
-                           'stored in all three channels at 3-4 c/mm. From there until the curves separate (blue at '
-                           '~12 c/mm, red and green at ~20 c/mm) the values are null.'}
+                  'notes': cfg['mtf_note']}
     rec['interlayer'] = None
-    rec['notes'] = ['EI 500 under 3200 K tungsten (EI 320 daylight with a WRATTEN 85 filter per the datasheet).']
+    rec['notes'] = list(cfg['notes'])
     if cinestill:
-        rec['exposureIndex'] = 800
-        rec['notes'] = [
-            'CineStill 800T is KODAK VISION3 500T 5219 with the rem-jet anti-halation backing removed; CineStill '
-            'publishes no sensitometric data of its own. All curves are copied from the 5219 datasheet (H-1-5219).',
-            'Without rem-jet there is NO anti-halation layer: strong halation (red/orange glow around highlights, '
-            'from light reflected at the base/back surface re-exposing mainly the red-sensitive layer) should be '
-            'modelled separately; it is not represented in these curves.',
-            'Rated EI 800 by CineStill (vs Kodak EI 500 tungsten): the 5219 characteristic curves are unchanged; '
-            'EI 800 is an exposure-placement choice about 2/3 stop under Kodak\'s rating.',
-            'CineStill markets it for C-41 processing; the curves here are for ECN-2 as published by Kodak, so a '
-            'C-41 processed negative will differ (contrast, D-min) in ways not documented by either maker.']
+        c = cfg['cinestill']
+        rec['exposureIndex'] = c['ei']
+        rec['notes'] = cinestill_notes(c['cs'], c['kodak'], cfg['ei'], c['ei'], c['tungsten'])
     rec['derived'] = derived_block(rec['characteristicCurves'], rec['spectralSensitivity'], rec['dyeDensity'])
     rec['extraction'] = {'method': 'raster', 'tool': 'research/film-data/extract.py',
-                         'notes': 'All H-1-5219 charts are embedded ~3 px/pt anti-aliased bitmaps. Axes were '
+                         'notes': f'All {cfg["doc"]} charts are embedded ~3 px/pt anti-aliased bitmaps. Axes were '
                                   'calibrated on detected tick marks / grid lines; curves traced with a '
                                   'dynamic-programming follower that keeps each curve\'s direction through '
-                                  'crossings.', 'confidence': 'medium', 'checks': []}
+                                  'crossings.', 'confidence': cfg.get('confidence', 'medium'), 'checks': []}
     return rec
+
+
+def _vision3_d(cfg, slug):
+    """VISION3 daylight stocks (5207, 5203): same four bitmap charts as 5219, own calibration in cfg['charts']."""
+    key, doc_ = cfg['key'], cfg['doc']
+    k = dict(pred=DARK, grid_halfwidth=2, line_frac=0.3)
+    out = []
+    for part, (pno, xref, xa, ya, seeds, step, extra) in cfg['charts'].items():
+        if 'runs' in extra:
+            out.append(mtf_by_runs(key, pno, xref, xa, ya, extra['runs'], f'{slug}-{part}', f'{doc_} p{pno} {part}',
+                                   exclude=extra.get('exclude', ())))
+            continue
+        kw = dict(k)
+        kw.update(extra)
+        out.append(raster_chart(key, pno, xref, xa, ya, seeds, step, f'{slug}-{part}', f'{doc_} p{pno} {part}', **kw))
+    return out
+
+
+V3_250D = dict(
+    key='h15207', doc='H-1-5207', ei=250, char_exposure='5500 K daylight, 1/50 s',
+    sens_exposure='effective exposure 0.02 s', mtf_exposure='5500 K daylight',
+    char_units='log exposure (lux-seconds assumed: the 5207 chart prints the top-axis values -3.7..1.1 without a '
+               'unit; the 5203 chart labels the same axis "LOG EXPOSURE (lux-seconds)")',
+    char_note='Top axis -3.7..+1.1 in 0.6 steps (2 stops) and camera stops -8..+8 (16 stops = 4.82 log H) span the '
+              'same frame (4.8 log H) and agree to 0.4%. Camera stop 0 (normal exposure at EI 250) = -1.3 log H. '
+              'Curve ends at the right frame edge are under the B/G/R labels and stop at +1.0.',
+    sens_note='The green (magenta-forming) curve includes its blue-region tail (400-470 nm, log S 0.3-0.6) which '
+              'rises into the main curve. The red curve starts at ~533 nm where it leaves the frame floor. Curves '
+              'end where the published curves end.',
+    dye_note='The dashed minimum curve is traced where its dashes are resolvable; nulls are where it crosses the '
+             'solid curves.',
+    mtf_note='Read column by column at the standard frequencies (B above G above R wherever they are separate) '
+             'rather than traced. Below ~8 c/mm the three curves are one line and B and G are one line up to ~20 '
+             'c/mm: those columns store the shared value in each merged channel. Columns where the run count does '
+             'not match (curves just touching) are null.',
+    notes=['Daylight balanced (5500 K): EI 250 daylight; EI 64 under 3200 K / 3000 K tungsten with a WRATTEN 2 '
+           'Optical Filter No. 80A. Metal halide / HMI / KINO FLO 55: no filter, EI 250. Fluorescent: warm white '
+           'CC20M + CC05R EI 125; cool white CC40B EI 100.',
+           'Reciprocity: no filter or exposure correction for 1/1000 s to 1 s.',
+           'Acetate safety base. Process ECN-2.', AHU_NOTE],
+    charts={
+        'characteristic': (3, 9, L_([378.1, 399.7, 421.2, 442.7, 464.3, 485.8, 507.2, 528.9, 550.2],
+                                    [round(-3.7 + 0.6 * i, 1) for i in range(9)], name='logH'),
+                           L_([534.1, 591.5, 648.9, 706.1], [3, 2, 1, 0], name='D'),
+                           {'blue': (-1.3, 1.63), 'green': (-1.3, 1.41), 'red': (-1.3, 0.94)}, 0.05,
+                           dict(exclude=[(381, 540, 467, 567), (539.5, 542.5, 548, 550), (539.5, 563.5, 548, 570.5),
+                                         (539.5, 602.5, 548, 610)], lo=-3.68, hi=1.0)),
+        'dye-density': (4, 16, L_([371.3, 409.0, 446.8, 484.6, 522.3], [400, 500, 600, 700, 800], name='nm'),
+                        L_([128.5 + 15.1 * i for i in range(11)], [round(1.8 - 0.2 * i, 1) for i in range(11)],
+                           name='D'),
+                        {'yellow': (445, 1.0), 'magenta': (540, 1.0), 'cyan': (685, 1.0),
+                         'midscaleNeutral': (445, 1.57), 'minimum': (445, 0.89), 'yellow+r': (700, -0.002),
+                         'midscaleNeutral+r': (700, 0.804), 'minimum+m': (520, 0.622), 'minimum+r': (700, 0.211),
+                         'magenta+uv': (420, -0.008)}, 5,
+                        dict(exclude=[(379, 137.5, 423.5, 145), (379, 180, 398, 186), (408, 180.5, 431.5, 187.5),
+                                      (470.5, 180, 485, 186), (456.5, 240, 502, 246.5), (373.5, 267.5, 468.5, 275)],
+                             lo={'yellow': 400.5, 'magenta': 465, 'cyan': 400.5, 'midscaleNeutral': 400.5,
+                                 'minimum': 400.5, 'yellow+r': 600, 'midscaleNeutral+r': 612, 'minimum+m': 505,
+                                 'minimum+r': 625, 'magenta+uv': 400.5},
+                             hi={'yellow': 562, 'magenta': 799.5, 'cyan': 799.5, 'midscaleNeutral': 612,
+                                 'minimum': 470, 'yellow+r': 799.5, 'midscaleNeutral+r': 799.5, 'minimum+m': 572,
+                                 'minimum+r': 799.5, 'magenta+uv': 465},
+                             track_kw=dict(LOWRES, max_dtheta={'yellow': 0.8, 'magenta': 0.8, 'cyan': 0.8,
+                                                              'midscaleNeutral': 0.8, 'minimum': 0.8,
+                                                              'yellow+r': 0.2, 'midscaleNeutral+r': 0.8,
+                                                              'minimum+m': 0.8, 'minimum+r': 0.8,
+                                                              'magenta+uv': 0.8}), drop_lines=[('h', 0.0)])),
+        'sensitivity': (4, 17, L_([91.5, 109.3, 127.2, 144.8, 162.7, 180.6, 198.5, 216.4, 234.0, 251.9, 269.8],
+                                  list(range(250, 751, 50)), name='nm'),
+                        L_([140.5, 174.2, 207.9, 241.5, 275.4], [4, 3, 2, 1, 0], name='logS'),
+                        {'blue': (440, 2.42), 'green': (545, 2.38), 'red': (655, 2.38), 'green+r': (590, 1.263),
+                         'red+l': (570, 0.534)}, 5,
+                        dict(exclude=[(95.5, 145, 175, 176), (146, 201.5, 164, 221.5), (184, 212.5, 206.5, 233.5),
+                                      (217, 204.5, 241.5, 226)],
+                             lo={'blue': 358, 'green': 400.5, 'red': 598, 'green+r': 578, 'red+l': 532},
+                             hi={'blue': 522, 'green': 578, 'red': 702, 'green+r': 602, 'red+l': 598},
+                             track_kw=dict(LOWRES, max_dtheta=1.0))),
+        'mtf': (3, 10, L_([80.1, 101.7, 114.4, 123.3, 130.4, 152.0, 173.9, 202.4, 224.1, 245.7, 280.1], MTF_X,
+                          log=True),
+                L_([227.4, 247.3, 257.4, 267.2, 281.7, 293.2, 313.1, 323.2, 332.8, 347.5, 358.9, 378.8], MTF_Y,
+                   log=True),
+                None, 'mtf',
+                dict(exclude=[(216.5, 266, 224, 305), (87, 347.5, 171.5, 371.5)],
+                     runs=[(2.5, 7, [('red', 'green', 'blue')]), (8, 20, [('blue', 'green'), 'red']),
+                           (25, 80, ['blue', 'green', 'red'])])),
+    },
+    cinestill=None)
+
+V3_50D = dict(
+    key='h15203', doc='H-1-5203', ei=50, char_exposure='5500 K daylight, 1/50 s',
+    sens_exposure='effective exposure 1/10 s', mtf_exposure='5500 K daylight', confidence='medium (sensitivity: '
+    'medium-low, see its notes)',
+    char_note='The bitmap chart has two x scales that disagree by ~4.6%: the "LOG EXPOSURE (lux-seconds)" labels '
+              '(-3.03, -0.515, 2.006) span the frame (5.04 log H) while the camera-stop ticks (-8..+8 stops = 4.82 '
+              'log H) span the same frame. Calibrated on the log-exposure labels (as for 5219); camera stop 0 '
+              '(normal exposure at EI 50) = -0.515 log lux-s. If the stop scale is right, gammas are ~4.6% higher. '
+              'The red curve is drawn dotted.',
+    sens_note='The printed log-sensitivity labels are misregistered with the grid: "4.0" sits on the frame top, but '
+              '"3.0", "2.0" and "1.0" sit ~6-8 pt above the next grid line down and "0.0" falls below the frame. '
+              'Calibrated on the grid (frame top 4.0, 1.0 per grid line, frame floor 0.0). On this reading the '
+              'peaks (~1.6-1.8) are ~0.7 log below 5207 (250D), matching the 5x speed ratio; on the label reading '
+              'they would equal 250D. The green curve includes its blue-region rise from the frame floor at '
+              '~473 nm. Curves are clipped at the frame floor (0.0).',
+    dye_note='The dashed minimum curve is traced where its dashes are resolvable; nulls are where it crosses the '
+             'solid curves and beyond 697 nm, where its sparse dashes (~0.12-0.14) could not be followed reliably '
+             'next to the "Minimum Density" label. The published curves end at ~760 nm.',
+    mtf_note='The curves cross tightly (B is the shallowest: lowest from ~8 to ~36 c/mm, crossing R at ~36 and G '
+             'at ~59 c/mm), so values were read column by column at the standard frequencies and named by that '
+             'order rather than traced; columns where a curve lies on a grid line or at a crossing are null. Below '
+             '~8 c/mm the three curves are one line (shared value), and R and G are one line up to ~15 c/mm. The '
+             'chart has no grid line at 100 c/mm (frequency axis calibrated on the 1-50, 200 and 700 lines).',
+    notes=['Daylight balanced (5500 K): EI 50 daylight; EI 12 under 3200 K / 3000 K tungsten with a WRATTEN 2 '
+           'Optical Filter No. 80A. Metal halide / HMI / KINO FLO 55: no filter, EI 50. Fluorescent: warm white '
+           'CC20M + CC05R EI 25; cool white CC40B EI 20.',
+           'Reciprocity: no filter or exposure correction for 1/1000 s to 1 s.',
+           'Acetate safety base. Process ECN-2.', AHU_NOTE],
+    charts={
+        'characteristic': (3, 11, L_([383.4, 466.4, 549.4], [-3.03, -0.515, 2.006], name='logH'),
+                           L_([528.2, 582.4, 638.2, 694.1], [3, 2, 1, 0], name='D'),
+                           {'blue': (-0.45, 1.721), 'green': (-0.45, 1.48), 'red': (-0.45, 0.964)}, 0.05,
+                           dict(exclude=[(386, 530, 490, 556), (540.5, 532, 549, 538.5), (540.5, 543.5, 549, 549.5),
+                                         (540.5, 582, 549, 588.5)], lo=-3.0, hi=1.95,
+                                track_kw=dict(LOWRES, gap_pen=0.1))),
+        'dye-density': (4, 18, L_([372.4, 409.7, 446.9, 484.2, 521.4], [400, 500, 600, 700, 800], name='nm'),
+                        L_([131.8, 146.9, 161.6, 176.6, 191.5, 206.4, 221.3, 236.2, 251.1, 266.0, 280.9],
+                           [round(1.8 - 0.2 * i, 1) for i in range(11)], name='D'),
+                        {'yellow': (445, 1.0), 'magenta': (537, 1.0), 'cyan': (683, 1.0),
+                         'midscaleNeutral': (445, 1.56), 'minimum': (445, 0.85), 'yellow+r': (640, 0.024),
+                         'midscaleNeutral+r': (700, 0.836), 'minimum+m': (525, 0.577), 'minimum+r': (700, 0.143),
+                         'magenta+uv': (420, 0.0)}, 5,
+                        dict(exclude=[(374.5, 132, 481.5, 139.5), (397, 150, 440, 156.5), (383, 182, 400.5, 188.5),
+                                      (409, 184, 431.5, 190), (469.5, 179, 484.5, 185.5), (468, 248, 512.5, 253.5)],
+                             lo={'yellow': 400.5, 'magenta': 465, 'cyan': 400.5, 'midscaleNeutral': 400.5,
+                                 'minimum': 400.5, 'yellow+r': 580, 'midscaleNeutral+r': 612, 'minimum+m': 505,
+                                 'minimum+r': 625, 'magenta+uv': 400.5},
+                             hi={'yellow': 580, 'magenta': 758, 'cyan': 758, 'midscaleNeutral': 612,
+                                 'minimum': 470, 'yellow+r': 758, 'midscaleNeutral+r': 758, 'minimum+m': 572,
+                                 'minimum+r': 697, 'magenta+uv': 465},
+                             track_kw=dict(LOWRES, max_dtheta={n: 0.2 if n == 'minimum+r' else 0.8 for n in (
+                                 'yellow', 'magenta', 'cyan', 'midscaleNeutral', 'minimum', 'yellow+r',
+                                 'midscaleNeutral+r', 'minimum+m', 'minimum+r', 'magenta+uv')}),
+                             drop_lines=[('h', 0.0)])),
+        'sensitivity': (4, 19, L_([86.8, 105.4, 123.6, 142.1, 160.7, 179.2, 197.8, 216.0, 234.5, 253.1, 271.6],
+                                  list(range(250, 751, 50)), name='nm'),
+                        L_([138.4, 173.0, 207.9, 242.8, 277.8], [4, 3, 2, 1, 0], name='logS'),
+                        {'blue': (430, 1.6), 'green': (545, 1.6), 'red': (645, 1.55), 'green+l': (480, 0.11),
+                         'green+r': (580, 1.106), 'red+l': (580, 0.366)}, 5,
+                        dict(exclude=[(87, 142.5, 179.5, 171.5), (124, 196, 156, 219), (182, 194.5, 214, 217),
+                                      (226, 197.5, 249, 219.5)],
+                             lo={'blue': 358, 'green': 498, 'red': 598, 'green+l': 473, 'green+r': 575, 'red+l': 570},
+                             hi={'blue': 498, 'green': 575, 'red': 678, 'green+l': 498, 'green+r': 593, 'red+l': 598},
+                             track_kw=dict(LOWRES, max_dtheta=1.0))),
+        'mtf': (3, 12, L_([85.2, 105.5, 117.5, 125.9, 132.4, 152.8, 173.3, 200.2, 240.8, 277.8],
+                          [1, 2, 3, 4, 5, 10, 20, 50, 200, 700], log=True),
+                L_([229.9, 249.0, 258.8, 267.8, 281.8, 293.2, 312.0, 321.7, 331.1, 345.1, 356.1, 375.2], MTF_Y,
+                   log=True),
+                None, 'mtf',
+                # B is the shallowest curve: lowest from ~8 to ~36 c/mm, then crosses R (~36) and G (~59);
+                # R and G run as one line up to ~15 c/mm, all three below ~8 c/mm
+                dict(exclude=[(214.5, 285, 223, 314), (89, 344.5, 170.5, 367.5)],
+                     runs=[(2.5, 7, [('red', 'green', 'blue')]), (8, 20, [('red', 'green'), 'blue']),
+                           (25, 35, ['green', 'red', 'blue']), (40, 50, ['green', 'blue', 'red']),
+                           (60, 70, ['blue', 'green', 'red'])])),
+    },
+    cinestill=dict(cs='50D', kodak='VISION3 50D 5203', ei=50, tungsten=False))
+
+
+@stock
+def kodak_vision3_250d():
+    slug = 'kodak-vision3-250d'
+    ch, dy, se, mt = _vision3_d(V3_250D, slug)
+    return vision3_record(slug, 'KODAK VISION3 250D Color Negative Film 5207 / 7207', (ch, dy, se, mt), cfg=V3_250D)
+
+
+@stock
+def kodak_vision3_50d():
+    slug = 'kodak-vision3-50d'
+    return vision3_record(slug, 'KODAK VISION3 50D Color Negative Film 5203 / 7203', _vision3_d(V3_50D, slug),
+                          cfg=V3_50D)
+
+
+@stock
+def cinestill_50d():
+    return vision3_record('cinestill-50d', 'CineStill 50D (KODAK VISION3 50D 5203 without rem-jet)',
+                          _vision3_d(V3_50D, 'kodak-vision3-50d'), cinestill=True, cfg=V3_50D)
 
 
 @stock
@@ -1946,14 +2718,19 @@ def kodak_2383():
                       **k)
     sa = L_([76.5, 95.9, 115.9, 135.4, 155.1, 174.8, 194.2, 214.3, 233.7, 253.7, 273.1], list(range(250, 751, 50)))
     la = L_([59.6, 96.9, 134.3, 171.4, 208.5], [1, 0, -1, -2, -3])
-    # the green and red peaks sit on the 550 / 700 nm grid lines: each side is traced separately
-    se = raster_chart(key, 5, 23, sa, la, {'blue': (470, 0.61), 'green': (530, -0.85), 'green+r': (570, -1.22),
-                                           'red': (690, -1.1), 'red+r': (715, -1.55)}, 5,
-                      slug + '-sensitivity', 'H-1-2383 p5 spectral sensitivity',
-                      exclude=[(77, 60, 150, 96.5), (199, 99, 236, 126), (141, 108, 168, 133)],
-                      lo={'blue': 358, 'green': 446, 'green+r': 551, 'red': 586, 'red+r': 702},
-                      hi={'blue': 505, 'green': 549, 'green+r': 586, 'red': 698, 'red+r': 735},
-                      track_kw=dict(LOWRES, max_dtheta=1.0), **k)
+    # Read column by column: the green peak (550 nm) and red curve (700-705 nm) sit on vertical grid lines,
+    # where samples are interpolated between the clean columns either side (≤ 2.5 pt away).
+    box = lambda n0, n1, v0, v1: (sa.pos(n0), la.pos(v0), sa.pos(n1), la.pos(v1))
+    se = curves_by_columns(
+        key, 5, 23, sa, la,
+        [(355, 367, [['blue']]), (367, 406, [['blue'], ['blue', '_f'], ['blue', '_f', '_f']]),
+         (406, 449, [['blue']]), (449, 492, [['blue', 'green']]), (494, 513, [['green', 'blue']]),
+         (513, 584, [['green']]),
+         (592, 735, [['red']])],
+        grid(355, 735, 5), slug + '-sensitivity', 'H-1-2383 p5 spectral sensitivity (column read)',
+        exclude=[box(252, 605, 1.0, 0.72), box(252, 405, 0.72, 0.18), (141, 108, 168, 133),
+                 box(565, 656, -0.06, -0.78), box(655, 712, -1.81, -2.42)], pred=LIGHT,
+        frame=(76.5, 59.6, 273.1, 208.2))
     fa = L_([73.9, 95.5, 108.5, 117.4, 124.3, 146.4, 168.2, 197.0, 218.9, 240.7, 275.5], MTF_X, log=True)
     ra = L_([381.6, 401.2, 411.8, 421.4, 436.0, 447.8, 467.7, 477.8, 487.6, 502.3, 514.0, 533.7], MTF_Y, log=True)
     mt = raster_chart(key, 4, 17, fa, ra, {'green': (60, 79.7), 'red': (60, 61.0), 'blue': (60, 35.2)}, 'mtf',
@@ -1974,13 +2751,19 @@ def kodak_2383():
     rec['spectralSensitivity'] = {
         'units': LOGS_UNITS, 'densityCriterion': 'D = 1.0', 'exposure': 'tungsten, 1/50 s', 'process': 'ECP-2D',
         'wavelength': se['x'], **se['ys'],
-        'notes': 'Traced from a low-resolution (1.7 px/pt) bitmap. The magenta-forming (green) peak at ~550 nm '
-                 'and the cyan-forming (red) curve at ~700-705 nm lie on vertical grid lines; each side of those '
-                 'was traced separately and the samples on the grid line are null rather than guessed. Two short '
-                 'steep curve fragments near 365-400 nm (secondary short-wavelength responses), the steep '
-                 'short-wavelength end of the green curve (~450 nm) and the long-wavelength ends of all three '
-                 'curves below log S ≈ -1.3 / -1.7 / -2.3 could not be attributed or followed reliably and are '
-                 'omitted (null).'}
+        'interpolatedSamples': {k: v for k, v in se['interpolated'].items() if v},
+        'notes': 'Re-traced 2026-10-01 (batch 2). The datasheet (Revised 8-26, the current and only revision found) '
+                 'carries this chart only as a 428x397 px bitmap (1.7 px/pt); no vector or higher-resolution '
+                 'version is published. Curves and grid share one colour, so the chart is read column by column '
+                 '(curves_by_columns): every image column between grid lines, ink runs named by their top-to-bottom '
+                 'order, steep segments taken at the run centre. Samples falling on a vertical grid line '
+                 '(interpolatedSamples) are linear interpolations between the nearest clean columns on both '
+                 'sides, ≤ 2.5 pt (≈ 6 nm) away; none is interpolated across a longer gap. The magenta-forming '
+                 '(green) peak is a cusp on the 550 nm line: its interpolated value (≈ -0.27) may sit up to ~0.1 '
+                 'below the drawn tip. Still null: blue 355-370 nm (lies along the 0.0 grid line), the green '
+                 'curve\'s vertical start at 450 nm (along the grid line), the green/red tails at 584-592 nm '
+                 '(the curves merge), and two unlabelled steep fragments from ~368 nm (-0.75) to -3.0 at ~390 and '
+                 '~400 nm (secondary short-wavelength responses; not attributable to a layer from the chart).'}
     rec['dyeDensity'] = {
         'units': 'diffuse spectral density', 'process': 'ECP-2D', 'wavelength': dy['x'],
         'cyan': dy['ys']['cyan'], 'magenta': dy['ys']['magenta'], 'yellow': dy['ys']['yellow'], 'minimum': None,
@@ -2007,8 +2790,12 @@ def kodak_2383():
     rec['derived'] = derived_block(rec['characteristicCurves'], rec['spectralSensitivity'], rec['dyeDensity'])
     rec['extraction'] = {'method': 'raster', 'tool': 'research/film-data/extract.py',
                          'notes': 'All H-1-2383 charts are low-resolution embedded bitmaps (1.7-2.5 px/pt). Axes '
-                                  'from tick marks / grid lines; curves traced with the dynamic-programming '
-                                  'follower.', 'confidence': 'medium (characteristic, dye, MTF); low (sensitivity)',
+                                  'from tick marks / grid lines; characteristic, dye and MTF curves traced with the '
+                                  'dynamic-programming follower; spectral sensitivity read column by column '
+                                  '(re-traced in batch 2: previously the green peak and the steep tails were '
+                                  'missing).',
+                         'confidence': 'medium (characteristic, dye, MTF, sensitivity); sensitivity peak at 550 nm '
+                                       'interpolated across the grid line',
                          'checks': []}
     return rec
 
@@ -2029,6 +2816,321 @@ def kodak_gold_200():
                                   'frame, and the main curve that re-emerges from the frame at ~490 nm. Both are '
                                   'stored in "red"; samples lying on the chart floor (log S <= 0) are null.',
                                   'No MTF curve is published in E-7022 (March 2022 edition); mtf is null.'])
+
+
+@stock
+def kodak_portra_160():
+    r = kodak_colour_negative('e4051', 4, (81.4, 102.1, 266.0, 286.6), (73.8, 348.0, 274.2, 499.6),
+                              (355.1, 101.2, 539.5, 285.5), (349.0, 350.4, 551.4, 503.5), 'kodak-portra-160',
+                              mtf_names=('green', 'blue', 'red'))
+    pgi = [('135 (24x36 mm)', '4x6 in', '4.4X', 28), ('135 (24x36 mm)', '8x10 in', '8.8X', 50),
+           ('135 (24x36 mm)', '16x20 in', '17.8X', 79),
+           ('120 (6x6 cm)', '4x6 in', '2.6X', '<25'), ('120 (6x6 cm)', '8x10 in', '4.4X', 28),
+           ('120 (6x6 cm)', '16x20 in', '8.8X', 50),
+           ('4x5 in sheet', '4x6 in', '1.2X', '<25'), ('4x5 in sheet', '8x10 in', '2X', '<25'),
+           ('4x5 in sheet', '16x20 in', '4X', 26)]
+    return kodak_cn_record(r, 'kodak-portra-160', 'KODAK PROFESSIONAL PORTRA 160 Film', 160, 'e4051', [1, 2, 3, 4],
+                           -1.051, 'Daylight', 'Daylight, effective exposure 1/50 s', pgi, notes=[
+        'ISO 160 daylight / electronic flash; ISO 50 under 3400 K photolamps with WRATTEN 80B; ISO 40 under 3200 K '
+        'tungsten with WRATTEN 80A (daylight-balanced film).',
+        'No filter or exposure correction is needed from 1/10,000 s to 1 s (reciprocity); longer exposures: test.',
+        'MTF curve labels at the high-frequency end read G (top), B, R (bottom).',
+        'Red-filter densities of a normally exposed negative: gray card 0.79-0.89; lightest step of a paper gray '
+        'scale 1.15-1.25; forehead 1.10-1.20 (light) / 0.95-1.05 (dark complexion).'])
+
+
+@stock
+def kodak_portra_800():
+    key, slug = 'e4040', 'kodak-portra-800'
+    bar = [-4.0, -3.0, -2.0, -1.0, 0.0, 1.0]
+    # the EI 800 chart prints its x labels as -4.0, -2.0, -3.0, -1.0, 0.0, 1.0 (two swapped); they are evenly
+    # spaced, so the values are assigned in reading order
+    r = kodak_colour_negative(key, 4, (81.6, 74.5, 266.2, 258.9), (350.2, 313.7, 550.9, 465.4),
+                              (81.1, 101.8, 265.4, 286.1), (71.6, 345.7, 274.1, 498.7), slug, char_xvalues=bar,
+                              pages={'dye': 5, 'mtf': 5})
+    variants, gv = [], {}
+    for F, ei, push, tag in (((81.1, 314.1, 265.6, 498.5), 1600, '1 stop push', 'push1'),
+                             ((357.6, 71.0, 542.2, 255.5), 3200, '2 stop push', 'push2')):
+        v = vchart(key, 4, F, lambda cs, xa, ya: by_order_at(cs, xa, ya, lo_x(cs, xa) + 0.05, ['blue', 'green', 'red']),
+                   0.05, f'{slug}-characteristic-{tag}', f'E-4040 p4 characteristic curves EI {ei} ({push})',
+                   xvalues=bar)
+        variants.append({'exposureIndex': ei, 'process': f'C-41, {push} (as labelled on the chart)',
+                         'logExposure': v['x'], **v['ys'], 'dMin': {c: v['ys'][c][0] for c in ('red', 'green', 'blue')}})
+        gv[f'EI {ei}'] = {c: round(gamma_fit(v['x'], v['ys'][c]), 3) for c in ('red', 'green', 'blue')}
+    pgi = [('135 (24x36 mm)', '4x6 in', '4.4X', 48), ('135 (24x36 mm)', '8x10 in', '8.8X', 70),
+           ('135 (24x36 mm)', '16x20 in', '17.8X', 99),
+           ('120 (6x6 cm)', '4x6 in', '2.6X', 36), ('120 (6x6 cm)', '8x10 in', '4.4X', 48),
+           ('120 (6x6 cm)', '16x20 in', '8.8X', 70)]
+    rec = kodak_cn_record(r, slug, 'KODAK PROFESSIONAL PORTRA 800 Film', 800, key, [2, 3, 4, 5], -1.74, 'Daylight',
+                          'Daylight, effective exposure 1/200 s', pgi, notes=[
+        'ISO 800 daylight / electronic flash; ISO 250 under 3400 K photolamps with WRATTEN 80B; ISO 200 under 3200 K '
+        'tungsten with WRATTEN 80A (daylight-balanced film).',
+        'Push processing is published: characteristicCurves.variants holds the EI 1600 (push 1) and EI 3200 '
+        '(push 2) curves, same exposure, densitometry and Log H Ref (-1.74) as the EI 800 chart. The datasheet does '
+        'not give the push development times (C-41 push is lab practice, typically longer developer time).',
+        'Red-filter densities of a normally exposed negative (EI 800 / 1600 push 1 / 3200 push 2): gray card '
+        '0.75-0.95 / 0.85-1.05 / 0.95-1.15; lightest paper-gray-scale step 1.00-1.20 / 1.20-1.40 / 1.40-1.60.',
+        'No filter or exposure correction is needed from 1/10,000 s to 1 s (reciprocity).',
+        'High-speed film: sensitive to ambient radiation and airport x-ray inspection (datasheet note).',
+        'The EI 800 chart prints its log-exposure labels as -4.0, -2.0, -3.0, -1.0, 0.0, 1.0 (two transposed); '
+        'they are evenly spaced and were read as -4.0 ... 1.0 in order.'])
+    rec['characteristicCurves']['variants'] = variants
+    rec['characteristicCurves']['condition'] = 'EI 800, normal C-41 processing'
+    rec['derived']['gammaByVariant'] = gv
+    return rec
+
+
+@stock
+def kodak_ultramax_400():
+    r = kodak_colour_negative('e7023', 4, (81.1, 112.7, 265.9, 297.4), (76.6, 371.0, 277.6, 522.6),
+                              (357.2, 113.0, 541.5, 297.2), None, 'kodak-ultramax-400')
+    pgi = [('135 (24x36 mm)', '4x6 in', '4.4X', 46)]
+    return kodak_cn_record(r, 'kodak-ultramax-400', 'KODAK ULTRA MAX 400 Film', 400, 'e7023', [1, 2, 3, 4],
+                           -1.44, 'Daylight', 'Daylight, effective exposure 1/100 s', pgi, mtf=False, notes=[
+        'ISO/DIN 400/27° (daylight-balanced consumer film). The datasheet gives no tungsten / filter speed table.',
+        'No exposure or filter adjustment from 1/10,000 s to 1 s; longer exposures may need compensation.',
+        'Printing-compatible with KODAK GOLD films (datasheet).',
+        'No MTF curve and no rms granularity are published in E-7023 (Feb 2016); mtf is null. Only one Print Grain '
+        'Index figure is given (135, 4x6 in print).',
+        'Red-filter densities of a normally exposed negative: gray card 0.80-1.00; lightest paper-gray-scale step '
+        '1.20-1.40; forehead 1.10-1.40 (light) / 0.85-1.25 (dark complexion).'])
+
+
+def neutral_and_dyes(cs, xa, ya):
+    """Dye chart with a visual-neutral curve: the neutral is the curve with the highest mean density."""
+    mean = lambda c: sum(ya.val(y) for p in c['polys'] for _, y in p) / sum(len(p) for p in c['polys'])
+    cs = sorted(cs, key=mean)
+    return {**by_peak(cs[:-1], xa, ya, BANDS_DYE), 'visualNeutral': cs[-1]['polys']}
+
+
+@stock
+def kodak_ektachrome_e100():
+    slug, key = 'kodak-ektachrome-e100', 'e4000'
+    rgb = ('red', 'green', 'blue')
+    ch = vchart(key, 3, (368.7, 358.6, 553.9, 543.0),
+                lambda cs, xa, ya: by_order_at(cs, xa, ya, lo_x(cs, xa) + 0.05, ['blue', 'green', 'red']),
+                0.05, slug + '-characteristic', 'E-4000 p3 characteristic curves', min_width=40)
+    mt = vchart(key, 3, (357.6, 126.9, 560.1, 279.7),
+                lambda cs, xa, ya: by_order_at(cs, xa, ya, hi_x(cs, xa) - 0.01, ['blue', 'green', 'red']),
+                'mtf', slug + '-mtf', 'E-4000 p3 MTF', xlog=True, ylog=True, nd=1, max_width_frac=0.9)
+    se = vchart(key, 4, (74.3, 107.0, 274.9, 258.5), lambda cs, xa, ya: by_peak(cs, xa, ya, BANDS_RGB),
+                5, slug + '-sensitivity', 'E-4000 p4 spectral sensitivity', max_width_frac=0.8, floor=True)
+    dy = vchart(key, 4, (70.6, 349.7, 271.1, 501.1), neutral_and_dyes, 5, slug + '-dye-density',
+                'E-4000 p4 spectral dye density')
+    rec = base_record(slug, 'KODAK PROFESSIONAL EKTACHROME Film E100', 'Kodak Alaris (KODAK PROFESSIONAL)',
+                      'reversal', 'E-6', 100, key, [1, 2, 3, 4])
+    xs, c = ch['x'], ch['ys']
+    rec['characteristicCurves'] = {
+        'densityType': 'status-A', 'exposure': 'Daylight, 1/100 s', 'process': 'E-6',
+        'logExposureUnits': LOGH_UNITS, 'logExposure': xs, **c,
+        'dMax': {k: next(v for v in c[k] if v is not None) for k in rgb},
+        'dMin': {k: next(v for v in reversed(c[k]) if v is not None) for k in rgb},
+        'notes': 'Reversal: density falls with exposure. dMax / dMin = density at the lowest / highest plotted '
+                 'exposure. The three curves separate only in the shoulder (D > ~2.5, B highest) and coincide '
+                 'within the line width below D ≈ 2.'}
+    rec['spectralSensitivity'] = {
+        'units': LOGS_UNITS, 'densityCriterion': 'equivalent neutral density (E.N.D.) = 1.0',
+        'exposure': 'effective exposure 1/10 s', 'process': 'E-6', 'wavelength': se['x'], **se['ys'],
+        'notes': 'red = red-sensitive (cyan-forming) layer, green = magenta-forming, blue = yellow-forming. Curves '
+                 'end where the published curves end; samples on the chart floor are null.'}
+    rec['dyeDensity'] = {
+        'units': 'diffuse spectral density', 'process': 'E-6', 'wavelength': dy['x'],
+        'cyan': dy['ys']['cyan'], 'magenta': dy['ys']['magenta'], 'yellow': dy['ys']['yellow'],
+        'minimum': None, 'midscaleNeutral': None, 'visualNeutral': dy['ys']['visualNeutral'],
+        'notes': 'Chart: "Normalized dyes to form a visual neutral density of 1.0 for a viewing illuminant of '
+                 '5000 K"; visualNeutral is the resulting neutral. No D-min curve is published.'}
+    rec['granularity'] = {'rmsDiffuse': 8, 'printGrainIndex': None,
+                          'notes': 'Diffuse rms granularity 8 ("extremely fine"), read at a gross diffuse visual '
+                                   'density of 1.0 with a 48 µm aperture (Kodak x1000 scale; reversal-film '
+                                   'convention, i.e. at D = 1.0 gross rather than 1.0 above D-min).'}
+    rec['mtf'] = {'units': 'percent response', 'frequencyUnits': 'cycles/mm', 'process': 'E-6',
+                  'frequency': mt['x'], **mt['ys'],
+                  'notes': 'Exposure illuminant not stated on the chart. Labels at the high-frequency end read B '
+                           '(top), G, R.'}
+    rec['interlayer'] = None
+    rec['notes'] = [
+        'EI 100 daylight / electronic flash; EI 32 under 3400 K photolamps with WRATTEN 80B; EI 25 under 3200 K '
+        'tungsten with WRATTEN 80A (daylight-balanced).',
+        'Reciprocity: no correction from 1/10,000 s to 10 s; at 120 s add CC10R. Multiple flash: none up to 4 '
+        'pops, CC05M for 8.',
+        'Push processing: effective speed is raised by extending the E-6 first-developer time; recommended '
+        'starting point for push 1 is EI 200 with 8 minutes in the first developer (labs typically offer push '
+        '1/2 and push 1). No push characteristic curves are published.',
+        'Low D-min and a low-contrast tone scale are design features (datasheet).']
+    rec['derived'] = derived_block(rec['characteristicCurves'], rec['spectralSensitivity'], rec['dyeDensity'],
+                                   reversal=True)
+    rec['derived']['gammaNote'] = 'Reversal: gamma is the magnitude of the (negative) slope.'
+    rec['extraction'] = {'method': 'vector', 'tool': 'research/film-data/extract.py',
+                         'notes': 'All four charts are vector paths; sampled from path geometry with tick-snapped '
+                                  'axes.', 'confidence': 'high', 'checks': []}
+    return rec
+
+
+@stock
+def kodak_kodachrome_64():
+    slug, key = 'kodak-kodachrome-64', 'e55'
+    rgb = ('red', 'green', 'blue')
+    # Bar-notation labels (3̄.0 = -3.0); axes from the frame edges and grid lines, which the labels sit on.
+    ch = vchart(key, 6, (71.3, 161.7, 255.8, 346.2),
+                lambda cs, xa, ya: by_order_at(cs, xa, ya, lo_x(cs, xa) + 0.05, ['red', 'green', 'blue']),
+                0.05, slug + '-characteristic', 'E-55 p6 KODACHROME 64 characteristic curves', min_width=40,
+                xaxis=axis_from_pairs([(71.3 + i * (255.8 - 71.3) / 4, -3.0 + i) for i in range(5)], name='logH'),
+                yaxis=axis_from_pairs([(161.7, 4.0), (346.2, 0.0)], name='D'))
+    se = vchart(key, 6, (74.7, 422.3, 275.2, 573.8), lambda cs, xa, ya: by_peak(cs, xa, ya, BANDS_RGB),
+                5, slug + '-sensitivity', 'E-55 p6 KODACHROME 64 spectral sensitivity', max_width_frac=0.8,
+                xaxis=axis_from_pairs([(74.7 + i * (255.5 - 74.7) / 9, 250 + 50 * i) for i in range(10)], name='nm'),
+                yaxis=axis_from_pairs([(422.3, 2.0), (460.2, 1.0), (498.1, 0.0), (535.9, -1.0), (573.8, -2.0)],
+                                      name='log S'))
+    dy = vchart(key, 6, (352.0, 305.3, 536.3, 489.6), neutral_and_dyes, 5, slug + '-dye-density',
+                'E-55 p6 KODACHROME 64 spectral dye density',
+                xaxis=axis_from_pairs([(352.0, 400), (536.3, 700)], name='nm'),
+                yaxis=axis_from_pairs([(489.6, 0.0), (425.7, 0.5), (361.3, 1.0)], name='D'))
+    mt = vchart(key, 6, (351.2, 58.4, 553.7, 211.4), lambda cs, xa, ya: {'neutral': cs[0]['polys']},
+                'mtf', slug + '-mtf', 'E-55 p6 KODACHROME 64 MTF', nd=1, max_width_frac=0.9,
+                xaxis=axis_from_pairs([(351.2, 1), (372.9, 2), (385.6, 3), (394.9, 4), (401.5, 5), (422.9, 10),
+                                       (445.5, 20), (474.5, 50), (496.2, 100), (517.6, 200)], log=True, name='c/mm'),
+                yaxis=axis_from_pairs([(77.7, 100), (88.2, 70), (97.9, 50), (112.6, 30), (124.4, 20), (144.6, 10),
+                                       (154.8, 7), (165.1, 5), (179.2, 3), (191.9, 2), (211.4, 1)], log=True,
+                                      name='%'))
+    rec = base_record(slug, 'KODACHROME 64 Professional Film (PKR)', 'Eastman Kodak Company', 'reversal',
+                      'K-14', 64, key, [1, 2, 3, 6])
+    xs, c = ch['x'], ch['ys']
+    rec['characteristicCurves'] = {
+        'densityType': 'status-A', 'exposure': 'Daylight, 1/50 s', 'process': 'K-14',
+        'logExposureUnits': LOGH_UNITS, 'logExposure': xs, **c,
+        'dMax': {k: next(v for v in c[k] if v is not None) for k in rgb},
+        'dMin': {k: next(v for v in reversed(c[k]) if v is not None) for k in rgb},
+        'notes': 'Reversal: density falls with exposure. dMax / dMin = density at the lowest / highest plotted '
+                 'exposure. The x labels use Kodak bar notation (3̄.0 = -3.0); axes calibrated on the frame edges '
+                 '(-3.0 and +1.0 log H; 0 and 4.0 D). Curves are drawn in black and identified by their end labels '
+                 '(R top, G, B at the shoulder); they merge in the toe.'}
+    rec['spectralSensitivity'] = {
+        'units': LOGS_UNITS, 'densityCriterion': 'equivalent neutral density (E.N.D.) = 1.00',
+        'exposure': 'effective exposure 1.4 s', 'process': 'K-14', 'wavelength': se['x'], **se['ys'],
+        'notes': 'red = cyan-forming layer, green = magenta-forming, blue = yellow-forming (chart labels). Bar-'
+                 'notation y labels (1̄.0 = -1.0). Curves end where the published curves end.'}
+    rec['dyeDensity'] = {
+        'units': 'diffuse spectral density', 'process': 'K-14', 'wavelength': dy['x'],
+        'cyan': dy['ys']['cyan'], 'magenta': dy['ys']['magenta'], 'yellow': dy['ys']['yellow'],
+        'minimum': None, 'midscaleNeutral': None, 'visualNeutral': dy['ys']['visualNeutral'],
+        'notes': 'Chart: "Normalized dyes to form a visual density of 1.0 for a viewing illuminant of 3200 K" '
+                 '(not 5000 K as on current Kodak reversal sheets); visualNeutral is the resulting neutral. No '
+                 'D-min curve is published. Kodachrome dyes are formed in processing (K-14 colour developers '
+                 'contain the couplers), not by couplers coated in the film.'}
+    rec['granularity'] = {'rmsDiffuse': 10, 'printGrainIndex': None,
+                          'notes': 'Diffuse rms granularity 10, read at a gross diffuse visual density of 1.0 with a '
+                                   '48 µm aperture, 12x magnification (Kodak x1000 scale; reversal convention).'}
+    rec['mtf'] = {'units': 'percent response', 'frequencyUnits': 'cycles/mm', 'exposure': 'Daylight',
+                  'process': 'K-14', 'frequency': mt['x'], 'neutral': mt['ys']['neutral'],
+                  'notes': 'Single curve, "Densitometry: Diffuse visual". The top label "150" is not on the log '
+                           'scale and was not used; y calibrated on 1-100%.'}
+    rec['interlayer'] = None
+    rec['notes'] = [
+        'DISCONTINUED (Kodak ended Kodachrome 64 in 2009 and K-14 processing in 2010). Datasheet fetched from an '
+        'Internet Archive capture (2000-08-17) of Kodak\'s own URL.',
+        'EI 64 daylight / electronic flash; EI 20 under 3400 K photolamps with WRATTEN 80B; EI 16 under 3200 K '
+        'tungsten with WRATTEN 80A.',
+        'Reciprocity (E-55 table): +1/3 stop with CC05R at 1/10 s; 10 s exposures not recommended.',
+        'Push processing is not recommended for KODACHROME 25 and 64.',
+        'Base: 5.3-mil (0.13 mm) acetate. Non-substantive process: dyes are formed in three separate colour-'
+        'development steps of Process K-14.']
+    rec['derived'] = derived_block(rec['characteristicCurves'], rec['spectralSensitivity'], rec['dyeDensity'],
+                                   reversal=True)
+    rec['derived']['gammaNote'] = 'Reversal: gamma is the magnitude of the (negative) slope.'
+    rec['extraction'] = {'method': 'vector', 'tool': 'research/film-data/extract.py',
+                         'notes': 'All four p6 charts are vector paths (1996 Distiller PDF); sampled from path '
+                                  'geometry. Axes from frame edges and grid lines (bar-notation labels).',
+                         'confidence': 'high (geometry); medium for R/G/B identity in the toe, where the black '
+                                       'curves merge', 'checks': []}
+    return rec
+
+
+@stock
+def fuji_eterna_vivid_250d():
+    slug, key = 'fuji-eterna-vivid-250d', 'eternav250d'
+    doc_ = SOURCES[key]['document']
+    stop = math.log10(2)
+    # Page is stored rotated 90°; page_drawings/_number_spans map it upright. x labels are camera stops; the
+    # negative labels are not extractable as text, so x is taken from the 1-stop grid lines.
+    ch = vchart(key, 1, (234.1, 73.1, 382.5, 179.8),
+                lambda cs, xa, ya: by_order_at(cs, xa, ya, lo_x(cs, xa) + 0.05, ['blue', 'green', 'red']),
+                0.05, slug + '-characteristic', f'{doc_} characteristic curves (x in log H = stops x 0.301)',
+                min_width=60,
+                xaxis=axis_from_pairs([(244.7 + i * (371.9 - 244.7) / 12, (i - 6) * stop) for i in range(13)],
+                                      name='logH'),
+                yaxis=axis_from_pairs([(179.8, 0.0), (162.0, 0.5), (144.2, 1.0), (126.4, 1.5), (108.7, 2.0),
+                                       (90.9, 2.5), (73.1, 3.0)], name='D'))
+    se = vchart(key, 1, (234.5, 291.3, 382.2, 373.6), lambda cs, xa, ya: by_peak(cs, xa, ya, BANDS_RGB),
+                5, slug + '-sensitivity', f'{doc_} spectral sensitivity (relative log)', max_width_frac=0.8,
+                min_width=10,
+                xaxis=axis_from_pairs([(243.1, 400), (286.3, 500), (330.0, 600), (373.4, 700)], name='nm'),
+                yaxis=axis_from_pairs([(373.6, 0.0), (346.2, 1.0), (318.9, 2.0), (291.3, 3.0)], name='rel log S'))
+    dy = vchart(key, 1, (49.6, 73.2, 169.0, 227.5),
+                lambda cs, xa, ya: {('minimum' if dash_key(c) != 'solid' else 'midscaleNeutral'): c['polys']
+                                    for c in cs},
+                5, slug + '-dye-density', f'{doc_} spectral density (mid-scale neutral, minimum)',
+                xaxis=axis_from_pairs([(49.6, 400), (88.7, 500), (128.9, 600), (169.0, 700)], name='nm'),
+                yaxis=axis_from_pairs([(227.5, 0.0), (189.2, 0.5), (150.6, 1.0), (112.1, 1.5), (73.2, 2.0)],
+                                      name='D'))
+    mt = vchart(key, 1, (49.6, 291.6, 169.4, 373.9), lambda cs, xa, ya: {'neutral': cs[0]['polys']},
+                'mtf', slug + '-ctf', f'{doc_} contrast transfer function', nd=1, max_width_frac=0.9,
+                xaxis=axis_from_pairs([(49.6, 1), (67.7, 2), (91.5, 5), (109.9, 10), (127.8, 20), (138.3, 30),
+                                       (145.9, 40), (152.1, 50), (169.4, 100)], log=True, name='c/mm'),
+                yaxis=axis_from_pairs([(295.1, 100), (313.8, 50), (327.1, 30), (337.9, 20), (355.8, 10)],
+                                      log=True, name='%'))
+    rec = base_record(slug, 'FUJICOLOR NEGATIVE FILM ETERNA Vivid 250D (Type 8546 / 8646)', 'FUJIFILM Corporation',
+                      'negative', 'ECN-2', 250, key, [1, 2])
+    rec['characteristicCurves'] = {
+        'densityType': 'status-M', 'exposure': '5400 K light source, 1/50 s, through a Fuji SC-41 UV filter',
+        'process': 'ECN-2 (specified standard conditions)', 'logExposureUnits': REL_LOGH,
+        'logExposure': ch['x'], **ch['ys'],
+        'dMin': {c: ch['ys'][c][0] for c in ('red', 'green', 'blue')},
+        'notes': 'The x axis is labelled in camera stops (-6..+6) relative to normal exposure, not in lux-seconds; '
+                 'converted here to log exposure at 0.30103 per stop (0 = normal exposure, no absolute origin). '
+                 'Status M densities including the orange mask; dMin = density at the lowest plotted exposure.'}
+    rec['spectralSensitivity'] = {
+        'units': 'relative log10 spectral sensitivity (0-3 as labelled; arbitrary origin); sensitivity = '
+                 'reciprocal of the exposure (erg/cm^2) required to produce the stated density',
+        'densityCriterion': '0.40 above minimum density (arbitrary three-colour densities)',
+        'process': 'ECN-2', 'wavelength': se['x'], **se['ys'],
+        'notes': 'Curves end where the published curves end.'}
+    rec['dyeDensity'] = {
+        'units': 'spectral density', 'wavelength': dy['x'], 'cyan': None, 'magenta': None, 'yellow': None,
+        'minimum': dy['ys']['minimum'], 'midscaleNeutral': dy['ys']['midscaleNeutral'],
+        'notes': 'Only "typical densities for a mid-scale neutral subject" (solid) and "minimum densities" (dashed) '
+                 'are published; per-dye curves are not, so cyan/magenta/yellow are null.'}
+    rec['granularity'] = {'rmsDiffuse': 3.5, 'printGrainIndex': None,
+                          'notes': 'RMS granularity 3.5: 1000x the value measured at a visual diffuse density of 1.0 '
+                                   'above minimum density with a 48 µm aperture (same scale as Fujifilm still '
+                                   'negative sheets).'}
+    rec['mtf'] = {'units': 'percent response (contrast transfer function, square-wave)', 'frequencyUnits': 'cycles/mm',
+                  'process': 'ECN-2', 'frequency': mt['x'], 'neutral': mt['ys']['neutral'],
+                  'notes': 'Published as a contrast transfer function: "spatial frequency attenuation characteristic '
+                           'of amplitude relative to rectangular wave chart", normalised to zero frequency, at a '
+                           'visual diffuse density of 1.1. This is a square-wave response, not a sine-wave MTF '
+                           '(CTF exceeds MTF at mid frequencies); convert before mixing with MTF data.'}
+    rec['interlayer'] = ('Fujifilm cites "Super-Efficient DIR-Coupler Technology" for colour separation; no interimage '
+                         'data are published.')
+    rec['notes'] = [
+        'DISCONTINUED (Fujifilm ended motion-picture camera film production in 2013). Datasheet fetched from an '
+        'Internet Archive capture (2012-02-16) of Fujifilm\'s own URL. ETERNA 250D (non-Vivid) was also sought; '
+        'its only archived capture is a truncated PDF.',
+        'Daylight balanced. EI 250 daylight, metal halide (HMI), ordinary fluorescent (white and daylight types) and '
+        'three-band daylight fluorescent (5000 K), no filter; EI 64 under 3200 K tungsten with Kodak Daylight '
+        'Filter No. 80A.',
+        'Reciprocity: no correction from 1/1000 s to 1/10 s; at 1 s open 1/3 stop.',
+        'Described as the highest-contrast film of the ETERNA colour negative series, with high saturation, '
+        '"optimised orange mask density" for scanning, and designed to intercut with ETERNA Vivid 500.',
+        'Base: triacetate, tinted light cyan (anti-light-piping). Process ECN-2 (persulfate, ferricyanide or '
+        'PDTA-ferric bleach). Edge code FN46 / "FUJI V250".']
+    rec['derived'] = derived_block(rec['characteristicCurves'], rec['spectralSensitivity'])
+    rec['derived']['gammaNote'] = 'Gamma per log10 exposure (stops converted at 0.30103 log units per stop).'
+    rec['extraction'] = {'method': 'vector', 'tool': 'research/film-data/extract.py',
+                         'notes': 'All four p1 charts are vector paths on a page stored rotated 90°; coordinates are '
+                                  'mapped through the page rotation matrix. Axes from grid lines.',
+                         'confidence': 'high (characteristic, dye, CTF geometry); medium for sensitivity (relative '
+                                       'scale)', 'checks': []}
+    return rec
 
 
 REL_LOGH = 'relative log exposure (arbitrary origin, as labelled on the chart)'
@@ -2084,6 +3186,189 @@ def ilford_hp5_plus():
                          'confidence': 'medium (characteristic), medium-low (sensitivity: scale type unstated)',
                          'checks': []}
     return rec
+
+
+def wedge_axes(key, pno, xref, labels=(400, 450, 500, 550, 600, 650)):
+    """Axes of an Ilford wedge-spectrogram bitmap: x from the centres of the wavelength labels under the
+    frame (no tick marks are drawn; label glyph groups are split where the gap exceeds 4 pt), y from the
+    1.0 / 0.5 tick marks right of the frame."""
+    r = Raster.image(key, pno, xref)
+    m = r.mask(DARK)
+    h, v = r.lines(m, 'h', 0.5), r.lines(m, 'v', 0.3)
+    yb, xr = max(h), max(v)
+    a, b = int(r.to_px(0, yb + 1.5)[1]), min(r.h, int(r.to_px(0, yb + 10)[1]))
+    groups, last = [], -99
+    for c in range(r.w):
+        if any(m[y][c] for y in range(a, b)):
+            if c - last > 4 * r.sx:
+                groups.append([c])
+            else:
+                groups[-1].append(c)
+            last = c
+    cent = [r.to_page((g[0] + g[-1]) / 2, 0)[0] for g in groups]
+    assert len(cent) == len(labels), (key, cent)
+    ticks = tick_marks(r, m, 'y', (xr + 0.6, xr + 3.0))
+    assert len(ticks) == 2, (key, ticks)
+    return L_(cent, list(labels), name='nm'), L_(ticks, [1.0, 0.5], name='S'), r.rect
+
+
+ILFORD_SENS_NOTE = ('Ilford publishes a wedge-spectrogram outline with a "Sensitivity" axis marked 0.5 and 1.0 and does '
+                    'not say whether the scale is linear or logarithmic (a wedge spectrogram\'s height is '
+                    'proportional to log sensitivity). Values are read on the printed scale (the chart floor is '
+                    '≈0). No density criterion is given. x calibrated on the centres of the wavelength labels (no '
+                    'tick marks drawn).')
+
+
+def ilford_film(slug, key, name, ei, pages, sens_xref, char, notes, sens_seed, extra=None, iso_note=None):
+    """ILFORD B&W film: wedge spectrogram on p1 + characteristic-curve bitmap(s).
+    char: [(pno, xref, {name: (x, y) seed}, condition, developer, times or None)]."""
+    k = dict(pred=DARK, grid_halfwidth=2, line_frac=0.5, half=1)
+    ident = lambda f: f
+    variants, checks, prim = [], [], None
+    for pno, xref, seeds, cond, dev, times in char:
+        tag = '' if len(char) == 1 else '-' + dev.split()[1].lower()
+        ch = raster_chart(key, pno, xref, ('v', ident, (0.0, 4.5, 0.5), False), ('h', ident, (3.0, 0.0, 0.5), False),
+                          seeds, 0.05, f'{slug}-characteristic{tag}', f'{SOURCES[key]["document"][:20]} p{pno} '
+                          f'characteristic {dev}', lo=0.02, hi=(extra or {}).get('hi', 4.45), track_kw=LOWRES, **k)
+        for n in seeds:
+            if '+' in n:
+                continue
+            v = {'developer': dev, 'condition': cond, 'timeMin': times[n] if times else None,
+                 'logExposure': [x for x, y in zip(ch['x'], ch['ys'][n]) if y is not None],
+                 'neutral': [y for y in ch['ys'][n] if y is not None]}
+            v['gamma'] = round(gamma_fit(v['logExposure'], v['neutral']), 3)
+            variants.append(v)
+    wa, sa, _ = wedge_axes(key, 1, sens_xref)
+    se = raster_chart(key, 1, sens_xref, wa, sa, {'neutral': sens_seed}, 5, slug + '-sensitivity',
+                      f'{SOURCES[key]["document"][:20]} p1 spectral sensitivity', lo=wa.val(wa.labels[0][0]) - 60,
+                      hi=720, track_kw=LOWRES, **dict(k, line_frac=0.3))
+    prim = variants[0] if len(variants) == 1 else extra['primary'](variants)
+    rec = base_record(slug, name, 'HARMAN technology Ltd (ILFORD PHOTO)', 'bw-negative', prim['condition'], ei, key,
+                      pages)
+    rec['characteristicCurves'] = {
+        'densityType': None, 'logExposureUnits': REL_LOGH, 'exposure': None, 'condition': prim['condition'],
+        'logExposure': prim['logExposure'], 'neutral': prim['neutral'], 'dMin': prim['neutral'][0],
+        'variants': [dict((kk, vv) for kk, vv in v.items() if kk != 'gamma') for v in variants] if len(variants) > 1 else [],
+        'notes': 'x axis is relative log exposure 0-4.5 with no absolute origin, so the curve cannot be placed against '
+                 'lux-seconds from this datasheet. Density type and exposure illuminant are not stated. dMin = '
+                 'base + fog at the lowest plotted exposure. Grid: 0.5 log E x 0.5 D, checked against the 1-4 and '
+                 '1.0 / 2.0 labels.' + (' ' + extra['char_note'] if extra and extra.get('char_note') else '')}
+    rec['spectralSensitivity'] = {
+        'units': 'relative sensitivity as labelled (ticks 0.5 and 1.0; zero at the chart floor)',
+        'densityCriterion': None, 'exposure': f'wedge spectrogram to tungsten light ({extra.get("sens_k", 2850) if extra else 2850} K)',
+        'wavelength': se['x'], 'neutral': se['ys']['neutral'], 'notes': ILFORD_SENS_NOTE}
+    rec['dyeDensity'] = None
+    rec['granularity'] = {'rmsDiffuse': None, 'printGrainIndex': None,
+                          'notes': 'No granularity figure is published in this datasheet.'}
+    rec['mtf'] = None
+    rec['interlayer'] = None
+    if extra and extra.get('contrastVsTime'):
+        rec['contrastVsDevelopmentTime'] = extra['contrastVsTime']
+    rec['notes'] = list(notes) + ['No MTF, resolving power or granularity data are published (mtf and granularity '
+                                  'null).']
+    rec['derived'] = derived_block(rec['characteristicCurves'], rec['spectralSensitivity'])
+    if len(variants) > 1:
+        rec['derived']['gammaByVariant'] = {f"{v['developer']} {v['timeMin']} min": v['gamma'] for v in variants}
+    rec['extraction'] = {'method': 'raster', 'tool': 'research/film-data/extract.py',
+                         'notes': 'Embedded bitmaps (~1.8-4.9 px/pt). Characteristic axes from the grid lines; '
+                                  'spectrogram x from the wavelength-label centres and y from the two tick marks.',
+                         'confidence': 'medium (characteristic), medium-low (sensitivity: scale type unstated)',
+                         'checks': checks}
+    return rec
+
+
+def ilford_bw_notes(iso, eis, recip, base, curve):
+    return [iso + ' ' + eis, f'Reciprocity: {recip}', base, f'Characteristic curve: {curve}']
+
+
+ILFORD_BASE = ('35 mm on 0.125 mm acetate base; roll film on 0.110 mm clear acetate with an anti-halation backing that '
+               'clears in development; sheet film on 0.180 mm polyester base with anti-halation backing.')
+
+
+@stock
+def ilford_delta_100():
+    return ilford_film(
+        'ilford-delta-100', 'd100', 'ILFORD DELTA 100 PROFESSIONAL', 100, [1, 2, 3, 4], 16,
+        [(4, 37, {'neutral': (3.9, 1.745)}, 'ILFORD ID-11 stock, 8½ min at 20°C/68°F, intermittent agitation '
+          '(roll film; representative of 35 mm and sheet)', 'ILFORD ID-11', None)],
+        ilford_bw_notes('ISO 100/21° daylight.', 'Best at EI 100/21; good results from EI 50/18 to EI 200/24 (EI range '
+                        'from practical evaluation, not ISO foot speed). Development times are tabulated for EI 50, '
+                        '100 and 200 (e.g. ID-11 stock 7 / 8½ / 10½ min, DD-X 1+4 8 / 10½ / 12½ min at 20°C).',
+                        'none from 1/10,000 s to 1 s; longer metered times Tm need Ta = Tm^1.26 (seconds).',
+                        ILFORD_BASE, 'ID-11 stock, 8½ min, 20°C.'),
+        (500, 0.75))
+
+
+@stock
+def ilford_fp4_plus():
+    return ilford_film(
+        'ilford-fp4-plus', 'fp4', 'ILFORD FP4 PLUS', 125, [1, 2, 3, 5], 17,
+        [(5, 38, {'neutral': (3.9, 1.86)}, 'ILFORD ILFOTEC HC (1+31), 8 min at 20°C/68°F, intermittent agitation '
+          '(roll film; representative of 35 mm and sheet)', 'ILFORD ILFOTEC HC', None)],
+        ilford_bw_notes('ISO 125/22° daylight (ID-11, 20°C, spiral tank).', 'Best at EI 125/22; good results from EI '
+                        '50/18 to EI 200/24. Development times are tabulated for EI 50, 125 and 200 (e.g. ID-11 stock '
+                        '6½ / 8½ / 10 min, DD-X 1+4 8 / 10 / 12 min at 20°C).',
+                        'none from 1/2 s to 1/10,000 s; longer metered times Tm need Ta = Tm^1.26 (seconds).',
+                        ILFORD_BASE, 'ILFOTEC HC (1+31), 8 min, 20°C.'),
+        (500, 0.62))
+
+
+@stock
+def ilford_pan_f_plus():
+    return ilford_film(
+        'ilford-pan-f-plus', 'panf', 'ILFORD PAN F PLUS', 50, [1, 2, 3, 4], 32,
+        [(4, 48, {'neutral': (3.9, 1.622)}, 'ILFORD ILFOTEC HC (1+31), 4 min at 20°C/68°F, intermittent agitation '
+          '(roll film; representative of 35 mm)', 'ILFORD ILFOTEC HC', None)],
+        ilford_bw_notes('ISO 50/18° daylight (ID-11, 20°C, spiral tank).', 'Best at EI 50/18; good results at EI 25/15. '
+                        'Development times are tabulated for EI 25, 50 and 64 (e.g. ID-11 stock 4½ / 6½ min, DD-X 1+4 '
+                        '7 / 8 min at 20°C); accidental exposure at EI 100-200+ is covered only by a rescue table.',
+                        'none from 1/2 s to 1/10,000 s; longer metered times Tm need Ta = Tm^1.33 (seconds).',
+                        ILFORD_BASE.replace('; sheet film', '; large-format sheet film'),
+                        'ILFOTEC HC (1+31), 4 min, 20°C.') +
+        ['Ilford recommends processing PAN F Plus within 3 months of exposure (latent-image stability).'],
+        (500, 0.65))
+
+
+@stock
+def ilford_delta_3200():
+    slug, key = 'ilford-delta-3200', 'd3200'
+    times = {'t16': 16, 't12': 12, 't9': 9, 't7': 7}
+    dd = {'t16': (3.9, 2.378), 't12': (3.9, 2.22), 't9': (3.9, 1.951), 't7': (3.9, 1.756)}
+    mi = {'t16': (3.9, 2.384), 't12': (3.9, 2.208), 't9': (2.25, 1.40), 't7': (3.9, 1.866)}
+    k = dict(pred=DARK, grid_halfwidth=2, line_frac=0.5, half=1, track_kw=LOWRES)
+    ident = lambda f: f
+    cvt = {}
+    for xref, dev, xv, seed in ((45, 'ILFORD ILFOTEC DD-X 1+4', (3, 30, 3), (13.5, 0.78)),
+                                (46, 'ILFORD MICROPHEN stock', (0, 18, 2), (14.0, 0.775))):
+        c = raster_chart(key, 5, xref, ('v', ident, xv, False), ('h', ident, (1.2, 0.0, 0.2), False),
+                         {'contrast': seed}, 0.5, f'{slug}-contrast-time-{dev.split()[1].lower()}',
+                         f'DELTA 3200 p5 contrast vs time {dev}', lo=xv[0] + 0.05, hi=xv[1] - 0.05, nd=3, **k)
+        cvt[dev] = {'timeMin': [x for x, y in zip(c['x'], c['ys']['contrast']) if y is not None],
+                    'contrastGbar': [y for y in c['ys']['contrast'] if y is not None]}
+    contrast = {'units': 'Ilford average gradient G-bar (contrast) vs development time in minutes at 20°C/68°F',
+                'series': cvt,
+                'notes': 'From the "CONTRAST – TIME GRAPHS" (p5). G-bar is Ilford\'s average-gradient contrast; its '
+                         'exact definition (density interval) is not given in the datasheet.'}
+    pick = lambda vs: next(v for v in vs if 'DD-X' in v['developer'] and v['timeMin'] == 9)
+    return ilford_film(
+        slug, key, 'ILFORD DELTA 3200 PROFESSIONAL', 3200, [1, 2, 3, 4, 5, 6], 23,
+        [(5, 47, dd, 'ILFORD ILFOTEC DD-X 1+4, 20°C/68°F', 'ILFORD ILFOTEC DD-X 1+4', times),
+         (5, 48, mi, 'ILFORD MICROPHEN stock, 20°C/68°F', 'ILFORD MICROPHEN stock', times)],
+        ['Nominal ISO speed 1000/31° daylight (ID-11, 20°C, spiral tank); designed to be exposed at EI 3200/36 with '
+         'extended development. Good results from EI 400/27 to EI 6400/39 (recommended range EI 1600-6400); usable '
+         'up to EI 25000/45 with tests. exposureIndex is the recommended meter setting (3200), not the ISO speed.',
+         'Push/pull is by development time: e.g. ILFOTEC DD-X 1+4 at 20°C: EI 400 6 min, 800 7, 1600 8, 3200 9½, '
+         '6400 12½, 12500 17 min; EI 25000: DD-X 25 min / MICROPHEN 22 min at 20°C.',
+         'Reciprocity: none from 1/2 s to 1/10,000 s; longer metered times Tm need Ta = Tm^1.33 (seconds).',
+         '35 mm on 0.125 mm acetate base; 120 roll film. Very fast film: Ilford advises against airport x-ray '
+         'scanners.',
+         'Characteristic variants: DD-X 1+4 and MICROPHEN stock, each 7 / 9 / 12 / 16 min at 20°C. The primary '
+         'curve is DD-X 9 min (nearest the EI 3200 time of 9½ min).',
+         'contrastVsDevelopmentTime: G-bar vs development time for DD-X 1+4 and MICROPHEN (p5).'],
+        (500, 0.83), extra={'primary': pick, 'contrastVsTime': contrast, 'sens_k': 2856, 'hi': 4.25,
+                            'char_note': 'The four curves of each chart merge below relative log E ≈ 0.8 (toe); the '
+                                         'traced values there are a shared centreline (±0.03 D). Traces stop at '
+                                         'relative log E 4.25, where the time labels are printed over the curve ends.'})
 
 
 MG_FILTERS = ['00', '0', '1', '2', '3', '4', '5']

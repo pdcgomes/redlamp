@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "id": "kodak-vision3-50d",
+  "name": "KODAK VISION3 50D Color Negative Film 5203 / 7203",
+  "manufacturer": "Eastman Kodak Company",
+  "type": "negative",
+  "process": "ECN-2",
+  "exposureIndex": 50,
+  "source": {
+    "title": "KODAK VISION3 50D Color Negative Film 5203 / 7203 — Technical Information",
+    "document": "H-1-5203",
+    "edition": "Revised 3-26 (March 2026)",
+    "url": "https://www.kodak.com/content/products-brochures/motion-picture/KODAK-VISION3-50D-5203-7203-technical-information.pdf",
+    "fetchedVia": "direct",
+    "retrieved": "2026-10-01",
+    "sha256": "b4613661abed641671329eff3bd7d5686b268eb26b954ef1c27ea68f363caca6",
+    "pages": [1, 2, 3, 4]
+  },
+  "characteristicCurves": {
+    "densityType": "status-M (chart label: \"Densitometry: Status M\")",
+    "exposure": "5500 K daylight, 1/50 s",
+    "process": "ECN-2",
+    "logExposureUnits": "log10 exposure in lux-seconds",
+    "logExposure": [-2.95, -2.9, -2.85, -2.8, -2.75, -2.7, -2.65, -2.6, -2.55, -2.5, -2.45, -2.4, -2.35, -2.3, -2.25, -2.2, -2.15, -2.1, -2.05, -2.0, -1.95, -1.9, -1.85, -1.8, -1.75, -1.7, -1.65, -1.6, -1.55, -1.5, -1.45, -1.4, -1.35, -1.3, -1.25, -1.2, -1.15, -1.1, -1.05, -1.0, -0.95, -0.9, -0.85, -0.8, -0.75, -0.7, -0.65, -0.6, -0.55, -0.5, -0.45, -0.4, -0.35, -0.3, -0.25, -0.2, -0.15, -0.1, -0.05, 0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4, 1.45, 1.5, 1.55, 1.6, 1.65, 1.7, 1.75, 1.8, 1.85, 1.9],
+    "blue": [0.851, 0.851, 0.851, 0.851, 0.851, 0.851, 0.852, 0.854, 0.855, 0.857, 0.859, 0.864, 0.869, 0.876, 0.882, 0.891, 0.901, 0.913, 0.928, 0.945, 0.963, 0.983, 1.004, 1.026, 1.048, 1.072, 1.096, 1.121, 1.147, 1.173, 1.199, 1.225, 1.252, 1.278, 1.305, 1.331, 1.357, 1.383, 1.407, 1.432, 1.457, 1.482, 1.507, 1.533, 1.56, 1.587, 1.614, 1.642, 1.669, 1.696, 1.722, 1.748, 1.775, 1.801, 1.828, 1.854, 1.882, 1.911, 1.938, 1.966, 1.995, 2.022, 2.05, 2.077, 2.105, 2.133, 2.161, 2.188, 2.215, 2.243, 2.27, 2.298, 2.325, 2.351, 2.378, 2.405, 2.431, 2.457, 2.482, 2.506, 2.53, 2.552, 2.574, 2.594, 2.614, 2.634, 2.652, 2.67, 2.686, 2.701, 2.716, 2.731, 2.745, 2.758, 2.769, 2.781, 2.787, 2.793],
+    "green": [0.576, 0.576, 0.576, 0.576, 0.576, 0.576, 0.576, 0.576, 0.576, 0.578, 0.58, 0.582, 0.586, 0.591, 0.598, 0.605, 0.614, 0.626, 0.641, 0.657, 0.676, 0.697, 0.719, 0.742, 0.766, 0.791, 0.818, 0.846, 0.874, 0.901, 0.93, 0.958, 0.985, 1.013, 1.04, 1.068, 1.096, 1.124, 1.151, 1.179, 1.207, 1.233, 1.26, 1.288, 1.316, 1.343, 1.371, 1.399, 1.427, 1.455, 1.483, 1.511, 1.538, 1.566, 1.594, 1.623, 1.65, 1.678, 1.708, 1.735, 1.763, 1.792, 1.82, 1.848, 1.876, 1.905, 1.933, 1.96, 1.988, 2.016, 2.043, 2.072, 2.099, 2.126, 2.154, 2.18, 2.206, 2.231, 2.257, 2.282, 2.306, 2.329, 2.351, 2.373, 2.394, 2.414, 2.433, 2.452, 2.47, 2.487, 2.504, 2.52, 2.535, 2.55, 2.562, 2.574, 2.585, 2.592],
+    "red": [0.168, 0.168, 0.168, 0.169, 0.168, 0.168, 0.168, 0.168, 0.168, 0.169, 0.172, 0.175, 0.179, 0.186, 0.194, 0.201, 0.207, 0.216, 0.229, 0.246, 0.262, 0.279, 0.299, 0.316, 0.338, 0.369, 0.388, 0.407, 0.441, 0.47, 0.486, 0.518, 0.543, 0.563, 0.589, 0.619, 0.65, 0.668, 0.69, 0.708, 0.73, 0.756, 0.774, 0.8, 0.819, 0.843, 0.868, 0.896, 0.916, 0.944, 0.964, 0.985, 1.013, 1.031, 1.057, 1.088, 1.106, 1.127, 1.157, 1.174, 1.205, 1.229, 1.252, 1.271, 1.3, 1.32, 1.34, 1.366, 1.388, 1.414, 1.434, 1.453, 1.486, 1.506, 1.526, 1.546, 1.571, 1.589, 1.607, 1.631, 1.648, 1.668, 1.684, 1.703, 1.72, 1.736, 1.754, 1.768, 1.777, 1.794, 1.808, 1.816, 1.823, 1.837, 1.85, 1.854, 1.857, 1.861],
+    "dMin": {
+      "red": 0.168,
+      "green": 0.576,
+      "blue": 0.851
+    },
+    "notes": "The bitmap chart has two x scales that disagree by ~4.6%: the \"LOG EXPOSURE (lux-seconds)\" labels (-3.03, -0.515, 2.006) span the frame (5.04 log H) while the camera-stop ticks (-8..+8 stops = 4.82 log H) span the same frame. Calibrated on the log-exposure labels (as for 5219); camera stop 0 (normal exposure at EI 50) = -0.515 log lux-s. If the stop scale is right, gammas are ~4.6% higher. The red curve is drawn dotted."
+  },
+  "spectralSensitivity": {
+    "units": "log10 spectral sensitivity; sensitivity = reciprocal of the exposure (erg/cm^2) required to produce the stated density",
+    "densityCriterion": "0.2 above D-min (Status M)",
+    "exposure": "effective exposure 1/10 s",
+    "process": "ECN-2",
+    "wavelength": [360, 365, 370, 375, 380, 385, 390, 395, 400, 405, 410, 415, 420, 425, 430, 435, 440, 445, 450, 455, 460, 465, 470, 475, 480, 485, 490, 495, 500, 505, 510, 515, 520, 525, 530, 535, 540, 545, 550, 555, 560, 565, 570, 575, 580, 585, 590, 595, 600, 605, 610, 615, 620, 625, 630, 635, 640, 645, 650, 655, 660, 665, 670, 675],
+    "blue": [0.181, 0.238, 0.358, 0.511, 0.692, 0.891, 1.098, 1.31, 1.419, 1.498, 1.543, 1.544, 1.541, 1.551, 1.57, 1.591, 1.601, 1.614, 1.621, 1.636, 1.691, 1.75, 1.756, 1.658, 1.423, 1.014, 0.542, 0.235, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "green": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 0.196, 0.376, 0.617, 0.755, 0.903, 1.051, 1.076, 1.145, 1.218, 1.291, 1.367, 1.442, 1.511, 1.542, 1.539, 1.528, 1.466, 1.392, 1.329, 1.191, 1.052, 0.79, 0.52, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "red": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 0.182, 0.353, 0.6, 0.811, 0.941, 1.078, 1.215, 1.247, 1.272, 1.294, 1.326, 1.374, 1.43, 1.485, 1.509, 1.509, 1.499, 1.409, 1.194, 0.851, 0.571],
+    "notes": "The printed log-sensitivity labels are misregistered with the grid: \"4.0\" sits on the frame top, but \"3.0\", \"2.0\" and \"1.0\" sit ~6-8 pt above the next grid line down and \"0.0\" falls below the frame. Calibrated on the grid (frame top 4.0, 1.0 per grid line, frame floor 0.0). On this reading the peaks (~1.6-1.8) are ~0.7 log below 5207 (250D), matching the 5x speed ratio; on the label reading they would equal 250D. The green curve includes its blue-region rise from the frame floor at ~473 nm. Curves are clipped at the frame floor (0.0)."
+  },
+  "dyeDensity": {
+    "units": "diffuse spectral density",
+    "process": "ECN-2; D-mins subtracted",
+    "wavelength": [405, 410, 415, 420, 425, 430, 435, 440, 445, 450, 455, 460, 465, 470, 475, 480, 485, 490, 495, 500, 505, 510, 515, 520, 525, 530, 535, 540, 545, 550, 555, 560, 565, 570, 575, 580, 585, 590, 595, 600, 605, 610, 615, 620, 625, 630, 635, 640, 645, 650, 655, 660, 665, 670, 675, 680, 685, 690, 695, 700, 705, 710, 715, 720, 725, 730, 735, 740, 745, 750, 755],
+    "cyan": [0.216, 0.198, 0.177, 0.156, 0.137, 0.119, 0.104, 0.091, 0.079, 0.069, 0.062, 0.056, 0.052, 0.048, 0.045, 0.042, 0.04, 0.039, 0.039, 0.039, 0.041, 0.044, 0.048, 0.053, 0.061, 0.069, 0.08, 0.093, 0.109, 0.125, 0.142, 0.16, 0.18, 0.202, 0.228, 0.259, 0.296, 0.339, 0.388, 0.438, 0.485, 0.529, 0.573, 0.617, 0.661, 0.704, 0.748, 0.791, 0.831, 0.865, 0.896, 0.927, 0.952, 0.972, 0.988, 0.998, 1.001, 0.997, 0.987, 0.969, 0.943, 0.914, 0.878, 0.837, 0.796, 0.751, 0.701, 0.649, 0.596, 0.543, 0.503],
+    "magenta": [-0.004, -0.002, -0.0, 0.0, 0.0, 0.0, 0.0, -0.0, -0.001, 0.002, 0.011, 0.025, 0.058, 0.092, 0.149, 0.218, 0.295, 0.377, 0.463, 0.552, 0.64, 0.724, 0.801, 0.87, 0.927, 0.968, 0.989, 0.991, 0.973, 0.933, 0.872, 0.793, 0.703, 0.61, 0.521, 0.439, 0.369, 0.309, 0.259, 0.217, 0.183, 0.156, 0.136, 0.119, 0.105, 0.094, 0.086, 0.079, 0.073, 0.069, 0.065, 0.062, 0.059, 0.057, 0.055, 0.053, 0.051, 0.05, 0.048, 0.046, 0.045, 0.042, 0.04, 0.038, 0.036, 0.034, 0.031, 0.029, 0.026, 0.024, 0.022],
+    "yellow": [0.557, 0.624, 0.703, 0.779, 0.849, 0.908, 0.953, 0.982, 0.997, 0.995, 0.974, 0.938, 0.883, 0.813, 0.733, 0.647, 0.561, 0.478, 0.399, 0.327, 0.266, 0.215, 0.174, 0.141, 0.115, 0.096, 0.079, 0.067, 0.057, 0.049, 0.043, 0.037, 0.033, 0.029, 0.027, 0.026, 0.024, 0.024, 0.024, 0.024, 0.024, 0.024, 0.024, 0.024, 0.024, 0.024, 0.024, 0.024, 0.024, 0.024, 0.023, 0.023, 0.022, 0.021, 0.02, 0.018, 0.017, 0.017, 0.016, 0.015, 0.014, 0.012, 0.011, 0.01, 0.009, 0.009, 0.009, 0.008, 0.008, 0.008, 0.007],
+    "minimum": [0.557, 0.624, 0.699, 0.757, 0.801, 0.817, 0.844, 0.846, 0.852, 0.838, 0.832, 0.808, 0.804, null, null, null, null, null, null, null, null, 0.636, 0.619, 0.598, 0.583, 0.562, 0.559, 0.55, 0.55, 0.55, 0.551, 0.549, 0.548, 0.542, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "midscaleNeutral": [1.183, 1.225, 1.297, 1.374, 1.441, 1.493, 1.528, 1.548, 1.551, 1.539, 1.517, 1.487, 1.456, 1.423, 1.387, 1.346, 1.301, 1.26, 1.234, 1.225, 1.236, 1.255, 1.267, 1.274, 1.277, 1.281, 1.284, 1.282, 1.27, 1.245, 1.207, 1.162, 1.109, 1.049, 0.983, 0.912, 0.837, 0.763, 0.703, 0.66, 0.637, 0.63, 0.64, 0.651, 0.669, 0.69, 0.713, 0.737, 0.761, 0.782, 0.802, 0.819, 0.835, 0.846, 0.855, 0.861, 0.862, 0.858, 0.849, 0.836, 0.818, 0.796, 0.77, 0.74, 0.707, 0.671, 0.633, 0.596, 0.561, 0.526, 0.494],
+    "notes": "Cyan, magenta and yellow curves are peak-normalised (1.0) per the datasheet note. midscaleNeutral and minimum are as drawn (\"D-mins subtracted\" per the chart label). The dashed minimum curve is traced where its dashes are resolvable; nulls are where it crosses the solid curves and beyond 697 nm, where its sparse dashes (~0.12-0.14) could not be followed reliably next to the \"Minimum Density\" label. The published curves end at ~760 nm."
+  },
+  "granularity": {
+    "rmsDiffuse": null,
+    "printGrainIndex": null,
+    "notes": "Published only as \"Diffuse rms Granularity Curves\" (granularity sigma-D vs log relative exposure, 48 µm aperture, ECN-2) on p3; not digitised here."
+  },
+  "mtf": {
+    "units": "percent response",
+    "frequencyUnits": "cycles/mm",
+    "exposure": "5500 K daylight",
+    "process": "ECN-2",
+    "densityType": "status-M",
+    "frequency": [2.5, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 25, 30, 35, 40, 50, 60, 70],
+    "red": [null, 100.2, 96.7, 96.2, 96.2, 96.2, null, 101.4, 101.4, 99.6, 90.6, 73.2, null, null, 43.5, 33.9, 18.9, 15.0],
+    "green": [null, 100.2, 96.7, 96.2, 96.2, 96.2, null, 101.4, 101.4, 99.6, 90.6, 79.1, null, null, 54.5, 45.6, 28.2, 23.1],
+    "blue": [null, 100.2, 96.7, 96.2, 96.2, 96.2, null, 93.9, 91.7, 84.4, 75.9, 64.3, null, null, 46.7, 41.0, 30.3, 26.9],
+    "notes": "The curves cross tightly (B is the shallowest: lowest from ~8 to ~36 c/mm, crossing R at ~36 and G at ~59 c/mm), so values were read column by column at the standard frequencies and named by that order rather than traced; columns where a curve lies on a grid line or at a crossing are null. Below ~8 c/mm the three curves are one line (shared value), and R and G are one line up to ~15 c/mm. The chart has no grid line at 100 c/mm (frequency axis calibrated on the 1-50, 200 and 700 lines)."
+  },
+  "interlayer": null,
+  "notes": ["Daylight balanced (5500 K): EI 50 daylight; EI 12 under 3200 K / 3000 K tungsten with a WRATTEN 2 Optical Filter No. 80A. Metal halide / HMI / KINO FLO 55: no filter, EI 50. Fluorescent: warm white CC20M + CC05R EI 25; cool white CC40B EI 20.", "Reciprocity: no filter or exposure correction for 1/1000 s to 1 s.", "Acetate safety base. Process ECN-2.", "The current Kodak datasheet (Revised 3-26) states that \"an Anti-halation undercoat replaces the traditional remjet backing layer\"; the curves are for that construction."],
+  "derived": {
+    "note": "Computed by extract.py from the digitised curves as sanity checks; not published values.",
+    "gamma": {
+      "red": 0.469,
+      "green": 0.559,
+      "blue": 0.541
+    },
+    "gammaMethod": "least-squares slope over the central 25-75% of each curve's density range",
+    "monotonic": {
+      "red": true,
+      "green": true,
+      "blue": true
+    },
+    "sensitivityPeakNm": {
+      "red": 650,
+      "green": 545,
+      "blue": 470
+    },
+    "dyePeakNm": {
+      "cyan": 685,
+      "magenta": 540,
+      "yellow": 445
+    }
+  },
+  "extraction": {
+    "method": "raster",
+    "tool": "research/film-data/extract.py",
+    "notes": "All H-1-5203 charts are embedded ~3 px/pt anti-aliased bitmaps. Axes were calibrated on detected tick marks / grid lines; curves traced with a dynamic-programming follower that keeps each curve's direction through crossings.",
+    "confidence": "medium (sensitivity: medium-low, see its notes)",
+    "checks": []
+  }
+}
