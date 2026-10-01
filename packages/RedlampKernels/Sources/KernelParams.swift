@@ -163,6 +163,7 @@ public struct DevelopParams {
     public var toImage0 = SIMD4<Float>(1, 0, 0, 1)
     public var toImage1 = SIMD4<Float>(0, 1, 0, 0)
     public var toImage2 = SIMD4<Float>(0, 0, 1, 0)
+    public var lens = SIMD4<Float>(0, 0, 0.5, 0)
 
     public init() {}
 

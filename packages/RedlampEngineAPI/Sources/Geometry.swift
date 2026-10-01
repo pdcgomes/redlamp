@@ -101,9 +101,10 @@ public struct CropRect: Codable, Sendable, Hashable {
 }
 
 /// Every geometry edit as one map, from a pixel of the developed (cropped) output back to the
-/// photo (LNS-05): the crop with its angle, then Transform, then the user's orientation, to the
-/// EXIF-oriented photo. Without lens correction this is a single homography, so the renderer
-/// applies it per pixel and samples the pyramid once.
+/// photo (LNS-05): the crop with its angle, then Transform, then the user's orientation, then
+/// lens distortion, to the EXIF-oriented photo as the camera recorded it. Up to the lens it is a
+/// single homography; the lens adds one radial polynomial. The renderer applies both per pixel
+/// and samples the pyramid once.
 public struct GeometryMap: Sendable, Equatable {
     /// The photo after its EXIF orientation.
     public let imageSize: PixelSize
@@ -114,7 +115,13 @@ public struct GeometryMap: Sendable, Equatable {
     /// Output (0...1 across the crop) to photo (0...1, EXIF-oriented), homogeneous.
     public let toImage: simd_double3x3
     public let fromImage: simd_double3x3
+    /// Radial distortion of the photo: a corrected point at radius r (in half-diagonals from the
+    /// centre) was recorded at r · (1 + k r²). Zero without lens correction.
+    public let lensDistortion: Double
     public let isIdentity: Bool
+
+    /// The Distortion slider at ±100.
+    public static let maximumDistortion = 0.2
 
     /// Vertical and Horizontal at ±100 tilt or turn the virtual camera this far.
     public static let maximumPerspective = 25.0
@@ -123,6 +130,7 @@ public struct GeometryMap: Sendable, Equatable {
         self.init(
             imageSize: imageSize, orientation: recipe.orientation, crop: includesCrop ? recipe.crop : .full,
             angle: recipe[.cropAngle], transform: Transform(recipe: recipe),
+            lensDistortion: -recipe[.lensDistortion] / 100 * Self.maximumDistortion,
         )
     }
 
@@ -132,8 +140,10 @@ public struct GeometryMap: Sendable, Equatable {
         crop: CropRect = .full,
         angle: Double = 0,
         transform: Transform = Transform(),
+        lensDistortion: Double = 0,
     ) {
         self.imageSize = imageSize
+        self.lensDistortion = lensDistortion
         let canvas = orientation.swapsAxes
             ? PixelSize(width: imageSize.height, height: imageSize.width) : imageSize
         canvasSize = canvas
@@ -155,16 +165,47 @@ public struct GeometryMap: Sendable, Equatable {
         self.toImage = (1 / toImage[2, 2]) * toImage
         fromImage = toImage.inverse
         isIdentity = orientation.isIdentity && crop.isFull && abs(angle) < 1e-9 && transform.isIdentity
+            && abs(lensDistortion) < 1e-12
     }
 
     /// The photo point behind an output point, or nil when it lies behind the virtual camera.
     public func imagePoint(_ output: SIMD2<Double>) -> SIMD2<Double>? {
-        Self.project(toImage, output)
+        Self.project(toImage, output).map(distorted)
     }
 
     /// Where a photo point lands in the output, or nil.
     public func outputPoint(_ image: SIMD2<Double>) -> SIMD2<Double>? {
-        Self.project(fromImage, image)
+        Self.project(fromImage, undistorted(image))
+    }
+
+    /// Half-diagonal units about the centre, so the lens is round whatever the aspect.
+    private var lensScale: SIMD2<Double> {
+        let aspect = imageSize.aspectRatio
+        let halfDiagonal = 0.5 * (aspect * aspect + 1).squareRoot()
+        return SIMD2(aspect, 1) / halfDiagonal
+    }
+
+    /// Where the camera recorded a lens-corrected photo point.
+    func distorted(_ point: SIMD2<Double>) -> SIMD2<Double> {
+        guard lensDistortion != 0 else { return point }
+        let offset = (point - 0.5) * lensScale
+        let scale = 1 + lensDistortion * simd_length_squared(offset)
+        return 0.5 + (point - 0.5) * scale
+    }
+
+    /// The lens-corrected point the camera recorded at `point` (Newton on the radius).
+    func undistorted(_ point: SIMD2<Double>) -> SIMD2<Double> {
+        guard lensDistortion != 0 else { return point }
+        let recorded = simd_length((point - 0.5) * lensScale)
+        guard recorded > 1e-12 else { return point }
+        var radius = recorded
+        for _ in 0 ..< 8 {
+            let f = radius * (1 + lensDistortion * radius * radius) - recorded
+            let slope = 1 + 3 * lensDistortion * radius * radius
+            guard abs(slope) > 1e-9 else { break }
+            radius -= f / slope
+        }
+        return 0.5 + (point - 0.5) * (radius / recorded)
     }
 
     /// Photo pixels per output pixel at the output's centre.
@@ -181,26 +222,34 @@ public struct GeometryMap: Sendable, Equatable {
         return abs(dx.x * dy.y - dx.y * dy.x).squareRoot()
     }
 
-    /// Whether the whole output shows the photo, with no empty corners.
+    /// Whether the whole output shows the photo, with no empty corners. The corners decide for a
+    /// homography; lens distortion bends the edges, so points along them are checked too.
     public var staysInsideImage: Bool {
-        [SIMD2(0.0, 0.0), SIMD2(1, 0), SIMD2(0, 1), SIMD2(1, 1)].allSatisfy { corner in
-            guard let point = imagePoint(corner) else { return false }
+        let steps = lensDistortion == 0 ? 1 : 8
+        let border = (0 ... steps).flatMap { index -> [SIMD2<Double>] in
+            let t = Double(index) / Double(steps)
+            return [SIMD2(t, 0), SIMD2(t, 1), SIMD2(0, t), SIMD2(1, t)]
+        }
+        return border.allSatisfy { edge in
+            guard let point = imagePoint(edge) else { return false }
             return point.x >= -1e-6 && point.y >= -1e-6 && point.x <= 1 + 1e-6 && point.y <= 1 + 1e-6
         }
     }
 
     /// The crop scaled about its centre until it stays inside the photo (Lightroom's Constrain to
-    /// Image). The photo's outline under a homography is convex, so the corners decide.
+    /// Image).
     public static func constrained(
         _ crop: CropRect,
         imageSize: PixelSize,
         orientation: ImageOrientation,
         angle: Double,
         transform: Transform,
+        lensDistortion: Double = 0,
     ) -> CropRect {
         func fits(_ candidate: CropRect) -> Bool {
             GeometryMap(
                 imageSize: imageSize, orientation: orientation, crop: candidate, angle: angle, transform: transform,
+                lensDistortion: lensDistortion,
             ).staysInsideImage
         }
         guard !fits(crop) else { return crop }
@@ -214,6 +263,15 @@ public struct GeometryMap: Sendable, Equatable {
             }
         }
         return crop.scaled(by: low)
+    }
+
+    /// `crop` fitted inside the photo under `recipe`'s angle, Transform, orientation and lens.
+    public static func constrained(_ crop: CropRect, recipe: EditRecipe, imageSize: PixelSize) -> CropRect {
+        constrained(
+            crop, imageSize: imageSize, orientation: recipe.orientation, angle: recipe[.cropAngle],
+            transform: Transform(recipe: recipe),
+            lensDistortion: -recipe[.lensDistortion] / 100 * maximumDistortion,
+        )
     }
 
     static func rotation(_ degrees: Double) -> simd_double3x3 {
@@ -299,7 +357,7 @@ public struct Transform: Sendable, Hashable {
 public extension EditRecipe {
     /// The parameters that shape the developed frame rather than its look.
     static let geometryParameters: [ParameterID] = [
-        .cropAngle, .transformVertical, .transformHorizontal, .transformRotate, .transformAspect,
+        .cropAngle, .lensDistortion, .transformVertical, .transformHorizontal, .transformRotate, .transformAspect,
         .transformScale, .transformOffsetX, .transformOffsetY,
     ]
 

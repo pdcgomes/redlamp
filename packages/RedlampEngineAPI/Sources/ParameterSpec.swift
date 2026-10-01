@@ -317,12 +317,9 @@ public enum ParameterCatalog {
                 .noiseColorSmoothness, "Smoothness", range: 0 ... 100, default: 50, format: .integer,
             ),
 
-            ParameterSpec(.lensDistortion, "Distortion", availability: geometry),
-            ParameterSpec(.lensVignetting, "Vignetting", availability: geometry),
-            ParameterSpec(
-                .lensVignettingMidpoint, "Midpoint", range: 0 ... 100, default: 50, format: .integer,
-                availability: geometry,
-            ),
+            ParameterSpec(.lensDistortion, "Distortion"),
+            ParameterSpec(.lensVignetting, "Vignetting"),
+            ParameterSpec(.lensVignettingMidpoint, "Midpoint", range: 0 ... 100, default: 50, format: .integer),
 
             ParameterSpec(
                 .cropAngle, "Angle", range: -45 ... 45, step: 0.01, format: .signedDecimal(2),

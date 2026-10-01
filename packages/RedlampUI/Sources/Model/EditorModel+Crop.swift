@@ -180,10 +180,7 @@ public extension EditorModel {
     /// Fits the crop as last drawn inside the photo, when Constrain to Image is on.
     internal func constrainCrop(_ next: inout EditRecipe) {
         guard constrainCropToImage, let info else { return }
-        next.crop = GeometryMap.constrained(
-            cropIntent, imageSize: info.pixelSize, orientation: next.orientation, angle: next[.cropAngle],
-            transform: Transform(recipe: next),
-        )
+        next.crop = GeometryMap.constrained(cropIntent, recipe: next, imageSize: info.pixelSize)
     }
 
     /// `crop` moved (not resized) to lie inside `bounds` where it can.

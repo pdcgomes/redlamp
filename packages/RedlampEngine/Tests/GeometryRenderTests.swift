@@ -123,6 +123,20 @@ struct GeometryRenderTests {
     }
 
     @Test(.enabled(if: EngineSmokeTests.canRender))
+    func `lens vignetting lightens the corners, not the centre`() async throws {
+        let engine = try await openEngine()
+        let plainFrame = try render(engine, plain, longEdge: 600)
+        var lightened = plain
+        lightened[.lensVignetting] = 100
+        let frame = try render(engine, lightened, longEdge: 600)
+        let corner = frame.at(3, 3).sum() / max(plainFrame.at(3, 3).sum(), 1e-4)
+        let centre = frame.at(frame.width / 2, frame.height / 2).sum()
+            / max(plainFrame.at(frame.width / 2, frame.height / 2).sum(), 1e-4)
+        #expect(corner > 1.2, "corner \(corner)")
+        #expect(abs(centre - 1) < 0.01, "centre \(centre)")
+    }
+
+    @Test(.enabled(if: EngineSmokeTests.canRender))
     func `a mask stays on the photo's content when the crop moves it`() async throws {
         let engine = try await openEngine()
         var recipe = plain

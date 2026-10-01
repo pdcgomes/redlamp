@@ -446,6 +446,12 @@ kernel void rl_develop(
     } else {
         camera = source.sample(linearSampler, sourceUV, level(p.geometry.y)).rgb;
     }
+    // Lens vignetting, Lightroom's manual Vignetting: positive lightens the corners, by up to a
+    // stop, from the midpoint outwards.
+    if (p.lens.y != 0.0f) {
+        float radius = length((imageUV - 0.5f) * lensScale(p));
+        camera *= exp2(p.lens.y * smoothstep(0.9f * p.lens.z, 1.0f, radius));
+    }
 
     // Mask coverage for every layer, then the summed local adjustments.
     int layerCount = min(int(p.masks.x), kMaxMaskLayers);

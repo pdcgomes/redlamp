@@ -161,6 +161,10 @@ enum DevelopParameters {
         let full = session.orientedSize
         let map = GeometryMap(recipe: recipe, imageSize: full)
         p.setOutputToImage(map.toImage.floatMatrix, imageAspect: Float(full.aspectRatio))
+        p.lens = SIMD4(
+            Float(map.lensDistortion), Float(recipe[.lensVignetting] / 100),
+            Float(recipe[.lensVignettingMidpoint] / 100), 0,
+        )
         // Developed-frame pixels per output pixel, and photo pixels per output pixel, which
         // picks the pyramid level to sample.
         let scale = region.width * Double(map.outputSize.width) / Double(max(outputSize.width, 1))

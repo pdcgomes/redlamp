@@ -354,7 +354,8 @@ final class DetailStage {
     }
 
     /// The pyramid level and texel rectangle (with margin) behind a region of the developed
-    /// frame: the bounds of its corners mapped into the photo (a homography keeps lines straight).
+    /// frame: the bounds of its corners and edge midpoints mapped into the photo (a homography
+    /// keeps lines straight; lens distortion bends them a little).
     static func workArea(
         session: ImageSession,
         geometry: GeometryMap,
@@ -370,6 +371,8 @@ final class DetailStage {
         let corners = [
             SIMD2(region.x, region.y), SIMD2(region.x + region.width, region.y),
             SIMD2(region.x, region.y + region.height), SIMD2(region.x + region.width, region.y + region.height),
+            SIMD2(region.x + region.width / 2, region.y), SIMD2(region.x + region.width / 2, region.y + region.height),
+            SIMD2(region.x, region.y + region.height / 2), SIMD2(region.x + region.width, region.y + region.height / 2),
         ].map { corner in
             let image = geometry.imagePoint(corner).map { simd_clamp($0, SIMD2(repeating: 0), SIMD2(repeating: 1)) }
             return sourceCoordinate(image ?? corner, orientation: session.orientation)

@@ -819,7 +819,7 @@ The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on mac
 - [ ] Better X-Trans demosaicing (Markesteijn)
 - [ ] Full DCP camera profiles (dual and triple illuminant), ICC input profiles, and `.3dl` and log-space LUT import
 - [ ] **Film effects for recipes:** halation (the red glow around bright lights), bloom and diffusion, and film grain that varies with density and scales with output size
-- [ ] Lens corrections from the lensfun database, Adobe LCP import, and DNG opcodes
+- [ ] Lens corrections from the lensfun database, Adobe LCP import, and DNG opcodes *(manual Distortion and Vignetting done, in the same geometry map)*
 - [x] **Crop and straighten** (aspect presets and lock, Angle, Constrain to Image), rotate and flip, and the manual Transform sliders, all one geometry map that masks follow
 - [ ] Upright (Auto, Level, Vertical, Full, Guided), the crop overlays beyond thirds, and a straighten tool
 - [x] Brush, color range, and luminance range masks, and Vision AI masks (subject, sky, background, people)

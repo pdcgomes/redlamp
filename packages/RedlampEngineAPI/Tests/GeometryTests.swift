@@ -107,6 +107,28 @@ struct GeometryTests {
         #expect(!larger.staysInsideImage, "the largest crop that fits")
     }
 
+    @Test func `lens distortion and its inverse undo each other`() {
+        let map = GeometryMap(imageSize: size, angle: 4, lensDistortion: 0.15)
+        for point in [SIMD2(0.05, 0.1), SIMD2(0.5, 0.5), SIMD2(0.9, 0.7)] {
+            let image = map.imagePoint(point) ?? .zero
+            expectNear(map.outputPoint(image), point)
+        }
+    }
+
+    @Test func `correcting barrel distortion stays inside the photo, pincushion leaves corners empty`() {
+        var recipe = EditRecipe()
+        recipe[.lensDistortion] = 60
+        let barrel = GeometryMap(recipe: recipe, imageSize: size)
+        #expect(barrel.staysInsideImage)
+        let corner = barrel.imagePoint(SIMD2(0, 0)) ?? .zero
+        #expect(corner.x > 0 && corner.y > 0, "the corner shows a point recorded nearer the centre")
+        recipe[.lensDistortion] = -60
+        #expect(!GeometryMap(recipe: recipe, imageSize: size).staysInsideImage)
+        recipe.crop = GeometryMap.constrained(.full, recipe: recipe, imageSize: size)
+        #expect(recipe.crop.width < 1)
+        #expect(GeometryMap(recipe: recipe, imageSize: size).staysInsideImage)
+    }
+
     @Test func `crop and orientation are kept in the sidecar only when set`() throws {
         var recipe = EditRecipe()
         let plain = try JSONEncoder().encode(recipe)
