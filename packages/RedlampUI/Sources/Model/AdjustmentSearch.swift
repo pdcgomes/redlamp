@@ -109,6 +109,8 @@ public enum AdjustmentSearch {
         .vignetteRoundness: "Post-Crop Vignetting", .vignetteFeather: "Post-Crop Vignetting",
         .grainAmount: "Grain", .grainSize: "Grain", .grainRoughness: "Grain", .grainColor: "Grain",
         .halationAmount: "Halation", .halationSize: "Halation", .bloomAmount: "Bloom", .bloomSize: "Bloom",
+        .leakAmount: "Light Leak", .leakWarmth: "Light Leak", .leakVariation: "Light Leak",
+        .dustAmount: "Dust & Scratches", .scratchAmount: "Dust & Scratches", .frameStyle: "Frame", .frameSize: "Frame",
     ]
 
     /// The words people use: Lightroom's current and older names, and plain descriptions.
@@ -152,6 +154,13 @@ public enum AdjustmentSearch {
         .halationSize: ["halation", "glow"],
         .bloomAmount: ["bloom", "glow", "diffusion", "mist", "pro-mist", "soft"],
         .bloomSize: ["bloom", "glow", "diffusion", "mist"],
+        .leakAmount: ["light leak", "leak", "flare", "vintage", "lomo"],
+        .leakWarmth: ["light leak", "leak"],
+        .leakVariation: ["light leak", "leak"],
+        .dustAmount: ["dust", "specks", "dirt", "vintage", "film"],
+        .scratchAmount: ["scratches", "scratch", "vintage", "film", "projector"],
+        .frameStyle: ["frame", "border", "rebate", "sprocket", "film border", "slide mount"],
+        .frameSize: ["frame", "border"],
         .gradeBlending: ["split toning", "color grading", "toning"],
         .gradeBalance: ["split toning", "color grading", "toning"],
     ].merging(mixerAndGradingSynonyms) { $0 + $1 }

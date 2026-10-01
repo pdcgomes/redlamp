@@ -87,6 +87,22 @@ struct VignetteStylePicker: View {
     }
 }
 
+/// The Frame border (`ParameterID.frameStyle`), as a menu of its styles.
+struct FrameStylePicker: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        Picker("Style", selection: Binding(
+            get: { Int(model.recipe[.frameStyle].rounded()) },
+            set: { model.setValue(.frameStyle, Double($0)) },
+        )) {
+            ForEach(FrameStyle.allCases, id: \.rawValue) { Text($0.name).tag($0.rawValue) }
+        }
+        .labelsHidden()
+        .controlSize(.small)
+    }
+}
+
 struct ProcessVersion: View {
     var body: some View {
         Text("Redlamp v1").font(Theme.labelFont).foregroundStyle(Theme.value)
@@ -130,6 +146,16 @@ struct ProcessVersion: View {
             SubsectionHeader(title: "Bloom", parameters: [.bloomAmount, .bloomSize])
             ParameterSlider(parameter: .bloomAmount)
             ParameterSlider(parameter: .bloomSize)
+            SubsectionHeader(title: "Light Leak", parameters: [.leakAmount, .leakWarmth, .leakVariation])
+            ParameterSlider(parameter: .leakAmount)
+            ParameterSlider(parameter: .leakWarmth)
+            ParameterSlider(parameter: .leakVariation)
+            SubsectionHeader(title: "Dust & Scratches", parameters: [.dustAmount, .scratchAmount])
+            ParameterSlider(parameter: .dustAmount)
+            ParameterSlider(parameter: .scratchAmount)
+            SubsectionHeader(title: "Frame", parameters: [.frameStyle, .frameSize])
+            ControlRow(label: "Style") { FrameStylePicker() }
+            ParameterSlider(parameter: .frameSize)
             SubsectionHeader(title: "Camera Recipe", parameters: PanelID.cameraRecipeParameters)
             ForEach(PanelID.cameraRecipeParameters, id: \.self) { ParameterSlider(parameter: $0) }
         }

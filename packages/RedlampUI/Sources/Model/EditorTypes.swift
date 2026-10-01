@@ -137,6 +137,13 @@ public enum PanelID: String, CaseIterable, Identifiable, Sendable {
                 .halationSize,
                 .bloomAmount,
                 .bloomSize,
+                .leakAmount,
+                .leakWarmth,
+                .leakVariation,
+                .dustAmount,
+                .scratchAmount,
+                .frameStyle,
+                .frameSize,
             ] + PanelID.cameraRecipeParameters
         case .calibration:
             [

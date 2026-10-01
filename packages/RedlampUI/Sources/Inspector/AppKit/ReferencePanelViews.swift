@@ -56,6 +56,8 @@ import SwiftUI
         let grain: [ParameterID] = [.grainAmount, .grainSize, .grainRoughness, .grainColor]
         let halation: [ParameterID] = [.halationAmount, .halationSize]
         let bloom: [ParameterID] = [.bloomAmount, .bloomSize]
+        let leak: [ParameterID] = [.leakAmount, .leakWarmth, .leakVariation]
+        let dust: [ParameterID] = [.dustAmount, .scratchAmount]
         return rows.panel(
             .effects,
             rows: [
@@ -64,6 +66,10 @@ import SwiftUI
             ] + rows.sliders(vignette) + [rows.header("Grain", grain)] + rows.sliders(grain)
                 + [rows.header("Halation", halation)] + rows.sliders(halation)
                 + [rows.header("Bloom", bloom)] + rows.sliders(bloom)
+                + [rows.header("Light Leak", leak)] + rows.sliders(leak)
+                + [rows.header("Dust & Scratches", dust)] + rows.sliders(dust)
+                + [rows.header("Frame", [.frameStyle, .frameSize]), rows.controls("Style", FrameStylePicker()),
+                   rows.slider(.frameSize)]
                 + [rows.header("Camera Recipe", PanelID.cameraRecipeParameters)] + rows
                 .sliders(PanelID.cameraRecipeParameters),
         )
