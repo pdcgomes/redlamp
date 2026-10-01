@@ -167,12 +167,15 @@ public enum ParameterID: String, CaseIterable, Codable, Sendable, Hashable {
     case localNoise = "local.noise"
     case localMoire = "local.moire"
     case localDefringe = "local.defringe"
+    /// The film glows, more or less where a mask covers (the radii stay global).
+    case localHalation = "local.halation"
+    case localBloom = "local.bloom"
 
     /// The local adjustments, in Lightroom's masking-panel order.
     public static let localParameters: [ParameterID] = [
         .localTemperature, .localTint, .localExposure, .localContrast, .localHighlights, .localShadows,
         .localWhites, .localBlacks, .localTexture, .localClarity, .localDehaze, .localHue, .localSaturation,
-        .localSharpness, .localNoise, .localMoire, .localDefringe,
+        .localSharpness, .localNoise, .localMoire, .localDefringe, .localHalation, .localBloom,
     ]
 
     // Mask properties shown as sliders (stored on the mask or component, not as adjustments).

@@ -234,6 +234,7 @@ enum DevelopParameters {
                 ),
                 tone2: SIMD4(value(.localWhites), value(.localBlacks), Float(first), Float(count)),
                 detail: SIMD4(value(.localDehaze), Float(mask.detail / 100), Float(detailLevel), 0),
+                glow: SIMD4(value(.localHalation), value(.localBloom), 0, 0),
             ))
         }
         return (layers, encoder.finished(), overlayIndex)

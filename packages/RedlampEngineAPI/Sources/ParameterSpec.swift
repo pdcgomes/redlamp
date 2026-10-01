@@ -405,6 +405,8 @@ public enum ParameterCatalog {
             ParameterSpec(.localNoise, "Noise"),
             ParameterSpec(.localMoire, "Moiré", availability: detail),
             ParameterSpec(.localDefringe, "Defringe", range: -100 ... 100, availability: geometry),
+            ParameterSpec(.localHalation, "Halation"),
+            ParameterSpec(.localBloom, "Bloom"),
             ParameterSpec(.maskAmount, "Amount", range: 0 ... 200, default: 100, format: .integer),
             ParameterSpec(.maskFeather, "Feather", range: 0 ... 100, default: 50, format: .integer),
             ParameterSpec(.maskBrushSize, "Size", range: 1 ... 100, default: 25, format: .integer),

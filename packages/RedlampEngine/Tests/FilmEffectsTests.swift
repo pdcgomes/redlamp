@@ -305,6 +305,67 @@ struct FilmEffectsTests {
     }
 
     @Test(.enabled(if: BaseLookTests.canRender))
+    func `a mask adds halation only where it covers`() async throws {
+        // Two small bright lights on a dark frame, one in each half.
+        let size = Self.size
+        var words = [UInt16](repeating: 65535, count: size * size * 4)
+        for y in 0 ..< size {
+            for x in 0 ..< size {
+                let light = hypot(Double(x) - 64, Double(y) - 128) < 6 || hypot(Double(x) - 192, Double(y) - 128) < 6
+                for c in 0 ..< 3 {
+                    words[(y * size + x) * 4 + c] = UInt16((light ? 1.0 : 0.03) * 65535)
+                }
+            }
+        }
+        let data = words.withUnsafeBufferPointer { Data(buffer: $0) }
+        let image = try #require(CGImage(
+            width: size, height: size, bitsPerComponent: 16, bitsPerPixel: 64, bytesPerRow: size * 8,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue | CGImageByteOrderInfo
+                .order16Little.rawValue),
+            provider: CGDataProvider(data: data as CFData)!, decode: nil, shouldInterpolate: false,
+            intent: .defaultIntent,
+        ))
+        let url = FileManager.default.temporaryDirectory.appending(path: "redlamp-lights-\(UUID().uuidString).png")
+        let destination = try #require(CGImageDestinationCreateWithURL(
+            url as CFURL,
+            UTType.png.identifier as CFString,
+            1,
+            nil,
+        ))
+        CGImageDestinationAddImage(destination, image, nil)
+        #expect(CGImageDestinationFinalize(destination))
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let engine = try RedlampEngine()
+        _ = try await engine.open(url)
+        var mask = MaskLayer(name: "Glow", components: [
+            MaskComponent(shape: .linear(LinearMask(start: ImagePoint(x: 0.45, y: 0.5), end: ImagePoint(x: 0.55, y: 0.5)))),
+        ])
+        mask[.localHalation] = 100
+        var masked = EditRecipe()
+        masked.masks = [mask]
+        let plain = try await BaseLookTests.pixels(engine.renderStill(StillRequest(recipe: EditRecipe())))
+        let glowing = try await BaseLookTests.pixels(engine.renderStill(StillRequest(recipe: masked)))
+        /// The red lift in a ring around the light at `cx`.
+        func lift(_ cx: Double) -> Double {
+            var total = 0.0, count = 0.0
+            for y in 100 ..< 156 {
+                for x in Int(cx) - 28 ..< Int(cx) + 28 {
+                    let distance = hypot(Double(x) - cx, Double(y) - 128)
+                    guard distance > 9, distance < 26 else { continue }
+                    total += Double(glowing[(y * size + x) * 4]) - Double(plain[(y * size + x) * 4])
+                    count += 1
+                }
+            }
+            return total / count
+        }
+        let left = lift(64), right = lift(192)
+        #expect(max(left, right) > 6, "the covered light glows: left \(left), right \(right)")
+        #expect(min(left, right) < 0.2 * max(left, right), "the other doesn't: left \(left), right \(right)")
+    }
+
+    @Test(.enabled(if: BaseLookTests.canRender))
     func `colour grain differs between the layers; monochrome grain doesn't`() async throws {
         // Large enough that frame-sized grain is bigger than a pixel.
         let url = try Self.flat(0.45, size: 1536)

@@ -484,7 +484,7 @@ private struct SelectedMaskEditor: View {
 
 extension MaskingPanel {
     /// Local adjustments come in groups, like the Basic panel's.
-    static let gapAfter: Set<ParameterID> = [.localTint, .localBlacks, .localDehaze]
+    static let gapAfter: Set<ParameterID> = [.localTint, .localBlacks, .localDehaze, .localDefringe]
 
     /// Which component settings to show: the brush while brushing, otherwise the selected
     /// component's own.

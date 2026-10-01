@@ -300,7 +300,7 @@ Each look ships as a scene-referred Base Look. It takes the place of Redlamp's t
 - **Window ▸ Film Looks** (`⇧⌘L`) shows the open photo in every film. Hover over a card to preview the look in the editor; click to apply it with its grain, halation and bloom. Hold `⌥` over a card to see the photo before the look. Star a look to keep it under **Favourites**. The applied look's card has Grain, Halation and Bloom sliders, and the header an Amount slider. Tabs filter by colour negative, cinema, slide, and black and white.
 - **Basic ▸ Base Look ▸ Film Stocks**, with each film's icon, sets only the look, as a Lightroom profile does.
 - **Recipes ▸ Film Stocks** in the sidebar applies the look with its effects.
-- **Effects ▸ Grain** (with a new **Color** slider for grain in each dye layer), **Halation** and **Bloom** work on any photo.
+- **Effects ▸ Grain** (with a new **Color** slider for grain in each dye layer), **Halation** and **Bloom** work on any photo. Masks have their own **Halation** and **Bloom** sliders, to add glow to a sign or hold it back from a face.
 
 ![CineStill 800T applied in the editor, with its grain, halation and bloom in the Effects panel](docs/images/film-editor.png)
 

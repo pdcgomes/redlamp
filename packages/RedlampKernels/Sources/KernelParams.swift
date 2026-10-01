@@ -341,12 +341,17 @@ public struct MaskLayerGPU: Sendable {
     public var tone: SIMD4<Float>
     public var tone2: SIMD4<Float>
     public var detail: SIMD4<Float>
+    public var glow: SIMD4<Float>
 
-    public init(color: SIMD4<Float>, tone: SIMD4<Float>, tone2: SIMD4<Float>, detail: SIMD4<Float> = .zero) {
+    public init(
+        color: SIMD4<Float>, tone: SIMD4<Float>, tone2: SIMD4<Float>, detail: SIMD4<Float> = .zero,
+        glow: SIMD4<Float> = .zero,
+    ) {
         self.color = color
         self.tone = tone
         self.tone2 = tone2
         self.detail = detail
+        self.glow = glow
     }
 
     public static let empty = MaskLayerGPU(color: .zero, tone: .zero, tone2: .zero)

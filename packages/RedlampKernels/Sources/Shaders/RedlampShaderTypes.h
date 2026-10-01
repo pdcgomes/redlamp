@@ -101,6 +101,7 @@ struct MaskLayerGPU {
     float4 tone;              // x exposure (EV), y contrast, z highlights, w shadows
     float4 tone2;             // x whites, y blacks, z first component index, w component count
     float4 detail;            // x Dehaze (slider / 100), y Detail refinement (-1...1), z pyramid level it measures texture at
+    float4 glow;              // x halation, y bloom (slider / 100, scaled by the mask's Amount), added to the global amounts
 };
 
 #endif

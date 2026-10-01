@@ -452,6 +452,7 @@ kernel void rl_develop(
     float4 localTone = 0.0f;
     float2 localTone2 = 0.0f;
     float localDehaze = 0.0f;
+    float2 localGlow = 0.0f;
     MaskImages maskImages = { maskRasters, maskGuide };
     float textureMagnitude = -1.0f;
     for (int i = 0; i < layerCount; i++) {
@@ -466,6 +467,7 @@ kernel void rl_develop(
         localTone += coverage[i] * layers[i].tone;
         localTone2 += coverage[i] * layers[i].tone2.xy;
         localDehaze += coverage[i] * layers[i].detail.x;
+        localGlow += coverage[i] * layers[i].glow.xy;
     }
 
     // Scene-referred: white balance (global and local), camera matrix, exposure.
@@ -502,7 +504,10 @@ kernel void rl_develop(
     // reaches the red layer widest, the green a little and the blue (on top) not at all; its
     // colour is the light's own red. Bloom spreads every colour, and a diffusion filter also
     // spreads a little of all the light, which lowers contrast.
-    if (p.glow.x > 0.0f || p.glow.z > 0.0f) {
+    // Masks add to (or take from) the glow where they cover; the radii stay global.
+    float halationAmount = max(p.glow.x + localGlow.x, 0.0f);
+    float bloomAmount = max(p.glow.z + localGlow.y, 0.0f);
+    if (halationAmount > 0.0f || bloomAmount > 0.0f) {
         float3 toScene = p.wbRatio.xyz * p.tone.x * exp2(localTone.x);
         constexpr sampler glowSampler(coord::normalized, filter::linear, address::clamp_to_edge);
         // Inside an evenly bright area the scattered light is the area's own, which a print or
@@ -510,22 +515,22 @@ kernel void rl_develop(
         // surroundings send beyond the pixel's own highlight light.
         float3 own = glowSource.sample(glowSampler, sourceUV, level(0.0f)).rgb;
         float3 core;
-        if (p.glow.x > 0.0f) {
+        if (halationAmount > 0.0f) {
             float3 wide = p.render.y > 0.5f ? wideGlow(glowLights, sourceUV, p.glow.y, core)
                 : wideGlow(glowSource, sourceUV, p.glow.y, core);
             wide = max(mul3(p.camToWork0, p.camToWork1, p.camToWork2, max(wide - own, 0.0f) * toScene), 0.0f);
             core = max(mul3(p.camToWork0, p.camToWork1, p.camToWork2, max(core - own, 0.0f) * toScene), 0.0f);
-            float h = 0.12f * p.glow.x;
+            float h = 0.12f * halationAmount;
             scene.r += h * mix(dot(wide, kRec2020Luma), wide.r, 0.5f);
             scene.g += 0.25f * h * mix(dot(core, kRec2020Luma), core.g, 0.5f);
         }
-        if (p.glow.z > 0.0f) {
+        if (bloomAmount > 0.0f) {
             float3 spread = wideGlow(glowSource, sourceUV, p.glow.w, core);
             float3 highlights = max(mul3(p.camToWork0, p.camToWork1, p.camToWork2,
                 max(spread - own, 0.0f) * toScene), 0.0f);
             float3 all = max(mul3(p.camToWork0, p.camToWork1, p.camToWork2,
                 wideGlow(source, sourceUV, p.glow.w, core) * toScene), 0.0f);
-            scene = mix(scene, all, 0.1f * p.glow.z) + 0.08f * p.glow.z * highlights;
+            scene = mix(scene, all, 0.1f * bloomAmount) + 0.08f * bloomAmount * highlights;
         }
     }
     // Tone controls in log space around middle grey, applied as a luminance ratio.
