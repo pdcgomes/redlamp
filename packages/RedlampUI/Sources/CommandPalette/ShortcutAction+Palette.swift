@@ -69,6 +69,8 @@ extension ShortcutAction {
         .openFolder: ["import", "open", "folder", "photos"],
         .export: ["save", "jpeg", "heic", "avif", "png", "tiff", "export"],
         .exportWithPrevious: ["save", "again", "repeat", "last", "export"],
+        .mergeFocusStack: ["focus stacking", "stack", "merge", "depth of field", "macro", "bracketing"],
+        .editFocusStack: ["focus stacking", "stack", "frames", "depth", "retouch"],
         .showShortcuts: ["keys", "help", "shortcuts", "keyboard"],
         .filmLooks: ["film", "stocks", "looks"],
     ]
@@ -137,6 +139,8 @@ extension ShortcutAction {
         case .openFolder: "folder"
         case .export: "square.and.arrow.up"
         case .exportWithPrevious: "square.and.arrow.up.on.square"
+        case .mergeFocusStack: "square.stack.3d.down.right"
+        case .editFocusStack: "square.stack.3d.down.right.fill"
         case .showShortcuts: "keyboard"
         case .filmLooks: "film"
         default: "command"

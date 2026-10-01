@@ -131,6 +131,12 @@ public extension EditorModel {
             } else {
                 toggleCommandPalette(scope: .sliders)
             }
+        case .mergeFocusStack:
+            guard stackWorkspace == nil, let suggestion = stackSuggestions.first else { return false }
+            mergeStack(suggestion)
+        case .editFocusStack:
+            guard stackWorkspace == nil, let selection, SupportedFormats.isStack(selection) else { return false }
+            openStackWorkspace(selection)
         case .openFolder, .export, .exportWithPrevious, .filmLooks: return false
         default:
             return false
@@ -171,6 +177,8 @@ public extension EditorModel {
         case .autoWhiteBalance, .whiteBalanceSelector: return whiteBalance
         case .editTool, .maskingTool, .cancel, .showShortcuts, .openFolder, .filmLooks, .commandPalette:
             return true
+        case .mergeFocusStack: return stackWorkspace == nil && !stackSuggestions.isEmpty
+        case .editFocusStack: return stackWorkspace == nil && selection.map(SupportedFormats.isStack) == true
         case .linearMask: return photo && canCreateMask(.linear)
         case .radialMask: return photo && canCreateMask(.radial)
         case .brushMask: return photo && canCreateMask(.brush)

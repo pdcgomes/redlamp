@@ -1,5 +1,5 @@
-import RedlampUI
 import Testing
+@testable import RedlampUI
 
 struct ShortcutRegistryTests {
     @Test func `every key combo belongs to exactly one action`() {
@@ -12,10 +12,22 @@ struct ShortcutRegistryTests {
         }
     }
 
-    @Test func `every action has a key and a title`() {
+    @Test func `every action has a title`() {
         for action in ShortcutAction.allCases {
-            #expect(!action.combos.isEmpty, "\(action) has no key")
             #expect(!action.title.isEmpty)
+        }
+    }
+
+    @Test func `the shortcuts sheet lists every action with a key, and only those`() {
+        let listed = ShortcutAction.byCategory.flatMap(\.1)
+        #expect(listed.count == Set(listed).count)
+        #expect(Set(listed) == Set(ShortcutAction.allCases.filter { !$0.combos.isEmpty }))
+    }
+
+    @MainActor
+    @Test func `an action without a key is in the command palette`() {
+        for action in ShortcutAction.allCases where action.combos.isEmpty {
+            #expect(!PaletteCatalog.keyOnlyActions.contains(action), "\(action) has no key and isn't in the palette")
         }
     }
 

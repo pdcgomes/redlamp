@@ -130,7 +130,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case labelRed, labelYellow, labelGreen, labelBlue
 
     /// File & Edit
-    case openFolder, export, exportWithPrevious, showShortcuts, filmLooks, commandPalette
+    case openFolder, export, exportWithPrevious, mergeFocusStack, editFocusStack, showShortcuts, filmLooks
+    case commandPalette
 
     public var id: String {
         rawValue
@@ -160,7 +161,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .rating0, .rating1, .rating2, .rating3, .rating4, .rating5, .decreaseRating, .increaseRating,
              .flagPick, .flagReject, .unflag, .labelRed, .labelYellow, .labelGreen, .labelBlue:
             .rating
-        case .openFolder, .export, .exportWithPrevious, .showShortcuts, .filmLooks, .commandPalette:
+        case .openFolder, .export, .exportWithPrevious, .mergeFocusStack, .editFocusStack, .showShortcuts,
+             .filmLooks, .commandPalette:
             .file
         }
     }
@@ -247,6 +249,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .openFolder: "Open Folder…"
         case .export: "Export…"
         case .exportWithPrevious: "Export with Previous"
+        case .mergeFocusStack: "Merge to Focus Stack…"
+        case .editFocusStack: "Edit Focus Stack…"
         case .showShortcuts: "Keyboard Shortcuts"
         case .filmLooks: "Film Looks"
         case .findAdjustment: "Find Adjustment…"
@@ -337,6 +341,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .openFolder: [.char("o", command: true)]
         case .export: [.char("e", shift: true, command: true)]
         case .exportWithPrevious: [.char("e", shift: true, option: true, command: true)]
+        case .mergeFocusStack, .editFocusStack: []
         case .showShortcuts: [.char("/", command: true)]
         case .filmLooks: [.char("l", shift: true, command: true)]
         case .findAdjustment: [.char("f", command: true)]
@@ -376,8 +381,9 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         combos.first?.command ?? false
     }
 
+    /// The Keyboard Shortcuts sheet's groups: every action with a key.
     static let byCategory: [(ShortcutCategory, [ShortcutAction])] = ShortcutCategory.allCases.map { category in
-        (category, allCases.filter { $0.category == category })
+        (category, allCases.filter { $0.category == category && !$0.combos.isEmpty })
     }
 
     /// Resolves a key press. Exact matches win; actions that accept Shift also match

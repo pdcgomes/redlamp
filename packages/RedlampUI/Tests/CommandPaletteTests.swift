@@ -17,7 +17,6 @@ struct CommandPaletteTests: PaletteTesting {
         let rows = try palette(model).rows
         for action in ShortcutAction.allCases where !PaletteCatalog.keyOnlyActions.contains(action) {
             #expect(rows.count(where: { $0.kind == .action(action) }) == 1, "\(action)")
-            #expect(action.combos.first != nil)
         }
         for action in PaletteCatalog.keyOnlyActions {
             #expect(!rows.contains { $0.kind == .action(action) }, "\(action) only makes sense as a key")

@@ -99,11 +99,14 @@ struct EditorOverlays: View {
 /// The filmstrip floats at the bottom between the panels, in the same kind of pane, and
 /// keeps out of the way of editing: it slides in while the pointer is at the bottom edge or
 /// over it, and away shortly after the pointer leaves. With nothing selected it stays, as
-/// it is the way to pick a photo.
+/// it is the way to pick a photo. It also comes up for a few seconds when a focus stack is
+/// found, so its banner is seen.
 private struct FloatingFilmstrip: View {
     @Environment(EditorModel.self) private var model
     @Environment(ThemeSettings.self) private var theme
     @State private var revealed = false
+    @State private var overEdge = false
+    @State private var overStrip = false
     @State private var hiding: Task<Void, Never>?
 
     var body: some View {
@@ -112,11 +115,17 @@ private struct FloatingFilmstrip: View {
             Color.clear
                 .frame(height: PanelMetrics.filmstripTrigger)
                 .contentShape(Rectangle())
-                .onHover { inside in inside ? reveal() : scheduleHide() }
+                .onHover { inside in
+                    overEdge = inside
+                    hoverChanged()
+                }
             if shown {
                 FilmstripView()
                     .modifier(FloatingPane(opacity: theme.panelOpacity))
-                    .onHover { inside in inside ? reveal() : scheduleHide() }
+                    .onHover { inside in
+                        overStrip = inside
+                        hoverChanged()
+                    }
                     .padding(.horizontal, PanelMetrics.inset)
                     .padding(.bottom, PanelMetrics.inset)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -124,6 +133,20 @@ private struct FloatingFilmstrip: View {
         }
         .ignoresSafeArea(edges: .bottom)
         .animation(.snappy(duration: 0.25), value: shown)
+        .onChange(of: model.stackSuggestions) { old, new in
+            if new.contains(where: { !old.contains($0) }) {
+                reveal()
+                scheduleHide(after: .seconds(5))
+            }
+        }
+    }
+
+    private func hoverChanged() {
+        if overEdge || overStrip {
+            reveal()
+        } else {
+            scheduleHide()
+        }
     }
 
     private func reveal() {
@@ -132,11 +155,11 @@ private struct FloatingFilmstrip: View {
         revealed = true
     }
 
-    private func scheduleHide() {
+    private func scheduleHide(after delay: Duration = .milliseconds(600)) {
         hiding?.cancel()
         hiding = Task {
-            try? await Task.sleep(for: .milliseconds(600))
-            guard !Task.isCancelled else { return }
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled, !overEdge, !overStrip else { return }
             revealed = false
         }
     }
