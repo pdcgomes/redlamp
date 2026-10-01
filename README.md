@@ -658,7 +658,7 @@ Provia cross-processed: contrasty, with cool green-cyan shadows.
 
 ### Mood looks
 
-Ten one-tap looks in the spirit of Prequel's filters. Each starts from a film look, with its grain, halation and bloom, and adds the new Effects: **Light Leak** (Amount, Warmth and Variation), **Dust & Scratches**, and a **Frame**. Frames come as a keyline, a white print border, a 35 mm rebate with its sprocket holes, or a slide mount. They're in the sidebar under **Recipes ▸ Mood**, and the effects work on any photo.
+One-tap looks in the spirit of Prequel's filters. Each starts from a film look, with its grain, halation and bloom, and adds the new Effects: **Light Leak** (Amount, Warmth and Variation), **Dust & Scratches**, and a **Frame**. Frames come as a keyline, a white print border, a 35 mm rebate with its sprocket holes, or a slide mount. They're in the sidebar under **Recipes ▸ Mood**, and the effects work on any photo.
 
 | Mood | Built on | Adds |
 | --- | --- | --- |
@@ -674,6 +674,23 @@ Ten one-tap looks in the spirit of Prequel's filters. Each starts from a film lo
 | Neon Rain | Provia 100F · Cross-Processed | halation and a cool leak |
 
 ![The ten mood looks on three photos, beside the original](docs/images/film/moods.jpg)
+
+Ten more are **tuned on the photographs shot on each film**. `redlamp recipe film --fit-moods` fits the style fingerprint of a film's 20 reference photographs with the recipe studio's fitter, adjusting tone, saturation, grading and grain on top of the film's own look. The fitted values are pinned in the source. Shared film scans are bright and open, and the moods carry that. The fit leaves out per-colour hue and saturation, which follow the photographs' subjects more than the film.
+
+| Mood | Built on | Fitted to |
+| --- | --- | --- |
+| Portra Days | Portra 400 | bright, airy scans |
+| Ektar Colour | Ektar 100 | warm, vivid colour with open shadows |
+| Gold Summer | Gold 200 | sunny warmth, soft contrast, more grain |
+| Superia Snapshots | Superia 400 | bright, cool-leaning snapshots |
+| Wedding Day | Pro 400H | pastel, soft wedding scans |
+| CineStill Nights | CineStill 800T | deep shadows and a cool split tone |
+| Velvia Landscapes | Velvia 50 | open shadows and rich colour |
+| Kodachrome Memories | Kodachrome 64 | bright slides with cool shadows |
+| Tri-X Street | Tri-X 400 | open, bright street prints |
+| HP5 Documentary | HP5 Plus | bright midtones with deep blacks |
+
+![The ten fitted moods on three photos, beside the original](docs/images/film/moods-fitted.jpg)
 
 ### Checked against photographs shot on the films
 

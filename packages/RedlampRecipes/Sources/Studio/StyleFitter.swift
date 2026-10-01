@@ -127,8 +127,10 @@ public final class StyleFitter {
     }
 
     /// The candidate as a recipe the renderer can apply.
-    func recipe(_ candidate: Candidate, name: String, useLookTable: Bool, id: String) throws -> Recipe {
-        var values = candidate.values
+    /// `base` keeps another recipe's Base Look, effects and treatment underneath the candidate's
+    /// sliders, so a fit tunes a look rather than replacing it.
+    func recipe(_ candidate: Candidate, name: String, useLookTable: Bool, id: String, base: Recipe? = nil) throws -> Recipe {
+        var values = (base?.settings.values ?? [:]).merging(candidate.values) { $1 }
         func grade(_ tint: (a: Double, b: Double), hue: ParameterID, saturation: ParameterID) {
             let length = (tint.a * tint.a + tint.b * tint.b).squareRoot()
             guard length > 1e-4 else { return }
@@ -171,6 +173,11 @@ public final class StyleFitter {
             .whiteBalance,
             .toneCurve,
         ]
+        if let base, base.baseLook != nil {
+            baseLook = base.baseLook
+            looks = base.embeddedBaseLooks
+            includes.formUnion(base.includes)
+        }
         if baseLook != nil {
             includes.insert(.baseLook)
         }
@@ -178,6 +185,7 @@ public final class StyleFitter {
             id: id, name: name, group: "Fitted", tags: ["fitted"], includes: includes,
             settings: RecipeSettings(
                 values: values.filter { abs($0.value - $0.key.spec.defaultValue) > 1e-9 },
+                treatment: base?.settings.treatment,
                 whiteBalanceMode: .asShot,
                 pointCurve: curve,
             ),
@@ -205,8 +213,12 @@ public final class StyleFitter {
         evaluations budget: Int = 160,
         seed: UInt64 = 1,
         id: String = RecipeNamespace.newLocalID(),
+        onto base: Recipe? = nil,
+        excluding excluded: Set<ParameterID> = [],
     ) async throws -> Result {
-        let dimensions = dimensions(useLookTable: useLookTable)
+        let dimensions = dimensions(useLookTable: useLookTable).filter { dimension in
+            !excluded.contains { $0.rawValue == dimension.name }
+        }
         var best = Candidate()
         if let start {
             for (parameter, value) in start.settings.values {
@@ -216,7 +228,7 @@ public final class StyleFitter {
         var evaluations = 0
         func score(_ candidate: Candidate) async throws -> Double {
             evaluations += 1
-            return try await fingerprint(of: recipe(candidate, name: name, useLookTable: useLookTable, id: id))
+            return try await fingerprint(of: recipe(candidate, name: name, useLookTable: useLookTable, id: id, base: base))
                 .distance(to: target)
         }
         var bestScore = try await score(best)
@@ -258,7 +270,7 @@ public final class StyleFitter {
                 break
             }
         }
-        var fitted = try recipe(best, name: name, useLookTable: useLookTable, id: id)
+        var fitted = try recipe(best, name: name, useLookTable: useLookTable, id: id, base: base)
         if useLookTable, let package = fitted.embeddedBaseLooks.first {
             // Store the final look at full resolution.
             let table = try LookSynthesizer.table(for: best.design)

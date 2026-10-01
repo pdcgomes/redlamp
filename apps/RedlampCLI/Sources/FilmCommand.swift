@@ -14,6 +14,10 @@ enum FilmCommand {
     static func run(_ context: RecipeCommands.Context) async throws {
         let arguments = context.arguments
         let data = Repository.root.appendingPathComponent("research/film-data")
+        if arguments.has("--fit-moods") {
+            try await fitMoods(context)
+            return
+        }
         if arguments.has("--validate") {
             try await renderForValidation(context)
             return
@@ -157,6 +161,52 @@ enum FilmCommand {
         let map = Dictionary(uniqueKeysWithValues: looks.map { ($0.id, $0.film) })
         try JSONSerialization.data(withJSONObject: map, options: [.prettyPrinted, .sortedKeys])
             .write(to: output.appendingPathComponent("looks.json"))
+        print("wrote \(output.path)")
+    }
+
+    /// Mood looks tuned on photographs shot on each film: the film's recipe, with sliders fitted
+    /// to the photographs' style fingerprint (`StyleFitter`) on varied look-development images.
+    static let fittedMoods: [(slug: String, name: String, look: String, references: String)] = [
+        ("portra-days", "Portra Days", "portra-400", "kodak-portra-400"),
+        ("ektar-colour", "Ektar Colour", "ektar-100", "kodak-ektar-100"),
+        ("gold-summer", "Gold Summer", "gold-200", "kodak-gold-200"),
+        ("superia-snapshots", "Superia Snapshots", "superia-400", "fuji-superia-xtra-400"),
+        ("wedding-day", "Wedding Day", "pro-400h", "fuji-pro-400h"),
+        ("cinestill-nights", "CineStill Nights", "cinestill-800t", "cinestill-800t"),
+        ("velvia-landscapes", "Velvia Landscapes", "velvia-50", "fuji-velvia-50"),
+        ("kodachrome-memories", "Kodachrome Memories", "kodachrome-64", "kodak-kodachrome-64"),
+        ("tri-x-street", "Tri-X Street", "tri-x-400", "kodak-tri-x-400"),
+        ("hp5-documentary", "HP5 Documentary", "hp5-plus", "ilford-hp5-plus"),
+    ]
+
+    /// `--fit-moods`: fits each of `fittedMoods` and writes the slider values it found to
+    /// `build/film/fitted-moods.json`, to be reviewed and pinned in `MoodLooks`.
+    private static func fitMoods(_ context: RecipeCommands.Context) async throws {
+        let renderer = try context.renderer()
+        let all = LookDev.images()
+        let images = stride(from: 0, to: all.count, by: max(all.count / 8, 1)).prefix(8).map { all[$0] }
+        let fitter = StyleFitter(renderer: renderer, images: images)
+        var results: [String: [String: Double]] = [:]
+        for mood in fittedMoods {
+            guard let look = FilmLookCatalog.look(mood.look), let base = BuiltInRecipes.recipe(id: look.recipeID) else {
+                throw CLIError(description: "no bundled film look \(mood.look)")
+            }
+            let folder = Repository.root.appendingPathComponent("build/film-references/\(mood.references)")
+            let photos = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+                .filter { ["jpg", "jpeg", "png"].contains($0.pathExtension.lowercased()) }
+            let target = try StyleFingerprint.average(photos.map(RecipeCommands.measure))
+            // Per-band hue and saturation mostly follow the photographs' subjects, not the film.
+            let result = try await fitter.fit(
+                to: target, name: mood.name, evaluations: context.arguments.int("--evaluations") ?? 200, onto: base,
+                excluding: [.hueOrange, .hueGreen, .hueBlue, .saturationGreen, .saturationBlue],
+            )
+            let fitted = result.recipe.settings.values.filter { key, value in base.settings.values[key] != value }
+            results[mood.slug] = Dictionary(uniqueKeysWithValues: fitted.map { ($0.key.rawValue, $0.value) })
+            let from = String(format: "%.3f", result.startDistance), to = String(format: "%.3f", result.distance)
+            print("\(mood.slug): \(photos.count) photographs, distance \(from) → \(to): \(fitted.count) sliders")
+        }
+        let output = Repository.root.appendingPathComponent("build/film/fitted-moods.json")
+        try JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys]).write(to: output)
         print("wrote \(output.path)")
     }
 }
