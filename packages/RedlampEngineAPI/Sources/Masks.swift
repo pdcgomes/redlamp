@@ -1,6 +1,11 @@
 import Foundation
 
 /// A point in normalised, oriented image coordinates: (0, 0) top-left, (1, 1) bottom-right.
+///
+/// This is the canonical mask space (DEC-07): the photo as its EXIF orientation shows it, before
+/// crop, Transform and lens correction. A user's rotation or flip is geometry after it, like crop,
+/// and each of those maps mask points forward, so masks stay on the same content. Shapes are
+/// anchored here but built in the corrected image, so an ellipse stays an ellipse on screen.
 public struct ImagePoint: Codable, Sendable, Hashable {
     public var x: Double
     public var y: Double

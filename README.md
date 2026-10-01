@@ -565,7 +565,7 @@ flowchart LR
 
 Redlamp is at an early stage and moving quickly. Issues and discussion are very welcome.
 
-- **Clean-room policy.** No GPL or LGPL code. Algorithms are implemented from published papers and specifications. Please don't port code from darktable, RawTherapee, or other GPL projects, and if you have studied a GPL implementation of something, please don't write Redlamp's version of it.
+- **Clean-room policy.** No GPL or LGPL code or data. Algorithms are implemented from published papers and specifications. Reading GPL projects such as darktable and RawTherapee to understand an idea is fine, but never port, translate or paraphrase their code, and never copy their data (profiles, tables, presets).
 - **Third-party components:** LibRaw is used under its CDDL-1.0 option. Planned additions are lcms2 (MIT) and the lensfun database (CC-BY-SA, data only).
 - **Conventions:**
   - Run `mise run lint` and `mise run test` before sending changes.
