@@ -182,6 +182,7 @@ public struct FilmCatalogView: View {
             Text(look.summary).font(.callout).foregroundStyle(.secondary).lineLimit(2, reservesSpace: true)
             if applied {
                 effectSliders
+                stylePicker
             } else {
                 Text(effectsLine(look)).font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
             }
@@ -199,6 +200,29 @@ public struct FilmCatalogView: View {
             model.applyRecipe(recipe)
         }
         .help(model.info == nil ? look.summary : applied ? look.summary : "Click to apply \(look.name)")
+    }
+
+    /// Natural, Soft, Warm, Punchy or Faded on top of the applied look, as one history step.
+    private var stylePicker: some View {
+        let current = FilmLookStyle.allCases.first { style in
+            FilmLookStyle.parameters.allSatisfy { model.recipe[$0] == (style.values[$0] ?? $0.spec.defaultValue) }
+        }
+        return Picker("Style", selection: Binding(
+            get: { current ?? .natural },
+            set: { style in
+                model.beginEdit()
+                for parameter in FilmLookStyle.parameters {
+                    model.setValue(parameter, style.values[parameter] ?? parameter.spec.defaultValue)
+                }
+                model.endEdit(name: "Film Style: \(style.name)")
+            },
+        )) {
+            ForEach(FilmLookStyle.allCases, id: \.self) { Text($0.name).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.small)
+        .padding(.top, 2)
     }
 
     /// The applied look's film effects, adjustable here as in the Effects panel.
