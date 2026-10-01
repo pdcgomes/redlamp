@@ -117,7 +117,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case previousSetting, nextSetting, increaseSetting, decreaseSetting, findAdjustment
 
     // Tools
-    case editTool, cropTool, healTool, maskingTool, cropAspectLock
+    case editTool, cropTool, healTool, maskingTool, cropAspectLock, rotateLeft, rotateRight
     case brushMask, linearMask, radialMask, colorRangeMask, luminanceRangeMask, depthRangeMask
 
     /// Masking
@@ -153,7 +153,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
              .autoWhiteBalance, .toggleBlackAndWhite, .whiteBalanceSelector, .newSnapshot, .newPreset,
              .virtualCopy, .previousSetting, .nextSetting, .increaseSetting, .decreaseSetting, .findAdjustment:
             .develop
-        case .editTool, .cropTool, .healTool, .maskingTool, .cropAspectLock, .brushMask, .linearMask,
+        case .editTool, .cropTool, .healTool, .maskingTool, .cropAspectLock, .rotateLeft, .rotateRight, .brushMask,
+             .linearMask,
              .radialMask, .colorRangeMask, .luminanceRangeMask, .depthRangeMask:
             .tools
         case .maskOverlay, .maskOverlayColor, .maskPins, .deleteMask, .cancel:
@@ -220,6 +221,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .healTool: "Healing"
         case .maskingTool: "Masking"
         case .cropAspectLock: "Lock Crop Aspect"
+        case .rotateLeft: "Rotate Left"
+        case .rotateRight: "Rotate Right"
         case .brushMask: "Brush Mask"
         case .linearMask: "Linear Gradient Mask"
         case .radialMask: "Radial Gradient Mask"
@@ -312,6 +315,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .healTool: [.char("q")]
         case .maskingTool: [.char("w", shift: true)]
         case .cropAspectLock: [.char("a")]
+        case .rotateLeft: [.char("[", command: true)]
+        case .rotateRight: [.char("]", command: true)]
         case .brushMask: [.char("k")]
         case .linearMask: [.char("m")]
         case .radialMask: [.char("m", shift: true)]
@@ -365,7 +370,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     /// Where the feature lands on the roadmap; `nil` once it works.
     public var plannedPhase: String? {
         switch self {
-        case .cropTool, .cropAspectLock, .virtualCopy:
+        case .virtualCopy:
             "Phase 2"
         case .healTool: "Phase 3"
         default: nil

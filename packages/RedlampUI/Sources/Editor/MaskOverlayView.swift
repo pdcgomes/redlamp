@@ -13,7 +13,7 @@ struct MaskOverlayView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let frame = ImageFrame(rect: model.canvas.imageRect(in: geometry.size))
+            let frame = ImageFrame(rect: model.canvas.imageRect(in: geometry.size), geometry: model.canvasGeometry)
             ZStack {
                 if model.isBrushing {
                     BrushCanvas(frame: frame)
@@ -304,21 +304,30 @@ private struct ObjectPicker: View {
 /// Converts between normalised image coordinates and view points.
 struct ImageFrame {
     let rect: CGRect
+    /// How the photo maps to the frame on the canvas (crop, straighten, Transform, rotation);
+    /// masks live in the photo's own coordinates.
+    var geometry: GeometryMap?
 
     func view(_ point: ImagePoint) -> CGPoint {
-        CGPoint(x: rect.minX + point.x * rect.width, y: rect.minY + point.y * rect.height)
+        let image = SIMD2(point.x, point.y)
+        let shown = geometry?.isIdentity == false ? geometry?.outputPoint(image) ?? image : image
+        return CGPoint(x: rect.minX + shown.x * rect.width, y: rect.minY + shown.y * rect.height)
     }
 
     func image(_ point: CGPoint) -> ImagePoint {
-        ImagePoint(
-            x: (point.x - rect.minX) / max(rect.width, 1),
-            y: (point.y - rect.minY) / max(rect.height, 1),
-        )
+        let shown = SIMD2((point.x - rect.minX) / max(rect.width, 1), (point.y - rect.minY) / max(rect.height, 1))
+        let image = geometry?.isIdentity == false ? geometry?.imagePoint(shown) ?? shown : shown
+        return ImagePoint(x: image.x, y: image.y)
     }
 
-    /// View points per unit of image height (radial radii are in image heights).
+    /// View points per unit of image height (radial radii are in image heights), at the
+    /// frame's centre.
     var heightScale: CGFloat {
-        rect.height
+        guard geometry?.isIdentity == false else { return rect.height }
+        let centre = image(CGPoint(x: rect.midX, y: rect.midY))
+        let a = view(centre)
+        let b = view(ImagePoint(x: centre.x, y: centre.y + 0.01))
+        return hypot(b.x - a.x, b.y - a.y) / 0.01
     }
 }
 

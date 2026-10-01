@@ -1,0 +1,152 @@
+import CoreGraphics
+import RedlampEngineAPI
+
+/// The crop's aspect ratio presets, Lightroom's.
+public enum CropAspect: Hashable, Sendable, CaseIterable {
+    case free, original, square, fourByFive, fiveBySeven, twoByThree, sixteenByNine
+
+    public var title: String {
+        switch self {
+        case .free: "Custom"
+        case .original: "Original"
+        case .square: "1 × 1"
+        case .fourByFive: "4 × 5 / 8 × 10"
+        case .fiveBySeven: "5 × 7"
+        case .twoByThree: "2 × 3 / 4 × 6"
+        case .sixteenByNine: "16 × 9"
+        }
+    }
+
+    /// Width over height for a landscape frame; nil when free.
+    func ratio(original: PixelSize) -> Double? {
+        switch self {
+        case .free: nil
+        case .original: original.aspectRatio
+        case .square: 1
+        case .fourByFive: 5.0 / 4
+        case .fiveBySeven: 7.0 / 5
+        case .twoByThree: 3.0 / 2
+        case .sixteenByNine: 16.0 / 9
+        }
+    }
+}
+
+public extension EditorModel {
+    /// The geometry of the frame on the canvas: the developed frame, or in the crop tool the
+    /// whole straightened frame the crop is drawn on.
+    var canvasGeometry: GeometryMap? {
+        info.map { GeometryMap(recipe: recipe, imageSize: $0.pixelSize, includesCrop: activeTool != .crop) }
+    }
+
+    /// The photo point (EXIF-oriented, 0...1) behind a canvas point (0...1 across the frame).
+    func imagePoint(forCanvas point: CGPoint) -> CGPoint? {
+        guard let geometry = canvasGeometry else { return point }
+        return geometry.imagePoint(SIMD2(point.x, point.y)).map { CGPoint(x: $0.x, y: $0.y) }
+    }
+
+    /// The pixel size of the straightened frame the crop is cut from.
+    var cropFrameSize: PixelSize {
+        info.map { GeometryMap(recipe: recipe, imageSize: $0.pixelSize, includesCrop: false).outputSize } ?? .zero
+    }
+
+    /// The crop's aspect as width over height, in pixels of the straightened frame.
+    func pixelAspect(of crop: CropRect) -> Double {
+        let frame = cropFrameSize
+        return crop.width * Double(frame.width) / max(crop.height * Double(frame.height), 1e-9)
+    }
+
+    /// Sets the crop while drawing it (bracket a drag with `beginEdit` and `endEdit`).
+    func setCrop(_ crop: CropRect) {
+        var next = recipe
+        next.crop = crop
+        cropIntent = crop
+        constrainCrop(&next)
+        guard next != recipe else { return }
+        apply(next)
+    }
+
+    /// Picks an aspect and fits the crop to it about its centre, as large as it can be.
+    func setCropAspect(_ aspect: CropAspect) {
+        cropAspect = aspect
+        guard let ratio = aspect.ratio(original: info?.pixelSize ?? cropFrameSize) else { return }
+        let frame = cropFrameSize
+        let current = recipe.crop
+        // Keep the crop's orientation: a portrait crop stays portrait.
+        let wanted = pixelAspect(of: current) >= 1 ? ratio : 1 / ratio
+        let frameAspect = Double(frame.width) / max(Double(frame.height), 1)
+        var width = 1.0, height = 1.0
+        if wanted > frameAspect {
+            height = frameAspect / wanted
+        } else {
+            width = wanted / frameAspect
+        }
+        let center = current.center
+        var crop = CropRect(
+            left: center.x - width / 2, top: center.y - height / 2, right: center.x + width / 2,
+            bottom: center.y + height / 2,
+        )
+        crop = Self.shifted(crop, inside: .full)
+        var next = recipe
+        next.crop = crop
+        cropIntent = crop
+        constrainCrop(&next)
+        commit(next, name: "Crop Aspect")
+    }
+
+    /// Turns the photo a quarter, the crop with it.
+    func rotate(clockwise: Bool) {
+        var next = recipe
+        let crop = next.crop
+        next.orientation = clockwise ? next.orientation.rotatedClockwise : next.orientation.rotatedCounterclockwise
+        next.crop = clockwise
+            ? CropRect(left: 1 - crop.bottom, top: crop.left, right: 1 - crop.top, bottom: crop.right)
+            : CropRect(left: crop.top, top: 1 - crop.right, right: crop.bottom, bottom: 1 - crop.left)
+        cropIntent = next.crop
+        commit(next, name: clockwise ? "Rotate Right" : "Rotate Left")
+    }
+
+    /// Mirrors the photo as shown, keeping the same crop of it.
+    func flip(horizontally: Bool) {
+        var next = recipe
+        let crop = next.crop
+        next.orientation = horizontally ? next.orientation.flippedHorizontally : next.orientation.flippedVertically
+        next.crop = horizontally
+            ? CropRect(left: 1 - crop.right, top: crop.top, right: 1 - crop.left, bottom: crop.bottom)
+            : CropRect(left: crop.left, top: 1 - crop.bottom, right: crop.right, bottom: 1 - crop.top)
+        // A mirrored photo turns the other way: the same angle would tilt it further.
+        next[.cropAngle] = -next[.cropAngle]
+        cropIntent = next.crop
+        commit(next, name: horizontally ? "Flip Horizontal" : "Flip Vertical")
+    }
+
+    /// Removes the crop, angle and orientation.
+    func resetCrop() {
+        var next = recipe
+        next.crop = .full
+        next.orientation = .identity
+        next[.cropAngle] = 0
+        cropIntent = .full
+        commit(next, name: "Reset Crop")
+    }
+
+    /// Fits the crop as last drawn inside the photo, when Constrain to Image is on.
+    internal func constrainCrop(_ next: inout EditRecipe) {
+        guard constrainCropToImage, let info else { return }
+        next.crop = GeometryMap.constrained(
+            cropIntent, imageSize: info.pixelSize, orientation: next.orientation, angle: next[.cropAngle],
+            transform: Transform(recipe: next),
+        )
+    }
+
+    /// `crop` moved (not resized) to lie inside `bounds` where it can.
+    internal static func shifted(_ crop: CropRect, inside bounds: CropRect) -> CropRect {
+        var crop = crop
+        let dx = max(bounds.left - crop.left, 0) - max(crop.right - bounds.right, 0)
+        let dy = max(bounds.top - crop.top, 0) - max(crop.bottom - bounds.bottom, 0)
+        crop.left += dx
+        crop.right += dx
+        crop.top += dy
+        crop.bottom += dy
+        return crop
+    }
+}

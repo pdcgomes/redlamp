@@ -37,6 +37,8 @@ final class InspectorPanelsView: NSView {
             ]
         case .masking:
             [MaskingPanelView(model: model)]
+        case .crop:
+            [HostedControl(model: model, CropToolPanel())] + PanelRows(model: model).sliders([.cropAngle])
         default:
             [HostedControl(model: model, PlannedToolCard(tool: tool))]
         }

@@ -119,6 +119,8 @@ extension ShortcutAction {
         case .virtualCopy: "square.on.square"
         case .editTool: EditTool.edit.symbol
         case .cropTool, .cropAspectLock: EditTool.crop.symbol
+        case .rotateLeft: "rotate.left"
+        case .rotateRight: "rotate.right"
         case .healTool: EditTool.heal.symbol
         case .maskingTool: EditTool.masking.symbol
         case .brushMask: MaskKind.brush.symbol

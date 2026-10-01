@@ -17,7 +17,8 @@ struct CanvasArea: View {
                 CanvasView(
                     feed: model.frames,
                     controller: model.canvas,
-                    clickAction: model.activeTool == .masking ? .none : (model.eyedropperActive ? .sample : .zoom),
+                    clickAction: model.activeTool == .masking || model.activeTool == .crop
+                        ? .none : (model.eyedropperActive ? .sample : .zoom),
                     surround: model.colorAssessment
                         ? CanvasMetalView.assessmentSurround
                         : [CanvasMetalView.defaultSurround, 0.003, 0][min(model.lightsOut, 2)],
@@ -38,6 +39,11 @@ struct CanvasArea: View {
             // Full canvas: mask geometry uses the same coordinates as the Metal view.
             if model.activeTool == .masking, model.info != nil, !model.isShowingOriginal {
                 MaskOverlayView()
+            }
+        }
+        .overlay {
+            if model.activeTool == .crop, model.info != nil, !model.isShowingOriginal {
+                CropOverlayView()
             }
         }
         .overlay {

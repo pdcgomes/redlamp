@@ -198,6 +198,22 @@ public final class EditorModel {
         }
     }
 
+    /// Crop tool settings: the aspect the crop keeps, and whether it stays inside the photo
+    /// (Lightroom's Constrain to Image).
+    public var cropAspect: CropAspect = .original
+    public var cropAspectLocked = true
+    public var constrainCropToImage = true {
+        didSet {
+            guard constrainCropToImage, !oldValue else { return }
+            var next = recipe
+            constrainCrop(&next)
+            commit(next, name: "Constrain to Image")
+        }
+    }
+
+    /// The crop as last drawn, which Angle and Transform changes fit inside the photo again.
+    @ObservationIgnored var cropIntent: CropRect = .full
+
     // MARK: Masking state
 
     public var selectedMaskID: UUID? {
@@ -471,10 +487,12 @@ public final class EditorModel {
         history = [HistoryStep(name: sidecar == nil ? "Import" : "Opened with edits", recipe: loaded)]
         historyIndex = 0
         isLoading = false
+        cropIntent = loaded.crop
+        let frameSize = loaded.developedSize(imageSize: opened.pixelSize)
         if !hasFrame {
-            showOnCanvas(opened.pixelSize)
+            showOnCanvas(frameSize)
         } else {
-            pendingCanvas = (opened.pixelSize, generation &+ 1)
+            pendingCanvas = (frameSize, generation &+ 1)
         }
         requestRender()
     }
@@ -497,14 +515,23 @@ public final class EditorModel {
     }
 
     public func requestRender() {
-        guard info != nil else { return }
+        guard let info else { return }
+        var displayed = isShowingOriginal
+            ? beforeRecipe.withGeometry(of: recipe)
+            : (previewingEdit ?? previewingRecipe.map { previewEdit(for: $0) } ?? recipe)
+        // The crop tool shows the whole straightened frame, with the crop drawn over it.
+        if activeTool == .crop {
+            displayed.crop = .full
+        }
+        // A new frame size shows once a frame of that size arrives.
+        let frameSize = displayed.developedSize(imageSize: info.pixelSize)
+        if pendingCanvas == nil, frameSize != canvas.imageSize, canvas.imageSize.width > 0 {
+            pendingCanvas = (frameSize, generation &+ 1)
+        }
         let target = pendingCanvas.map { CanvasController.RenderTarget(size: canvas.fitRenderSize(for: $0.imageSize)) }
             ?? canvas.renderTarget
         guard target.size.width > 0 else { return }
         generation &+= 1
-        let displayed = isShowingOriginal
-            ? beforeRecipe
-            : (previewingEdit ?? previewingRecipe.map { previewEdit(for: $0) } ?? recipe)
         let overlay = activeTool == .masking && showMaskOverlay && !isShowingOriginal ? selectedMaskID : nil
         var request = RenderRequest(
             recipe: displayed,
@@ -593,6 +620,9 @@ public final class EditorModel {
     public func setValue(_ parameter: ParameterID, _ value: Double) {
         var next = recipe
         next[parameter] = parameter.spec.quantize(value)
+        if EditRecipe.geometryParameters.contains(parameter) {
+            constrainCrop(&next)
+        }
         if parameter == .temperature || parameter == .tint {
             next.whiteBalanceMode = matchesAsShot(next) ? .asShot : .custom
         }
@@ -697,7 +727,8 @@ public final class EditorModel {
 
     public func sampleWhiteBalance(at point: CGPoint) {
         Task {
-            if let wb = await engine.whiteBalance(sampledAt: point) {
+            guard let photoPoint = imagePoint(forCanvas: point) else { return }
+            if let wb = await engine.whiteBalance(sampledAt: photoPoint) {
                 applyWhiteBalance(wb, mode: .custom, name: "White Balance: Selector")
             }
             eyedropperActive = false
@@ -810,6 +841,17 @@ public final class EditorModel {
         recipe = next
         requestRender()
         scheduleSave()
+    }
+
+    /// A live change, such as dragging the crop: history records one step when the drag ends.
+    func apply(_ next: EditRecipe, name: String = "Crop") {
+        guard next != recipe else { return }
+        recipe = next
+        requestRender()
+        scheduleSave()
+        if editStart == nil {
+            recordHistory(name)
+        }
     }
 
     func commit(_ next: EditRecipe, name: String) {

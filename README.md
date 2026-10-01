@@ -800,7 +800,7 @@ The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on mac
 - [x] Golden-image color regression tests (ΔE2000) for camera files, and a golden render for every bundled recipe version
 - [ ] Written clean-room policy and a license-audit gate in CI
 
-### Phase 1: First light *(in progress; iterations 1 and 2 done)*
+### Phase 1: First light *(done)*
 - [x] RAW pipeline core, fused develop kernel, cached pyramid, and latest-wins rendering
 - [x] Develop workspace on macOS, Basic panel, histogram, before/after, sidecars, undo, and export
 - [x] Layer and mask engine, with linear and radial gradient masks, local adjustments, and the Masking panel
@@ -820,7 +820,8 @@ The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on mac
 - [ ] Full DCP camera profiles (dual and triple illuminant), ICC input profiles, and `.3dl` and log-space LUT import
 - [ ] **Film effects for recipes:** halation (the red glow around bright lights), bloom and diffusion, and film grain that varies with density and scales with output size
 - [ ] Lens corrections from the lensfun database, Adobe LCP import, and DNG opcodes
-- [ ] Crop and straighten, Transform and Upright
+- [x] **Crop and straighten** (aspect presets and lock, Angle, Constrain to Image), rotate and flip, and the manual Transform sliders, all one geometry map that masks follow
+- [ ] Upright (Auto, Level, Vertical, Full, Guided), the crop overlays beyond thirds, and a straighten tool
 - [x] Brush, color range, and luminance range masks, and Vision AI masks (subject, sky, background, people)
 - [ ] Slider-feel calibration against Lightroom, and Lightroom XMP preset import
 - [ ] Photos library integration and a Photos editing extension
@@ -1036,7 +1037,7 @@ Redlamp follows Lightroom Classic's Develop-module shortcuts. Press **⌘/** in 
 | **Panels** | `Tab` hide side panels · `⇧Tab` hide all · `F6` filmstrip · `F7` left panel · `F8` right panel · `⌘1`–`⌘9` open or close Basic, Tone Curve, Color Mixer, Color Grading, Detail, Lens Corrections, Transform, Effects, Calibration |
 | **Navigation** | `←` `→` or `⌘←` `⌘→` previous/next photo |
 | **Develop** | `,` `.` select previous/next setting · `-` `=` decrease/increase it (`⇧` for larger steps) · `V` black & white · `W` white-balance selector · `⌘U` auto settings · `⇧⌘U` auto white balance · `⇧⌘C` / `⇧⌘V` copy/paste settings · `⌥⌘V` paste from previous · `⇧⌘R` reset all · `⌘N` new snapshot · `⌘Z` / `⇧⌘Z` undo/redo · hold `⌥` to turn group titles into "Reset …" |
-| **Tools** | `D` Edit · `⇧W` Masking · `M` linear gradient · `⇧M` radial gradient · `K` brush · `⇧J` color range · `⇧Q` luminance range · `⇧Z` depth range · `R` crop, `A` crop aspect lock *(Phase 2)* · `Q` healing *(Phase 3)* |
+| **Tools** | `D` Edit · `⇧W` Masking · `M` linear gradient · `⇧M` radial gradient · `K` brush · `⇧J` color range · `⇧Q` luminance range · `⇧Z` depth range · `R` crop, `A` crop aspect lock, `⌘[` / `⌘]` rotate left and right · `Q` healing *(Phase 3)* |
 | **Masking** | `O` show/hide overlay · `⇧O` cycle overlay color · `H` show/hide pins · `⌫` delete selected mask · `Esc` finish drawing or leave the tool · brushing: `[` `]` size (`⇧` feather), hold `⌥` to erase · Objects: `⌥`-click to take away |
 | **Rating & flags** | `0`–`5` star rating · `[` `]` decrease/increase rating · `P` pick · `X` reject · `U` unflag · `6`–`9` red, yellow, green, blue label · add `⇧` to any of these to also move to the next photo |
 | **File** | `⌘O` open folder · `⇧⌘E` export · `⌥⇧⌘E` export with previous · `⌘/` keyboard shortcuts · `⇧⌘L` Film Looks window · `⌘K` command palette (`⌘F` for sliders only) |

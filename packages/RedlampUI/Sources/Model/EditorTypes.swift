@@ -236,8 +236,7 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
     /// Where the tool lands on the roadmap; `nil` once it is live.
     public var plannedPhase: String? {
         switch self {
-        case .edit, .masking: nil
-        case .crop: "Phase 2"
+        case .edit, .masking, .crop: nil
         case .heal, .redEye: "Phase 3"
         }
     }

@@ -12,7 +12,6 @@ public extension EditorModel {
         guard action.isAvailable else {
             // Planned tools still open their tool card, so the shortcut is discoverable.
             switch action {
-            case .cropTool: activeTool = .crop
             case .healTool: activeTool = .heal
             default: return false
             }
@@ -84,6 +83,10 @@ public extension EditorModel {
         // Tools
         case .editTool: activeTool = .edit
         case .maskingTool: activeTool = activeTool == .masking ? .edit : .masking
+        case .cropTool: activeTool = activeTool == .crop ? .edit : .crop
+        case .cropAspectLock: cropAspectLocked.toggle()
+        case .rotateLeft: rotate(clockwise: false)
+        case .rotateRight: rotate(clockwise: true)
         case .linearMask: startDrawing(.linear)
         case .radialMask: startDrawing(.radial)
         case .brushMask: startDrawing(.brush)
@@ -177,6 +180,8 @@ public extension EditorModel {
         case .autoWhiteBalance, .whiteBalanceSelector: return whiteBalance
         case .editTool, .maskingTool, .cancel, .showShortcuts, .openFolder, .filmLooks, .commandPalette:
             return true
+        case .cropTool, .rotateLeft, .rotateRight: return photo
+        case .cropAspectLock: return activeTool == .crop
         case .mergeFocusStack: return stackWorkspace == nil && !stackSuggestions.isEmpty
         case .editFocusStack: return stackWorkspace == nil && selection.map(SupportedFormats.isStack) == true
         case .linearMask: return photo && canCreateMask(.linear)

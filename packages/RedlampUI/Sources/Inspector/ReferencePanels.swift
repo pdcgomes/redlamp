@@ -233,6 +233,10 @@ struct ProcessVersion: View {
                     SwiftUIDevelopPanels()
                 } else if model.activeTool == .masking {
                     MaskingPanel()
+                } else if model.activeTool == .crop {
+                    CropToolPanel()
+                    ParameterSlider(parameter: .cropAngle)
+                        .padding(.horizontal, Theme.panelPadding)
                 } else {
                     PlannedToolCard(tool: model.activeTool)
                 }
