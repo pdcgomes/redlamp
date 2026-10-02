@@ -82,10 +82,10 @@ public extension EditorModel {
     }
 
     /// Pasted AI masks were made for another photo: compute them again for this one, as
-    /// Lightroom does when syncing.
-    func updatePastedAIMasks() {
-        guard aiMaskCount > 0 else { return }
-        Task { await updateAIMasks() }
+    /// Lightroom does when syncing. Only `masks`, the ones pasted, when given.
+    func updatePastedAIMasks(_ masks: Set<UUID>? = nil) {
+        guard aiMaskCount > 0, masks?.isEmpty != true else { return }
+        Task { await updateAIMasks(in: masks) }
     }
 
     /// Snaps an AI mask's edges to the photo's (a wider guided filter than when it was made).

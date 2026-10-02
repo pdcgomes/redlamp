@@ -355,7 +355,14 @@ public final class EditorModel {
     var recipeApplication: (recipe: Recipe, base: EditRecipe)?
     /// The photo's auto white balance, for recipes that ask for it.
     @ObservationIgnored var autoWhiteBalance: WhiteBalanceValue?
-    public private(set) var hasClipboard = false
+    public internal(set) var hasClipboard = false
+    /// The Copy Settings checklist, while it is open.
+    public var settingsChooser: SettingsChooser?
+    /// What the checklist ticked last time (the first time, `SettingsSelection.default`).
+    public internal(set) var copySelection = SettingsSelection.saved() {
+        didSet { copySelection.save() }
+    }
+
     /// An app-modal dialog (Export) is open: every action is unavailable, so menus, keys and
     /// the palette can't change the photo behind it.
     public internal(set) var isModalDialogOpen = false
@@ -369,7 +376,7 @@ public final class EditorModel {
     @ObservationIgnored public var onCompareLayoutChange: ((CompareLayout) -> Void)?
 
     @ObservationIgnored private var temporaryClipping = false
-    @ObservationIgnored private var clipboard: EditRecipe?
+    @ObservationIgnored var clipboard: CopiedSettings?
     @ObservationIgnored var pendingDrawingName: String?
     @ObservationIgnored var pendingDrawingKind: MaskKind?
     @ObservationIgnored var editStart: EditRecipe?
@@ -943,19 +950,6 @@ public final class EditorModel {
         recordHistory(action, title, from: previous, value: value)
         requestRender()
         scheduleSave()
-    }
-
-    // MARK: - Copy / paste
-
-    public func copySettings() {
-        clipboard = recipe
-        hasClipboard = true
-    }
-
-    public func pasteSettings() {
-        guard let clipboard else { return }
-        commit(clipboard, .paste, "Paste Settings")
-        updatePastedAIMasks()
     }
 
     // MARK: - Panels

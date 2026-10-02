@@ -111,7 +111,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case previousPhoto, nextPhoto
 
     // Develop
-    case undo, redo, copySettings, pasteSettings, pastePrevious, resetAll
+    case undo, redo, copySettings, copySettingsAgain, pasteSettings, pastePrevious, resetAll
     case autoTone, autoWhiteBalance, toggleBlackAndWhite, whiteBalanceSelector
     case newSnapshot, newPreset, virtualCopy
     case previousSetting, nextSetting, increaseSetting, decreaseSetting, findAdjustment
@@ -149,7 +149,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
             .panels
         case .previousPhoto, .nextPhoto:
             .navigation
-        case .undo, .redo, .copySettings, .pasteSettings, .pastePrevious, .resetAll, .autoTone,
+        case .undo, .redo, .copySettings, .copySettingsAgain, .pasteSettings, .pastePrevious, .resetAll, .autoTone,
              .autoWhiteBalance, .toggleBlackAndWhite, .whiteBalanceSelector, .newSnapshot, .newPreset,
              .virtualCopy, .previousSetting, .nextSetting, .increaseSetting, .decreaseSetting, .findAdjustment:
             .develop
@@ -201,7 +201,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .nextPhoto: "Next Photo"
         case .undo: "Undo"
         case .redo: "Redo"
-        case .copySettings: "Copy Settings"
+        case .copySettings: "Copy Settings…"
+        case .copySettingsAgain: "Copy Settings with Last Choice"
         case .pasteSettings: "Paste Settings"
         case .pastePrevious: "Paste Settings from Previous"
         case .resetAll: "Reset All Settings"
@@ -296,6 +297,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .undo: [.char("z", command: true)]
         case .redo: [.char("z", shift: true, command: true)]
         case .copySettings: [.char("c", shift: true, command: true)]
+        case .copySettingsAgain: [.char("c", shift: true, option: true, command: true)]
         case .pasteSettings: [.char("v", shift: true, command: true)]
         case .pastePrevious: [.char("v", option: true, command: true)]
         case .resetAll: [.char("r", shift: true, command: true)]

@@ -119,9 +119,9 @@ public extension EditorModel {
         }
     }
 
-    /// Recomputes every AI mask of the edit with today's models, keeping each component's place,
-    /// operation and inversion. A person is matched by their index.
-    func updateAIMasks() async {
+    /// Recomputes every AI mask of the edit (of the masks `in`, when given) with today's models,
+    /// keeping each component's place, operation and inversion. A person is matched by their index.
+    func updateAIMasks(in masks: Set<UUID>? = nil) async {
         guard info != nil, aiMaskProgress == nil else { return }
         let photo = selection
         aiMaskProgress = .subject
@@ -130,7 +130,7 @@ public extension EditorModel {
         var next = recipe
         var results: [MaskRequest: [AIMask]] = [:]
         var failed = 0
-        for layer in next.masks.indices {
+        for layer in next.masks.indices where masks?.contains(next.masks[layer].id) ?? true {
             for index in next.masks[layer].components.indices {
                 let shape = next.masks[layer].components[index].shape
                 let old: AIMask

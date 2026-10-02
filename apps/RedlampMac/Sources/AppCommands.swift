@@ -40,6 +40,7 @@ struct AppCommands: Commands {
 
         CommandMenu("Photo") {
             item(.copySettings)
+            item(.copySettingsAgain)
             item(.pasteSettings)
             item(.pastePrevious)
             Divider()

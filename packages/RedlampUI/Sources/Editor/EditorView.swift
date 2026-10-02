@@ -40,6 +40,11 @@ struct EditorContentView: View {
                 StackWorkspaceView(workspace: workspace, onDone: model.finishStackWorkspace)
                     .environment(theme)
             }
+            .sheet(item: $model.settingsChooser) { chooser in
+                CopySettingsSheet(chooser: chooser)
+                    .environment(model)
+                    .environment(theme)
+            }
             .onAppear(perform: updateStage)
             .onChange(of: toolbarHeight) { _, _ in updateStage() }
             .onChange(of: model.isPresenting) { _, _ in updateStage() }

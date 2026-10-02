@@ -68,9 +68,12 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
     var computed: [AIMask] = []
 
     var lastRequest: MaskRequest?
+    /// Every AI mask asked for, in order.
+    var requests: [MaskRequest] = []
 
     func computeMasks(_ request: MaskRequest) async throws -> [AIMask] {
         lastRequest = request
+        requests.append(request)
         return computed.map { mask in
             var mask = mask
             mask.kind = request.kind

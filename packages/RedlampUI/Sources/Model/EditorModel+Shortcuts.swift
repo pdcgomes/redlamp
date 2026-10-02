@@ -60,7 +60,8 @@ public extension EditorModel {
         // Develop
         case .undo: undo()
         case .redo: redo()
-        case .copySettings: copySettings()
+        case .copySettings: chooseSettingsToCopy()
+        case .copySettingsAgain: copySettings()
         case .pasteSettings: pasteSettings()
         case .pastePrevious: pasteFromPrevious()
         case .resetAll: resetAll()
@@ -186,7 +187,7 @@ public extension EditorModel {
         case .redo: return canRedo
         case .pasteSettings: return hasClipboard && photo
         case .pastePrevious: return previousSelection != nil && photo
-        case .copySettings, .resetAll, .autoTone, .toggleBlackAndWhite, .newSnapshot, .newPreset,
+        case .copySettings, .copySettingsAgain, .resetAll, .autoTone, .toggleBlackAndWhite, .newSnapshot, .newPreset,
              .previousSetting, .nextSetting, .increaseSetting, .decreaseSetting, .findAdjustment, .export,
              .exportWithPrevious:
             return photo
@@ -303,17 +304,6 @@ public extension EditorModel {
         let spec = parameter.spec
         let position = spec.position(for: sliderValue(parameter)) + direction * (large ? 0.1 : 0.025)
         setSliderValue(parameter, spec.value(atPosition: position))
-    }
-
-    // MARK: - Settings
-
-    /// Applies the settings of the previously viewed photo (Lightroom's "Previous").
-    func pasteFromPrevious() {
-        guard let previous = previousSelection, info != nil,
-              let sidecar = SidecarStore().load(for: previous)
-        else { return }
-        commit(sidecar.recipe, .paste, "Paste from Previous")
-        updatePastedAIMasks()
     }
 
     // MARK: - Rating, flags and labels

@@ -26,7 +26,8 @@ extension ShortcutAction {
         .nextPhoto: ["forward", "photo", "image"],
         .undo: ["undo", "back"],
         .redo: ["redo"],
-        .copySettings: ["sync", "settings", "copy edit"],
+        .copySettings: ["sync", "settings", "copy edit", "choose"],
+        .copySettingsAgain: ["sync", "settings", "copy edit", "last", "same"],
         .pasteSettings: ["sync", "settings", "paste edit"],
         .pastePrevious: ["sync", "previous", "last photo"],
         .resetAll: ["reset", "start over", "revert", "original"],
@@ -107,6 +108,7 @@ extension ShortcutAction {
         case .undo: "arrow.uturn.backward"
         case .redo: "arrow.uturn.forward"
         case .copySettings: "doc.on.doc"
+        case .copySettingsAgain: "doc.on.doc.fill"
         case .pasteSettings: "doc.on.clipboard"
         case .pastePrevious: "clock.arrow.circlepath"
         case .resetAll: "arrow.counterclockwise"
