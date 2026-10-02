@@ -39,6 +39,9 @@ public final class EditorModel {
     /// Stack suggestions the user dismissed; they don't come back when the folder changes.
     @ObservationIgnored var dismissedStacks: Set<StackSuggestion> = []
     public internal(set) var selection: URL?
+    /// The photos selected in the filmstrip, in its order: the open one (`selection`) and any
+    /// others ⌘- or ⇧-clicked with it.
+    public internal(set) var selectedPhotos: [URL] = []
     /// Focus stacks found in the folder that have no stack document yet.
     public internal(set) var stackSuggestions: [StackSuggestion] = []
     /// The Stack workspace, when open over the editor.
@@ -420,7 +423,11 @@ public final class EditorModel {
 
     // MARK: - Opening a photo (folders: EditorModel+Library)
 
-    public func select(_ url: URL) {
+    /// Opens `url`. Unless `keepingSelection`, it becomes the only photo selected.
+    public func select(_ url: URL, keepingSelection: Bool = false) {
+        if !keepingSelection {
+            selectedPhotos = [url]
+        }
         guard url != selection else { return }
         saveNow()
         engine.prefetch(workingSet(around: url, comingFrom: selection))

@@ -57,6 +57,8 @@ struct AppCommands: Commands {
             Divider()
             item(.previousPhoto)
             item(.nextPhoto)
+            item(.selectAllPhotos)
+            item(.deselectOtherPhotos)
             Divider()
             Menu("Set Rating") {
                 ForEach([ShortcutAction.rating0, .rating1, .rating2, .rating3, .rating4, .rating5]) { mouseItem($0) }

@@ -108,7 +108,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case panelLens, panelTransform, panelEffects, panelCalibration
 
     /// Navigation
-    case previousPhoto, nextPhoto
+    case previousPhoto, nextPhoto, selectAllPhotos, deselectOtherPhotos
 
     // Develop
     case undo, redo, copySettings, copySettingsAgain, pasteSettings, pastePrevious, resetAll
@@ -147,7 +147,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
              .panelBasic, .panelToneCurve, .panelColorMixer, .panelColorGrading, .panelDetail,
              .panelLens, .panelTransform, .panelEffects, .panelCalibration:
             .panels
-        case .previousPhoto, .nextPhoto:
+        case .previousPhoto, .nextPhoto, .selectAllPhotos, .deselectOtherPhotos:
             .navigation
         case .undo, .redo, .copySettings, .copySettingsAgain, .pasteSettings, .pastePrevious, .resetAll, .autoTone,
              .autoWhiteBalance, .toggleBlackAndWhite, .whiteBalanceSelector, .newSnapshot, .newPreset,
@@ -203,6 +203,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .redo: "Redo"
         case .copySettings: "Copy Settings…"
         case .copySettingsAgain: "Copy Settings with Last Choice"
+        case .selectAllPhotos: "Select All Photos"
+        case .deselectOtherPhotos: "Deselect Other Photos"
         case .pasteSettings: "Paste Settings"
         case .pastePrevious: "Paste Settings from Previous"
         case .resetAll: "Reset All Settings"
@@ -298,6 +300,9 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .redo: [.char("z", shift: true, command: true)]
         case .copySettings: [.char("c", shift: true, command: true)]
         case .copySettingsAgain: [.char("c", shift: true, option: true, command: true)]
+        // Lightroom's ⌘A and ⌘D with Option: without it they would take Select All from text fields.
+        case .selectAllPhotos: [.char("a", option: true, command: true)]
+        case .deselectOtherPhotos: [.char("d", option: true, command: true)]
         case .pasteSettings: [.char("v", shift: true, command: true)]
         case .pastePrevious: [.char("v", option: true, command: true)]
         case .resetAll: [.char("r", shift: true, command: true)]

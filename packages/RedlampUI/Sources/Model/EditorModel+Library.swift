@@ -76,6 +76,9 @@ public extension EditorModel {
     }
 
     private func libraryChanged(_ diff: LibraryDiff) {
+        if !diff.removed.isEmpty {
+            selectedPhotos.removeAll { library.index(of: $0) == nil }
+        }
         guard !diff.reset, let selection else { return }
         if let index = library.index(of: selection) {
             selectionIndex = index

@@ -27,14 +27,24 @@ final class FilmstripCellView: NSView {
     private static let inset: CGFloat = 4
 
     private(set) var item: LibraryItem?
-    var onClick: (() -> Void)?
+    /// A click, with the modifier keys held (⌘ and ⇧ select several photos).
+    var onClick: ((NSEvent.ModifierFlags) -> Void)?
     private let background = CALayer()
     private let thumbnail = CALayer()
     private let badges = FilmstripBadgesView()
 
+    /// The active photo: the one open.
     var isSelected = false {
         didSet {
             guard isSelected != oldValue else { return }
+            updateBackground()
+        }
+    }
+
+    /// Selected with the active photo, for Sync and Paste.
+    var isInSelection = false {
+        didSet {
+            guard isInSelection != oldValue else { return }
             updateBackground()
         }
     }
@@ -94,8 +104,9 @@ final class FilmstripCellView: NSView {
     }
 
     private func updateBackground() {
-        background.backgroundColor = NSColor(white: isSelected ? 0.22 : 0.14, alpha: 1).cgColor
-        background.borderWidth = isSelected ? 1.5 : 0
+        background.backgroundColor = NSColor(white: isSelected ? 0.22 : isInSelection ? 0.19 : 0.14, alpha: 1).cgColor
+        background.borderWidth = isSelected ? 1.5 : isInSelection ? 1 : 0
+        background.borderColor = NSColor(white: 1, alpha: isSelected ? 0.85 : 0.4).cgColor
     }
 
     override func layout() {
@@ -109,8 +120,8 @@ final class FilmstripCellView: NSView {
         badges.frame = bounds
     }
 
-    override func mouseDown(with _: NSEvent) {
-        onClick?()
+    override func mouseDown(with event: NSEvent) {
+        onClick?(event.modifierFlags)
     }
 
     override func isAccessibilityElement() -> Bool {

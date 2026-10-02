@@ -13,6 +13,10 @@ struct FilmstripView: View {
                 }
                 Text("\(model.library.count) photos\(model.library.includesSubfolders ? ", with subfolders" : "")")
                     .foregroundStyle(Theme.tertiaryLabel)
+                if model.isMultiSelecting {
+                    Text("\(model.selectedPhotos.count) selected")
+                        .help("⌘-click adds or removes a photo, ⇧-click selects a range; ⌥⌘D keeps only this one")
+                }
                 if let suggestion = model.stackSuggestions.first {
                     StackSuggestionBanner(suggestion: suggestion)
                 }

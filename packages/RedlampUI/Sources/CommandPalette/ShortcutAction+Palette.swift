@@ -24,6 +24,8 @@ extension ShortcutAction {
         .toggleRightPanel: ["inspector", "develop", "panels"],
         .previousPhoto: ["back", "photo", "image"],
         .nextPhoto: ["forward", "photo", "image"],
+        .selectAllPhotos: ["select", "all", "photos", "filmstrip", "sync"],
+        .deselectOtherPhotos: ["deselect", "select none", "only this", "filmstrip"],
         .undo: ["undo", "back"],
         .redo: ["redo"],
         .copySettings: ["sync", "settings", "copy edit", "choose"],
@@ -109,6 +111,8 @@ extension ShortcutAction {
         case .redo: "arrow.uturn.forward"
         case .copySettings: "doc.on.doc"
         case .copySettingsAgain: "doc.on.doc.fill"
+        case .selectAllPhotos: "checklist.checked"
+        case .deselectOtherPhotos: "checklist.unchecked"
         case .pasteSettings: "doc.on.clipboard"
         case .pastePrevious: "clock.arrow.circlepath"
         case .resetAll: "arrow.counterclockwise"

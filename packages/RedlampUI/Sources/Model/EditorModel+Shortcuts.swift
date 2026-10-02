@@ -62,6 +62,8 @@ public extension EditorModel {
         case .redo: redo()
         case .copySettings: chooseSettingsToCopy()
         case .copySettingsAgain: copySettings()
+        case .selectAllPhotos: selectAllPhotos()
+        case .deselectOtherPhotos: deselectOtherPhotos()
         case .pasteSettings: pasteSettings()
         case .pastePrevious: pasteFromPrevious()
         case .resetAll: resetAll()
@@ -179,6 +181,8 @@ public extension EditorModel {
              .toggleLeftPanel, .toggleRightPanel, .panelBasic, .panelToneCurve, .panelColorMixer, .panelColorGrading,
              .panelDetail, .panelLens, .panelTransform, .panelEffects, .panelCalibration:
             return true
+        case .selectAllPhotos: return photo && selectedPhotos.count < items.count
+        case .deselectOtherPhotos: return isMultiSelecting
         case .previousPhoto, .nextPhoto:
             guard let selection, let index = library.index(of: selection) else { return false }
             return items.indices.contains(index + (action == .nextPhoto ? 1 : -1))

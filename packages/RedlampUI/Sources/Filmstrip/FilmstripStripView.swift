@@ -10,7 +10,8 @@ import SwiftUI
 ///   view's prefetching asks for the next ones at look-ahead priority and cancels them when the
 ///   strip turns back. A thumbnail arriving sets only its own cell.
 /// - Changes: the library's row diffs become inserts and deletes; a badge redraws its cell.
-/// - The selection is followed: its cell is highlighted and scrolled to the middle.
+/// - The selection is followed: the active photo's cell is highlighted and scrolled to the middle,
+///   and the others selected with it (⌘- and ⇧-click) are marked.
 final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollectionViewDelegate,
     NSCollectionViewPrefetching {
     static let height: CGFloat = 82
@@ -24,6 +25,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     private var observation: LibraryObservation?
     private var tracker: Tracker?
     private var selected: URL?
+    private var marked: Set<URL> = []
     private var prefetching: [URL: UInt64] = [:]
 
     init(model: EditorModel) {
@@ -79,7 +81,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         observation = model.library.observe { [weak self] diff in self?.apply(diff) }
         tracker = Tracker { [weak self] in
             guard let self else { return }
-            follow(model.selection)
+            follow(model.selection, marking: model.selectedPhotos)
         }
     }
 
@@ -97,7 +99,12 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         let photo = model.items[indexPath.item]
         item.cell.configure(photo, image: model.thumbnailLoader.cached(photo))
         item.cell.isSelected = photo.url == model.selection
-        item.cell.onClick = { [weak self] in self?.model.select(photo.url) }
+        item.cell.isInSelection = marked.contains(photo.url)
+        item.cell.onClick = { [weak self] modifiers in
+            self?.model.click(
+                photo.url, toggling: modifiers.contains(.command), extending: modifiers.contains(.shift),
+            )
+        }
         return item
     }
 
@@ -174,7 +181,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
             prefetching.values.forEach(model.thumbnailLoader.cancel)
             prefetching = [:]
             collectionView.reloadData()
-            follow(model.selection, animated: false)
+            follow(model.selection, marking: model.selectedPhotos, animated: false)
             return
         }
         if !diff.removed.isEmpty || !diff.inserted.isEmpty {
@@ -201,16 +208,22 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
 
     // MARK: - Selection
 
-    private func follow(_ selection: URL?, animated: Bool = true) {
-        for url in [selected, selection].compactMap(\.self) {
+    private func follow(_ selection: URL?, marking photos: [URL], animated: Bool = true) {
+        let marking = Set(photos).subtracting([selection].compactMap(\.self))
+        let changed = marked.symmetricDifference(marking).union([selected, selection].compactMap(\.self))
+        for url in changed {
             guard let row = model.library.index(of: url),
                   let item = collectionView.item(at: IndexPath(item: row, section: 0)) as? FilmstripItem else {
                 continue
             }
             item.cell.isSelected = url == selection
+            item.cell.isInSelection = marking.contains(url)
         }
+        marked = marking
+        let moved = selected != selection
         selected = selection
-        guard let selection, let row = model.library.index(of: selection) else { return }
+        // Scrolled to when it changes, and after a reload; not when only the marks do.
+        guard moved || !animated, let selection, let row = model.library.index(of: selection) else { return }
         let path: Set<IndexPath> = [IndexPath(item: row, section: 0)]
         if animated {
             NSAnimationContext.runAnimationGroup { context in
