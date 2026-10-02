@@ -52,6 +52,8 @@ COLOURS = {"tracker": "5319e7", "area": "0e8a16", "size": "c5def5", "kind": "bfd
            "status": "d93f0b"}
 # `phase:` labels were how phases were shown before milestones: removed where found.
 MANAGED = ("tracker", "area:", "phase:", "size:", "kind:", "decision:", "status:")
+# Every row by ID, for rows that take another's phase.
+ROWS = {}
 
 
 # MARK: - The tracker
@@ -117,13 +119,16 @@ def labels(row):
     return out
 
 
-def phase_of(row):
-    """The row's earliest roadmap phase, or None."""
-    if row["id"].startswith("P1-"):
+def phase_of(row, by_id=None):
+    """The row's earliest roadmap phase, or None. Rows in the "Phase 1: now" section are phase 1
+    (it has no Phase column); "With SHP-03" takes that row's phase."""
+    if row["id"].startswith("P1-") or (row["section"].startswith("2. Phase 1") and "Phase" not in row):
         return 1
     phase = row.get("Phase", "")
     if found := re.search(r"P(\d)", phase):
         return int(found.group(1))
+    if (found := re.match(r"With ((?:[A-Z]{2,4}|P1)-\d+)", phase)) and by_id and found.group(1) in by_id:
+        return phase_of(by_id[found.group(1)], by_id)
     return 1 if phase.startswith("Now") else None
 
 
@@ -137,7 +142,7 @@ def phases():
 
 
 def milestone_of(row, roadmap):
-    phase = phase_of(row)
+    phase = phase_of(row, ROWS)
     return roadmap[phase][0] if phase in roadmap else None
 
 
@@ -252,6 +257,7 @@ def main():
     options = parser.parse_args()
 
     only = set(options.only.split(",")) if options.only else None
+    ROWS.update({row["id"]: row for row in rows()})
     wanted = [row for row in rows()
               if (only is None or row["id"] in only)
               and (options.include_decisions or not row["id"].startswith("DEC-"))
