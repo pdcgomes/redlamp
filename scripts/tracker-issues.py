@@ -3,9 +3,14 @@
 
 The tracker is where the roadmap is planned; each of its work items has an issue, so the roadmap
 can be followed, discussed and picked up on GitHub. The sync is one way for the row's fields: the
-script owns a marked block in each issue's body and its own labels (tracker, area:, phase:, size:,
-kind:, decision:, status:), and opens or closes the issue with the row's status. Anything else on
-the issue (text outside the block, other labels, comments, assignees) is left alone.
+script owns a marked block in each issue's body, its own labels (tracker, area:, size:, kind:,
+decision:, status:) and its milestone, and opens or closes the issue with the row's status.
+Anything else on the issue (text outside the block, other labels, comments, assignees) is left
+alone.
+
+Each roadmap phase in the README (`### Phase N: Title *(status)*`) is a milestone of that title,
+closed once the README marks the phase done; an issue goes in the milestone of its row's earliest
+phase ("P2–P3" is Phase 2). Rows with no phase have no milestone.
 
 Issues filed by other people come into the tracker by hand: give the item a tracker ID, then put
 the ID at the start of the issue's title ("MSK-18: …") and the next sync adopts it, keeping the
@@ -30,7 +35,9 @@ import time
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TRACKER = ROOT / "docs/research/research-tracker.md"
-BLOB = "https://github.com/pdcgomes/redlamp/blob/main/"
+README = ROOT / "README.md"
+REPO = "pdcgomes/redlamp"
+BLOB = f"https://github.com/{REPO}/blob/main/"
 BEGIN, END = "<!-- tracker:begin -->", "<!-- tracker:end -->"
 ID = re.compile(r"^([A-Z]{2,4}|P1)-\d+$")
 
@@ -41,8 +48,9 @@ AREAS = {
     "SR": "super-resolution", "SHP": "sharpening", "AUT": "auto", "OTH": "other-ai",
     "INF": "ai-infrastructure", "DEC": "decisions", "SKIP": "skipped",
 }
-COLOURS = {"tracker": "5319e7", "area": "0e8a16", "phase": "1d76db", "size": "c5def5", "kind": "bfd4f2",
-           "decision": "fbca04", "status": "d93f0b"}
+COLOURS = {"tracker": "5319e7", "area": "0e8a16", "size": "c5def5", "kind": "bfd4f2", "decision": "fbca04",
+           "status": "d93f0b"}
+# `phase:` labels were how phases were shown before milestones: removed where found.
 MANAGED = ("tracker", "area:", "phase:", "size:", "kind:", "decision:", "status:")
 
 
@@ -86,11 +94,6 @@ def absolute(markdown):
 def labels(row):
     prefix = row["id"].split("-")[0]
     out = {"tracker", f"area:{AREAS.get(prefix, prefix.lower())}"}
-    phase = "P1" if prefix == "P1" else row.get("Phase", "")
-    if found := re.search(r"P(\d)", phase):
-        out.add(f"phase:P{found.group(1)}")
-    elif phase.startswith("Now"):
-        out.add("phase:P1")
     size = row.get("Size", "")
     letters = re.findall(r"\b(XL|S|M|L)\b", size.split("(")[0])
     # Engineer-weeks, the larger of a range: "2–3 ew", "6–8 ew + US$5–20k".
@@ -111,6 +114,30 @@ def labels(row):
     if status in ("in progress", "blocked"):
         out.add(f"status:{status.replace(' ', '-')}")
     return out
+
+
+def phase_of(row):
+    """The row's earliest roadmap phase, or None."""
+    if row["id"].startswith("P1-"):
+        return 1
+    phase = row.get("Phase", "")
+    if found := re.search(r"P(\d)", phase):
+        return int(found.group(1))
+    return 1 if phase.startswith("Now") else None
+
+
+def phases():
+    """The README's roadmap phases: number to (title, done)."""
+    out = {}
+    for line in README.read_text().splitlines():
+        if found := re.match(r"^### (Phase (\d+): .+?)(?: \*\((.+)\)\*)?$", line):
+            out[int(found.group(2))] = (found.group(1).strip(), (found.group(3) or "").strip() == "done")
+    return out
+
+
+def milestone_of(row, roadmap):
+    phase = phase_of(row)
+    return roadmap[phase][0] if phase in roadmap else None
 
 
 def status_of(row):
@@ -169,7 +196,7 @@ def gh(*args, input=None):
 
 def issues():
     found = json.loads(gh("issue", "list", "--state", "all", "--limit", "2000",
-                          "--json", "number,title,body,state,labels"))
+                          "--json", "number,title,body,state,labels,milestone"))
     by_id, untriaged = {}, []
     for issue in found:
         marker = re.search(r"<!-- tracker-id: (\S+) -->", issue["body"] or "")
@@ -192,6 +219,17 @@ def merged_body(existing, mirrored):
     return (existing.rstrip() + "\n\n---\n\n" if existing.strip() else "") + mirrored
 
 
+def milestones():
+    """Milestones by phase number (from their "Phase N:" titles)."""
+    found = json.loads(gh("api", f"repos/{REPO}/milestones?state=all&per_page=100"))
+    return {int(m.group(1)): milestone for milestone in found
+            if (m := re.match(r"^Phase (\d+):", milestone["title"]))}
+
+
+def current_milestone(issue):
+    return (issue.get("milestone") or {}).get("title")
+
+
 # MARK: - Sync
 
 
@@ -210,6 +248,11 @@ def main():
               and (options.include_decisions or not row["id"].startswith("DEC-"))
               and (options.include_skips or not row["id"].startswith("SKIP-"))]
     existing, untriaged = issues()
+    roadmap = phases()
+    present = milestones()
+    milestone_changes = [(number, title_, done) for number, (title_, done) in sorted(roadmap.items())
+                         if number not in present or present[number]["title"] != title_
+                         or (present[number]["state"] == "closed") != done]
 
     plan = {"create": [], "update": [], "close": [], "reopen": [], "unchanged": 0, "skipped done": 0}
     for row in wanted:
@@ -224,6 +267,7 @@ def main():
         managed = {name for name in current if name.startswith(MANAGED)}
         numbers = {key: value["number"] for key, value in existing.items()}
         if (issue["title"] != title(row) or managed != labels(row)
+                or current_milestone(issue) != milestone_of(row, roadmap)
                 or merged_body(issue["body"], block(row, numbers)) != issue["body"]):
             plan["update"].append(row)
         else:
@@ -233,6 +277,9 @@ def main():
         elif not closed(row) and issue["state"] == "CLOSED":
             plan["reopen"].append(row)
 
+    for number, title_, done in milestone_changes:
+        verb = "create" if number not in present else "update"
+        print(f"{verb:7s} milestone {title_}{' (closed: done)' if done else ''}")
     for action in ("create", "update", "close", "reopen"):
         for row in plan[action]:
             print(f"{action:7s} {title(row)}")
@@ -247,16 +294,26 @@ def main():
         print("\nDry run: nothing changed. Run with --apply to sync.")
         return
 
+    for number, title_, done in milestone_changes:
+        fields = ["-f", f"title={title_}", "-f", f"state={'closed' if done else 'open'}",
+                  "-f", f"description=The README's roadmap: {BLOB}README.md#roadmap"]
+        if number in present:
+            gh("api", "-X", "PATCH", f"repos/{REPO}/milestones/{present[number]['number']}", *fields)
+        else:
+            gh("api", "-X", "POST", f"repos/{REPO}/milestones", *fields)
     every = set().union(*(labels(row) for row in wanted)) if wanted else set()
     for name in sorted(every):
         colour = COLOURS[name.split(":")[0]] if ":" in name else COLOURS["tracker"]
         gh("label", "create", name, "--color", colour, "--force")
     # Created first, so every dependency can link to its issue.
     for row in plan["create"]:
+        milestone = milestone_of(row, roadmap)
         url = gh("issue", "create", "--title", title(row), "--body", block(row, {}),
-                 *[arg for name in sorted(labels(row)) for arg in ("--label", name)]).strip()
+                 *[arg for name in sorted(labels(row)) for arg in ("--label", name)],
+                 *(["--milestone", milestone] if milestone else [])).strip()
         existing[row["id"]] = {"number": int(url.rsplit("/", 1)[1]), "title": title(row), "body": block(row, {}),
-                               "state": "OPEN", "labels": [{"name": name} for name in labels(row)]}
+                               "state": "OPEN", "labels": [{"name": name} for name in labels(row)],
+                               "milestone": {"title": milestone} if milestone else None}
         print(f"created {url}")
         time.sleep(1)  # GitHub's secondary rate limit on creating content
     numbers = {key: value["number"] for key, value in existing.items()}
@@ -268,10 +325,14 @@ def main():
         current = {label["name"] for label in issue["labels"]}
         managed = {name for name in current if name.startswith(MANAGED)}
         add, remove = labels(row) - managed, managed - labels(row)
-        if issue["title"] != title(row) or body != issue["body"] or add or remove:
+        milestone = milestone_of(row, roadmap)
+        moves = current_milestone(issue) != milestone
+        if issue["title"] != title(row) or body != issue["body"] or add or remove or moves:
             args = ["issue", "edit", str(issue["number"]), "--title", title(row), "--body-file", "-"]
             args += [arg for name in sorted(add) for arg in ("--add-label", name)]
             args += [arg for name in sorted(remove) for arg in ("--remove-label", name)]
+            if moves:
+                args += ["--milestone", milestone] if milestone else ["--remove-milestone"]
             gh(*args, input=body)
         if closed(row) and issue["state"] == "OPEN":
             reason = "not planned" if status_of(row) == "not needed" or row.get("Decision", "").startswith("Rejected") \

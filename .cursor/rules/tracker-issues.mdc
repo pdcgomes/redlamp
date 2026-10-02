@@ -10,7 +10,8 @@ alwaysApply: true
 ## Plan in the tracker
 
 - Add, split, reprioritise and finish work in the tracker first, by its own rules: new IDs in the right section, never reused; `Status` names the commit.
-- The sync owns each issue's title, the block between `<!-- tracker:begin -->` and `<!-- tracker:end -->`, its open or closed state, and the `tracker`, `area:`, `phase:`, `size:`, `kind:`, `decision:` and `status:` labels. Don't edit those on GitHub: the next sync overwrites them. Everything else is free to use: comments, assignees, text above the block, and labels such as `help wanted` or `good first issue`.
+- The sync owns each issue's title, the block between `<!-- tracker:begin -->` and `<!-- tracker:end -->`, its open or closed state, its milestone, and the `tracker`, `area:`, `size:`, `kind:`, `decision:` and `status:` labels. Don't edit those on GitHub: the next sync overwrites them. Everything else is free to use: comments, assignees, text above the block, and labels such as `help wanted` or `good first issue`.
+- Each README roadmap phase (`### Phase N: Title *(status)*`) is a milestone of that title, closed once the README marks it *(done)*; an issue goes in its row's earliest phase. Renaming a phase in the README renames its milestone on the next sync.
 - Decision rows (`DEC-`) and recorded skips (`SKIP-`) stay in the tracker only.
 
 ## Sync after a tracker change
