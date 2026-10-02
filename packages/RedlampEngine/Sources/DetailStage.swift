@@ -20,6 +20,15 @@ struct DenoiseSettings: Hashable {
     /// (2 over-smooths; 0 is the plain per-coefficient garrote).
     static let lumaEnergyRadius: Float = 1
 
+    /// At 1:1 and in exports, luma is then non-local means of the noisy texels, weighted by how
+    /// alike the wavelet result's 3×3 patches are within 7×7, with a patch difference of this
+    /// many pixel noise sigmas (per unit of Luminance strength) weighing 1/e. Chosen with
+    /// `NoiseBenchmarkTests`: at 2, Luminance 50 adds 0.8 dB and keeps 90% of the texture where
+    /// the wavelet alone kept 85% (1.5 is better above Luminance 75, worse below; 5×5 patches and
+    /// 11×11 windows are no better).
+    static let nonLocalWidth: Float = 2
+    static let nonLocalSearch: Float = 3
+
     static let scaleCount = 5
 
     /// The Luminance slider / 100.
@@ -27,6 +36,7 @@ struct DenoiseSettings: Hashable {
     var lumaPerStrength: [Float]
     var chroma: [Float]
     var lumaRadius: Float
+    var nonLocalWidth: Float
 
     var isActive: Bool {
         luma > 0 || chroma.contains { $0 > 0 }
@@ -42,13 +52,15 @@ struct DenoiseSettings: Hashable {
         lumaPerStrength: Array(repeating: 3, count: scaleCount),
         chroma: Array(repeating: 3, count: scaleCount),
         lumaRadius: 0,
+        nonLocalWidth: 0,
     )
 
-    private init(luma: Float, lumaPerStrength: [Float], chroma: [Float], lumaRadius: Float) {
+    private init(luma: Float, lumaPerStrength: [Float], chroma: [Float], lumaRadius: Float, nonLocalWidth: Float) {
         self.luma = luma
         self.lumaPerStrength = lumaPerStrength
         self.chroma = chroma
         self.lumaRadius = lumaRadius
+        self.nonLocalWidth = nonLocalWidth
     }
 
     init(recipe: EditRecipe) {
@@ -68,6 +80,7 @@ struct DenoiseSettings: Hashable {
             6 * chroma * (scale < 2 ? 1.4 - 0.8 * chromaDetail : scale >= 3 ? 0.5 + smoothness : 1)
         }
         lumaRadius = Self.lumaEnergyRadius
+        nonLocalWidth = Self.nonLocalWidth
     }
 }
 
@@ -208,7 +221,9 @@ final class DetailStage {
         let area: SIMD4<Float>
     }
 
-    /// Texels of context around the work area, enough for the widest à-trous scale.
+    /// Texels of context around the work area, enough for the widest à-trous scale. Its luma
+    /// energy neighbourhood reaches 16 further, but only through the outermost taps of every
+    /// scale, which weigh too little to show in half floats.
     static let margin = 64
 
     /// Whether the recipe needs the stage at full resolution.
@@ -444,6 +459,8 @@ final class DetailStage {
 
         // The energy pass costs about 1 ms at 1:1, so it runs only when luma is shrunk at all.
         let lumaRadius = settings.luma > 0 || local != nil ? settings.lumaRadius : 0
+        // Non-local means is for full resolution, where its texture shows and noise is strongest.
+        let nonLocal = settings.nonLocalWidth > 0 && work.level == 0 && (settings.luma > 0 || local != nil)
         let sigmas = NoiseCalibration.sigmas(sensor: session.sensor, level: work.level)
         for scale in 0 ..< DenoiseSettings.scaleCount {
             let last = scale == DenoiseSettings.scaleCount - 1
@@ -454,7 +471,10 @@ final class DetailStage {
             )
             // This level's luma noise: its own detail and every coarser one's, in quadrature.
             let levelNoise = sigmas[scale...].map { $0.x * $0.x }.reduce(0, +).squareRoot()
-            params.edge = SIMD4(DenoiseSettings.chromaEdge * levelNoise, lumaRadius, 0, 0)
+            params.edge = SIMD4(DenoiseSettings.chromaEdge * levelNoise, lumaRadius, nonLocal ? 1 : 0, 0)
+            if scale == 0 {
+                params.nonLocal = SIMD4(DenoiseSettings.nonLocalSearch, 0, settings.nonLocalWidth * levelNoise, 0)
+            }
 
             encoder.setComputePipelineState(kernels.denoiseRows)
             encoder.setTexture(current, index: 0)
@@ -487,6 +507,19 @@ final class DetailStage {
             }
             swap(&current, &next)
         }
+        guard nonLocal else { return }
+        encoder.setComputePipelineState(kernels.denoiseNonLocal)
+        encoder.setTexture(result, index: 0)
+        encoder.setTexture(session.pyramid, index: 1)
+        encoder.setTexture(session.noiseGain, index: 2)
+        encoder.setTexture(local ?? output, index: 3)
+        encoder.setTexture(output, index: 4)
+        encoder.setBytes(&params, length: MemoryLayout<DenoiseParams>.stride, index: 0)
+        // 32×32 tiles, a 2×4 block per thread (see rl_denoise_nonlocal).
+        encoder.dispatchThreadgroups(
+            MTLSize(width: (work.size.x + 31) / 32, height: (work.size.y + 31) / 32, depth: 1),
+            threadsPerThreadgroup: MTLSize(width: 16, height: 8, depth: 1),
+        )
     }
 
     private func encodeLocalContrast(

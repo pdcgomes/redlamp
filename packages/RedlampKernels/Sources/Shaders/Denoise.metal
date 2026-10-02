@@ -119,13 +119,16 @@ static inline float3 thresholdsAt(texture2d<float, access::read> local, uint2 gi
 }
 
 // Adds this scale's kept detail to the finer scales' (scale.y is 0 after the first), and on the
-// coarsest scale (scale.z) writes the result back in pyramid units.
+// coarsest scale (scale.z) writes the result back in pyramid units, or with edge.z leaves it in
+// `result` as rl_denoise_nonlocal's guide.
 static inline void accumulate(float3 kept, float3 coarse, texture2d<half, access::read_write> result,
                               texture2d<half, access::write> out, texture2d<float, access::read> pyramid,
                               texture2d<float, access::sample> noiseGain, uint2 gid, constant DenoiseParams &p) {
     float3 total = kept;
     if (p.scale.y == 0) total += float3(result.read(gid).rgb);
-    if (p.scale.z != 0) {
+    if (p.scale.z != 0 && p.edge.z != 0) {
+        result.write(half4(half3(total + coarse), 1.0h), gid);
+    } else if (p.scale.z != 0) {
         float3 value = unstabilize(fromOpponent(total + coarse), p.a.xyz, p.b.xyz)
             * noiseGainAt(noiseGain, pyramid, gid, p);
         out.write(half4(half3(max(value, 0.0f)), 1.0h), gid);
@@ -205,4 +208,104 @@ kernel void rl_denoise_shrink(
         kept.x = detail.x * max(1.0f - threshold.x * threshold.x / max(energy, 1e-12f), 0.0f);
     }
     accumulate(kept, float3(coarse.read(gid).rgb), result, out, pyramid, noiseGain, gid, p);
+}
+
+// Non-local means (Buades, Coll and Morel 2005) guided by the wavelet result: luma becomes an
+// average of the noisy luma around it, each texel weighted by how alike the guide's 3×3 patches
+// around the two are, so texture the shrinkage flattened comes back where its neighbourhood
+// repeats it. Chroma keeps the guide's. nonLocal.x is the search radius (at most
+// kNonLocalReach - 1), z the RMS patch difference (stabilised units) that weighs 1/e per unit of
+// Luminance strength.
+//
+// Dispatched as kNonLocalThreads threadgroups, each covering a kNonLocalTile² tile whose
+// neighbourhood it loads into threadgroup memory once. A thread computes a 2×4 block of texels,
+// so for each offset the squared differences of neighbouring patches are summed once per row.
+constant int kNonLocalTile = 32;
+constant int kNonLocalReach = 4;
+constant int kNonLocalSpan = kNonLocalTile + 2 * kNonLocalReach;
+constant int kBlockWidth = 2;
+constant int kBlockHeight = 4;
+
+kernel void rl_denoise_nonlocal(
+    texture2d<half, access::read> guide [[texture(0)]],
+    texture2d<float, access::read> pyramid [[texture(1)]],
+    texture2d<float, access::sample> noiseGain [[texture(2)]],
+    texture2d<float, access::read> local [[texture(3)]],
+    texture2d<half, access::write> out [[texture(4)]],
+    constant DenoiseParams &p [[buffer(0)]],
+    uint2 tid [[thread_position_in_threadgroup]],
+    uint2 threads [[threads_per_threadgroup]],
+    uint2 group [[threadgroup_position_in_grid]])
+{
+    threadgroup float guides[kNonLocalSpan * kNonLocalSpan];
+    threadgroup float noisy[kNonLocalSpan * kNonLocalSpan];
+    int2 tile = int2(group) * kNonLocalTile;
+    uint level = uint(p.origin.z);
+    int2 levelSize = int2(pyramid.get_width(level), pyramid.get_height(level));
+    int count = int(threads.x * threads.y);
+    for (int i = int(tid.y * threads.x + tid.x); i < kNonLocalSpan * kNonLocalSpan; i += count) {
+        int2 at = clamp(tile - kNonLocalReach + int2(i % kNonLocalSpan, i / kNonLocalSpan), int2(0), p.size.xy - 1);
+        guides[i] = float(guide.read(uint2(at)).r);
+        int2 source = clamp(at + p.origin.xy, int2(0), levelSize - 1);
+        float3 value = pyramid.read(uint2(source), level).rgb / noiseGainAt(noiseGain, pyramid, uint2(at), p);
+        noisy[i] = toOpponent(stabilize(value, p.a.xyz, p.b.xyz)).x;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // The block's top-left texel, in the tile and in threadgroup memory.
+    int2 block = int2(tid) * int2(kBlockWidth, kBlockHeight);
+    int origin = (block.y + kNonLocalReach) * kNonLocalSpan + block.x + kNonLocalReach;
+    float inverse[kBlockHeight][kBlockWidth];
+    float sums[kBlockHeight][kBlockWidth];
+    float weights[kBlockHeight][kBlockWidth];
+    bool any = false;
+    for (int j = 0; j < kBlockHeight; j++) {
+        for (int i = 0; i < kBlockWidth; i++) {
+            int2 at = min(tile + block + int2(i, j), p.size.xy - 1);
+            float strength = p.threshold.w + (p.scale.w != 0 ? local.read(uint2(at)).w : 0.0f);
+            float h = p.nonLocal.z * max(strength, 0.0f);
+            inverse[j][i] = h > 0.0f ? 1.0f / (9.0f * h * h) : 0.0f;
+            any = any || h > 0.0f;
+            sums[j][i] = 0.0f;
+            weights[j][i] = 0.0f;
+        }
+    }
+    int search = any ? int(p.nonLocal.x) : 0;
+    for (int dy = -search; dy <= search; dy++) {
+        for (int dx = -search; dx <= search; dx++) {
+            int offset = dy * kNonLocalSpan + dx;
+            // Each row's 3-wide patch sums, from the block's row above to its row below.
+            float rows[kBlockHeight + 2][kBlockWidth];
+            for (int r = 0; r < kBlockHeight + 2; r++) {
+                int start = origin + (r - 1) * kNonLocalSpan - 1;
+                float d[kBlockWidth + 2];
+                for (int c = 0; c < kBlockWidth + 2; c++) {
+                    float difference = guides[start + c] - guides[start + c + offset];
+                    d[c] = difference * difference;
+                }
+                for (int i = 0; i < kBlockWidth; i++) {
+                    rows[r][i] = d[i] + d[i + 1] + d[i + 2];
+                }
+            }
+            for (int j = 0; j < kBlockHeight; j++) {
+                for (int i = 0; i < kBlockWidth; i++) {
+                    float distance = rows[j][i] + rows[j + 1][i] + rows[j + 2][i];
+                    float w = exp(-distance * inverse[j][i]);
+                    sums[j][i] += w * noisy[origin + j * kNonLocalSpan + i + offset];
+                    weights[j][i] += w;
+                }
+            }
+        }
+    }
+    for (int j = 0; j < kBlockHeight; j++) {
+        for (int i = 0; i < kBlockWidth; i++) {
+            int2 at = tile + block + int2(i, j);
+            if (at.x >= p.size.x || at.y >= p.size.y) continue;
+            float3 here = float3(guide.read(uint2(at)).rgb);
+            float luma = weights[j][i] > 0.0f ? sums[j][i] / weights[j][i] : noisy[origin + j * kNonLocalSpan + i];
+            float3 value = unstabilize(fromOpponent(float3(luma, here.yz)), p.a.xyz, p.b.xyz)
+                * noiseGainAt(noiseGain, pyramid, uint2(at), p);
+            out.write(half4(half3(max(value, 0.0f)), 1.0h), uint2(at));
+        }
+    }
 }

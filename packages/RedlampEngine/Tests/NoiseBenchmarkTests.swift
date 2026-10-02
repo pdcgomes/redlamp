@@ -173,7 +173,8 @@ struct NoiseBenchmarkTests {
         let some = try score(reduced(noisy, luminance: 40, color: 25), truth: truth)
         #expect(some.psnr > none.psnr + 0.5, "PSNR \(none.psnr) → \(some.psnr)")
         #expect(some.chroma < none.chroma * 0.8, "chroma \(none.chroma) → \(some.chroma)")
-        #expect(some.texture > 0.5, "texture kept \(some.texture)")
+        // The wavelet alone keeps about 87% here; non-local means brings back most of the rest.
+        #expect(some.texture > 0.88, "texture kept \(some.texture)")
     }
 
     @Test(.enabled(if: benchmarking))

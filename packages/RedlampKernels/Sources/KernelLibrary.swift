@@ -23,6 +23,7 @@ public final class KernelLibrary: @unchecked Sendable {
     public let denoiseRows: any MTLComputePipelineState
     public let denoiseColumns: any MTLComputePipelineState
     public let denoiseShrink: any MTLComputePipelineState
+    public let denoiseNonLocal: any MTLComputePipelineState
     public let stackWarp: any MTLComputePipelineState
     public let stackPyramidDown: any MTLComputePipelineState
     public let stackLaplacian: any MTLComputePipelineState
@@ -79,6 +80,7 @@ public final class KernelLibrary: @unchecked Sendable {
         denoiseRows = try pipeline("rl_denoise_rows")
         denoiseColumns = try pipeline("rl_denoise_columns")
         denoiseShrink = try pipeline("rl_denoise_shrink")
+        denoiseNonLocal = try pipeline("rl_denoise_nonlocal")
         stackWarp = try pipeline("rl_stack_warp")
         stackPyramidDown = try pipeline("rl_stack_pyr_down")
         stackLaplacian = try pipeline("rl_stack_laplacian")

@@ -102,6 +102,46 @@ struct DetailStageTests {
         #expect(worst <= 1, "largest difference \(worst) in \(differing) bytes")
     }
 
+    /// A region at 1:1 carries enough margin that its texels are the full render's, at the
+    /// strongest settings, whose filters reach furthest.
+    @Test func `a region renders what the whole frame renders there`() throws {
+        let (width, height) = (640, 480)
+        let session = try makeSession(.bayer, width: width, height: height) { x, y in
+            Float(0.2 + 0.1 * sin(Double(x) / 3) * cos(Double(y) / 5))
+        }
+        var recipe = Self.untouched
+        recipe[.noiseLuminance] = 100
+        recipe[.noiseColor] = 100
+        let stage = DetailStage(device: device, kernels: kernels)
+        /// The texels, where they start in the frame, and their row length.
+        func render(
+            _ region: ImageRect,
+            _ size: PixelSize,
+        ) throws -> (texels: [SIMD3<Float>], x: Int, y: Int, width: Int) {
+            let commands = try #require(queue.makeCommandBuffer())
+            let output = try #require(try stage.process(
+                recipe, session: session, region: region, outputSize: size, commands: commands, cache: false,
+            ))
+            commands.commit()
+            commands.waitUntilCompleted()
+            let texture = output.texture
+            let texels = try readBack(texture, level: 0, width: texture.width, height: texture.height)
+            let x = Int((output.area.x * Float(width)).rounded()), y = Int((output.area.y * Float(height)).rounded())
+            return (texels, x, y, texture.width)
+        }
+        let full = try render(.full, session.orientedSize)
+        let region = try render(ImageRect(x: 0.4, y: 0.4, width: 0.2, height: 0.2), PixelSize(width: 128, height: 96))
+        #expect(region.x > 0 && region.width < width)
+        var worst: Float = 0
+        for y in 192 ..< 288 {
+            for x in 256 ..< 384 {
+                let inRegion = region.texels[(y - region.y) * region.width + x - region.x]
+                worst = max(worst, simd_abs(inRegion - full.texels[y * full.width + x]).max())
+            }
+        }
+        #expect(worst < 1e-3, "largest difference \(worst)")
+    }
+
     // MARK: - Sharpening
 
     /// Noise reduction and sharpening both off.
