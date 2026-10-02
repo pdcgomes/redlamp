@@ -122,9 +122,18 @@ public enum StackDetector {
         return runs(captures).compactMap { run in
             let covered = run.count { stacked.contains($0.standardizedFileURL) }
             guard covered * 2 < run.count else { return nil }
-            let thumbnails = concurrentMap(run, concurrently: concurrently, thumbnail).compactMap(\.self)
-            guard thumbnails.count == run.count, isFocusSweep(thumbnails) else { return nil }
-            return StackSuggestion(frames: run)
+            // Frames in order, a batch at a time (one with `concurrently: false`), so only the
+            // batch's thumbnails are held (a run of 100 held them all: 35 MB); reading stops once
+            // the run can't be a sweep.
+            let batch = concurrently ? ProcessInfo.processInfo.activeProcessorCount : 1
+            var sweep = FocusSweep()
+            for start in stride(from: 0, to: run.count, by: batch) {
+                let frames = Array(run[start ..< min(start + batch, run.count)])
+                for thumbnail in concurrentMap(frames, concurrently: concurrently, thumbnail) {
+                    guard let thumbnail, sweep.add(thumbnail) else { return nil }
+                }
+            }
+            return sweep.isFocusSweep ? StackSuggestion(frames: run) : nil
         }
     }
 
@@ -196,29 +205,8 @@ public enum StackDetector {
     /// match once blurred, and across a grid of cells sharpness varies a lot from frame to frame,
     /// peaking at different frames in different places.
     public static func isFocusSweep(_ thumbnails: [Thumbnail]) -> Bool {
-        guard thumbnails.count >= minimumFrames, let first = thumbnails.first,
-              thumbnails.allSatisfy({ $0.width == first.width && $0.height == first.height })
-        else {
-            return false
-        }
-        let coarse = thumbnails.map { blurred($0, radius: max(2, first.width / 48)) }
-        for index in 1 ..< coarse.count where correlation(coarse[index - 1], coarse[index]) < 0.9 {
-            return false
-        }
-        let (columns, rows) = (6, 4)
-        let sharpness = thumbnails.map { cellSharpness($0, columns: columns, rows: rows) }
-        var varying = 0
-        var peaks = Set<Int>()
-        for cell in 0 ..< columns * rows {
-            let values = sharpness.map { $0[cell] }
-            guard let high = values.max(), let low = values.min(), high > 0 else { continue }
-            if high > 2 * max(low, 1e-12) {
-                varying += 1
-                peaks.insert(values.firstIndex(of: high)!)
-            }
-        }
-        // Half the cells change sharpness at least twofold, and they peak at more than one frame.
-        return varying * 2 >= columns * rows && peaks.count >= 2
+        var sweep = FocusSweep()
+        return thumbnails.allSatisfy { sweep.add($0) } && sweep.isFocusSweep
     }
 
     static func thumbnail(_ url: URL) -> Thumbnail? {
@@ -326,5 +314,53 @@ public enum StackDetector {
         let centredB = vDSP.add(-vDSP.mean(b), b)
         let product = vDSP.dot(centredA, centredB)
         return product / max((vDSP.sumOfSquares(centredA) * vDSP.sumOfSquares(centredB)).squareRoot(), 1e-12)
+    }
+}
+
+extension StackDetector {
+    /// `isFocusSweep` a frame at a time: each frame is compared with the one before as it comes,
+    /// then kept only as its cells' sharpness.
+    struct FocusSweep {
+        private static let (columns, rows) = (6, 4)
+        private var size: (width: Int, height: Int)?
+        /// The previous frame, blurred.
+        private var previous: [Float]?
+        private var sharpness: [[Float]] = []
+        private var matching = true
+
+        /// Adds the next frame; false once the run can't be a sweep (a frame of another size, or
+        /// one that doesn't match the frame before).
+        mutating func add(_ thumbnail: Thumbnail) -> Bool {
+            guard matching else { return false }
+            if let size, size != (thumbnail.width, thumbnail.height) {
+                matching = false
+                return false
+            }
+            size = (thumbnail.width, thumbnail.height)
+            let coarse = StackDetector.blurred(thumbnail, radius: max(2, thumbnail.width / 48))
+            if let previous, StackDetector.correlation(previous, coarse) < 0.9 {
+                matching = false
+                return false
+            }
+            previous = coarse
+            sharpness.append(StackDetector.cellSharpness(thumbnail, columns: Self.columns, rows: Self.rows))
+            return true
+        }
+
+        /// Half the cells change sharpness at least twofold, and they peak at more than one frame.
+        var isFocusSweep: Bool {
+            guard matching, sharpness.count >= StackDetector.minimumFrames else { return false }
+            var varying = 0
+            var peaks = Set<Int>()
+            for cell in 0 ..< Self.columns * Self.rows {
+                let values = sharpness.map { $0[cell] }
+                guard let high = values.max(), let low = values.min(), high > 0 else { continue }
+                if high > 2 * max(low, 1e-12) {
+                    varying += 1
+                    peaks.insert(values.firstIndex(of: high)!)
+                }
+            }
+            return varying * 2 >= Self.columns * Self.rows && peaks.count >= 2
+        }
     }
 }

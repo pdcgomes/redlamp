@@ -69,6 +69,24 @@ struct StackDetectorTests {
         #expect(!StackDetector.isFocusSweep(pan))
     }
 
+    @Test func `the focus signature stops at the first frame that doesn't match`() {
+        let (width, height) = (192, 128)
+        let texture = Self.texture(width: width + 64, height: height)
+        let frame = Self.blurred(texture, width: width + 64, height: height, crop: width) { _ in 1 }
+        let flat = StackDetector.Thumbnail(
+            width: width, height: height, pixels: [Float](repeating: 0.5, count: width * height),
+        )
+        var sweep = StackDetector.FocusSweep()
+        let added = [frame, frame, flat, frame].map { sweep.add($0) }
+        #expect(added == [true, true, false, false], "another scene, and the run stays rejected")
+        #expect(!sweep.isFocusSweep)
+
+        var sizes = StackDetector.FocusSweep()
+        let small = StackDetector.Thumbnail(width: 2, height: 2, pixels: [0, 1, 1, 0])
+        let sized = [frame, small].map { sizes.add($0) }
+        #expect(sized == [true, false], "another size")
+    }
+
     /// Deterministic blobs and fine texture.
     static func texture(width: Int, height: Int) -> [Float] {
         var state: UInt64 = 7
