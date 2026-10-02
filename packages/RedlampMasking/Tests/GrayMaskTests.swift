@@ -27,6 +27,19 @@ struct GrayMaskTests {
         #expect(oriented[x, y] == 255, "orientation \(orientation)")
     }
 
+    /// Lightroom's Landscape classes don't overlap: where vegetation and natural ground both claim a
+    /// pixel (a lawn), vegetation keeps it.
+    @Test func `landscape classes are exclusive by precedence`() {
+        let size = 2
+        let classes = SAM3Landscape.exclusive([
+            .naturalGround: [1, 1, 1, 0], .vegetation: [1, 0, 0, 0], .water: [0, 0, 0.5, 0],
+        ], size: size)
+        #expect(classes[.vegetation]?.pixels == [255, 0, 0, 0])
+        #expect(classes[.water]?.pixels == [0, 0, 128, 0])
+        #expect(classes[.naturalGround]?.pixels == [0, 255, 128, 0])
+        #expect(classes[.mountains] == nil)
+    }
+
     @Test func `combines like mask operations`() {
         let a = GrayMask(width: 2, height: 1, pixels: [255, 0])
         let b = GrayMask(width: 2, height: 1, pixels: [255, 255])

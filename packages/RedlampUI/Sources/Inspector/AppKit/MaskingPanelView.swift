@@ -64,7 +64,10 @@ final class MaskingPanelView: ColumnView {
         guard !structure.outlines.isEmpty else {
             return [
                 rows.native(MasksHeaderBar()),
-                rows.native(CreateMaskGrid(title: "Create New Mask") { [model] kind in
+                rows.native(CreateMaskGrid(
+                    title: "Create New Mask",
+                    onLandscapeClass: { [model] cls in Task { await model.createAIMask(.landscape, landscape: cls) } },
+                ) { [model] kind in
                     model.startDrawing(kind)
                 }.padding(.horizontal, Metrics.panelPadding).padding(.bottom, 12)),
             ] + hint

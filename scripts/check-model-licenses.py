@@ -28,6 +28,8 @@ MANIFESTS = ROOT / "packages/RedlampMasking/Resources/Models"
 TRACKER = ROOT / "docs/research/research-tracker.md"
 
 PERMISSIVE = {"Apache-2.0", "MIT", "BSD-2-Clause", "BSD-3-Clause"}
+# Custom licences counsel hasn't cleared: only ever for an evaluation model, never cleared.
+RESTRICTED = {"SAM License"}
 
 DATASETS = {
     "SA-1B": "publisher-grant",
@@ -44,6 +46,8 @@ DATASETS = {
     "DIS5K": "non-commercial",
     # "Public academic datasets", unlisted: treated as non-commercial until audited.
     "Depth Anything 3 academic mix (unaudited)": "non-commercial",
+    # SAM 3's SA-Co data (Meta): terms unaudited, treated as non-commercial.
+    "SA-Co (unaudited)": "non-commercial",
 }
 
 REQUIRED = ["id", "version", "name", "purpose", "provider", "assetPack", "source", "computeUnits", "files", "licenses"]
@@ -69,8 +73,12 @@ def check(path, accepted):
         return problems, None
     licenses = manifest["licenses"]
     for part in ("code", "weights"):
-        if licenses.get(part) not in PERMISSIVE:
-            problems.append(f"{part} licence {licenses.get(part)!r} is not permissive")
+        licence = licenses.get(part)
+        if licence in RESTRICTED:
+            if not manifest.get("evaluationOnly", False) or manifest.get("cleared", False):
+                problems.append(f"{part} licence {licence!r} is only allowed for an evaluation model, never cleared")
+        elif licence not in PERMISSIVE:
+            problems.append(f"{part} licence {licence!r} is not permissive")
     if not manifest["files"]:
         problems.append("no files")
     for file in manifest["files"]:

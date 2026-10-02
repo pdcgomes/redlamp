@@ -61,8 +61,11 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
 
     var computed: [AIMask] = []
 
+    var lastRequest: MaskRequest?
+
     func computeMasks(_ request: MaskRequest) async throws -> [AIMask] {
-        computed.map { mask in
+        lastRequest = request
+        return computed.map { mask in
             var mask = mask
             mask.kind = request.kind
             if !request.prompts.isEmpty {
@@ -72,8 +75,10 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         }
     }
 
+    var availableKinds: Set<MaskKind> = [.subject, .background, .people, .sky, .objects]
+
     func availableMaskKinds() -> Set<MaskKind> {
-        [.subject, .background, .people, .sky, .objects]
+        availableKinds
     }
 
     var neededModel: ModelInfo?
@@ -222,6 +227,34 @@ struct MaskEditingTests {
         model.setLuminanceRange(edited)
         model.endEdit(name: "Luminance Range")
         #expect(model.selectedLuminanceRange?.upper == 90)
+    }
+
+    /// A Landscape mask asks the engine for its class and is named for it.
+    @Test func `a Landscape mask is named for its class`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let engine = StubEngine()
+        engine.availableKinds.insert(.landscape)
+        engine.computed = [AIMask(
+            kind: .landscape, provider: "stub", revision: 1, part: LandscapeClass.water.rawValue, analysisHash: "h",
+            center: ImagePoint(x: 0.5, y: 0.5), bitmap: MaskBitmap(sha256: "w", width: 4, height: 4),
+        )]
+        let model = EditorModel(engine: engine)
+        model.select(folder.appending(path: "IMG_0003.ARW"))
+        for _ in 0 ..< 200 where model.info == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(model.canCreateMask(.landscape))
+        await model.createAIMask(.landscape, landscape: .water)
+        #expect(engine.lastRequest?.landscape == .water)
+        #expect(model.recipe.masks.first?.name == "Water")
+
+        // A class the engine finds none of says which class, rather than nothing happening.
+        engine.computed = []
+        await model.createAIMask(.landscape, landscape: .mountains)
+        #expect(model.maskMessage == "No mountains were found in this photo.")
+        #expect(model.recipe.masks.count == 1)
     }
 
     @Test func `AI masks become components and update in place`() async throws {

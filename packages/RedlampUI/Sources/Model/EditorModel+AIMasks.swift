@@ -13,8 +13,8 @@ public extension EditorModel {
     /// Computes an AI mask: a new mask, or a component of `target` with `operation`. People
     /// adds one component per person (one for all of them when subtracting or intersecting).
     func createAIMask(
-        _ kind: MaskKind, part: PersonPart = .entirePerson, operation: MaskOperation = .add,
-        addingTo target: UUID? = nil,
+        _ kind: MaskKind, part: PersonPart = .entirePerson, landscape: LandscapeClass = .vegetation,
+        operation: MaskOperation = .add, addingTo target: UUID? = nil,
     ) async {
         guard info != nil, aiMaskProgress == nil else { return }
         let photo = selection
@@ -23,10 +23,18 @@ public extension EditorModel {
         aiMaskProgress = kind
         maskMessage = nil
         defer { aiMaskProgress = nil }
-        let request = MaskRequest(kind: kind, part: part, combined: target != nil && operation != .add)
+        let request = MaskRequest(
+            kind: kind, part: part, combined: target != nil && operation != .add, landscape: landscape,
+        )
         do {
             let masks = try await engine.computeMasks(request)
-            guard selection == photo, !masks.isEmpty else { return }
+            guard selection == photo else { return }
+            guard !masks.isEmpty else {
+                let error: MaskComputationError = kind == .landscape ? .notFound(landscape)
+                    : kind == .people && part != .entirePerson ? .notFound(part) : .nothingFound(kind)
+                maskMessage = error.description
+                return
+            }
             var next = recipe
             let components = masks.enumerated().map { index, mask in
                 MaskComponent(
@@ -34,7 +42,8 @@ public extension EditorModel {
                     operation: index == 0 && target != nil ? operation : .add,
                 )
             }
-            let title = kind == .people && part != .entirePerson ? part.name : kind.name
+            let title = kind == .people && part != .entirePerson ? part.name
+                : kind == .landscape ? landscape.name : kind.name
             if let target, let index = next.masks.firstIndex(where: { $0.id == target }) {
                 next.masks[index].components += components
                 selectedMaskID = target

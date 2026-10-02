@@ -9,6 +9,7 @@ public extension RedlampEngine {
         switch kind {
         case .objects: "sam2.1-tiny"
         case .depthRange: "depth-anything-v2-small"
+        case .landscape: "sam3-landscape"
         default: nil
         }
     }

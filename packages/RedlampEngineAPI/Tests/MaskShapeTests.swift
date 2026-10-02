@@ -81,6 +81,45 @@ struct MaskShapeTests {
         #expect(range.upperFeather == 20)
     }
 
+    /// A mask's `part` is its person part, or its Landscape class: updating it asks for the same.
+    @Test func `updating a Landscape mask asks for its class`() {
+        let bitmap = MaskBitmap(sha256: "a", width: 1, height: 1)
+        let water = AIMask(
+            kind: .landscape,
+            provider: "test",
+            revision: 1,
+            part: LandscapeClass.water.rawValue,
+            analysisHash: "",
+            center: ImagePoint(x: 0.5, y: 0.5),
+            bitmap: bitmap,
+        )
+        #expect(MaskRequest(updating: water).landscape == .water)
+        let lips = AIMask(
+            kind: .people,
+            provider: "test",
+            revision: 1,
+            part: PersonPart.lips.rawValue,
+            analysisHash: "",
+            center: ImagePoint(x: 0.5, y: 0.5),
+            bitmap: bitmap,
+        )
+        #expect(MaskRequest(updating: lips).part == .lips)
+    }
+
+    /// Every mask that finds nothing says so in a sentence that reads right.
+    @Test func `nothing found messages read right`() {
+        #expect(MaskComputationError.nothingFound(.subject).description == "No subject was found in this photo.")
+        #expect(MaskComputationError.nothingFound(.sky).description == "No sky was found in this photo.")
+        #expect(MaskComputationError.nothingFound(.people).description == "No people were found in this photo.")
+        #expect(MaskComputationError.nothingFound(.objects).description == "Nothing was found to select there.")
+        #expect(MaskComputationError.notFound(LandscapeClass.water).description == "No water was found in this photo.")
+        #expect(MaskComputationError.notFound(LandscapeClass.mountains).description
+            == "No mountains were found in this photo.")
+        #expect(MaskComputationError.notFound(PersonPart.teeth).description == "No teeth were found in this photo.")
+        #expect(MaskComputationError.notFound(PersonPart.faceSkin).description
+            == "No face skin was found in this photo.")
+    }
+
     @Test func `limits color samples to five`() {
         let samples = (0 ..< 8).map { ColorSample(center: ImagePoint(x: Double($0) / 8, y: 0.5)) }
         #expect(ColorRangeMask(samples: samples).samples.count == ColorRangeMask.maximumSamples)

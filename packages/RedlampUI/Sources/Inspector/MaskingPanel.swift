@@ -12,7 +12,10 @@ import SwiftUI
             MasksHeaderBar()
 
             if model.maskOutlines.isEmpty {
-                CreateMaskGrid(title: "Create New Mask") { kind in model.startDrawing(kind) }
+                CreateMaskGrid(
+                    title: "Create New Mask",
+                    onLandscapeClass: { cls in Task { await model.createAIMask(.landscape, landscape: cls) } },
+                ) { kind in model.startDrawing(kind) }
                     .padding(.horizontal, Theme.panelPadding)
                     .padding(.bottom, 8)
                 HStack {
@@ -99,6 +102,7 @@ struct MaskActionsBar: View {
             CreateMaskMenu(
                 title: "Create New Mask", systemImage: "plus",
                 onPersonPart: { part in Task { await model.createAIMask(.people, part: part) } },
+                onLandscapeClass: { cls in Task { await model.createAIMask(.landscape, landscape: cls) } },
             ) { kind in
                 model.startDrawing(kind)
             }
@@ -269,6 +273,8 @@ struct DrawingHint: View {
 /// visible but disabled, with their phase in the tooltip.
 struct CreateMaskGrid: View {
     let title: String
+    /// Landscape classes: the Landscape tile opens a menu of them.
+    var onLandscapeClass: ((LandscapeClass) -> Void)?
     let onCreate: (MaskKind) -> Void
     @Environment(EditorModel.self) private var model
 
@@ -282,24 +288,24 @@ struct CreateMaskGrid: View {
                 .foregroundStyle(Theme.secondaryLabel)
             LazyVGrid(columns: columns, spacing: 6) {
                 ForEach(MaskKind.creatable, id: \.self) { kind in
-                    Button {
-                        onCreate(kind)
-                    } label: {
-                        VStack(spacing: 5) {
-                            if model.aiMaskProgress == kind {
-                                ProgressView().controlSize(.small).frame(height: 16)
-                            } else {
-                                Image(systemName: kind.symbol).font(.system(size: 16))
+                    Group {
+                        if kind == .landscape, let onLandscapeClass {
+                            Menu {
+                                ForEach(LandscapeClass.allCases, id: \.self) { cls in
+                                    Button(cls.name) { onLandscapeClass(cls) }
+                                }
+                            } label: {
+                                tile(kind)
                             }
-                            Text(kind.name)
-                                .font(.system(size: 9.5))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
+                            .menuStyle(.button)
+                            .menuIndicator(.hidden)
+                        } else {
+                            Button {
+                                onCreate(kind)
+                            } label: {
+                                tile(kind)
+                            }
                         }
-                        .frame(maxWidth: .infinity, minHeight: 52)
-                        .foregroundStyle(model.canCreateMask(kind) ? Theme.value : Theme.tertiaryLabel)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.well))
-                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .disabled(!model.canCreateMask(kind) || model.aiMaskProgress != nil)
@@ -308,6 +314,24 @@ struct CreateMaskGrid: View {
                 }
             }
         }
+    }
+
+    private func tile(_ kind: MaskKind) -> some View {
+        VStack(spacing: 5) {
+            if model.aiMaskProgress == kind {
+                ProgressView().controlSize(.small).frame(height: 16)
+            } else {
+                Image(systemName: kind.symbol).font(.system(size: 16))
+            }
+            Text(kind.name)
+                .font(.system(size: 9.5))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, minHeight: 52)
+        .foregroundStyle(model.canCreateMask(kind) ? Theme.value : Theme.tertiaryLabel)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.well))
+        .contentShape(Rectangle())
     }
 }
 
@@ -319,6 +343,8 @@ struct CreateMaskMenu: View {
     var onReuse: (UUID) -> Void = { _ in }
     /// People parts; the plain People item selects entire people.
     var onPersonPart: ((PersonPart) -> Void)?
+    /// Landscape classes.
+    var onLandscapeClass: ((LandscapeClass) -> Void)?
     let onCreate: (MaskKind) -> Void
     @Environment(EditorModel.self) private var model
 
@@ -337,6 +363,14 @@ struct CreateMaskMenu: View {
                     Menu {
                         ForEach(PersonPart.allCases, id: \.self) { part in
                             Button(part.name) { onPersonPart(part) }
+                        }
+                    } label: {
+                        Label(kind.name, systemImage: kind.symbol)
+                    }
+                } else if kind == .landscape, let onLandscapeClass, model.canCreateMask(.landscape) {
+                    Menu {
+                        ForEach(LandscapeClass.allCases, id: \.self) { cls in
+                            Button(cls.name) { onLandscapeClass(cls) }
                         }
                     } label: {
                         Label(kind.name, systemImage: kind.symbol)
@@ -689,6 +723,16 @@ struct ComponentOperationMenus: View {
                     onReuse: { model.addMaskReference($0, to: mask.id, operation: operation) },
                     onPersonPart: { part in
                         Task { await model.createAIMask(.people, part: part, operation: operation, addingTo: mask.id) }
+                    },
+                    onLandscapeClass: { cls in
+                        Task {
+                            await model.createAIMask(
+                                .landscape,
+                                landscape: cls,
+                                operation: operation,
+                                addingTo: mask.id,
+                            )
+                        }
                     },
                 ) { kind in
                     model.startDrawing(kind, operation: operation, addingTo: mask.id)

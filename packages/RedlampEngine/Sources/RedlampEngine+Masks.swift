@@ -90,6 +90,36 @@ extension RedlampEngine {
 
     static let depthAnything3ID = "depth-anything-3-mono-large"
 
+    /// SAM 3 for Landscape, when it's on this Mac and offered (it is evaluation only).
+    func sam3Landscape() async -> SAM3Landscape? {
+        if let loaded = landscapeModel.withLock({ $0 }) {
+            return loaded
+        }
+        guard let manifest = ModelCatalog.offered.first(where: { $0.id == Self.modelID(for: .landscape) }),
+              let directory = await ModelStore.shared.location(of: manifest),
+              let loaded = try? await Task.detached(priority: .userInitiated, operation: {
+                  try SAM3Landscape(manifest: manifest, directory: directory)
+              }).value
+        else { return nil }
+        landscapeModel.withLock { $0 = loaded }
+        return loaded
+    }
+
+    /// Every Landscape class's mask for the open photo: one encoding, every prompt decoded, kept.
+    func landscapeClasses(
+        _ analysis: (image: CGImage, hash: String), model: SAM3Landscape,
+    ) async throws -> [LandscapeClass: GrayMask] {
+        if let cached = landscapeCache.withLock({ $0 }), cached.hash == analysis.hash {
+            return cached.classes
+        }
+        let image = analysis.image
+        let classes = try await Task.detached(priority: .userInitiated) {
+            try model.classes(model.features(of: image))
+        }.value
+        landscapeCache.withLock { $0 = (analysis.hash, classes) }
+        return classes
+    }
+
     /// One inference gives both depth and sky; kept for the open photo.
     func depthAnything3Result(
         _ analysis: (image: CGImage, hash: String), model: DepthAnything3,
@@ -171,6 +201,9 @@ extension RedlampEngine {
         if ModelCatalog.offered.contains(where: { $0.id == Self.modelID(for: .objects) }) {
             kinds.insert(.objects)
         }
+        if ModelCatalog.offered.contains(where: { $0.id == Self.modelID(for: .landscape) }) {
+            kinds.insert(.landscape)
+        }
         let embeddedDepth = currentSession().map { EmbeddedMattes.available(in: $0.info.url).contains(.depth) } ?? false
         let depthModels = [Self.modelID(for: .depthRange), Self.depthAnything3ID]
         if embeddedDepth || ModelCatalog.offered.contains(where: { depthModels.contains($0.id) }) {
@@ -205,6 +238,9 @@ extension RedlampEngine {
                 analysisHash: analysis.hash, center: ImagePoint(x: 0.5, y: 0.5), bitmap: bitmap,
             )]
         }
+        if request.kind == .landscape {
+            return try await landscapeMask(request, analysis: analysis, session: session)
+        }
         if request.kind == .objects {
             let (raw, segmenter) = try await segmentObject(request, analysis: analysis)
             let image = analysis.image
@@ -226,9 +262,21 @@ extension RedlampEngine {
                 analysisHash: analysis.hash, center: request.prompts.first ?? mask.centroid, bitmap: bitmap,
             )]
         }
-        var provided = try await Task.detached(priority: .userInitiated) {
-            try Self.provideMasks(request, image: analysis.image, url: url)
-        }.value
+        let part = request.kind == .people && request.part != .entirePerson ? request.part : nil
+        var provided: [ProvidedMask]
+        do {
+            provided = try await Task.detached(priority: .userInitiated) {
+                try Self.provideMasks(request, image: analysis.image, url: url)
+            }.value
+        } catch MaskComputationError.nothingFound(.people) where part != nil {
+            // No face, so none of the part: say which part.
+            throw MaskComputationError.notFound(request.part)
+        } catch MaskComputationError.unsupported(.people) where part == .hair {
+            throw MaskComputationError.needsHairMatte
+        }
+        guard !provided.isEmpty else {
+            throw part.map(MaskComputationError.notFound) ?? MaskComputationError.nothingFound(request.kind)
+        }
         if request.combined, var first = provided.first, provided.count > 1 {
             first.mask = provided.dropFirst().reduce(first.mask) { $0.union($1.mask) }
             first.instance = nil
@@ -265,6 +313,33 @@ extension RedlampEngine {
     static func takesClosedFormMatte(_ mask: ProvidedMask) -> Bool {
         [.subject, .background, .people].contains(mask.kind) && (mask.part ?? .entirePerson) == .entirePerson
             && !mask.provider.hasPrefix("apple.embedded")
+    }
+
+    /// One Landscape class, from SAM 3's at its output size, its edges solved per pixel at the
+    /// size masks are stored at (REDLAMP_EDGE_MATTE=off keeps the model's).
+    func landscapeMask(
+        _ request: MaskRequest, analysis: (image: CGImage, hash: String), session: ImageSession,
+    ) async throws -> [AIMask] {
+        guard let model = await sam3Landscape() else { throw MaskComputationError.unsupported(.landscape) }
+        let classes = try await landscapeClasses(analysis, model: model)
+        guard let coarse = classes[request.landscape], coarse.coveredFraction > 0.001 else {
+            throw MaskComputationError.notFound(request.landscape)
+        }
+        let size = PixelSize(width: analysis.image.width, height: analysis.image.height)
+        let full = ProcessInfo.processInfo.environment["REDLAMP_EDGE_MATTE"] == "off"
+            ? nil : try? await matteImage(for: session)
+        let mask = await Task.detached(priority: .userInitiated) {
+            let resized = coarse.resized(to: size)
+            return full.map { ClosedFormMatte.refine(resized, image: $0) } ?? resized
+        }.value
+        guard mask.coveredFraction > 0.001, let bitmap = mask.bitmap() else {
+            throw MaskComputationError.notFound(request.landscape)
+        }
+        return [AIMask(
+            kind: .landscape, provider: model.manifest.provider + (full == nil ? "" : "+closed-form"),
+            revision: model.manifest.version, part: request.landscape.rawValue, analysisHash: analysis.hash,
+            center: mask.centroid, bitmap: bitmap,
+        )]
     }
 
     /// Segment Anything's mask for `request`'s prompts as it gives it, at the analysis size within
@@ -472,6 +547,10 @@ extension RedlampEngine {
             }
             if currentSession() === session, let model = await depthAnything3() {
                 _ = try? await depthAnything3Result(analysis, model: model)
+            }
+            if await isReady(Self.modelID(for: .landscape)), currentSession() === session,
+               let model = await sam3Landscape() {
+                _ = try? await landscapeClasses(analysis, model: model)
             }
         }
     }

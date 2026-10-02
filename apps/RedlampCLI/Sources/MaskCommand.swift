@@ -7,8 +7,10 @@ enum MaskCommand {
     static let usage = """
     usage: redlamp mask <image> --kind <kind> -o <mask.png> [--point x,y]… [--exclude x,y]…
 
-      --kind      subject, background, sky, people, people:<part>, objects, depthRange
-                  (parts: faceSkin, eyebrows, eyeSclera, iris, lips, teeth, hair)
+      --kind      subject, background, sky, people, people:<part>, objects, depthRange,
+                  landscape:<class>
+                  (parts: faceSkin, eyebrows, eyeSclera, iris, lips, teeth, hair; classes: water,
+                  vegetation, mountains, architecture, naturalGround, artificialGround)
       --point     for objects: a point to select (0…1, from the top left); repeat to add
       --exclude   for objects: a point to leave out
       -o          the PNG; several masks (one per person) are written as name-1.png, name-2.png…
@@ -26,6 +28,7 @@ enum MaskCommand {
         }
         var kind: MaskKind?
         var part = PersonPart.entirePerson
+        var landscape = LandscapeClass.vegetation
         var prompts: [ImagePoint] = []
         var excluded: [ImagePoint] = []
         var output: URL?
@@ -46,7 +49,11 @@ enum MaskCommand {
             case "--kind":
                 let spec = try value().split(separator: ":").map(String.init)
                 kind = MaskKind(rawValue: spec[0])
-                if spec.count > 1 {
+                if spec.count > 1, kind == .landscape {
+                    guard let named = LandscapeClass(rawValue: spec[1])
+                    else { throw CLIError(description: "unknown Landscape class \(spec[1])") }
+                    landscape = named
+                } else if spec.count > 1 {
                     guard let named = PersonPart(rawValue: spec[1])
                     else { throw CLIError(description: "unknown part \(spec[1])") }
                     part = named
@@ -74,6 +81,7 @@ enum MaskCommand {
             part: part,
             prompts: prompts,
             excluded: excluded,
+            landscape: landscape,
         ))
         let elapsed = clock.now - started
         for (number, mask) in masks.enumerated() {

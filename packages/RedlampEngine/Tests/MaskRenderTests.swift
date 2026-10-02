@@ -440,6 +440,23 @@ extension MaskRenderTests {
         #expect(try await ready(within: 30), "the next photo")
     }
 
+    /// With SAM 3 on this Mac: the Sony sample's trees are vegetation, named for the class, and
+    /// its edges solved per pixel.
+    @Test(.enabled(if: EngineSmokeTests.canRender && Self.isInstalled("sam3-landscape")))
+    func `landscape finds the trees`() async throws {
+        setenv("REDLAMP_EVALUATION_MODELS", "1", 1)
+        let engine = try RedlampEngine()
+        let url = try #require(EngineSmokeTests.fixtures.first { $0.lastPathComponent == "_DSC0009.ARW" })
+        _ = try await engine.open(url)
+        let mask = try #require(try await engine.computeMasks(MaskRequest(kind: .landscape, landscape: .vegetation))
+            .first)
+        #expect(mask.part == LandscapeClass.vegetation.rawValue)
+        #expect(mask.provider == "redlamp.sam3-landscape+closed-form")
+        let png = try #require(mask.bitmap.png)
+        let vegetation = try #require(GrayMask.decode(png))
+        #expect(vegetation.coveredFraction > 0.05, "vegetation covers \(vegetation.coveredFraction)")
+    }
+
     /// With Depth Anything 3 on this Mac: on the Nikon sample the front of the table is nearer
     /// than the wall behind the objects.
     @Test(.enabled(if: EngineSmokeTests.canRender && Self.isInstalled("depth-anything-3-mono-large")))

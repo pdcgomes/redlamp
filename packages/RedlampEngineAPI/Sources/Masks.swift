@@ -356,6 +356,32 @@ public enum PersonPart: String, Codable, Sendable, Hashable, CaseIterable {
         case .hair: "Hair"
         }
     }
+
+    /// Whether `name` is plural ("No eyebrows were found").
+    public var isPlural: Bool {
+        [.eyebrows, .iris, .lips, .teeth].contains(self)
+    }
+}
+
+/// Lightroom's Landscape classes (Sky is a mask kind of its own). Each pixel belongs to one.
+public enum LandscapeClass: String, Codable, Sendable, Hashable, CaseIterable {
+    case water, vegetation, mountains, architecture, naturalGround, artificialGround
+
+    public var name: String {
+        switch self {
+        case .water: "Water"
+        case .vegetation: "Vegetation"
+        case .mountains: "Mountains"
+        case .architecture: "Architecture"
+        case .naturalGround: "Natural Ground"
+        case .artificialGround: "Artificial Ground"
+        }
+    }
+
+    /// Whether `name` is plural ("No mountains were found").
+    public var isPlural: Bool {
+        self == .mountains
+    }
 }
 
 /// What an AI mask is computed for. Masks are computed from the photo without any edit, so
@@ -370,24 +396,29 @@ public struct MaskRequest: Sendable, Hashable {
     public var excluded: [ImagePoint]
     /// One mask for everyone found, rather than one per person.
     public var combined: Bool
+    /// For Landscape: which class.
+    public var landscape: LandscapeClass
 
     public init(
         kind: MaskKind, part: PersonPart = .entirePerson, prompts: [ImagePoint] = [], excluded: [ImagePoint] = [],
-        combined: Bool = false,
+        combined: Bool = false, landscape: LandscapeClass = .vegetation,
     ) {
         self.kind = kind
         self.part = part
         self.prompts = prompts
         self.excluded = excluded
         self.combined = combined
+        self.landscape = landscape
     }
 
-    /// The request an existing AI mask was made with, to update it.
+    /// The request an existing AI mask was made with, to update it. (A mask's `part` is its person
+    /// part, or its Landscape class.)
     public init(updating mask: AIMask) {
         self.init(
             kind: mask.kind, part: mask.part.flatMap(PersonPart.init(rawValue:)) ?? .entirePerson,
             prompts: mask.prompts, excluded: mask.excludedPrompts ?? [],
             combined: mask.instance == nil && mask.kind == .people,
+            landscape: mask.part.flatMap(LandscapeClass.init(rawValue:)) ?? .vegetation,
         )
     }
 }
@@ -397,11 +428,27 @@ public enum MaskComputationError: Error, Equatable, CustomStringConvertible {
     case unsupported(MaskKind)
     /// The model found nothing to select (no subject, no people, no sky).
     case nothingFound(MaskKind)
+    /// The model found none of a People part or a Landscape class (`name`, plural or not).
+    case partNotFound(name: String, plural: Bool)
+    /// Hair comes only from a hair matte the camera embedded (iPhone portraits).
+    case needsHairMatte
+
+    public static func notFound(_ part: PersonPart) -> MaskComputationError {
+        .partNotFound(name: part.name, plural: part.isPlural)
+    }
+
+    public static func notFound(_ landscape: LandscapeClass) -> MaskComputationError {
+        .partNotFound(name: landscape.name, plural: landscape.isPlural)
+    }
 
     public var description: String {
         switch self {
         case let .unsupported(kind): "\(kind.name) masks aren't available on this device yet."
+        case .nothingFound(.people): "No people were found in this photo."
+        case .nothingFound(.objects): "Nothing was found to select there."
         case let .nothingFound(kind): "No \(kind.name.lowercased()) was found in this photo."
+        case let .partNotFound(name, plural): "No \(name.lowercased()) \(plural ? "were" : "was") found in this photo."
+        case .needsHairMatte: "Hair masks need a photo with its own hair matte, such as an iPhone portrait."
         }
     }
 }
@@ -581,8 +628,7 @@ public enum MaskKind: String, CaseIterable, Codable, Sendable, Hashable {
     public var plannedPhase: String? {
         switch self {
         case .linear, .radial, .brush, .colorRange, .luminanceRange, .existingMask: nil
-        case .subject, .sky, .background, .people, .depthRange, .objects: nil
-        case .landscape: "Phase 3"
+        case .subject, .sky, .background, .people, .depthRange, .objects, .landscape: nil
         }
     }
 

@@ -182,8 +182,19 @@ Lightroom splits Landscape into Sky (done above) and six more classes: Water, Ve
 
 - **SAM 3 finds every class, with Lightroom-like regions.** Several of its "errors" are the reference's: it marks a swimming pool and a street puddle as water, which ADE20K has no label for.
 - **Natural ground is a taxonomy question as much as a model one.** ADE20K files grassy fields under natural ground ("field"), the lawn prompts file them under vegetation; without exclusive classes, "ground" also fires on roads (11% false positives). Where Lightroom draws that line needs checking against Lightroom itself.
-- **It is not shippable as it stands.** SAM 3 is 0.85B parameters (3.4 GB), takes 17–27 s per photo for all six classes on the GPU (MPS, through PyTorch), has no Core ML conversion, and is under Meta's custom SAM License (gated; pass-through and no-reverse-engineering terms), which needs counsel.
-- **The routes from here:** counsel on the SAM License, then a Core ML conversion of SAM 3's image encoder and text-prompted decoder (large, like Depth Anything 3's, with prompts cached per class); or the trained head of MSK-13 on data we have rights to (the CC-licensed part of COCO-Stuff, whose stuff classes map onto these six), with SAM 3 as a labeller if its licence allows that much.
+- **Converted to Core ML** (`convert_sam3.py`; licence risk accepted for evaluation). Only what Landscape needs ships: the image encoder (454M parameters, 876 MB in fp16) and the text-prompted decoder (25M, 66 MB); the 20 prompts' text features are computed once, offline (329 KB), so the 354M-parameter text encoder stays behind. The decoder outputs two 288 × 288 maps per prompt, computed inside the model: the instances scoring over 0.4 merged, and the dense semantic map times the presence score. Getting there took: calling the models' submodules directly (the export can't follow Transformers' decorators), the empty decomposition table for the encoder (the default one turns every windowed-attention projection into a 450 MB constant: 13 GB in all), a converter for `aten.alias`, contiguous example inputs, and the mask decoder's einsum written as a matrix multiply (the GPU backend can't compile its 5-D transposes). Both run on the GPU: the encoder in 609 ms per photo (2.9 s to load), the decoder in 86 ms per prompt. Against PyTorch the encoder's features correlate at 0.9999 and the decoder's maps agree everywhere at 0.5.
+- **On the bake-off (`sam3_coreml_landscape.py`) Core ML matches PyTorch**, at 2.6–2.9 s per photo for all six classes and 20 prompts (PyTorch on MPS, encoding once: about 4 s):
+
+| Mean IoU against OneFormer | Water | Vegetation | Mountains | Architecture | Natural ground | Artificial ground | Mean |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| PyTorch, instances | 0.833 | 0.687 | 0.655 | 0.592 | 0.351 | 0.611 | 0.622 |
+| PyTorch, semantic map | 0.841 | 0.757 | 0.571 | 0.602 | 0.286 | 0.619 | 0.613 |
+| Core ML, instances | 0.832 | 0.712 | 0.626 | 0.582 | 0.337 | 0.612 | 0.617 |
+| Core ML, semantic map | 0.842 | 0.757 | 0.572 | 0.602 | 0.287 | 0.619 | 0.613 |
+| **Core ML, mean of both** | 0.839 | 0.718 | 0.618 | 0.589 | 0.329 | 0.621 | **0.619** |
+
+  The semantic map is better for vegetation and water, instances for mountains and natural ground; their mean is as good as either overall. Under the SAM License, it stays an evaluation model.
+- **In Redlamp, as an evaluation model** (`SAM3Landscape`, manifest `sam3-landscape`, 988 MB, unpublished): Create New Mask › Landscape › Water, Vegetation, Mountains, Architecture, Natural Ground or Artificial Ground (`redlamp mask --kind landscape:water`). The photo is encoded once and every class decoded together, cached for the open photo and prepared by the Masking tool's warm-up; each class is the mean of its prompts' instance and semantic maps, made exclusive by precedence, then its edges solved by `ClosedFormMatte` at 4096 px. On the Sony test raw its trees come out as vegetation; the coastal and street look-development photos split into sea and pool, trees, houses, road and a puddle as water.
 
 ## Decision
 
