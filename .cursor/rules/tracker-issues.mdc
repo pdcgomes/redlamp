@@ -1,0 +1,34 @@
+---
+description: The research tracker is where the roadmap is planned; GitHub issues mirror its work items. Sync after tracker changes, and bring issues people file into the tracker.
+alwaysApply: true
+---
+
+# Roadmap: the tracker and GitHub issues
+
+`docs/research/research-tracker.md` is where the roadmap is planned. Every open work item in it has a GitHub issue, mirrored by `scripts/tracker-issues.py`, so the roadmap can be followed, discussed and picked up on GitHub.
+
+## Plan in the tracker
+
+- Add, split, reprioritise and finish work in the tracker first, by its own rules: new IDs in the right section, never reused; `Status` names the commit.
+- The sync owns each issue's title, the block between `<!-- tracker:begin -->` and `<!-- tracker:end -->`, its open or closed state, and the `tracker`, `area:`, `phase:`, `size:`, `kind:`, `decision:` and `status:` labels. Don't edit those on GitHub: the next sync overwrites them. Everything else is free to use: comments, assignees, text above the block, and labels such as `help wanted` or `good first issue`.
+- Decision rows (`DEC-`) and recorded skips (`SKIP-`) stay in the tracker only.
+
+## Sync after a tracker change
+
+Whenever a change touches the tracker, sync as part of the same work, once it is committed:
+
+```bash
+scripts/tracker-issues.py          # dry run: read what it will do
+scripts/tracker-issues.py --apply
+```
+
+A row that becomes `Done` closes its issue as completed; `Not needed` or `Rejected` closes it as not planned; a row moving back reopens it. When work lands for a tracked item, name its issue in the commit message (`Refine Edge brush (MSK-07, #12)`).
+
+## Issues people file
+
+The sync lists open issues without a tracker ID as untriaged. For each:
+
+- **Bug:** fix it and close it as usual. Bugs don't need a tracker row unless fixing one is a piece of planned work.
+- **Feature request or idea:** if it belongs on the roadmap, add a tracker row (Decision `Proposed`, Source linking the issue), then start the issue's title with the new ID (`MSK-18: …`). The next sync adopts it and keeps the reporter's text above the mirrored block. Only the owner moves a row to `Accepted`.
+- **Already tracked:** close it as a duplicate of the tracker item's issue.
+- **Declined:** close it with the reason; add a `SKIP-` row when the reason is worth keeping.
