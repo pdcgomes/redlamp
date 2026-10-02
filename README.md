@@ -200,7 +200,7 @@ Folders and the filmstrip on 50,000 photos in 500 folders (`scripts/make-folder-
 | Thumbnails from the disk cache | 6,210 a second |
 | Main thread while listing, decoding and warming (p99) | 0.15 ms |
 | Main thread while scrolling the filmstrip end to end (p99) | 1.4 ms |
-| Peak memory, 155 MB before opening | 531 MB (thumbnails 115 MB) |
+| Peak memory, 152 MB before opening | 317 MB (531 MB before the [memory budgets](docs/plans/2026-10-02-folders-design.md#memory-budgets)); 207 MB idle after a memory-pressure trim |
 
 Dragging a slider at 120 events a second (`scripts/perf-sweep.sh`), with every panel open:
 

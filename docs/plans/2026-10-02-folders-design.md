@@ -34,7 +34,7 @@ Every rule below is enforced by a test or by `--folders-perf` (see Verification)
 - **Streaming.** The open folder's photos appear as soon as its listing returns. With subfolders on, the subfolders are listed in parallel and arrive in order, so nothing sorts 50,000 names at once.
 - **O(1) lookups.** A URL-to-index map serves `select`, stepping, the prefetch working set, saving and ratings.
 - **Bounded thumbnails.**
-  - In memory: an LRU of decoded thumbnails with a 128 MB budget (about 1,200 at 192 × 140), trimmed to what's visible on a memory-pressure warning.
+  - In memory: an LRU of decoded thumbnails with a 128 MB budget (about 1,200 at 192 × 140), trimmed to what's visible on a memory-pressure warning. They're always decoded from their pack JPEG, whose pixels ImageIO keeps in purgeable memory: the system can take it back, and it doesn't count against Redlamp, so a full LRU costs about 45 MB of footprint.
   - Decoded at the cell's pixel size (192 px), not 256.
   - On disk: one pack file per folder in `~/Library/Caches/app.redlamp/Thumbnails`, at most 1 GB across packs (about 100,000 thumbnails), least recently used packs first to go.
   - Files iCloud hasn't downloaded are never read: they show a cloud.
@@ -48,7 +48,41 @@ Every rule below is enforced by a test or by `--folders-perf` (see Verification)
 | A 50,000-photo tree in 500 folders, fully listed | under 300 ms |
 | Visible thumbnails | under 150 ms from the pack, under 400 ms from the files |
 | Background warming | at least 300 thumbnails a second from the files, 2,000 from the pack |
-| Memory | about 150 B per photo, plus the 128 MB thumbnail budget; pack pages are file-backed |
+| Memory | see Memory budgets |
+
+## Memory budgets
+
+The footprint (`phys_footprint`, which Activity Monitor shows as Memory) is what macOS charges Redlamp for and what memory pressure acts on, so the budgets are footprints. They're counted over the footprint at launch: the engine's Metal setup and the frameworks (about 150 MB) aren't the folders' to spend. `--folders-perf` checks them on 50,000 photos in 500 folders, through each phase of browsing:
+
+| Over the footprint at launch | Budget | Measured |
+| --- | --- | --- |
+| The peak, while listing, decoding, warming, reading the pack and scrolling | under 200 MB | 163 to 168 MB |
+| Once listed | under 1.2 KB a photo (57 MB) | 43 to 52 MB |
+| Browsing paused, without memory pressure | under 180 MB | 155 to 162 MB |
+| After a memory-pressure trim | under 80 MB | 52 to 54 MB |
+| Idle after the trim | under 80 MB | 54 to 58 MB |
+
+And for the parts:
+
+- **Thumbnails in memory:** at most 128 MB of pixels, the LRU's budget. Each costs about 33 KB of footprint (ImageIO's state and the JPEG); its 96 KB of pixels are purgeable. A full LRU is about 45 MB.
+- **Decodes in flight:** no more than the lanes are wide together (32 on an M1 Ultra). Each is a LibRaw instance (750 KB) and ImageIO's decode of the preview, read where it is in the file's mapping, whose clean pages don't count.
+- **Stack detection:** one batch of frames at a time (one frame, on the background lane), never a whole run.
+- **Photos:** about 0.9 KB each over launch once listed, 0.7 KB of it live. Most of that is the URL each keeps (512 B); the item is about 100 B and its index entry 63 B. The 150 B a photo first planned assumed names, not URLs. A name per photo and a URL per folder is the next saving.
+
+`--folders-perf` ends its report with PASS or FAIL for each budget and for the performance contract, and quits with status 1 when one fails; `scripts/folders-perf.sh` runs it on a Release build and fails with it. Unit tests hold the parts to theirs: the loader never holds more than its budget, whichever lanes ask; no more decodes run at once than the lanes allow; a raw's preview is decoded in place in the mapping, never copied; what a job autoreleases goes when the job ends; the focus signature stops at the first frame that doesn't match.
+
+### Where the memory goes
+
+`--folders-perf-memory` breaks the footprint down after each phase, and near each phase's peak, into `/tmp/redlamp-memory.txt`. It uses in-process APIs only, since `vmmap`, `footprint`, `heap` and `leaks` may not be allowed to run where Redlamp is measured:
+
+- the kernel's ledgers (`task_info(TASK_VM_INFO)`): the footprint and its lifetime peak; anonymous memory, resident and compressed; GPU memory (the graphics ledger); purgeable memory, volatile and not; reusable pages;
+- every VM region's dirty and compressed pages (`mach_vm_region_recurse`), grouped by the tag its allocator gave it: malloc's kinds, ImageIO, CoreGraphics, Core Animation, IOKit, IOSurface and IOAccelerator, stacks, mapped files and the shared cache;
+- malloc's zones (`malloc_zone_statistics`): the bytes in live blocks, against its regions' pages;
+- Redlamp's own counts: photos, thumbnails in memory, packs open, and jobs running in each lane.
+
+It can't say which code owns a malloc block (that takes MallocStackLogging and `heap`), nor split up GPU memory that isn't mapped into the process. That memory, page tables and IOKit's own are left as "not in a region".
+
+On macOS 26, malloc keeps the blocks it frees, of every size, for reuse, and they stay in the footprint. Of 16 MB freed in 1 MB blocks, all 16 are still counted, and `malloc_zone_pressure_relief` gives nothing back (in a test program, the undocumented `MallocSpaceEfficient=1` and `MallocLargeCache=0` do). So the footprint follows the highest amount ever allocated at once, transient buffers included, and doesn't come down by itself. The budgets therefore hold down transient memory as much as what is kept.
 
 ## Using the hardware
 
@@ -59,9 +93,9 @@ Redlamp feels instant because it uses the whole machine, not because it does lit
   - **look-ahead**, at utility priority, half as wide;
   - **background**, at utility priority, half as wide as the performance cores (at least as wide as the efficiency cores, `hw.perflevel1.logicalcpu`). It was background priority at first; see Results.
 
-  Jobs run on GCD threads (blocking I/O doesn't belong on Swift's cooperative pool). A queued job is promoted when it becomes visible, and a job whose folder or cell went away is dropped before it starts. Background jobs start only while no on-screen job waits, and not at all in Low Power Mode or when the Mac is hot (`thermalState` serious or critical), as exports already rest.
+  Jobs run on GCD threads (blocking I/O doesn't belong on Swift's cooperative pool), each in an autorelease pool of its own: GCD's global queues drain theirs only when a thread runs out of work, so what the frameworks autorelease would outlive the job for as long as the lanes stay busy. A queued job is promoted when it becomes visible, and a job whose folder or cell went away is dropped before it starts. Background jobs start only while no on-screen job waits, and not at all in Low Power Mode or when the Mac is hot (`thermalState` serious or critical), as exports already rest.
 - **I/O in parallel.** With subfolders on, each folder is listed by its own job. Probes read `edit.json` without file coordination, which is safe because it is always written atomically (directly, or by replacing the whole package), and skip sidecars iCloud hasn't downloaded. Probes run on the look-ahead lane in batches of 32 rows, the visible rows' batches promoted to on screen: decoding the JSON, not reading it, is most of their cost.
-- **Decoding where it's cheapest.** A raw file's thumbnail comes from the smallest embedded JPEG preview that's big enough (found by LibRaw), decoded at reduced scale by ImageIO; HEIC uses the hardware decoder. Both run on all performance cores at once. Stack detection's blur, correlation and sharpness use Accelerate (vDSP). Core Animation composites the filmstrip on the GPU, so scrolling never redraws a thumbnail.
+- **Decoding where it's cheapest.** A raw file's thumbnail comes from the smallest embedded JPEG preview that's big enough (found by LibRaw), decoded at reduced scale by ImageIO where it is in the file's mapping, without copying it out; HEIC uses the hardware decoder. Both run on all performance cores at once. Stack detection's blur, correlation and sharpness use Accelerate (vDSP). Core Animation composites the filmstrip on the GPU, so scrolling never redraws a thumbnail.
 - **Raw files without a usable preview** (rare: some DNGs) are the expensive case. The trial compares ImageIO's full decode with a reduced-size develop in the engine; see Results.
 - **Warming.** While nothing is waiting on screen, thumbnails for the rest of the open folder, then for its sibling folders, are decoded into the pack on the background lane, so scrolling never waits. Warmed thumbnails go to the pack, not to memory.
 
@@ -101,7 +135,7 @@ flowchart LR
 - **Bookmarks.** A root is stored as bookmark data with its last known path, behind `FolderAccess`, which calls `startAccessingSecurityScopedResource`. That does nothing until the app is sandboxed, so the Mac App Store sandbox needs no model change.
 - **Tree.** A row is listed the first time it is visible. That one listing gives its count and its subfolders, so expanding is instant. Packages (sidecars, `.photoslibrary`, apps) and hidden folders are not folders here.
 - **`FolderWatcher`** is one FSEvents stream over all roots, with a 0.3 s latency. Only listed directories (the open folder, its subtree with subfolders on, visible tree rows) are listed again, and the result is diffed into what's shown. A new subfolder under an open subtree is walked and merged in. A file whose size or date is still changing waits for 2 s of quiet before its thumbnail is requested. Mounts and unmounts (NSWorkspace) drive the missing state. Network volumes have no FSEvents, so their listed folders are polled every 15 s.
-- **Stack detection** runs per directory on the background lane, one directory at a time, and its result is cached per directory by the listing's names, sizes and dates, so opening a folder again doesn't read every photo's EXIF.
+- **Stack detection** runs per directory on the background lane, one directory at a time, and its result is cached per directory by the listing's names, sizes and dates, so opening a folder again doesn't read every photo's EXIF. A run's frames are scored in order as they're read: each is compared, blurred, with the frame before, then kept only as its 24 cells' sharpness. So detection holds one thumbnail rather than the run's (35 MB for 100 frames), and stops reading a run at the first frame that doesn't match.
 
 ## Thumbnail packs
 
@@ -134,9 +168,9 @@ An AppKit `NSCollectionView` (horizontal flow) inside the existing floating pane
 
 ## Verification
 
-- **Tests:** the scheduler (lanes, widths, promotion, cancellation, background pausing), the scanner (sidecars, packages, hidden files, iCloud state, ordered walk), the probe, packs (append, reopen, stale records, compaction, eviction), the library (streaming, diffs, index map, persistence, migration, missing roots), the watcher (files added, removed, renamed and rewritten in a temporary tree), the filmstrip's cell reuse and per-cell updates, and the Folders panel.
+- **Tests:** the scheduler (lanes, widths, promotion, cancellation, background pausing, a pool per job), the scanner (sidecars, packages, hidden files, iCloud state, ordered walk), the probe, packs (append, reopen, stale records, compaction, eviction), the library (streaming, diffs, index map, persistence, migration, missing roots), the watcher (files added, removed, renamed and rewritten in a temporary tree), the filmstrip's cell reuse and per-cell updates, the Folders panel, and the memory budgets' parts (see Memory budgets).
 - **`scripts/make-folder-fixture.sh`** builds a tree of 50,000 photos in 500 folders as APFS clones of one sample, which uses no disk space.
-- **`--folders-perf <folder>`** opens the tree, measures time to first items, full listing, first thumbnails, warming throughput from the files and from the pack, how busy the performance and efficiency cores were (`host_processor_info`), main-thread statistics while scrolling the strip end to end, and peak footprint; it writes `/tmp/redlamp-perf.txt`.
+- **`--folders-perf <folder>`** opens the tree, measures time to first items, full listing, first thumbnails, warming throughput from the files and from the pack, how busy the performance and efficiency cores were (`host_processor_info`), and main-thread statistics while scrolling the strip end to end. It follows the footprint every 5 ms through each phase, then waits with browsing paused, trims as a memory-pressure warning does, and idles. It writes `/tmp/redlamp-perf.txt`, ending with PASS or FAIL for every budget. `--folders-perf-memory` adds the breakdown (see Memory budgets); its region walks take a core, so performance is measured without it. `scripts/folders-perf.sh [folder] [flags]` runs it all on a Release build and exits 1 when a budget fails.
 - **Harness:** the Folders scene shows the panel and the filmstrip on the fixture.
 
 ## Results
@@ -152,7 +186,7 @@ Measured with `--folders-perf` on 50,000 photos in 500 folders (APFS clones of o
 | From the pack | at least 2,000 a second | 6,210 a second |
 | Main thread while listing, decoding, warming | p99 under 8.3 ms | p99 0.15 ms, max 12 ms |
 | Main thread scrolling the strip end to end in 4 s | p99 under 8.3 ms | p99 1.4 ms, max 22 ms |
-| Memory | thumbnails 128 MB | 531 MB peak against 155 MB before opening; thumbnails 115 MB |
+| Memory | see Memory budgets | 317 MB peak against 152 MB before opening (531 MB before the memory work below); 207 MB idle after a memory-pressure trim |
 
 What the measurements changed:
 
@@ -163,6 +197,30 @@ What the measurements changed:
 - **Raw files without a preview.** Every fixture has an embedded preview, decoded through ImageIO in 6 to 30 ms on one core. A full ImageIO decode, which a previewless file needs, takes 64 to 206 ms, and the engine's own open is 70 to 250 ms. LibRaw's unpacking dominates both, so a reduced-size develop in the engine has no room to win; ImageIO stays.
 - **Thumbnails from the smallest preview.** ImageIO decodes a raw's largest embedded JPEG (often full size) even for a 192 px thumbnail: about 25 ms each. Raw thumbnails now come from the smallest JPEG preview of at least 192 px in LibRaw's thumbnail list, read from one memory mapping of the file and turned upright by the preview's own orientation or LibRaw's. Per file that's 3 times faster for Sony and Pixel DNG files, 6 for Canon, 11 for Nikon and 1.6 for DNGs with only a full-size preview; Fujifilm files, with only a full-size preview, are level (`research/prototypes/thumbnails`). In the app, visible thumbnails went from 197 to 33 ms and warming from 253 to 705 a second.
 - **A race in the packs.** With decodes this fast, many threads stored a new folder's first thumbnails at once; two could open its pack together, and one reset the new file while the other read its mapping (a bus error). A pack is now opened under the store's lock, and a new or unreadable pack file is replaced by renaming a fresh one over it, never truncated.
+- **Memory.** The peak was 531 MB against 155 MB before opening, with 115 MB of thumbnails; `--folders-perf-memory` found where the rest went. At the peak, 201 MB was malloc's, freed and kept for reuse (the 27 MB at launch had grown by 174 MB, none of it ever returned). Another 145 MB were thumbnail bitmaps, 20 MB more than the LRU counted: thumbnails it had dropped, still held by worker threads' autorelease pools. The live heap had grown by 45 MB (the photos, and ImageIO's state for thumbnails from the pack). Breakdowns at launch, at the peak and idle after a trim (load average about 35):
+
+  | MB | Launch | Before: peak | Before: idle | After: peak | After: idle |
+  | --- | --- | --- | --- | --- | --- |
+  | Footprint | 152 | 524 | 386 | 312 | 209 |
+  | malloc, live blocks | 67 | 112 | 110 | 163 | 112 |
+  | malloc, freed and held for reuse | 27 | 201 | 211 | 73 | 39 |
+  | Thumbnail bitmaps (CoreGraphics) | 1 | 145 | 3 | 3 | 1 |
+  | GPU (IOKit, IOSurface, IOAccelerator) and Core Animation | 40 | 41 | 41 | 40 | 41 |
+  | The rest: stacks, mapped files, page tables | 17 | 25 | 21 | 33 | 16 |
+  | Not counted: thumbnail pixels in ImageIO's purgeable memory | 0 | 0 | 0 | 122 | 2 |
+
+  Each change below was measured with the others in place and taken out again (two or three runs each, load average 15 to 30):
+  - **Previews decoded in place.** A raw's preview (1.1 MB for the Sony fixture, up to 5 MB for DNGs) was copied out of the file's mapping for ImageIO. With up to 24 decodes at once while scrolling, the copies' high-water mark stayed in the footprint. ImageIO now reads the preview in the mapping: peak 381 to 322 MB. A probe on its own: 16 threads decoding left 46 MB behind, against 15 MB without the copy.
+  - **Thumbnails in purgeable memory.** A thumbnail decoded from the raw file is a 96 KB CoreGraphics bitmap that counts in full. One decoded from its pack JPEG is held by ImageIO in purgeable memory, which doesn't count (the system may take it back, and ImageIO decodes it again when drawn), for about 33 KB of state. The loader now keeps the decode of the JPEG it has just written to the pack, an extra decode of a fraction of a millisecond off the main thread: peak 410 to 322 MB, browsing paused 359 to 315 MB.
+  - **An autorelease pool per job.** In half the runs the footprint stayed 100 to 130 MB higher after browsing, the thumbnail bitmaps the LRU had dropped still held in worker threads' pools. With a pool per job, idle after the trim went from 260, 393 and 383 MB to 278, 250 and 270 (before the other changes). With thumbnails purgeable it's within noise in short runs, and was 17 MB lower at the peak in a run warming 20,000.
+  - **Stack detection streamed.** On the fixture every folder is a candidate run of 100 frames, whose float thumbnails were held together (35 MB). They're now scored as they're read: peak 346 to 322 MB, idle 233 to 213 MB.
+  - **Rejected:**
+    - Reading pack JPEGs in place too (saving the 8 KB copy a pack-decoded thumbnail keeps): no measurable change.
+    - A cap of 8, 12 or 16 raw decodes at once, whatever the lane: 4 to 28 MB lower at the peak, but any cap below the lanes' total lets warming hold every slot while visible thumbnails wait, which the measurement doesn't cover.
+    - A 64 MB LRU: about 45 MB lower in the one clean run, at the cost of half the thumbnails kept for scrolling back.
+    - Reusing a LibRaw instance per thread: no change once previews weren't copied, in a probe; their 750 KB stay for good instead.
+    - `malloc_zone_pressure_relief` after bursts: it gives back nothing on macOS 26.
+  - **Performance didn't move.** Load average 15 to 19, three runs each, before and after: first photos 10 to 17 and 12 to 16 ms; 50,000 listed in 210 to 244 and 173 to 200 ms; visible thumbnails 19 to 24 and 17 to 25 ms; warming 657 to 717 and 682 to 705 a second; the pack 6,198 to 7,362 and 5,878 to 6,365 a second. Main-thread p99 was 0.2 ms both times while listing and warming, and 1.3 and 1.2 ms while scrolling.
 
 ## Later
 
