@@ -117,7 +117,7 @@ struct CanvasArea: View {
 
     private var statusLayer: some View {
         ZStack {
-            if !model.hasFrame, let selection = model.selection, let thumbnail = model.thumbnails[selection] {
+            if !model.hasFrame, let thumbnail = model.selectionThumbnail {
                 Image(decorative: thumbnail, scale: 1)
                     .resizable()
                     .scaledToFit()

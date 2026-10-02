@@ -76,6 +76,11 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// A fast preview for the filmstrip, usually the file's embedded thumbnail.
     func thumbnail(for url: URL, maxPixelSize: Int) async -> CGImage?
 
+    /// The same preview, decoded on the calling thread, which it blocks: for callers that
+    /// schedule decodes themselves (the filmstrip's thumbnail loader). Never call it on the
+    /// main thread.
+    func decodeThumbnail(for url: URL, maxPixelSize: Int) -> CGImage?
+
     /// Makes a Base Look renderable. Edits reference it by id and version, and pin its
     /// look table by content hash; built-in looks need no registration. Registering the
     /// same look again is cheap. Edits whose look isn't registered render without it.
@@ -94,4 +99,8 @@ public protocol EditingEngine: AnyObject, Sendable {
 
 public extension EditingEngine {
     func warmUpMasks() {}
+
+    func decodeThumbnail(for _: URL, maxPixelSize _: Int) -> CGImage? {
+        nil
+    }
 }

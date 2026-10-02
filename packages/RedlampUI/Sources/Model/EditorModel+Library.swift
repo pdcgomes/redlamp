@@ -16,7 +16,6 @@ public extension EditorModel {
 
     internal func openFolder(_ url: URL, select target: URL?) {
         stackSuggestions = []
-        thumbnails = [:]
         onFolderChange?(url)
         library.open(url) { [weak self] found in
             guard let self else { return }
@@ -24,13 +23,7 @@ public extension EditorModel {
             if let next = target ?? found.first?.url {
                 select(next)
             }
-        }
-    }
-
-    func loadThumbnail(for url: URL) async {
-        guard thumbnails[url] == nil else { return }
-        if let image = await engine.thumbnail(for: url, maxPixelSize: 256) {
-            thumbnails[url] = image
+            thumbnailLoader.warm(found)
         }
     }
 

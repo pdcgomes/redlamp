@@ -42,7 +42,6 @@ struct FilmstripView: View {
                             FilmstripCell(item: item, isSelected: item.url == model.selection)
                                 .id(item.url)
                                 .onTapGesture { model.select(item.url) }
-                                .task { await model.loadThumbnail(for: item.url) }
                         }
                     }
                     .padding(.horizontal, 10)
@@ -95,12 +94,13 @@ private struct FilmstripCell: View {
     let item: LibraryItem
     let isSelected: Bool
     @Environment(EditorModel.self) private var model
+    @State private var thumbnail: CGImage?
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             RoundedRectangle(cornerRadius: 4)
                 .fill(Color(white: isSelected ? 0.22 : 0.14))
-            if let thumbnail = model.thumbnails[item.url] {
+            if let thumbnail {
                 Image(decorative: thumbnail, scale: 1)
                     .resizable()
                     .scaledToFit()
@@ -141,6 +141,7 @@ private struct FilmstripCell: View {
         )
         .opacity(item.metadata.flag == .reject ? 0.45 : 1)
         .help(item.name)
+        .task(id: item.modified) { thumbnail = await model.thumbnailLoader.image(for: item) }
     }
 
     @ViewBuilder

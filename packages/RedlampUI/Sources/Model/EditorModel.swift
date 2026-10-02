@@ -29,7 +29,10 @@ public final class EditorModel {
         library.items
     }
 
-    public internal(set) var thumbnails: [URL: CGImage] = [:]
+    @ObservationIgnored public let thumbnailLoader: ThumbnailLoader
+    /// The selected photo's thumbnail, shown while it decodes.
+    public internal(set) var selectionThumbnail: CGImage?
+    @ObservationIgnored private var selectionThumbnailRequest: UInt64?
     public internal(set) var selection: URL?
     /// Focus stacks found in the folder that have no stack document yet.
     public internal(set) var stackSuggestions: [StackSuggestion] = []
@@ -374,6 +377,9 @@ public final class EditorModel {
         self.engine = engine
         self.recipes = recipes ?? RecipeCatalog(engine: engine)
         self.library = library ?? FolderLibrary()
+        thumbnailLoader = ThumbnailLoader(scheduler: self.library.scheduler) { [engine] url, size in
+            engine.decodeThumbnail(for: url, maxPixelSize: size)
+        }
         canvas.onRenderSizeChange = { [weak self] _ in self?.requestRender() }
         let frames = engine.frames()
         framesTask = Task { [weak self] in
@@ -417,6 +423,8 @@ public final class EditorModel {
             }
         }
         if let opened = engine.openIfReady(url) {
+            selectionThumbnailRequest.map(thumbnailLoader.cancel)
+            selectionThumbnail = nil
             openTask = Task {
                 let read = await readSidecar()
                 guard selection == url, !Task.isCancelled else { return }
@@ -429,7 +437,7 @@ public final class EditorModel {
         latestFrame = nil
         histogram = .empty
         isLoading = true
-        Task { await loadThumbnail(for: url) }
+        showThumbnail(of: url)
         openTask = Task { [engine] in
             let loading = Task { await readSidecar() }
             do {
@@ -444,6 +452,17 @@ public final class EditorModel {
                 isLoading = false
                 errorMessage = error.localizedDescription
             }
+        }
+    }
+
+    /// Shows the photo's thumbnail on the canvas until its first frame arrives.
+    private func showThumbnail(of url: URL) {
+        selectionThumbnailRequest.map(thumbnailLoader.cancel)
+        selectionThumbnail = nil
+        selectionThumbnailRequest = thumbnailLoader.request(library.item(for: url) ?? LibraryItem(url: url)) {
+            [weak self] image in
+            guard let self, selection == url else { return }
+            selectionThumbnail = image
         }
     }
 
