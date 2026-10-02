@@ -117,7 +117,7 @@ Mask presets and adaptive presets, updating AI masks on paste and sync, a Refine
 Built: M0 to M7, M9 and M10. M8's trained heads are still blocked as described above, but SAM 3 (converted to Core ML) stands in for them as an evaluation model. Where the build differs from the plan:
 
 - **AI mask edges** are solved per pixel when the mask is made, at the size masks are stored at (4096 px), not refined again at render time: Sky by `SkyMatte` (against the sky's own colour), Subject, Background, People, Objects and Landscape by `ClosedFormMatte`, and SAM 3's people parts both ways (the person's matte where a part meets the background, SAM 3's edge where it meets skin). See [MSK-17](../research/notes/MSK-17-sky-bakeoff.md).
-- **Refine Edges** is an action on an AI component (a guided filter); the **Refine Edge brush** solves an edge again per pixel where it paints, its strokes kept with the mask. Convert to Path isn't built.
+- **Refine Edges** is an action on an AI component (a guided filter); the **Refine Edge brush** solves an edge again per pixel where it paints, its strokes kept with the mask.
 - **Sky** is Segment Anything prompted inside the classical estimate, arbitrated with Depth Anything 3's sky when that evaluation model is installed.
 - **Landscape and the people parts Vision can't give** (hair on any photo, facial hair, body skin, clothes) come from SAM 3, evaluation only: its licence isn't cleared, and the risk is accepted for evaluation. A shippable route is still M8's trained head.
 - **Objects:** Vision's tap-to-segment needs the macOS 27 SDK, so Objects is SAM 2.1 only, and the Vision-against-SAM bake-off waits.
