@@ -16,7 +16,10 @@ public final class WorkScheduler: Sendable {
         case onScreen
         /// What they'll want next: prefetched cells, badges, the folder tree's counts.
         case lookAhead
-        /// Warming caches nobody is waiting for, on the efficiency cores.
+        /// Warming caches nobody is waiting for: half as wide as the performance cores, and only
+        /// while nothing on screen waits. It runs at utility priority, not background: macOS
+        /// throttles background I/O behind every other reader, which made warming 28 times slower
+        /// while Spotlight was indexing.
         case background
 
         public static func < (lhs: Lane, rhs: Lane) -> Bool {
@@ -26,8 +29,7 @@ public final class WorkScheduler: Sendable {
         var qos: DispatchQoS.QoSClass {
             switch self {
             case .onScreen: .userInitiated
-            case .lookAhead: .utility
-            case .background: .background
+            case .lookAhead, .background: .utility
             }
         }
     }
@@ -44,14 +46,14 @@ public final class WorkScheduler: Sendable {
             self.background = max(background, 1)
         }
 
-        /// On screen as wide as the performance cores, look-ahead half as wide, background as
-        /// wide as the efficiency cores.
+        /// On screen as wide as the performance cores; look-ahead and background half as wide
+        /// (background at least as wide as the efficiency cores).
         public static var machine: Widths {
             let performance = CoreCounts.performance
             return Widths(
                 onScreen: performance,
                 lookAhead: max(performance / 2, 2),
-                background: max(CoreCounts.efficiency, 2),
+                background: max(CoreCounts.efficiency, performance / 2, 2),
             )
         }
 

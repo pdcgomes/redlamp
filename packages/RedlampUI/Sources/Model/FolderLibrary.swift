@@ -61,6 +61,8 @@ public final class FolderLibrary {
     @ObservationIgnored public internal(set) var tree: [String: FolderNode] = [:]
     @ObservationIgnored var listingTree: Set<String> = []
     @ObservationIgnored var treeObservers: [UUID: @MainActor (Set<String>) -> Void] = [:]
+    /// The open folder (and with subfolders, its tree) is still being listed.
+    public private(set) var isListing = false
     /// The open folder can't be listed (its volume went away).
     public internal(set) var isOpenFolderUnavailable = false
     /// The number of photos shown.
@@ -135,7 +137,7 @@ public final class FolderLibrary {
     /// Lists `folder` (and, with Show Photos in Subfolders, every folder beneath it) and shows its
     /// photos, then calls `opened` with them once the first ones are in (once, unless another
     /// folder opens first). `nil` closes the open folder.
-    func open(_ folder: URL?, opened: @escaping @MainActor ([LibraryItem]) -> Void = { _ in }) {
+    public func open(_ folder: URL?, opened: @escaping @MainActor ([LibraryItem]) -> Void = { _ in }) {
         generation += 1
         let generation = generation
         scheduler.cancel(prefix: probeKeyPrefix(generation - 1))
@@ -144,6 +146,7 @@ public final class FolderLibrary {
         listedDirectories = []
         replace(with: [])
         saveSettings()
+        isListing = folder != nil
         guard let folder else { return }
         let includesSubfolders = includesSubfolders
         Task {
@@ -161,6 +164,7 @@ public final class FolderLibrary {
                     }
                 }
                 guard self.generation == generation else { return }
+                isListing = false
                 isOpenFolderUnavailable = !listed
                 if !announced {
                     opened(items)
@@ -171,6 +175,7 @@ public final class FolderLibrary {
                     try LibraryItem.items(FolderScanner.list(folder))
                 }
                 guard self.generation == generation else { return }
+                isListing = false
                 isOpenFolderUnavailable = found == nil
                 if found != nil {
                     listedDirectories = [folder.path]
@@ -184,7 +189,9 @@ public final class FolderLibrary {
     }
 
     /// Shows or hides the photos of the open folder's subfolders.
-    func setIncludesSubfolders(_ include: Bool, opened: @escaping @MainActor ([LibraryItem]) -> Void = { _ in }) {
+    public func setIncludesSubfolders(
+        _ include: Bool, opened: @escaping @MainActor ([LibraryItem]) -> Void = { _ in },
+    ) {
         guard include != includesSubfolders else { return }
         includesSubfolders = include
         saveSettings()

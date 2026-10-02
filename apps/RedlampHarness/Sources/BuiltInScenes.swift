@@ -9,6 +9,7 @@ enum BuiltInScenes {
         catalog.register(.panelChrome)
         catalog.register(.basicPanel)
         catalog.register(.history)
+        catalog.register(.folders)
         catalog.register(.sliderRowParity)
         catalog.register(.basicPanelParity)
         catalog.register(.toneCurveParity)

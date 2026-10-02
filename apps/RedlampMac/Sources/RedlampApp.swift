@@ -94,6 +94,12 @@ struct RedlampApp: App {
     /// working set and the folder from the previous session.
     private static func openInitialFolder(model: EditorModel) {
         let arguments = LaunchArguments.all.dropFirst().prefix { !$0.hasPrefix("-") }
+        #if DEBUG || REDLAMP_PROFILING
+            // The measurement opens its own folder; the working set would compete with it.
+            if LaunchArguments.all.contains("--folders-perf") {
+                return
+            }
+        #endif
         guard !arguments.isEmpty else {
             model.restoreLibrary()
             return

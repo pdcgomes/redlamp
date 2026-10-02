@@ -11,7 +11,7 @@ import Synchronization
 /// embedded preview at the cell's pixel size, which then goes into the pack. Requests for one photo
 /// share a decode. A request can be promoted (its cell scrolled into view) or cancelled (it
 /// scrolled away), and photos iCloud Drive hasn't downloaded are never read. Warming decodes a
-/// folder's thumbnails into its pack on the efficiency cores, without keeping them in memory.
+/// folder's thumbnails into its pack on the background lane, without keeping them in memory.
 @MainActor
 public final class ThumbnailLoader {
     /// The long edge thumbnails are decoded at: a filmstrip cell's image at 2x.
@@ -261,6 +261,11 @@ public final class ThumbnailLoader {
     /// Photos still queued for warming.
     public var warmingRemaining: Int {
         warmQueue.count - warmHead
+    }
+
+    /// Warming jobs queued or running.
+    public var isWarming: Bool {
+        warmingRemaining > 0 || warming > 0
     }
 
     private func pumpWarming() {

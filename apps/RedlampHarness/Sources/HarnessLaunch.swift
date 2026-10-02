@@ -12,6 +12,7 @@ import RedlampDesign
 /// - `--stage-only` hides the scene list and the inspector.
 /// - `--open-export` opens the Export dialog once the Export ▸ Live scene's photo is open.
 /// - `--history-height <points>` sets the History scene's list height.
+/// - `--folders-root <path>` is the folder the Folders scene opens (the raw fixtures by default).
 /// - `--window <width>x<height>` sizes the window in points and moves it to a Retina screen
 ///   when one is connected, so captures come out at 2x even when the main display is 1x.
 enum HarnessLaunch {

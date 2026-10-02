@@ -239,6 +239,24 @@ final class FilmstripScrollView: NSScrollView {
     }
 }
 
+@_spi(Harness) public enum FilmstripViews {
+    /// The filmstrip's photos (the strip without its header), for the harness and measurements.
+    @MainActor public static func make(model: EditorModel) -> NSView {
+        FilmstripStripView(model: model)
+    }
+
+    @MainActor public static let height = FilmstripStripView.height
+
+    /// Scrolls a strip made by `make` to `fraction` (0 ... 1) of its length.
+    @MainActor public static func scroll(_ view: NSView, to fraction: Double) {
+        guard let strip = view as? FilmstripStripView else { return }
+        let clip = strip.scrollView.contentView
+        let width = max(strip.collectionView.frame.width - clip.bounds.width, 0)
+        clip.scroll(to: CGPoint(x: width * fraction, y: 0))
+        strip.scrollView.reflectScrolledClipView(clip)
+    }
+}
+
 /// Hosts the AppKit strip under the SwiftUI header.
 struct FilmstripStripHost: NSViewRepresentable {
     let model: EditorModel

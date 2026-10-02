@@ -108,26 +108,31 @@ public enum StackDetector {
     public static let maximumGap: TimeInterval = 30
 
     /// Stacks among `urls` (sorted by name) that no stack document among them already covers.
-    /// Reads each file's EXIF and, for candidate runs, small thumbnails, on all cores.
-    public static func suggestions(in urls: [URL]) -> [StackSuggestion] {
+    /// Reads each file's EXIF and, for candidate runs, small thumbnails, on all cores unless the
+    /// caller already runs detections side by side (`concurrently: false`).
+    public static func suggestions(in urls: [URL], concurrently: Bool = true) -> [StackSuggestion] {
         let stacked = Set(urls.filter(SupportedFormats.isStack).flatMap { url in
             ((try? FocusStackDocument.read(url))?.frameURLs(at: url) ?? []).map(\.standardizedFileURL)
         })
         let photos = urls.filter { !SupportedFormats.isStack($0) }
-        let captures = zip(photos, concurrentMap(photos, Capture.read)).compactMap { url, capture in
-            capture.map { (url, $0) }
-        }
+        let captures = zip(photos, concurrentMap(photos, concurrently: concurrently, Capture.read))
+            .compactMap { url, capture in
+                capture.map { (url, $0) }
+            }
         return runs(captures).compactMap { run in
             let covered = run.count { stacked.contains($0.standardizedFileURL) }
             guard covered * 2 < run.count else { return nil }
-            let thumbnails = concurrentMap(run, thumbnail).compactMap(\.self)
+            let thumbnails = concurrentMap(run, concurrently: concurrently, thumbnail).compactMap(\.self)
             guard thumbnails.count == run.count, isFocusSweep(thumbnails) else { return nil }
             return StackSuggestion(frames: run)
         }
     }
 
     /// `transform` of every element, run across the cores (file reads and decodes).
-    static func concurrentMap<T: Sendable>(_ elements: [URL], _ transform: @Sendable (URL) -> T?) -> [T?] {
+    static func concurrentMap<T: Sendable>(
+        _ elements: [URL], concurrently: Bool = true, _ transform: @Sendable (URL) -> T?,
+    ) -> [T?] {
+        guard concurrently else { return elements.map(transform) }
         let results = UnsafeMutableBufferPointer<T?>.allocate(capacity: elements.count)
         results.initialize(repeating: nil)
         defer {

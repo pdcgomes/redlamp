@@ -150,6 +150,14 @@
         static func scheduleIfRequested(model: EditorModel) {
             let arguments = LaunchArguments.all
             trace("launched with \(arguments.dropFirst().joined(separator: " "))")
+            if let index = arguments.firstIndex(of: "--folders-perf"), index + 1 < arguments.count {
+                let root = URL(fileURLWithPath: arguments[index + 1], isDirectory: true)
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(1))
+                    await DebugFoldersPerformance.run(root: root, engine: model.engine)
+                }
+                return
+            }
             if arguments.contains("--browse") {
                 let dwell = arguments.firstIndex(of: "--browse-dwell").flatMap { Double(arguments[$0 + 1]) } ?? 0.5
                 Task { @MainActor in

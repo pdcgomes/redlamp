@@ -247,18 +247,19 @@ extension FolderLibrary {
 
     // MARK: - Focus stacks
 
-    /// Looks for focus stacks in each shown directory, on the look-ahead lane (after the visible
-    /// thumbnails), reusing what was found while a directory's listing is unchanged.
+    /// Looks for focus stacks in each shown directory on the background lane, one directory at a
+    /// time (detection decodes thumbnails, and warming shares the lane), reusing what was found
+    /// while a directory's listing is unchanged.
     func refreshStacks() {
         let generation = generation
         let snapshot = items
         let cached = stackCache.mapValues(\.signature)
-        scheduler.submit(.lookAhead, key: "stacks:\(generation)") {
+        scheduler.submit(.background, key: "stacks:\(generation)") {
             var groups: [String: [LibraryItem]] = [:]
             for item in snapshot {
                 groups[item.folderPath, default: []].append(item)
             }
-            var found: [String: (signature: Int, suggestions: [StackSuggestion])] = [:]
+            var stale: [(directory: String, signature: Int, urls: [URL])] = []
             for (directory, photos) in groups {
                 var hasher = Hasher()
                 for photo in photos {
@@ -267,14 +268,33 @@ extension FolderLibrary {
                     hasher.combine(photo.modified)
                 }
                 let signature = hasher.finalize()
-                guard cached[directory] != signature else { continue }
-                found[directory] = (signature, StackDetector.suggestions(in: photos.map(\.url)))
+                if cached[directory] != signature {
+                    stale.append((directory, signature, photos.map(\.url)))
+                }
             }
+            let shown = groups.keys.sorted(by: FileOrder.precedes)
             Task { @MainActor [weak self] in
                 guard let self, self.generation == generation else { return }
-                stackCache.merge(found) { _, new in new }
-                let shown = Set(groups.keys)
-                onStacks?(shown.sorted(by: FileOrder.precedes).flatMap { stackCache[$0]?.suggestions ?? [] })
+                detectStacks(
+                    stale.sorted { FileOrder.precedes($0.directory, $1.directory) },
+                    shown: shown,
+                    generation: generation,
+                )
+            }
+        }
+    }
+
+    private func detectStacks(
+        _ remaining: [(directory: String, signature: Int, urls: [URL])], shown: [String], generation: Int,
+    ) {
+        onStacks?(shown.flatMap { stackCache[$0]?.suggestions ?? [] })
+        guard let next = remaining.first else { return }
+        scheduler.submit(.background, key: "stacks:\(generation):\(next.directory)") {
+            let found = StackDetector.suggestions(in: next.urls, concurrently: false)
+            Task { @MainActor [weak self] in
+                guard let self, self.generation == generation else { return }
+                stackCache[next.directory] = (next.signature, found)
+                detectStacks(Array(remaining.dropFirst()), shown: shown, generation: generation)
             }
         }
     }
