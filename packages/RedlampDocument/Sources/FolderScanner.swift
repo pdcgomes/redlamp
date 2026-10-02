@@ -47,39 +47,44 @@ public struct FolderListing: Sendable, Hashable {
 public enum FolderScanner {
     private static let keys: [URLResourceKey] = [
         .isDirectoryKey, .isPackageKey, .fileSizeKey, .contentModificationDateKey,
-        .ubiquitousItemDownloadingStatusKey,
     ]
 
     /// One listing: photos, the sidecars beside them, and subfolders (packages and hidden folders
-    /// aren't folders here). The resource values arrive with the listing itself. URLs are built on
-    /// `folder` as given (the listing's own may resolve `/var` to `/private/var`), so they match
-    /// the URLs the rest of the app has for the same files.
+    /// aren't folders here). The resource values arrive with the listing itself. iCloud Drive's
+    /// download state, which costs ten times the rest of the listing, is asked for only in a folder
+    /// iCloud Drive syncs. URLs are built on `folder` as given (the listing's own may resolve `/var`
+    /// to `/private/var`), so they match the URLs the rest of the app has for the same files.
     public static func list(_ folder: URL) throws -> FolderListing {
+        let ubiquitous = (try? folder.resourceValues(forKeys: [.isUbiquitousItemKey]))?.isUbiquitousItem == true
+        let keys = ubiquitous ? keys + [.ubiquitousItemDownloadingStatusKey] : keys
         let entries = try FileManager.default.contentsOfDirectory(
             at: folder, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles],
         )
         let keySet = Set(keys)
-        var files: [(URL, URLResourceValues)] = []
+        var files: [(name: String, values: URLResourceValues)] = []
         var sidecars: [String: Bool] = [:]
-        var subfolders: [URL] = []
+        var subfolders: [String] = []
         files.reserveCapacity(entries.count)
         for entry in entries {
             guard let values = try? entry.resourceValues(forKeys: keySet) else { continue }
-            let name = entry.lastPathComponent
-            if entry.pathExtension == "redlamp" {
+            var name = entry.lastPathComponent
+            name.makeContiguousUTF8()
+            let ext = (name as NSString).pathExtension.lowercased()
+            if ext == "redlamp" {
                 sidecars[String(name.dropLast(".redlamp".count))] = isLocal(values)
             } else if values.isDirectory == true {
-                if values.isPackage != true, !SupportedFormats.isStack(entry) {
-                    subfolders.append(folder.appending(path: name, directoryHint: .isDirectory))
+                if values.isPackage != true, ext != FocusStackDocument.fileExtension {
+                    subfolders.append(name)
                 }
-            } else if SupportedFormats.isSupported(entry) {
-                files.append((folder.appending(path: name, directoryHint: .notDirectory), values))
+            } else if SupportedFormats.isSupported(extension: ext) {
+                files.append((name, values))
             }
         }
-        let photos = files.map { url, values in
-            let sidecar = sidecars[url.lastPathComponent]
+        files.sort { FileOrder.precedes($0.name, $1.name) }
+        let photos = files.map { name, values in
+            let sidecar = sidecars[name]
             return PhotoEntry(
-                url: url,
+                url: folder.appending(path: name, directoryHint: .notDirectory),
                 size: Int64(values.fileSize ?? 0),
                 modified: values.contentModificationDate ?? .distantPast,
                 hasSidecar: sidecar != nil,
@@ -89,8 +94,9 @@ public enum FolderScanner {
         }
         return FolderListing(
             folder: folder,
-            photos: photos.sorted { FileOrder.precedes($0.url.lastPathComponent, $1.url.lastPathComponent) },
-            subfolders: subfolders.sorted { FileOrder.precedes($0.lastPathComponent, $1.lastPathComponent) },
+            photos: photos,
+            subfolders: subfolders.sorted(by: FileOrder.precedes)
+                .map { folder.appending(path: $0, directoryHint: .isDirectory) },
         )
     }
 

@@ -18,7 +18,11 @@ public enum SupportedFormats {
     }
 
     public static func isSupported(_ url: URL) -> Bool {
-        let ext = url.pathExtension.lowercased()
-        return rawExtensions.contains(ext) || bitmapExtensions.contains(ext) || isStack(url)
+        isSupported(extension: url.pathExtension.lowercased())
+    }
+
+    /// `ext` lowercased.
+    public static func isSupported(extension ext: String) -> Bool {
+        rawExtensions.contains(ext) || bitmapExtensions.contains(ext) || ext == FocusStackDocument.fileExtension
     }
 }

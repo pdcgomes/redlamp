@@ -1,0 +1,249 @@
+import AppKit
+import RedlampDesign
+import RedlampDocument
+import SwiftUI
+
+/// The filmstrip's photos in AppKit: a horizontal collection view whose cells are reused as it
+/// scrolls, so 50,000 photos cost what a screenful does.
+///
+/// - Thumbnails: a cell scrolling into view asks for its thumbnail on screen; the collection
+///   view's prefetching asks for the next ones at look-ahead priority and cancels them when the
+///   strip turns back. A thumbnail arriving sets only its own cell.
+/// - Changes: the library's row diffs become inserts and deletes; a badge redraws its cell.
+/// - The selection is followed: its cell is highlighted and scrolled to the middle.
+final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollectionViewDelegate,
+    NSCollectionViewPrefetching {
+    static let height: CGFloat = 82
+    private static let spacing: CGFloat = 6
+    /// A flow layout needs its items strictly shorter than the view minus these.
+    private static let insets = NSEdgeInsets(top: 6, left: 10, bottom: 5, right: 10)
+
+    let collectionView = NSCollectionView()
+    let scrollView = FilmstripScrollView()
+    private let model: EditorModel
+    private var observation: LibraryObservation?
+    private var tracker: Tracker?
+    private var selected: URL?
+    private var prefetching: [URL: UInt64] = [:]
+
+    init(model: EditorModel) {
+        self.model = model
+        super.init(frame: CGRect(x: 0, y: 0, width: 600, height: Self.height))
+        let layout = NSCollectionViewFlowLayout()
+        layout.scrollDirection = .horizontal
+        layout.itemSize = FilmstripCellView.size
+        layout.minimumLineSpacing = Self.spacing
+        layout.minimumInteritemSpacing = Self.spacing
+        layout.sectionInset = Self.insets
+        collectionView.collectionViewLayout = layout
+        collectionView.backgroundColors = [.clear]
+        collectionView.isSelectable = false
+        collectionView.register(FilmstripItem.self, forItemWithIdentifier: FilmstripItem.identifier)
+        collectionView.dataSource = self
+        collectionView.delegate = self
+        collectionView.prefetchDataSource = self
+        collectionView.setAccessibilityLabel("Filmstrip")
+        // Laid out at the strip's height from the start: a flow layout taller than its view logs.
+        scrollView.frame = bounds
+        collectionView.frame = bounds
+        scrollView.documentView = collectionView
+        scrollView.drawsBackground = false
+        scrollView.hasHorizontalScroller = false
+        scrollView.hasVerticalScroller = false
+        scrollView.verticalScrollElasticity = .none
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        addSubview(scrollView)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView,
+        )
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    override func layout() {
+        super.layout()
+        scrollView.frame = bounds
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        observation = nil
+        tracker?.cancel()
+        tracker = nil
+        guard window != nil else { return }
+        collectionView.reloadData()
+        observation = model.library.observe { [weak self] diff in self?.apply(diff) }
+        tracker = Tracker { [weak self] in
+            guard let self else { return }
+            follow(model.selection)
+        }
+    }
+
+    // MARK: - Data source
+
+    func collectionView(_: NSCollectionView, numberOfItemsInSection _: Int) -> Int {
+        model.items.count
+    }
+
+    func collectionView(
+        _ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath,
+    ) -> NSCollectionViewItem {
+        let view = collectionView.makeItem(withIdentifier: FilmstripItem.identifier, for: indexPath)
+        guard let item = view as? FilmstripItem, model.items.indices.contains(indexPath.item) else { return view }
+        let photo = model.items[indexPath.item]
+        item.cell.configure(photo, image: model.thumbnailLoader.cached(photo))
+        item.cell.isSelected = photo.url == model.selection
+        item.cell.onClick = { [weak self] in self?.model.select(photo.url) }
+        return item
+    }
+
+    // MARK: - Thumbnails
+
+    func collectionView(
+        _: NSCollectionView, willDisplay item: NSCollectionViewItem, forRepresentedObjectAt indexPath: IndexPath,
+    ) {
+        guard let item = item as? FilmstripItem, model.items.indices.contains(indexPath.item) else { return }
+        let photo = model.items[indexPath.item]
+        if let id = prefetching.removeValue(forKey: photo.url) {
+            model.thumbnailLoader.cancel(id)
+        }
+        requestThumbnail(for: item, photo)
+    }
+
+    func collectionView(
+        _: NSCollectionView, didEndDisplaying item: NSCollectionViewItem, forRepresentedObjectAt _: IndexPath,
+    ) {
+        guard let item = item as? FilmstripItem, let id = item.request else { return }
+        item.request = nil
+        model.thumbnailLoader.cancel(id)
+    }
+
+    private func requestThumbnail(for item: FilmstripItem, _ photo: LibraryItem) {
+        if let id = item.request {
+            item.request = nil
+            model.thumbnailLoader.cancel(id)
+        }
+        guard item.cell.image == nil || item.cell.item?.modified != photo.modified else { return }
+        if let image = model.thumbnailLoader.cached(photo) {
+            item.cell.setImage(image)
+            return
+        }
+        item.request = model.thumbnailLoader.request(photo, lane: .onScreen) { [weak item] image in
+            guard let item, item.cell.item?.url == photo.url else { return }
+            item.request = nil
+            if let image {
+                item.cell.setImage(image)
+            }
+        }
+    }
+
+    func collectionView(_: NSCollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
+        for indexPath in indexPaths where model.items.indices.contains(indexPath.item) {
+            let photo = model.items[indexPath.item]
+            guard prefetching[photo.url] == nil, model.thumbnailLoader.cached(photo) == nil else { continue }
+            prefetching[photo.url] = model.thumbnailLoader.request(photo, lane: .lookAhead) { [weak self] _ in
+                self?.prefetching.removeValue(forKey: photo.url)
+            }
+        }
+    }
+
+    func collectionView(_: NSCollectionView, cancelPrefetchingForItemsAt indexPaths: [IndexPath]) {
+        for indexPath in indexPaths where model.items.indices.contains(indexPath.item) {
+            if let id = prefetching.removeValue(forKey: model.items[indexPath.item].url) {
+                model.thumbnailLoader.cancel(id)
+            }
+        }
+    }
+
+    /// What's on screen: kept in memory, and its badges read first.
+    @objc private func scrolled() {
+        let rows = collectionView.indexPathsForVisibleItems().map(\.item)
+        guard let first = rows.min(), let last = rows.max() else { return }
+        model.thumbnailLoader.protected = Set(rows.filter(model.items.indices.contains).map { model.items[$0].url })
+        model.library.prioritize(first ..< last + 1)
+    }
+
+    // MARK: - Changes
+
+    private func apply(_ diff: LibraryDiff) {
+        guard !diff.reset else {
+            prefetching.values.forEach(model.thumbnailLoader.cancel)
+            prefetching = [:]
+            collectionView.reloadData()
+            follow(model.selection, animated: false)
+            return
+        }
+        if !diff.removed.isEmpty || !diff.inserted.isEmpty {
+            collectionView.performBatchUpdates {
+                collectionView.deleteItems(at: Set(diff.removed.map { IndexPath(item: $0, section: 0) }))
+                collectionView.insertItems(at: Set(diff.inserted.map { IndexPath(item: $0, section: 0) }))
+            }
+        }
+        for row in diff.updated where model.items.indices.contains(row) {
+            guard let item = collectionView.item(at: IndexPath(item: row, section: 0)) as? FilmstripItem else {
+                continue
+            }
+            let photo = model.items[row]
+            let rewritten = item.cell.item?.modified != photo.modified
+            item.cell.configure(photo, image: nil)
+            if rewritten {
+                item.cell.setImage(nil)
+                requestThumbnail(for: item, photo)
+            }
+        }
+    }
+
+    // MARK: - Selection
+
+    private func follow(_ selection: URL?, animated: Bool = true) {
+        for url in [selected, selection].compactMap(\.self) {
+            guard let row = model.library.index(of: url),
+                  let item = collectionView.item(at: IndexPath(item: row, section: 0)) as? FilmstripItem else {
+                continue
+            }
+            item.cell.isSelected = url == selection
+        }
+        selected = selection
+        guard let selection, let row = model.library.index(of: selection) else { return }
+        let path: Set<IndexPath> = [IndexPath(item: row, section: 0)]
+        if animated {
+            NSAnimationContext.runAnimationGroup { context in
+                context.allowsImplicitAnimation = true
+                collectionView.animator().scrollToItems(at: path, scrollPosition: .centeredHorizontally)
+            }
+        } else {
+            collectionView.scrollToItems(at: path, scrollPosition: .centeredHorizontally)
+        }
+    }
+}
+
+/// Scrolls horizontally with a mouse wheel too (trackpads already scroll sideways).
+final class FilmstripScrollView: NSScrollView {
+    override func scrollWheel(with event: NSEvent) {
+        guard !event.hasPreciseScrollingDeltas, abs(event.scrollingDeltaY) > abs(event.scrollingDeltaX),
+              let cgEvent = event.cgEvent?.copy() else {
+            super.scrollWheel(with: event)
+            return
+        }
+        cgEvent.setDoubleValueField(.scrollWheelEventDeltaAxis2, value: Double(event.scrollingDeltaY))
+        cgEvent.setDoubleValueField(.scrollWheelEventDeltaAxis1, value: 0)
+        cgEvent.setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: Double(event.scrollingDeltaY))
+        cgEvent.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: 0)
+        super.scrollWheel(with: NSEvent(cgEvent: cgEvent) ?? event)
+    }
+}
+
+/// Hosts the AppKit strip under the SwiftUI header.
+struct FilmstripStripHost: NSViewRepresentable {
+    let model: EditorModel
+
+    func makeNSView(context _: Context) -> FilmstripStripView {
+        FilmstripStripView(model: model)
+    }
+
+    func updateNSView(_: FilmstripStripView, context _: Context) {}
+}

@@ -373,13 +373,18 @@ public final class EditorModel {
     @ObservationIgnored private var openTask: Task<Void, Never>?
     @ObservationIgnored private var framesTask: Task<Void, Never>?
 
-    public init(engine: any EditingEngine, recipes: RecipeCatalog? = nil, library: FolderLibrary? = nil) {
+    public init(
+        engine: any EditingEngine, recipes: RecipeCatalog? = nil, library: FolderLibrary? = nil,
+        thumbnailLoader: ThumbnailLoader? = nil,
+    ) {
         self.engine = engine
         self.recipes = recipes ?? RecipeCatalog(engine: engine)
         self.library = library ?? FolderLibrary()
-        thumbnailLoader = ThumbnailLoader(scheduler: self.library.scheduler) { [engine] url, size in
-            engine.decodeThumbnail(for: url, maxPixelSize: size)
-        }
+        self
+            .thumbnailLoader = thumbnailLoader ??
+            ThumbnailLoader(scheduler: self.library.scheduler) { [engine] url, size in
+                engine.decodeThumbnail(for: url, maxPixelSize: size)
+            }
         canvas.onRenderSizeChange = { [weak self] _ in self?.requestRender() }
         let frames = engine.frames()
         framesTask = Task { [weak self] in
