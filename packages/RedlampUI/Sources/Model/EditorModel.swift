@@ -753,6 +753,17 @@ public final class EditorModel {
 
     // MARK: - Base Look, treatment, white balance
 
+    /// Moves the edit to another process version, Lightroom's Process: always an explicit,
+    /// undoable choice, since it changes how the photo renders.
+    public func setProcessVersion(_ version: Int) {
+        let version = min(max(version, 1), EditRecipe.currentProcessVersion)
+        guard version != recipe.processVersion else { return }
+        var next = recipe
+        next.processVersion = version
+        constrainCrop(&next)
+        commit(next, .edit, "Process Version") { "Version \($0.processVersion)" }
+    }
+
     public func setTreatment(_ treatment: Treatment) {
         var next = recipe
         next.treatment = treatment

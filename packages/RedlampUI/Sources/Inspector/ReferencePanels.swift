@@ -2,8 +2,7 @@ import RedlampEngineAPI
 import SwiftUI
 
 // Detail, Lens Corrections, Transform, Effects and Calibration. Their sliders come straight from
-// the parameter schema, so any the engine doesn't render yet (Calibration's) show dimmed with
-// their phase.
+// the parameter schema, so any the engine doesn't render yet show dimmed with their phase.
 
 @_spi(Harness) public struct DetailPanel: View {
     public init() {}
@@ -175,9 +174,27 @@ struct FrameStylePicker: View {
     }
 }
 
+/// The edit's process version (Lightroom's Process): newer ones render better, and edits keep
+/// the one they were made with until moved on here.
 struct ProcessVersion: View {
+    @Environment(EditorModel.self) private var model
+
     var body: some View {
-        Text("Redlamp v1").font(Theme.labelFont).foregroundStyle(Theme.value)
+        let current = EditRecipe.currentProcessVersion
+        let version = model.recipe.processVersion
+        if version > current {
+            Text("Version \(version) (newer Redlamp)").font(Theme.labelFont).foregroundStyle(Theme.value)
+        } else {
+            Picker("Process", selection: Binding(get: { version }, set: { model.setProcessVersion($0) })) {
+                ForEach((1 ... current).reversed(), id: \.self) { number in
+                    Text(number == current ? "Version \(number) (Current)" : "Version \(number)").tag(number)
+                }
+            }
+            .labelsHidden()
+            .controlSize(.small)
+            .disabled(model.info == nil)
+            .help("How the photo renders. Edits keep the version they were made with; newer versions render better")
+        }
     }
 }
 
@@ -238,7 +255,7 @@ struct ProcessVersion: View {
     public init() {}
 
     public var body: some View {
-        PanelSection(panel: .calibration, badge: "Phase 2") {
+        PanelSection(panel: .calibration) {
             ControlRow(label: "Process") { ProcessVersion() }
             SubsectionHeader(title: "Shadows", parameters: [.calibrationShadowsTint])
             ParameterSlider(parameter: .calibrationShadowsTint)

@@ -178,6 +178,7 @@ public struct DevelopParams {
     public var gainTable = SIMD4<Float>(0, 1, 1, 0)
     public var gainTableWeights = SIMD4<Float>(0, 0, 0, 0)
     public var gainTableGrid = SIMD4<Float>(0, 0, 1, 1)
+    public var calibration = SIMD4<Float>(0, 0, 0, 0)
 
     public init() {}
 

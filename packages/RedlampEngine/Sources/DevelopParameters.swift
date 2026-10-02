@@ -97,7 +97,11 @@ enum DevelopParameters {
             0,
         )
 
-        p.setCameraToWorking(session.cameraToWorking(for: recipe))
+        p.setCameraToWorking(
+            Calibration.matrix(recipe).map { $0.floatMatrix * session.cameraToWorking(for: recipe) }
+                ?? session.cameraToWorking(for: recipe),
+        )
+        p.calibration = SIMD4(Float(recipe[.calibrationShadowsTint] / 100), 0, 0, 0)
         if recipe.processVersion >= 4, let maps = session.hueSatMaps {
             p.hueSat = SIMD4(1, session.hueSatWeight(for: recipe), maps.srgbValues ? 1 : 0, 0)
             p.setWorkingToProPhoto(HueSatMaps.workingToProPhoto)

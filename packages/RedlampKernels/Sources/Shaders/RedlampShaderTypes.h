@@ -74,6 +74,7 @@ struct DevelopParams {
                               // BaselineExposure gain its input assumes, w the weight of max(R, G, B)
     float4 gainTableWeights;  // weights of R, G, B and min(R, G, B) (ProPhoto)
     float4 gainTableGrid;     // xy the map's origin, zw its spacing, relative to the raw image
+    float4 calibration;       // x Calibration's Shadows Tint (-1 green ... 1 magenta)
 };
 
 // Noise reduction over one work area of the pyramid.

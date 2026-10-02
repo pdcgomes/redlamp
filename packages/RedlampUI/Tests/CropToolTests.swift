@@ -172,6 +172,16 @@ struct CropToolTests {
         #expect(model.history.last?.name == "Upright: Vertical")
     }
 
+    @Test func `the process version is changed only on request, and can be undone`() async throws {
+        let model = try await openModel()
+        #expect(model.recipe.processVersion == EditRecipe.currentProcessVersion)
+        model.setProcessVersion(3)
+        #expect(model.recipe.processVersion == 3)
+        #expect(model.history.last?.name == "Process Version: Version 5 → Version 3")
+        model.undo()
+        #expect(model.recipe.processVersion == EditRecipe.currentProcessVersion)
+    }
+
     @Test func `reset removes the crop, angle and turns`() async throws {
         let model = try await openModel()
         model.setValue(.cropAngle, 3)

@@ -79,6 +79,9 @@ public enum AdjustmentSearch {
         .lensVignetting: "Manual", .lensVignettingMidpoint: "Manual",
         .defringePurpleAmount: "Defringe", .defringePurpleHueLow: "Defringe", .defringePurpleHueHigh: "Defringe",
         .defringeGreenAmount: "Defringe", .defringeGreenHueLow: "Defringe", .defringeGreenHueHigh: "Defringe",
+        .calibrationShadowsTint: "Shadows", .calibrationRedHue: "Red Primary", .calibrationRedSaturation: "Red Primary",
+        .calibrationGreenHue: "Green Primary", .calibrationGreenSaturation: "Green Primary",
+        .calibrationBlueHue: "Blue Primary", .calibrationBlueSaturation: "Blue Primary",
     ]
 
     /// The words people use: Lightroom's current and older names, and plain descriptions.
@@ -133,6 +136,13 @@ public enum AdjustmentSearch {
         .gradeBalance: ["split toning", "color grading", "toning"],
         .defringePurpleAmount: ["defringe", "fringe", "fringing", "purple fringe", "chromatic aberration", "ca"],
         .defringeGreenAmount: ["defringe", "fringe", "fringing", "green fringe", "chromatic aberration", "ca"],
+        .calibrationShadowsTint: ["calibration", "camera calibration", "shadow tint", "shadows"],
+        .calibrationRedHue: ["calibration", "camera calibration", "primaries", "red primary"],
+        .calibrationRedSaturation: ["calibration", "camera calibration", "primaries", "red primary"],
+        .calibrationGreenHue: ["calibration", "camera calibration", "primaries", "green primary"],
+        .calibrationGreenSaturation: ["calibration", "camera calibration", "primaries", "green primary"],
+        .calibrationBlueHue: ["calibration", "camera calibration", "primaries", "blue primary"],
+        .calibrationBlueSaturation: ["calibration", "camera calibration", "primaries", "blue primary"],
     ].merging(mixerAndGradingSynonyms) { $0 + $1 }
 
     private static var mixerAndGradingSynonyms: [ParameterID: [String]] {

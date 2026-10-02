@@ -4,8 +4,7 @@ import RedlampEngineAPI
 import SwiftUI
 
 /// Detail, Lens Corrections, Transform, Effects and Calibration. Their sliders come from the
-/// parameter schema, so any the engine doesn't render yet (Calibration's) show dimmed with
-/// their phase.
+/// parameter schema, so any the engine doesn't render yet show dimmed with their phase.
 @MainActor
 @_spi(Harness) public enum ReferencePanelViews {
     public static func detail(model: EditorModel) -> PanelSectionView {
@@ -89,7 +88,7 @@ import SwiftUI
             ("Green Primary", [.calibrationGreenHue, .calibrationGreenSaturation]),
             ("Blue Primary", [.calibrationBlueHue, .calibrationBlueSaturation]),
         ]
-        return rows.panel(.calibration, badge: "Phase 2", rows: [
+        return rows.panel(.calibration, rows: [
             rows.controls("Process", ProcessVersion()),
             rows.header("Shadows", [.calibrationShadowsTint]),
             rows.slider(.calibrationShadowsTint),

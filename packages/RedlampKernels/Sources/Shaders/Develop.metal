@@ -672,6 +672,13 @@ kernel void rl_develop(
         scene *= pow(gainTableAt(scene, sourceUV, gainTable, p), p.gainTable.x);
     }
     scene *= p.tone.x * exp2(localTone.x);
+    // Calibration's Shadows Tint: green or magenta in the shadows, fading out by middle grey, at
+    // constant luminance.
+    if (p.calibration.x != 0.0f) {
+        float y = max(dot(scene, kRec2020Luma), 0.0f);
+        float shadow = 1.0f - smoothstep(0.0f, kMiddleGrey * 1.5f, y);
+        scene = max(scene + p.calibration.x * 0.12f * shadow * y * float3(1.0f, -0.4749f, 1.0f), 0.0f);
+    }
     // Halation and bloom: highlight light scattered on its way to the image (see Glow.metal),
     // added in scene light. Halation reflects off the film base behind the emulsion, so it
     // reaches the red layer widest, the green a little and the blue (on top) not at all; its
