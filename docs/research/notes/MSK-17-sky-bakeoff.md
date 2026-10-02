@@ -148,6 +148,21 @@ It brings back beard curls and the curls at the side of a head, and it sharpens 
 
 **Licences and patents.** Both papers' methods are ours to implement, but closed-form matting and the window-sum solve may be patented; they are added to the freedom-to-operate search with the guided filter (DEC-05).
 
+## Getting masks ready
+
+Opening the Masking tool now warms AI masks in the background, at low priority, for the open photo and every photo opened after it: the 2048 px and 4096 px analysis renders (both cached per photo), Segment Anything (loaded, its embedding of the photo computed, and one throwaway decode, since Core ML prepares the decoder's GPU work on its first prediction) and Depth Anything 3 (its depth and sky). Sky also no longer pays for an Objects edge solve on the Segment Anything mask it starts from: `SkyMatte` solves those edges.
+
+Measured on the dancer raw (Release build, M1 Ultra), first mask of each kind after the photo opened:
+
+| | Before | After warming up |
+| --- | --- | --- |
+| Sky | 3.1 s | 1.3 s |
+| People | 4.1–5.1 s | 3.6–4.3 s |
+| Subject | 2.5–2.8 s | 2.1–2.6 s |
+| Objects | 1.4–1.8 s | 1.0–1.3 s |
+
+What remains is the edge solvers themselves: about 1.1 s for `SkyMatte` and 1–3 s for `ClosedFormMatte` at 4096 px. Halving the closed-form iterations would save 0.2–0.6 s, and costs nothing on the portraits, but loses accuracy where Vision is unsure of much (the dancer: 0.122 to 0.131); they stay. Next is moving both solvers to the GPU.
+
 ## Decision
 
 - **Sky ships as SAM 2.1 refined between branches, then `SkyMatte`** when SAM's model is on the Mac, with the classical estimate (also through `SkyMatte`) as the fallback. An embedded sky matte, when the file has one, wins over both.

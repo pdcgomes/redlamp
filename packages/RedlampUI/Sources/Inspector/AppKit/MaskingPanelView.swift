@@ -39,6 +39,8 @@ final class MaskingPanelView: ColumnView {
         tracker?.cancel()
         tracker = nil
         guard window != nil else { return }
+        // The Masking tool is open: get AI masks ready for this photo and the next ones.
+        model.engine.warmUpMasks()
         tracker = Tracker { [weak self] in
             guard let self else { return }
             let next = Structure(

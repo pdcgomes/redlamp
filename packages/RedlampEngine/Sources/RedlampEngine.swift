@@ -37,6 +37,10 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     let depthAnything3Model = Mutex<DepthAnything3?>(nil)
     let depthAnything3Cache = Mutex<(hash: String, result: DepthAnything3.Result)?>(nil)
     let objectEmbeddingCache = Mutex<(hash: String, embedding: SAMSegmenter.Embedding)?>(nil)
+    /// The analysis render at the size masks are stored at.
+    let matteCache = Mutex<AnalysisCache?>(nil)
+    /// Set once the Masking tool has opened: photos opened after get their AI masks ready too.
+    let masksWanted = Mutex(false)
 
     func currentSession() -> ImageSession? {
         session.withLock { $0 }
@@ -134,6 +138,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         let built = try await sessions.session(for: url)
         guard openGeneration.withLock({ $0 == generation }) else { throw CancellationError() }
         session.withLock { $0 = built }
+        warmIfWanted(built)
         return built.info
     }
 
@@ -141,6 +146,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         guard let ready = sessions.cached(url) else { return nil }
         openGeneration.withLock { $0 += 1 }
         session.withLock { $0 = ready }
+        warmIfWanted(ready)
         return ready.info
     }
 

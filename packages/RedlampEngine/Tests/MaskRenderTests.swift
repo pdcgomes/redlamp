@@ -415,6 +415,31 @@ struct MaskRenderTests {
 }
 
 extension MaskRenderTests {
+    /// Opening the Masking tool gets the open photo's mask renders ready in the background, and
+    /// those of the photo opened next.
+    @Test(.enabled(if: EngineSmokeTests.canRender && EngineSmokeTests.fixtures.count >= 2))
+    func `warming up prepares the mask renders, for the next photo too`() async throws {
+        let engine = try RedlampEngine()
+        func ready(within seconds: Double) async throws -> Bool {
+            let deadline = ContinuousClock.now + .seconds(seconds)
+            while ContinuousClock.now < deadline {
+                if let session = engine.currentSession(),
+                   engine.matteCache.withLock({ $0?.session === session }),
+                   engine.analysisCache.withLock({ $0?.session === session }) {
+                    return true
+                }
+                try await Task.sleep(for: .milliseconds(100))
+            }
+            return false
+        }
+        _ = try await engine.open(EngineSmokeTests.fixtures[0])
+        #expect(try await !ready(within: 1.5), "nothing is warmed before the Masking tool opens")
+        engine.warmUpMasks()
+        #expect(try await ready(within: 30))
+        _ = try await engine.open(EngineSmokeTests.fixtures[1])
+        #expect(try await ready(within: 30), "the next photo")
+    }
+
     /// With Depth Anything 3 on this Mac: on the Nikon sample the front of the table is nearer
     /// than the wall behind the objects.
     @Test(.enabled(if: EngineSmokeTests.canRender && Self.isInstalled("depth-anything-3-mono-large")))

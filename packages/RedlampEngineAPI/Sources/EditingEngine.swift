@@ -57,6 +57,11 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// The AI mask kinds this device can compute now.
     func availableMaskKinds() -> Set<MaskKind>
 
+    /// Gets AI masks ready in the background (renders, models, embeddings) for the current photo
+    /// and those opened after it, so computing one later is quicker. Called when the Masking
+    /// tool opens.
+    func warmUpMasks()
+
     /// The AI mask kinds that need a model downloaded first, and that model.
     func modelNeeded(for kind: MaskKind) async -> ModelInfo?
 
@@ -85,4 +90,8 @@ public protocol EditingEngine: AnyObject, Sendable {
     func focusStack(
         at url: URL, maxLongEdge: Int, progress: @escaping @Sendable (Double) -> Void,
     ) async throws -> FocusStackPreview
+}
+
+public extension EditingEngine {
+    func warmUpMasks() {}
 }

@@ -33,11 +33,12 @@ extension RedlampEngine {
         // estimate finds none (a small patch between buildings).
         if method == "auto" || method == "sam", await isReady(Self.modelID(for: .objects)),
            let seeds = (try? SkyEstimator.seeds(image)) ?? da3.flatMap({ try? SkyEstimator.seeds(inside: $0) }),
-           let object = try await computeMasks(MaskRequest(kind: .objects, prompts: seeds)).first,
-           let png = object.bitmap.png, let mask = GrayMask.decode(png) {
-            // SAM cuts around bare tree crowns; give back the sky seen through them.
+           let (raw, _) = try? await segmentObject(MaskRequest(kind: .objects, prompts: seeds), analysis: analysis) {
+            // SAM cuts around bare tree crowns; give back the sky seen through them. SkyMatte
+            // solves the edges afterwards.
             sam = await Task.detached(priority: .userInitiated) {
-                SkyEstimator.refineBetweenBranches(mask, image: image)
+                let mask = GuidedFilter.refine(raw, guide: image, radius: 4, epsilon: 1e-3)
+                return SkyEstimator.refineBetweenBranches(mask, image: image)
             }.value
         }
         let coarse: GrayMask
@@ -205,25 +206,13 @@ extension RedlampEngine {
             )]
         }
         if request.kind == .objects {
-            let size = PixelSize(width: analysis.image.width, height: analysis.image.height)
-                .fitted(within: PixelSize(
-                    width: VisionMaskProvider.partsLongEdge,
-                    height: VisionMaskProvider.partsLongEdge,
-                ))
-            let segmenter = try await objectSegmenter()
-            let embedding = try await objectEmbedding(analysis, segmenter: segmenter)
+            let (raw, segmenter) = try await segmentObject(request, analysis: analysis)
             let image = analysis.image
             // Edges solved per pixel at the size masks are stored at (the hover preview keeps the
             // model's, to stay instant). REDLAMP_EDGE_MATTE=off keeps the guided filter's.
             let full = ProcessInfo.processInfo.environment["REDLAMP_EDGE_MATTE"] == "off"
                 ? nil : try? await matteImage(for: session)
-            let mask = try await Task.detached(priority: .userInitiated) {
-                let raw = try segmenter.mask(
-                    embedding,
-                    included: request.prompts,
-                    excluded: request.excluded,
-                    size: size,
-                )
+            let mask = await Task.detached(priority: .userInitiated) {
                 guard let full else { return GuidedFilter.refine(raw, guide: image, radius: 4, epsilon: 1e-3) }
                 return ClosedFormMatte.refine(raw, image: full)
             }.value
@@ -276,6 +265,24 @@ extension RedlampEngine {
     static func takesClosedFormMatte(_ mask: ProvidedMask) -> Bool {
         [.subject, .background, .people].contains(mask.kind) && (mask.part ?? .entirePerson) == .entirePerson
             && !mask.provider.hasPrefix("apple.embedded")
+    }
+
+    /// Segment Anything's mask for `request`'s prompts as it gives it, at the analysis size within
+    /// the parts' long edge.
+    func segmentObject(
+        _ request: MaskRequest, analysis: (image: CGImage, hash: String),
+    ) async throws -> (mask: GrayMask, segmenter: SAMSegmenter) {
+        let size = PixelSize(width: analysis.image.width, height: analysis.image.height)
+            .fitted(within: PixelSize(
+                width: VisionMaskProvider.partsLongEdge,
+                height: VisionMaskProvider.partsLongEdge,
+            ))
+        let segmenter = try await objectSegmenter()
+        let embedding = try await objectEmbedding(analysis, segmenter: segmenter)
+        let mask = try await Task.detached(priority: .userInitiated) {
+            try segmenter.mask(embedding, included: request.prompts, excluded: request.excluded, size: size)
+        }.value
+        return (mask, segmenter)
     }
 
     public func previewObjectMask(_ request: MaskRequest) async throws -> MaskBitmap? {
@@ -411,7 +418,10 @@ extension RedlampEngine {
 
     /// The analysis render at the size masks are stored at, for edges finer than the models see.
     func matteImage(for session: ImageSession) async throws -> CGImage {
-        try await withCheckedThrowingContinuation { continuation in
+        if let cached = matteCache.withLock({ $0 }), cached.session === session {
+            return cached.image
+        }
+        let image: CGImage = try await withCheckedThrowingContinuation { continuation in
             renderQueue.async { [self] in
                 continuation.resume(with: Result {
                     try renderStillNow(
@@ -423,6 +433,45 @@ extension RedlampEngine {
                         session: session,
                     )
                 })
+            }
+        }
+        matteCache.withLock { $0 = AnalysisCache(session: session, image: image, hash: "") }
+        return image
+    }
+
+    // MARK: - Warming up
+
+    public func warmUpMasks() {
+        masksWanted.withLock { $0 = true }
+        if let session = currentSession() {
+            warm(session)
+        }
+    }
+
+    func warmIfWanted(_ session: ImageSession) {
+        if masksWanted.withLock({ $0 }) {
+            warm(session)
+        }
+    }
+
+    /// The renders, models and embeddings `session`'s AI masks need, each cached, at low priority
+    /// and after a moment, so the canvas's own frame goes first. Stops if another photo opens.
+    func warm(_ session: ImageSession) {
+        Task.detached(priority: .utility) { [self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard currentSession() === session, let analysis = try? await analysisImage(for: session) else { return }
+            guard currentSession() === session, await (try? matteImage(for: session)) != nil else { return }
+            if await isReady(Self.modelID(for: .objects)), currentSession() === session,
+               let segmenter = try? await objectSegmenter(),
+               let embedding = try? await objectEmbedding(analysis, segmenter: segmenter) {
+                // One throwaway decode: Core ML prepares the decoder's GPU work on its first.
+                _ = try? segmenter.mask(
+                    embedding, included: [ImagePoint(x: 0.5, y: 0.5)], excluded: [],
+                    size: PixelSize(width: 64, height: 64),
+                )
+            }
+            if currentSession() === session, let model = await depthAnything3() {
+                _ = try? await depthAnything3Result(analysis, model: model)
             }
         }
     }
