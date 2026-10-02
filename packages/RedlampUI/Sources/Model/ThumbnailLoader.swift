@@ -19,6 +19,8 @@ public final class ThumbnailLoader {
     /// Photos per warming job.
     static let warmBatch = 8
 
+    /// The pixel bytes held at most. They're purgeable (see `load`), so about a third of this counts
+    /// in the app's footprint.
     public let budget: Int
     /// The photos on screen, which trimming keeps.
     public var protected: Set<URL> = []
@@ -72,6 +74,11 @@ public final class ThumbnailLoader {
     /// Bytes of decoded thumbnails held.
     public var memoryUsed: Int {
         used
+    }
+
+    /// Decoded thumbnails held.
+    public var cachedCount: Int {
+        cache.count
     }
 
     // MARK: - Requests
@@ -179,19 +186,21 @@ public final class ThumbnailLoader {
         }
     }
 
-    /// From the pack, else decoded from the photo and added to the pack.
+    /// From the pack, else decoded from the photo and added to the pack. A thumbnail to keep is
+    /// always one decoded from its pack JPEG: ImageIO holds those pixels in purgeable memory, which
+    /// the system can take back (ImageIO decodes them again when drawn) and doesn't count against
+    /// the app, so a thumbnail costs about 33 KB of footprint rather than its 96 KB bitmap.
     nonisolated static func load(
-        _ item: LibraryItem, packs: ThumbnailPacks, decode: (URL, Int) -> CGImage?,
+        _ item: LibraryItem, packs: ThumbnailPacks, decode: (URL, Int) -> CGImage?, keep: Bool = true,
     ) -> CGImage? {
         if let jpeg = packs.jpeg(for: item.url, size: item.size, modified: item.modified),
            let image = ThumbnailPacks.decode(jpeg) {
             return image
         }
         guard let image = decode(item.url, pixelSize) else { return nil }
-        if let jpeg = ThumbnailPacks.encode(image) {
-            packs.store(jpeg, for: item.url, size: item.size, modified: item.modified)
-        }
-        return image
+        guard let jpeg = ThumbnailPacks.encode(image) else { return image }
+        packs.store(jpeg, for: item.url, size: item.size, modified: item.modified)
+        return keep ? ThumbnailPacks.decode(jpeg) ?? image : image
     }
 
     // MARK: - Memory
@@ -280,7 +289,7 @@ public final class ThumbnailLoader {
                 onCancel: { Task { @MainActor [weak self] in self?.warmed(generation) } },
                 {
                     for item in batch where !packs.contains(item.url, size: item.size, modified: item.modified) {
-                        _ = Self.load(item, packs: packs, decode: decode)
+                        _ = Self.load(item, packs: packs, decode: decode, keep: false)
                     }
                     Task { @MainActor [weak self] in self?.warmed(generation) }
                 },
