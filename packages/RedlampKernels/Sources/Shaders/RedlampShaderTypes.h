@@ -75,6 +75,7 @@ struct DevelopParams {
     float4 gainTableWeights;  // weights of R, G, B and min(R, G, B) (ProPhoto)
     float4 gainTableGrid;     // xy the map's origin, zw its spacing, relative to the raw image
     float4 calibration;       // x Calibration's Shadows Tint (-1 green ... 1 magenta)
+    float4 vignette2;         // x Post-Crop Vignetting's Highlights (0...1)
 };
 
 // Noise reduction over one work area of the pyramid.
@@ -173,7 +174,8 @@ struct MaskLayerGPU {
     float4 tone;              // x exposure (EV), y contrast, z highlights, w shadows
     float4 tone2;             // x whites, y blacks, z first component index, w component count
     float4 detail;            // x Dehaze (slider / 100), y Detail refinement (-1...1), z pyramid level it measures texture at
-    float4 glow;              // x halation, y bloom (slider / 100, scaled by the mask's Amount), added to the global amounts
+    float4 glow;              // x halation, y bloom, z defringe, w moiré (slider / 100, scaled by the mask's Amount);
+                              // halation, bloom and defringe add to the global amounts
 };
 
 #endif

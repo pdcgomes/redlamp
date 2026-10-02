@@ -142,4 +142,72 @@ struct ChromaticAberrationTests {
         #expect(fringeAfter < fringeBefore * 0.3, "fringe \(fringeBefore) → \(fringeAfter)")
         #expect(abs(patchAfter - patchBefore) < 1e-3, "patch \(patchBefore) → \(patchAfter)")
     }
+
+    /// The whole frame, as a mask a local adjustment can use.
+    static func everywhere(_ parameter: ParameterID, _ value: Double) -> MaskLayer {
+        var mask = MaskLayer(name: "All", components: [
+            MaskComponent(shape: .luminanceRange(LuminanceRangeMask(lower: 0, upper: 100))),
+        ])
+        mask[parameter] = value
+        return mask
+    }
+
+    func fringeScene() throws -> ImageSession {
+        try session(width: 512, height: 256) { x, _ in
+            if x < 120 {
+                return SIMD3(repeating: 0.95)
+            }
+            return x < 124 ? SIMD3(0.30, 0.08, 0.36) : SIMD3(repeating: 0.03)
+        }
+    }
+
+    func pixel(_ session: ImageSession, _ recipe: EditRecipe, _ x: Int, _ y: Int) throws -> SIMD3<Float> {
+        let frame = try RedlampEngine().renderFrame(
+            RenderRequest(recipe: recipe, targetSize: session.orientedSize, generation: 0), session: session,
+        )
+        IOSurfaceLock(frame.surface, .readOnly, nil)
+        defer { IOSurfaceUnlock(frame.surface, .readOnly, nil) }
+        let row = (IOSurfaceGetBaseAddress(frame.surface) + y * IOSurfaceGetBytesPerRow(frame.surface))
+            .assumingMemoryBound(to: Float16.self)
+        return SIMD3(Float(row[x * 4]), Float(row[x * 4 + 1]), Float(row[x * 4 + 2]))
+    }
+
+    @Test func `a mask's Defringe greys fringes inside it, or holds the global Defringe back`() throws {
+        let session = try fringeScene()
+        func colourfulness(_ recipe: EditRecipe) throws -> Float {
+            let c = try pixel(session, recipe, 121, 128)
+            return c.max() - c.min()
+        }
+        let plain = try colourfulness(EditRecipe())
+        var local = EditRecipe()
+        local.masks = [Self.everywhere(.localDefringe, 100)]
+        #expect(try colourfulness(local) < plain * 0.3)
+        var global = EditRecipe()
+        global[.defringePurpleAmount] = 20
+        global.masks = [Self.everywhere(.localDefringe, -100)]
+        #expect(try abs(colourfulness(global) - plain) < 1e-3, "the mask protects its area")
+    }
+
+    @Test func `a mask's Moiré takes the colour out of fine coloured stripes and keeps their brightness`() throws {
+        // Alternating magenta and green columns of equal luminance: colour aliasing on a fine pattern.
+        let session = try session(width: 256, height: 128) { x, _ in
+            Int(x) % 2 == 0 ? SIMD3(0.4, 0.1, 0.4) : SIMD3(0.15, 0.25, 0.15)
+        }
+        var recipe = EditRecipe()
+        recipe.masks = [Self.everywhere(.localMoire, 100)]
+        let before = try pixel(session, EditRecipe(), 100, 64), after = try pixel(session, recipe, 100, 64)
+        #expect(after.max() - after.min() < (before.max() - before.min()) * 0.3, "\(before) → \(after)")
+        let luma = { (c: SIMD3<Float>) in simd_dot(c, SIMD3(0.2627, 0.6780, 0.0593)) }
+        #expect(abs(luma(after) - luma(before)) < 0.05, "brightness \(luma(before)) → \(luma(after))")
+    }
+
+    @Test func `the vignette's Highlights keep bright corners bright`() throws {
+        let session = try session(width: 256, height: 128) { _, _ in SIMD3(repeating: 0.9) }
+        var recipe = EditRecipe()
+        recipe[.vignetteAmount] = -100
+        let darkened = try pixel(session, recipe, 2, 2)
+        recipe[.vignetteHighlights] = 100
+        let kept = try pixel(session, recipe, 2, 2)
+        #expect(kept.y > darkened.y * 1.3, "corner \(darkened.y) → \(kept.y)")
+    }
 }

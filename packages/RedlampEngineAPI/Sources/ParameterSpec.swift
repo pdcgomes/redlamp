@@ -229,9 +229,6 @@ public extension ParameterID {
 }
 
 public enum ParameterCatalog {
-    private static let detail = Availability.planned(phase: "Phase 2")
-    private static let geometry = Availability.planned(phase: "Phase 2")
-
     public static let all: [ParameterSpec] = [
         ParameterSpec(
             .temperature, "Temp", range: 2000 ... 50000, default: 5500, step: 50,
@@ -360,10 +357,7 @@ public enum ParameterCatalog {
             ParameterSpec(.vignetteMidpoint, "Midpoint", range: 0 ... 100, default: 50, format: .integer),
             ParameterSpec(.vignetteRoundness, "Roundness"),
             ParameterSpec(.vignetteFeather, "Feather", range: 0 ... 100, default: 50, format: .integer),
-            ParameterSpec(
-                .vignetteHighlights, "Highlights", range: 0 ... 100, format: .integer,
-                availability: .planned(phase: "Phase 2"),
-            ),
+            ParameterSpec(.vignetteHighlights, "Highlights", range: 0 ... 100, format: .integer),
             ParameterSpec(.grainAmount, "Amount", range: 0 ... 100, format: .integer),
             ParameterSpec(.grainSize, "Size", range: 0 ... 100, default: 25, format: .integer),
             ParameterSpec(.grainRoughness, "Roughness", range: 0 ... 100, default: 50, format: .integer),
@@ -422,8 +416,8 @@ public enum ParameterCatalog {
             ParameterSpec(.localSaturation, "Saturation"),
             ParameterSpec(.localSharpness, "Sharpness"),
             ParameterSpec(.localNoise, "Noise"),
-            ParameterSpec(.localMoire, "Moiré", availability: detail),
-            ParameterSpec(.localDefringe, "Defringe", range: -100 ... 100, availability: geometry),
+            ParameterSpec(.localMoire, "Moiré", range: 0 ... 100, format: .integer),
+            ParameterSpec(.localDefringe, "Defringe", range: -100 ... 100),
             ParameterSpec(.localHalation, "Halation"),
             ParameterSpec(.localBloom, "Bloom"),
             ParameterSpec(.maskAmount, "Amount", range: 0 ... 200, default: 100, format: .integer),

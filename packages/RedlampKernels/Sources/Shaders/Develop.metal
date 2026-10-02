@@ -143,7 +143,7 @@ static inline float hueBand(float hue, float from, float to) {
 // Lightroom's Defringe: purple or green colour beside a strong edge (a stop and more of contrast
 // within two texels) loses its colour, so axial fringes that no scale can realign go grey.
 static inline float3 defringe(float3 scene, texture2d<float, access::sample> source, float2 sourceUV,
-                              constant DevelopParams &p) {
+                              float2 amounts, constant DevelopParams &p) {
     constexpr sampler pointSampler(coord::normalized, filter::linear, mip_filter::nearest, address::clamp_to_edge);
     uint mip = uint(max(p.geometry.y, 0.0f));
     float2 texel = 2.0f / float2(source.get_width(mip), source.get_height(mip));
@@ -162,10 +162,32 @@ static inline float3 defringe(float3 scene, texture2d<float, access::sample> sou
     if (chroma < 1e-5f || lab.x < 1e-5f) return scene;
     float hue = fmod(atan2(lab.z, lab.y) * 57.2957795f + 360.0f, 360.0f);
     float saturated = smoothstep(0.05f, 0.15f, chroma / lab.x);
-    float amount = p.defringe.x * hueBand(hue, p.defringeHue.x, p.defringeHue.y)
-        + p.defringe.y * hueBand(hue, p.defringeHue.z, p.defringeHue.w);
+    float amount = amounts.x * hueBand(hue, p.defringeHue.x, p.defringeHue.y)
+        + amounts.y * hueBand(hue, p.defringeHue.z, p.defringeHue.w);
     float weight = clamp(amount * edge * saturated, 0.0f, 1.0f);
     return mix(scene, float3(dot(scene, kRec2020Luma)), weight);
+}
+
+// A mask's Moiré: colour averaged over a 3x3 neighbourhood about three texels apart, at the
+// pixel's own luminance, so the coloured bands that fine repeating patterns alias into go, and
+// detail stays.
+static inline float3 removeMoire(float3 camera, texture2d<float, access::sample> source, float2 sourceUV,
+                                 float amount, constant DevelopParams &p) {
+    constexpr sampler areaSampler(coord::normalized, filter::linear, mip_filter::nearest, address::clamp_to_edge);
+    uint mip = uint(max(p.geometry.y, 0.0f));
+    float2 texel = 3.0f / float2(source.get_width(mip), source.get_height(mip));
+    float3 total = 0.0f;
+    for (int dy = -1; dy <= 1; dy++) {
+        for (int dx = -1; dx <= 1; dx++) {
+            total += source.sample(areaSampler, sourceUV + float2(dx, dy) * texel, level(float(mip))).rgb;
+        }
+    }
+    float3 average = total / 9.0f;
+    // Luminance in camera RGB: Rec. 2020's weights through the camera matrix.
+    float3 weights = p.camToWork0.xyz * kRec2020Luma.x + p.camToWork1.xyz * kRec2020Luma.y
+        + p.camToWork2.xyz * kRec2020Luma.z;
+    float3 smoothed = average * (dot(camera, weights) / max(dot(average, weights), 1e-6f));
+    return mix(camera, smoothed, clamp(amount, 0.0f, 1.0f));
 }
 
 // The camera profile's colour correction, in linear ProPhoto as the DNG specification has it:
@@ -617,6 +639,7 @@ kernel void rl_develop(
     float2 localTone2 = 0.0f;
     float localDehaze = 0.0f;
     float2 localGlow = 0.0f;
+    float2 localFringe = 0.0f;
     MaskImages maskImages = { maskRasters, maskGuide };
     float textureMagnitude = -1.0f;
     for (int i = 0; i < layerCount; i++) {
@@ -632,6 +655,7 @@ kernel void rl_develop(
         localTone2 += coverage[i] * layers[i].tone2.xy;
         localDehaze += coverage[i] * layers[i].detail.x;
         localGlow += coverage[i] * layers[i].glow.xy;
+        localFringe += coverage[i] * layers[i].glow.zw;
     }
 
     // Scene-referred: white balance (global and local), camera matrix, exposure.
@@ -659,14 +683,19 @@ kernel void rl_develop(
         // channel may go negative here; working space takes it back.
         camera = mul3(p.workToCam0, p.workToCam1, p.workToCam2, inverseToneCurve(shown));
     }
+    if (localFringe.y > 0.0f) {
+        camera = removeMoire(camera, source, sourceUV, localFringe.y, p);
+    }
     camera *= p.wbRatio.xyz;
     camera *= float3(exp2(localColor.x * 0.6f), exp2(-localColor.y * 0.4f), exp2(-localColor.x * 0.6f));
     float3 scene = max(mul3(p.camToWork0, p.camToWork1, p.camToWork2, camera), 0.0f);
     if (p.hueSat.x > 0.5f) {
         scene = max(applyHueSatMap(scene, hueSatCool, hueSatWarm, p), 0.0f);
     }
-    if (p.defringe.x > 0.0f || p.defringe.y > 0.0f) {
-        scene = max(defringe(scene, source, sourceUV, p), 0.0f);
+    // A mask's Defringe adds to both of the global amounts, or holds them back where negative.
+    float2 fringeAmounts = clamp(p.defringe.xy + localFringe.x, 0.0f, 1.0f);
+    if (fringeAmounts.x > 0.0f || fringeAmounts.y > 0.0f) {
+        scene = max(defringe(scene, source, sourceUV, fringeAmounts, p), 0.0f);
     }
     if (p.gainTable.x > 0.0f) {
         scene *= pow(gainTableAt(scene, sourceUV, gainTable, p), p.gainTable.x);
@@ -833,7 +862,9 @@ kernel void rl_develop(
         float feather = mix(0.02f, 1.1f, p.vignette.w);
         float amount = smoothstep(start - feather * 0.5f, start + feather * 0.5f, distance);
         if (p.vignette.x < 0.0f) {
-            encoded *= 1.0f + p.vignette.x * amount;
+            // Highlights keep bright areas bright as the corners darken (Highlight Priority).
+            float bright = smoothstep(0.5f, 1.0f, dot(encoded, kRec2020Luma)) * p.vignette2.x;
+            encoded *= 1.0f + p.vignette.x * amount * (1.0f - bright);
         } else {
             encoded += (1.0f - encoded) * p.vignette.x * amount;
         }

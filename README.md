@@ -92,7 +92,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] **Tone Curve:** a parametric curve with split points, and a point curve with presets.
 - [x] **Color Mixer:** HSL (Hue, Saturation, Luminance, and All) and a per-color mode, working in OKLCh.
 - [x] **Color Grading:** 3-way and individual wheels, Blending, and Balance. It also tints B&W images for split-toning.
-- [x] **Effects:** post-crop vignette (amount, midpoint, roundness, feather) and zoom-stable film grain.
+- [x] **Effects:** post-crop vignette (amount, midpoint, roundness, feather, and Highlights to keep bright areas bright under a darkening vignette) and zoom-stable film grain.
 - [x] **Noise reduction** (Detail panel): Luminance with Detail and Contrast, and Color with Detail and Smoothness. It is scaled to each photo's own noise, read from the DNG NoiseProfile tag or measured from the raw data when the file opens. Luminance keeps fine texture: wavelet shrinkage judges each detail by its neighbourhood, and at 1:1 and in exports a non-local-means pass guided by that result brings back texture where the photo repeats it. It runs as a cached stage in front of the fused kernel, so other sliders stay as fast as before, and exports render in tiles.
 - [x] **Sharpening** (Detail panel): Amount, Radius, Detail and Masking, in the same cached stage after noise reduction. It is noise-aware: detail is measured on a denoised copy of the luminance and applied to the untouched image, so the photo's noise and grain pass through as they were instead of being sharpened. Detail moves from a halo-limited unsharp mask towards Richardson–Lucy deconvolution of the Radius's blur, and holds back halos on strong edges; Masking keeps flat areas untouched. It boosts luminance detail in stops, so it doesn't depend on exposure and leaves colors alone.
 - [x] **Texture and Clarity** (global): gains on medium (about 2–8 px) and larger (about 8–64 px) luminance detail, taken from the image pyramid in the same cached stage, so tiles and zoom levels agree. Negative values soften.
@@ -169,7 +169,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 ### In progress
 
 - **Focus stacking:** lens corrections before alignment, halo handling, vendor focus-bracketing tags for detection, and baking a stack to DNG.
-- **Controls laid out but not yet rendering** (shown dimmed, with the phase they arrive in): Moiré and Defringe in masks. The Healing and Red Eye tools show what is coming and when.
+- **Tools not yet working:** the Healing and Red Eye tools show what is coming and when.
 
 ### Measured performance
 
@@ -825,7 +825,7 @@ The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on mac
 - [x] Coordinated sidecar I/O for iCloud Drive
 
 ### Phase 2: Develop parity *(in progress)*
-- [x] Texture, Clarity and Dehaze, globally and inside masks
+- [x] Texture, Clarity and Dehaze, globally and inside masks, and Moiré and Defringe inside masks
 - [x] Detail panel: noise reduction scaled to each photo's measured noise, and noise-aware sharpening, with Lightroom's controls
 - [x] Menon Bayer demosaic with a dual pass for flat noisy areas, hot-pixel repair and highlight reconstruction
 - [x] **Recipes:** one format for presets, profiles and LUTs, Base Look tables, camera recipe cards, `.cube` and HaldCLUT import, 39 bundled recipes, and the Recipe Lab
