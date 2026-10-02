@@ -37,9 +37,12 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     let depthAnything3Model = Mutex<DepthAnything3?>(nil)
     let depthAnything3Cache = Mutex<(hash: String, result: DepthAnything3.Result)?>(nil)
     let objectEmbeddingCache = Mutex<(hash: String, embedding: SAMSegmenter.Embedding)?>(nil)
-    /// SAM 3 for Landscape, once loaded, and the open photo's class masks.
-    let landscapeModel = Mutex<SAM3Landscape?>(nil)
+    /// SAM 3 for Landscape and people parts, once loaded; the open photo's encoding, and its
+    /// class and part masks.
+    let sam3Model = Mutex<SAM3Concepts?>(nil)
+    let sam3Features = Mutex<(hash: String, features: SAM3Concepts.Features)?>(nil)
     let landscapeCache = Mutex<(hash: String, classes: [LandscapeClass: GrayMask])?>(nil)
+    let peoplePartsCache = Mutex<(hash: String, parts: [PersonPart: GrayMask])?>(nil)
     /// The analysis render at the size masks are stored at.
     let matteCache = Mutex<AnalysisCache?>(nil)
     /// Set once the Masking tool has opened: photos opened after get their AI masks ready too.

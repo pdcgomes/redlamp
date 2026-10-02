@@ -90,34 +90,58 @@ extension RedlampEngine {
 
     static let depthAnything3ID = "depth-anything-3-mono-large"
 
-    /// SAM 3 for Landscape, when it's on this Mac and offered (it is evaluation only).
-    func sam3Landscape() async -> SAM3Landscape? {
-        if let loaded = landscapeModel.withLock({ $0 }) {
+    /// SAM 3, when it's on this Mac and offered (it is evaluation only).
+    func sam3() async -> SAM3Concepts? {
+        if let loaded = sam3Model.withLock({ $0 }) {
             return loaded
         }
-        guard let manifest = ModelCatalog.offered.first(where: { $0.id == Self.modelID(for: .landscape) }),
+        guard let manifest = ModelCatalog.offered.first(where: { $0.id == Self.sam3ID }),
               let directory = await ModelStore.shared.location(of: manifest),
               let loaded = try? await Task.detached(priority: .userInitiated, operation: {
-                  try SAM3Landscape(manifest: manifest, directory: directory)
+                  try SAM3Concepts(manifest: manifest, directory: directory)
               }).value
         else { return nil }
-        landscapeModel.withLock { $0 = loaded }
+        sam3Model.withLock { $0 = loaded }
         return loaded
     }
 
-    /// Every Landscape class's mask for the open photo: one encoding, every prompt decoded, kept.
+    /// The open photo's SAM 3 encoding, which Landscape and people parts share.
+    func sam3Encoding(
+        _ analysis: (image: CGImage, hash: String), model: SAM3Concepts,
+    ) async throws -> SAM3Concepts.Features {
+        if let cached = sam3Features.withLock({ $0 }), cached.hash == analysis.hash {
+            return cached.features
+        }
+        let image = analysis.image
+        let features = try await Task.detached(priority: .userInitiated) { try model.features(of: image) }.value
+        sam3Features.withLock { $0 = (analysis.hash, features) }
+        return features
+    }
+
+    /// Every Landscape class's mask for the open photo: every prompt decoded, kept.
     func landscapeClasses(
-        _ analysis: (image: CGImage, hash: String), model: SAM3Landscape,
+        _ analysis: (image: CGImage, hash: String), model: SAM3Concepts,
     ) async throws -> [LandscapeClass: GrayMask] {
         if let cached = landscapeCache.withLock({ $0 }), cached.hash == analysis.hash {
             return cached.classes
         }
-        let image = analysis.image
-        let classes = try await Task.detached(priority: .userInitiated) {
-            try model.classes(model.features(of: image))
-        }.value
+        let features = try await sam3Encoding(analysis, model: model)
+        let classes = try await Task.detached(priority: .userInitiated) { try model.classes(features) }.value
         landscapeCache.withLock { $0 = (analysis.hash, classes) }
         return classes
+    }
+
+    /// Hair, facial hair, clothes and body skin for everyone in the open photo, kept.
+    func peopleParts(
+        _ analysis: (image: CGImage, hash: String), model: SAM3Concepts,
+    ) async throws -> [PersonPart: GrayMask] {
+        if let cached = peoplePartsCache.withLock({ $0 }), cached.hash == analysis.hash {
+            return cached.parts
+        }
+        let features = try await sam3Encoding(analysis, model: model)
+        let parts = try await Task.detached(priority: .userInitiated) { try model.peopleParts(features) }.value
+        peoplePartsCache.withLock { $0 = (analysis.hash, parts) }
+        return parts
     }
 
     /// One inference gives both depth and sky; kept for the open photo.
@@ -201,7 +225,7 @@ extension RedlampEngine {
         if ModelCatalog.offered.contains(where: { $0.id == Self.modelID(for: .objects) }) {
             kinds.insert(.objects)
         }
-        if ModelCatalog.offered.contains(where: { $0.id == Self.modelID(for: .landscape) }) {
+        if ModelCatalog.offered.contains(where: { $0.id == Self.sam3ID }) {
             kinds.insert(.landscape)
         }
         let embeddedDepth = currentSession().map { EmbeddedMattes.available(in: $0.info.url).contains(.depth) } ?? false
@@ -210,6 +234,16 @@ extension RedlampEngine {
             kinds.insert(.depthRange)
         }
         return kinds
+    }
+
+    /// Vision's parts and Hair (from iPhone mattes) everywhere; with SAM 3, its parts too.
+    public func availablePersonParts() -> Set<PersonPart> {
+        var parts = Set(PersonPart.allCases).subtracting(SAM3Concepts.partPrecedence)
+        parts.insert(.hair)
+        if ModelCatalog.offered.contains(where: { $0.id == Self.sam3ID }) {
+            parts.formUnion(SAM3Concepts.partPrecedence)
+        }
+        return parts
     }
 
     public func computeMasks(_ request: MaskRequest) async throws -> [AIMask] {
@@ -240,6 +274,12 @@ extension RedlampEngine {
         }
         if request.kind == .landscape {
             return try await landscapeMask(request, analysis: analysis, session: session)
+        }
+        // An iPhone's own hair matte beats SAM 3's.
+        if request.kind == .people, SAM3Concepts.partPrecedence.contains(request.part),
+           request.part != .hair || EmbeddedMattes.read(.hair, from: url) == nil,
+           await isReady(Self.sam3ID), let model = await sam3() {
+            return try await personPartMasks(request, analysis: analysis, model: model)
         }
         if request.kind == .objects {
             let (raw, segmenter) = try await segmentObject(request, analysis: analysis)
@@ -273,6 +313,8 @@ extension RedlampEngine {
             throw MaskComputationError.notFound(request.part)
         } catch MaskComputationError.unsupported(.people) where part == .hair {
             throw MaskComputationError.needsHairMatte
+        } catch MaskComputationError.unsupported(.people) where part.map(SAM3Concepts.partPrecedence.contains) == true {
+            throw MaskComputationError.needsSAM3(request.part)
         }
         guard !provided.isEmpty else {
             throw part.map(MaskComputationError.notFound) ?? MaskComputationError.nothingFound(request.kind)
@@ -315,12 +357,61 @@ extension RedlampEngine {
             && !mask.provider.hasPrefix("apple.embedded")
     }
 
+    /// A People part from SAM 3's map of everyone's, cut between the people Vision finds (each
+    /// pixel to the nearest, within reach), one mask per person who has any (one for all when
+    /// `combined`). Its
+    /// edges are only snapped to the photo's (a guided filter): solving them per pixel, as for
+    /// whole people, bleeds hair into skin and a beard over the lip, which SAM 3 draws well.
+    func personPartMasks(
+        _ request: MaskRequest, analysis: (image: CGImage, hash: String), model: SAM3Concepts,
+    ) async throws -> [AIMask] {
+        let part = request.part
+        let parts = try await peopleParts(analysis, model: model)
+        guard let found = parts[part], Self.selected(found) > 0.0002 else {
+            throw MaskComputationError.notFound(part)
+        }
+        // SAM 3 leaves a faint haze (a tenth) where it isn't sure: none of the part.
+        let coarse = GrayMask(width: found.width, height: found.height, coverage: found.coverage.map {
+            max($0 - 0.1, 0) / 0.9
+        })
+        let image = analysis.image
+        let size = PixelSize(width: image.width, height: image.height)
+        let combined = request.combined
+        let pieces = await Task.detached(priority: .userInitiated) {
+            let people = (try? VisionMaskProvider().masks(for: MaskRequest(kind: .people), in: image)) ?? []
+            let mask = GuidedFilter.refine(coarse.resized(to: size), guide: image, radius: 4, epsilon: 1e-3)
+            guard !people.isEmpty else { return [(instance: Int?.none, mask: mask)] }
+            // Stray hairs reach a little beyond a person's mask; further is someone Vision missed.
+            let pieces = mask.split(among: people.map { $0.mask.resized(to: size) }, reach: size.longEdge / 25)
+            guard !combined else {
+                return [(instance: nil, mask: pieces.dropFirst().reduce(pieces[0]) { $0.union($1) })]
+            }
+            return pieces.enumerated().map { (instance: Optional($0.offset), mask: $0.element) }
+        }.value
+        let osBuild = ProcessInfo.processInfo.operatingSystemVersionString
+        let masks = pieces.compactMap { piece -> AIMask? in
+            guard Self.selected(piece.mask) > 0.0002, let bitmap = piece.mask.bitmap() else { return nil }
+            return AIMask(
+                kind: .people, provider: model.manifest.provider, revision: model.manifest.version, osBuild: osBuild,
+                instance: piece.instance, part: part.rawValue, analysisHash: analysis.hash,
+                center: piece.mask.centroid, bitmap: bitmap,
+            )
+        }
+        guard !masks.isEmpty else { throw MaskComputationError.notFound(part) }
+        return masks
+    }
+
+    /// The share of `mask` over half covered.
+    static func selected(_ mask: GrayMask) -> Double {
+        Double(mask.pixels.count { $0 > 127 }) / Double(max(mask.pixels.count, 1))
+    }
+
     /// One Landscape class, from SAM 3's at its output size, its edges solved per pixel at the
     /// size masks are stored at (REDLAMP_EDGE_MATTE=off keeps the model's).
     func landscapeMask(
         _ request: MaskRequest, analysis: (image: CGImage, hash: String), session: ImageSession,
     ) async throws -> [AIMask] {
-        guard let model = await sam3Landscape() else { throw MaskComputationError.unsupported(.landscape) }
+        guard let model = await sam3() else { throw MaskComputationError.unsupported(.landscape) }
         let classes = try await landscapeClasses(analysis, model: model)
         guard let coarse = classes[request.landscape], coarse.coveredFraction > 0.001 else {
             throw MaskComputationError.notFound(request.landscape)
@@ -548,8 +639,7 @@ extension RedlampEngine {
             if currentSession() === session, let model = await depthAnything3() {
                 _ = try? await depthAnything3Result(analysis, model: model)
             }
-            if await isReady(Self.modelID(for: .landscape)), currentSession() === session,
-               let model = await sam3Landscape() {
+            if await isReady(Self.sam3ID), currentSession() === session, let model = await sam3() {
                 _ = try? await landscapeClasses(analysis, model: model)
             }
         }

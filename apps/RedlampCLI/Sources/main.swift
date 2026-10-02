@@ -18,7 +18,8 @@ options:
   --set <name>=<value>     set a parameter, e.g. --set exposure=0.5 --set basic.contrast=20
   --recipe <file.json>     start from a recipe (e.g. a .redlamp sidecar, file or package)
   --mask <kind>            add an AI mask: subject, background, sky, people, or people:<part>
-                           (faceSkin, eyebrows, eyeSclera, iris, lips, teeth, hair)
+                           (faceSkin, bodySkin, eyebrows, eyeSclera, iris, lips, teeth, hair,
+                           facialHair, clothes)
   --mask-set <name>=<v>    set a local adjustment of the last mask, e.g. --mask-set local.exposure=-1
   --mask-invert            invert the last mask's components
   --base-look <name>       color, neutral, vivid, landscape, portrait, monochrome (--profile works too)

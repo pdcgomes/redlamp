@@ -1,11 +1,11 @@
 {
-  "id": "sam3-landscape",
+  "id": "sam3",
   "version": 1,
-  "name": "SAM 3 (Landscape)",
-  "purpose": "Landscape masks: water, vegetation, mountains, architecture, natural and artificial ground.",
-  "provider": "redlamp.sam3-landscape",
-  "assetPack": "models.sam3-landscape.v1",
-  "source": "https://github.com/pdcgomes/redlamp/releases/download/models-sam3-landscape-v1/",
+  "name": "SAM 3",
+  "purpose": "Landscape masks (water, vegetation, mountains, architecture, natural and artificial ground) and the People parts Vision can't give: hair, facial hair, body skin and clothes.",
+  "provider": "redlamp.sam3",
+  "assetPack": "models.sam3.v1",
+  "source": "https://github.com/pdcgomes/redlamp/releases/download/models-sam3-v1/",
   "computeUnits": "cpuAndGPU",
   "files": [
     {
@@ -50,13 +50,13 @@
     },
     {
       "path": "Sam3Prompts.bin",
-      "bytes": 328960,
-      "sha256": "76d0a91de6147ec0579d0b404ba62b47efd32c7ec8242436ba4bcace7b13b584"
+      "bytes": 575680,
+      "sha256": "b335ec2e14099f358b03ad30e624126391d793820e0a2ddb0cb64e2d8b120d15"
     },
     {
       "path": "Sam3Prompts.json",
-      "bytes": 3189,
-      "sha256": "89cbc526ab2a3ef470c8d7131cb9e7b91351189145284b14335c00f16f2eea8c"
+      "bytes": 5552,
+      "sha256": "36170ffcfc31468bbc122e491d862d92f3ce017598916d445bb0a6e8979b2d37"
     }
   ],
   "licenses": {
@@ -69,5 +69,5 @@
   "evaluationOnly": true,
   "cleared": false,
   "published": false,
-  "notes": "Converted by research/prototypes/masking/convert_sam3.py: the image encoder (fp16, 1008x1008) and the text-prompted decoder; the 20 Landscape prompts' text features precomputed (Sam3Prompts.bin), so no text encoder ships. GPU: encoder 609 ms, decoder 86 ms per prompt on an M1 Ultra. Meta's SAM License (gated; pass-through and no-reverse-engineering terms) is not cleared: evaluation only, risk accepted by the project owner for evaluation."
+  "notes": "Converted by research/prototypes/masking/convert_sam3.py: the image encoder (fp16, 1008x1008) and the text-prompted decoder; the text features of 35 prompts (20 for Landscape, 15 for people parts) precomputed (Sam3Prompts.bin), so no text encoder ships. GPU: encoder 609 ms, decoder 86 ms per prompt on an M1 Ultra. Meta's SAM License (gated; pass-through and no-reverse-engineering terms) is not cleared: evaluation only, risk accepted by the project owner for evaluation."
 }

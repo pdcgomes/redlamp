@@ -31,13 +31,42 @@ struct GrayMaskTests {
     /// pixel (a lawn), vegetation keeps it.
     @Test func `landscape classes are exclusive by precedence`() {
         let size = 2
-        let classes = SAM3Landscape.exclusive([
+        let classes = SAM3Concepts.exclusive([
             .naturalGround: [1, 1, 1, 0], .vegetation: [1, 0, 0, 0], .water: [0, 0, 0.5, 0],
-        ], size: size)
+        ], order: SAM3Concepts.precedence, size: size)
         #expect(classes[.vegetation]?.pixels == [255, 0, 0, 0])
         #expect(classes[.water]?.pixels == [0, 0, 128, 0])
         #expect(classes[.naturalGround]?.pixels == [0, 255, 128, 0])
         #expect(classes[.mountains] == nil)
+    }
+
+    /// A beard is facial hair, not hair, and a sleeve clothes, not skin.
+    @Test func `people parts are exclusive by precedence`() {
+        let parts = SAM3Concepts.exclusive([
+            .hair: [1, 1, 0, 0], .facialHair: [0, 1, 0, 0], .bodySkin: [0, 0, 1, 1], .clothes: [0, 0, 0, 1],
+        ], order: SAM3Concepts.partPrecedence, size: 2)
+        #expect(parts[.facialHair]?.pixels == [0, 255, 0, 0])
+        #expect(parts[.hair]?.pixels == [255, 0, 0, 0])
+        #expect(parts[.clothes]?.pixels == [0, 0, 0, 255])
+        #expect(parts[.bodySkin]?.pixels == [0, 0, 255, 0])
+    }
+
+    /// Hair beyond either person's own mask goes to the nearer of the two, and only so far.
+    @Test func `a part is cut between people by distance`() {
+        let width = 10
+        func person(_ columns: Range<Int>) -> GrayMask {
+            GrayMask(width: width, height: 1, pixels: (0 ..< width).map { columns.contains($0) ? 255 : 0 })
+        }
+        let hair = GrayMask(width: width, height: 1, pixels: [UInt8](repeating: 200, count: width))
+        let pieces = hair.split(among: [person(0 ..< 2), person(7 ..< 10)])
+        #expect(pieces.count == 2)
+        #expect(pieces[0].pixels == [200, 200, 200, 200, 200, 0, 0, 0, 0, 0])
+        #expect(pieces[1].pixels == [0, 0, 0, 0, 0, 200, 200, 200, 200, 200])
+        #expect(hair.split(among: [person(0 ..< 2)]) == [hair])
+        // Someone else's beyond reach is no one's.
+        #expect(hair.split(among: [person(0 ..< 2)], reach: 3)[0].pixels == [200, 200, 200, 200, 200, 0, 0, 0, 0, 0])
+        let nobody = hair.split(among: [person(0 ..< 0), person(0 ..< 0)])
+        #expect(nobody[0] == hair && nobody[1].coveredFraction == 0)
     }
 
     @Test func `combines like mask operations`() {

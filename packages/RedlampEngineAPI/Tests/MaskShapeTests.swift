@@ -118,6 +118,11 @@ struct MaskShapeTests {
         #expect(MaskComputationError.notFound(PersonPart.teeth).description == "No teeth were found in this photo.")
         #expect(MaskComputationError.notFound(PersonPart.faceSkin).description
             == "No face skin was found in this photo.")
+        #expect(MaskComputationError.notFound(PersonPart.clothes).description == "No clothes were found in this photo.")
+        #expect(MaskComputationError.notFound(PersonPart.facialHair).description
+            == "No facial hair was found in this photo.")
+        #expect(MaskComputationError.needsSAM3(.bodySkin).description
+            == "Body Skin masks need the SAM 3 evaluation model.")
     }
 
     @Test func `limits color samples to five`() {

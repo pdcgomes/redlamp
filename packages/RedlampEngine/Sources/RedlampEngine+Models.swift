@@ -9,10 +9,13 @@ public extension RedlampEngine {
         switch kind {
         case .objects: "sam2.1-tiny"
         case .depthRange: "depth-anything-v2-small"
-        case .landscape: "sam3-landscape"
+        case .landscape: sam3ID
         default: nil
         }
     }
+
+    /// SAM 3: Landscape, and the People parts Vision can't give (`SAM3Concepts.partPrecedence`).
+    internal static let sam3ID = "sam3"
 
     func models() async -> [ModelInfo] {
         var infos: [ModelInfo] = []

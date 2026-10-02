@@ -183,9 +183,10 @@ public struct VisionMaskProvider: Sendable {
 
     /// Lips, eyebrows, eyes, iris and face skin drawn from Vision's 76 face landmarks, feathered
     /// a little. Face skin is the face outline within the person, less the features. Teeth are
-    /// the bright, pale pixels inside the lips. Hair needs an embedded matte (see `EmbeddedMattes`).
+    /// the bright, pale pixels inside the lips. Hair needs an embedded matte (see `EmbeddedMattes`)
+    /// or SAM 3, as do facial hair, body skin and clothes (`SAM3Concepts`).
     private func personParts(_ part: PersonPart, in image: CGImage) throws -> [ProvidedMask] {
-        guard part != .hair else { throw MaskComputationError.unsupported(.people) }
+        guard !SAM3Concepts.partPrecedence.contains(part) else { throw MaskComputationError.unsupported(.people) }
         let handler = VNImageRequestHandler(cgImage: image, options: [:])
         let faces = VNDetectFaceLandmarksRequest()
         try handler.perform([faces])

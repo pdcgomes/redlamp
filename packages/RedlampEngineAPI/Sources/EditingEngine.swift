@@ -57,6 +57,9 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// The AI mask kinds this device can compute now.
     func availableMaskKinds() -> Set<MaskKind>
 
+    /// The People parts this device can compute now.
+    func availablePersonParts() -> Set<PersonPart>
+
     /// Gets AI masks ready in the background (renders, models, embeddings) for the current photo
     /// and those opened after it, so computing one later is quicker. Called when the Masking
     /// tool opens.
@@ -99,6 +102,10 @@ public protocol EditingEngine: AnyObject, Sendable {
 
 public extension EditingEngine {
     func warmUpMasks() {}
+
+    func availablePersonParts() -> Set<PersonPart> {
+        Set(PersonPart.allCases)
+    }
 
     func decodeThumbnail(for _: URL, maxPixelSize _: Int) -> CGImage? {
         nil

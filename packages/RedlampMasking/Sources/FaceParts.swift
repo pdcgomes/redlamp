@@ -20,7 +20,7 @@ enum FaceParts {
         case .eyeSclera: face.sclera()
         case .faceSkin: face.skin(people: people)
         case .teeth: pixels.flatMap(face.teeth)
-        case .entirePerson, .hair: nil
+        case .entirePerson, .bodySkin, .hair, .facialHair, .clothes: nil
         }
     }
 

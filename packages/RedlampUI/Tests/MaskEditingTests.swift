@@ -81,6 +81,12 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         availableKinds
     }
 
+    var personParts = Set(PersonPart.allCases)
+
+    func availablePersonParts() -> Set<PersonPart> {
+        personParts
+    }
+
     var neededModel: ModelInfo?
     var downloaded: [String] = []
 
@@ -255,6 +261,14 @@ struct MaskEditingTests {
         await model.createAIMask(.landscape, landscape: .mountains)
         #expect(model.maskMessage == "No mountains were found in this photo.")
         #expect(model.recipe.masks.count == 1)
+    }
+
+    /// The People menus offer only the parts the engine can make, in Lightroom's order.
+    @Test func `people menus offer the parts there are`() {
+        let engine = StubEngine()
+        engine.personParts = [.hair, .clothes, .entirePerson, .lips]
+        let model = EditorModel(engine: engine)
+        #expect(model.availablePersonParts == [.entirePerson, .lips, .hair, .clothes])
     }
 
     @Test func `AI masks become components and update in place`() async throws {

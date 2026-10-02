@@ -9,8 +9,9 @@ enum MaskCommand {
 
       --kind      subject, background, sky, people, people:<part>, objects, depthRange,
                   landscape:<class>
-                  (parts: faceSkin, eyebrows, eyeSclera, iris, lips, teeth, hair; classes: water,
-                  vegetation, mountains, architecture, naturalGround, artificialGround)
+                  (parts: faceSkin, bodySkin, eyebrows, eyeSclera, iris, lips, teeth, hair,
+                  facialHair, clothes; classes: water, vegetation, mountains, architecture,
+                  naturalGround, artificialGround)
       --point     for objects: a point to select (0…1, from the top left); repeat to add
       --exclude   for objects: a point to leave out
       -o          the PNG; several masks (one per person) are written as name-1.png, name-2.png…

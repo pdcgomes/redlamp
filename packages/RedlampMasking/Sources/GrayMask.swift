@@ -111,6 +111,72 @@ public struct GrayMask: Sendable, Hashable {
         intersection(other.inverted)
     }
 
+    /// This mask cut between `people` (masks of this size), one piece each, in their order: each
+    /// pixel goes to the person nearest it (city-block distance from where they cover more than
+    /// half), so hair beyond a person's own mask is still theirs; what is more than `reach`
+    /// pixels from everyone (someone Vision didn't find) is no one's. With no one, all of it is
+    /// the first's.
+    public func split(among people: [GrayMask], reach: Int = .max) -> [GrayMask] {
+        guard !people.isEmpty else { return [] }
+        let count = width * height
+        var owner = [Int8](repeating: -1, count: count)
+        var queue = [Int32]()
+        queue.reserveCapacity(count)
+        for index in 0 ..< count {
+            var best = -1
+            var strongest: UInt8 = 127
+            for (person, mask) in people.enumerated() where mask.pixels[index] > strongest {
+                (best, strongest) = (person, mask.pixels[index])
+            }
+            if best >= 0 {
+                owner[index] = Int8(best)
+                queue.append(Int32(index))
+            }
+        }
+        guard !queue.isEmpty else {
+            let none = GrayMask(width: width, height: height, pixels: [UInt8](repeating: 0, count: count))
+            return [self] + people.dropFirst().map { _ in none }
+        }
+        func claim(_ next: Int, by person: Int8) {
+            if owner[next] < 0 {
+                owner[next] = person
+                queue.append(Int32(next))
+            }
+        }
+        // Breadth first, a ring of one more pixel's distance at a time.
+        var head = 0
+        var distance = 0
+        while head < queue.count, distance < reach {
+            let ring = queue.count
+            while head < ring {
+                let index = Int(queue[head])
+                head += 1
+                let x = index % width
+                let person = owner[index]
+                if x > 0 {
+                    claim(index - 1, by: person)
+                }
+                if x < width - 1 {
+                    claim(index + 1, by: person)
+                }
+                if index >= width {
+                    claim(index - width, by: person)
+                }
+                if index + width < count {
+                    claim(index + width, by: person)
+                }
+            }
+            distance += 1
+        }
+        return people.indices.map { person in
+            var piece = [UInt8](repeating: 0, count: count)
+            for index in 0 ..< count where owner[index] == person {
+                piece[index] = pixels[index]
+            }
+            return GrayMask(width: width, height: height, pixels: piece)
+        }
+    }
+
     /// A box blur of `radius` pixels, twice (close to a Gaussian), to feather drawn shapes.
     public func blurred(radius: Int) -> GrayMask {
         guard radius > 0 else { return self }

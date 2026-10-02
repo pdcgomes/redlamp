@@ -361,7 +361,7 @@ struct CreateMaskMenu: View {
             ForEach(MaskKind.creatable, id: \.self) { kind in
                 if kind == .people, let onPersonPart, model.canCreateMask(.people) {
                     Menu {
-                        ForEach(PersonPart.allCases, id: \.self) { part in
+                        ForEach(model.availablePersonParts, id: \.self) { part in
                             Button(part.name) { onPersonPart(part) }
                         }
                     } label: {

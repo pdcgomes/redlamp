@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SAM 3 to Core ML for Landscape masks: an image encoder, a text-prompted decoder, and the
+"""SAM 3 to Core ML for Landscape masks and people parts: an image encoder, a text-prompted decoder, and the
 prompts' text features computed here (so no text encoder ships).
 
     research/prototypes/masking/.venv-sam3-coreml/bin/python research/prototypes/masking/convert_sam3.py [encoder|decoder|text|all]
@@ -11,7 +11,8 @@ Writes to build/models/:
     `instances` (288², every instance scoring over 0.4 merged, soft) and `semantic` (288², the
     dense map times the presence score). The position encodings are constant for a fixed size, so
     they are baked in.
-  * Sam3Prompts.bin + Sam3Prompts.json: each Landscape prompt's text features and mask (float16).
+  * Sam3Prompts.bin + Sam3Prompts.json: each prompt's text features and mask (float16), and
+    its class (a Landscape class or a people part).
 
 Each wrapper is checked against Transformers' own pipeline before conversion, and the Core ML
 model against PyTorch after.
@@ -66,6 +67,13 @@ PROMPTS = {
     "architecture": ["building"],
     "natural-ground": ["ground", "sand", "rock", "dirt"],
     "artificial-ground": ["road", "pavement", "floor"],
+    # People parts Vision can't give on a camera photo (sam3_people_parts.py). "face" only takes
+    # the face out of body skin.
+    "hair": ["hair"],
+    "facial-hair": ["beard", "mustache", "facial hair"],
+    "body-skin": ["skin", "arm", "hand", "neck", "leg"],
+    "clothes": ["clothing", "shirt", "jacket", "dress", "trousers"],
+    "face": ["face"],
 }
 
 

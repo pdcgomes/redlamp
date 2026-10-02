@@ -342,24 +342,27 @@ public struct DepthRangeMask: Codable, Sendable, Hashable {
 
 /// Parts of a person an AI mask can select, as in Lightroom's People mask.
 public enum PersonPart: String, Codable, Sendable, Hashable, CaseIterable {
-    case entirePerson, faceSkin, eyebrows, eyeSclera, iris, lips, teeth, hair
+    case entirePerson, faceSkin, bodySkin, eyebrows, eyeSclera, iris, lips, teeth, hair, facialHair, clothes
 
     public var name: String {
         switch self {
         case .entirePerson: "Entire Person"
         case .faceSkin: "Face Skin"
+        case .bodySkin: "Body Skin"
         case .eyebrows: "Eyebrows"
         case .eyeSclera: "Eye Sclera"
         case .iris: "Iris and Pupil"
         case .lips: "Lips"
         case .teeth: "Teeth"
         case .hair: "Hair"
+        case .facialHair: "Facial Hair"
+        case .clothes: "Clothes"
         }
     }
 
     /// Whether `name` is plural ("No eyebrows were found").
     public var isPlural: Bool {
-        [.eyebrows, .iris, .lips, .teeth].contains(self)
+        [.eyebrows, .iris, .lips, .teeth, .clothes].contains(self)
     }
 }
 
@@ -430,8 +433,10 @@ public enum MaskComputationError: Error, Equatable, CustomStringConvertible {
     case nothingFound(MaskKind)
     /// The model found none of a People part or a Landscape class (`name`, plural or not).
     case partNotFound(name: String, plural: Bool)
-    /// Hair comes only from a hair matte the camera embedded (iPhone portraits).
+    /// Without SAM 3, hair comes only from a hair matte the camera embedded (iPhone portraits).
     case needsHairMatte
+    /// Body skin, facial hair and clothes come only from SAM 3 (an evaluation model).
+    case needsSAM3(PersonPart)
 
     public static func notFound(_ part: PersonPart) -> MaskComputationError {
         .partNotFound(name: part.name, plural: part.isPlural)
@@ -449,6 +454,7 @@ public enum MaskComputationError: Error, Equatable, CustomStringConvertible {
         case let .nothingFound(kind): "No \(kind.name.lowercased()) was found in this photo."
         case let .partNotFound(name, plural): "No \(name.lowercased()) \(plural ? "were" : "was") found in this photo."
         case .needsHairMatte: "Hair masks need a photo with its own hair matte, such as an iPhone portrait."
+        case let .needsSAM3(part): "\(part.name) masks need the SAM 3 evaluation model."
         }
     }
 }

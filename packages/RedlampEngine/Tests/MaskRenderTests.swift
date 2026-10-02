@@ -442,7 +442,7 @@ extension MaskRenderTests {
 
     /// With SAM 3 on this Mac: the Sony sample's trees are vegetation, named for the class, and
     /// its edges solved per pixel.
-    @Test(.enabled(if: EngineSmokeTests.canRender && Self.isInstalled("sam3-landscape")))
+    @Test(.enabled(if: EngineSmokeTests.canRender && Self.isInstalled("sam3")))
     func `landscape finds the trees`() async throws {
         setenv("REDLAMP_EVALUATION_MODELS", "1", 1)
         let engine = try RedlampEngine()
@@ -451,10 +451,32 @@ extension MaskRenderTests {
         let mask = try #require(try await engine.computeMasks(MaskRequest(kind: .landscape, landscape: .vegetation))
             .first)
         #expect(mask.part == LandscapeClass.vegetation.rawValue)
-        #expect(mask.provider == "redlamp.sam3-landscape+closed-form")
+        #expect(mask.provider == "redlamp.sam3+closed-form")
         let png = try #require(mask.bitmap.png)
         let vegetation = try #require(GrayMask.decode(png))
         #expect(vegetation.coveredFraction > 0.05, "vegetation covers \(vegetation.coveredFraction)")
+    }
+
+    /// With SAM 3 on this Mac: People offers hair, facial hair, body skin and clothes on any photo.
+    /// None of the samples has a person, but Vision takes the Canon's pig statues for people, one
+    /// with a tuft SAM 3 calls hair; the Sony landscape has no clothes.
+    @Test(.enabled(if: EngineSmokeTests.canRender && Self.isInstalled("sam3")))
+    func `people parts come from SAM 3`() async throws {
+        setenv("REDLAMP_EVALUATION_MODELS", "1", 1)
+        let engine = try RedlampEngine()
+        #expect(engine.availablePersonParts().isSuperset(of: [.hair, .facialHair, .bodySkin, .clothes]))
+        let canon = try #require(EngineSmokeTests.fixtures.first { $0.pathExtension == "CR3" })
+        _ = try await engine.open(canon)
+        let hair = try #require(try await engine.computeMasks(MaskRequest(kind: .people, part: .hair)).first)
+        #expect(hair.part == PersonPart.hair.rawValue)
+        #expect(hair.provider == "redlamp.sam3")
+        #expect(hair.instance != nil)
+
+        let sony = try #require(EngineSmokeTests.fixtures.first { $0.lastPathComponent == "_DSC0009.ARW" })
+        _ = try await engine.open(sony)
+        await #expect(throws: MaskComputationError.notFound(PersonPart.clothes)) {
+            try await engine.computeMasks(MaskRequest(kind: .people, part: .clothes))
+        }
     }
 
     /// With Depth Anything 3 on this Mac: on the Nikon sample the front of the table is nearer

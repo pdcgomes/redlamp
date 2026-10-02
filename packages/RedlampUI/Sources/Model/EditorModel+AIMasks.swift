@@ -10,6 +10,12 @@ public extension EditorModel {
         return !kind.isAI || availableAIMaskKinds.contains(kind)
     }
 
+    /// The People parts the menus offer, in Lightroom's order.
+    var availablePersonParts: [PersonPart] {
+        let available = engine.availablePersonParts()
+        return PersonPart.allCases.filter(available.contains)
+    }
+
     /// Computes an AI mask: a new mask, or a component of `target` with `operation`. People
     /// adds one component per person (one for all of them when subtracting or intersecting).
     func createAIMask(
