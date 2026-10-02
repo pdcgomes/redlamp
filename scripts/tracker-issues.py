@@ -75,8 +75,9 @@ def rows():
 
 
 def plain(markdown):
-    """Markdown links as their text, bold as plain."""
-    return re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", markdown).replace("**", "")
+    """Markdown links as their text, bold and italics as plain."""
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", markdown).replace("**", "")
+    return re.sub(r"\*([^*]+)\*", r"\1", text)
 
 
 def absolute(markdown):
@@ -230,6 +231,14 @@ def current_milestone(issue):
     return (issue.get("milestone") or {}).get("title")
 
 
+def set_milestone(number, milestone, present):
+    """By the milestone's number: gh's --milestone finds only open milestones by title, and a done
+    phase's milestone is closed."""
+    phase = int(re.match(r"^Phase (\d+):", milestone).group(1)) if milestone else None
+    value = str(present[phase]["number"]) if phase is not None else "null"
+    gh("api", "-X", "PATCH", f"repos/{REPO}/issues/{number}", "-F", f"milestone={value}")
+
+
 # MARK: - Sync
 
 
@@ -301,6 +310,7 @@ def main():
             gh("api", "-X", "PATCH", f"repos/{REPO}/milestones/{present[number]['number']}", *fields)
         else:
             gh("api", "-X", "POST", f"repos/{REPO}/milestones", *fields)
+    present = milestones()
     every = set().union(*(labels(row) for row in wanted)) if wanted else set()
     for name in sorted(every):
         colour = COLOURS[name.split(":")[0]] if ":" in name else COLOURS["tracker"]
@@ -309,8 +319,9 @@ def main():
     for row in plan["create"]:
         milestone = milestone_of(row, roadmap)
         url = gh("issue", "create", "--title", title(row), "--body", block(row, {}),
-                 *[arg for name in sorted(labels(row)) for arg in ("--label", name)],
-                 *(["--milestone", milestone] if milestone else [])).strip()
+                 *[arg for name in sorted(labels(row)) for arg in ("--label", name)]).strip()
+        if milestone:
+            set_milestone(int(url.rsplit("/", 1)[1]), milestone, present)
         existing[row["id"]] = {"number": int(url.rsplit("/", 1)[1]), "title": title(row), "body": block(row, {}),
                                "state": "OPEN", "labels": [{"name": name} for name in labels(row)],
                                "milestone": {"title": milestone} if milestone else None}
@@ -331,9 +342,9 @@ def main():
             args = ["issue", "edit", str(issue["number"]), "--title", title(row), "--body-file", "-"]
             args += [arg for name in sorted(add) for arg in ("--add-label", name)]
             args += [arg for name in sorted(remove) for arg in ("--remove-label", name)]
-            if moves:
-                args += ["--milestone", milestone] if milestone else ["--remove-milestone"]
             gh(*args, input=body)
+            if moves:
+                set_milestone(issue["number"], milestone, present)
         if closed(row) and issue["state"] == "OPEN":
             reason = "not planned" if status_of(row) == "not needed" or row.get("Decision", "").startswith("Rejected") \
                 else "completed"
