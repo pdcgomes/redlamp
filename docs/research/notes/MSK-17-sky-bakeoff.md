@@ -118,26 +118,39 @@ The rows of the image are the FX150, the Coolpix P7700, the FZ28 and the EOS R50
 
 `REDLAMP_SKY_MATTE=off` keeps the models' edges, for comparison.
 
-## People: hair and beards (research, not shipped)
+## People: hair and beards
 
-Person and subject masks have the same problem worse: Vision's mattes are stored at 1536 px and refined with the same luminance guided filter, so stray hairs and beard curls are lost. `refine_subject` in `sky_matte.py` tries the same approach, with both colours learnt locally (neither a person nor what's behind them is smooth) and strands sought up to 6% beyond the silhouette.
+Person and subject masks had the same problem worse: Vision's mattes are stored at 1536 px and refined with the same luminance guided filter, so stray hairs and beard curls were lost.
 
-`hair_bench.py` draws a head with a hair cap, 600 strands (0.4–1.6 px wide, up to 320 px long, some grey) and a curly beard over sharp and blurred real backgrounds, with a coarse mask that knows the silhouette but no strands (512 px, blurred).
+**A colour model, as for sky, doesn't hold up** (`refine_subject` in `sky_matte.py`, research only). On `hair_bench.py`, a synthetic benchmark of a head with 600 strands and a curly beard over real backgrounds, it keeps 61% of strands (the coarse silhouette keeps none). But a person and what's behind them aren't smooth like a sky: on real portraits it makes visible mistakes (background above a head called person, holes under a beard), and against the reference below it scores worse than Vision's own mask (0.127 against 0.077).
 
-| On the hair benchmark (6 scenes) | Band error | Thin-structure error | Strands kept | Person lost | Background called person |
-| --- | --- | --- | --- | --- | --- |
-| Coarse silhouette | 0.127 | 0.340 | 0% | 0% | 0% |
-| Colour guided filter at full size (best of four settings) | 0.117 | 0.314 | 2% | 0.01% | 0% |
-| `refine_subject` | 0.090 | 0.181 | 61% | 0.6% | 0.5% |
+**Closed-form matting does** (`ClosedFormMatte`, prototyped in `cf_matte.py`): Levin, Lischinski and Weiss (2008). Within every 3×3 window coverage is taken to be a linear function of colour, and the coverage that best fits that across an uncertain band is solved for, with sure subject inside the band and sure background outside it. It needs no estimate of the background behind a strand. Its matrix is never built: it is applied through 3×3 window sums (He, Sun and Tang, 2010), and conjugate gradients run over the uncertain pixels only, in double precision, preconditioned by the diagonal and started from Vision's mask, coarse to fine (400 iterations at about 1500 px, 100 at 2048, 40 at 4096).
 
-What it took: the background behind a strand can't be learnt from the strand itself, and blur and noise make strand pixels mixtures, not hair-coloured. So strands are erased first with a grey-level closing (dark strands) or opening (light ones) over 7 px, and the background's colour is then spread from the background side only. Beyond the silhouette only thin structures are kept (a large blob there is background, such as a shadow beside a dark shirt).
+- **The band:** 0.6% of the long side inside Vision's edge, 2% outside it (where hair pokes out), plus wherever Vision is itself unsure (between 10% and 90%: it leaves much of a dancer's costume grey).
+- **Regularisation:** ε = 10⁻⁵. Smaller follows JPEG blocks; larger smooths strands away.
 
-On a real portrait (a man with grey hair and a goatee against a dark, blurred background, 2048 px), it brings back the curls at the side of the head and in the beard, but makes visible mistakes: part of the background above the head becomes person, there is a hole under the beard, and some edges come out hard. In a dark photo every colour difference is small, and the background behind hair is rarely as easy to estimate as a sky. So it isn't in the app. Next steps: a closed-form matting solve in the band (local colour lines, no global colour estimates), and a hand-matted set of portraits to measure on; a learned matting refiner would need training data we have rights to (every open one, such as ViTMatte, MODNet and BiRefNet, is trained on research-only composites).
+**Measured on real portraits** (`portrait_bench.py`). There is no hand-matted set, so ViTMatte (Composition-1k: research-only data, never ships) stands in for ground truth, given the widest trimap so it decides every pixel any candidate might. Four stills (a man with a grey goatee, a man with grey hair in a dark, low-key photo, a woman with dark hair against a busy background, an older woman), and a raw of a dancer in a feathered costume:
+
+| Error around the edge, against ViTMatte | Four portraits | Dancer (raw, 4096 px) |
+| --- | --- | --- |
+| Vision's mask (before) | 0.085 | 0.182 |
+| **`ClosedFormMatte` (Redlamp now, in Swift)** | **0.067** | **0.122** |
+| Closed-form, pymatting (the same solve, for reference) | 0.068 | 0.120 (2048 px) |
+| KNN matting / learning-based matting (pymatting) | 0.103 / 0.125 | not run |
+
+It brings back beard curls and the curls at the side of a head, and it sharpens soft edges along shirts and hands. Two weaknesses remain: on dark backgrounds it leaves a light haze above grey hair (ViTMatte does too), and on JPEGs it can follow compression blocks in dark areas. Raws don't have those.
+
+**Cost:** 0.3–1.2 s for a 2048 px photo; on a 4096 px render with a large uncertain area (the dancer, 3 million uncertain pixels), 2.9 s on top of Vision's 0.75 s. It runs once per mask. `REDLAMP_EDGE_MATTE=off` keeps Vision's edges, to compare.
+
+**A missed head.** In the low-key portrait, Vision's person segmentation left out the man's head entirely, while its Subject mask had it. People masks are now checked against detected faces: a face mostly outside every person mask gets the part of the Subject mask connected to it, added to the person it overlaps most.
+
+**Licences and patents.** Both papers' methods are ours to implement, but closed-form matting and the window-sum solve may be patented; they are added to the freedom-to-operate search with the guided filter (DEC-05).
 
 ## Decision
 
 - **Sky ships as SAM 2.1 refined between branches, then `SkyMatte`** when SAM's model is on the Mac, with the classical estimate (also through `SkyMatte`) as the fallback. An embedded sky matte, when the file has one, wins over both.
 - **Depth Anything 3 is an evaluation model** (Settings › Models, with evaluation models turned on), behind the same gate as SAM 2.1. With it installed, Sky arbitrates between both models before `SkyMatte` (band error 0.050 on the edge benchmark). It is not published: its manifest is marked `published: false`, so the app won't download it, and the licence gate refuses to clear it. Before it can be cleared it needs a training-data audit ("public academic datasets", unaudited) by counsel, with DEC-02, and a hosted copy of the converted package.
+- **Subject, Background and People ship through `ClosedFormMatte`** (error around the edge 0.085 to 0.067 against ViTMatte on four portraits), with missed heads filled in from the Subject mask. Embedded iPhone mattes and face parts are left as they are. Pending DEC-05.
 - **No Sky head training (MSK-12) for now.** Revisit it if hand-labelled scores show tree lines and hair need better than SAM's edges.
 - **Landscape classes and people parts still need a trained head (MSK-13).** Unlike sky, there is no classical estimate to seed SAM with for water, vegetation or skin. Every open model that knows those classes (OneFormer, Mask2Former, SegFormer) is trained on non-commercial data.
 

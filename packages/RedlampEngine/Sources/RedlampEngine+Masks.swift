@@ -239,6 +239,22 @@ extension RedlampEngine {
             first.instance = nil
             provided = [first]
         }
+        // Stray hairs and beard curls, per pixel at the size masks are stored at. Embedded mattes
+        // (iPhone) are already fine, and face parts are drawn shapes. REDLAMP_EDGE_MATTE=off
+        // keeps Vision's edges, to compare.
+        if ProcessInfo.processInfo.environment["REDLAMP_EDGE_MATTE"] != "off",
+           provided.contains(where: Self.takesClosedFormMatte), let full = try? await matteImage(for: session) {
+            let masks = provided
+            provided = await Task.detached(priority: .userInitiated) {
+                masks.map { mask in
+                    guard Self.takesClosedFormMatte(mask) else { return mask }
+                    var refined = mask
+                    refined.mask = ClosedFormMatte.refine(mask.mask, image: full)
+                    refined.provider += "+closed-form"
+                    return refined
+                }
+            }.value
+        }
         let osBuild = ProcessInfo.processInfo.operatingSystemVersionString
         return provided.compactMap { mask in
             guard let bitmap = mask.mask.bitmap() else { return nil }
@@ -248,6 +264,12 @@ extension RedlampEngine {
                 analysisHash: analysis.hash, center: mask.mask.centroid, bitmap: bitmap,
             )
         }
+    }
+
+    /// Subject, Background and whole people from Vision; not embedded mattes or face parts.
+    static func takesClosedFormMatte(_ mask: ProvidedMask) -> Bool {
+        [.subject, .background, .people].contains(mask.kind) && (mask.part ?? .entirePerson) == .entirePerson
+            && !mask.provider.hasPrefix("apple.embedded")
     }
 
     public func previewObjectMask(_ request: MaskRequest) async throws -> MaskBitmap? {

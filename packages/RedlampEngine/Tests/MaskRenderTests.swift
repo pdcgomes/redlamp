@@ -283,7 +283,9 @@ struct MaskRenderTests {
                 found += 1
                 #expect(subject.kind == .subject && background.kind == .background)
                 #expect(subject.analysisHash == background.analysisHash)
-                #expect(subject.bitmap.width <= VisionMaskProvider.storedLongEdge)
+                // Solved per pixel at the size masks are stored at, not Vision's.
+                #expect(max(subject.bitmap.width, subject.bitmap.height) <= MaskResources.rasterLongEdge)
+                #expect(subject.provider.hasSuffix("+closed-form"))
                 #expect(abs(Double(subject.bitmap.width) / Double(subject.bitmap.height) - info.pixelSize.aspectRatio) <
                     0.02)
                 let subjectPNG = try #require(subject.bitmap.png)

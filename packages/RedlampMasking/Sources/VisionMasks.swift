@@ -88,7 +88,7 @@ public struct VisionMaskProvider: Sendable {
         try handler.perform([instances])
         if let observation = instances.results?.first, !observation.allInstances.isEmpty,
            observation.allInstances.count < 4 {
-            return try observation.allInstances.sorted().enumerated().map { index, instance in
+            return try covering(faces: observation.allInstances.sorted().enumerated().map { index, instance in
                 let buffer = try observation.generateScaledMaskForImage(
                     forInstances: IndexSet(integer: instance), from: handler,
                 )
@@ -97,14 +97,73 @@ public struct VisionMaskProvider: Sendable {
                     kind: .people, provider: "apple.vision.personInstance", revision: instances.revision,
                     instance: index, part: .entirePerson, mask: GuidedFilter.refine(mask, guide: image),
                 )
-            }
+            }, image: image, handler: handler)
         }
         let mask = try allPeople(image, handler: handler)
         guard mask.coveredFraction > 0.001 else { throw MaskComputationError.nothingFound(.people) }
-        return [ProvidedMask(
+        return covering(faces: [ProvidedMask(
             kind: .people, provider: "apple.vision.personSegmentation", revision: 1, part: .entirePerson,
             mask: GuidedFilter.refine(mask, guide: image),
-        )]
+        )], image: image, handler: handler)
+    }
+
+    /// Vision's person segmentation can miss a head in a dark, low-key photo that its foreground
+    /// (Subject) mask has. Each detected face the people masks leave mostly uncovered gets the part
+    /// of the Subject mask connected to it, added to the person it overlaps most.
+    private func covering(
+        faces masks: [ProvidedMask], image: CGImage, handler: VNImageRequestHandler,
+    ) -> [ProvidedMask] {
+        let request = VNDetectFaceRectanglesRequest()
+        guard let first = masks.first, (try? handler.perform([request])) != nil,
+              let faces = request.results, !faces.isEmpty
+        else { return masks }
+        let width = first.mask.width
+        let height = first.mask.height
+        let everyone = masks.dropFirst().reduce(first.mask) { $0.union($1.mask) }
+        /// Vision's boxes are normalised, from the bottom left.
+        func pixels(_ face: VNFaceObservation) -> (x: Range<Int>, y: Range<Int>) {
+            let box = face.boundingBox
+            let x0 = min(max(Int(box.minX * Double(width)), 0), width - 1)
+            let x1 = min(max(Int(box.maxX * Double(width)), x0 + 1), width)
+            let y0 = min(max(Int((1 - box.maxY) * Double(height)), 0), height - 1)
+            let y1 = min(max(Int((1 - box.minY) * Double(height)), y0 + 1), height)
+            return (x0 ..< x1, y0 ..< y1)
+        }
+        let uncovered = faces.filter { face in
+            let box = pixels(face)
+            var sum = 0
+            for y in box.y {
+                for x in box.x {
+                    sum += Int(everyone[x, y])
+                }
+            }
+            return Double(sum) / Double(255 * box.x.count * box.y.count) < 0.5
+        }
+        guard !uncovered.isEmpty,
+              let subject = try? subject(image).mask.resized(to: PixelSize(width: width, height: height))
+        else { return masks }
+        var masks = masks
+        for face in uncovered {
+            let box = pixels(face)
+            let centre = (box.y.lowerBound + box.y.upperBound) / 2 * width + (box.x.lowerBound + box.x.upperBound) / 2
+            guard subject.pixels[centre] > 127 else { continue }
+            var part = [UInt8](repeating: 0, count: width * height)
+            var stack = [centre]
+            part[centre] = subject.pixels[centre]
+            while let index = stack.popLast() {
+                let x = index % width
+                for next in [x > 0 ? index - 1 : -1, x < width - 1 ? index + 1 : -1, index - width, index + width]
+                    where next >= 0 && next < part.count && part[next] == 0 && subject.pixels[next] > 127 {
+                    part[next] = subject.pixels[next]
+                    stack.append(next)
+                }
+            }
+            let piece = GrayMask(width: width, height: height, pixels: part)
+            let overlaps = masks.map { mask in zip(mask.mask.pixels, part).reduce(0) { $0 + Int(min($1.0, $1.1)) } }
+            let target = overlaps.indices.max { overlaps[$0] < overlaps[$1] } ?? 0
+            masks[target].mask = masks[target].mask.union(piece)
+        }
+        return masks
     }
 
     private func allPeople(_ image: CGImage, handler: VNImageRequestHandler) throws -> GrayMask {
