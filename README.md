@@ -144,6 +144,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
   - ⌘F opens it for sliders only, searching by name or the words people use (Lightroom's older names too).
 - [x] **Sliders by hand:** ⌘-scroll over any slider adjusts it (Shift coarse, Option fine), and value fields accept arithmetic such as `x+10`.
 - [x] **Culling while you develop:** star ratings, pick/reject flags and color labels, shown on the filmstrip. There's also an Info overlay (`I`), Lights Out (`L`), full-screen preview (`F`), and Paste from Previous (`⌥⌘V` and the Previous button).
+- [x] **Copy, paste and sync settings, as Lightroom does:** Copy Settings… (`⇧⌘C`) opens a checklist of every setting and mask, remembered for next time; Paste (`⇧⌘V`) applies what was ticked, and recomputes the pasted AI masks for the photo. ⌘- and ⇧-click select several photos in the filmstrip: Sync… (`⇧⌘S`) and Paste reach all of them in the background, with Undo, and Auto Sync (`⌥⇧⌘A`) repeats every change.
 - [x] Non-destructive edits, saved automatically to a sidecar file next to each photo (`IMG_1234.ARW.redlamp`).
 - [x] **Export dialog** (`⇧⌘E`): JPEG, HEIC and AVIF (lossy, with quality and an optional file size limit) or PNG and TIFF (lossless, with TIFF compression), 8, 10 or 16 bits, sRGB or Display P3. Resize by long edge, short edge, width and height, megapixels or percentage, keep all metadata, all but the location, or none, and choose the folder and file name. Built-in and saved presets, and Export with Previous (`⌥⇧⌘E`) repeats the last export without the dialog.
 - [x] A headless `redlamp` command-line tool for rendering and export. Exports smaller than the photo are developed at full resolution and downscaled last, so sharpening, noise reduction and texture look the same at every size.
@@ -826,6 +827,7 @@ The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on mac
 
 ### Phase 2: Develop parity *(in progress)*
 - [x] Texture, Clarity and Dehaze, globally and inside masks, and Moiré and Defringe inside masks
+- [x] Copy Settings with Lightroom's checklist, Sync and Auto Sync across a filmstrip selection
 - [x] Detail panel: noise reduction scaled to each photo's measured noise, and noise-aware sharpening, with Lightroom's controls
 - [x] Menon Bayer demosaic with a dual pass for flat noisy areas, hot-pixel repair and highlight reconstruction
 - [x] **Recipes:** one format for presets, profiles and LUTs, Base Look tables, camera recipe cards, `.cube` and HaldCLUT import, 39 bundled recipes, and the Recipe Lab

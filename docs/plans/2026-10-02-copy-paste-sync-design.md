@@ -2,6 +2,8 @@
 
 Lightroom's model: choose which settings carry from one photo to others, then paste them onto one photo, sync them across a selection, or let Auto Sync repeat every change. Tracker: EDT-08 (the picker and its safe defaults), EDT-17 (a selection, Sync and batch AI mask updates) and EDT-18 (Auto Sync).
 
+**Status (2026-10-02):** built, all five steps: the model (`SettingsSelection`), the checklist and Paste on the open photo, the filmstrip's selection, the worker (`SettingsSync`), and Auto Sync. Not yet in the checklist: retouch spots, being added to the edit; until they have an item a paste leaves the target's own.
+
 ## Decisions (2026-10-02, the owner)
 
 - **The choice is made when copying,** as in Lightroom: Copy Settings… opens a checklist, remembered between uses; Paste applies what was copied; Sync… shows the same checklist. Option skips the dialog and reuses the last choice.
