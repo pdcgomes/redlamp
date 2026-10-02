@@ -12,15 +12,15 @@ import simd
 /// The bake follows the DNG SDK's rendering: scene light (1 is white, after BaselineExposure,
 /// which Redlamp's exposure already includes) scaled by BaselineExposureOffset, the LookTable
 /// in linear ProPhoto, then the tone curve with the SDK's hue-preserving RGB method. A profile
-/// without a tone curve gets Redlamp's own. A profile whose look follows a gain table map
-/// (Apple ProRAW's) has none: without the map, its tone curve renders far too dark.
+/// without a tone curve gets Redlamp's own. A profile whose look follows a gain table map (Apple
+/// ProRAW's) relies on the develop kernel applying the map first (process 5).
 enum EmbeddedLook {
     /// Bumped when the bake changes. Edits keep the version they pinned, which the Looks store keeps.
     static let bakeVersion = 1
     static let tableSize = 33
 
     static func definition(for profile: DNGProfile) -> BaseLookDefinition? {
-        guard profile.lookTable != nil || profile.toneCurve != nil, !profile.hasGainTableMap else { return nil }
+        guard profile.lookTable != nil || profile.toneCurve != nil else { return nil }
         let curve = profile.toneCurve.map(ToneSpline.init)
         let toProPhoto = HueSatMaps.workingToProPhoto
         let fromProPhoto = toProPhoto.inverse

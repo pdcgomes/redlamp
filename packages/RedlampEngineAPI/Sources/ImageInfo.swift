@@ -56,6 +56,9 @@ public struct ImageInfo: Codable, Sendable, Hashable {
     /// The look of the camera profile the file embeds (a DNG's LookTable or tone curve), as a
     /// Base Look the engine can render while the photo is open.
     public var embeddedBaseLook: BaseLookReference?
+    /// The process version the embedded look needs, when it relies on a stage older edits
+    /// don't apply (ProRAW's tone curve on its gain table map, process 5).
+    public var embeddedBaseLookProcess: Int?
     /// The lens correction the file carries (DNG opcodes or the maker's tags), applied by
     /// Enable Profile Corrections.
     public var lensCorrection: LensCorrection?

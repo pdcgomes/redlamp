@@ -114,6 +114,21 @@ static inline float3 hueSatEntry(texture3d<float, access::read> map, float3 hsv,
     return result;
 }
 
+// The profile's ProfileGainTableMap (DNG 1.6 and 1.7): the gain for this pixel's mix of channels
+// in linear ProPhoto (after BaselineExposure), from the four tables around its position in the
+// raw image, all in one trilinear sample. Apple ProRAW's local tone mapping.
+static inline float gainTableAt(float3 scene, float2 sourceUV, texture3d<float, access::sample> table,
+                                constant DevelopParams &p) {
+    float3 pro = mul3(p.toProPhoto0, p.toProPhoto1, p.toProPhoto2, scene) * p.gainTable.z;
+    float input = dot(p.gainTableWeights, float4(pro, min3(pro.r, pro.g, pro.b))) + p.gainTable.w * max3(pro.r, pro.g, pro.b);
+    input = pow(clamp(input, 0.0f, 1.0f), p.gainTable.y);
+    float3 size = float3(table.get_width(), table.get_height(), table.get_depth());
+    float2 cell = (sourceUV - p.gainTableGrid.xy) / p.gainTableGrid.zw;
+    float3 coordinate = (float3(min(input * size.x, size.x - 1.0f), cell.x, cell.y) + 0.5f) / size;
+    constexpr sampler tableSampler(coord::normalized, filter::linear, address::clamp_to_edge);
+    return max(table.sample(tableSampler, coordinate).r, 0.0f);
+}
+
 // How far a hue (degrees) lies inside the band from `from` to `to`, going up and wrapping at 360,
 // with 8° shoulders.
 static inline float hueBand(float hue, float from, float to) {
@@ -551,6 +566,7 @@ kernel void rl_develop(
     texture2d<float, access::sample> maskGuide [[texture(7)]],
     texture3d<float, access::read> hueSatCool [[texture(9)]],
     texture3d<float, access::read> hueSatWarm [[texture(10)]],
+    texture3d<float, access::sample> gainTable [[texture(11)]],
     constant float4 *lensTable [[buffer(5)]],
     uint2 gid [[thread_position_in_grid]])
 {
@@ -651,6 +667,9 @@ kernel void rl_develop(
     }
     if (p.defringe.x > 0.0f || p.defringe.y > 0.0f) {
         scene = max(defringe(scene, source, sourceUV, p), 0.0f);
+    }
+    if (p.gainTable.x > 0.0f) {
+        scene *= pow(gainTableAt(scene, sourceUV, gainTable, p), p.gainTable.x);
     }
     scene *= p.tone.x * exp2(localTone.x);
     // Halation and bloom: highlight light scattered on its way to the image (see Glow.metal),

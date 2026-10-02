@@ -72,7 +72,8 @@ struct BaseLookMenu: View {
         let current = model.baseLook
         let groups = BaseLookGroups(model.recipes.currentBaseLooks)
         Menu {
-            if let embedded = model.info?.embeddedBaseLook {
+            if let embedded = model.info?.embeddedBaseLook,
+               model.recipe.processVersion >= model.info?.embeddedBaseLookProcess ?? 0 {
                 Section("In This Photo") {
                     Button {
                         model.setBaseLook(embedded)

@@ -100,13 +100,14 @@ struct EmbeddedLookTests {
         #expect(BaseLookTests.maxDifference(plain, off) <= 2, "Amount 0 is no look")
     }
 
-    /// ProRAW's tone curve follows its gain table map, which Redlamp doesn't apply yet.
+    /// ProRAW's tone curve follows its gain table map, so its look is offered for process 5 edits.
     @Test(.enabled(if: canRender && fixture("IMG_1361") != nil))
-    func `an iPhone's tone curve isn't offered without its gain table map`() async throws {
+    func `an iPhone's tone curve becomes its embedded look, for edits that apply the gain table map`() async throws {
         let url = try #require(Self.fixture("IMG_1361"))
         let engine = try RedlampEngine()
         let info = try await engine.open(url)
-        #expect(info.embeddedBaseLook == nil)
-        #expect(engine.embeddedBaseLook() == nil)
+        let embedded = try #require(info.embeddedBaseLook)
+        #expect(embedded.name == "Apple Embedded Color Profile" && engine.canRender(embedded))
+        #expect(info.embeddedBaseLookProcess == 5)
     }
 }

@@ -45,6 +45,8 @@ final class ImageSession: @unchecked Sendable {
     /// The DNG's embedded camera profile, and its HueSatMaps on the GPU when it has some.
     let dngProfile: DNGProfile?
     let hueSatMaps: HueSatMaps?
+    /// The profile's ProfileGainTableMap on the GPU (process 5).
+    let gainTableMap: GainTableMapTexture?
     /// The profile's look baked into a Base Look (`EmbeddedLook`).
     let embeddedLook: BaseLookDefinition?
     private let chromaticAberration = LateralChromaticAberration.Cache()
@@ -64,11 +66,13 @@ final class ImageSession: @unchecked Sendable {
         glowLights: any MTLTexture,
         noiseGain: any MTLTexture,
         hueSatMaps: HueSatMaps? = nil,
+        gainTableMap: GainTableMapTexture? = nil,
         embeddedLook: BaseLookDefinition? = nil,
     ) {
         self.noiseGain = noiseGain
         dngProfile = decoded.isRaw ? decoded.dngProfile : nil
         self.hueSatMaps = decoded.isRaw ? hueSatMaps : nil
+        self.gainTableMap = decoded.isRaw ? gainTableMap : nil
         self.embeddedLook = decoded.isRaw ? embeddedLook : nil
         self.repairedPixels = repairedPixels
         self.airlight = airlight

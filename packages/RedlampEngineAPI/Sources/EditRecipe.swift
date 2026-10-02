@@ -58,7 +58,8 @@ public struct EditRecipe: Sendable, Hashable {
     /// 3: a bitmap (JPEG, HEIC, PNG, TIFF) renders as the file at default settings, and halation
     /// boosts only small clipped lights, not a clipped sky.
     /// 4: a DNG's embedded camera profile corrects its colour with the profile's HueSatMap.
-    /// 5: the lens correction the file carries (DNG opcodes, Sony's tags) applies by default.
+    /// 5: the lens correction the file carries (DNG opcodes, Sony's tags) applies by default, and
+    /// a DNG's ProfileGainTableMap (Apple ProRAW's local tone mapping) applies with its embedded look.
     public static let currentProcessVersion = 5
     public static let linearPointCurve = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]
 

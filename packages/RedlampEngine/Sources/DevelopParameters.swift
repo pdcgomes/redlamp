@@ -102,6 +102,20 @@ enum DevelopParameters {
             p.hueSat = SIMD4(1, session.hueSatWeight(for: recipe), maps.srgbValues ? 1 : 0, 0)
             p.setWorkingToProPhoto(HueSatMaps.workingToProPhoto)
         }
+        // The map and the profile's tone curve are one design: it applies with the photo's embedded
+        // look, as strongly as the look's Amount, and Redlamp's own looks render without it.
+        if recipe.processVersion >= 5, let table = session.gainTableMap?.map, let embedded = session.embeddedLook,
+           recipe.baseLook.isSameLook(as: embedded.reference) {
+            p.gainTable = SIMD4(
+                Float(recipe.baseLook.amount / 100), table.gamma, Float(pow(2, session.baselineExposure)),
+                table.weights[4],
+            )
+            p.gainTableWeights = SIMD4(table.weights[0], table.weights[1], table.weights[2], table.weights[3])
+            p.gainTableGrid = SIMD4(
+                Float(table.origin.x), Float(table.origin.y), Float(table.spacing.x), Float(table.spacing.y),
+            )
+            p.setWorkingToProPhoto(HueSatMaps.workingToProPhoto)
+        }
         // Display-referred work stays in Rec.2020 primaries; the kernel gamut-maps into these.
         p.setDisplayToOutput(
             encoding == .sRGB || encoding == .linearSRGB

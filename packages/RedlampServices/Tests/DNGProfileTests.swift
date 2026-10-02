@@ -22,7 +22,7 @@ struct DNGProfileTests {
         let size: [Int] = [look.hues, look.saturations, look.values]
         #expect(size == [36, 8, 16])
         #expect(profile.toneCurve == nil)
-        #expect(!profile.hasGainTableMap)
+        #expect(profile.gainTableMap == nil)
     }
 
     @Test(.enabled(if: fixture("IMG_1361") != nil))
@@ -35,7 +35,9 @@ struct DNGProfileTests {
         #expect(curve.count == 257)
         #expect(curve.first == SIMD2<Float>(0, 0))
         #expect(curve.last == SIMD2<Float>(1, 1))
-        #expect(profile.hasGainTableMap)
+        let map = try #require(profile.gainTableMap)
+        #expect(map.rows == 6 && map.columns == 8 && map.points == 257)
+        #expect(map.gains[0] > 1 && map.gains[map.points - 1] < 1, "shadows lifted, highlights held back")
     }
 
     @Test func `reads a .dcp file`() throws {

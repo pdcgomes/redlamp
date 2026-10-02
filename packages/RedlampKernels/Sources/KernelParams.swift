@@ -175,6 +175,9 @@ public struct DevelopParams {
     public var lensProfile2 = SIMD4<Float>(1, 1, 1, 0)
     public var defringe = SIMD4<Float>(0, 0, 0, 0)
     public var defringeHue = SIMD4<Float>(0, 0, 0, 0)
+    public var gainTable = SIMD4<Float>(0, 1, 1, 0)
+    public var gainTableWeights = SIMD4<Float>(0, 0, 0, 0)
+    public var gainTableGrid = SIMD4<Float>(0, 0, 1, 1)
 
     public init() {}
 

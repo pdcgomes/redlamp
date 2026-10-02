@@ -32,6 +32,42 @@ public struct DNGProfile: Codable, Sendable, Hashable {
         }
     }
 
+    /// A ProfileGainTableMap (DNG 1.6) or ProfileGainTableMap2 (1.7): a grid of gain tables over
+    /// the photo, each indexed by a weighted mix of a pixel's channels, as Apple ProRAW carries for
+    /// its local tone mapping. Positions are in the raw image's own orientation.
+    public struct GainTableMap: Codable, Sendable, Hashable {
+        public var rows: Int
+        public var columns: Int
+        /// Relative to the image's height and width.
+        public var spacing: SIMD2<Double>
+        public var origin: SIMD2<Double>
+        public var points: Int
+        /// For R, G, B, min(R, G, B) and max(R, G, B).
+        public var weights: [Float]
+        public var gamma: Float
+        /// Row-major tables, each `points` gains.
+        public var gains: [Float]
+
+        public init?(
+            rows: Int, columns: Int, spacing: SIMD2<Double>, origin: SIMD2<Double>, points: Int, weights: [Float],
+            gamma: Float, gains: [Float],
+        ) {
+            guard rows >= 1, columns >= 1, points >= 2, rows * columns * points <= 1 << 22,
+                  gains.count == rows * columns * points, weights.count == 5,
+                  gains.allSatisfy({ $0 >= 0 && $0.isFinite }),
+                  spacing.x > 0, spacing.y > 0, (0.25 ... 4).contains(gamma)
+            else { return nil }
+            self.rows = rows
+            self.columns = columns
+            self.spacing = spacing
+            self.origin = origin
+            self.points = points
+            self.weights = weights
+            self.gamma = gamma
+            self.gains = gains
+        }
+    }
+
     public var name: String?
     public var copyright: String?
     /// ProfileEmbedPolicy: 0 allow copying, 1 embed if used, 2 never embed, 3 no restrictions.
@@ -43,9 +79,8 @@ public struct DNGProfile: Codable, Sendable, Hashable {
     /// Input-output pairs in 0...1, input increasing.
     public var toneCurve: [SIMD2<Float>]?
     public var baselineExposureOffset: Double
-    /// Whether the file has a ProfileGainTableMap (DNG 1.6), a local tone map the profile's
-    /// tone curve is designed to follow, as Apple ProRAW's is. Redlamp doesn't apply one yet.
-    public var hasGainTableMap: Bool
+    /// The local tone map the profile's tone curve is designed to follow, as Apple ProRAW's is.
+    public var gainTableMap: GainTableMap?
 
     public init(
         name: String?,
@@ -56,7 +91,7 @@ public struct DNGProfile: Codable, Sendable, Hashable {
         lookTable: HSVMap?,
         toneCurve: [SIMD2<Float>]?,
         baselineExposureOffset: Double,
-        hasGainTableMap: Bool = false,
+        gainTableMap: GainTableMap? = nil,
     ) {
         self.name = name
         self.copyright = copyright
@@ -66,12 +101,12 @@ public struct DNGProfile: Codable, Sendable, Hashable {
         self.lookTable = lookTable
         self.toneCurve = toneCurve
         self.baselineExposureOffset = baselineExposureOffset
-        self.hasGainTableMap = hasGainTableMap
+        self.gainTableMap = gainTableMap
     }
 
     /// Whether the profile has anything beyond matrices.
     public var isEmpty: Bool {
-        hueSatMaps.isEmpty && lookTable == nil && toneCurve == nil
+        hueSatMaps.isEmpty && lookTable == nil && toneCurve == nil && gainTableMap == nil
     }
 
     static func read(_ data: Data, url: URL) -> DNGProfile? {
@@ -128,9 +163,60 @@ public struct DNGProfile: Codable, Sendable, Hashable {
             toneCurve: Self.isValidCurve(points) ? points : nil,
             baselineExposureOffset: tags[0xC7A5]
                 .flatMap { DNGColorCalibration.rationals($0, reader: reader).first } ?? 0,
-            hasGainTableMap: tags[0xCD2D] != nil,
+            gainTableMap: tags[0xCD40].flatMap { gainTableMap($0, reader: reader, version: 2) }
+                ?? tags[0xCD2D].flatMap { gainTableMap($0, reader: reader, version: 1) },
         )
         return profile.isEmpty ? nil : profile
+    }
+
+    /// The tag's parameters, big-endian as DNG's opcode lists are. Version 2 adds a storage type,
+    /// a gamma on the table input, and a range for integer gains.
+    private static func gainTableMap(_ entry: TIFFReader.Entry, reader: TIFFReader, version: Int) -> GainTableMap? {
+        let start = entry.count <= 4 ? entry.valueOffset : Int(reader.u32(entry.valueOffset))
+        let header = version == 2 ? 80 : 64
+        guard entry.count >= header, start + entry.count <= reader.bytes.count else { return nil }
+        let data = UnsafeRawBufferPointer(rebasing: reader.bytes[start ..< start + entry.count])
+        func u32(_ offset: Int) -> UInt32 {
+            UInt32(bigEndian: data.loadUnaligned(fromByteOffset: offset, as: UInt32.self))
+        }
+        func f32(_ offset: Int) -> Float {
+            Float(bitPattern: u32(offset))
+        }
+        func f64(_ offset: Int) -> Double {
+            Double(bitPattern: UInt64(bigEndian: data.loadUnaligned(fromByteOffset: offset, as: UInt64.self)))
+        }
+        let (rows, columns, points) = (Int(u32(0)), Int(u32(4)), Int(u32(40)))
+        guard rows > 0, columns > 0, points > 0, rows * columns * points <= 1 << 22 else { return nil }
+        let count = rows * columns * points
+        var gamma: Float = 1
+        var gains: [Float]
+        if version == 2 {
+            let type = u32(64)
+            gamma = f32(68)
+            let (low, high) = (f32(72), f32(76))
+            let size = [1, 2, 2, 4][Int(min(type, 3))]
+            guard type <= 3, entry.count >= header + size * count else { return nil }
+            gains = (0 ..< count).map { i in
+                let at = header + i * size
+                switch type {
+                case 0: return low + Float(data[at]) / 255 * (high - low)
+                case 1: return low + Float(UInt16(bigEndian: data.loadUnaligned(fromByteOffset: at, as: UInt16.self))) /
+                    65535 * (high - low)
+                case 2: return Float(Float16(bitPattern: UInt16(bigEndian: data.loadUnaligned(
+                        fromByteOffset: at,
+                        as: UInt16.self,
+                    ))))
+                default: return f32(at)
+                }
+            }
+        } else {
+            guard entry.count >= header + 4 * count else { return nil }
+            gains = (0 ..< count).map { f32(header + $0 * 4) }
+        }
+        return GainTableMap(
+            rows: rows, columns: columns, spacing: SIMD2(f64(16), f64(8)), origin: SIMD2(f64(32), f64(24)),
+            points: points, weights: (0 ..< 5).map { f32(44 + $0 * 4) }, gamma: gamma, gains: gains,
+        )
     }
 
     /// At least two points in 0...1 with increasing inputs.

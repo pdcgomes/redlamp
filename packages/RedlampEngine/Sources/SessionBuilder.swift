@@ -108,6 +108,8 @@ struct SessionBuilder {
         info.asShotWhiteBalance = colorModel?.whiteBalance(forMultipliers: decoded.asShotMultipliers)
         let embeddedLook = decoded.isRaw ? decoded.dngProfile.flatMap(EmbeddedLook.definition) : nil
         info.embeddedBaseLook = embeddedLook?.reference
+        // A look designed to follow the gain table map renders as meant only where the map applies.
+        info.embeddedBaseLookProcess = embeddedLook != nil && decoded.dngProfile?.gainTableMap != nil ? 5 : nil
         info.lensCorrection = decoded.isRaw ? decoded.lensCorrection : nil
 
         return ImageSession(
@@ -125,6 +127,7 @@ struct SessionBuilder {
             glowLights: glowLights,
             noiseGain: noiseGain,
             hueSatMaps: decoded.isRaw ? HueSatMaps(profile: decoded.dngProfile, device: device) : nil,
+            gainTableMap: decoded.isRaw ? GainTableMapTexture(decoded.dngProfile?.gainTableMap, device: device) : nil,
             embeddedLook: embeddedLook,
         )
     }

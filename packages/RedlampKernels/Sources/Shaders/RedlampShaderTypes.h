@@ -70,6 +70,10 @@ struct DevelopParams {
     float4 lensProfile2;      // xy photo offset to the profile's radius per unit, z radius per table entry
     float4 defringe;          // x purple amount, y green amount (0...1)
     float4 defringeHue;       // OKLab hue bands in degrees: x, y purple from and to, z, w green
+    float4 gainTable;         // process 5: x the profile's gain table map's strength (gain to this power), y its gamma, z the
+                              // BaselineExposure gain its input assumes, w the weight of max(R, G, B)
+    float4 gainTableWeights;  // weights of R, G, B and min(R, G, B) (ProPhoto)
+    float4 gainTableGrid;     // xy the map's origin, zw its spacing, relative to the raw image
 };
 
 // Noise reduction over one work area of the pyramid.
