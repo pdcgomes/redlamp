@@ -57,10 +57,10 @@ Redlamp feels instant because it uses the whole machine, not because it does lit
 - **`WorkScheduler`** (RedlampDocument) runs every bulk job: listings, probes, thumbnail decodes, warming and stack detection. It has three lanes:
   - **on-screen**, at user-initiated priority, as wide as the performance cores (`hw.perflevel0.logicalcpu`);
   - **look-ahead**, at utility priority, half as wide;
-  - **background**, at background priority, which macOS runs on the efficiency cores, as wide as they are (`hw.perflevel1.logicalcpu`).
+  - **background**, at utility priority, half as wide as the performance cores (at least as wide as the efficiency cores, `hw.perflevel1.logicalcpu`). It was background priority at first; see Results.
 
   Jobs run on GCD threads (blocking I/O doesn't belong on Swift's cooperative pool). A queued job is promoted when it becomes visible, and a job whose folder or cell went away is dropped before it starts. Background jobs start only while no on-screen job waits, and not at all in Low Power Mode or when the Mac is hot (`thermalState` serious or critical), as exports already rest.
-- **I/O in parallel.** With subfolders on, each folder is listed by its own job. Probes read `edit.json` without file coordination, which is safe because it is always written atomically (directly, or by replacing the whole package), and skip sidecars iCloud hasn't downloaded. Being I/O-bound, probes run on the look-ahead lane at twice its width.
+- **I/O in parallel.** With subfolders on, each folder is listed by its own job. Probes read `edit.json` without file coordination, which is safe because it is always written atomically (directly, or by replacing the whole package), and skip sidecars iCloud hasn't downloaded. Probes run on the look-ahead lane in batches of 32 rows, the visible rows' batches promoted to on screen: decoding the JSON, not reading it, is most of their cost.
 - **Decoding where it's cheapest.** ImageIO's thumbnail path decodes a raw file's embedded JPEG at reduced scale, and HEIC on the hardware decoder, on all performance cores at once. Stack detection's blur, correlation and sharpness use Accelerate (vDSP). Core Animation composites the filmstrip on the GPU, so scrolling never redraws a thumbnail.
 - **Raw files without a usable preview** (rare: some DNGs) are the expensive case. The trial compares ImageIO's full decode with a reduced-size develop in the engine; see Results.
 - **Warming.** While nothing is waiting on screen, thumbnails for the rest of the open folder, then for its sibling folders, are decoded into the pack on the background lane, so scrolling never waits. Warmed thumbnails go to the pack, not to memory.
@@ -101,7 +101,7 @@ flowchart LR
 - **Bookmarks.** A root is stored as bookmark data with its last known path, behind `FolderAccess`, which calls `startAccessingSecurityScopedResource`. That does nothing until the app is sandboxed, so the Mac App Store sandbox needs no model change.
 - **Tree.** A row is listed the first time it is visible. That one listing gives its count and its subfolders, so expanding is instant. Packages (sidecars, `.photoslibrary`, apps) and hidden folders are not folders here.
 - **`FolderWatcher`** is one FSEvents stream over all roots, with a 0.3 s latency. Only listed directories (the open folder, its subtree with subfolders on, visible tree rows) are listed again, and the result is diffed into what's shown. A new subfolder under an open subtree is walked and merged in. A file whose size or date is still changing waits for 2 s of quiet before its thumbnail is requested. Mounts and unmounts (NSWorkspace) drive the missing state. Network volumes have no FSEvents, so their listed folders are polled every 15 s.
-- **Stack detection** runs per directory on the look-ahead lane after the visible thumbnails, and its result is cached per directory by the listing's names, sizes and dates, so opening a folder again doesn't read every photo's EXIF.
+- **Stack detection** runs per directory on the background lane, one directory at a time, and its result is cached per directory by the listing's names, sizes and dates, so opening a folder again doesn't read every photo's EXIF.
 
 ## Thumbnail packs
 
@@ -141,8 +141,28 @@ An AppKit `NSCollectionView` (horizontal flow) inside the existing floating pane
 
 ## Results
 
-Filled in by phase 6.
+Measured with `--folders-perf` on 50,000 photos in 500 folders (APFS clones of one 24 MP ARW), on an M1 Ultra (16 performance and 4 efficiency cores), Release build. The Mac was busy throughout (load average 17 to 30: Spotlight, endpoint security, another build), so these are conservative.
+
+| | Target | Measured |
+| --- | --- | --- |
+| First photos (subfolders on) | under 50 ms | 13.7 ms |
+| All 50,000 photos listed | under 300 ms | 209 ms |
+| Visible thumbnails (15, from the files) | under 400 ms | 197 ms |
+| Warming from the files | at least 300 a second | 253 a second |
+| From the pack | at least 2,000 a second | 6,210 a second |
+| Main thread while listing, decoding, warming | p99 under 8.3 ms | p99 0.15 ms, max 12 ms |
+| Main thread scrolling the strip end to end in 4 s | p99 under 8.3 ms | p99 1.4 ms, max 22 ms |
+| Memory | thumbnails 128 MB | 457 MB peak against 155 MB before opening; thumbnails 121 MB |
+
+What the measurements changed:
+
+- **Listing.** The first scanner took 1.4 s for 10,000 photos. Asking every file for iCloud Drive's download state cost ten times the rest of the listing, and sorting compared URLs' last path components on every comparison. The scanner now asks for download state only in a folder iCloud Drive syncs, and sorts native names once: 120 ms for 10,000. Calling `getattrlistbulk` directly wasn't needed.
+- **Warming at utility priority.** At background priority macOS throttles a thread's reads behind every other reader. With Spotlight indexing, warming fell to 4 thumbnails a second, against 224 at utility priority for the same decodes (and 127 on the on-screen lane). Warming now runs at utility priority, half as wide as the performance cores. It still waits while anything on screen does, and pauses in Low Power Mode and when the Mac is hot.
+- **Stack detection** decoded 256 px thumbnails for every candidate run across every core, from the look-ahead lane. On the fixture, where every folder looks like a run, it starved warming and took memory to 1.7 GB. It now runs on the background lane one directory at a time, single-threaded, so it never holds more than one core.
+- **The Folders panel** first rebuilt every row on each change: 64 ms per reload with 5,000 subfolders. Its rows now come from the tree on demand, one node per folder, and a listing reloads only its own row. Only rows on screen get views (under 60 for 5,000) and only folders on screen are listed.
+- **Raw files without a preview.** Every fixture has an embedded preview, decoded through ImageIO in 6 to 30 ms on one core. A full ImageIO decode, which a previewless file needs, takes 64 to 206 ms, and the engine's own open is 70 to 250 ms. LibRaw's unpacking dominates both, so a reduced-size develop in the engine has no room to win; ImageIO stays.
+- **Where decoding time goes.** ImageIO decodes a raw's largest embedded JPEG (often full size) even for a 192 px thumbnail: about 25 ms each. Picking the smallest preview of at least 192 px through LibRaw's thumbnail list would cut that several times; that's for later.
 
 ## Later
 
-Moving and renaming on disk, several folders in the filmstrip at once, a catalog, thumbnails that show the edit, collections, and a Library grid.
+Decoding the smallest embedded preview that fits instead of ImageIO's largest one, moving and renaming on disk, several folders in the filmstrip at once, a catalog, thumbnails that show the edit, collections, and a Library grid.

@@ -50,7 +50,7 @@ A **red lamp** is the darkroom safelight: the one light you can work by without 
 
 Lightroom defined how millions of photographers edit, but it is a cross-platform application that doesn't feel at home on a Mac, iPad, or iPhone, and it is tied to a subscription and a cloud. Redlamp keeps the workflow photographers already know, including the panel layout, slider names and ranges, and keyboard shortcuts, and rebuilds everything underneath as a native, GPU-first, open-source application.
 
-**Redlamp is an editor, not a catalog.** It opens folders of photos and stores edits in small sidecar files next to them. Library management is a separate, later track.
+**Redlamp is an editor, not a catalog.** It keeps a working set of folders, as Lightroom Classic's Folders panel does, and stores edits in small sidecar files next to the photos. Library management is a separate, later track.
 
 ## Goals
 
@@ -124,7 +124,9 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] One frame is in memory at a time, and `redlamp stack` does the same from the command line.
 
 **Workspace**
-- [x] A Lightroom-style layout. On the left: Navigator, Recipes, Snapshots, and History, as collapsible panels like the Develop panels. In the center: the photo, with the filmstrip below. On the right: histogram, tool strip, and the Develop panels in Lightroom's order.
+- [x] A Lightroom-style layout. On the left: Navigator, Folders, Recipes, Snapshots, and History, as collapsible panels like the Develop panels. In the center: the photo, with the filmstrip below. On the right: histogram, tool strip, and the Develop panels in Lightroom's order.
+- [x] **Folders**, as in Lightroom Classic: add folders with **+**, ⌘O or by dropping them on the window, and they're remembered (by bookmark, so a folder that's renamed or moved is followed). Each shows as a tree with the number of photos in every folder; click one to show it in the filmstrip, or turn on **Show Photos in Subfolders** (View menu or the folder's context menu) to see everything beneath it. Nothing on disk is moved or changed. The filmstrip follows the disk by itself: photos copied in, deleted, renamed or rewritten appear, leave or update in place, a photo still being copied waits until it's complete, and the selection moves to the next photo when its own is deleted. A folder on a disk that isn't connected is dimmed with a question mark, **Locate…** points it at where it went, and it comes back when the disk does. Each folder reopens on the photo you last had in it.
+- [x] **Built to stay fast with any number of photos:** a folder lists without reading a single sidecar (badges follow from light reads, visible photos first); thumbnails decode in parallel on every core at the cell's size, are kept within a 128 MB budget in memory and cached on disk in one file per folder (at most 1 GB), and are warmed in the background while you're not waiting; the filmstrip is AppKit with reused cells, so 50,000 photos cost what a screenful does. Focus stacks are looked for one folder at a time in the background, and remembered. See [Measured performance](#measured-performance) and the [design](docs/plans/2026-10-02-folders-design.md).
 - [x] **Sliders:** click to jump, drag to adjust, Shift-drag for fine control, double-click to reset, and click the value to type one in. Option-dragging a tone slider shows clipping, as in Lightroom.
 - [x] **Panels:** double-click a panel or group title to reset it, and Option-click a header for Solo Mode. The left column's panels collapse the same way when you click their headers, and Option-click shows only one.
 - [x] **Histogram:** clipping indicators, and you can drag across it to adjust Blacks, Shadows, Exposure, Highlights, or Whites.
@@ -186,6 +188,19 @@ Measured on an Apple M1 Ultra with a Release build.
 | Reopen a merged focus stack from its cache | ~0.1 s |
 | Detail stage on a 1:1 region (about 10 MP of pyramid texels), GPU time: noise reduction, Texture and Clarity | ~5 ms, ~1 ms |
 | Detail stage for a 2560 × 1600 view at 1:1 of a 24 MP frame, GPU time: noise reduction alone (Luminance 50); default sharpening, first render; while dragging Radius; while dragging Amount, Detail or Masking (cached analysis); while dragging Luminance | ~3.6 ms, ~7.2 ms, ~5.5 ms, ~2.2 ms, ~4.3 ms |
+
+Folders and the filmstrip on 50,000 photos in 500 folders (`scripts/make-folder-fixture.sh`, then `--folders-perf`), measured while the Mac was busy with other work (load average about 18):
+
+| Operation | Time |
+| --- | --- |
+| First photos in the filmstrip, Show Photos in Subfolders on | 14 ms |
+| All 50,000 photos listed (500 folders, in parallel, in order) | 209 ms |
+| The visible thumbnails, decoded from the raw files | 197 ms |
+| Background warming from the raw files | 253 a second |
+| Thumbnails from the disk cache | 6,210 a second |
+| Main thread while listing, decoding and warming (p99) | 0.15 ms |
+| Main thread while scrolling the filmstrip end to end (p99) | 1.4 ms |
+| Peak memory, 155 MB before opening | 457 MB (thumbnails 121 MB) |
 
 Dragging a slider at 120 events a second (`scripts/perf-sweep.sh`), with every panel open:
 
@@ -928,7 +943,7 @@ mise run fixtures         # optional: downloads CC0 sample raw files into tests/
 mise run run -- tests/fixtures/raw    # build and launch, opening a folder
 ```
 
-You can also run `mise run run` on its own and choose **File → Open Folder…** (⌘O), or drop a folder or files onto the window. Redlamp reopens the last folder on launch.
+You can also run `mise run run` on its own and choose **File → Open Folder…** (⌘O), or drop a folder or files onto the window: folders join the Folders panel. Redlamp remembers them and reopens the last folder, on the photo you were on.
 
 ### Command-line tool
 
@@ -965,6 +980,8 @@ mise run render -- render ~/Pictures/DSC01234.ARW -o out.jpg --size 2048 \
 | `mise run notarize -- <path>` | Notarize a signed `.app`, `.dmg` or `.zip`, then staple and check it with Gatekeeper |
 | `scripts/test-update.sh [--auto]` | Update an old copy of a dry run to the dry run itself through Sparkle, from a feed on 127.0.0.1 (see [Releasing](#releasing)) |
 | `scripts/perf-sweep.sh [Debug\|Release] [parameter] [script]` | Drag a slider for 3 s and report main-thread smoothness. `PROFILE=1` adds a main-thread profile; `PANELS=swiftui` measures the SwiftUI panels |
+| `scripts/make-folder-fixture.sh <folder> [folders] [per-folder]` | Build a tree of photos (500 folders of 100 by default) from APFS clones of one sample raw, using no disk space. Put it in a folder ending in `.noindex` so Spotlight leaves it alone |
+| `--folders-perf <folder> [--folders-perf-warm N] [--folders-perf-quit]` (development builds) | Open a tree of photos in an editor of its own and measure listing, thumbnails, warming, the disk cache, the main thread while the filmstrip scrolls, the cores and memory; writes `/tmp/redlamp-perf.txt` |
 | `scripts/harness-capture.sh <scene> <png> [mode]` | Screenshot a harness scene; with `side` mode, `swift scripts/parity-diff.swift <png>` scores it and `scripts/parity-rows.swift` compares it row by row |
 
 ### Releasing
@@ -998,7 +1015,7 @@ To try a change to releasing or updating before it's on `main`, `REF=HEAD DRY_RU
 | --- | --- | --- |
 | **Foundations** | Tokens, Theme gallery | The palette, the type ramp (SwiftUI and AppKit side by side) and metrics; every theme at once |
 | **Controls** | Slider row, Panel chrome | Each component in every state worth reviewing, with a note on what would be wrong with it |
-| **Panels** | Basic, History | Panels wired to the live editor. History plays every kind of step, then opens the photo again so an earlier session shows, at the sidebar's normal and narrowest widths |
+| **Panels** | Basic, History, Folders | Panels wired to the live editor. History plays every kind of step, then opens the photo again so an earlier session shows, at the sidebar's normal and narrowest widths. Folders shows the Folders panel and the AppKit filmstrip on a folder of real photos (`--folders-root`, the fixtures by default) |
 | **Parity** | Slider rows, Basic, Tone Curve, Histogram, Color Mixer, Color Grading, Detail, Effects, Lens Corrections, Transform, Calibration, Masking, Inspector column, Navigator, the sidebar lists | A SwiftUI original and its AppKit port at the same width: side by side, as a difference blend (identical pixels are black), as an onion skin, or flickering. The inspector has knobs for drawing constants and a **Copy values** button |
 | **Performance** | Basic panel drag | Drags a slider at 120 events a second through each implementation and reports how busy the main thread got |
 | **Recipes** | Recipe Lab | Every recipe, Base Look and imported LUT on the look-development set and a lint chart (see below) |
@@ -1017,7 +1034,7 @@ Against their SwiftUI originals, the AppKit ports score a mean difference of 0.0
 - **Create:** a new recipe from the real Develop panels ("Edit in Develop", then "Capture"), a camera card, or an imported `.cube` or HaldCLUT, saved to My Recipes.
 - **Runs:** the agent studio's runs. Approve briefs next to their references, open candidates in Compare, judge pairs large on any photo, and pick finals or add them to My Recipes.
 
-**Launch options,** for reviews and scripted screenshots: `--scene <id>`, `--background panel|canvas|black`, `--parity-mode`, `--theme <id>`, `--appearance dark|light`, `--tint <0…1>`, `--stage-only` (no sidebar or inspector), `--window <width>x<height>` (in points, on a Retina screen when one is connected), `--history-height <points>` for the History scene's lists, and for the Lab `--lab-tab`, `--lab-select <recipe id>`, `--lab-compare <recipe id>`, `--lab-mode split|beforeAfter|sideBySide|flicker|acrossSet`, `--lab-image <camera>`, `--lab-run <run>` and `--lab-hide-gallery`. `--probe` measures SwiftUI and AppKit elements one by one and writes the sizes to `/tmp/redlamp-probe.txt`. `scripts/harness-capture.sh <scene> <png> [mode] [options…]` screenshots a scene; `scripts/theme-sweep.sh` captures scenes in every theme.
+**Launch options,** for reviews and scripted screenshots: `--scene <id>`, `--background panel|canvas|black`, `--parity-mode`, `--theme <id>`, `--appearance dark|light`, `--tint <0…1>`, `--stage-only` (no sidebar or inspector), `--window <width>x<height>` (in points, on a Retina screen when one is connected), `--history-height <points>` for the History scene's lists, `--folders-root <path>` for the Folders scene, and for the Lab `--lab-tab`, `--lab-select <recipe id>`, `--lab-compare <recipe id>`, `--lab-mode split|beforeAfter|sideBySide|flicker|acrossSet`, `--lab-image <camera>`, `--lab-run <run>` and `--lab-hide-gallery`. `--probe` measures SwiftUI and AppKit elements one by one and writes the sizes to `/tmp/redlamp-probe.txt`. `scripts/harness-capture.sh <scene> <png> [mode] [options…]` screenshots a scene; `scripts/theme-sweep.sh` captures scenes in every theme.
 
 To add a component, write a scene in `apps/RedlampHarness/Sources/Scenes/` and register it in `BuiltInScenes.swift`.
 
@@ -1053,7 +1070,7 @@ Ratings, flags and color labels are saved in the photo's sidecar and shown on th
 
 ### Where edits are stored
 
-Edits are saved next to the photo, in `IMG_1234.ARW.redlamp`. It is a package (Finder shows it as one file): `edit.json` holds the edit recipe and any snapshots, and `masks/` holds the bitmaps of AI masks as 8-bit PNGs named by their SHA-256, which the JSON refers to. Brush strokes and range masks are part of the JSON. Only values that differ from the defaults are stored, so sidecars stay small. `history/` holds one file per editing session: its first step's edit, then each later step as a [JSON Patch](https://www.rfc-editor.org/rfc/rfc6902) from the one before, so a slider step stores one value. Resetting a photo completely deletes its sidecar, unless it still holds history.
+Edits are saved next to the photo, in `IMG_1234.ARW.redlamp`. It is a package (Finder shows it as one file): `edit.json` holds the edit recipe and any snapshots, and `masks/` holds the bitmaps of AI masks as 8-bit PNGs named by their SHA-256, which the JSON refers to. Brush strokes and range masks are part of the JSON. Only values that differ from the defaults are stored, so sidecars stay small. `history/` holds one file per editing session: its first step's edit, then each later step as a [JSON Patch](https://www.rfc-editor.org/rfc/rfc6902) from the one before, so a slider step stores one value. Resetting a photo completely deletes its sidecar, unless it still holds history. Filmstrip thumbnails are cached apart from the photos, in `~/Library/Caches/app.redlamp/Thumbnails`, one file per folder.
 
 Sidecars carry two version numbers:
 - The **format version** describes the file's syntax. Older formats are migrated silently when read.
