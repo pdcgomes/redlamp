@@ -67,7 +67,8 @@ struct DenoiseParams {
     float4 a;                 // noise per channel in pyramid units: variance = a · value + b
     float4 b;
     float4 threshold;         // x luma, yz chroma: detail below these is removed (0 keeps it)
-    float4 edge;              // x luma difference (stabilised units) at which chroma stops averaging; 0 off
+    float4 edge;              // x luma difference (stabilised units) at which chroma stops averaging (0 off),
+                              // y radius of the luma energy neighbourhood (0: each coefficient alone)
 };
 
 // Photo coordinates to half-diagonal units about the centre, so the lens is round at any aspect.

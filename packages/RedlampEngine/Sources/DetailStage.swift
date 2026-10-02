@@ -14,12 +14,19 @@ struct DenoiseSettings: Hashable {
     /// through) a clipped orange light no longer bleeds into its blue surroundings at high Color.
     static let chromaEdge: Float = 3
 
+    /// Luma detail is shrunk by the energy of its (2r+1)² neighbourhood rather than by its own
+    /// magnitude, so texture keeps its coefficients and flat areas lose theirs. Chosen with
+    /// `NoiseBenchmarkTests`: radius 1 adds 1.1–1.4 dB at Luminance 50 for the same texture
+    /// (2 over-smooths; 0 is the plain per-coefficient garrote).
+    static let lumaEnergyRadius: Float = 1
+
     static let scaleCount = 5
 
     /// The Luminance slider / 100.
     var luma: Float
     var lumaPerStrength: [Float]
     var chroma: [Float]
+    var lumaRadius: Float
 
     var isActive: Bool {
         luma > 0 || chroma.contains { $0 > 0 }
@@ -28,17 +35,20 @@ struct DenoiseSettings: Hashable {
     /// Sharpening's separator: noise removed at a fixed number of sigmas per scale, luma and chroma
     /// (sharpening reads Rec. 2020 luminance, which picks up the chroma axes' noise too), so the
     /// detail it boosts is detail, not noise. Chosen by `shp01_calibrate.py`: at 3 sigmas flat
-    /// noise grows under 1% at any Detail, where luma alone let it grow 17-29%.
+    /// noise grows under 1% at any Detail, where luma alone let it grow 17-29%. It keeps the
+    /// per-coefficient garrote that calibration used.
     static let separator = DenoiseSettings(
         luma: 1,
         lumaPerStrength: Array(repeating: 3, count: scaleCount),
         chroma: Array(repeating: 3, count: scaleCount),
+        lumaRadius: 0,
     )
 
-    private init(luma: Float, lumaPerStrength: [Float], chroma: [Float]) {
+    private init(luma: Float, lumaPerStrength: [Float], chroma: [Float], lumaRadius: Float) {
         self.luma = luma
         self.lumaPerStrength = lumaPerStrength
         self.chroma = chroma
+        self.lumaRadius = lumaRadius
     }
 
     init(recipe: EditRecipe) {
@@ -57,6 +67,7 @@ struct DenoiseSettings: Hashable {
         self.chroma = (0 ..< Self.scaleCount).map { scale in
             6 * chroma * (scale < 2 ? 1.4 - 0.8 * chromaDetail : scale >= 3 ? 0.5 + smoothness : 1)
         }
+        lumaRadius = Self.lumaEnergyRadius
     }
 }
 
@@ -308,7 +319,7 @@ final class DetailStage {
         func target() throws -> any MTLTexture {
             remaining -= 1
             guard remaining > 0 else { return texture }
-            let intermediates = try scratchTextures(.rgba16Float, 6, work)
+            let intermediates = try scratchTextures(.rgba16Float, 9, work)
             // Alternate between two intermediates, never the one being read.
             return intermediates[4] === source.texture ? intermediates[5] : intermediates[4]
         }
@@ -409,7 +420,10 @@ final class DetailStage {
         into output: any MTLTexture,
         encoder: any MTLComputeCommandEncoder,
     ) throws {
-        let textures = try scratchTextures(.rgba16Float, 4, work)
+        // 0-3 here, 4-5 the passes' intermediates, 6 masks' amounts, 7 sharpening's separation,
+        // 8 each scale's detail.
+        let textures = try scratchTextures(.rgba16Float, 9, work)
+        let details = textures[8]
         var params = DenoiseParams(
             origin: SIMD4(Int32(work.origin.x), Int32(work.origin.y), Int32(work.level), 0),
             size: SIMD4(Int32(work.size.x), Int32(work.size.y), 0, 0),
@@ -428,6 +442,8 @@ final class DetailStage {
         encoder.setBytes(&params, length: MemoryLayout<DenoiseParams>.stride, index: 0)
         encoder.dispatchGrid(width: work.size.x, height: work.size.y, pipeline: kernels.denoisePrepare)
 
+        // The energy pass costs about 1 ms at 1:1, so it runs only when luma is shrunk at all.
+        let lumaRadius = settings.luma > 0 || local != nil ? settings.lumaRadius : 0
         let sigmas = NoiseCalibration.sigmas(sensor: session.sensor, level: work.level)
         for scale in 0 ..< DenoiseSettings.scaleCount {
             let last = scale == DenoiseSettings.scaleCount - 1
@@ -438,7 +454,7 @@ final class DetailStage {
             )
             // This level's luma noise: its own detail and every coarser one's, in quadrature.
             let levelNoise = sigmas[scale...].map { $0.x * $0.x }.reduce(0, +).squareRoot()
-            params.edge = SIMD4(DenoiseSettings.chromaEdge * levelNoise, 0, 0, 0)
+            params.edge = SIMD4(DenoiseSettings.chromaEdge * levelNoise, lumaRadius, 0, 0)
 
             encoder.setComputePipelineState(kernels.denoiseRows)
             encoder.setTexture(current, index: 0)
@@ -449,13 +465,26 @@ final class DetailStage {
             encoder.setComputePipelineState(kernels.denoiseColumns)
             encoder.setTexture(rows, index: 0)
             encoder.setTexture(current, index: 1)
-            encoder.setTexture(last ? output : next, index: 2)
+            encoder.setTexture(last && lumaRadius == 0 ? output : next, index: 2)
             encoder.setTexture(result, index: 3)
             encoder.setTexture(local ?? output, index: 4)
             encoder.setTexture(session.pyramid, index: 5)
             encoder.setTexture(session.noiseGain, index: 6)
+            encoder.setTexture(details, index: 7)
             encoder.setBytes(&params, length: MemoryLayout<DenoiseParams>.stride, index: 0)
             encoder.dispatchGrid(width: work.size.x, height: work.size.y, pipeline: kernels.denoiseColumns)
+            if lumaRadius > 0 {
+                encoder.setComputePipelineState(kernels.denoiseShrink)
+                encoder.setTexture(details, index: 0)
+                encoder.setTexture(next, index: 1)
+                encoder.setTexture(result, index: 2)
+                encoder.setTexture(output, index: 3)
+                encoder.setTexture(local ?? output, index: 4)
+                encoder.setTexture(session.pyramid, index: 5)
+                encoder.setTexture(session.noiseGain, index: 6)
+                encoder.setBytes(&params, length: MemoryLayout<DenoiseParams>.stride, index: 0)
+                encoder.dispatchGrid(width: work.size.x, height: work.size.y, pipeline: kernels.denoiseShrink)
+            }
             swap(&current, &next)
         }
     }
@@ -504,7 +533,7 @@ final class DetailStage {
         masks: MaskBindings,
         encoder: any MTLComputeCommandEncoder,
     ) throws -> any MTLTexture {
-        let output = try scratchTextures(.rgba16Float, 7, work)[6]
+        let output = try scratchTextures(.rgba16Float, 9, work)[6]
         let aspect = session.orientedSize.aspectRatio
         var layers: [MaskLayerGPU] = []
         var maskComponents = MaskComponentEncoder(aspect: aspect, masks: masks, layers: local.referenced)

@@ -151,7 +151,7 @@ extension DetailStage {
             linear = cached
         } else {
             // The separator denoises from the pyramid, whatever the user's own noise reduction did.
-            let separated = try scratchTextures(.rgba16Float, 8, work)[7]
+            let separated = try scratchTextures(.rgba16Float, 9, work)[7]
             try encodeDenoise(
                 session: session, settings: .separator, work: work, local: nil, into: separated,
                 encoder: passes.encoder,

@@ -111,9 +111,32 @@ kernel void rl_denoise_rows(
     rows.write(half4(half(luma), half2(chroma / max(weights, 1e-6f)), half(weights)), gid);
 }
 
-// Finishes this scale's blur, keeps what of its detail isn't noise, and on the coarsest scale
-// writes the result back in pyramid units. threshold.x is the luma threshold per unit of
+// This scale's luma and chroma thresholds. threshold.x is the luma threshold per unit of
 // Luminance strength, threshold.w that strength; with scale.w set, masks' Noise (local.w) adds to it.
+static inline float3 thresholdsAt(texture2d<float, access::read> local, uint2 gid, constant DenoiseParams &p) {
+    float strength = p.threshold.w + (p.scale.w != 0 ? local.read(gid).w : 0.0f);
+    return float3(p.threshold.x * max(strength, 0.0f), p.threshold.yz);
+}
+
+// Adds this scale's kept detail to the finer scales' (scale.y is 0 after the first), and on the
+// coarsest scale (scale.z) writes the result back in pyramid units.
+static inline void accumulate(float3 kept, float3 coarse, texture2d<half, access::read_write> result,
+                              texture2d<half, access::write> out, texture2d<float, access::read> pyramid,
+                              texture2d<float, access::sample> noiseGain, uint2 gid, constant DenoiseParams &p) {
+    float3 total = kept;
+    if (p.scale.y == 0) total += float3(result.read(gid).rgb);
+    if (p.scale.z != 0) {
+        float3 value = unstabilize(fromOpponent(total + coarse), p.a.xyz, p.b.xyz)
+            * noiseGainAt(noiseGain, pyramid, gid, p);
+        out.write(half4(half3(max(value, 0.0f)), 1.0h), gid);
+    } else {
+        result.write(half4(half3(total), 1.0h), gid);
+    }
+}
+
+// Finishes this scale's blur. With a luma energy radius (edge.y) it leaves the coarser level in
+// `next` and the detail in `details` for rl_denoise_shrink; otherwise it shrinks the detail
+// itself, and `next` is the output on the coarsest scale.
 kernel void rl_denoise_columns(
     texture2d<half, access::read> rows [[texture(0)]],
     texture2d<half, access::read> current [[texture(1)]],
@@ -122,6 +145,7 @@ kernel void rl_denoise_columns(
     texture2d<float, access::read> local [[texture(4)]],
     texture2d<float, access::read> pyramid [[texture(5)]],
     texture2d<float, access::sample> noiseGain [[texture(6)]],
+    texture2d<half, access::write> details [[texture(7)]],
     constant DenoiseParams &p [[buffer(0)]],
     uint2 gid [[thread_position_in_grid]])
 {
@@ -140,16 +164,45 @@ kernel void rl_denoise_columns(
     }
     float3 coarse = float3(luma, chroma / max(weights, 1e-6f));
     float3 detail = here - coarse;
-    float strength = p.threshold.w + (p.scale.w != 0 ? local.read(gid).w : 0.0f);
-    float3 threshold = float3(p.threshold.x * max(strength, 0.0f), p.threshold.yz);
-    float3 total = shrink(detail, threshold);
-    if (p.scale.y == 0) total += float3(result.read(gid).rgb);
-    if (p.scale.z != 0) {
-        float3 value = unstabilize(fromOpponent(total + coarse), p.a.xyz, p.b.xyz)
-            * noiseGainAt(noiseGain, pyramid, gid, p);
-        next.write(half4(half3(max(value, 0.0f)), 1.0h), gid);
-    } else {
-        result.write(half4(half3(total), 1.0h), gid);
+    if (p.edge.y > 0.0f) {
         next.write(half4(half3(coarse), 1.0h), gid);
+        details.write(half4(half3(detail), 1.0h), gid);
+        return;
     }
+    if (p.scale.z == 0) next.write(half4(half3(coarse), 1.0h), gid);
+    accumulate(shrink(detail, thresholdsAt(local, gid, p)), coarse, result, next, pyramid, noiseGain, gid, p);
+}
+
+// Luma shrunk by its neighbourhood's energy (Lee's local statistics, 1980): the garrote with the
+// coefficient's own square replaced by the mean square of the (2r+1)² around it at this scale's
+// spacing, so faint texture beside real texture survives while flat noise still goes.
+kernel void rl_denoise_shrink(
+    texture2d<half, access::read> details [[texture(0)]],
+    texture2d<half, access::read> coarse [[texture(1)]],
+    texture2d<half, access::read_write> result [[texture(2)]],
+    texture2d<half, access::write> out [[texture(3)]],
+    texture2d<float, access::read> local [[texture(4)]],
+    texture2d<float, access::read> pyramid [[texture(5)]],
+    texture2d<float, access::sample> noiseGain [[texture(6)]],
+    constant DenoiseParams &p [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    if (int(gid.x) >= p.size.x || int(gid.y) >= p.size.y) return;
+    float3 detail = float3(details.read(gid).rgb);
+    float3 threshold = thresholdsAt(local, gid, p);
+    float3 kept = shrink(detail, threshold);
+    if (threshold.x > 0.0f) {
+        int radius = int(p.edge.y);
+        float energy = 0.0f;
+        for (int dy = -radius; dy <= radius; dy++) {
+            for (int dx = -radius; dx <= radius; dx++) {
+                int2 at = clamp(int2(gid) + int2(dx, dy) * p.scale.x, int2(0), p.size.xy - 1);
+                float d = float(details.read(uint2(at)).r);
+                energy += d * d;
+            }
+        }
+        energy /= float((2 * radius + 1) * (2 * radius + 1));
+        kept.x = detail.x * max(1.0f - threshold.x * threshold.x / max(energy, 1e-12f), 0.0f);
+    }
+    accumulate(kept, float3(coarse.read(gid).rgb), result, out, pyramid, noiseGain, gid, p);
 }

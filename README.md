@@ -185,7 +185,7 @@ Measured on an Apple M1 Ultra with a Release build.
 | Focus stack of 109 × 4 MP JPEG frames | ~15 s |
 | Reopen a merged focus stack from its cache | ~0.1 s |
 | Detail stage on a 1:1 region (about 10 MP of pyramid texels), GPU time: noise reduction, Texture and Clarity | ~5 ms, ~1 ms |
-| Detail stage for a 2560 × 1600 view at 1:1 of a 24 MP frame, GPU time: noise reduction alone; default sharpening, first render; while dragging Radius; while dragging Amount, Detail, Masking or a noise slider (cached analysis) | ~1.9 ms, ~7.2 ms, ~5.5 ms, ~2.2 ms |
+| Detail stage for a 2560 × 1600 view at 1:1 of a 24 MP frame, GPU time: noise reduction alone (Luminance 50); default sharpening, first render; while dragging Radius; while dragging Amount, Detail or Masking (cached analysis); while dragging Luminance | ~2.7 ms, ~7.2 ms, ~5.5 ms, ~2.2 ms, ~2.8 ms |
 
 Dragging a slider at 120 events a second (`scripts/perf-sweep.sh`), with every panel open:
 
