@@ -27,6 +27,8 @@ public final class SettingsSync {
     }
 
     public private(set) var progress: Progress?
+    /// Auto Sync: each step on the open photo repeats on the rest of the selection.
+    public var isAutoSyncing = false
     /// How the last batch went, when there is something to say ("1 photo was left alone…").
     public private(set) var report: String?
     public var canUndo: Bool {
@@ -41,6 +43,10 @@ public final class SettingsSync {
     @ObservationIgnored private var before: [URL: EditRecipe?] = [:]
     @ObservationIgnored private var written: [URL: EditRecipe] = [:]
     @ObservationIgnored private var title = ""
+    /// Auto Sync's steps that came while a batch ran: gathered, and run after it.
+    @ObservationIgnored private var pending: (
+        source: EditRecipe, selection: SettingsSelection, photos: [URL], done: (URL, EditRecipe) -> Void,
+    )?
 
     init(store: SidecarStore = SidecarStore(), makeEngine: @escaping () -> (any EditingEngine)?) {
         self.store = store
@@ -62,7 +68,22 @@ public final class SettingsSync {
     }
 
     public func cancel() {
+        pending = nil
         task?.cancel()
+    }
+
+    /// One Auto Sync step: what it changed of `source`, onto `photos`; gathered with the steps
+    /// before it while a batch runs.
+    func autoSync(
+        _ source: EditRecipe, _ changes: SettingsSelection, on photos: [URL], done: @escaping (URL, EditRecipe) -> Void,
+    ) {
+        guard !changes.isEmpty, !photos.isEmpty else { return }
+        if progress == nil {
+            run(.paste(source, changes), on: photos, title: "Auto Sync", done: done)
+        } else {
+            let gathered = pending.map { $0.selection.union(changes) } ?? changes
+            pending = (source, gathered, photos, done)
+        }
     }
 
     /// Waits for the batch running, if any.
@@ -154,6 +175,11 @@ public final class SettingsSync {
         }
         report = Self.report(skipped: skipped, failedMasks: failedMasks, cancelled: Task.isCancelled)
         progress = nil
+        if let next = pending {
+            pending = nil
+            run(.paste(next.source, next.selection), on: next.photos, title: "Auto Sync", done: next.done)
+            await task?.value
+        }
     }
 
     /// A history session for a change made without opening the photo.

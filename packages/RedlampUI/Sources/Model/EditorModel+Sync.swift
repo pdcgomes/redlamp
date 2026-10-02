@@ -39,6 +39,18 @@ public extension EditorModel {
         settingsSync.undo(done: written)
     }
 
+    /// ⌥⇧⌘A: Auto Sync on or off.
+    func toggleAutoSync() {
+        settingsSync.isAutoSyncing.toggle()
+    }
+
+    /// With Auto Sync on, what the step just recorded changed goes to the rest of the selection.
+    internal func autoSync(from previous: EditRecipe) {
+        guard settingsSync.isAutoSyncing, isMultiSelecting, info != nil else { return }
+        let changes = SettingsSelection.changes(from: previous, to: recipe)
+        settingsSync.autoSync(recipe, changes, on: otherSelectedPhotos, done: written)
+    }
+
     internal func sync(_ source: EditRecipe, _ selection: SettingsSelection, title: String) {
         saveNow()
         settingsSync.run(.paste(source, selection), on: otherSelectedPhotos, title: title, done: written)

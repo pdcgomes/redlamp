@@ -25,6 +25,10 @@ struct FilmstripView: View {
                     Button("Sync…") { model.chooseSettingsToSync() }
                         .buttonStyle(.link)
                         .help("This photo's settings onto the other selected photos (⇧⌘S)")
+                    Toggle("Auto Sync", isOn: Bindable(model.settingsSync).isAutoSyncing)
+                        .toggleStyle(.checkbox)
+                        .controlSize(.mini)
+                        .help("Every change to this photo repeats on the other selected photos (⌥⇧⌘A)")
                 }
                 if let report = model.settingsSync.report {
                     Text(report)

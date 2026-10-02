@@ -33,6 +33,7 @@ extension ShortcutAction {
         .syncSettings: ["sync", "settings", "selection", "batch", "apply to all"],
         .syncSettingsAgain: ["sync", "settings", "selection", "batch", "last"],
         .undoSync: ["undo", "sync", "revert", "batch"],
+        .toggleAutoSync: ["auto sync", "sync", "live", "selection", "batch"],
         .pasteSettings: ["sync", "settings", "paste edit"],
         .pastePrevious: ["sync", "previous", "last photo"],
         .resetAll: ["reset", "start over", "revert", "original"],
@@ -116,6 +117,7 @@ extension ShortcutAction {
         case .copySettingsAgain: "doc.on.doc.fill"
         case .syncSettings, .syncSettingsAgain: "arrow.triangle.2.circlepath"
         case .undoSync: "arrow.uturn.backward"
+        case .toggleAutoSync: "arrow.triangle.2.circlepath.circle"
         case .selectAllPhotos: "checklist.checked"
         case .deselectOtherPhotos: "checklist.unchecked"
         case .pasteSettings: "doc.on.clipboard"

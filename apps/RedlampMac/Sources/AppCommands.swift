@@ -46,6 +46,7 @@ struct AppCommands: Commands {
             item(.syncSettings)
             item(.syncSettingsAgain)
             item(.undoSync)
+            item(.toggleAutoSync)
             Divider()
             item(.autoTone)
             item(.autoWhiteBalance)

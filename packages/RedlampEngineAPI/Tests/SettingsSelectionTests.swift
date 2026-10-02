@@ -85,6 +85,27 @@ struct SettingsSelectionTests {
         #expect(target.pasting(source, .default).masks.count == MaskLayer.maximumLayers)
     }
 
+    /// Auto Sync carries what one step changed: here exposure and a new mask, nothing else.
+    @Test func `the changes of a step are a selection`() {
+        var old = EditRecipe()
+        old[.contrast] = 20
+        let kept = MaskLayer(name: "Kept", components: [])
+        old.masks = [kept]
+        var new = old
+        new[.exposure] = 1
+        let added = MaskLayer(name: "Added", components: [])
+        new.masks.append(added)
+        let changes = SettingsSelection.changes(from: old, to: new)
+        #expect(changes.items == ["basic.exposure"])
+        #expect(changes.includes(mask: added.id) && !changes.includes(mask: kept.id))
+        #expect(SettingsSelection.changes(from: new, to: new).isEmpty)
+        var curve = new
+        curve.pointCurve = [CurvePoint(x: 0, y: 0.2), CurvePoint(x: 1, y: 1)]
+        #expect(SettingsSelection.changes(from: new, to: curve).items == ["toneCurve.point"])
+        let both = changes.union(SettingsSelection.changes(from: new, to: curve))
+        #expect(both.items == ["basic.exposure", "toneCurve.point"] && both.includes(mask: added.id))
+    }
+
     @Test func `the remembered choice forgets which masks were left out`() throws {
         var selection = SettingsSelection.default
         selection.excludedMasks = [UUID()]

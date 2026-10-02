@@ -95,4 +95,34 @@ struct SettingsSyncTests {
         #expect(model.history.last?.name == "Paste Settings")
         #expect(SidecarStore().load(for: photos[1])?.recipe[.exposure] == 2, "B, in the background")
     }
+
+    /// With Auto Sync on, each step carries only what it changed: B keeps its own clarity.
+    @Test func `auto sync repeats each change on the rest of the selection`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let photos = ["A", "B"].map { folder.appending(path: "\($0).ARW") }
+        var own = EditRecipe()
+        own[.clarity] = 10
+        try SidecarStore().save(Sidecar(recipe: own), for: photos[1])
+        let model = EditorModel(engine: StubEngine())
+        photos.forEach { model.library.insert(LibraryItem(url: $0)) }
+        try await open(model, photos[0])
+        model.selectAllPhotos()
+        model.setValue(.exposure, 1)
+        await model.settingsSync.idle()
+        #expect(SidecarStore().load(for: photos[1])?.recipe[.exposure] == 0, "off: nothing synced")
+
+        model.toggleAutoSync()
+        defer { model.toggleAutoSync() }
+        model.setValue(.exposure, 0.5)
+        model.setValue(.contrast, 20)
+        model.setValue(.vibrance, 15)
+        await model.settingsSync.idle()
+        let synced = try #require(SidecarStore().load(for: photos[1])?.recipe)
+        #expect(synced[.exposure] == 0.5 && synced[.contrast] == 20 && synced[.vibrance] == 15)
+        #expect(synced[.clarity] == 10, "only what the steps changed")
+        let titles = SidecarStore().loadHistory(for: photos[1]).flatMap(\.steps).map(\.title)
+        #expect(titles.contains("Auto Sync"))
+    }
 }

@@ -184,6 +184,36 @@ public struct SettingsSelection: Codable, Sendable, Hashable {
     public var remembered: SettingsSelection {
         SettingsSelection(items: items, masks: masks)
     }
+
+    public var isEmpty: Bool {
+        items.isEmpty && !masks
+    }
+
+    /// What changed from `old` to `new` (one history step, for Auto Sync): the items with a
+    /// parameter or field that differs, and the masks added or changed. Masks taken away aren't:
+    /// a paste only adds and replaces.
+    public static func changes(from old: EditRecipe, to new: EditRecipe) -> SettingsSelection {
+        let items = SettingsGroup.allItems.filter { item in
+            item.parameters.contains { old[$0] != new[$0] } || item.fields.contains { !old.matches(new, in: $0) }
+        }
+        let changed = Set(new.masks.filter { old.mask($0.id) != $0 }.map(\.id))
+        return SettingsSelection(
+            items: Set(items.map(\.id)), masks: !changed.isEmpty,
+            excludedMasks: changed.isEmpty ? [] : Set(new.masks.map(\.id)).subtracting(changed),
+        )
+    }
+
+    /// Both selections: Auto Sync's steps, gathered while a sync runs.
+    public func union(_ other: SettingsSelection) -> SettingsSelection {
+        let masks = masks || other.masks
+        let excluded = switch (self.masks, other.masks) {
+        case (true, true): excludedMasks.intersection(other.excludedMasks)
+        case (true, false): excludedMasks
+        case (false, true): other.excludedMasks
+        case (false, false): Set<UUID>()
+        }
+        return SettingsSelection(items: items.union(other.items), masks: masks, excludedMasks: excluded)
+    }
 }
 
 /// Settings copied from a photo: the clipboard of Copy Settings and Paste.
@@ -229,6 +259,19 @@ public extension EditRecipe {
     /// The masks a paste of `selection` from `source` brings.
     static func pastedMasks(from source: EditRecipe, _ selection: SettingsSelection) -> Set<UUID> {
         Set(source.masks.map(\.id).filter(selection.includes(mask:)))
+    }
+
+    /// Whether `field` is the same in both edits.
+    func matches(_ other: EditRecipe, in field: EditField) -> Bool {
+        switch field {
+        case .treatment: treatment == other.treatment
+        case .baseLook: baseLook == other.baseLook && appliedRecipe == other.appliedRecipe
+        case .whiteBalanceMode: whiteBalanceMode == other.whiteBalanceMode
+        case .pointCurve: pointCurve == other.pointCurve
+        case .crop: crop == other.crop
+        case .orientation: orientation == other.orientation
+        case .processVersion: processVersion == other.processVersion
+        }
     }
 
     private mutating func take(_ field: EditField, from source: EditRecipe) {

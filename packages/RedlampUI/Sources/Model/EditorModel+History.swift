@@ -54,6 +54,13 @@ extension EditorModel {
     ) {
         let after = value?(recipe)
         let before = previous.flatMap { value?($0) }
+        let prior = history.indices.contains(historyIndex) ? history[historyIndex].recipe : previous
+        defer {
+            // A paste reaches the selection itself.
+            if action != .paste, let prior {
+                autoSync(from: prior)
+            }
+        }
         if historyIndex < history.count - 1 {
             history.removeSubrange((historyIndex + 1)...)
         }
