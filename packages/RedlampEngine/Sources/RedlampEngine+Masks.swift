@@ -213,6 +213,10 @@ extension RedlampEngine {
             let segmenter = try await objectSegmenter()
             let embedding = try await objectEmbedding(analysis, segmenter: segmenter)
             let image = analysis.image
+            // Edges solved per pixel at the size masks are stored at (the hover preview keeps the
+            // model's, to stay instant). REDLAMP_EDGE_MATTE=off keeps the guided filter's.
+            let full = ProcessInfo.processInfo.environment["REDLAMP_EDGE_MATTE"] == "off"
+                ? nil : try? await matteImage(for: session)
             let mask = try await Task.detached(priority: .userInitiated) {
                 let raw = try segmenter.mask(
                     embedding,
@@ -220,13 +224,15 @@ extension RedlampEngine {
                     excluded: request.excluded,
                     size: size,
                 )
-                return GuidedFilter.refine(raw, guide: image, radius: 4, epsilon: 1e-3)
+                guard let full else { return GuidedFilter.refine(raw, guide: image, radius: 4, epsilon: 1e-3) }
+                return ClosedFormMatte.refine(raw, image: full)
             }.value
             guard mask.coveredFraction > 0.0005, let bitmap = mask.bitmap() else {
                 throw MaskComputationError.nothingFound(.objects)
             }
             return [AIMask(
-                kind: .objects, provider: segmenter.manifest.provider, revision: segmenter.manifest.version,
+                kind: .objects, provider: segmenter.manifest.provider + (full == nil ? "" : "+closed-form"),
+                revision: segmenter.manifest.version,
                 prompts: request.prompts, excludedPrompts: request.excluded.isEmpty ? nil : request.excluded,
                 analysisHash: analysis.hash, center: request.prompts.first ?? mask.centroid, bitmap: bitmap,
             )]

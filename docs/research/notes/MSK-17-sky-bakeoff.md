@@ -142,6 +142,8 @@ It brings back beard curls and the curls at the side of a head, and it sharpens 
 
 **Cost:** 0.3–1.2 s for a 2048 px photo; on a 4096 px render with a large uncertain area (the dancer, 3 million uncertain pixels), 2.9 s on top of Vision's 0.75 s. It runs once per mask. `REDLAMP_EDGE_MATTE=off` keeps Vision's edges, to compare.
 
+**Objects too.** Segment Anything's selections (256 × 256 logits, then the same guided filter) go through `ClosedFormMatte` as well; the hover preview keeps the model's edges, to stay instant. On four selections from the same stills (a bicycle, a helmet with its visor, a woman with her hair, a toy figure), against ViTMatte given the widest trimap: 0.165 to 0.120, every one better, for 0.2–0.6 s more per selection. The same 0.6% inward band is best (1.5% scores 0.154, 3% 0.180). Its limit is the model's region: Segment Anything fills a bicycle wheel as a disc, and since the disc's middle is sure, no matting opens the spokes up (the reference doesn't either). A mask sure of nothing on one side (a thin object Segment Anything is never confident of) is left as it is.
+
 **A missed head.** In the low-key portrait, Vision's person segmentation left out the man's head entirely, while its Subject mask had it. People masks are now checked against detected faces: a face mostly outside every person mask gets the part of the Subject mask connected to it, added to the person it overlaps most.
 
 **Licences and patents.** Both papers' methods are ours to implement, but closed-form matting and the window-sum solve may be patented; they are added to the freedom-to-operate search with the guided filter (DEC-05).
@@ -150,7 +152,7 @@ It brings back beard curls and the curls at the side of a head, and it sharpens 
 
 - **Sky ships as SAM 2.1 refined between branches, then `SkyMatte`** when SAM's model is on the Mac, with the classical estimate (also through `SkyMatte`) as the fallback. An embedded sky matte, when the file has one, wins over both.
 - **Depth Anything 3 is an evaluation model** (Settings › Models, with evaluation models turned on), behind the same gate as SAM 2.1. With it installed, Sky arbitrates between both models before `SkyMatte` (band error 0.050 on the edge benchmark). It is not published: its manifest is marked `published: false`, so the app won't download it, and the licence gate refuses to clear it. Before it can be cleared it needs a training-data audit ("public academic datasets", unaudited) by counsel, with DEC-02, and a hosted copy of the converted package.
-- **Subject, Background and People ship through `ClosedFormMatte`** (error around the edge 0.085 to 0.067 against ViTMatte on four portraits), with missed heads filled in from the Subject mask. Embedded iPhone mattes and face parts are left as they are. Pending DEC-05.
+- **Subject, Background, People and Objects ship through `ClosedFormMatte`** (error around the edge 0.085 to 0.067 against ViTMatte on four portraits, 0.165 to 0.120 on four object selections), with missed heads filled in from the Subject mask. Embedded iPhone mattes and face parts are left as they are. Pending DEC-05.
 - **No Sky head training (MSK-12) for now.** Revisit it if hand-labelled scores show tree lines and hair need better than SAM's edges.
 - **Landscape classes and people parts still need a trained head (MSK-13).** Unlike sky, there is no classical estimate to seed SAM with for water, vegetation or skin. Every open model that knows those classes (OneFormer, Mask2Former, SegFormer) is trained on non-commercial data.
 

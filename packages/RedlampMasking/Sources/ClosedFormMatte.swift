@@ -287,7 +287,9 @@ public enum ClosedFormMatte {
             return trimap[index] == 0.5 && x > 0 && y > 0 && x < width - 1 && y < height - 1
         }
         let unknown = unknownMask.indices.filter { unknownMask[$0] }.map { Int32($0) }
-        guard !unknown.isEmpty else { return trimap.map { $0 == 0.5 ? 0.5 : $0 } }
+        // With nothing sure on one side (a thin object Segment Anything is never sure of) there
+        // is nothing to solve against: the coarse mask stays.
+        guard !unknown.isEmpty, trimap.contains(1), trimap.contains(0) else { return initial }
         let laplacian = Laplacian(image: image, unknown: unknownMask, width: width, height: height, epsilon: epsilon)
         let n = unknown.count
         let windows = laplacian.centres.count

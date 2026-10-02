@@ -46,6 +46,18 @@ struct ClosedFormMatteTests {
         #expect(matte[20, 100] == 255 && matte[380, 100] == 0, "sure pixels stay")
     }
 
+    /// A coarse mask that is nowhere sure (a thin object Segment Anything is never confident of)
+    /// has nothing to solve against, and stays as it was.
+    @Test func `a mask sure of nothing stays as it was`() throws {
+        let width = 200
+        let height = 100
+        let photo = try image(width: width, height: height) { x, _ in x < 100 ? Self.hair : Self.wall }
+        let coarse = GrayMask(width: width, height: height, coverage: (0 ..< width * height).map { index in
+            index % width < 100 ? 0.6 : 0.3
+        })
+        #expect(ClosedFormMatte.refine(coarse, image: photo) == coarse)
+    }
+
     /// A dark head with a one-pixel strand reaching out over the wall, which the coarse mask
     /// doesn't have: the strand joins the subject; the wall beside it doesn't.
     @Test func `a strand the coarse mask missed comes back`() throws {
