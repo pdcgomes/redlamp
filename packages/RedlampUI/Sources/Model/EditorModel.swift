@@ -404,6 +404,7 @@ public final class EditorModel {
             previousSelection = selection
         }
         selection = url
+        library.remember(url)
         // Cleared first so the resets below don't render the outgoing photo; a ready photo
         // sets it again before the UI updates.
         info = nil

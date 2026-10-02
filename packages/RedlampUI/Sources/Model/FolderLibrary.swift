@@ -23,16 +23,28 @@ public struct LibraryDiff: Sendable, Equatable {
     }
 }
 
-/// The photos of the open folder, and how they got there.
+/// The working set of folders, and the photos of the one that's open.
 ///
-/// Listing reads no sidecars: photos arrive from the directory listing alone, and the badges of
-/// those with a sidecar follow from light probes of their `edit.json`, run in parallel, visible
-/// photos first. `items` isn't observed (a badge mustn't re-render SwiftUI views); views observe
-/// `count`, `revision` or `openFolder`, and the filmstrip applies `LibraryDiff`s row by row.
+/// - Roots are the folders the user added (see `FolderLibrary+WorkingSet`), remembered by bookmark.
+/// - Opening a folder lists it without reading sidecars; with Show Photos in Subfolders, every
+///   folder beneath it is listed in parallel and streamed in in order. The badges of photos with a
+///   sidecar follow from light probes of their `edit.json`, visible photos first.
+/// - `items` isn't observed (a badge mustn't re-render SwiftUI views); views observe `count`,
+///   `revision` or `openFolder`, and the filmstrip applies `LibraryDiff`s row by row.
 @MainActor
 @Observable
 public final class FolderLibrary {
-    public private(set) var openFolder: URL?
+    /// The folders the user added, in the order they were added.
+    public internal(set) var roots: [WorkingFolder] = []
+    /// Roots that can't be found now (deleted, or on a volume that isn't mounted).
+    public internal(set) var missing: Set<UUID> = []
+    public internal(set) var openFolder: URL?
+    /// Show Photos in Subfolders.
+    public internal(set) var includesSubfolders = false
+    /// The folder tree's expanded rows (paths).
+    public internal(set) var expandedFolders: Set<String> = []
+    /// The open folder can't be listed (its volume went away).
+    public private(set) var isOpenFolderUnavailable = false
     /// The number of photos shown.
     public private(set) var count = 0
     /// Bumped by every change to `items`.
@@ -41,16 +53,28 @@ public final class FolderLibrary {
     @ObservationIgnored public private(set) var items: [LibraryItem] = []
     @ObservationIgnored private var positions: [URL: Int] = [:]
     @ObservationIgnored let scheduler: WorkScheduler
+    @ObservationIgnored let defaults: UserDefaults?
     @ObservationIgnored private let store = SidecarStore()
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var observers: [UUID: @MainActor (LibraryDiff) -> Void] = [:]
+    /// The first rows of probe batches still waiting, for `prioritize`.
+    @ObservationIgnored private var probeStarts: Set<Int> = []
+    @ObservationIgnored private var probedGeneration = 0
+    /// The last photo shown in each folder (paths), most recent last.
+    @ObservationIgnored var lastPhotos: [String: String] = [:]
+    @ObservationIgnored var lastPhotoOrder: [String] = []
+    /// Roots whose access was started (security-scoped once sandboxed).
+    @ObservationIgnored var accessing: Set<String> = []
 
     /// Photos per probe job: big enough that scheduling is noise, small enough that the visible
     /// ones' badges come first.
     static let probeBatch = 32
 
-    public init(scheduler: WorkScheduler = .shared) {
+    /// `defaults` keeps the working set across launches; nil keeps it in memory only.
+    public init(scheduler: WorkScheduler = .shared, defaults: UserDefaults? = nil) {
         self.scheduler = scheduler
+        self.defaults = defaults
+        loadSettings()
     }
 
     // MARK: - Reading
@@ -72,22 +96,57 @@ public final class FolderLibrary {
 
     // MARK: - Opening
 
-    /// Lists `folder` and shows its photos, then calls `opened` with them (once, unless another
-    /// folder opens first).
-    func open(_ folder: URL, opened: @escaping @MainActor ([LibraryItem]) -> Void = { _ in }) {
+    /// Lists `folder` (and, with Show Photos in Subfolders, every folder beneath it) and shows its
+    /// photos, then calls `opened` with them once the first ones are in (once, unless another
+    /// folder opens first). `nil` closes the open folder.
+    func open(_ folder: URL?, opened: @escaping @MainActor ([LibraryItem]) -> Void = { _ in }) {
         generation += 1
         let generation = generation
         scheduler.cancel(prefix: probeKeyPrefix(generation - 1))
         openFolder = folder
+        isOpenFolderUnavailable = false
         replace(with: [])
+        saveSettings()
+        guard let folder else { return }
+        let includesSubfolders = includesSubfolders
         Task {
-            let found = try? await scheduler.run(.onScreen) {
-                try FolderScanner.list(folder).photos.map(LibraryItem.init)
+            if includesSubfolders {
+                var announced = false
+                var listed = false
+                for await listing in FolderScanner.walk(folder, scheduler: scheduler) {
+                    guard self.generation == generation else { return }
+                    listed = true
+                    append(listing.photos.map(LibraryItem.init))
+                    if !announced, !items.isEmpty {
+                        announced = true
+                        opened(items)
+                    }
+                }
+                guard self.generation == generation else { return }
+                isOpenFolderUnavailable = !listed
+                if !announced {
+                    opened(items)
+                }
+            } else {
+                let found = try? await scheduler.run(.onScreen) {
+                    try FolderScanner.list(folder).photos.map(LibraryItem.init)
+                }
+                guard self.generation == generation else { return }
+                isOpenFolderUnavailable = found == nil
+                replace(with: found ?? [])
+                probeSidecars(in: 0 ..< items.count, generation: generation)
+                opened(items)
             }
-            guard self.generation == generation else { return }
-            replace(with: found ?? [])
-            probeSidecars(generation: generation)
-            opened(items)
+        }
+    }
+
+    /// Shows or hides the photos of the open folder's subfolders.
+    func setIncludesSubfolders(_ include: Bool, opened: @escaping @MainActor ([LibraryItem]) -> Void = { _ in }) {
+        guard include != includesSubfolders else { return }
+        includesSubfolders = include
+        saveSettings()
+        if let openFolder {
+            open(openFolder, opened: opened)
         }
     }
 
@@ -95,6 +154,16 @@ public final class FolderLibrary {
         self.items = items
         positions = Dictionary(items.enumerated().map { ($1.url, $0) }) { first, _ in first }
         publish(LibraryDiff(reset: true))
+    }
+
+    /// Adds photos after the last (a subfolder's, in walk order).
+    private func append(_ new: [LibraryItem]) {
+        guard !new.isEmpty else { return }
+        let start = items.count
+        items += new
+        reindex(from: start)
+        publish(LibraryDiff(inserted: IndexSet(integersIn: start ..< items.count)))
+        probeSidecars(in: start ..< items.count, generation: generation)
     }
 
     /// Adds a photo in name order (a stack document just saved).
@@ -136,16 +205,23 @@ public final class FolderLibrary {
         "probe:\(generation):"
     }
 
-    /// Reads the badges of every photo with a local sidecar, a batch per job, in order.
-    private func probeSidecars(generation: Int) {
+    /// Reads the badges of the photos in `rows` with a local sidecar, a batch per job, in order.
+    /// A batch is keyed by its first row, so `prioritize` can find the visible ones.
+    private func probeSidecars(in rows: Range<Int>, generation: Int) {
         let store = store
-        for start in stride(from: 0, to: items.count, by: Self.probeBatch) {
-            let urls = items[start ..< min(start + Self.probeBatch, items.count)].filter(\.needsSummary).map(\.url)
+        if generation != probedGeneration {
+            probedGeneration = generation
+            probeStarts = []
+        }
+        for start in stride(from: rows.lowerBound, to: rows.upperBound, by: Self.probeBatch) {
+            let urls = items[start ..< min(start + Self.probeBatch, rows.upperBound)].filter(\.needsSummary).map(\.url)
             guard !urls.isEmpty else { continue }
-            scheduler.submit(.lookAhead, key: probeKeyPrefix(generation) + "\(start / Self.probeBatch)") {
+            probeStarts.insert(start)
+            scheduler.submit(.lookAhead, key: probeKeyPrefix(generation) + "\(start)") {
                 let summaries = urls.map { ($0, store.summary(for: $0)) }
                 Task { @MainActor [weak self] in
                     guard let self, self.generation == generation else { return }
+                    probeStarts.remove(start)
                     apply(summaries)
                 }
             }
@@ -171,10 +247,11 @@ public final class FolderLibrary {
 
     /// Reads the badges of these rows before any others still waiting.
     public func prioritize(_ rows: Range<Int>) {
-        guard !rows.isEmpty else { return }
+        guard !rows.isEmpty, probedGeneration == generation else { return }
         let prefix = probeKeyPrefix(generation)
-        for batch in rows.lowerBound / Self.probeBatch ... (rows.upperBound - 1) / Self.probeBatch {
-            scheduler.promote(prefix + "\(batch)", to: .onScreen)
+        for start in max(rows.lowerBound - Self.probeBatch + 1, 0) ..< rows.upperBound
+            where probeStarts.contains(start) {
+            scheduler.promote(prefix + "\(start)", to: .onScreen)
         }
     }
 }

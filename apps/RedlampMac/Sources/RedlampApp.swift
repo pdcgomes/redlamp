@@ -24,10 +24,7 @@ struct RedlampApp: App {
         } catch {
             fatalError("Redlamp needs a Metal GPU: \(error.localizedDescription)")
         }
-        let model = EditorModel(engine: engine)
-        model.onFolderChange = { url in
-            UserDefaults.standard.set(url.path, forKey: "lastFolder")
-        }
+        let model = EditorModel(engine: engine, library: FolderLibrary(defaults: .standard))
         if let layout = UserDefaults.standard.string(forKey: "compareLayout").flatMap(CompareLayout.init) {
             model.compareLayout = layout
         }
@@ -94,25 +91,27 @@ struct RedlampApp: App {
     }
 
     /// Opens paths passed on the command line (`mise run run -- <folder>`), otherwise the
-    /// folder from the previous session.
+    /// working set and the folder from the previous session.
     private static func openInitialFolder(model: EditorModel) {
         let arguments = LaunchArguments.all.dropFirst().prefix { !$0.hasPrefix("-") }
-        let paths = arguments.isEmpty
-            ? [UserDefaults.standard.string(forKey: "lastFolder")].compactMap(\.self)
-            : Array(arguments)
-        let urls = paths.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) }
+        guard !arguments.isEmpty else {
+            model.restoreLibrary()
+            return
+        }
+        let urls = arguments.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) }
         if !urls.isEmpty {
             model.open(urls)
         }
     }
 
+    /// File › Open (⌘O): folders join the working set; photos add their folder and open.
     private static func openPanel(model: EditorModel) {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = true
-        panel.prompt = "Open"
-        panel.message = "Choose a folder of photos, or individual images."
+        panel.prompt = "Add"
+        panel.message = "Choose folders of photos to add to Folders, or individual photos."
         if panel.runModal() == .OK {
             model.open(panel.urls)
         }
