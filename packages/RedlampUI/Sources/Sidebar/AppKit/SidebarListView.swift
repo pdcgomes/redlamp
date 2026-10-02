@@ -13,6 +13,7 @@ import RedlampRecipes
 final class SidebarListView: PanelColumnScrollView, NSSearchFieldDelegate {
     private let model: EditorModel
     private let searchField: NSSearchField
+    let folders: FolderOutlineView
     let recipes: SidebarOutlineView
     let snapshots: SidebarOutlineView
     let history: SidebarOutlineView
@@ -30,12 +31,17 @@ final class SidebarListView: PanelColumnScrollView, NSSearchFieldDelegate {
     init(model: EditorModel) {
         self.model = model
         let searchField = NSSearchField()
+        let folders = FolderOutlineView(model: model)
         let recipes = SidebarOutlineView(model: model)
         let snapshots = SidebarOutlineView(model: model)
         let history = SidebarOutlineView(model: model)
+        let addFolder = Self.headerButton("plus", help: "Add Folder…") { FolderActions.add(model: model) }
         let createSnapshot = Self.headerButton("plus", help: "Create Snapshot (⌘N)") { model.createSnapshot() }
         let clearHistory = Self.headerButton("xmark", help: "Clear History") { model.clearHistory() }
         let panels: [SidebarSection: PanelSectionView] = [
+            .folders: PanelSectionView(
+                section: .folders, model: model, accessory: addFolder, insets: Self.listInsets, rows: [folders],
+            ),
             .recipes: PanelSectionView(
                 section: .recipes, model: model, accessory: Self.recipesButton(model: model), insets: Self.listInsets,
                 rows: [SearchFieldRow(field: searchField), recipes],
@@ -49,13 +55,14 @@ final class SidebarListView: PanelColumnScrollView, NSSearchFieldDelegate {
             ),
         ]
         self.searchField = searchField
+        self.folders = folders
         self.recipes = recipes
         self.snapshots = snapshots
         self.history = history
         self.createSnapshot = createSnapshot
         self.clearHistory = clearHistory
         self.panels = panels
-        super.init(views: [SidebarSection.recipes, .snapshots, .history].compactMap { panels[$0] })
+        super.init(views: [SidebarSection.folders, .recipes, .snapshots, .history].compactMap { panels[$0] })
 
         searchField.placeholderString = "Search recipes"
         searchField.controlSize = .small

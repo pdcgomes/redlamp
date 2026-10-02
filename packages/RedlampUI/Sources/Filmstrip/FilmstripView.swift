@@ -11,7 +11,7 @@ struct FilmstripView: View {
                 if let folder = model.folder {
                     Label(folder.lastPathComponent, systemImage: "folder")
                 }
-                Text("\(model.library.count) photos")
+                Text("\(model.library.count) photos\(model.library.includesSubfolders ? ", with subfolders" : "")")
                     .foregroundStyle(Theme.tertiaryLabel)
                 if let suggestion = model.stackSuggestions.first {
                     StackSuggestionBanner(suggestion: suggestion)
@@ -34,8 +34,19 @@ struct FilmstripView: View {
             .frame(height: 22)
             .padding(.top, 6)
 
-            FilmstripStripHost(model: model)
+            if model.library.isOpenFolderUnavailable {
+                Label(
+                    "This folder isn't available. Is its disk connected?",
+                    systemImage: "externaldrive.badge.questionmark",
+                )
+                .font(Theme.captionFont)
+                .foregroundStyle(Theme.secondaryLabel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .frame(height: FilmstripStripView.height)
+            } else {
+                FilmstripStripHost(model: model)
+                    .frame(height: FilmstripStripView.height)
+            }
         }
         .frame(height: 110)
     }

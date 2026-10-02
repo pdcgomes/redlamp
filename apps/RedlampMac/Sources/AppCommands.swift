@@ -86,6 +86,11 @@ struct AppCommands: Commands {
             }
             item(.zoomIn)
             item(.zoomOut)
+            Toggle("Show Photos in Subfolders", isOn: Binding(
+                get: { model.library.includesSubfolders },
+                set: { model.setIncludesSubfolders($0) },
+            ))
+            .disabled(model.folder == nil || model.isModalDialogOpen)
             Menu("Develop Panels") {
                 ForEach(ShortcutAction.allCases.filter { $0.category == .panels && $0.isMenuShortcut }) { item($0) }
             }

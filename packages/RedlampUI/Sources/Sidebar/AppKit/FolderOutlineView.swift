@@ -1,0 +1,154 @@
+import AppKit
+import RedlampDesign
+import RedlampDocument
+
+/// The Folders panel's tree: the roots, and the subfolders of each folder that's open.
+///
+/// Its rows come straight from the library's tree as the outline view asks for them, one node per
+/// folder kept for the list's life, so a folder with thousands of subfolders costs a screenful:
+/// only rows on screen get views, and only folders on screen are listed. A listing that changes a
+/// folder's count or subfolders reloads that row alone; only the roots changing reloads the list.
+final class FolderOutlineView: SidebarOutlineView {
+    private var rootNodes: [SidebarNode] = []
+    private var nodes: [String: SidebarNode] = [:]
+    private var placeholder = SidebarNode(.placeholder("Add a folder of photos with +"))
+    private var structure: Tracker?
+    private var openTracker: Tracker?
+    private var treeObservation: LibraryObservation?
+    private var openPath: String?
+
+    private var library: FolderLibrary {
+        model.library
+    }
+
+    override init(model: EditorModel) {
+        super.init(model: model)
+        expansionChanged = { [weak self] node, expanded in
+            guard let self, !isReloading, case let .folder(row) = node.kind else { return }
+            library.setExpanded(row.url, expanded)
+        }
+    }
+
+    override func track() {
+        structure = Tracker { [weak self] in
+            guard let self else { return }
+            let roots = library.roots
+            let missing = library.missing
+            showRoots(roots, missing: missing)
+        }
+        openTracker = Tracker { [weak self] in
+            guard let self else { return }
+            setOpen(library.openFolder)
+        }
+        treeObservation = library.observeTree { [weak self] paths in self?.treeChanged(paths) }
+    }
+
+    override func stopTracking() {
+        structure?.cancel()
+        openTracker?.cancel()
+        structure = nil
+        openTracker = nil
+        treeObservation = nil
+    }
+
+    // MARK: - Rows
+
+    private func row(for url: URL, root: WorkingFolder, missing: Bool) -> FolderRow {
+        let listed = missing ? nil : library.node(for: url)
+        let path = url.standardizedFileURL.path
+        return FolderRow(
+            url: url, name: path == root.path ? root.name : url.lastPathComponent, root: root, count: listed?.count,
+            hasSubfolders: !(listed?.subfolders.isEmpty ?? true), isMissing: missing, isOpen: path == openPath,
+        )
+    }
+
+    /// The folder's node, kept across reloads so the outline view keeps its place and expansion.
+    private func node(for url: URL, root: WorkingFolder, missing: Bool = false) -> SidebarNode {
+        let path = url.standardizedFileURL.path
+        let row = row(for: url, root: root, missing: missing)
+        if let node = nodes[path] {
+            node.kind = .folder(row)
+            return node
+        }
+        let node = SidebarNode(.folder(row))
+        nodes[path] = node
+        return node
+    }
+
+    private func showRoots(_ roots: [WorkingFolder], missing: Set<UUID>) {
+        rootNodes = roots.map { node(for: $0.url, root: $0, missing: missing.contains($0.id)) }
+        isReloading = true
+        reloadData()
+        expandRemembered(rootNodes)
+        isReloading = false
+        invalidateColumnLayout()
+    }
+
+    /// Opens the rows that were open, as their subfolders become known.
+    private func expandRemembered(_ items: [SidebarNode]) {
+        for item in items {
+            guard case let .folder(row) = item.kind, row.hasSubfolders, library.isExpanded(row.url) else { continue }
+            if !isItemExpanded(item) {
+                expandItem(item)
+            }
+            expandRemembered(children(of: item))
+        }
+    }
+
+    private func children(of item: SidebarNode) -> [SidebarNode] {
+        (0 ..< outlineView(self, numberOfChildrenOfItem: item)).compactMap {
+            outlineView(self, child: $0, ofItem: item) as? SidebarNode
+        }
+    }
+
+    /// Folders listed again: their rows (and, when open, their subfolders) reload, nothing else.
+    private func treeChanged(_ paths: Set<String>) {
+        isReloading = true
+        for path in paths {
+            guard let item = nodes[path], case let .folder(old) = item.kind, row(forItem: item) >= 0 else { continue }
+            let updated = row(for: old.url, root: old.root, missing: old.isMissing)
+            item.kind = .folder(updated)
+            if isItemExpanded(item) {
+                reloadItem(item, reloadChildren: true)
+                expandRemembered(children(of: item))
+            } else {
+                reloadItem(item)
+                expandRemembered([item])
+            }
+        }
+        isReloading = false
+        invalidateColumnLayout()
+    }
+
+    private func setOpen(_ folder: URL?) {
+        let previous = openPath
+        openPath = folder?.standardizedFileURL.path
+        for path in [previous, openPath].compactMap(\.self) {
+            guard let item = nodes[path], case let .folder(row) = item.kind else { continue }
+            item.kind = .folder(self.row(for: row.url, root: row.root, missing: row.isMissing))
+            if self.row(forItem: item) >= 0 {
+                reloadItem(item)
+            }
+        }
+    }
+
+    // MARK: - Data source
+
+    override func outlineView(_: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
+        guard let item = item as? SidebarNode else { return max(rootNodes.count, 1) }
+        guard case let .folder(row) = item.kind, !row.isMissing else { return 0 }
+        return library.node(for: row.url)?.subfolders.count ?? 0
+    }
+
+    override func outlineView(_: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
+        guard let item = item as? SidebarNode else { return rootNodes.isEmpty ? placeholder : rootNodes[index] }
+        guard case let .folder(row) = item.kind, let subfolders = library.node(for: row.url)?.subfolders,
+              subfolders.indices.contains(index) else { return placeholder }
+        return node(for: subfolders[index], root: row.root)
+    }
+
+    override func outlineView(_: NSOutlineView, isItemExpandable item: Any) -> Bool {
+        guard let item = item as? SidebarNode, case let .folder(row) = item.kind else { return false }
+        return row.hasSubfolders
+    }
+}

@@ -185,7 +185,7 @@ public enum PanelID: String, CaseIterable, Identifiable, Sendable {
 
 /// The left column's panels, top to bottom.
 public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
-    case navigator, recipes, snapshots, history
+    case navigator, folders, recipes, snapshots, history
 
     public var id: String {
         rawValue
@@ -194,6 +194,7 @@ public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
     public var title: String {
         switch self {
         case .navigator: "Navigator"
+        case .folders: "Folders"
         case .recipes: "Recipes"
         case .snapshots: "Snapshots"
         case .history: "History"
@@ -204,6 +205,7 @@ public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
     public var symbol: String {
         switch self {
         case .navigator: "map"
+        case .folders: "folder"
         case .recipes: "wand.and.stars"
         case .snapshots: "camera"
         case .history: "clock.arrow.circlepath"

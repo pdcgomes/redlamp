@@ -17,9 +17,12 @@ final class SidebarNode: NSObject {
         case session(HistorySession)
         /// A step of an earlier session: choosing it brings its edit back as a new step.
         case earlierStep(HistoryStep, session: HistorySession)
+        /// A folder of the working set, its subfolders inside.
+        case folder(FolderRow)
     }
 
-    let kind: Kind
+    /// Updated in place by lists that reload one row at a time (the Folders panel).
+    var kind: Kind
     let children: [SidebarNode]
 
     init(_ kind: Kind, children: [SidebarNode] = []) {
@@ -30,17 +33,19 @@ final class SidebarNode: NSObject {
 
 /// One of the sidebar's lists: an outline view as tall as its rows, with no scroll view of its
 /// own, so the panels around it scroll together. Groups and earlier sessions expand in place.
-final class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSource, NSOutlineViewDelegate {
+/// Subclasses with rows of their own (the Folders panel) override the data source and `track()`.
+class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSource, NSOutlineViewDelegate {
     /// The rows, read while tracked: the list reloads when anything they read changes.
-    var content: @MainActor () -> [SidebarNode] = { [] }
+    final var content: @MainActor () -> [SidebarNode] = { [] }
     /// Whether a group or session shows its rows when the list reloads.
-    var isExpanded: @MainActor (SidebarNode) -> Bool = { _ in false }
-    var expansionChanged: @MainActor (SidebarNode, Bool) -> Void = { _, _ in }
+    final var isExpanded: @MainActor (SidebarNode) -> Bool = { _ in false }
+    final var expansionChanged: @MainActor (SidebarNode, Bool) -> Void = { _, _ in }
 
-    private let model: EditorModel
+    let model: EditorModel
     private var roots: [SidebarNode] = []
     private var tracker: Tracker?
-    private var isReloading = false
+    /// Rows are being reloaded: expansion changes then are restorations, not the user's.
+    var isReloading = false
 
     init(model: EditorModel) {
         self.model = model
@@ -70,13 +75,23 @@ final class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDat
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        tracker?.cancel()
-        tracker = nil
-        guard window != nil else { return }
+        stopTracking()
+        if window != nil {
+            track()
+        }
+    }
+
+    /// Starts keeping the rows up to date, when the list joins a window.
+    func track() {
         tracker = Tracker { [weak self] in
             guard let self else { return }
             show(content())
         }
+    }
+
+    func stopTracking() {
+        tracker?.cancel()
+        tracker = nil
     }
 
     /// Shows the rows again, after something they read that isn't observed (a search) changed.
@@ -161,13 +176,20 @@ final class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDat
 
     func outlineView(_: NSOutlineView, viewFor _: NSTableColumn?, item: Any) -> NSView? {
         guard let node = item as? SidebarNode else { return nil }
+        // Rows are made only as they show, so a folder is listed (for its count and subfolders)
+        // only once it's on screen, however many siblings it has.
+        if case let .folder(folder) = node.kind, folder.count == nil, !folder.isMissing {
+            model.library.listTree(folder.url)
+        }
         return SidebarCellView(node: node, model: model, isExpanded: isItemExpanded(node))
     }
 
     func outlineView(_: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
         let row = SidebarRowView()
-        if let node = item as? SidebarNode, case let .history(_, _, current, _) = node.kind {
-            row.isCurrentStep = current
+        switch (item as? SidebarNode)?.kind {
+        case let .history(_, _, current, _): row.isCurrentStep = current
+        case let .folder(folder): row.isCurrentStep = folder.isOpen
+        default: break
         }
         return row
     }
@@ -202,13 +224,30 @@ final class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDat
         case let .earlierStep(step, session):
             model.restoreHistory(step, from: session)
         case .group, .session:
-            if isItemExpanded(node) {
-                collapseItem(node)
-            } else {
-                expandItem(node)
-            }
+            toggle(node)
+        case let .folder(folder):
+            clicked(node, folder)
         default:
             break
+        }
+    }
+
+    /// The chevron expands a folder; the rest of its row opens it.
+    private func clicked(_ node: SidebarNode, _ folder: FolderRow) {
+        let location = convert(window?.currentEvent?.locationInWindow ?? .zero, from: nil)
+        let chevronEnd = frameOfCell(atColumn: 0, row: clickedRow).minX + SidebarCellView.Layout.chevronSize.width + 4
+        if isExpandable(node), location.x < chevronEnd {
+            toggle(node)
+        } else if !folder.isMissing {
+            model.showFolder(folder.url)
+        }
+    }
+
+    private func toggle(_ node: SidebarNode) {
+        if isItemExpanded(node) {
+            collapseItem(node)
+        } else {
+            expandItem(node)
         }
     }
 }

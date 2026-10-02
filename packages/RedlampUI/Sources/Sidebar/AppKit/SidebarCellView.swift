@@ -96,6 +96,8 @@ final class SidebarCellView: NSTableCellView {
             symbol = "camera.viewfinder"
         case .history, .session, .earlierStep:
             showHistory(node.kind)
+        case let .folder(row):
+            decorate(row)
         }
         if let symbol {
             showIcon(symbol)
@@ -107,6 +109,15 @@ final class SidebarCellView: NSTableCellView {
             addSubview(values)
         }
         needsLayout = true
+    }
+
+    private func decorate(_ row: FolderRow) {
+        let shown = showFolder(row, label: label)
+        if row.hasSubfolders {
+            showChevron()
+        }
+        showIcon(shown.symbol, color: shown.color)
+        trailing = shown.trailing
     }
 
     private func showChevron() {
@@ -164,12 +175,16 @@ final class SidebarCellView: NSTableCellView {
         }
         var titleMaxX = amountSlider.map { $0.frame.minX - 4 } ?? bounds.width
         if let trailing {
-            let size = trailing.intrinsicContentSize
+            var size = trailing.intrinsicContentSize
+            // A label draws its text inset by `labelPadding` on each side of its intrinsic width:
+            // its frame gets both, reaching past the row's edge so the text ends there.
+            let padding = trailing is NSTextField ? Layout.labelPadding : 0
+            size.width += padding * 2
             trailing.frame = CGRect(
-                x: PixelGrid.round(bounds.width - size.width, scale: scale), y: centeredY(size),
+                x: PixelGrid.round(bounds.width - size.width + padding, scale: scale), y: centeredY(size),
                 width: size.width, height: size.height,
             )
-            titleMaxX = trailing.frame.minX - 6
+            titleMaxX = trailing.frame.minX + padding - 6
         }
         let size = label.intrinsicContentSize
         if let values {
@@ -208,6 +223,8 @@ final class SidebarCellView: NSTableCellView {
                 menu.addItem(.separator())
                 menu.addItem(NSMenuItem(title: "Delete Recipe") { [model] in model.recipes.delete(recipe) })
             }
+        case let .folder(row):
+            return Self.folderMenu(row, model: model)
         default:
             return nil
         }

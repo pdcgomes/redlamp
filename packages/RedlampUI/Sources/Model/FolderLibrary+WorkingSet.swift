@@ -117,6 +117,54 @@ public extension FolderLibrary {
         }
     }
 
+    // MARK: - The folder tree
+
+    /// What the tree knows of `folder`; nil until it has been listed (see `listTree`).
+    func node(for folder: URL) -> FolderNode? {
+        tree[folder.standardizedFileURL.path]
+    }
+
+    /// Lists `folder` for the tree: when its row first shows, and again when it changes on disk.
+    func listTree(_ folder: URL, lane: WorkScheduler.Lane = .lookAhead) {
+        let path = folder.standardizedFileURL.path
+        guard listingTree.insert(path).inserted else { return }
+        scheduler.submit(lane, key: "tree:\(path)") {
+            let listing = try? FolderScanner.list(folder)
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                listingTree.remove(path)
+                let node = listing.map { FolderNode(count: $0.photos.count, subfolders: $0.subfolders) }
+                guard tree[path] != node else { return }
+                tree[path] = node
+                for observer in treeObservers.values {
+                    observer([path])
+                }
+            }
+        }
+    }
+
+    /// Calls `handler` with the paths of folders whose count or subfolders changed.
+    func observeTree(_ handler: @escaping @MainActor (Set<String>) -> Void) -> LibraryObservation {
+        let id = UUID()
+        treeObservers[id] = handler
+        return LibraryObservation { [weak self] in self?.treeObservers.removeValue(forKey: id) }
+    }
+
+    func isExpanded(_ folder: URL) -> Bool {
+        expandedFolders.contains(folder.standardizedFileURL.path)
+    }
+
+    func setExpanded(_ folder: URL, _ expanded: Bool) {
+        let path = folder.standardizedFileURL.path
+        guard expanded != expandedFolders.contains(path) else { return }
+        if expanded {
+            expandedFolders.insert(path)
+        } else {
+            expandedFolders.remove(path)
+        }
+        saveSettings()
+    }
+
     // MARK: - The last photo in each folder
 
     /// The photo last shown in `folder`.

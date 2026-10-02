@@ -23,6 +23,17 @@ public struct LibraryDiff: Sendable, Equatable {
     }
 }
 
+/// A folder as the tree shows it: the photos directly in it and its subfolders, in Finder's order.
+public struct FolderNode: Sendable, Equatable {
+    public var count: Int
+    public var subfolders: [URL]
+
+    public init(count: Int, subfolders: [URL]) {
+        self.count = count
+        self.subfolders = subfolders
+    }
+}
+
 /// The working set of folders, and the photos of the one that's open.
 ///
 /// - Roots are the folders the user added (see `FolderLibrary+WorkingSet`), remembered by bookmark.
@@ -41,8 +52,14 @@ public final class FolderLibrary {
     public internal(set) var openFolder: URL?
     /// Show Photos in Subfolders.
     public internal(set) var includesSubfolders = false
-    /// The folder tree's expanded rows (paths).
-    public internal(set) var expandedFolders: Set<String> = []
+    /// The folder tree's expanded rows (paths). Not observed, like `tree`: the Folders panel
+    /// changes only the rows a change touches.
+    @ObservationIgnored public internal(set) var expandedFolders: Set<String> = []
+    /// Folders listed for the tree, by path: how many photos each holds and its subfolders.
+    /// Changes are announced to `observeTree` handlers.
+    @ObservationIgnored public internal(set) var tree: [String: FolderNode] = [:]
+    @ObservationIgnored var listingTree: Set<String> = []
+    @ObservationIgnored var treeObservers: [UUID: @MainActor (Set<String>) -> Void] = [:]
     /// The open folder can't be listed (its volume went away).
     public private(set) var isOpenFolderUnavailable = false
     /// The number of photos shown.
