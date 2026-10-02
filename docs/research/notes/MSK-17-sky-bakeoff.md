@@ -148,6 +148,8 @@ It brings back beard curls and the curls at the side of a head, and it sharpens 
 
 **Licences and patents.** Both papers' methods are ours to implement, but closed-form matting and the window-sum solve may be patented; they are added to the freedom-to-operate search with the guided filter (DEC-05).
 
+**The faint halo against pale, blurred backgrounds is mostly real** (`halo.py`). Closed-form leaves about 2% coverage, on average, over the band's background (where ViTMatte has none) on the four portraits. A colour check estimated each pixel's background and person colours near it (spread from the trimap's sure regions), and lowered coverage where the pixel's share of the way between them (Smith and Blinn's projection) says it is background. It halves that halo (0.022 to 0.010), but keeps 64–70% of the strands instead of 85%, and raises the error (0.065 to 0.066–0.070): a thin strand against a blurred background is mostly background colour. And ViTMatte draws the same glow above the beard portrait's out-of-focus head. That edge really is a soft, partial coverage, so it stays.
+
 ## Getting masks ready
 
 Opening the Masking tool now warms AI masks in the background, at low priority, for the open photo and every photo opened after it: the 2048 px and 4096 px analysis renders (both cached per photo), Segment Anything (loaded, its embedding of the photo computed, and one throwaway decode, since Core ML prepares the decoder's GPU work on its first prediction) and Depth Anything 3 (its depth and sky). Sky also no longer pays for an Objects edge solve on the Segment Anything mask it starts from: `SkyMatte` solves those edges.
