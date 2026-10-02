@@ -512,6 +512,7 @@ kernel void rl_develop(
     texture2d<float, access::sample> maskGuide [[texture(7)]],
     texture3d<float, access::read> hueSatCool [[texture(9)]],
     texture3d<float, access::read> hueSatWarm [[texture(10)]],
+    constant float4 *lensTable [[buffer(5)]],
     uint2 gid [[thread_position_in_grid]])
 {
     uint width = uint(p.outputSize.x);
@@ -522,15 +523,28 @@ kernel void rl_develop(
     // The whole developed (cropped) frame, so vignette and grain don't depend on the region...
     float2 uv = p.region.xy + (float2(gid) + 0.5f) / float2(width, height) * p.region.zw;
     // ...and the photo point behind it, which masks are placed in.
-    float2 imageUV;
-    bool outsideImage = outputToImage(uv, p, imageUV);
+    float2 imageUV, redUV, blueUV;
+    bool outsideImage = outputToImage(uv, p, lensTable, imageUV, redUV, blueUV);
     float2 sourceUV = orient(imageUV, int(p.geometry.x));
     float3 camera;
     if (p.denoised.z > 0.0f) {
         constexpr sampler areaSampler(coord::normalized, filter::linear, address::clamp_to_edge);
         camera = denoised.sample(areaSampler, (sourceUV - p.denoised.xy) / p.denoised.zw).rgb;
+        // The profile's lateral chromatic aberration: red and blue from where the lens put them.
+        if (p.lensProfile.w > 0.5f) {
+            camera.r = denoised.sample(areaSampler, (orient(redUV, int(p.geometry.x)) - p.denoised.xy) / p.denoised.zw).r;
+            camera.b = denoised.sample(areaSampler, (orient(blueUV, int(p.geometry.x)) - p.denoised.xy) / p.denoised.zw).b;
+        }
     } else {
         camera = source.sample(linearSampler, sourceUV, level(p.geometry.y)).rgb;
+        if (p.lensProfile.w > 0.5f) {
+            camera.r = source.sample(linearSampler, orient(redUV, int(p.geometry.x)), level(p.geometry.y)).r;
+            camera.b = source.sample(linearSampler, orient(blueUV, int(p.geometry.x)), level(p.geometry.y)).b;
+        }
+    }
+    // The profile's vignetting, at the radius the light was recorded at.
+    if (p.lensProfile.x > 0.5f) {
+        camera *= lensTableAt(lensTable, lensRadius(imageUV, p), p).w;
     }
     // Lens vignetting, Lightroom's manual Vignetting: positive lightens the corners, by up to a
     // stop, from the midpoint outwards.

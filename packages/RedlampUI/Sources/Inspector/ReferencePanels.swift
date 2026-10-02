@@ -39,7 +39,10 @@ import SwiftUI
     public var body: some View {
         PanelSection(panel: .lens, badge: "Phase 2") {
             LensToggle(title: "Remove Chromatic Aberration", help: nil)
-            LensToggle(title: "Enable Profile Corrections", help: "lensfun and LCP lens profiles arrive in Phase 2")
+            ProfileCorrectionsToggle()
+            SubsectionHeader(title: "Profile", parameters: [.lensProfileDistortion, .lensProfileVignetting])
+            ParameterSlider(parameter: .lensProfileDistortion)
+            ParameterSlider(parameter: .lensProfileVignetting)
             SubsectionHeader(title: "Manual", parameters: [.lensDistortion, .lensVignetting, .lensVignettingMidpoint])
             ParameterSlider(parameter: .lensDistortion)
             ParameterSlider(parameter: .lensVignetting)
@@ -61,6 +64,33 @@ struct LensToggle: View {
             .font(Theme.labelFont)
             .toggleStyle(.checkbox)
             .controlSize(.small)
+    }
+}
+
+/// Enable Profile Corrections: the lens correction the photo carries (DNG opcodes, Sony's tags),
+/// on by default from process 5. lensfun profiles wait on DEC-04.
+struct ProfileCorrectionsToggle: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        let lens = model.info?.lensCorrection
+        let applies = lens != nil && model.recipe.processVersion >= 5
+        Toggle("Enable Profile Corrections", isOn: Binding(
+            get: { applies && model.recipe[.lensProfile] > 0.5 },
+            set: { model.setValue(.lensProfile, $0 ? 1 : 0) },
+        ))
+        .disabled(!applies)
+        .help(help(lens, applies: applies))
+        .font(Theme.labelFont)
+        .toggleStyle(.checkbox)
+        .controlSize(.small)
+    }
+
+    private func help(_ lens: LensCorrection?, applies: Bool) -> String {
+        guard let lens else { return "This photo carries no lens correction" }
+        guard applies else { return "Edits made before process 5 render without the lens correction" }
+        return "Distortion and vignetting corrections from the \(lens.source.name) file itself"
+            + (lens.correctsColorFringes ? ", with its colour fringe correction" : "")
     }
 }
 

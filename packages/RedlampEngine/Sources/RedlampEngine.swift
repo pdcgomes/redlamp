@@ -332,6 +332,9 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         encoder.setBytes(&inputs.toneLUT, length: inputs.toneLUT.count * MemoryLayout<Float>.stride, index: 1)
         encoder.setBytes(&inputs.mixer, length: inputs.mixer.count * MemoryLayout<Float>.stride, index: 2)
         encoder.setBytes(&inputs.layers, length: inputs.layers.count * MemoryLayout<MaskLayerGPU>.stride, index: 3)
+        encoder.setBytes(
+            &inputs.lensTable, length: inputs.lensTable.count * MemoryLayout<SIMD4<Float>>.stride, index: 5,
+        )
         try encoder.setArray(inputs.components, index: 4, device: device)
         encoder.dispatchGrid(width: size.width, height: size.height, pipeline: kernels.develop)
         encoder.endEncoding()
@@ -363,6 +366,9 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         encoder.setTexture(session.noiseGain, index: 2)
         encoder.setBytes(&inputs.params, length: MemoryLayout<DevelopParams>.stride, index: 0)
         encoder.setBytes(&clip, length: MemoryLayout<SIMD4<Float>>.stride, index: 1)
+        encoder.setBytes(
+            &inputs.lensTable, length: inputs.lensTable.count * MemoryLayout<SIMD4<Float>>.stride, index: 2,
+        )
         encoder.dispatchGrid(width: size.width, height: size.height, pipeline: kernels.rawClipping)
         encoder.endEncoding()
     }

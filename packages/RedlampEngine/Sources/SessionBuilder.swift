@@ -108,6 +108,7 @@ struct SessionBuilder {
         info.asShotWhiteBalance = colorModel?.whiteBalance(forMultipliers: decoded.asShotMultipliers)
         let embeddedLook = decoded.isRaw ? decoded.dngProfile.flatMap(EmbeddedLook.definition) : nil
         info.embeddedBaseLook = embeddedLook?.reference
+        info.lensCorrection = decoded.isRaw ? decoded.lensCorrection : nil
 
         return ImageSession(
             info: info,

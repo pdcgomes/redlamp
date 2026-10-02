@@ -69,6 +69,8 @@ public struct DecodedImage: Sendable {
     public var dngColor: DNGColorCalibration?
     /// The DNG's embedded camera profile tables and tone curve, when it has any.
     public var dngProfile: DNGProfile?
+    /// The lens correction the file carries (DNG opcodes, Sony's tags), EXIF-oriented.
+    public var lensCorrection: LensCorrection?
     /// Row and column offsets from the optical-black margins, when they show banding.
     public var banding: BandingCorrection?
 

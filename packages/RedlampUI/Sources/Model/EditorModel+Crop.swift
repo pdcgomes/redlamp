@@ -84,7 +84,11 @@ public extension EditorModel {
     /// The geometry of the frame on the canvas: the developed frame, or in the crop tool the
     /// whole straightened frame the crop is drawn on.
     var canvasGeometry: GeometryMap? {
-        info.map { GeometryMap(recipe: recipe, imageSize: $0.pixelSize, includesCrop: activeTool != .crop) }
+        info.map { info in
+            GeometryMap(
+                recipe: recipe, imageSize: info.pixelSize, includesCrop: activeTool != .crop, lens: info.lensCorrection,
+            )
+        }
     }
 
     /// The photo point (EXIF-oriented, 0...1) behind a canvas point (0...1 across the frame).
@@ -95,7 +99,9 @@ public extension EditorModel {
 
     /// The pixel size of the straightened frame the crop is cut from.
     var cropFrameSize: PixelSize {
-        info.map { GeometryMap(recipe: recipe, imageSize: $0.pixelSize, includesCrop: false).outputSize } ?? .zero
+        info
+            .map { GeometryMap(recipe: recipe, imageSize: $0.pixelSize, includesCrop: false, lens: nil).outputSize } ??
+            .zero
     }
 
     /// The crop's aspect as width over height, in pixels of the straightened frame.
@@ -261,7 +267,12 @@ public extension EditorModel {
     /// Fits the crop as last drawn inside the photo, when Constrain to Image is on.
     internal func constrainCrop(_ next: inout EditRecipe) {
         guard constrainCropToImage, let info else { return }
-        next.crop = GeometryMap.constrained(cropIntent, recipe: next, imageSize: info.pixelSize)
+        next.crop = GeometryMap.constrained(
+            cropIntent,
+            recipe: next,
+            imageSize: info.pixelSize,
+            lens: info.lensCorrection,
+        )
     }
 
     /// `crop` moved (not resized) to lie inside `bounds` where it can.

@@ -55,6 +55,7 @@ public extension DecodedImage {
         var gainMaps: [GainMap]
         var dngColor: DNGColorCalibration?
         var dngProfile: DNGProfile?
+        var lensCorrection: LensCorrection?
         var banding: BandingCorrection?
     }
 
@@ -66,7 +67,7 @@ public extension DecodedImage {
             whiteLevel: whiteLevel, asShotMultipliers: asShotMultipliers, cameraToSRGB: cameraToSRGB,
             xyzToCamera: xyzToCamera, orientation: orientation, baselineExposure: baselineExposure, info: info,
             noiseProfile: noiseProfile, gainMaps: gainMaps, dngColor: dngColor, dngProfile: dngProfile,
-            banding: banding,
+            lensCorrection: lensCorrection, banding: banding,
         ))
         var data = Data(capacity: 8 + header.count + samples.count * 2)
         withUnsafeBytes(of: UInt64(header.count).littleEndian) { data.append(contentsOf: $0) }
@@ -109,6 +110,7 @@ public extension DecodedImage {
         gainMaps = header.gainMaps
         dngColor = header.dngColor
         dngProfile = header.dngProfile
+        lensCorrection = header.lensCorrection
         banding = header.banding
     }
 }

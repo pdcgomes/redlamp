@@ -75,6 +75,8 @@ public enum AdjustmentSearch {
         .halationAmount: "Halation", .halationSize: "Halation", .bloomAmount: "Bloom", .bloomSize: "Bloom",
         .leakAmount: "Light Leak", .leakWarmth: "Light Leak", .leakVariation: "Light Leak",
         .dustAmount: "Dust & Scratches", .scratchAmount: "Dust & Scratches", .frameStyle: "Frame", .frameSize: "Frame",
+        .lensProfileDistortion: "Profile", .lensProfileVignetting: "Profile", .lensDistortion: "Manual",
+        .lensVignetting: "Manual", .lensVignettingMidpoint: "Manual",
     ]
 
     /// The words people use: Lightroom's current and older names, and plain descriptions.

@@ -171,6 +171,8 @@ public struct DevelopParams {
     public var fromProPhoto0 = SIMD4<Float>(1, 0, 0, 0)
     public var fromProPhoto1 = SIMD4<Float>(0, 1, 0, 0)
     public var fromProPhoto2 = SIMD4<Float>(0, 0, 1, 0)
+    public var lensProfile = SIMD4<Float>(0, 0.5, 0.5, 0)
+    public var lensProfile2 = SIMD4<Float>(1, 1, 1, 0)
 
     public init() {}
 

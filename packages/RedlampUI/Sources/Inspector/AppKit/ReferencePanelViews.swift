@@ -27,17 +27,15 @@ import SwiftUI
     public static func lens(model: EditorModel) -> PanelSectionView {
         let rows = PanelRows(model: model)
         let manual: [ParameterID] = [.lensDistortion, .lensVignetting, .lensVignettingMidpoint]
+        let profile: [ParameterID] = [.lensProfileDistortion, .lensProfileVignetting]
         // In the panel's own stack SwiftUI leaves a point above the first checkbox (their
         // alignment insets) that a separately hosted one doesn't; the harness's Lens parity
         // scene checks it.
         return rows.panel(.lens, badge: "Phase 2", rows: [
             rows.native(LensToggle(title: "Remove Chromatic Aberration", help: nil).padding(.top, 1)),
-            rows.native(LensToggle(
-                title: "Enable Profile Corrections",
-                help: "lensfun and LCP lens profiles arrive in Phase 2",
-            )),
-            rows.header("Manual", manual),
-        ] + rows.sliders(manual))
+            rows.native(ProfileCorrectionsToggle()),
+            rows.header("Profile", profile),
+        ] + rows.sliders(profile) + [rows.header("Manual", manual)] + rows.sliders(manual))
     }
 
     public static func transform(model: EditorModel) -> PanelSectionView {

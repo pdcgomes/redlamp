@@ -161,7 +161,7 @@ public enum PanelID: String, CaseIterable, Identifiable, Sendable {
                 .noiseColorSmoothness,
             ]
         case .lens:
-            [.lensDistortion, .lensVignetting, .lensVignettingMidpoint]
+            [.lensProfileDistortion, .lensProfileVignetting, .lensDistortion, .lensVignetting, .lensVignettingMidpoint]
         case .transform:
             [
                 .transformVertical,

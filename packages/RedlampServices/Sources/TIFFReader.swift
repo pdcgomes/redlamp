@@ -70,6 +70,14 @@ struct TIFFReader {
         }
     }
 
+    /// The values of an SSHORT entry; empty for other types.
+    func signedShorts(_ entry: Entry) -> [Int] {
+        guard entry.type == 8, entry.count >= 0 else { return [] }
+        let start = entry.count * 2 <= 4 ? entry.valueOffset : Int(u32(entry.valueOffset))
+        guard start + entry.count * 2 <= bytes.count else { return [] }
+        return (0 ..< entry.count).map { Int(Int16(bitPattern: u16(start + $0 * 2))) }
+    }
+
     /// The values of a FLOAT or DOUBLE entry; empty for other types.
     func floats(_ entry: Entry) -> [Float] {
         let size: Int

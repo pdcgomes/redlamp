@@ -162,7 +162,9 @@ func run(_ arguments: [String]) async throws {
             recipe[.transformVertical] = solved.vertical
             recipe[.transformHorizontal] = solved.horizontal
             recipe[.transformRotate] = solved.rotate
-            recipe.crop = GeometryMap.constrained(recipe.crop, recipe: recipe, imageSize: info.pixelSize)
+            recipe.crop = GeometryMap.constrained(
+                recipe.crop, recipe: recipe, imageSize: info.pixelSize, lens: info.lensCorrection,
+            )
             print(String(
                 format: "upright %@: %d lines in %@, vertical %.1f, horizontal %.1f, rotate %.2f",
                 name, lines.count, "\(clock.now - started)", solved.vertical, solved.horizontal, solved.rotate,

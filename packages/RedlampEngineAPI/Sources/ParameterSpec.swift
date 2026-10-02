@@ -320,6 +320,9 @@ public enum ParameterCatalog {
             ParameterSpec(.lensDistortion, "Distortion"),
             ParameterSpec(.lensVignetting, "Vignetting"),
             ParameterSpec(.lensVignettingMidpoint, "Midpoint", range: 0 ... 100, default: 50, format: .integer),
+            ParameterSpec(.lensProfile, "Enable Profile Corrections", range: 0 ... 1, default: 1, format: .integer),
+            ParameterSpec(.lensProfileDistortion, "Distortion", range: 0 ... 200, default: 100, format: .integer),
+            ParameterSpec(.lensProfileVignetting, "Vignetting", range: 0 ... 200, default: 100, format: .integer),
 
             ParameterSpec(
                 .cropAngle, "Angle", range: -45 ... 45, step: 0.01, format: .signedDecimal(2),

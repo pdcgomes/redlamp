@@ -17,6 +17,7 @@ struct DecodeServiceTests {
         #expect(a.noiseProfile == b.noiseProfile && a.gainMaps == b.gainMaps, "\(name) DNG tags")
         #expect(a.dngColor == b.dngColor && a.banding == b.banding, "\(name) calibration, banding")
         #expect(a.dngProfile == b.dngProfile, "\(name) camera profile")
+        #expect(a.lensCorrection == b.lensCorrection, "\(name) lens correction")
         #expect(String(describing: a.layout) == String(describing: b.layout), "\(name) layout")
     }
 

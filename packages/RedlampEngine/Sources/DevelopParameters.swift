@@ -15,6 +15,26 @@ struct DevelopInputs {
     var components: [MaskComponentGPU]
     /// The Base Look's table; nil binds the identity table with the stage off.
     var lookTable: (any MTLTexture)?
+    /// The lens profile's table (`kLensTableSize` entries), identity when there is none.
+    var lensTable: [SIMD4<Float>] = LensTable.identity
+}
+
+/// The photo's lens profile resampled to the develop kernel's table: evenly spaced radii, each
+/// entry red, green and blue's recorded scale and the vignetting gain.
+enum LensTable {
+    static let size = 64
+    /// Radius of the last entry: past the corners, where a crop or Transform may still reach.
+    static let reach: Double = 1.5
+    static let identity = [SIMD4<Float>](repeating: SIMD4(1, 1, 1, 1), count: size)
+
+    static func entries(_ lens: LensCorrection) -> [SIMD4<Float>] {
+        (0 ..< size).map { index in
+            let radius = Double(index) / Double(size - 1) * reach
+            let scale = lens.interpolate(lens.distortion, at: radius)
+            let gain = lens.vignetting.isEmpty ? 1 : lens.interpolate(lens.vignetting, at: radius)
+            return SIMD4(Float(scale.x), Float(scale.y), Float(scale.z), Float(gain))
+        }
+    }
 }
 
 /// Translates an `EditRecipe` into the fused kernel's parameter block.
@@ -163,12 +183,26 @@ enum DevelopParameters {
         )
 
         let full = session.orientedSize
-        let map = GeometryMap(recipe: recipe, imageSize: full)
+        let map = GeometryMap(recipe: recipe, imageSize: full, lens: session.info.lensCorrection)
         p.setOutputToImage(map.toImage.floatMatrix, imageAspect: Float(full.aspectRatio))
         p.lens = SIMD4(
             Float(map.lensDistortion), Float(recipe[.lensVignetting] / 100),
             Float(recipe[.lensVignettingMidpoint] / 100), 0,
         )
+        var lensTable = LensTable.identity
+        if let profile = map.lensProfile {
+            lensTable = LensTable.entries(profile)
+            p.lensProfile = SIMD4(
+                1, Float(profile.center.x), Float(profile.center.y), profile.correctsColorFringes ? 1 : 0,
+            )
+            let scale = profile.offsetScale(imageSize: full)
+            p.lensProfile2 = SIMD4(
+                Float(scale.x),
+                Float(scale.y),
+                Float(LensTable.reach / Double(LensTable.size - 1)),
+                0,
+            )
+        }
         // Developed-frame pixels per output pixel, and photo pixels per output pixel, which
         // picks the pyramid level to sample.
         let scale = region.width * Double(map.outputSize.width) / Double(max(outputSize.width, 1))
@@ -205,6 +239,7 @@ enum DevelopParameters {
             layers: layers.isEmpty ? [.empty] : layers,
             components: components.isEmpty ? [.empty] : components,
             lookTable: baseLook.table,
+            lensTable: lensTable,
         )
     }
 

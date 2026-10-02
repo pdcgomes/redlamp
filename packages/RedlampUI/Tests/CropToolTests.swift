@@ -39,7 +39,7 @@ struct CropToolTests {
         let tilted = model.recipe.crop
         #expect(tilted.width < 1 && tilted.height < 1)
         let info = try #require(model.info)
-        #expect(GeometryMap(recipe: model.recipe, imageSize: info.pixelSize).staysInsideImage)
+        #expect(GeometryMap(recipe: model.recipe, imageSize: info.pixelSize, lens: nil).staysInsideImage)
         expectNear(model.pixelAspect(of: tilted), 1.5, "the frame's aspect is kept")
         model.setValue(.cropAngle, 0)
         #expect(model.recipe.crop == .full)

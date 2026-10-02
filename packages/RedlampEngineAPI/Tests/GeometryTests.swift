@@ -118,15 +118,15 @@ struct GeometryTests {
     @Test func `correcting barrel distortion stays inside the photo, pincushion leaves corners empty`() {
         var recipe = EditRecipe()
         recipe[.lensDistortion] = 60
-        let barrel = GeometryMap(recipe: recipe, imageSize: size)
+        let barrel = GeometryMap(recipe: recipe, imageSize: size, lens: nil)
         #expect(barrel.staysInsideImage)
         let corner = barrel.imagePoint(SIMD2(0, 0)) ?? .zero
         #expect(corner.x > 0 && corner.y > 0, "the corner shows a point recorded nearer the centre")
         recipe[.lensDistortion] = -60
-        #expect(!GeometryMap(recipe: recipe, imageSize: size).staysInsideImage)
-        recipe.crop = GeometryMap.constrained(.full, recipe: recipe, imageSize: size)
+        #expect(!GeometryMap(recipe: recipe, imageSize: size, lens: nil).staysInsideImage)
+        recipe.crop = GeometryMap.constrained(.full, recipe: recipe, imageSize: size, lens: nil)
         #expect(recipe.crop.width < 1)
-        #expect(GeometryMap(recipe: recipe, imageSize: size).staysInsideImage)
+        #expect(GeometryMap(recipe: recipe, imageSize: size, lens: nil).staysInsideImage)
     }
 
     @Test func `guided upright finds the correction that makes the guides vertical`() {
@@ -225,7 +225,7 @@ struct GeometryTests {
             recipe[.transformVertical] = transform.vertical
             recipe[.transformHorizontal] = transform.horizontal
             recipe[.transformRotate] = transform.rotate
-            let crop = GeometryMap.constrained(.full, recipe: recipe, imageSize: size)
+            let crop = GeometryMap.constrained(.full, recipe: recipe, imageSize: size, lens: nil)
             return crop.width * crop.height
         }
         for (truth, eased) in [(-10.0, false), (-60, true)] {
@@ -264,6 +264,50 @@ struct GeometryTests {
             strength: 10,
         )
         #expect(Transform().upright(.auto, lines: [short], imageSize: size, orientation: .identity) == nil)
+    }
+
+    /// A centred lens whose correction pulls the edges in by 3% (a pincushion) and lifts the
+    /// corners by half a stop.
+    private static let pincushion = LensCorrection(
+        source: .sony, center: SIMD2(0.5, 0.5), radii: [0, 0.5, 1, 1.2],
+        distortion: [SIMD3(repeating: 1), SIMD3(repeating: 1.008), SIMD3(repeating: 1.03), SIMD3(repeating: 1.045)],
+        vignetting: [1, 1.1, 1.41, 1.6],
+    )
+
+    @Test func `the lens profile applies from process 5, while enabled, at its amounts`() throws {
+        var recipe = EditRecipe()
+        recipe.processVersion = 4
+        #expect(GeometryMap(recipe: recipe, imageSize: size, lens: Self.pincushion).lensProfile == nil)
+        recipe.processVersion = 5
+        let full = try #require(GeometryMap(recipe: recipe, imageSize: size, lens: Self.pincushion).lensProfile)
+        recipe[.lensProfileDistortion] = 50
+        recipe[.lensProfileVignetting] = 0
+        let half = try #require(GeometryMap(recipe: recipe, imageSize: size, lens: Self.pincushion).lensProfile)
+        #expect(half.vignetting.allSatisfy { abs($0 - 1) < 1e-12 })
+        // Half the correction needs less of the zoom that keeps the corners filled.
+        #expect(
+            full.distortion[0].y < half.distortion[0].y && half.distortion[0].y < 1,
+            "\(full.distortion[0]), \(half.distortion[0])",
+        )
+        recipe[.lensProfile] = 0
+        #expect(GeometryMap(recipe: recipe, imageSize: size, lens: Self.pincushion).isIdentity)
+    }
+
+    @Test func `a profiled map round-trips, and fills the frame`() throws {
+        var recipe = EditRecipe()
+        recipe[.cropAngle] = 4
+        let map = GeometryMap(recipe: recipe, imageSize: size, lens: Self.pincushion)
+        #expect(map.lensProfile != nil)
+        for point in [SIMD2(0.3, 0.4), SIMD2(0.9, 0.1), SIMD2(0.5, 0.5)] {
+            let image = try #require(map.imagePoint(point))
+            let back = try #require(map.outputPoint(image))
+            #expect(simd_distance(back, point) < 1e-6, "\(point) → \(image) → \(back)")
+        }
+        // The pincushion correction would leave the corners empty; the zoom keeps them filled.
+        #expect(GeometryMap(recipe: EditRecipe(), imageSize: size, lens: Self.pincushion).staysInsideImage)
+        let corner = try #require(GeometryMap(recipe: EditRecipe(), imageSize: size, lens: Self.pincushion)
+            .imagePoint(.zero))
+        #expect(corner.min() > -1e-6 && corner.min() < 0.01, "the corner reaches the photo's: \(corner)")
     }
 
     @Test func `crop and orientation are kept in the sidecar only when set`() throws {

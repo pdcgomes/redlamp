@@ -151,6 +151,7 @@ enum RawDecoder {
             decoded.gainMaps = DNGGainMaps.read(data, url: url)
             decoded.dngColor = DNGColorCalibration.read(data, url: url)
             decoded.dngProfile = DNGProfile.read(data, url: url)
+            decoded.lensCorrection = LensCorrectionReader.read(data, url: url, orientation: decoded.orientation)
         }
         decoded.banding = banding
         return decoded

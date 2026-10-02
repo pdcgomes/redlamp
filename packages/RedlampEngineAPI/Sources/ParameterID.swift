@@ -98,6 +98,10 @@ public enum ParameterID: String, CaseIterable, Codable, Sendable, Hashable {
     case lensDistortion = "lens.distortion"
     case lensVignetting = "lens.vignetting"
     case lensVignettingMidpoint = "lens.vignettingMidpoint"
+    /// Enable Profile Corrections: 1 applies the photo's own lens correction (process 5).
+    case lensProfile = "lens.profile"
+    case lensProfileDistortion = "lens.profileDistortion"
+    case lensProfileVignetting = "lens.profileVignetting"
 
     /// Crop
     case cropAngle = "crop.angle"

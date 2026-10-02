@@ -286,7 +286,7 @@ final class DetailStage {
         masks: MaskBindings = .none,
     ) throws -> Output? {
         guard outputSize.width > 0 else { return nil }
-        let geometry = GeometryMap(recipe: recipe, imageSize: session.orientedSize)
+        let geometry = GeometryMap(recipe: recipe, imageSize: session.orientedSize, lens: session.info.lensCorrection)
         let work = Self.workArea(session: session, geometry: geometry, region: region, outputSize: outputSize)
         let denoiseSettings = DenoiseSettings(recipe: recipe)
         let sharpenSettings = SharpenSettings(recipe: recipe)

@@ -835,7 +835,7 @@ The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on mac
 - [ ] Better X-Trans demosaicing (Markesteijn)
 - [ ] Full DCP camera profiles (dual and triple illuminant), ICC input profiles, and `.3dl` and log-space LUT import
 - [ ] **Film effects for recipes:** halation (the red glow around bright lights), bloom and diffusion, and film grain that varies with density and scales with output size
-- [ ] Lens corrections from the lensfun database, Adobe LCP import, and DNG opcodes *(manual Distortion and Vignetting done, in the same geometry map)*
+- [ ] Lens corrections from the lensfun database and Adobe LCP import *(the corrections raw files carry, DNG opcodes and Sony's, and manual Distortion and Vignetting, are done, in the same geometry map)*
 - [x] **Crop and straighten** (aspect presets and lock, composition overlays, Angle and the Straighten tool, Constrain to Image), rotate and flip, and the manual Transform sliders, all one geometry map that masks follow
 - [x] Upright: Auto, Level, Vertical and Full from the photo's own straight edges, found by Redlamp's line detector, and Guided from drawn guides. A correction is applied only when the edges agree on it, so a landscape or a still life is levelled at most, and Auto leaves strong perspective partly in place
 - [x] Brush, color range, and luminance range masks, and Vision AI masks (subject, sky, background, people)
@@ -1074,7 +1074,7 @@ Edits are saved next to the photo, in `IMG_1234.ARW.redlamp`. It is a package (F
 
 Sidecars carry two version numbers:
 - The **format version** describes the file's syntax. Older formats are migrated silently when read.
-- The **process version** records the rendering behavior the edit was made with, like Lightroom's process versions. An edit keeps rendering the way it did when it was made; moving it to a newer process is always an explicit choice. Process 2 (October 2026) sizes grain to the frame and makes it strongest in the shadows, as film's is. Process 3 shows a JPEG, HEIC, PNG or TIFF as the file at default settings, and gives halation's extra glow only to small lights. Process 4 corrects a DNG's colour with its embedded camera profile's HueSatMap, as Lightroom does. Edits made before each keep the behaviour they were made with.
+- The **process version** records the rendering behavior the edit was made with, like Lightroom's process versions. An edit keeps rendering the way it did when it was made; moving it to a newer process is always an explicit choice. Process 2 (October 2026) sizes grain to the frame and makes it strongest in the shadows, as film's is. Process 3 shows a JPEG, HEIC, PNG or TIFF as the file at default settings, and gives halation's extra glow only to small lights. Process 4 corrects a DNG's colour with its embedded camera profile's HueSatMap, as Lightroom does. Process 5 applies the lens correction the file carries (DNG warp and vignetting opcodes, Sony's built-in profile), with Enable Profile Corrections in the Lens Corrections panel. Edits made before each keep the behaviour they were made with.
 
 Settings a newer Redlamp wrote, but this version doesn't know, are kept and written back unchanged. A sidecar written with a newer format or process version is never overwritten or deleted, and sidecars are only rewritten when their content changes. Format 2 renamed `profile` to `baseLook`; format-1 sidecars still read. Format 3 added brush, range and AI mask components and made sidecars packages; a single-file sidecar is read as it is and becomes a package on its next save.
 

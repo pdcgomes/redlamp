@@ -28,7 +28,8 @@ struct AdjustmentSearchTests {
 
     @Test func `only live sliders are offered, and nonsense finds nothing`() {
         #expect(AdjustmentSearch.results(for: "defringe").isEmpty)
-        #expect(AdjustmentSearch.results(for: "distortion").first?.parameter == .lensDistortion)
+        let distortion = Set(AdjustmentSearch.results(for: "distortion").prefix(2).map(\.parameter))
+        #expect(distortion == [.lensProfileDistortion, .lensDistortion])
         #expect(AdjustmentSearch.results(for: "zzzz").isEmpty)
         #expect(AdjustmentSearch.results(for: "  ").isEmpty)
     }

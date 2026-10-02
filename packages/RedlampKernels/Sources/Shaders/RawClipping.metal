@@ -11,6 +11,7 @@ kernel void rl_raw_clipping(
     texture2d<float, access::sample> noiseGain [[texture(2)]],
     constant DevelopParams &p [[buffer(0)]],
     constant float4 &clip [[buffer(1)]],
+    constant float4 *lensTable [[buffer(2)]],
     uint2 gid [[thread_position_in_grid]])
 {
     uint width = uint(p.outputSize.x);
@@ -18,8 +19,8 @@ kernel void rl_raw_clipping(
     if (gid.x >= width || gid.y >= height) return;
     constexpr sampler linearSampler(coord::normalized, filter::linear, mip_filter::linear, address::clamp_to_edge);
     float2 uv = p.region.xy + (float2(gid) + 0.5f) / float2(width, height) * p.region.zw;
-    float2 imageUV;
-    if (outputToImage(uv, p, imageUV)) return;
+    float2 imageUV, redUV, blueUV;
+    if (outputToImage(uv, p, lensTable, imageUV, redUV, blueUV)) return;
     float2 sourceUV = orient(imageUV, int(p.geometry.x));
     float3 camera = source.sample(linearSampler, sourceUV, level(p.geometry.y)).rgb;
     float3 limit = clip.xyz;

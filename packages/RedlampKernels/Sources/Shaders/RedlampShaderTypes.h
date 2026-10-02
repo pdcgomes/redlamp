@@ -65,6 +65,9 @@ struct DevelopParams {
     float4 fromProPhoto0;
     float4 fromProPhoto1;
     float4 fromProPhoto2;
+    float4 lensProfile;       // x 1 = apply the photo's lens profile (the lens table buffer), yz its optical
+                              // centre (0...1), w 1 = red and blue are recorded at their own scale
+    float4 lensProfile2;      // xy photo offset to the profile's radius per unit, z radius per table entry
 };
 
 // Noise reduction over one work area of the pyramid.
@@ -87,9 +90,26 @@ static inline float2 lensScale(constant DevelopParams &p) {
     return float2(aspect, 1.0f) / (0.5f * sqrt(aspect * aspect + 1.0f));
 }
 
+// The lens profile as a table over the radius: per entry, where red, green and blue were recorded
+// as a multiple of the radius, and the vignetting gain (see LensCorrection).
+constant int kLensTableSize = 64;
+
+static inline float lensRadius(float2 imageUV, constant DevelopParams &p) {
+    return length((imageUV - p.lensProfile.yz) * p.lensProfile2.xy);
+}
+
+static inline float4 lensTableAt(constant float4 *table, float radius, constant DevelopParams &p) {
+    float x = clamp(radius / p.lensProfile2.z, 0.0f, float(kLensTableSize - 1));
+    int i = min(int(x), kLensTableSize - 2);
+    return mix(table[i], table[i + 1], x - float(i));
+}
+
 // The photo point (0...1, EXIF-oriented) behind an output-frame point, through the geometry
-// homography; returns whether it falls outside the photo (or behind the virtual camera).
-static inline bool outputToImage(float2 uv, constant DevelopParams &p, thread float2 &imageUV) {
+// homography and the lens (the manual slider, then the photo's profile), where green was
+// recorded, and red and blue where the profile has them; returns whether it falls outside the
+// photo (or behind the virtual camera).
+static inline bool outputToImage(float2 uv, constant DevelopParams &p, constant float4 *lensTable,
+                                 thread float2 &imageUV, thread float2 &redUV, thread float2 &blueUV) {
     float3 point = float3(uv, 1.0f);
     float3 mapped = float3(dot(p.toImage0.xyz, point), dot(p.toImage1.xyz, point), dot(p.toImage2.xyz, point));
     imageUV = mapped.xy / max(mapped.z, 1e-9f);
@@ -97,6 +117,15 @@ static inline bool outputToImage(float2 uv, constant DevelopParams &p, thread fl
     if (p.lens.x != 0.0f) {
         float2 offset = (imageUV - 0.5f) * lensScale(p);
         imageUV = 0.5f + (imageUV - 0.5f) * (1.0f + p.lens.x * dot(offset, offset));
+    }
+    redUV = imageUV;
+    blueUV = imageUV;
+    if (p.lensProfile.x > 0.5f) {
+        float4 scale = lensTableAt(lensTable, lensRadius(imageUV, p), p);
+        float2 offset = imageUV - p.lensProfile.yz;
+        imageUV = p.lensProfile.yz + offset * scale.y;
+        redUV = p.lensProfile.yz + offset * scale.x;
+        blueUV = p.lensProfile.yz + offset * scale.z;
     }
     return mapped.z <= 0.0f || any(imageUV < 0.0f) || any(imageUV > 1.0f);
 }
