@@ -64,11 +64,9 @@ struct ThumbnailsTests {
     func `a preview is decoded in place in the mapped raw file, never copied`() throws {
         let url = try #require(Self.raws.first)
         var file: NSData? = try NSData(contentsOf: url, options: .alwaysMapped)
-        let (preview, _) = try #require(try Thumbnails.smallestPreview(
-            in: Data(referencing: #require(file)),
-            atLeast: 192,
-        ))
-        let bytes = try #require(try Thumbnails.bytes(of: preview, in: #require(file)))
+        let mapped = try #require(file)
+        let (preview, _) = try #require(Thumbnails.smallestPreview(in: Data(referencing: mapped), atLeast: 192))
+        let bytes = try #require(Thumbnails.bytes(of: preview, in: mapped))
         let start = try #require(file?.bytes) + preview.offset
         file = nil
         #expect(bytes.withUnsafeBytes { $0.baseAddress } == start, "a view into the mapping")
