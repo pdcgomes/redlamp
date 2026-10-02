@@ -837,7 +837,7 @@ The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on mac
 - [ ] **Film effects for recipes:** halation (the red glow around bright lights), bloom and diffusion, and film grain that varies with density and scales with output size
 - [ ] Lens corrections from the lensfun database, Adobe LCP import, and DNG opcodes *(manual Distortion and Vignetting done, in the same geometry map)*
 - [x] **Crop and straighten** (aspect presets and lock, composition overlays, Angle and the Straighten tool, Constrain to Image), rotate and flip, and the manual Transform sliders, all one geometry map that masks follow
-- [ ] Upright's automatic modes (Auto, Level, Vertical, Full), which need a line detector (blocked on the patent search, DEC-05) *(Guided Upright done)*
+- [x] Upright: Auto, Level, Vertical and Full from the photo's own straight edges, found by Redlamp's line detector, and Guided from drawn guides. A correction is applied only when the edges agree on it, so a landscape or a still life is levelled at most, and Auto leaves strong perspective partly in place
 - [x] Brush, color range, and luminance range masks, and Vision AI masks (subject, sky, background, people)
 - [ ] Slider-feel calibration against Lightroom, and Lightroom XMP preset import
 - [ ] Photos library integration and a Photos editing extension

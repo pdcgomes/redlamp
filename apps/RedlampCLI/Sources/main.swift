@@ -25,6 +25,7 @@ options:
   --base-look <name>       color, neutral, vivid, landscape, portrait, monochrome, or embedded (the
                            camera profile's look a DNG carries); --profile works too
   --wb <mode>              asShot, auto, daylight, cloudy, shade, tungsten, fluorescent, flash
+  --upright <mode>         auto, level, vertical or full, from the photo's own edges
   --bw                     black & white treatment
   --p3                     encode in Display P3 instead of sRGB
   --16bit                  16 bits per component (PNG/TIFF)
@@ -150,6 +151,22 @@ func run(_ arguments: [String]) async throws {
                 recipe[.temperature] = wb.temperature
                 recipe[.tint] = wb.tint
             }
+        case "--upright":
+            let name = try value()
+            guard let mode = UprightMode(rawValue: name) else { throw CLIError(description: "unknown upright \(name)") }
+            let started = clock.now
+            let lines = await engine.detectLines()
+            guard let solved = Transform(recipe: recipe).upright(
+                mode, lines: lines, imageSize: info.pixelSize, orientation: recipe.orientation,
+            ) else { throw CLIError(description: "too few straight edges for Upright in \(info.fileName)") }
+            recipe[.transformVertical] = solved.vertical
+            recipe[.transformHorizontal] = solved.horizontal
+            recipe[.transformRotate] = solved.rotate
+            recipe.crop = GeometryMap.constrained(recipe.crop, recipe: recipe, imageSize: info.pixelSize)
+            print(String(
+                format: "upright %@: %d lines in %@, vertical %.1f, horizontal %.1f, rotate %.2f",
+                name, lines.count, "\(clock.now - started)", solved.vertical, solved.horizontal, solved.rotate,
+            ))
         case "--bw":
             recipe.treatment = .blackAndWhite
         case "--p3":

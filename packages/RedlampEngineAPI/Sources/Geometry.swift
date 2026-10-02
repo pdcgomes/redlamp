@@ -391,26 +391,202 @@ public struct GuideLine: Codable, Sendable, Hashable {
     }
 }
 
+/// Lightroom's automatic Upright modes.
+public enum UprightMode: String, CaseIterable, Sendable {
+    /// Level for a strong horizon or few lines, otherwise Vertical or Full, whichever the lines
+    /// support, with perspective held to what still looks natural.
+    case auto
+    /// Rotate only: horizontal lines level, vertical ones upright on average.
+    case level
+    /// Rotate and Vertical: converging verticals made parallel.
+    case vertical
+    /// Rotate, Vertical and Horizontal: verticals upright and horizontals level.
+    case full
+
+    public var name: String {
+        switch self {
+        case .auto: "Auto"
+        case .level: "Level"
+        case .vertical: "Vertical"
+        case .full: "Full"
+        }
+    }
+}
+
+/// A straight edge found in a photo, for automatic Upright, in the photo's own coordinates
+/// (EXIF-oriented, like `GuideLine`).
+public struct DetectedLine: Sendable, Hashable {
+    public var line: GuideLine
+    /// How much the edge counts: its length in pixels of a 1024-pixel analysis image, times its contrast.
+    public var strength: Double
+
+    public init(line: GuideLine, strength: Double) {
+        self.line = line
+        self.strength = strength
+    }
+}
+
 public extension Transform {
     /// Lightroom's Guided Upright: the Vertical, Horizontal and Rotate that turn each guide
-    /// upright or level (whichever it is nearer, as shown), keeping `self`'s other sliders. A
-    /// few Levenberg–Marquardt steps on the guides' angles, damped towards the smallest
-    /// correction, so two verticals don't invent a horizontal turn.
+    /// upright or level (whichever it is nearer, as shown), keeping `self`'s other sliders.
     func guided(by guides: [GuideLine], imageSize: PixelSize, orientation: ImageOrientation) -> Transform {
-        let canvas = orientation.swapsAxes ? PixelSize(width: imageSize.height, height: imageSize.width) : imageSize
+        let lines = Self.uprightLines(guides.map { DetectedLine(line: $0, strength: 1) }, imageSize, orientation)
+        return fitted(to: lines, free: [true, true, true], robust: false, canvas: Self.canvas(imageSize, orientation))
+    }
+
+    /// Automatic Upright from the photo's detected edges, keeping `self`'s other sliders. Lines
+    /// within 30° of vertical count as verticals and within 30° of level as horizontals; the
+    /// rest (roofs, diagonals) are ignored, and a robust fit lets the outliers among the counted
+    /// ones go. A correction must be agreed: most of the lines' weight upright or level within
+    /// 1.5° afterwards (for Level, which can't straighten converging lines, twice the minimum
+    /// evidence instead), from lines spread over a quarter of the frame, and inside the
+    /// sliders' range. Otherwise Full falls back to Vertical, Vertical to Level, and Level to
+    /// nil, when `self` should stay as it is. Auto then leaves strong perspective partly in
+    /// place, as Lightroom's does: past 30 at half strength, and eased until the crop it forces
+    /// keeps at least 80% of the frame.
+    func upright(
+        _ mode: UprightMode, lines detected: [DetectedLine], imageSize: PixelSize, orientation: ImageOrientation,
+    ) -> Transform? {
+        let canvas = Self.canvas(imageSize, orientation)
+        let all = Self.uprightLines(detected, imageSize, orientation).filter { line in
+            let dx = line.b.x - line.a.x, dy = line.b.y - line.a.y
+            let fromAxis = abs(line.vertical ? atan2(dx, dy) : atan2(dy, dx))
+            return min(fromAxis, .pi - fromAxis) < 30 * .pi / 180
+        }
+        func evidence(_ lines: [UprightLine]) -> Double {
+            lines.map(\.weight).reduce(0, +)
+        }
+        /// How far apart the lines are across the frame: verticals side to side, horizontals top to bottom.
+        func spread(_ lines: [UprightLine], vertical: Bool) -> Double {
+            let positions = lines.filter { $0.vertical == vertical }
+                .map {
+                    vertical ? ($0.a.x + $0.b.x) / 2 / Double(canvas.width) : ($0.a.y + $0.b.y) / 2 /
+                        Double(canvas.height)
+                }
+            return (positions.max() ?? 0) - (positions.min() ?? 0)
+        }
+        // Lines of a combined 60 analysis pixels, at full contrast, make a correction worth applying.
+        let enough = 60.0
+        var base = self
+        base.vertical = 0
+        base.horizontal = 0
+        base.rotate = 0
+        func solve(_ lines: [UprightLine], free: [Bool]) -> (transform: Transform, inliers: [UprightLine])? {
+            guard evidence(lines) >= enough else { return nil }
+            let solved = base.fitted(to: lines, free: free, robust: true, canvas: canvas)
+            guard abs(solved.rotate) < 9.9, abs(solved.vertical) < 99, abs(solved.horizontal) < 99 else { return nil }
+            let residuals = Self.residuals(of: solved, lines, canvas: canvas)
+            let inliers = zip(lines, residuals).filter { abs($1) < 1.5 * .pi / 180 }.map(\.0)
+            let agreed = free == [false, false, true] ? evidence(inliers) >= 2 * enough
+                : evidence(inliers) >= enough && evidence(inliers) >= 0.5 * evidence(lines)
+            return agreed ? (solved, inliers) : nil
+        }
+        let level = solve(all, free: [false, false, true])?.transform
+        let vertical: Transform? = {
+            guard let solved = solve(all.filter(\.vertical), free: [true, false, true]),
+                  solved.inliers.count >= 2, spread(solved.inliers, vertical: true) >= 0.25
+            else { return level }
+            return solved.transform
+        }()
+        let full: Transform? = {
+            guard let solved = solve(all, free: [true, true, true]),
+                  solved.inliers.count(where: { !$0.vertical }) >= 2, spread(solved.inliers, vertical: false) >= 0.25
+            else { return vertical }
+            return solved.transform
+        }()
+        switch mode {
+        case .level: return level
+        case .vertical: return vertical
+        case .full: return full
+        case .auto:
+            guard var solved = full else { return nil }
+            for keyPath in [\Transform.vertical, \Transform.horizontal] {
+                let value = solved[keyPath: keyPath]
+                if abs(value) > 30 {
+                    solved[keyPath: keyPath] = (value < 0 ? -1 : 1) * (30 + 0.5 * (abs(value) - 30))
+                }
+            }
+            return solved.eased(keeping: 0.8, imageSize: imageSize, orientation: orientation)
+        }
+    }
+
+    /// This correction with its perspective scaled back, by bisection, until Constrain to Image
+    /// keeps `area` of the frame.
+    private func eased(keeping area: Double, imageSize: PixelSize, orientation: ImageOrientation) -> Transform {
+        func scaled(_ factor: Double) -> Transform {
+            var transform = self
+            transform.vertical *= factor
+            transform.horizontal *= factor
+            return transform
+        }
+        func kept(_ transform: Transform) -> Double {
+            var recipe = EditRecipe()
+            recipe.orientation = orientation
+            recipe[.transformVertical] = transform.vertical
+            recipe[.transformHorizontal] = transform.horizontal
+            recipe[.transformRotate] = transform.rotate
+            let crop = GeometryMap.constrained(.full, recipe: recipe, imageSize: imageSize)
+            return crop.width * crop.height
+        }
+        guard kept(self) < area else { return self }
+        var (low, high) = (0.0, 1.0)
+        for _ in 0 ..< 12 {
+            let middle = (low + high) / 2
+            if kept(scaled(middle)) >= area {
+                low = middle
+            } else {
+                high = middle
+            }
+        }
+        return scaled(low)
+    }
+
+    /// Each line's angle away from upright or level once `transform` applies.
+    private static func residuals(of transform: Transform, _ lines: [UprightLine], canvas: PixelSize) -> [Double] {
+        let matrix = transform.matrix(canvas: canvas)
+        return lines.map { line in
+            let pa = matrix * line.a, pb = matrix * line.b
+            let dx = pb.x / pb.z - pa.x / pa.z, dy = pb.y / pb.z - pa.y / pa.z
+            // The angle away from vertical or level, whichever way the line was drawn.
+            let angle = line.vertical ? atan2(dx, dy) : atan2(dy, dx)
+            return remainder(angle, .pi)
+        }
+    }
+
+    private struct UprightLine {
+        var a: SIMD3<Double>
+        var b: SIMD3<Double>
+        var vertical: Bool
+        var weight: Double
+    }
+
+    private static func canvas(_ imageSize: PixelSize, _ orientation: ImageOrientation) -> PixelSize {
+        orientation.swapsAxes ? PixelSize(width: imageSize.height, height: imageSize.width) : imageSize
+    }
+
+    /// The lines in the oriented photo, in pixels about its centre: what Transform maps.
+    private static func uprightLines(
+        _ lines: [DetectedLine], _ imageSize: PixelSize, _ orientation: ImageOrientation,
+    ) -> [UprightLine] {
+        let canvas = canvas(imageSize, orientation)
         let (w, h) = (Double(canvas.width), Double(canvas.height))
-        // The guides in the oriented photo, in pixels about its centre: what Transform maps.
-        let lines = guides.compactMap { guide -> (SIMD3<Double>, SIMD3<Double>, Bool)? in
+        return lines.compactMap { detected -> UprightLine? in
             func oriented(_ point: ImagePoint) -> SIMD3<Double> {
                 let mapped = orientation.matrix * SIMD3(point.x, point.y, 1)
                 return SIMD3((mapped.x / mapped.z - 0.5) * w, (mapped.y / mapped.z - 0.5) * h, 1)
             }
-            let a = oriented(guide.start), b = oriented(guide.end)
-            guard simd_distance(SIMD2(a.x, a.y), SIMD2(b.x, b.y)) > 1 else { return nil }
-            return (a, b, abs(b.y - a.y) >= abs(b.x - a.x))
+            let a = oriented(detected.line.start), b = oriented(detected.line.end)
+            guard simd_distance(SIMD2(a.x, a.y), SIMD2(b.x, b.y)) > 1, detected.strength > 0 else { return nil }
+            return UprightLine(a: a, b: b, vertical: abs(b.y - a.y) >= abs(b.x - a.x), weight: detected.strength)
         }
-        guard !lines.isEmpty else { return self }
+    }
 
+    /// A few Levenberg–Marquardt steps on the lines' angles over the free sliders (Vertical,
+    /// Horizontal, Rotate), damped towards the smallest correction, so two verticals don't
+    /// invent a horizontal turn. Robust fits reweight each line by a Cauchy function of its
+    /// residual (scale 1°), so lines that were never meant to be upright stop pulling.
+    private func fitted(to lines: [UprightLine], free: [Bool], robust: Bool, canvas: PixelSize) -> Transform {
+        guard !lines.isEmpty else { return self }
         func candidate(_ p: SIMD3<Double>) -> Transform {
             var transform = self
             transform.vertical = min(max(p.x, -100), 100)
@@ -419,35 +595,40 @@ public extension Transform {
             return transform
         }
         func residuals(_ p: SIMD3<Double>) -> [Double] {
-            let matrix = candidate(p).matrix(canvas: canvas)
-            return lines.map { a, b, vertical in
-                let pa = matrix * a, pb = matrix * b
-                let dx = pb.x / pb.z - pa.x / pa.z, dy = pb.y / pb.z - pa.y / pa.z
-                // The angle away from vertical or level, whichever way the guide was drawn.
-                let angle = vertical ? atan2(dx, dy) : atan2(dy, dx)
-                return remainder(angle, .pi)
-            }
+            Self.residuals(of: candidate(p), lines, canvas: canvas)
         }
-        // Far below the guides' sensitivity (about 2e-4 radians per slider unit, squared), so it
-        // only holds still what the guides don't determine.
+        let scale = Double.pi / 180
+        // Far below the lines' sensitivity (about 2e-4 radians per slider unit, squared), so it
+        // only holds still what the lines don't determine.
         let damping = 1e-12
         var p = SIMD3(vertical, horizontal, rotate)
         for _ in 0 ..< 50 {
             let r = residuals(p)
+            let weights = zip(lines, r).map { line, residual in
+                line.weight * (robust ? 1 / (1 + (residual / scale) * (residual / scale)) : 1)
+            }
             let step = 1e-3
             let columns = (0 ..< 3).map { axis -> [Double] in
+                guard free[axis] else { return Array(repeating: 0, count: r.count) }
                 var moved = p
                 moved[axis] += step
                 return zip(residuals(moved), r).map { ($0 - $1) / step }
             }
-            // (JᵀJ + λI) δ = −Jᵀr − λp: the damping also pulls towards no correction.
+            // (JᵀWJ + λI) δ = −JᵀWr − λp: the damping also pulls towards no correction. Fixed
+            // sliders get δ = 0.
             var normal = simd_double3x3(diagonal: SIMD3(repeating: damping))
             var gradient = -damping * p
             for i in 0 ..< 3 {
-                for j in 0 ..< 3 {
-                    normal[j][i] += zip(columns[i], columns[j]).map(*).reduce(0, +)
+                guard free[i] else {
+                    normal[i] = SIMD3(repeating: 0)
+                    normal[i][i] = 1
+                    gradient[i] = 0
+                    continue
                 }
-                gradient[i] -= zip(columns[i], r).map(*).reduce(0, +)
+                for j in 0 ..< 3 where free[j] {
+                    normal[j][i] += zip(zip(columns[i], columns[j]), weights).map { $0.0 * $0.1 * $1 }.reduce(0, +)
+                }
+                gradient[i] -= zip(zip(columns[i], r), weights).map { $0.0 * $0.1 * $1 }.reduce(0, +)
             }
             let delta = normal.inverse * gradient
             p += delta

@@ -494,6 +494,11 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         return ImageAnalysis.autoTone(session: current, recipe: recipe)
     }
 
+    public func detectLines() async -> [DetectedLine] {
+        guard let current = session.withLock({ $0 }) else { return [] }
+        return LineDetector.lines(in: current)
+    }
+
     public func maskColor(sampledAt point: CGPoint, recipe: EditRecipe) async -> SIMD3<Double>? {
         guard let current = session.withLock({ $0 }) else { return nil }
         return await withCheckedContinuation { continuation in

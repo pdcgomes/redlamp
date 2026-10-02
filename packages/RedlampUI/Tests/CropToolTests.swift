@@ -143,6 +143,35 @@ struct CropToolTests {
         #expect(model.recipe.isDefault(.transformVertical) && model.uprightGuides.isEmpty)
     }
 
+    @Test func `automatic upright corrects from the photo's edges, or leaves it when there are none`() async throws {
+        let engine = StubEngine()
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let model = EditorModel(engine: engine)
+        model.select(folder.appending(path: "IMG_0001.ARW"))
+        for _ in 0 ..< 200 where model.info == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        model.applyUpright(.vertical)
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(model.recipe.isDefault(.transformVertical) && model.history.last?.name.hasPrefix("Upright") != true)
+
+        // Four edges that lean in towards the top, as a building shot from below.
+        engine.detectedLines = [0.2, 0.4, 0.6, 0.8].map { x in
+            let lean = (x - 0.5) * 0.06
+            return DetectedLine(
+                line: GuideLine(start: ImagePoint(x: x - lean, y: 0.1), end: ImagePoint(x: x + lean, y: 0.9)),
+                strength: 200,
+            )
+        }
+        model.applyUpright(.vertical)
+        for _ in 0 ..< 100 where model.history.last?.name != "Upright: Vertical" {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(model.recipe[.transformVertical] < -5, "vertical \(model.recipe[.transformVertical])")
+        #expect(model.history.last?.name == "Upright: Vertical")
+    }
+
     @Test func `reset removes the crop, angle and turns`() async throws {
         let model = try await openModel()
         model.setValue(.cropAngle, 3)

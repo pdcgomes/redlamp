@@ -64,7 +64,7 @@ struct LensToggle: View {
     }
 }
 
-/// Upright: Off and Guided work today; the automatic modes need a line detector (LNS-07).
+/// Upright: Off, the automatic modes from the photo's own edges, and Guided.
 struct UprightButtons: View {
     @Environment(EditorModel.self) private var model
 
@@ -73,24 +73,23 @@ struct UprightButtons: View {
             Button("Off") { model.clearUpright() }
                 .controlSize(.mini)
                 .help("Remove Upright's perspective and rotation")
-            ForEach(["Auto"], id: \.self) { mode in
-                Button(mode) {}
-                    .controlSize(.mini)
-                    .disabled(true)
-                    .help("Automatic Upright needs line detection, which comes later in Phase 2")
-            }
+            mode(.auto, "Level, verticals and perspective, balanced so the result still looks natural")
             Button("Guided") { model.isPlacingGuides.toggle() }
                 .controlSize(.mini)
                 .tint(model.isPlacingGuides ? Color.accentColor : nil)
                 .buttonStyle(.bordered)
                 .help("Draw up to four guides along edges that should be vertical or horizontal")
-            ForEach(["Level", "Vertical", "Full"], id: \.self) { mode in
-                Button(mode) {}
-                    .controlSize(.mini)
-                    .disabled(true)
-                    .help("Automatic Upright needs line detection, which comes later in Phase 2")
-            }
+            mode(.level, "Level the photo by its horizontal and vertical edges")
+            mode(.vertical, "Level the photo and make converging verticals parallel")
+            mode(.full, "Level the photo, make verticals parallel and horizontals level")
         }
+    }
+
+    private func mode(_ mode: UprightMode, _ help: String) -> some View {
+        Button(mode.name) { model.applyUpright(mode) }
+            .controlSize(.mini)
+            .disabled(model.info == nil)
+            .help(help)
     }
 }
 

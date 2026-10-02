@@ -96,6 +96,9 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// keeping with the installed looks once an edit uses it.
     func embeddedBaseLook() -> BaseLookDefinition?
 
+    /// The open photo's straight edges, for automatic Upright.
+    func detectLines() async -> [DetectedLine]
+
     /// The focus stack document at `url`, merged now or read from the cache, developed with the
     /// default edit within `maxLongEdge`. `progress` gets 0 ... 1 from any thread. Opening the
     /// document afterwards shows this merge, even if it changed since it was last opened.
@@ -117,5 +120,9 @@ public extension EditingEngine {
 
     func embeddedBaseLook() -> BaseLookDefinition? {
         nil
+    }
+
+    func detectLines() async -> [DetectedLine] {
+        []
     }
 }

@@ -7,6 +7,12 @@ import Testing
 /// An engine that opens anything instantly and renders nothing: enough to drive the editor.
 final class StubEngine: EditingEngine, @unchecked Sendable {
     var sampledColor = SIMD3<Double>(0.62, 0, 0)
+    /// What `detectLines` finds, for automatic Upright.
+    var detectedLines: [DetectedLine] = []
+
+    func detectLines() async -> [DetectedLine] {
+        detectedLines
+    }
 
     func open(_ url: URL) async throws -> ImageInfo {
         ImageInfo(url: url, pixelSize: PixelSize(width: 600, height: 400), isRaw: true, sensorDescription: "stub")

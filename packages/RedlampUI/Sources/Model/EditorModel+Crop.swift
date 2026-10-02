@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import RedlampEngineAPI
 
@@ -211,6 +212,30 @@ public extension EditorModel {
         next[.transformRotate] = solved.rotate
         constrainCrop(&next)
         commit(next, .upright, "Guided Upright")
+    }
+
+    /// Automatic Upright from the photo's detected edges. Guides give way to it; with too few
+    /// edges to go on, the edit stays as it is.
+    func applyUpright(_ mode: UprightMode) {
+        Task {
+            let lines = await engine.detectLines()
+            guard let info,
+                  let solved = Transform(recipe: recipe).upright(
+                      mode, lines: lines, imageSize: info.pixelSize, orientation: recipe.orientation,
+                  )
+            else {
+                NSSound.beep()
+                return
+            }
+            uprightGuides = []
+            isPlacingGuides = false
+            var next = recipe
+            next[.transformVertical] = solved.vertical
+            next[.transformHorizontal] = solved.horizontal
+            next[.transformRotate] = solved.rotate
+            constrainCrop(&next)
+            commit(next, .upright, "Upright") { _ in mode.name }
+        }
     }
 
     /// Upright off: no guides, and no perspective or rotation correction.

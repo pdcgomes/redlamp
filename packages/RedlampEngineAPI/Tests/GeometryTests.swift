@@ -157,6 +157,115 @@ struct GeometryTests {
         #expect(abs((b.y - a.y) * 400) < 0.5, "the horizon is level: \((b.y - a.y) * 400) px")
     }
 
+    /// Edges of a scene shot so that `truth` corrects it: verticals and horizontals once corrected,
+    /// where the photo shows them, plus shorter roof lines when asked.
+    private func sceneLines(_ truth: Transform, roofs: Bool = false) -> [DetectedLine] {
+        let map = GeometryMap(imageSize: size, transform: truth)
+        func line(_ a: SIMD2<Double>, _ b: SIMD2<Double>, strength: Double) -> DetectedLine {
+            let pa = map.imagePoint(a) ?? .zero, pb = map.imagePoint(b) ?? .zero
+            return DetectedLine(
+                line: GuideLine(start: ImagePoint(x: pa.x, y: pa.y), end: ImagePoint(x: pb.x, y: pb.y)),
+                strength: strength,
+            )
+        }
+        var lines = [0.2, 0.4, 0.6, 0.8].map { x in line(SIMD2(x, 0.2), SIMD2(x, 0.8), strength: 200) }
+        lines += [0.25, 0.45, 0.65, 0.85].map { y in line(SIMD2(0.15, y), SIMD2(0.85, y), strength: 200) }
+        if roofs {
+            lines.append(line(SIMD2(0.3, 0.2), SIMD2(0.5, 0.12), strength: 80))
+            lines.append(line(SIMD2(0.5, 0.12), SIMD2(0.7, 0.2), strength: 80))
+        }
+        return lines
+    }
+
+    @Test func `Full upright recovers tilt, turn and roll, ignoring roof lines`() throws {
+        var truth = Transform()
+        truth.vertical = -30
+        truth.horizontal = 20
+        truth.rotate = 2
+        let solved = try #require(Transform().upright(
+            .full, lines: sceneLines(truth, roofs: true), imageSize: size, orientation: .identity,
+        ))
+        #expect(abs(solved.vertical + 30) < 1 && abs(solved.horizontal - 20) < 1, "\(solved)")
+        #expect(abs(solved.rotate - 2) < 0.1, "\(solved.rotate)")
+    }
+
+    @Test func `Vertical upright corrects verticals and roll but not turn`() throws {
+        var truth = Transform()
+        truth.vertical = -30
+        truth.rotate = -1.5
+        var start = Transform()
+        start.horizontal = 15
+        start.scale = 110
+        let solved = try #require(start.upright(
+            .vertical,
+            lines: sceneLines(truth),
+            imageSize: size,
+            orientation: .identity,
+        ))
+        #expect(abs(solved.vertical + 30) < 1 && abs(solved.rotate + 1.5) < 0.1, "\(solved)")
+        #expect(solved.horizontal == 0, "Upright replaces the earlier correction")
+        #expect(solved.scale == 110, "and keeps the other sliders")
+    }
+
+    @Test func `Level upright only rotates`() throws {
+        var truth = Transform()
+        truth.rotate = 3
+        let solved = try #require(Transform().upright(
+            .level,
+            lines: sceneLines(truth),
+            imageSize: size,
+            orientation: .identity,
+        ))
+        #expect(abs(solved.rotate - 3) < 0.05 && solved.vertical == 0 && solved.horizontal == 0, "\(solved)")
+    }
+
+    @Test func `Auto upright leaves strong perspective partly in place`() throws {
+        func kept(_ transform: Transform) -> Double {
+            var recipe = EditRecipe()
+            recipe[.transformVertical] = transform.vertical
+            recipe[.transformHorizontal] = transform.horizontal
+            recipe[.transformRotate] = transform.rotate
+            let crop = GeometryMap.constrained(.full, recipe: recipe, imageSize: size)
+            return crop.width * crop.height
+        }
+        for (truth, eased) in [(-10.0, false), (-60, true)] {
+            var transform = Transform()
+            transform.vertical = truth
+            let lines = sceneLines(transform)
+            let full = try #require(Transform().upright(.full, lines: lines, imageSize: size, orientation: .identity))
+            let auto = try #require(Transform().upright(.auto, lines: lines, imageSize: size, orientation: .identity))
+            #expect(abs(full.vertical - truth) < 1.5, "full \(full.vertical)")
+            if eased {
+                #expect(abs(auto.vertical - (-30 + 0.5 * (full.vertical + 30))) < 1e-9, "auto \(auto.vertical)")
+                #expect(kept(auto) >= 0.8 - 1e-3, "auto keeps \(kept(auto)) of the frame")
+            } else {
+                #expect(auto == full, "a mild correction stays whole")
+            }
+        }
+    }
+
+    @Test func `upright ignores lines that don't agree on a correction`() {
+        // Short edges in every direction, as foliage gives: no correction is agreed.
+        var random = SplitMix(seed: 5)
+        let lines = (0 ..< 40).map { _ in
+            let (x, y, angle) = (random.unit() * 0.8 + 0.1, random.unit() * 0.8 + 0.1, (random.unit() - 0.5) * 0.9)
+            let (dx, dy) = (0.03 * sin(angle), 0.04 * cos(angle))
+            return DetectedLine(
+                line: GuideLine(start: ImagePoint(x: x, y: y), end: ImagePoint(x: x + dx, y: y + dy)),
+                strength: 25,
+            )
+        }
+        #expect(Transform().upright(.auto, lines: lines, imageSize: size, orientation: .identity) == nil)
+    }
+
+    @Test func `upright needs enough edges`() {
+        let short = DetectedLine(
+            line: GuideLine(start: ImagePoint(x: 0.5, y: 0.4), end: ImagePoint(x: 0.5, y: 0.45)),
+            strength: 10,
+        )
+        #expect(Transform().upright(.auto, lines: [short], imageSize: size, orientation: .identity) == nil)
+    }
+
     @Test func `crop and orientation are kept in the sidecar only when set`() throws {
         var recipe = EditRecipe()
         let plain = try JSONEncoder().encode(recipe)
@@ -167,5 +276,22 @@ struct GeometryTests {
         #expect(!recipe.isPristine)
         let decoded = try JSONDecoder().decode(EditRecipe.self, from: JSONEncoder().encode(recipe))
         #expect(decoded == recipe)
+    }
+}
+
+/// A small deterministic generator for test data.
+private struct SplitMix {
+    var state: UInt64
+
+    init(seed: UInt64) {
+        state = seed
+    }
+
+    mutating func unit() -> Double {
+        state &+= 0x9E37_79B9_7F4A_7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return Double((z ^ (z >> 31)) >> 11) / Double(1 << 53)
     }
 }
