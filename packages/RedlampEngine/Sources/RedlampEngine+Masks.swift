@@ -334,7 +334,7 @@ extension RedlampEngine {
                 masks.map { mask in
                     guard Self.takesClosedFormMatte(mask) else { return mask }
                     var refined = mask
-                    refined.mask = ClosedFormMatte.refine(mask.mask, image: full)
+                    refined.mask = Self.closedForm(mask, image: full)
                     refined.provider += "+closed-form"
                     return refined
                 }
@@ -348,6 +348,20 @@ extension RedlampEngine {
                 instance: mask.instance, part: mask.part?.rawValue, prompts: request.prompts,
                 analysisHash: analysis.hash, center: mask.mask.centroid, bitmap: bitmap,
             )
+        }
+    }
+
+    /// Subject doubts more of Vision's edge (`ClosedFormMatte.subjectInner`), and Background is
+    /// solved as the Subject it is the inverse of: hair pokes out of the subject, so the wide
+    /// band belongs outside the subject's edge, not the background's.
+    static func closedForm(_ mask: ProvidedMask, image: CGImage) -> GrayMask {
+        switch mask.kind {
+        case .subject:
+            ClosedFormMatte.refine(mask.mask, image: image, inner: ClosedFormMatte.subjectInner)
+        case .background:
+            ClosedFormMatte.refine(mask.mask.inverted, image: image, inner: ClosedFormMatte.subjectInner).inverted
+        default:
+            ClosedFormMatte.refine(mask.mask, image: image)
         }
     }
 

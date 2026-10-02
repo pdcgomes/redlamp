@@ -99,4 +99,20 @@ struct ClosedFormMatteTests {
         #expect(matte[140, 280] == 0, "the same column below the stroke stays as it was")
         #expect(matte[20, 20] == 255 && matte[280, 20] == 0)
     }
+
+    /// A coarse mask 6 pixels past the subject's edge: the default inner band (2.4 pixels here)
+    /// holds most of the overreach as sure subject; a wider one doubts it, and the solve gives
+    /// the wall back.
+    @Test func `a wider inner band doubts a mask that runs past the edge`() throws {
+        let width = 400
+        let height = 100
+        let photo = try image(width: width, height: height) { x, _ in x < 200 ? Self.hair : Self.wall }
+        let coarse = GrayMask(width: width, height: height, coverage: (0 ..< width * height).map { index in
+            index % width < 206 ? 1 : 0
+        })
+        #expect(ClosedFormMatte.refine(coarse, image: photo)[202, 50] == 255)
+        let doubted = ClosedFormMatte.refine(coarse, image: photo, inner: 0.03)
+        #expect(doubted[202, 50] < 30, "the wall: \(doubted[202, 50])")
+        #expect(doubted[195, 50] > 225, "the subject: \(doubted[195, 50])")
+    }
 }

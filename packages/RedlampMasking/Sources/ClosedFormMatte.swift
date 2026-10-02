@@ -23,8 +23,12 @@ public enum ClosedFormMatte {
     static let epsilon: Float = 1e-5
     /// The uncertain band, as fractions of the long side: a little inside the coarse edge, more
     /// outside it, where hair pokes out.
-    static let inner: Float = 0.006
+    public static let inner: Float = 0.006
     static let outer: Float = 0.02
+    /// Vision's Subject mask can run a few pixels past hair onto a smooth background, which a
+    /// narrow inner band would hold as sure subject and spread a haze from: on three portraits a
+    /// 1% band takes the error around the edge from 0.084 to 0.072 (`subject_haze.py`, MSK-17).
+    public static let subjectInner: Float = 0.01
     /// Coarse to fine: the photo halved until its long side is at most this, where most
     /// iterations run; each finer size starts from the coarser one's result.
     static let coarsestLongEdge = 1536
@@ -32,9 +36,12 @@ public enum ClosedFormMatte {
     static let refineIterations = 100
     static let finalIterations = 40
 
-    /// `coarse` is any size; `image` is the photo at the size to solve at.
-    public static func refine(_ coarse: GrayMask, image: CGImage) -> GrayMask {
-        refine(coarse, image: image) { mask, size in Self.trimap(mask, width: size.width, height: size.height) }
+    /// `coarse` is any size; `image` is the photo at the size to solve at; `inner` is how far
+    /// inside the coarse edge to doubt it, as a fraction of the long side.
+    public static func refine(_ coarse: GrayMask, image: CGImage, inner: Float = inner) -> GrayMask {
+        refine(coarse, image: image) { mask, size in
+            Self.trimap(mask, width: size.width, height: size.height, inner: inner)
+        }
     }
 
     /// The Refine Edge brush: coverage under `strokes` solved again, everything else kept as
@@ -136,9 +143,9 @@ public enum ClosedFormMatte {
 
     /// 1 for sure subject, 0 for sure background, 0.5 for uncertain: the band around the coarse
     /// edge, and wherever the coarse mask is itself unsure (Vision leaves much of a costume grey).
-    static func trimap(_ mask: [Float], width: Int, height: Int) -> [Float] {
+    static func trimap(_ mask: [Float], width: Int, height: Int, inner: Float = inner) -> [Float] {
         let long = Float(max(width, height))
-        let distance = SkyMatte.distance(from: mask, width: width, height: height, limit: outer * long)
+        let distance = SkyMatte.distance(from: mask, width: width, height: height, limit: max(outer, inner) * long)
         return mask.indices.map { index in
             if mask[index] > 0.1, mask[index] < 0.9 {
                 return 0.5

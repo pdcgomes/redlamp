@@ -150,6 +150,15 @@ It brings back beard curls and the curls at the side of a head, and it sharpens 
 
 **The faint halo against pale, blurred backgrounds is mostly real** (`halo.py`). Closed-form leaves about 2% coverage, on average, over the band's background (where ViTMatte has none) on the four portraits. A colour check estimated each pixel's background and person colours near it (spread from the trimap's sure regions), and lowered coverage where the pixel's share of the way between them (Smith and Blinn's projection) says it is background. It halves that halo (0.022 to 0.010), but keeps 64–70% of the strands instead of 85%, and raises the error (0.065 to 0.066–0.070): a thin strand against a blurred background is mostly background colour. And ViTMatte draws the same glow above the beard portrait's out-of-focus head. That edge really is a soft, partial coverage, so it stays.
 
+**Subject's haze beside hair, and Background's band** (`subject_haze.py`). Vision's Subject mask can run a few pixels past hair onto a smooth background (on the beard portrait 0.5% of what the trimap took as sure subject is background; none of the person mask's). Held at full coverage, that sliver spreads a haze across the background. Subject now doubts 1% of the long side inside its edge instead of 0.6% (1.5% helps the beard portrait more but the others less). And Background was solved as a mask of its own, so its narrow band lay on the background side and its wide one inside the person, the wrong way round for hair: it is solved as the Subject it inverts. In Swift, over the person's edge on the three portraits where Subject is the person, against ViTMatte:
+
+| | Error, before | Error, after | Strands kept, before | Strands kept, after | Haze, before | Haze, after |
+| --- | --- | --- | --- | --- | --- | --- |
+| Subject | 0.084 | 0.072 | 84% | 82% | 0.043 | 0.035 |
+| Background (its inverse) | 0.089 | 0.072 | 34% | 82% | 0.002 | 0.035 |
+
+  Background keeps its strands now (its old narrow band on the hair side left them out, and with them their haze). People and Objects keep the 0.6% band they were tuned with.
+
 ## The Refine Edge brush
 
 Painting over an AI mask's edge marks a band where `ClosedFormMatte` solves coverage again from the photo; everything else stays as the mask has it, soft values included, so the solve meets the mask where the stroke ends. Each stroke is a step of its own and is kept with the mask (`AIMask.refinements`), so Update AI Masks applies it to the new mask. `redlamp mask … --refine x,y;x,y --refine-size 0.02` runs it from the command line. What it took:
