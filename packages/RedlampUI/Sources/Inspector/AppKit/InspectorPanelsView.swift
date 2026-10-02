@@ -38,7 +38,18 @@ final class InspectorPanelsView: NSView {
         case .masking:
             [MaskingPanelView(model: model)]
         case .crop:
-            [HostedControl(model: model, CropToolPanel())] + PanelRows(model: model).sliders([.cropAngle])
+            [
+                HostedControl(model: model, CropToolPanel()),
+                // Slider rows get their insets from a panel; this one has no panel around it.
+                ColumnView(
+                    spacing: Metrics.panelRowSpacing,
+                    insets: NSEdgeInsets(
+                        top: 0, left: Metrics.panelPadding, bottom: Metrics.panelBottomPadding,
+                        right: Metrics.panelPadding,
+                    ),
+                    views: PanelRows(model: model).sliders([.cropAngle]),
+                ),
+            ]
         default:
             [HostedControl(model: model, PlannedToolCard(tool: tool))]
         }
