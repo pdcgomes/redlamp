@@ -53,13 +53,35 @@ public extension EditorModel {
     }
 
     /// The folder's first photos are in: selects `target` if it's among them, else the first.
-    private func didList(_ found: [LibraryItem], select target: URL?) {
-        guard let folder else { return }
-        detectStacks(in: found.map(\.url), folder: folder)
+    internal func didList(_ found: [LibraryItem], select target: URL?) {
         if let next = target.flatMap({ library.index(of: $0) != nil ? $0 : nil }) ?? found.first?.url {
-            select(next)
+            if next == selection {
+                selectionIndex = library.index(of: next)
+            } else {
+                select(next)
+            }
         }
         thumbnailLoader.warm(found)
+    }
+
+    /// Keeps the editor in step with the folder as it changes on disk: when the selected photo is
+    /// deleted or moved away, its neighbour is selected, as deleting does in Lightroom.
+    internal func followLibrary() {
+        libraryObservation = library.observe { [weak self] diff in self?.libraryChanged(diff) }
+        library.onReopened = { [weak self] found in self?.didList(found, select: self?.selection) }
+        library.onStacks = { [weak self] found in
+            guard let self else { return }
+            stackSuggestions = found.filter { !dismissedStacks.contains($0) }
+        }
+    }
+
+    private func libraryChanged(_ diff: LibraryDiff) {
+        guard !diff.reset, let selection else { return }
+        if let index = library.index(of: selection) {
+            selectionIndex = index
+        } else if let last = selectionIndex, !diff.removed.isEmpty, !items.isEmpty {
+            select(items[min(last, items.count - 1)].url)
+        }
     }
 
     func selectNext() {

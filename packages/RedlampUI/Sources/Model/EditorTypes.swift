@@ -13,28 +13,54 @@ public struct LibraryItem: Identifiable, Hashable, Sendable {
     public var hasSidecar = false
     /// The sidecar can be read without waiting for iCloud Drive.
     public var sidecarIsLocal = true
+    public var sidecarModified: Date?
     /// The photo is on this Mac, not only in iCloud Drive.
     public var isLocal = true
+    /// Still being written (copied in): its thumbnail waits until its size and date settle.
+    public var isSettling = false
+    /// The folder it's in, which orders it among subfolders' photos.
+    public let folderPath: String
 
     public init(url: URL, hasEdits: Bool = false, metadata: PhotoMetadata = PhotoMetadata()) {
         self.url = url
         self.hasEdits = hasEdits
         self.metadata = metadata
+        folderPath = url.deletingLastPathComponent().path
     }
 
-    init(_ entry: PhotoEntry) {
+    init(_ entry: PhotoEntry, folderPath: String) {
         url = entry.url
+        self.folderPath = folderPath
         hasEdits = false
         size = entry.size
         modified = entry.modified
         hasSidecar = entry.hasSidecar
         sidecarIsLocal = entry.sidecarIsLocal
+        sidecarModified = entry.sidecarModified
         isLocal = entry.isLocal
     }
 
     /// Whether its badges are waiting for its sidecar to be read.
     var needsSummary: Bool {
         hasSidecar && sidecarIsLocal
+    }
+
+    /// A listing's photos as items, in the listing's order.
+    static func items(_ listing: FolderListing) -> [LibraryItem] {
+        let folderPath = listing.folder.path
+        return listing.photos.map { LibraryItem($0, folderPath: folderPath) }
+    }
+
+    /// The order photos have with Show Photos in Subfolders: a folder's photos by name, then each
+    /// subfolder's, depth first, subfolders in Finder's order.
+    static func walkPrecedes(_ a: LibraryItem, _ b: LibraryItem) -> Bool {
+        guard a.folderPath != b.folderPath else { return FileOrder.precedes(a.name, b.name) }
+        let left = a.folderPath.split(separator: "/")
+        let right = b.folderPath.split(separator: "/")
+        for (x, y) in zip(left, right) where x != y {
+            return FileOrder.precedes(String(x), String(y))
+        }
+        return left.count < right.count
     }
 
     public var id: URL {

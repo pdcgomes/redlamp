@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 import RedlampDocument
@@ -61,18 +62,18 @@ public final class FolderLibrary {
     @ObservationIgnored var listingTree: Set<String> = []
     @ObservationIgnored var treeObservers: [UUID: @MainActor (Set<String>) -> Void] = [:]
     /// The open folder can't be listed (its volume went away).
-    public private(set) var isOpenFolderUnavailable = false
+    public internal(set) var isOpenFolderUnavailable = false
     /// The number of photos shown.
     public private(set) var count = 0
     /// Bumped by every change to `items`.
     public private(set) var revision = 0
 
-    @ObservationIgnored public private(set) var items: [LibraryItem] = []
-    @ObservationIgnored private var positions: [URL: Int] = [:]
+    @ObservationIgnored public internal(set) var items: [LibraryItem] = []
+    @ObservationIgnored var positions: [URL: Int] = [:]
     @ObservationIgnored let scheduler: WorkScheduler
     @ObservationIgnored let defaults: UserDefaults?
     @ObservationIgnored private let store = SidecarStore()
-    @ObservationIgnored private var generation = 0
+    @ObservationIgnored var generation = 0
     @ObservationIgnored private var observers: [UUID: @MainActor (LibraryDiff) -> Void] = [:]
     /// The first rows of probe batches still waiting, for `prioritize`.
     @ObservationIgnored private var probeStarts: Set<Int> = []
@@ -82,6 +83,16 @@ public final class FolderLibrary {
     @ObservationIgnored var lastPhotoOrder: [String] = []
     /// Roots whose access was started (security-scoped once sandboxed).
     @ObservationIgnored var accessing: Set<String> = []
+    /// The directories whose photos are shown (the open folder, and its subtree with subfolders).
+    @ObservationIgnored var listedDirectories: Set<String> = []
+    /// File-system watching (see `FolderLibrary+Watching`).
+    @ObservationIgnored var watching = Watching()
+    /// The open folder was listed again after its volume came back.
+    @ObservationIgnored var onReopened: (@MainActor ([LibraryItem]) -> Void)?
+    /// Focus stacks found in the shown directories.
+    @ObservationIgnored var onStacks: (@MainActor ([StackSuggestion]) -> Void)?
+    /// Focus stacks found per directory, kept while its listing is unchanged.
+    @ObservationIgnored var stackCache: [String: (signature: Int, suggestions: [StackSuggestion])] = [:]
 
     /// Photos per probe job: big enough that scheduling is noise, small enough that the visible
     /// ones' badges come first.
@@ -92,6 +103,14 @@ public final class FolderLibrary {
         self.scheduler = scheduler
         self.defaults = defaults
         loadSettings()
+    }
+
+    isolated deinit {
+        watching.watcher?.stop()
+        watching.poll?.invalidate()
+        for observer in watching.mountObservers {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+        }
     }
 
     // MARK: - Reading
@@ -122,6 +141,7 @@ public final class FolderLibrary {
         scheduler.cancel(prefix: probeKeyPrefix(generation - 1))
         openFolder = folder
         isOpenFolderUnavailable = false
+        listedDirectories = []
         replace(with: [])
         saveSettings()
         guard let folder else { return }
@@ -133,7 +153,8 @@ public final class FolderLibrary {
                 for await listing in FolderScanner.walk(folder, scheduler: scheduler) {
                     guard self.generation == generation else { return }
                     listed = true
-                    append(listing.photos.map(LibraryItem.init))
+                    remember(listing)
+                    append(LibraryItem.items(listing))
                     if !announced, !items.isEmpty {
                         announced = true
                         opened(items)
@@ -144,15 +165,20 @@ public final class FolderLibrary {
                 if !announced {
                     opened(items)
                 }
+                refreshStacks()
             } else {
                 let found = try? await scheduler.run(.onScreen) {
-                    try FolderScanner.list(folder).photos.map(LibraryItem.init)
+                    try LibraryItem.items(FolderScanner.list(folder))
                 }
                 guard self.generation == generation else { return }
                 isOpenFolderUnavailable = found == nil
+                if found != nil {
+                    listedDirectories = [folder.path]
+                }
                 replace(with: found ?? [])
                 probeSidecars(in: 0 ..< items.count, generation: generation)
                 opened(items)
+                refreshStacks()
             }
         }
     }
@@ -167,10 +193,14 @@ public final class FolderLibrary {
         }
     }
 
-    private func replace(with items: [LibraryItem]) {
+    func replace(with items: [LibraryItem]) {
         self.items = items
         positions = Dictionary(items.enumerated().map { ($1.url, $0) }) { first, _ in first }
         publish(LibraryDiff(reset: true))
+    }
+
+    private func remember(_ listing: FolderListing) {
+        listedDirectories.insert(listing.folder.path)
     }
 
     /// Adds photos after the last (a subfolder's, in walk order).
@@ -202,13 +232,13 @@ public final class FolderLibrary {
         publish(LibraryDiff(updated: [index]))
     }
 
-    private func reindex(from start: Int) {
+    func reindex(from start: Int) {
         for index in start ..< items.count {
             positions[items[index].url] = index
         }
     }
 
-    private func publish(_ diff: LibraryDiff) {
+    func publish(_ diff: LibraryDiff) {
         count = items.count
         revision += 1
         for observer in observers.values {
@@ -224,7 +254,7 @@ public final class FolderLibrary {
 
     /// Reads the badges of the photos in `rows` with a local sidecar, a batch per job, in order.
     /// A batch is keyed by its first row, so `prioritize` can find the visible ones.
-    private func probeSidecars(in rows: Range<Int>, generation: Int) {
+    func probeSidecars(in rows: Range<Int>, generation: Int) {
         let store = store
         if generation != probedGeneration {
             probedGeneration = generation

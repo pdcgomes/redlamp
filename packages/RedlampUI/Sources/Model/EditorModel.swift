@@ -33,6 +33,11 @@ public final class EditorModel {
     /// The selected photo's thumbnail, shown while it decodes.
     public internal(set) var selectionThumbnail: CGImage?
     @ObservationIgnored private var selectionThumbnailRequest: UInt64?
+    /// Where the selection is in `items`, so a deleted photo's neighbour can take its place.
+    @ObservationIgnored var selectionIndex: Int?
+    @ObservationIgnored var libraryObservation: LibraryObservation?
+    /// Stack suggestions the user dismissed; they don't come back when the folder changes.
+    @ObservationIgnored var dismissedStacks: Set<StackSuggestion> = []
     public internal(set) var selection: URL?
     /// Focus stacks found in the folder that have no stack document yet.
     public internal(set) var stackSuggestions: [StackSuggestion] = []
@@ -386,6 +391,7 @@ public final class EditorModel {
                 engine.decodeThumbnail(for: url, maxPixelSize: size)
             }
         canvas.onRenderSizeChange = { [weak self] _ in self?.requestRender() }
+        followLibrary()
         let frames = engine.frames()
         framesTask = Task { [weak self] in
             for await frame in frames {
@@ -404,6 +410,7 @@ public final class EditorModel {
             previousSelection = selection
         }
         selection = url
+        selectionIndex = library.index(of: url)
         library.remember(url)
         // Cleared first so the resets below don't render the outgoing photo; a ready photo
         // sets it again before the UI updates.

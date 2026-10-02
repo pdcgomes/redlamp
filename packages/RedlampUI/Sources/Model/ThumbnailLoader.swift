@@ -97,7 +97,7 @@ public final class ThumbnailLoader {
             completion(image)
             return id
         }
-        guard item.isLocal else {
+        guard item.isLocal, !item.isSettling else {
             completion(nil)
             return id
         }
@@ -244,7 +244,7 @@ public final class ThumbnailLoader {
         let generation = warmGeneration
         for folder in folders {
             scheduler.submit(.background, key: "warm:list:\(folder.path)") {
-                let items = ((try? FolderScanner.list(folder))?.photos ?? []).map(LibraryItem.init)
+                let items = (try? FolderScanner.list(folder)).map(LibraryItem.items) ?? []
                 Task { @MainActor [weak self] in
                     guard let self, warmGeneration == generation else { return }
                     warmQueue += items.filter(\.isLocal)

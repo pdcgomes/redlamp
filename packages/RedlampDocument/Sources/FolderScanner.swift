@@ -12,10 +12,12 @@ public struct PhotoEntry: Sendable, Hashable {
     public let sidecarIsLocal: Bool
     /// The photo itself is on this Mac, not only in iCloud Drive.
     public let isLocal: Bool
+    /// When the sidecar last changed, so a sidecar edited elsewhere is read again.
+    public let sidecarModified: Date?
 
     public init(
         url: URL, size: Int64 = 0, modified: Date = .distantPast, hasSidecar: Bool = false,
-        sidecarIsLocal: Bool = true, isLocal: Bool = true,
+        sidecarIsLocal: Bool = true, isLocal: Bool = true, sidecarModified: Date? = nil,
     ) {
         self.url = url
         self.size = size
@@ -23,6 +25,7 @@ public struct PhotoEntry: Sendable, Hashable {
         self.hasSidecar = hasSidecar
         self.sidecarIsLocal = sidecarIsLocal
         self.isLocal = isLocal
+        self.sidecarModified = sidecarModified
     }
 
     public var name: String {
@@ -62,7 +65,7 @@ public enum FolderScanner {
         )
         let keySet = Set(keys)
         var files: [(name: String, values: URLResourceValues)] = []
-        var sidecars: [String: Bool] = [:]
+        var sidecars: [String: (isLocal: Bool, modified: Date?)] = [:]
         var subfolders: [String] = []
         files.reserveCapacity(entries.count)
         for entry in entries {
@@ -71,7 +74,7 @@ public enum FolderScanner {
             name.makeContiguousUTF8()
             let ext = (name as NSString).pathExtension.lowercased()
             if ext == "redlamp" {
-                sidecars[String(name.dropLast(".redlamp".count))] = isLocal(values)
+                sidecars[String(name.dropLast(".redlamp".count))] = (isLocal(values), values.contentModificationDate)
             } else if values.isDirectory == true {
                 if values.isPackage != true, ext != FocusStackDocument.fileExtension {
                     subfolders.append(name)
@@ -88,8 +91,9 @@ public enum FolderScanner {
                 size: Int64(values.fileSize ?? 0),
                 modified: values.contentModificationDate ?? .distantPast,
                 hasSidecar: sidecar != nil,
-                sidecarIsLocal: sidecar ?? true,
+                sidecarIsLocal: sidecar?.isLocal ?? true,
                 isLocal: isLocal(values),
+                sidecarModified: sidecar?.modified,
             )
         }
         return FolderListing(

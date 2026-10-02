@@ -192,6 +192,8 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
             item.cell.configure(photo, image: nil)
             if rewritten {
                 item.cell.setImage(nil)
+            }
+            if item.cell.image == nil {
                 requestThumbnail(for: item, photo)
             }
         }

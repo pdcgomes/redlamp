@@ -3,17 +3,6 @@ import RedlampDocument
 import RedlampEngineAPI
 
 public extension EditorModel {
-    /// Looks for focus stacks among a folder's photos in the background.
-    internal func detectStacks(in urls: [URL], folder: URL) {
-        Task {
-            let found = await Task.detached(priority: .utility) {
-                StackDetector.suggestions(in: urls)
-            }.value
-            guard self.folder == folder else { return }
-            stackSuggestions = found
-        }
-    }
-
     /// Saves the stack as a document beside its frames, adds it to the library and opens the
     /// Stack workspace on it, which merges it.
     func mergeStack(_ suggestion: StackSuggestion) {
@@ -30,6 +19,7 @@ public extension EditorModel {
     }
 
     func dismissStack(_ suggestion: StackSuggestion) {
+        dismissedStacks.insert(suggestion)
         stackSuggestions.removeAll { $0 == suggestion }
     }
 

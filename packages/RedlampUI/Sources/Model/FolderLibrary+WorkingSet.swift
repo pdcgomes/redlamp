@@ -22,6 +22,7 @@ public extension FolderLibrary {
         }
         guard !added.isEmpty else { return [] }
         saveSettings()
+        watchRoots()
         for root in added {
             startAccess(root)
             let url = root.url
@@ -42,6 +43,7 @@ public extension FolderLibrary {
             open(nil)
         }
         saveSettings()
+        watchRoots()
     }
 
     /// Points a missing root at the folder the user found it in.
@@ -51,6 +53,7 @@ public extension FolderLibrary {
         replaceRoot(moved)
         missing.remove(root.id)
         startAccess(moved)
+        watchRoots()
         scheduler.submit(.lookAhead) {
             let made = WorkingFolder.make(for: url, id: root.id)
             Task { @MainActor [weak self] in self?.replaceRoot(made) }
@@ -83,6 +86,7 @@ public extension FolderLibrary {
                         missing.insert(root.id)
                     }
                 }
+                watchRoots()
                 let folder = open.flatMap { open in
                     root(containing: open).flatMap { missing.contains($0.id) ? nil : open }
                 }

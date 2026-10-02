@@ -1,3 +1,4 @@
+import Accelerate
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -107,21 +108,37 @@ public enum StackDetector {
     public static let maximumGap: TimeInterval = 30
 
     /// Stacks among `urls` (sorted by name) that no stack document among them already covers.
-    /// Reads each file's EXIF and, for candidate runs, small thumbnails.
+    /// Reads each file's EXIF and, for candidate runs, small thumbnails, on all cores.
     public static func suggestions(in urls: [URL]) -> [StackSuggestion] {
         let stacked = Set(urls.filter(SupportedFormats.isStack).flatMap { url in
             ((try? FocusStackDocument.read(url))?.frameURLs(at: url) ?? []).map(\.standardizedFileURL)
         })
-        let captures = urls.filter { !SupportedFormats.isStack($0) }.compactMap { url in
-            Capture.read(url).map { (url, $0) }
+        let photos = urls.filter { !SupportedFormats.isStack($0) }
+        let captures = zip(photos, concurrentMap(photos, Capture.read)).compactMap { url, capture in
+            capture.map { (url, $0) }
         }
         return runs(captures).compactMap { run in
             let covered = run.count { stacked.contains($0.standardizedFileURL) }
             guard covered * 2 < run.count else { return nil }
-            let thumbnails = run.compactMap(thumbnail)
+            let thumbnails = concurrentMap(run, thumbnail).compactMap(\.self)
             guard thumbnails.count == run.count, isFocusSweep(thumbnails) else { return nil }
             return StackSuggestion(frames: run)
         }
+    }
+
+    /// `transform` of every element, run across the cores (file reads and decodes).
+    static func concurrentMap<T: Sendable>(_ elements: [URL], _ transform: @Sendable (URL) -> T?) -> [T?] {
+        let results = UnsafeMutableBufferPointer<T?>.allocate(capacity: elements.count)
+        results.initialize(repeating: nil)
+        defer {
+            results.deinitialize()
+            results.deallocate()
+        }
+        nonisolated(unsafe) let output = results
+        DispatchQueue.concurrentPerform(iterations: elements.count) { index in
+            output[index] = transform(elements[index])
+        }
+        return Array(results)
     }
 
     /// Consecutive frames with identical settings, each within `maximumGap` of the last and not
@@ -227,19 +244,37 @@ public enum StackDetector {
         return Thumbnail(width: width, height: height, pixels: bytes.map { Float($0) / 255 })
     }
 
-    /// Mean squared Laplacian per grid cell.
+    /// Mean squared Laplacian per grid cell, over the pixels with all four neighbours.
     static func cellSharpness(_ image: Thumbnail, columns: Int, rows: Int) -> [Float] {
+        let (w, h) = (image.width, image.height)
+        var laplacian = [Float](repeating: 0, count: w * h)
+        let kernel: [Float] = [0, -1, 0, -1, 4, -1, 0, -1, 0]
+        convolve(image.pixels, into: &laplacian, width: w, height: h) { source, destination in
+            vImageConvolve_PlanarF(
+                &source, &destination, nil, 0, 0, kernel, 3, 3, 0, vImage_Flags(kvImageEdgeExtend),
+            )
+        }
+        // Runs of interior columns that fall in the same grid column.
+        var segments: [(column: Int, range: Range<Int>)] = []
+        for x in 1 ..< max(w - 1, 1) {
+            let column = min(x * columns / w, columns - 1)
+            if let last = segments.last, last.column == column {
+                segments[segments.count - 1].range = last.range.lowerBound ..< x + 1
+            } else {
+                segments.append((column, x ..< x + 1))
+            }
+        }
         var sums = [Float](repeating: 0, count: columns * rows)
         var counts = [Float](repeating: 0, count: columns * rows)
-        let (w, h) = (image.width, image.height)
-        for y in 1 ..< h - 1 {
-            for x in 1 ..< w - 1 {
-                let p = image.pixels
-                let laplacian = 4 * p[y * w + x] - p[y * w + x - 1] - p[y * w + x + 1] - p[(y - 1) * w + x]
-                    - p[(y + 1) * w + x]
-                let cell = min(y * rows / h, rows - 1) * columns + min(x * columns / w, columns - 1)
-                sums[cell] += laplacian * laplacian
-                counts[cell] += 1
+        laplacian.withUnsafeBufferPointer { values in
+            for y in 1 ..< max(h - 1, 1) {
+                let row = min(y * rows / h, rows - 1)
+                for segment in segments {
+                    let start = y * w + segment.range.lowerBound
+                    let slice = UnsafeBufferPointer(rebasing: values[start ..< start + segment.range.count])
+                    sums[row * columns + segment.column] += vDSP.sumOfSquares(slice)
+                    counts[row * columns + segment.column] += Float(segment.range.count)
+                }
             }
         }
         return zip(sums, counts).map { $0 / max($1, 1) }
@@ -248,36 +283,43 @@ public enum StackDetector {
     /// A separable box blur with clamped edges.
     static func blurred(_ image: Thumbnail, radius: Int) -> [Float] {
         let (w, h) = (image.width, image.height)
-        func pass(_ values: [Float], horizontal: Bool) -> [Float] {
-            var out = values
-            for y in 0 ..< h {
-                for x in 0 ..< w {
-                    var sum: Float = 0
-                    for k in -radius ... radius {
-                        let (sx, sy) = horizontal ? (min(max(x + k, 0), w - 1), y) : (x, min(max(y + k, 0), h - 1))
-                        sum += values[sy * w + sx]
-                    }
-                    out[y * w + x] = sum / Float(2 * radius + 1)
-                }
-            }
-            return out
+        let kernel = [Float](repeating: 1 / Float(2 * radius + 1), count: 2 * radius + 1)
+        var blurred = [Float](repeating: 0, count: w * h)
+        convolve(image.pixels, into: &blurred, width: w, height: h) { source, destination in
+            vImageSepConvolve_PlanarF(
+                &source, &destination, nil, 0, 0, kernel, UInt32(kernel.count), kernel, UInt32(kernel.count), 0, 0,
+                vImage_Flags(kvImageEdgeExtend),
+            )
         }
-        return pass(pass(image.pixels, horizontal: true), horizontal: false)
+        return blurred
+    }
+
+    /// Runs a vImage convolution from `pixels` into `output`, both `width` × `height` floats.
+    private static func convolve(
+        _ pixels: [Float], into output: inout [Float], width: Int, height: Int,
+        _ body: (inout vImage_Buffer, inout vImage_Buffer) -> vImage_Error,
+    ) {
+        var input = pixels
+        input.withUnsafeMutableBytes { source in
+            output.withUnsafeMutableBytes { destination in
+                var sourceBuffer = vImage_Buffer(
+                    data: source.baseAddress, height: vImagePixelCount(height), width: vImagePixelCount(width),
+                    rowBytes: width * MemoryLayout<Float>.stride,
+                )
+                var destinationBuffer = vImage_Buffer(
+                    data: destination.baseAddress, height: vImagePixelCount(height), width: vImagePixelCount(width),
+                    rowBytes: width * MemoryLayout<Float>.stride,
+                )
+                _ = body(&sourceBuffer, &destinationBuffer)
+            }
+        }
     }
 
     /// Pearson correlation of two equally sized images.
     static func correlation(_ a: [Float], _ b: [Float]) -> Float {
-        let n = Float(a.count)
-        let meanA = a.reduce(0, +) / n
-        let meanB = b.reduce(0, +) / n
-        var ab: Float = 0
-        var aa: Float = 0
-        var bb: Float = 0
-        for (x, y) in zip(a, b) {
-            ab += (x - meanA) * (y - meanB)
-            aa += (x - meanA) * (x - meanA)
-            bb += (y - meanB) * (y - meanB)
-        }
-        return ab / max((aa * bb).squareRoot(), 1e-12)
+        let centredA = vDSP.add(-vDSP.mean(a), a)
+        let centredB = vDSP.add(-vDSP.mean(b), b)
+        let product = vDSP.dot(centredA, centredB)
+        return product / max((vDSP.sumOfSquares(centredA) * vDSP.sumOfSquares(centredB)).squareRoot(), 1e-12)
     }
 }
