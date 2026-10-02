@@ -60,6 +60,24 @@ struct ThumbnailsTests {
         #expect(similarity > 0.9, "the same picture, the same way up (\(similarity))")
     }
 
+    @Test(.enabled(if: !raws.isEmpty))
+    func `a preview is decoded in place in the mapped raw file, never copied`() throws {
+        let url = try #require(Self.raws.first)
+        var file: NSData? = try NSData(contentsOf: url, options: .alwaysMapped)
+        let (preview, _) = try #require(try Thumbnails.smallestPreview(
+            in: Data(referencing: #require(file)),
+            atLeast: 192,
+        ))
+        let bytes = try #require(try Thumbnails.bytes(of: preview, in: #require(file)))
+        let start = try #require(file?.bytes) + preview.offset
+        file = nil
+        #expect(bytes.withUnsafeBytes { $0.baseAddress } == start, "a view into the mapping")
+        #expect(bytes.count == preview.length)
+        #expect(Array(bytes.prefix(2)) == [0xFF, 0xD8], "a JPEG, still mapped once the file is let go")
+        let outside = Thumbnails.Preview(offset: 1 << 40, length: 1, width: 192, height: 128)
+        #expect(Thumbnails.bytes(of: outside, in: NSData()) == nil)
+    }
+
     @Test func `the smallest preview that fits is chosen`() {
         let small = Thumbnails.Preview(offset: 0, length: 1, width: 160, height: 120)
         let medium = Thumbnails.Preview(offset: 1, length: 1, width: 1616, height: 1080)

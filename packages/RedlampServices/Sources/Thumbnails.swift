@@ -36,14 +36,15 @@ public enum Thumbnails {
 
     /// The raw file's smallest JPEG preview at least `maxPixelSize` on its long edge, decoded at
     /// that size and turned upright. The file is mapped once: LibRaw parses it from the mapping
-    /// and the preview is decoded straight from it, so nothing is read twice or copied.
+    /// and ImageIO decodes the preview straight from it. A copy of the preview (1 to 5 MB) was
+    /// most of a decode's memory, and with every core decoding, malloc kept the copies' high-water
+    /// mark in the footprint after they were freed.
     static func embeddedPreview(of url: URL, maxPixelSize: Int) -> CGImage? {
-        guard let file = try? Data(contentsOf: url, options: .alwaysMapped),
-              let (preview, flip) = smallestPreview(in: file, atLeast: maxPixelSize),
-              preview.offset >= 0, preview.offset + preview.length <= file.count
+        guard let file = try? NSData(contentsOf: url, options: .alwaysMapped),
+              let (preview, flip) = smallestPreview(in: Data(referencing: file), atLeast: maxPixelSize),
+              let jpeg = bytes(of: preview, in: file),
+              let source = CGImageSourceCreateWithData(jpeg as CFData, nil)
         else { return nil }
-        let jpeg = file.subdata(in: preview.offset ..< preview.offset + preview.length)
-        guard let source = CGImageSourceCreateWithData(jpeg as CFData, nil) else { return nil }
         // The preview itself, never its own (often 160 px) EXIF thumbnail; scaled as it decodes.
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -55,6 +56,18 @@ public enum Thumbnails {
         let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
         let tagged = properties?[kCGImagePropertyOrientation] as? Int ?? 1
         return oriented(image, exifOrientation: tagged != 1 ? tagged : exifOrientation(libRawFlip: flip))
+    }
+
+    /// The preview's bytes where they are in the mapped file, which they keep mapped for as long as
+    /// anything (ImageIO) holds them.
+    static func bytes(of preview: Preview, in file: NSData) -> Data? {
+        guard preview.offset >= 0, preview.length > 0, preview.offset + preview.length <= file.length else {
+            return nil
+        }
+        return Data(
+            bytesNoCopy: UnsafeMutableRawPointer(mutating: file.bytes + preview.offset), count: preview.length,
+            deallocator: .custom { _, _ in withExtendedLifetime(file) {} },
+        )
     }
 
     /// The preview to decode and the photo's rotation (LibRaw's `flip`), from the file's metadata.
