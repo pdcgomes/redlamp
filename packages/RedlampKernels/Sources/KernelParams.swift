@@ -199,6 +199,7 @@ public struct DenoiseParams {
     public var a: SIMD4<Float>
     public var b: SIMD4<Float>
     public var threshold = SIMD4<Float>(0, 0, 0, 0)
+    public var edge = SIMD4<Float>(0, 0, 0, 0)
 
     public init(origin: SIMD4<Int32>, size: SIMD4<Int32>, a: SIMD4<Float>, b: SIMD4<Float>) {
         self.origin = origin

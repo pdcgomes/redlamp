@@ -9,6 +9,11 @@ import simd
 /// sigmas of luma and chroma detail to remove. Luma is split into a strength, which masks' Noise
 /// adds to per pixel, and a threshold per unit of it.
 struct DenoiseSettings: Hashable {
+    /// Chroma stops averaging across luma differences of about this many of the level's noise
+    /// sigmas. Chosen with `NoiseBenchmarkTests`: at 3 (2 is as good, 5 starts letting colour
+    /// through) a clipped orange light no longer bleeds into its blue surroundings at high Color.
+    static let chromaEdge: Float = 3
+
     static let scaleCount = 5
 
     /// The Luminance slider / 100.
@@ -431,6 +436,9 @@ final class DetailStage {
                 settings.lumaPerStrength[scale] * sigmas[scale].x, settings.chroma[scale] * sigmas[scale].y,
                 settings.chroma[scale] * sigmas[scale].z, settings.luma,
             )
+            // This level's luma noise: its own detail and every coarser one's, in quadrature.
+            let levelNoise = sigmas[scale...].map { $0.x * $0.x }.reduce(0, +).squareRoot()
+            params.edge = SIMD4(DenoiseSettings.chromaEdge * levelNoise, 0, 0, 0)
 
             encoder.setComputePipelineState(kernels.denoiseRows)
             encoder.setTexture(current, index: 0)

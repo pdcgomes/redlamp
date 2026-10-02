@@ -79,6 +79,16 @@ kernel void rl_denoise_prepare(
     out.write(half4(half3(toOpponent(stabilize(value, p.a.xyz, p.b.xyz))), 1.0h), gid);
 }
 
+// Lee's sigma filter (1983) across channels: a neighbour's chroma counts as much as its luma
+// resembles the centre's, so colour doesn't average across luminance edges (a lamp's rim).
+static inline float edgeWeight(float luma, float centre, constant DenoiseParams &p) {
+    if (p.edge.x <= 0.0f) return 1.0f;
+    float d = (luma - centre) / p.edge.x;
+    return exp(-0.5f * d * d);
+}
+
+// Luma is blurred plainly; chroma by edge-stopping weights, whose sum goes in alpha so the
+// column pass can normalise.
 kernel void rl_denoise_rows(
     texture2d<half, access::read> current [[texture(0)]],
     texture2d<half, access::write> rows [[texture(1)]],
@@ -86,12 +96,19 @@ kernel void rl_denoise_rows(
     uint2 gid [[thread_position_in_grid]])
 {
     if (int(gid.x) >= p.size.x || int(gid.y) >= p.size.y) return;
-    float3 sum = 0.0f;
+    float centre = float(current.read(gid).r);
+    float luma = 0.0f;
+    float2 chroma = 0.0f;
+    float weights = 0.0f;
     for (int i = -2; i <= 2; i++) {
         int x = clamp(int(gid.x) + i * p.scale.x, 0, p.size.x - 1);
-        sum += kB3[i + 2] * float3(current.read(uint2(x, gid.y)).rgb);
+        float3 sample = float3(current.read(uint2(x, gid.y)).rgb);
+        float w = kB3[i + 2] * edgeWeight(sample.x, centre, p);
+        luma += kB3[i + 2] * sample.x;
+        chroma += w * sample.yz;
+        weights += w;
     }
-    rows.write(half4(half3(sum), 1.0h), gid);
+    rows.write(half4(half(luma), half2(chroma / max(weights, 1e-6f)), half(weights)), gid);
 }
 
 // Finishes this scale's blur, keeps what of its detail isn't noise, and on the coarsest scale
@@ -109,12 +126,20 @@ kernel void rl_denoise_columns(
     uint2 gid [[thread_position_in_grid]])
 {
     if (int(gid.x) >= p.size.x || int(gid.y) >= p.size.y) return;
-    float3 coarse = 0.0f;
+    float3 here = float3(current.read(gid).rgb);
+    float luma = 0.0f;
+    float2 chroma = 0.0f;
+    float weights = 0.0f;
     for (int i = -2; i <= 2; i++) {
         int y = clamp(int(gid.y) + i * p.scale.x, 0, p.size.y - 1);
-        coarse += kB3[i + 2] * float3(rows.read(uint2(gid.x, y)).rgb);
+        float4 row = float4(rows.read(uint2(gid.x, y)));
+        float w = kB3[i + 2] * edgeWeight(float(current.read(uint2(gid.x, y)).r), here.x, p);
+        luma += kB3[i + 2] * row.x;
+        chroma += w * row.yz;
+        weights += w;
     }
-    float3 detail = float3(current.read(gid).rgb) - coarse;
+    float3 coarse = float3(luma, chroma / max(weights, 1e-6f));
+    float3 detail = here - coarse;
     float strength = p.threshold.w + (p.scale.w != 0 ? local.read(gid).w : 0.0f);
     float3 threshold = float3(p.threshold.x * max(strength, 0.0f), p.threshold.yz);
     float3 total = shrink(detail, threshold);

@@ -49,12 +49,12 @@ struct NoiseBenchmarkTests {
                 }
             }
         }
-        // A clipped highlight on a mid-grey ground, bottom right.
+        // A coloured light with only its red clipped (a lamp at dusk), on a blue ground, bottom right.
         let (hx, hy) = (Float(leavesWidth + (width - leavesWidth) / 2), Float(height * 3 / 4))
         for y in height / 2 ..< height {
             for x in leavesWidth ..< width {
                 let distance = hypot(Float(x) - hx, Float(y) - hy)
-                pixels[y * width + x] = distance < 80 ? SIMD3(1.4, 1.3, 1.2) : SIMD3(repeating: 0.3)
+                pixels[y * width + x] = distance < 80 ? SIMD3(1.5, 0.7, 0.35) : SIMD3(0.12, 0.18, 0.3)
             }
         }
         return pixels
@@ -87,7 +87,8 @@ struct NoiseBenchmarkTests {
         var texture: Double
         /// RMS chroma error in the flat patch, in the square-root encoding.
         var chroma: Double
-        /// The largest chroma deviation just outside the clipped highlight.
+        /// The colour cast just outside the clipped highlight: the ring's mean chroma error (noise
+        /// averages out of it; a spread of the highlight's colour doesn't).
         var fringe: Double
     }
 
@@ -124,7 +125,7 @@ struct NoiseBenchmarkTests {
             return centre - sum / 9
         }
         var squared = 0.0, count = 0.0, kept = 0.0, clean = 0.0
-        var chromaSquared = 0.0, chromaCount = 0.0, fringe = 0.0
+        var chromaSquared = 0.0, chromaCount = 0.0, fringe = SIMD2<Double>.zero, ringCount = 0.0
         for y in stride(from: 1, to: Self.height - 1, by: 1) {
             for x in stride(from: 1, to: Self.width - 1, by: 1) {
                 let index = y * Self.width + x
@@ -141,7 +142,8 @@ struct NoiseBenchmarkTests {
                     chromaSquared += simd_length_squared(chroma(a) - chroma(b))
                     chromaCount += 1
                 } else if Region.highlightRing.contains(x, y) {
-                    fringe = max(fringe, simd_length(chroma(a) - chroma(b)))
+                    fringe += chroma(a) - chroma(b)
+                    ringCount += 1
                 }
             }
         }
@@ -149,7 +151,7 @@ struct NoiseBenchmarkTests {
             psnr: 10 * log10(1 / max(squared / count, 1e-12)),
             texture: kept / max(clean, 1e-12),
             chroma: (chromaSquared / max(chromaCount, 1)).squareRoot(),
-            fringe: fringe,
+            fringe: simd_length(fringe / max(ringCount, 1)),
         )
     }
 
