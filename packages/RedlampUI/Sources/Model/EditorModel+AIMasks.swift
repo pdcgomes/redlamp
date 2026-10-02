@@ -152,6 +152,13 @@ public extension EditorModel {
                     range.depth = fresh
                     next.masks[layer].components[index].shape = .depthRange(range)
                 } else {
+                    // The Refine Edge brush's strokes, on the new mask's edge.
+                    var fresh = fresh
+                    if let strokes = old.refinements, !strokes.isEmpty,
+                       let refined = try? await engine.refineMaskEdges(fresh.bitmap, along: strokes) {
+                        fresh.bitmap = refined
+                        fresh.refinements = strokes
+                    }
                     next.masks[layer].components[index].shape = .ai(fresh)
                 }
             }

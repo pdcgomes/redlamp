@@ -78,4 +78,25 @@ struct ClosedFormMatteTests {
         #expect(matte[204, 115] < 40, "the wall beside it: \(matte[204, 115])")
         #expect(matte[200, 200] == 255, "inside the head")
     }
+
+    /// The Refine Edge brush: a mask whose edge is 30 pixels off the subject's is solved again
+    /// under a stroke along the edge, and left as it was elsewhere. Where the stroke ends the old
+    /// edge still holds, so a flat subject (no texture to stop it) is surest away from the end.
+    @Test func `the refine edge brush solves the edge where it paints`() throws {
+        let width = 300
+        let height = 300
+        let photo = try image(width: width, height: height) { x, _ in x < 150 ? Self.hair : Self.wall }
+        let coarse = GrayMask(width: width, height: height, coverage: (0 ..< width * height).map { index in
+            index % width < 120 ? 1 : 0
+        })
+        // Down the edge from above the photo to its middle.
+        let stroke = BrushStroke(
+            points: [ImagePoint(x: 0.45, y: -0.2), ImagePoint(x: 0.45, y: 0.5)], size: 0.1, feather: 0,
+        )
+        let matte = ClosedFormMatte.refine(coarse, image: photo, along: [stroke])
+        #expect(matte[140, 20] > 230, "the subject under the stroke: \(matte[140, 20])")
+        #expect(matte[160, 20] < 15, "the wall under the stroke: \(matte[160, 20])")
+        #expect(matte[140, 280] == 0, "the same column below the stroke stays as it was")
+        #expect(matte[20, 20] == 255 && matte[280, 20] == 0)
+    }
 }

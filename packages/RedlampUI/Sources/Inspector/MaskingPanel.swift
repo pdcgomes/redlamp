@@ -25,7 +25,7 @@ import SwiftUI
                 .padding(.horizontal, Theme.panelPadding)
                 .padding(.bottom, 12)
                 MaskStatus()
-                if model.drawingKind != nil {
+                if model.drawingKind != nil || model.isRefiningEdges {
                     DrawingHint()
                 }
             } else {
@@ -34,7 +34,7 @@ import SwiftUI
                 MaskActionsBar()
                 MaskStatus()
 
-                if model.drawingKind != nil {
+                if model.drawingKind != nil || model.isRefiningEdges {
                     DrawingHint()
                 }
 
@@ -236,7 +236,10 @@ struct DrawingHint: View {
     @Environment(EditorModel.self) private var model
 
     private var hint: String {
-        switch model.drawingKind {
+        if model.isRefiningEdges {
+            return "Paint over an edge to solve it again from the photo, hair by hair. [ and ] change the size."
+        }
+        return switch model.drawingKind {
         case .radial: "Drag on the photo to draw the radial gradient. Shift keeps it circular."
         case .brush: "Paint on the photo. Hold Option to erase; [ and ] change the size, with Shift the feather."
         case .colorRange: "Click or drag on the photo to sample a color. Shift-click adds a sample (up to 5)."
@@ -252,13 +255,20 @@ struct DrawingHint: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: model.drawingKind?.symbol ?? "hand.draw")
-            Text(hint)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer()
-            Button(staysArmed && model.drawingComponentID != nil ? "Done" : "Cancel") { model.cancelDrawing() }
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: model.isRefiningEdges ? "wand.and.rays" : model.drawingKind?.symbol ?? "hand.draw")
+                Text(hint)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer()
+                Button(model.isRefiningEdges || staysArmed && model.drawingComponentID != nil ? "Done" : "Cancel") {
+                    model.cancelDrawing()
+                }
                 .controlSize(.mini)
+            }
+            if model.isRefiningEdges {
+                EdgeBrushSize()
+            }
         }
         .font(Theme.captionFont)
         .foregroundStyle(Theme.label)
@@ -266,6 +276,23 @@ struct DrawingHint: View {
         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.selection))
         .padding(.horizontal, Theme.panelPadding)
         .padding(.bottom, 10)
+    }
+}
+
+/// The Refine Edge brush's size, and whether a stroke is being solved.
+struct EdgeBrushSize: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        HStack(spacing: 8) {
+            Text("Size")
+            Slider(value: $model.edgeBrushSize, in: 1 ... 100)
+                .controlSize(.mini)
+            ProgressView()
+                .controlSize(.mini)
+                .opacity(model.isSolvingEdges ? 1 : 0)
+        }
     }
 }
 
@@ -815,6 +842,7 @@ struct ComponentRow: View {
             if let kind = component.kind, kind.isAI, kind != .depthRange {
                 Divider()
                 Button("Refine Edges") { Task { await model.refineEdges(component.id, in: mask.id) } }
+                Button("Refine Edge Brush") { model.startRefiningEdges(component.id, in: mask.id) }
             }
         }
     }

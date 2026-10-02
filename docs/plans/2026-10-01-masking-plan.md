@@ -112,16 +112,19 @@ Embedded depth first, with the Luminance Range trapezoid applied to depth.
 
 Mask presets and adaptive presets, updating AI masks on paste and sync, a Refine Edge brush, and later a learned matting refiner (MSK-15).
 
-## Status (2026-10-01)
+## Status (2026-10-02)
 
-Built: M0 to M7, M9 and M10. M8 is blocked as described above. Where the build differs from the plan:
+Built: M0 to M7, M9 and M10. M8's trained heads are still blocked as described above, but SAM 3 (converted to Core ML) stands in for them as an evaluation model. Where the build differs from the plan:
 
-- **AI mask edges** are refined with the guided filter when the mask is made (and on Refine Edges), not again at render time against full-resolution luminance.
-- **Refine Edge** is an action on an AI component, not a brush that marks a band to re-solve. Convert to Path isn't built.
+- **AI mask edges** are solved per pixel when the mask is made, at the size masks are stored at (4096 px), not refined again at render time: Sky by `SkyMatte` (against the sky's own colour), Subject, Background, People, Objects and Landscape by `ClosedFormMatte`, and SAM 3's people parts both ways (the person's matte where a part meets the background, SAM 3's edge where it meets skin). See [MSK-17](../research/notes/MSK-17-sky-bakeoff.md).
+- **Refine Edges** is an action on an AI component (a guided filter); the **Refine Edge brush** solves an edge again per pixel where it paints, its strokes kept with the mask. Convert to Path isn't built.
+- **Sky** is Segment Anything prompted inside the classical estimate, arbitrated with Depth Anything 3's sky when that evaluation model is installed.
+- **Landscape and the people parts Vision can't give** (hair on any photo, facial hair, body skin, clothes) come from SAM 3, evaluation only: its licence isn't cleared, and the risk is accepted for evaluation. A shippable route is still M8's trained head.
 - **Objects:** Vision's tap-to-segment needs the macOS 27 SDK, so Objects is SAM 2.1 only, and the Vision-against-SAM bake-off waits.
-- **Models waiting on DEC-02** (SAM 2.1) and evaluation-only models (Depth Anything V2 Small) are offered only with evaluation models turned on: Settings › Models, or `REDLAMP_EVALUATION_MODELS=1`. A manifest becomes `cleared` once its decision is accepted, and the licence gate checks that it is.
-- **New module:** `RedlampMasking` (engine side) holds Vision, embedded mattes, the sky estimate, SAM and Depth Anything, the model store and the bitmap utilities.
-- **CLI:** `redlamp mask` writes AI masks as PNGs, and `redlamp render --mask <kind> --mask-set …` renders with them. The bake-off uses both.
+- **Models waiting on DEC-02** (SAM 2.1) and evaluation-only models (Depth Anything V2 Small, Depth Anything 3, SAM 3) are offered only with evaluation models turned on: Settings › Models, or `REDLAMP_EVALUATION_MODELS=1`. A manifest becomes `cleared` once its decision is accepted, and the licence gate checks that it is.
+- **Warm-up:** opening the Masking tool prepares the open photo's renders, model loads and encodings in the background, and those of photos opened after it.
+- **New module:** `RedlampMasking` (engine side) holds Vision, embedded mattes, the sky estimate and `SkyMatte`, `ClosedFormMatte`, SAM 2.1, SAM 3 and Depth Anything, the model store and the bitmap utilities.
+- **CLI:** `redlamp mask` writes AI masks as PNGs (with `--refine` for Refine Edge strokes), and `redlamp render --mask <kind> --mask-set …` renders with them. The bake-off uses both.
 
 ## Gates
 

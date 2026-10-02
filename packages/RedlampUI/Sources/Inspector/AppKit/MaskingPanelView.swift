@@ -47,7 +47,7 @@ final class MaskingPanelView: ColumnView {
                 outlines: model.maskOutlines,
                 selected: model.selectedOutline,
                 tools: MaskingPanel.componentTools(model),
-                drawing: model.drawingKind != nil,
+                drawing: model.drawingKind != nil || model.isRefiningEdges,
                 status: model.aiMaskProgress != nil || model.maskMessage != nil || model.pendingModel != nil
                     || model.modelDownloadProgress != nil,
             )

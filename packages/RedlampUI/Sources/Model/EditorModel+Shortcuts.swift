@@ -124,6 +124,8 @@ public extension EditorModel {
         // While brushing, [ and ] size the brush (Shift: feather), as in Lightroom.
         case .decreaseRating where isBrushing: nudgeBrush(direction: -1, feather: shifted)
         case .increaseRating where isBrushing: nudgeBrush(direction: 1, feather: shifted)
+        case .decreaseRating where isRefiningEdges: nudgeEdgeBrush(direction: -1)
+        case .increaseRating where isRefiningEdges: nudgeEdgeBrush(direction: 1)
         case .decreaseRating: updateMetadata(advance: shifted) { $0.rating = max($0.rating - 1, 0) }
         case .increaseRating: updateMetadata(advance: shifted) { $0.rating = min($0.rating + 1, 5) }
         case .flagPick: updateMetadata(advance: shifted) { $0.flag = $0.flag == .pick ? nil : .pick }
@@ -235,7 +237,7 @@ public extension EditorModel {
     private func cancelCurrentMode() -> Bool {
         if showShortcuts {
             showShortcuts = false
-        } else if drawingKind != nil {
+        } else if drawingKind != nil || isRefiningEdges {
             cancelDrawing()
         } else if eyedropperActive {
             eyedropperActive = false

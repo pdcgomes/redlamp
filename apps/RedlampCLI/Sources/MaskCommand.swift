@@ -6,6 +6,7 @@ import RedlampEngineAPI
 enum MaskCommand {
     static let usage = """
     usage: redlamp mask <image> --kind <kind> -o <mask.png> [--point x,y]… [--exclude x,y]…
+                        [--refine x,y;x,y… [--refine-size s]]…
 
       --kind      subject, background, sky, people, people:<part>, objects, depthRange,
                   landscape:<class>
@@ -14,6 +15,9 @@ enum MaskCommand {
                   naturalGround, artificialGround)
       --point     for objects: a point to select (0…1, from the top left); repeat to add
       --exclude   for objects: a point to leave out
+      --refine    a Refine Edge brush stroke through these points, solved again per pixel; repeat
+                  for more strokes
+      --refine-size  the following strokes' radius, as a fraction of the height (default 0.03)
       -o          the PNG; several masks (one per person) are written as name-1.png, name-2.png…
 
     Objects and Depth Range use downloaded models (Settings › Models in the app; set
@@ -33,6 +37,8 @@ enum MaskCommand {
         var prompts: [ImagePoint] = []
         var excluded: [ImagePoint] = []
         var output: URL?
+        var refinements: [BrushStroke] = []
+        var refineSize = 0.03
         var index = 1
         func value() throws -> String {
             index += 1
@@ -61,6 +67,13 @@ enum MaskCommand {
                 }
             case "--point": try prompts.append(point(value()))
             case "--exclude": try excluded.append(point(value()))
+            case "--refine":
+                try refinements.append(BrushStroke(
+                    points: value().split(separator: ";").map { try point(String($0)) }, size: refineSize, feather: 0,
+                ))
+            case "--refine-size":
+                guard let size = try Double(value()) else { throw CLIError(description: "bad --refine-size") }
+                refineSize = size
             case "-o", "--output": output = try URL(fileURLWithPath: value())
             default: throw CLIError(description: "unknown option \(arguments[index])\n\n\(usage)")
             }
@@ -77,7 +90,7 @@ enum MaskCommand {
         }
         let clock = ContinuousClock()
         let started = clock.now
-        let masks = try await engine.computeMasks(MaskRequest(
+        var masks = try await engine.computeMasks(MaskRequest(
             kind: kind,
             part: part,
             prompts: prompts,
@@ -85,6 +98,15 @@ enum MaskCommand {
             landscape: landscape,
         ))
         let elapsed = clock.now - started
+        if !refinements.isEmpty {
+            let refining = clock.now
+            for index in masks.indices {
+                masks[index].bitmap = try await engine.refineMaskEdges(masks[index].bitmap, along: refinements)
+            }
+            print(
+                "refined along \(refinements.count) stroke\(refinements.count == 1 ? "" : "s") in \(clock.now - refining)",
+            )
+        }
         for (number, mask) in masks.enumerated() {
             guard let png = mask.bitmap.png else { continue }
             let url = masks.count == 1 ? output : output.deletingLastPathComponent()

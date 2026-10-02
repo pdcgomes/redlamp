@@ -11,6 +11,7 @@ public extension EditorModel {
     func editBrush(_ componentID: UUID, in maskID: UUID) {
         guard info != nil, case .brush = recipe.mask(maskID)?.components.first(where: { $0.id == componentID })?.shape
         else { return }
+        edgeBrushTarget = nil
         activeTool = .masking
         selectedMaskID = maskID
         selectedComponentID = componentID
@@ -27,6 +28,9 @@ public extension EditorModel {
     /// Starts a stroke at `point`. The first stroke of a new brush creates its component (in a new
     /// mask, or added to `drawingTarget`); later ones are added to it.
     func beginStroke(at point: ImagePoint, pressure: Double? = nil, erasing: Bool = false) {
+        if isRefiningEdges {
+            return beginEdgeStroke(at: point)
+        }
         guard isBrushing, info != nil else { return }
         let choice = strokeBrush(erasing: erasing)
         let settings = brushes[choice]
@@ -58,6 +62,9 @@ public extension EditorModel {
 
     /// Extends the stroke; points closer than a tenth of the radius to the last are skipped.
     func continueStroke(to point: ImagePoint, pressure: Double? = nil) {
+        if isRefiningEdges {
+            return continueEdgeStroke(to: point)
+        }
         guard isBrushing, let target = drawingComponentID, editStart != nil,
               let location = locateComponent(target, in: recipe),
               case var .brush(brush) = recipe.masks[location.mask].components[location.component].shape,
@@ -77,6 +84,10 @@ public extension EditorModel {
     }
 
     func endStroke() {
+        if isRefiningEdges {
+            Task { await endEdgeStroke() }
+            return
+        }
         guard editStart != nil else { return }
         endEdit(.mask(.brush), pendingDrawingName ?? "Brush Stroke")
         pendingDrawingName = nil

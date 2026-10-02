@@ -33,6 +33,7 @@ public extension EditorModel {
             return
         }
         activeTool = .masking
+        edgeBrushTarget = nil
         drawingKind = kind
         drawingOperation = operation
         drawingTarget = target
@@ -43,6 +44,7 @@ public extension EditorModel {
         drawingKind = nil
         drawingTarget = nil
         drawingComponentID = nil
+        edgeBrushTarget = nil
     }
 
     /// Creates the armed shape and starts a live edit; call `updateComponent` while

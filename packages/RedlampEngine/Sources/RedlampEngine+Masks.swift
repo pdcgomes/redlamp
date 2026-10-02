@@ -509,6 +509,19 @@ extension RedlampEngine {
         return result
     }
 
+    public func refineMaskEdges(_ bitmap: MaskBitmap, along strokes: [BrushStroke]) async throws -> MaskBitmap {
+        guard let session = currentSession() else { throw EngineError.noImageOpen }
+        guard !strokes.isEmpty else { return bitmap }
+        guard let png = bitmap.png,
+              let mask = GrayMask.decode(png) else { throw MaskComputationError.nothingFound(.subject) }
+        let image = try await matteImage(for: session)
+        let refined = await Task.detached(priority: .userInitiated) {
+            ClosedFormMatte.refine(mask, image: image, along: strokes)
+        }.value
+        guard let result = refined.bitmap() else { throw MaskComputationError.nothingFound(.subject) }
+        return result
+    }
+
     func depthEstimator() async throws -> DepthEstimator {
         if let loaded = depthModel.withLock({ $0 }) {
             return loaded

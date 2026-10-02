@@ -15,7 +15,7 @@ struct MaskOverlayView: View {
         GeometryReader { geometry in
             let frame = ImageFrame(rect: model.canvas.imageRect(in: geometry.size), geometry: model.canvasGeometry)
             ZStack {
-                if model.isBrushing {
+                if model.isBrushing || model.isRefiningEdges {
                     BrushCanvas(frame: frame)
                 } else if model.drawingKind == .colorRange || model.drawingKind == .luminanceRange {
                     RangeSampler(frame: frame)
@@ -116,7 +116,8 @@ struct MaskOverlayView: View {
     }
 }
 
-/// Brushing: each drag paints a stroke; a ring shows the brush's size and feather.
+/// Brushing: each drag paints a stroke; a ring shows the brush's size and feather. The Refine
+/// Edge brush paints the same way, its strokes shown as bands until their edge is solved.
 private struct BrushCanvas: View {
     let frame: ImageFrame
     @Environment(EditorModel.self) private var model
@@ -125,11 +126,17 @@ private struct BrushCanvas: View {
     @State private var erasing = false
 
     var body: some View {
-        let choice = model.strokeBrush(erasing: erasing || NSEvent.modifierFlags.contains(.option))
+        let refining = model.isRefiningEdges
+        let choice = model.strokeBrush(erasing: !refining && (erasing || NSEvent.modifierFlags.contains(.option)))
         let settings = model.brushes[choice]
-        let radius = CGFloat(settings.radius) * frame.heightScale
-        let core = max(radius * 2 * CGFloat(1 - settings.feather / 100), 1)
+        let radius = CGFloat(refining ? model.edgeBrushRadius : settings.radius) * frame.heightScale
+        let core = refining ? radius * 2 : max(radius * 2 * CGFloat(1 - settings.feather / 100), 1)
         ZStack {
+            if refining {
+                ForEach(Array(model.edgeBrushStrokes.enumerated()), id: \.offset) { _, pending in
+                    band(pending.stroke)
+                }
+            }
             Color.clear
                 .contentShape(Rectangle())
                 .gesture(paint)
@@ -171,6 +178,29 @@ private struct BrushCanvas: View {
                 }
             }
         }
+    }
+
+    /// A Refine Edge stroke as the band it marks.
+    private func band(_ stroke: BrushStroke) -> some View {
+        let points = stroke.points.map(frame.view)
+        return Path { path in
+            guard let first = points.first else { return }
+            path.move(to: first)
+            // A single dab still draws its disc.
+            path.addLine(to: points.count > 1 ? points[1] : CGPoint(x: first.x + 0.01, y: first.y))
+            for point in points.dropFirst(2) {
+                path.addLine(to: point)
+            }
+        }
+        .stroke(
+            Color.white.opacity(0.35),
+            style: StrokeStyle(
+                lineWidth: CGFloat(stroke.size) * frame.heightScale * 2,
+                lineCap: .round,
+                lineJoin: .round,
+            ),
+        )
+        .allowsHitTesting(false)
     }
 
     private var paint: some Gesture {

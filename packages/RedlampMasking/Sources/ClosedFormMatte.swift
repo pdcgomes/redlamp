@@ -34,10 +34,74 @@ public enum ClosedFormMatte {
 
     /// `coarse` is any size; `image` is the photo at the size to solve at.
     public static func refine(_ coarse: GrayMask, image: CGImage) -> GrayMask {
+        refine(coarse, image: image) { mask, size in Self.trimap(mask, width: size.width, height: size.height) }
+    }
+
+    /// The Refine Edge brush: coverage under `strokes` solved again, everything else kept as
+    /// `coarse` has it (soft values included), so the solve meets the mask where the strokes end.
+    /// Under a stroke, all of it outside the mask's edge is uncertain (hair the mask missed), but
+    /// inside only the usual band along the edge, and wherever the mask is itself unsure: solving
+    /// deep inside hair turns the dark gaps between strands into holes.
+    public static func refine(_ coarse: GrayMask, image: CGImage, along strokes: [BrushStroke]) -> GrayMask {
+        // A stroke reaching the frame solves the pixels along it too.
+        refine(coarse, image: image, tolerance: brushTolerance, solvesBorder: true) { mask, size in
+            let band = Self.band(along: strokes, size: size)
+            let reach = inner * Float(max(size.width, size.height))
+            let inside = SkyMatte.distance(from: mask, width: size.width, height: size.height, limit: reach)
+            return mask.indices.map { index in
+                let value = mask[index]
+                let uncertain = band[index] && (value <= 0.9 || inside[index] <= reach)
+                // 0.5 marks the uncertain pixels: a known pixel exactly at a half is nudged off it.
+                return uncertain ? 0.5 : value == 0.5 ? 0.502 : value
+            }
+        }
+    }
+
+    /// A stroke's band is small, so its solve can run to a tighter residual: coverage has to
+    /// reach across flat colour inside it, which a looser stop leaves half done.
+    static let brushTolerance = 1e-6
+
+    /// The pixels within reach of `strokes` (each a chain of discs of its size, a fraction of the
+    /// height), at `size`.
+    static func band(along strokes: [BrushStroke], size: PixelSize) -> [Bool] {
+        let width = size.width
+        let height = size.height
+        var band = [Bool](repeating: false, count: width * height)
+        for stroke in strokes {
+            let radius = max(stroke.size * Double(height), 1)
+            let points = stroke.points.map { SIMD2($0.x * Double(width), $0.y * Double(height)) }
+            for (index, end) in points.enumerated() {
+                let start = index > 0 ? points[index - 1] : end
+                let x0 = max(Int((min(start.x, end.x) - radius).rounded(.down)), 0)
+                let x1 = min(Int((max(start.x, end.x) + radius).rounded(.up)), width - 1)
+                let y0 = max(Int((min(start.y, end.y) - radius).rounded(.down)), 0)
+                let y1 = min(Int((max(start.y, end.y) + radius).rounded(.up)), height - 1)
+                guard x0 <= x1, y0 <= y1 else { continue }
+                let segment = end - start
+                let length = simd_length_squared(segment)
+                for y in y0 ... y1 {
+                    for x in x0 ... x1 {
+                        let pixel = SIMD2(Double(x) + 0.5, Double(y) + 0.5)
+                        let t = length > 0 ? min(max(simd_dot(pixel - start, segment) / length, 0), 1) : 0
+                        if simd_distance(pixel, start + t * segment) <= radius {
+                            band[y * width + x] = true
+                        }
+                    }
+                }
+            }
+        }
+        return band
+    }
+
+    /// Coarse to fine, each size's trimap from `trimap(coarse at that size, the size)`.
+    static func refine(
+        _ coarse: GrayMask, image: CGImage, tolerance: Double = 1e-3, solvesBorder: Bool = false,
+        trimap makeTrimap: ([Float], PixelSize) -> [Float],
+    ) -> GrayMask {
         let size = PixelSize(width: image.width, height: image.height)
         guard let rgb = RGBImage(image, size: size) else { return coarse.resized(to: size) }
         let mask = coarse.resized(to: size).coverage
-        let trimap = Self.trimap(mask, width: size.width, height: size.height)
+        let trimap = makeTrimap(mask, size)
         // Coarse to fine: many iterations where they're cheap, a few at full size.
         var sizes = [size]
         while let last = sizes.last, max(last.width, last.height) > coarsestLongEdge {
@@ -52,13 +116,10 @@ public enum ClosedFormMatte {
                 .resized(to: levelSize).coverage
             } ?? levelMask
             initial = Self.solve(
-                Self.colours(levelRGB), trimap: Self.trimap(
-                    levelMask,
-                    width: levelSize.width,
-                    height: levelSize.height,
-                ),
+                Self.colours(levelRGB), trimap: makeTrimap(levelMask, levelSize),
                 initial: start, width: levelSize.width, height: levelSize.height,
-                iterations: level == sizes.count - 1 ? coarsestIterations : refineIterations,
+                iterations: level == sizes.count - 1 ? coarsestIterations : refineIterations, tolerance: tolerance,
+                solvesBorder: solvesBorder,
             )
             previous = levelSize
         }
@@ -68,7 +129,7 @@ public enum ClosedFormMatte {
         let iterations = sizes.count == 1 ? coarsestIterations : finalIterations
         let alpha = Self.solve(
             Self.colours(rgb), trimap: trimap, initial: start, width: size.width, height: size.height,
-            iterations: iterations,
+            iterations: iterations, tolerance: tolerance, solvesBorder: solvesBorder,
         )
         return GrayMask(width: size.width, height: size.height, coverage: alpha)
     }
@@ -234,7 +295,10 @@ public enum ClosedFormMatte {
                                 var fitted: Double = 0
                                 for dy in -1 ... 1 {
                                     let row = index + dy * width
-                                    for neighbour in row - 1 ... row + 1 {
+                                    // Past the first or last row there is no window; past either
+                                    // side, the next row's border pixel has none either.
+                                    for neighbour in row - 1 ... row + 1
+                                        where neighbour >= 0 && neighbour < window.count {
                                         let k = Int(window[neighbour])
                                         if k >= 0 {
                                             count += 1
@@ -257,7 +321,9 @@ public enum ClosedFormMatte {
                 var sum: Double = 0
                 for dy in -1 ... 1 {
                     for dx in -1 ... 1 {
-                        let k = Int(window[index + dy * width + dx])
+                        let neighbour = index + dy * width + dx
+                        guard neighbour >= 0, neighbour < window.count else { continue }
+                        let k = Int(window[neighbour])
                         guard k >= 0 else { continue }
                         let d = image[index] - means[k]
                         sum += 1 - (1 + Double(simd_dot(d, inverses[k] * d))) / 9
@@ -279,12 +345,15 @@ public enum ClosedFormMatte {
     /// Coverage minimising the matting energy, with the trimap's sure pixels fixed.
     static func solve(
         _ image: [SIMD3<Float>], trimap: [Float], initial: [Float], width: Int, height: Int, iterations: Int,
+        tolerance: Double = 1e-3, solvesBorder: Bool = false,
     ) -> [Float] {
-        // Uncertain pixels away from the border, so every 3×3 neighbourhood is inside the image.
+        // Border pixels only when asked: they are in the windows of the pixels inside them
+        // (windows are centred inside the image), so their coverage follows as if the photo went
+        // on; otherwise they keep `initial`, as masks made before the Refine Edge brush did.
         let unknownMask = trimap.indices.map { index in
             let x = index % width
             let y = index / width
-            return trimap[index] == 0.5 && x > 0 && y > 0 && x < width - 1 && y < height - 1
+            return trimap[index] == 0.5 && (solvesBorder || x > 0 && y > 0 && x < width - 1 && y < height - 1)
         }
         let unknown = unknownMask.indices.filter { unknownMask[$0] }.map { Int32($0) }
         // With nothing sure on one side (a thin object Segment Anything is never sure of) there
@@ -360,7 +429,7 @@ public enum ClosedFormMatte {
             var minusStep = -step
             vDSP_vsmaD(d.baseAddress!, 1, &step, x.baseAddress!, 1, x.baseAddress!, 1, vDSP_Length(n))
             vDSP_vsmaD(q.baseAddress!, 1, &minusStep, r.baseAddress!, 1, r.baseAddress!, 1, vDSP_Length(n))
-            if dot(r, r).squareRoot() / norm < 1e-3 {
+            if dot(r, r).squareRoot() / norm < tolerance {
                 break
             }
             for t in 0 ..< n {

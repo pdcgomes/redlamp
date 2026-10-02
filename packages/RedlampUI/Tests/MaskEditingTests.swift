@@ -120,6 +120,17 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         MaskBitmap(sha256: bitmap.sha256 + "-refined", width: bitmap.width, height: bitmap.height)
     }
 
+    var brushRefinements: [[BrushStroke]] = []
+
+    func refineMaskEdges(_ bitmap: MaskBitmap, along strokes: [BrushStroke]) async throws -> MaskBitmap {
+        brushRefinements.append(strokes)
+        return MaskBitmap(
+            sha256: bitmap.sha256 + "-brushed\(strokes.count)",
+            width: bitmap.width,
+            height: bitmap.height,
+        )
+    }
+
     func thumbnail(for _: URL, maxPixelSize _: Int) async -> CGImage? {
         nil
     }
@@ -317,6 +328,51 @@ struct MaskEditingTests {
         }
         #expect(hashes == ["a2", "b2"])
         #expect(model.history.last?.name == "Update AI Masks")
+    }
+
+    /// Each Refine Edge stroke is solved by the engine, kept with the mask and a step of its own;
+    /// Update AI Masks applies the strokes to the new mask.
+    @Test func `the refine edge brush refines an AI mask stroke by stroke`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let engine = StubEngine()
+        engine.computed = [AIMask(
+            kind: .subject, provider: "stub", revision: 1, analysisHash: "h",
+            center: ImagePoint(x: 0.5, y: 0.5), bitmap: MaskBitmap(sha256: "s", width: 4, height: 4),
+        )]
+        let model = EditorModel(engine: engine)
+        model.select(folder.appending(path: "IMG_0004.ARW"))
+        for _ in 0 ..< 200 where model.info == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        await model.createAIMask(.subject)
+        let mask = try #require(model.recipe.masks.first)
+        let component = try #require(mask.components.first)
+        model.startRefiningEdges(component.id, in: mask.id)
+        #expect(model.isRefiningEdges)
+
+        model.beginStroke(at: ImagePoint(x: 0.2, y: 0.2))
+        model.continueStroke(to: ImagePoint(x: 0.4, y: 0.2))
+        await model.endEdgeStroke()
+        #expect(model.edgeBrushStrokes.isEmpty)
+        guard case let .ai(refined) = model.recipe.masks[0].components[0].shape else {
+            Issue.record("not an AI mask")
+            return
+        }
+        #expect(refined.bitmap.sha256 == "s-brushed1")
+        #expect(refined.refinements?.first?.points.count == 2)
+        #expect(refined.refinements?.first?.size == model.edgeBrushRadius)
+        #expect(model.history.last?.name == "Refine Edge Brush")
+
+        engine.computed[0].bitmap = MaskBitmap(sha256: "s2", width: 4, height: 4)
+        await model.updateAIMasks()
+        guard case let .ai(updated) = model.recipe.masks[0].components[0].shape else { return }
+        #expect(updated.bitmap.sha256 == "s2-brushed1")
+        #expect(updated.refinements?.count == 1)
+
+        model.cancelDrawing()
+        #expect(!model.isRefiningEdges)
     }
 
     @Test func `objects ask before downloading their model, then refine with clicks`() async throws {

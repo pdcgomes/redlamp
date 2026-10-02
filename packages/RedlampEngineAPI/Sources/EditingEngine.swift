@@ -54,6 +54,10 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// An AI mask's bitmap with its edges snapped harder to the current photo's.
     func refineMaskEdges(_ bitmap: MaskBitmap) async throws -> MaskBitmap
 
+    /// An AI mask's bitmap with coverage under `strokes` (the Refine Edge brush) solved again per
+    /// pixel from the current photo, and kept as it was everywhere else.
+    func refineMaskEdges(_ bitmap: MaskBitmap, along strokes: [BrushStroke]) async throws -> MaskBitmap
+
     /// The AI mask kinds this device can compute now.
     func availableMaskKinds() -> Set<MaskKind>
 

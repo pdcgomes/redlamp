@@ -217,6 +217,7 @@ public final class EditorModel {
         didSet {
             if activeTool != .masking {
                 drawingKind = nil
+                edgeBrushTarget = nil
             }
             requestRender()
         }
@@ -273,6 +274,16 @@ public final class EditorModel {
     }
 
     public var activeBrush: BrushChoice = .a
+    /// The Refine Edge brush, while armed on an AI component: each stroke solves the component's
+    /// edge again where it paints.
+    public internal(set) var edgeBrushTarget: EdgeBrushTarget?
+    /// The Refine Edge brush's size, in the brushes' units (0...100).
+    public var edgeBrushSize: Double = 12
+    /// Refine Edge strokes painted and not yet solved, the one being painted last; shown on the
+    /// canvas until their edge is.
+    public internal(set) var edgeBrushStrokes: [EdgeBrushStroke] = []
+    /// Whether a Refine Edge stroke is being solved.
+    public internal(set) var isSolvingEdges = false
     /// The AI mask being computed, for a progress indicator.
     public internal(set) var aiMaskProgress: MaskKind?
     /// Why the last AI mask couldn't be made, shown in the Masking panel.
@@ -427,6 +438,8 @@ public final class EditorModel {
         selectedMaskID = nil
         selectedComponentID = nil
         drawingKind = nil
+        edgeBrushTarget = nil
+        edgeBrushStrokes = []
         openTask?.cancel()
         // The sidecar is read off the main thread even for a photo already decoded: it is
         // coordinated, and iCloud Drive may have to download it first.

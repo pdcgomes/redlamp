@@ -243,8 +243,12 @@ public struct AIMask: Codable, Sendable, Hashable {
     /// Hash of the render the model saw.
     public var analysisHash: String
     public var center: ImagePoint
+    /// The model's mask, with `refinements` applied.
     public var bitmap: MaskBitmap
     public var createdAt: Date
+    /// Refine Edge brush strokes, in order: where the edge was solved again per pixel. Kept so
+    /// Update AI Masks can apply them to the new mask.
+    public var refinements: [BrushStroke]?
 
     public init(
         kind: MaskKind,
@@ -259,7 +263,9 @@ public struct AIMask: Codable, Sendable, Hashable {
         center: ImagePoint,
         bitmap: MaskBitmap,
         createdAt: Date = Date(),
+        refinements: [BrushStroke]? = nil,
     ) {
+        self.refinements = refinements
         self.excludedPrompts = excludedPrompts
         self.kind = kind
         self.provider = provider
