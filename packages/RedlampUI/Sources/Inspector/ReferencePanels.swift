@@ -1,15 +1,15 @@
 import RedlampEngineAPI
 import SwiftUI
 
-// Panels whose controls are laid out for fidelity but mostly render in later phases.
-// Their sliders come straight from the parameter schema, so they light up automatically
-// when the engine marks a parameter live.
+// Detail, Lens Corrections, Transform, Effects and Calibration. Their sliders come straight from
+// the parameter schema, so any the engine doesn't render yet (Calibration's) show dimmed with
+// their phase.
 
 @_spi(Harness) public struct DetailPanel: View {
     public init() {}
 
     public var body: some View {
-        PanelSection(panel: .detail, badge: "Phase 2") {
+        PanelSection(panel: .detail) {
             SubsectionHeader(
                 title: "Sharpening",
                 parameters: [.sharpenAmount, .sharpenRadius, .sharpenDetail, .sharpenMasking],
@@ -42,7 +42,7 @@ import SwiftUI
     ]
 
     public var body: some View {
-        PanelSection(panel: .lens, badge: "Phase 2") {
+        PanelSection(panel: .lens) {
             ParameterToggle(
                 parameter: .lensRemoveChromaticAberration,
                 help: "Realign red and blue fringes at edges, from the lens profile or measured from the photo",
@@ -113,28 +113,38 @@ struct ProfileCorrectionsToggle: View {
 struct UprightButtons: View {
     @Environment(EditorModel.self) private var model
 
+    /// Two rows of three equal buttons, in Lightroom's order: six don't fit beside the label at
+    /// the inspector's width without truncating.
     var body: some View {
-        HStack(spacing: 4) {
-            Button("Off") { model.clearUpright() }
-                .controlSize(.mini)
-                .help("Remove Upright's perspective and rotation")
-            mode(.auto, "Level, verticals and perspective, balanced so the result still looks natural")
-            Button("Guided") { model.isPlacingGuides.toggle() }
-                .controlSize(.mini)
+        Grid(horizontalSpacing: 4, verticalSpacing: 4) {
+            GridRow {
+                button("Off", "Remove Upright's perspective and rotation") { model.clearUpright() }
+                mode(.auto, "Level, verticals and perspective, balanced so the result still looks natural")
+                button("Guided", "Draw up to four guides along edges that should be vertical or horizontal") {
+                    model.isPlacingGuides.toggle()
+                }
                 .tint(model.isPlacingGuides ? Color.accentColor : nil)
-                .buttonStyle(.bordered)
-                .help("Draw up to four guides along edges that should be vertical or horizontal")
-            mode(.level, "Level the photo by its horizontal and vertical edges")
-            mode(.vertical, "Level the photo and make converging verticals parallel")
-            mode(.full, "Level the photo, make verticals parallel and horizontals level")
+            }
+            GridRow {
+                mode(.level, "Level the photo by its horizontal and vertical edges")
+                mode(.vertical, "Level the photo and make converging verticals parallel")
+                mode(.full, "Level the photo, make verticals parallel and horizontals level")
+            }
         }
     }
 
     private func mode(_ mode: UprightMode, _ help: String) -> some View {
-        Button(mode.name) { model.applyUpright(mode) }
-            .controlSize(.mini)
+        button(mode.name, help) { model.applyUpright(mode) }
             .disabled(model.info == nil)
-            .help(help)
+    }
+
+    private func button(_ title: String, _ help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).lineLimit(1).frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.mini)
+        .help(help)
     }
 }
 
@@ -175,7 +185,7 @@ struct ProcessVersion: View {
     public init() {}
 
     public var body: some View {
-        PanelSection(panel: .transform, badge: "Phase 2") {
+        PanelSection(panel: .transform) {
             ControlRow(label: "Upright") { UprightButtons() }
             SubsectionHeader(title: "Manual", parameters: PanelID.transform.parameters)
             ForEach(PanelID.transform.parameters, id: \.self) { ParameterSlider(parameter: $0) }

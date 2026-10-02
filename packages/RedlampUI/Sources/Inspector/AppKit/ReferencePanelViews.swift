@@ -3,9 +3,9 @@ import RedlampDesign
 import RedlampEngineAPI
 import SwiftUI
 
-/// Detail, Lens Corrections, Transform, Effects and Calibration: mostly laid out for
-/// fidelity and rendering in later phases. Their sliders come from the parameter schema,
-/// so they light up when the engine marks a parameter live.
+/// Detail, Lens Corrections, Transform, Effects and Calibration. Their sliders come from the
+/// parameter schema, so any the engine doesn't render yet (Calibration's) show dimmed with
+/// their phase.
 @MainActor
 @_spi(Harness) public enum ReferencePanelViews {
     public static func detail(model: EditorModel) -> PanelSectionView {
@@ -14,7 +14,6 @@ import SwiftUI
         let luminance: [ParameterID] = [.noiseLuminance, .noiseLuminanceDetail, .noiseLuminanceContrast]
         return rows.panel(
             .detail,
-            badge: "Phase 2",
             rows: [rows.header("Sharpening", sharpening)]
                 + rows.sliders(sharpening)
                 + [rows.header("Noise Reduction", luminance)]
@@ -33,7 +32,6 @@ import SwiftUI
         // scene checks it.
         return rows.panel(
             .lens,
-            badge: "Phase 2",
             rows: [
                 rows.native(ParameterToggle(
                     parameter: .lensRemoveChromaticAberration,
@@ -48,7 +46,7 @@ import SwiftUI
 
     public static func transform(model: EditorModel) -> PanelSectionView {
         let rows = PanelRows(model: model)
-        return rows.panel(.transform, badge: "Phase 2", rows: [
+        return rows.panel(.transform, rows: [
             rows.controls("Upright", UprightButtons()),
             rows.header("Manual", PanelID.transform.parameters),
         ] + rows.sliders(PanelID.transform.parameters))
