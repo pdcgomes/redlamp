@@ -310,7 +310,7 @@ public extension EditorModel {
         guard let previous = previousSelection, info != nil,
               let sidecar = SidecarStore().load(for: previous)
         else { return }
-        commit(sidecar.recipe, name: "Paste from Previous")
+        commit(sidecar.recipe, .paste, "Paste from Previous")
         updatePastedAIMasks()
     }
 

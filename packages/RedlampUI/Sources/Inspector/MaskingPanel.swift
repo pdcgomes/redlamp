@@ -558,7 +558,7 @@ struct LuminanceRangeEditor: View {
             RangeBar(
                 title: "Luminance Range", colors: [.black, .white],
                 range: model.selectedLuminanceRange ?? LuminanceRangeMask(),
-                onChange: { model.setLuminanceRange($0) }, historyName: "Luminance Range",
+                onChange: { model.setLuminanceRange($0) }, historyName: "Luminance Range", kind: .luminanceRange,
             )
             Toggle("Show Luminance Map", isOn: $model.showLuminanceMap)
                 .toggleStyle(.checkbox)
@@ -576,7 +576,8 @@ struct DepthRangeEditor: View {
         RangeBar(
             title: "Depth Range", colors: [Color(white: 0.15), Color(white: 0.95)],
             range: model.selectedDepthRange ?? LuminanceRangeMask(),
-            onChange: { model.setDepthRange($0) }, historyName: "Depth Range", ends: ("Far", "Near"),
+            onChange: { model.setDepthRange($0) }, historyName: "Depth Range", kind: .depthRange,
+            ends: ("Far", "Near"),
         )
     }
 }
@@ -588,6 +589,7 @@ struct RangeBar: View {
     let range: LuminanceRangeMask
     let onChange: (LuminanceRangeMask) -> Void
     let historyName: String
+    let kind: MaskKind
     var ends: (String, String)?
     @Environment(EditorModel.self) private var model
     @State private var dragging: Int?
@@ -668,7 +670,7 @@ struct RangeBar: View {
             }
             .onEnded { _ in
                 dragging = nil
-                model.endEdit(name: historyName)
+                model.endEdit(.mask(kind), historyName)
             }
     }
 }

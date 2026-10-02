@@ -38,13 +38,13 @@ public extension EditorModel {
             if let target, let index = next.masks.firstIndex(where: { $0.id == target }) {
                 next.masks[index].components += components
                 selectedMaskID = target
-                commit(next, name: "\(operation.name) \(title)")
+                commit(next, .mask(kind), "\(operation.name) \(title)")
             } else {
                 guard next.masks.count < MaskLayer.maximumLayers else { return }
                 let mask = MaskLayer(name: title, components: components)
                 next.masks.append(mask)
                 selectedMaskID = mask.id
-                commit(next, name: "New \(title)")
+                commit(next, .mask(kind), "New \(title)")
             }
             selectedComponentID = components.last?.id
         } catch {
@@ -145,6 +145,6 @@ public extension EditorModel {
         if failed > 0 {
             maskMessage = "\(failed) AI mask\(failed == 1 ? "" : "s") couldn't be updated and kept their previous result."
         }
-        commit(next, name: "Update AI Masks")
+        commit(next, .mask(nil), "Update AI Masks")
     }
 }

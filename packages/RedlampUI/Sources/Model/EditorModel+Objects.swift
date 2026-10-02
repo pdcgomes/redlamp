@@ -68,7 +68,7 @@ public extension EditorModel {
                 guard let added = addDrawnComponent(.ai(mask), kind: .objects, to: &next) else { return }
                 name = added
             }
-            commit(next, name: name)
+            commit(next, .mask(.objects), name)
         } catch {
             maskMessage = (error as? MaskComputationError)?.description ?? error.localizedDescription
         }

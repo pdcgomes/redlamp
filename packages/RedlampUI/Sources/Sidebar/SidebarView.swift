@@ -92,6 +92,17 @@ import SwiftUI
                     .contentShape(Rectangle())
                     .onTapGesture { model.goToHistory(index) }
                 }
+                ForEach(model.earlierSessions) { session in
+                    DisclosureGroup {
+                        ForEach(session.steps.reversed()) { step in
+                            HistoryRow(step: step, isCurrent: false, isFuture: false)
+                                .contentShape(Rectangle())
+                                .onTapGesture { model.restoreHistory(step, from: session) }
+                        }
+                    } label: {
+                        Label(session.title, systemImage: "clock")
+                    }
+                }
             } header: {
                 HStack {
                     Text("History")
@@ -102,7 +113,7 @@ import SwiftUI
                         Image(systemName: "xmark")
                     }
                     .buttonStyle(.plain)
-                    .disabled(model.history.count <= 1)
+                    .disabled(model.history.count <= 1 && model.earlierSessions.isEmpty)
                     .help("Clear History")
                 }
             }
@@ -142,16 +153,33 @@ private struct HistoryRow: View {
     let isFuture: Bool
 
     var body: some View {
-        HStack {
-            Text(step.name)
-                .foregroundStyle(isFuture ? Theme.tertiaryLabel : (isCurrent ? Theme.labelHover : Theme.label))
+        HStack(spacing: 8) {
+            Label {
+                Text(step.title)
+                    .foregroundStyle(isFuture ? Theme.tertiaryLabel : (isCurrent ? Theme.labelHover : Theme.label))
+                    .lineLimit(1)
+            } icon: {
+                Image(systemName: step.action.symbol)
+                    .font(.system(size: 12))
+                    .foregroundStyle(isFuture ? Theme.tertiaryLabel : Theme.secondaryLabel)
+            }
+            Spacer(minLength: 8)
+            if let after = step.after {
+                let shown = Text(after).foregroundStyle(isFuture ? Theme.tertiaryLabel : Theme.label)
+                Group {
+                    if let before = step.before {
+                        let was = Text(before).foregroundStyle(isFuture ? Theme.tertiaryLabel : Theme.secondaryLabel)
+                        Text("\(was)\(Text(" → ").foregroundStyle(Theme.tertiaryLabel))\(shown)")
+                    } else {
+                        shown
+                    }
+                }
+                .font(Theme.valueFont)
                 .lineLimit(1)
-            Spacer()
-            if isCurrent {
-                Image(systemName: "checkmark").font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Theme.secondaryLabel)
             }
         }
+        .help(step.name)
+        .listRowBackground(isCurrent ? RoundedRectangle(cornerRadius: 5).fill(Theme.selection) : nil)
     }
 }
 

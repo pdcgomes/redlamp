@@ -32,18 +32,24 @@ public final class PanelSectionView: NSView, HeightProviding {
     private var trackers: [Tracker] = []
     private(set) var isExpanded = false
 
-    public init(title: String, symbol: String? = nil, badge: String? = nil, rows: [NSView], actions: Actions) {
-        header = PanelHeaderView(title: title, symbol: symbol, badge: badge)
-        body = ColumnView(
-            spacing: Metrics.panelRowSpacing,
-            insets: NSEdgeInsets(
-                top: 0,
-                left: Metrics.panelPadding,
-                bottom: Metrics.panelBottomPadding,
-                right: Metrics.panelPadding,
-            ),
-            views: rows,
-        )
+    /// The rows' padding inside a panel.
+    public static let bodyInsets = NSEdgeInsets(
+        top: 0, left: Metrics.panelPadding, bottom: Metrics.panelBottomPadding, right: Metrics.panelPadding,
+    )
+
+    /// `accessory` (a button) sits at the header's trailing edge. Rows that pad themselves (a
+    /// list whose highlight reaches past its text) can be given other `insets`.
+    public init(
+        title: String,
+        symbol: String? = nil,
+        badge: String? = nil,
+        accessory: NSView? = nil,
+        insets: NSEdgeInsets = PanelSectionView.bodyInsets,
+        rows: [NSView],
+        actions: Actions,
+    ) {
+        header = PanelHeaderView(title: title, symbol: symbol, badge: badge, accessory: accessory)
+        body = ColumnView(spacing: Metrics.panelRowSpacing, insets: insets, views: rows)
         self.actions = actions
         super.init(frame: CGRect(x: 0, y: 0, width: 316, height: Metrics.panelHeaderHeight))
         wantsLayer = true
@@ -156,11 +162,13 @@ public final class PanelSectionView: NSView, HeightProviding {
     }
 }
 
-/// The panel title bar.
+/// The panel title bar: chevron, glyph, title and badge, then at the trailing edge the edited dot
+/// or an accessory.
 final class PanelHeaderView: NSView {
     let title: String
     let symbol: String?
     let badge: String?
+    let accessory: NSView?
     var onClick: (_ solo: Bool) -> Void = { _ in }
     var onDoubleClick: () -> Void = {}
     var menuProvider: (@MainActor () -> NSMenu)?
@@ -196,13 +204,17 @@ final class PanelHeaderView: NSView {
 
     private var hoverArea: NSTrackingArea?
 
-    init(title: String, symbol: String?, badge: String?) {
+    init(title: String, symbol: String?, badge: String?, accessory: NSView? = nil) {
         self.title = title
         self.symbol = symbol
         self.badge = badge
+        self.accessory = accessory
         super.init(frame: .zero)
         wantsLayer = true
         layerContentsRedrawPolicy = .onSetNeedsDisplay
+        if let accessory {
+            addSubview(accessory)
+        }
     }
 
     @available(*, unavailable)
@@ -212,6 +224,17 @@ final class PanelHeaderView: NSView {
 
     override var isFlipped: Bool {
         true
+    }
+
+    /// Where the edited dot would be.
+    override func layout() {
+        super.layout()
+        guard let accessory else { return }
+        let size = accessory.intrinsicContentSize
+        accessory.frame = PixelGrid.centered(
+            size, at: CGPoint(x: bounds.width - Metrics.panelPadding - size.width / 2, y: bounds.height / 2),
+            scale: backingScale,
+        )
     }
 
     override func draw(_: NSRect) {

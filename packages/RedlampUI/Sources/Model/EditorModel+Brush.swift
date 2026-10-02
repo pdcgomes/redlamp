@@ -78,7 +78,7 @@ public extension EditorModel {
 
     func endStroke() {
         guard editStart != nil else { return }
-        endEdit(name: pendingDrawingName ?? "Brush Stroke")
+        endEdit(.mask(.brush), pendingDrawingName ?? "Brush Stroke")
         pendingDrawingName = nil
     }
 

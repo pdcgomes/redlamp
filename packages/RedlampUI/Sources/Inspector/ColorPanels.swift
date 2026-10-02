@@ -321,7 +321,7 @@ struct ColorWheel: View {
                 }
                 .onEnded { _ in
                     dragging = false
-                    model.endEdit(name: "\(range.name) Grading")
+                    model.endEdit(.adjustment(range.hueParameter), "\(range.name) Grading")
                 },
         )
         .simultaneousGesture(TapGesture(count: 2).onEnded {

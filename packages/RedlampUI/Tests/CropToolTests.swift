@@ -30,7 +30,7 @@ struct CropToolTests {
         expectNear(model.pixelAspect(of: crop), 1)
         expectNear(crop.height, 1, "the 600 x 400 frame's full height")
         expectNear(crop.center.x, 0.5)
-        #expect(model.history.last?.name == "Crop Aspect")
+        #expect(model.history.last?.name == "Crop Aspect: \(CropAspect.square.title)")
     }
 
     @Test func `straightening keeps the crop inside the photo, and straightening back restores it`() async throws {
@@ -113,7 +113,8 @@ struct CropToolTests {
         // A horizon falling 10° to the right is levelled by turning 10° back.
         model.straighten(from: .zero, to: CGPoint(x: 100 * cos(radians), y: 100 * sin(radians)))
         expectNear(model.recipe[.cropAngle], -10)
-        #expect(model.history.last?.name == "Straighten")
+        #expect(model.history.last?.name == "Straighten: 0.00° → -10.00°")
+        #expect(model.history.last?.action == .straighten)
         #expect(model.recipe.crop.width < 1, "constrained to the photo")
         // Drawn the other way, the same line.
         model.straighten(from: CGPoint(x: 100 * cos(radians), y: 100 * sin(radians)), to: .zero)

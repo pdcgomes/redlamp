@@ -505,7 +505,9 @@ amount and hash) from presets, as Lightroom does.
 ## 5. Open questions
 
 1. **Persisted history.** Should Redlamp persist history at all? Lightroom keeps it in the catalog,
-   not the XMP **(verify)**. A capped log costs size and sync conflicts.
+   not the XMP **(verify)**. A capped log costs size and sync conflicts. *Decided (2 October 2026):*
+   yes, as sessions, one file each in the sidecar package, every step a JSON Patch from the one before,
+   the last 20 kept ([design](../../../plans/2026-10-02-history-sessions-design.md)).
 2. **PV granularity.** Is one global PV enough? AI denoise and AI masks have model versions that change
    faster than the tone pipeline, so they probably need per-feature pins inside the recipe (see
    `docs/research/ai-findings.md`).

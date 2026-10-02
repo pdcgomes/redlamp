@@ -3,31 +3,37 @@ import RedlampCanvas
 import RedlampDesign
 import SwiftUI
 
-/// The Navigator in AppKit: a live, fitted view of the current render with the zoomed
-/// viewport outlined (drag it, or click, to move around the photo), and Lightroom's FIT /
-/// FILL / 1:1 / ratio zoom buttons. Panning and zooming redraw the outline and the zoom
-/// buttons only.
-final class NavigatorPanelView: NSView, HeightProviding {
+extension PanelSectionView {
+    /// The Navigator in AppKit: a live, fitted view of the current render with the zoomed
+    /// viewport outlined (drag it, or click, to move around the photo), and Lightroom's FIT /
+    /// FILL / 1:1 / ratio zoom buttons in the header. Panning and zooming redraw the outline
+    /// and the zoom buttons only.
+    convenience init(navigator model: EditorModel) {
+        self.init(
+            section: .navigator, model: model, accessory: NavigatorZoomButtons(model: model),
+            rows: [NavigatorPreviewView(model: model)],
+        )
+    }
+}
+
+/// The photo at 3:2, as SwiftUI's `.aspectRatio(1.5, contentMode: .fit)`, with the viewport outlined.
+final class NavigatorPreviewView: NSView, HeightProviding {
     private let model: EditorModel
     private let controller = CanvasController()
-    private let header: NavigatorHeaderView
     private let well = WellView()
     private let canvas: CanvasMetalView
     private let outline: ViewportOutlineView
     private var tracker: Tracker?
 
-    private static let spacing: CGFloat = 6
-
     init(model: EditorModel) {
         self.model = model
-        header = NavigatorHeaderView(model: model)
         canvas = model.frames.makeView(controller: controller, interactive: false)
         outline = ViewportOutlineView(model: model, controller: controller)
         super.init(frame: .zero)
         canvas.wantsLayer = true
         canvas.layer?.cornerRadius = 6
         canvas.layer?.masksToBounds = true
-        [header, well, canvas, outline].forEach(addSubview)
+        [well, canvas, outline].forEach(addSubview)
     }
 
     @available(*, unavailable)
@@ -39,15 +45,8 @@ final class NavigatorPanelView: NSView, HeightProviding {
         true
     }
 
-    /// The header, then the photo at 3:2, as SwiftUI's `.aspectRatio(1.5, contentMode: .fit)`.
     func height(forWidth width: CGFloat) -> CGFloat {
-        photoFrame(width: width).maxY
-    }
-
-    private func photoFrame(width: CGFloat) -> CGRect {
-        PixelGrid.snap(
-            CGRect(x: 0, y: header.height + Self.spacing, width: width, height: width / 1.5), scale: backingScale,
-        )
+        PixelGrid.snap(CGRect(x: 0, y: 0, width: width, height: width / 1.5), scale: backingScale).height
     }
 
     override func viewDidMoveToWindow() {
@@ -63,14 +62,12 @@ final class NavigatorPanelView: NSView, HeightProviding {
 
     override func layout() {
         super.layout()
-        header.frame = CGRect(x: 0, y: 0, width: bounds.width, height: header.height)
-        let photo = photoFrame(width: bounds.width)
-        [well, canvas, outline].forEach { $0.frame = photo }
+        [well, canvas, outline].forEach { $0.frame = bounds }
     }
 }
 
-/// "NAVIGATOR" and the zoom buttons.
-private final class NavigatorHeaderView: LayerDrawnView {
+/// FIT, FILL, 1:1 and the ratio menu, at the trailing edge of the Navigator's header.
+private final class NavigatorZoomButtons: LayerDrawnView {
     private let model: EditorModel
     private let ratio: HostedControl
     private var tracker: Tracker?
@@ -78,6 +75,7 @@ private final class NavigatorHeaderView: LayerDrawnView {
     private var buttons: [(String, CanvasController.Zoom, CGRect)] = []
 
     private static let choices: [(String, CanvasController.Zoom)] = [("Fit", .fit), ("Fill", .fill), ("1:1", .oneToOne)]
+    private static let gap: CGFloat = 10
 
     init(model: EditorModel) {
         self.model = model
@@ -86,17 +84,12 @@ private final class NavigatorHeaderView: LayerDrawnView {
         addSubview(ratio)
     }
 
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        fatalError("init(coder:) is not supported")
-    }
-
     /// As tall as its tallest item, like the SwiftUI HStack.
-    var height: CGFloat {
-        max(
-            TextLine.lineHeight(Typography.section),
-            TextLine.lineHeight(Typography.caption),
-            ratio.intrinsicContentSize.height,
+    override var intrinsicContentSize: NSSize {
+        let titles = Self.choices.reduce(0) { $0 + TextLine.width($1.0, font: Typography.caption) + Self.gap }
+        return NSSize(
+            width: titles + ratio.intrinsicContentSize.width,
+            height: max(TextLine.lineHeight(Typography.caption), ratio.intrinsicContentSize.height),
         )
     }
 
@@ -120,11 +113,11 @@ private final class NavigatorHeaderView: LayerDrawnView {
         ratio.frame = PixelGrid.centered(
             ratioSize, at: CGPoint(x: bounds.width - ratioSize.width / 2, y: bounds.height / 2), scale: scale,
         )
-        var x = ratio.frame.minX - 10
+        var x = ratio.frame.minX - Self.gap
         buttons = Self.choices.reversed().map { title, zoom in
             let width = TextLine.width(title, font: Typography.caption)
             x -= width
-            defer { x -= 10 }
+            defer { x -= Self.gap }
             return (title, zoom, CGRect(x: x, y: 0, width: width, height: bounds.height))
         }
         setNeedsContentDisplay()
@@ -132,10 +125,6 @@ private final class NavigatorHeaderView: LayerDrawnView {
 
     override func drawContent(in _: CGRect) {
         let scale = backingScale
-        TextLine.draw(
-            "NAVIGATOR", font: Typography.section, color: Palette.secondaryLabel.nsColor,
-            in: CGRect(x: 0, y: 0, width: bounds.width, height: bounds.height), scale: scale,
-        )
         for (title, choice, rect) in buttons {
             let color = choice == zoom ? Palette.labelHover : Palette.secondaryLabel
             TextLine.draw(title, font: Typography.caption, color: color.nsColor, in: rect, scale: scale)
@@ -249,6 +238,6 @@ private final class ViewportOutlineView: LayerDrawnView {
 
 @_spi(Harness) public enum NavigatorPanelViews {
     @MainActor public static func make(model: EditorModel) -> NSView {
-        NavigatorPanelView(model: model)
+        PanelSectionView(navigator: model)
     }
 }

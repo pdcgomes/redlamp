@@ -245,7 +245,7 @@ final class CurveGraphView: LayerDrawnView, HeightProviding {
     override func mouseUp(with _: NSEvent) {
         guard dragIndex != nil else { return }
         dragIndex = nil
-        model.endEdit(name: "Point Curve")
+        model.endEdit(.toneCurve, "Point Curve")
     }
 
     private func move(to location: CGPoint, in sorted: [CurvePoint]) {

@@ -115,7 +115,7 @@ struct CurveEditor: View {
             }
             .onEnded { _ in
                 dragIndex = nil
-                model.endEdit(name: "Point Curve")
+                model.endEdit(.toneCurve, "Point Curve")
             }
     }
 

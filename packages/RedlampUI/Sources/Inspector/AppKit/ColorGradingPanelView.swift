@@ -169,7 +169,7 @@ final class ColorWheelView: LayerDrawnView, HeightProviding {
     override func mouseUp(with _: NSEvent) {
         guard dragging else { return }
         dragging = false
-        model.endEdit(name: "\(range.name) Grading")
+        model.endEdit(.adjustment(range.hueParameter), "\(range.name) Grading")
     }
 
     private func set(_ location: CGPoint) {

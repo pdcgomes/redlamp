@@ -104,7 +104,13 @@ public struct FilmCatalogView: View {
                     Text(title).font(.callout)
                     Slider(
                         value: Binding(get: { amount }, set: { model.setRecipeAmount($0) }), in: 0 ... 200,
-                        onEditingChanged: { editing in editing ? model.beginEdit() : model.endEdit() },
+                        onEditingChanged: { editing in
+                            if editing {
+                                model.beginEdit()
+                            } else {
+                                model.endEdit(.recipe, "Recipe Amount", value: EditorModel.recipeAmountText)
+                            }
+                        },
                     )
                     .frame(width: 160)
                     Text("\(Int(amount))").monospacedDigit().frame(width: 32, alignment: .trailing)

@@ -138,7 +138,7 @@ struct CommandPaletteTests: PaletteTesting {
         #expect(palette.hasOpenStep)
         palette.handle(.escape)
         #expect(model.history.count == steps + 1)
-        #expect(model.history.last?.name == "Exposure +0.15")
+        #expect(model.history.last?.name == "Exposure: 0.00 → +0.15")
     }
 
     @Test func `shift steps ten times further and stops at the slider's range`() async throws {
@@ -180,7 +180,7 @@ struct CommandPaletteTests: PaletteTesting {
         palette.setText("x+0.3")
         palette.handle(.submit)
         #expect(model.value(.exposure) == 0.5)
-        #expect(model.history.last?.name == "Exposure +0.50")
+        #expect(model.history.last?.name == "Exposure: +0.20 → +0.50")
         palette.setText("1..2")
         palette.handle(.submit)
         #expect(palette.typedIsInvalid)

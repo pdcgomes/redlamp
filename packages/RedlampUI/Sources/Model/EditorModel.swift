@@ -145,8 +145,11 @@ public final class EditorModel {
         return curve
     }
 
-    public private(set) var history: [HistoryStep] = []
-    public private(set) var historyIndex = 0
+    /// This session's steps: everything since the photo was opened.
+    public internal(set) var history: [HistoryStep] = []
+    public internal(set) var historyIndex = 0
+    /// The photo's earlier sessions, newest first. They load after the photo opens.
+    public internal(set) var earlierSessions: [HistorySession] = []
     public private(set) var snapshots: [Snapshot] = []
     /// Frames go straight to the canvases; views only observe whether there is one.
     @ObservationIgnored public let frames = FrameFeed()
@@ -218,7 +221,7 @@ public final class EditorModel {
             guard constrainCropToImage, !oldValue else { return }
             var next = recipe
             constrainCrop(&next)
-            commit(next, name: "Constrain to Image")
+            commit(next, .crop, "Constrain to Image")
         }
     }
 
@@ -265,6 +268,7 @@ public final class EditorModel {
     /// Bumped when the user's mask presets change, so menus listing them update.
     var maskPresetsVersion = 0
     public var expandedPanels: Set<PanelID> = [.basic, .toneCurve, .colorMixer]
+    public var expandedSidebarSections = Set(SidebarSection.allCases)
     public var soloMode = false
     public var leftPanelVisible = true
     public var rightPanelVisible = true
@@ -335,8 +339,15 @@ public final class EditorModel {
     @ObservationIgnored private var temporaryClipping = false
     @ObservationIgnored private var clipboard: EditRecipe?
     @ObservationIgnored var pendingDrawingName: String?
+    @ObservationIgnored var pendingDrawingKind: MaskKind?
     @ObservationIgnored var editStart: EditRecipe?
     @ObservationIgnored var editParameter: ParameterID?
+    @ObservationIgnored private var session = (id: UUID(), started: Date())
+    /// Whether `earlierSessions` is known: until it is, a sidecar isn't deleted, since it may hold them.
+    @ObservationIgnored var earlierSessionsLoaded = true
+    /// The next save removes the earlier sessions' files (Clear History).
+    @ObservationIgnored var clearsSavedHistory = false
+    @ObservationIgnored var historyTask: Task<Void, Never>?
     @ObservationIgnored private var generation: UInt64 = 0
     /// Canvas geometry for a photo whose first frame hasn't arrived yet. Until it does, the
     /// previous photo stays on screen rather than flashing the placeholder in between.
@@ -495,8 +506,7 @@ public final class EditorModel {
         }
         recipe = loaded
         snapshots = sidecar?.snapshots ?? []
-        history = [HistoryStep(name: sidecar == nil ? "Import" : "Opened with edits", recipe: loaded)]
-        historyIndex = 0
+        startSession(opening: opened.url, recipe: loaded, hasSidecar: sidecar != nil)
         isLoading = false
         cropIntent = loaded.crop
         uprightGuides = []
@@ -640,31 +650,46 @@ public final class EditorModel {
             next.whiteBalanceMode = matchesAsShot(next) ? .asShot : .custom
         }
         guard next != recipe else { return }
+        let previous = recipe
         recipe = next
         requestRender()
         scheduleSave()
         if editStart == nil {
-            recordHistory(historyName(for: parameter))
+            recordStep(for: parameter, from: previous)
         }
     }
 
+    /// Ends a drag as one step, named for the slider it began on (see `beginEdit`) or `name`.
     public func endEdit(name: String? = nil) {
+        if let name {
+            endEdit(.edit, name)
+        } else {
+            finishEdit { [self] start in
+                if let editParameter {
+                    recordStep(for: editParameter, from: start)
+                } else {
+                    recordHistory(.edit, "Edit", from: start)
+                }
+            }
+        }
+    }
+
+    /// Ends a drag as one step. `value` reads the value it changed, to show it before and after.
+    func endEdit(_ action: HistoryAction, _ title: String, value: ((EditRecipe) -> String)? = nil) {
+        finishEdit { [self] start in recordHistory(action, title, from: start, value: value) }
+    }
+
+    private func finishEdit(_ record: (EditRecipe) -> Void) {
         defer {
             editStart = nil
             editParameter = nil
         }
         guard let start = editStart, start != recipe else { return }
-        if let name {
-            recordHistory(name)
-        } else if let editParameter {
-            recordHistory(historyName(for: editParameter))
-        } else {
-            recordHistory("Edit")
-        }
+        record(start)
     }
 
     public func reset(_ parameter: ParameterID) {
-        resetParameters([parameter], name: "Reset \(parameter.spec.label)")
+        resetParameters([parameter], name: "Reset \(parameter.displayName)")
     }
 
     public func resetParameters(_ parameters: [ParameterID], name: String) {
@@ -677,19 +702,15 @@ public final class EditorModel {
                 next[.tint] = wb.tint
             }
         }
-        commit(next, name: name)
+        if parameters.count == 1, let parameter = parameters.first {
+            commit(next, .reset, name) { parameter.spec.formatted($0[parameter]) }
+        } else {
+            commit(next, .reset, name)
+        }
     }
 
     public func resetAll() {
-        commit(beforeRecipe, name: "Reset")
-    }
-
-    func historyName(for parameter: ParameterID) -> String {
-        let spec = parameter.spec
-        if parameter.isMaskScoped {
-            return "\(selectedMask?.name ?? "Mask") \(spec.label) \(spec.formatted(maskValue(parameter)))"
-        }
-        return "\(parameter.displayName) \(spec.formatted(recipe[parameter]))"
+        commit(beforeRecipe, .reset, "Reset")
     }
 
     /// Alt-drag on tone sliders previews clipping, like Lightroom.
@@ -704,7 +725,7 @@ public final class EditorModel {
     public func setTreatment(_ treatment: Treatment) {
         var next = recipe
         next.treatment = treatment
-        commit(next, name: "Treatment: \(treatment.name)")
+        commit(next, .treatment, "Treatment") { $0.treatment.name }
     }
 
     public func setBaseLook(_ look: BaseLookReference) {
@@ -713,7 +734,7 @@ public final class EditorModel {
         if look == BuiltInBaseLook.monochrome.reference || recipes.package(for: look)?.parameters.isMonochrome == true {
             next.treatment = .blackAndWhite
         }
-        commit(next, name: "Base Look: \(look.name)")
+        commit(next, .baseLook, "Base Look") { $0.baseLook.name }
     }
 
     public func setWhiteBalanceMode(_ mode: WhiteBalanceMode) {
@@ -730,7 +751,7 @@ public final class EditorModel {
         case .custom:
             var next = recipe
             next.whiteBalanceMode = .custom
-            commit(next, name: "White Balance: Custom")
+            commit(next, .whiteBalance, "White Balance") { $0.whiteBalanceMode.name }
         default:
             if let wb = mode.presetValue {
                 applyWhiteBalance(wb, mode: mode)
@@ -742,18 +763,25 @@ public final class EditorModel {
         Task {
             guard let photoPoint = imagePoint(forCanvas: point) else { return }
             if let wb = await engine.whiteBalance(sampledAt: photoPoint) {
-                applyWhiteBalance(wb, mode: .custom, name: "White Balance: Selector")
+                applyWhiteBalance(wb, mode: .custom, selector: true)
             }
             eyedropperActive = false
         }
     }
 
-    private func applyWhiteBalance(_ wb: WhiteBalanceValue, mode: WhiteBalanceMode, name: String? = nil) {
+    /// A preset shows the mode it came from and went to; the selector, the temperature.
+    private func applyWhiteBalance(_ wb: WhiteBalanceValue, mode: WhiteBalanceMode, selector: Bool = false) {
         var next = recipe
         next.whiteBalanceMode = mode
         next[.temperature] = ParameterID.temperature.spec.quantize(wb.temperature)
         next[.tint] = ParameterID.tint.spec.quantize(wb.tint)
-        commit(next, name: name ?? "White Balance: \(mode.name)")
+        if selector {
+            commit(next, .whiteBalance, "White Balance Selector") {
+                "\(ParameterID.temperature.spec.formatted($0[.temperature])) K"
+            }
+        } else {
+            commit(next, .whiteBalance, "White Balance") { $0.whiteBalanceMode.name }
+        }
     }
 
     private func matchesAsShot(_ candidate: EditRecipe) -> Bool {
@@ -770,7 +798,7 @@ public final class EditorModel {
             for (parameter, value) in values {
                 next[parameter] = value
             }
-            commit(next, name: "Auto Settings")
+            commit(next, .auto, "Auto Settings")
         }
     }
 
@@ -780,18 +808,19 @@ public final class EditorModel {
         var next = recipe
         next.pointCurve = points
         guard next != recipe else { return }
+        let previous = recipe
         recipe = next
         requestRender()
         scheduleSave()
         if editStart == nil {
-            recordHistory("Point Curve")
+            recordHistory(.toneCurve, "Point Curve", from: previous)
         }
     }
 
     public func resetPointCurve() {
         var next = recipe
         next.pointCurve = EditRecipe.linearPointCurve
-        commit(next, name: "Reset Point Curve")
+        commit(next, .reset, "Reset Point Curve")
     }
 
     // MARK: - Snapshots
@@ -805,7 +834,7 @@ public final class EditorModel {
     }
 
     public func applySnapshot(_ snapshot: Snapshot) {
-        commit(snapshot.recipe, name: "Snapshot: \(snapshot.name)")
+        commit(snapshot.recipe, .snapshot, "Snapshot") { _ in snapshot.name }
     }
 
     public func deleteSnapshot(_ snapshot: Snapshot) {
@@ -813,27 +842,7 @@ public final class EditorModel {
         scheduleSave()
     }
 
-    // MARK: - History
-
-    public var canUndo: Bool {
-        historyIndex > 0
-    }
-
-    public var canRedo: Bool {
-        historyIndex < history.count - 1
-    }
-
-    public func undo() {
-        commandPalette?.endBurst()
-        guard canUndo else { return }
-        goToHistory(historyIndex - 1)
-    }
-
-    public func redo() {
-        commandPalette?.endBurst()
-        guard canRedo else { return }
-        goToHistory(historyIndex + 1)
-    }
+    // MARK: - History (see EditorModel+History)
 
     public func goToHistory(_ index: Int) {
         guard history.indices.contains(index) else { return }
@@ -843,9 +852,22 @@ public final class EditorModel {
         scheduleSave()
     }
 
-    public func clearHistory() {
-        history = [HistoryStep(name: "History cleared", recipe: recipe)]
+    /// A new session for the photo just opened; its earlier ones load in the background.
+    private func startSession(opening url: URL, recipe: EditRecipe, hasSidecar: Bool) {
+        history = [HistoryStep(action: .open, title: hasSidecar ? "Opened" : "Import", recipe: recipe)]
         historyIndex = 0
+        session = (UUID(), Date())
+        clearsSavedHistory = false
+        earlierSessions = []
+        earlierSessionsLoaded = !hasSidecar
+        historyTask?.cancel()
+        guard hasSidecar else { return }
+        historyTask = Task { [sidecars] in
+            let sessions = await Task.detached(priority: .utility) { sidecars.loadHistory(for: url) }.value
+            guard selection == url, !Task.isCancelled else { return }
+            earlierSessions = sessions.filter { $0.id != session.id }
+            earlierSessionsLoaded = true
+        }
     }
 
     /// Applies a change without recording history (the live part of a drag).
@@ -857,33 +879,25 @@ public final class EditorModel {
     }
 
     /// A live change, such as dragging the crop: history records one step when the drag ends.
-    func apply(_ next: EditRecipe, name: String = "Crop") {
+    func apply(_ next: EditRecipe) {
         guard next != recipe else { return }
+        let previous = recipe
         recipe = next
         requestRender()
         scheduleSave()
         if editStart == nil {
-            recordHistory(name)
+            recordHistory(.crop, "Crop", from: previous)
         }
     }
 
-    func commit(_ next: EditRecipe, name: String) {
+    /// Applies a change as one step. `value` reads the value it changed, to show it before and after.
+    func commit(_ next: EditRecipe, _ action: HistoryAction, _ title: String, value: ((EditRecipe) -> String)? = nil) {
         guard next != recipe else { return }
+        let previous = recipe
         recipe = next
-        recordHistory(name)
+        recordHistory(action, title, from: previous, value: value)
         requestRender()
         scheduleSave()
-    }
-
-    func recordHistory(_ name: String) {
-        if historyIndex < history.count - 1 {
-            history.removeSubrange((historyIndex + 1)...)
-        }
-        history.append(HistoryStep(name: name, recipe: recipe))
-        if history.count > 500 {
-            history.removeFirst(history.count - 500)
-        }
-        historyIndex = history.count - 1
     }
 
     // MARK: - Copy / paste
@@ -895,7 +909,7 @@ public final class EditorModel {
 
     public func pasteSettings() {
         guard let clipboard else { return }
-        commit(clipboard, name: "Paste Settings")
+        commit(clipboard, .paste, "Paste Settings")
         updatePastedAIMasks()
     }
 
@@ -908,6 +922,18 @@ public final class EditorModel {
             expandedPanels.remove(panel)
         } else {
             expandedPanels.insert(panel)
+        }
+    }
+
+    /// The left column's panels expand and collapse as the Develop panels do; Solo Mode is
+    /// Option-click there, so the inspector's setting doesn't reach them.
+    public func toggleSidebarSection(_ section: SidebarSection, solo: Bool) {
+        if solo {
+            expandedSidebarSections = expandedSidebarSections == [section] ? [] : [section]
+        } else if expandedSidebarSections.contains(section) {
+            expandedSidebarSections.remove(section)
+        } else {
+            expandedSidebarSections.insert(section)
         }
     }
 
@@ -1002,8 +1028,17 @@ public final class EditorModel {
         saveDeadline = nil
         guard let url = selection, info != nil, !isReadOnly else { return }
         let metadata = items.first { $0.url == url }?.metadata ?? PhotoMetadata()
-        let sidecar = Sidecar(recipe: recipe, snapshots: snapshots, metadata: metadata.isEmpty ? nil : metadata)
-        let pristine = sidecar.isPristine
+        var sidecar = Sidecar(
+            recipe: recipe, snapshots: snapshots, metadata: metadata.isEmpty ? nil : metadata,
+            session: HistorySession(
+                id: session.id,
+                started: session.started,
+                steps: Array(history.prefix(historyIndex + 1)),
+            ),
+        )
+        sidecar.clearsHistory = clearsSavedHistory
+        clearsSavedHistory = false
+        let pristine = sidecar.isPristine && earlierSessionsLoaded && earlierSessions.isEmpty
         let store = sidecars
         Task.detached(priority: .utility) {
             if pristine {

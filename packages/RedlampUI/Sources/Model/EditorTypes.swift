@@ -16,12 +16,6 @@ public struct LibraryItem: Identifiable, Hashable, Sendable {
     }
 }
 
-public struct HistoryStep: Identifiable, Hashable, Sendable {
-    public let id = UUID()
-    public let name: String
-    public let recipe: EditRecipe
-}
-
 /// The Develop panels, in Lightroom's order.
 public enum PanelID: String, CaseIterable, Identifiable, Sendable {
     case basic, toneCurve, colorMixer, colorGrading, detail, lens, transform, effects, calibration
@@ -155,6 +149,34 @@ public enum PanelID: String, CaseIterable, Identifiable, Sendable {
                 .calibrationBlueHue,
                 .calibrationBlueSaturation,
             ]
+        }
+    }
+}
+
+/// The left column's panels, top to bottom.
+public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
+    case navigator, recipes, snapshots, history
+
+    public var id: String {
+        rawValue
+    }
+
+    public var title: String {
+        switch self {
+        case .navigator: "Navigator"
+        case .recipes: "Recipes"
+        case .snapshots: "Snapshots"
+        case .history: "History"
+        }
+    }
+
+    /// The glyph beside the panel's title, as the Develop panels have.
+    public var symbol: String {
+        switch self {
+        case .navigator: "map"
+        case .recipes: "wand.and.stars"
+        case .snapshots: "camera"
+        case .history: "clock.arrow.circlepath"
         }
     }
 }

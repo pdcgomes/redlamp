@@ -172,7 +172,7 @@ struct CropOverlayView: View {
                     return
                 }
                 dragStart = nil
-                model.endEdit(name: "Crop")
+                model.endEdit(.crop, "Crop")
             }
     }
 

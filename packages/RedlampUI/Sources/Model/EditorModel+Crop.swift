@@ -77,7 +77,7 @@ public extension EditorModel {
         )
         cropIntent = next.crop
         constrainCrop(&next)
-        commit(next, name: "Swap Crop Orientation")
+        commit(next, .crop, "Swap Crop Orientation")
     }
 
     /// The geometry of the frame on the canvas: the developed frame, or in the crop tool the
@@ -138,7 +138,7 @@ public extension EditorModel {
         next.crop = crop
         cropIntent = crop
         constrainCrop(&next)
-        commit(next, name: "Crop Aspect")
+        commit(next, .crop, "Crop Aspect") { _ in aspect.title }
     }
 
     /// Turns the photo a quarter, the crop with it.
@@ -150,7 +150,7 @@ public extension EditorModel {
             ? CropRect(left: 1 - crop.bottom, top: crop.left, right: 1 - crop.top, bottom: crop.right)
             : CropRect(left: crop.top, top: 1 - crop.right, right: crop.bottom, bottom: 1 - crop.left)
         cropIntent = next.crop
-        commit(next, name: clockwise ? "Rotate Right" : "Rotate Left")
+        commit(next, .rotate, clockwise ? "Rotate Right" : "Rotate Left")
     }
 
     /// Mirrors the photo as shown, keeping the same crop of it.
@@ -164,7 +164,7 @@ public extension EditorModel {
         // A mirrored photo turns the other way: the same angle would tilt it further.
         next[.cropAngle] = -next[.cropAngle]
         cropIntent = next.crop
-        commit(next, name: horizontally ? "Flip Horizontal" : "Flip Vertical")
+        commit(next, .flip, horizontally ? "Flip Horizontal" : "Flip Vertical")
     }
 
     /// Levels the photo along a line drawn on the canvas (view points, y down): nearer horizontal
@@ -187,7 +187,7 @@ public extension EditorModel {
         var next = recipe
         next[.cropAngle] = angle
         constrainCrop(&next)
-        commit(next, name: "Straighten")
+        commit(next, .straighten, "Straighten") { "\(ParameterID.cropAngle.spec.formatted($0[.cropAngle]))°" }
     }
 
     /// Adds a Guided Upright guide (up to four, the oldest giving way) and solves again.
@@ -210,7 +210,7 @@ public extension EditorModel {
         next[.transformHorizontal] = solved.horizontal
         next[.transformRotate] = solved.rotate
         constrainCrop(&next)
-        commit(next, name: "Guided Upright")
+        commit(next, .upright, "Guided Upright")
     }
 
     /// Upright off: no guides, and no perspective or rotation correction.
@@ -220,7 +220,7 @@ public extension EditorModel {
         var next = recipe
         next.reset([.transformVertical, .transformHorizontal, .transformRotate])
         constrainCrop(&next)
-        commit(next, name: "Upright: Off")
+        commit(next, .upright, "Upright") { _ in "Off" }
     }
 
     /// Removes the crop, angle and orientation.
@@ -230,7 +230,7 @@ public extension EditorModel {
         next.orientation = .identity
         next[.cropAngle] = 0
         cropIntent = .full
-        commit(next, name: "Reset Crop")
+        commit(next, .reset, "Reset Crop")
     }
 
     /// Fits the crop as last drawn inside the photo, when Constrain to Image is on.

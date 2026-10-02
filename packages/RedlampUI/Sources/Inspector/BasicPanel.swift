@@ -121,7 +121,7 @@ struct BaseLookAmountRow: View {
                 if editing {
                     model.beginEdit()
                 } else {
-                    model.endEdit(name: "Base Look Amount")
+                    model.endEdit(.baseLook, "Base Look Amount", value: EditorModel.baseLookAmountText)
                 }
             }
             .controlSize(.mini)

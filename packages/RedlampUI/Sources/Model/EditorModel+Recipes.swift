@@ -12,10 +12,9 @@ public extension EditorModel {
             : self.recipe
         recipeApplication = (recipe, base)
         let apply = { [self] in
-            commit(
-                recipe.apply(to: base, amount: amount, whiteBalance: resolveWhiteBalance),
-                name: "Recipe: \(recipe.name)",
-            )
+            commit(recipe.apply(to: base, amount: amount, whiteBalance: resolveWhiteBalance), .recipe, "Recipe") { _ in
+                recipe.name
+            }
         }
         if needsAutoWhiteBalance(recipe), autoWhiteBalance == nil {
             Task {
@@ -69,7 +68,7 @@ public extension EditorModel {
         )
         guard next != recipe else { return }
         if editStart == nil {
-            commit(next, name: "Recipe Amount")
+            commit(next, .recipe, "Recipe Amount", value: Self.recipeAmountText)
         } else {
             applyLive(next)
         }
@@ -81,10 +80,19 @@ public extension EditorModel {
         next.baseLook = recipe.baseLook.withAmount(amount.rounded())
         guard next != recipe else { return }
         if editStart == nil {
-            commit(next, name: "Base Look Amount")
+            commit(next, .baseLook, "Base Look Amount", value: Self.baseLookAmountText)
         } else {
             applyLive(next)
         }
+    }
+
+    /// The Recipe Amount and Base Look Amount as history shows them.
+    internal static func recipeAmountText(_ recipe: EditRecipe) -> String {
+        recipe.appliedRecipe.map { "\(Int($0.amount.rounded()))" } ?? "–"
+    }
+
+    internal static func baseLookAmountText(_ recipe: EditRecipe) -> String {
+        "\(Int(recipe.baseLook.amount.rounded()))"
     }
 
     /// The edit's Base Look isn't installed here, so the photo renders without it.

@@ -47,7 +47,7 @@ struct CommandPalettePickerTests: PaletteTesting {
         _ = try open("exposure 0.7", in: model)
         #expect(model.value(.exposure) == 0.7)
         #expect(model.commandPalette == nil)
-        #expect(model.history.last?.name == "Exposure +0.70")
+        #expect(model.history.last?.name == "Exposure: 0.00 → +0.70")
         #expect(events.all.contains(.applied(.setValue(.exposure, 0.7))))
     }
 

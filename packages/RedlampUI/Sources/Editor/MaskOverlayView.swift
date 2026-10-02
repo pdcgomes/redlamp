@@ -537,7 +537,7 @@ private struct ComponentHandles: View {
             }
             .onEnded { _ in
                 original = nil
-                model.endEdit(name: "Edit \(mask.name)")
+                model.endEdit(.mask(component.kind), "Edit \(mask.name)")
             }
     }
 
@@ -559,7 +559,7 @@ private struct ComponentHandles: View {
             }
             .onEnded { _ in
                 original = nil
-                model.endEdit(name: "Edit \(mask.name)")
+                model.endEdit(.mask(component.kind), "Edit \(mask.name)")
             }
     }
 
@@ -578,7 +578,7 @@ private struct ComponentHandles: View {
             }
             .onEnded { _ in
                 original = nil
-                model.endEdit(name: "Rotate \(mask.name)")
+                model.endEdit(.mask(component.kind), "Rotate \(mask.name)")
             }
     }
 }

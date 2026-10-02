@@ -62,7 +62,7 @@ public extension EditorModel {
             ) else { return }
             name = added
         }
-        commit(next, name: name)
+        commit(next, .mask(.colorRange), name)
     }
 
     func removeColorSample(at index: Int) {
@@ -93,7 +93,7 @@ public extension EditorModel {
             else { return }
             name = added
         }
-        commit(next, name: name)
+        commit(next, .mask(.luminanceRange), name)
     }
 
     /// The range bar's handles. Live while dragging (inside `beginEdit` / `endEdit`).

@@ -4,16 +4,9 @@ import SwiftUI
 
 /// The inspector's scrolling column, in AppKit: the Develop panels, or the Masking tool's
 /// panel. Each control updates only when a value it shows changes.
-final class InspectorPanelsView: NSView {
-    private let scrollView = OverlayScrollView()
-    private let document: InspectorDocumentView
-
+final class InspectorPanelsView: PanelColumnScrollView {
     init(model: EditorModel, tool: EditTool) {
-        document = InspectorDocumentView(views: Self.content(for: tool, model: model))
-        super.init(frame: .zero)
-        scrollView.documentView = document
-        addSubview(scrollView)
-        document.onHeightChange = { [weak self] in self?.sizeDocument() }
+        super.init(views: Self.content(for: tool, model: model))
     }
 
     @available(*, unavailable)
@@ -53,38 +46,5 @@ final class InspectorPanelsView: NSView {
         default:
             [HostedControl(model: model, PlannedToolCard(tool: tool))]
         }
-    }
-
-    override func layout() {
-        super.layout()
-        scrollView.frame = bounds
-        sizeDocument()
-    }
-
-    private func sizeDocument() {
-        let width = scrollView.contentView.bounds.width
-        let size = CGSize(width: width, height: document.height(forWidth: width))
-        if document.frame.size != size {
-            document.setFrameSize(size)
-        }
-        document.layoutSubtreeIfNeeded()
-    }
-}
-
-/// The scroll view's document: the panels, top to bottom.
-final class InspectorDocumentView: ColumnView, ColumnHost {
-    var onHeightChange: () -> Void = {}
-
-    init(views: [NSView]) {
-        super.init(views: views)
-    }
-
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        fatalError("init(coder:) is not supported")
-    }
-
-    func columnContentDidChange() {
-        onHeightChange()
     }
 }

@@ -78,7 +78,7 @@ public extension EditorModel {
         next.masks.append(mask)
         selectedMaskID = mask.id
         selectedComponentID = components.last?.id
-        commit(next, name: "Apply \(preset.name)")
+        commit(next, .mask(components.first?.shape.kind), "Apply \(preset.name)")
     }
 
     /// Pasted AI masks were made for another photo: compute them again for this one, as

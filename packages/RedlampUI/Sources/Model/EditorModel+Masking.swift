@@ -63,14 +63,16 @@ public extension EditorModel {
         }
         selectedComponentID = component.id
         pendingDrawingName = drawingTarget == nil ? "New \(kind.name)" : "Add \(kind.name)"
+        pendingDrawingKind = kind
         applyLive(next)
         drawingKind = nil
         drawingTarget = nil
     }
 
     func finishDrawing() {
-        endEdit(name: pendingDrawingName ?? "New Mask")
+        endEdit(.mask(pendingDrawingKind), pendingDrawingName ?? "New Mask")
         pendingDrawingName = nil
+        pendingDrawingKind = nil
     }
 
     /// Adds a component made with a tool that stays armed (brush, range samplers): to
@@ -106,7 +108,7 @@ public extension EditorModel {
     /// Live shape update during a drag (inside a `beginEdit` / `endEdit` pair), or with a `name`
     /// a step of its own.
     func updateComponent(_ componentID: UUID, in maskID: UUID, shape: MaskShape, name: String? = nil) {
-        mutateMask(maskID, name: name) { mask in
+        mutateMask(maskID, name: name, kind: shape.kind) { mask in
             if let index = mask.components.firstIndex(where: { $0.id == componentID }) {
                 mask.components[index].shape = shape
             }
@@ -114,7 +116,11 @@ public extension EditorModel {
     }
 
     func setComponentInverted(_ componentID: UUID, in maskID: UUID, _ inverted: Bool) {
-        mutateMask(maskID, name: inverted ? "Invert Component" : "Uninvert Component") { mask in
+        mutateMask(
+            maskID,
+            name: inverted ? "Invert Component" : "Uninvert Component",
+            kind: kind(of: componentID),
+        ) { mask in
             if let index = mask.components.firstIndex(where: { $0.id == componentID }) {
                 mask.components[index].inverted = inverted
             }
@@ -122,7 +128,7 @@ public extension EditorModel {
     }
 
     func setComponentOperation(_ componentID: UUID, in maskID: UUID, _ operation: MaskOperation) {
-        mutateMask(maskID, name: "\(operation.name) Component") { mask in
+        mutateMask(maskID, name: "\(operation.name) Component", kind: kind(of: componentID)) { mask in
             if let index = mask.components.firstIndex(where: { $0.id == componentID }) {
                 mask.components[index].operation = operation
             }
@@ -133,7 +139,7 @@ public extension EditorModel {
     func addMaskReference(_ referencedID: UUID, to maskID: UUID, operation: MaskOperation) {
         guard referencedID != maskID, let referenced = recipe.mask(referencedID) else { return }
         let component = MaskComponent(shape: .maskReference(MaskReference(maskID: referencedID)), operation: operation)
-        mutateMask(maskID, name: "\(operation.name) \(referenced.name)") { mask in
+        mutateMask(maskID, name: "\(operation.name) \(referenced.name)", kind: .existingMask) { mask in
             mask.components.append(component)
         }
         selectedMaskID = maskID
@@ -146,7 +152,7 @@ public extension EditorModel {
             deleteMask(maskID)
             return
         }
-        mutateMask(maskID, name: "Delete Component") { mask in
+        mutateMask(maskID, name: "Delete Component", kind: kind(of: componentID)) { mask in
             mask.components.removeAll { $0.id == componentID }
         }
         if selectedComponentID == componentID {
@@ -180,7 +186,7 @@ public extension EditorModel {
             selectedMaskID = next.masks.last?.id
             selectedComponentID = nil
         }
-        commit(next, name: "Delete \(mask.name)")
+        commit(next, .mask(nil), "Delete \(mask.name)")
     }
 
     func duplicateMask(_ id: UUID, inverted: Bool = false) {
@@ -199,13 +205,15 @@ public extension EditorModel {
         var next = recipe
         next.masks.append(copy)
         selectedMaskID = copy.id
-        commit(next, name: inverted ? "Duplicate and Invert \(original.name)" : "Duplicate \(original.name)")
+        commit(next, .mask(nil), inverted ? "Duplicate and Invert \(original.name)" : "Duplicate \(original.name)")
     }
 
     func renameMask(_ id: UUID, to name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-        mutateMask(id, name: "Rename Mask") { $0.name = trimmed }
+        guard !trimmed.isEmpty, let index = recipe.masks.firstIndex(where: { $0.id == id }) else { return }
+        var next = recipe
+        next.masks[index].name = trimmed
+        commit(next, .mask(nil), "Rename Mask") { $0.mask(id)?.name ?? "" }
     }
 
     func toggleMaskVisibility(_ id: UUID) {
@@ -214,15 +222,17 @@ public extension EditorModel {
     }
 
     func resetMaskAdjustments(_ id: UUID) {
-        guard let mask = recipe.mask(id) else { return }
-        mutateMask(id, name: "Reset \(mask.name)") { $0.resetAdjustments() }
+        guard let mask = recipe.mask(id), let index = recipe.masks.firstIndex(where: { $0.id == id }) else { return }
+        var next = recipe
+        next.masks[index].resetAdjustments()
+        commit(next, .reset, "Reset \(mask.name)")
     }
 
     func deleteAllMasks() {
         var next = recipe
         next.masks = []
         selectMask(nil)
-        commit(next, name: "Delete All Masks")
+        commit(next, .mask(nil), "Delete All Masks")
     }
 
     // MARK: - Mask sliders
@@ -233,18 +243,38 @@ public extension EditorModel {
             return brushes[activeBrush][parameter]
         }
         guard let mask = selectedMask else { return parameter.spec.defaultValue }
+        return Self.maskValue(parameter, of: mask, component: selectedComponent)
+    }
+
+    /// A mask slider's value in `recipe`, for the mask and component it would show.
+    internal static func maskValue(
+        _ parameter: ParameterID,
+        in recipe: EditRecipe,
+        mask: UUID?,
+        component: UUID?,
+    ) -> Double {
+        guard let layer = mask.flatMap(recipe.mask) else { return parameter.spec.defaultValue }
+        return maskValue(
+            parameter,
+            of: layer,
+            component: layer.components.first { $0.id == component }
+                ?? layer.components.last,
+        )
+    }
+
+    private static func maskValue(_ parameter: ParameterID, of mask: MaskLayer, component: MaskComponent?) -> Double {
         switch parameter {
         case .maskAmount:
             return mask.amount
         case .maskDetail:
             return mask.detail
         case .maskFeather:
-            if case let .radial(gradient) = selectedComponent?.shape {
+            if case let .radial(gradient) = component?.shape {
                 return gradient.feather
             }
             return parameter.spec.defaultValue
         case .maskColorRefine:
-            if case let .colorRange(range) = selectedComponent?.shape {
+            if case let .colorRange(range) = component?.shape {
                 return range.refine
             }
             return parameter.spec.defaultValue
@@ -286,7 +316,7 @@ public extension EditorModel {
         }
         // Outside a drag (typed values, resets) each change is its own history step.
         if editStart == nil, recipe != before {
-            recordHistory(historyName(for: parameter))
+            recordStep(for: parameter, from: before)
         }
     }
 
@@ -317,15 +347,22 @@ public extension EditorModel {
 
     /// Applies `change` to one mask. With a `name`, records a history step; without,
     /// it is part of a live edit.
-    private func mutateMask(_ id: UUID, name: String?, _ change: (inout MaskLayer) -> Void) {
+    private func mutateMask(
+        _ id: UUID, name: String?, kind: MaskKind? = nil, _ change: (inout MaskLayer) -> Void,
+    ) {
         guard let index = recipe.masks.firstIndex(where: { $0.id == id }) else { return }
         var next = recipe
         change(&next.masks[index])
         guard next != recipe else { return }
         if let name, editStart == nil {
-            commit(next, name: name)
+            commit(next, .mask(kind), name)
         } else {
             applyLive(next)
         }
+    }
+
+    /// The type of a component of the edit.
+    internal func kind(of componentID: UUID) -> MaskKind? {
+        locateComponent(componentID, in: recipe).flatMap { recipe.masks[$0.mask].components[$0.component].shape.kind }
     }
 }
