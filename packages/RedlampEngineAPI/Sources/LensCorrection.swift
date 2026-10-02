@@ -12,11 +12,14 @@ public struct LensCorrection: Codable, Sendable, Hashable {
         case dng
         /// Sony's correction tags in the ARW, the camera's own built-in profile.
         case sony
+        /// Measured from the photo's own edges (Remove Chromatic Aberration).
+        case measured
 
         public var name: String {
             switch self {
             case .dng: "DNG"
             case .sony: "Sony"
+            case .measured: "Measured"
             }
         }
     }

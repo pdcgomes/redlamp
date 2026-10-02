@@ -102,6 +102,14 @@ public enum ParameterID: String, CaseIterable, Codable, Sendable, Hashable {
     case lensProfile = "lens.profile"
     case lensProfileDistortion = "lens.profileDistortion"
     case lensProfileVignetting = "lens.profileVignetting"
+    /// Remove Chromatic Aberration: 1 corrects lateral colour fringes, from the profile or measured.
+    case lensRemoveChromaticAberration = "lens.removeChromaticAberration"
+    case defringePurpleAmount = "lens.defringePurple"
+    case defringePurpleHueLow = "lens.defringePurpleHueLow"
+    case defringePurpleHueHigh = "lens.defringePurpleHueHigh"
+    case defringeGreenAmount = "lens.defringeGreen"
+    case defringeGreenHueLow = "lens.defringeGreenHueLow"
+    case defringeGreenHueHigh = "lens.defringeGreenHueHigh"
 
     /// Crop
     case cropAngle = "crop.angle"

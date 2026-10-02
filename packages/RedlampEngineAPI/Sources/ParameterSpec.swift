@@ -323,6 +323,18 @@ public enum ParameterCatalog {
             ParameterSpec(.lensProfile, "Enable Profile Corrections", range: 0 ... 1, default: 1, format: .integer),
             ParameterSpec(.lensProfileDistortion, "Distortion", range: 0 ... 200, default: 100, format: .integer),
             ParameterSpec(.lensProfileVignetting, "Vignetting", range: 0 ... 200, default: 100, format: .integer),
+            ParameterSpec(
+                .lensRemoveChromaticAberration,
+                "Remove Chromatic Aberration",
+                range: 0 ... 1,
+                format: .integer,
+            ),
+            ParameterSpec(.defringePurpleAmount, "Purple Amount", range: 0 ... 20, format: .integer),
+            ParameterSpec(.defringePurpleHueLow, "Purple Hue Low", range: 0 ... 100, default: 30, format: .integer),
+            ParameterSpec(.defringePurpleHueHigh, "Purple Hue High", range: 0 ... 100, default: 70, format: .integer),
+            ParameterSpec(.defringeGreenAmount, "Green Amount", range: 0 ... 20, format: .integer),
+            ParameterSpec(.defringeGreenHueLow, "Green Hue Low", range: 0 ... 100, default: 40, format: .integer),
+            ParameterSpec(.defringeGreenHueHigh, "Green Hue High", range: 0 ... 100, default: 60, format: .integer),
 
             ParameterSpec(
                 .cropAngle, "Angle", range: -45 ... 45, step: 0.01, format: .signedDecimal(2),

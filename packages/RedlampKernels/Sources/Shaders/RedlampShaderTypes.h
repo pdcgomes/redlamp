@@ -68,6 +68,8 @@ struct DevelopParams {
     float4 lensProfile;       // x 1 = apply the photo's lens profile (the lens table buffer), yz its optical
                               // centre (0...1), w 1 = red and blue are recorded at their own scale
     float4 lensProfile2;      // xy photo offset to the profile's radius per unit, z radius per table entry
+    float4 defringe;          // x purple amount, y green amount (0...1)
+    float4 defringeHue;       // OKLab hue bands in degrees: x, y purple from and to, z, w green
 };
 
 // Noise reduction over one work area of the pyramid.

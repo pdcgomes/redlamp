@@ -47,6 +47,7 @@ final class ImageSession: @unchecked Sendable {
     let hueSatMaps: HueSatMaps?
     /// The profile's look baked into a Base Look (`EmbeddedLook`).
     let embeddedLook: BaseLookDefinition?
+    private let chromaticAberration = LateralChromaticAberration.Cache()
 
     init(
         info: ImageInfo,
@@ -113,6 +114,13 @@ final class ImageSession: @unchecked Sendable {
     func cameraToWorking(for recipe: EditRecipe) -> simd_float3x3 {
         guard let dngColor, recipe.whiteBalanceMode != .asShot else { return cameraToWorking }
         return dngColor.cameraToWorking(temperature: recipe[.temperature])
+    }
+
+    /// The photo's lateral chromatic aberration as measured from its edges, the first time an
+    /// edit asks for it (Remove Chromatic Aberration without a profile that corrects it).
+    func measuredChromaticAberration() -> LensCorrection? {
+        guard isRaw else { return nil }
+        return chromaticAberration.value { LateralChromaticAberration.estimate(self) }
     }
 
     /// How much of the coolest HueSatMap to use, interpolated as the matrices are.

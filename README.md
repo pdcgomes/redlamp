@@ -169,7 +169,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 ### In progress
 
 - **Focus stacking:** lens corrections before alignment, halo handling, vendor focus-bracketing tags for detection, and baking a stack to DNG.
-- **Panels laid out but not yet rendering** (shown dimmed, with the phase they arrive in): Moiré and Defringe in masks, and the Lens Corrections, Transform, and Calibration panels. The Crop, Healing, and Red Eye tools show what is coming and when.
+- **Panels laid out but not yet rendering** (shown dimmed, with the phase they arrive in): Moiré and Defringe in masks, and the Calibration panel. The Healing and Red Eye tools show what is coming and when.
 
 ### Measured performance
 
@@ -835,6 +835,7 @@ The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on mac
 - [ ] Better X-Trans demosaicing (Markesteijn)
 - [ ] Full DCP camera profiles (dual and triple illuminant), ICC input profiles, and `.3dl` and log-space LUT import
 - [ ] **Film effects for recipes:** halation (the red glow around bright lights), bloom and diffusion, and film grain that varies with density and scales with output size
+- [x] Remove Chromatic Aberration, from the lens profile or measured from the photo's own edges, and Lightroom's Defringe (Purple and Green Amount and Hue)
 - [ ] Lens corrections from the lensfun database and Adobe LCP import *(the corrections raw files carry, DNG opcodes and Sony's, and manual Distortion and Vignetting, are done, in the same geometry map)*
 - [x] **Crop and straighten** (aspect presets and lock, composition overlays, Angle and the Straighten tool, Constrain to Image), rotate and flip, and the manual Transform sliders, all one geometry map that masks follow
 - [x] Upright: Auto, Level, Vertical and Full from the photo's own straight edges, found by Redlamp's line detector, and Guided from drawn guides. A correction is applied only when the edges agree on it, so a landscape or a still life is levelled at most, and Auto leaves strong perspective partly in place

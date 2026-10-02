@@ -27,6 +27,29 @@ enum LensTable {
     static let reach: Double = 1.5
     static let identity = [SIMD4<Float>](repeating: SIMD4(1, 1, 1, 1), count: size)
 
+    /// The geometry's lens profile, with the colour fringe correction Remove Chromatic Aberration
+    /// asks for when the profile has none of its own: the one measured from the photo, red's and
+    /// blue's scales multiplying the profile's.
+    static func combined(_ profile: LensCorrection?, recipe: EditRecipe, session: ImageSession) -> LensCorrection? {
+        guard recipe[.lensRemoveChromaticAberration] > 0.5, profile?.correctsColorFringes != true,
+              let measured = session.measuredChromaticAberration()
+        else { return profile }
+        guard let profile else { return measured }
+        var combined = profile
+        if profile.distortion.isEmpty {
+            // Vignetting only: both on the measurement's radii.
+            combined.radii = measured.radii
+            combined.distortion = measured.distortion
+            combined.vignetting = measured.radii.map { profile.interpolate(profile.vignetting, at: $0) }
+        } else {
+            combined.distortion = zip(profile.radii, profile.distortion).map { r, scale in
+                let fringe = measured.interpolate(measured.distortion, at: r)
+                return SIMD3(scale.x * fringe.x, scale.y, scale.z * fringe.z)
+            }
+        }
+        return combined
+    }
+
     static func entries(_ lens: LensCorrection) -> [SIMD4<Float>] {
         (0 ..< size).map { index in
             let radius = Double(index) / Double(size - 1) * reach
@@ -189,8 +212,17 @@ enum DevelopParameters {
             Float(map.lensDistortion), Float(recipe[.lensVignetting] / 100),
             Float(recipe[.lensVignettingMidpoint] / 100), 0,
         )
+        // Defringe's hue sliders span OKLab hue bands: purple 250...370°, green 80...200°.
+        p.defringe = SIMD4(Float(recipe[.defringePurpleAmount] / 20), Float(recipe[.defringeGreenAmount] / 20), 0, 0)
+        func hue(_ base: Double, _ parameter: ParameterID) -> Float {
+            Float(fmod(base + 1.2 * recipe[parameter], 360))
+        }
+        p.defringeHue = SIMD4(
+            hue(250, .defringePurpleHueLow), hue(250, .defringePurpleHueHigh),
+            hue(80, .defringeGreenHueLow), hue(80, .defringeGreenHueHigh),
+        )
         var lensTable = LensTable.identity
-        if let profile = map.lensProfile {
+        if let profile = LensTable.combined(map.lensProfile, recipe: recipe, session: session) {
             lensTable = LensTable.entries(profile)
             p.lensProfile = SIMD4(
                 1, Float(profile.center.x), Float(profile.center.y), profile.correctsColorFringes ? 1 : 0,

@@ -36,13 +36,23 @@ import SwiftUI
 @_spi(Harness) public struct LensPanel: View {
     public init() {}
 
+    static let defringe: [ParameterID] = [
+        .defringePurpleAmount, .defringePurpleHueLow, .defringePurpleHueHigh, .defringeGreenAmount,
+        .defringeGreenHueLow, .defringeGreenHueHigh,
+    ]
+
     public var body: some View {
         PanelSection(panel: .lens, badge: "Phase 2") {
-            LensToggle(title: "Remove Chromatic Aberration", help: nil)
+            ParameterToggle(
+                parameter: .lensRemoveChromaticAberration,
+                help: "Realign red and blue fringes at edges, from the lens profile or measured from the photo",
+            )
             ProfileCorrectionsToggle()
             SubsectionHeader(title: "Profile", parameters: [.lensProfileDistortion, .lensProfileVignetting])
             ParameterSlider(parameter: .lensProfileDistortion)
             ParameterSlider(parameter: .lensProfileVignetting)
+            SubsectionHeader(title: "Defringe", parameters: Self.defringe)
+            ForEach(Self.defringe, id: \.self) { ParameterSlider(parameter: $0) }
             SubsectionHeader(title: "Manual", parameters: [.lensDistortion, .lensVignetting, .lensVignettingMidpoint])
             ParameterSlider(parameter: .lensDistortion)
             ParameterSlider(parameter: .lensVignetting)
@@ -53,17 +63,22 @@ import SwiftUI
 
 // The reference panels' native controls, shared with the AppKit panels.
 
-struct LensToggle: View {
-    let title: String
-    let help: String?
+/// A checkbox for an on/off parameter (0 or 1).
+struct ParameterToggle: View {
+    @Environment(EditorModel.self) private var model
+    let parameter: ParameterID
+    let help: String
 
     var body: some View {
-        Toggle(title, isOn: .constant(false))
-            .disabled(true)
-            .help(help ?? "")
-            .font(Theme.labelFont)
-            .toggleStyle(.checkbox)
-            .controlSize(.small)
+        Toggle(parameter.spec.label, isOn: Binding(
+            get: { model.recipe[parameter] > 0.5 },
+            set: { model.setValue(parameter, $0 ? 1 : 0) },
+        ))
+        .disabled(model.info == nil)
+        .help(help)
+        .font(Theme.labelFont)
+        .toggleStyle(.checkbox)
+        .controlSize(.small)
     }
 }
 

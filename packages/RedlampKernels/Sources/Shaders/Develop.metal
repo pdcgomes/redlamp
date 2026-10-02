@@ -114,6 +114,45 @@ static inline float3 hueSatEntry(texture3d<float, access::read> map, float3 hsv,
     return result;
 }
 
+// How far a hue (degrees) lies inside the band from `from` to `to`, going up and wrapping at 360,
+// with 8° shoulders.
+static inline float hueBand(float hue, float from, float to) {
+    float width = fmod(to - from + 720.0f, 360.0f);
+    float d = fmod(hue - from + 720.0f, 360.0f);
+    float inside = d <= width ? 1.0f : 0.0f;
+    float below = 1.0f - smoothstep(0.0f, 8.0f, 360.0f - d);
+    float above = 1.0f - smoothstep(0.0f, 8.0f, d - width);
+    return max(inside, max(below, above));
+}
+
+// Lightroom's Defringe: purple or green colour beside a strong edge (a stop and more of contrast
+// within two texels) loses its colour, so axial fringes that no scale can realign go grey.
+static inline float3 defringe(float3 scene, texture2d<float, access::sample> source, float2 sourceUV,
+                              constant DevelopParams &p) {
+    constexpr sampler pointSampler(coord::normalized, filter::linear, mip_filter::nearest, address::clamp_to_edge);
+    uint mip = uint(max(p.geometry.y, 0.0f));
+    float2 texel = 2.0f / float2(source.get_width(mip), source.get_height(mip));
+    float lo = 1e9f, hi = 0.0f;
+    for (int i = 0; i < 5; i++) {
+        float2 offset = i == 0 ? float2(0.0f) : float2(i == 1 ? 1.0f : i == 2 ? -1.0f : 0.0f, i == 3 ? 1.0f : i == 4 ? -1.0f : 0.0f);
+        float3 c = source.sample(pointSampler, sourceUV + offset * texel, level(float(mip))).rgb;
+        float l = max(c.r + c.g + c.b, 1e-6f);
+        lo = min(lo, l);
+        hi = max(hi, l);
+    }
+    float edge = smoothstep(1.0f, 2.0f, log2(hi / lo));
+    if (edge <= 0.0f) return scene;
+    float3 lab = rec2020ToOKLab(max(scene, 0.0f));
+    float chroma = length(lab.yz);
+    if (chroma < 1e-5f || lab.x < 1e-5f) return scene;
+    float hue = fmod(atan2(lab.z, lab.y) * 57.2957795f + 360.0f, 360.0f);
+    float saturated = smoothstep(0.05f, 0.15f, chroma / lab.x);
+    float amount = p.defringe.x * hueBand(hue, p.defringeHue.x, p.defringeHue.y)
+        + p.defringe.y * hueBand(hue, p.defringeHue.z, p.defringeHue.w);
+    float weight = clamp(amount * edge * saturated, 0.0f, 1.0f);
+    return mix(scene, float3(dot(scene, kRec2020Luma)), weight);
+}
+
 // The camera profile's colour correction, in linear ProPhoto as the DNG specification has it:
 // hue shifted, saturation (at most 1) and value scaled. Unlike dng_sdk, light above white keeps
 // its headroom, and channels below zero pass through, so an identity map changes nothing.
@@ -609,6 +648,9 @@ kernel void rl_develop(
     float3 scene = max(mul3(p.camToWork0, p.camToWork1, p.camToWork2, camera), 0.0f);
     if (p.hueSat.x > 0.5f) {
         scene = max(applyHueSatMap(scene, hueSatCool, hueSatWarm, p), 0.0f);
+    }
+    if (p.defringe.x > 0.0f || p.defringe.y > 0.0f) {
+        scene = max(defringe(scene, source, sourceUV, p), 0.0f);
     }
     scene *= p.tone.x * exp2(localTone.x);
     // Halation and bloom: highlight light scattered on its way to the image (see Glow.metal),

@@ -31,11 +31,19 @@ import SwiftUI
         // In the panel's own stack SwiftUI leaves a point above the first checkbox (their
         // alignment insets) that a separately hosted one doesn't; the harness's Lens parity
         // scene checks it.
-        return rows.panel(.lens, badge: "Phase 2", rows: [
-            rows.native(LensToggle(title: "Remove Chromatic Aberration", help: nil).padding(.top, 1)),
-            rows.native(ProfileCorrectionsToggle()),
-            rows.header("Profile", profile),
-        ] + rows.sliders(profile) + [rows.header("Manual", manual)] + rows.sliders(manual))
+        return rows.panel(
+            .lens,
+            badge: "Phase 2",
+            rows: [
+                rows.native(ParameterToggle(
+                    parameter: .lensRemoveChromaticAberration,
+                    help: "Realign red and blue fringes at edges, from the lens profile or measured from the photo",
+                ).padding(.top, 1)),
+                rows.native(ProfileCorrectionsToggle()),
+                rows.header("Profile", profile),
+            ] + rows.sliders(profile) + [rows.header("Defringe", LensPanel.defringe)] + rows.sliders(LensPanel.defringe)
+                + [rows.header("Manual", manual)] + rows.sliders(manual),
+        )
     }
 
     public static func transform(model: EditorModel) -> PanelSectionView {

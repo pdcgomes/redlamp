@@ -77,6 +77,8 @@ public enum AdjustmentSearch {
         .dustAmount: "Dust & Scratches", .scratchAmount: "Dust & Scratches", .frameStyle: "Frame", .frameSize: "Frame",
         .lensProfileDistortion: "Profile", .lensProfileVignetting: "Profile", .lensDistortion: "Manual",
         .lensVignetting: "Manual", .lensVignettingMidpoint: "Manual",
+        .defringePurpleAmount: "Defringe", .defringePurpleHueLow: "Defringe", .defringePurpleHueHigh: "Defringe",
+        .defringeGreenAmount: "Defringe", .defringeGreenHueLow: "Defringe", .defringeGreenHueHigh: "Defringe",
     ]
 
     /// The words people use: Lightroom's current and older names, and plain descriptions.
@@ -129,6 +131,8 @@ public enum AdjustmentSearch {
         .frameSize: ["frame", "border"],
         .gradeBlending: ["split toning", "color grading", "toning"],
         .gradeBalance: ["split toning", "color grading", "toning"],
+        .defringePurpleAmount: ["defringe", "fringe", "fringing", "purple fringe", "chromatic aberration", "ca"],
+        .defringeGreenAmount: ["defringe", "fringe", "fringing", "green fringe", "chromatic aberration", "ca"],
     ].merging(mixerAndGradingSynonyms) { $0 + $1 }
 
     private static var mixerAndGradingSynonyms: [ParameterID: [String]] {
