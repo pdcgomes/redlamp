@@ -102,7 +102,7 @@ struct TIFFReader {
         return String(bytes: text, encoding: .utf8).map { $0.trimmingCharacters(in: .whitespaces) }
     }
 
-    private func entries(at offset: Int) -> [Entry]? {
+    func entries(at offset: Int) -> [Entry]? {
         guard offset + 2 <= bytes.count else { return nil }
         let count = Int(u16(offset))
         guard offset + 2 + count * 12 + 4 <= bytes.count else { return nil }

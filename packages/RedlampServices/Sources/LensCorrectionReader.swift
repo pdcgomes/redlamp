@@ -4,10 +4,13 @@ import simd
 
 /// The lens correction a raw file carries (LNS-02): a DNG's OpcodeList3 warp and vignetting
 /// opcodes (DNG specification 1.7, "Opcode List Processing"), or the correction tables Sony
-/// writes into every ARW. Positions come out EXIF-oriented.
+/// writes into every ARW and Fujifilm into every RAF. Positions come out EXIF-oriented.
 enum LensCorrectionReader {
     static func read(_ data: Data, url: URL, orientation: Int) -> LensCorrection? {
         let kind = url.pathExtension.lowercased()
+        if kind == "raf" {
+            return data.withUnsafeBytes(fujifilm)
+        }
         guard kind == "dng" || kind == "arw" else { return nil }
         return data.withUnsafeBytes { bytes -> LensCorrection? in
             guard let reader = TIFFReader(bytes: bytes) else { return nil }
@@ -74,6 +77,49 @@ enum LensCorrectionReader {
         case 5: SIMD2(point.y, 1 - point.x)
         case 6: SIMD2(1 - point.y, point.x)
         default: point
+        }
+    }
+
+    // MARK: - Fujifilm
+
+    /// The RAF's raw block (its offset at byte 100, big-endian) is a TIFF whose IFD points at the
+    /// FujiIFD (tag 0xF000), which holds GeometricDistortionParams (0xF00B),
+    /// ChromaticAberrationParams (0xF00F) and VignettingParams (0xF010): 9 knots on X-Trans IV
+    /// and V (19, 29 and 19 values), 11 on earlier bodies (23, 31 and 23), CA without its first.
+    private static func fujifilm(_ bytes: UnsafeRawBufferPointer) -> LensCorrection? {
+        guard bytes.count > 108, bytes.starts(with: Array("FUJIFILMCCD-RAW".utf8)) else { return nil }
+        let start = Int(UInt32(bigEndian: bytes.loadUnaligned(fromByteOffset: 100, as: UInt32.self)))
+        let length = Int(UInt32(bigEndian: bytes.loadUnaligned(fromByteOffset: 104, as: UInt32.self)))
+        guard start > 0, start < bytes.count else { return nil }
+        let block = UnsafeRawBufferPointer(rebasing: bytes[start ..< min(start + max(length, 8), bytes.count)])
+        guard let reader = TIFFReader(bytes: block),
+              let directory = reader.imageFileDirectories().first,
+              let fuji = directory.first(where: { $0.tag == 0xF000 }),
+              let entries = reader.entries(at: Int(reader.u32(fuji.valueOffset)))
+        else { return nil }
+        func values(_ tag: UInt16) -> [Double] {
+            entries.first { $0.tag == tag }.map { DNGColorCalibration.rationals($0, reader: reader) } ?? []
+        }
+        let (distortion, aberration, vignetting) = (values(0xF00B), values(0xF00F), values(0xF010))
+        switch (distortion.count, aberration.count, vignetting.count) {
+        case (19, 29, 19):
+            let knots = Array(distortion[1 ... 9])
+            guard Array(aberration[1 ... 9]) == knots, Array(vignetting[1 ... 9]) == knots else { return nil }
+            return LensCorrection.fujifilm(
+                knots: knots, distortion: Array(distortion[10 ... 18]), red: Array(aberration[10 ... 18]),
+                blue: Array(aberration[19 ... 27]), vignetting: Array(vignetting[10 ... 18]),
+            )
+        case (23, 31, 23):
+            let knots = Array(distortion[1 ... 11])
+            guard Array(aberration[1 ... 10]) == Array(knots[1...]), Array(vignetting[1 ... 11]) == knots else {
+                return nil
+            }
+            return LensCorrection.fujifilm(
+                knots: knots, distortion: Array(distortion[12 ... 22]), red: [0] + Array(aberration[11 ... 20]),
+                blue: [0] + Array(aberration[21 ... 30]), vignetting: Array(vignetting[12 ... 22]),
+            )
+        default:
+            return nil
         }
     }
 

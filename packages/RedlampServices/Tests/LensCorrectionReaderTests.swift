@@ -107,6 +107,19 @@ struct LensCorrectionReaderTests {
         #expect(try #require(lens.vignetting.last) > lens.vignetting.first!, "the corners need more light")
     }
 
+    @Test(.enabled(if: fixture("AFXT2720") != nil))
+    func `reads Fujifilm's correction tags`() throws {
+        let url = try #require(Self.fixture("AFXT2720"))
+        let lens = try #require(try Self.read(url))
+        #expect(lens.source == .fujifilm && lens.radii.count == 9)
+        #expect(abs(lens.radii[0] - 0.3535) < 1e-3 && abs(lens.radii[8] - 1.0606) < 1e-3)
+        // A wide kit zoom's barrel: the corners recorded about 9% in.
+        #expect(abs(lens.distortion[8].y - 0.911) < 2e-3, "\(lens.distortion.map(\.y))")
+        // Red recorded a little inside green and blue a little outside, as measured from the photo.
+        #expect(lens.distortion.allSatisfy { $0.x < $0.y && $0.z > $0.y })
+        #expect(lens.vignetting.allSatisfy { abs($0 - 1) < 1e-9 }, "no vignetting correction on this lens")
+    }
+
     @Test func `files without corrections have none`() throws {
         for prefix in ["DSC_0750", "IMG_1361"] {
             guard let url = Self.fixture(prefix) else { continue }

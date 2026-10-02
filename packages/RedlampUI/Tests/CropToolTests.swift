@@ -177,7 +177,7 @@ struct CropToolTests {
         #expect(model.recipe.processVersion == EditRecipe.currentProcessVersion)
         model.setProcessVersion(3)
         #expect(model.recipe.processVersion == 3)
-        #expect(model.history.last?.name == "Process Version: Version 5 → Version 3")
+        #expect(model.history.last?.name == "Process Version: Version \(EditRecipe.currentProcessVersion) → Version 3")
         model.undo()
         #expect(model.recipe.processVersion == EditRecipe.currentProcessVersion)
     }

@@ -95,11 +95,18 @@ struct DetailStageTests {
         #expect(renders[0].count == renders[1].count)
         var worst = 0
         var differing = 0
+        var rounding = 0
         for (a, b) in zip(renders[0], renders[1]) where a != b {
             worst = max(worst, abs(Int(a) - Int(b)))
             differing += 1
+            rounding += abs(Int(a) - Int(b)) > 1 ? 1 : 0
         }
-        #expect(worst <= 1, "largest difference \(worst) in \(differing) bytes")
+        // A lens correction moves each tile's sample positions by a rounding error, which now and
+        // then tips a value two levels; a seam would be whole rows of them.
+        #expect(
+            worst <= 2 && rounding <= renders[0].count / 100_000,
+            "largest difference \(worst) in \(differing) bytes",
+        )
     }
 
     /// A region at 1:1 carries enough margin that its texels are the full render's, at the

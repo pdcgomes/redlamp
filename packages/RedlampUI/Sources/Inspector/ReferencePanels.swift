@@ -88,7 +88,7 @@ struct ProfileCorrectionsToggle: View {
 
     var body: some View {
         let lens = model.info?.lensCorrection
-        let applies = lens != nil && model.recipe.processVersion >= 5
+        let applies = lens.map { model.recipe.processVersion >= $0.source.process } ?? false
         Toggle("Enable Profile Corrections", isOn: Binding(
             get: { applies && model.recipe[.lensProfile] > 0.5 },
             set: { model.setValue(.lensProfile, $0 ? 1 : 0) },
@@ -102,7 +102,9 @@ struct ProfileCorrectionsToggle: View {
 
     private func help(_ lens: LensCorrection?, applies: Bool) -> String {
         guard let lens else { return "This photo carries no lens correction" }
-        guard applies else { return "Edits made before process 5 render without the lens correction" }
+        guard applies else {
+            return "Edits made before process \(lens.source.process) render without this lens correction"
+        }
         return "Distortion and vignetting corrections from the \(lens.source.name) file itself"
             + (lens.correctsColorFringes ? ", with its colour fringe correction" : "")
     }

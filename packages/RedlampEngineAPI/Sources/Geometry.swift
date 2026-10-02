@@ -139,9 +139,10 @@ public struct GeometryMap: Sendable, Equatable {
         )
     }
 
-    /// The lens profile an edit applies: from process 5, while Enable Profile Corrections is on.
+    /// The lens profile an edit applies: from its source's process version (5, or 6 for
+    /// Fujifilm's), while Enable Profile Corrections is on.
     public static func profile(_ lens: LensCorrection?, recipe: EditRecipe) -> LensCorrection? {
-        guard let lens, recipe.processVersion >= 5, recipe[.lensProfile] > 0.5 else { return nil }
+        guard let lens, recipe.processVersion >= lens.source.process, recipe[.lensProfile] > 0.5 else { return nil }
         return lens.scaled(
             distortion: recipe[.lensProfileDistortion] / 100, vignetting: recipe[.lensProfileVignetting] / 100,
         )

@@ -12,6 +12,8 @@ public struct LensCorrection: Codable, Sendable, Hashable {
         case dng
         /// Sony's correction tags in the ARW, the camera's own built-in profile.
         case sony
+        /// Fujifilm's correction tags in the RAF.
+        case fujifilm
         /// Measured from the photo's own edges (Remove Chromatic Aberration).
         case measured
 
@@ -19,8 +21,14 @@ public struct LensCorrection: Codable, Sendable, Hashable {
             switch self {
             case .dng: "DNG"
             case .sony: "Sony"
+            case .fujifilm: "Fujifilm"
             case .measured: "Measured"
             }
+        }
+
+        /// The first process version that applies corrections from this source.
+        public var process: Int {
+            self == .fujifilm ? 6 : 5
         }
     }
 
@@ -143,6 +151,28 @@ public extension LensCorrection {
             radii: radii,
             distortion: distortion,
             vignetting: vignetting,
+        )
+    }
+
+    /// Fujifilm's correction tags: knots at radii of the half-diagonal (scaled by 1.25 in the
+    /// cameras' 1.25× crop modes, which aren't read yet). Distortion is in percent of the radius,
+    /// red's and blue's scale a fraction on top, and vignetting the brightness left in percent,
+    /// whose gain is its inverse squared: the conventions darktable uses.
+    static func fujifilm(
+        knots: [Double], distortion: [Double], red: [Double], blue: [Double], vignetting: [Double],
+    ) -> LensCorrection? {
+        let count = knots.count
+        guard count >= 2, distortion.count == count, red.count == count, blue.count == count,
+              vignetting.count == count, zip(knots, knots.dropFirst()).allSatisfy({ $0 < $1 }),
+              vignetting.allSatisfy({ $0 > 1 })
+        else { return nil }
+        let scales = (0 ..< count).map { i -> SIMD3<Double> in
+            let green = 1 + distortion[i] / 100
+            return SIMD3(green * (1 + red[i]), green, green * (1 + blue[i]))
+        }
+        let gains = vignetting.map { 1 / pow($0 / 100, 2) }
+        return LensCorrection(
+            source: .fujifilm, center: SIMD2(0.5, 0.5), radii: knots, distortion: scales, vignetting: gains,
         )
     }
 
