@@ -49,7 +49,14 @@ final class ImageSession: @unchecked Sendable {
     let gainTableMap: GainTableMapTexture?
     /// The profile's look baked into a Base Look (`EmbeddedLook`).
     let embeddedLook: BaseLookDefinition?
-    private let chromaticAberration = LateralChromaticAberration.Cache()
+    private let chromaticAberration: LateralChromaticAberration.Cache
+    /// The session this one copies with Heal and Clone spots in its pyramid (see `RetouchStage`).
+    private let retouchedFrom: ImageSession?
+
+    /// The photo as opened, without spots.
+    var original: ImageSession {
+        retouchedFrom ?? self
+    }
 
     init(
         info: ImageInfo,
@@ -101,6 +108,41 @@ final class ImageSession: @unchecked Sendable {
         self.balanceMultipliers = balanceMultipliers
         baselineExposure = decoded.baselineExposure
         self.analysis = analysis
+        chromaticAberration = LateralChromaticAberration.Cache()
+        retouchedFrom = nil
+    }
+
+    /// `session` with `pyramid` in place of its own. Analyses made when the photo opened (the
+    /// haze map, the glow source, the noise model) are shared.
+    init(retouching session: ImageSession, pyramid: any MTLTexture) {
+        let original = session.original
+        info = original.info
+        isRaw = original.isRaw
+        self.pyramid = pyramid
+        orientation = original.orientation
+        orientedSize = original.orientedSize
+        cameraToWorking = original.cameraToWorking
+        dngColor = original.dngColor
+        asShotTemperature = original.asShotTemperature
+        colorModel = original.colorModel
+        asShotMultipliers = original.asShotMultipliers
+        balanceMultipliers = original.balanceMultipliers
+        baselineExposure = original.baselineExposure
+        analysis = original.analysis
+        noise = original.noise
+        sensor = original.sensor
+        repairedPixels = original.repairedPixels
+        airlight = original.airlight
+        hazeMap = original.hazeMap
+        glowSource = original.glowSource
+        glowLights = original.glowLights
+        noiseGain = original.noiseGain
+        dngProfile = original.dngProfile
+        hueSatMaps = original.hueSatMaps
+        gainTableMap = original.gainTableMap
+        embeddedLook = original.embeddedLook
+        chromaticAberration = original.chromaticAberration
+        retouchedFrom = original
     }
 
     /// Per-channel gains that move the as-shot balance to the requested white balance.

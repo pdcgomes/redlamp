@@ -13,6 +13,8 @@ public enum EditField: String, Sendable, Hashable, CaseIterable {
     case crop
     case orientation
     case processVersion
+    /// Heal and Clone spots.
+    case spots
 }
 
 /// One line of the checklist.
@@ -21,7 +23,8 @@ public struct SettingsItem: Sendable, Hashable, Identifiable {
     public let name: String
     public let parameters: [ParameterID]
     public let fields: Set<EditField>
-    /// Ticked the first time the checklist opens: everything but a photo's own framing.
+    /// Ticked the first time the checklist opens: everything but what belongs to one photo, its
+    /// framing and its spots.
     public let selectedByDefault: Bool
 
     init(
@@ -141,6 +144,9 @@ public struct SettingsGroup: Sendable, Hashable, Identifiable {
                 .calibrationGreenSaturation, .calibrationBlueHue, .calibrationBlueSaturation,
             ]),
             SettingsItem("calibration.processVersion", "Process Version", fields: [.processVersion]),
+        ]),
+        SettingsGroup(id: "remove", name: "Remove", items: [
+            SettingsItem("remove.spots", "Heal and Clone", fields: [.spots], selectedByDefault: false),
         ]),
         SettingsGroup(id: "crop", name: "Crop", items: [
             SettingsItem("crop.frame", "Crop and Straighten", [.cropAngle], fields: [.crop], selectedByDefault: false),
@@ -271,6 +277,7 @@ public extension EditRecipe {
         case .crop: crop == other.crop
         case .orientation: orientation == other.orientation
         case .processVersion: processVersion == other.processVersion
+        case .spots: spots == other.spots
         }
     }
 
@@ -285,6 +292,7 @@ public extension EditRecipe {
         case .crop: crop = source.crop
         case .orientation: orientation = source.orientation
         case .processVersion: processVersion = source.processVersion
+        case .spots: spots = source.spots
         }
     }
 }

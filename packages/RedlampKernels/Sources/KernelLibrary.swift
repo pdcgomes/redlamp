@@ -51,6 +51,8 @@ public final class KernelLibrary: @unchecked Sendable {
     public let maskStroke: any MTLComputePipelineState
     public let maskStrokeApply: any MTLComputePipelineState
     public let maskUpload: any MTLComputePipelineState
+    public let retouchRim: any MTLComputePipelineState
+    public let retouchApply: any MTLComputePipelineState
 
     public init(device: any MTLDevice) throws {
         self.device = device
@@ -108,6 +110,8 @@ public final class KernelLibrary: @unchecked Sendable {
         maskStroke = try pipeline("rl_mask_stroke")
         maskStrokeApply = try pipeline("rl_mask_stroke_apply")
         maskUpload = try pipeline("rl_mask_upload")
+        retouchRim = try pipeline("rl_retouch_rim")
+        retouchApply = try pipeline("rl_retouch_apply")
     }
 }
 

@@ -242,7 +242,7 @@ These block other rows. Most need the project owner; the ones marked *counsel* n
 
 | ID | Item | Recommended | Phase | Size | Depends on | Decision | Status | Source |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| RM-01 | Classical Heal and Clone (Poisson blending, exhaustive GPU source search, no PatchMatch) | Build | P3 | 5–7 ew | — | Proposed | Not started | [AI §6](ai-findings.md#6-d-object-removal-healing-and-distraction-removal) |
+| RM-01 | Classical Heal and Clone (Poisson blending, exhaustive GPU source search, no PatchMatch) | Build | P3 | 5–7 ew | — | Accepted (2026-10-02): next in the plan the owner approved | In progress: circular Heal and Clone spots render into a copy of the photo before everything else, saved with the edit and in Copy Settings. Heal is Poisson blending solved in closed form on the disc (the Poisson integral of the rim's log ratio of destination to source), so it needs no iterative solver. The automatic source search, the Healing tool and brush-shaped spots are not started | [AI §6](ai-findings.md#6-d-object-removal-healing-and-distraction-removal) |
 | RM-02 | Dust detection and removal, Visualize Spots | Build | P3 | 3–4 ew | — | Proposed | Not started | [AI §6](ai-findings.md#6-d-object-removal-healing-and-distraction-removal) |
 | RM-03 | Content Credentials (C2PA) export and "Generated fill" badge | Adopt | P3 | 2–3 ew | — | Proposed | Not started | [AI §6](ai-findings.md#6-d-object-removal-healing-and-distraction-removal) |
 | RM-04 | Inpainting data pipeline (PD12M, Megalith-10M) and mask generator | Build | P3 | 2–3 ew | — | Proposed | Not started | [AI §6](ai-findings.md#6-d-object-removal-healing-and-distraction-removal) |

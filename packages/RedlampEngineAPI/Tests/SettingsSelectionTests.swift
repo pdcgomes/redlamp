@@ -14,9 +14,9 @@ struct SettingsSelectionTests {
         #expect(Set(SettingsGroup.allItems.map(\.id)).count == SettingsGroup.allItems.count)
     }
 
-    @Test func `the first choice leaves out a photo's own framing`() {
+    @Test func `the first choice leaves out a photo's own framing and spots`() {
         let off = SettingsGroup.allItems.filter { !SettingsSelection.default.includes($0) }.map(\.id)
-        #expect(Set(off) == ["lens.manual", "transform", "crop.frame", "crop.orientation"])
+        #expect(Set(off) == ["lens.manual", "transform", "remove.spots", "crop.frame", "crop.orientation"])
         #expect(SettingsSelection.default.masks)
     }
 

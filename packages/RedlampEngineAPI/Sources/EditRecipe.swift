@@ -73,6 +73,8 @@ public struct EditRecipe: Sendable, Hashable {
     public private(set) var values: [ParameterID: Double] = [:]
     /// Local adjustments, applied in order on top of the global edit.
     public var masks: [MaskLayer] = []
+    /// Heal and Clone spots, applied in order before everything else.
+    public var spots: [RetouchSpot] = []
     /// The shared recipe this edit was last built from.
     public var appliedRecipe: AppliedRecipe?
     /// The crop, in the straightened frame (see `GeometryMap`); its angle is `cropAngle`.
@@ -123,6 +125,7 @@ public struct EditRecipe: Sendable, Hashable {
             && whiteBalanceMode == .asShot
             && pointCurve == EditRecipe.linearPointCurve
             && masks.isEmpty
+            && spots.isEmpty
             && appliedRecipe == nil
             && crop.isFull
             && orientation.isIdentity
@@ -150,7 +153,7 @@ public struct EditRecipe: Sendable, Hashable {
 extension EditRecipe: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case version, processVersion, treatment, baseLook, whiteBalance, pointCurve, values, masks, appliedRecipe
-        case crop, orientation
+        case crop, orientation, spots
         /// Format version 1's name for `baseLook`; read, never written.
         case profile
     }
@@ -174,6 +177,7 @@ extension EditRecipe: Codable {
             }
         }
         masks = try container.decodeIfPresent([MaskLayer].self, forKey: .masks) ?? []
+        spots = try container.decodeIfPresent([RetouchSpot].self, forKey: .spots) ?? []
         appliedRecipe = try container.decodeIfPresent(AppliedRecipe.self, forKey: .appliedRecipe)
         crop = try container.decodeIfPresent(CropRect.self, forKey: .crop) ?? .full
         orientation = try container.decodeIfPresent(ImageOrientation.self, forKey: .orientation) ?? .identity
@@ -197,6 +201,9 @@ extension EditRecipe: Codable {
         try container.encode(unknownValues.merging(known) { _, value in value }, forKey: .values)
         if !masks.isEmpty {
             try container.encode(masks, forKey: .masks)
+        }
+        if !spots.isEmpty {
+            try container.encode(spots, forKey: .spots)
         }
         try container.encodeIfPresent(appliedRecipe, forKey: .appliedRecipe)
         if !crop.isFull {

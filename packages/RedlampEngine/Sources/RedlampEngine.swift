@@ -75,6 +75,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     private let comparisonOverviews: SurfacePool
     private var comparison: CachedComparison?
     private let detailStage: DetailStage
+    private let retouch: RetouchStage
     let masks: MaskResources
     private let baseLooks: BaseLookRegistry
     let stacks: FocusStackCache
@@ -119,6 +120,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         comparisons = SurfacePool(device: device)
         comparisonOverviews = SurfacePool(device: device)
         detailStage = DetailStage(device: device, kernels: kernels)
+        retouch = RetouchStage(device: device, kernels: kernels)
         masks = try MaskResources(device: device, kernels: kernels)
         baseLooks = try BaseLookRegistry(device: device)
 
@@ -304,6 +306,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             recipe, session: session, commands: commands,
             needsGuide: maskOverlay != nil && maskOverlayStyle == .luminanceMap,
         )
+        let session = try retouch.session(for: recipe, base: session, commands: commands)
         let processed = detail ? try detailStage.process(
             recipe, session: session, region: region, outputSize: size, commands: commands, cache: cacheDetail,
             masks: maskBindings,
