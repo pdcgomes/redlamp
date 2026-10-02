@@ -111,6 +111,12 @@ struct MaskActionsBar: View {
             Menu {
                 Button("Update AI Masks") { Task { await model.updateAIMasks() } }
                     .disabled(model.aiMaskCount == 0 || model.aiMaskProgress != nil)
+                if model.isMultiSelecting {
+                    Button("Update AI Masks on \(model.selectedPhotos.count) Photos") {
+                        Task { await model.updateAIMasksInSelection() }
+                    }
+                    .disabled(model.aiMaskProgress != nil || model.settingsSync.progress != nil)
+                }
                 Divider()
                 Button("Delete All Masks", role: .destructive) { model.deleteAllMasks() }
             } label: {

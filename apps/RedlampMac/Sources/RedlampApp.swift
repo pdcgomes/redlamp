@@ -25,6 +25,8 @@ struct RedlampApp: App {
             fatalError("Redlamp needs a Metal GPU: \(error.localizedDescription)")
         }
         let model = EditorModel(engine: engine, library: FolderLibrary(defaults: .standard))
+        // Sync and Paste onto a selection open the other photos in an engine of their own.
+        model.makeWorkerEngine = { try? RedlampEngine(decoder: DecodeServiceClient()) }
         if let layout = UserDefaults.standard.string(forKey: "compareLayout").flatMap(CompareLayout.init) {
             model.compareLayout = layout
         }

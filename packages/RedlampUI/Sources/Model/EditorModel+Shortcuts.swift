@@ -62,6 +62,9 @@ public extension EditorModel {
         case .redo: redo()
         case .copySettings: chooseSettingsToCopy()
         case .copySettingsAgain: copySettings()
+        case .syncSettings: chooseSettingsToSync()
+        case .syncSettingsAgain: syncSettings()
+        case .undoSync: undoSync()
         case .selectAllPhotos: selectAllPhotos()
         case .deselectOtherPhotos: deselectOtherPhotos()
         case .pasteSettings: pasteSettings()
@@ -182,6 +185,8 @@ public extension EditorModel {
              .panelDetail, .panelLens, .panelTransform, .panelEffects, .panelCalibration:
             return true
         case .selectAllPhotos: return photo && selectedPhotos.count < items.count
+        case .syncSettings, .syncSettingsAgain: return canSync
+        case .undoSync: return settingsSync.canUndo
         case .deselectOtherPhotos: return isMultiSelecting
         case .previousPhoto, .nextPhoto:
             guard let selection, let index = library.index(of: selection) else { return false }

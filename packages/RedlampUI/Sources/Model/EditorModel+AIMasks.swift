@@ -127,6 +127,20 @@ public extension EditorModel {
         aiMaskProgress = .subject
         maskMessage = nil
         defer { aiMaskProgress = nil }
+        let (next, failed) = await Self.recomputingAIMasks(recipe, in: masks, engine: engine)
+        guard selection == photo else { return }
+        if failed > 0 {
+            maskMessage = "\(failed) AI mask\(failed == 1 ? "" : "s") couldn't be updated and kept their previous result."
+        }
+        commit(next, .mask(nil), "Update AI Masks")
+    }
+
+    /// `recipe` with its AI masks (those of the masks `in`, when given) computed again by `engine`
+    /// for the photo it has open, Refine Edge strokes and all; and how many couldn't be, which keep
+    /// their previous result.
+    static func recomputingAIMasks(
+        _ recipe: EditRecipe, in masks: Set<UUID>?, engine: any EditingEngine,
+    ) async -> (recipe: EditRecipe, failed: Int) {
         var next = recipe
         var results: [MaskRequest: [AIMask]] = [:]
         var failed = 0
@@ -163,10 +177,6 @@ public extension EditorModel {
                 }
             }
         }
-        guard selection == photo else { return }
-        if failed > 0 {
-            maskMessage = "\(failed) AI mask\(failed == 1 ? "" : "s") couldn't be updated and kept their previous result."
-        }
-        commit(next, .mask(nil), "Update AI Masks")
+        return (next, failed)
     }
 }

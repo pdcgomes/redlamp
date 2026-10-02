@@ -359,6 +359,11 @@ public final class EditorModel {
     /// The photo's auto white balance, for recipes that ask for it.
     @ObservationIgnored var autoWhiteBalance: WhiteBalanceValue?
     public internal(set) var hasClipboard = false
+    /// Sync, and Paste or Update AI Masks on the selection's other photos, in the background.
+    public let settingsSync = SettingsSync { nil }
+    /// Makes an engine for photos that aren't open (the worker's), when it needs one. Set by the
+    /// app; without it, AI masks pasted onto those photos keep the bitmaps they came with.
+    @ObservationIgnored public var makeWorkerEngine: (() -> (any EditingEngine)?)?
     /// The Copy Settings checklist, while it is open.
     public var settingsChooser: SettingsChooser?
     /// What the checklist ticked last time (the first time, `SettingsSelection.default`).
@@ -412,6 +417,7 @@ public final class EditorModel {
                 engine.decodeThumbnail(for: url, maxPixelSize: size)
             }
         canvas.onRenderSizeChange = { [weak self] _ in self?.requestRender() }
+        settingsSync.makeEngine = { [weak self] in self?.makeWorkerEngine?() }
         followLibrary()
         let frames = engine.frames()
         framesTask = Task { [weak self] in

@@ -6,6 +6,8 @@ import RedlampEngineAPI
 public struct SettingsChooser: Identifiable {
     public enum Purpose {
         case copy
+        /// Sync Settings: onto the rest of the selection.
+        case sync
     }
 
     public let id = UUID()
@@ -35,6 +37,8 @@ public extension EditorModel {
         case .copy:
             clipboard = CopiedSettings(source: chooser.source, selection: chosen, sourceURL: selection)
             hasClipboard = true
+        case .sync:
+            sync(chooser.source, chosen, title: "Sync Settings")
         }
     }
 
@@ -45,10 +49,13 @@ public extension EditorModel {
         hasClipboard = true
     }
 
-    /// ⇧⌘V: what was copied, onto the open photo.
+    /// ⇧⌘V: what was copied, onto the open photo, and onto the rest of the selection.
     func pasteSettings() {
         guard let clipboard else { return }
         paste(clipboard.source, clipboard.selection, name: "Paste Settings")
+        if isMultiSelecting, settingsSync.progress == nil {
+            sync(clipboard.source, clipboard.selection, title: "Paste Settings")
+        }
     }
 
     /// ⌥⌘V: the previously viewed photo's settings, with the last choice (Lightroom's "Previous").

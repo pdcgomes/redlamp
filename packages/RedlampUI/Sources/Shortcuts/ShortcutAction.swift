@@ -112,6 +112,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
 
     // Develop
     case undo, redo, copySettings, copySettingsAgain, pasteSettings, pastePrevious, resetAll
+    case syncSettings, syncSettingsAgain, undoSync
     case autoTone, autoWhiteBalance, toggleBlackAndWhite, whiteBalanceSelector
     case newSnapshot, newPreset, virtualCopy
     case previousSetting, nextSetting, increaseSetting, decreaseSetting, findAdjustment
@@ -150,6 +151,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .previousPhoto, .nextPhoto, .selectAllPhotos, .deselectOtherPhotos:
             .navigation
         case .undo, .redo, .copySettings, .copySettingsAgain, .pasteSettings, .pastePrevious, .resetAll, .autoTone,
+             .syncSettings, .syncSettingsAgain, .undoSync,
              .autoWhiteBalance, .toggleBlackAndWhite, .whiteBalanceSelector, .newSnapshot, .newPreset,
              .virtualCopy, .previousSetting, .nextSetting, .increaseSetting, .decreaseSetting, .findAdjustment:
             .develop
@@ -203,6 +205,9 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .redo: "Redo"
         case .copySettings: "Copy Settings…"
         case .copySettingsAgain: "Copy Settings with Last Choice"
+        case .syncSettings: "Sync Settings…"
+        case .syncSettingsAgain: "Sync Settings with Last Choice"
+        case .undoSync: "Undo Sync Settings"
         case .selectAllPhotos: "Select All Photos"
         case .deselectOtherPhotos: "Deselect Other Photos"
         case .pasteSettings: "Paste Settings"
@@ -300,6 +305,9 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .redo: [.char("z", shift: true, command: true)]
         case .copySettings: [.char("c", shift: true, command: true)]
         case .copySettingsAgain: [.char("c", shift: true, option: true, command: true)]
+        case .syncSettings: [.char("s", shift: true, command: true)]
+        case .syncSettingsAgain: [.char("s", shift: true, option: true, command: true)]
+        case .undoSync: []
         // Lightroom's ⌘A and ⌘D with Option: without it they would take Select All from text fields.
         case .selectAllPhotos: [.char("a", option: true, command: true)]
         case .deselectOtherPhotos: [.char("d", option: true, command: true)]

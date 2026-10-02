@@ -18,8 +18,12 @@ struct CopySettingsSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Copy Settings")
+            Text(chooser.purpose == .sync ? "Synchronize Settings" : "Copy Settings")
                 .font(.headline)
+            if chooser.purpose == .sync {
+                Text("From this photo onto the \(model.otherSelectedPhotos.count) other selected photos.")
+                    .foregroundStyle(.secondary)
+            }
             ScrollView {
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
                     ForEach(SettingsGroup.all) { group in
@@ -39,7 +43,7 @@ struct CopySettingsSheet: View {
                 Spacer()
                 Button("Cancel", role: .cancel) { model.settingsChooser = nil }
                     .keyboardShortcut(.cancelAction)
-                Button("Copy") { model.confirmSettingsChoice(selection) }
+                Button(chooser.purpose == .sync ? "Synchronize" : "Copy") { model.confirmSettingsChoice(selection) }
                     .keyboardShortcut(.defaultAction)
             }
         }

@@ -13,9 +13,24 @@ struct FilmstripView: View {
                 }
                 Text("\(model.library.count) photos\(model.library.includesSubfolders ? ", with subfolders" : "")")
                     .foregroundStyle(Theme.tertiaryLabel)
-                if model.isMultiSelecting {
+                if let progress = model.settingsSync.progress {
+                    ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1)))
+                        .frame(width: 80)
+                    Text("\(progress.title): \(progress.done) of \(progress.total)")
+                    Button("Cancel") { model.settingsSync.cancel() }
+                        .buttonStyle(.link)
+                } else if model.isMultiSelecting {
                     Text("\(model.selectedPhotos.count) selected")
                         .help("⌘-click adds or removes a photo, ⇧-click selects a range; ⌥⌘D keeps only this one")
+                    Button("Sync…") { model.chooseSettingsToSync() }
+                        .buttonStyle(.link)
+                        .help("This photo's settings onto the other selected photos (⇧⌘S)")
+                }
+                if let report = model.settingsSync.report {
+                    Text(report)
+                        .foregroundStyle(Theme.tertiaryLabel)
+                        .lineLimit(1)
+                        .help(report)
                 }
                 if let suggestion = model.stackSuggestions.first {
                     StackSuggestionBanner(suggestion: suggestion)
