@@ -165,13 +165,33 @@ What remains is the edge solvers themselves: 1–3 s for `ClosedFormMatte` at 40
 
 **Closed-form matting on the GPU was tried and set aside.** Metal kernels for the window sums, the matrix application and the conjugate-gradient scalars matched the CPU to 2 × 10⁻⁶ per application. But Apple GPUs have no double precision, and at the ε that makes good mattes (10⁻⁵) the system is too ill-conditioned for single precision: a probe solve agreed with the CPU to 10⁻⁴ at ε = 10⁻², 0.008 at 10⁻³, 0.14 at 10⁻⁴ and 0.28 at 10⁻⁵ (worst pixel). Rewriting the fitted value centred on each window's mean, and freezing the iteration once converged, weren't enough. Flexible conjugate gradients in double on the CPU, with short GPU solves as search directions, made it converge (portraits 0.073 against the CPU's 0.067, the dancer 0.129–0.142 against 0.122), but the CPU's share (window statistics, the double-precision applications, the trimap) then dominated: no faster on portraits, at best 1.5 s faster on the dancer (2.6 s against 4.0 s), always less accurate. Raising ε until single precision copes costs as much quality (portraits 0.076 at 10⁻⁴, 0.083 at 3 × 10⁻⁴, against Vision's 0.085). What would make it pay is a GPU-side double emulation or a multigrid preconditioner, both large; for now the CPU solve stays.
 
+## Landscape: SAM 3 text prompts
+
+Lightroom splits Landscape into Sky (done above) and six more classes: Water, Vegetation, Mountains, Architecture, Natural Ground and Artificial Ground. `landscape_bakeoff.py` runs OneFormer (ADE20K; never ships) as the reference on all 40 look-development photos, its 150 classes grouped into those six; `sam3_landscape.py` asks SAM 3 for each class by text (water, sea, lake, river; tree, grass, lawn, meadow, bush, plant; mountain, hill; building; ground, sand, rock, dirt; road, pavement, floor), every instance merged. As in Lightroom the classes are then made exclusive, by precedence (water, vegetation, architecture, mountains, artificial ground, natural ground).
+
+| Class | Photos with it | Mean IoU against OneFormer | False positives (photos without it) |
+| --- | --- | --- | --- |
+| Water | 5 | 0.833 | 3.0% |
+| Vegetation | 30 | 0.687 | 0% |
+| Mountains | 4 | 0.655 | 0.25% |
+| Artificial ground | 19 | 0.611 | 0.17% |
+| Architecture | 19 | 0.592 | 0% |
+| Natural ground | 14 | 0.351 | 0.7% |
+
+![Six photos: render, OneFormer, SAM 3 by text](../../images/masking-landscape-bakeoff.jpg)
+
+- **SAM 3 finds every class, with Lightroom-like regions.** Several of its "errors" are the reference's: it marks a swimming pool and a street puddle as water, which ADE20K has no label for.
+- **Natural ground is a taxonomy question as much as a model one.** ADE20K files grassy fields under natural ground ("field"), the lawn prompts file them under vegetation; without exclusive classes, "ground" also fires on roads (11% false positives). Where Lightroom draws that line needs checking against Lightroom itself.
+- **It is not shippable as it stands.** SAM 3 is 0.85B parameters (3.4 GB), takes 17–27 s per photo for all six classes on the GPU (MPS, through PyTorch), has no Core ML conversion, and is under Meta's custom SAM License (gated; pass-through and no-reverse-engineering terms), which needs counsel.
+- **The routes from here:** counsel on the SAM License, then a Core ML conversion of SAM 3's image encoder and text-prompted decoder (large, like Depth Anything 3's, with prompts cached per class); or the trained head of MSK-13 on data we have rights to (the CC-licensed part of COCO-Stuff, whose stuff classes map onto these six), with SAM 3 as a labeller if its licence allows that much.
+
 ## Decision
 
 - **Sky ships as SAM 2.1 refined between branches, then `SkyMatte`** when SAM's model is on the Mac, with the classical estimate (also through `SkyMatte`) as the fallback. An embedded sky matte, when the file has one, wins over both.
 - **Depth Anything 3 is an evaluation model** (Settings › Models, with evaluation models turned on), behind the same gate as SAM 2.1. With it installed, Sky arbitrates between both models before `SkyMatte` (band error 0.050 on the edge benchmark). It is not published: its manifest is marked `published: false`, so the app won't download it, and the licence gate refuses to clear it. Before it can be cleared it needs a training-data audit ("public academic datasets", unaudited) by counsel, with DEC-02, and a hosted copy of the converted package.
 - **Subject, Background, People and Objects ship through `ClosedFormMatte`** (error around the edge 0.085 to 0.067 against ViTMatte on four portraits, 0.165 to 0.120 on four object selections), with missed heads filled in from the Subject mask. Embedded iPhone mattes and face parts are left as they are. Pending DEC-05.
 - **No Sky head training (MSK-12) for now.** Revisit it if hand-labelled scores show tree lines and hair need better than SAM's edges.
-- **Landscape classes and people parts still need a trained head (MSK-13).** Unlike sky, there is no classical estimate to seed SAM with for water, vegetation or skin. Every open model that knows those classes (OneFormer, Mask2Former, SegFormer) is trained on non-commercial data.
+- **Landscape:** SAM 3 by text gives usable masks for all six classes (water 0.833 to natural ground 0.351 against OneFormer), but at 3.4 GB, 17–27 s per photo and under the SAM License it waits on counsel and a Core ML conversion; otherwise a trained head (MSK-13). People parts still need a trained head: every open model that knows those classes (OneFormer, Mask2Former, SegFormer) is trained on non-commercial data.
 
 ## Limits
 
