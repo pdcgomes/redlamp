@@ -126,7 +126,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 **Workspace**
 - [x] A Lightroom-style layout. On the left: Navigator, Folders, Recipes, Snapshots, and History, as collapsible panels like the Develop panels. In the center: the photo, with the filmstrip below. On the right: histogram, tool strip, and the Develop panels in Lightroom's order.
 - [x] **Folders**, as in Lightroom Classic: add folders with **+**, ⌘O or by dropping them on the window, and they're remembered (by bookmark, so a folder that's renamed or moved is followed). Each shows as a tree with the number of photos in every folder; click one to show it in the filmstrip, or turn on **Show Photos in Subfolders** (View menu or the folder's context menu) to see everything beneath it. Nothing on disk is moved or changed. The filmstrip follows the disk by itself: photos copied in, deleted, renamed or rewritten appear, leave or update in place, a photo still being copied waits until it's complete, and the selection moves to the next photo when its own is deleted. A folder on a disk that isn't connected is dimmed with a question mark, **Locate…** points it at where it went, and it comes back when the disk does. Each folder reopens on the photo you last had in it.
-- [x] **Built to stay fast with any number of photos:** a folder lists without reading a single sidecar (badges follow from light reads, visible photos first); thumbnails decode in parallel on every core at the cell's size, are kept within a 128 MB budget in memory and cached on disk in one file per folder (at most 1 GB), and are warmed in the background while you're not waiting; the filmstrip is AppKit with reused cells, so 50,000 photos cost what a screenful does. Focus stacks are looked for one folder at a time in the background, and remembered. See [Measured performance](#measured-performance) and the [design](docs/plans/2026-10-02-folders-design.md).
+- [x] **Built to stay fast with any number of photos:** a folder lists without reading a single sidecar (badges follow from light reads, visible photos first); thumbnails decode in parallel on every core at the cell's size, from the smallest preview the raw file embeds that's big enough (found by LibRaw; 3 to 11 times faster than ImageIO's full-size one for Sony, Canon and Nikon files), are kept within a 128 MB budget in memory and cached on disk in one file per folder (at most 1 GB), and are warmed in the background while you're not waiting; the filmstrip is AppKit with reused cells, so 50,000 photos cost what a screenful does. Focus stacks are looked for one folder at a time in the background, and remembered. See [Measured performance](#measured-performance) and the [design](docs/plans/2026-10-02-folders-design.md).
 - [x] **Sliders:** click to jump, drag to adjust, Shift-drag for fine control, double-click to reset, and click the value to type one in. Option-dragging a tone slider shows clipping, as in Lightroom.
 - [x] **Panels:** double-click a panel or group title to reset it, and Option-click a header for Solo Mode. The left column's panels collapse the same way when you click their headers, and Option-click shows only one.
 - [x] **Histogram:** clipping indicators, and you can drag across it to adjust Blacks, Shadows, Exposure, Highlights, or Whites.
@@ -195,12 +195,12 @@ Folders and the filmstrip on 50,000 photos in 500 folders (`scripts/make-folder-
 | --- | --- |
 | First photos in the filmstrip, Show Photos in Subfolders on | 14 ms |
 | All 50,000 photos listed (500 folders, in parallel, in order) | 209 ms |
-| The visible thumbnails, decoded from the raw files | 197 ms |
-| Background warming from the raw files | 253 a second |
+| The visible thumbnails, decoded from the raw files | 33 ms |
+| Background warming from the raw files | 705 a second |
 | Thumbnails from the disk cache | 6,210 a second |
 | Main thread while listing, decoding and warming (p99) | 0.15 ms |
 | Main thread while scrolling the filmstrip end to end (p99) | 1.4 ms |
-| Peak memory, 155 MB before opening | 457 MB (thumbnails 121 MB) |
+| Peak memory, 155 MB before opening | 531 MB (thumbnails 115 MB) |
 
 Dragging a slider at 120 events a second (`scripts/perf-sweep.sh`), with every panel open:
 

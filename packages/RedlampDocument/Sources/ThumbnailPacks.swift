@@ -95,14 +95,15 @@ public final class ThumbnailPacks: Sendable {
         }
         guard creating || FileManager.default.fileExists(atPath: url.path) else { return nil }
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        guard let opened = Pack(url: url) else { return nil }
-        try? (url as NSURL).setResourceValue(Date(), forKey: .contentModificationDateKey)
-        // Packs past the limit are closed once nothing reading them holds them.
-        let (pack, measure) = state.withLock { state -> (Pack, Bool) in
+        // Opened under the lock: two threads opening one pack at once would each map the file
+        // while the other might be replacing it.
+        let opened = state.withLock { state -> (pack: Pack, measure: Bool)? in
             if let raced = state.open[key] {
                 return (raced, false)
             }
+            guard let opened = Pack(url: url) else { return nil }
             state.open[key] = opened
+            // Packs past the limit are closed once nothing reading them holds them.
             if state.open.count > Self.openLimit {
                 let oldest = state.open.keys.sorted { state.lastUse[$0, default: 0] < state.lastUse[$1, default: 0] }
                 for key in oldest.prefix(state.open.count - Self.openLimit) {
@@ -111,6 +112,8 @@ public final class ThumbnailPacks: Sendable {
             }
             return (opened, state.total == nil)
         }
+        guard let (pack, measure) = opened else { return nil }
+        try? (url as NSURL).setResourceValue(Date(), forKey: .contentModificationDateKey)
         if measure {
             let total = packFiles().reduce(Int64(0)) { $0 + $1.size }
             state.withLock { $0.total = $0.total ?? total }
@@ -203,16 +206,22 @@ private final class Pack: Sendable {
 
     init?(url: URL) {
         self.url = url
-        let fd = open(url.path, O_RDWR | O_CREAT | O_CLOEXEC, 0o644)
-        guard fd >= 0 else { return nil }
         var mapped = (try? Data(contentsOf: url, options: .alwaysMapped)) ?? Data()
         if mapped.count < Self.headerSize || Array(mapped.prefix(4)) != Self.magic {
+            // A new pack, or one this version can't read: a fresh file is renamed over it rather
+            // than truncating it, which would break a mapping another process holds.
             var header = Data(Self.magic)
             withUnsafeBytes(of: Self.version.littleEndian) { header.append(contentsOf: $0) }
-            ftruncate(fd, 0)
-            _ = header.withUnsafeBytes { pwrite(fd, $0.baseAddress, header.count, 0) }
+            let staging = url.deletingLastPathComponent()
+                .appending(path: ".\(url.lastPathComponent).\(UUID().uuidString)")
+            guard (try? header.write(to: staging)) != nil, rename(staging.path, url.path) == 0 else {
+                try? FileManager.default.removeItem(at: staging)
+                return nil
+            }
             mapped = header
         }
+        let fd = open(url.path, O_RDWR | O_CLOEXEC)
+        guard fd >= 0 else { return nil }
         var state = State(descriptor: fd, mapped: mapped, end: mapped.count)
         Self.index(&state)
         self.state = Mutex(state)

@@ -61,7 +61,7 @@ Redlamp feels instant because it uses the whole machine, not because it does lit
 
   Jobs run on GCD threads (blocking I/O doesn't belong on Swift's cooperative pool). A queued job is promoted when it becomes visible, and a job whose folder or cell went away is dropped before it starts. Background jobs start only while no on-screen job waits, and not at all in Low Power Mode or when the Mac is hot (`thermalState` serious or critical), as exports already rest.
 - **I/O in parallel.** With subfolders on, each folder is listed by its own job. Probes read `edit.json` without file coordination, which is safe because it is always written atomically (directly, or by replacing the whole package), and skip sidecars iCloud hasn't downloaded. Probes run on the look-ahead lane in batches of 32 rows, the visible rows' batches promoted to on screen: decoding the JSON, not reading it, is most of their cost.
-- **Decoding where it's cheapest.** ImageIO's thumbnail path decodes a raw file's embedded JPEG at reduced scale, and HEIC on the hardware decoder, on all performance cores at once. Stack detection's blur, correlation and sharpness use Accelerate (vDSP). Core Animation composites the filmstrip on the GPU, so scrolling never redraws a thumbnail.
+- **Decoding where it's cheapest.** A raw file's thumbnail comes from the smallest embedded JPEG preview that's big enough (found by LibRaw), decoded at reduced scale by ImageIO; HEIC uses the hardware decoder. Both run on all performance cores at once. Stack detection's blur, correlation and sharpness use Accelerate (vDSP). Core Animation composites the filmstrip on the GPU, so scrolling never redraws a thumbnail.
 - **Raw files without a usable preview** (rare: some DNGs) are the expensive case. The trial compares ImageIO's full decode with a reduced-size develop in the engine; see Results.
 - **Warming.** While nothing is waiting on screen, thumbnails for the rest of the open folder, then for its sibling folders, are decoded into the pack on the background lane, so scrolling never waits. Warmed thumbnails go to the pack, not to memory.
 
@@ -147,12 +147,12 @@ Measured with `--folders-perf` on 50,000 photos in 500 folders (APFS clones of o
 | --- | --- | --- |
 | First photos (subfolders on) | under 50 ms | 13.7 ms |
 | All 50,000 photos listed | under 300 ms | 209 ms |
-| Visible thumbnails (15, from the files) | under 400 ms | 197 ms |
-| Warming from the files | at least 300 a second | 253 a second |
+| Visible thumbnails (15, from the files) | under 400 ms | 33 ms (197 ms through ImageIO) |
+| Warming from the files | at least 300 a second | 705 a second (253 through ImageIO) |
 | From the pack | at least 2,000 a second | 6,210 a second |
 | Main thread while listing, decoding, warming | p99 under 8.3 ms | p99 0.15 ms, max 12 ms |
 | Main thread scrolling the strip end to end in 4 s | p99 under 8.3 ms | p99 1.4 ms, max 22 ms |
-| Memory | thumbnails 128 MB | 457 MB peak against 155 MB before opening; thumbnails 121 MB |
+| Memory | thumbnails 128 MB | 531 MB peak against 155 MB before opening; thumbnails 115 MB |
 
 What the measurements changed:
 
@@ -161,8 +161,9 @@ What the measurements changed:
 - **Stack detection** decoded 256 px thumbnails for every candidate run across every core, from the look-ahead lane. On the fixture, where every folder looks like a run, it starved warming and took memory to 1.7 GB. It now runs on the background lane one directory at a time, single-threaded, so it never holds more than one core.
 - **The Folders panel** first rebuilt every row on each change: 64 ms per reload with 5,000 subfolders. Its rows now come from the tree on demand, one node per folder, and a listing reloads only its own row. Only rows on screen get views (under 60 for 5,000) and only folders on screen are listed.
 - **Raw files without a preview.** Every fixture has an embedded preview, decoded through ImageIO in 6 to 30 ms on one core. A full ImageIO decode, which a previewless file needs, takes 64 to 206 ms, and the engine's own open is 70 to 250 ms. LibRaw's unpacking dominates both, so a reduced-size develop in the engine has no room to win; ImageIO stays.
-- **Where decoding time goes.** ImageIO decodes a raw's largest embedded JPEG (often full size) even for a 192 px thumbnail: about 25 ms each. Picking the smallest preview of at least 192 px through LibRaw's thumbnail list would cut that several times; that's for later.
+- **Thumbnails from the smallest preview.** ImageIO decodes a raw's largest embedded JPEG (often full size) even for a 192 px thumbnail: about 25 ms each. Raw thumbnails now come from the smallest JPEG preview of at least 192 px in LibRaw's thumbnail list, read from one memory mapping of the file and turned upright by the preview's own orientation or LibRaw's. Per file that's 3 times faster for Sony and Pixel DNG files, 6 for Canon, 11 for Nikon and 1.6 for DNGs with only a full-size preview; Fujifilm files, with only a full-size preview, are level (`research/prototypes/thumbnails`). In the app, visible thumbnails went from 197 to 33 ms and warming from 253 to 705 a second.
+- **A race in the packs.** With decodes this fast, many threads stored a new folder's first thumbnails at once; two could open its pack together, and one reset the new file while the other read its mapping (a bus error). A pack is now opened under the store's lock, and a new or unreadable pack file is replaced by renaming a fresh one over it, never truncated.
 
 ## Later
 
-Decoding the smallest embedded preview that fits instead of ImageIO's largest one, moving and renaming on disk, several folders in the filmstrip at once, a catalog, thumbnails that show the edit, collections, and a Library grid.
+Moving and renaming on disk, several folders in the filmstrip at once, a catalog, thumbnails that show the edit, collections, and a Library grid.

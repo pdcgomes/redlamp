@@ -61,6 +61,26 @@ struct ThumbnailPacksTests {
         #expect(packs.contains(photo("A.ARW"), size: 1, modified: date))
     }
 
+    @Test func `many threads storing into a new pack at once lose nothing`() {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        for round in 0 ..< 20 {
+            let packs = ThumbnailPacks(directory: directory)
+            let folder = URL(fileURLWithPath: "/Photos/Round \(round)")
+            DispatchQueue.concurrentPerform(iterations: 64) { index in
+                packs.store(
+                    Data(repeating: UInt8(index), count: 2000), for: folder.appending(path: "\(index).ARW"), size: 1,
+                    modified: date,
+                )
+            }
+            let reopened = ThumbnailPacks(directory: directory)
+            let found = (0 ..< 64).count {
+                reopened.jpeg(for: folder.appending(path: "\($0).ARW"), size: 1, modified: date)
+                    == Data(repeating: UInt8($0), count: 2000)
+            }
+            #expect(found == 64, "round \(round)")
+        }
+    }
+
     @Test func `thumbnails round-trip through JPEG`() throws {
         let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))
         let context = try #require(CGContext(
