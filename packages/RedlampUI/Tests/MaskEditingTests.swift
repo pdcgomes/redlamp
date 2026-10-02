@@ -288,6 +288,37 @@ struct MaskEditingTests {
         #expect(model.availablePersonParts == [.entirePerson, .lips, .hair, .clothes])
     }
 
+    /// Dragging a mask's adjustment hides its overlay, so the edit shows; it comes back on release.
+    /// Sliders that shape the mask keep it.
+    @Test func `the overlay hides while a mask's adjustment is dragged`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let model = EditorModel(engine: StubEngine())
+        model.select(folder.appending(path: "IMG_0005.ARW"))
+        for _ in 0 ..< 200 where model.info == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        model.startDrawing(.radial)
+        model.beginDrawing(.radial(RadialMask(center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.2)))
+        model.finishDrawing()
+        let mask = try #require(model.selectedMaskID)
+        #expect(model.maskOverlayShown == mask)
+
+        model.beginEdit(.localExposure)
+        model.setValue(.localExposure, 1)
+        #expect(model.maskOverlayShown == nil)
+        model.endEdit()
+        #expect(model.maskOverlayShown == mask)
+
+        model.beginEdit(.maskAmount)
+        #expect(model.maskOverlayShown == nil)
+        model.endEdit()
+        model.beginEdit(.maskFeather)
+        #expect(model.maskOverlayShown == mask, "feather shapes the mask: the overlay shows it")
+        model.endEdit()
+    }
+
     @Test func `AI masks become components and update in place`() async throws {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

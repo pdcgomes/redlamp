@@ -564,7 +564,7 @@ public final class EditorModel {
             ?? canvas.renderTarget
         guard target.size.width > 0 else { return }
         generation &+= 1
-        let overlay = activeTool == .masking && showMaskOverlay && !isShowingOriginal ? selectedMaskID : nil
+        let overlay = maskOverlayShown
         var request = RenderRequest(
             recipe: displayed,
             targetSize: target.size,
@@ -643,10 +643,27 @@ public final class EditorModel {
         return abs(self[observing: parameter] - parameter.spec.defaultValue) > 1e-9
     }
 
+    /// The mask the canvas overlays: the selected one in the Masking tool, except while one of
+    /// its adjustments is being dragged, so the edit itself shows (Lightroom's automatic overlay
+    /// toggle). Sliders that shape the mask (Feather, Detail, Refine) keep it.
+    public var maskOverlayShown: UUID? {
+        guard activeTool == .masking, showMaskOverlay, !isShowingOriginal, !isAdjustingMask else { return nil }
+        return selectedMaskID
+    }
+
+    /// Whether a mask's adjustment or Amount is being dragged.
+    var isAdjustingMask: Bool {
+        guard editStart != nil, let editParameter else { return false }
+        return editParameter.isLocal || editParameter == .maskAmount
+    }
+
     /// Starts a continuous edit (a slider drag); history records one step when it ends.
     public func beginEdit(_ parameter: ParameterID? = nil) {
         editStart = recipe
         editParameter = parameter
+        if isAdjustingMask, activeTool == .masking, showMaskOverlay {
+            requestRender()
+        }
     }
 
     public func setValue(_ parameter: ParameterID, _ value: Double) {
@@ -689,9 +706,14 @@ public final class EditorModel {
     }
 
     private func finishEdit(_ record: (EditRecipe) -> Void) {
+        let adjustingMask = isAdjustingMask
         defer {
             editStart = nil
             editParameter = nil
+            // The overlay comes back once the drag ends.
+            if adjustingMask, activeTool == .masking, showMaskOverlay {
+                requestRender()
+            }
         }
         guard let start = editStart, start != recipe else { return }
         record(start)
