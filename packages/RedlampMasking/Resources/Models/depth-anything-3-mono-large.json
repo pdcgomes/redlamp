@@ -1,27 +1,27 @@
 {
   "id": "depth-anything-3-mono-large",
-  "version": 1,
+  "version": 2,
   "name": "Depth Anything 3 (mono, large)",
   "purpose": "Sky masks (with Segment Anything) and Depth Range masks, from one model.",
   "provider": "redlamp.depth-anything-3-mono-large",
-  "assetPack": "models.depth-anything-3-mono-large.v1",
-  "source": "https://github.com/pdcgomes/redlamp/releases/download/models-depth-anything-3-mono-large-v1/",
+  "assetPack": "models.depth-anything-3-mono-large.v2",
+  "source": "https://github.com/pdcgomes/redlamp/releases/download/models-depth-anything-3-mono-large-v2/",
   "computeUnits": "cpuAndGPU",
   "files": [
     {
       "path": "DepthAnything3MonoLargeW8.mlpackage/Data/com.apple.CoreML/model.mlmodel",
-      "bytes": 334346,
-      "sha256": "b74238ddcee60077e8d01365ab0d4a4d5b965629d3b5ecd2d4bf5d8dc0784206"
+      "bytes": 667960,
+      "sha256": "7f2a0d2f71a2d0c2dcc2fec649e12dd6e94bcd84444b77a921e3a03fad45c975"
     },
     {
       "path": "DepthAnything3MonoLargeW8.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
-      "bytes": 334535936,
-      "sha256": "430fee3b2ec86dca62a0c64268966102651cf21a9884da3762fb964b028e3c03"
+      "bytes": 335421760,
+      "sha256": "1cbd9be2cd788c377d067f92024f535e67f26e299435810368e6e1916a7ab16c"
     },
     {
       "path": "DepthAnything3MonoLargeW8.mlpackage/Manifest.json",
       "bytes": 617,
-      "sha256": "59ae3b82d41dd899b4f73edb4a9523d036be574b6539428f03c4d2f5049c2b41"
+      "sha256": "995ecaf9a1003cbc29552a102dff387fe20c37aa16f916ee4fa1f8b052381fa5"
     }
   ],
   "licenses": {
@@ -34,6 +34,6 @@
   "decision": "DEC-02",
   "evaluationOnly": true,
   "cleared": false,
-  "notes": "Converted by research/prototypes/masking/convert_da3.py (504x336, fixed) and compress_da3.py (8-bit weights; sky agreement with fp16 >= 0.997). Not yet published: the source URL is where a release would go. GPU 126 ms per photo on an M1 Ultra; the Neural Engine is slower. Training data ('public academic datasets') unaudited.",
+  "notes": "Converted by research/prototypes/masking/convert_da3.py (fixed 504x336 landscape and 336x504 portrait inputs) and compress_da3.py (8-bit weights; sky agreement with fp16 >= 0.997), merged into one package with a landscape and a portrait function that share their weights. Not yet published: the source URL is where a release would go. GPU 126 ms per photo on an M1 Ultra; the Neural Engine is slower. Training data ('public academic datasets') unaudited.",
   "published": false
 }

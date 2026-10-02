@@ -2,15 +2,19 @@
 """Depth Anything 3 Mono-L to Core ML (MSK-17 follow-up): depth and sky for one image.
 
 There is no official Core ML conversion. This wraps the network (DINOv2 ViT-L backbone and DPT
-head with its sky branch) so it takes an RGB image at a fixed 504×336 (3:2; the reference
-pipeline resizes the long side to 504, both sides multiples of the 14 px patch), freezes the
-position embedding for that size (the converter has no bicubic resampling), and checks the
-wrapper against the package's own pipeline before converting.
+head with its sky branch) so it takes an RGB image at a fixed size, freezes the position
+embedding for that size (the converter has no bicubic resampling), and checks the wrapper
+against the package's own pipeline before converting. The reference pipeline resizes the long
+side to 504, both sides multiples of the 14 px patch: 504×336 for landscape photos, 336×504 for
+portrait ones. Portrait photos need their own input: turned on their side, the model misses
+small patches of sky (0.75% of a portrait street scene upright, 0.31% sideways).
 
-    KMP_DUPLICATE_LIB_OK=TRUE research/prototypes/masking/.venv/bin/python \
-        research/prototypes/masking/convert_da3.py build/models/DepthAnything3MonoLarge.mlpackage
+    KMP_DUPLICATE_LIB_OK=TRUE research/prototypes/masking/.venv-coreml/bin/python \
+        research/prototypes/masking/convert_da3.py [landscape|portrait]
 
-Outputs: `depth` (relative, larger is farther) and `sky` (≥ 0.5 is sky), both 336×504.
+Writes build/models/DepthAnything3MonoLarge-<orientation>.mlpackage. Outputs: `depth`
+(relative, larger is farther) and `sky` (≥ 0.5 is sky), both at the input size.
+compress_da3.py then quantizes both and merges them into one two-function package.
 """
 
 import pathlib
@@ -23,27 +27,31 @@ import torch
 from depth_anything_3.api import DepthAnything3
 from PIL import Image
 
-HEIGHT, WIDTH = 336, 504
+SHAPES = {"landscape": (336, 504), "portrait": (504, 336)}
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 
 class Wrapper(torch.nn.Module):
-    def __init__(self, net):
+    def __init__(self, net, height, width):
         super().__init__()
         self.backbone = net.backbone
         self.head = net.head
+        self.height, self.width = height, width
         self.register_buffer("mean", torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
         self.register_buffer("std", torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
     def forward(self, image):
         x = ((image - self.mean) / self.std).unsqueeze(1)
         feats, _ = self.backbone(x, cam_token=None, export_feat_layers=[], ref_view_strategy="first")
-        out = self.head(feats, HEIGHT, WIDTH, patch_start_idx=0)
-        return out["depth"].reshape(1, 1, HEIGHT, WIDTH), out["sky"].reshape(1, 1, HEIGHT, WIDTH)
+        out = self.head(feats, self.height, self.width, patch_start_idx=0)
+        shape = (1, 1, self.height, self.width)
+        return out["depth"].reshape(shape), out["sky"].reshape(shape)
 
 
 def main():
-    destination = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else ROOT / "build/models/DepthAnything3MonoLarge.mlpackage")
+    orientation = sys.argv[1] if len(sys.argv) > 1 else "landscape"
+    height, width = SHAPES[orientation]
+    destination = ROOT / f"build/models/DepthAnything3MonoLarge-{orientation}.mlpackage"
     api = DepthAnything3.from_pretrained("depth-anything/DA3MONO-LARGE").eval()
     preprocess = api.input_processor
     api.input_processor = lambda *a, **k: preprocess(*a, **{**k, "sequential": True, "num_workers": 1})
@@ -51,13 +59,16 @@ def main():
 
     # Freeze DINOv2's position embedding for this size.
     vit = net.backbone.pretrained
-    tokens = torch.zeros(1, 1 + (HEIGHT // 14) * (WIDTH // 14), vit.embed_dim)
-    fixed = vit.interpolate_pos_encoding(tokens, HEIGHT, WIDTH).detach()
+    tokens = torch.zeros(1, 1 + (height // 14) * (width // 14), vit.embed_dim)
+    fixed = vit.interpolate_pos_encoding(tokens, height, width).detach()
     vit.interpolate_pos_encoding = lambda x, w, h: fixed
 
-    wrapper = Wrapper(net).eval()
+    wrapper = Wrapper(net, height, width).eval()
     sample = ROOT / "build/masking-bakeoff/Sony_ILCE-6700.png"
-    image = Image.open(sample).convert("RGB").resize((WIDTH, HEIGHT), Image.BICUBIC)
+    image = Image.open(sample).convert("RGB")
+    if orientation == "portrait":
+        image = image.crop((image.width // 3, 0, image.width // 3 + image.height * 2 // 3, image.height))
+    image = image.resize((width, height), Image.BICUBIC)
     tensor = torch.from_numpy(np.asarray(image, dtype=np.float32) / 255).permute(2, 0, 1)[None].contiguous()
     with torch.no_grad():
         depth, sky = wrapper(tensor)
@@ -77,13 +88,13 @@ def main():
     exported = torch.export.export(wrapper, (tensor,)).run_decompositions({})
     model = ct.convert(
         exported,
-        inputs=[ct.ImageType(name="image", shape=(1, 3, HEIGHT, WIDTH), scale=1 / 255, color_layout=ct.colorlayout.RGB)],
+        inputs=[ct.ImageType(name="image", shape=(1, 3, height, width), scale=1 / 255, color_layout=ct.colorlayout.RGB)],
         outputs=[ct.TensorType(name="depth"), ct.TensorType(name="sky")],
         convert_to="mlprogram",
         compute_precision=ct.precision.FLOAT16,
         minimum_deployment_target=ct.target.macOS15,
     )
-    model.short_description = "Depth Anything 3 Mono-L: relative depth and sky, 504×336"
+    model.short_description = f"Depth Anything 3 Mono-L: relative depth and sky, {width}×{height}"
     model.license = "Apache-2.0 (weights); training data unaudited, see docs/research/notes/MSK-17-sky-bakeoff.md"
     destination.parent.mkdir(parents=True, exist_ok=True)
     model.save(str(destination))

@@ -1,0 +1,447 @@
+import CoreGraphics
+import Foundation
+import RedlampEngineAPI
+import simd
+
+/// Sky coverage per pixel from a coarse sky mask: every twig, leaf gap, wire and hair edge.
+///
+/// Sky is smooth, so the sky colour behind any pixel can be estimated from the sure sky around
+/// it, and the foreground's from the sure foreground. A pixel's coverage is then where its colour
+/// lies between the two in linear light, where light mixes: blue-screen matting with a known,
+/// smoothly varying backing (Smith and Blinn, 1996), the colours spread by pull-push (Gortler et
+/// al., 1996). Solved: an uncertain band around the coarse edge; sky-coloured pixels further into
+/// the foreground that connect to the sky (a crown the coarse mask cut out whole); and, inside
+/// the coarse sky, pixels clearly not sky (twigs and wires the model never saw). Where the two
+/// colours are too close to tell apart, the coarse mask stays.
+///
+/// Prototyped as `research/prototypes/masking/sky_matte.py`. On the edge benchmark
+/// (`edge_bench.py`: thin structures over real skies, with known coverage, at 4096 px) it takes
+/// the error around edges from 0.179 to 0.051 and on thin structures from 0.259 to 0.116 (MSK-17).
+public enum SkyMatte {
+    /// The band solved around the coarse edge, and how far into the foreground sky is sought,
+    /// as fractions of the long side.
+    static let band: Float = 0.012
+    static let reach: Float = 0.06
+    /// Sky and foreground colours closer than this (linear RGB distance) can't be told apart.
+    static let tolerance: (low: Float, high: Float) = (0.015, 0.06)
+
+    /// What each pixel takes part in.
+    struct Regions {
+        /// Within the band of the coarse edge, or where the coarse mask is unsure.
+        var near: [Bool]
+        /// Further into the coarse foreground, within the reach.
+        var far: [Bool]
+        /// Inside the coarse sky, beyond the band.
+        var inside: [Bool]
+    }
+
+    /// `coarse` is any size; `image` is the photo at the size to solve at.
+    public static func refine(_ coarse: GrayMask, image: CGImage) -> GrayMask {
+        let size = PixelSize(width: image.width, height: image.height)
+        guard let rgb = RGBImage(image, size: size) else { return coarse.resized(to: size) }
+        let width = size.width
+        let height = size.height
+        let count = width * height
+        let mask = coarse.resized(to: size).coverage
+        let unchanged = GrayMask(width: width, height: height, coverage: mask)
+        let regions = Self.regions(mask, width: width, height: height)
+
+        let linear = Self.linear(rgb)
+        var sky = (0 ..< count).map { mask[$0] > 0.9 && !regions.near[$0] }
+        var solid = (0 ..< count).map { mask[$0] < 0.1 && !regions.near[$0] }
+        guard sky.contains(true) else { return unchanged }
+        var result = mask
+        for _ in 0 ..< 2 {
+            let behind = SkyColour(linear, sky: sky, width: width, height: height)
+            guard let front = ForegroundColour(
+                linear, behind: behind, sky: sky, solid: solid, width: width, height: height,
+            ) else { return unchanged }
+            let (refined, confidence) = Self.solve(
+                linear, mask: mask, regions: regions, behind: behind, front: front, width: width,
+            )
+
+            // Far from the edge, only sky-like pixels connected to the sky through sky-like ones;
+            // inside the sky, only what is clearly not sky (noise and cloud texture stay sky).
+            let likely = (0 ..< count).map {
+                refined[$0] > 0.5 && (regions.near[$0] || regions.far[$0] || mask[$0] > 0.5)
+            }
+            let connected = Self.connected(likely, seeds: mask.map { $0 > 0.5 }, width: width, height: height)
+            for index in 0 ..< count {
+                let intrusion = regions.inside[index] && refined[index] < 0.75 && confidence[index] > 0.5
+                if regions.near[index] || (regions.far[index] && connected[index]) || intrusion {
+                    result[index] = refined[index]
+                } else {
+                    result[index] = mask[index]
+                }
+            }
+            // The next pass learns the colours from what this one found.
+            for index in 0 ..< count {
+                let solved = regions.near[index] || regions.far[index]
+                sky[index] = (result[index] > 0.97 && confidence[index] > 0.5)
+                    || (mask[index] > 0.9 && !regions.near[index] && result[index] > 0.9)
+                solid[index] = result[index] < 0.03 && (confidence[index] > 0.5 || !solved)
+            }
+        }
+        return GrayMask(width: width, height: height, coverage: result)
+    }
+
+    /// The band, the reach and the sky's inside, from distances to the coarse edge measured at a
+    /// quarter of the size (a few pixels off doesn't matter at these widths).
+    static func regions(_ mask: [Float], width: Int, height: Int) -> Regions {
+        let long = Float(max(width, height))
+        let factor = 4
+        let smallWidth = max(1, width / factor)
+        let smallHeight = max(1, height / factor)
+        let small = (0 ..< smallWidth * smallHeight).map { index -> Float in
+            let x = min((index % smallWidth) * factor + factor / 2, width - 1)
+            let y = min((index / smallWidth) * factor + factor / 2, height - 1)
+            return mask[y * width + x]
+        }
+        let reachPixels = reach * long
+        let distance = Self.distance(
+            from: small, width: smallWidth, height: smallHeight, limit: reachPixels / Float(factor),
+        )
+        let bandPixels = max(4, band * long)
+        let count = width * height
+        var regions = Regions(
+            near: [Bool](repeating: false, count: count), far: [Bool](repeating: false, count: count),
+            inside: [Bool](repeating: false, count: count),
+        )
+        for y in 0 ..< height {
+            let row = min(y / factor, smallHeight - 1) * smallWidth
+            for x in 0 ..< width {
+                let index = y * width + x
+                let d = distance[row + min(x / factor, smallWidth - 1)] * Float(factor)
+                let value = mask[index]
+                let near = d <= bandPixels || (value > 0.1 && value < 0.9)
+                regions.near[index] = near
+                regions.far[index] = !near && d <= reachPixels && value <= 0.5
+                regions.inside[index] = !near && value > 0.5
+            }
+        }
+        return regions
+    }
+
+    /// Each solved pixel's coverage, where its colour lies between the sky's and the
+    /// foreground's, blended back to the coarse mask as the two get too close to tell apart.
+    static func solve(
+        _ linear: [SIMD3<Float>], mask: [Float], regions: Regions, behind: SkyColour, front: ForegroundColour,
+        width: Int,
+    ) -> (refined: [Float], confidence: [Float]) {
+        var refined = mask
+        var confidence = [Float](repeating: 0, count: mask.count)
+        let height = mask.count / width
+        refined.withUnsafeMutableBufferPointer { refinedBuffer in
+            confidence.withUnsafeMutableBufferPointer { confidenceBuffer in
+                // Each row writes only its own pixels.
+                nonisolated(unsafe) let refinedOut = refinedBuffer
+                nonisolated(unsafe) let confidenceOut = confidenceBuffer
+                DispatchQueue.concurrentPerform(iterations: height) { y in
+                    for index in y * width ..< (y + 1) * width
+                        where regions.near[index] || regions.far[index] || regions.inside[index] {
+                        let f = front.at(index)
+                        let difference = behind.at(index) - f
+                        let span = simd_length_squared(difference)
+                        var alpha = simd_dot(linear[index] - f, difference) / max(span, 1e-8)
+                        alpha = min(max((alpha - 0.04) / 0.92, 0), 1)
+                        let sure = min(
+                            max((span.squareRoot() - tolerance.low) / (tolerance.high - tolerance.low), 0),
+                            1,
+                        )
+                        refinedOut[index] = sure * alpha + (1 - sure) * mask[index]
+                        confidenceOut[index] = sure
+                    }
+                }
+            }
+        }
+        return (refined, confidence)
+    }
+
+    // MARK: - Colours
+
+    /// sRGB to linear light, per pixel.
+    static func linear(_ rgb: RGBImage) -> [SIMD3<Float>] {
+        let table = (0 ..< 256).map { value -> Float in
+            let x = Float(value) / 255
+            return x <= 0.04045 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4)
+        }
+        var out = [SIMD3<Float>](repeating: .zero, count: rgb.width * rgb.height)
+        rgb.pixels.withUnsafeBufferPointer { pixels in
+            for index in out.indices {
+                out[index] = SIMD3(
+                    table[Int(pixels[index * 4])],
+                    table[Int(pixels[index * 4 + 1])],
+                    table[Int(pixels[index * 4 + 2])],
+                )
+            }
+        }
+        return out
+    }
+
+    /// The sky's colour behind every pixel, from the sure sky: at a quarter of the size (it is
+    /// smooth), read back bilinearly.
+    struct SkyColour: Sendable {
+        static let factor = 4
+        let width: Int
+        let smallWidth: Int
+        let smallHeight: Int
+        let filled: [SIMD3<Float>]
+
+        init(_ linear: [SIMD3<Float>], sky: [Bool], width: Int, height: Int) {
+            let factor = Self.factor
+            self.width = width
+            smallWidth = max(1, width / factor)
+            smallHeight = max(1, height / factor)
+            var values = [SIMD3<Float>](repeating: .zero, count: smallWidth * smallHeight)
+            var weights = [Float](repeating: 0, count: smallWidth * smallHeight)
+            for y in 0 ..< smallHeight {
+                for x in 0 ..< smallWidth {
+                    var sum = SIMD3<Float>.zero
+                    var all = true
+                    for dy in 0 ..< factor {
+                        for dx in 0 ..< factor {
+                            let index = min(y * factor + dy, height - 1) * width + min(x * factor + dx, width - 1)
+                            sum += linear[index]
+                            all = all && sky[index]
+                        }
+                    }
+                    values[y * smallWidth + x] = sum / Float(factor * factor)
+                    weights[y * smallWidth + x] = all ? 1 : 0
+                }
+            }
+            filled = PullPush.fill(values, weights: weights, width: smallWidth, height: smallHeight, levels: nil)
+        }
+
+        func at(_ index: Int) -> SIMD3<Float> {
+            let factor = Float(Self.factor)
+            let x = (Float(index % width) + 0.5) / factor - 0.5
+            let y = (Float(index / width) + 0.5) / factor - 0.5
+            let x0 = min(max(Int(x.rounded(.down)), 0), smallWidth - 1)
+            let y0 = min(max(Int(y.rounded(.down)), 0), smallHeight - 1)
+            let x1 = min(x0 + 1, smallWidth - 1)
+            let y1 = min(y0 + 1, smallHeight - 1)
+            let fx = min(max(x - Float(x0), 0), 1)
+            let fy = min(max(y - Float(y0), 0), 1)
+            let top = filled[y0 * smallWidth + x0] * (1 - fx) + filled[y0 * smallWidth + x1] * fx
+            let bottom = filled[y1 * smallWidth + x0] * (1 - fx) + filled[y1 * smallWidth + x1] * fx
+            return top * (1 - fy) + bottom * fy
+        }
+    }
+
+    /// The foreground's colour behind every pixel, from the sure foreground, weighted by how far
+    /// from the sky's colour, so pure foreground outweighs pixels mixed with sky (inside a
+    /// cut-out crown, most are). Spread only a few levels, as foreground varies. With no sure
+    /// foreground at all (every trunk inside the band), one colour from the purest pixels that
+    /// aren't sure sky: learnt locally, each pixel would learn its own colour.
+    struct ForegroundColour: Sendable {
+        let filled: [SIMD3<Float>]?
+        let constant: SIMD3<Float>
+
+        /// Nil if nothing differs from the sky.
+        init?(
+            _ linear: [SIMD3<Float>], behind: SkyColour, sky: [Bool], solid: [Bool], width: Int, height: Int,
+        ) {
+            var distinct = [Float](repeating: 0, count: linear.count)
+            distinct.withUnsafeMutableBufferPointer { buffer in
+                nonisolated(unsafe) let out = buffer
+                DispatchQueue.concurrentPerform(iterations: height) { y in
+                    for index in y * width ..< (y + 1) * width where !sky[index] {
+                        let separation = simd_length(linear[index] - behind.at(index))
+                        out[index] = min(max((separation - 0.04) / 0.25, 0), 1)
+                    }
+                }
+            }
+            let weights = solid.indices.map { solid[$0] ? distinct[$0] * distinct[$0] * distinct[$0] : 0 }
+            if weights.reduce(0, +) >= 1 {
+                filled = PullPush.fill(linear, weights: weights, width: width, height: height, levels: 7)
+                constant = .zero
+                return
+            }
+            var sum = SIMD3<Float>.zero
+            var total: Float = 0
+            for index in linear.indices where !sky[index] {
+                let weight = distinct[index] * distinct[index]
+                sum += weight * linear[index]
+                total += weight
+            }
+            guard total >= 1 else { return nil }
+            filled = nil
+            constant = sum / total
+        }
+
+        func at(_ index: Int) -> SIMD3<Float> {
+            filled?[index] ?? constant
+        }
+    }
+
+    // MARK: - Geometry
+
+    /// Distance in pixels from the boundary of `mask > 0.5`, capped at `limit` (a 3-4 chamfer).
+    static func distance(from mask: [Float], width: Int, height: Int, limit: Float) -> [Float] {
+        let count = width * height
+        let inside = mask.map { $0 > 0.5 }
+        let cap = (limit + 2) * 3
+        var d = [Float](repeating: cap, count: count)
+        for y in 0 ..< height {
+            for x in 0 ..< width {
+                let index = y * width + x
+                let value = inside[index]
+                if (x > 0 && inside[index - 1] != value) || (x < width - 1 && inside[index + 1] != value)
+                    || (y > 0 && inside[index - width] != value) || (y < height - 1 && inside[index + width] != value) {
+                    d[index] = 0
+                }
+            }
+        }
+        for y in 0 ..< height {
+            for x in 0 ..< width {
+                let index = y * width + x
+                var value = d[index]
+                if x > 0 {
+                    value = min(value, d[index - 1] + 3)
+                }
+                if y > 0 {
+                    value = min(value, d[index - width] + 3)
+                    if x > 0 {
+                        value = min(value, d[index - width - 1] + 4)
+                    }
+                    if x < width - 1 {
+                        value = min(value, d[index - width + 1] + 4)
+                    }
+                }
+                d[index] = value
+            }
+        }
+        for y in stride(from: height - 1, through: 0, by: -1) {
+            for x in stride(from: width - 1, through: 0, by: -1) {
+                let index = y * width + x
+                var value = d[index]
+                if x < width - 1 {
+                    value = min(value, d[index + 1] + 3)
+                }
+                if y < height - 1 {
+                    value = min(value, d[index + width] + 3)
+                    if x < width - 1 {
+                        value = min(value, d[index + width + 1] + 4)
+                    }
+                    if x > 0 {
+                        value = min(value, d[index + width - 1] + 4)
+                    }
+                }
+                d[index] = value
+            }
+        }
+        return d.map { $0 / 3 }
+    }
+
+    /// The pixels of `region` four-connected to a pixel of it where `seeds` holds. Seeds count as
+    /// connected at once; the flood starts only from those at the edge of what they cover.
+    static func connected(_ region: [Bool], seeds: [Bool], width: Int, height _: Int) -> [Bool] {
+        var connected = (0 ..< region.count).map { region[$0] && seeds[$0] }
+        var stack: [Int] = []
+        func open(_ index: Int) -> Bool {
+            region[index] && !connected[index]
+        }
+        for index in region.indices where connected[index] {
+            let x = index % width
+            if (x > 0 && open(index - 1)) || (x < width - 1 && open(index + 1))
+                || (index >= width && open(index - width)) || (index + width < region.count && open(index + width)) {
+                stack.append(index)
+            }
+        }
+        while let index = stack.popLast() {
+            let x = index % width
+            if x > 0, open(index - 1) {
+                connected[index - 1] = true
+                stack.append(index - 1)
+            }
+            if x < width - 1, open(index + 1) {
+                connected[index + 1] = true
+                stack.append(index + 1)
+            }
+            if index >= width, open(index - width) {
+                connected[index - width] = true
+                stack.append(index - width)
+            }
+            if index + width < region.count, open(index + width) {
+                connected[index + width] = true
+                stack.append(index + width)
+            }
+        }
+        return connected
+    }
+}
+
+/// Fills values where their weight is 0 from the weighted values around them, coarse to fine
+/// (the pull-push of Gortler et al., 1996).
+enum PullPush {
+    struct Level {
+        var values: [SIMD3<Float>]
+        var weights: [Float]
+        var width: Int
+        var height: Int
+    }
+
+    static func fill(
+        _ values: [SIMD3<Float>], weights: [Float], width: Int, height: Int, levels: Int?,
+    ) -> [SIMD3<Float>] {
+        var pyramid: [Level] = []
+        var level = Level(values: zip(values, weights).map { $0 * $1 }, weights: weights, width: width, height: height)
+        while min(level.width, level.height) > 1, levels.map({ pyramid.count < $0 }) ?? true {
+            pyramid.append(level)
+            level = Self.down(level)
+        }
+        var filled = zip(level.values, level.weights).map { $0 / max($1, 1e-6) }
+        var parent = (width: level.width, height: level.height)
+        for child in pyramid.reversed() {
+            filled = Self.up(filled, parent: parent, child: child)
+            parent = (child.width, child.height)
+        }
+        return filled
+    }
+
+    /// Sums over 2×2 blocks.
+    static func down(_ level: Level) -> Level {
+        let width = (level.width + 1) / 2
+        let height = (level.height + 1) / 2
+        var values = [SIMD3<Float>](repeating: .zero, count: width * height)
+        var weights = [Float](repeating: 0, count: width * height)
+        for y in 0 ..< level.height {
+            for x in 0 ..< level.width {
+                let target = (y / 2) * width + x / 2
+                values[target] += level.values[y * level.width + x]
+                weights[target] += level.weights[y * level.width + x]
+            }
+        }
+        return Level(values: values, weights: weights, width: width, height: height)
+    }
+
+    /// The child's own mean where it has weight, else the parent repeated 2×2 and box blurred 3×3.
+    static func up(_ filled: [SIMD3<Float>], parent: (width: Int, height: Int), child: Level) -> [SIMD3<Float>] {
+        var out = [SIMD3<Float>](repeating: .zero, count: child.width * child.height)
+        out.withUnsafeMutableBufferPointer { buffer in
+            // Each row writes only its own pixels.
+            nonisolated(unsafe) let result = buffer
+            DispatchQueue.concurrentPerform(iterations: child.height) { y in
+                for x in 0 ..< child.width {
+                    let index = y * child.width + x
+                    let weight = child.weights[index]
+                    if weight >= 1 {
+                        result[index] = child.values[index] / weight
+                        continue
+                    }
+                    var sum = SIMD3<Float>.zero
+                    for dy in -1 ... 1 {
+                        let sy = min(min(max(y + dy, 0), child.height - 1) / 2, parent.height - 1)
+                        for dx in -1 ... 1 {
+                            let sx = min(min(max(x + dx, 0), child.width - 1) / 2, parent.width - 1)
+                            sum += filled[sy * parent.width + sx]
+                        }
+                    }
+                    let mean = child.values[index] / max(weight, 1e-6)
+                    result[index] = weight * mean + (1 - weight) * sum / 9
+                }
+            }
+        }
+        return out
+    }
+}

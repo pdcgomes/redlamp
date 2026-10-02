@@ -27,6 +27,21 @@
       "boundaryF": 0.912,
       "seconds": 4.57
     },
+    "redlamp-arbitrated": {
+      "iou": 0.963,
+      "boundaryF": 0.977,
+      "seconds": 0
+    },
+    "redlamp-matte": {
+      "iou": 0.954,
+      "boundaryF": 0.922,
+      "seconds": 0
+    },
+    "redlamp-sam-matte": {
+      "iou": 0.958,
+      "boundaryF": 0.965,
+      "seconds": 0
+    },
     "florence-2-base": {
       "iou": 0.138,
       "boundaryF": 0.487,
@@ -65,6 +80,21 @@
       "iou": 0.956,
       "boundaryF": 0.885,
       "seconds": 4.73
+    },
+    "redlamp-arbitrated": {
+      "iou": 0.969,
+      "boundaryF": 0.97,
+      "seconds": 0
+    },
+    "redlamp-matte": {
+      "iou": 0.949,
+      "boundaryF": 0.883,
+      "seconds": 0
+    },
+    "redlamp-sam-matte": {
+      "iou": 0.954,
+      "boundaryF": 0.921,
+      "seconds": 0
     },
     "florence-2-base": {
       "iou": 0.935,
@@ -105,6 +135,21 @@
       "boundaryF": 0.973,
       "seconds": 4.49
     },
+    "redlamp-arbitrated": {
+      "iou": 0.97,
+      "boundaryF": 0.982,
+      "seconds": 0
+    },
+    "redlamp-matte": {
+      "iou": 0.972,
+      "boundaryF": 0.991,
+      "seconds": 0
+    },
+    "redlamp-sam-matte": {
+      "iou": 0.973,
+      "boundaryF": 0.993,
+      "seconds": 0
+    },
     "florence-2-base": {
       "iou": 0.957,
       "boundaryF": 0.992,
@@ -143,6 +188,21 @@
       "iou": 0.981,
       "boundaryF": 0.99,
       "seconds": 4.56
+    },
+    "redlamp-arbitrated": {
+      "iou": 0.982,
+      "boundaryF": 0.997,
+      "seconds": 0
+    },
+    "redlamp-matte": {
+      "iou": 0.981,
+      "boundaryF": 0.978,
+      "seconds": 0
+    },
+    "redlamp-sam-matte": {
+      "iou": 0.982,
+      "boundaryF": 0.983,
+      "seconds": 0
     },
     "florence-2-base": {
       "iou": 0.926,
@@ -183,6 +243,21 @@
       "boundaryF": 0.997,
       "seconds": 5.25
     },
+    "redlamp-arbitrated": {
+      "iou": 0.984,
+      "boundaryF": 1.0,
+      "seconds": 0
+    },
+    "redlamp-matte": {
+      "iou": 0.982,
+      "boundaryF": 0.988,
+      "seconds": 0
+    },
+    "redlamp-sam-matte": {
+      "iou": 0.982,
+      "boundaryF": 0.987,
+      "seconds": 0
+    },
     "florence-2-base": {
       "iou": 0.323,
       "boundaryF": 0.486,
@@ -221,6 +296,21 @@
       "iou": 0.981,
       "boundaryF": 0.991,
       "seconds": 5.72
+    },
+    "redlamp-arbitrated": {
+      "iou": 0.983,
+      "boundaryF": 1.0,
+      "seconds": 0
+    },
+    "redlamp-matte": {
+      "iou": 0.98,
+      "boundaryF": 0.991,
+      "seconds": 0
+    },
+    "redlamp-sam-matte": {
+      "iou": 0.979,
+      "boundaryF": 0.982,
+      "seconds": 0
     },
     "florence-2-base": {
       "iou": 0.977,
@@ -261,6 +351,21 @@
       "boundaryF": 1.0,
       "seconds": 4.71
     },
+    "redlamp-arbitrated": {
+      "iou": 0.993,
+      "boundaryF": 1.0,
+      "seconds": 0
+    },
+    "redlamp-matte": {
+      "iou": 0.994,
+      "boundaryF": 1.0,
+      "seconds": 0
+    },
+    "redlamp-sam-matte": {
+      "iou": 0.994,
+      "boundaryF": 1.0,
+      "seconds": 0
+    },
     "florence-2-base": {
       "iou": 0.542,
       "boundaryF": 0.383,
@@ -299,6 +404,21 @@
       "iou": 0.988,
       "boundaryF": 0.992,
       "seconds": 4.66
+    },
+    "redlamp-arbitrated": {
+      "iou": 0.992,
+      "boundaryF": 0.995,
+      "seconds": 0
+    },
+    "redlamp-matte": {
+      "iou": 0.992,
+      "boundaryF": 0.994,
+      "seconds": 0
+    },
+    "redlamp-sam-matte": {
+      "iou": 0.993,
+      "boundaryF": 0.997,
+      "seconds": 0
     },
     "florence-2-base": {
       "iou": 0.208,
@@ -339,6 +459,21 @@
       "boundaryF": 0.387,
       "seconds": 5.27
     },
+    "redlamp-arbitrated": {
+      "iou": 0.911,
+      "boundaryF": 0.871,
+      "seconds": 0
+    },
+    "redlamp-matte": {
+      "iou": 0.728,
+      "boundaryF": 0.381,
+      "seconds": 0
+    },
+    "redlamp-sam-matte": {
+      "iou": 0.873,
+      "boundaryF": 0.763,
+      "seconds": 0
+    },
     "florence-2-base": {
       "iou": 0.701,
       "boundaryF": 0.676,
@@ -377,6 +512,21 @@
       "iou": 0.885,
       "boundaryF": 0.585,
       "seconds": 5.75
+    },
+    "redlamp-arbitrated": {
+      "iou": 0.907,
+      "boundaryF": 0.702,
+      "seconds": 0
+    },
+    "redlamp-matte": {
+      "iou": 0.889,
+      "boundaryF": 0.63,
+      "seconds": 0
+    },
+    "redlamp-sam-matte": {
+      "iou": 0.943,
+      "boundaryF": 0.83,
+      "seconds": 0
     },
     "florence-2-base": {
       "iou": 0.868,
@@ -417,6 +567,21 @@
       "boundaryF": 0.874,
       "seconds": 4.75
     },
+    "redlamp-arbitrated": {
+      "iou": 0.86,
+      "boundaryF": 0.886,
+      "seconds": 0
+    },
+    "redlamp-matte": {
+      "iou": 0.845,
+      "boundaryF": 0.867,
+      "seconds": 0
+    },
+    "redlamp-sam-matte": {
+      "iou": 0.811,
+      "boundaryF": 0.65,
+      "seconds": 0
+    },
     "florence-2-base": {
       "iou": 0.798,
       "boundaryF": 0.403,
@@ -455,6 +620,21 @@
       "iou": 0.855,
       "boundaryF": 0.9,
       "seconds": 4.67
+    },
+    "redlamp-arbitrated": {
+      "iou": 0.757,
+      "boundaryF": 0.765,
+      "seconds": 0
+    },
+    "redlamp-matte": {
+      "iou": 0.833,
+      "boundaryF": 0.86,
+      "seconds": 0
+    },
+    "redlamp-sam-matte": {
+      "iou": 0.754,
+      "boundaryF": 0.746,
+      "seconds": 0
     },
     "florence-2-base": {
       "iou": 0.392,
@@ -495,6 +675,21 @@
       "boundaryF": 0.987,
       "seconds": 4.94
     },
+    "redlamp-arbitrated": {
+      "iou": 0.992,
+      "boundaryF": 1.0,
+      "seconds": 0
+    },
+    "redlamp-matte": {
+      "iou": 0.991,
+      "boundaryF": 0.985,
+      "seconds": 0
+    },
+    "redlamp-sam-matte": {
+      "iou": 0.99,
+      "boundaryF": 0.989,
+      "seconds": 0
+    },
     "florence-2-base": {
       "iou": 0.531,
       "boundaryF": 0.547,
@@ -533,6 +728,21 @@
       "iou": 0.961,
       "boundaryF": 0.962,
       "seconds": 4.65
+    },
+    "redlamp-arbitrated": {
+      "iou": 0.968,
+      "boundaryF": 0.99,
+      "seconds": 0
+    },
+    "redlamp-matte": {
+      "iou": 0.963,
+      "boundaryF": 0.961,
+      "seconds": 0
+    },
+    "redlamp-sam-matte": {
+      "iou": 0.966,
+      "boundaryF": 0.983,
+      "seconds": 0
     },
     "florence-2-base": {
       "iou": 0.956,

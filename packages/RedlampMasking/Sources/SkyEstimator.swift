@@ -30,10 +30,46 @@ public enum SkyEstimator {
     /// (the auto-prompted Segment Anything candidate of the bake-off).
     public static func seeds(_ image: CGImage, count: Int = 4) throws -> [ImagePoint] {
         let region = try region(image)
-        let width = region.width
-        let height = region.height
+        return try seeds(inside: region.sky, width: region.width, height: region.height, count: count, depth: 6)
+    }
+
+    /// Segment Anything's and Depth Anything 3's skies as one: averaged where they broadly agree,
+    /// but when one covers under 30% of the other's sky it has missed the sky (Depth Anything 3
+    /// on some overcast skies, Segment Anything on a patch it wasn't seeded in), and the other
+    /// stands alone. A plain mean would leave such a sky half covered, with no sure sky for
+    /// `SkyMatte` to learn its colour from.
+    public static func arbitrate(_ sam: GrayMask, _ da3: GrayMask) -> GrayMask {
+        let da3 = da3.resized(to: PixelSize(width: sam.width, height: sam.height))
+        let samArea = sam.pixels.count { $0 > 127 }
+        let da3Area = da3.pixels.count { $0 > 127 }
+        if Double(da3Area) < 0.3 * Double(samArea) {
+            return sam
+        }
+        if Double(samArea) < 0.3 * Double(da3Area) {
+            return da3
+        }
+        return GrayMask(
+            width: sam.width, height: sam.height,
+            pixels: zip(sam.pixels, da3.pixels).map { UInt8((Int($0) + Int($1)) / 2) },
+        )
+    }
+
+    /// Points well inside another model's sky (Depth Anything 3's), for when the classical
+    /// estimate finds none: a small patch between buildings is too little for it.
+    public static func seeds(inside mask: GrayMask, count: Int = 4) throws -> [ImagePoint] {
+        let size = PixelSize(width: mask.width, height: mask.height)
+            .fitted(within: PixelSize(width: workLongEdge, height: workLongEdge))
+        let small = mask.resized(to: size)
+        return try seeds(
+            inside: small.pixels.map { $0 > 200 }, width: size.width, height: size.height, count: count, depth: 3,
+        )
+    }
+
+    /// The deepest point of `region` in each of `count` vertical bands, if at least `depth` work
+    /// pixels from its edge.
+    static func seeds(inside region: [Bool], width: Int, height: Int, count: Int, depth: Int) throws -> [ImagePoint] {
         // Distance from the region's edge, in work pixels (two-pass chamfer).
-        var distance = region.sky.map { $0 ? Int.max / 2 : 0 }
+        var distance = region.map { $0 ? Int.max / 2 : 0 }
         for y in 0 ..< height {
             for x in 0 ..< width where distance[y * width + x] > 0 {
                 let up = y > 0 ? distance[(y - 1) * width + x] + 1 : 1
@@ -58,7 +94,7 @@ public enum SkyEstimator {
                     best = (distance[y * width + x], y * width + x)
                 }
             }
-            if best.index >= 0, best.distance >= 6 {
+            if best.index >= 0, best.distance >= depth {
                 points.append(ImagePoint(
                     x: (Double(best.index % width) + 0.5) / Double(width),
                     y: (Double(best.index / width) + 0.5) / Double(height),

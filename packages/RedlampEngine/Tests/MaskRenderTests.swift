@@ -430,10 +430,11 @@ extension MaskRenderTests {
         #expect(table > wall + 60, "table \(table), wall \(wall)")
     }
 
+    /// Whether any version of the model is in the model store's directory.
     static func isInstalled(_ id: String) -> Bool {
-        FileManager.default.fileExists(atPath: FileManager.default.urls(
-            for: .applicationSupportDirectory, in: .userDomainMask,
-        )[0].appending(path: "Redlamp/Models/\(id)/1").path)
+        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appending(path: "Redlamp/Models/\(id)")
+        return !((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []).isEmpty
     }
 
     static var samIsInstalled: Bool {

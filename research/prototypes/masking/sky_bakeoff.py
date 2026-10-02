@@ -171,7 +171,7 @@ def boundary_f(a, b, tolerance):
 
 
 # Candidates run elsewhere (their own environments) whose masks are scored when present.
-PRECOMPUTED = ["sam3-text-sky", "redlamp-auto", "redlamp-da3"]
+PRECOMPUTED = ["sam3-text-sky", "redlamp-auto", "redlamp-da3", "redlamp-arbitrated", "redlamp-matte", "redlamp-sam-matte"]
 
 
 def main():

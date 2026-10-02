@@ -14,8 +14,9 @@ enum MaskCommand {
       -o          the PNG; several masks (one per person) are written as name-1.png, name-2.png…
 
     Objects and Depth Range use downloaded models (Settings › Models in the app; set
-    REDLAMP_EVALUATION_MODELS=1 for models awaiting licence review). REDLAMP_SKY_METHOD=sam seeds
-    Segment Anything inside the classical sky estimate.
+    REDLAMP_EVALUATION_MODELS=1 for models awaiting licence review). REDLAMP_SKY_METHOD forces
+    Sky's method: auto (the default), sam, da3 or classical; REDLAMP_SKY_MATTE=off keeps the
+    models' edges instead of solving each edge pixel at full size.
     """
 
     static func run(_ arguments: [String]) async throws {

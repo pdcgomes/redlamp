@@ -27,21 +27,6 @@ struct GrayMaskTests {
         #expect(oriented[x, y] == 255, "orientation \(orientation)")
     }
 
-    /// Undoes the clockwise turn Depth Anything 3's input makes for portrait photos: the top-left
-    /// of the portrait, turned clockwise, is the top-right of the landscape, and comes back.
-    @Test func `turns a quarter counter clockwise`() {
-        var landscape = [UInt8](repeating: 0, count: 4 * 2)
-        landscape[3] = 255 // top right
-        let portrait = GrayMask(width: 4, height: 2, pixels: landscape).rotatedCounterClockwise()
-        #expect(portrait.width == 2 && portrait.height == 4)
-        #expect(portrait[0, 0] == 255)
-        var turned = portrait
-        for _ in 0 ..< 3 {
-            turned = turned.rotatedCounterClockwise()
-        }
-        #expect(turned == GrayMask(width: 4, height: 2, pixels: landscape), "four quarter turns")
-    }
-
     @Test func `combines like mask operations`() {
         let a = GrayMask(width: 2, height: 1, pixels: [255, 0])
         let b = GrayMask(width: 2, height: 1, pixels: [255, 255])

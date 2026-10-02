@@ -10,22 +10,29 @@ import RedlampMasking
 extension RedlampEngine {
     static let analysisLongEdge = 2048
     /// Sky's method. `auto` (the default) uses what's on this Mac, best first, as the bake-off
-    /// (MSK-17) measured it: the mean of Segment Anything (seeded inside the classical estimate,
-    /// with the sky between bare branches given back) and Depth Anything 3's sky (IoU 0.945);
+    /// (MSK-17) measured it: Segment Anything (seeded inside the classical estimate, with the sky
+    /// between bare branches given back) and Depth Anything 3's sky, arbitrated (IoU 0.945);
     /// either alone (0.940, 0.931); else the classical estimate (0.898). `sam`, `da3` and
-    /// `classical` force one.
+    /// `classical` force one. Whichever it is, `SkyMatte` then solves its edges at the size
+    /// masks are stored at.
     static var skyMethod: String {
         ProcessInfo.processInfo.environment["REDLAMP_SKY_METHOD"] ?? "auto"
     }
 
-    /// Sky from the models, or nil to fall back to the classical estimate.
+    /// Sky from the models or the classical estimate, its edges solved per pixel; nil if
+    /// neither finds any.
     func modelSky(_ analysis: (image: CGImage, hash: String)) async throws -> AIMask? {
         let method = Self.skyMethod
-        guard method != "classical" else { return nil }
         let image = analysis.image
+        var da3: GrayMask?
+        if method == "auto" || method == "da3", let model = await depthAnything3() {
+            da3 = try? await depthAnything3Result(analysis, model: model).sky
+        }
         var sam: GrayMask?
+        // Seeded inside the classical estimate, or inside Depth Anything 3's sky when the
+        // estimate finds none (a small patch between buildings).
         if method == "auto" || method == "sam", await isReady(Self.modelID(for: .objects)),
-           let seeds = try? SkyEstimator.seeds(image),
+           let seeds = (try? SkyEstimator.seeds(image)) ?? da3.flatMap({ try? SkyEstimator.seeds(inside: $0) }),
            let object = try await computeMasks(MaskRequest(kind: .objects, prompts: seeds)).first,
            let png = object.bitmap.png, let mask = GrayMask.decode(png) {
             // SAM cuts around bare tree crowns; give back the sky seen through them.
@@ -33,33 +40,29 @@ extension RedlampEngine {
                 SkyEstimator.refineBetweenBranches(mask, image: image)
             }.value
         }
-        var da3: GrayMask?
-        if method == "auto" || method == "da3", let model = await depthAnything3() {
-            da3 = try? await depthAnything3Result(analysis, model: model).sky
-        }
-        let sky: GrayMask
+        let coarse: GrayMask
         let provider: String
         switch (sam, da3) {
         case let (sam?, da3?):
-            let resized = da3.resized(to: PixelSize(width: sam.width, height: sam.height))
-            sky = GrayMask(
-                width: sam.width, height: sam.height,
-                pixels: zip(sam.pixels, resized.pixels).map { UInt8((Int($0) + Int($1)) / 2) },
-            )
-            provider = "redlamp.sky.sam2.1-tiny+depth-anything-3"
+            (coarse, provider) = (SkyEstimator.arbitrate(sam, da3), "redlamp.sky.sam2.1-tiny+depth-anything-3")
         case let (sam?, nil):
-            (sky, provider) = (sam, "redlamp.sky.sam2.1-tiny")
+            (coarse, provider) = (sam, "redlamp.sky.sam2.1-tiny")
         case let (nil, da3?):
-            (sky, provider) = (
-                GuidedFilter.refine(da3, guide: image, radius: 6, epsilon: 2e-3),
-                "redlamp.sky.depth-anything-3",
-            )
+            (coarse, provider) = (da3, "redlamp.sky.depth-anything-3")
         case (nil, nil):
-            return nil
+            guard let estimate = try? SkyEstimator.estimate(image) else { return nil }
+            (coarse, provider) = (estimate.mask, estimate.provider)
         }
-        guard sky.coveredFraction > 0.005, let bitmap = sky.bitmap() else { return nil }
+        guard coarse.coveredFraction > 0.001 else { return nil }
+        var sky = coarse
+        // REDLAMP_SKY_MATTE=off keeps the models' edges, to compare.
+        if ProcessInfo.processInfo.environment["REDLAMP_SKY_MATTE"] != "off",
+           let session = currentSession(), let full = try? await matteImage(for: session) {
+            sky = await Task.detached(priority: .userInitiated) { SkyMatte.refine(coarse, image: full) }.value
+        }
+        guard let bitmap = sky.bitmap() else { return nil }
         return AIMask(
-            kind: .sky, provider: provider, revision: 2, analysisHash: analysis.hash, center: sky.centroid,
+            kind: .sky, provider: provider, revision: 3, analysisHash: analysis.hash, center: sky.centroid,
             bitmap: bitmap,
         )
     }
@@ -376,6 +379,24 @@ extension RedlampEngine {
         let hash = SHA256.hash(data: bytes).prefix(16).map { String(format: "%02x", $0) }.joined()
         analysisCache.withLock { $0 = AnalysisCache(session: session, image: image, hash: hash) }
         return (image, hash)
+    }
+
+    /// The analysis render at the size masks are stored at, for edges finer than the models see.
+    func matteImage(for session: ImageSession) async throws -> CGImage {
+        try await withCheckedThrowingContinuation { continuation in
+            renderQueue.async { [self] in
+                continuation.resume(with: Result {
+                    try renderStillNow(
+                        StillRequest(
+                            recipe: EditRecipe(),
+                            maxLongEdge: MaskResources.rasterLongEdge,
+                            colorSpace: .sRGB,
+                        ),
+                        session: session,
+                    )
+                })
+            }
+        }
     }
 }
 

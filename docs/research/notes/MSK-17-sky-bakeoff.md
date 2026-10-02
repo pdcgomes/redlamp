@@ -35,7 +35,7 @@ Redlamp's Sky mask has no Apple API behind it. Can an open model, or Segment Any
 | Classical estimate | 14 / 14 | 0.898 | 0.821 | 0.622 (Coolpix P7700) | 1.3–6.5 s (CLI, cold) |
 | Florence-2 base | 14 / 14 | 0.661 | 0.657 | 0.138 | 19–80 s (CPU) |
 
-The rows in bold are what Redlamp computes today, measured through `redlamp mask` and scored against the same reference. The other rows are the first round, run in Python.
+The rows in bold are Redlamp's second round, measured through `redlamp mask` and scored against the same reference; the other rows are the first round, run in Python. These score the region each method finds. Redlamp now also solves every edge pixel at full size, which this reference can't measure: see the third round below.
 
 The SAM–DA3 combination averages the two soft masks. Their union scores 0.931 / 0.892 and their intersection 0.918 / 0.888, so neither helps. Adding SAM 3 to any mix doesn't help either: SAM 2.1 with SAM 3 scores 0.924 / 0.895, DA3 with SAM 3 0.923 / 0.889, and all three 0.930 / 0.902.
 
@@ -64,12 +64,16 @@ Two follow-ups to the bare-tree failure, both now in Redlamp.
 - On the two bare-tree photos, the FX150 goes from 0.779 / 0.429 to 0.799 / 0.484 and the FZ28 from 0.585 / 0.519 to 0.695 / 0.669. The rest of the FZ28's loss is the part of its cloudy sky SAM leaves out, whose colour is too far from the sure sky for the rule to add safely.
 - Letting the fill cross small gaps (bridging) was tried and rejected: it leaked into the Coolpix tree line.
 
-**Depth Anything 3 on Core ML** (`DepthAnything3`, converted by `convert_da3.py` and `compress_da3.py`). There is no official conversion. DA3 Mono-L exports through `torch.export` with PyTorch 2.7 and coremltools 9 (`.venv-coreml`), at a fixed 504 × 336 input; portrait photos are turned a quarter for it and the outputs turned back. One model gives both a sky mask and relative depth, so Depth Range uses it too when it is installed.
+**Depth Anything 3 on Core ML** (`DepthAnything3`, converted by `convert_da3.py` and `compress_da3.py`). There is no official conversion. DA3 Mono-L exports through `torch.export` with PyTorch 2.7 and coremltools 9 (`.venv-coreml`), at a fixed input size. One model gives both a sky mask and relative depth, so Depth Range uses it too when it is installed.
+
+Portrait photos need their own input. Turning them a quarter for the landscape input (the first version) hid small skies: on a portrait street scene, the patch of sky between two buildings is 0.75% of the frame upright and 0.31% sideways, under the 0.5% Redlamp then required, so Sky found nothing. The package now has two functions, `landscape` (504 × 336) and `portrait` (336 × 504). Their weights are identical, so Core ML stores them once (manifest version 2).
 
 | Package | Size | GPU, once loaded | Neural Engine |
 | --- | --- | --- | --- |
-| fp16 | 637 MB | 89 ms | slower, and 5–20 minutes to compile on first load |
-| 8-bit weights (shipped manifest) | 319 MB | 126 ms | as above |
+| fp16, one orientation | 637 MB | 89 ms | slower, and 5–20 minutes to compile on first load |
+| 8-bit weights, both orientations (manifest v2) | 336 MB | 125 ms either way | as above |
+
+Small skies also no longer fall through: a sky covering 0.1% of the frame is kept (it was 0.5%), and when the classical estimate finds no sky to seed SAM in (it needs 2% of the frame), SAM is seeded inside DA3's sky instead.
 
 It runs on the GPU. In Swift it scores 0.931 / 0.888, matching PyTorch's 0.929 / 0.887, after reading its output with the multi-array's strides (row padding first gave streaks and 0.663).
 
@@ -77,16 +81,70 @@ It runs on the GPU. In Swift it scores 0.931 / 0.888, matching PyTorch's 0.929 /
 
 The method can be forced with `REDLAMP_SKY_METHOD` set to `sam`, `da3` or `classical`.
 
+## Third round: every twig, per pixel
+
+In use, Sky still struggled with trees and anything else partly covering the sky. The cause wasn't the models' choice of region but resolution: SAM predicts at 256 × 256, DA3 at 504 × 336, and masks were stored at 2048 px, so a twig or wire one or two pixels wide at full size was gone before any refinement ran. The guided filter that refined edges (luminance only, radius 4–8 px) blurs fine structure into a halo rather than giving each mixed pixel its own coverage. The bake-off above can't see this: OneFormer cuts crowns out whole, and its boundary score forgives 1% of the diagonal (25 px).
+
+**An edge benchmark with known coverage** (`edge_bench.py`). Twelve scenes at 4096 px, the size the renderer stores masks at: real skies (the all-sky bands of five bake-off photos, without vignetted corners, plus clear, sunset and overcast gradients) behind procedurally drawn bare trees (branches tapering to sub-pixel twigs), leafy trees, power lines and a skyline with antennae. They are drawn at 4× supersampling, so coverage is exact, and composited in linear light with a lens blur and sensor noise. Scores: the mean coverage error where the truth is mixed or within 16 px of it (band error), the same over thin structures (under 4 px wide), and leaks into solid foreground.
+
+**`SkyMatte`** (prototyped in `sky_matte.py`) takes the coarse sky and solves every pixel near its edge at 4096 px. Sky is smooth, so the sky colour behind any pixel is estimated from the sure sky around it (pull-push from 4 × 4 blocks that are entirely sure sky); the foreground's from the sure foreground, weighted towards pure pixels. A pixel's coverage is where its colour lies between the two in linear light: blue-screen matting with a known, smoothly varying backing (Smith and Blinn, 1996; pull-push from Gortler et al., 1996, so any patents on either have long expired). It solves three regions:
+
+- a band of 1.2% of the long side around the coarse edge;
+- up to 6% into the coarse foreground, sky-coloured pixels connected to the sky through sky-coloured ones (a crown SAM cut out whole);
+- inside the coarse sky, pixels clearly not sky (twigs and wires the models never saw).
+
+Where the two colours are too close to tell apart, the coarse mask stays. Two passes; the second learns its colours from the first's result.
+
+SAM and DA3 are now arbitrated rather than averaged: where one covers under 30% of the other's sky, it missed the sky (DA3 misses some overcast skies whole) and the other stands alone. Averaging would leave such a sky half covered, with no sure sky to learn its colour from. On the 14 photos, arbitration scores the same as the mean (0.945 / 0.938).
+
+| On the edge benchmark (12 scenes) | Band error | Thin-structure error | Thin structures kept out of the sky | Leak into foreground | IoU |
+| --- | --- | --- | --- | --- | --- |
+| Classical estimate | 0.307 | 0.394 | 37% | 4.1% | 0.773 |
+| SAM 2.1 refined | 0.209 | 0.293 | 79% | 0.2% | 0.929 |
+| SAM and DA3, averaged | 0.209 | 0.280 | 65% | 2.3% | 0.667 |
+| SAM and DA3, arbitrated | 0.179 | 0.259 | 66% | 1.4% | 0.882 |
+| **Arbitrated, then `SkyMatte` (Redlamp now, in Swift)** | **0.050** | **0.114** | **99.8%** | **0%** | **0.988** |
+| Classical estimate, then `SkyMatte` | 0.210 | 0.349 | 49% | 1.3% | 0.800 |
+| The truth shrunk to 256 px, then `SkyMatte` (a perfect coarse model) | 0.028 | 0.072 | 99.9% | 0% | 0.995 |
+
+![Bare trees and a willow at 4096 px: the render, the masks without SkyMatte, and with it](../../images/masking-sky-edges.jpg)
+
+The rows of the image are the FX150, the Coolpix P7700, the FZ28 and the EOS R50's willow; the columns the render, the arbitrated coarse mask, and the mask with `SkyMatte`.
+
+- **Edges are four times more accurate,** and close to what a perfect coarse model would give (0.050 against 0.028). Twigs and wires survive at full size.
+- **Against OneFormer on the 14 photos it scores lower, 0.932 / 0.888,** because OneFormer itself cuts crowns out whole (on the Coolpix it marks the whole crown as not sky; `SkyMatte` gives the sky between the twigs back) and counts the TZ200D's vignetted corners as sky. The edge benchmark is the measure for edges now.
+- **Its one leak:** a sea whose blue matches the sky at the horizon gets a thin line of partial coverage.
+- **Cost:** about 1.5 s on an M1 Ultra (the 4096 px render and two passes), for a mask computed once. A cold Sky is 5.5–7 s in the CLI, most of it loading the models.
+
+`REDLAMP_SKY_MATTE=off` keeps the models' edges, for comparison.
+
+## People: hair and beards (research, not shipped)
+
+Person and subject masks have the same problem worse: Vision's mattes are stored at 1536 px and refined with the same luminance guided filter, so stray hairs and beard curls are lost. `refine_subject` in `sky_matte.py` tries the same approach, with both colours learnt locally (neither a person nor what's behind them is smooth) and strands sought up to 6% beyond the silhouette.
+
+`hair_bench.py` draws a head with a hair cap, 600 strands (0.4–1.6 px wide, up to 320 px long, some grey) and a curly beard over sharp and blurred real backgrounds, with a coarse mask that knows the silhouette but no strands (512 px, blurred).
+
+| On the hair benchmark (6 scenes) | Band error | Thin-structure error | Strands kept | Person lost | Background called person |
+| --- | --- | --- | --- | --- | --- |
+| Coarse silhouette | 0.127 | 0.340 | 0% | 0% | 0% |
+| Colour guided filter at full size (best of four settings) | 0.117 | 0.314 | 2% | 0.01% | 0% |
+| `refine_subject` | 0.090 | 0.181 | 61% | 0.6% | 0.5% |
+
+What it took: the background behind a strand can't be learnt from the strand itself, and blur and noise make strand pixels mixtures, not hair-coloured. So strands are erased first with a grey-level closing (dark strands) or opening (light ones) over 7 px, and the background's colour is then spread from the background side only. Beyond the silhouette only thin structures are kept (a large blob there is background, such as a shadow beside a dark shirt).
+
+On a real portrait (a man with grey hair and a goatee against a dark, blurred background, 2048 px), it brings back the curls at the side of the head and in the beard, but makes visible mistakes: part of the background above the head becomes person, there is a hole under the beard, and some edges come out hard. In a dark photo every colour difference is small, and the background behind hair is rarely as easy to estimate as a sky. So it isn't in the app. Next steps: a closed-form matting solve in the band (local colour lines, no global colour estimates), and a hand-matted set of portraits to measure on; a learned matting refiner would need training data we have rights to (every open one, such as ViTMatte, MODNet and BiRefNet, is trained on research-only composites).
+
 ## Decision
 
-- **Sky ships as SAM 2.1 refined between branches** (0.940 / 0.918) when its model is on the Mac, with the classical estimate as the fallback. An embedded sky matte, when the file has one, wins over both.
-- **Depth Anything 3 is an evaluation model** (Settings › Models, with evaluation models turned on), behind the same gate as SAM 2.1. With it installed, Sky averages both models (0.945 / 0.938). It is not published: its manifest is marked `published: false`, so the app won't download it, and the licence gate refuses to clear it. Before it can be cleared it needs a training-data audit ("public academic datasets", unaudited) by counsel, with DEC-02, and a hosted copy of the converted package.
+- **Sky ships as SAM 2.1 refined between branches, then `SkyMatte`** when SAM's model is on the Mac, with the classical estimate (also through `SkyMatte`) as the fallback. An embedded sky matte, when the file has one, wins over both.
+- **Depth Anything 3 is an evaluation model** (Settings › Models, with evaluation models turned on), behind the same gate as SAM 2.1. With it installed, Sky arbitrates between both models before `SkyMatte` (band error 0.050 on the edge benchmark). It is not published: its manifest is marked `published: false`, so the app won't download it, and the licence gate refuses to clear it. Before it can be cleared it needs a training-data audit ("public academic datasets", unaudited) by counsel, with DEC-02, and a hosted copy of the converted package.
 - **No Sky head training (MSK-12) for now.** Revisit it if hand-labelled scores show tree lines and hair need better than SAM's edges.
 - **Landscape classes and people parts still need a trained head (MSK-13).** Unlike sky, there is no classical estimate to seed SAM with for water, vegetation or skin. Every open model that knows those classes (OneFormer, Mask2Former, SegFormer) is trained on non-commercial data.
 
 ## Limits
 
 - **The reference is a model, not ground truth.** Scores measure agreement with OneFormer, so a candidate that beats OneFormer at an edge is scored down for it. The next step is a hand-labelled set: 50 photos we have rights to, labelled by drafting with SAM 2.1 and checking by hand.
+- **The edge benchmarks are synthetic.** Their skies and backgrounds are real, but trees, wires and hair are drawn: straighter and more regular than the real thing. They measure edges given a region, not whether a model finds the region (DA3 misses some of their frame-filling skies, which arbitration covers).
 - **The set is small** and nearly all landscapes in daylight. Sunsets, night, fog, snow fields and window reflections are missing.
 - **Running DA3 here took workarounds.** Its package requires xformers (which doesn't build on macOS, and it falls back without it). `pycolmap` and PyTorch each load an OpenMP runtime, so the script needs `KMP_DUPLICATE_LIB_OK=TRUE`. Its preprocessing pool is forced to run sequentially.
 - **SAM 3 runs in its own environment** (`.venv-sam3`, Transformers 5), because Florence-2's remote code needs Transformers 4.x.
