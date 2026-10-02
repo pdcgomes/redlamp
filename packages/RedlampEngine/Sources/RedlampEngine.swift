@@ -75,7 +75,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     private let comparisonOverviews: SurfacePool
     private var comparison: CachedComparison?
     private let detailStage: DetailStage
-    private let retouch: RetouchStage
+    let retouch: RetouchStage
     let masks: MaskResources
     private let baseLooks: BaseLookRegistry
     let stacks: FocusStackCache

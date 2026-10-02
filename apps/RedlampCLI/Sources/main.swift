@@ -26,6 +26,8 @@ options:
                            camera profile's look a DNG carries); --profile works too
   --wb <mode>              asShot, auto, daylight, cloudy, shade, tungsten, fluorescent, flash
   --upright <mode>         auto, level, vertical or full, from the photo's own edges
+  --heal <x>,<y>,<radius>  heal a spot (x, y 0...1 across the photo as shown, radius a fraction
+                           of its height) from the best source nearby; --clone copies instead
   --bw                     black & white treatment
   --p3                     encode in Display P3 instead of sRGB
   --16bit                  16 bits per component (PNG/TIFF)
@@ -169,6 +171,20 @@ func run(_ arguments: [String]) async throws {
                 format: "upright %@: %d lines in %@, vertical %.1f, horizontal %.1f, rotate %.2f",
                 name, lines.count, "\(clock.now - started)", solved.vertical, solved.horizontal, solved.rotate,
             ))
+        case "--heal", "--clone":
+            let mode: RetouchSpot.Mode = arguments[index] == "--heal" ? .heal : .clone
+            let numbers = try value().split(separator: ",").compactMap { Double($0) }
+            guard numbers.count == 3 else { throw CLIError(description: "\(arguments[index - 1]) needs x,y,radius") }
+            var spot = RetouchSpot(
+                mode: mode, center: ImagePoint(x: numbers[0], y: numbers[1]),
+                source: ImagePoint(x: numbers[0], y: numbers[1]), radius: numbers[2],
+            )
+            guard let source = await engine.retouchSource(for: spot, recipe: recipe) else {
+                throw CLIError(description: "no source fits a spot at \(numbers[0]), \(numbers[1])")
+            }
+            spot.source = source
+            recipe.spots.append(spot)
+            print(String(format: "%@ from %.3f, %.3f", mode.name.lowercased(), source.x, source.y))
         case "--bw":
             recipe.treatment = .blackAndWhite
         case "--p3":

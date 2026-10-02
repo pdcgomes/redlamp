@@ -103,6 +103,10 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// The open photo's straight edges, for automatic Upright.
     func detectLines() async -> [DetectedLine]
 
+    /// Where `spot` of the open photo should copy from: the nearby circle that matches its
+    /// surroundings best, clear of the spot itself. `recipe`'s spots apply first. Nil when none fits.
+    func retouchSource(for spot: RetouchSpot, recipe: EditRecipe) async -> ImagePoint?
+
     /// The focus stack document at `url`, merged now or read from the cache, developed with the
     /// default edit within `maxLongEdge`. `progress` gets 0 ... 1 from any thread. Opening the
     /// document afterwards shows this merge, even if it changed since it was last opened.
@@ -128,5 +132,9 @@ public extension EditingEngine {
 
     func detectLines() async -> [DetectedLine] {
         []
+    }
+
+    func retouchSource(for _: RetouchSpot, recipe _: EditRecipe) async -> ImagePoint? {
+        nil
     }
 }

@@ -214,3 +214,13 @@ func sourceCoordinate(_ point: SIMD2<Double>, orientation: Int) -> SIMD2<Double>
     default: point
     }
 }
+
+/// The inverse of `sourceCoordinate`.
+func orientedCoordinate(_ point: SIMD2<Double>, orientation: Int) -> SIMD2<Double> {
+    switch orientation {
+    case 3: SIMD2(1 - point.x, 1 - point.y)
+    case 5: SIMD2(point.y, 1 - point.x)
+    case 6: SIMD2(1 - point.y, point.x)
+    default: point
+    }
+}

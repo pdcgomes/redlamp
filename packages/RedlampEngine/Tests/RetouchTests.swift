@@ -152,6 +152,59 @@ struct RetouchTests {
         #expect(abs(copy.mean - replaced.mean) < replaced.mean * 0.01, "repair \(replaced.mean), copy \(copy.mean)")
     }
 
+    @Test func `the source search keeps to the spot's texture and passes over other blemishes`() throws {
+        // Random texture (grass) on the left, flat (water) on the right; a blemish in the spot and
+        // another where the nearest good source would be. Unrelated textures differ more than
+        // a texture and a flat area do, so a plain difference would pick the water.
+        let (width, height) = (200, 120)
+        var values = [Float](repeating: -1, count: width * height)
+        var state: UInt32 = 12345
+        for y in 0 ..< height {
+            for x in 0 ..< 100 {
+                state = state &* 1_664_525 &+ 1_013_904_223
+                values[y * width + x] = Float(state >> 8) / Float(1 << 24) * 0.5 - 0.25
+            }
+        }
+        let spot = SIMD2<Float>(80.5, 60.5), decoy = SIMD2<Float>(60.5, 60.5)
+        for y in 0 ..< height {
+            for x in 0 ..< width {
+                let at = SIMD2(Float(x) + 0.5, Float(y) + 0.5)
+                if simd_distance(at, spot) < 5 || simd_distance(at, decoy) < 5 {
+                    values[y * width + x] = -3
+                }
+            }
+        }
+        let image = RetouchSource.Image(width: width, height: height, values: values)
+        for heal in [true, false] {
+            let found = try #require(RetouchSource.search(image, center: spot, radius: 8, matchBrightness: heal))
+            #expect(simd_distance(found, spot) >= 8 * RetouchSource.separation, "\(found) overlaps the spot")
+            #expect(found.x + 8 * RetouchSource.rim < 100, "\(found) reaches the flat side")
+            #expect(simd_distance(found, decoy) > 8 + 5, "\(found) takes the other blemish")
+        }
+        #expect(RetouchSource.search(image, center: SIMD2(-5, 60), radius: 8, matchBrightness: true) == nil)
+    }
+
+    @Test func `Clone's source keeps to the spot's brightness and Heal's clears the spot`() throws {
+        let engine = try RedlampEngine()
+        let session = try scene(blemished: true)
+        for mode in RetouchSpot.Mode.allCases {
+            var spot = spot(mode)
+            spot.source = spot.center
+            let result = try engine.findRetouchSource(for: spot, recipe: EditRecipe(), session: session)
+            let found = try #require(result)
+            let offset = SIMD2(
+                (found.x - spot.center.x) * Double(Self.width), (found.y - spot.center.y) * Double(Self.height),
+            )
+            let radius = spot.radius * Double(Self.height)
+            #expect(simd_length(offset) >= radius * 2, "\(mode): \(offset) from the spot")
+            #expect(found.x > 0 && found.x < 1 && found.y > 0 && found.y < 1)
+            if mode == .clone {
+                // The light brightens to the right, so a clone keeps to the spot's column.
+                #expect(abs(offset.x) < radius, "clone moved \(offset.x) across the gradient")
+            }
+        }
+    }
+
     @Test func `spots land on the same content whatever the orientation`() throws {
         let spot = RetouchSpot(
             center: ImagePoint(x: 0.25, y: 0.75), source: ImagePoint(x: 0.5, y: 0.5), radius: 0.1,

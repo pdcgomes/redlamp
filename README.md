@@ -170,7 +170,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 ### In progress
 
 - **Focus stacking:** lens corrections before alignment, halo handling, vendor focus-bracketing tags for detection, and baking a stack to DNG.
-- **Heal and Clone:** circular spots render (Heal matches the source's texture to the light around the spot), are saved with the edit and paste with Copy Settings. The automatic source search and the Healing tool come next.
+- **Heal and Clone:** circular spots render (Heal matches the source's texture to the light around the spot), are saved with the edit and paste with Copy Settings, and each finds its own source nearby (`redlamp render --heal x,y,radius`). The Healing tool comes next.
 - **Tools not yet working:** the Healing and Red Eye tools show what is coming and when.
 
 ### Measured performance
