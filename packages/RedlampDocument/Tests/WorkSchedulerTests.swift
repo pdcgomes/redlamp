@@ -31,10 +31,37 @@ struct WorkSchedulerTests {
         }
     }
 
+    /// Sets its flag when it goes.
+    private final class Watched: Sendable {
+        let gone: Flag
+
+        init(gone: Flag) {
+            self.gone = gone
+        }
+
+        deinit {
+            gone.set()
+        }
+    }
+
     private func eventually(_ condition: () -> Bool) async throws {
         for _ in 0 ..< 400 where !condition() {
             try await Task.sleep(for: .milliseconds(5))
         }
+    }
+
+    @Test func `what a job autoreleases goes when the job ends, while the lane stays busy`() async throws {
+        let scheduler = WorkScheduler(widths: .init(onScreen: 1, lookAhead: 1, background: 1))
+        let gone = Flag()
+        let goneWhenNextStarted = Mutex<Bool?>(nil)
+        scheduler.submit(.onScreen) {
+            _ = Unmanaged.passRetained(Watched(gone: gone)).autorelease()
+        }
+        scheduler.submit(.onScreen) {
+            goneWhenNextStarted.withLock { $0 = gone.value }
+        }
+        try await eventually { goneWhenNextStarted.withLock { $0 } != nil }
+        #expect(goneWhenNextStarted.withLock { $0 } == true)
     }
 
     @Test func `a lane runs no more jobs at once than its width`() async throws {

@@ -269,7 +269,10 @@ public final class WorkScheduler: Sendable {
         }
         for (lane, job) in starting {
             DispatchQueue.global(qos: lane.qos).async { [self] in
-                job.work()
+                // GCD's global queues drain their autorelease pools only when a thread runs out of
+                // work, so what ImageIO and Foundation autorelease in a job would outlive it for
+                // as long as the lanes stay busy (thumbnails the memory LRU had dropped, among them).
+                autoreleasepool { job.work() }
                 state.withLock { $0.running[lane.rawValue] -= 1 }
                 pump()
             }
