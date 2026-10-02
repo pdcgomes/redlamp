@@ -42,7 +42,9 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     let sam3Model = Mutex<SAM3Concepts?>(nil)
     let sam3Features = Mutex<(hash: String, features: SAM3Concepts.Features)?>(nil)
     let landscapeCache = Mutex<(hash: String, classes: [LandscapeClass: GrayMask])?>(nil)
-    let peoplePartsCache = Mutex<(hash: String, parts: [PersonPart: GrayMask])?>(nil)
+    let peoplePartsCache = Mutex<(hash: String, parts: SAM3Concepts.PeopleParts)?>(nil)
+    /// Each person's matte for the open photo, solved per pixel, which their parts' edges take.
+    let personMatteCache = Mutex<(hash: String, mattes: [GrayMask])?>(nil)
     /// The analysis render at the size masks are stored at.
     let matteCache = Mutex<AnalysisCache?>(nil)
     /// Set once the Masking tool has opened: photos opened after get their AI masks ready too.

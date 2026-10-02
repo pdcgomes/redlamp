@@ -134,7 +134,7 @@ extension RedlampEngine {
     /// Hair, facial hair, clothes and body skin for everyone in the open photo, kept.
     func peopleParts(
         _ analysis: (image: CGImage, hash: String), model: SAM3Concepts,
-    ) async throws -> [PersonPart: GrayMask] {
+    ) async throws -> SAM3Concepts.PeopleParts {
         if let cached = peoplePartsCache.withLock({ $0 }), cached.hash == analysis.hash {
             return cached.parts
         }
@@ -279,7 +279,7 @@ extension RedlampEngine {
         if request.kind == .people, SAM3Concepts.partPrecedence.contains(request.part),
            request.part != .hair || EmbeddedMattes.read(.hair, from: url) == nil,
            await isReady(Self.sam3ID), let model = await sam3() {
-            return try await personPartMasks(request, analysis: analysis, model: model)
+            return try await personPartMasks(request, analysis: analysis, session: session, model: model)
         }
         if request.kind == .objects {
             let (raw, segmenter) = try await segmentObject(request, analysis: analysis)
@@ -359,46 +359,81 @@ extension RedlampEngine {
 
     /// A People part from SAM 3's map of everyone's, cut between the people Vision finds (each
     /// pixel to the nearest, within reach), one mask per person who has any (one for all when
-    /// `combined`). Its
-    /// edges are only snapped to the photo's (a guided filter): solving them per pixel, as for
-    /// whole people, bleeds hair into skin and a beard over the lip, which SAM 3 draws well.
+    /// `combined`). Where the part meets the background its edge is the person's matte, solved per
+    /// pixel (stray hairs); where it meets their skin, face or clothes it is SAM 3's, snapped to
+    /// the photo's (a guided filter): solving those per pixel bleeds hair into the forehead and
+    /// a beard over the lip. REDLAMP_EDGE_MATTE=off keeps SAM 3's everywhere.
     func personPartMasks(
-        _ request: MaskRequest, analysis: (image: CGImage, hash: String), model: SAM3Concepts,
+        _ request: MaskRequest, analysis: (image: CGImage, hash: String), session: ImageSession,
+        model: SAM3Concepts,
     ) async throws -> [AIMask] {
         let part = request.part
-        let parts = try await peopleParts(analysis, model: model)
-        guard let found = parts[part], Self.selected(found) > 0.0002 else {
+        let found = try await peopleParts(analysis, model: model)
+        guard let map = found.parts[part], let others = found.others[part], Self.selected(map) > 0.0002 else {
             throw MaskComputationError.notFound(part)
         }
         // SAM 3 leaves a faint haze (a tenth) where it isn't sure: none of the part.
-        let coarse = GrayMask(width: found.width, height: found.height, coverage: found.coverage.map {
+        let coarse = GrayMask(width: map.width, height: map.height, coverage: map.coverage.map {
             max($0 - 0.1, 0) / 0.9
         })
         let image = analysis.image
         let size = PixelSize(width: image.width, height: image.height)
-        let combined = request.combined
-        let pieces = await Task.detached(priority: .userInitiated) {
-            let people = (try? VisionMaskProvider().masks(for: MaskRequest(kind: .people), in: image)) ?? []
-            let mask = GuidedFilter.refine(coarse.resized(to: size), guide: image, radius: 4, epsilon: 1e-3)
-            guard !people.isEmpty else { return [(instance: Int?.none, mask: mask)] }
-            // Stray hairs reach a little beyond a person's mask; further is someone Vision missed.
-            let pieces = mask.split(among: people.map { $0.mask.resized(to: size) }, reach: size.longEdge / 25)
-            guard !combined else {
-                return [(instance: nil, mask: pieces.dropFirst().reduce(pieces[0]) { $0.union($1) })]
-            }
-            return pieces.enumerated().map { (instance: Optional($0.offset), mask: $0.element) }
+        let people = await Task.detached(priority: .userInitiated) {
+            (try? VisionMaskProvider().masks(for: MaskRequest(kind: .people), in: image)) ?? []
         }.value
+        let full = ProcessInfo.processInfo.environment["REDLAMP_EDGE_MATTE"] == "off" || people.isEmpty
+            ? nil : try? await matteImage(for: session)
+        var mattes: [GrayMask] = []
+        if let full {
+            mattes = await personMattes(analysis, people: people, image: full)
+        }
+        let pieces = await Task.detached(priority: .userInitiated) {
+            let mask = GuidedFilter.refine(coarse.resized(to: size), guide: image, radius: 4, epsilon: 1e-3)
+            guard !people.isEmpty else { return [mask] }
+            // Stray hairs reach a little beyond a person's mask; further is someone Vision missed.
+            let split = mask.split(among: people.map { $0.mask.resized(to: size) }, reach: size.longEdge / 25)
+            guard mattes.count == split.count else { return split }
+            return zip(split, mattes).map { piece, matte in
+                Self.selected(piece) > 0.0002
+                    ? SAM3Concepts.edges(of: piece, others: others, person: matte, reach: size.longEdge / 50) : piece
+            }
+        }.value
+        let instances: [Int?] = people.isEmpty ? [nil] : Array(pieces.indices)
+        var kept: [(instance: Int?, mask: GrayMask)] = zip(instances, pieces)
+            .filter { Self.selected($0.1) > 0.0002 }
+            .map { (instance: $0.0, mask: $0.1) }
+        if request.combined, let first = kept.first {
+            kept = [(nil, kept.dropFirst().reduce(first.mask) { $0.union($1.mask) })]
+        }
         let osBuild = ProcessInfo.processInfo.operatingSystemVersionString
-        let masks = pieces.compactMap { piece -> AIMask? in
-            guard Self.selected(piece.mask) > 0.0002, let bitmap = piece.mask.bitmap() else { return nil }
-            return AIMask(
-                kind: .people, provider: model.manifest.provider, revision: model.manifest.version, osBuild: osBuild,
-                instance: piece.instance, part: part.rawValue, analysisHash: analysis.hash,
-                center: piece.mask.centroid, bitmap: bitmap,
-            )
+        let provider = model.manifest.provider + (mattes.isEmpty ? "" : "+closed-form")
+        let masks = kept.compactMap { piece -> AIMask? in
+            piece.mask.bitmap().map { bitmap in
+                AIMask(
+                    kind: .people, provider: provider, revision: model.manifest.version, osBuild: osBuild,
+                    instance: piece.instance, part: part.rawValue, analysisHash: analysis.hash,
+                    center: piece.mask.centroid, bitmap: bitmap,
+                )
+            }
         }
         guard !masks.isEmpty else { throw MaskComputationError.notFound(part) }
         return masks
+    }
+
+    /// Each person's matte, solved per pixel at `image`'s size (the size masks are stored at), for
+    /// the open photo.
+    func personMattes(
+        _ analysis: (image: CGImage, hash: String), people: [ProvidedMask], image: CGImage,
+    ) async -> [GrayMask] {
+        if let cached = personMatteCache.withLock({ $0 }), cached.hash == analysis.hash,
+           cached.mattes.count == people.count {
+            return cached.mattes
+        }
+        let mattes = await Task.detached(priority: .userInitiated) {
+            people.map { ClosedFormMatte.refine($0.mask, image: image) }
+        }.value
+        personMatteCache.withLock { $0 = (analysis.hash, mattes) }
+        return mattes
     }
 
     /// The share of `mask` over half covered.

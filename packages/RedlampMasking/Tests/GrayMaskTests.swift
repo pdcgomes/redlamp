@@ -51,6 +51,23 @@ struct GrayMaskTests {
         #expect(parts[.bodySkin]?.pixels == [0, 0, 255, 0])
     }
 
+    /// Beyond SAM 3's hair the person's matte is the hair's (stray strands), within reach and where
+    /// SAM 3 sees none of the person's other parts.
+    @Test func `a part's edge is the person's matte where it meets the background`() {
+        func mask(_ values: [Range<Int>: UInt8]) -> GrayMask {
+            GrayMask(
+                width: 20,
+                height: 1,
+                pixels: (0 ..< 20).map { x in values.first { $0.key.contains(x) }?.value ?? 0 },
+            )
+        }
+        let hair = mask([0 ..< 5: 255])
+        let person = mask([0 ..< 5: 255, 5 ..< 14: 200])
+        let skin = mask([7 ..< 8: 255])
+        let edges = SAM3Concepts.edges(of: hair, others: skin, person: person, reach: 4)
+        #expect(edges.pixels == [255, 255, 255, 255, 255, 200, 200, 0, 200, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    }
+
     /// Hair beyond either person's own mask goes to the nearer of the two, and only so far.
     @Test func `a part is cut between people by distance`() {
         let width = 10

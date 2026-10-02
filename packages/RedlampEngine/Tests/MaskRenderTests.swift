@@ -469,7 +469,8 @@ extension MaskRenderTests {
         _ = try await engine.open(canon)
         let hair = try #require(try await engine.computeMasks(MaskRequest(kind: .people, part: .hair)).first)
         #expect(hair.part == PersonPart.hair.rawValue)
-        #expect(hair.provider == "redlamp.sam3")
+        // Its edge with the background is the statue's own matte.
+        #expect(hair.provider == "redlamp.sam3+closed-form")
         #expect(hair.instance != nil)
 
         let sony = try #require(EngineSmokeTests.fixtures.first { $0.lastPathComponent == "_DSC0009.ARW" })

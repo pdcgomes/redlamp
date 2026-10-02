@@ -79,18 +79,56 @@ public final class SAM3Concepts: @unchecked Sendable {
         return Self.exclusive(raw, order: Self.precedence, size: Self.outputSize)
     }
 
-    /// Hair, facial hair, clothes and body skin for everyone in the photo, at the output size,
-    /// exclusive by precedence.
-    public func peopleParts(_ features: Features) throws -> [PersonPart: GrayMask] {
+    /// Hair, facial hair, clothes and body skin for everyone in the photo, at the output size.
+    public struct PeopleParts: @unchecked Sendable {
+        /// Each part, exclusive by precedence.
+        public var parts: [PersonPart: GrayMask]
+        /// For each part, where SAM 3 sees the face or any other part (not exclusive): where the
+        /// part meets those, its edge is SAM 3's (see `edges(of:others:person:reach:)`).
+        public var others: [PersonPart: GrayMask]
+    }
+
+    public func peopleParts(_ features: Features) throws -> PeopleParts {
+        let size = Self.outputSize
         var raw: [PersonPart: [Float]] = [:]
         for part in Self.partPrecedence {
             raw[part] = try map(Self.className(part), features: features)
         }
+        let face = try map("face", features: features)
+        var others: [PersonPart: GrayMask] = [:]
+        for part in Self.partPrecedence {
+            let seen = Self.partPrecedence.filter { $0 != part }.compactMap { raw[$0] }
+                .reduce(face) { zip($0, $1).map(max) }
+            others[part] = GrayMask(width: size, height: size, coverage: seen)
+        }
         if let skin = raw[.bodySkin] {
-            let face = try map("face", features: features)
             raw[.bodySkin] = zip(skin, face).map { max($0 - $1, 0) }
         }
-        return Self.exclusive(raw, order: Self.partPrecedence, size: Self.outputSize)
+        return PeopleParts(parts: Self.exclusive(raw, order: Self.partPrecedence, size: size), others: others)
+    }
+
+    /// A part's edges both ways, at `person`'s size: SAM 3's where it meets the person's other
+    /// parts, and the person's own matte (`person`, solved per pixel) where it meets the
+    /// background. Within `reach` (in `part`'s pixels) of the part, whatever of the person SAM 3
+    /// sees as none of their other parts is the part's: stray hairs, a beard's straggles, a
+    /// sleeve's fringe, which SAM 3's 288 × 288 output misses.
+    public static func edges(of part: GrayMask, others: GrayMask, person: GrayMask, reach: Int) -> GrayMask {
+        let size = PixelSize(width: person.width, height: person.height)
+        let inside = part.pixels.map { $0 > 127 ? Float(1) : 0 }
+        let spread = BoxFilter.blur(inside, width: part.width, height: part.height, radius: reach)
+        // Any of the window is the part (the box mean is at least one pixel's worth).
+        let floor = 0.5 / Float((2 * reach + 1) * (2 * reach + 1))
+        let near = GrayMask(width: part.width, height: part.height, pixels: spread.map { $0 > floor ? 255 : 0 })
+            .resized(to: size).pixels
+        let own = part.resized(to: size).pixels
+        let seen = others.resized(to: size).pixels
+        let matte = person.pixels
+        var out = [UInt8](repeating: 0, count: matte.count)
+        Parallel.fill(&out) { index in
+            let free = near[index] > 0 ? matte[index] - min(matte[index], seen[index]) : 0
+            return max(own[index], free)
+        }
+        return GrayMask(width: size.width, height: size.height, pixels: out)
     }
 
     /// One class's prompts decoded and maxed: the mean of the instance and semantic maps.
