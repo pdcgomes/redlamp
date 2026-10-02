@@ -71,6 +71,11 @@ public final class ThumbnailPacks: Sendable {
         }
     }
 
+    /// Packs open now.
+    public var openCount: Int {
+        state.withLock { $0.open.count }
+    }
+
     /// Forgets the open packs (tests, and after the directory is cleared).
     public func close() {
         state.withLock { state in
