@@ -177,7 +177,7 @@ public extension EditorModel {
              .panelDetail, .panelLens, .panelTransform, .panelEffects, .panelCalibration:
             return true
         case .previousPhoto, .nextPhoto:
-            guard let selection, let index = items.firstIndex(where: { $0.url == selection }) else { return false }
+            guard let selection, let index = library.index(of: selection) else { return false }
             return items.indices.contains(index + (action == .nextPhoto ? 1 : -1))
         // A burst of arrow presses in the palette is a step not yet recorded, and ⌘Z undoes it.
         case .undo: return canUndo || commandPalette?.hasOpenStep == true
@@ -317,17 +317,19 @@ public extension EditorModel {
     // MARK: - Rating, flags and labels
 
     var currentMetadata: PhotoMetadata {
-        selection.flatMap { url in items.first { $0.url == url }?.metadata } ?? PhotoMetadata()
+        photoMetadata
     }
 
     private func updateMetadata(advance: Bool, _ change: (inout PhotoMetadata) -> Void) {
-        guard let url = selection, let index = items.firstIndex(where: { $0.url == url }) else { return }
-        var metadata = items[index].metadata
+        guard let url = selection else { return }
+        var metadata = photoMetadata
         change(&metadata)
-        items[index].metadata = metadata
+        photoMetadata = metadata
+        library.update(url) { $0.metadata = metadata }
         if info != nil {
             saveNow()
         } else {
+            metadataChangedWhileOpening = true
             let store = SidecarStore()
             Task.detached(priority: .utility) { try? Library.writeMetadata(metadata, for: url, store: store) }
         }

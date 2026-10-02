@@ -1,0 +1,106 @@
+import Foundation
+import RedlampDocument
+import RedlampEngineAPI
+import Testing
+@testable import RedlampUI
+
+/// The open folder's photos: listed without reading sidecars, badged by probes, changed row by row.
+@MainActor
+struct FolderLibraryTests {
+    private let folder = FileManager.default.temporaryDirectory.appending(path: "library-\(UUID().uuidString)")
+
+    private func makeFolder(_ names: [String]) throws {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        for name in names {
+            try Data([1]).write(to: folder.appending(path: name))
+        }
+    }
+
+    private func eventually(_ condition: () -> Bool) async throws {
+        for _ in 0 ..< 400 where !condition() {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
+    @Test func `opening a folder lists its photos, then badges those with a sidecar`() async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try makeFolder(["IMG_2.ARW", "IMG_10.ARW", "IMG_1.ARW"])
+        var recipe = EditRecipe()
+        recipe[.exposure] = 1
+        try SidecarStore().save(
+            Sidecar(recipe: recipe, metadata: PhotoMetadata(rating: 4)), for: folder.appending(path: "IMG_10.ARW"),
+        )
+        let library = FolderLibrary()
+        var diffs: [LibraryDiff] = []
+        let observation = library.observe { diffs.append($0) }
+        defer { observation.invalidate() }
+
+        var opened: [String] = []
+        library.open(folder) { opened = $0.map(\.name) }
+        try await eventually { !opened.isEmpty }
+        #expect(opened == ["IMG_1.ARW", "IMG_2.ARW", "IMG_10.ARW"])
+        #expect(library.count == 3)
+        #expect(library.index(of: folder.appending(path: "IMG_10.ARW")) == 2)
+        #expect(library.items.map(\.hasSidecar) == [false, false, true])
+
+        try await eventually { library.items[2].hasEdits }
+        #expect(library.items[2].metadata.rating == 4)
+        #expect(diffs.last == LibraryDiff(updated: [2]), "the badge changes only its row")
+    }
+
+    @Test func `a photo added or updated changes only its row`() async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try makeFolder(["A.ARW", "C.ARW"])
+        let library = FolderLibrary()
+        var diffs: [LibraryDiff] = []
+        let observation = library.observe { diffs.append($0) }
+        defer { observation.invalidate() }
+        var opened = false
+        library.open(folder) { _ in opened = true }
+        try await eventually { opened }
+
+        library.insert(LibraryItem(url: folder.appending(path: "B.ARW")))
+        #expect(library.items.map(\.name) == ["A.ARW", "B.ARW", "C.ARW"])
+        #expect(library.index(of: folder.appending(path: "C.ARW")) == 2)
+        #expect(diffs.last == LibraryDiff(inserted: [1]))
+
+        library.update(folder.appending(path: "C.ARW")) { $0.metadata.rating = 2 }
+        #expect(diffs.last == LibraryDiff(updated: [2]))
+        let count = diffs.count
+        library.update(folder.appending(path: "C.ARW")) { $0.metadata.rating = 2 }
+        #expect(diffs.count == count, "an unchanged row isn't republished")
+    }
+
+    @Test func `a photo opened from outside the folder keeps its rating when saved`() async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try makeFolder(["IMG_1.ARW"])
+        let photo = folder.appending(path: "IMG_1.ARW")
+        try SidecarStore().save(Sidecar(recipe: EditRecipe(), metadata: PhotoMetadata(rating: 3)), for: photo)
+        let model = EditorModel(engine: StubEngine())
+        model.select(photo)
+        try await eventually { model.info != nil }
+        #expect(model.items.isEmpty, "no folder is open")
+        #expect(model.photoMetadata.rating == 3)
+
+        model.setValue(.exposure, 0.5)
+        model.saveNow()
+        try await eventually { SidecarStore().load(for: photo)?.recipe[.exposure] == 0.5 }
+        #expect(SidecarStore().load(for: photo)?.metadata?.rating == 3)
+    }
+
+    @Test func `rating a photo updates its row and its sidecar`() async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try makeFolder(["IMG_1.ARW", "IMG_2.ARW"])
+        let model = EditorModel(engine: StubEngine())
+        model.open([folder])
+        try await eventually { model.info != nil }
+        let photo = folder.appending(path: "IMG_1.ARW")
+        #expect(model.selection == photo)
+
+        model.perform(.rating4)
+        #expect(model.photoMetadata.rating == 4)
+        #expect(model.library.item(for: photo)?.metadata.rating == 4)
+        try await eventually { SidecarStore().load(for: photo)?.metadata?.rating == 4 }
+        #expect(SidecarStore().load(for: photo)?.metadata?.rating == 4)
+    }
+}

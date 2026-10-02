@@ -29,7 +29,7 @@ struct EditorContentView: View {
         CanvasArea(onOpen: onOpen)
             .ignoresSafeArea()
             .overlay(alignment: .bottom) {
-                if model.filmstripVisible, !model.items.isEmpty, model.lightsOut == 0 {
+                if model.filmstripVisible, model.library.count > 0, model.lightsOut == 0 {
                     FloatingFilmstrip()
                         .id(theme.selection)
                 }

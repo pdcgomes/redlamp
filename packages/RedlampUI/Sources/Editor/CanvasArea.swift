@@ -141,7 +141,7 @@ struct CanvasArea: View {
                     .glassEffect(.regular, in: .capsule)
             }
 
-            if model.items.isEmpty, model.selection == nil {
+            if model.library.count == 0, model.selection == nil {
                 EmptyStateView(onOpen: onOpen)
             }
         }

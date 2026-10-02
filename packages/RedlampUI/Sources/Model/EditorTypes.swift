@@ -6,6 +6,36 @@ public struct LibraryItem: Identifiable, Hashable, Sendable {
     public let url: URL
     public var hasEdits: Bool
     public var metadata = PhotoMetadata()
+    /// The file's size and date, which key its cached thumbnail.
+    public var size: Int64 = 0
+    public var modified: Date = .distantPast
+    /// A sidecar sits beside it; its badges arrive once it has been read.
+    public var hasSidecar = false
+    /// The sidecar can be read without waiting for iCloud Drive.
+    public var sidecarIsLocal = true
+    /// The photo is on this Mac, not only in iCloud Drive.
+    public var isLocal = true
+
+    public init(url: URL, hasEdits: Bool = false, metadata: PhotoMetadata = PhotoMetadata()) {
+        self.url = url
+        self.hasEdits = hasEdits
+        self.metadata = metadata
+    }
+
+    init(_ entry: PhotoEntry) {
+        url = entry.url
+        hasEdits = false
+        size = entry.size
+        modified = entry.modified
+        hasSidecar = entry.hasSidecar
+        sidecarIsLocal = entry.sidecarIsLocal
+        isLocal = entry.isLocal
+    }
+
+    /// Whether its badges are waiting for its sidecar to be read.
+    var needsSummary: Bool {
+        hasSidecar && sidecarIsLocal
+    }
 
     public var id: URL {
         url

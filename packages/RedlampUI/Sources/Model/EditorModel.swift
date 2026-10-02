@@ -18,9 +18,18 @@ public final class EditorModel {
 
     // MARK: Library
 
-    public private(set) var folder: URL?
-    public internal(set) var items: [LibraryItem] = []
-    public private(set) var thumbnails: [URL: CGImage] = [:]
+    /// The open folder's photos.
+    public let library: FolderLibrary
+    public var folder: URL? {
+        library.openFolder
+    }
+
+    /// Not observed: views observe `library.count` or `library.revision`.
+    public var items: [LibraryItem] {
+        library.items
+    }
+
+    public internal(set) var thumbnails: [URL: CGImage] = [:]
     public internal(set) var selection: URL?
     /// Focus stacks found in the folder that have no stack document yet.
     public internal(set) var stackSuggestions: [StackSuggestion] = []
@@ -35,6 +44,10 @@ public final class EditorModel {
     /// The photo's sidecar was written by a newer Redlamp. Its edit is shown, but changes aren't
     /// saved: this version would lose settings it doesn't understand.
     public private(set) var isReadOnly = false
+    /// The open photo's rating, flag and label, saved with its edit.
+    public internal(set) var photoMetadata = PhotoMetadata()
+    /// The rating, flag or label changed while the photo was opening, so its sidecar's are stale.
+    @ObservationIgnored var metadataChangedWhileOpening = false
     /// Reading `recipe` observes every change to it. Views observe only what they show —
     /// `value(_:)` for one parameter, or `masks`, `pointCurve`, … — so a slider drag
     /// re-evaluates a single row rather than every panel.
@@ -357,9 +370,10 @@ public final class EditorModel {
     @ObservationIgnored private var openTask: Task<Void, Never>?
     @ObservationIgnored private var framesTask: Task<Void, Never>?
 
-    public init(engine: any EditingEngine, recipes: RecipeCatalog? = nil) {
+    public init(engine: any EditingEngine, recipes: RecipeCatalog? = nil, library: FolderLibrary? = nil) {
         self.engine = engine
         self.recipes = recipes ?? RecipeCatalog(engine: engine)
+        self.library = library ?? FolderLibrary()
         canvas.onRenderSizeChange = { [weak self] _ in self?.requestRender() }
         let frames = engine.frames()
         framesTask = Task { [weak self] in
@@ -369,48 +383,7 @@ public final class EditorModel {
         }
     }
 
-    // MARK: - Library
-
-    /// Opens a folder, or loose files (their folder becomes the library).
-    public func open(_ urls: [URL]) {
-        guard let first = urls.first else { return }
-        var isDirectory: ObjCBool = false
-        FileManager.default.fileExists(atPath: first.path, isDirectory: &isDirectory)
-        if isDirectory.boolValue {
-            openFolder(first, select: nil)
-        } else {
-            openFolder(first.deletingLastPathComponent(), select: first)
-        }
-    }
-
-    func openFolder(_ url: URL, select target: URL?) {
-        folder = url
-        stackSuggestions = []
-        onFolderChange?(url)
-        let store = sidecars
-        Task {
-            let found = await Task.detached(priority: .userInitiated) {
-                Library.images(in: url).map { image in
-                    let summary = Library.summary(image, store: store)
-                    return LibraryItem(url: image, hasEdits: summary.hasEdits, metadata: summary.metadata)
-                }
-            }.value
-            guard folder == url else { return }
-            items = found
-            thumbnails = [:]
-            detectStacks(in: found.map(\.url), folder: url)
-            if let next = target ?? found.first?.url {
-                select(next)
-            }
-        }
-    }
-
-    public func loadThumbnail(for url: URL) async {
-        guard thumbnails[url] == nil else { return }
-        if let image = await engine.thumbnail(for: url, maxPixelSize: 256) {
-            thumbnails[url] = image
-        }
-    }
+    // MARK: - Opening a photo (folders: EditorModel+Library)
 
     public func select(_ url: URL) {
         guard url != selection else { return }
@@ -425,6 +398,8 @@ public final class EditorModel {
         info = nil
         errorMessage = nil
         isReadOnly = false
+        photoMetadata = library.item(for: url)?.metadata ?? PhotoMetadata()
+        metadataChangedWhileOpening = false
         eyedropperActive = false
         previewingRecipe = nil
         previewingEdit = nil
@@ -434,18 +409,19 @@ public final class EditorModel {
         selectedComponentID = nil
         drawingKind = nil
         openTask?.cancel()
-        if let opened = engine.openIfReady(url) {
-            // A sidecar iCloud Drive evicted downloads first, which mustn't block the main thread.
-            guard sidecars.isAvailableLocally(for: url) else {
-                isLoading = true
-                openTask = Task { [sidecars] in
-                    let sidecar = await Task.detached(priority: .userInitiated) { sidecars.load(for: url) }.value
-                    guard selection == url, !Task.isCancelled else { return }
-                    didOpen(opened, sidecar: sidecar)
-                }
-                return
+        // The sidecar is read off the main thread even for a photo already decoded: it is
+        // coordinated, and iCloud Drive may have to download it first.
+        let readSidecar = { [sidecars, scheduler = library.scheduler] in
+            try? await scheduler.run(.onScreen) {
+                OpenedSidecar(sidecar: sidecars.load(for: url), isNewer: sidecars.isWrittenByNewerVersion(for: url))
             }
-            didOpen(opened, sidecar: sidecars.load(for: url))
+        }
+        if let opened = engine.openIfReady(url) {
+            openTask = Task {
+                let read = await readSidecar()
+                guard selection == url, !Task.isCancelled else { return }
+                didOpen(opened, read ?? OpenedSidecar())
+            }
             return
         }
         showFrame(nil)
@@ -454,13 +430,13 @@ public final class EditorModel {
         histogram = .empty
         isLoading = true
         Task { await loadThumbnail(for: url) }
-        openTask = Task { [engine, sidecars] in
-            let loading = Task.detached(priority: .userInitiated) { sidecars.load(for: url) }
+        openTask = Task { [engine] in
+            let loading = Task { await readSidecar() }
             do {
                 let opened = try await engine.open(url)
-                let sidecar = await loading.value
+                let read = await loading.value
                 guard selection == url else { return }
-                didOpen(opened, sidecar: sidecar)
+                didOpen(opened, read ?? OpenedSidecar())
             } catch is CancellationError {
                 return
             } catch {
@@ -471,34 +447,22 @@ public final class EditorModel {
         }
     }
 
-    public func selectNext() {
-        step(by: 1)
+    /// A photo's sidecar as read when it opens.
+    private struct OpenedSidecar: Sendable {
+        var sidecar: Sidecar?
+        /// Written by a newer Redlamp: shown, but never saved over.
+        var isNewer = false
     }
 
-    public func selectPrevious() {
-        step(by: -1)
-    }
-
-    private func step(by offset: Int) {
-        guard let selection, let index = items.firstIndex(where: { $0.url == selection }) else { return }
-        let next = index + offset
-        guard items.indices.contains(next) else { return }
-        select(items[next].url)
-    }
-
-    /// The photo being opened, then its neighbours, the direction of travel first.
-    private func workingSet(around url: URL, comingFrom previous: URL?) -> [URL] {
-        guard let index = items.firstIndex(where: { $0.url == url }) else { return [url] }
-        let backward = previous.flatMap { previous in items.firstIndex { $0.url == previous } }.map { $0 > index }
-        let offsets = backward == true ? [-1, 1, -2] : [1, -1, 2]
-        return [url] + offsets.map { index + $0 }.filter(items.indices.contains).map { items[$0].url }
-    }
-
-    private func didOpen(_ opened: ImageInfo, sidecar: Sidecar?) {
+    private func didOpen(_ opened: ImageInfo, _ read: OpenedSidecar) {
+        let sidecar = read.sidecar
         info = opened
         availableAIMaskKinds = engine.availableMaskKinds()
         maskMessage = nil
-        isReadOnly = sidecars.isWrittenByNewerVersion(for: opened.url)
+        isReadOnly = read.isNewer
+        if !metadataChangedWhileOpening {
+            photoMetadata = sidecar?.metadata ?? PhotoMetadata()
+        }
         var loaded = sidecar?.recipe ?? EditRecipe()
         if loaded.whiteBalanceMode == .asShot, let wb = opened.asShotWhiteBalance {
             loaded[.temperature] = wb.temperature
@@ -1027,7 +991,7 @@ public final class EditorModel {
         saveTask = nil
         saveDeadline = nil
         guard let url = selection, info != nil, !isReadOnly else { return }
-        let metadata = items.first { $0.url == url }?.metadata ?? PhotoMetadata()
+        let metadata = photoMetadata
         var sidecar = Sidecar(
             recipe: recipe, snapshots: snapshots, metadata: metadata.isEmpty ? nil : metadata,
             session: HistorySession(
@@ -1047,8 +1011,10 @@ public final class EditorModel {
                 try? store.save(sidecar, for: url)
             }
         }
-        if let index = items.firstIndex(where: { $0.url == url }) {
-            items[index].hasEdits = !recipe.isPristine
+        let hasEdits = !recipe.isPristine
+        library.update(url) { item in
+            item.hasEdits = hasEdits
+            item.metadata = metadata
         }
     }
 }

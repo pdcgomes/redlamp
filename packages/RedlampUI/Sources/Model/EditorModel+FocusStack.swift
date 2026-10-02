@@ -25,13 +25,7 @@ public extension EditorModel {
             return
         }
         stackSuggestions.removeAll { $0 == suggestion }
-        if !items.contains(where: { $0.url == url }) {
-            items.append(LibraryItem(url: url, hasEdits: false, metadata: PhotoMetadata()))
-            items
-                .sort {
-                    $0.url.lastPathComponent.localizedStandardCompare($1.url.lastPathComponent) == .orderedAscending
-                }
-        }
+        library.insert(LibraryItem(url: url))
         openStackWorkspace(url)
     }
 

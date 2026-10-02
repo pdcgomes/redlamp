@@ -11,7 +11,7 @@ struct FilmstripView: View {
                 if let folder = model.folder {
                     Label(folder.lastPathComponent, systemImage: "folder")
                 }
-                Text("\(model.items.count) photos")
+                Text("\(model.library.count) photos")
                     .foregroundStyle(Theme.tertiaryLabel)
                 if let suggestion = model.stackSuggestions.first {
                     StackSuggestionBanner(suggestion: suggestion)
@@ -37,6 +37,7 @@ struct FilmstripView: View {
             ScrollViewReader { proxy in
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: 6) {
+                        let _ = model.library.revision
                         ForEach(model.items) { item in
                             FilmstripCell(item: item, isSelected: item.url == model.selection)
                                 .id(item.url)
