@@ -381,6 +381,7 @@ struct DetailStageTests {
         asShot: SIMD3<Double> = SIMD3(1, 1, 1),
         gainMaps: [GainMap] = [],
         banding: BandingCorrection? = nil,
+        profile: NoiseModel = DetailStageTests.noise,
         spikes: [(SIMD2<Int>, Float)] = [],
         signal: (Int, Int) -> Float = { _, _ in DetailStageTests.level },
     ) throws -> ImageSession {
@@ -424,7 +425,7 @@ struct DetailStageTests {
                 isRaw: true, sensorDescription: "synthetic",
             ),
         )
-        decoded.noiseProfile = Self.noise
+        decoded.noiseProfile = profile
         decoded.gainMaps = gainMaps
         decoded.banding = banding
         return try SessionBuilder(device: device, queue: queue, kernels: kernels).build(decoded)
