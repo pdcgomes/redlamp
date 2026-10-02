@@ -96,7 +96,7 @@ public struct EditRecipe: Sendable, Hashable {
     public subscript(parameter: ParameterID) -> Double {
         get { values[parameter] ?? parameter.spec.defaultValue }
         set {
-            guard !parameter.isMaskScoped else { return }
+            guard !parameter.isMaskScoped, !parameter.isSpotScoped else { return }
             let spec = parameter.spec
             let clamped = spec.clamp(newValue)
             if abs(clamped - spec.defaultValue) < 1e-9 {

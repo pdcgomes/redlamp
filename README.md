@@ -170,8 +170,8 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 ### In progress
 
 - **Focus stacking:** lens corrections before alignment, halo handling, vendor focus-bracketing tags for detection, and baking a stack to DNG.
-- **Heal and Clone:** circular spots render (Heal matches the source's texture to the light around the spot), are saved with the edit and paste with Copy Settings, and each finds its own source nearby (`redlamp render --heal x,y,radius`). The Healing tool comes next.
-- **Tools not yet working:** the Healing and Red Eye tools show what is coming and when.
+- **Heal and Clone** (`Q`): click the photo to add a spot, which finds its own source nearby; drag the spot or its source to move it, or its handle to resize it, and change Heal or Clone, Size, Feather and Opacity in the panel. Heal matches the source's texture to the light around the spot. Spots are saved with the edit, paste with Copy Settings, and `redlamp render --heal x,y,radius` adds one from the command line. Brush-shaped spots come next.
+- **Tools not yet working:** the Red Eye tool shows what is coming and when.
 
 ### Measured performance
 
@@ -850,7 +850,7 @@ The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on mac
 ### Phase 3: Pro masking, healing, AI denoise, focus stacking, and looks
 - [x] SAM-class object and face-part masks, depth range, mask refinement, mask presets, and recomputing AI masks for pasted settings
 - [ ] Landscape and body-part masks on a model trained on data we have rights to, and batch updating AI masks across photos
-- [ ] Healing, clone, and content-aware remove, with AI inpainting on the device
+- [ ] Healing, clone, and content-aware remove, with AI inpainting on the device *(circular Heal and Clone spots with automatic sources are done)*
 - [ ] **AI Denoise:** an on-device model working on raw data, matching or beating the best commercial denoisers, with a fast 1:1 preview and non-destructive results
 - [ ] **Focus stacking v1:** stacks detected automatically in the filmstrip, alignment (including focus breathing and handheld sequences), depth-map and pyramid fusion strategies, a retouch brush, and results that stay fully editable *(alignment, depth solve, fusion and `redlamp stack` done)*
 - [ ] Manufacturer lens corrections embedded in RAW files (Sony, Fujifilm, Panasonic, OM System)
@@ -1060,7 +1060,7 @@ Redlamp follows Lightroom Classic's Develop-module shortcuts. Press **⌘/** in 
 | **Panels** | `Tab` hide side panels · `⇧Tab` hide all · `F6` filmstrip · `F7` left panel · `F8` right panel · `⌘1`–`⌘9` open or close Basic, Tone Curve, Color Mixer, Color Grading, Detail, Lens Corrections, Transform, Effects, Calibration |
 | **Navigation** | `←` `→` or `⌘←` `⌘→` previous/next photo |
 | **Develop** | `,` `.` select previous/next setting · `-` `=` decrease/increase it (`⇧` for larger steps) · `V` black & white · `W` white-balance selector · `⌘U` auto settings · `⇧⌘U` auto white balance · `⇧⌘C` / `⇧⌘V` copy/paste settings · `⌥⌘V` paste from previous · `⇧⌘R` reset all · `⌘N` new snapshot · `⌘Z` / `⇧⌘Z` undo/redo · hold `⌥` to turn group titles into "Reset …" |
-| **Tools** | `D` Edit · `⇧W` Masking · `M` linear gradient · `⇧M` radial gradient · `K` brush · `⇧J` color range · `⇧Q` luminance range · `⇧Z` depth range · `R` crop, `A` crop aspect lock, `⌘[` / `⌘]` rotate left and right · `Q` healing *(Phase 3)* |
+| **Tools** | `D` Edit · `⇧W` Masking · `M` linear gradient · `⇧M` radial gradient · `K` brush · `⇧J` color range · `⇧Q` luminance range · `⇧Z` depth range · `R` crop, `A` crop aspect lock, `⌘[` / `⌘]` rotate left and right · `Q` healing, `⌫` deletes the selected spot |
 | **Masking** | `O` show/hide overlay · `⇧O` cycle overlay color · `H` show/hide pins · `⌫` delete selected mask · `Esc` finish drawing or leave the tool · brushing: `[` `]` size (`⇧` feather), hold `⌥` to erase · Objects: `⌥`-click to take away |
 | **Rating & flags** | `0`–`5` star rating · `[` `]` decrease/increase rating · `P` pick · `X` reject · `U` unflag · `6`–`9` red, yellow, green, blue label · add `⇧` to any of these to also move to the next photo |
 | **File** | `⌘O` open folder · `⇧⌘E` export · `⌥⇧⌘E` export with previous · `⌘/` keyboard shortcuts · `⇧⌘L` Film Looks window · `⌘K` command palette (`⌘F` for sliders only) |

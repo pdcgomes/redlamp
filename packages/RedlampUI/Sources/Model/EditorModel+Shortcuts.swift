@@ -9,14 +9,7 @@ public extension EditorModel {
     @discardableResult
     func perform(_ action: ShortcutAction, shifted: Bool = false) -> Bool {
         guard !isModalDialogOpen else { return false }
-        guard action.isAvailable else {
-            // Planned tools still open their tool card, so the shortcut is discoverable.
-            switch action {
-            case .healTool: activeTool = .heal
-            default: return false
-            }
-            return true
-        }
+        guard action.isAvailable else { return false }
         switch action {
         // View
         case .beforeAfter: showBefore.toggle()
@@ -91,6 +84,7 @@ public extension EditorModel {
         case .editTool: activeTool = .edit
         case .maskingTool: activeTool = activeTool == .masking ? .edit : .masking
         case .cropTool: activeTool = activeTool == .crop ? .edit : .crop
+        case .healTool: activeTool = activeTool == .heal ? .edit : .heal
         case .cropAspectLock: cropAspectLocked.toggle()
         case .rotateLeft: rotate(clockwise: false)
         case .rotateRight: rotate(clockwise: true)
@@ -120,6 +114,10 @@ public extension EditorModel {
             guard activeTool == .masking else { return false }
             showMaskPins.toggle()
         case .deleteMask:
+            if activeTool == .heal, let spot = selectedSpotID {
+                deleteSpot(spot)
+                return true
+            }
             guard activeTool == .masking, let mask = selectedMaskID else { return false }
             deleteMask(mask)
         case .cancel: return cancelCurrentMode()
@@ -172,7 +170,7 @@ public extension EditorModel {
     func canPerform(_ action: ShortcutAction) -> Bool {
         guard !isModalDialogOpen else { return false }
         guard action.isAvailable else {
-            return action == .cropTool || action == .healTool
+            return action == .cropTool
         }
         let photo = info != nil
         let whiteBalance = info?.supportsWhiteBalance == true
@@ -205,7 +203,7 @@ public extension EditorModel {
         case .autoWhiteBalance, .whiteBalanceSelector: return whiteBalance
         case .editTool, .maskingTool, .cancel, .showShortcuts, .openFolder, .filmLooks, .commandPalette:
             return true
-        case .cropTool, .rotateLeft, .rotateRight: return photo
+        case .cropTool, .healTool, .rotateLeft, .rotateRight: return photo
         case .cropAspectLock: return activeTool == .crop
         case .mergeFocusStack: return stackWorkspace == nil && !stackSuggestions.isEmpty
         case .editFocusStack: return stackWorkspace == nil && selection.map(SupportedFormats.isStack) == true
@@ -216,7 +214,7 @@ public extension EditorModel {
         case .luminanceRangeMask: return photo && canCreateMask(.luminanceRange)
         case .maskOverlay, .maskOverlayColor: return masking || activeTool == .crop
         case .maskPins: return masking
-        case .deleteMask: return masking && selectedMaskID != nil
+        case .deleteMask: return (masking && selectedMaskID != nil) || (activeTool == .heal && selectedSpotID != nil)
         case .rating0, .rating1, .rating2, .rating3, .rating4, .rating5, .decreaseRating, .increaseRating,
              .flagPick, .flagReject, .unflag, .labelRed, .labelYellow, .labelGreen, .labelBlue:
             return selection != nil

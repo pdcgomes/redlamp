@@ -76,7 +76,12 @@ extension EditorModel {
     /// Records a slider's change as a step: "Exposure", 0.00 → +0.50.
     func recordStep(for parameter: ParameterID, from previous: EditRecipe) {
         let spec = parameter.spec
-        if parameter.isMaskScoped {
+        if parameter.isSpotScoped {
+            let spot = selectedSpotID
+            recordHistory(.retouch, "Spot \(spec.label)", from: previous) { recipe in
+                spec.formatted(recipe.spots.first { $0.id == spot }?[parameter] ?? spec.defaultValue)
+            }
+        } else if parameter.isMaskScoped {
             let mask = selectedMaskID
             let component = selectedComponentID
             recordHistory(.mask(nil), "\(selectedMask?.name ?? "Mask") \(spec.label)", from: previous) { recipe in

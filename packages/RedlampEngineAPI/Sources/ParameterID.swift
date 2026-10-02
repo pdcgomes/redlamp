@@ -211,6 +211,19 @@ public enum ParameterID: String, CaseIterable, Codable, Sendable, Hashable {
         .maskBrushSize, .maskBrushFeather, .maskBrushFlow, .maskBrushDensity,
     ]
 
+    /// The selected Heal or Clone spot's settings, or the next spot's when none is selected
+    /// (stored on the spot, not as adjustments).
+    case spotSize = "spot.size"
+    case spotFeather = "spot.feather"
+    case spotOpacity = "spot.opacity"
+
+    public static let spotParameters: [ParameterID] = [.spotSize, .spotFeather, .spotOpacity]
+
+    /// A Heal or Clone spot's setting; never stored in the global recipe.
+    public var isSpotScoped: Bool {
+        rawValue.hasPrefix("spot.")
+    }
+
     /// A per-mask adjustment, stored in `MaskLayer.adjustments`.
     public var isLocal: Bool {
         rawValue.hasPrefix("local.")

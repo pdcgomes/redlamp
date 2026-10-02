@@ -28,6 +28,7 @@ extension HistoryAction {
         case .straighten: "level"
         case .upright: "perspective"
         case let .mask(kind): kind?.symbol ?? EditTool.masking.symbol
+        case .retouch: EditTool.heal.symbol
         case .edit: "slider.horizontal.3"
         }
     }

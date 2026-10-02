@@ -241,7 +241,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .maskOverlay: "Show / Hide Mask Overlay"
         case .maskOverlayColor: "Cycle Mask Overlay Color"
         case .maskPins: "Show / Hide Pins"
-        case .deleteMask: "Delete Selected Mask"
+        case .deleteMask: "Delete Selected Mask or Spot"
         case .cancel: "Cancel / Leave Tool"
         case .rating0: "Clear Rating"
         case .rating1: "1 Star"
@@ -389,7 +389,6 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         switch self {
         case .virtualCopy:
             "Phase 2"
-        case .healTool: "Phase 3"
         default: nil
         }
     }

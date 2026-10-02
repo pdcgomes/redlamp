@@ -1,8 +1,9 @@
 import AppKit
 import RedlampDesign
+import RedlampEngineAPI
 import SwiftUI
 
-/// The inspector's scrolling column, in AppKit: the Develop panels, or the Masking tool's
+/// The inspector's scrolling column, in AppKit: the Develop panels, or the active tool's
 /// panel. Each control updates only when a value it shows changes.
 final class InspectorPanelsView: PanelColumnScrollView {
     init(model: EditorModel, tool: EditTool) {
@@ -41,6 +42,18 @@ final class InspectorPanelsView: PanelColumnScrollView {
                         right: Metrics.panelPadding,
                     ),
                     views: PanelRows(model: model).sliders([.cropAngle]),
+                ),
+            ]
+        case .heal:
+            [
+                HostedControl(model: model, HealToolPanel()),
+                ColumnView(
+                    spacing: Metrics.panelRowSpacing,
+                    insets: NSEdgeInsets(
+                        top: 0, left: Metrics.panelPadding, bottom: Metrics.panelBottomPadding,
+                        right: Metrics.panelPadding,
+                    ),
+                    views: PanelRows(model: model).sliders(ParameterID.spotParameters),
                 ),
             ]
         default:

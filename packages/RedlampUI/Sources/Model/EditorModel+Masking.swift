@@ -326,11 +326,16 @@ public extension EditorModel {
 
     /// Sliders call these; mask-scoped parameters go to the selected mask.
     func sliderValue(_ parameter: ParameterID) -> Double {
-        parameter.isMaskScoped ? maskValue(parameter) : value(parameter)
+        if parameter.isSpotScoped {
+            return spotValue(parameter)
+        }
+        return parameter.isMaskScoped ? maskValue(parameter) : value(parameter)
     }
 
     func setSliderValue(_ parameter: ParameterID, _ value: Double) {
-        if parameter.isMaskScoped {
+        if parameter.isSpotScoped {
+            setSpotValue(parameter, value)
+        } else if parameter.isMaskScoped {
             setMaskValue(parameter, value)
         } else {
             setValue(parameter, value)
@@ -338,7 +343,9 @@ public extension EditorModel {
     }
 
     func resetSlider(_ parameter: ParameterID) {
-        if parameter.isMaskScoped {
+        if parameter.isSpotScoped {
+            setSpotValue(parameter, parameter.spec.defaultValue)
+        } else if parameter.isMaskScoped {
             setMaskValue(parameter, parameter.spec.defaultValue)
         } else {
             reset(parameter)

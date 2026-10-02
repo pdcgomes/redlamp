@@ -320,8 +320,8 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
     /// Where the tool lands on the roadmap; `nil` once it is live.
     public var plannedPhase: String? {
         switch self {
-        case .edit, .masking, .crop: nil
-        case .heal, .redEye: "Phase 3"
+        case .edit, .masking, .crop, .heal: nil
+        case .redEye: "Phase 3"
         }
     }
 
@@ -329,7 +329,7 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .edit: ""
         case .crop: "Crop with aspect presets and overlays, straighten with the level tool, rotate and flip."
-        case .heal: "Content-aware Remove, Heal and Clone brushes with Visualize Spots."
+        case .heal: "Heal and Clone spots, each copying from the best source nearby."
         case .redEye: "Red Eye and Pet Eye correction."
         case .masking: "Linear and radial gradients, brush, color and luminance range, and AI subject, sky, background and people masks."
         }

@@ -28,6 +28,8 @@ public enum HistoryAction: Hashable, Sendable {
     /// A mask: a component, stroke or sample, one of its sliders, renaming or deleting it. The kind,
     /// when the step is about one type of component.
     case mask(MaskKind?)
+    /// A Heal or Clone spot: adding, moving, resizing or deleting one.
+    case retouch
     case edit
 }
 
@@ -36,7 +38,8 @@ extension HistoryAction: Codable {
         "open": .open, "clear": .clear, "restore": .restore, "reset": .reset, "auto": .auto,
         "treatment": .treatment, "baseLook": .baseLook, "whiteBalance": .whiteBalance, "toneCurve": .toneCurve,
         "recipe": .recipe, "snapshot": .snapshot, "paste": .paste, "crop": .crop, "rotate": .rotate,
-        "flip": .flip, "straighten": .straighten, "upright": .upright, "mask": .mask(nil), "edit": .edit,
+        "flip": .flip, "straighten": .straighten, "upright": .upright, "mask": .mask(nil), "retouch": .retouch,
+        "edit": .edit,
     ]
 
     /// "adjustment:basic.exposure", "mask:brush", "crop". Actions this build doesn't know read as `edit`.

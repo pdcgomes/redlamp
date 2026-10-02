@@ -253,6 +253,14 @@ public final class EditorModel {
     /// The crop as last drawn, which Angle and Transform changes fit inside the photo again.
     @ObservationIgnored var cropIntent: CropRect = .full
 
+    // MARK: Healing state
+
+    /// The Heal or Clone spot the Healing tool's sliders change.
+    public var selectedSpotID: UUID?
+    /// What the next spot does, and its settings (what the sliders show with no spot selected).
+    public var spotMode: RetouchSpot.Mode = .heal
+    public var spotSettings = SpotSettings()
+
     // MARK: Masking state
 
     public var selectedMaskID: UUID? {

@@ -14,6 +14,13 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         detectedLines
     }
 
+    /// Where `retouchSource` says a spot should copy from; nil finds none.
+    var retouchSource: ImagePoint?
+
+    func retouchSource(for _: RetouchSpot, recipe _: EditRecipe) async -> ImagePoint? {
+        retouchSource
+    }
+
     func open(_ url: URL) async throws -> ImageInfo {
         ImageInfo(url: url, pixelSize: PixelSize(width: 600, height: 400), isRaw: true, sensorDescription: "stub")
     }
