@@ -159,10 +159,6 @@ final class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDat
         false
     }
 
-    func outlineView(_: NSOutlineView, shouldShowOutlineCellForItem _: Any) -> Bool {
-        false
-    }
-
     func outlineView(_: NSOutlineView, viewFor _: NSTableColumn?, item: Any) -> NSView? {
         guard let node = item as? SidebarNode else { return nil }
         return SidebarCellView(node: node, model: model, isExpanded: isItemExpanded(node))

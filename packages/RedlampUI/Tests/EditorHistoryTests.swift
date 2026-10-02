@@ -277,6 +277,40 @@ struct EditorHistoryTests {
         #expect(list.recipes.window != nil && list.snapshots.window == nil)
     }
 
+    @Test func `recipe groups and earlier sessions collapse again`() async throws {
+        let (editor, cleanup) = try await openEditor()
+        defer { cleanup() }
+        let model = editor.model
+        try await reopenAfterEditing(editor)
+        let (list, window) = showLists(model)
+        defer { window.contentView = nil }
+
+        func node(in outline: SidebarOutlineView, where matches: (SidebarNode.Kind) -> Bool) -> SidebarNode? {
+            (0 ..< outline.numberOfRows).lazy.compactMap { outline.item(atRow: $0) as? SidebarNode }
+                .first { matches($0.kind) }
+        }
+        func isGroup(_ kind: SidebarNode.Kind) -> Bool {
+            if case .group = kind {
+                return true
+            }
+            return false
+        }
+        func isSession(_ kind: SidebarNode.Kind) -> Bool {
+            if case .session = kind {
+                return true
+            }
+            return false
+        }
+        for (outline, matches) in [(list.recipes, isGroup), (list.history, isSession)] {
+            try await eventually { node(in: outline, where: matches) != nil }
+            let row = try #require(node(in: outline, where: matches))
+            outline.expandItem(row)
+            #expect(outline.isItemExpanded(row))
+            outline.collapseItem(row)
+            #expect(!outline.isItemExpanded(row))
+        }
+    }
+
     @Test func `typing a recipe search keeps the field's focus as the list updates`() async throws {
         let (editor, cleanup) = try await openEditor()
         defer { cleanup() }
