@@ -54,6 +54,7 @@ public extension DecodedImage {
         var noiseProfile: NoiseModel?
         var gainMaps: [GainMap]
         var dngColor: DNGColorCalibration?
+        var dngProfile: DNGProfile?
         var banding: BandingCorrection?
     }
 
@@ -64,7 +65,8 @@ public extension DecodedImage {
             width: width, height: height, layout: layout, sampleCount: samples.count, blackLevels: blackLevels,
             whiteLevel: whiteLevel, asShotMultipliers: asShotMultipliers, cameraToSRGB: cameraToSRGB,
             xyzToCamera: xyzToCamera, orientation: orientation, baselineExposure: baselineExposure, info: info,
-            noiseProfile: noiseProfile, gainMaps: gainMaps, dngColor: dngColor, banding: banding,
+            noiseProfile: noiseProfile, gainMaps: gainMaps, dngColor: dngColor, dngProfile: dngProfile,
+            banding: banding,
         ))
         var data = Data(capacity: 8 + header.count + samples.count * 2)
         withUnsafeBytes(of: UInt64(header.count).littleEndian) { data.append(contentsOf: $0) }
@@ -106,6 +108,7 @@ public extension DecodedImage {
         noiseProfile = header.noiseProfile
         gainMaps = header.gainMaps
         dngColor = header.dngColor
+        dngProfile = header.dngProfile
         banding = header.banding
     }
 }

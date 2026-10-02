@@ -55,6 +55,10 @@ enum DevelopParameters {
         )
 
         p.setCameraToWorking(session.cameraToWorking(for: recipe))
+        if recipe.processVersion >= 4, let maps = session.hueSatMaps {
+            p.hueSat = SIMD4(1, session.hueSatWeight(for: recipe), maps.srgbValues ? 1 : 0, 0)
+            p.setWorkingToProPhoto(HueSatMaps.workingToProPhoto)
+        }
         // Display-referred work stays in Rec.2020 primaries; the kernel gamut-maps into these.
         p.setDisplayToOutput(
             encoding == .sRGB || encoding == .linearSRGB

@@ -42,6 +42,9 @@ final class ImageSession: @unchecked Sendable {
     let glowLights: any MTLTexture
     /// The gain maps' gain per camera channel, which scaled the sensor noise (see `NoiseGain`).
     let noiseGain: any MTLTexture
+    /// The DNG's embedded camera profile, and its HueSatMaps on the GPU when it has some.
+    let dngProfile: DNGProfile?
+    let hueSatMaps: HueSatMaps?
 
     init(
         info: ImageInfo,
@@ -57,8 +60,11 @@ final class ImageSession: @unchecked Sendable {
         glowSource: any MTLTexture,
         glowLights: any MTLTexture,
         noiseGain: any MTLTexture,
+        hueSatMaps: HueSatMaps? = nil,
     ) {
         self.noiseGain = noiseGain
+        dngProfile = decoded.isRaw ? decoded.dngProfile : nil
+        self.hueSatMaps = decoded.isRaw ? hueSatMaps : nil
         self.repairedPixels = repairedPixels
         self.airlight = airlight
         self.hazeMap = hazeMap
@@ -103,6 +109,12 @@ final class ImageSession: @unchecked Sendable {
     func cameraToWorking(for recipe: EditRecipe) -> simd_float3x3 {
         guard let dngColor, recipe.whiteBalanceMode != .asShot else { return cameraToWorking }
         return dngColor.cameraToWorking(temperature: recipe[.temperature])
+    }
+
+    /// How much of the coolest HueSatMap to use, interpolated as the matrices are.
+    func hueSatWeight(for recipe: EditRecipe) -> Float {
+        guard let dngColor else { return 1 }
+        return Float(dngColor.weight(recipe.whiteBalanceMode == .asShot ? asShotTemperature : recipe[.temperature]))
     }
 }
 

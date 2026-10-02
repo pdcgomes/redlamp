@@ -322,6 +322,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         encoder.setTexture(session.glowLights, index: 8)
         encoder.setTexture(maskBindings.rasters ?? masks.emptyRasters, index: 6)
         encoder.setTexture(maskBindings.guide ?? masks.emptyGuide, index: 7)
+        encoder.setTexture(session.hueSatMaps?.cool ?? baseLooks.identity, index: 9)
+        encoder.setTexture(session.hueSatMaps?.warm ?? baseLooks.identity, index: 10)
         encoder.setBytes(&inputs.params, length: MemoryLayout<DevelopParams>.stride, index: 0)
         encoder.setBytes(&inputs.toneLUT, length: inputs.toneLUT.count * MemoryLayout<Float>.stride, index: 1)
         encoder.setBytes(&inputs.mixer, length: inputs.mixer.count * MemoryLayout<Float>.stride, index: 2)

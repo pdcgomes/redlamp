@@ -150,6 +150,7 @@ enum RawDecoder {
             decoded.noiseProfile = DNGNoiseProfile.read(data, url: url)
             decoded.gainMaps = DNGGainMaps.read(data, url: url)
             decoded.dngColor = DNGColorCalibration.read(data, url: url)
+            decoded.dngProfile = DNGProfile.read(data, url: url)
         }
         decoded.banding = banding
         return decoded

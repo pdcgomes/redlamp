@@ -1,6 +1,7 @@
 import Foundation
 
-/// Reads tags from TIFF-based files (DNG) for the few things LibRaw doesn't expose.
+/// Reads tags from TIFF-based files (DNG, and DNG camera profiles, whose magic is "RC" rather
+/// than 42) for the few things LibRaw doesn't expose.
 struct TIFFReader {
     let bytes: UnsafeRawBufferPointer
     let littleEndian: Bool
@@ -10,6 +11,8 @@ struct TIFFReader {
     static let longType: UInt16 = 4
     static let doubleType: UInt16 = 12
     static let ifdType: UInt16 = 13
+    static let floatType: UInt16 = 11
+    static let profileMagic: UInt16 = 0x4352
 
     struct Entry {
         var tag: UInt16
@@ -27,7 +30,7 @@ struct TIFFReader {
         case (0x4D, 0x4D): littleEndian = false
         default: return nil
         }
-        guard u16(2) == 42 else { return nil }
+        guard u16(2) == 42 || u16(2) == Self.profileMagic else { return nil }
     }
 
     /// Every image file directory: the main chain and the SubIFDs hanging off it.
@@ -65,6 +68,30 @@ struct TIFFReader {
         return (0 ..< entry.count).map { index in
             size == 2 ? Int(u16(start + index * 2)) : Int(u32(start + index * 4))
         }
+    }
+
+    /// The values of a FLOAT or DOUBLE entry; empty for other types.
+    func floats(_ entry: Entry) -> [Float] {
+        let size: Int
+        switch entry.type {
+        case Self.floatType: size = 4
+        case Self.doubleType: size = 8
+        default: return []
+        }
+        let start = entry.count * size <= 4 ? entry.valueOffset : Int(u32(entry.valueOffset))
+        guard entry.count >= 0, start + entry.count * size <= bytes.count else { return [] }
+        return (0 ..< entry.count).map { index in
+            size == 4 ? Float(bitPattern: u32(start + index * 4)) : Float(f64(start + index * 8))
+        }
+    }
+
+    /// An ASCII or BYTE (UTF-8) entry's text, up to its first NUL.
+    func string(_ entry: Entry) -> String? {
+        guard [1, 2, 7].contains(entry.type), entry.count > 0 else { return nil }
+        let start = entry.count <= 4 ? entry.valueOffset : Int(u32(entry.valueOffset))
+        guard start + entry.count <= bytes.count else { return nil }
+        let text = bytes[start ..< start + entry.count].prefix { $0 != 0 }
+        return String(bytes: text, encoding: .utf8).map { $0.trimmingCharacters(in: .whitespaces) }
     }
 
     private func entries(at offset: Int) -> [Entry]? {

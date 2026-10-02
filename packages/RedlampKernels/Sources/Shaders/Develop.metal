@@ -47,6 +47,90 @@ static inline float srgbDecode(float x) {
 static inline float3 srgbEncode3(float3 c) { return float3(srgbEncode(c.r), srgbEncode(c.g), srgbEncode(c.b)); }
 static inline float3 srgbDecode3(float3 c) { return float3(srgbDecode(c.r), srgbDecode(c.g), srgbDecode(c.b)); }
 
+// DNG camera profiles' HSV (dng_sdk's DNG_RGBtoHSV): hue in 0...6, value the largest channel.
+static inline float3 dngHSV(float3 c) {
+    float v = max3(c.r, c.g, c.b);
+    float gap = v - min3(c.r, c.g, c.b);
+    if (gap <= 0.0f) return float3(0.0f, 0.0f, v);
+    float h;
+    if (c.r == v) {
+        h = (c.g - c.b) / gap;
+        if (h < 0.0f) h += 6.0f;
+    } else if (c.g == v) {
+        h = 2.0f + (c.b - c.r) / gap;
+    } else {
+        h = 4.0f + (c.r - c.g) / gap;
+    }
+    return float3(h, gap / v, v);
+}
+
+static inline float3 dngRGB(float3 hsv) {
+    float h = hsv.x, s = hsv.y, v = hsv.z;
+    if (s <= 0.0f) return float3(v);
+    if (h < 0.0f) h += 6.0f;
+    if (h >= 6.0f) h -= 6.0f;
+    int i = min(int(h), 5);
+    float f = h - float(i);
+    float p = v * (1.0f - s), q = v * (1.0f - s * f), t = v * (1.0f - s * (1.0f - f));
+    switch (i) {
+        case 0: return float3(v, t, p);
+        case 1: return float3(q, v, p);
+        case 2: return float3(p, v, t);
+        case 3: return float3(p, q, v);
+        case 4: return float3(t, p, v);
+        default: return float3(v, p, q);
+    }
+}
+
+// A HueSatMap's hue shift (degrees), saturation scale and value scale at `hsv` (dng_sdk's
+// RefBaselineHueSatMap): bilinear in hue, which wraps, and saturation; linear in value for 3D
+// maps. The texture holds saturation across, hue down and value in depth.
+static inline float3 hueSatEntry(texture3d<float, access::read> map, float3 hsv, float encodedValue) {
+    int hues = int(map.get_height()), saturations = int(map.get_width()), values = int(map.get_depth());
+    float hScaled = hues < 2 ? 0.0f : hsv.x * float(hues) / 6.0f;
+    float sScaled = hsv.y * float(saturations - 1);
+    int h0 = int(hScaled);
+    int s0 = min(int(sScaled), saturations - 2);
+    int h1 = h0 + 1;
+    if (h0 >= hues - 1) {
+        h0 = hues - 1;
+        h1 = 0;
+    }
+    float hf = hScaled - float(h0), sf = sScaled - float(s0);
+    int v0 = 0;
+    float vf = 0.0f;
+    if (values > 1) {
+        float vScaled = clamp(encodedValue, 0.0f, 1.0f) * float(values - 1);
+        v0 = min(int(vScaled), values - 2);
+        vf = vScaled - float(v0);
+    }
+    float3 result = 0.0f;
+    for (int dv = 0; dv <= (values > 1 ? 1 : 0); dv++) {
+        uint v = uint(v0 + dv);
+        float3 low = mix(map.read(uint3(s0, h0, v)).xyz, map.read(uint3(s0, h1, v)).xyz, hf);
+        float3 high = mix(map.read(uint3(s0 + 1, h0, v)).xyz, map.read(uint3(s0 + 1, h1, v)).xyz, hf);
+        result += mix(low, high, sf) * (values > 1 ? (dv == 0 ? 1.0f - vf : vf) : 1.0f);
+    }
+    return result;
+}
+
+// The camera profile's colour correction, in linear ProPhoto as the DNG specification has it:
+// hue shifted, saturation (at most 1) and value scaled. Unlike dng_sdk, light above white keeps
+// its headroom, and channels below zero pass through, so an identity map changes nothing.
+static inline float3 applyHueSatMap(float3 scene, texture3d<float, access::read> cool,
+                                    texture3d<float, access::read> warm, constant DevelopParams &p) {
+    float3 pro = mul3(p.toProPhoto0, p.toProPhoto1, p.toProPhoto2, scene);
+    float3 negative = min(pro, 0.0f);
+    float3 hsv = dngHSV(max(pro, 0.0f));
+    bool srgb = p.hueSat.z > 0.5f;
+    float encoded = srgb ? srgbEncode(hsv.z) : hsv.z;
+    float3 entry = mix(hueSatEntry(warm, hsv, encoded), hueSatEntry(cool, hsv, encoded), p.hueSat.y);
+    hsv.x += entry.x * (6.0f / 360.0f);
+    hsv.y = min(hsv.y * entry.y, 1.0f);
+    hsv.z = srgb ? srgbDecode(max(encoded * entry.z, 0.0f)) : max(hsv.z * entry.z, 0.0f);
+    return mul3(p.fromProPhoto0, p.fromProPhoto1, p.fromProPhoto2, dngRGB(hsv) + negative);
+}
+
 // Filmic curve (Narkowicz's ACES fit).
 static inline float filmic(float x) {
     return (x * (2.51f * x + 0.03f)) / (x * (2.43f * x + 0.59f) + 0.14f);
@@ -426,6 +510,8 @@ kernel void rl_develop(
     texture2d<float, access::sample> glowLights [[texture(8)]],
     texture2d_array<float, access::sample> maskRasters [[texture(6)]],
     texture2d<float, access::sample> maskGuide [[texture(7)]],
+    texture3d<float, access::read> hueSatCool [[texture(9)]],
+    texture3d<float, access::read> hueSatWarm [[texture(10)]],
     uint2 gid [[thread_position_in_grid]])
 {
     uint width = uint(p.outputSize.x);
@@ -507,6 +593,9 @@ kernel void rl_develop(
     camera *= p.wbRatio.xyz;
     camera *= float3(exp2(localColor.x * 0.6f), exp2(-localColor.y * 0.4f), exp2(-localColor.x * 0.6f));
     float3 scene = max(mul3(p.camToWork0, p.camToWork1, p.camToWork2, camera), 0.0f);
+    if (p.hueSat.x > 0.5f) {
+        scene = max(applyHueSatMap(scene, hueSatCool, hueSatWarm, p), 0.0f);
+    }
     scene *= p.tone.x * exp2(localTone.x);
     // Halation and bloom: highlight light scattered on its way to the image (see Glow.metal),
     // added in scene light. Halation reflects off the film base behind the emulsion, so it

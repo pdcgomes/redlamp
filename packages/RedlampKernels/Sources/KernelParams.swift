@@ -164,6 +164,13 @@ public struct DevelopParams {
     public var toImage1 = SIMD4<Float>(0, 1, 0, 0)
     public var toImage2 = SIMD4<Float>(0, 0, 1, 0)
     public var lens = SIMD4<Float>(0, 0, 0.5, 0)
+    public var hueSat = SIMD4<Float>(0, 1, 0, 0)
+    public var toProPhoto0 = SIMD4<Float>(1, 0, 0, 0)
+    public var toProPhoto1 = SIMD4<Float>(0, 1, 0, 0)
+    public var toProPhoto2 = SIMD4<Float>(0, 0, 1, 0)
+    public var fromProPhoto0 = SIMD4<Float>(1, 0, 0, 0)
+    public var fromProPhoto1 = SIMD4<Float>(0, 1, 0, 0)
+    public var fromProPhoto2 = SIMD4<Float>(0, 0, 1, 0)
 
     public init() {}
 
@@ -176,6 +183,12 @@ public struct DevelopParams {
     public mutating func setCameraToWorking(_ matrix: simd_float3x3) {
         (camToWork0, camToWork1, camToWork2) = Self.rows(matrix)
         (workToCam0, workToCam1, workToCam2) = Self.rows(matrix.inverse)
+    }
+
+    /// Working space to the space camera profiles' HueSatMaps work in.
+    public mutating func setWorkingToProPhoto(_ matrix: simd_float3x3) {
+        (toProPhoto0, toProPhoto1, toProPhoto2) = Self.rows(matrix)
+        (fromProPhoto0, fromProPhoto1, fromProPhoto2) = Self.rows(matrix.inverse)
     }
 
     public mutating func setDisplayToOutput(_ matrix: simd_float3x3) {

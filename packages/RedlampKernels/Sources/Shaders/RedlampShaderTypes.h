@@ -57,6 +57,14 @@ struct DevelopParams {
     float4 toImage1;          // (crop, straighten, Transform, user orientation; see GeometryMap);
     float4 toImage2;          // toImage0.w is the photo's aspect, which masks are shaped in
     float4 lens;              // x radial distortion k (see GeometryMap), y lens vignetting (slider / 100), z its midpoint (0...1)
+    float4 hueSat;            // process 4: x 1 = apply the camera profile's HueSatMap, y the cool map's weight,
+                              // z 1 = its value axis is sRGB-encoded
+    float4 toProPhoto0;       // linear Rec.2020 to linear ProPhoto (D50), rows
+    float4 toProPhoto1;
+    float4 toProPhoto2;
+    float4 fromProPhoto0;
+    float4 fromProPhoto1;
+    float4 fromProPhoto2;
 };
 
 // Noise reduction over one work area of the pyramid.

@@ -92,7 +92,7 @@ public struct DNGColorCalibration: Codable, Sendable, Hashable {
     }
 
     /// RATIONAL (5) or SRATIONAL (10) values.
-    private static func rationals(_ entry: TIFFReader.Entry, reader: TIFFReader) -> [Double] {
+    static func rationals(_ entry: TIFFReader.Entry, reader: TIFFReader) -> [Double] {
         guard entry.type == 5 || entry.type == 10, entry.count > 0 else { return [] }
         let start = Int(reader.u32(entry.valueOffset))
         guard start + entry.count * 8 <= reader.bytes.count else { return [] }

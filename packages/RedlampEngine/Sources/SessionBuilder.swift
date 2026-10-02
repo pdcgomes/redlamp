@@ -121,6 +121,7 @@ struct SessionBuilder {
             glowSource: glowSource,
             glowLights: glowLights,
             noiseGain: noiseGain,
+            hueSatMaps: decoded.isRaw ? HueSatMaps(profile: decoded.dngProfile, device: device) : nil,
         )
     }
 

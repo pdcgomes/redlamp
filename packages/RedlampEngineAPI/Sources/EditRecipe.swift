@@ -57,7 +57,8 @@ public struct EditRecipe: Sendable, Hashable {
     /// low midtones and shadows, as film's is.
     /// 3: a bitmap (JPEG, HEIC, PNG, TIFF) renders as the file at default settings, and halation
     /// boosts only small clipped lights, not a clipped sky.
-    public static let currentProcessVersion = 3
+    /// 4: a DNG's embedded camera profile corrects its colour with the profile's HueSatMap.
+    public static let currentProcessVersion = 4
     public static let linearPointCurve = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]
 
     /// Sidecars written before process versions existed are version 1.

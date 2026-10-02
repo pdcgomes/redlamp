@@ -21,6 +21,11 @@ public struct RGBPrimaries: Sendable, Hashable {
     public static let rec2020 = RGBPrimaries(
         red: [0.708, 0.292], green: [0.170, 0.797], blue: [0.131, 0.046], white: d65,
     )
+    /// ROMM RGB, the space DNG camera profiles' tables work in; its white is D50, so its
+    /// `toXYZ` gives D50-relative XYZ.
+    public static let proPhoto = RGBPrimaries(
+        red: [0.7347, 0.2653], green: [0.1596, 0.8404], blue: [0.0366, 0.0001], white: [0.3457, 0.3585],
+    )
 
     /// Linear RGB → CIE XYZ (Y = 1 for white).
     public var toXYZ: simd_double3x3 {
