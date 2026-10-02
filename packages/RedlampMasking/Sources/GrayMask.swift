@@ -62,19 +62,24 @@ public struct GrayMask: Sendable, Hashable {
         var out = [UInt8](repeating: 0, count: size.width * size.height)
         let sx = Double(width) / Double(size.width)
         let sy = Double(height) / Double(size.height)
-        for y in 0 ..< size.height {
-            let fy = min(max((Double(y) + 0.5) * sy - 0.5, 0), Double(height - 1))
-            let y0 = Int(fy)
-            let y1 = min(y0 + 1, height - 1)
-            let ty = fy - Double(y0)
-            for x in 0 ..< size.width {
-                let fx = min(max((Double(x) + 0.5) * sx - 0.5, 0), Double(width - 1))
-                let x0 = Int(fx)
-                let x1 = min(x0 + 1, width - 1)
-                let tx = fx - Double(x0)
-                let top = Double(pixels[y0 * width + x0]) * (1 - tx) + Double(pixels[y0 * width + x1]) * tx
-                let bottom = Double(pixels[y1 * width + x0]) * (1 - tx) + Double(pixels[y1 * width + x1]) * tx
-                out[y * size.width + x] = UInt8((top * (1 - ty) + bottom * ty).rounded())
+        let (width, height, pixels) = (width, height, pixels)
+        // Each row writes only its own pixels.
+        out.withUnsafeMutableBufferPointer { buffer in
+            nonisolated(unsafe) let result = buffer
+            DispatchQueue.concurrentPerform(iterations: size.height) { y in
+                let fy = min(max((Double(y) + 0.5) * sy - 0.5, 0), Double(height - 1))
+                let y0 = Int(fy)
+                let y1 = min(y0 + 1, height - 1)
+                let ty = fy - Double(y0)
+                for x in 0 ..< size.width {
+                    let fx = min(max((Double(x) + 0.5) * sx - 0.5, 0), Double(width - 1))
+                    let x0 = Int(fx)
+                    let x1 = min(x0 + 1, width - 1)
+                    let tx = fx - Double(x0)
+                    let top = Double(pixels[y0 * width + x0]) * (1 - tx) + Double(pixels[y0 * width + x1]) * tx
+                    let bottom = Double(pixels[y1 * width + x0]) * (1 - tx) + Double(pixels[y1 * width + x1]) * tx
+                    result[y * size.width + x] = UInt8((top * (1 - ty) + bottom * ty).rounded())
+                }
             }
         }
         return GrayMask(width: size.width, height: size.height, pixels: out)

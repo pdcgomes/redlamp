@@ -47,9 +47,13 @@ public enum SkyMatte {
         let regions = Self.regions(mask, width: width, height: height)
 
         let linear = Self.linear(rgb)
-        var sky = (0 ..< count).map { mask[$0] > 0.9 && !regions.near[$0] }
-        var solid = (0 ..< count).map { mask[$0] < 0.1 && !regions.near[$0] }
+        var sky = [Bool](repeating: false, count: count)
+        Parallel.fill(&sky) { mask[$0] > 0.9 && !regions.near[$0] }
+        var solid = [Bool](repeating: false, count: count)
+        Parallel.fill(&solid) { mask[$0] < 0.1 && !regions.near[$0] }
         guard sky.contains(true) else { return unchanged }
+        var seeds = [Bool](repeating: false, count: count)
+        Parallel.fill(&seeds) { mask[$0] > 0.5 }
         var result = mask
         for _ in 0 ..< 2 {
             let behind = SkyColour(linear, sky: sky, width: width, height: height)
@@ -62,24 +66,24 @@ public enum SkyMatte {
 
             // Far from the edge, only sky-like pixels connected to the sky through sky-like ones;
             // inside the sky, only what is clearly not sky (noise and cloud texture stay sky).
-            let likely = (0 ..< count).map {
-                refined[$0] > 0.5 && (regions.near[$0] || regions.far[$0] || mask[$0] > 0.5)
+            var likely = [Bool](repeating: false, count: count)
+            Parallel.fill(&likely) { index in
+                refined[index] > 0.5 && (regions.near[index] || regions.far[index] || mask[index] > 0.5)
             }
-            let connected = Self.connected(likely, seeds: mask.map { $0 > 0.5 }, width: width, height: height)
-            for index in 0 ..< count {
+            let connected = Self.connected(likely, seeds: seeds, width: width, height: height)
+            Parallel.fill(&result) { index in
                 let intrusion = regions.inside[index] && refined[index] < 0.75 && confidence[index] > 0.5
-                if regions.near[index] || (regions.far[index] && connected[index]) || intrusion {
-                    result[index] = refined[index]
-                } else {
-                    result[index] = mask[index]
-                }
+                return regions.near[index] || (regions.far[index] && connected[index]) || intrusion
+                    ? refined[index] : mask[index]
             }
             // The next pass learns the colours from what this one found.
-            for index in 0 ..< count {
-                let solved = regions.near[index] || regions.far[index]
-                sky[index] = (result[index] > 0.97 && confidence[index] > 0.5)
-                    || (mask[index] > 0.9 && !regions.near[index] && result[index] > 0.9)
-                solid[index] = result[index] < 0.03 && (confidence[index] > 0.5 || !solved)
+            let solved = result
+            Parallel.fill(&sky) { index in
+                (solved[index] > 0.97 && confidence[index] > 0.5)
+                    || (mask[index] > 0.9 && !regions.near[index] && solved[index] > 0.9)
+            }
+            Parallel.fill(&solid) { index in
+                solved[index] < 0.03 && (confidence[index] > 0.5 || !(regions.near[index] || regions.far[index]))
             }
         }
         return GrayMask(width: width, height: height, coverage: result)
@@ -166,14 +170,9 @@ public enum SkyMatte {
             return x <= 0.04045 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4)
         }
         var out = [SIMD3<Float>](repeating: .zero, count: rgb.width * rgb.height)
-        rgb.pixels.withUnsafeBufferPointer { pixels in
-            for index in out.indices {
-                out[index] = SIMD3(
-                    table[Int(pixels[index * 4])],
-                    table[Int(pixels[index * 4 + 1])],
-                    table[Int(pixels[index * 4 + 2])],
-                )
-            }
+        let pixels = rgb.pixels
+        Parallel.fill(&out) { index in
+            SIMD3(table[Int(pixels[index * 4])], table[Int(pixels[index * 4 + 1])], table[Int(pixels[index * 4 + 2])])
         }
         return out
     }
@@ -251,7 +250,9 @@ public enum SkyMatte {
                     }
                 }
             }
-            let weights = solid.indices.map { solid[$0] ? distinct[$0] * distinct[$0] * distinct[$0] : 0 }
+            var weights = [Float](repeating: 0, count: solid.count)
+            let separations = distinct
+            Parallel.fill(&weights) { solid[$0] ? separations[$0] * separations[$0] * separations[$0] : 0 }
             if weights.reduce(0, +) >= 1 {
                 filled = PullPush.fill(linear, weights: weights, width: width, height: height, levels: 7)
                 constant = .zero
@@ -371,6 +372,23 @@ public enum SkyMatte {
     }
 }
 
+/// Work split into a chunk per core.
+enum Parallel {
+    /// `array[i] = value(i)` for every index, in parallel; each chunk writes only its own indices.
+    static func fill<T>(_ array: inout [T], _ value: @Sendable (Int) -> T) {
+        let count = array.count
+        array.withUnsafeMutableBufferPointer { buffer in
+            nonisolated(unsafe) let out = buffer
+            let parts = max(1, min(count / 16384, ProcessInfo.processInfo.activeProcessorCount * 4))
+            DispatchQueue.concurrentPerform(iterations: parts) { part in
+                for index in part * count / parts ..< (part + 1) * count / parts {
+                    out[index] = value(index)
+                }
+            }
+        }
+    }
+}
+
 /// Fills values where their weight is 0 from the weighted values around them, coarse to fine
 /// (the pull-push of Gortler et al., 1996).
 enum PullPush {
@@ -385,7 +403,9 @@ enum PullPush {
         _ values: [SIMD3<Float>], weights: [Float], width: Int, height: Int, levels: Int?,
     ) -> [SIMD3<Float>] {
         var pyramid: [Level] = []
-        var level = Level(values: zip(values, weights).map { $0 * $1 }, weights: weights, width: width, height: height)
+        var weighted = [SIMD3<Float>](repeating: .zero, count: values.count)
+        Parallel.fill(&weighted) { values[$0] * weights[$0] }
+        var level = Level(values: weighted, weights: weights, width: width, height: height)
         while min(level.width, level.height) > 1, levels.map({ pyramid.count < $0 }) ?? true {
             pyramid.append(level)
             level = Self.down(level)
@@ -405,11 +425,20 @@ enum PullPush {
         let height = (level.height + 1) / 2
         var values = [SIMD3<Float>](repeating: .zero, count: width * height)
         var weights = [Float](repeating: 0, count: width * height)
-        for y in 0 ..< level.height {
-            for x in 0 ..< level.width {
-                let target = (y / 2) * width + x / 2
-                values[target] += level.values[y * level.width + x]
-                weights[target] += level.weights[y * level.width + x]
+        // Each output row sums its own two input rows.
+        values.withUnsafeMutableBufferPointer { valueBuffer in
+            weights.withUnsafeMutableBufferPointer { weightBuffer in
+                nonisolated(unsafe) let valuesOut = valueBuffer
+                nonisolated(unsafe) let weightsOut = weightBuffer
+                DispatchQueue.concurrentPerform(iterations: height) { row in
+                    for y in row * 2 ..< min(row * 2 + 2, level.height) {
+                        for x in 0 ..< level.width {
+                            let target = row * width + x / 2
+                            valuesOut[target] += level.values[y * level.width + x]
+                            weightsOut[target] += level.weights[y * level.width + x]
+                        }
+                    }
+                }
             }
         }
         return Level(values: values, weights: weights, width: width, height: height)
