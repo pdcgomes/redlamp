@@ -13,6 +13,14 @@ struct FolderRow: Equatable {
     let hasSubfolders: Bool
     let isMissing: Bool
     let isOpen: Bool
+    /// Opening it would show photos: it has some, or (with Show Photos in Subfolders) it has
+    /// subfolders that may. Folders not listed yet count as selectable, so rows don't flicker.
+    let isSelectable: Bool
+
+    /// Listed, and nothing to show: dimmed, and clicking it doesn't open it.
+    var isEmpty: Bool {
+        !isMissing && !isSelectable
+    }
 
     var isRoot: Bool {
         url.standardizedFileURL.path == root.path
@@ -27,13 +35,23 @@ extension SidebarCellView {
         let trailing: NSView?
     }
 
-    /// A folder's icon, name and photo count; a missing root is dimmed with a question mark.
+    /// A folder's icon, name and photo count; a missing root is dimmed with a question mark, and a
+    /// folder with no photos to show is dimmed.
     func showFolder(_ row: FolderRow, label: NSTextField) -> FolderDecoration {
+        let dimmed = row.isMissing || row.isEmpty
         label.stringValue = row.name
-        label.textColor = (row.isMissing ? Palette.tertiaryLabel : row.isOpen ? Palette.labelHover : Palette.label)
-            .nsColor
-        toolTip = row.isMissing ? "\(row.root.path)\nNot found: it may be on a disk that isn't connected" : row.url.path
-        setAccessibilityLabel(row.name + (row.isMissing ? ", missing" : row.isOpen ? ", open" : ""))
+        label.textColor = (dimmed ? Palette.tertiaryLabel : row.isOpen ? Palette.labelHover : Palette.label).nsColor
+        toolTip = if row.isMissing {
+            "\(row.root.path)\nNot found: it may be on a disk that isn't connected"
+        } else if row.isEmpty {
+            row.hasSubfolders
+                ? "\(row.url.path)\nNo photos directly in this folder. Turn on Show Photos in Subfolders to see the ones below it."
+                : "\(row.url.path)\nNo photos in this folder"
+        } else {
+            row.url.path
+        }
+        setAccessibilityLabel(row
+            .name + (row.isMissing ? ", missing" : row.isEmpty ? ", no photos" : row.isOpen ? ", open" : ""))
         var trailing: NSView?
         if let count = row.count, !row.isMissing {
             let text = NSTextField(labelWithString: count.formatted())
@@ -45,7 +63,7 @@ extension SidebarCellView {
         }
         let symbol = row.isMissing ? "folder.badge.questionmark" : row.isOpen ? "folder.fill" : "folder"
         return FolderDecoration(
-            symbol: symbol, color: row.isMissing ? Palette.tertiaryLabel : Palette.secondaryLabel, trailing: trailing,
+            symbol: symbol, color: dimmed ? Palette.tertiaryLabel : Palette.secondaryLabel, trailing: trailing,
         )
     }
 

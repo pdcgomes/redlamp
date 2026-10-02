@@ -34,6 +34,8 @@ final class FolderOutlineView: SidebarOutlineView {
             guard let self else { return }
             let roots = library.roots
             let missing = library.missing
+            // Which folders can be opened depends on Show Photos in Subfolders.
+            _ = library.includesSubfolders
             showRoots(roots, missing: missing)
         }
         openTracker = Tracker { [weak self] in
@@ -56,9 +58,12 @@ final class FolderOutlineView: SidebarOutlineView {
     private func row(for url: URL, root: WorkingFolder, missing: Bool) -> FolderRow {
         let listed = missing ? nil : library.node(for: url)
         let path = url.standardizedFileURL.path
+        let hasSubfolders = !(listed?.subfolders.isEmpty ?? true)
+        let selectable = !missing &&
+            (listed.map { $0.count > 0 || library.includesSubfolders && hasSubfolders } ?? true)
         return FolderRow(
             url: url, name: path == root.path ? root.name : url.lastPathComponent, root: root, count: listed?.count,
-            hasSubfolders: !(listed?.subfolders.isEmpty ?? true), isMissing: missing, isOpen: path == openPath,
+            hasSubfolders: hasSubfolders, isMissing: missing, isOpen: path == openPath, isSelectable: selectable,
         )
     }
 

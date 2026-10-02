@@ -67,6 +67,53 @@ struct FoldersPanelTests {
         #expect(model.library.isExpanded(trip.url))
     }
 
+    @Test func `a folder with no photos is dimmed and can't be opened, until photos arrive`() async throws {
+        defer { try? FileManager.default.removeItem(at: root) }
+        try photos(["Trip/a.ARW", "Trip/Day 2/b.ARW"])
+        try FileManager.default.createDirectory(
+            at: root.appending(path: "Trip/Empty"),
+            withIntermediateDirectories: true,
+        )
+        let model = EditorModel(engine: StubEngine())
+        model.open([root.appending(path: "Trip")])
+        model.library.setExpanded(root.appending(path: "Trip"), true)
+        let (list, window) = showPanel(model)
+        defer { window.contentView = nil }
+        func row(_ name: String) -> FolderRow? {
+            rows(list.folders).first { $0.name == name }
+        }
+        try await eventually { row("Empty")?.count == 0 && row("Day 2")?.count == 1 }
+        let empty = try #require(row("Empty"))
+        #expect(empty.isEmpty && !empty.isSelectable)
+        #expect(row("Day 2")?.isSelectable == true)
+
+        list.folders.open(empty)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(model.folder?.lastPathComponent == "Trip", "clicking an empty folder doesn't open it")
+
+        try photos(["Trip/Empty/c.ARW"])
+        try await eventually { row("Empty")?.isSelectable == true }
+        #expect(row("Empty")?.count == 1, "photos arriving undim it")
+        try list.folders.open(#require(row("Empty")))
+        try await eventually { model.folder?.lastPathComponent == "Empty" }
+        #expect(model.folder?.lastPathComponent == "Empty")
+    }
+
+    @Test func `a folder holding only subfolders opens with Show Photos in Subfolders`() async throws {
+        defer { try? FileManager.default.removeItem(at: root) }
+        try photos(["Year/March/a.ARW"])
+        let model = EditorModel(engine: StubEngine())
+        model.library.add([root.appending(path: "Year")])
+        let (list, window) = showPanel(model)
+        defer { window.contentView = nil }
+        try await eventually { rows(list.folders).first?.count == 0 }
+        #expect(rows(list.folders).first?.isSelectable == false)
+
+        model.library.setIncludesSubfolders(true)
+        try await eventually { rows(list.folders).first?.isSelectable == true }
+        #expect(rows(list.folders).first?.isSelectable == true)
+    }
+
     @Test func `a missing root is flagged in the panel`() async throws {
         defer { try? FileManager.default.removeItem(at: root) }
         try photos(["Gone/a.ARW"])

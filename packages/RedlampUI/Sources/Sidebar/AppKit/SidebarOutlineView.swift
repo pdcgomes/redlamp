@@ -238,9 +238,15 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
         let chevronEnd = frameOfCell(atColumn: 0, row: clickedRow).minX + SidebarCellView.Layout.chevronSize.width + 4
         if isExpandable(node), location.x < chevronEnd {
             toggle(node)
-        } else if !folder.isMissing {
-            model.showFolder(folder.url)
+        } else {
+            open(folder)
         }
+    }
+
+    /// Shows the folder in the filmstrip, unless it's missing or has nothing to show.
+    func open(_ folder: FolderRow) {
+        guard folder.isSelectable else { return }
+        model.showFolder(folder.url)
     }
 
     private func toggle(_ node: SidebarNode) {
