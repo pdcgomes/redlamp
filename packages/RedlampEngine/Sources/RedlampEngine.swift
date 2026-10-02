@@ -144,6 +144,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         let built = try await sessions.session(for: url)
         guard openGeneration.withLock({ $0 == generation }) else { throw CancellationError() }
         session.withLock { $0 = built }
+        registerEmbeddedLook(built)
         warmIfWanted(built)
         return built.info
     }
@@ -152,6 +153,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         guard let ready = sessions.cached(url) else { return nil }
         openGeneration.withLock { $0 += 1 }
         session.withLock { $0 = ready }
+        registerEmbeddedLook(ready)
         warmIfWanted(ready)
         return ready.info
     }
@@ -515,6 +517,17 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
 
     public func canRender(_ reference: BaseLookReference) -> Bool {
         baseLooks.canRender(reference)
+    }
+
+    public func embeddedBaseLook() -> BaseLookDefinition? {
+        session.withLock { $0 }?.embeddedLook
+    }
+
+    /// Makes the photo's embedded look renderable while it is open.
+    private func registerEmbeddedLook(_ session: ImageSession) {
+        if let look = session.embeddedLook {
+            baseLooks.register(look)
+        }
     }
 }
 

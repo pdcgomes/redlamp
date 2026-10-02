@@ -54,9 +54,10 @@ public final class RecipeCatalog {
         return library.baseLooks
     }
 
-    /// Each look once, at its newest version: what menus and the browser offer.
+    /// Each look once, at its newest version: what menus and the browser offer. Looks
+    /// embedded in photos are offered only with their photo.
     public var currentBaseLooks: [BaseLookPackage] {
-        BuiltInBaseLooks.newest(baseLooks)
+        BuiltInBaseLooks.newest(baseLooks).filter { !$0.reference.isEmbedded }
     }
 
     public func recipe(id: String) -> Recipe? {
@@ -97,6 +98,18 @@ public final class RecipeCatalog {
     }
 
     // MARK: - Changing
+
+    /// Keeps a look with the installed ones, so edits that use it render without its source,
+    /// such as a photo's embedded camera profile look.
+    public func remember(_ look: BaseLookDefinition) {
+        guard package(for: look.reference) == nil else { return }
+        perform {
+            try library.lookStore.save(BaseLookPackage(
+                id: look.id, version: look.version, name: look.name, parameters: look.parameters, table: look.table,
+            ))
+            library.reload()
+        }
+    }
 
     @discardableResult
     public func save(_ recipe: Recipe) -> Recipe? {

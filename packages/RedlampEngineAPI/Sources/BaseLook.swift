@@ -31,6 +31,14 @@ public struct BaseLookReference: Sendable, Hashable {
         return copy
     }
 
+    /// The id prefix of looks baked from photos' embedded camera profiles.
+    public static let embeddedIDPrefix = "local/embedded/"
+
+    /// Whether the look came from a photo's embedded camera profile.
+    public var isEmbedded: Bool {
+        id.hasPrefix(Self.embeddedIDPrefix)
+    }
+
     /// Whether `other` names the same look and version, whatever its strength.
     public func isSameLook(as other: BaseLookReference) -> Bool {
         id == other.id && version == other.version && contentHash == other.contentHash

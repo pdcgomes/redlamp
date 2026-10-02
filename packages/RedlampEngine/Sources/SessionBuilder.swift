@@ -106,6 +106,8 @@ struct SessionBuilder {
         let colorModel = decoded.isRaw ? decoded.xyzToCamera.flatMap(CameraColorModel.init(xyzToCameraRowMajor:)) : nil
         var info = decoded.info
         info.asShotWhiteBalance = colorModel?.whiteBalance(forMultipliers: decoded.asShotMultipliers)
+        let embeddedLook = decoded.isRaw ? decoded.dngProfile.flatMap(EmbeddedLook.definition) : nil
+        info.embeddedBaseLook = embeddedLook?.reference
 
         return ImageSession(
             info: info,
@@ -122,6 +124,7 @@ struct SessionBuilder {
             glowLights: glowLights,
             noiseGain: noiseGain,
             hueSatMaps: decoded.isRaw ? HueSatMaps(profile: decoded.dngProfile, device: device) : nil,
+            embeddedLook: embeddedLook,
         )
     }
 

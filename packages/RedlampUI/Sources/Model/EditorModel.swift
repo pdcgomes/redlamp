@@ -725,6 +725,9 @@ public final class EditorModel {
     }
 
     public func setBaseLook(_ look: BaseLookReference) {
+        if let embedded = engine.embeddedBaseLook(), embedded.reference.isSameLook(as: look) {
+            recipes.remember(embedded)
+        }
         var next = recipe
         next.baseLook = look.withAmount(recipe.baseLook.isSameLook(as: look) ? recipe.baseLook.amount : look.amount)
         if look == BuiltInBaseLook.monochrome.reference || recipes.package(for: look)?.parameters.isMonochrome == true {

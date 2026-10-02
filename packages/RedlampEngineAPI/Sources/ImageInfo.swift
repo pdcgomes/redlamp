@@ -53,6 +53,9 @@ public struct ImageInfo: Codable, Sendable, Hashable {
     public var captureDate: Date?
     /// The camera's recorded white balance; `nil` for images that are not raw.
     public var asShotWhiteBalance: WhiteBalanceValue?
+    /// The look of the camera profile the file embeds (a DNG's LookTable or tone curve), as a
+    /// Base Look the engine can render while the photo is open.
+    public var embeddedBaseLook: BaseLookReference?
 
     public init(
         url: URL,

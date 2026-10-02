@@ -22,7 +22,8 @@ options:
                            facialHair, clothes)
   --mask-set <name>=<v>    set a local adjustment of the last mask, e.g. --mask-set local.exposure=-1
   --mask-invert            invert the last mask's components
-  --base-look <name>       color, neutral, vivid, landscape, portrait, monochrome (--profile works too)
+  --base-look <name>       color, neutral, vivid, landscape, portrait, monochrome, or embedded (the
+                           camera profile's look a DNG carries); --profile works too
   --wb <mode>              asShot, auto, daylight, cloudy, shade, tungsten, fluorescent, flash
   --bw                     black & white treatment
   --p3                     encode in Display P3 instead of sRGB
@@ -125,6 +126,13 @@ func run(_ arguments: [String]) async throws {
             recipe[id] = number
         case "--profile", "--base-look":
             let name = try value()
+            if name == "embedded" {
+                guard let embedded = info.embeddedBaseLook else {
+                    throw CLIError(description: "\(info.fileName) embeds no camera profile look")
+                }
+                recipe.baseLook = embedded
+                break
+            }
             guard let look = BuiltInBaseLook(legacyID: name) ?? BuiltInBaseLook(legacyID: "redlamp.\(name)") else {
                 throw CLIError(description: "unknown base look \(name)")
             }

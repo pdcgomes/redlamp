@@ -72,6 +72,20 @@ struct BaseLookMenu: View {
         let current = model.baseLook
         let groups = BaseLookGroups(model.recipes.currentBaseLooks)
         Menu {
+            if let embedded = model.info?.embeddedBaseLook {
+                Section("In This Photo") {
+                    Button {
+                        model.setBaseLook(embedded)
+                    } label: {
+                        if embedded.isSameLook(as: current) {
+                            Label(embedded.name, systemImage: "checkmark")
+                        } else {
+                            Text(embedded.name)
+                        }
+                    }
+                    .help("The look of the camera profile embedded in this file")
+                }
+            }
             ForEach(groups.sections, id: \.name) { section in
                 Section(section.name) {
                     ForEach(section.looks, id: \.self) { look in

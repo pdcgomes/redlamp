@@ -92,6 +92,10 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// Whether the engine can render `reference` exactly as pinned.
     func canRender(_ reference: BaseLookReference) -> Bool
 
+    /// The open photo's embedded camera profile look (`ImageInfo.embeddedBaseLook`), for
+    /// keeping with the installed looks once an edit uses it.
+    func embeddedBaseLook() -> BaseLookDefinition?
+
     /// The focus stack document at `url`, merged now or read from the cache, developed with the
     /// default edit within `maxLongEdge`. `progress` gets 0 ... 1 from any thread. Opening the
     /// document afterwards shows this merge, even if it changed since it was last opened.
@@ -108,6 +112,10 @@ public extension EditingEngine {
     }
 
     func decodeThumbnail(for _: URL, maxPixelSize _: Int) -> CGImage? {
+        nil
+    }
+
+    func embeddedBaseLook() -> BaseLookDefinition? {
         nil
     }
 }

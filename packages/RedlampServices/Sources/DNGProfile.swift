@@ -43,6 +43,9 @@ public struct DNGProfile: Codable, Sendable, Hashable {
     /// Input-output pairs in 0...1, input increasing.
     public var toneCurve: [SIMD2<Float>]?
     public var baselineExposureOffset: Double
+    /// Whether the file has a ProfileGainTableMap (DNG 1.6), a local tone map the profile's
+    /// tone curve is designed to follow, as Apple ProRAW's is. Redlamp doesn't apply one yet.
+    public var hasGainTableMap: Bool
 
     public init(
         name: String?,
@@ -53,6 +56,7 @@ public struct DNGProfile: Codable, Sendable, Hashable {
         lookTable: HSVMap?,
         toneCurve: [SIMD2<Float>]?,
         baselineExposureOffset: Double,
+        hasGainTableMap: Bool = false,
     ) {
         self.name = name
         self.copyright = copyright
@@ -62,6 +66,7 @@ public struct DNGProfile: Codable, Sendable, Hashable {
         self.lookTable = lookTable
         self.toneCurve = toneCurve
         self.baselineExposureOffset = baselineExposureOffset
+        self.hasGainTableMap = hasGainTableMap
     }
 
     /// Whether the profile has anything beyond matrices.
@@ -123,6 +128,7 @@ public struct DNGProfile: Codable, Sendable, Hashable {
             toneCurve: Self.isValidCurve(points) ? points : nil,
             baselineExposureOffset: tags[0xC7A5]
                 .flatMap { DNGColorCalibration.rationals($0, reader: reader).first } ?? 0,
+            hasGainTableMap: tags[0xCD2D] != nil,
         )
         return profile.isEmpty ? nil : profile
     }

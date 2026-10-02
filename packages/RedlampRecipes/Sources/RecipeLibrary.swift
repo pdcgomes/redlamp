@@ -236,11 +236,13 @@ public final class RecipeLibrary {
         reload()
     }
 
-    /// A self-contained copy for sharing: the Base Look travels inside the file.
+    /// A self-contained copy for sharing: the Base Look travels inside the file, unless it
+    /// came from a photo's camera profile, whose maker's terms Redlamp doesn't pass on.
     public func exportable(_ recipe: Recipe) -> Recipe {
         var recipe = recipe
         if let look = recipe.baseLook, !recipe.embeddedBaseLooks.contains(where: { $0.matches(look) }),
-           BuiltInBaseLook(reference: look) == nil, let package = package(for: look) {
+           BuiltInBaseLook(reference: look) == nil, !look.isEmbedded,
+           let package = package(for: look) {
             recipe.embeddedBaseLooks.append(package)
         }
         return recipe

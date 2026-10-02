@@ -45,6 +45,8 @@ final class ImageSession: @unchecked Sendable {
     /// The DNG's embedded camera profile, and its HueSatMaps on the GPU when it has some.
     let dngProfile: DNGProfile?
     let hueSatMaps: HueSatMaps?
+    /// The profile's look baked into a Base Look (`EmbeddedLook`).
+    let embeddedLook: BaseLookDefinition?
 
     init(
         info: ImageInfo,
@@ -61,10 +63,12 @@ final class ImageSession: @unchecked Sendable {
         glowLights: any MTLTexture,
         noiseGain: any MTLTexture,
         hueSatMaps: HueSatMaps? = nil,
+        embeddedLook: BaseLookDefinition? = nil,
     ) {
         self.noiseGain = noiseGain
         dngProfile = decoded.isRaw ? decoded.dngProfile : nil
         self.hueSatMaps = decoded.isRaw ? hueSatMaps : nil
+        self.embeddedLook = decoded.isRaw ? embeddedLook : nil
         self.repairedPixels = repairedPixels
         self.airlight = airlight
         self.hazeMap = hazeMap
