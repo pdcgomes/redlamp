@@ -26,6 +26,35 @@ enum LookTableFixtures {
         return lines.joined(separator: "\n")
     }
 
+    /// Lustre's 10-bit input mesh: `0 64 … 960 1023` for 17 points.
+    static func lustreMesh(size: Int) -> [Int] {
+        (0 ..< size).map { min($0 * 1024 / (size - 1), 1023) }
+    }
+
+    /// A `.3dl` sampled at its mesh points, blue varying fastest, with `bits`-bit output.
+    static func threeDL(
+        size: Int,
+        bits: Int = 12,
+        header: [String] = [],
+        _ transform: (SIMD3<Float>) -> SIMD3<Float>,
+    ) -> String {
+        let mesh = lustreMesh(size: size)
+        let top = Float(mesh[size - 1])
+        let scale = Float((1 << bits) - 1)
+        var lines = header + [mesh.map(String.init).joined(separator: " ")]
+        for r in 0 ..< size {
+            for g in 0 ..< size {
+                for b in 0 ..< size {
+                    let input = SIMD3(Float(mesh[r]), Float(mesh[g]), Float(mesh[b])) / top
+                    let v = (simd_clamp(transform(input), .zero, SIMD3(repeating: 1)) * scale)
+                        .rounded(.toNearestOrAwayFromZero)
+                    lines.append("\(Int(v.x)) \(Int(v.y)) \(Int(v.z))")
+                }
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+
     static func gradedHald() throws -> CGImage {
         let identity = try #require(LookTableImport.haldIdentity(level: 4))
         var pixels = try #require(PixelImage(identity, colorSpace: CGColorSpace(name: CGColorSpace.sRGB)))
@@ -114,5 +143,112 @@ struct ExistingLookTableImportTests {
             SIMD3(0.06000, 0.65552, 0.38000), SIMD3(0.14822, 0.49235, 0.80181), SIMD3(0.62598, 0.39771, 0.79980),
             SIMD3(0.05302, 0.81885, 0.58484), SIMD3(0.95020, 0.89990, 0.39990), SIMD3(0.05002, 0.00000, 1.00000),
         ])
+    }
+}
+
+struct ThreeDLImportTests {
+    /// Written out by hand from the format: rows run with blue fastest and red slowest, and
+    /// every corner's output mixes channels, so reading them in another order moves values.
+    static let corners = """
+    # Lustre 3D LUT
+    0 1023
+    100 200 300
+    1100 200 2300
+    100 3200 1000
+    1100 3200 3000
+    2100 700 300
+    3100 700 2300
+    2100 3700 1000
+    3100 3700 3000
+    """
+
+    static func cornerOutput(r: Int, g: Int, b: Int) -> SIMD3<Float> {
+        SIMD3(Float(2000 * r + 1000 * b + 100), Float(3000 * g + 500 * r + 200), Float(2000 * b + 700 * g + 300)) / 4095
+    }
+
+    @Test func `rows run with blue fastest and red slowest`() throws {
+        let table = try LookTableImport.parse3DL(Self.corners, space: .displayRec2020)
+        for r in 0 ... 1 {
+            for g in 0 ... 1 {
+                for b in 0 ... 1 {
+                    let corner = SIMD3(Float(r), Float(g), Float(b))
+                    #expect(simd_distance(table.sample(corner), Self.cornerOutput(r: r, g: g, b: b)) < 1e-3)
+                }
+            }
+        }
+    }
+
+    @Test func `a .3dl imports like a .cube of the same grade`() throws {
+        let threeDL = LookTableFixtures.threeDL(size: 17, LookTableFixtures.grade)
+        // A .3dl's integers stop at white.
+        let cube = LookTableFixtures
+            .cube(size: 17) { simd_clamp(LookTableFixtures.grade($0), .zero, SIMD3(repeating: 1)) }
+        for space in [ImportedTableSpace.displayRec2020, .sRGB] {
+            let a = try LookTableImport.parse3DL(threeDL, space: space)
+            let b = try LookTableImport.parseCube(cube, space: space).table
+            #expect(a.size == b.size && a.space == b.space)
+            let worst = zip(a.values, b.values).map { abs(Float($0) - Float($1)) }.max() ?? 0
+            #expect(worst < 3e-3, "\(space): \(worst)")
+        }
+    }
+
+    @Test(arguments: [17, 33, 65])
+    func `the common mesh sizes import, stored at up to 33 points`(size: Int) throws {
+        let table = try LookTableImport.parse3DL(LookTableFixtures.threeDL(size: size) { $0 }, space: .displayRec2020)
+        #expect(table.size == min(size, LookTableImport.storedSize))
+        #expect(table.isIdentity)
+    }
+
+    @Test(arguments: [10, 12, 16])
+    func `the output bit depth comes from the largest value`(bits: Int) throws {
+        let text = LookTableFixtures.threeDL(size: 17, bits: bits) { $0 }
+        #expect(try LookTableImport.parse3DL(text, space: .displayRec2020).isIdentity)
+    }
+
+    @Test func `a Mesh header gives the output bit depth`() throws {
+        // Every value is 1000: white in a 10-bit file, a dark grey in a 12-bit one.
+        let dark = LookTableFixtures.threeDL(size: 17, bits: 12) { _ in SIMD3(repeating: 1000 / 4095) }
+        let inferred = try LookTableImport.parse3DL(dark, space: .displayRec2020)
+        #expect(abs(inferred.sample(SIMD3(repeating: 0.5)).x - 1000 / 1023) < 1e-3)
+        let flame = "3DMESH\nMesh 4 12\n\(dark)\nLUT8\ngamma 1.0\n"
+        let declared = try LookTableImport.parse3DL(flame, space: .displayRec2020)
+        #expect(abs(declared.sample(SIMD3(repeating: 0.5)).x - 1000 / 4095) < 1e-3)
+    }
+
+    @Test func `an identity stays an identity through the sRGB conversion`() throws {
+        let table = try LookTableImport.parse3DL(LookTableFixtures.threeDL(size: 17) { $0 })
+        for probe in [SIMD3<Float>(0.4, 0.5, 0.6), SIMD3(0.1, 0.2, 0.9), SIMD3(0.9, 0.9, 0.9)] {
+            #expect(simd_distance(table.sample(probe), probe) < 5e-3)
+        }
+    }
+
+    @Test func `bad files are rejected with the reason`() {
+        let rows = String(repeating: "0 0 0\n", count: 8)
+        let cases: [(String, String)] = [
+            ("", "no line of input mesh points"),
+            ("# just a comment\n3DMESH\n", "no line of input mesh points"),
+            ("0 512 1023\n0 0 0\n", "expected 27 rows, found 1"),
+            ("1023 0\n" + rows, "the input mesh points must increase"),
+            ("0 1023\n0 0\n" + rows, "a row isn't three whole numbers"),
+            ("0 1023\n0.5 0 0\n" + rows, "a row isn't three whole numbers"),
+            ("0 1023\n" + rows.replacingOccurrences(of: "0 0 0", with: "0 -4 0"), "values can't be negative"),
+            ("0 1023\n70000 0 0\n" + rows.dropFirst(6), "values above 65535 aren't 10, 12 or 16-bit"),
+            ("Mesh 4 12\n0 1023\n" + rows, "the Mesh line gives 17 points, but the mesh has 2"),
+            ("Mesh 0 10\n0 1023\n2000 0 0\n" + rows.dropFirst(6), "a value exceeds the Mesh line's 10 bits"),
+            ("Mesh 4\n0 1023\n" + rows, "a Mesh line gives the mesh size and output bits, as in Mesh 4 12"),
+        ]
+        for (text, reason) in cases {
+            #expect(throws: LookTableImportError.notA3DL(reason), "\(reason)") { try LookTableImport.parse3DL(text) }
+        }
+        let wide = (0 ..< 66).map(String.init).joined(separator: " ")
+        #expect(throws: LookTableImportError.unsupportedSize(66)) { try LookTableImport.parse3DL(wide) }
+    }
+
+    @Test func `a .3dl becomes a recipe that carries its table`() throws {
+        let table = try LookTableImport.parse3DL(LookTableFixtures.threeDL(size: 17, LookTableFixtures.grade))
+        let recipe = LookTableImport.recipe(for: table, name: "Lustre Grade")
+        let (decoded, issues) = try RecipeValidator.decode(RecipeFile.encode(recipe))
+        #expect(issues.isEmpty)
+        #expect(try decoded.embeddedBaseLooks.first?.definition().table == table)
     }
 }
