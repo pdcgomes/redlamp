@@ -128,8 +128,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
 
         let stacks = FocusStackCache(device: device, kernels: kernels, root: stackCache)
         self.stacks = stacks
-        var builder = SessionBuilder(device: device, queue: buildQueue, kernels: kernels)
-        builder.lensProfiles = lensProfiles
+        let builder = SessionBuilder(device: device, queue: buildQueue, kernels: kernels, lensProfiles: lensProfiles)
         let signposter = signposts
         sessions = SessionCache(
             budget: min(Int(device.recommendedMaxWorkingSetSize) / 4, 3 << 30),

@@ -103,7 +103,7 @@ struct LCPProfileLibraryTests {
         #expect(LensCorrectionReader
             .correction(for: Self.decoded(Self.info, lens: builtIn), profiles: library) == builtIn)
         #expect(LensCorrectionReader.correction(for: Self.decoded(Self.info, lens: nil), profiles: library)?
-            .source == .dng)
+            .source == .profile)
         #expect(LensCorrectionReader.correction(for: Self.decoded(Self.info, lens: nil), profiles: nil) == nil)
         let bitmap = Self.decoded(Self.info, lens: nil, layout: .linearSRGBHalf)
         #expect(LensCorrectionReader.correction(for: bitmap, profiles: library) == nil)
@@ -214,7 +214,7 @@ struct LCPProfileLibraryTests {
         let library = LCPProfileLibrary(directory: directory)
         #expect(nikon.lensCorrection == nil)
         let corrected = try #require(LensCorrectionReader.correction(for: nikon, profiles: library))
-        #expect(corrected.source == .dng && corrected.correctsColorFringes && !corrected.vignetting.isEmpty)
+        #expect(corrected.source == .profile && corrected.correctsColorFringes && !corrected.vignetting.isEmpty)
         #expect(LensCorrectionReader.correction(for: sony, profiles: library) == sony.lensCorrection)
         #expect(sony.lensCorrection?.source == .sony)
     }
