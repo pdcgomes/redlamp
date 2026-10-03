@@ -1,7 +1,9 @@
 import Foundation
 
-// Coded by hand so fields a newer Redlamp wrote come back out unchanged. The keys and
-// which of them are optional match what synthesized coding wrote before.
+// Coded by hand so fields a newer Redlamp wrote come back out unchanged. Every stored
+// property must be decoded and encoded here, under the key and with the optionality
+// synthesized coding gave it: a property added to the type but not here is lost on the next
+// save (HandCodedTypeTests catches it).
 
 public extension AppliedRecipe {
     private enum CodingKeys: String, CodingKey, CaseIterable {

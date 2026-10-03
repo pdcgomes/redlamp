@@ -75,7 +75,7 @@ struct UnknownFieldTests {
         let json = #"{"id":"local/test","version":1,"name":"Test","amount":80,"#
             + #""seed":9007199254740993,"low":-9007199254740993,"hash":18446744073709551615,"ratio":0.1}"#
         let recipe = try JSONDecoder().decode(AppliedRecipe.self, from: Data(json.utf8))
-        let written = try String(decoding: JSONEncoder().encode(recipe), as: UTF8.self)
+        let written = try String(bytes: JSONEncoder().encode(recipe), encoding: .utf8) ?? ""
         for field in [#""seed":9007199254740993"#, #""low":-9007199254740993"#, #""hash":18446744073709551615"#] {
             #expect(written.contains(field))
         }
