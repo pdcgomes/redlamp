@@ -105,7 +105,7 @@ public extension EditorModel {
             showMaskOverlay.toggle()
         case .maskOverlayColor:
             if activeTool == .crop {
-                cropOverlayTurns = (cropOverlayTurns + 1) % 4
+                cropOverlayTurns = (cropOverlayTurns + 1) % CropOverlay.orientations
                 return true
             }
             guard activeTool == .masking else { return false }

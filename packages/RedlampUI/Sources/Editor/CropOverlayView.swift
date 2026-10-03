@@ -25,11 +25,7 @@ struct CropOverlayView: View {
     var body: some View {
         GeometryReader { geometry in
             let frame = model.canvas.imageRect(in: geometry.size)
-            let crop = model.recipe.crop
-            let rect = CGRect(
-                x: frame.minX + crop.left * frame.width, y: frame.minY + crop.top * frame.height,
-                width: crop.width * frame.width, height: crop.height * frame.height,
-            )
+            let rect = Self.rect(of: model.recipe.crop, in: frame)
             ZStack {
                 // Outside the crop a drag only draws a level line.
                 Color.clear
@@ -42,6 +38,10 @@ struct CropOverlayView: View {
                 }
                 .fill(Color.black.opacity(0.55), style: FillStyle(eoFill: true))
                 .allowsHitTesting(false)
+
+                Self.faintOverlay(model.cropOverlay, turns: model.cropOverlayTurns, in: rect)
+                    .stroke(Color.white.opacity(0.18), lineWidth: 0.5)
+                    .allowsHitTesting(false)
 
                 Self.overlay(model.cropOverlay, turns: model.cropOverlayTurns, in: rect)
                     .stroke(Color.white.opacity(0.35), lineWidth: 0.5)
@@ -80,6 +80,14 @@ struct CropOverlayView: View {
                 }
             }
         }
+    }
+
+    /// The crop's rectangle on screen, in the straightened frame's.
+    nonisolated static func rect(of crop: CropRect, in frame: CGRect) -> CGRect {
+        CGRect(
+            x: frame.minX + crop.left * frame.width, y: frame.minY + crop.top * frame.height,
+            width: crop.width * frame.width, height: crop.height * frame.height,
+        )
     }
 
     /// The guide, turned `turns` times where it isn't symmetric.
@@ -123,6 +131,29 @@ struct CropOverlayView: View {
                     let t = ((corner.x - a.x) * ab.x + (corner.y - a.y) * ab.y) / (ab.x * ab.x + ab.y * ab.y)
                     line(corner, CGPoint(x: a.x + ab.x * t, y: a.y + ab.y * t))
                 }
+            case .goldenSpiral:
+                let arcs = GoldenSpiral(in: rect, turns: turns).arcs
+                if let first = arcs.first {
+                    path.move(to: first.start)
+                }
+                for arc in arcs {
+                    path.addCurve(to: arc.end, control1: arc.control1, control2: arc.control2)
+                }
+            case .aspectRatios:
+                for outline in CropOverlay.aspectOutlines(in: rect) {
+                    path.addRect(outline)
+                }
+            }
+        }
+    }
+
+    /// The guide's faint lines: the golden spiral's squares.
+    private nonisolated static func faintOverlay(_ kind: CropOverlay, turns: Int, in rect: CGRect) -> Path {
+        Path { path in
+            guard kind == .goldenSpiral else { return }
+            for divider in GoldenSpiral(in: rect, turns: turns).dividers {
+                path.move(to: divider.start)
+                path.addLine(to: divider.end)
             }
         }
     }
@@ -242,5 +273,96 @@ struct CropOverlayView: View {
             }
         }
         return EditorModel.shifted(crop, inside: .full)
+    }
+}
+
+/// The golden spiral in a rectangle: quarter arcs through the golden rectangle's successive
+/// squares, each cut at the golden ratio from what is left. In any other rectangle the squares
+/// and arcs are stretched with it. Of the eight orientations (`turns`), the first four put the
+/// eye in the bottom right, bottom left, top left and top right corners, cutting the longer side
+/// first; the last four wind the other way into the same corners, cutting the shorter side first.
+struct GoldenSpiral: Equatable {
+    /// A quarter of an ellipse from `start` to `end` about `center`, its axes the frame's.
+    struct Arc: Equatable {
+        var center: CGPoint
+        var start: CGPoint
+        var end: CGPoint
+
+        /// The control points of the cubic Bézier that draws it: a quarter circle's, stretched.
+        var control1: CGPoint {
+            CGPoint(x: start.x + Self.kappa * (end.x - center.x), y: start.y + Self.kappa * (end.y - center.y))
+        }
+
+        var control2: CGPoint {
+            CGPoint(x: end.x + Self.kappa * (start.x - center.x), y: end.y + Self.kappa * (start.y - center.y))
+        }
+
+        private static let kappa = 4 * (sqrt(2) - 1) / 3
+    }
+
+    /// Outermost first, each starting where the one before ends, down to a couple of points.
+    private(set) var arcs: [Arc] = []
+
+    /// The lines between its squares: each arc's centre to its end.
+    var dividers: [(start: CGPoint, end: CGPoint)] {
+        arcs.map { (start: $0.center, end: $0.end) }
+    }
+
+    init(in rect: CGRect, turns: Int) {
+        let orientations = CropOverlay.orientations
+        let turn = (turns % orientations + orientations) % orientations
+        // Laid out in a unit square for a landscape frame with the eye at the bottom right, then
+        // transposed for the other winding (or a portrait frame) and mirrored into its corner.
+        let transposed = (turn >= 4) != (rect.height > rect.width)
+        let mirrorX = turn % 4 == 1 || turn % 4 == 2
+        let mirrorY = turn % 4 >= 2
+        func place(_ x: Double, _ y: Double) -> CGPoint {
+            let (u, v) = transposed ? (y, x) : (x, y)
+            return CGPoint(
+                x: rect.minX + rect.width * (mirrorX ? 1 - u : u),
+                y: rect.minY + rect.height * (mirrorY ? 1 - v : v),
+            )
+        }
+        let width = transposed ? rect.height : rect.width
+        let height = transposed ? rect.width : rect.height
+        let section = (sqrt(5) - 1) / 2
+        // What is left to divide: squares come off its left, top, right and bottom in turn.
+        var (left, top, right, bottom) = (0.0, 0.0, 1.0, 1.0)
+        while min((right - left) * width, (bottom - top) * height) >= 2 {
+            switch arcs.count % 4 {
+            case 0:
+                let x = left + (right - left) * section
+                arcs.append(Arc(center: place(x, bottom), start: place(left, bottom), end: place(x, top)))
+                left = x
+            case 1:
+                let y = top + (bottom - top) * section
+                arcs.append(Arc(center: place(left, y), start: place(left, top), end: place(right, y)))
+                top = y
+            case 2:
+                let x = right - (right - left) * section
+                arcs.append(Arc(center: place(x, top), start: place(right, top), end: place(x, bottom)))
+                right = x
+            default:
+                let y = bottom - (bottom - top) * section
+                arcs.append(Arc(center: place(right, y), start: place(right, bottom), end: place(left, y)))
+                bottom = y
+            }
+        }
+    }
+}
+
+extension CropOverlay {
+    /// The Aspect Ratios overlay's ratios, long side over short: Lightroom's 1 × 1, 4 × 5,
+    /// 8.5 × 11, 5 × 7, 2 × 3, 4 × 3, 16 × 9 and 16 × 10.
+    static let outlineRatios: [Double] = [1, 5.0 / 4, 11 / 8.5, 7.0 / 5, 3.0 / 2, 4.0 / 3, 16.0 / 9, 16.0 / 10]
+
+    /// Each ratio's outline centred in `rect`, the largest that fits, and portrait when `rect` is.
+    static func aspectOutlines(in rect: CGRect) -> [CGRect] {
+        outlineRatios.map { ratio in
+            let aspect = rect.height > rect.width ? 1 / ratio : ratio
+            let width = min(rect.width, rect.height * aspect)
+            let height = min(rect.height, rect.width / aspect)
+            return CGRect(x: rect.midX - width / 2, y: rect.midY - height / 2, width: width, height: height)
+        }
     }
 }
