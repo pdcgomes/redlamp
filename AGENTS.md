@@ -14,6 +14,7 @@ Redlamp is a macOS raw editor in Swift and Metal (`README.md`). These rules appl
   ```bash
   mkdir -p tests/fixtures vendor Tuist
   cp -cR "$MAIN/tests/fixtures/raw" tests/fixtures/
+  [ -d "$MAIN/tests/fixtures/shoots" ] && cp -cR "$MAIN/tests/fixtures/shoots" tests/fixtures/
   cp -cR "$MAIN/vendor/build" "$MAIN/vendor/cache" vendor/
   cp -cR "$MAIN/Tuist/.build" Tuist/
   mise exec -- tuist generate --no-open
@@ -25,6 +26,7 @@ Redlamp is a macOS raw editor in Swift and Metal (`README.md`). These rules appl
 ## Working in parallel
 
 - **Stay inside the paths you own** (the plan's table). Everything else is read-only, including `EditRecipe.currentProcessVersion`, `docs/research/research-tracker.md`, `README.md`, this file, the plan, `Project.swift`, `Workspace.swift` and `.github/`. Ask for changes in your final report.
+- **Bugs that produce wrong pixels** (NaN, black or out-of-range values) are fixed in every process version: no edit relies on them. A reference that recorded such a pixel is re-recorded in the same change, and the commit says which pixels changed and that nothing else did.
 - **No agent changes how an existing edit renders.** A rendering change needs a new process version, and that is the orchestrator's call. The process-stability gate (`ProcessStabilityTests`) catches it; a new version records its references with `TEST_RUNNER_REDLAMP_RECORD_PROCESS_GOLDEN=1`, which writes only missing ones, and raises the process version's maximum in `docs/recipes/sidecar-format.schema.json` and its table in `sidecar-format.md` (`SidecarSchemaTests` checks both).
 - **Off limits:** removal (RM-*), the audit fixes (AUD-*), noise (DN-*), `video/` and `web/`; other sessions are working there.
 - **Commit to your own branch** in small, described commits. Never push, merge or rebase onto `main`.
