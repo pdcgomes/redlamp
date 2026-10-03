@@ -144,6 +144,9 @@ public extension Target {
             sources: ["Tests/**"],
             dependencies: [.target(name: module.name)] + dependencies,
             settings: .settings(base: redlampBaseSettings),
+            // Metal's validation layer turns a dispatch or binding the GPU would get wrong into a
+            // failed test instead of a crash in the app.
+            environmentVariables: ["MTL_DEBUG_LAYER": "1"],
         )
     }
 }

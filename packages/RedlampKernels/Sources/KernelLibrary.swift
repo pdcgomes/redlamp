@@ -152,13 +152,15 @@ public extension MTLComputeCommandEncoder {
         }
     }
 
-    /// Dispatches one thread per pixel of a `width` x `height` grid.
+    /// Dispatches one thread per pixel of a `width` x `height` grid. A threadgroup is never taller
+    /// than the grid: a kernel indexed by a scalar `thread_position_in_grid` (a 1-row grid) must
+    /// get threadgroups one row tall, or Metal's validation layer aborts the dispatch.
     func dispatchGrid(width: Int, height: Int, pipeline: any MTLComputePipelineState) {
         let w = pipeline.threadExecutionWidth
         let h = max(1, pipeline.maxTotalThreadsPerThreadgroup / w)
         dispatchThreads(
             MTLSize(width: width, height: height, depth: 1),
-            threadsPerThreadgroup: MTLSize(width: w, height: min(h, 16), depth: 1),
+            threadsPerThreadgroup: MTLSize(width: w, height: min(h, 16, max(height, 1)), depth: 1),
         )
     }
 }
