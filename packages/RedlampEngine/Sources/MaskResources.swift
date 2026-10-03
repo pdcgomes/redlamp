@@ -57,8 +57,9 @@ final class MaskResources {
     static let maximumSlices = 32
     /// Segments per stroke dispatch; their points go in a small constant buffer.
     static let segmentsPerDispatch = 16
-    /// What one photo kept aside may hold, and what all of them may.
-    static let parkedBytesPerPhoto = 64 << 20
+    /// What one photo kept aside may hold (five 4096 px slices, or three and a guide), and what
+    /// all of them may.
+    static let parkedBytesPerPhoto = 128 << 20
     static let parkedBytes = 256 << 20
 
     enum RasterKey: Hashable {
@@ -72,12 +73,35 @@ final class MaskResources {
         var rasters: (any MTLTexture)?
         var keys: [RasterKey?]
         var lastUsed: [UInt64]
+        var paintBase: (key: BrushMask, texture: any MTLTexture)?
         var editGuide: (recipe: EditRecipe, texture: any MTLTexture)?
         var editGuideGeneration: Int
         var analysisGuide: (any MTLTexture)?
 
+        var textures: [any MTLTexture] {
+            [rasters, paintBase?.texture, editGuide?.texture, analysisGuide].compactMap(\.self)
+        }
+
         var bytes: Int {
-            [rasters, editGuide?.texture, analysisGuide].reduce(0) { $0 + ($1?.allocatedSize ?? 0) }
+            textures.reduce(0) { $0 + $1.allocatedSize }
+        }
+
+        /// Makes the textures resident again, dropping any the system purged meanwhile.
+        mutating func reclaim() {
+            if rasters?.setPurgeableState(.nonVolatile) == .empty {
+                rasters = nil
+                keys = []
+                lastUsed = []
+            }
+            if paintBase?.texture.setPurgeableState(.nonVolatile) == .empty {
+                paintBase = nil
+            }
+            if editGuide?.texture.setPurgeableState(.nonVolatile) == .empty {
+                editGuide = nil
+            }
+            if analysisGuide?.setPurgeableState(.nonVolatile) == .empty {
+                analysisGuide = nil
+            }
         }
     }
 
@@ -90,13 +114,16 @@ final class MaskResources {
     private(set) var keys: [RasterKey?] = []
     private var lastUsed: [UInt64] = []
     private var clock: UInt64 = 0
+    /// Slices drawn so far (not found on the GPU), for tests.
+    private(set) var slicesDrawn = 0
     var scratch: (any MTLTexture)?
     /// The most recently painted brush without its last stroke.
     var paintBase: (key: BrushMask, texture: any MTLTexture)?
 
     private(set) var guideSize = PixelSize.zero
     private var editGuide: (recipe: EditRecipe, texture: any MTLTexture)?
-    /// Unique across photos, since stage caches compare it alone.
+    /// Never reused, since a photo's guide can be dropped and rendered again while caches still
+    /// hold its old number.
     private(set) var editGuideGeneration = 0
     private var guideGenerations = 0
     private var analysisGuide: (any MTLTexture)?
@@ -142,12 +169,13 @@ final class MaskResources {
         return (emptyRasters, emptyGuide)
     }
 
-    /// Switches to `next`'s rasters and guides, keeping the current photo's aside. Rasters kept
-    /// aside are compacted to fit in `commands`; without it, they are kept only if they fit.
+    /// Switches to `next`'s rasters and guides, keeping the current photo's aside.
     func use(_ next: ImageSession, commands: (any MTLCommandBuffer)? = nil) {
+        parked.removeAll { $0.session == nil }
         guard session !== next else { return }
+        var kept = parked.firstIndex { $0.session === next }.map { parked.remove(at: $0) }
         if let session {
-            park(session, commands: commands)
+            park(session, queue: commands?.commandQueue)
         }
         session = next
         rasterSize = next.orientedSize.fitted(
@@ -155,11 +183,11 @@ final class MaskResources {
         )
         guideSize = next.orientedSize.fitted(within: PixelSize(width: Self.guideLongEdge, height: Self.guideLongEdge))
         scratch = nil
-        paintBase = nil
-        let kept = parked.firstIndex { $0.session === next }.map { parked.remove(at: $0) }
+        kept?.reclaim()
         rasters = kept?.rasters
         keys = kept?.keys ?? []
         lastUsed = kept?.lastUsed ?? []
+        paintBase = kept?.paintBase
         editGuide = kept?.editGuide
         editGuideGeneration = kept?.editGuideGeneration ?? 0
         analysisGuide = kept?.analysisGuide
@@ -170,58 +198,93 @@ final class MaskResources {
         parked.map(\.bytes)
     }
 
-    private func park(_ session: ImageSession, commands: (any MTLCommandBuffer)?) {
-        parked.removeAll { $0.session == nil || $0.session === session }
+    /// The slices of each photo kept aside, oldest first.
+    var parkedRasterSlices: [Int] {
+        parked.compactMap { $0.rasters?.arrayLength }
+    }
+
+    var parkedTextures: [any MTLTexture] {
+        parked.flatMap(\.textures)
+    }
+
+    /// Fits the photo within its share, dropping in order unused slices, the painting cache, the
+    /// guides (each one render) and then the least recently used slices (each maybe a PNG decode).
+    private func park(_ session: ImageSession, queue: (any MTLCommandQueue)?) {
+        parked.removeAll { $0.session === session }
         var photo = Parked(
-            session: session, rasters: rasters, keys: keys, lastUsed: lastUsed, editGuide: editGuide,
-            editGuideGeneration: editGuideGeneration, analysisGuide: analysisGuide,
+            session: session, rasters: rasters, keys: keys, lastUsed: lastUsed, paintBase: paintBase,
+            editGuide: editGuide, editGuideGeneration: editGuideGeneration, analysisGuide: analysisGuide,
         )
-        // A guide is one render; a raster may be a PNG decode.
-        if photo.bytes > Self.parkedBytesPerPhoto {
-            photo.analysisGuide = nil
+        var slices = photo.keys.indices.filter { photo.keys[$0] != nil }
+            .sorted { photo.lastUsed[$0] > photo.lastUsed[$1] }
+        let arrayLength = rasters?.arrayLength ?? 0
+        func rasterBytes(_ count: Int) -> Int {
+            guard count > 0 else { return 0 }
+            if count == arrayLength, let rasters {
+                return rasters.allocatedSize
+            }
+            return device.heapTextureSizeAndAlign(descriptor: arrayDescriptor(slices: count)).size
         }
-        if photo.bytes > Self.parkedBytesPerPhoto {
-            photo.editGuide = nil
+        func fits(_ count: Int) -> Bool {
+            photo.bytes - (photo.rasters?.allocatedSize ?? 0) + rasterBytes(count) <= Self.parkedBytesPerPhoto
         }
-        if photo.bytes > Self.parkedBytesPerPhoto {
-            compact(&photo, commands: commands)
+        if !fits(arrayLength) {
+            if !fits(slices.count) {
+                photo.paintBase = nil
+            }
+            if !fits(slices.count) {
+                photo.analysisGuide = nil
+            }
+            if !fits(slices.count) {
+                photo.editGuide = nil
+            }
+            while !slices.isEmpty, !fits(slices.count) {
+                slices.removeLast()
+            }
+            if slices.count < arrayLength {
+                compact(&photo, to: slices, queue: queue)
+            }
         }
         guard photo.bytes > 0 else { return }
+        for texture in photo.textures {
+            texture.setPurgeableState(.volatile)
+        }
         parked.append(photo)
         while parked.reduce(0, { $0 + $1.bytes }) > Self.parkedBytes {
             parked.removeFirst()
         }
     }
 
-    /// Copies the most recently used slices that fit within the photo's share into an array of
-    /// just those, or drops the rasters.
-    private func compact(_ photo: inout Parked, commands: (any MTLCommandBuffer)?) {
+    /// Copies `slices` into an array of just those, on a command buffer of its own, so the copy
+    /// doesn't depend on the next photo's render running; drops the rasters if it can't.
+    private func compact(_ photo: inout Parked, to slices: [Int], queue: (any MTLCommandQueue)?) {
         guard let source = photo.rasters else { return }
-        let room = Self.parkedBytesPerPhoto - (photo.bytes - source.allocatedSize)
-        var kept = photo.keys.indices.filter { photo.keys[$0] != nil }
-            .sorted { photo.lastUsed[$0] > photo.lastUsed[$1] }
-        while !kept.isEmpty,
-              device.heapTextureSizeAndAlign(descriptor: arrayDescriptor(slices: kept.count)).size > room {
-            kept.removeLast()
-        }
         photo.rasters = nil
-        guard !kept.isEmpty, let commands, let compacted = try? makeArray(slices: kept.count),
-              let blit = commands.makeBlitCommandEncoder()
+        guard !slices.isEmpty, let commands = queue?.makeCommandBuffer(),
+              let compacted = try? makeArray(slices: slices.count), let blit = commands.makeBlitCommandEncoder()
         else {
             photo.keys = []
             photo.lastUsed = []
             return
         }
-        for (slice, from) in kept.enumerated() {
+        for (slice, from) in slices.enumerated() {
             blit.copy(
                 from: source, sourceSlice: from, sourceLevel: 0, to: compacted, destinationSlice: slice,
                 destinationLevel: 0, sliceCount: 1, levelCount: 1,
             )
         }
         blit.endEncoding()
+        commands.commit()
+        // Kept textures are made volatile, which the GPU mustn't be writing.
+        commands.waitUntilCompleted()
+        guard commands.status == .completed else {
+            photo.keys = []
+            photo.lastUsed = []
+            return
+        }
         photo.rasters = compacted
-        photo.keys = kept.map { photo.keys[$0] }
-        photo.lastUsed = kept.map { photo.lastUsed[$0] }
+        photo.keys = slices.map { photo.keys[$0] }
+        photo.lastUsed = slices.map { photo.lastUsed[$0] }
     }
 
     // MARK: - Guides
@@ -296,12 +359,12 @@ final class MaskResources {
         analysisGuide: (any MTLTexture)?,
         commands: any MTLCommandBuffer,
     ) throws -> [UUID: Int] {
-        clock += 1
         var result: [UUID: Int] = [:]
         var used = Set<Int>()
         for component in components {
             guard let key = Self.key(for: component.shape) else { continue }
             if let slice = keys.firstIndex(of: key) {
+                clock += 1
                 lastUsed[slice] = clock
                 used.insert(slice)
                 result[component.id] = slice
@@ -318,7 +381,9 @@ final class MaskResources {
                 nil
             }
             guard let slice = drawn else { continue }
+            slicesDrawn += 1
             keys[slice] = key
+            clock += 1
             lastUsed[slice] = clock
             used.insert(slice)
             result[component.id] = slice
