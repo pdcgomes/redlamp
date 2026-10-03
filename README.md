@@ -840,7 +840,7 @@ The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on mac
 - [ ] **Film effects for recipes:** halation (the red glow around bright lights), bloom and diffusion, and film grain that varies with density and scales with output size
 - [x] Calibration panel: Shadows Tint and the red, green and blue primaries' Hue and Saturation, and the Process version, which moves an edit to a newer rendering only when you ask
 - [x] Remove Chromatic Aberration, from the lens profile or measured from the photo's own edges, and Lightroom's Defringe (Purple and Green Amount and Hue)
-- [ ] Lens corrections from the lensfun database and Adobe LCP import *(the corrections raw files carry, DNG opcodes, Sony's and Fujifilm's, and manual Distortion and Vignetting, are done, in the same geometry map)*
+- [ ] Lens corrections from the lensfun database and Adobe LCP import *(the corrections raw files carry, DNG opcodes, Sony's and Fujifilm's, manual Distortion and Vignetting, and Adobe LCP profiles you put in Redlamp's Lens Profiles folder are done, in the same geometry map; lensfun waits on counsel)*
 - [x] **Crop and straighten** (aspect presets and lock, composition overlays, Angle and the Straighten tool, Constrain to Image), rotate and flip, and the manual Transform sliders, all one geometry map that masks follow
 - [x] Upright: Auto, Level, Vertical and Full from the photo's own straight edges, found by Redlamp's line detector, and Guided from drawn guides. A correction is applied only when the edges agree on it, so a landscape or a still life is levelled at most, and Auto leaves strong perspective partly in place
 - [x] Brush, color range, and luminance range masks, and Vision AI masks (subject, sky, background, people)
