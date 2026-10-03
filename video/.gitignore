@@ -4,5 +4,9 @@ out/
 # Window captures for the stills, made from the owner's photos by scripts/capture-promo.sh.
 public/promo/
 
+# The film's captures and engine renders, made from the same photos (scripts/film-assets.mjs),
+# and its scores (scripts/score.py).
+public/film/
+
 # Copied from docs/ by ../web/scripts/sync-assets.mjs before every studio session and render.
 public/synced/

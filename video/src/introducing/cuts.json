@@ -1,0 +1,22 @@
+{
+  "film": [
+    ["safelight", 3],
+    ["reveal", 3],
+    ["familiar", 3],
+    ["steps", 4],
+    ["originals", 2.5],
+    ["masks", 4],
+    ["film", 4],
+    ["keyboard", 2],
+    ["native", 2],
+    ["end", 2.5]
+  ],
+  "short": [
+    ["safelight", 2],
+    ["reveal", 2.5],
+    ["steps", 3.5],
+    ["masks", 3],
+    ["film", 3],
+    ["end", 2]
+  ]
+}
