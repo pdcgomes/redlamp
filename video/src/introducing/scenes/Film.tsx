@@ -99,6 +99,8 @@ export function Film({ length }: { length: number }) {
             {looks.map((look, i) => {
               const depth = i - front;
               if (depth <= -1) return null;
+              // The front sheet lifts towards the camera and fades, drifting only a little aside,
+              // so it never crosses the words.
               const away = Math.max(0, -depth);
               return (
                 <Sheet
@@ -106,9 +108,10 @@ export function Film({ length }: { length: number }) {
                   src={render(look.file)}
                   width={sheetWidth}
                   height={sheetHeight}
-                  x={-away * sheetWidth * 0.75}
-                  z={depth >= 0 ? -depth * gap : away * 240}
-                  opacity={depth >= 0 ? Math.max(0, Math.min(1, 7 - depth)) : 1 - away}
+                  x={-away * sheetWidth * 0.22}
+                  y={-away * 36}
+                  z={depth >= 0 ? -depth * gap : away * 300}
+                  opacity={depth >= 0 ? Math.max(0, Math.min(1, 7 - depth)) : (1 - away) ** 1.6}
                   shade={Math.max(0, depth) * 0.085}
                 />
               );
