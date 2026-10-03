@@ -102,9 +102,27 @@ public struct DecodedImage: Sendable {
         self.info = info
     }
 
-    /// Sensor noise in normalised units: the file's profile, else measured from the image.
+    /// Sensor noise in normalised units: the file's own profile, else its camera's calibrated one
+    /// at its ISO, else measured from the image (DN-01).
     public var noise: NoiseModel {
-        noiseProfile ?? NoiseEstimator.estimate(self) ?? .quantization
+        noise(profiles: .bundled)
+    }
+
+    /// A raw far cleaner than its camera's profile says has had noise reduction in the camera (or
+    /// the profile isn't this camera's): the measurement wins. Measurements read too noisy when
+    /// anything (texture, compression) adds variance, never too clean.
+    public func noise(profiles: NoiseProfileCatalog) -> NoiseModel {
+        if let noiseProfile {
+            return noiseProfile
+        }
+        let measured = NoiseEstimator.estimate(self)
+        if let profiled = profiles.model(for: info) {
+            if let measured, measured.a.y < profiled.a.y * 0.4 {
+                return measured
+            }
+            return profiled
+        }
+        return measured ?? .quantization
     }
 
     public var isRaw: Bool {

@@ -14,6 +14,7 @@ let project = Project(
             dependencies: [
                 Module.engineAPI.dependency,
                 Module.engine.dependency,
+                Module.services.dependency,
                 Module.recipes.dependency,
                 Module.document.dependency,
             ],

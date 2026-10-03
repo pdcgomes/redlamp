@@ -12,6 +12,7 @@ usage: redlamp info <image>
        redlamp recipe <command> …   recipes and look development (redlamp recipe help)
        redlamp stack <frames…> …    merge a focus stack (redlamp stack --help)
        redlamp mask <image> …       write an AI mask as a PNG (redlamp mask --help)
+       redlamp noise <command> …    calibrate a camera's noise profile (redlamp noise --help)
        redlamp mcp                  the engine as an MCP server on stdin/stdout
 
 options:
@@ -249,6 +250,8 @@ do {
         try await StackCommand.run(Array(arguments.dropFirst()))
     case "mask":
         try await MaskCommand.run(Array(arguments.dropFirst()))
+    case "noise":
+        try await NoiseCommand.run(Array(arguments.dropFirst()))
     case "mcp":
         try await MCPServer().run()
     default:
