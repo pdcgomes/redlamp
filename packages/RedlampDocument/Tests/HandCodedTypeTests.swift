@@ -60,7 +60,8 @@ struct HandCodedTypeTests {
     }
 
     @Test func `spots, recipes and looks`() throws {
-        try check(everything.recipe.spots[1])
+        try check(everything.recipe.spots[1], notWritten: ["region"])
+        try check(everything.recipe.spots[2], notWritten: ["stroke"])
         try check(#require(everything.recipe.appliedRecipe))
         try check(everything.recipe.baseLook)
         try check(

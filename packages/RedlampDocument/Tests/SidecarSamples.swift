@@ -17,7 +17,7 @@ enum SidecarSamples {
     }
 
     /// An edit using every part of the format, optional fields included: each mask shape, local
-    /// adjustments, circle and brushed spots, crop, orientation, a recipe, a curve, a snapshot and
+    /// adjustments, circle, brushed and region spots, crop, orientation, a recipe, a curve, a snapshot and
     /// culling metadata.
     static var everything: Sidecar {
         var recipe = EditRecipe()
@@ -70,6 +70,10 @@ enum SidecarSamples {
                 id: id(6), mode: .clone, center: ImagePoint(x: 0.2, y: 0.7), source: ImagePoint(x: 0.5, y: 0.7),
                 stroke: [ImagePoint(x: 0.01, y: 0), ImagePoint(x: 0.02, y: 0.01)], radius: 0.01, feather: 20,
                 opacity: 90,
+            ),
+            RetouchSpot(
+                id: id(7), mode: .remove, center: ImagePoint(x: 0.8, y: 0.2), source: ImagePoint(x: 0.8, y: 0.2),
+                region: ai(.objects), radius: 0.005,
             ),
         ]
         recipe.baseLook = BaseLookReference(id: "user/film", version: 2, name: "Film", amount: 90, contentHash: "abc")
