@@ -62,8 +62,9 @@ public final class EditorModel {
     public private(set) var readOnlyReason: SidecarProtection?
     /// The open photo's rating, flag and label, saved with its edit.
     public internal(set) var photoMetadata = PhotoMetadata()
-    /// The rating, flag or label changed while the photo was opening, so its sidecar's are stale.
-    @ObservationIgnored var metadataChangedWhileOpening = false
+    /// What was set of the rating, flag and label while the photo was opening, made again on
+    /// its sidecar's when it opens.
+    @ObservationIgnored var metadataChangesWhileOpening: [@Sendable (inout PhotoMetadata) -> Void] = []
     /// Reading `recipe` observes every change to it. Views observe only what they show —
     /// `value(_:)` for one parameter, or `masks`, `pointCurve`, … — so a slider drag
     /// re-evaluates a single row rather than every panel.
@@ -481,7 +482,7 @@ public final class EditorModel {
         errorMessage = nil
         readOnlyReason = nil
         photoMetadata = library.item(for: url)?.metadata ?? PhotoMetadata()
-        metadataChangedWhileOpening = false
+        metadataChangesWhileOpening = []
         eyedropperActive = false
         previewingRecipe = nil
         previewingEdit = nil
@@ -557,9 +558,15 @@ public final class EditorModel {
         availableAIMaskKinds = engine.availableMaskKinds()
         maskMessage = nil
         readOnlyReason = read.protection
-        if !metadataChangedWhileOpening {
-            photoMetadata = sidecar?.metadata ?? PhotoMetadata()
+        var metadata = sidecar?.metadata ?? PhotoMetadata()
+        if read.protection == nil {
+            metadataChangesWhileOpening.forEach { $0(&metadata) }
         }
+        if !metadataChangesWhileOpening.isEmpty {
+            library.update(opened.url) { $0.metadata = metadata }
+            metadataChangesWhileOpening = []
+        }
+        photoMetadata = metadata
         var loaded = sidecar?.recipe ?? EditRecipe()
         if loaded.whiteBalanceMode == .asShot, let wb = opened.asShotWhiteBalance {
             loaded[.temperature] = wb.temperature

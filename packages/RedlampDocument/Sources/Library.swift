@@ -7,14 +7,17 @@ public enum Library {
         ((try? FolderScanner.list(folder))?.photos ?? []).map(\.url)
     }
 
-    /// Updates only the culling metadata of an image's sidecar, keeping its edits and history.
-    /// Throws, changing nothing, if the sidecar is protected (see `SidecarStore.protection(for:)`).
+    /// Makes `change` to the culling metadata of an image's sidecar as it is on disk, keeping
+    /// its edits, history and the rest of its metadata. Throws, changing nothing, if the sidecar
+    /// is protected (see `SidecarStore.protection(for:)`).
     public static func writeMetadata(
-        _ metadata: PhotoMetadata,
         for image: URL,
         store: SidecarStore = SidecarStore(),
+        _ change: (inout PhotoMetadata) -> Void,
     ) throws {
         var sidecar = store.load(for: image) ?? Sidecar(recipe: EditRecipe())
+        var metadata = sidecar.metadata ?? PhotoMetadata()
+        change(&metadata)
         sidecar.metadata = metadata
         sidecar.modified = Date()
         try store.saveOrRemove(sidecar, for: image)

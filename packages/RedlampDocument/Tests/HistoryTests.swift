@@ -310,7 +310,7 @@ struct SidecarHistoryTests {
             for: image,
         )
 
-        try Library.writeMetadata(PhotoMetadata(), for: image, store: store)
+        try Library.writeMetadata(for: image, store: store) { $0 = PhotoMetadata() }
         #expect(store.loadHistory(for: image).count == 1)
         // Rolling back: what is kept is an edit the previous build reads.
         let edit = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: store.editURL(for: image)))

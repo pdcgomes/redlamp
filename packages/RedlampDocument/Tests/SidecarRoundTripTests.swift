@@ -159,7 +159,7 @@ struct SidecarRoundTripTests {
             try store.save(SidecarSamples.everything, for: image)
         }
         #expect(throws: SidecarStoreError.lossy(store.url(for: image))) {
-            try Library.writeMetadata(PhotoMetadata(rating: 1), for: image, store: store)
+            try Library.writeMetadata(for: image, store: store) { $0.rating = 1 }
         }
         #expect(throws: SidecarStoreError.lossy(store.url(for: image))) {
             try store.saveOrRemove(Sidecar(recipe: EditRecipe()), for: image)

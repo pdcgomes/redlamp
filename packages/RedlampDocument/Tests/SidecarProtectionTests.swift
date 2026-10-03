@@ -29,10 +29,10 @@ struct SidecarProtectionTests {
         }
         store.delete(for: image)
         #expect(throws: SidecarStoreError.unreadable(package)) {
-            try Library.writeMetadata(PhotoMetadata(rating: 2), for: image, store: store)
+            try Library.writeMetadata(for: image, store: store) { $0.rating = 2 }
         }
         #expect(throws: SidecarStoreError.unreadable(package)) {
-            try Library.writeMetadata(PhotoMetadata(), for: image, store: store)
+            try Library.writeMetadata(for: image, store: store) { $0 = PhotoMetadata() }
         }
         #expect(try Data(contentsOf: store.editURL(for: image)) == Data(json.utf8))
     }
@@ -74,7 +74,7 @@ struct SidecarProtectionTests {
             try store.saveOrRemove(Sidecar(recipe: EditRecipe()), for: image)
         }
         #expect(throws: SidecarStoreError.unreadable(sidecar)) {
-            try Library.writeMetadata(PhotoMetadata(), for: image, store: store)
+            try Library.writeMetadata(for: image, store: store) { $0 = PhotoMetadata() }
         }
         store.delete(for: image)
         try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: edit.path)

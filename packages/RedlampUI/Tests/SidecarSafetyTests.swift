@@ -31,13 +31,15 @@ struct SidecarSafetyTests {
             SidecarStore().editURL(for: photo)
         }
 
-        /// A package for `photo` holding `json` as its edit, and a history session.
-        func seed(_ json: String) throws {
+        /// A package for `photo` holding `json` as its edit, and a history session unless not `withHistory`.
+        func seed(_ json: String, withHistory: Bool = true) throws {
             let package = SidecarStore().url(for: photo)
             let history = package.appending(path: SidecarStore.historyDirectory)
             try FileManager.default.createDirectory(at: history, withIntermediateDirectories: true)
             try Data(json.utf8).write(to: package.appending(path: SidecarStore.editFile))
-            try Data("{}".utf8).write(to: history.appending(path: "\(UUID().uuidString).json"))
+            if withHistory {
+                try Data("{}".utf8).write(to: history.appending(path: "\(UUID().uuidString).json"))
+            }
         }
 
         /// Every file in the package, with its bytes.
@@ -95,8 +97,10 @@ struct SidecarSafetyTests {
         let folder = Folder()
         try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder.url) }
-        try folder
-            .seed(#"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":1},"keywords":["harbour"]}"#)
+        try folder.seed(
+            #"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":1},"keywords":["harbour"]}"#,
+            withHistory: false,
+        )
         let before = try folder.contents()
         let model = EditorModel(engine: StubEngine())
 
@@ -105,6 +109,49 @@ struct SidecarSafetyTests {
         try await open(folder.other, in: model)
         try await settle()
         #expect(try folder.contents() == before)
+    }
+
+    @Test(arguments: unreadable)
+    func `rating a photo whose edit can't be read changes nothing it shows`(json: String) async throws {
+        let folder = Folder()
+        try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder.url) }
+        try folder.seed(json)
+        let model = EditorModel(engine: StubEngine())
+        model.library.insert(LibraryItem(url: folder.photo))
+
+        model.select(folder.photo)
+        _ = model.perform(.rating3)
+        try await open(folder.photo, in: model)
+        #expect(model.currentMetadata == PhotoMetadata(), "a change made as it opened is taken back")
+        #expect((model.library.item(for: folder.photo)?.metadata.rating ?? 0) == 0)
+        _ = model.perform(.rating4)
+        _ = model.perform(.flagPick)
+        #expect(model.currentMetadata == PhotoMetadata())
+        #expect((model.library.item(for: folder.photo)?.metadata.rating ?? 0) == 0)
+    }
+
+    @Test func `rating a photo as it opens keeps the rest of its metadata`() async throws {
+        let folder = Folder()
+        try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder.url) }
+        try folder.seed(
+            #"{"format":"app.redlamp.edit","recipe":{"version":3,"processVersion":1},"#
+                + #""metadata":{"rating":2,"flag":"pick","label":"red","caption":"Harbour"}}"#,
+            withHistory: false,
+        )
+        let model = EditorModel(engine: StubEngine())
+        model.library.insert(LibraryItem(url: folder.photo))
+
+        model.select(folder.photo)
+        _ = model.perform(.rating4)
+        try await open(folder.photo, in: model)
+        var expected = PhotoMetadata(rating: 4, flag: .pick, label: .red)
+        expected.unknownFields = ["caption": .string("Harbour")]
+        #expect(model.currentMetadata == expected)
+        try await open(folder.other, in: model)
+        try await settle()
+        #expect(SidecarStore().load(for: folder.photo)?.metadata == expected)
     }
 
     @Test(arguments: unreadable)

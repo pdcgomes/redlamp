@@ -321,21 +321,48 @@ public extension EditorModel {
         photoMetadata
     }
 
+    /// A read-only photo's metadata doesn't change: it wouldn't be saved.
     private func updateMetadata(advance: Bool, _ change: (inout PhotoMetadata) -> Void) {
         guard let url = selection else { return }
-        var metadata = photoMetadata
-        change(&metadata)
-        photoMetadata = metadata
-        library.update(url) { $0.metadata = metadata }
-        if info != nil {
-            saveNow()
-        } else {
-            metadataChangedWhileOpening = true
-            let store = SidecarStore()
-            Task.detached(priority: .utility) { try? Library.writeMetadata(metadata, for: url, store: store) }
+        if !isReadOnly {
+            var metadata = photoMetadata
+            change(&metadata)
+            let setting = Self.setting(from: photoMetadata, to: metadata)
+            photoMetadata = metadata
+            library.update(url) { setting(&$0.metadata) }
+            if info != nil {
+                saveNow()
+            } else {
+                // The metadata shown may be the filmstrip's, not yet the file's: only what
+                // `change` set goes to the file, and again onto the file's when it opens.
+                metadataChangesWhileOpening.append(setting)
+                let store = SidecarStore()
+                Task.detached(priority: .utility) { try? Library.writeMetadata(for: url, store: store, setting) }
+            }
         }
         if advance {
             selectNext()
+        }
+    }
+
+    /// Sets the fields that differ between `old` and `new` to `new`'s values, so applying it
+    /// twice is the same as once.
+    private static func setting(
+        from old: PhotoMetadata,
+        to new: PhotoMetadata,
+    ) -> @Sendable (inout PhotoMetadata) -> Void {
+        let (rating, flag, label) = (new.rating, new.flag, new.label)
+        let changes = (rating: rating != old.rating, flag: flag != old.flag, label: label != old.label)
+        return { metadata in
+            if changes.rating {
+                metadata.rating = rating
+            }
+            if changes.flag {
+                metadata.flag = flag
+            }
+            if changes.label {
+                metadata.label = label
+            }
         }
     }
 }
