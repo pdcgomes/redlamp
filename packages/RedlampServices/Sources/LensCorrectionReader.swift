@@ -5,7 +5,20 @@ import simd
 /// The lens correction a raw file carries (LNS-02): a DNG's OpcodeList3 warp and vignetting
 /// opcodes (DNG specification 1.7, "Opcode List Processing"), or the correction tables Sony
 /// writes into every ARW and Fujifilm into every RAF. Positions come out EXIF-oriented.
-enum LensCorrectionReader {
+public enum LensCorrectionReader {
+    /// The correction a raw photo opens with: the one its file carries, as Lightroom prefers a
+    /// raw's built-in profile, else the user's matching lens profile (LNS-04). The sandboxed
+    /// decode service can't reach the user's profiles, so this runs after decoding.
+    public static func correction(
+        for image: DecodedImage, profiles: LCPProfileLibrary? = .user,
+    ) -> LensCorrection? {
+        guard image.isRaw else { return nil }
+        return image.lensCorrection ?? profiles?.correction(
+            for: image.info, sensorSize: PixelSize(width: image.width, height: image.height),
+            orientation: image.orientation,
+        )
+    }
+
     static func read(_ data: Data, url: URL, orientation: Int) -> LensCorrection? {
         let kind = url.pathExtension.lowercased()
         if kind == "raf" {
