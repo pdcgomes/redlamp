@@ -166,7 +166,10 @@ enum RawDecoder {
         url: URL,
         data: Data?,
     ) throws -> DNGJPEGXL.Image? {
-        if raw.pointee.idata.dng_version != 0, let image = try data.map(DNGJPEGXL.decode) ?? DNGJPEGXL.decode(url) {
+        let rawSize = PixelSize(width: Int(raw.pointee.sizes.raw_width), height: Int(raw.pointee.sizes.raw_height))
+        if raw.pointee.idata.dng_version != 0,
+           let image = try data.map({ try DNGJPEGXL.decode($0, rawSize: rawSize) })
+           ?? DNGJPEGXL.decode(url, rawSize: rawSize) {
             return image
         }
         try check(libraw_unpack(raw), url: url)

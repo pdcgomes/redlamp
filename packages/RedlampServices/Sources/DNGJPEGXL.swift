@@ -38,19 +38,23 @@ enum DNGJPEGXL {
         static let linearRaw = 34892
     }
 
-    /// The raw image, or nil when the file's raw image isn't JPEG XL-compressed.
-    static func decode(_ url: URL) throws -> Image? {
-        try decode(Data(contentsOf: url, options: .alwaysMapped))
+    /// LibRaw's limit on each side of a raw image.
+    static let maximumSide = 65535
+
+    /// The raw image, or nil when the file's raw image isn't JPEG XL-compressed. A JPEG XL
+    /// directory is the raw image only when its size is LibRaw's `rawSize`.
+    static func decode(_ url: URL, rawSize: PixelSize) throws -> Image? {
+        try decode(Data(contentsOf: url, options: .alwaysMapped), rawSize: rawSize)
     }
 
-    static func decode(_ data: Data) throws -> Image? {
+    static func decode(_ data: Data, rawSize: PixelSize) throws -> Image? {
         try data.withUnsafeBytes { bytes in
             guard let reader = TIFFReader(bytes: bytes) else { return nil }
-            return try decode(reader)
+            return try decode(reader, rawSize: rawSize)
         }
     }
 
-    static func decode(_ reader: TIFFReader) throws -> Image? {
+    static func decode(_ reader: TIFFReader, rawSize: PixelSize) throws -> Image? {
         let directories = reader.imageFileDirectories().map { entries in
             Dictionary(entries.map { ($0.tag, $0) }) { first, _ in first }
         }
@@ -74,16 +78,22 @@ enum DNGJPEGXL {
 
         let width = values(tags, Tag.width).first ?? 0
         let height = values(tags, Tag.height).first ?? 0
+        guard width == rawSize.width, height == rawSize.height,
+              (1 ... maximumSide).contains(width), (1 ... maximumSide).contains(height),
+              let sampleCount = TIFFReader.product(width, height, 3)
+        else {
+            return nil
+        }
         let tileWidth = values(tags, Tag.tileWidth).first ?? 0
         let tileHeight = values(tags, Tag.tileHeight).first ?? 0
         let offsets = values(tags, Tag.tileOffsets)
         let byteCounts = values(tags, Tag.tileByteCounts)
-        guard width > 0, height > 0, tileWidth > 0, tileHeight > 0 else {
+        guard tileWidth > 0, tileHeight > 0 else {
             throw EngineError.decodeFailed("JPEG XL DNG without tile dimensions")
         }
         let tilesAcross = (width + tileWidth - 1) / tileWidth
         let tilesDown = (height + tileHeight - 1) / tileHeight
-        guard offsets.count == tilesAcross * tilesDown, byteCounts.count == offsets.count,
+        guard offsets.count == TIFFReader.product(tilesAcross, tilesDown), byteCounts.count == offsets.count,
               zip(offsets, byteCounts).allSatisfy({ $0 >= 0 && $1 > 0 && $0 + $1 <= reader.bytes.count })
         else {
             throw EngineError.decodeFailed("JPEG XL DNG tiles are missing or truncated")
@@ -92,9 +102,9 @@ enum DNGJPEGXL {
 
         let failure = Mutex<EngineError?>(nil)
         nonisolated(unsafe) let file = reader.bytes
-        let samples = [UInt16](unsafeUninitializedCapacity: width * height * 3) { buffer, count in
+        let samples = [UInt16](unsafeUninitializedCapacity: sampleCount) { buffer, count in
             buffer.initialize(repeating: 0)
-            count = width * height * 3
+            count = sampleCount
             // Each tile writes only its own pixels.
             nonisolated(unsafe) let destination = Destination(
                 samples: buffer, width: width, height: height,
@@ -130,7 +140,16 @@ enum DNGJPEGXL {
 
     private static func decodeTile(_ data: Data, into destination: Destination, originX: Int, originY: Int) throws {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let tileWidth = properties[kCGImagePropertyPixelWidth] as? Int,
+              let tileHeight = properties[kCGImagePropertyPixelHeight] as? Int
+        else {
+            throw EngineError.decodeFailed("a JPEG XL tile could not be decoded")
+        }
+        guard tileWidth <= destination.tileWidth, tileHeight <= destination.tileHeight else {
+            throw EngineError.decodeFailed("a JPEG XL tile is larger than the DNG's tiles")
+        }
+        guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
               let pixels = image.dataProvider?.data,
               let base = CFDataGetBytePtr(pixels)
         else {
