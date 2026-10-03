@@ -17,7 +17,7 @@ export const closing = {
   icon: 6,
 };
 
-export function End({ length }: { length: number }) {
+export function End({ length, notice = true }: { length: number; notice?: boolean }) {
   const frame = useCurrentFrame();
   const { shape, height } = useShape();
   const s = typeScale[shape];
@@ -63,15 +63,17 @@ export function End({ length }: { length: number }) {
             </div>
           </Develop>
         </div>
-        <div style={{ position: "absolute", bottom: s.small * 2.4, left: 0, right: 0, textAlign: "center" }}>
-          <Develop at={card + 40} duration={30}>
-            <div style={{ ...font.text, fontSize: s.small, color: ink.small, whiteSpace: "pre-line", lineHeight: 1.45 }}>
-              {shape === "wide"
-                ? "Lightroom is a trademark of Adobe Inc., and the film names are their makers' trademarks. Redlamp isn't affiliated with any of them."
-                : "Lightroom is a trademark of Adobe Inc., and the film names\nare their makers' trademarks. Redlamp isn't affiliated\nwith any of them."}
-            </div>
-          </Develop>
-        </div>
+        {notice ? (
+          <div style={{ position: "absolute", bottom: s.small * 2.4, left: 0, right: 0, textAlign: "center" }}>
+            <Develop at={card + 40} duration={30}>
+              <div style={{ ...font.text, fontSize: s.small, color: ink.small, whiteSpace: "pre-line", lineHeight: 1.45 }}>
+                {shape === "wide"
+                  ? "Lightroom is a trademark of Adobe Inc., and the film names are their makers' trademarks. Redlamp isn't affiliated with any of them."
+                  : "Lightroom is a trademark of Adobe Inc., and the film names\nare their makers' trademarks. Redlamp isn't affiliated\nwith any of them."}
+              </div>
+            </Develop>
+          </div>
+        ) : null}
       </AbsoluteFill>
     </Room>
   );

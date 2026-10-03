@@ -2,6 +2,7 @@ import { type CalculateMetadataFunction, Composition, Folder, Still } from "remo
 import { durationOf, Explainer, type ExplainerProps } from "./Explainer";
 import { loadManifest } from "./introducing/assets";
 import { durationOf as filmDuration, Introducing, type IntroducingProps } from "./introducing/Introducing";
+import { stories } from "./introducing/Posters";
 import { stills } from "./stills";
 import { canvas } from "./stills/canvas";
 import "./theme";
@@ -75,6 +76,9 @@ export function RemotionRoot() {
           defaultProps={{ cut: "short", musicSrc: "film/score-short.wav", manifest: {} } satisfies IntroducingProps}
           calculateMetadata={withManifest}
         />
+        {stories.map(({ id, component, durationInFrames }) => (
+          <Composition key={id} id={id} component={component} durationInFrames={durationInFrames} fps={FPS} width={1080} height={1920} />
+        ))}
       </Folder>
       <Folder name="Stills">
         {stills.map(({ id, component }) => (
