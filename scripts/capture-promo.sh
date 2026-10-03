@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 #
-# Captures the editor for the Reddit stills (video/src/stills) from a folder of your own photos:
+# Captures the editor for the Reddit stills (video/src/stills) and the Introducing film
+# (video/src/introducing) from a folder of your own photos:
 #
 #   scripts/capture-promo.sh ~/Pictures/redlamp-promo
 #   ONLY="masks-people film-looks" scripts/capture-promo.sh ~/Pictures/redlamp-promo
+#   PROMO_OUT=video/public/film/captures scripts/capture-promo.sh ~/Pictures/redlamp-promo   # the film's
 #
 # The folder needs a promo.txt naming the photo for each role, one `role = file name` per line:
 #
@@ -23,8 +25,9 @@
 # 1600 × 1000 points on a Retina screen. It applies a --script of edits on top of the edits already
 # in your sidecars, and keeps the 3200 × 2000 window capture in video/public/promo/<shot>.png
 # (PROMO_OUT overrides it), where the stills pick it up. Shots use the app's default theme and only
-# the models testers get; your preferences are put back afterwards, and nothing in the folder
-# itself changes. The terminal running this needs the Screen Recording permission.
+# the models testers get, and the Folders panel shows only the folder being captured, under the
+# name of yours; your preferences are put back afterwards, and nothing in the folder itself
+# changes. The terminal running this needs the Screen Recording permission.
 
 set -euo pipefail
 
@@ -103,8 +106,10 @@ restore() {
     rm -rf "$WORK"
 }
 trap restore EXIT
+# The remembered folders go too, so the Folders panel lists only the shot's own folder.
 for key in themeFamily themeAppearance themeTint themeTintsNativeControls panelTransparency \
-    commandPaletteThemeFamily commandPaletteThemeAppearance commandPaletteThemeTint app.redlamp.evaluationModels; do
+    commandPaletteThemeFamily commandPaletteThemeAppearance commandPaletteThemeTint app.redlamp.evaluationModels \
+    folders.roots folders.open folders.expanded folders.lastPhotos folders.subfolders lastFolder; do
     defaults delete "$DOMAIN" "$key" 2>/dev/null || true
 done
 
@@ -137,6 +142,12 @@ capture() {
 if [[ -n "$HERO" ]]; then
     hero="$(open_role "$HERO" hero)"
     capture hero "$PHOTOS" "$hero,panel=basic+toneCurve"
+    # The edit the app saved for it, which the film's History sheets are rendered from
+    # (video/scripts/film-assets.mjs).
+    if [[ -e "$PHOTOS/$HERO.redlamp" ]]; then
+        rm -rf "$OUT/hero.redlamp"
+        cp -R "$PHOTOS/$HERO.redlamp" "$OUT/hero.redlamp"
+    fi
     capture panels "$PHOTOS" "$hero,panel=basic"
     capture shortcuts "$PHOTOS" "$hero,action=showShortcuts"
     # Image 7 waits for a release with the command palette; builds without it capture the editor.
