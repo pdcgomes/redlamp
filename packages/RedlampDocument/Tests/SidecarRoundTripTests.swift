@@ -104,6 +104,38 @@ struct SidecarRoundTripTests {
         #expect(lost.isEmpty)
     }
 
+    /// A mask bitmap only a newer build's mask shape, or a field it added, refers to.
+    static let bitmapReferences: [(path: String, value: JSONValue)] = [
+        ("/recipe/masks/0/components/-", .object([
+            "id": .string("00000000-0000-0000-0000-000000000099"), "operation": .string("add"),
+            "inverted": .bool(false),
+            "shape": .object(["objectMatte": .object(["_0": .object(["bitmap": .object([
+                "sha256": .string(MaskBitmap.hash(futurePNG)), "width": .number(4), "height": .number(2),
+            ])])])]),
+        ])),
+        ("/recipe/masks/0/matte", .object(["sha256": .string(MaskBitmap.hash(futurePNG))])),
+    ]
+
+    private static let futurePNG = Data("future".utf8)
+
+    @Test(arguments: bitmapReferences)
+    func `a bitmap only a field this build keeps refers to is kept`(path: String, value: JSONValue) throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        _ = try saveEverything(adding: value, at: path, for: image)
+        let bitmap = store.bitmapURL(MaskBitmap.hash(Self.futurePNG), for: image)
+        try Self.futurePNG.write(to: bitmap)
+        #expect(store.protection(for: image) == nil)
+
+        var sidecar = try #require(store.load(for: image))
+        try store.save(sidecar, for: image)
+        #expect(FileManager.default.fileExists(atPath: bitmap.path), "an unchanged save keeps it")
+        sidecar.recipe[.contrast] = 10
+        try store.save(sidecar, for: image)
+        #expect(FileManager.default.fileExists(atPath: bitmap.path), "an edit keeps it")
+    }
+
     /// Fields where this build has nowhere to keep them, and a value outside this build's range.
     static let lossy: [(path: String, value: JSONValue)] = [
         ("/recipe/crop/angle", .number(2)),

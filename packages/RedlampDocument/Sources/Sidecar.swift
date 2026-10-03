@@ -280,22 +280,24 @@ public struct SidecarStore: Sendable {
     private static func write(_ sidecar: Sidecar, to destination: URL) throws {
         let existingPackage = isPackage(destination)
         var sidecar = sidecar
-        if let existing = try existing(at: destination) {
+        let existing = try existing(at: destination)
+        if let existing {
             sidecar.unknownFields = existing.unknownFields.merging(sidecar.unknownFields) { _, new in new }
-            if existing.hasSameContent(as: sidecar), existingPackage, hasEveryBitmap(sidecar, in: destination) {
-                if try writeHistory(of: sidecar, in: destination) {
-                    removeUnusedBitmaps(of: sidecar, in: destination)
-                }
-                return
-            }
         }
         let json = try JSONEncoder.sidecar.encode(sidecar)
+        if let existing, existing.hasSameContent(as: sidecar), existingPackage,
+           hasEveryBitmap(sidecar, in: destination) {
+            if try writeHistory(of: sidecar, in: destination) {
+                removeUnusedBitmaps(of: sidecar, in: destination, json: json)
+            }
+            return
+        }
         let fileManager = FileManager.default
         if existingPackage {
             try writeBitmaps(of: sidecar, into: destination)
             try json.write(to: destination.appending(path: editFile), options: .atomic)
             try writeHistory(of: sidecar, in: destination)
-            removeUnusedBitmaps(of: sidecar, in: destination)
+            removeUnusedBitmaps(of: sidecar, in: destination, json: json)
             return
         }
         // A new package, or a single-file sidecar becoming one: built beside it, then moved in.
@@ -347,7 +349,10 @@ public struct SidecarStore: Sendable {
 
     /// Bitmaps no edit, snapshot or history session names any more. Nothing is removed while a
     /// session file can't be read, since the bitmaps it needs aren't known.
-    private static func removeUnusedBitmaps(of sidecar: Sidecar, in package: URL) {
+    /// Removes the package's bitmaps that nothing refers to: not the edit, its snapshots or its
+    /// history, nor anything in `json`, the edit as written, where fields a newer build added
+    /// (a mask shape this build doesn't know, say) may name one.
+    private static func removeUnusedBitmaps(of sidecar: Sidecar, in package: URL, json: Data) {
         var used = Set(bitmaps(of: sidecar).map(\.sha256))
         for file in historyFiles(in: package) {
             guard let summary = historySummary(file) else { return }
@@ -355,8 +360,11 @@ public struct SidecarStore: Sendable {
         }
         let masks = package.appending(path: masksDirectory)
         let files = (try? FileManager.default.contentsOfDirectory(atPath: masks.path)) ?? []
-        for file in files where file.hasSuffix(".png") && !used.contains(String(file.dropLast(4))) {
-            try? FileManager.default.removeItem(at: masks.appending(path: file))
+        for file in files where file.hasSuffix(".png") {
+            let sha256 = String(file.dropLast(4))
+            if !used.contains(sha256), json.range(of: Data(sha256.utf8)) == nil {
+                try? FileManager.default.removeItem(at: masks.appending(path: file))
+            }
         }
     }
 }
