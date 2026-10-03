@@ -120,7 +120,7 @@ extension SidecarStore {
 extension PhotoMetadata {
     /// Three-way, field by field: each field (an unknown one by its key) takes theirs if only
     /// they changed it since `base`, and ours, changed here since `opened` or not, otherwise.
-    /// Nil when neither side has any.
+    /// Nil when nothing is left of either.
     static func merge(
         _ ours: PhotoMetadata?, _ theirs: PhotoMetadata?, base: PhotoMetadata?, opened: PhotoMetadata?,
     ) -> PhotoMetadata? {
@@ -134,6 +134,6 @@ extension PhotoMetadata {
         for key in Set(ours.unknownFields.keys).union(theirs.unknownFields.keys) {
             merged.unknownFields[key] = pick { $0.unknownFields[key] }
         }
-        return merged
+        return merged.isEmpty ? nil : merged
     }
 }

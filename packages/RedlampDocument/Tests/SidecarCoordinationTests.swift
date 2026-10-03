@@ -209,6 +209,13 @@ struct SidecarCoordinationTests {
         var expected = PhotoMetadata(rating: 4, flag: .pick)
         expected.unknownFields = ["caption": .string("Dusk"), "place": .string("Porto")]
         #expect(merged.metadata == expected)
+
+        var cleared = base
+        cleared.metadata = nil
+        var unrated = base
+        unrated.metadata?.unknownFields = [:]
+        let empty = SidecarStore.merge(cleared, unrated, base: base, opened: base)
+        #expect(empty.metadata == nil, "nothing left of either: no metadata written")
     }
 
     @Test func `an edit a newer version saved meanwhile is never saved over`() throws {
