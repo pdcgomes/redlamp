@@ -136,6 +136,25 @@ struct SidecarRoundTripTests {
         #expect(FileManager.default.fileExists(atPath: bitmap.path), "an edit keeps it")
     }
 
+    @Test func `a bitmap only a history step's unknown mask refers to is kept`() throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        _ = try saveEverything(adding: Self.bitmapReferences[0].value, at: Self.bitmapReferences[0].path, for: image)
+        let bitmap = store.bitmapURL(MaskBitmap.hash(Self.futurePNG), for: image)
+        try Self.futurePNG.write(to: bitmap)
+
+        var sidecar = try #require(store.load(for: image))
+        let before = sidecar.recipe
+        sidecar.recipe.masks.remove(at: 0)
+        sidecar.session = HistorySession(steps: [
+            HistoryStep(action: .open, title: "Opened", recipe: before),
+            HistoryStep(action: .mask(nil), title: "Delete Mask", recipe: sidecar.recipe),
+        ])
+        try store.save(sidecar, for: image)
+        #expect(FileManager.default.fileExists(atPath: bitmap.path), "undoing the delete needs it")
+    }
+
     /// Fields where this build has nowhere to keep them, and a value outside this build's range.
     static let lossy: [(path: String, value: JSONValue)] = [
         ("/recipe/crop/angle", .number(2)),
