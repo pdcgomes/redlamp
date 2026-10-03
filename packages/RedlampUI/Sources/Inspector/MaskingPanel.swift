@@ -490,6 +490,14 @@ struct MaskList: View {
                 }
             }
         }
+        // The list outlives photos and selections, so an unfinished rename mustn't.
+        .onChange(of: model.selectedMaskID) { cancelRename() }
+        .onChange(of: model.selection) { cancelRename() }
+    }
+
+    private func cancelRename() {
+        renaming = nil
+        draftName = ""
     }
 }
 
