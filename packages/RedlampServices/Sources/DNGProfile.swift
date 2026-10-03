@@ -48,14 +48,17 @@ public struct DNGProfile: Codable, Sendable, Hashable {
         /// Row-major tables, each `points` gains.
         public var gains: [Float]
 
+        static let maximumGains = 1 << 22
+
         public init?(
             rows: Int, columns: Int, spacing: SIMD2<Double>, origin: SIMD2<Double>, points: Int, weights: [Float],
             gamma: Float, gains: [Float],
         ) {
-            guard rows >= 1, columns >= 1, points >= 2, rows * columns * points <= 1 << 22,
-                  gains.count == rows * columns * points, weights.count == 5,
+            guard points >= 2, let count = TIFFReader.product(rows, columns, points), count <= Self.maximumGains,
+                  gains.count == count, weights.count == 5, weights.allSatisfy(\.isFinite),
                   gains.allSatisfy({ $0 >= 0 && $0.isFinite }),
-                  spacing.x > 0, spacing.y > 0, (0.25 ... 4).contains(gamma)
+                  spacing.x > 0, spacing.y > 0, spacing.x.isFinite, spacing.y.isFinite,
+                  origin.x.isFinite, origin.y.isFinite, (0.25 ... 4).contains(gamma)
             else { return nil }
             self.rows = rows
             self.columns = columns
@@ -186,8 +189,9 @@ public struct DNGProfile: Codable, Sendable, Hashable {
             Double(bitPattern: UInt64(bigEndian: data.loadUnaligned(fromByteOffset: offset, as: UInt64.self)))
         }
         let (rows, columns, points) = (Int(u32(0)), Int(u32(4)), Int(u32(40)))
-        guard rows > 0, columns > 0, points > 0, rows * columns * points <= 1 << 22 else { return nil }
-        let count = rows * columns * points
+        guard let count = TIFFReader.product(rows, columns, points), count <= GainTableMap.maximumGains else {
+            return nil
+        }
         var gamma: Float = 1
         var gains: [Float]
         if version == 2 {
@@ -223,5 +227,31 @@ public struct DNGProfile: Codable, Sendable, Hashable {
     private static func isValidCurve(_ points: [SIMD2<Float>]) -> Bool {
         points.count >= 2 && points.allSatisfy { simd_reduce_min($0) >= 0 && simd_reduce_max($0) <= 1 }
             && zip(points, points.dropFirst()).allSatisfy { $0.x < $1.x }
+    }
+}
+
+extension DNGProfile.GainTableMap {
+    private enum CodingKeys: String, CodingKey {
+        case rows, columns, spacing, origin, points, weights, gamma, gains
+    }
+
+    /// As `init?` checks it, since the decode service's archive comes from another process.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        guard let map = try Self(
+            rows: container.decode(Int.self, forKey: .rows),
+            columns: container.decode(Int.self, forKey: .columns),
+            spacing: container.decode(SIMD2<Double>.self, forKey: .spacing),
+            origin: container.decode(SIMD2<Double>.self, forKey: .origin),
+            points: container.decode(Int.self, forKey: .points),
+            weights: container.decode([Float].self, forKey: .weights),
+            gamma: container.decode(Float.self, forKey: .gamma),
+            gains: container.decode([Float].self, forKey: .gains),
+        ) else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath, debugDescription: "The gain table map isn't valid.",
+            ))
+        }
+        self = map
     }
 }

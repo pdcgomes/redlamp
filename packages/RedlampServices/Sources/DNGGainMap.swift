@@ -86,11 +86,7 @@ public struct GainMap: Codable, Sendable, Hashable {
     /// `pointsV x pointsH x mapPlanes`, or nil if a factor isn't positive or the product is
     /// over `maximumGains`.
     static func count(_ pointsV: Int, _ pointsH: Int, _ mapPlanes: Int) -> Int? {
-        guard pointsV > 0, pointsH > 0, mapPlanes > 0 else { return nil }
-        let (grid, gridOverflow) = pointsV.multipliedReportingOverflow(by: pointsH)
-        let (total, totalOverflow) = grid.multipliedReportingOverflow(by: mapPlanes)
-        guard !gridOverflow, !totalOverflow, total <= maximumGains else { return nil }
-        return total
+        TIFFReader.product(pointsV, pointsH, mapPlanes).flatMap { $0 <= maximumGains ? $0 : nil }
     }
 
     /// The gain for one plane of a pixel, bilinear on the grid; nil where the map doesn't apply

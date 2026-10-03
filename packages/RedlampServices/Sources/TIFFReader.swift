@@ -134,4 +134,16 @@ struct TIFFReader {
         let value = bytes.loadUnaligned(fromByteOffset: offset, as: UInt64.self)
         return Double(bitPattern: littleEndian ? UInt64(littleEndian: value) : UInt64(bigEndian: value))
     }
+
+    /// The product of counts a file states, or nil if one isn't positive or the product overflows.
+    static func product(_ factors: Int...) -> Int? {
+        var total = 1
+        for factor in factors {
+            guard factor > 0 else { return nil }
+            let (next, overflow) = total.multipliedReportingOverflow(by: factor)
+            guard !overflow else { return nil }
+            total = next
+        }
+        return total
+    }
 }
