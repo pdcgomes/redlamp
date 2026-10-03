@@ -9,6 +9,9 @@ public enum SidecarProtection: Equatable, Sendable {
     /// Its edit doesn't decode: a newer Redlamp added a value this build doesn't know, or the
     /// file is damaged.
     case unreadable
+    /// Saving it back would drop or change something: a field a newer Redlamp added where this
+    /// build doesn't keep it, or a value this build can't hold.
+    case lossy
 }
 
 /// Sidecars that must be left as they are, and when an emptied one can go.
@@ -39,6 +42,9 @@ extension SidecarStore {
         guard let existing = try? JSONDecoder.sidecar.decode(Sidecar.self, from: data) else {
             throw SidecarStoreError.unreadable(destination)
         }
+        if wouldLose(data, decoding: existing) {
+            throw SidecarStoreError.lossy(destination)
+        }
         return existing
     }
 
@@ -57,7 +63,81 @@ extension SidecarStore {
         if isNewer(data) {
             return .writtenByNewerVersion
         }
-        return (try? JSONDecoder.sidecar.decode(Sidecar.self, from: data)) == nil ? .unreadable : nil
+        guard let decoded = try? JSONDecoder.sidecar.decode(Sidecar.self, from: data) else { return .unreadable }
+        return wouldLose(data, decoding: decoded) ? .lossy : nil
+    }
+
+    // MARK: - Round trip
+
+    /// Whether saving `decoded`, read from `data`, would drop or change something in the file:
+    /// a field this build ignores, or a value it changed on reading (clamped into range, say).
+    /// Keys left out because they hold the default, and upgrades from older formats (the format
+    /// version, a base look's old id), aren't losses.
+    static func wouldLose(_ data: Data, decoding decoded: Sidecar) -> Bool {
+        let decoder = JSONDecoder()
+        guard let original = try? decoder.decode(JSONValue.self, from: data),
+              let encoded = try? JSONEncoder.sidecar.encode(decoded),
+              let written = try? decoder.decode(JSONValue.self, from: encoded)
+        else { return true }
+        return JSONPatch.diff(from: original, to: written).contains { operation in
+            switch operation.op {
+            case .add: false
+            case .replace: !isUpgrade(
+                    from: value(at: operation.path, in: original),
+                    to: operation.value,
+                    at: operation.path,
+                )
+            case .remove: isIgnored(operation.path, in: original, decoded: decoded)
+            }
+        }
+    }
+
+    /// Whether this build ignores the key at `path`: no other value there changes what it reads.
+    /// A key it reads but leaves out when it holds the default isn't ignored.
+    private static func isIgnored(_ path: String, in original: JSONValue, decoded: Sidecar) -> Bool {
+        guard let value = value(at: path, in: original) else { return false }
+        return probes(for: value).allSatisfy { probe in
+            guard let probed = try? JSONPatch.apply([JSONPatch.Operation(.replace, path, probe)], to: original),
+                  let data = try? JSONEncoder().encode(probed),
+                  let reread = try? JSONDecoder.sidecar.decode(Sidecar.self, from: data)
+            else { return false }
+            return reread == decoded
+        }
+    }
+
+    /// Other values of the same kind, or of another kind for containers and null. Numbers move
+    /// both ways, so a default at the end of a range still changes.
+    private static func probes(for value: JSONValue) -> [JSONValue] {
+        switch value {
+        case let .bool(bool): [.bool(!bool)]
+        case let .number(number): [.number(number + 1), .number(number - 1)]
+        case let .string(string): [.string(string + "~")]
+        case .null, .array, .object: [.string("~")]
+        }
+    }
+
+    private static func isUpgrade(from old: JSONValue?, to new: JSONValue?, at path: String) -> Bool {
+        switch (path.split(separator: "/").last, old, new) {
+        case let ("version", .number(old), .number(new)):
+            old < new && new == Double(EditRecipe.formatVersion)
+        case let ("id", .string(old), .string(new)):
+            BuiltInBaseLook(legacyID: old)?.rawValue == new
+        default:
+            false
+        }
+    }
+
+    /// The value at a JSON Pointer `path`.
+    private static func value(at path: String, in document: JSONValue) -> JSONValue? {
+        let tokens = path.split(separator: "/", omittingEmptySubsequences: false).dropFirst()
+        return tokens.reduce(Optional(document)) { value, token in
+            let key = token.replacingOccurrences(of: "~1", with: "/").replacingOccurrences(of: "~0", with: "~")
+            switch value {
+            case let .object(object): return object[key]
+            case let .array(array): return Int(key).flatMap { array.indices.contains($0) ? array[$0] : nil }
+            default: return nil
+            }
+        }
     }
 
     private static func isNewer(_ data: Data) -> Bool {

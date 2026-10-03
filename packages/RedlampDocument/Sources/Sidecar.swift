@@ -125,6 +125,9 @@ public enum SidecarStoreError: Error, Equatable {
     case writtenByNewerVersion(URL)
     /// The sidecar's edit doesn't decode in this build, so it is never overwritten or deleted.
     case unreadable(URL)
+    /// Saving over the sidecar would drop or change what's in it, so it is never overwritten or
+    /// deleted.
+    case lossy(URL)
 }
 
 /// Reads and writes sidecars.
