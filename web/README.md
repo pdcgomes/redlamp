@@ -1,6 +1,6 @@
 # redlamp.app
 
-The project's website: Next.js (App Router), React and Tailwind CSS, with marked for the blog's Markdown and no other runtime dependencies.
+The project's website: Next.js (App Router), React and Tailwind CSS, with marked for the blog's Markdown, Vercel Web Analytics for page views, and no other runtime dependencies.
 
 ```bash
 mise run site            # dev server on http://localhost:3000
@@ -44,3 +44,4 @@ draft: true              # optional: shown by `mise run site`, left out of produ
 - Root directory: `web`.
 - Enable **Include files outside the root directory in the Build Step**, so the build can read `README.md` and `docs/`.
 - Domain: `redlamp.app`.
+- Enable **Web Analytics** in the project's Analytics tab. `<Analytics />` in `app/layout.tsx` reports page views from deployments on Vercel; under `mise run site` it only logs them to the browser console.
