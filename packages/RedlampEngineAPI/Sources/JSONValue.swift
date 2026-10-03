@@ -6,7 +6,8 @@ public enum JSONValue: Codable, Sendable, Hashable {
     case null
     case bool(Bool)
     case number(Double)
-    /// An integer a `Double` can't hold exactly, so it isn't rounded on the way through.
+    /// An integer beyond ±2^53, kept as written: a `Double` would round it, or write it back
+    /// in exponent form.
     case integer(Int64)
     /// An integer above `Int64.max`.
     case unsignedInteger(UInt64)
@@ -21,9 +22,9 @@ public enum JSONValue: Codable, Sendable, Hashable {
         } else if let value = try? container.decode(Bool.self) {
             self = .bool(value)
         } else if let value = try? container.decode(Int64.self) {
-            self = Double(exactly: value).map(JSONValue.number) ?? .integer(value)
+            self = value.magnitude <= Self.exactIntegers ? .number(Double(value)) : .integer(value)
         } else if let value = try? container.decode(UInt64.self) {
-            self = Double(exactly: value).map(JSONValue.number) ?? .unsignedInteger(value)
+            self = value <= Self.exactIntegers ? .number(Double(value)) : .unsignedInteger(value)
         } else if let value = try? container.decode(Double.self) {
             self = .number(value)
         } else if let value = try? container.decode(String.self) {
@@ -34,6 +35,9 @@ public enum JSONValue: Codable, Sendable, Hashable {
             self = try .object(container.decode([String: JSONValue].self))
         }
     }
+
+    /// Integers up to this size are `.number`: a `Double` holds them, and writes them as digits.
+    private static let exactIntegers: UInt64 = 1 << 53
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()

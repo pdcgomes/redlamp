@@ -82,6 +82,22 @@ struct UnknownFieldTests {
         #expect(recipe.unknownFields["ratio"] == .number(0.1))
     }
 
+    @Test func `numbers a newer build added are written back byte for byte`() throws {
+        let fields = #"{"a":5,"b":0.1,"c":9007199254740994,"d":-9007199254740994,"e":10000000000000000,"#
+            + #""f":1727950000000000000}"#
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let decoded = try JSONDecoder().decode([String: JSONValue].self, from: Data(fields.utf8))
+        #expect(try String(bytes: encoder.encode(decoded), encoding: .utf8) == fields)
+
+        let json = #"{"id":"local/test","version":1,"name":"Test","amount":80,"#
+            + #""seed":9007199254740994,"size":10000000000000000}"#
+        let recipe = try JSONDecoder().decode(AppliedRecipe.self, from: Data(json.utf8))
+        let written = try String(bytes: JSONEncoder().encode(recipe), encoding: .utf8) ?? ""
+        #expect(written.contains(#""seed":9007199254740994"#))
+        #expect(written.contains(#""size":10000000000000000"#))
+    }
+
     @Test func `types without unknown fields are written as before`() throws {
         let layer = MaskLayer(name: "Sky", components: [MaskComponent(shape: .radial(RadialMask(
             center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.1,
