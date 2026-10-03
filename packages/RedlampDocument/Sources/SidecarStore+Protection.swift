@@ -6,8 +6,9 @@ import RedlampEngineAPI
 public enum SidecarProtection: Equatable, Sendable {
     /// Its file format or process version is newer than this build's.
     case writtenByNewerVersion
-    /// Its edit doesn't decode: a newer Redlamp added a value this build doesn't know, or the
-    /// file is damaged.
+    /// Its edit can't be opened or doesn't decode: a newer Redlamp added a value this build
+    /// doesn't know, the file is damaged, or it is there but can't be read now (no permission,
+    /// an I/O error, or iCloud Drive can't download it).
     case unreadable
     /// Saving it back would drop or change something: a field a newer Redlamp added where this
     /// build doesn't keep it, or a value this build can't hold.
@@ -16,26 +17,22 @@ public enum SidecarProtection: Equatable, Sendable {
 
 /// Sidecars that must be left as they are, and when an emptied one can go.
 public extension SidecarStore {
-    /// Whether the image's sidecar uses a file format or process version this build
-    /// doesn't have. Such edits can be shown, but saving would lose information.
-    func isWrittenByNewerVersion(for image: URL) -> Bool {
-        protection(for: image) == .writtenByNewerVersion
-    }
-
     /// Why the image's sidecar must be left as it is, or nil if it can be saved over or
     /// deleted (including when there is none, or a package has no edit in it).
     func protection(for image: URL) -> SidecarProtection? {
         let sidecar = url(for: image)
-        return (try? Self.reading(sidecar) { url in
-            (try? Data(contentsOf: Self.editURL(inSidecar: url))).flatMap(Self.protection)
-        }) ?? nil
+        do {
+            return try Self.reading(sidecar) { Self.protection(atSidecar: $0) }
+        } catch {
+            return Self.isPresent(sidecar) ? .unreadable : nil
+        }
     }
 }
 
 extension SidecarStore {
     /// The edit on disk, without its bitmaps; nil if there is none. Throws if it is protected.
     static func existing(at destination: URL) throws -> Sidecar? {
-        guard let data = try? Data(contentsOf: editURL(inSidecar: destination)) else { return nil }
+        guard let data = try editData(inSidecar: destination) else { return nil }
         if isNewer(data) {
             throw SidecarStoreError.writtenByNewerVersion(destination)
         }
@@ -57,6 +54,34 @@ extension SidecarStore {
         guard merged.isPristine else { return false }
         let open = sidecar.session.map { "\($0.id.uuidString).json" }
         return sidecar.clearsHistory || historyFiles(in: destination).allSatisfy { $0.lastPathComponent == open }
+    }
+
+    /// The edit's bytes; nil when there is none. Throws when it is there but can't be read.
+    static func editData(inSidecar sidecar: URL) throws -> Data? {
+        let edit = editURL(inSidecar: sidecar)
+        guard isPresent(edit) else { return nil }
+        do {
+            return try Data(contentsOf: edit)
+        } catch {
+            throw SidecarStoreError.unreadable(sidecar)
+        }
+    }
+
+    /// Why the sidecar at `sidecar` must be left as it is; call it under coordination.
+    static func protection(atSidecar sidecar: URL) -> SidecarProtection? {
+        do {
+            return try editData(inSidecar: sidecar).flatMap(protection)
+        } catch {
+            return .unreadable
+        }
+    }
+
+    /// Whether `url` is there, downloaded or not: iCloud Drive leaves a placeholder in place of
+    /// a file it evicted.
+    private static func isPresent(_ url: URL) -> Bool {
+        let placeholder = url.deletingLastPathComponent().appending(path: ".\(url.lastPathComponent).icloud")
+        return FileManager.default.fileExists(atPath: url.path) || FileManager.default
+            .fileExists(atPath: placeholder.path)
     }
 
     static func protection(_ data: Data) -> SidecarProtection? {

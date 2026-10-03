@@ -214,7 +214,7 @@ public struct SidecarStore: Sendable {
     public func delete(for image: URL) {
         let sidecar = url(for: image)
         try? Self.writing(sidecar, options: .forDeleting) { url in
-            if let data = try? Data(contentsOf: Self.editURL(inSidecar: url)), Self.protection(data) != nil {
+            if Self.protection(atSidecar: url) != nil {
                 return
             }
             try FileManager.default.removeItem(at: url)

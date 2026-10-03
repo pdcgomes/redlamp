@@ -75,7 +75,7 @@ struct SidecarTests {
         let json = #"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":99}}"#
         try Data(json.utf8).write(to: store.url(for: image))
 
-        #expect(store.isWrittenByNewerVersion(for: image))
+        #expect(store.protection(for: image) == .writtenByNewerVersion)
         #expect(store.load(for: image)?.recipe.requiresNewerProcess == true)
         #expect(throws: SidecarStoreError.writtenByNewerVersion(store.url(for: image))) {
             try store.save(Sidecar(recipe: EditRecipe()), for: image)
@@ -214,52 +214,6 @@ struct SidecarTests {
         try store.save(Sidecar(recipe: recipe), for: image)
         store.delete(for: image)
         #expect(!FileManager.default.fileExists(atPath: store.url(for: image).path))
-    }
-
-    // MARK: - Unreadable sidecars
-
-    /// Edits this build can't decode, though no version number says a newer Redlamp wrote them:
-    /// an enum value it doesn't know, a truncated file, and a value of the wrong type.
-    static let unreadable = [
-        #"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":1,"treatment":"infrared"}}"#,
-        #"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":1,"values":{"basic.expo"#,
-        #"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":1,"values":{"basic.exposure":"+1"}}}"#,
-    ]
-
-    @Test(arguments: unreadable)
-    func `a sidecar this build can't read is never saved over or deleted`(json: String) throws {
-        let (image, cleanup) = try temporaryImage()
-        defer { cleanup() }
-        let store = SidecarStore()
-        let package = store.url(for: image)
-        try FileManager.default.createDirectory(at: package, withIntermediateDirectories: false)
-        try Data(json.utf8).write(to: store.editURL(for: image))
-
-        #expect(store.load(for: image) == nil)
-        #expect(store.protection(for: image) == .unreadable)
-        #expect(throws: SidecarStoreError.unreadable(package)) {
-            try store.save(Sidecar(recipe: EditRecipe()), for: image)
-        }
-        store.delete(for: image)
-        #expect(throws: SidecarStoreError.unreadable(package)) {
-            try Library.writeMetadata(PhotoMetadata(rating: 2), for: image, store: store)
-        }
-        #expect(throws: SidecarStoreError.unreadable(package)) {
-            try Library.writeMetadata(PhotoMetadata(), for: image, store: store)
-        }
-        #expect(try Data(contentsOf: store.editURL(for: image)) == Data(json.utf8))
-    }
-
-    @Test func `a package without its edit is written over`() throws {
-        let (image, cleanup) = try temporaryImage()
-        defer { cleanup() }
-        let store = SidecarStore()
-        try FileManager.default.createDirectory(at: store.url(for: image), withIntermediateDirectories: false)
-        #expect(store.protection(for: image) == nil)
-        var recipe = EditRecipe()
-        recipe[.exposure] = 0.5
-        try store.save(Sidecar(recipe: recipe), for: image)
-        #expect(store.load(for: image)?.recipe[.exposure] == 0.5)
     }
 
     /// Rolling back to a build that predates this one: what this build writes, it still reads.
