@@ -42,8 +42,9 @@ public extension SidecarStore {
         return merge(current, conflicts)
     }
 
-    /// Merges and saves the sidecar's unresolved conflict versions, then marks them resolved;
-    /// nil when there are none (or they can't be merged now, so they stay for the next load).
+    /// Merges and saves the sidecar's unresolved conflict versions, then marks them resolved and
+    /// removes them; nil when there are none (or they can't be merged now, so they stay for the
+    /// next load).
     internal func resolveConflicts(_ current: Sidecar, for image: URL) -> Sidecar? {
         let sidecar = url(for: image)
         guard let versions = NSFileVersion.unresolvedConflictVersionsOfItem(at: sidecar), !versions.isEmpty
@@ -59,8 +60,11 @@ public extension SidecarStore {
             for version in versions {
                 version.isResolved = true
             }
-            try Self.writing(sidecar, options: []) { url in
-                try NSFileVersion.removeOtherVersionsOfItem(at: url)
+            // Only the versions merged: one that arrived since stays for the next load.
+            try Self.writing(sidecar, options: []) { _ in
+                for version in versions {
+                    try version.remove()
+                }
             }
             return merged
         } catch {
