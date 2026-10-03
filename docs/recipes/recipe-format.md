@@ -94,6 +94,27 @@ The card and its mapping to Redlamp values are documented in [camera-card-mappin
 ## Importing other formats
 
 - **`.cube`** (3D and 1D, with `DOMAIN_MIN`/`DOMAIN_MAX`): assumed to be built for sRGB unless told otherwise, and converted into Redlamp's space so it renders as its author intended. Stored at up to 33 points per side.
+- **`.3dl`** (Autodesk Lustre and Flame): a line of input mesh points, such as `0 64 … 960 1023` for 17 points (2 to 65 points; they need not be evenly spaced), then one row of three integers per grid point, blue varying fastest and red slowest. The output bit depth (10, 12 or 16) comes from a `Mesh <log2 intervals> <bits>` line when the file has one, and otherwise from the largest value, so a 12-bit table whose values all stay below 1024 reads as 10-bit. `3DMESH`, `LUT8` and `gamma` lines are ignored. The same conversion as `.cube`.
 - **HaldCLUT** images (level² points in a level³ square image): the same conversion. `redlamp recipe hald-identity` writes an identity image to grade in any editor.
 
-Both become a recipe with one embedded Base Look.
+Each becomes a recipe with one embedded Base Look.
+
+### LUTs for camera log footage
+
+A LUT made for a camera's log footage, such as a camera maker's conversion to Rec.709 or a colourist's look for log material, expects the camera's log curve and gamut as its input. Its input space is chosen on import:
+
+| Input space | Curve | Gamut | Middle grey's signal |
+| --- | --- | --- | --- |
+| `slog3-sgamut3cine` | Sony S-Log3 | S-Gamut3.Cine | 420/1023 |
+| `slog3-sgamut3` | Sony S-Log3 | S-Gamut3 | 420/1023 |
+| `logc3-awg3` | ARRI LogC3, EI 800 | ARRI Wide Gamut 3 | 0.391 |
+| `vlog-vgamut` | Panasonic V-Log | V-Gamut | 433/1023 |
+| `applelog` | Apple Log | Rec.2020 | 0.488 |
+
+The LUT's output is taken to be Rec.709 for a BT.1886 display (a pure 2.4 gamma), the target of camera makers' Rec.709 LUTs, unless sRGB is chosen.
+
+Such a LUT is converted at import into a scene-referred table (`sceneLog`, 33 points per side), which takes the place of Redlamp's tone curve. At each grid point the scene light (linear Rec.2020) is converted to the camera's gamut and encoded with its log curve, so middle grey (0.18) reaches the LUT at the camera's own grey; the LUT is sampled tetrahedrally, with signals outside its domain clamped to its edge; and its output is decoded to linear light and converted from Rec.709 to Rec.2020. White balance, Exposure and the Basic tone sliders act on scene light before the table, and the colour controls and the tone curve on its output. The table spans −10 to +6.5 stops around middle grey, so brighter scene light renders as +6.5 stops does.
+
+The curves are the makers' published formulas: Sony's *Technical Summary for S-Gamut3.Cine/S-Log3 and S-Gamut3/S-Log3*; ARRI's *ALEXA Log C Curve: Usage in VFX* (2017), with its exposure-value parameters for EI 800; Panasonic's *V-Log/V-Gamut Reference Manual* (2014); and Apple's *Apple Log Profile White Paper* (2023). Each gamut matrix is derived from the maker's published primaries and D65 white by SMPTE RP 177, and matches the matrices the makers print.
+
+In the app, the import panel's *Look tables are for* menu sets the input space (sRGB unless changed) and *Output* the display. From the command line: `redlamp recipe import <file> --space slog3-sgamut3cine [--display srgb]`.
