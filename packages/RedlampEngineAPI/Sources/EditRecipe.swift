@@ -30,6 +30,8 @@ public struct AppliedRecipe: Codable, Sendable, Hashable {
     public var name: String
     /// The recipe's Amount when it was applied, in percent.
     public var amount: Double
+    /// Fields written by a newer Redlamp, written back unchanged.
+    public var unknownFields: [String: JSONValue] = [:]
 
     public init(id: String, version: Int, name: String, amount: Double = 100) {
         self.id = id

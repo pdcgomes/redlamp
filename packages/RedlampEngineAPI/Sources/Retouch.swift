@@ -52,6 +52,8 @@ public struct RetouchSpot: Codable, Sendable, Hashable, Identifiable {
     public var feather: Double
     /// 0...100.
     public var opacity: Double
+    /// Fields written by a newer Redlamp, written back unchanged.
+    public var unknownFields: [String: JSONValue] = [:]
 
     public static let radiusRange = 0.002 ... 0.25
 
@@ -88,7 +90,7 @@ public struct RetouchSpot: Codable, Sendable, Hashable, Identifiable {
         return [origin] + stroke.map { ImagePoint(x: origin.x + $0.x, y: origin.y + $0.y) }
     }
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case id, mode, center, source, stroke, region, radius, feather, opacity
     }
 
@@ -103,9 +105,13 @@ public struct RetouchSpot: Codable, Sendable, Hashable, Identifiable {
         radius = try container.decode(Double.self, forKey: .radius)
         feather = try container.decode(Double.self, forKey: .feather)
         opacity = try container.decode(Double.self, forKey: .opacity)
+        unknownFields = try decoder.container(keyedBy: DynamicCodingKey.self)
+            .unknownFields(excluding: Set(CodingKeys.allCases.map(\.stringValue)))
     }
 
     public func encode(to encoder: Encoder) throws {
+        var unknown = encoder.container(keyedBy: DynamicCodingKey.self)
+        try unknown.encode(unknownFields)
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
         try container.encode(mode, forKey: .mode)

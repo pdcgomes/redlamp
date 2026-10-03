@@ -1,11 +1,13 @@
 import Foundation
 import RedlampEngineAPI
 
-public struct Snapshot: Codable, Sendable, Hashable, Identifiable {
+public struct Snapshot: Sendable, Hashable, Identifiable {
     public var id: UUID
     public var name: String
     public var created: Date
     public var recipe: EditRecipe
+    /// Fields written by a newer Redlamp, written back unchanged.
+    public var unknownFields: [String: JSONValue] = [:]
 
     public init(id: UUID = UUID(), name: String, created: Date = Date(), recipe: EditRecipe) {
         self.id = id
@@ -25,11 +27,13 @@ public enum ColorLabel: String, Codable, Sendable, Hashable, CaseIterable {
 }
 
 /// Rating, flag and label: the culling metadata Lightroom lets you set while developing.
-public struct PhotoMetadata: Codable, Sendable, Hashable {
+public struct PhotoMetadata: Sendable, Hashable {
     /// 0–5 stars.
     public var rating: Int
     public var flag: PhotoFlag?
     public var label: ColorLabel?
+    /// Fields written by a newer Redlamp (a caption, say), written back unchanged.
+    public var unknownFields: [String: JSONValue] = [:]
 
     public init(rating: Int = 0, flag: PhotoFlag? = nil, label: ColorLabel? = nil) {
         self.rating = min(max(rating, 0), 5)
@@ -38,7 +42,7 @@ public struct PhotoMetadata: Codable, Sendable, Hashable {
     }
 
     public var isEmpty: Bool {
-        rating == 0 && flag == nil && label == nil
+        rating == 0 && flag == nil && label == nil && unknownFields.isEmpty
     }
 }
 
