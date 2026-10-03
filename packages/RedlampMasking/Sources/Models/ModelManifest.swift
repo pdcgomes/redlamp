@@ -54,6 +54,15 @@ public struct ModelManifest: Codable, Sendable, Hashable, Identifiable {
     public func package(named name: String, in root: URL) -> URL {
         root.appending(path: "\(name).mlpackage")
     }
+
+    /// Where `file` is fetched from: by its path under the source, except from a GitHub release,
+    /// whose assets can't hold folders, so each `/` of the path is `__` in the asset's name.
+    public func remote(_ file: File) -> URL {
+        if source.host() == "github.com", source.path().contains("/releases/download/") {
+            return source.appending(path: file.path.replacingOccurrences(of: "/", with: "__"))
+        }
+        return source.appending(path: file.path)
+    }
 }
 
 /// The models Redlamp knows, from the bundled manifests.

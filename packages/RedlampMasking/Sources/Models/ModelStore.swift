@@ -127,8 +127,7 @@ public actor ModelStore {
         var done = 0
         let total = max(manifest.downloadBytes, 1)
         for file in manifest.files {
-            let remote = manifest.source.appending(path: file.path)
-            let (downloaded, response) = try await URLSession.shared.download(from: remote)
+            let (downloaded, response) = try await URLSession.shared.download(from: manifest.remote(file))
             guard (response as? HTTPURLResponse)?.statusCode ?? 200 < 400 else {
                 throw ModelStoreError.download("\(file.path): HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)")
             }

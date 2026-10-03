@@ -55,6 +55,18 @@ struct ModelStoreTests {
         #expect(await store.location(of: model) == nil)
     }
 
+    @Test func `a release's files are fetched by flat names, other sources' by their paths`() throws {
+        let owl = try #require(ModelCatalog.manifest("owlv2-base"))
+        let weights = try #require(owl.files.first { $0.path.hasSuffix("weight.bin") })
+        #expect(
+            owl.remote(weights).absoluteString == "https://github.com/pdcgomes/redlamp/releases/download/"
+                + "models-owlv2-base-v1/Owlv2Detector.mlpackage__Data__com.apple.CoreML__weights__weight.bin",
+        )
+        let sam = try #require(ModelCatalog.manifest("sam2.1-tiny"))
+        let encoder = try #require(sam.files.first)
+        #expect(sam.remote(encoder).absoluteString.hasSuffix("/resolve/main/\(encoder.path)"))
+    }
+
     @Test func `an unpublished model can't be downloaded`() async throws {
         let root = try temporary()
         defer { try? FileManager.default.removeItem(at: root) }
