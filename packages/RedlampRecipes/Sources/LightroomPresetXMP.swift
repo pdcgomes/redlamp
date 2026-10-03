@@ -38,6 +38,12 @@ struct CameraRawSettings: Sendable {
         return value.isFinite ? value : nil
     }
 
+    /// A simple value with no text, as Lightroom writes a field it leaves unset
+    /// (`crs:CameraModelRestriction=""`).
+    func isBlank(_ name: String) -> Bool {
+        text(name)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true
+    }
+
     /// `True` and `False` in any case, or a number, which is on unless it is zero.
     func flag(_ name: String) -> Bool? {
         switch text(name)?.lowercased() {

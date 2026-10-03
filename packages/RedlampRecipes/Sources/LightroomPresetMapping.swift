@@ -61,6 +61,7 @@ extension LightroomPreset {
         ("ConvertToGrayscale", .treatment),
         ("CameraProfile", .ignored(Note.profile)),
         ("Look", .look),
+        ("OverrideLookVignette", .unlessOff(Note.profile)),
         ("WhiteBalance", .whiteBalance),
         ("Temperature", .kelvin(.temperature)),
         ("Tint", .kelvin(.tint)),
@@ -193,8 +194,9 @@ extension LightroomPreset {
     }
 
     /// The preset's settings in report order, each with its rule: nil for one Redlamp doesn't know.
+    /// Blank ones are left out.
     static func orderedSettings(_ settings: CameraRawSettings) -> [(key: String, rule: LightroomRule?)] {
-        var remaining = Set(settings.values.keys)
+        var remaining = Set(settings.values.keys.filter { !settings.isBlank($0) })
         var ordered: [(key: String, rule: LightroomRule?)] = []
         for (pattern, rule) in rules {
             let matches = pattern.hasSuffix("*")
