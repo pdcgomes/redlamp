@@ -41,6 +41,8 @@ final class ImageSession: @unchecked Sendable {
     let refinedHaze: any MTLTexture
     /// Edge-aware Highlights and Shadows' base: a guided filter's coefficients (see `ToneBase`).
     let toneBase: any MTLTexture
+    /// Edge-aware Clarity's base: a guided filter's coefficients (see `ClarityBase`).
+    let clarityBase: any MTLTexture
     /// The light halation and bloom spread (see `Glow`), mipmapped.
     let glowSource: any MTLTexture
     /// The same, boosting only small lights (process 3).
@@ -78,6 +80,7 @@ final class ImageSession: @unchecked Sendable {
         hazeMap: any MTLTexture,
         refinedHaze: any MTLTexture,
         toneBase: any MTLTexture,
+        clarityBase: any MTLTexture,
         glowSource: any MTLTexture,
         glowLights: any MTLTexture,
         noiseGain: any MTLTexture,
@@ -97,6 +100,7 @@ final class ImageSession: @unchecked Sendable {
         self.hazeMap = hazeMap
         self.refinedHaze = refinedHaze
         self.toneBase = toneBase
+        self.clarityBase = clarityBase
         self.glowSource = glowSource
         self.glowLights = glowLights
         self.noise = noise.scaled(by: SIMD3<Float>(balanceMultipliers))
@@ -149,6 +153,7 @@ final class ImageSession: @unchecked Sendable {
         hazeMap = original.hazeMap
         refinedHaze = original.refinedHaze
         toneBase = original.toneBase
+        clarityBase = original.clarityBase
         glowSource = original.glowSource
         glowLights = original.glowLights
         noiseGain = original.noiseGain

@@ -231,6 +231,57 @@ struct DetailStageTests {
         #expect(try gain(stripes(period: 48), recipe) > 1.1)
     }
 
+    /// A dark and a bright half, 3.3 stops apart, both with Clarity-sized stripes (48 px, ±0.15
+    /// stops). Per-level Clarity takes the edge for detail and brightens the bright side beside it
+    /// and darkens the dark side; edge-aware Clarity (process 9) boosts the stripes at least as
+    /// much and leaves the edge mostly alone.
+    @Test func `edge-aware clarity puts no bands along an edge`() throws {
+        let width = 1024
+        let edge = width / 2
+        let session = try makeSession(.bayer, width: width, height: 256, noiseScale: 0) { x, _ in
+            Float((x < edge ? 0.05 : 0.5) * pow(2, 0.15 * sin(2 * .pi * Double(x) / 48)))
+        }
+        let source = try readLevel(session, level: 0)
+        func measure(process: Int) throws -> (bright: Float, dark: Float, gain: Float) {
+            var recipe = Self.untouched
+            recipe.processVersion = process
+            recipe[.clarity] = 100
+            let output = try processed(session, recipe: recipe)
+            func shift(_ columns: Range<Int>) -> Float {
+                columns.map { log2(output[128 * width + $0].y) - log2(source[128 * width + $0].y) }
+                    .reduce(0, +) / Float(columns.count)
+            }
+            func spread(_ pixels: [SIMD3<Float>], _ columns: Range<Int>) -> Float {
+                let logs = columns.map { log2(pixels[128 * width + $0].y) }
+                let mean = logs.reduce(0, +) / Float(logs.count)
+                return (logs.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Float(logs.count)).squareRoot()
+            }
+            let far = 124 ..< 316
+            return (
+                shift(edge + 4 ..< edge + 52) - shift(edge + 188 ..< edge + 380),
+                shift(edge - 52 ..< edge - 4) - shift(far),
+                spread(output, far) / spread(source, far),
+            )
+        }
+        let perLevel = try measure(process: 8)
+        let edgeAware = try measure(process: 9)
+        print("clarity beside the edge: per level \(perLevel), edge-aware \(edgeAware)")
+        #expect(perLevel.bright > 0.05 && perLevel.dark < -0.05, "per-level Clarity bands the edge: \(perLevel)")
+        #expect(edgeAware.gain >= perLevel.gain, "stripes: \(edgeAware.gain), per level \(perLevel.gain)")
+        /// The bands for each stop of the stripes' boost, so a stronger gain isn't an excuse.
+        func perBoost(_ band: Float, _ gain: Float) -> Float {
+            abs(band) / log2(gain)
+        }
+        #expect(
+            perBoost(edgeAware.bright, edgeAware.gain) < perBoost(perLevel.bright, perLevel.gain) / 3,
+            "bright side: \(edgeAware), per level \(perLevel)",
+        )
+        #expect(
+            perBoost(edgeAware.dark, edgeAware.gain) < perBoost(perLevel.dark, perLevel.gain) / 3,
+            "dark side: \(edgeAware), per level \(perLevel)",
+        )
+    }
+
     // MARK: - Masks
 
     /// A mask covering the left 45% of the photo, fading out by 55%.

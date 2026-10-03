@@ -132,12 +132,15 @@ struct LocalContrastSettings: Hashable {
 
     var texture: Float
     var clarity: Float
+    /// Process 9: Clarity's band ends at an edge-preserving base (`ClarityBase`) instead of a level.
+    var edgeAware: Bool
     /// Clarity's detail saturates at about this many stops, which holds back halos.
     static let clarityLimit: Float = 0.5
 
     init(recipe: EditRecipe) {
         texture = Float(recipe[.texture] / 100)
         clarity = Float(recipe[.clarity] / 100)
+        edgeAware = recipe.processVersion >= 9
     }
 
     var isActive: Bool {
@@ -547,13 +550,19 @@ final class DetailStage {
                 Int32(clarity?.lowerBound ?? 0), Int32(clarity?.upperBound ?? 0),
             ),
             luma: Self.luma(session),
-            shape: SIMD4(settings.texture, settings.clarity, LocalContrastSettings.clarityLimit, 0),
+            shape: SIMD4(
+                settings.texture,
+                settings.clarity,
+                LocalContrastSettings.clarityLimit,
+                settings.edgeAware ? ClarityBase.gain : 0,
+            ),
         )
         encoder.setComputePipelineState(kernels.localContrast)
         encoder.setTexture(source.texture, index: 0)
         encoder.setTexture(session.pyramid, index: 1)
         encoder.setTexture(output, index: 2)
         encoder.setTexture(local ?? output, index: 3)
+        encoder.setTexture(session.clarityBase, index: 4)
         encoder.setBytes(&params, length: MemoryLayout<LocalContrastParams>.stride, index: 0)
         encoder.dispatchGrid(width: work.size.x, height: work.size.y, pipeline: kernels.localContrast)
     }

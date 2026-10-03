@@ -65,7 +65,9 @@ public struct EditRecipe: Sendable, Hashable {
     /// the detail inside it (`ToneBase`), instead of a curve on each pixel's own brightness.
     /// 8: Dehaze's haze map follows the photo's edges (`Haze.Refined`), so the sky
     /// beside a tree or a ridge is dehazed as much as the rest of it.
-    public static let currentProcessVersion = 8
+    /// 9: Clarity is edge-aware (`ClarityBase`): a strong edge isn't its detail, so it puts no
+    /// bright and dark bands along it.
+    public static let currentProcessVersion = 9
     public static let linearPointCurve = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]
 
     /// Sidecars written before process versions existed are version 1.

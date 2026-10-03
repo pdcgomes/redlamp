@@ -87,6 +87,8 @@ struct SessionBuilder {
         let analysis = AnalysisImage(width: analysisWidth, height: analysisHeight, pixels: pixels)
         let airlight = Haze.airlight(analysis)
         let toneBase = try ToneBase.coefficients(analysis).texture(device: device)
+        let clarityBase = try ClarityBase.coefficients(analysis, fullLongEdge: max(width, height))
+            .texture(device: device)
         guard let hazeCommands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
         hazeCommands.label = "Haze map"
         let (hazeMap, hazeBlocks) = try Haze.encodeMap(
@@ -130,6 +132,7 @@ struct SessionBuilder {
             hazeMap: hazeMap,
             refinedHaze: refinedHaze,
             toneBase: toneBase,
+            clarityBase: clarityBase,
             glowSource: glowSource,
             glowLights: glowLights,
             noiseGain: noiseGain,

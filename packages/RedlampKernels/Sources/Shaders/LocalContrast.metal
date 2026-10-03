@@ -9,7 +9,7 @@ struct LocalContrastParams {
     int4 place;               // xy work area origin in pyramid texels at the work level, z work level
     int4 levels;              // xy Texture's fine and coarse pyramid levels (0 0 for none), zw Clarity's
     float4 luma;              // xyz pyramid RGB to luminance, w floor added before the log
-    float4 shape;             // x Texture, y Clarity (slider / 100), z Clarity limit (stops)
+    float4 shape;             // x Texture, y Clarity (slider / 100), z Clarity limit (stops), w edge-aware Clarity's gain (process 9; 0 per level)
 };
 
 // Log luminance of a pyramid level at `uv`, cubic B-spline interpolated (four bilinear taps), so
@@ -43,6 +43,7 @@ kernel void rl_local_contrast(
     texture2d<float, access::sample> pyramid [[texture(1)]],
     texture2d<float, access::write> out [[texture(2)]],
     texture2d<float, access::read> local [[texture(3)]],
+    texture2d<float, access::sample> clarityBase [[texture(4)]],
     constant LocalContrastParams &p [[buffer(0)]],
     uint2 gid [[thread_position_in_grid]])
 {
@@ -57,7 +58,7 @@ kernel void rl_local_contrast(
     float2 amounts = p.shape.xy + (p.size.z != 0 ? local.read(gid).xy : float2(0.0f));
     // Removing all of Texture's band looks blurred, so negative Texture only softens it.
     float texture = amounts.x > 0.0f ? amounts.x : 0.5f * amounts.x;
-    float clarity = 0.7f * amounts.y;
+    float clarity = (p.shape.w > 0.0f ? p.shape.w : 0.7f) * amounts.y;
     float boost = 0.0f;
     if (texture != 0.0f && p.levels.x <= p.levels.y && p.levels.y > 0) {
         // Rendering at or below the band's fine level, the texels themselves are the fine detail:
@@ -67,7 +68,17 @@ kernel void rl_local_contrast(
         boost += texture * (fine - logLumaAt(pyramid, uv, p.levels.y, p.luma));
     }
     if (clarity != 0.0f && p.levels.z < p.levels.w) {
-        float detail = logLumaAt(pyramid, uv, p.levels.z, p.luma) - logLumaAt(pyramid, uv, p.levels.w, p.luma);
+        float detail;
+        if (p.shape.w > 0.0f) {
+            // Edge-aware (`ClarityBase`): the band ends at an edge-preserving base, in its own
+            // log luminance, so a strong edge isn't Clarity's detail.
+            constexpr sampler baseSampler(coord::normalized, filter::linear, address::clamp_to_edge);
+            float fine = logLumaAt(pyramid, uv, p.levels.z, float4(0.25f, 0.5f, 0.25f, p.luma.w));
+            float2 ab = clarityBase.sample(baseSampler, uv).rg;
+            detail = fine - (ab.x * fine + ab.y);
+        } else {
+            detail = logLumaAt(pyramid, uv, p.levels.z, p.luma) - logLumaAt(pyramid, uv, p.levels.w, p.luma);
+        }
         float limit = p.shape.z;
         boost += clarity * limit * tanh(detail / limit);
     }
