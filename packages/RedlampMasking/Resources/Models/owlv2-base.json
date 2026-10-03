@@ -1,0 +1,58 @@
+{
+  "id": "owlv2-base",
+  "version": 1,
+  "name": "OWLv2 (base)",
+  "purpose": "Finding things named in words to remove: litter, signs, cables, cars, people, birds.",
+  "provider": "redlamp.owlv2-base",
+  "assetPack": "models.owlv2-base.v1",
+  "source": "https://github.com/pdcgomes/redlamp/releases/download/models-owlv2-base-v1/",
+  "computeUnits": "cpuAndGPU",
+  "files": [
+    {
+      "path": "Owlv2Detector.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+      "bytes": 150917,
+      "sha256": "63f3da536151198467538353b9544ced88bbfb486ac005f2543bdc5baedd8db4"
+    },
+    {
+      "path": "Owlv2Detector.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+      "bytes": 364778304,
+      "sha256": "1db17bf2459ec174b8cd6e54cc1f6cf2ce3d2b3db29bca9fcb86babde942c137"
+    },
+    {
+      "path": "Owlv2Detector.mlpackage/Manifest.json",
+      "bytes": 617,
+      "sha256": "79a9565d574c12bfc575c3298126bc3b9f9ed36578e7b0e73f17e8eb53014384"
+    },
+    {
+      "path": "Owlv2Detector.mlpackage/executorch_debug_handle_mapping.json",
+      "bytes": 139598,
+      "sha256": "e78acf3a0be101148c4002bfacc5dd11090a4ec103c71aba062f07b2a5b04ce8"
+    },
+    {
+      "path": "Owlv2Queries.bin",
+      "bytes": 19456,
+      "sha256": "fa4087f1baecf59cc0b4b119d1ed2704638477f10fee07f9a53cd1ec630a1323"
+    },
+    {
+      "path": "Owlv2Queries.json",
+      "bytes": 1863,
+      "sha256": "7adc7f7dceab8a25a8d876650bf8c4c000a0bacfc4029527c01847352de3fc8e"
+    }
+  ],
+  "licenses": {
+    "code": "Apache-2.0",
+    "weights": "Apache-2.0",
+    "data": [
+      "CLIP image-text pairs (OpenAI, undisclosed)",
+      "WebLI (Google), pseudo-annotated",
+      "LVIS (COCO images)",
+      "Objects365, behind the annotator",
+      "Visual Genome, behind the annotator"
+    ]
+  },
+  "decision": "DEC-24",
+  "evaluationOnly": false,
+  "cleared": false,
+  "published": false,
+  "notes": "Converted by research/prototypes/masking/convert_owlv2.py from google/owlv2-base-patch16-ensemble (OpenAI's CLIP B/16 self-trained on WebLI boxes an OWL-ViT L/14 annotated, the annotator trained on Objects365 and Visual Genome, and averaged with itself fine-tuned on LVIS base): the image side at 960x960, computing in float32, since in float16 a few dozen patches a photo drift through the vision transformer's massive activations, and 8-bit weights move some boxes by over half the square. The text features of 19 prompts for 13 things are precomputed (Owlv2Queries.bin), so no text encoder ships. Matches PyTorch on 40 renders (scores within 0.0004). GPU 150 ms a photo on an M1 Ultra. Not yet published: the source URL is where a release would go."
+}

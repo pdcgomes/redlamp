@@ -12,6 +12,10 @@ Dataset verdicts follow docs/research/notes/C-masking.md:
   publisher-grant  the publisher owned or licensed the data and released the weights itself;
                    shippable once the decision named in the manifest is accepted
   non-commercial   research or non-commercial only: the model must be evaluationOnly
+  lineage          research-only data behind the permissive weights a publisher released (under a
+                   backbone, an annotator or a fine-tune): allowed by DEC-24, which the manifest
+                   must name; data a model was trained on directly from Places2 stays
+                   non-commercial
 
 A manifest is `cleared` (offered to everyone) only once its decision is accepted; until then the
 app offers it only with evaluation models turned on. With --release, a model still waiting on its
@@ -48,6 +52,12 @@ DATASETS = {
     "Depth Anything 3 academic mix (unaudited)": "non-commercial",
     # SAM 3's SA-Co data (Meta): terms unaudited, treated as non-commercial.
     "SA-Co (unaudited)": "non-commercial",
+    # OWLv2 (google/owlv2-base-patch16-ensemble), from its paper (arXiv 2306.09683).
+    "CLIP image-text pairs (OpenAI, undisclosed)": "publisher-grant",
+    "WebLI (Google), pseudo-annotated": "publisher-grant",
+    "LVIS (COCO images)": "lineage",
+    "Objects365, behind the annotator": "lineage",
+    "Visual Genome, behind the annotator": "lineage",
 }
 
 REQUIRED = ["id", "version", "name", "purpose", "provider", "assetPack", "source", "computeUnits", "files", "licenses"]
@@ -99,6 +109,8 @@ def check(path, accepted):
         problems.append("cleared models must be published (downloadable)")
     if "publisher-grant" in verdicts.values() and not decision:
         problems.append("publisher-granted data needs a decision id")
+    if "lineage" in verdicts.values() and decision != "DEC-24":
+        problems.append("research-only data in the lineage is allowed by DEC-24 only, which it must name")
     cleared = manifest.get("cleared", False)
     if cleared and (evaluation_only or (decision and decision not in accepted)):
         problems.append(f"marked cleared, but {'it is evaluation only' if evaluation_only else decision + ' is not accepted'}")
