@@ -6,13 +6,39 @@ import SwiftUI
 /// The Masking tool's panel: masks list, create menu, components and local adjustments.
 ///
 /// The local adjustment sliders are AppKit, like the Develop panels'. The lists and menus
-/// are the SwiftUI panel's own, hosted separately; they read `maskOutlines`, and the panel
-/// rebuilds its rows only when that structure, the selection or the drawing state changes,
-/// so dragging a mask's slider touches only that slider.
+/// are the SwiftUI panel's own, hosted separately; they read `maskOutlines` and update
+/// themselves, so they are made once. Only the selected mask's editor is rebuilt, when that
+/// mask's outline or its tools change; dragging a mask's slider touches only that slider.
 final class MaskingPanelView: ColumnView {
     private let model: EditorModel
     private var tracker: Tracker?
     private var structure: Structure?
+
+    private lazy var header = panelRows.native(MasksHeaderBar())
+    private lazy var createGrid = panelRows.native(CreateMaskGrid(
+        title: "Create New Mask",
+        onLandscapeClass: { [model] cls in Task { await model.createAIMask(.landscape, landscape: cls) } },
+    ) { [model] kind in
+        model.startDrawing(kind)
+    }.padding(.horizontal, Metrics.panelPadding).padding(.bottom, 12))
+    private lazy var list = panelRows.native(MaskList().padding(.horizontal, Metrics.panelPadding))
+    private lazy var actions = panelRows.native(MaskActionsBar())
+    private lazy var status = panelRows.native(MaskStatus())
+    private lazy var drawingHint = panelRows.native(DrawingHint())
+    private lazy var noSelection = panelRows.native(NoMaskSelected())
+    private let divider = DividerView()
+    /// Each mask's editor, kept while the mask exists so switching between masks reuses it.
+    private var editors: [UUID: Editor] = [:]
+
+    private struct Editor {
+        var mask: MaskOutline
+        var tools: MaskKind?
+        var view: ColumnView
+    }
+
+    private var panelRows: PanelRows {
+        PanelRows(model: model)
+    }
 
     /// What the rows depend on (everything but adjustment values).
     private struct Structure: Equatable {
@@ -53,35 +79,35 @@ final class MaskingPanelView: ColumnView {
             )
             guard next != structure else { return }
             structure = next
-            setArrangedViews(rows(for: next))
+            let views = rows(for: next)
+            if !views.elementsEqual(arrangedViews, by: ===) {
+                setArrangedViews(views)
+            }
         }
     }
 
     private func rows(for structure: Structure) -> [NSView] {
-        let rows = PanelRows(model: model)
-        let hint: [NSView] = (structure.status ? [rows.native(MaskStatus())] : [])
-            + (structure.drawing ? [rows.native(DrawingHint())] : [])
+        let hint: [NSView] = (structure.status ? [status] : []) + (structure.drawing ? [drawingHint] : [])
+        let ids = Set(structure.outlines.map(\.id))
+        editors = editors.filter { ids.contains($0.key) }
         guard !structure.outlines.isEmpty else {
-            return [
-                rows.native(MasksHeaderBar()),
-                rows.native(CreateMaskGrid(
-                    title: "Create New Mask",
-                    onLandscapeClass: { [model] cls in Task { await model.createAIMask(.landscape, landscape: cls) } },
-                ) { [model] kind in
-                    model.startDrawing(kind)
-                }.padding(.horizontal, Metrics.panelPadding).padding(.bottom, 12)),
-            ] + hint
+            return [header, createGrid] + hint
         }
-        let editor: NSView = if let mask = structure.selected {
-            editorColumn(mask, tools: structure.tools, rows: rows)
-        } else {
-            rows.native(NoMaskSelected())
+        return [header, list, actions] + hint + [divider, editorView(for: structure)]
+    }
+
+    private func editorView(for structure: Structure) -> NSView {
+        guard let mask = structure.selected else {
+            return noSelection
         }
-        return [
-            rows.native(MasksHeaderBar()),
-            rows.native(MaskList().padding(.horizontal, Metrics.panelPadding)),
-            rows.native(MaskActionsBar()),
-        ] + hint + [DividerView(), editor]
+        // Showing or hiding the mask changes nothing in its editor.
+        if let editor = editors[mask.id], editor.mask.name == mask.name,
+           editor.mask.components == mask.components, editor.tools == structure.tools {
+            return editor.view
+        }
+        let view = editorColumn(mask, tools: structure.tools, rows: panelRows)
+        editors[mask.id] = Editor(mask: mask, tools: structure.tools, view: view)
+        return view
     }
 
     private func editorColumn(_ mask: MaskOutline, tools: MaskKind?, rows: PanelRows) -> ColumnView {

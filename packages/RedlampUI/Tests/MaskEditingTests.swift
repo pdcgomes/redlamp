@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Foundation
 import RedlampEngineAPI
@@ -497,5 +498,53 @@ struct MaskEditingTests {
         let components = model.recipe.masks[0].components
         #expect(components.count == 2)
         #expect(components[1].operation == .intersect)
+    }
+
+    @Test func `the Masking panel keeps its rows as masks are drawn and selected`() async throws {
+        let (model, cleanup) = try await openEditor()
+        defer { cleanup() }
+        _ = NSApplication.shared
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 300, height: 900), styleMask: [.titled], backing: .buffered,
+            defer: false,
+        )
+        let panel = MaskingPanelView(model: model)
+        window.contentView = panel
+        defer { window.contentView = nil }
+        func settle() async throws {
+            for _ in 0 ..< 10 {
+                try await Task.sleep(for: .milliseconds(5))
+            }
+        }
+        func draw(_ x: Double) async throws {
+            model.startDrawing(.radial)
+            model.beginDrawing(.radial(RadialMask(center: ImagePoint(x: x, y: 0.5), radiusX: 0.1, radiusY: 0.1)))
+            model.finishDrawing()
+            try await settle()
+        }
+        try await settle()
+        let header = try #require(panel.arrangedViews.first)
+
+        try await draw(0.3)
+        let first = try #require(model.selectedMaskID)
+        let rows = panel.arrangedViews
+        #expect(rows.first === header, "the header bar outlives the first mask")
+        let firstEditor = try #require(rows.last)
+
+        try await draw(0.7)
+        #expect(panel.arrangedViews.prefix(3).elementsEqual(rows.prefix(3), by: ===), "header, list and actions")
+        #expect(panel.arrangedViews.last !== firstEditor, "the new mask gets its own editor")
+
+        model.selectMask(first)
+        try await settle()
+        #expect(panel.arrangedViews.prefix(3).elementsEqual(rows.prefix(3), by: ===))
+        #expect(panel.arrangedViews.count == rows.count)
+        #expect(panel.arrangedViews.last === firstEditor, "going back to a mask reuses its editor")
+
+        model.selectMask(nil)
+        try await settle()
+        model.selectMask(first)
+        try await settle()
+        #expect(panel.arrangedViews.prefix(3).elementsEqual(rows.prefix(3), by: ===))
     }
 }
