@@ -116,11 +116,14 @@ extension LCPProfile.SubProfile {
         chromatic?.green ?? distortion
     }
 
-    /// Whether the photo has the reference photos' shape. A crop mode's frame, another shape,
-    /// would put the principal point, a fraction of the larger side, in the wrong place.
+    /// Whether the photo has the reference photos' shape and size, within what LibRaw's and
+    /// Adobe's frames differ by. The model is a fraction of the larger side, so a crop mode's
+    /// frame would move it (another shape) or scale it (APS-C on a full-frame body), and a raw
+    /// doesn't say whether a smaller frame is cropped or downsampled.
     func fits(_ size: SIMD2<Double>) -> Bool {
         guard let imageSize, imageSize.min() > 0 else { return true }
-        return abs(size.max() / size.min() / (imageSize.max() / imageSize.min()) - 1) < 0.03
+        let shape = size.max() / size.min() / (imageSize.max() / imageSize.min())
+        return abs(shape - 1) < 0.03 && abs(size.max() / imageSize.max() - 1) < 0.05
     }
 
     /// A model's focal length in pixels for a photo of `size`: fx and fy (their geometric mean)

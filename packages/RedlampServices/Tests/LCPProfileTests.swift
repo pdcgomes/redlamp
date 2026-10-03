@@ -191,8 +191,9 @@ struct LCPProfileTests {
         #expect(try Self.correction([SyntheticLCP.Spec()], focalLength: nil) == Self.correction([SyntheticLCP.Spec()]))
     }
 
-    @Test func `a photo of another shape than the reference photos gets no correction`() throws {
+    @Test func `a crop mode's frame, of another shape or size than the reference photos, gets no correction`() throws {
         #expect(try Self.correction([SyntheticLCP.Spec()], size: PixelSize(width: 6000, height: 3375)) == nil)
+        #expect(try Self.correction([SyntheticLCP.Spec()], size: PixelSize(width: 3936, height: 2624)) == nil)
         #expect(try Self.correction([SyntheticLCP.Spec()], size: PixelSize(width: 6064, height: 4040)) != nil)
     }
 
