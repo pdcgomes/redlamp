@@ -127,16 +127,6 @@ public enum SidecarStoreError: Error, Equatable {
     case unreadable(URL)
 }
 
-/// Why a sidecar on disk must be left as it is: saving over it or deleting it would lose an
-/// edit this build can't fully read.
-public enum SidecarProtection: Equatable, Sendable {
-    /// Its file format or process version is newer than this build's.
-    case writtenByNewerVersion
-    /// Its edit doesn't decode: a newer Redlamp added a value this build doesn't know, or the
-    /// file is damaged.
-    case unreadable
-}
-
 /// Reads and writes sidecars.
 ///
 /// A sidecar is a package, `IMG_1234.CR3.redlamp/`, holding the edit as `edit.json`, mask
@@ -186,21 +176,6 @@ public struct SidecarStore: Sendable {
         return resolveConflicts(loaded, for: image) ?? loaded
     }
 
-    /// Whether the image's sidecar uses a file format or process version this build
-    /// doesn't have. Such edits can be shown, but saving would lose information.
-    public func isWrittenByNewerVersion(for image: URL) -> Bool {
-        protection(for: image) == .writtenByNewerVersion
-    }
-
-    /// Why the image's sidecar must be left as it is, or nil if it can be saved over or
-    /// deleted (including when there is none, or a package has no edit in it).
-    public func protection(for image: URL) -> SidecarProtection? {
-        let sidecar = url(for: image)
-        return (try? Self.reading(sidecar) { url in
-            (try? Data(contentsOf: Self.editURL(inSidecar: url))).flatMap(Self.protection)
-        }) ?? nil
-    }
-
     /// Writes the sidecar unless nothing but `modified` changed, so unchanged edits don't
     /// wake up sync services. Fields a newer Redlamp added to the file on disk are kept.
     public func save(_ sidecar: Sidecar, for image: URL) throws {
@@ -211,7 +186,24 @@ public struct SidecarStore: Sendable {
         }
     }
 
-    /// Removes the sidecar, unless it is protected (see `protection(for:)`).
+    /// Saves the sidecar, or removes it when nothing would be left worth keeping: the edit is
+    /// pristine, the file on disk has no fields this build doesn't know, and no history session
+    /// would remain. A photo without a sidecar doesn't get one just to hold nothing.
+    public func saveOrRemove(_ sidecar: Sidecar, for image: URL) throws {
+        let destination = url(for: image)
+        let options: NSFileCoordinator.WritingOptions = Self.isPackage(destination) ? [] : .forReplacing
+        try Self.writing(destination, options: options) { destination in
+            guard try Self.leavesNothing(sidecar, at: destination) else {
+                return try Self.write(sidecar, to: destination)
+            }
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+        }
+    }
+
+    /// Removes the sidecar, history included, unless it is protected (see `protection(for:)`).
+    /// To save an edit that may have gone back to defaults, use `saveOrRemove`.
     public func delete(for image: URL) {
         let sidecar = url(for: image)
         try? Self.writing(sidecar, options: .forDeleting) { url in
@@ -311,7 +303,7 @@ public struct SidecarStore: Sendable {
         return try (result ?? .failure(CocoaError(.fileWriteUnknown))).get()
     }
 
-    private static func editURL(inSidecar sidecar: URL) -> URL {
+    static func editURL(inSidecar sidecar: URL) -> URL {
         isPackage(sidecar) ? sidecar.appending(path: editFile) : sidecar
     }
 
@@ -336,13 +328,7 @@ public struct SidecarStore: Sendable {
     private static func write(_ sidecar: Sidecar, to destination: URL) throws {
         let existingPackage = isPackage(destination)
         var sidecar = sidecar
-        if let data = try? Data(contentsOf: editURL(inSidecar: destination)) {
-            if isNewer(data) {
-                throw SidecarStoreError.writtenByNewerVersion(destination)
-            }
-            guard let existing = try? JSONDecoder.sidecar.decode(Sidecar.self, from: data) else {
-                throw SidecarStoreError.unreadable(destination)
-            }
+        if let existing = try existing(at: destination) {
             sidecar.unknownFields = existing.unknownFields.merging(sidecar.unknownFields) { _, new in new }
             if existing.hasSameContent(as: sidecar), existingPackage, hasEveryBitmap(sidecar, in: destination) {
                 if try writeHistory(of: sidecar, in: destination) {
@@ -420,27 +406,6 @@ public struct SidecarStore: Sendable {
         for file in files where file.hasSuffix(".png") && !used.contains(String(file.dropLast(4))) {
             try? FileManager.default.removeItem(at: masks.appending(path: file))
         }
-    }
-
-    private static func protection(_ data: Data) -> SidecarProtection? {
-        if isNewer(data) {
-            return .writtenByNewerVersion
-        }
-        return (try? JSONDecoder.sidecar.decode(Sidecar.self, from: data)) == nil ? .unreadable : nil
-    }
-
-    private static func isNewer(_ data: Data) -> Bool {
-        struct Probe: Decodable {
-            struct Versions: Decodable {
-                var version: Int?
-                var processVersion: Int?
-            }
-
-            var recipe: Versions?
-        }
-        guard let versions = (try? JSONDecoder.sidecar.decode(Probe.self, from: data))?.recipe else { return false }
-        return (versions.version ?? 1) > EditRecipe.formatVersion
-            || (versions.processVersion ?? 1) > EditRecipe.currentProcessVersion
     }
 }
 

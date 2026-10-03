@@ -91,6 +91,22 @@ struct SidecarSafetyTests {
         #expect(try Data(contentsOf: folder.edit) == Data(json.utf8))
     }
 
+    @Test func `a sidecar holding only fields this build doesn't know survives viewing the photo`() async throws {
+        let folder = Folder()
+        try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder.url) }
+        try folder
+            .seed(#"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":1},"keywords":["harbour"]}"#)
+        let before = try folder.contents()
+        let model = EditorModel(engine: StubEngine())
+
+        try await open(folder.photo, in: model)
+        #expect(!model.isReadOnly)
+        try await open(folder.other, in: model)
+        try await settle()
+        #expect(try folder.contents() == before)
+    }
+
     @Test(arguments: unreadable)
     func `sync settings leaves a photo whose edit can't be read alone`(json: String) async throws {
         let folder = Folder()

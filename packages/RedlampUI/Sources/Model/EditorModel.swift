@@ -1123,14 +1123,9 @@ public final class EditorModel {
         )
         sidecar.clearsHistory = clearsSavedHistory
         clearsSavedHistory = false
-        let pristine = sidecar.isPristine && earlierSessionsLoaded && earlierSessions.isEmpty
         let store = sidecars
         Task.detached(priority: .utility) {
-            if pristine {
-                store.delete(for: url)
-            } else {
-                try? store.save(sidecar, for: url)
-            }
+            try? store.saveOrRemove(sidecar, for: url)
         }
         let hasEdits = !recipe.isPristine
         library.update(url) { item in
