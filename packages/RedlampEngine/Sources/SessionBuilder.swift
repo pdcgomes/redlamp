@@ -34,6 +34,7 @@ struct SessionBuilder {
     static let hotPixelRatio: Float = 2
 
     func build(_ decoded: DecodedImage) throws -> ImageSession {
+        try Self.checkGainMaps(decoded)
         let url = decoded.info.url
         let mattes = Prefetch(on: .global(qos: .userInitiated)) { EmbeddedMattes.available(in: url) }
         let width = decoded.width
@@ -149,6 +150,7 @@ struct SessionBuilder {
     /// A frame for focus stacking: level 0 only (no mipmaps, analysis or haze map), full resolution,
     /// in camera RGB balanced by `balance(_:)`, exactly as a session's pyramid holds it.
     func demosaic(_ decoded: DecodedImage) throws -> DemosaicedFrame {
+        try Self.checkGainMaps(decoded)
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .rgba16Float, width: decoded.width, height: decoded.height, mipmapped: false,
         )
@@ -392,6 +394,14 @@ struct SessionBuilder {
         var model = [SIMD4<Float>(blend.a, 0), SIMD4<Float>(blend.b, 0)]
         encoder.setBytes(&model, length: model.count * MemoryLayout<SIMD4<Float>>.stride, index: 2)
         dispatch(kernels.menonRBAtRB, [working, directions, pyramid, mosaic, noiseGain])
+    }
+
+    /// Checked before any encoder opens: an encoder left open by a throw aborts under Metal's
+    /// validation layer.
+    private static func checkGainMaps(_ decoded: DecodedImage) throws {
+        guard GainMap.areValid(decoded.gainMaps) else {
+            throw EngineError.decodeFailed("the photo's lens shading is damaged")
+        }
     }
 
     /// Gain maps as kernel buffers; a neutral placeholder when there are none.

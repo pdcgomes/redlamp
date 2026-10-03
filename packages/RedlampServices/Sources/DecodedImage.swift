@@ -14,6 +14,12 @@ public struct CFAPattern: Codable, Sendable, Hashable {
         self.colors = colors
     }
 
+    /// Decoding skips `init`'s check: a pattern read from elsewhere is checked with this.
+    var isValid: Bool {
+        (1 ... 16).contains(width) && (1 ... 16).contains(height) && colors.count == width * height
+            && colors.allSatisfy { $0 <= 3 }
+    }
+
     public func color(x: Int, y: Int) -> UInt8 {
         colors[(y % height) * width + (x % width)]
     }

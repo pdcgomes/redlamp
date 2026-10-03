@@ -20,8 +20,9 @@ enum NoiseGain {
 
     /// The field for an image `width` x `height`; a mosaic's channels come from `pattern`,
     /// averaged over the pattern's sites near each texel (Bayer's two greens), otherwise planes.
+    /// Gains of 1 when a map isn't valid, as the maps aren't applied then.
     static func field(_ maps: [GainMap], width: Int, height: Int, pattern: CFAPattern?) -> Field {
-        guard !maps.isEmpty, width > 0, height > 0 else {
+        guard !maps.isEmpty, GainMap.areValid(maps), width > 0, height > 0 else {
             return Field(width: 1, height: 1, gains: [SIMD4(1, 1, 1, 1)])
         }
         let scale = Double(resolution) / Double(max(width, height))

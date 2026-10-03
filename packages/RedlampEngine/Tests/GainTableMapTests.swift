@@ -81,6 +81,32 @@ struct GainTableMapTests {
         return try SessionBuilder(device: device, queue: queue, kernels: kernels).build(decoded)
     }
 
+    /// A lens-shading gain map (DNG opcode GainMap) with a top below its bottom, as a decoded image
+    /// built by hand could hold one the parser would refuse.
+    static let invalidGainMap = GainMap(
+        top: 200, left: 0, bottom: 100, right: 256, plane: 0, planes: 3, rowPitch: 1, columnPitch: 1,
+        pointsV: 1, pointsH: 2, spacingV: 1, spacingH: 1, originV: 0, originH: 0, mapPlanes: 1, gains: [1, 2],
+    )
+
+    @Test func `an invalid lens-shading map fails the photo, and scales no noise`() throws {
+        let field = NoiseGain.field([Self.invalidGainMap], width: 256, height: 128, pattern: nil)
+        #expect(field.width == 1 && field.height == 1 && field.gains == [SIMD4(1, 1, 1, 1)])
+
+        var decoded = DecodedImage(
+            width: 4, height: 2, layout: .linearRGB, samples: [UInt16](repeating: 100, count: 24),
+            blackLevels: [0, 0, 0], whiteLevel: 65535, asShotMultipliers: SIMD3(1, 1, 1),
+            cameraToSRGB: [1, 0, 0, 0, 1, 0, 0, 0, 1], xyzToCamera: nil, orientation: 0, baselineExposure: 0,
+            info: ImageInfo(
+                url: URL(fileURLWithPath: "/map.dng"), pixelSize: PixelSize(width: 4, height: 2), isRaw: true,
+                sensorDescription: "synthetic",
+            ),
+        )
+        decoded.gainMaps = [Self.invalidGainMap]
+        #expect(throws: EngineError.self) {
+            try SessionBuilder(device: device, queue: queue, kernels: kernels).build(decoded)
+        }
+    }
+
     func render(_ session: ImageSession, process: Int, embedded: Bool = true) throws -> [SIMD3<Float>] {
         var recipe = EditRecipe()
         recipe.processVersion = process

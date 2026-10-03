@@ -57,6 +57,28 @@ public extension DecodedImage {
         var dngProfile: DNGProfile?
         var lensCorrection: LensCorrection?
         var banding: BandingCorrection?
+
+        /// What the app relies on before it touches the samples: one per pixel and channel, a
+        /// colour filter pattern that indexes itself, and gain maps it can apply.
+        var isValid: Bool {
+            let channels: Int
+            switch layout {
+            case let .mosaic(pattern):
+                guard pattern.isValid else { return false }
+                channels = 1
+            case .linearRGB:
+                channels = 3
+            case let .balancedCameraHalf(pattern):
+                guard pattern?.isValid ?? true else { return false }
+                channels = 4
+            case .linearSRGBHalf:
+                channels = 4
+            }
+            let (pixels, pixelsOverflow) = width.multipliedReportingOverflow(by: height)
+            let (samples, samplesOverflow) = pixels.multipliedReportingOverflow(by: channels)
+            return width > 0 && height > 0 && !pixelsOverflow && !samplesOverflow && samples == sampleCount
+                && GainMap.areValid(gainMaps)
+        }
     }
 
     /// A compact binary form for crossing process boundaries: a header length (8 bytes,
@@ -85,12 +107,14 @@ public extension DecodedImage {
             throw EngineError.decodeFailed("the decode service sent a damaged image")
         }
         let length = Int(stored)
-        var header = try JSONDecoder().decode(Header.self, from: data.subdata(in: 8 ..< 8 + length))
+        guard var header = try? JSONDecoder().decode(Header.self, from: data.subdata(in: 8 ..< 8 + length)) else {
+            throw EngineError.decodeFailed("the decode service sent a damaged image")
+        }
         if let url {
             header.info.url = url
         }
         let body = data.subdata(in: 8 + length ..< data.count)
-        guard body.count == header.sampleCount * MemoryLayout<UInt16>.size else {
+        guard header.isValid, body.count.isMultiple(of: 2), body.count / 2 == header.sampleCount else {
             throw EngineError.decodeFailed("the decode service sent a damaged image")
         }
         let samples = [UInt16](unsafeUninitializedCapacity: header.sampleCount) { buffer, count in
