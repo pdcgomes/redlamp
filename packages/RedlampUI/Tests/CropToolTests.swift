@@ -107,6 +107,21 @@ struct CropToolTests {
         #expect(model.recipe.crop == swapped, "outside the crop tool X is Reject again")
     }
 
+    @Test func `⇧O turns the golden spiral through eight orientations, then back to the first`() async throws {
+        let model = try await openModel()
+        model.cropOverlay = .goldenSpiral
+        let rect = CGRect(x: 0, y: 0, width: 600, height: 400)
+        var spirals: [GoldenSpiral] = []
+        for _ in 0 ..< 8 {
+            spirals.append(GoldenSpiral(in: rect, turns: model.cropOverlayTurns))
+            #expect(model.perform(.maskOverlayColor))
+        }
+        for (index, spiral) in spirals.enumerated() {
+            #expect(!spirals[..<index].contains(spiral), "orientation \(index) repeats an earlier one")
+        }
+        #expect(GoldenSpiral(in: rect, turns: model.cropOverlayTurns) == spirals[0])
+    }
+
     @Test func `straightening levels a drawn horizon or vertical`() async throws {
         let model = try await openModel()
         let radians = 10.0 * .pi / 180
@@ -189,5 +204,92 @@ struct CropToolTests {
         model.resetCrop()
         #expect(model.recipe.crop == .full && model.recipe.orientation.isIdentity)
         #expect(model.recipe.isDefault(.cropAngle))
+    }
+}
+
+/// The composition guides' geometry in the crop's rectangle on screen.
+struct CropOverlayTests {
+    /// Crops on screen: landscape, portrait, square, a panorama and a small golden portrait.
+    private static let frames = [
+        CGRect(x: 10, y: 20, width: 600, height: 400),
+        CGRect(x: 0, y: 0, width: 400, height: 600),
+        CGRect(x: 5, y: 5, width: 300, height: 300),
+        CGRect(x: -40, y: 12.5, width: 1000, height: 90),
+        CGRect(x: 0, y: 0, width: 61.8, height: 100),
+    ]
+
+    private func expectInside(_ point: CGPoint, _ rect: CGRect, _ note: String = "") {
+        let slack = 1e-9 * max(rect.width, rect.height)
+        #expect(rect.insetBy(dx: -slack, dy: -slack).contains(point), "\(point) outside \(rect) \(note)")
+    }
+
+    /// The corner a spiral winds into, and whether it winds clockwise on screen.
+    private struct Eye: Hashable {
+        var right: Bool
+        var bottom: Bool
+        var clockwise: Bool
+
+        init(_ spiral: GoldenSpiral, in rect: CGRect) {
+            let first = spiral.arcs[0], last = spiral.arcs[spiral.arcs.count - 1]
+            let from = CGPoint(x: first.start.x - first.center.x, y: first.start.y - first.center.y)
+            let to = CGPoint(x: first.end.x - first.center.x, y: first.end.y - first.center.y)
+            right = last.end.x > rect.midX
+            bottom = last.end.y > rect.midY
+            clockwise = from.x * to.y - from.y * to.x > 0
+        }
+    }
+
+    @Test func `the golden spiral winds into each corner both ways, the longer side cut first`() {
+        for rect in Self.frames.prefix(2) {
+            let eyes = (0 ..< 8).map { Eye(GoldenSpiral(in: rect, turns: $0), in: rect) }
+            #expect(Set(eyes).count == 8, "\(rect)")
+            let corners = eyes.prefix(4).map { [$0.right, $0.bottom] }
+            #expect(corners == [[true, true], [false, true], [false, false], [true, false]], "BR, BL, TL, TR")
+
+            let first = GoldenSpiral(in: rect, turns: 0).arcs[0]
+            if rect.width > rect.height {
+                #expect(abs(first.end.y - first.start.y) == rect.height, "a landscape crop's first square is as tall")
+            } else {
+                #expect(abs(first.end.x - first.start.x) == rect.width, "a portrait crop's first square is as wide")
+            }
+        }
+    }
+
+    @Test func `the golden spiral and its squares stay inside the crop, as one unbroken curve`() {
+        for rect in Self.frames {
+            for turns in 0 ..< 8 {
+                let spiral = GoldenSpiral(in: rect, turns: turns)
+                #expect(spiral.arcs.count > 5)
+                for (index, arc) in spiral.arcs.enumerated() {
+                    for point in [arc.center, arc.start, arc.end, arc.control1, arc.control2] {
+                        expectInside(point, rect, "turn \(turns)")
+                    }
+                    if index > 0 {
+                        #expect(arc.start == spiral.arcs[index - 1].end)
+                    }
+                }
+                for divider in spiral.dividers {
+                    expectInside(divider.start, rect)
+                    expectInside(divider.end, rect)
+                }
+            }
+        }
+    }
+
+    @Test func `in a golden rectangle the spiral's squares are square and its arcs circular`() {
+        let golden = (1 + sqrt(5)) / 2
+        let rects = [
+            CGRect(x: 0, y: 0, width: 100 * golden, height: 100),
+            CGRect(x: 0, y: 0, width: 100, height: 100 * golden),
+        ]
+        for rect in rects {
+            for turns in 0 ..< 4 {
+                for arc in GoldenSpiral(in: rect, turns: turns).arcs {
+                    let across = abs(arc.start.x - arc.center.x) + abs(arc.end.x - arc.center.x)
+                    let down = abs(arc.start.y - arc.center.y) + abs(arc.end.y - arc.center.y)
+                    #expect(abs(across - down) < 1e-6, "\(across) × \(down) in \(rect), turn \(turns)")
+                }
+            }
+        }
     }
 }
