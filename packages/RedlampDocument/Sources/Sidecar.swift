@@ -86,7 +86,7 @@ public struct Sidecar: Sendable, Hashable {
     }
 
     /// Same edit, ratings and snapshots, whenever it was written.
-    func hasSameContent(as other: Sidecar) -> Bool {
+    public func hasSameContent(as other: Sidecar) -> Bool {
         var other = other
         other.modified = modified
         other.session = session

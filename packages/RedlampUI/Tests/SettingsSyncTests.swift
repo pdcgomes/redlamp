@@ -74,6 +74,29 @@ struct SettingsSyncTests {
         model.copySelection = .default
     }
 
+    @Test func `undo keeps what was added since to a sidecar the sync made`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (a, b) = (folder.appending(path: "A.ARW"), folder.appending(path: "B.ARW"))
+        let store = SidecarStore()
+        let model = EditorModel(engine: StubEngine())
+        [a, b].forEach { model.library.insert(LibraryItem(url: $0)) }
+        try await open(model, a)
+        model.setValue(.exposure, 1)
+        model.selectAllPhotos()
+        model.copySelection = .default
+        model.syncSettings()
+        await model.settingsSync.idle()
+        try Library.writeMetadata(for: b, store: store) { $0.rating = 4 }
+
+        model.undoSync()
+        let kept = try #require(store.load(for: b), "the rating added since keeps the sidecar")
+        #expect(kept.metadata?.rating == 4)
+        #expect(kept.recipe[.exposure] == 0)
+        model.copySelection = .default
+    }
+
     /// Paste with several photos selected reaches all of them.
     @Test func `paste reaches the whole selection`() async throws {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
