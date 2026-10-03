@@ -81,13 +81,12 @@ public struct Sidecar: Sendable, Hashable {
             && session?.hasEdits != true
     }
 
-    /// Same edit, ratings and snapshots, whenever it was written.
-    func hasSameContent(as other: Sidecar) -> Bool {
+    /// Same edit, ratings and snapshots, whenever it was written. Compared as written, since the
+    /// file keeps dates only to the second.
+    func hasSameContent(as other: Sidecar) throws -> Bool {
         var other = other
         other.modified = modified
-        other.session = session
-        other.clearsHistory = clearsHistory
-        return self == other
+        return try JSONEncoder.sidecar.encode(self) == JSONEncoder.sidecar.encode(other)
     }
 }
 
@@ -346,7 +345,7 @@ public struct SidecarStore: Sendable {
                 throw SidecarStoreError.unreadable(destination)
             }
             sidecar.unknownFields = existing.unknownFields.merging(sidecar.unknownFields) { _, new in new }
-            if existing.hasSameContent(as: sidecar), existingPackage, hasEveryBitmap(sidecar, in: destination) {
+            if try existing.hasSameContent(as: sidecar), existingPackage, hasEveryBitmap(sidecar, in: destination) {
                 if try writeHistory(of: sidecar, in: destination) {
                     removeUnusedBitmaps(of: sidecar, in: destination)
                 }
