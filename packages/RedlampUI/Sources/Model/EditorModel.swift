@@ -60,7 +60,14 @@ public final class EditorModel {
         readOnlyReason != nil
     }
 
-    public private(set) var readOnlyReason: SidecarProtection?
+    public internal(set) var readOnlyReason: SidecarProtection?
+    /// Copies of the photo's edit made on another Mac that this build couldn't merge; they stay
+    /// on disk, unresolved, for one that can.
+    public internal(set) var hasUnmergedEdits = false
+    /// The last save that failed, shown until one goes through (see `EditorModel+Saving`).
+    public internal(set) var saveError: SaveError?
+    @ObservationIgnored var failedSave: SaveQueue.Write?
+    @ObservationIgnored var saveRetry: (task: Task<Void, Never>?, delay: Duration) = (nil, .seconds(1))
     /// The open photo's rating, flag and label, saved with its edit.
     public internal(set) var photoMetadata = PhotoMetadata()
     /// What was set of the rating, flag and label while the photo was opening, made again on
@@ -461,6 +468,7 @@ public final class EditorModel {
         canvas.onRenderSizeChange = { [weak self] _ in self?.requestRender() }
         settingsSync.makeEngine = { [weak self] in self?.makeWorkerEngine?() }
         settingsSync.saves = saves
+        saves.reportResults { [weak self] url, write, error in self?.saved(url, write, error) }
         followLibrary()
         let frames = engine.frames()
         framesTask = Task { [weak self] in
@@ -491,6 +499,7 @@ public final class EditorModel {
         info = nil
         errorMessage = nil
         readOnlyReason = nil
+        hasUnmergedEdits = false
         photoMetadata = library.item(for: url)?.metadata ?? PhotoMetadata()
         metadataChangesWhileOpening = []
         eyedropperActive = false
@@ -510,7 +519,10 @@ public final class EditorModel {
         let readSidecar = { [sidecars, saves, scheduler = library.scheduler] in
             await saves.wait(for: url)
             return try? await scheduler.run(.onScreen) {
-                OpenedSidecar(sidecar: sidecars.load(for: url), protection: sidecars.protection(for: url))
+                OpenedSidecar(
+                    sidecar: sidecars.load(for: url), protection: sidecars.protection(for: url),
+                    hasUnmergedConflicts: sidecars.hasUnmergedConflicts(for: url),
+                )
             }
         }
         if let opened = engine.openIfReady(url) {
@@ -562,6 +574,7 @@ public final class EditorModel {
         var sidecar: Sidecar?
         /// Shown, but never saved over.
         var protection: SidecarProtection?
+        var hasUnmergedConflicts = false
     }
 
     private func didOpen(_ opened: ImageInfo, _ read: OpenedSidecar) {
@@ -570,6 +583,7 @@ public final class EditorModel {
         availableAIMaskKinds = engine.availableMaskKinds()
         maskMessage = nil
         readOnlyReason = read.protection
+        hasUnmergedEdits = read.hasUnmergedConflicts
         var metadata = sidecar?.metadata ?? PhotoMetadata()
         if read.protection == nil {
             metadataChangesWhileOpening.forEach { $0(&metadata) }
@@ -1152,11 +1166,7 @@ public final class EditorModel {
         )
         sidecar.clearsHistory = clearsSavedHistory
         clearsSavedHistory = false
+        // The filmstrip's badge follows once it's on disk (`saved`).
         saves.enqueue(.sidecar(sidecar), for: url)
-        let hasEdits = !recipe.isPristine
-        library.update(url) { item in
-            item.hasEdits = hasEdits
-            item.metadata = metadata
-        }
     }
 }

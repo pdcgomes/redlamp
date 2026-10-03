@@ -1,3 +1,4 @@
+import AppKit
 import RedlampCanvas
 import RedlampEngineAPI
 import SwiftUI
@@ -70,17 +71,22 @@ struct CanvasArea: View {
             }
         }
         .overlay(alignment: .top) {
-            // The command palette says what it's previewing beside its own hint bar.
-            if model.lightsOut == 0, model.commandPalette == nil,
-               model.exportStatus != nil
-               || model.isShowingOriginal || model.previewingRecipe != nil || model.previewingEdit != nil
-               || model.eyedropperActive || model.drawingKind != nil || model.isReadOnly
-               || (model.info != nil && model.isBaseLookMissing) {
-                StatusPill(text: statusText)
-                    .padding(.top, 14)
-                    .padding(stagePadding)
-                    .id(theme.selection)
+            VStack(spacing: 8) {
+                // The command palette says what it's previewing beside its own hint bar.
+                if model.lightsOut == 0, model.commandPalette == nil,
+                   model.exportStatus != nil
+                   || model.isShowingOriginal || model.previewingRecipe != nil || model.previewingEdit != nil
+                   || model.eyedropperActive || model.drawingKind != nil || model.notice != nil
+                   || (model.info != nil && model.isBaseLookMissing) {
+                    StatusPill(text: statusText)
+                }
+                if let error = model.saveError {
+                    SaveErrorBanner(error: error)
+                }
             }
+            .padding(.top, 14)
+            .padding(stagePadding)
+            .id(theme.selection)
         }
         .overlay(alignment: .bottom) {
             if model.info != nil, model.lightsOut == 0, !model.isPresenting {
@@ -171,11 +177,8 @@ struct CanvasArea: View {
         if model.isShowingOriginal {
             return "Before"
         }
-        switch model.readOnlyReason {
-        case .writtenByNewerVersion: return "Edited in a newer version of Redlamp  ·  Changes won't be saved"
-        case .unreadable: return "This photo's edit file can't be read  ·  Changes won't be saved"
-        case .lossy: return "This edit has settings this version doesn't know  ·  Changes won't be saved"
-        case nil: break
+        if let notice = model.notice {
+            return notice
         }
         return "Base Look “\(model.baseLook.name)” isn't installed  ·  Showing the photo without it"
     }
@@ -216,6 +219,29 @@ private struct InfoOverlay: View {
         .font(.system(size: 11))
         .foregroundStyle(Color.white.opacity(0.92))
         .shadow(color: .black.opacity(0.8), radius: 2)
+    }
+}
+
+/// Stays until a save goes through: what wasn't saved, why, and a way to try again.
+private struct SaveErrorBanner: View {
+    let error: SaveError
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Label(error.message, systemImage: "exclamationmark.triangle.fill")
+                .symbolRenderingMode(.multicolor)
+            if error.canRetry {
+                Button("Retry") { model.retrySave() }
+                    .buttonStyle(.borderless)
+            }
+            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([error.url]) }
+                .buttonStyle(.borderless)
+        }
+        .font(.system(size: 12, weight: .medium))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .glassEffect(.regular, in: .capsule)
     }
 }
 

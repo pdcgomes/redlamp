@@ -22,9 +22,21 @@ final class SaveQueue: @unchecked Sendable {
     /// Writes asked for and not finished, the one being written included.
     private var unfinished: [URL: Int] = [:]
     private var waiters: [URL: [CheckedContinuation<Void, Never>]] = [:]
+    typealias Report = @MainActor @Sendable (URL, Write, (any Error)?) -> Void
+    private var report: Report?
 
     init(store: SidecarStore) {
         self.store = store
+    }
+
+    /// Tells `report`, on the main actor and in order, how each write went: nil, or why it failed.
+    func reportResults(to report: @escaping Report) {
+        lock.withLock { self.report = report }
+    }
+
+    /// Whether a write asked for `url` hasn't finished.
+    func isPending(_ url: URL) -> Bool {
+        lock.withLock { unfinished[url] != nil }
     }
 
     func enqueue(_ write: Write, for url: URL) {
@@ -81,16 +93,26 @@ final class SaveQueue: @unchecked Sendable {
             return first
         }
         guard let write else { return }
-        switch write {
-        case let .sidecar(sidecar):
-            try? store.saveOrRemove(sidecar, for: url)
-        case let .metadata(change):
-            try? Library.writeMetadata(for: url, store: store, change)
+        var failure: (any Error)?
+        do {
+            switch write {
+            case let .sidecar(sidecar):
+                try store.saveOrRemove(sidecar, for: url)
+            case let .metadata(change):
+                try Library.writeMetadata(for: url, store: store, change)
+            }
+        } catch {
+            failure = error
         }
-        let done = lock.withLock {
+        let (done, report): ([CheckedContinuation<Void, Never>], Report?) = lock.withLock {
             let left = unfinished[url, default: 1] - 1
             unfinished[url] = left > 0 ? left : nil
-            return left > 0 ? [] : waiters.removeValue(forKey: url) ?? []
+            return (left > 0 ? [] : waiters.removeValue(forKey: url) ?? [], self.report)
+        }
+        if let report {
+            DispatchQueue.main.async { [failure] in
+                MainActor.assumeIsolated { report(url, write, failure) }
+            }
         }
         done.forEach { $0.resume() }
     }

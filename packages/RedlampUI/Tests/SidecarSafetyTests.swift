@@ -154,6 +154,103 @@ struct SidecarSafetyTests {
         #expect(SidecarStore().load(for: folder.photo)?.metadata == expected)
     }
 
+    /// Waits for `condition`, which the save queue's results make true on the main actor.
+    private func eventually(_ condition: () -> Bool, seconds: Double = 1) async throws {
+        for _ in 0 ..< Int(seconds * 200) where !condition() {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
+    @Test func `a save that fails says why, and the filmstrip shows what is on disk`() async throws {
+        let folder = Folder()
+        try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder.url) }
+        let model = EditorModel(engine: StubEngine())
+        model.library.insert(LibraryItem(url: folder.photo))
+        try await open(folder.photo, in: model)
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: folder.url.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.url.path) }
+        model.setValue(.exposure, 0.8)
+        _ = model.perform(.rating4)
+        model.saveNow()
+        await model.saves.flush()
+        try await eventually { model.saveError != nil && model.library.item(for: folder.photo)?.metadata.rating == 0 }
+        #expect(model.saveError?.message == "Edits to IMG_0001 can't be saved: permission denied")
+        #expect(model.saveError?.canRetry == true)
+        #expect(model.library.item(for: folder.photo)?.hasEdits == false)
+        #expect(model.library.item(for: folder.photo)?.metadata.rating == 0)
+        #expect(model.currentMetadata.rating == 4, "the photo still shows it")
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.url.path)
+        model.setValue(.exposure, 0.9)
+        model.saveNow()
+        await model.saves.flush()
+        try await eventually { model.saveError == nil && model.library.item(for: folder.photo)?.hasEdits == true }
+        #expect(model.saveError == nil)
+        #expect(SidecarStore().load(for: folder.photo)?.recipe == model.recipe)
+        #expect(SidecarStore().load(for: folder.photo)?.metadata?.rating == 4)
+        #expect(model.library.item(for: folder.photo)?.hasEdits == true)
+        #expect(model.library.item(for: folder.photo)?.metadata.rating == 4)
+    }
+
+    @Test func `an edit made while its folder is away is saved once it is back`() async throws {
+        let folder = Folder()
+        try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
+        let away = folder.url.appendingPathExtension("away")
+        defer {
+            try? FileManager.default.removeItem(at: folder.url)
+            try? FileManager.default.removeItem(at: away)
+        }
+        let model = EditorModel(engine: StubEngine())
+        try await open(folder.photo, in: model)
+
+        try FileManager.default.moveItem(at: folder.url, to: away)
+        model.setValue(.exposure, 0.7)
+        model.saveNow()
+        await model.saves.flush()
+        try await eventually { model.saveError != nil }
+        #expect(model.saveError?.message == "Edits to IMG_0001 can't be saved: its folder can't be found")
+
+        try FileManager.default.moveItem(at: away, to: folder.url)
+        try await eventually({ model.saveError == nil }, seconds: 5)
+        #expect(model.saveError == nil)
+        #expect(SidecarStore().load(for: folder.photo)?.recipe == model.recipe)
+    }
+
+    @Test func `an edit a newer version saved since the photo opened is never saved over`() async throws {
+        let folder = Folder()
+        try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder.url) }
+        let model = EditorModel(engine: StubEngine())
+        try await open(folder.photo, in: model)
+        #expect(!model.isReadOnly)
+
+        try folder.seed(#"{"format":"app.redlamp.edit","recipe":{"version":999,"processVersion":1}}"#)
+        let before = try folder.contents()
+        model.setValue(.exposure, 0.6)
+        model.saveNow()
+        await model.saves.flush()
+        try await eventually { model.isReadOnly }
+        #expect(model.readOnlyReason == .writtenByNewerVersion)
+        #expect(model.saveError?.message
+            == "Edits to IMG_0001 can't be saved: a newer version of Redlamp changed it since it opened")
+        #expect(model.saveError?.canRetry == false)
+        model.setValue(.exposure, 0.2)
+        model.saveNow()
+        await model.saves.flush()
+        #expect(try folder.contents() == before)
+    }
+
+    @Test func `the notice says when edits from another Mac are waiting to be merged`() {
+        let model = EditorModel(engine: StubEngine())
+        #expect(model.notice == nil)
+        model.hasUnmergedEdits = true
+        #expect(model.notice == "Edits from another Mac couldn't be merged here  ·  They're kept as they are")
+        model.readOnlyReason = .unreadable
+        #expect(model.notice == "This photo's edit file can't be read  ·  Changes won't be saved")
+    }
+
     @Test(arguments: unreadable)
     func `sync settings leaves a photo whose edit can't be read alone`(json: String) async throws {
         let folder = Folder()

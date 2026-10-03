@@ -42,6 +42,12 @@ public extension SidecarStore {
         return merge(current, conflicts)
     }
 
+    /// Whether the image's sidecar has conflicting copies still unresolved: once `load` has
+    /// run, ones this build couldn't merge.
+    func hasUnmergedConflicts(for image: URL) -> Bool {
+        !(NSFileVersion.unresolvedConflictVersionsOfItem(at: url(for: image)) ?? []).isEmpty
+    }
+
     /// Merges and saves the sidecar's unresolved conflict versions, then marks them resolved and
     /// removes them; nil when there are none (or they can't be merged now, so they stay for the
     /// next load).
