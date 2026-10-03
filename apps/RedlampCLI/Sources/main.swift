@@ -3,6 +3,7 @@ import Foundation
 import ImageIO
 import RedlampEngine
 import RedlampEngineAPI
+import RedlampRecipes
 import UniformTypeIdentifiers
 
 let usage = """
@@ -41,6 +42,14 @@ struct CLIError: Error, CustomStringConvertible {
 /// Accepts either the sidecar key (`basic.exposure`) or the Swift case name (`exposure`).
 func parameter(named name: String) -> ParameterID? {
     ParameterID(rawValue: name) ?? ParameterID.allCases.first { "\($0)".lowercased() == name.lowercased() }
+}
+
+/// The engine renders only looks it has been given, so an edit's look from a recipe of yours
+/// comes from the installed ones, as it does in the app.
+func registerInstalledLook(_ reference: BaseLookReference, with engine: RedlampEngine) {
+    if let look = RecipeLibrary().definition(for: reference) {
+        engine.registerBaseLook(look)
+    }
 }
 
 func run(_ arguments: [String]) async throws {
@@ -208,6 +217,7 @@ func run(_ arguments: [String]) async throws {
         index += 1
     }
     guard let output else { throw CLIError(description: "missing -o <output>") }
+    registerInstalledLook(recipe.baseLook, with: engine)
     request.recipe = recipe
 
     let renderStart = clock.now
