@@ -230,6 +230,11 @@ struct SidecarSchemaTests {
             ("/recipe/values/basic.exposure", edit.updating(exposure) { _ in .string("bright") }),
             ("/recipe/values/basic.exposure", edit.updating(exposure) { _ in .number(7) }),
             ("/recipe/values/local.exposure", edit.updating(["recipe", "values"]) { $0.adding("local.exposure") }),
+            ("/recipe/masks/0/adjustments/local.future", edit.updating(["recipe", "masks", "0", "adjustments"]) {
+                guard case var .object(adjustments) = $0 else { return $0 }
+                adjustments["local.future"] = .string("bright")
+                return .object(adjustments)
+            }),
             (pointer(operation), edit.updating(operation) { _ in .string("multiply") }),
             ("\(pointer(radial))/softness", edit.updating(radial) { $0.adding("softness") }),
             ("/modified", edit.updating(["modified"]) { _ in .string("2026-10-03T12:59:01") }),

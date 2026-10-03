@@ -356,7 +356,10 @@
         "local.halation": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Halation where the mask covers; the size stays global." },
         "local.bloom": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Bloom where the mask covers; the size stays global." }
       },
-      "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." },
+      "additionalProperties": {
+        "type": "number",
+        "description": "A local adjustment a newer Redlamp added: kept and written back unchanged."
+      },
       "default": {}
     },
     "maskComponent": {

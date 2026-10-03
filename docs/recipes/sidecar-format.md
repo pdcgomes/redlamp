@@ -346,7 +346,7 @@ What Redlamp does when it reads a sidecar, which is also what another reader mus
 2. **Unknown keys** are kept and written back unchanged where the format has room for them:
    - top-level keys of `edit.json`;
    - keys of a recipe, in the edit and in snapshots, and of a snapshot;
-   - keys in `values` (they must be numbers, and don't render) and in a mask's `adjustments`;
+   - keys in `values` and in a mask's `adjustments` (in both they must be numbers, and don't render);
    - keys of a mask, a component, an AI mask (a depth range's depth map and a spot's region included), a spot, `metadata` and the applied recipe;
    - component kinds in a mask's `shape` (they render nothing).
 
