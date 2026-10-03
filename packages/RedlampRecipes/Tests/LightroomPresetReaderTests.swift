@@ -251,6 +251,72 @@ struct LightroomPresetRefusalTests {
         }
     }
 
+    /// A photo's sidecar as Lightroom writes one beside a raw: the photo's TIFF and Exif metadata,
+    /// the raw's file name and its develop settings, in one description or one per namespace.
+    static func sidecar(form: PresetXMP.Form, split: Bool = false) -> Data {
+        let photo = [
+            ("tiff", "Make", "Example"),
+            ("tiff", "Model", "Example X1"),
+            ("exif", "ExposureTime", "1/250"),
+            ("exif", "FNumber", "56/10"),
+            ("aux", "Lens", "Example 35mm F1.8"),
+            ("exifEX", "LensModel", "Example 35mm F1.8"),
+        ]
+        let develop = [
+            ("crs", "Version", "15.4"),
+            ("crs", "ProcessVersion", "11.0"),
+            ("crs", "RawFileName", "IMG_0001.CR3"),
+            ("crs", "WhiteBalance", "As Shot"),
+            ("crs", "Exposure2012", "+0.40"),
+            ("crs", "HasSettings", "True"),
+        ]
+        let namespaces = """
+        xmlns:tiff="http://ns.adobe.com/tiff/1.0/" xmlns:exif="http://ns.adobe.com/exif/1.0/" \
+        xmlns:aux="http://ns.adobe.com/exif/1.0/aux/" xmlns:exifEX="http://cipa.jp/exif/1.0/" \
+        xmlns:crs="\(PresetXMP.namespace)"
+        """
+        func description(_ properties: [(String, String, String)]) -> String {
+            switch form {
+            case .attributes:
+                let attributes = properties.map { "\n    \($0.0):\($0.1)=\"\($0.2)\"" }.joined()
+                return "  <rdf:Description rdf:about=\"\" \(namespaces)\(attributes)/>\n"
+            case .elements:
+                let elements = properties.map { "\n   <\($0.0):\($0.1)>\($0.2)</\($0.0):\($0.1)>" }.joined()
+                return "  <rdf:Description rdf:about=\"\" \(namespaces)>\(elements)\n  </rdf:Description>\n"
+            }
+        }
+        let descriptions = split ? description(photo) + description(develop) : description(photo + develop)
+        return Data(PresetXMP.packet(descriptions).utf8)
+    }
+
+    @Test(arguments: PresetXMP.Form.allCases, [false, true])
+    func `a photo's sidecar isn't a preset`(form: PresetXMP.Form, split: Bool) {
+        let sidecar = Self.sidecar(form: form, split: split)
+        #expect(CameraRawSettings(xmp: sidecar)?.text("Exposure2012") == "+0.40")
+        #expect(!LightroomPreset.isPreset(sidecar))
+        #expect(throws: LightroomPresetError.notAPreset) {
+            try LightroomPreset.convert(sidecar)
+        }
+    }
+
+    @Test(arguments: PresetXMP.Form.allCases)
+    func `a preset is recognised by its type, or else by its own name, group or UUID`(form: PresetXMP.Form) {
+        let typed = PresetXMP.preset([("PresetType", "Normal"), ("Exposure2012", "+0.50")], form: form, name: nil)
+        let named = PresetXMP.preset([("Exposure2012", "+0.50")], form: form)
+        let grouped = PresetXMP.preset([("Exposure2012", "+0.50")], form: form, name: nil, group: "Portraits")
+        let identified = PresetXMP.preset([("UUID", "6F1C"), ("Exposure2012", "+0.50")], form: form, name: nil)
+        for preset in [typed, named, grouped, identified] {
+            #expect(LightroomPreset.isPreset(preset))
+        }
+        let anonymous = PresetXMP.preset([("Exposure2012", "+0.50")], form: form, name: nil)
+        let blankName = PresetXMP.preset([("Exposure2012", "+0.50")], form: form, name: " ")
+        let rawFile = PresetXMP.preset([("RawFileName", "IMG_0001.CR3"), ("Exposure2012", "+0.50")], form: form)
+        let profile = PresetXMP.preset([("PresetType", "Look"), ("Exposure2012", "+0.50")], form: form)
+        for data in [anonymous, blankName, rawFile, profile] {
+            #expect(!LightroomPreset.isPreset(data))
+        }
+    }
+
     @Test func `a preset without a process version converts, and Process 2010 sliders are reported`() throws {
         let imported = try LightroomPreset.convert(PresetXMP.preset([
             ("Exposure", "+0.50"), ("FillLight", "20"), ("Shadows", "5"), ("Exposure2012", "+0.30"),

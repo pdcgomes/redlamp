@@ -6,10 +6,7 @@ extension LightroomPreset {
     static let firstProcessVersion = [6, 7]
 
     static func convert(_ settings: CameraRawSettings, name: String?) throws -> LightroomPresetImport {
-        // A profile is an XMP file of Camera Raw settings too, but not a preset.
-        if settings.text("PresetType") == "Look" {
-            throw LightroomPresetError.notAPreset
-        }
+        guard settings.isPreset else { throw LightroomPresetError.notAPreset }
         let processVersion = settings.text("ProcessVersion")
         if let processVersion, let numbers = versionNumbers(processVersion),
            numbers.lexicographicallyPrecedes(firstProcessVersion) {
@@ -21,8 +18,8 @@ extension LightroomPreset {
         let converter = LightroomPresetConverter(settings)
         let recipe = Recipe(
             id: RecipeNamespace.newLocalID(),
-            name: trimmed(name) ?? trimmed(settings.text("Name")) ?? "Lightroom Preset",
-            group: trimmed(settings.text("Group")) ?? "Imported",
+            name: trimmed(name) ?? trimmed(settings.text("Name")) ?? "",
+            group: trimmed(settings.text("Group")) ?? "",
             summary: trimmed(settings.text("Description")),
             tags: ["lightroom"],
             includes: converter.includes,

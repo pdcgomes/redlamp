@@ -437,10 +437,14 @@ struct LightroomPresetMappingTests {
         #expect(imported.recipe.processVersion == EditRecipe.currentProcessVersion)
         #expect(try LightroomPreset.convert(data, name: "Renamed").recipe.name == "Renamed")
 
-        let anonymous = try LightroomPreset.convert(PresetXMP.preset([("Vibrance", "+10")], name: nil))
-        #expect(anonymous.recipe.name == "Lightroom Preset")
-        #expect(anonymous.recipe.group == "Imported")
+        let anonymous = try LightroomPreset.convert(
+            PresetXMP.preset([("PresetType", "Normal"), ("Vibrance", "+10")], name: nil),
+        )
+        #expect(anonymous.recipe.name == "")
+        #expect(anonymous.recipe.group == "")
         #expect(anonymous.recipe.summary == nil)
+        let ungrouped = try LightroomPreset.convert(PresetXMP.preset([("Vibrance", "+10")]))
+        #expect(ungrouped.recipe.name == "Test Preset" && ungrouped.recipe.group == "")
     }
 
     @Test

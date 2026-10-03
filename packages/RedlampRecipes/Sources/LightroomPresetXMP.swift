@@ -21,6 +21,21 @@ struct CameraRawSettings: Sendable {
     }
 
     private(set) var values: [String: Value] = [:]
+    /// Whether the packet also describes a photo: TIFF, Exif or Exif auxiliary properties, which a
+    /// photo's sidecar carries and a preset never does.
+    private(set) var describesPhoto = false
+
+    /// A develop preset rather than a photo's sidecar, which holds Camera Raw settings too.
+    /// Lightroom Classic and Camera Raw write `crs:PresetType` in every XMP preset; without it, a
+    /// preset's own name, group or UUID with no photo metadata and no `crs:RawFileName` still
+    /// counts. A profile (`PresetType` Look) isn't a develop preset.
+    var isPreset: Bool {
+        if let type = text("PresetType"), !isBlank("PresetType") {
+            return type != "Look"
+        }
+        return !describesPhoto && values["RawFileName"] == nil
+            && ["Name", "Group", "UUID"].contains { values[$0] != nil && !isBlank($0) }
+    }
 
     subscript(name: String) -> Value? {
         values[name]
@@ -57,6 +72,11 @@ struct CameraRawSettings: Sendable {
 extension CameraRawSettings {
     static let rdf = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
     static let xml = "http://www.w3.org/XML/1998/namespace"
+    /// TIFF, Exif, Exif auxiliary (Adobe) and Exif 2.3 (CIPA) namespaces.
+    static let photoNamespaces: Set = [
+        "http://ns.adobe.com/tiff/1.0/", "http://ns.adobe.com/exif/1.0/", "http://ns.adobe.com/exif/1.0/aux/",
+        "http://cipa.jp/exif/1.0/",
+    ]
 
     /// Reads an XMP packet, or nil when `data` isn't well-formed XML with an `rdf:RDF` element. A
     /// document type declaration is refused: XMP has none, and its entities could expand without
@@ -67,6 +87,10 @@ extension CameraRawSettings {
               let rdf = root.first(where: { $0.namespace == Self.rdf && $0.name == "RDF" })
         else { return nil }
         for description in rdf.children where description.namespace == Self.rdf && description.name == "Description" {
+            let namespaces = description.attributes.map(\.namespace) + description.children.map(\.namespace)
+            if namespaces.contains(where: { $0.map(Self.photoNamespaces.contains) ?? false }) {
+                describesPhoto = true
+            }
             for attribute in description.attributes where attribute.namespace == Self.namespace {
                 add(attribute.name, .text(attribute.value))
             }

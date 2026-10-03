@@ -71,15 +71,23 @@ public enum LightroomPresetError: Error, Equatable, CustomStringConvertible {
 }
 
 public enum LightroomPreset {
-    /// Whether `data` looks like a Lightroom develop preset (XMP with Camera Raw settings).
+    /// Whether `data` is a Lightroom develop preset: XMP with Camera Raw settings that a preset
+    /// carries, not a photo's sidecar or a profile (see `CameraRawSettings.isPreset`).
     public static func isPreset(_ data: Data) -> Bool {
-        let head = data.prefix(64 * 1024)
-        return [CameraRawSettings.rdf, CameraRawSettings.namespace].allSatisfy { head.range(of: Data($0.utf8)) != nil }
+        mentionsCameraRawSettings(data) && CameraRawSettings(xmp: data)?.isPreset == true
     }
 
-    /// The preset as a recipe named `name` (or the preset's own name), with its report.
+    /// The preset as a recipe named `name`, else the preset's own name, else an empty name for the
+    /// caller to fill in, with its report.
     public static func convert(_ data: Data, name: String? = nil) throws -> LightroomPresetImport {
-        guard isPreset(data), let settings = CameraRawSettings(xmp: data) else { throw LightroomPresetError.notAPreset }
+        guard mentionsCameraRawSettings(data), let settings = CameraRawSettings(xmp: data) else {
+            throw LightroomPresetError.notAPreset
+        }
         return try convert(settings, name: name)
+    }
+
+    private static func mentionsCameraRawSettings(_ data: Data) -> Bool {
+        let head = data.prefix(64 * 1024)
+        return [CameraRawSettings.rdf, CameraRawSettings.namespace].allSatisfy { head.range(of: Data($0.utf8)) != nil }
     }
 }
