@@ -13,6 +13,8 @@ public final class RecipeCatalog {
     /// Bumped on every change; list views observe it through the accessors below.
     public private(set) var revision = 0
     public private(set) var lastError: String?
+    /// The Recipes panel's lists imports have added to since the panel last took them.
+    @ObservationIgnored private var importedLists: Set<String> = []
 
     public init(engine: any EditingEngine, library: RecipeLibrary = RecipeLibrary()) {
         self.engine = engine
@@ -58,6 +60,12 @@ public final class RecipeCatalog {
     /// embedded in photos are offered only with their photo.
     public var currentBaseLooks: [BaseLookPackage] {
         BuiltInBaseLooks.newest(baseLooks).filter { !$0.reference.isEmbedded }
+    }
+
+    /// The lists imports have added to since the last call, for the panel to open once.
+    public func takeImportedLists() -> Set<String> {
+        defer { importedLists = [] }
+        return importedLists
     }
 
     public func recipe(id: String) -> Recipe? {
@@ -119,6 +127,17 @@ public final class RecipeCatalog {
     @discardableResult
     public func install(contentsOf url: URL, tableSpace: ImportedTableSpace = .sRGB) -> Recipe? {
         perform { try library.install(contentsOf: url, tableSpace: tableSpace).recipe }
+    }
+
+    /// Installs files, and the Lightroom presets in folders, reading the library once; what
+    /// came in, with each preset's report, and what didn't, with the reasons.
+    @discardableResult
+    public func install(contentsOf urls: [URL], tableSpace: ImportedTableSpace = .sRGB) -> RecipeImportSummary {
+        let summary = library.install(contentsOf: urls, tableSpace: tableSpace)
+        importedLists.formUnion(summary.lists)
+        lastError = nil
+        changed()
+        return summary
     }
 
     public func delete(_ recipe: Recipe) {
