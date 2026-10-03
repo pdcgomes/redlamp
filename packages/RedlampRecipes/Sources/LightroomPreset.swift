@@ -7,6 +7,9 @@ import Foundation
 public struct LightroomPresetImport: Sendable {
     public var recipe: Recipe
     public var report: LightroomImportReport
+    /// The preset's crop, which a recipe doesn't hold, for applying to a photo directly
+    /// (`LightroomCrop.redlampCrop(imageSize:cameraOrientation:orientation:)`).
+    public var crop: LightroomCrop?
 
     public init(recipe: Recipe, report: LightroomImportReport) {
         self.recipe = recipe
@@ -68,15 +71,23 @@ public enum LightroomPresetError: Error, Equatable, CustomStringConvertible {
 }
 
 public enum LightroomPreset {
-    /// Whether `data` looks like a Lightroom develop preset (XMP with Camera Raw settings).
+    /// Whether `data` is a Lightroom develop preset: XMP with Camera Raw settings that a preset
+    /// carries, not a photo's sidecar or a profile (see `CameraRawSettings.isPreset`).
     public static func isPreset(_ data: Data) -> Bool {
-        guard let text = String(data: data.prefix(64 * 1024), encoding: .utf8) else { return false }
-        return text.contains("x:xmpmeta") && text.contains("http://ns.adobe.com/camera-raw-settings/1.0/")
+        mentionsCameraRawSettings(data) && CameraRawSettings(xmp: data)?.isPreset == true
     }
 
-    /// The preset as a recipe named `name` (or the preset's own name), with its report.
-    public static func convert(_ data: Data, name _: String? = nil) throws -> LightroomPresetImport {
-        guard isPreset(data) else { throw LightroomPresetError.notAPreset }
-        throw LightroomPresetError.notAPreset
+    /// The preset as a recipe named `name`, else the preset's own name, else an empty name for the
+    /// caller to fill in, with its report.
+    public static func convert(_ data: Data, name: String? = nil) throws -> LightroomPresetImport {
+        guard mentionsCameraRawSettings(data), let settings = CameraRawSettings(xmp: data) else {
+            throw LightroomPresetError.notAPreset
+        }
+        return try convert(settings, name: name)
+    }
+
+    private static func mentionsCameraRawSettings(_ data: Data) -> Bool {
+        let head = data.prefix(64 * 1024)
+        return [CameraRawSettings.rdf, CameraRawSettings.namespace].allSatisfy { head.range(of: Data($0.utf8)) != nil }
     }
 }
