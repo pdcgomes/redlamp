@@ -37,7 +37,7 @@ struct LightroomPresetCropTests {
 
     @Test func `an upright crop on an upright photo maps one to one`() throws {
         let crop = LightroomCrop(left: 0.1, top: 0.2, right: 0.8, bottom: 0.9)
-        let mapped = try #require(crop.redlamp(imageSize: stored))
+        let mapped = try #require(crop.redlampCrop(imageSize: stored))
         #expect(mapped.angle == 0)
         #expect(abs(mapped.crop.left - 0.1) < 1e-12 && abs(mapped.crop.top - 0.2) < 1e-12)
         #expect(abs(mapped.crop.right - 0.8) < 1e-12 && abs(mapped.crop.bottom - 0.9) < 1e-12)
@@ -47,7 +47,7 @@ struct LightroomPresetCropTests {
         // A quarter turn clockwise takes a stored point (x, y) to (1 - y, x).
         let crop = LightroomCrop(left: 0.1, top: 0.2, right: 0.5, bottom: 0.6)
         let quarterTurn = ImageOrientation(quarterTurns: 1)
-        let mapped = try #require(crop.redlamp(imageSize: photoSize(quarterTurn), cameraOrientation: quarterTurn))
+        let mapped = try #require(crop.redlampCrop(imageSize: photoSize(quarterTurn), cameraOrientation: quarterTurn))
         #expect(mapped.angle == 0)
         let expected = CropRect(left: 0.4, top: 0.1, right: 0.8, bottom: 0.5)
         for (value, target) in zip(
@@ -69,7 +69,7 @@ struct LightroomPresetCropTests {
             for edit in [ImageOrientation(), ImageOrientation(quarterTurns: 3), ImageOrientation(mirrored: true)] {
                 let imageSize = photoSize(camera)
                 let mapped = try #require(
-                    crop.redlamp(imageSize: imageSize, cameraOrientation: camera, orientation: edit),
+                    crop.redlampCrop(imageSize: imageSize, cameraOrientation: camera, orientation: edit),
                 )
                 let map = GeometryMap(imageSize: imageSize, orientation: edit, crop: mapped.crop, angle: mapped.angle)
                 let developed = try [SIMD2(0.0, 0), SIMD2(1, 0), SIMD2(1, 1), SIMD2(0, 1)].map { corner in
@@ -91,7 +91,7 @@ struct LightroomPresetCropTests {
 
     @Test func `the crop turns clockwise over the photo, as Lightroom's does`() throws {
         let crop = LightroomCrop(left: 0.1, top: 0.15, right: 0.85, bottom: 0.9, angle: 5)
-        let mapped = try #require(crop.redlamp(imageSize: stored))
+        let mapped = try #require(crop.redlampCrop(imageSize: stored))
         #expect(abs(mapped.angle + 5) < 1e-12)
         let map = GeometryMap(imageSize: stored, crop: mapped.crop, angle: mapped.angle)
         let scale = SIMD2(Double(stored.width), Double(stored.height))
@@ -104,8 +104,8 @@ struct LightroomPresetCropTests {
     }
 
     @Test func `corners that don't make a crop give none`() {
-        #expect(LightroomCrop(left: 0.8, top: 0.2, right: 0.1, bottom: 0.9).redlamp(imageSize: stored) == nil)
-        #expect(LightroomCrop(left: 0.1, top: 0.5, right: 0.8, bottom: 0.5).redlamp(imageSize: stored) == nil)
+        #expect(LightroomCrop(left: 0.8, top: 0.2, right: 0.1, bottom: 0.9).redlampCrop(imageSize: stored) == nil)
+        #expect(LightroomCrop(left: 0.1, top: 0.5, right: 0.8, bottom: 0.5).redlampCrop(imageSize: stored) == nil)
     }
 
     @Test(arguments: PresetXMP.Form.allCases)

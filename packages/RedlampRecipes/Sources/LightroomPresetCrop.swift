@@ -38,7 +38,7 @@ public struct LightroomCrop: Sendable, Hashable {
     /// `cameraOrientation` turned from its stored pixels (LibRaw's orientation 6 is one quarter
     /// turn clockwise, 3 two and 5 three), in an edit turned by `orientation`. Nil when the
     /// corners don't make a crop.
-    public func redlamp(
+    public func redlampCrop(
         imageSize: PixelSize,
         cameraOrientation: ImageOrientation = .identity,
         orientation: ImageOrientation = .identity,

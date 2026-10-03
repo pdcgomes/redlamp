@@ -8,7 +8,7 @@ public struct LightroomPresetImport: Sendable {
     public var recipe: Recipe
     public var report: LightroomImportReport
     /// The preset's crop, which a recipe doesn't hold, for applying to a photo directly
-    /// (`LightroomCrop.redlamp(imageSize:cameraOrientation:orientation:)`).
+    /// (`LightroomCrop.redlampCrop(imageSize:cameraOrientation:orientation:)`).
     public var crop: LightroomCrop?
 
     public init(recipe: Recipe, report: LightroomImportReport) {
