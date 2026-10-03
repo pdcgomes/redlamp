@@ -81,7 +81,7 @@ final class ImageSession: @unchecked Sendable {
         hueSatMaps: HueSatMaps? = nil,
         gainTableMap: GainTableMapTexture? = nil,
         embeddedLook: BaseLookDefinition? = nil,
-        embeddedMattes: Set<EmbeddedMatte> = [],
+        embeddedMattes: Set<EmbeddedMatte>,
     ) {
         self.embeddedMattes = embeddedMattes
         self.noiseGain = noiseGain

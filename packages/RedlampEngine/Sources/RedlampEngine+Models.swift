@@ -26,8 +26,7 @@ public extension RedlampEngine {
     }
 
     func modelNeeded(for kind: MaskKind) async -> ModelInfo? {
-        if kind == .depthRange, let url = currentSession()?.info.url,
-           EmbeddedMattes.available(in: url).contains(.depth) {
+        if kind == .depthRange, currentSession()?.embeddedMattes.contains(.depth) == true {
             return nil
         }
         guard let id = Self.modelID(for: kind), let manifest = ModelCatalog.offered.first(where: { $0.id == id }) else {
