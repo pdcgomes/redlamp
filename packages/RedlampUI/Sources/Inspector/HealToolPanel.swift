@@ -35,7 +35,7 @@ struct HealToolPanel: View {
             .help("Heal matches the source to the light around the spot; Clone copies it as it is")
 
             Text(selected == nil
-                ? "Click the photo to add a spot. Its source is found nearby."
+                ? "Click the photo to add a spot, or drag to brush one. Its source is found nearby."
                 : "Drag the spot or its source to move it, or its handle to resize it.")
                 .font(Theme.labelFont)
                 .foregroundStyle(Theme.label)

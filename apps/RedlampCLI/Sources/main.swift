@@ -28,6 +28,7 @@ options:
   --upright <mode>         auto, level, vertical or full, from the photo's own edges
   --heal <x>,<y>,<radius>  heal a spot (x, y 0...1 across the photo as shown, radius a fraction
                            of its height) from the best source nearby; --clone copies instead
+  --heal-brush <x>,<y>,…,<radius>  the same along a brush stroke through the points; --clone-brush
   --bw                     black & white treatment
   --p3                     encode in Display P3 instead of sRGB
   --16bit                  16 bits per component (PNG/TIFF)
@@ -171,13 +172,23 @@ func run(_ arguments: [String]) async throws {
                 format: "upright %@: %d lines in %@, vertical %.1f, horizontal %.1f, rotate %.2f",
                 name, lines.count, "\(clock.now - started)", solved.vertical, solved.horizontal, solved.rotate,
             ))
-        case "--heal", "--clone":
-            let mode: RetouchSpot.Mode = arguments[index] == "--heal" ? .heal : .clone
+        case "--heal", "--clone", "--heal-brush", "--clone-brush":
+            let flag = arguments[index]
+            let mode: RetouchSpot.Mode = flag.hasPrefix("--heal") ? .heal : .clone
             let numbers = try value().split(separator: ",").compactMap { Double($0) }
-            guard numbers.count == 3 else { throw CLIError(description: "\(arguments[index - 1]) needs x,y,radius") }
+            let brush = flag.hasSuffix("-brush")
+            let counted = brush ? numbers.count >= 5 && numbers.count % 2 == 1 : numbers.count == 3
+            guard counted else {
+                throw CLIError(description: "\(flag) needs \(brush ? "x,y pairs and a radius" : "x,y,radius")")
+            }
+            let points = stride(from: 0, to: numbers.count - 1, by: 2).map { ImagePoint(
+                x: numbers[$0],
+                y: numbers[$0 + 1],
+            ) }
             var spot = RetouchSpot(
-                mode: mode, center: ImagePoint(x: numbers[0], y: numbers[1]),
-                source: ImagePoint(x: numbers[0], y: numbers[1]), radius: numbers[2],
+                mode: mode, center: points[0], source: points[0],
+                stroke: points.dropFirst().map { ImagePoint(x: $0.x - points[0].x, y: $0.y - points[0].y) },
+                radius: numbers[numbers.count - 1],
             )
             guard let source = await engine.retouchSource(for: spot, recipe: recipe) else {
                 throw CLIError(description: "no source fits a spot at \(numbers[0]), \(numbers[1])")

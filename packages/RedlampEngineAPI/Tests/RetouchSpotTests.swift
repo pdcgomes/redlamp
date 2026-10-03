@@ -19,6 +19,18 @@ struct RetouchSpotTests {
         #expect(decoded == recipe)
     }
 
+    @Test func `a brushed spot keeps its stroke, and a circle reads without one`() throws {
+        var spot = Self.spot
+        spot.stroke = [ImagePoint(x: 0.1, y: 0), ImagePoint(x: 0.1, y: 0.05)]
+        let decoded = try JSONDecoder().decode(RetouchSpot.self, from: JSONEncoder().encode(spot))
+        #expect(decoded == spot)
+        let end = try #require(spot.points(at: spot.source).last)
+        #expect(abs(end.x - 0.5) < 1e-12 && abs(end.y - 0.35) < 1e-12, "the stroke moves with the source")
+        let circle = try String(decoding: JSONEncoder().encode(Self.spot), as: UTF8.self)
+        #expect(!circle.contains("stroke"))
+        #expect(try JSONDecoder().decode(RetouchSpot.self, from: Data(circle.utf8)) == Self.spot)
+    }
+
     @Test func `a spot onto itself or at no opacity changes nothing`() {
         var spot = Self.spot
         #expect(!spot.isEmpty)

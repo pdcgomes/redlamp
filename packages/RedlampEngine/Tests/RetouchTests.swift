@@ -25,14 +25,14 @@ struct RetouchTests {
     }
 
     /// Fine texture over light that brightens to the right, with a dark blemish when asked.
-    func scene(blemished: Bool) throws -> ImageSession {
+    func scene(blemished: Bool, darkened: (Double, Double) -> Bool = { _, _ in false }) throws -> ImageSession {
         let (width, height) = (Self.width, Self.height)
         var samples = [UInt16](repeating: 0, count: width * height * 3)
         for y in 0 ..< height {
             for x in 0 ..< width {
                 let (fx, fy) = (Double(x) + 0.5, Double(y) + 0.5)
                 var value = (0.2 + 0.4 * fx / Double(width)) * (1 + 0.15 * sin(fx / 3) * sin(fy / 3))
-                if blemished, simd_distance(SIMD2(fx, fy), Self.blemish) < 8 {
+                if blemished && simd_distance(SIMD2(fx, fy), Self.blemish) < 8 || darkened(fx, fy) {
                     value = 0.02
                 }
                 let colour = SIMD3(value, value * 0.9, value * 0.8)
@@ -203,6 +203,82 @@ struct RetouchTests {
                 #expect(abs(offset.x) < radius, "clone moved \(offset.x) across the gradient")
             }
         }
+    }
+
+    @Test func `a brushed Heal removes a scratch, matching the light along it`() throws {
+        // A dark scratch along the gradient: the light it should take changes along its length.
+        let engine = try RedlampEngine()
+        let clean = try render(scene(blemished: false), EditRecipe(), engine: engine)
+        let (width, height) = (Double(Self.width), Double(Self.height))
+        let scratched = try scene(blemished: false) { x, y in abs(y - 150) < 1.5 && x > 120 && x < 300 }
+        var recipe = EditRecipe()
+        recipe.spots = [RetouchSpot(
+            center: ImagePoint(x: 115 / width, y: 150 / height),
+            source: ImagePoint(x: 155 / width, y: 120 / height),
+            stroke: [ImagePoint(x: 190 / width, y: 0)],
+            radius: 6 / height,
+        )]
+        let healed = try render(scratched, recipe, engine: engine)
+        // Over two periods of the texture along the scratch, which the source has at another phase.
+        func mean(_ image: [Float], from x0: Int) -> Float {
+            let values = (x0 ..< x0 + 38).flatMap { x in (149 ... 150).map { image[$0 * Self.width + x] } }
+            return values.reduce(0, +) / Float(values.count)
+        }
+        for x in stride(from: 125, to: 260, by: 40) {
+            let expected = mean(clean, from: x), result = mean(healed, from: x)
+            #expect(abs(result - expected) < expected * 0.04, "from \(x): \(expected) → \(result)")
+        }
+        // The source is brighter, being further along the gradient: a clone shows it.
+        recipe.spots[0].mode = .clone
+        let cloned = try render(scratched, recipe, engine: engine)
+        #expect(mean(cloned, from: 165) > mean(clean, from: 165) * 1.06)
+    }
+
+    @Test func `a stroke's outline runs a radius from it, all the way round`() {
+        let placement = RetouchStage.Placement(
+            points: [SIMD2(100, 100), SIMD2(200, 100), SIMD2(200, 160)], offset: SIMD2(0, 50), radius: 10,
+            origin: .zero, size: SIMD2(400, 400),
+        )
+        let outline = RetouchStage.outline(placement)
+        #expect(outline.points.count > 100 && outline.points.count <= RetouchStage.maximumOutline)
+        func distance(_ point: SIMD2<Float>) -> Float {
+            zip(placement.points, placement.points.dropFirst()).map { a, b in
+                let t = min(max(simd_dot(point - a, b - a) / simd_length_squared(b - a), 0), 1)
+                return simd_distance(point, a + (b - a) * t)
+            }.min() ?? 0
+        }
+        for point in outline.points {
+            #expect(abs(distance(point) - 10) < 0.2, "\(point) is \(distance(point)) from the stroke")
+        }
+        // Both sides of each segment, and both ends.
+        #expect(outline.points.contains { $0.y < 95 } && outline.points.contains { $0.y > 105 && $0.x < 190 })
+        #expect(outline.points.contains { $0.x < 92 } && outline.points.contains { $0.y > 168 })
+    }
+
+    @Test func `a stroke's source is clear of the stroke`() throws {
+        let (width, height) = (240, 160)
+        var values = [Float](repeating: 0, count: width * height)
+        var state: UInt32 = 99
+        for index in values.indices {
+            state = state &* 1_664_525 &+ 1_013_904_223
+            values[index] = Float(state >> 8) / Float(1 << 24) * 0.5 - 0.25
+        }
+        let image = RetouchSource.Image(width: width, height: height, values: values)
+        let stroke = [SIMD2<Float>(40, 0), SIMD2(40, 20)]
+        let found = try #require(RetouchSource.search(
+            image, center: SIMD2(100.5, 70.5), radius: 8, stroke: stroke, matchBrightness: true,
+        ))
+        let offset = found - SIMD2(100.5, 70.5)
+        let points = [SIMD2<Float>(0, 0)] + stroke
+        // The moved stroke keeps more than two radii from the stroke, sampled along both.
+        var dense: [SIMD2<Float>] = []
+        for index in points.indices.dropFirst() {
+            for step in 0 ... 20 {
+                dense.append(points[index - 1] + (points[index] - points[index - 1]) * Float(step) / 20)
+            }
+        }
+        let nearest = dense.flatMap { a in dense.map { b in simd_distance(a + offset, b) } }.min() ?? 0
+        #expect(nearest >= 8 * 2, "the source comes within \(nearest) of the stroke")
     }
 
     @Test func `spots land on the same content whatever the orientation`() throws {

@@ -47,6 +47,25 @@ struct HealToolTests {
         #expect(model.history.last?.name == "Clone")
     }
 
+    @Test func `a drag brushes a spot that follows the stroke`() async throws {
+        let (model, cleanup) = try await openEditor()
+        defer { cleanup() }
+        model.activeTool = .heal
+        let points = (0 ... 40).map { ImagePoint(x: 0.3 + Double($0) * 0.005, y: 0.4) }
+        await model.addStroke(points)
+        let spot = try #require(model.recipe.spots.first)
+        #expect(spot.center == points[0])
+        #expect(spot.stroke.count > 4 && spot.stroke.count < points.count, "thinned to a quarter brush apart")
+        let end = try #require(spot.points().last)
+        #expect(abs(end.x - 0.5) < 0.02 && end.y == 0.4)
+        #expect(spot.source.y > 0.4 + spot.radius * 2, "no source found: below the stroke")
+        #expect(model.history.last?.name == "Heal Brush")
+
+        // A stroke that barely moves is a click.
+        await model.addStroke([ImagePoint(x: 0.7, y: 0.7), ImagePoint(x: 0.7001, y: 0.7)])
+        #expect(model.recipe.spots.last?.stroke.isEmpty == true)
+    }
+
     @Test func `the sliders change the selected spot, and the next one`() async throws {
         let (model, cleanup) = try await openEditor()
         defer { cleanup() }

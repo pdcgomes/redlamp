@@ -329,15 +329,15 @@ public struct GlowParams {
 
 public struct RetouchParams {
     public var box: SIMD4<Int32>
-    public var circle: SIMD4<Float>
+    public var shape: SIMD4<Float>
     public var source: SIMD4<Float>
-    public var samples: SIMD4<Int32>
+    public var counts: SIMD4<Int32>
 
-    public init(box: SIMD4<Int32>, circle: SIMD4<Float>, source: SIMD4<Float>, samples: SIMD4<Int32>) {
+    public init(box: SIMD4<Int32>, shape: SIMD4<Float>, source: SIMD4<Float>, counts: SIMD4<Int32>) {
         self.box = box
-        self.circle = circle
+        self.shape = shape
         self.source = source
-        self.samples = samples
+        self.counts = counts
     }
 }
 

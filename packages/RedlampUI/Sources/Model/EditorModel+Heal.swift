@@ -72,6 +72,36 @@ public extension EditorModel {
         selectedSpotID = spot.id
     }
 
+    /// Adds a brushed spot along `points`, painted with the tool's settings; a stroke too short to
+    /// be one adds a circle.
+    func addStroke(_ points: [ImagePoint]) async {
+        guard info != nil, let first = points.first else { return }
+        let radius = RetouchSpot.radius(size: spotSettings.size)
+        let aspect = Double(info?.pixelSize.width ?? 1) / Double(max(info?.pixelSize.height ?? 1, 1))
+        // A quarter of the brush apart is plenty to follow the hand.
+        var kept = [first]
+        for point in points.dropFirst() {
+            let last = kept[kept.count - 1]
+            if hypot((point.x - last.x) * aspect, point.y - last.y) >= radius / 4 {
+                kept.append(point)
+            }
+        }
+        guard kept.count > 1 else {
+            await addSpot(at: first)
+            return
+        }
+        var spot = RetouchSpot(
+            mode: spotMode, center: first, source: first,
+            stroke: kept.dropFirst().map { ImagePoint(x: $0.x - first.x, y: $0.y - first.y) },
+            radius: radius, feather: spotSettings.feather, opacity: spotSettings.opacity,
+        )
+        spot.source = await engine.retouchSource(for: spot, recipe: recipe) ?? nearbySource(for: spot)
+        var next = recipe
+        next.spots.append(spot)
+        commit(next, .retouch, "\(spot.mode.name) Brush")
+        selectedSpotID = spot.id
+    }
+
     /// Changes a spot as part of a drag (between `beginEdit` and `endEdit`), or as one step.
     func updateSpot(_ id: UUID, name: String? = nil, _ change: (inout RetouchSpot) -> Void) {
         guard let index = recipe.spots.firstIndex(where: { $0.id == id }) else { return }
@@ -136,8 +166,15 @@ public extension EditorModel {
         }
     }
 
-    /// Two and a half radii to the side, when the engine finds nothing better.
+    /// Two and a half radii to the side of a circle, or below (or above) a stroke, when the engine
+    /// finds nothing better.
     private func nearbySource(for spot: RetouchSpot) -> ImagePoint {
+        guard spot.stroke.isEmpty else {
+            let ys = spot.points().map(\.y)
+            let step = (ys.max() ?? 0) - (ys.min() ?? 0) + spot.radius * 2.5
+            let below = (ys.max() ?? 0) + step + spot.radius <= 1
+            return ImagePoint(x: spot.center.x, y: spot.center.y + (below ? step : -step))
+        }
         let size = info?.pixelSize ?? PixelSize(width: 1, height: 1)
         let aspect = Double(size.height) / Double(max(size.width, 1))
         let step = spot.radius * 2.5 * aspect

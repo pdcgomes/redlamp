@@ -29,9 +29,12 @@ extension RedlampEngine {
         let scale = Float(1 << level)
         let levelWidth = max(1, pyramid.width >> level), levelHeight = max(1, pyramid.height >> level)
         let center = placement.center / scale, radius = placement.radius / scale
+        let stroke = placement.points.dropFirst().map { ($0 - placement.center) / scale }
+        let low = stroke.reduce(center) { simd_min($0, center + $1) }
+        let high = stroke.reduce(center) { simd_max($0, center + $1) }
         let margin = Int(ceil(radius * (RetouchSource.reach + RetouchSource.rim))) + 2
-        let x0 = max(Int(center.x) - margin, 0), y0 = max(Int(center.y) - margin, 0)
-        let x1 = min(Int(center.x) + margin, levelWidth), y1 = min(Int(center.y) + margin, levelHeight)
+        let x0 = max(Int(low.x) - margin, 0), y0 = max(Int(low.y) - margin, 0)
+        let x1 = min(Int(high.x) + margin, levelWidth), y1 = min(Int(high.y) + margin, levelHeight)
         guard x1 > x0, y1 > y0 else { return nil }
         let (width, height) = (x1 - x0, y1 - y0)
         guard let buffer = device.makeBuffer(length: width * height * 8, options: .storageModeShared),
@@ -55,7 +58,7 @@ extension RedlampEngine {
         let origin = SIMD2(Float(x0), Float(y0))
         guard let found = RetouchSource.search(
             RetouchSource.Image(width: width, height: height, values: values),
-            center: center - origin, radius: radius, matchBrightness: spot.mode == .heal,
+            center: center - origin, radius: radius, stroke: stroke, matchBrightness: spot.mode == .heal,
         ) else { return nil }
         let texel = (found + origin) * scale
         let point = orientedCoordinate(

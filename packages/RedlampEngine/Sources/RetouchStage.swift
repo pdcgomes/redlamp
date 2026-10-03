@@ -9,18 +9,31 @@ import simd
 ///
 /// Owned by the engine's render queue.
 final class RetouchStage {
-    /// Points on a spot's rim for Heal.
+    /// Points on a circle's rim for Heal.
     static let rimSamples = 256
+    /// The most points on a brushed spot's outline, and on its stroke.
+    static let maximumOutline = 1024
+    static let maximumStroke = 512
     /// A recipe and the one it's compared with.
     private static let maximumEntries = 2
 
     /// Where a spot lands in the pyramid, in level-0 texels.
     struct Placement: Equatable {
-        var center: SIMD2<Float>
-        var source: SIMD2<Float>
+        /// The stroke, the spot's own point first; one point for a circle.
+        var points: [SIMD2<Float>]
+        /// From the spot to its source.
+        var offset: SIMD2<Float>
         var radius: Float
         var origin: SIMD2<Int>
         var size: SIMD2<Int>
+
+        var center: SIMD2<Float> {
+            points[0]
+        }
+
+        var source: SIMD2<Float> {
+            points[0] + offset
+        }
     }
 
     private struct Entry {
@@ -91,19 +104,73 @@ final class RetouchStage {
         }
         let orientedHeight = orientation >= 5 ? width : height
         let radius = Float(min(max(spot.radius, 0), 1) * Double(orientedHeight))
-        let center = texel(spot.center)
+        var points = spot.points().map(texel)
+        if points.count > maximumStroke {
+            let stride = Double(points.count - 1) / Double(maximumStroke - 1)
+            points = (0 ..< maximumStroke).map { points[Int((Double($0) * stride).rounded())] }
+        }
         let source = texel(spot.source)
-        guard radius.isFinite, center.x.isFinite, center.y.isFinite, source.x.isFinite, source.y.isFinite,
-              abs(center.x) < 1e7, abs(center.y) < 1e7
-        else { return nil }
-        let low = SIMD2(
-            max(Int(floor(center.x - radius)) - 1, 0), max(Int(floor(center.y - radius)) - 1, 0),
+        let finite = { (point: SIMD2<Float>) in
+            point.x.isFinite && point.y.isFinite && simd_reduce_max(simd_abs(point)) < 1e7
+        }
+        guard radius.isFinite, radius > 0, points.allSatisfy(finite), finite(source) else { return nil }
+        let low = points.dropFirst().reduce(points[0], simd_min) - radius
+        let high = points.dropFirst().reduce(points[0], simd_max) + radius
+        let origin = SIMD2(max(Int(floor(low.x)) - 1, 0), max(Int(floor(low.y)) - 1, 0))
+        let end = SIMD2(min(Int(ceil(high.x)) + 1, width), min(Int(ceil(high.y)) + 1, height))
+        guard end.x > origin.x, end.y > origin.y else { return nil }
+        return Placement(
+            points: points,
+            offset: source - points[0],
+            radius: radius,
+            origin: origin,
+            size: end &- origin,
         )
-        let high = SIMD2(
-            min(Int(ceil(center.x + radius)) + 1, width), min(Int(ceil(center.y + radius)) + 1, height),
-        )
-        guard radius > 0, high.x > low.x, high.y > low.y else { return nil }
-        return Placement(center: center, source: source, radius: radius, origin: low, size: high &- low)
+    }
+
+    /// Points on the edge of the spot's shape, about evenly spaced, and their spacing: a circle's
+    /// rim, or the outline of the discs along a stroke (a quarter radius apart).
+    static func outline(_ placement: Placement) -> (points: [SIMD2<Float>], spacing: Float) {
+        let radius = placement.radius
+        guard placement.points.count > 1 else {
+            let count = rimSamples
+            let points = (0 ..< count).map { index in
+                let angle = 2 * Float.pi * (Float(index) + 0.5) / Float(count)
+                return placement.center + radius * SIMD2(cos(angle), sin(angle))
+            }
+            return (points, 2 * .pi * radius / Float(count))
+        }
+        var dabs = [placement.points[0]]
+        for next in placement.points.dropFirst() {
+            let last = dabs[dabs.count - 1]
+            let steps = max(Int(ceil(simd_distance(last, next) / (radius / 4))), 1)
+            for step in 1 ... steps {
+                dabs.append(last + (next - last) * Float(step) / Float(steps))
+            }
+        }
+        let perDab = min(max(Int(ceil(2 * Float.pi * radius)), 32), 128)
+        let directions = (0 ..< perDab).map { index in
+            let angle = 2 * Float.pi * (Float(index) + 0.5) / Float(perDab)
+            return radius * SIMD2(cos(angle), sin(angle))
+        }
+        var points: [SIMD2<Float>] = []
+        let reach2 = 4 * radius * radius, inside2 = radius * radius * 0.998
+        for (index, dab) in dabs.enumerated() {
+            let neighbours = dabs.indices.filter { $0 != index && simd_distance_squared(dabs[$0], dab) < reach2 }
+            for direction in directions {
+                let point = dab + direction
+                if neighbours.allSatisfy({ simd_distance_squared(dabs[$0], point) >= inside2 }) {
+                    points.append(point)
+                }
+            }
+        }
+        var spacing = 2 * .pi * radius / Float(perDab)
+        if points.count > maximumOutline {
+            let stride = Float(points.count) / Float(maximumOutline)
+            points = (0 ..< maximumOutline).map { points[min(Int(Float($0) * stride), points.count - 1)] }
+            spacing *= stride
+        }
+        return (points, spacing)
     }
 
     private func makeCopy(of pyramid: any MTLTexture) throws -> any MTLTexture {
@@ -128,13 +195,22 @@ final class RetouchStage {
         )
         descriptor.usage = [.shaderWrite]
         descriptor.storageMode = .private
-        let rimLength = Self.rimSamples * MemoryLayout<SIMD4<Float>>.stride
+        let heal = spot.mode == .heal
+        let outline = heal ? Self.outline(placement) : (points: [placement.center], spacing: 1)
+        let point = MemoryLayout<SIMD2<Float>>.stride
+        let ratioLength = outline.points.count * MemoryLayout<SIMD4<Float>>.stride
         guard let scratch = device.makeTexture(descriptor: descriptor),
-              let rim = device.makeBuffer(length: rimLength, options: .storageModePrivate),
+              let ratios = device.makeBuffer(length: ratioLength, options: .storageModePrivate),
+              let filtered = device.makeBuffer(length: ratioLength, options: .storageModePrivate),
+              let rim = device.makeBuffer(
+                  bytes: outline.points, length: outline.points.count * point, options: .storageModeShared,
+              ),
+              let stroke = device.makeBuffer(
+                  bytes: placement.points, length: placement.points.count * point, options: .storageModeShared,
+              ),
               let encoder = commands.makeComputeCommandEncoder()
         else { throw EngineError.gpuUnavailable }
         encoder.label = "Retouch"
-        let heal = spot.mode == .heal
         let box = SIMD4<Int32>(
             Int32(placement.origin.x), Int32(placement.origin.y), Int32(placement.size.x), Int32(placement.size.y),
         )
@@ -142,16 +218,22 @@ final class RetouchStage {
         let opacity = Float(min(max(spot.opacity, 0), 100) / 100)
         var params = RetouchParams(
             box: box,
-            circle: SIMD4<Float>(placement.center.x, placement.center.y, placement.radius, featherStart),
-            source: SIMD4<Float>(placement.source.x, placement.source.y, opacity, heal ? 1 : 0),
-            samples: SIMD4<Int32>(Int32(Self.rimSamples), 0, 0, 0),
+            shape: SIMD4<Float>(placement.radius, featherStart, outline.spacing, placement.radius / 2),
+            source: SIMD4<Float>(placement.offset.x, placement.offset.y, opacity, heal ? 1 : 0),
+            counts: SIMD4<Int32>(Int32(outline.points.count), Int32(placement.points.count), 0, 0),
         )
         encoder.setTexture(texture, index: 0)
         encoder.setBytes(&params, length: MemoryLayout<RetouchParams>.stride, index: 0)
-        encoder.setBuffer(rim, offset: 0, index: 1)
+        encoder.setBuffer(ratios, offset: 0, index: 1)
+        encoder.setBuffer(rim, offset: 0, index: 2)
+        encoder.setBuffer(stroke, offset: 0, index: 3)
         if heal {
             encoder.setComputePipelineState(kernels.retouchRim)
-            encoder.dispatchGrid(width: Self.rimSamples, height: 1, pipeline: kernels.retouchRim)
+            encoder.dispatchGrid(width: outline.points.count, height: 1, pipeline: kernels.retouchRim)
+            encoder.setBuffer(filtered, offset: 0, index: 4)
+            encoder.setComputePipelineState(kernels.retouchRimMedian)
+            encoder.dispatchGrid(width: outline.points.count, height: 1, pipeline: kernels.retouchRimMedian)
+            encoder.setBuffer(filtered, offset: 0, index: 1)
         }
         encoder.setComputePipelineState(kernels.retouchApply)
         encoder.setTexture(scratch, index: 1)
