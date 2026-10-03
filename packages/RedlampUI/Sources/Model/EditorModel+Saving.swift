@@ -23,6 +23,16 @@ extension EditorModel {
         }
     }
 
+    /// Saves what hasn't been, then blocks until every save has landed, or for `limit`: quitting
+    /// mustn't hang on a disk that doesn't answer. False if the time ran out.
+    ///
+    /// It blocks rather than awaits: `terminate` can be called from inside a main-queue block,
+    /// where nothing else on the main actor runs until it returns.
+    public func saveBeforeQuitting(within limit: Duration = .seconds(2)) -> Bool {
+        saveNow()
+        return saves.flush(waitingAtMost: limit)
+    }
+
     /// Saves again what failed: the open photo as it is now, or the last write of the one left.
     public func retrySave() {
         guard let error = saveError, error.canRetry else { return }

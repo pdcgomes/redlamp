@@ -1,4 +1,5 @@
 import AppKit
+import OSLog
 import RedlampEngine
 import RedlampEngineAPI
 import RedlampServices
@@ -43,6 +44,7 @@ struct RedlampApp: App {
         _exports = State(initialValue: exports)
 
         let keyboard = KeyboardShortcuts()
+        AppDelegate.saveBeforeQuitting = { model.saveBeforeQuitting() }
         AppDelegate.launch = {
             let editor = EditorWindowController(
                 model: model, theme: theme,
@@ -128,15 +130,25 @@ struct RedlampApp: App {
 }
 
 /// Opens the editor window once the app has launched, and again when the Dock icon is
-/// clicked with no window open.
+/// clicked with no window open; quitting waits for the last edits to be saved.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static var launch: (@MainActor () -> EditorWindowController)?
+    static var saveBeforeQuitting: (@MainActor () -> Bool)?
     let updates = Updates()
     private var editor: EditorWindowController?
 
     func applicationDidFinishLaunching(_: Notification) {
         editor = Self.launch?()
+    }
+
+    /// Quit, log out, shut down and an update's relaunch all come here. It waits at most about
+    /// 2 s, then quits anyway.
+    func applicationShouldTerminate(_: NSApplication) -> NSApplication.TerminateReply {
+        if Self.saveBeforeQuitting?() == false {
+            Logger(subsystem: "app.redlamp.mac", category: "saving").error("Quit before the last edits were saved")
+        }
+        return .terminateNow
     }
 
     func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows: Bool) -> Bool {

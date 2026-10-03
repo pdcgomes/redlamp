@@ -158,6 +158,32 @@ struct SaveQueueTests {
         }
     }
 
+    @Test func `quitting right after an edit saves it first`() async throws {
+        let folder = try Folder()
+        defer { folder.remove() }
+        let model = EditorModel(engine: StubEngine())
+        try await open(folder.photo, in: model)
+
+        model.setValue(.exposure, 0.7)
+        #expect(model.saveBeforeQuitting())
+        #expect(folder.saved?.recipe == model.recipe)
+    }
+
+    @Test func `quitting waits no longer than its limit for a disk that doesn't answer`() async throws {
+        let folder = try Folder()
+        defer { folder.remove() }
+        let model = EditorModel(engine: StubEngine())
+        try await open(folder.photo, in: model)
+
+        let gate = DispatchSemaphore(value: 0)
+        defer { gate.signal() }
+        model.saves.enqueue(.metadata { _ in gate.wait() }, for: folder.other)
+        model.setValue(.exposure, 0.7)
+        let start = ContinuousClock.now
+        #expect(!model.saveBeforeQuitting(within: .milliseconds(300)))
+        #expect(ContinuousClock.now - start < .seconds(1))
+    }
+
     @Test func `writes run in order on the queue's own thread, and reads after them`() async throws {
         let folder = try Folder()
         defer { folder.remove() }

@@ -10,7 +10,8 @@
     ///   `EditorModel.applyDebugCommand`), e.g. `select=3,exposure=0.5,panel=all`. `select`
     ///   also takes a file name, `mask=<kind>[:<part>]` computes an AI mask, such as
     ///   `mask=sky` or `mask=people:faceSkin`, and `overlay=<style>` shows masks in one of
-    ///   `MaskOverlayStyle`'s modes, such as `overlay=imageOnBlack`.
+    ///   `MaskOverlayStyle`'s modes, such as `overlay=imageOnBlack`; `quit=now` quits there
+    ///   and then, as ⌘Q would.
     /// - `--snapshot <path.png> [--snapshot-delay <s>] [--snapshot-quit]` writes an image of
     ///   the window without Screen Recording permission (glass materials are approximated;
     ///   `scripts/capture-screenshots.sh` uses real window captures instead). An open sheet is
@@ -87,6 +88,8 @@
                 await createMask(value, model: model)
             case "overlay":
                 model.maskOverlayStyle = MaskOverlayStyle.allCases.first { value == "\($0)" } ?? model.maskOverlayStyle
+            case "quit":
+                NSApp.terminate(nil)
             default:
                 return false
             }

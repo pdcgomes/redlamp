@@ -77,6 +77,16 @@ final class SaveQueue: @unchecked Sendable {
         }
     }
 
+    /// Blocks until every write asked for before the call has finished, or `limit` has passed;
+    /// false if it ran out. Only for quitting: writes never need the calling thread.
+    func flush(waitingAtMost limit: Duration) -> Bool {
+        let done = DispatchSemaphore(value: 0)
+        queue.async { done.signal() }
+        let (seconds, attoseconds) = limit.components
+        let nanoseconds = Int(seconds) * 1_000_000_000 + Int(attoseconds / 1_000_000_000)
+        return done.wait(timeout: .now() + .nanoseconds(nanoseconds)) == .success
+    }
+
     /// Runs `body` on the queue, after every write asked for before the call and before any
     /// asked for after it.
     func read<T: Sendable>(_ body: @escaping @Sendable () -> T) async -> T {
