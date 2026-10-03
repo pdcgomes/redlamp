@@ -62,8 +62,8 @@
       "SA-V"
     ]
   },
-  "decision": "DEC-02",
+  "decision": "DEC-24",
   "evaluationOnly": false,
   "notes": "Apple's Core ML conversion of Meta's SAM 2.1 Hiera tiny (fp16). Measured on an M1 Ultra: 58 ms to encode, 12 ms per prompt on the GPU; the Neural Engine is slower for this conversion.",
-  "cleared": false
+  "cleared": true
 }

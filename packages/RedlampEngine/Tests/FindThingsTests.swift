@@ -32,7 +32,6 @@ struct FindThingsTests {
 
     @Test(.enabled(if: MaskRenderTests.samIsInstalled))
     func `a found thing's box gives Segment Anything its whole outline`() async throws {
-        setenv("REDLAMP_EVALUATION_MODELS", "1", 1)
         let engine = try RedlampEngine()
         _ = try await engine.open(#require(FindSample.url))
         let car = try #require(try await engine.findThings(["car"], threshold: 0.25).first)

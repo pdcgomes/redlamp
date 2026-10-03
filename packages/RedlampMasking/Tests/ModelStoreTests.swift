@@ -32,7 +32,7 @@ struct ModelStoreTests {
         #expect(ids.contains("depth-anything-v2-small"))
         let sam = ModelCatalog.manifest("sam2.1-tiny")
         #expect(sam?.downloadBytes == 79_644_968)
-        #expect(sam?.cleared == false)
+        #expect(sam?.cleared == true)
         #expect(try SAMSegmenter.packages(in: #require(sam)).count == 3)
     }
 
