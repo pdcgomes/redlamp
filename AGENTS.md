@@ -8,6 +8,7 @@ Redlamp is a macOS raw editor in Swift and Metal (`README.md`). These rules appl
 - **Build and test** with your own build directory:
   `xcodebuild test -workspace Redlamp.xcworkspace -scheme <Scheme> -destination 'platform=macOS,arch=arm64' -derivedDataPath /tmp/<your-key>-dd -only-testing:<Target>/<Suite>`.
   Schemes: `RedlampEngine`, `RedlampEngineAPI`, `RedlampKernels`, `RedlampMasking`, `RedlampServices`, `RedlampDocument`, `RedlampRecipes`, `RedlampUI`, `Redlamp` (app), `redlamp` (CLI). Run targeted tests while working and your scheme's full suite once at the end; never run several full builds at once.
+- **Tests run with Metal's validation layer** (`MTL_DEBUG_LAYER=1`, set on every test target): a test that aborts with a `validate…` message has found a dispatch or binding the app would crash on in Debug; fix the dispatch, don't turn validation off.
 - **Swift Testing:** `xcodebuild` prints XCTest's "Executed 0 tests" plus one "Test run with N tests … passed" line per bundle. Read the Swift Testing lines.
 - **A fresh worktree needs the gitignored build inputs.** From the worktree root, with `MAIN=/Users/pedrogomes/src/darkroom`, clone them (never symlink: scripts in the worktree would write into the main checkout):
 
