@@ -23,6 +23,9 @@ struct SessionBuilder {
     var bayerDemosaic = BayerDemosaic.menon
     /// Menon's green is replaced by a plain average where only noise varies (CAM-06).
     var dualDemosaic = true
+    /// The user's lens profiles, for raws that carry no correction (LNS-04). Off unless the app or
+    /// CLI turns them on, so tests and references never depend on a developer's own profiles.
+    var lensProfiles: LCPProfileLibrary?
 
     static let analysisLongEdge = 1024
     /// A photosite counts as hot when it is this many noise sigmas above every neighbour...
@@ -117,7 +120,7 @@ struct SessionBuilder {
         info.embeddedBaseLook = embeddedLook?.reference
         // A look designed to follow the gain table map renders as meant only where the map applies.
         info.embeddedBaseLookProcess = embeddedLook != nil && decoded.dngProfile?.gainTableMap != nil ? 5 : nil
-        info.lensCorrection = decoded.isRaw ? decoded.lensCorrection : nil
+        info.lensCorrection = LensCorrectionReader.correction(for: decoded, profiles: lensProfiles)
 
         return try ImageSession(
             info: info,

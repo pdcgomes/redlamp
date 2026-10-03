@@ -80,7 +80,7 @@ struct LCPProfileTests {
 
     @Test func `the tables follow the published equations`() throws {
         let lens = try #require(try Self.correction([SyntheticLCP.Spec()]))
-        #expect(lens.source == .dng && lens.radii == LCPProfile.radii)
+        #expect(lens.source == .profile && lens.radii == LCPProfile.radii)
         // Every model's principal point is (3060, 1920) of 6000 × 4000, so its farthest corner is
         // 3700 pixels away.
         #expect(simd_distance(lens.center, SIMD2(0.51, 0.48)) < 1e-12)

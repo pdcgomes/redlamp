@@ -46,7 +46,7 @@ struct LCPProfileLibraryTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         try write([SyntheticLCP.Spec()])
         let lens = try #require(correction())
-        #expect(lens.source == .dng && lens.correctsColorFringes && !lens.vignetting.isEmpty)
+        #expect(lens.source == .profile && lens.correctsColorFringes && !lens.vignetting.isEmpty)
     }
 
     @Test func `falls back to the lens's display name`() throws {

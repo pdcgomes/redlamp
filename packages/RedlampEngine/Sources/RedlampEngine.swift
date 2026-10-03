@@ -86,15 +86,17 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         try self.init(stillTile: 2048)
     }
 
-    /// An engine that decodes photos with `decoder`, such as the Mac app's sandboxed decode service.
-    public convenience init(decoder: any ImageDecoding) throws {
-        try self.init(stillTile: 2048, decoder: decoder)
+    /// An engine that decodes photos with `decoder`, such as the Mac app's sandboxed decode service,
+    /// and corrects raws that carry no lens correction with the user's `lensProfiles`.
+    public convenience init(decoder: any ImageDecoding, lensProfiles: LCPProfileLibrary? = nil) throws {
+        try self.init(stillTile: 2048, decoder: decoder, lensProfiles: lensProfiles)
     }
 
     init(
         stillTile: Int,
         stackCache: URL = FocusStackCache.defaultRoot,
         decoder: any ImageDecoding = InProcessDecoder(),
+        lensProfiles: LCPProfileLibrary? = nil,
         thermalState: @escaping @Sendable () -> ProcessInfo.ThermalState = { ProcessInfo.processInfo.thermalState },
     ) throws {
         self.stillTile = stillTile
@@ -126,7 +128,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
 
         let stacks = FocusStackCache(device: device, kernels: kernels, root: stackCache)
         self.stacks = stacks
-        let builder = SessionBuilder(device: device, queue: buildQueue, kernels: kernels)
+        var builder = SessionBuilder(device: device, queue: buildQueue, kernels: kernels)
+        builder.lensProfiles = lensProfiles
         let signposter = signposts
         sessions = SessionCache(
             budget: min(Int(device.recommendedMaxWorkingSetSize) / 4, 3 << 30),

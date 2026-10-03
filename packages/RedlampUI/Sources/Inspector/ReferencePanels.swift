@@ -105,7 +105,9 @@ struct ProfileCorrectionsToggle: View {
         guard applies else {
             return "Edits made before process \(lens.source.process) render without this lens correction"
         }
-        return "Distortion and vignetting corrections from the \(lens.source.name) file itself"
+        let origin = lens.source == .profile
+            ? "a lens profile in your Lens Profiles folder" : "the \(lens.source.name) file itself"
+        return "Distortion and vignetting corrections from \(origin)"
             + (lens.correctsColorFringes ? ", with its colour fringe correction" : "")
     }
 }

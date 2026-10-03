@@ -4,6 +4,7 @@ import ImageIO
 import RedlampEngine
 import RedlampEngineAPI
 import RedlampRecipes
+import RedlampServices
 import UniformTypeIdentifiers
 
 let usage = """
@@ -59,7 +60,7 @@ func run(_ arguments: [String]) async throws {
     guard arguments.count >= 2 else { throw CLIError(description: usage) }
     let command = arguments[0]
     let input = URL(fileURLWithPath: arguments[1])
-    let engine = try RedlampEngine()
+    let engine = try RedlampEngine(decoder: InProcessDecoder(), lensProfiles: .user)
     let clock = ContinuousClock()
 
     let openStart = clock.now

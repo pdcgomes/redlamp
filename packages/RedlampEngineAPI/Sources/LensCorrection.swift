@@ -16,6 +16,8 @@ public struct LensCorrection: Codable, Sendable, Hashable {
         case fujifilm
         /// Measured from the photo's own edges (Remove Chromatic Aberration).
         case measured
+        /// A lens profile the user supplied (an Adobe LCP file, LNS-04), for a raw that carries none.
+        case profile
 
         public var name: String {
             switch self {
@@ -23,6 +25,7 @@ public struct LensCorrection: Codable, Sendable, Hashable {
             case .sony: "Sony"
             case .fujifilm: "Fujifilm"
             case .measured: "Measured"
+            case .profile: "lens profile"
             }
         }
 

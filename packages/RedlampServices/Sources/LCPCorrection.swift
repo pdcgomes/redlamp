@@ -56,7 +56,7 @@ extension LCPProfile {
         }
         guard !distortion.isEmpty || !vignetting.isEmpty else { return nil }
         return LensCorrection(
-            source: .dng,
+            source: .profile,
             center: LensCorrectionReader.oriented(center / size, orientation),
             radii: radii,
             distortion: distortion,
