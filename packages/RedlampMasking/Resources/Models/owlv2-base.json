@@ -37,6 +37,11 @@
       "path": "Owlv2Queries.json",
       "bytes": 1863,
       "sha256": "7adc7f7dceab8a25a8d876650bf8c4c000a0bacfc4029527c01847352de3fc8e"
+    },
+    {
+      "path": "LICENSE.txt",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
     }
   ],
   "licenses": {
@@ -53,5 +58,5 @@
   "decision": "DEC-24",
   "evaluationOnly": false,
   "cleared": true,
-  "notes": "Converted by research/prototypes/masking/convert_owlv2.py from google/owlv2-base-patch16-ensemble (OpenAI's CLIP B/16 self-trained on WebLI boxes an OWL-ViT L/14 annotated, the annotator trained on Objects365 and Visual Genome, and averaged with itself fine-tuned on LVIS base): the image side at 960x960, computing in float32, since in float16 a few dozen patches a photo drift through the vision transformer's massive activations, and 8-bit weights move some boxes by over half the square. The text features of 19 prompts for 13 things are precomputed (Owlv2Queries.bin), so no text encoder ships. Matches PyTorch on 40 renders (scores within 0.0004). GPU 150 ms a photo on an M1 Ultra. Published as the prerelease models-owlv2-base-v1, so it never becomes the app's Latest release."
+  "notes": "Converted by research/prototypes/masking/convert_owlv2.py from google/owlv2-base-patch16-ensemble (OpenAI's CLIP B/16 self-trained on WebLI boxes an OWL-ViT L/14 annotated, the annotator trained on Objects365 and Visual Genome, and averaged with itself fine-tuned on LVIS base): the image side at 960x960, computing in float32, since in float16 a few dozen patches a photo drift through the vision transformer's massive activations, and 8-bit weights move some boxes by over half the square. The text features of 19 prompts for 13 things are precomputed (Owlv2Queries.bin), so no text encoder ships. Matches PyTorch on 40 renders (scores within 0.0004). GPU 150 ms a photo on an M1 Ultra. Published as the prerelease models-owlv2-base-v1, so it never becomes the app's Latest release, with its licence (LICENSE.txt)."
 }

@@ -21,10 +21,15 @@ public struct ModelInfo: Sendable, Hashable, Identifiable {
     /// Downloadable; otherwise only usable where it was built.
     public var isPublished: Bool
     public var decision: String?
+    /// Its weights' licence ("Apache-2.0", "SAM License"), and where to read it when it comes with
+    /// the download.
+    public var licence: String?
+    public var licenceURL: URL?
 
     public init(
         id: String, name: String, purpose: String, downloadBytes: Int, state: State, isEvaluationOnly: Bool = false,
-        isCleared: Bool = true, isPublished: Bool = true, decision: String? = nil,
+        isCleared: Bool = true, isPublished: Bool = true, decision: String? = nil, licence: String? = nil,
+        licenceURL: URL? = nil,
     ) {
         self.isCleared = isCleared
         self.isPublished = isPublished
@@ -35,6 +40,8 @@ public struct ModelInfo: Sendable, Hashable, Identifiable {
         self.state = state
         self.isEvaluationOnly = isEvaluationOnly
         self.decision = decision
+        self.licence = licence
+        self.licenceURL = licenceURL
     }
 
     public var formattedSize: String {

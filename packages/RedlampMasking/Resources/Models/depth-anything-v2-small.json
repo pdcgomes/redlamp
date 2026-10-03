@@ -38,7 +38,7 @@
     ]
   },
   "decision": "DEC-02",
-  "evaluationOnly": true,
-  "notes": "Apple's Core ML conversion (fp16, 518x392 input). Its teacher was trained on Virtual KITTI 2 (CC BY-NC-SA 3.0), so it is evaluation-only until counsel decides DEC-02.",
-  "cleared": false
+  "evaluationOnly": false,
+  "notes": "Apple's Core ML conversion (fp16, 518x392 input). Its teacher was trained on Virtual KITTI 2 (CC BY-NC-SA 3.0), and it on Places365 among others; the owner approved it for everyone, as an exception to DEC-24 (DEC-02).",
+  "cleared": true
 }

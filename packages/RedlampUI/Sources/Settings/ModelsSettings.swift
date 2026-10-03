@@ -30,8 +30,8 @@ struct ModelsSettings: View {
                     .onChange(of: evaluationModels) { Task { await refresh() } }
             } footer: {
                 Text("""
-                For evaluation: models whose training data's terms are still being reviewed, such as \
-                Segment Anything for Objects masks. Masks made with them are kept in your edits either way.
+                For evaluation: models whose training data's terms are still being reviewed. Masks made \
+                with them are kept in your edits either way.
                 """)
                 .formFooter()
             }
@@ -51,6 +51,15 @@ struct ModelsSettings: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.name)
                 Text(model.purpose).font(.caption).foregroundStyle(.secondary)
+                if let licence = model.licence {
+                    HStack(spacing: 4) {
+                        Text("Licence: \(licence)")
+                        if let url = model.licenceURL {
+                            Link("Read it", destination: url)
+                        }
+                    }
+                    .font(.caption).foregroundStyle(.secondary)
+                }
                 if !model.isCleared {
                     Text("Awaiting licence review (\(model.decision ?? "pending")).")
                         .font(.caption).foregroundStyle(.orange)

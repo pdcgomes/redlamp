@@ -182,10 +182,17 @@ struct MaskStatus: View {
                 Text("\(pending.kind.name) masks use \(pending.model.name), a \(pending.model.formattedSize) download.")
                     .font(Theme.labelFont)
                     .foregroundStyle(Theme.value)
-                Text("It runs on this Mac; your photos are never uploaded. You can remove it in Settings › Models.")
-                    .font(Theme.captionFont)
-                    .foregroundStyle(Theme.secondaryLabel)
-                    .fixedSize(horizontal: false, vertical: true)
+                Text(
+                    "It runs on this Mac; your photos are never uploaded. You can remove it in Settings › Models."
+                        + (pending.model.licence.map { " Its licence: \($0)." } ?? ""),
+                )
+                .font(Theme.captionFont)
+                .foregroundStyle(Theme.secondaryLabel)
+                .fixedSize(horizontal: false, vertical: true)
+                if let url = pending.model.licenceURL {
+                    Link("Read the licence", destination: url)
+                        .font(Theme.captionFont)
+                }
                 HStack {
                     Spacer()
                     Button("Not Now") { model.declinePendingModel() }

@@ -22,6 +22,11 @@
       "path": "DepthAnything3MonoLargeW8.mlpackage/Manifest.json",
       "bytes": 617,
       "sha256": "995ecaf9a1003cbc29552a102dff387fe20c37aa16f916ee4fa1f8b052381fa5"
+    },
+    {
+      "path": "LICENSE.txt",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
     }
   ],
   "licenses": {
@@ -32,8 +37,7 @@
     ]
   },
   "decision": "DEC-02",
-  "evaluationOnly": true,
-  "cleared": false,
-  "notes": "Converted by research/prototypes/masking/convert_da3.py (fixed 504x336 landscape and 336x504 portrait inputs) and compress_da3.py (8-bit weights; sky agreement with fp16 >= 0.997), merged into one package with a landscape and a portrait function that share their weights. Not yet published: the source URL is where a release would go. GPU 126 ms per photo on an M1 Ultra; the Neural Engine is slower. Training data ('public academic datasets') unaudited.",
-  "published": false
+  "evaluationOnly": false,
+  "cleared": true,
+  "notes": "Converted by research/prototypes/masking/convert_da3.py (fixed 504x336 landscape and 336x504 portrait inputs) and compress_da3.py (8-bit weights; sky agreement with fp16 >= 0.997), merged into one package with a landscape and a portrait function that share their weights. Published as the prerelease models-depth-anything-3-mono-large-v2, with its licence (LICENSE.txt). GPU 126 ms per photo on an M1 Ultra; the Neural Engine is slower. Training data ('public academic datasets') unaudited; the owner approved it for everyone, as an exception to DEC-24 (DEC-02)."
 }

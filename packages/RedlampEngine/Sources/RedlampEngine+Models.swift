@@ -56,7 +56,8 @@ public extension RedlampEngine {
             id: manifest.id, name: manifest.name, purpose: manifest.purpose, downloadBytes: manifest.downloadBytes,
             state: state, isEvaluationOnly: manifest.evaluationOnly,
             isCleared: manifest.cleared && !manifest.evaluationOnly, isPublished: manifest.isPublished,
-            decision: manifest.decision,
+            decision: manifest.decision, licence: manifest.licenses.weights,
+            licenceURL: manifest.files.first { $0.path == "LICENSE.txt" }.map(manifest.remote),
         )
     }
 }

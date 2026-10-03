@@ -20,6 +20,10 @@ Dataset verdicts follow docs/research/notes/C-masking.md:
 A manifest is `cleared` (offered to everyone) only once its decision is accepted; until then the
 app offers it only with evaluation models turned on. With --release, a model still waiting on its
 decision fails.
+
+The owner can accept a model these rules would hold back, by a decision named in EXCEPTIONS: once
+that decision is accepted, the data or the licence it covers no longer makes the model evaluation
+only.
 """
 
 import json
@@ -32,8 +36,13 @@ MANIFESTS = ROOT / "packages/RedlampMasking/Resources/Models"
 TRACKER = ROOT / "docs/research/research-tracker.md"
 
 PERMISSIVE = {"Apache-2.0", "MIT", "BSD-2-Clause", "BSD-3-Clause"}
-# Custom licences counsel hasn't cleared: only ever for an evaluation model, never cleared.
+# Custom licences counsel hasn't cleared: only ever for an evaluation model, never cleared, unless an
+# exception covers it.
 RESTRICTED = {"SAM License"}
+# The owner's exceptions, by decision, and what each covers. DEC-02: Depth Anything V2 Small and 3,
+# whose training data's terms don't allow shipping. DEC-27: SAM 3, under Meta's SAM License, with
+# its unaudited data.
+EXCEPTIONS = {"DEC-02": {"data"}, "DEC-27": {"data", "licence"}}
 
 DATASETS = {
     "SA-1B": "publisher-grant",
@@ -82,10 +91,12 @@ def check(path, accepted):
     if problems:
         return problems, None
     licenses = manifest["licenses"]
+    decision = manifest.get("decision")
+    excepted = EXCEPTIONS.get(decision, set()) if decision in accepted else set()
     for part in ("code", "weights"):
         licence = licenses.get(part)
         if licence in RESTRICTED:
-            if not manifest.get("evaluationOnly", False) or manifest.get("cleared", False):
+            if "licence" not in excepted and (not manifest.get("evaluationOnly", False) or manifest.get("cleared", False)):
                 problems.append(f"{part} licence {licence!r} is only allowed for an evaluation model, never cleared")
         elif licence not in PERMISSIVE:
             problems.append(f"{part} licence {licence!r} is not permissive")
@@ -101,8 +112,7 @@ def check(path, accepted):
             problems.append(f"dataset {dataset!r} has no verdict in this script")
         verdicts[dataset] = verdict
     evaluation_only = manifest.get("evaluationOnly", False)
-    decision = manifest.get("decision")
-    if "non-commercial" in verdicts.values() and not evaluation_only:
+    if "non-commercial" in verdicts.values() and not evaluation_only and "data" not in excepted:
         tainted = [d for d, v in verdicts.items() if v == "non-commercial"]
         problems.append(f"trained on non-commercial data ({', '.join(tainted)}) but not evaluationOnly")
     if manifest.get("cleared") and manifest.get("published") is False:

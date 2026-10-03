@@ -69,12 +69,24 @@ struct ModelStoreTests {
 
     @Test func `an unpublished model can't be downloaded`() async throws {
         let root = try temporary()
-        defer { try? FileManager.default.removeItem(at: root) }
-        var model = try #require(ModelCatalog.manifest("depth-anything-3-mono-large"))
-        #expect(!model.isPublished)
-        model.cleared = true
-        model.evaluationOnly = false
+        let source = try temporary()
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: source)
+        }
+        var model = try manifest(serving: Data(repeating: 7, count: 64), at: source)
+        model.published = false
         await #expect(throws: ModelStoreError.self) { try await ModelStore(root: root).download(model) }
+        #expect(await ModelStore(root: root).location(of: model) == nil)
+    }
+
+    @Test func `the models redistributed from a release carry their licence`() throws {
+        for id in ["owlv2-base", "depth-anything-3-mono-large", "sam3"] {
+            let model = try #require(ModelCatalog.manifest(id))
+            #expect(model.cleared && !model.evaluationOnly && model.isPublished, "\(id)")
+            #expect(model.files.contains { $0.path == "LICENSE.txt" }, "\(id)")
+        }
+        #expect(ModelCatalog.manifest("sam3")?.licenses.weights == "SAM License")
     }
 
     @Test func `refuses a damaged download`() async throws {

@@ -57,6 +57,11 @@
       "path": "Sam3Prompts.json",
       "bytes": 5552,
       "sha256": "36170ffcfc31468bbc122e491d862d92f3ce017598916d445bb0a6e8979b2d37"
+    },
+    {
+      "path": "LICENSE.txt",
+      "bytes": 7352,
+      "sha256": "bec48f70bd37bf8280a9d1ebf01642d26086f6122ba735baa08fe03c5a6e7448"
     }
   ],
   "licenses": {
@@ -66,8 +71,8 @@
       "SA-Co (unaudited)"
     ]
   },
-  "evaluationOnly": true,
-  "cleared": false,
-  "published": false,
-  "notes": "Converted by research/prototypes/masking/convert_sam3.py: the image encoder (fp16, 1008x1008) and the text-prompted decoder; the text features of 35 prompts (20 for Landscape, 15 for people parts) precomputed (Sam3Prompts.bin), so no text encoder ships. GPU: encoder 609 ms, decoder 86 ms per prompt on an M1 Ultra. Meta's SAM License (gated; pass-through and no-reverse-engineering terms) is not cleared: evaluation only, risk accepted by the project owner for evaluation."
+  "evaluationOnly": false,
+  "cleared": true,
+  "notes": "Converted by research/prototypes/masking/convert_sam3.py: the image encoder (fp16, 1008x1008) and the text-prompted decoder; the text features of 35 prompts (20 for Landscape, 15 for people parts) precomputed (Sam3Prompts.bin), so no text encoder ships. GPU: encoder 609 ms, decoder 86 ms per prompt on an M1 Ultra. Under Meta's SAM License, which comes with every download (LICENSE.txt), as it requires; the owner approved it for everyone (DEC-27). Published as the prerelease models-sam3-v1.",
+  "decision": "DEC-27"
 }
