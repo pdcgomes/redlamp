@@ -2,6 +2,7 @@ import Foundation
 import Metal
 import RedlampEngineAPI
 import RedlampKernels
+import RedlampMasking
 import simd
 
 /// Remove, Heal and Clone spots baked into a copy of the session's pyramid (see `Retouch.metal`).
@@ -26,14 +27,55 @@ final class RetouchStage {
         var radius: Float
         var origin: SIMD2<Int>
         var size: SIMD2<Int>
+        /// A picked person or object's shape over the box, for a region spot.
+        var region: Region?
 
         var center: SIMD2<Float> {
             points[0]
         }
 
+        /// How much the spot covers `point` (level-0 texels): the region's alpha, or for a circle or
+        /// stroke, 1 within `reach` of it.
+        func covers(_ point: SIMD2<Float>, reach: Float) -> Bool {
+            guard let region else { return RetouchStage.strokeDistance(point, points) < reach }
+            return region.alpha(at: point - SIMD2(Float(origin.x), Float(origin.y))) > 0.001
+        }
+
         var source: SIMD2<Float> {
             points[0] + offset
         }
+    }
+
+    /// A region spot's shape over its placement's box: its alpha (1 inside the region grown by the
+    /// spot's radius less its feather, fading to 0 at the full radius), at `scale` level-0 texels per
+    /// texel, and points on the edge where it reaches 0.
+    struct Region: Equatable {
+        var width: Int
+        var height: Int
+        var scale: Float
+        var alphas: [Float]
+        var rim: [SIMD2<Float>]
+        var spacing: Float
+
+        /// Bilinear, at `point` in level-0 texels from the box's origin.
+        func alpha(at point: SIMD2<Float>) -> Float {
+            let p = point / scale - 0.5
+            let x0 = Int(floor(p.x)), y0 = Int(floor(p.y))
+            let t = p - SIMD2(Float(x0), Float(y0))
+            func at(_ x: Int, _ y: Int) -> Float {
+                alphas[min(max(y, 0), height - 1) * width + min(max(x, 0), width - 1)]
+            }
+            let top = at(x0, y0) * (1 - t.x) + at(x0 + 1, y0) * t.x
+            let bottom = at(x0, y0 + 1) * (1 - t.x) + at(x0 + 1, y0 + 1) * t.x
+            return top * (1 - t.y) + bottom * t.y
+        }
+    }
+
+    private struct RegionKey: Hashable {
+        var spot: RetouchSpot
+        var orientation: Int
+        var width: Int
+        var height: Int
     }
 
     private struct Entry {
@@ -71,6 +113,7 @@ final class RetouchStage {
     private var entries: [Entry] = []
     private var fills: [FillKey: FillMap] = [:]
     private var fillOrder: [FillKey] = []
+    private var regions: [RegionKey: Placement] = [:]
     private lazy var filler = ContentAwareFill(device: device, queue: queue, kernels: kernels)
     /// Fills computed so far (not found in the cache), for tests.
     private(set) var fillsComputed = 0
@@ -121,7 +164,7 @@ final class RetouchStage {
         )
         blit.endEncoding()
         for (index, spot) in spots.enumerated() {
-            guard let placement = Self.placement(
+            guard let placement = place(
                 spot, orientation: original.orientation, width: pyramid.width, height: pyramid.height,
             ) else { continue }
             guard let key = keys[index] else {
@@ -183,9 +226,154 @@ final class RetouchStage {
         )
     }
 
+    /// Where `spot` lands, its region rasterised (and cached) when it has one.
+    func place(_ spot: RetouchSpot, orientation: Int, width: Int, height: Int) -> Placement? {
+        guard spot.region != nil else {
+            return Self.placement(spot, orientation: orientation, width: width, height: height)
+        }
+        let key = RegionKey(spot: spot, orientation: orientation, width: width, height: height)
+        if let cached = regions[key] {
+            return cached
+        }
+        let placement = Self.regionPlacement(spot, orientation: orientation, width: width, height: height)
+        if regions.count > 64 {
+            regions.removeAll()
+        }
+        regions[key] = placement
+        return placement
+    }
+
+    /// A region spot's box and alpha: the mask's bounds in the pyramid, grown by the radius, and the
+    /// mask sampled over them, grown with a chamfer distance transform and feathered.
+    static func regionPlacement(_ spot: RetouchSpot, orientation: Int, width: Int, height: Int) -> Placement? {
+        guard let bitmap = spot.region?.bitmap, let png = bitmap.png, let mask = GrayMask.decode(png),
+              mask.width > 0, mask.height > 0
+        else { return nil }
+        let orientedHeight = orientation >= 5 ? width : height
+        let grow = Float(min(max(spot.radius, 0), 1) * Double(orientedHeight))
+        func texel(_ point: SIMD2<Double>) -> SIMD2<Float> {
+            let source = sourceCoordinate(point, orientation: orientation)
+            return SIMD2(Float(source.x * Double(width)), Float(source.y * Double(height)))
+        }
+        var low = SIMD2<Float>(repeating: .infinity), high = SIMD2<Float>(repeating: -.infinity)
+        for y in 0 ..< mask.height {
+            for x in 0 ..< mask.width where mask.pixels[y * mask.width + x] >= 128 {
+                for corner in [SIMD2(Double(x), Double(y)), SIMD2(Double(x + 1), Double(y + 1))] {
+                    let point = texel(corner / SIMD2(Double(mask.width), Double(mask.height)))
+                    low = simd_min(low, point)
+                    high = simd_max(high, point)
+                }
+            }
+        }
+        guard low.x <= high.x else { return nil }
+        let origin = SIMD2(max(Int(floor(low.x - grow)) - 2, 0), max(Int(floor(low.y - grow)) - 2, 0))
+        let end = SIMD2(min(Int(ceil(high.x + grow)) + 2, width), min(Int(ceil(high.y + grow)) + 2, height))
+        guard end.x > origin.x, end.y > origin.y else { return nil }
+        let size = end &- origin
+        let scale = Float(max(1, Int(ceil(Double(max(size.x, size.y)) / 1024))))
+        let (columns, rows) = (Int(ceil(Float(size.x) / scale)), Int(ceil(Float(size.y) / scale)))
+        // Inside the mask, sampled at each raster texel's centre (in the photo as shown).
+        var distance = [Float](repeating: .infinity, count: columns * rows)
+        for row in 0 ..< rows {
+            for column in 0 ..< columns {
+                let level0 = SIMD2(Float(origin.x), Float(origin.y)) + (SIMD2(Float(column), Float(row)) + 0.5) * scale
+                let source = SIMD2(Double(level0.x) / Double(width), Double(level0.y) / Double(height))
+                let shown = orientedCoordinate(source, orientation: orientation)
+                let mx = min(max(Int(shown.x * Double(mask.width)), 0), mask.width - 1)
+                let my = min(max(Int(shown.y * Double(mask.height)), 0), mask.height - 1)
+                if mask.pixels[my * mask.width + mx] >= 128 {
+                    distance[row * columns + column] = 0
+                }
+            }
+        }
+        // Chamfer distances (3-4), in raster texels.
+        for row in 0 ..< rows {
+            for column in 0 ..< columns {
+                var d = distance[row * columns + column]
+                if column > 0 {
+                    d = min(d, distance[row * columns + column - 1] + 1)
+                }
+                if row > 0 {
+                    d = min(d, distance[(row - 1) * columns + column] + 1)
+                }
+                if row > 0, column > 0 {
+                    d = min(d, distance[(row - 1) * columns + column - 1] + 1.4142)
+                }
+                if row > 0, column < columns - 1 {
+                    d = min(d, distance[(row - 1) * columns + column + 1] + 1.4142)
+                }
+                distance[row * columns + column] = d
+            }
+        }
+        for row in stride(from: rows - 1, through: 0, by: -1) {
+            for column in stride(from: columns - 1, through: 0, by: -1) {
+                var d = distance[row * columns + column]
+                if column < columns - 1 {
+                    d = min(d, distance[row * columns + column + 1] + 1)
+                }
+                if row < rows - 1 {
+                    d = min(d, distance[(row + 1) * columns + column] + 1)
+                }
+                if row < rows - 1,
+                   column < columns - 1 {
+                    d = min(d, distance[(row + 1) * columns + column + 1] + 1.4142)
+                }
+                if row < rows - 1, column > 0 {
+                    d = min(d, distance[(row + 1) * columns + column - 1] + 1.4142)
+                }
+                distance[row * columns + column] = d
+            }
+        }
+        let full = max(grow, 1) / scale
+        let solid = full * Float(1 - min(max(spot.feather, 0), 100) / 100)
+        let alphas = distance.map { d -> Float in
+            guard d < full else { return 0 }
+            guard d > solid else { return 1 }
+            let t = (d - solid) / max(full - solid, 1e-3)
+            return 1 - t * t * (3 - 2 * t)
+        }
+        // The edge: texels just outside the alpha's reach, beside one inside it.
+        var rim: [SIMD2<Float>] = []
+        for row in 0 ..< rows {
+            for column in 0 ..< columns where alphas[row * columns + column] == 0 {
+                let inside = [(1, 0), (-1, 0), (0, 1), (0, -1)].contains { dx, dy in
+                    let (x, y) = (column + dx, row + dy)
+                    return x >= 0 && y >= 0 && x < columns && y < rows && alphas[y * columns + x] > 0
+                }
+                if inside {
+                    rim
+                        .append(SIMD2(Float(origin.x), Float(origin.y)) + (SIMD2(Float(column), Float(row)) + 0.5) *
+                            scale)
+                }
+            }
+        }
+        guard !rim.isEmpty else { return nil }
+        var spacing = scale
+        if rim.count > maximumOutline {
+            let stride = Float(rim.count) / Float(maximumOutline)
+            rim = (0 ..< maximumOutline).map { rim[min(Int(Float($0) * stride), rim.count - 1)] }
+            spacing *= stride
+        }
+        let center = (low + high) / 2
+        var placement = Placement(
+            points: [center], offset: texel(SIMD2(spot.source.x, spot.source.y)) - texel(SIMD2(
+                spot.center.x,
+                spot.center.y,
+            )),
+            radius: max(grow, 1), origin: origin, size: size,
+        )
+        placement.region = Region(
+            width: columns, height: rows, scale: scale, alphas: alphas, rim: rim, spacing: spacing,
+        )
+        return placement
+    }
+
     /// Points on the edge of the spot's shape, about evenly spaced, and their spacing: a circle's
-    /// rim, or the outline of the discs along a stroke (a quarter radius apart).
+    /// rim, the outline of the discs along a stroke (a quarter radius apart), or a region's edge.
     static func outline(_ placement: Placement) -> (points: [SIMD2<Float>], spacing: Float) {
+        if let region = placement.region {
+            return (region.rim, region.spacing)
+        }
         let radius = placement.radius
         guard placement.points.count > 1 else {
             let count = rimSamples
@@ -308,7 +496,7 @@ final class RetouchStage {
         var hole: [Bool] = []
         pixels.reserveCapacity(width * height)
         hole.reserveCapacity(width * height)
-        // Texels whose centre is inside the spot, or within three quarters of a texel of its edge.
+        // Texels whose centre the spot covers, or is within three quarters of a texel of.
         let reach = placement.radius + 0.75 * scale
         for y in 0 ..< height {
             for x in 0 ..< width {
@@ -316,7 +504,7 @@ final class RetouchStage {
                 let rgb = SIMD3(Float(halves[index]), Float(halves[index + 1]), Float(halves[index + 2]))
                 pixels.append(simd_max(rgb, .zero).squareRoot())
                 let centre = (SIMD2(Float(x0 + x), Float(y0 + y)) + 0.5) * scale
-                hole.append(Self.strokeDistance(centre, placement.points) < reach)
+                hole.append(placement.covers(centre, reach: reach))
             }
         }
         let moves = try filler.fill(ContentAwareFill.Region(width: width, height: height, pixels: pixels, hole: hole))
@@ -436,8 +624,26 @@ final class RetouchStage {
                 ?? SIMD4<Float>(placement.offset.x, placement.offset.y, opacity, heal ? 1 : 0),
             counts: SIMD4<Int32>(Int32(outline.points.count), Int32(placement.points.count), fill == nil ? 0 : 1, 0),
         )
+        var alphaTexture: (any MTLTexture)?
+        if let region = placement.region {
+            let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+                pixelFormat: .r32Float, width: region.width, height: region.height, mipmapped: false,
+            )
+            descriptor.usage = [.shaderRead]
+            descriptor.storageMode = .shared
+            guard let alpha = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
+            region.alphas.withUnsafeBytes { bytes in
+                alpha.replace(
+                    region: MTLRegionMake2D(0, 0, region.width, region.height), mipmapLevel: 0,
+                    withBytes: bytes.baseAddress!, bytesPerRow: region.width * MemoryLayout<Float>.stride,
+                )
+            }
+            alphaTexture = alpha
+            params.counts.w = 1
+        }
         encoder.setTexture(texture, index: 0)
         encoder.setTexture(fill?.texture ?? texture, index: 2)
+        encoder.setTexture(alphaTexture ?? texture, index: 3)
         encoder.setBytes(&params, length: MemoryLayout<RetouchParams>.stride, index: 0)
         encoder.setBuffer(ratios, offset: 0, index: 1)
         encoder.setBuffer(rim, offset: 0, index: 2)

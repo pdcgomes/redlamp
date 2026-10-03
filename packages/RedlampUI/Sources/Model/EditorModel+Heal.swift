@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import RedlampDocument
 import RedlampEngineAPI
@@ -55,8 +56,78 @@ extension RetouchSpot {
     }
 }
 
-/// The Healing tool: Heal and Clone spots (RM-01).
+/// What a click in the Healing tool does: add a spot, or pick a person or an object to remove.
+public enum SpotPick: String, CaseIterable, Sendable {
+    case spot
+    case person
+    case object
+
+    public var name: String {
+        switch self {
+        case .spot: "Spot"
+        case .person: "Person"
+        case .object: "Object"
+        }
+    }
+}
+
+/// The Healing tool: Remove, Heal and Clone spots (RM-01, RM-07, RM-08).
 public extension EditorModel {
+    /// How far a picked person or object's mask grows to cover its edge and contact shadow, as a
+    /// fraction of the image height.
+    static let regionGrowth = 0.005
+
+    /// Removes the person or object under `point` (`spotPick`), its own mask grown a little.
+    func pickRegion(at point: ImagePoint) async {
+        guard info != nil, spotPick != .spot, !isPickingRegion else { return }
+        let pick = spotPick
+        let kind: MaskKind = pick == .person ? .people : .objects
+        pickMessage = nil
+        guard availableAIMaskKinds.contains(kind) else {
+            pickMessage = "Picking \(pick.name.lowercased())s isn't available for this photo."
+            return
+        }
+        if let model = await engine.modelNeeded(for: kind) {
+            pickMessage = "Picking objects needs \(model.name), from Settings › Models."
+            return
+        }
+        isPickingRegion = true
+        defer { isPickingRegion = false }
+        do {
+            let found = try await engine.computeMasks(
+                pick == .person ? MaskRequest(kind: .people) : MaskRequest(kind: .objects, prompts: [point]),
+            )
+            let chosen = pick == .person ? Self.mask(at: point, in: found) : found.first
+            guard let mask = chosen else {
+                pickMessage = pick == .person ? "No one is there." : "Nothing was found there."
+                return
+            }
+            let spot = RetouchSpot(
+                mode: .remove, center: mask.center, source: mask.center, region: mask, radius: Self.regionGrowth,
+                feather: spotSettings.feather, opacity: spotSettings.opacity,
+            )
+            var next = recipe
+            next.spots.append(spot)
+            commit(next, .retouch, "Remove \(pick.name)")
+            selectedSpotID = spot.id
+        } catch {
+            pickMessage = "\(error)"
+        }
+    }
+
+    /// The mask covering `point`, or else the one whose middle is nearest.
+    internal static func mask(at point: ImagePoint, in masks: [AIMask]) -> AIMask? {
+        let covering = masks.first { mask in
+            guard let png = mask.bitmap.png, let bitmap = NSBitmapImageRep(data: png) else { return false }
+            let x = min(max(Int(point.x * Double(bitmap.pixelsWide)), 0), bitmap.pixelsWide - 1)
+            let y = min(max(Int(point.y * Double(bitmap.pixelsHigh)), 0), bitmap.pixelsHigh - 1)
+            return (bitmap.colorAt(x: x, y: y)?.whiteComponent ?? 0) >= 0.5
+        }
+        return covering ?? masks.min { a, b in
+            hypot(a.center.x - point.x, a.center.y - point.y) < hypot(b.center.x - point.x, b.center.y - point.y)
+        }
+    }
+
     var selectedSpot: RetouchSpot? {
         selectedSpotID.flatMap { id in recipe.spots.first { $0.id == id } }
     }

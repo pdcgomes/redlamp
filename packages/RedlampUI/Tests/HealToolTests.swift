@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import RedlampEngineAPI
 import Testing
@@ -61,6 +62,56 @@ struct HealToolTests {
         await model.setSpotMode(.heal)
         #expect(model.recipe.spots[0].mode == .heal && model.recipe.spots[0].source == ImagePoint(x: 0.2, y: 0.6))
         #expect(model.history.last?.name == "Heal")
+    }
+
+    /// A mask covering the left or right half of the photo.
+    private func half(_ left: Bool) throws -> AIMask {
+        let (width, height) = (8, 4)
+        let pixels = (0 ..< width * height).map { index -> UInt8 in (index % width < width / 2) == left ? 255 : 0 }
+        let rep = try #require(NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8, samplesPerPixel: 1,
+            hasAlpha: false, isPlanar: false, colorSpaceName: .deviceWhite, bytesPerRow: width, bitsPerPixel: 8,
+        ))
+        rep.bitmapData?.update(from: pixels, count: pixels.count)
+        let png = try #require(rep.representation(using: .png, properties: [:]))
+        return AIMask(
+            kind: .people, provider: "stub", revision: 1, analysisHash: "h",
+            center: ImagePoint(x: left ? 0.25 : 0.75, y: 0.5), bitmap: MaskBitmap(
+                png: png,
+                width: width,
+                height: height,
+            ),
+        )
+    }
+
+    @Test func `a click picks the person under it, to remove`() async throws {
+        let engine = StubEngine()
+        engine.computed = try [half(true), half(false)]
+        let (model, cleanup) = try await openEditor(engine)
+        defer { cleanup() }
+        model.activeTool = .heal
+        model.spotPick = .person
+        await model.pickRegion(at: ImagePoint(x: 0.6, y: 0.5))
+        let spot = try #require(model.recipe.spots.first)
+        #expect(spot.mode == .remove && spot.region?.center == ImagePoint(x: 0.75, y: 0.5))
+        #expect(engine.lastRequest?.kind == .people)
+        #expect(model.history.last?.name == "Remove Person")
+        #expect(model.recipe.maskBitmaps.count == 1)
+    }
+
+    @Test func `a click picks the object under it, or says nothing is there`() async throws {
+        let engine = StubEngine()
+        engine.computed = try [half(true)]
+        let (model, cleanup) = try await openEditor(engine)
+        defer { cleanup() }
+        model.activeTool = .heal
+        model.spotPick = .object
+        await model.pickRegion(at: ImagePoint(x: 0.3, y: 0.4))
+        #expect(engine.lastRequest?.kind == .objects && engine.lastRequest?.prompts == [ImagePoint(x: 0.3, y: 0.4)])
+        #expect(model.recipe.spots.first?.region != nil && model.history.last?.name == "Remove Object")
+        engine.computed = []
+        await model.pickRegion(at: ImagePoint(x: 0.3, y: 0.4))
+        #expect(model.pickMessage == "Nothing was found there." && model.recipe.spots.count == 1)
     }
 
     @Test func `a drag brushes a spot that follows the stroke`() async throws {

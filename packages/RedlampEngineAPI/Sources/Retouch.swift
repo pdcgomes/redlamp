@@ -42,7 +42,11 @@ public struct RetouchSpot: Codable, Sendable, Hashable, Identifiable {
     /// A brushed spot's stroke after its first point (`center`), each point relative to
     /// `center`, so moving the spot moves the stroke. Empty for a circle.
     public var stroke: [ImagePoint]
-    /// A fraction of the image *height*, like radial mask radii: the circle's, or the brush's.
+    /// A picked person or object (an AI mask of the whole photo): the spot is its shape grown by
+    /// `radius`, instead of a circle or stroke. It stays where it was found; `center` is its middle.
+    public var region: AIMask?
+    /// A fraction of the image *height*, like radial mask radii: the circle's, the brush's, or how
+    /// far a region grows past its edge.
     public var radius: Double
     /// 0...100: the share of the radius that fades out.
     public var feather: Double
@@ -57,6 +61,7 @@ public struct RetouchSpot: Codable, Sendable, Hashable, Identifiable {
         center: ImagePoint,
         source: ImagePoint,
         stroke: [ImagePoint] = [],
+        region: AIMask? = nil,
         radius: Double,
         feather: Double = 50,
         opacity: Double = 100,
@@ -66,6 +71,7 @@ public struct RetouchSpot: Codable, Sendable, Hashable, Identifiable {
         self.center = center
         self.source = source
         self.stroke = stroke
+        self.region = region
         self.radius = radius
         self.feather = feather
         self.opacity = opacity
@@ -83,7 +89,7 @@ public struct RetouchSpot: Codable, Sendable, Hashable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, mode, center, source, stroke, radius, feather, opacity
+        case id, mode, center, source, stroke, region, radius, feather, opacity
     }
 
     public init(from decoder: Decoder) throws {
@@ -93,6 +99,7 @@ public struct RetouchSpot: Codable, Sendable, Hashable, Identifiable {
         center = try container.decode(ImagePoint.self, forKey: .center)
         source = try container.decode(ImagePoint.self, forKey: .source)
         stroke = try container.decodeIfPresent([ImagePoint].self, forKey: .stroke) ?? []
+        region = try container.decodeIfPresent(AIMask.self, forKey: .region)
         radius = try container.decode(Double.self, forKey: .radius)
         feather = try container.decode(Double.self, forKey: .feather)
         opacity = try container.decode(Double.self, forKey: .opacity)
@@ -107,6 +114,7 @@ public struct RetouchSpot: Codable, Sendable, Hashable, Identifiable {
         if !stroke.isEmpty {
             try container.encode(stroke, forKey: .stroke)
         }
+        try container.encodeIfPresent(region, forKey: .region)
         try container.encode(radius, forKey: .radius)
         try container.encode(feather, forKey: .feather)
         try container.encode(opacity, forKey: .opacity)

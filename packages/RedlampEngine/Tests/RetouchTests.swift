@@ -2,6 +2,7 @@ import Foundation
 import Metal
 import RedlampEngineAPI
 import RedlampKernels
+import RedlampMasking
 import RedlampServices
 import simd
 import Testing
@@ -342,6 +343,48 @@ struct RetouchTests {
                 "below the line at \(x): \(after[104 * width + x])",
             )
         }
+    }
+
+    /// A picked object's mask: a rectangle over the blemish, as a model would cut it out.
+    static func region() throws -> AIMask {
+        let (width, height) = (192, 96)
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        for y in 0 ..< height {
+            for x in 0 ..< width {
+                let point = SIMD2(Double(x) + 0.5, Double(y) + 0.5) * 2
+                if abs(point.x - blemish.x) < 9, abs(point.y - blemish.y) < 9 {
+                    pixels[y * width + x] = 255
+                }
+            }
+        }
+        let png = try #require(GrayMask(width: width, height: height, pixels: pixels).pngData())
+        return AIMask(
+            kind: .objects, provider: "test", revision: 1, analysisHash: "",
+            center: ImagePoint(x: blemish.x / Double(Self.width), y: blemish.y / Double(Self.height)),
+            bitmap: MaskBitmap(png: png, width: width, height: height),
+        )
+    }
+
+    @Test func `a picked object's shape is removed, grown by the spot's radius`() throws {
+        let engine = try RedlampEngine()
+        let clean = try render(scene(blemished: false), EditRecipe(), engine: engine)
+        let region = try Self.region()
+        var recipe = EditRecipe()
+        recipe.spots = [RetouchSpot(
+            mode: .remove, center: region.center, source: region.center, region: region,
+            radius: 3 / Double(Self.height),
+        )]
+        let removed = try render(scene(blemished: true), recipe, engine: engine)
+        let expected = statistics(clean, around: Self.blemish, radius: 8)
+        let result = statistics(removed, around: Self.blemish, radius: 8)
+        #expect(abs(result.mean - expected.mean) < expected.mean * 0.06, "mean \(expected.mean) → \(result.mean)")
+        // Outside the grown shape nothing changes but what the coarse levels see.
+        let untouched = try render(scene(blemished: true), EditRecipe(), engine: engine)
+        for (x, y) in [(70, 96), (130, 96), (100, 60), (100, 130)] {
+            let (after, before) = (removed[y * Self.width + x], untouched[y * Self.width + x])
+            #expect(abs(after - before) < before * 0.003, "at \(x), \(y): \(before) → \(after)")
+        }
+        #expect(recipe.maskBitmaps.contains(region.bitmap), "its mask is saved with the edit")
     }
 
     @Test func `a Remove spot is filled once, however the spots after it change`() throws {

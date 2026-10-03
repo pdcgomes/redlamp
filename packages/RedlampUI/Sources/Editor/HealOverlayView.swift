@@ -30,7 +30,7 @@ struct HealOverlayView: View {
                     outline.stroke(Color.white.opacity(0.8), lineWidth: 1).allowsHitTesting(false)
                 }
 
-                if let hover, frame.rect.contains(hover) {
+                if let hover, frame.rect.contains(hover), model.spotPick == .spot {
                     let diameter = brushDiameter(frame)
                     Circle()
                         .stroke(Color.white.opacity(0.7), lineWidth: 1)
@@ -71,9 +71,14 @@ struct HealOverlayView: View {
                         return
                     }
                     let point = frame.image(gesture.startLocation)
-                    Task { await model.addSpot(at: point) }
+                    if model.spotPick == .spot {
+                        Task { await model.addSpot(at: point) }
+                    } else {
+                        Task { await model.pickRegion(at: point) }
+                    }
                     return
                 }
+                guard model.spotPick == .spot else { return }
                 let stroke = points.filter(frame.rect.contains).map(frame.image)
                 Task { await model.addStroke(stroke) }
             }
@@ -105,6 +110,51 @@ private struct SpotHandles: View {
         let radius = max(spot.radius * frame.heightScale, 4)
         let strength = isSelected ? 0.95 : 0.55
 
+        if let region = spot.region {
+            regionHandles(region, center: center)
+        } else {
+            shapeHandles(center: center, source: source, radius: radius, strength: strength)
+        }
+    }
+
+    /// A picked person or object: its mask, tinted while selected, and a pin to select it by.
+    @ViewBuilder
+    private func regionHandles(_ region: AIMask, center: CGPoint) -> some View {
+        if isSelected, let image = Self.tint(region.bitmap) {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.medium)
+                .frame(width: frame.rect.width, height: frame.rect.height)
+                .position(x: frame.rect.midX, y: frame.rect.midY)
+                .allowsHitTesting(false)
+        }
+        Circle()
+            .fill(isSelected ? Color.accentColor : Color.white.opacity(0.85))
+            .overlay(Circle().strokeBorder(Color.black.opacity(0.6), lineWidth: 1))
+            .frame(width: isSelected ? 14 : 11, height: isSelected ? 14 : 11)
+            .shadow(color: .black.opacity(0.5), radius: 2)
+            .contentShape(Circle().inset(by: -6))
+            .position(center)
+            .onTapGesture { model.selectedSpotID = spot.id }
+            .help("\(spot.mode.name) \(region.kind == .people ? "person" : "object")")
+    }
+
+    /// A mask as translucent accent over the photo.
+    private static func tint(_ bitmap: MaskBitmap) -> NSImage? {
+        guard let png = bitmap.png, let mask = NSBitmapImageRep(data: png)?.cgImage else { return nil }
+        let size = NSSize(width: mask.width, height: mask.height)
+        return NSImage(size: size, flipped: false) { rect in
+            guard let context = NSGraphicsContext.current?.cgContext else { return false }
+            context.clip(to: rect, mask: mask)
+            context.setFillColor(NSColor.controlAccentColor.withAlphaComponent(0.4).cgColor)
+            context.fill(rect)
+            return true
+        }
+    }
+
+    /// A circle or stroke, its source when it has one, and a handle to resize it.
+    @ViewBuilder
+    private func shapeHandles(center: CGPoint, source: CGPoint, radius: CGFloat, strength: Double) -> some View {
         if spot.mode.usesSource {
             sourceHandles(center: center, source: source, radius: radius, strength: strength)
         }

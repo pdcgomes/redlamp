@@ -13,7 +13,7 @@ struct RetouchParams {
     int4 box;          // xy origin, zw size of the destination's bounding box, in level-0 texels
     float4 shape;      // x radius (texels), y where the feather starts (share of the radius), z rim spacing (texels), w the rim's median reach (texels)
     float4 source;     // xy from the destination to the source (texels), or the fill's origin; z opacity 0...1, w 1 = heal
-    int4 counts;       // x points on the rim, y points on the stroke (1 for a circle), z 1 = from the fill texture (Remove)
+    int4 counts;       // x points on the rim, y points on the stroke (1 for a circle), z 1 = from the fill texture (Remove), w 1 = the region's alpha texture
 };
 
 constexpr sampler retouchSampler(coord::pixel, address::clamp_to_edge, filter::linear);
@@ -99,6 +99,7 @@ kernel void rl_retouch_apply(
     texture2d<float, access::sample> image [[texture(0)]],
     texture2d<float, access::write> out [[texture(1)]],
     texture2d<float, access::sample> fill [[texture(2)]],
+    texture2d<float, access::sample> region [[texture(3)]],
     device const float4 *ratios [[buffer(1)]],
     device const float2 *rim [[buffer(2)]],
     device const float2 *stroke [[buffer(3)]],
@@ -109,12 +110,19 @@ kernel void rl_retouch_apply(
     float2 at = float2(p.box.xy) + float2(gid) + 0.5f;
     float4 destination = image.sample(retouchSampler, at, level(0));
     float radius = p.shape.x;
-    float distance = strokeDistance(at, stroke, p.counts.y);
-    if (distance >= radius) {
+    float alpha;
+    if (p.counts.w == 1) {
+        constexpr sampler normalized(coord::normalized, address::clamp_to_edge, filter::linear);
+        alpha = region.sample(normalized, (float2(gid) + 0.5f) / float2(p.box.zw)).r;
+    } else {
+        float distance = strokeDistance(at, stroke, p.counts.y);
+        alpha = distance >= radius ? 0.0f : 1.0f - smoothstep(p.shape.y * radius, radius, distance);
+    }
+    if (alpha <= 0.0f) {
         out.write(destination, gid);
         return;
     }
-    float alpha = (1.0f - smoothstep(p.shape.y * radius, radius, distance)) * p.source.z;
+    alpha *= p.source.z;
     float3 replacement = p.counts.z == 1 ? fill.sample(retouchSampler, at - p.source.xy, level(0)).rgb
         : image.sample(retouchSampler, at + p.source.xy, level(0)).rgb;
     if (p.source.w > 0.5f) {

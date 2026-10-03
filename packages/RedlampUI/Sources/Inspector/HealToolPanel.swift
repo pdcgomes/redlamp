@@ -40,6 +40,30 @@ struct HealToolPanel: View {
                 "Remove fills the spot from the photo around it; Heal matches a source to the light around the spot; Clone copies it as it is",
             )
 
+            HStack(spacing: 6) {
+                Text("Click picks")
+                    .font(Theme.labelFont)
+                    .foregroundStyle(Theme.label)
+                Picker("Click picks", selection: $model.spotPick) {
+                    ForEach(SpotPick.allCases, id: \.self) { pick in
+                        Text(pick.name).tag(pick)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.small)
+                .help("Spot adds a spot where you click; Person and Object remove the person or object you click")
+                if model.isPickingRegion {
+                    ProgressView().controlSize(.small)
+                }
+            }
+            if let message = model.pickMessage {
+                Text(message)
+                    .font(Theme.labelFont)
+                    .foregroundStyle(Theme.label)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Text(selected == nil
                 ? "Click the photo to add a spot, or drag to brush one. Its source is found nearby."
                 : "Drag the spot or its source to move it, or its handle to resize it.")

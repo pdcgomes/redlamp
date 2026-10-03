@@ -224,6 +224,7 @@ public final class EditorModel {
             }
             if activeTool != .heal {
                 dustMessage = nil
+                pickMessage = nil
             }
             requestRender()
         }
@@ -268,6 +269,11 @@ public final class EditorModel {
         didSet { requestRender() }
     }
 
+    /// What a click in the Healing tool does.
+    public var spotPick: SpotPick = .spot
+    public internal(set) var isPickingRegion = false
+    /// Why the last pick found nothing, shown in the Healing panel.
+    public var pickMessage: String?
     public internal(set) var isFindingDust = false
     /// What the last Remove Dust found, shown in the Healing panel.
     public var dustMessage: String?
