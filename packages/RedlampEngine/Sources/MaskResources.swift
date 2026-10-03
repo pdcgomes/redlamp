@@ -46,6 +46,10 @@ extension MaskShape {
 /// comparison can hold different versions of a mask at once. Painting is incremental: the last
 /// stroke is redrawn over a copy of the slice without it, so a growing stroke costs one stroke.
 ///
+/// The rasters and guides of photos rendered before the current one are kept aside while their
+/// sessions live, so an export of one photo and the canvas of another, rendered in turns, don't
+/// redraw each other's masks.
+///
 /// Owned by the engine's render queue.
 final class MaskResources {
     static let rasterLongEdge = 4096
@@ -53,10 +57,28 @@ final class MaskResources {
     static let maximumSlices = 32
     /// Segments per stroke dispatch; their points go in a small constant buffer.
     static let segmentsPerDispatch = 16
+    /// What one photo kept aside may hold, and what all of them may.
+    static let parkedBytesPerPhoto = 64 << 20
+    static let parkedBytes = 256 << 20
 
     enum RasterKey: Hashable {
         case brush(BrushMask)
         case bitmap(String)
+    }
+
+    /// A photo's rasters and guides while another photo renders.
+    private struct Parked {
+        weak var session: ImageSession?
+        var rasters: (any MTLTexture)?
+        var keys: [RasterKey?]
+        var lastUsed: [UInt64]
+        var editGuide: (recipe: EditRecipe, texture: any MTLTexture)?
+        var editGuideGeneration: Int
+        var analysisGuide: (any MTLTexture)?
+
+        var bytes: Int {
+            [rasters, editGuide?.texture, analysisGuide].reduce(0) { $0 + ($1?.allocatedSize ?? 0) }
+        }
     }
 
     private let device: any MTLDevice
@@ -74,8 +96,13 @@ final class MaskResources {
 
     private(set) var guideSize = PixelSize.zero
     private var editGuide: (recipe: EditRecipe, texture: any MTLTexture)?
+    /// Unique across photos, since stage caches compare it alone.
     private(set) var editGuideGeneration = 0
+    private var guideGenerations = 0
     private var analysisGuide: (any MTLTexture)?
+
+    /// Oldest first.
+    private var parked: [Parked] = []
 
     let emptyRasters: any MTLTexture
     let emptyGuide: any MTLTexture
@@ -115,21 +142,86 @@ final class MaskResources {
         return (emptyRasters, emptyGuide)
     }
 
-    /// Starts over for a different photo.
-    func use(_ next: ImageSession) {
+    /// Switches to `next`'s rasters and guides, keeping the current photo's aside. Rasters kept
+    /// aside are compacted to fit in `commands`; without it, they are kept only if they fit.
+    func use(_ next: ImageSession, commands: (any MTLCommandBuffer)? = nil) {
         guard session !== next else { return }
+        if let session {
+            park(session, commands: commands)
+        }
         session = next
         rasterSize = next.orientedSize.fitted(
             within: PixelSize(width: Self.rasterLongEdge, height: Self.rasterLongEdge),
         )
         guideSize = next.orientedSize.fitted(within: PixelSize(width: Self.guideLongEdge, height: Self.guideLongEdge))
-        rasters = nil
-        keys = []
-        lastUsed = []
         scratch = nil
         paintBase = nil
-        editGuide = nil
-        analysisGuide = nil
+        let kept = parked.firstIndex { $0.session === next }.map { parked.remove(at: $0) }
+        rasters = kept?.rasters
+        keys = kept?.keys ?? []
+        lastUsed = kept?.lastUsed ?? []
+        editGuide = kept?.editGuide
+        editGuideGeneration = kept?.editGuideGeneration ?? 0
+        analysisGuide = kept?.analysisGuide
+    }
+
+    /// The bytes each photo kept aside holds, oldest first.
+    var parkedSizes: [Int] {
+        parked.map(\.bytes)
+    }
+
+    private func park(_ session: ImageSession, commands: (any MTLCommandBuffer)?) {
+        parked.removeAll { $0.session == nil || $0.session === session }
+        var photo = Parked(
+            session: session, rasters: rasters, keys: keys, lastUsed: lastUsed, editGuide: editGuide,
+            editGuideGeneration: editGuideGeneration, analysisGuide: analysisGuide,
+        )
+        // A guide is one render; a raster may be a PNG decode.
+        if photo.bytes > Self.parkedBytesPerPhoto {
+            photo.analysisGuide = nil
+        }
+        if photo.bytes > Self.parkedBytesPerPhoto {
+            photo.editGuide = nil
+        }
+        if photo.bytes > Self.parkedBytesPerPhoto {
+            compact(&photo, commands: commands)
+        }
+        guard photo.bytes > 0 else { return }
+        parked.append(photo)
+        while parked.reduce(0, { $0 + $1.bytes }) > Self.parkedBytes {
+            parked.removeFirst()
+        }
+    }
+
+    /// Copies the most recently used slices that fit within the photo's share into an array of
+    /// just those, or drops the rasters.
+    private func compact(_ photo: inout Parked, commands: (any MTLCommandBuffer)?) {
+        guard let source = photo.rasters else { return }
+        let room = Self.parkedBytesPerPhoto - (photo.bytes - source.allocatedSize)
+        var kept = photo.keys.indices.filter { photo.keys[$0] != nil }
+            .sorted { photo.lastUsed[$0] > photo.lastUsed[$1] }
+        while !kept.isEmpty,
+              device.heapTextureSizeAndAlign(descriptor: arrayDescriptor(slices: kept.count)).size > room {
+            kept.removeLast()
+        }
+        photo.rasters = nil
+        guard !kept.isEmpty, let commands, let compacted = try? makeArray(slices: kept.count),
+              let blit = commands.makeBlitCommandEncoder()
+        else {
+            photo.keys = []
+            photo.lastUsed = []
+            return
+        }
+        for (slice, from) in kept.enumerated() {
+            blit.copy(
+                from: source, sourceSlice: from, sourceLevel: 0, to: compacted, destinationSlice: slice,
+                destinationLevel: 0, sliceCount: 1, levelCount: 1,
+            )
+        }
+        blit.endEncoding()
+        photo.rasters = compacted
+        photo.keys = kept.map { photo.keys[$0] }
+        photo.lastUsed = kept.map { photo.lastUsed[$0] }
     }
 
     // MARK: - Guides
@@ -150,7 +242,8 @@ final class MaskResources {
         try render(global, texture)
         try generateMipmaps(texture, commands: commands)
         editGuide = (global, texture)
-        editGuideGeneration += 1
+        guideGenerations += 1
+        editGuideGeneration = guideGenerations
         return texture
     }
 
@@ -273,6 +366,13 @@ final class MaskResources {
     }
 
     private func makeArray(slices: Int) throws -> any MTLTexture {
+        guard let texture = device.makeTexture(descriptor: arrayDescriptor(slices: slices)) else {
+            throw EngineError.gpuUnavailable
+        }
+        return texture
+    }
+
+    private func arrayDescriptor(slices: Int) -> MTLTextureDescriptor {
         let descriptor = MTLTextureDescriptor()
         descriptor.textureType = .type2DArray
         descriptor.pixelFormat = .r16Float
@@ -281,8 +381,7 @@ final class MaskResources {
         descriptor.arrayLength = slices
         descriptor.usage = [.shaderRead, .shaderWrite]
         descriptor.storageMode = .private
-        guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
-        return texture
+        return descriptor
     }
 
     func makeSingle() throws -> any MTLTexture {

@@ -166,7 +166,7 @@ extension RedlampEngine {
         let readsGuide = needsGuide || components.contains { $0.shape.readsEditGuide }
         let rasterComponents = components.filter { MaskResources.key(for: $0.shape) != nil }
         guard readsGuide || !rasterComponents.isEmpty else { return .none }
-        masks.use(session)
+        masks.use(session, commands: commands)
         let size = masks.guideSize
         let render = { [self] (guideRecipe: EditRecipe, texture: any MTLTexture) in
             try encodeDevelop(
@@ -194,7 +194,7 @@ extension RedlampEngine {
         guard let commands = queue.makeCommandBuffer(),
               let buffer = device.makeBuffer(length: 8, options: .storageModeShared)
         else { throw EngineError.gpuUnavailable }
-        masks.use(session)
+        masks.use(session, commands: commands)
         let size = masks.guideSize
         let guide = try masks.editGuide(for: recipe, commands: commands) { [self] global, texture in
             try encodeDevelop(
