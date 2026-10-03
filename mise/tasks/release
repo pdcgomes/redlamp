@@ -4,8 +4,8 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-# DRY_RUN=1 builds, signs and zips without notarizing, tagging or publishing. With it, REF builds
-# another commit, such as unpushed changes to this script.
+# DRY_RUN=1 builds, signs and zips without pushing a version bump, notarizing, tagging or
+# publishing. With it, REF builds another commit, such as unpushed changes to this script.
 DRY_RUN="${DRY_RUN:-0}"
 NOTARY_PROFILE="${REDLAMP_NOTARY_PROFILE:?REDLAMP_NOTARY_PROFILE is not set (run through mise)}"
 TEAM_ID="${REDLAMP_TEAM_ID:?REDLAMP_TEAM_ID is not set (run through mise)}"
@@ -18,12 +18,24 @@ fail() {
     exit 1
 }
 
+released() {
+    git rev-parse -q --verify "refs/tags/v$1" >/dev/null || [ -n "$(git ls-remote --tags origin "refs/tags/v$1")" ]
+}
+
 # A release is origin/main, built in a clean worktree, so nothing uncommitted or untracked
 # in this checkout can end up in it.
 git fetch --quiet origin
 COMMIT="$(git rev-parse "${REF:-origin/main}^{commit}")"
 VERSION="$(git show "$COMMIT:Version.xcconfig" | sed -nE 's/^MARKETING_VERSION *= *([^ ]+).*/\1/p')"
-BUILD="$(git rev-list --count "$COMMIT")"
+# A version that's been released moves on to its next patch, 0.2.0-prealpha to 0.2.1-prealpha,
+# committed to main before the build. Minor and major releases set MARKETING_VERSION by hand.
+BUMP=0
+if released "$VERSION"; then
+    SEMVER='^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$'
+    [[ "$VERSION" =~ $SEMVER ]] || fail "MARKETING_VERSION $VERSION isn't major.minor.patch, so it can't be bumped"
+    VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))${BASH_REMATCH[4]}"
+    BUMP=1
+fi
 TAG="v$VERSION"
 OUT="build/release"
 PRODUCTS="$OUT/DerivedData/Build/Products/Release"
@@ -38,23 +50,37 @@ IDENTITY="${REDLAMP_SIGN_IDENTITY:-$(security find-identity -v -p codesigning \
 
 if [ "$DRY_RUN" != 1 ]; then
     [ "$COMMIT" = "$(git rev-parse origin/main)" ] || fail "a release builds origin/main; REF is only for dry runs"
+    # Being only behind origin/main, as after a release pushed its version bump, is fine.
     git diff --quiet "$COMMIT" -- Version.xcconfig \
+        || git diff --quiet "$(git merge-base HEAD "$COMMIT")" -- Version.xcconfig \
         || fail "Version.xcconfig has changes that aren't on origin/main, which is what gets released; push them first"
-    if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || [ -n "$(git ls-remote --tags origin "refs/tags/$TAG")" ]; then
-        fail "$TAG already exists; bump MARKETING_VERSION in Version.xcconfig and push it"
+    if released "$VERSION"; then
+        fail "$TAG already exists; set MARKETING_VERSION in Version.xcconfig to an unreleased version and push it"
     fi
     xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
         || fail "no notarytool keychain profile '$NOTARY_PROFILE' (see README: Releasing)"
     gh auth status >/dev/null 2>&1 || fail "gh is not signed in"
 fi
 
-echo "==> Releasing Redlamp $VERSION (build $BUILD) from ${REF:-origin/main}: $(git log -1 --format='%h %s' "$COMMIT")"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 WORK="$(mktemp -d)"
 SRC="$WORK/redlamp"
 trap 'rm -rf "$WORK"; git worktree prune' EXIT
 git worktree add --quiet --detach "$SRC" "$COMMIT"
+if [ "$BUMP" = 1 ]; then
+    git show "$COMMIT:Version.xcconfig" \
+        | sed -E "s/^(MARKETING_VERSION *= *)[^ ]+/\1$VERSION/" >"$SRC/Version.xcconfig"
+    git -C "$SRC" commit --quiet -m "Version $VERSION" -- Version.xcconfig
+    COMMIT="$(git -C "$SRC" rev-parse HEAD)"
+    if [ "$DRY_RUN" != 1 ]; then
+        echo "==> Pushing Version $VERSION to main..."
+        git -C "$SRC" push --quiet origin HEAD:refs/heads/main \
+            || fail "couldn't push Version $VERSION to main; if main moved on, run the release again"
+    fi
+fi
+BUILD="$(git rev-list --count "$COMMIT")"
+echo "==> Releasing Redlamp $VERSION (build $BUILD) from ${REF:-origin/main}: $(git log -1 --format='%h %s' "$COMMIT")"
 # Reusing the vendored LibRaw saves a rebuild; generate still rebuilds it if its stamp doesn't
 # match the pinned version and shim.
 [ ! -d vendor/build/LibRaw.xcframework ] \
@@ -125,7 +151,8 @@ PREVIOUS="$(git describe --tags --abbrev=0 --match 'v*' "$COMMIT")"
 {
     echo "Changes since ${PREVIOUS#v}:"
     echo
-    git log --no-merges --format='- %s' --invert-grep --grep='^Cask: ' "$PREVIOUS..$COMMIT"
+    git log --no-merges --format='- %s' --invert-grep --grep='^Cask: ' --grep="^Version $VERSION\$" \
+        "$PREVIOUS..$COMMIT"
 } >"$NOTES"
 "$SRC/scripts/appcast.sh" "$APP" "$ZIP" \
     "https://github.com/pdcgomes/redlamp/releases/download/$TAG/$(basename "$ZIP")" "$NOTES" >"$OUT/appcast.xml"
