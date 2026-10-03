@@ -347,11 +347,10 @@ public struct SidecarStore: Sendable {
         }
     }
 
-    /// Bitmaps no edit, snapshot or history session names any more. Nothing is removed while a
-    /// session file can't be read, since the bitmaps it needs aren't known.
     /// Removes the package's bitmaps that nothing refers to: not the edit, its snapshots or its
     /// history, nor anything in `json`, the edit as written, where fields a newer build added
-    /// (a mask shape this build doesn't know, say) may name one.
+    /// (a mask shape this build doesn't know, say) may name one. Nothing is removed while a
+    /// session file can't be read, since the bitmaps it needs aren't known.
     private static func removeUnusedBitmaps(of sidecar: Sidecar, in package: URL, json: Data) {
         var used = Set(bitmaps(of: sidecar).map(\.sha256))
         for file in historyFiles(in: package) {
