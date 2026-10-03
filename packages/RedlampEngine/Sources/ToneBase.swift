@@ -21,11 +21,12 @@ import simd
 /// edit's scene (`base + (sceneEV - ev)`).
 enum ToneBase {
     static let mapLongEdge = 512
-    /// The filter's window radius, as a fraction of the map's long edge.
-    static let radiusFraction: Float = 0.03
+    /// The filter's window radius, as a fraction of the map's long edge. REDLAMP_TONE_RADIUS
+    /// overrides it, to tune.
+    static let radiusFraction = Float(ProcessInfo.processInfo.environment["REDLAMP_TONE_RADIUS"] ?? "") ?? 0.03
     /// Detail below this variance (stops squared) is texture and stays in the detail; edges above
-    /// it are kept in the base.
-    static let epsilon: Float = 0.25
+    /// it are kept in the base. REDLAMP_TONE_EPSILON overrides it, to tune.
+    static let epsilon = Float(ProcessInfo.processInfo.environment["REDLAMP_TONE_EPSILON"] ?? "") ?? 0.25
     /// Camera RGB to a luminance for the base: green-weighted, independent of the edit.
     static let lumaWeights = SIMD3<Float>(0.25, 0.5, 0.25)
 

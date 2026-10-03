@@ -217,7 +217,7 @@ With both side panels in AppKit, most of what remains is Core Animation committi
 
 ### Known limitations
 
-- Highlights and Shadows are per-pixel approximations for now. Lightroom-quality versions need edge-aware local tone mapping (an exposure-independent guided filter), planned for Phase 2.
+- Highlights and Shadows are edge-aware for new edits (process version 7): each region moves by its brightness and keeps the texture inside it. Edits made before keep the per-pixel version, and they haven't yet been compared against Lightroom's own exports.
 - X-Trans demosaicing is a first-generation interpolation. A Markesteijn-class demosaic comes in Phase 2.
 - Redlamp's exposure for Fujifilm raws differs from the camera's by up to ±0.9 EV depending on the body; the profiler removes it when measuring looks, and the engine fix is tracked (TON-14).
 - Non-DNG raws use a single-illuminant Adobe-derived matrix (LibRaw's). DNGs interpolate their two calibrations by white balance, and since process 4 apply their embedded profile's HueSatMap, but the Temperature and Tint model still converts with one matrix. The profile's look (LookTable and tone curve) is offered as a Base Look under "In This Photo", Apple ProRAW's look comes with its gain table map, Apple's local tone mapping, so it renders the way the iPhone does. Imported `.dcp` files are next.
