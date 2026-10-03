@@ -71,6 +71,17 @@ struct UnknownFieldTests {
         #expect(root["sourceRotation"] == .number(20))
     }
 
+    @Test func `large integers a newer build added come back exactly`() throws {
+        let json = #"{"id":"local/test","version":1,"name":"Test","amount":80,"#
+            + #""seed":9007199254740993,"low":-9007199254740993,"hash":18446744073709551615,"ratio":0.1}"#
+        let recipe = try JSONDecoder().decode(AppliedRecipe.self, from: Data(json.utf8))
+        let written = try String(decoding: JSONEncoder().encode(recipe), as: UTF8.self)
+        for field in [#""seed":9007199254740993"#, #""low":-9007199254740993"#, #""hash":18446744073709551615"#] {
+            #expect(written.contains(field))
+        }
+        #expect(recipe.unknownFields["ratio"] == .number(0.1))
+    }
+
     @Test func `types without unknown fields are written as before`() throws {
         let layer = MaskLayer(name: "Sky", components: [MaskComponent(shape: .radial(RadialMask(
             center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.1,

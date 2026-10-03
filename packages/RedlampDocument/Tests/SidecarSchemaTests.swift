@@ -969,7 +969,7 @@ private extension JSONValue {
     var ofAnotherType: JSONValue {
         switch self {
         case .string: .number(7)
-        case .number: .string("7")
+        case .number, .integer, .unsignedInteger: .string("7")
         case .bool: .string("true")
         case .array: .object([:])
         case .object: .array([])
@@ -982,6 +982,8 @@ private extension JSONValue {
         case ("null", .null), ("boolean", .bool), ("number", .number), ("string", .string), ("array", .array),
              ("object", .object): true
         case let ("integer", .number(number)): number.rounded() == number
+        case ("integer", .integer), ("integer", .unsignedInteger), ("number", .integer),
+             ("number", .unsignedInteger): true
         default: false
         }
     }

@@ -6,6 +6,10 @@ public enum JSONValue: Codable, Sendable, Hashable {
     case null
     case bool(Bool)
     case number(Double)
+    /// An integer a `Double` can't hold exactly, so it isn't rounded on the way through.
+    case integer(Int64)
+    /// An integer above `Int64.max`.
+    case unsignedInteger(UInt64)
     case string(String)
     case array([JSONValue])
     case object([String: JSONValue])
@@ -16,6 +20,10 @@ public enum JSONValue: Codable, Sendable, Hashable {
             self = .null
         } else if let value = try? container.decode(Bool.self) {
             self = .bool(value)
+        } else if let value = try? container.decode(Int64.self) {
+            self = Double(exactly: value).map(JSONValue.number) ?? .integer(value)
+        } else if let value = try? container.decode(UInt64.self) {
+            self = Double(exactly: value).map(JSONValue.number) ?? .unsignedInteger(value)
         } else if let value = try? container.decode(Double.self) {
             self = .number(value)
         } else if let value = try? container.decode(String.self) {
@@ -33,6 +41,8 @@ public enum JSONValue: Codable, Sendable, Hashable {
         case .null: try container.encodeNil()
         case let .bool(value): try container.encode(value)
         case let .number(value): try container.encode(value)
+        case let .integer(value): try container.encode(value)
+        case let .unsignedInteger(value): try container.encode(value)
         case let .string(value): try container.encode(value)
         case let .array(value): try container.encode(value)
         case let .object(value): try container.encode(value)

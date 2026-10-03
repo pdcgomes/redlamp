@@ -112,9 +112,19 @@ extension SidecarStore {
                     to: operation.value,
                     at: operation.path,
                 )
-            case .remove: isIgnored(operation.path, in: original, decoded: decoded)
+            case .remove: isArrayElement(operation.path, in: original)
+                || isIgnored(operation.path, in: original, decoded: decoded)
             }
         }
+    }
+
+    /// Whether `path` is an element of an array: dropping one is always a loss, though no
+    /// other value there would change what this build reads.
+    private static func isArrayElement(_ path: String, in original: JSONValue) -> Bool {
+        guard let slash = path.lastIndex(of: "/"), Int(path[path.index(after: slash)...]) != nil,
+              case .array = value(at: String(path[..<slash]), in: original)
+        else { return false }
+        return true
     }
 
     /// Whether this build ignores the key at `path`: no other value there changes what it reads.
@@ -136,6 +146,8 @@ extension SidecarStore {
         switch value {
         case let .bool(bool): [.bool(!bool)]
         case let .number(number): [.number(number + 1), .number(number - 1)]
+        case let .integer(number): [.integer(number &+ 1), .integer(number &- 1)]
+        case let .unsignedInteger(number): [.unsignedInteger(number &+ 1), .unsignedInteger(number &- 1)]
         case let .string(string): [.string(string + "~")]
         case .null, .array, .object: [.string("~")]
         }
