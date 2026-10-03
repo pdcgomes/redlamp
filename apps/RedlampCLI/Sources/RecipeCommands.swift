@@ -17,8 +17,12 @@ enum RecipeCommands {
       contact-sheet -o <sheet.png> [--recipes <list>] [--images <file>…] [--lookdev] [--chart]
                     [--original] [--tile <px>]
       hald-identity [-o <identity.png>] [--level <2-16>]
-      import <file.cube|hald.png|recipe.redrecipe> [--space srgb|rec2020] [--name <name>]
-             [-o <out.redrecipe>] [--install]
+      import <file.cube|file.3dl|hald.png|recipe.redrecipe> [--space <space>] [--display rec709|srgb]
+             [--name <name>] [-o <out.redrecipe>] [--install]
+                                               a look table is for --space srgb (the default), rec2020
+                                               (Redlamp's own) or camera log footage: slog3-sgamut3cine,
+                                               slog3-sgamut3, logc3-awg3, vlog-vgamut or applelog, with
+                                               output for --display rec709 (gamma 2.4, the default) or srgb
       export <recipe> -o <out.redrecipe> [--cube <out.cube>]
       build-pack [--out <dir>]                 regenerate the bundled LUT Base Looks
       golden [--record]                        compare (or record) golden renders of bundled recipes
@@ -44,7 +48,8 @@ enum RecipeCommands {
 
     static let valued: Set<String> = [
         "--output", "--query", "--recipe", "--size", "--amount", "--recipes", "--images", "--tile", "--level",
-        "--space", "--name", "--cube", "--out", "--references", "--evaluations", "--seed", "--pairs", "--slots",
+        "--space", "--display", "--name", "--cube", "--out", "--references", "--evaluations", "--seed", "--pairs",
+        "--slots",
     ]
 
     /// One command's inputs.
@@ -202,13 +207,18 @@ enum RecipeCommands {
         let arguments = context.arguments
         guard let path = arguments.positional.first else { throw CLIError(description: "import needs a file") }
         let url = URL(fileURLWithPath: path)
-        let space: ImportedTableSpace = arguments.value("--space") == "rec2020" ? .displayRec2020 : .sRGB
+        let space = try tableSpace(arguments)
         let name = arguments.value("--name") ?? url.deletingPathExtension().lastPathComponent
         var recipe: Recipe
         switch url.pathExtension.lowercased() {
         case "cube":
             let cube = try LookTableImport.parseCube(String(contentsOf: url, encoding: .utf8), space: space)
             recipe = LookTableImport.recipe(for: cube.table, name: arguments.value("--name") ?? cube.title ?? name)
+        case "3dl":
+            recipe = try LookTableImport.recipe(
+                for: LookTableImport.parse3DL(String(contentsOf: url, encoding: .utf8), space: space),
+                name: name,
+            )
         case "png", "tif", "tiff":
             recipe = try LookTableImport.recipe(
                 for: LookTableImport.parseHald(ImageFile.read(url), space: space),
@@ -228,6 +238,27 @@ enum RecipeCommands {
             print("wrote \(output)")
         } else if !arguments.has("--install") {
             try print(String(decoding: RecipeFile.encode(recipe), as: UTF8.self))
+        }
+    }
+
+    /// `--space` and `--display`: what an imported look table was made for.
+    static func tableSpace(_ arguments: Arguments) throws -> ImportedTableSpace {
+        let output: LookTableOutput = switch arguments.value("--display") {
+        case nil, "rec709": .rec709
+        case "srgb": .sRGB
+        case let other?: throw CLIError(description: "--display is rec709 or srgb, not \(other)")
+        }
+        switch arguments.value("--space") {
+        case nil, "srgb":
+            return .sRGB
+        case "rec2020":
+            return .displayRec2020
+        case let other?:
+            guard let camera = CameraLogSpace(rawValue: other) else {
+                let spaces = ["srgb", "rec2020"] + CameraLogSpace.allCases.map(\.rawValue)
+                throw CLIError(description: "--space is one of \(spaces.joined(separator: ", ")), not \(other)")
+            }
+            return .cameraLog(camera, output: output)
         }
     }
 

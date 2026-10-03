@@ -8,7 +8,10 @@ import UniformTypeIdentifiers
 public enum RecipeActions {
     public static let recipeType = UTType(filenameExtension: Recipe.fileExtension, conformingTo: .json) ?? .json
     static var importTypes: [UTType] {
-        [recipeType, UTType(filenameExtension: "cube") ?? .data, .png, .tiff]
+        [
+            recipeType, UTType(filenameExtension: "cube") ?? .data, UTType(filenameExtension: "3dl") ?? .data,
+            .png, .tiff,
+        ]
     }
 
     /// Asks for a name and the settings to include, then saves the edit to My Recipes.
@@ -32,17 +35,30 @@ public enum RecipeActions {
         window.beginSheet(sheetWindow)
     }
 
-    /// Installs `.redrecipe`, `.cube` and HaldCLUT files.
+    /// Installs `.redrecipe`, `.cube`, `.3dl` and HaldCLUT files, reading look tables in the
+    /// space the panel's accessory chooses.
     public static func importRecipes(model: EditorModel) {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
         panel.allowedContentTypes = importTypes
-        panel.message = "Choose recipes, .cube look tables or graded HaldCLUT images"
+        panel.message = "Choose recipes, .cube or .3dl look tables, or graded HaldCLUT images"
+        let choice = LookTableSpaceChoice()
+        let accessory = NSHostingView(rootView: LookTableSpaceAccessory(choice: choice))
+        accessory.frame.size = accessory.fittingSize
+        panel.accessoryView = accessory
+        panel.isAccessoryViewDisclosed = true
         guard panel.runModal() == .OK else { return }
         var failures: [String] = []
         for url in panel.urls {
-            if model.recipes.install(contentsOf: url) == nil {
-                failures.append("\(url.lastPathComponent): \(model.recipes.lastError ?? "unknown error")")
+            let failure: String? = if url.pathExtension.lowercased() == "3dl" {
+                installThreeDL(url, space: choice.space, model: model)
+            } else if model.recipes.install(contentsOf: url, tableSpace: choice.space) == nil {
+                model.recipes.lastError ?? "unknown error"
+            } else {
+                nil
+            }
+            if let failure {
+                failures.append("\(url.lastPathComponent): \(failure)")
             }
         }
         if !failures.isEmpty {
@@ -50,6 +66,17 @@ public enum RecipeActions {
             alert.messageText = failures.count == 1 ? "A file couldn't be imported" : "Some files couldn't be imported"
             alert.informativeText = failures.joined(separator: "\n")
             alert.runModal()
+        }
+    }
+
+    /// The library doesn't read `.3dl` files, so they're parsed here. Returns why it failed.
+    private static func installThreeDL(_ url: URL, space: ImportedTableSpace, model: EditorModel) -> String? {
+        do {
+            let table = try LookTableImport.parse3DL(String(contentsOf: url, encoding: .utf8), space: space)
+            let recipe = LookTableImport.recipe(for: table, name: url.deletingPathExtension().lastPathComponent)
+            return model.recipes.save(recipe) == nil ? model.recipes.lastError ?? "unknown error" : nil
+        } catch {
+            return "\(error)"
         }
     }
 
@@ -116,5 +143,60 @@ struct CreateRecipeSheet: View {
         }
         .padding(20)
         .frame(width: 380, height: 460)
+    }
+}
+
+/// What imported look tables were made for, chosen on the import panel. Recipes ignore it.
+@MainActor
+@Observable
+final class LookTableSpaceChoice {
+    enum Input: Hashable {
+        case sRGB
+        case displayRec2020
+        case camera(CameraLogSpace)
+    }
+
+    var input = Input.sRGB
+    var output = LookTableOutput.rec709
+
+    var isForCameraFootage: Bool {
+        if case .camera = input {
+            true
+        } else {
+            false
+        }
+    }
+
+    var space: ImportedTableSpace {
+        switch input {
+        case .sRGB: .sRGB
+        case .displayRec2020: .displayRec2020
+        case let .camera(camera): .cameraLog(camera, output: output)
+        }
+    }
+}
+
+/// The import panel's accessory: the input space of look tables and, for camera log
+/// footage, the display their output is for.
+struct LookTableSpaceAccessory: View {
+    @Bindable var choice: LookTableSpaceChoice
+
+    var body: some View {
+        Form {
+            Picker("Look tables are for", selection: $choice.input) {
+                Text("sRGB (most LUTs)").tag(LookTableSpaceChoice.Input.sRGB)
+                Text("Redlamp display (Rec.2020)").tag(LookTableSpaceChoice.Input.displayRec2020)
+                Divider()
+                ForEach(CameraLogSpace.allCases, id: \.self) { camera in
+                    Text("\(camera.name) footage").tag(LookTableSpaceChoice.Input.camera(camera))
+                }
+            }
+            Picker("Output", selection: $choice.output) {
+                ForEach(LookTableOutput.allCases, id: \.self) { Text($0.name).tag($0) }
+            }
+            .disabled(!choice.isForCameraFootage)
+        }
+        .padding(12)
+        .frame(width: 420)
     }
 }

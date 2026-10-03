@@ -6,15 +6,19 @@ import simd
 import UniformTypeIdentifiers
 
 /// The encoding a third-party table was built for.
-public enum ImportedTableSpace: String, Sendable, CaseIterable {
+public enum ImportedTableSpace: Sendable, Hashable {
     /// sRGB-encoded sRGB, what almost every `.cube` and HaldCLUT file assumes.
     case sRGB
     /// Already Redlamp's own space (display Rec.2020, sRGB transfer).
     case displayRec2020
+    /// A camera's log footage in, a display's encoding out: imported as a scene-referred
+    /// table, which takes the place of Redlamp's tone curve.
+    case cameraLog(CameraLogSpace, output: LookTableOutput = .rec709)
 }
 
 public enum LookTableImportError: Error, CustomStringConvertible, Equatable {
     case notACube(String)
+    case notA3DL(String)
     case unsupportedSize(Int)
     case notAHaldImage(width: Int, height: Int)
     case unreadableImage
@@ -22,6 +26,7 @@ public enum LookTableImportError: Error, CustomStringConvertible, Equatable {
     public var description: String {
         switch self {
         case let .notACube(reason): "not a .cube file: \(reason)"
+        case let .notA3DL(reason): "not a .3dl file: \(reason)"
         case let .unsupportedSize(size): "tables of \(size) points aren't supported (2 to 65)"
         case let .notAHaldImage(width, height): "a \(width)×\(height) image isn't a HaldCLUT (it must be level³ square)"
         case .unreadableImage: "the image can't be read"
@@ -34,7 +39,8 @@ public enum LookTableImport {
     public static let storedSize = 33
 
     /// Re-expresses a table built for `space` in Redlamp's display Rec.2020 domain, so it
-    /// renders as its author intended: colors are converted in, looked up, and back.
+    /// renders as its author intended: colors are converted in, looked up, and back. Tables
+    /// for camera log footage become scene-referred, at `storedSize` whatever `size` is.
     public static func adapt(
         _ sample: (SIMD3<Float>) -> SIMD3<Float>,
         from space: ImportedTableSpace,
@@ -53,6 +59,13 @@ public enum LookTableImport {
                 let looked = ColorMath.srgbDecode(sample(ColorMath.srgbEncode(inside)))
                 let back = ColorMath.rec709ToRec2020 * (looked + outside)
                 return ColorMath.srgbEncode(simd_max(back, .zero))
+            }
+        case let .cameraLog(camera, output):
+            try LookTable(size: storedSize, space: .sceneLog) { encoded in
+                // The LUT clamps signals outside its domain.
+                let signal = camera.encode(camera.fromRec2020 * SceneLogEncoding.decode(encoded))
+                let display = ColorMath.rec709ToRec2020 * output.decode(sample(signal))
+                return ColorMath.srgbEncode(simd_max(display, .zero))
             }
         }
     }
@@ -163,6 +176,110 @@ public enum LookTableImport {
             }
         }
         return lines.joined(separator: "\n") + "\n"
+    }
+
+    // MARK: - .3dl
+
+    /// Parses Autodesk Lustre/Flame `.3dl` text: a line of input mesh points (`0 64 … 1023`),
+    /// then one integer RGB row per grid point, blue varying fastest and red slowest. The
+    /// output bit depth (10, 12 or 16) comes from a `Mesh <log2 intervals> <bits>` line when
+    /// there is one, and otherwise from the largest value.
+    public static func parse3DL(_ text: String, space: ImportedTableSpace = .sRGB) throws -> LookTable {
+        var mesh: [Int]?
+        var declared: (points: Int, bits: Int)?
+        var rows: [Int] = []
+        for rawLine in text.split(whereSeparator: \.isNewline) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty || line.hasPrefix("#") {
+                continue
+            }
+            let parts = line.split(whereSeparator: { $0 == " " || $0 == "\t" })
+            guard let keyword = parts.first else { continue }
+            if keyword.uppercased() == "MESH" {
+                guard parts.count == 3, let intervals = Int(parts[1]), (0 ... 6).contains(intervals),
+                      let bits = Int(parts[2]), [10, 12, 16].contains(bits)
+                else {
+                    throw LookTableImportError
+                        .notA3DL("a Mesh line gives the mesh size and output bits, as in Mesh 4 12")
+                }
+                declared = ((1 << intervals) + 1, bits)
+                continue
+            }
+            // Other words (3DMESH, Flame's LUT8 and gamma lines) carry nothing the table needs.
+            guard Double(keyword) != nil else { continue }
+            let numbers = parts.compactMap { Int($0) }
+            guard numbers.count == parts.count, mesh == nil || numbers.count == 3 else {
+                throw LookTableImportError.notA3DL("a row isn't three whole numbers")
+            }
+            if mesh == nil {
+                mesh = numbers
+            } else {
+                rows += numbers
+            }
+        }
+        guard let mesh else { throw LookTableImportError.notA3DL("no line of input mesh points") }
+        let size = mesh.count
+        guard LookTable.sizeRange.contains(size) else { throw LookTableImportError.unsupportedSize(size) }
+        guard mesh[0] >= 0, zip(mesh, mesh.dropFirst()).allSatisfy({ $0 < $1 }) else {
+            throw LookTableImportError.notA3DL("the input mesh points must increase")
+        }
+        if let declared, declared.points != size {
+            throw LookTableImportError
+                .notA3DL("the Mesh line gives \(declared.points) points, but the mesh has \(size)")
+        }
+        guard rows.count == size * size * size * 3 else {
+            throw LookTableImportError.notA3DL("expected \(size * size * size) rows, found \(rows.count / 3)")
+        }
+        guard rows.allSatisfy({ $0 >= 0 }) else { throw LookTableImportError.notA3DL("values can't be negative") }
+        let largest = rows.max() ?? 0
+        let bits: Int
+        if let declared {
+            guard largest < 1 << declared.bits else {
+                throw LookTableImportError.notA3DL("a value exceeds the Mesh line's \(declared.bits) bits")
+            }
+            bits = declared.bits
+        } else {
+            guard let fitting = [10, 12, 16].first(where: { largest < 1 << $0 }) else {
+                throw LookTableImportError.notA3DL("values above 65535 aren't 10, 12 or 16-bit")
+            }
+            bits = fitting
+        }
+        let scale = 1 / Float((1 << bits) - 1)
+        var floats = [Float](repeating: 0, count: rows.count)
+        for row in 0 ..< size * size * size {
+            let r = row / (size * size), g = row / size % size, b = row % size
+            let i = ((b * size + g) * size + r) * 3
+            for channel in 0 ..< 3 {
+                floats[i + channel] = Float(rows[row * 3 + channel]) * scale
+            }
+        }
+        let native = try LookTable(size: size, floats: floats)
+        let positions = mesh.map { Float($0) / Float(mesh[size - 1]) }
+        return try adapt(
+            { native.sample(gridPosition(of: $0, mesh: positions)) },
+            from: space,
+            size: min(max(size, 17), storedSize),
+        )
+    }
+
+    /// Where each channel (0...1) falls on a grid whose points sit at `mesh`, as a fraction
+    /// of the grid: the identity for evenly spaced points.
+    private static func gridPosition(of c: SIMD3<Float>, mesh: [Float]) -> SIMD3<Float> {
+        func position(_ x: Float) -> Float {
+            guard x > mesh[0] else { return 0 }
+            guard x < mesh[mesh.count - 1] else { return 1 }
+            var lo = 0, hi = mesh.count - 1
+            while hi - lo > 1 {
+                let mid = (lo + hi) / 2
+                if mesh[mid] <= x {
+                    lo = mid
+                } else {
+                    hi = mid
+                }
+            }
+            return (Float(lo) + (x - mesh[lo]) / (mesh[hi] - mesh[lo])) / Float(mesh.count - 1)
+        }
+        return SIMD3(position(c.x), position(c.y), position(c.z))
     }
 
     // MARK: - HaldCLUT
