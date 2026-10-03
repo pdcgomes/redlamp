@@ -22,6 +22,20 @@ public enum RecipeActions {
         [recipeType, presetType] + lookTableTypes
     }
 
+    /// The files of a drop on the Recipes panel it imports: folders (not packages), and files
+    /// with one of the import's extensions. None means the panel refuses the drop.
+    static func droppableFiles(_ urls: [URL]) -> [URL] {
+        let extensions: Set = [Recipe.fileExtension, "xmp", "cube", "3dl", "png", "tif", "tiff"]
+        return urls.filter { url in
+            guard url.isFileURL else { return false }
+            let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
+            if values?.isDirectory == true {
+                return values?.isPackage != true
+            }
+            return extensions.contains(url.pathExtension.lowercased())
+        }
+    }
+
     /// Asks for a name and the settings to include, then saves the edit to My Recipes.
     public static func createRecipe(model: EditorModel) {
         guard model.info != nil, let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }

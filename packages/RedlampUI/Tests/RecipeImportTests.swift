@@ -69,6 +69,40 @@ struct RecipeImportTests {
         #expect(catalog.revision == revision + 1 && catalog.lastError == nil)
     }
 
+    @Test func `a drop takes folders and the files the import reads, and nothing else`() throws {
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appending(path: "Presets")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let package = root.appending(path: "Looks.app")
+        try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+        let taken = ["Fade.XMP", "warm.cube", "film.3dl", "hald.png", "hald.tif", "hald.tiff", "Teal.redrecipe"]
+            .map { root.appending(path: $0) }
+        let web = try #require(URL(string: "https://example.com/Fade.xmp"))
+        let refused = ["DSC01234.ARW", "notes.txt", "noextension"].map { root.appending(path: $0) } + [web]
+
+        // A folder's URL from a drag needn't end in a slash.
+        let unslashed = URL(fileURLWithPath: folder.path(percentEncoded: false), isDirectory: false)
+        #expect(RecipeActions.droppableFiles([unslashed] + taken + refused + [package]) == [unslashed] + taken)
+        #expect(RecipeActions.droppableFiles(refused).isEmpty)
+    }
+
+    @Test func `an import opens the lists it added to, once`() throws {
+        defer { try? FileManager.default.removeItem(at: root) }
+        let catalog = try catalog()
+        let cube = try write(RecipeLabImportTests.warmCube, as: "warm.cube")
+        let sidecar = try write(Self.sidecar, as: "DSC01234.xmp")
+        #expect(catalog.takeImportedLists().isEmpty)
+
+        catalog.install(contentsOf: [sidecar])
+        #expect(catalog.takeImportedLists().isEmpty)
+
+        let summary = catalog.install(contentsOf: [cube])
+        #expect(!summary.lists.isEmpty)
+        #expect(catalog.takeImportedLists() == Set(summary.lists))
+        #expect(catalog.sections.map(\.name) == summary.lists)
+        #expect(catalog.takeImportedLists().isEmpty)
+    }
+
     @Test func `a preset's report shows in a sheet, files that didn't come in in an alert, a clean import in neither`() {
         let report = LightroomImportReport(entries: [.init(setting: "GrainSeed", outcome: .ignored, note: "No seed")])
         let table = Self.item("warm.cube", Self.imported("Warm"))

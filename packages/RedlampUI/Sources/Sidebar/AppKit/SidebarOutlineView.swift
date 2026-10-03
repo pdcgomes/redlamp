@@ -40,6 +40,19 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
     /// Whether a group or session shows its rows when the list reloads.
     final var isExpanded: @MainActor (SidebarNode) -> Bool = { _ in false }
     final var expansionChanged: @MainActor (SidebarNode, Bool) -> Void = { _, _ in }
+    /// Files dropped on the list, filtered by `acceptsFiles`. A list without it refuses drops.
+    final var dropFiles: (@MainActor ([URL]) -> Void)? {
+        didSet {
+            if dropFiles == nil {
+                unregisterDraggedTypes()
+            } else {
+                registerForDraggedTypes([.fileURL])
+            }
+        }
+    }
+
+    /// The dropped files the list takes; none refuses the drop.
+    final var acceptsFiles: @MainActor ([URL]) -> [URL] = { $0 }
 
     let model: EditorModel
     private var roots: [SidebarNode] = []
@@ -166,6 +179,30 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
 
     func outlineView(_: NSOutlineView, isItemExpandable item: Any) -> Bool {
         !((item as? SidebarNode)?.children.isEmpty ?? true)
+    }
+
+    /// A drop lands on the whole list, wherever it's let go.
+    func outlineView(
+        _: NSOutlineView, validateDrop info: any NSDraggingInfo, proposedItem _: Any?, proposedChildIndex _: Int,
+    ) -> NSDragOperation {
+        guard dropFiles != nil, !droppedFiles(info).isEmpty else { return [] }
+        setDropItem(nil, dropChildIndex: NSOutlineViewDropOnItemIndex)
+        return .copy
+    }
+
+    func outlineView(_: NSOutlineView, acceptDrop info: any NSDraggingInfo, item _: Any?, childIndex _: Int) -> Bool {
+        let files = droppedFiles(info)
+        guard let dropFiles, !files.isEmpty else { return false }
+        // The import may show a modal alert, which shouldn't hold up the drag's end.
+        DispatchQueue.main.async { dropFiles(files) }
+        return true
+    }
+
+    private func droppedFiles(_ info: any NSDraggingInfo) -> [URL] {
+        let urls = info.draggingPasteboard.readObjects(
+            forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true],
+        ) as? [URL] ?? []
+        return acceptsFiles(urls)
     }
 
     // MARK: - Delegate

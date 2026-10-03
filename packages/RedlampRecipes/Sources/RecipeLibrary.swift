@@ -554,8 +554,8 @@ public struct RecipeImportSummary: Sendable {
         return presets == 0 ? recipes : "\(recipes), \(presets) of them from Lightroom presets"
     }
 
-    /// Where the installed recipes are listed: "In the Recipes panel under Lightroom".
-    public var placement: String? {
+    /// The Recipes panel's lists the installed recipes appear in, in import order.
+    public var lists: [String] {
         var lists: [String] = []
         for recipe in imported.map(\.recipe) {
             let list = recipe.isLocal ? RecipeLibrary.list(for: recipe) : "Installed"
@@ -563,6 +563,12 @@ public struct RecipeImportSummary: Sendable {
                 lists.append(list)
             }
         }
+        return lists
+    }
+
+    /// Where the installed recipes are listed: "In the Recipes panel under Lightroom".
+    public var placement: String? {
+        let lists = lists
         return lists.isEmpty ? nil : "In the Recipes panel under \(Self.joined(lists))"
     }
 

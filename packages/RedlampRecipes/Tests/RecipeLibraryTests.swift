@@ -396,6 +396,7 @@ struct RecipeImportSummaryTests {
             Self.item("shared.redrecipe", .imported(shared)), Self.item("old.xmp", .failed("Too old")),
         ])
         #expect(mixed.headline == "Imported 3 recipes, 1 of them from Lightroom presets")
+        #expect(mixed.lists == ["Lightroom", "Imported", "Installed"])
         #expect(mixed.placement == "In the Recipes panel under Lightroom, Imported and Installed")
         #expect(mixed.failures == ["old.xmp: Too old"] && mixed.failureTitle == "A file couldn't be imported")
 
@@ -407,7 +408,7 @@ struct RecipeImportSummaryTests {
             Self.item("x.xmp", .failed("No")),
         ])
         #expect(none.headline == "Nothing was imported" && none.failureTitle == "Nothing was imported")
-        #expect(none.placement == nil)
+        #expect(none.lists.isEmpty && none.placement == nil)
     }
 
     @Test func `each file prints as what it became, with its issues and report, or why it didn't come in`() {

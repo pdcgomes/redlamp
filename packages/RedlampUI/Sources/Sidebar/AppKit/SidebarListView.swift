@@ -73,6 +73,8 @@ final class SidebarListView: PanelColumnScrollView, NSSearchFieldDelegate {
         searchField.setAccessibilityLabel("Search recipes")
 
         recipes.content = { [weak self] in self?.recipeRows() ?? [] }
+        recipes.acceptsFiles = RecipeActions.droppableFiles
+        recipes.dropFiles = { [model] urls in RecipeActions.importFiles(urls, model: model) }
         snapshots.content = { [model] in
             model.snapshots.isEmpty
                 ? [SidebarNode(.placeholder("No snapshots"))]
@@ -112,6 +114,7 @@ final class SidebarListView: PanelColumnScrollView, NSSearchFieldDelegate {
     private func recipeRows() -> [SidebarNode] {
         _ = model.recipes.revision
         _ = model.recipeApplication?.recipe.id
+        expandedGroups.formUnion(model.recipes.takeImportedLists())
         var rows: [SidebarNode] = []
         if let amount = model.recipeAmount, let title = model.recipeAmountTitle {
             rows.append(SidebarNode(.recipeAmount(title, amount)))
