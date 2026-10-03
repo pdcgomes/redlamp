@@ -20,7 +20,7 @@ struct LabCreatorView: View {
                     Button("New Camera Card") { model.newCardDraft() }
                     Button("Duplicate Selected") { model.selected.map(model.duplicate) }
                         .disabled(model.selected == nil)
-                    Button("Import .cube or HaldCLUT…") { importTable() }
+                    Button("Import .cube, .3dl or HaldCLUT…") { importTable() }
                 }
                 .controlSize(.small)
 
@@ -145,13 +145,14 @@ struct LabCreatorView: View {
     }
 
     private func importTable() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [UTType(filenameExtension: "cube") ?? .data, .png, .tiff]
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let chosen = RecipeActions.chooseImports(
+            RecipeActions.lookTableTypes,
+            message: "Choose a .cube or .3dl look table, or a graded HaldCLUT image",
+        ), let url = chosen.urls.first else { return }
         if model.draft == nil {
             model.newDraft()
         }
-        model.importTable(url)
+        model.importTable(url, space: chosen.tableSpace)
     }
 
     private func export(_ draft: Recipe) {

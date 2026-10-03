@@ -7,11 +7,13 @@ import UniformTypeIdentifiers
 @MainActor
 public enum RecipeActions {
     public static let recipeType = UTType(filenameExtension: Recipe.fileExtension, conformingTo: .json) ?? .json
+    /// The look tables `RecipeLibrary.lookTable` reads: `.cube`, `.3dl` and HaldCLUT images.
+    static var lookTableTypes: [UTType] {
+        [UTType(filenameExtension: "cube") ?? .data, UTType(filenameExtension: "3dl") ?? .data, .png, .tiff]
+    }
+
     static var importTypes: [UTType] {
-        [
-            recipeType, UTType(filenameExtension: "cube") ?? .data, UTType(filenameExtension: "3dl") ?? .data,
-            .png, .tiff,
-        ]
+        [recipeType] + lookTableTypes
     }
 
     /// Asks for a name and the settings to include, then saves the edit to My Recipes.
@@ -38,28 +40,14 @@ public enum RecipeActions {
     /// Installs `.redrecipe`, `.cube`, `.3dl` and HaldCLUT files, reading look tables in the
     /// space the panel's accessory chooses.
     public static func importRecipes(model: EditorModel) {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = true
-        panel.allowedContentTypes = importTypes
-        panel.message = "Choose recipes, .cube or .3dl look tables, or graded HaldCLUT images"
-        let choice = LookTableSpaceChoice()
-        let accessory = NSHostingView(rootView: LookTableSpaceAccessory(choice: choice))
-        accessory.frame.size = accessory.fittingSize
-        panel.accessoryView = accessory
-        panel.isAccessoryViewDisclosed = true
-        guard panel.runModal() == .OK else { return }
+        guard let chosen = chooseImports(
+            importTypes,
+            message: "Choose recipes, .cube or .3dl look tables, or graded HaldCLUT images",
+            multiple: true,
+        ) else { return }
         var failures: [String] = []
-        for url in panel.urls {
-            let failure: String? = if url.pathExtension.lowercased() == "3dl" {
-                installThreeDL(url, space: choice.space, model: model)
-            } else if model.recipes.install(contentsOf: url, tableSpace: choice.space) == nil {
-                model.recipes.lastError ?? "unknown error"
-            } else {
-                nil
-            }
-            if let failure {
-                failures.append("\(url.lastPathComponent): \(failure)")
-            }
+        for url in chosen.urls where model.recipes.install(contentsOf: url, tableSpace: chosen.tableSpace) == nil {
+            failures.append("\(url.lastPathComponent): \(model.recipes.lastError ?? "unknown error")")
         }
         if !failures.isEmpty {
             let alert = NSAlert()
@@ -69,15 +57,24 @@ public enum RecipeActions {
         }
     }
 
-    /// The library doesn't read `.3dl` files, so they're parsed here. Returns why it failed.
-    private static func installThreeDL(_ url: URL, space: ImportedTableSpace, model: EditorModel) -> String? {
-        do {
-            let table = try LookTableImport.parse3DL(String(contentsOf: url, encoding: .utf8), space: space)
-            let recipe = LookTableImport.recipe(for: table, name: url.deletingPathExtension().lastPathComponent)
-            return model.recipes.save(recipe) == nil ? model.recipes.lastError ?? "unknown error" : nil
-        } catch {
-            return "\(error)"
-        }
+    /// Asks for files of `types` on an open panel whose accessory chooses what the look tables
+    /// among them were made for. Nil when cancelled.
+    static func chooseImports(
+        _ types: [UTType],
+        message: String,
+        multiple: Bool = false,
+    ) -> (urls: [URL], tableSpace: ImportedTableSpace)? {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = multiple
+        panel.allowedContentTypes = types
+        panel.message = message
+        let choice = LookTableSpaceChoice()
+        let accessory = NSHostingView(rootView: LookTableSpaceAccessory(choice: choice))
+        accessory.frame.size = accessory.fittingSize
+        panel.accessoryView = accessory
+        panel.isAccessoryViewDisclosed = true
+        guard panel.runModal() == .OK else { return nil }
+        return (panel.urls, choice.space)
     }
 
     /// Saves a self-contained `.redrecipe` for sharing.
@@ -146,7 +143,7 @@ struct CreateRecipeSheet: View {
     }
 }
 
-/// What imported look tables were made for, chosen on the import panel. Recipes ignore it.
+/// What imported look tables were made for, chosen on an import panel. Recipes ignore it.
 @MainActor
 @Observable
 final class LookTableSpaceChoice {
@@ -176,7 +173,7 @@ final class LookTableSpaceChoice {
     }
 }
 
-/// The import panel's accessory: the input space of look tables and, for camera log
+/// The import panels' accessory: the input space of look tables and, for camera log
 /// footage, the display their output is for.
 struct LookTableSpaceAccessory: View {
     @Bindable var choice: LookTableSpaceChoice
