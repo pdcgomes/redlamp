@@ -221,61 +221,6 @@ public struct SidecarStore: Sendable {
         }
     }
 
-    // MARK: - Conflicts
-
-    /// Conflicting copies, made when the same photo was edited on two Macs before iCloud Drive
-    /// synced them. The most recently modified edit wins, and every other distinct edit is kept
-    /// as a snapshot of the winner, so nothing is lost; snapshots of every copy are kept too.
-    public static func merge(_ current: Sidecar, _ conflicts: [Sidecar]) -> Sidecar {
-        let copies = [current] + conflicts
-        var winner = copies.reduce(current) { $1.modified > $0.modified ? $1 : $0 }
-        var snapshots = winner.snapshots
-        for copy in copies {
-            for snapshot in copy.snapshots where !snapshots.contains(where: { $0.id == snapshot.id }) {
-                snapshots.append(snapshot)
-            }
-        }
-        for copy in copies
-            where copy.recipe != winner.recipe && !snapshots.contains(where: { $0.recipe == copy.recipe }) {
-            snapshots.append(Snapshot(
-                name: "Edit from another Mac, \(copy.modified.formatted(date: .abbreviated, time: .shortened))",
-                created: copy.modified,
-                recipe: copy.recipe,
-            ))
-        }
-        winner.snapshots = snapshots
-        for copy in copies {
-            winner.unknownFields.merge(copy.unknownFields) { kept, _ in kept }
-        }
-        return winner
-    }
-
-    /// Merges and saves the sidecar's unresolved conflict versions, then marks them resolved;
-    /// nil when there are none (or they can't be merged now, so they stay for the next load).
-    private func resolveConflicts(_ current: Sidecar, for image: URL) -> Sidecar? {
-        let sidecar = url(for: image)
-        guard let versions = NSFileVersion.unresolvedConflictVersionsOfItem(at: sidecar), !versions.isEmpty
-        else { return nil }
-        let merged = Self.merge(current, versions.compactMap { Self.decode(sidecar: $0.url) })
-        do {
-            try save(merged, for: image)
-            try Self.writing(sidecar, options: []) { url in
-                for version in versions {
-                    try Self.copyHistory(from: version.url, into: url)
-                }
-            }
-            for version in versions {
-                version.isResolved = true
-            }
-            try Self.writing(sidecar, options: []) { url in
-                try NSFileVersion.removeOtherVersionsOfItem(at: url)
-            }
-            return merged
-        } catch {
-            return nil
-        }
-    }
-
     // MARK: - Files
 
     /// Runs `body` with coordinated read access to `url`.
@@ -319,7 +264,7 @@ public struct SidecarStore: Sendable {
     }
 
     /// The sidecar at `sidecar` (a package or a single file), with its mask bitmaps.
-    private static func decode(sidecar: URL) -> Sidecar? {
+    static func decode(sidecar: URL) -> Sidecar? {
         guard let data = try? Data(contentsOf: editURL(inSidecar: sidecar)),
               var decoded = try? JSONDecoder.sidecar.decode(Sidecar.self, from: data)
         else { return nil }
