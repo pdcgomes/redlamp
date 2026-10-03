@@ -21,7 +21,7 @@ public enum QuitSaving: Equatable, Sendable {
     case saved
     /// The disk didn't answer in time.
     case timedOut
-    /// These photos' edits can't be saved.
+    /// These photos' edits can't be saved, whether or not the rest landed in time.
     case unsaved([URL])
 }
 
@@ -48,9 +48,10 @@ extension EditorModel {
             retry(url)
         }
         saveNow()
-        guard saves.flush(waitingAtMost: limit) else { return .timedOut }
+        let landed = saves.flush(waitingAtMost: limit)
         let unsaved = saves.failedPhotos
-        return unsaved.isEmpty ? .saved : .unsaved(unsaved.sorted { $0.path < $1.path })
+        guard unsaved.isEmpty else { return .unsaved(unsaved.sorted { $0.path < $1.path }) }
+        return landed ? .saved : .timedOut
     }
 
     /// Saves again every photo's failed writes that may now go through.

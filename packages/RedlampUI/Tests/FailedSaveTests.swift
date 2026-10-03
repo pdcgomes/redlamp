@@ -138,6 +138,23 @@ struct FailedSaveTests {
         #expect(model.snapshots == saved.snapshots)
     }
 
+    @Test func `a quit that runs out of time with a failed save says so`() async throws {
+        let folder = try Folder()
+        defer { folder.remove() }
+        let model = EditorModel(engine: StubEngine())
+        try await open(folder.photo, in: model)
+
+        try folder.lock()
+        model.setValue(.exposure, 0.6)
+        try await open(folder.other, in: model)
+        await model.saves.flush()
+        try await eventually { model.saveError?.url == folder.photo }
+        let gate = DispatchSemaphore(value: 0)
+        defer { gate.signal() }
+        model.saves.enqueue(.metadata { _ in gate.wait() }, for: folder.third)
+        #expect(model.saveBeforeQuitting(within: .milliseconds(300)) == .unsaved([folder.photo]))
+    }
+
     @Test func `quitting with a failed save tries it again, and says if it still fails`() async throws {
         let folder = try Folder()
         defer { folder.remove() }
