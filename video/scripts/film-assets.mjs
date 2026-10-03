@@ -8,7 +8,7 @@
 //   hero, hero.edit   the History sheets: the raw before any edit, then after each command
 //   night             the night scene, before and after CineStill 800T
 //   cutout            a subject to lift off its background (the Subject and Background masks)
-//   stocks            a colourful frame for the fan of film stocks
+//   stocks            a colourful frame for the deck of film stocks
 // The CLI comes from the Debug build (`SCHEME=redlamp mise run build`); REDLAMP_CLI overrides it.
 
 import { execFileSync } from "node:child_process";
