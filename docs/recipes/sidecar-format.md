@@ -10,7 +10,7 @@ This page is the published format: edit format 3 and history format 1. A machine
 - **Sparse.** Only values that differ from their defaults are written. A missing key means its default, so new settings need no migration and sidecars stay small.
 - **Resolved, not recomputed.** Auto white balance, auto settings, applied recipes and AI masks are stored as the values and bitmaps they produced. Reading a sidecar computes nothing again, so an edit renders the same on every Mac.
 - **Stable rendering.** Every edit records the process version it was made with and keeps rendering that way until the user updates it.
-- **Forward compatible.** Fields a newer Redlamp wrote are kept and written back unchanged where the format has room for them. A sidecar with a newer format or process version is opened read-only, and so is one that saving would change in any other way.
+- **Forward compatible.** Fields a newer Redlamp wrote are kept and written back unchanged where the format has room for them. A sidecar with a newer format or process version is opened read-only, and so is one that saving would change in any other way, with one exception: a mask shape with more than one key is read as one of them, and saving drops the others.
 - **Safe to sync.** Every read and write is coordinated, files are replaced atomically, and conflicting copies from two Macs are merged without losing an edit.
 
 ## Files
