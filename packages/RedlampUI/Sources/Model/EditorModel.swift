@@ -423,8 +423,6 @@ public final class EditorModel {
     @ObservationIgnored var editStart: EditRecipe?
     @ObservationIgnored var editParameter: ParameterID?
     @ObservationIgnored private var session = (id: UUID(), started: Date())
-    /// Whether `earlierSessions` is known: until it is, a sidecar isn't deleted, since it may hold them.
-    @ObservationIgnored var earlierSessionsLoaded = true
     /// The next save removes the earlier sessions' files (Clear History).
     @ObservationIgnored var clearsSavedHistory = false
     @ObservationIgnored var historyTask: Task<Void, Never>?
@@ -964,14 +962,12 @@ public final class EditorModel {
         session = (UUID(), Date())
         clearsSavedHistory = false
         earlierSessions = []
-        earlierSessionsLoaded = !hasSidecar
         historyTask?.cancel()
         guard hasSidecar else { return }
         historyTask = Task { [sidecars] in
             let sessions = await Task.detached(priority: .utility) { sidecars.loadHistory(for: url) }.value
             guard selection == url, !Task.isCancelled else { return }
             earlierSessions = sessions.filter { $0.id != session.id }
-            earlierSessionsLoaded = true
         }
     }
 
