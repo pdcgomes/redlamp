@@ -78,10 +78,14 @@ final class MaskingPanelView: ColumnView {
                     || model.modelDownloadProgress != nil,
             )
             guard next != structure else { return }
+            let previous = structure
             structure = next
             let views = rows(for: next)
             if !views.elementsEqual(arrangedViews, by: ===) {
                 setArrangedViews(views)
+            } else if next.outlines.count != previous?.outlines.count {
+                // The list has a row per mask; nothing else re-measures the column when it grows or shrinks.
+                invalidateColumnLayout()
             }
         }
     }

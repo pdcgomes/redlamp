@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import RedlampDesign
 import RedlampEngineAPI
 import Testing
 @testable import RedlampUI
@@ -541,10 +542,87 @@ struct MaskEditingTests {
         #expect(panel.arrangedViews.count == rows.count)
         #expect(panel.arrangedViews.last === firstEditor, "going back to a mask reuses its editor")
 
+        let second = try #require(model.maskOutlines.last?.id)
+        model.selectMask(second)
+        try await settle()
+        let secondEditor = try #require(panel.arrangedViews.last)
+        model.toggleMaskVisibility(second)
+        try await settle()
+        #expect(panel.arrangedViews.last === secondEditor, "hiding the mask keeps its editor")
+        model.toggleMaskVisibility(second)
+        try await settle()
+        #expect(panel.arrangedViews.last === secondEditor, "showing it again keeps its editor")
+
+        model.renameMask(second, to: "Renamed")
+        try await settle()
+        let renamedEditor = try #require(panel.arrangedViews.last)
+        #expect(renamedEditor !== secondEditor, "renaming the mask rebuilds its editor")
+
+        let component = try #require(model.selectedOutline?.components.first?.id)
+        model.setComponentInverted(component, in: second, true)
+        try await settle()
+        let invertedEditor = try #require(panel.arrangedViews.last)
+        #expect(invertedEditor !== renamedEditor, "inverting a component rebuilds the editor")
+
+        model.deleteMask(second)
+        try await settle()
+        model.undo()
+        try await settle()
+        model.selectMask(second)
+        try await settle()
+        #expect(panel.arrangedViews.last !== invertedEditor, "a deleted mask's editor is rebuilt after undo")
+
         model.selectMask(nil)
         try await settle()
         model.selectMask(first)
         try await settle()
         #expect(panel.arrangedViews.prefix(3).elementsEqual(rows.prefix(3), by: ===))
+        #expect(panel.arrangedViews.last === firstEditor, "reselecting a mask reuses its editor")
+    }
+
+    @Test func `the Masking panel's column is re-measured when a mask comes back`() async throws {
+        let (model, cleanup) = try await openEditor()
+        defer { cleanup() }
+        _ = NSApplication.shared
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 300, height: 600), styleMask: [.titled], backing: .buffered,
+            defer: false,
+        )
+        let scroll = PanelColumnScrollView(views: [MaskingPanelView(model: model)])
+        window.contentView = scroll
+        defer { window.contentView = nil }
+        func settle() async throws {
+            for _ in 0 ..< 10 {
+                try await Task.sleep(for: .milliseconds(5))
+            }
+        }
+        func draw(_ x: Double) async throws {
+            model.startDrawing(.radial)
+            model.beginDrawing(.radial(RadialMask(center: ImagePoint(x: x, y: 0.5), radiusX: 0.1, radiusY: 0.1)))
+            model.finishDrawing()
+            try await settle()
+        }
+        func measured() -> Bool {
+            let document = scroll.document
+            return document.frame.height == document.height(forWidth: document.frame.width)
+        }
+        try await draw(0.3)
+        let kept = try #require(model.selectedMaskID)
+        try await draw(0.7)
+        let other = try #require(model.selectedMaskID)
+        model.selectMask(kept)
+        try await settle()
+        #expect(measured())
+
+        model.deleteMask(other)
+        try await settle()
+        #expect(model.selectedMaskID == kept)
+        #expect(measured(), "the list is a row shorter")
+        let shorter = scroll.document.frame.height
+        model.undo()
+        try await settle()
+        #expect(model.maskOutlines.count == 2)
+        #expect(measured(), "the list is a row longer again")
+        #expect(scroll.document.frame.height > shorter)
     }
 }
