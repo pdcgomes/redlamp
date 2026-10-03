@@ -10,7 +10,7 @@ This page is the published format: edit format 3 and history format 1. A machine
 - **Sparse.** Only values that differ from their defaults are written. A missing key means its default, so new settings need no migration and sidecars stay small.
 - **Resolved, not recomputed.** Auto white balance, auto settings, applied recipes and AI masks are stored as the values and bitmaps they produced. Reading a sidecar computes nothing again, so an edit renders the same on every Mac.
 - **Stable rendering.** Every edit records the process version it was made with and keeps rendering that way until the user updates it.
-- **Forward compatible.** Fields a newer Redlamp wrote are kept and written back unchanged where the format has room for them. A sidecar with a newer format or process version is opened read-only, and so is one that saving would change in any other way, with one exception: a mask shape with more than one key is read as one of them, and saving drops the others.
+- **Forward compatible.** Fields a newer Redlamp wrote are kept and written back unchanged where the format has room for them. A sidecar with a newer format or process version is opened read-only, and so is one that saving would change in any other way.
 - **Safe to sync.** Every read and write is coordinated, files are replaced atomically, and conflicting copies from two Macs are merged without losing an edit.
 
 ## Files
@@ -350,7 +350,7 @@ What Redlamp does when it reads a sidecar, which is also what another reader mus
    - keys of a mask, a component, an AI mask (a depth range's depth map and a spot's region included), a spot, `metadata` and the applied recipe;
    - component kinds in a mask's `shape` (they render nothing).
 
-   Everywhere else in `edit.json` (shape parameters, bitmaps, the Base Look, the crop and orientation) Redlamp has nowhere to keep an unknown key, so a sidecar holding one is read-only. A shape with more than one key loses all but one of them. It ignores unknown keys in history files, which it never rewrites. The schema marks the objects without room for unknown keys closed (`additionalProperties: false`) and leaves the others open, so a writer that validates its sidecars puts new keys only where Redlamp keeps them.
+   Everywhere else in `edit.json` (shape parameters, bitmaps, the Base Look, the crop and orientation) Redlamp has nowhere to keep an unknown key, so a sidecar holding one is read-only. A shape with more than one key is read as one of them (the first in the order of the kinds table in [Masks](#masks), or else the first by name), and the sidecar is read-only. It ignores unknown keys in history files, which it never rewrites. The schema marks the objects without room for unknown keys closed (`additionalProperties: false`) and leaves the others open, so a writer that validates its sidecars puts new keys only where Redlamp keeps them.
 3. **Unknown values**: a spot's `mode` reads as `heal`, and the sidecar is read-only, since saving would write `heal`; a history step's `action` reads as `edit`. Any other value outside its list (`treatment`, `whiteBalance`, a component's `operation`, an AI mask's `kind`, `flag`, `label`) makes the sidecar unreadable.
 4. **Values out of range**: parameters and local adjustments are clamped to their ranges, and the sidecar is read-only, since saving would write the clamped values. Nothing else is checked.
 5. **History files** with another `format`, a newer `version`, or that can't be read are skipped, and kept.

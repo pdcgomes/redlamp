@@ -588,10 +588,18 @@ public enum MaskShape: Sendable, Hashable {
 /// `{"linear": {"_0": {...}}}`, the shape Swift synthesizes for enums with a payload.
 extension MaskShape: Codable {
     private static let payloadKey = DynamicCodingKey("_0")
+    private static let knownKeys = [
+        "linear", "radial", "brush", "luminanceRange", "colorRange", "ai", "depthRange", "maskReference",
+    ]
 
+    /// A shape holding more than one key is read as the first known kind in `knownKeys`, or the
+    /// first unknown key by name: the same every time, as the round-trip check relies on.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: DynamicCodingKey.self)
-        guard let key = container.allKeys.first else {
+        func rank(_ key: DynamicCodingKey) -> Int {
+            Self.knownKeys.firstIndex(of: key.stringValue) ?? Self.knownKeys.count
+        }
+        guard let key = container.allKeys.min(by: { (rank($0), $0.stringValue) < (rank($1), $1.stringValue) }) else {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: decoder.codingPath,
                 debugDescription: "Empty mask shape",

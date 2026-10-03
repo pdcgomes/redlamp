@@ -167,8 +167,48 @@ struct SidecarRoundTripTests {
         ("/recipe/spots/0/mode", .string("future")),
     ]
 
+    /// Mask shapes as `MaskShape` writes them, by key: two this build knows and two it doesn't,
+    /// in the order a shape holding more than one of them is read.
+    static let shapes: [(key: String, value: JSONValue)] = [
+        ("linear", .object(["_0": .object([
+            "start": .object(["x": .number(0.5), "y": .number(0)]),
+            "end": .object(["x": .number(0.5), "y": .number(0.5)]),
+        ])])),
+        ("radial", .object(["_0": .object([
+            "center": .object(["x": .number(0.4), "y": .number(0.4)]),
+            "radiusX": .number(0.2), "radiusY": .number(0.1), "rotation": .number(0), "feather": .number(50),
+        ])])),
+        ("futureA", .object(["_0": .object([:])])),
+        ("futureB", .object(["_0": .object([:])])),
+    ]
+
+    @Test func `a shape with more than one key is always read as the same one`() throws {
+        for (index, first) in Self.shapes.enumerated() {
+            for second in Self.shapes[(index + 1)...] {
+                for pair in [[first, second], [second, first]] {
+                    let object = JSONValue.object(Dictionary(uniqueKeysWithValues: pair.map { ($0.key, $0.value) }))
+                    let shape = try JSONDecoder().decode(MaskShape.self, from: JSONEncoder().encode(object))
+                    let written = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(shape))
+                    guard case let .object(keys) = written else { Issue.record("not an object"); continue }
+                    #expect(Array(keys.keys) == [first.key], "\(first.key) and \(second.key)")
+                }
+            }
+        }
+    }
+
+    /// A second kind beside the sample's linear and radial components, the dropped one known or not.
+    @Test(arguments: [(0, 1), (1, 0), (1, 2)])
+    func `a shape with more than one key is read-only and kept`(component: Int, shape: Int) throws {
+        let added = Self.shapes[shape]
+        try expectLossy(adding: added.value, at: "/recipe/masks/0/components/\(component)/shape/\(added.key)")
+    }
+
     @Test(arguments: lossy)
     func `a sidecar that wouldn't survive a save is read-only and kept`(path: String, value: JSONValue) throws {
+        try expectLossy(adding: value, at: path)
+    }
+
+    private func expectLossy(adding value: JSONValue, at path: String) throws {
         let (image, cleanup) = try temporaryImage()
         defer { cleanup() }
         let store = SidecarStore()
