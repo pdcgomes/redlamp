@@ -52,7 +52,6 @@
   },
   "decision": "DEC-24",
   "evaluationOnly": false,
-  "cleared": false,
-  "published": false,
-  "notes": "Converted by research/prototypes/masking/convert_owlv2.py from google/owlv2-base-patch16-ensemble (OpenAI's CLIP B/16 self-trained on WebLI boxes an OWL-ViT L/14 annotated, the annotator trained on Objects365 and Visual Genome, and averaged with itself fine-tuned on LVIS base): the image side at 960x960, computing in float32, since in float16 a few dozen patches a photo drift through the vision transformer's massive activations, and 8-bit weights move some boxes by over half the square. The text features of 19 prompts for 13 things are precomputed (Owlv2Queries.bin), so no text encoder ships. Matches PyTorch on 40 renders (scores within 0.0004). GPU 150 ms a photo on an M1 Ultra. Not yet published: the source URL is where a release would go."
+  "cleared": true,
+  "notes": "Converted by research/prototypes/masking/convert_owlv2.py from google/owlv2-base-patch16-ensemble (OpenAI's CLIP B/16 self-trained on WebLI boxes an OWL-ViT L/14 annotated, the annotator trained on Objects365 and Visual Genome, and averaged with itself fine-tuned on LVIS base): the image side at 960x960, computing in float32, since in float16 a few dozen patches a photo drift through the vision transformer's massive activations, and 8-bit weights move some boxes by over half the square. The text features of 19 prompts for 13 things are precomputed (Owlv2Queries.bin), so no text encoder ships. Matches PyTorch on 40 renders (scores within 0.0004). GPU 150 ms a photo on an M1 Ultra. Published as the prerelease models-owlv2-base-v1, so it never becomes the app's Latest release."
 }
