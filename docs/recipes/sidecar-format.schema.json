@@ -1,0 +1,787 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://redlamp.app/schemas/redlamp-sidecar-3.json",
+  "title": "Redlamp sidecar (.redlamp), format 3: edit.json",
+  "description": "The edit.json of a .redlamp sidecar package. A history session file (history/<id>.json) validates against #/$defs/historyFile. Objects without additionalProperties: false are where Redlamp keeps fields it doesn't know and writes them back unchanged. See sidecar-format.md.",
+  "type": "object",
+  "required": ["recipe"],
+  "properties": {
+    "format": {
+      "const": "app.redlamp.edit",
+      "description": "The file type. Redlamp always writes it but doesn't check it."
+    },
+    "recipe": { "$ref": "#/$defs/recipe" },
+    "snapshots": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/snapshot" },
+      "default": [],
+      "description": "Named versions of the edit, oldest first."
+    },
+    "metadata": { "$ref": "#/$defs/metadata" },
+    "modified": {
+      "$ref": "#/$defs/date",
+      "description": "When the edit was last saved. The newest edit wins when conflicting copies merge."
+    }
+  },
+  "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$",
+      "description": "A UUID. Redlamp writes upper case and reads either case."
+    },
+    "date": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+      "description": "ISO 8601 with a time zone. Redlamp writes whole seconds in UTC, as 2026-10-03T12:59:01Z."
+    },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "A SHA-256, in lowercase hex." },
+    "imagePoint": {
+      "description": "A point in the photo as its EXIF orientation shows it, before crop, Transform and lens correction: (0, 0) is the top left and (1, 1) the bottom right. Points may lie outside 0...1.",
+      "type": "object",
+      "required": ["x", "y"],
+      "properties": { "x": { "type": "number" }, "y": { "type": "number" } },
+      "additionalProperties": false
+    },
+    "recipe": {
+      "description": "The edit. Every key is optional; a missing key means its default.",
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3,
+          "description": "Format version: the file's syntax, 3 here. Older versions are read and migrated; a newer one makes the sidecar read-only."
+        },
+        "processVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9,
+          "default": 1,
+          "description": "The rendering behavior the edit was made with (see sidecar-format.md). A newer one makes the sidecar read-only."
+        },
+        "treatment": { "enum": ["color", "blackAndWhite"], "default": "color" },
+        "baseLook": {
+          "$ref": "#/$defs/baseLookReference",
+          "default": { "id": "redlamp/base/color", "version": 1, "name": "Redlamp Color", "amount": 100 }
+        },
+        "profile": {
+          "$ref": "#/$defs/baseLookReference",
+          "deprecated": true,
+          "description": "Format 1's name for baseLook, read when baseLook is missing. Never written."
+        },
+        "whiteBalance": {
+          "enum": ["asShot", "auto", "daylight", "cloudy", "shade", "tungsten", "fluorescent", "flash", "custom"],
+          "default": "asShot",
+          "description": "The white balance popup. The values it resolved to are wb.temperature and wb.tint."
+        },
+        "pointCurve": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/curvePoint" },
+          "default": [{ "x": 0, "y": 0 }, { "x": 1, "y": 1 }],
+          "description": "The point curve, in increasing x. Written only when it isn't the straight line."
+        },
+        "values": { "$ref": "#/$defs/values" },
+        "masks": {
+          "type": "array",
+          "maxItems": 16,
+          "items": { "$ref": "#/$defs/maskLayer" },
+          "default": [],
+          "description": "Local adjustments, applied in order on top of the global edit."
+        },
+        "spots": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/retouchSpot" },
+          "default": [],
+          "description": "Remove, Heal and Clone spots, applied in order before everything else."
+        },
+        "appliedRecipe": { "$ref": "#/$defs/appliedRecipe" },
+        "crop": { "$ref": "#/$defs/cropRect", "default": { "left": 0, "top": 0, "right": 1, "bottom": 1 } },
+        "orientation": { "$ref": "#/$defs/orientation", "default": { "quarterTurns": 0, "mirrored": false } }
+      },
+      "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
+    },
+    "values": {
+      "description": "Global parameters by key, each written only when it differs from its default. Readers clamp a value to its range. Keys of local, mask and spot parameters don't belong here and are dropped.",
+      "type": "object",
+      "properties": {
+        "wb.temperature": { "type": "number", "minimum": 2000, "maximum": 50000, "default": 5500, "description": "White balance Temp, in kelvin. With whiteBalance asShot a raw renders with the camera's white balance, and this holds the as-shot value for display." },
+        "wb.tint": { "type": "number", "minimum": -150, "maximum": 150, "default": 0, "description": "White balance Tint." },
+        "wb.shift.red": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "White balance fine-tuning on the red axis, on top of Temp and Tint." },
+        "wb.shift.blue": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "White balance fine-tuning on the blue axis, on top of Temp and Tint." },
+        "basic.exposure": { "type": "number", "minimum": -5, "maximum": 5, "default": 0, "description": "Exposure, in stops." },
+        "basic.contrast": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Contrast." },
+        "basic.highlights": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Highlights." },
+        "basic.shadows": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Shadows." },
+        "basic.whites": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Whites." },
+        "basic.blacks": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Blacks." },
+        "basic.dynamicRange": { "type": "number", "minimum": 100, "maximum": 400, "default": 100, "description": "Highlight headroom in percent, like a camera's DR setting: 100, 200 or 400." },
+        "basic.texture": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Texture." },
+        "basic.clarity": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Clarity." },
+        "basic.dehaze": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Dehaze; negative adds a veil." },
+        "basic.vibrance": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Vibrance." },
+        "basic.saturation": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Saturation." },
+        "toneCurve.highlights": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Parametric curve: Highlights region." },
+        "toneCurve.lights": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Parametric curve: Lights region." },
+        "toneCurve.darks": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Parametric curve: Darks region." },
+        "toneCurve.shadows": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Parametric curve: Shadows region." },
+        "toneCurve.split.shadows": { "type": "number", "minimum": 10, "maximum": 40, "default": 25, "description": "Parametric curve: where Shadows end and Darks begin, in percent of the input range." },
+        "toneCurve.split.midtones": { "type": "number", "minimum": 30, "maximum": 70, "default": 50, "description": "Parametric curve: where Darks end and Lights begin, in percent of the input range." },
+        "toneCurve.split.highlights": { "type": "number", "minimum": 60, "maximum": 90, "default": 75, "description": "Parametric curve: where Lights end and Highlights begin, in percent of the input range." },
+        "mixer.hue.red": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Red hue." },
+        "mixer.hue.orange": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Orange hue." },
+        "mixer.hue.yellow": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Yellow hue." },
+        "mixer.hue.green": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Green hue." },
+        "mixer.hue.aqua": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Aqua hue." },
+        "mixer.hue.blue": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Blue hue." },
+        "mixer.hue.purple": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Purple hue." },
+        "mixer.hue.magenta": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Magenta hue." },
+        "mixer.saturation.red": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Red saturation." },
+        "mixer.saturation.orange": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Orange saturation." },
+        "mixer.saturation.yellow": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Yellow saturation." },
+        "mixer.saturation.green": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Green saturation." },
+        "mixer.saturation.aqua": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Aqua saturation." },
+        "mixer.saturation.blue": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Blue saturation." },
+        "mixer.saturation.purple": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Purple saturation." },
+        "mixer.saturation.magenta": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Magenta saturation." },
+        "mixer.luminance.red": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Red luminance." },
+        "mixer.luminance.orange": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Orange luminance." },
+        "mixer.luminance.yellow": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Yellow luminance." },
+        "mixer.luminance.green": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Green luminance." },
+        "mixer.luminance.aqua": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Aqua luminance." },
+        "mixer.luminance.blue": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Blue luminance." },
+        "mixer.luminance.purple": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Purple luminance." },
+        "mixer.luminance.magenta": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color mixer: Magenta luminance." },
+        "grading.shadows.hue": { "type": "number", "minimum": 0, "maximum": 360, "default": 0, "description": "Color grading, Shadows: hue, in degrees." },
+        "grading.shadows.saturation": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Color grading, Shadows: saturation." },
+        "grading.shadows.luminance": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color grading, Shadows: luminance." },
+        "grading.midtones.hue": { "type": "number", "minimum": 0, "maximum": 360, "default": 0, "description": "Color grading, Midtones: hue, in degrees." },
+        "grading.midtones.saturation": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Color grading, Midtones: saturation." },
+        "grading.midtones.luminance": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color grading, Midtones: luminance." },
+        "grading.highlights.hue": { "type": "number", "minimum": 0, "maximum": 360, "default": 0, "description": "Color grading, Highlights: hue, in degrees." },
+        "grading.highlights.saturation": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Color grading, Highlights: saturation." },
+        "grading.highlights.luminance": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color grading, Highlights: luminance." },
+        "grading.global.hue": { "type": "number", "minimum": 0, "maximum": 360, "default": 0, "description": "Color grading, Global: hue, in degrees." },
+        "grading.global.saturation": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Color grading, Global: saturation." },
+        "grading.global.luminance": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color grading, Global: luminance." },
+        "grading.blending": { "type": "number", "minimum": 0, "maximum": 100, "default": 50, "description": "Color grading: Blending." },
+        "grading.balance": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Color grading: Balance." },
+        "detail.sharpen.amount": { "type": "number", "minimum": 0, "maximum": 150, "default": 40, "description": "Sharpening: Amount." },
+        "detail.sharpen.radius": { "type": "number", "minimum": 0.5, "maximum": 3, "default": 1, "description": "Sharpening: Radius, in pixels." },
+        "detail.sharpen.detail": { "type": "number", "minimum": 0, "maximum": 100, "default": 25, "description": "Sharpening: Detail." },
+        "detail.sharpen.masking": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Sharpening: Masking." },
+        "detail.noise.luminance": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Noise reduction: Luminance." },
+        "detail.noise.luminanceDetail": { "type": "number", "minimum": 0, "maximum": 100, "default": 50, "description": "Noise reduction: Luminance Detail." },
+        "detail.noise.luminanceContrast": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Noise reduction: Luminance Contrast." },
+        "detail.noise.color": { "type": "number", "minimum": 0, "maximum": 100, "default": 25, "description": "Noise reduction: Color." },
+        "detail.noise.colorDetail": { "type": "number", "minimum": 0, "maximum": 100, "default": 50, "description": "Noise reduction: Color Detail." },
+        "detail.noise.colorSmoothness": { "type": "number", "minimum": 0, "maximum": 100, "default": 50, "description": "Noise reduction: Color Smoothness." },
+        "lens.distortion": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Manual lens correction: Distortion." },
+        "lens.vignetting": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Manual lens correction: Vignetting." },
+        "lens.vignettingMidpoint": { "type": "number", "minimum": 0, "maximum": 100, "default": 50, "description": "Manual lens correction: Vignetting Midpoint." },
+        "lens.profile": { "type": "number", "minimum": 0, "maximum": 1, "default": 1, "description": "Enable Profile Corrections, a switch: 1 applies the lens correction the photo's file carries (process 5 and later; Fujifilm's from process 6), 0 doesn't." },
+        "lens.profileDistortion": { "type": "number", "minimum": 0, "maximum": 200, "default": 100, "description": "The profile's distortion correction, in percent." },
+        "lens.profileVignetting": { "type": "number", "minimum": 0, "maximum": 200, "default": 100, "description": "The profile's vignetting correction, in percent." },
+        "lens.removeChromaticAberration": { "type": "number", "minimum": 0, "maximum": 1, "default": 0, "description": "Remove Chromatic Aberration, a switch: 1 corrects lateral color fringes, from the profile or measured; 0 doesn't." },
+        "lens.defringePurple": { "type": "number", "minimum": 0, "maximum": 20, "default": 0, "description": "Defringe: Purple Amount." },
+        "lens.defringePurpleHueLow": { "type": "number", "minimum": 0, "maximum": 100, "default": 30, "description": "Defringe: the low end of the purple hue range." },
+        "lens.defringePurpleHueHigh": { "type": "number", "minimum": 0, "maximum": 100, "default": 70, "description": "Defringe: the high end of the purple hue range." },
+        "lens.defringeGreen": { "type": "number", "minimum": 0, "maximum": 20, "default": 0, "description": "Defringe: Green Amount." },
+        "lens.defringeGreenHueLow": { "type": "number", "minimum": 0, "maximum": 100, "default": 40, "description": "Defringe: the low end of the green hue range." },
+        "lens.defringeGreenHueHigh": { "type": "number", "minimum": 0, "maximum": 100, "default": 60, "description": "Defringe: the high end of the green hue range." },
+        "crop.angle": { "type": "number", "minimum": -45, "maximum": 45, "default": 0, "description": "The crop's angle (Straighten), in degrees; positive turns the photo clockwise." },
+        "transform.vertical": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Transform: Vertical perspective; negative widens the top." },
+        "transform.horizontal": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Transform: Horizontal perspective; negative widens the left side." },
+        "transform.rotate": { "type": "number", "minimum": -10, "maximum": 10, "default": 0, "description": "Transform: Rotate, in degrees, clockwise." },
+        "transform.aspect": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Transform: Aspect; positive stretches horizontally." },
+        "transform.scale": { "type": "number", "minimum": 50, "maximum": 150, "default": 100, "description": "Transform: Scale, in percent." },
+        "transform.offsetX": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Transform: X Offset, as a share of the frame's half width." },
+        "transform.offsetY": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Transform: Y Offset, as a share of the frame's half height." },
+        "effects.vignette.amount": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Post-crop vignette: Amount." },
+        "effects.vignette.midpoint": { "type": "number", "minimum": 0, "maximum": 100, "default": 50, "description": "Post-crop vignette: Midpoint." },
+        "effects.vignette.roundness": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Post-crop vignette: Roundness." },
+        "effects.vignette.feather": { "type": "number", "minimum": 0, "maximum": 100, "default": 50, "description": "Post-crop vignette: Feather." },
+        "effects.vignette.highlights": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Post-crop vignette: Highlights." },
+        "effects.grain.amount": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Grain: Amount." },
+        "effects.grain.size": { "type": "number", "minimum": 0, "maximum": 100, "default": 25, "description": "Grain: Size." },
+        "effects.grain.roughness": { "type": "number", "minimum": 0, "maximum": 100, "default": 50, "description": "Grain: Roughness." },
+        "effects.grain.color": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Grain: how much the grain differs between the dye layers; 0 is monochrome grain." },
+        "effects.halation.amount": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Halation: Amount." },
+        "effects.halation.size": { "type": "number", "minimum": 0, "maximum": 100, "default": 50, "description": "Halation: Size." },
+        "effects.bloom.amount": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Bloom: Amount." },
+        "effects.bloom.size": { "type": "number", "minimum": 0, "maximum": 100, "default": 50, "description": "Bloom: Size." },
+        "effects.leak.amount": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Light leak: Amount." },
+        "effects.leak.warmth": { "type": "number", "minimum": -100, "maximum": 100, "default": 60, "description": "Light leak: Warmth." },
+        "effects.leak.variation": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Light leak: Variation." },
+        "effects.dust.amount": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Film dust." },
+        "effects.scratches.amount": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Film scratches." },
+        "effects.frame.style": { "type": "number", "minimum": 0, "maximum": 4, "default": 0, "description": "Frame style, by number: 0 none, 1 keyline, 2 print border, 3 35 mm rebate, 4 slide mount." },
+        "effects.frame.size": { "type": "number", "minimum": 0, "maximum": 100, "default": 50, "description": "Frame size." },
+        "effects.colorChrome": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Color Chrome: deepens highly saturated colors." },
+        "effects.colorChromeBlue": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Color Chrome FX Blue: the same, for blues only." },
+        "calibration.shadowsTint": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Calibration: Shadows Tint." },
+        "calibration.red.hue": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Calibration: Red Primary hue." },
+        "calibration.red.saturation": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Calibration: Red Primary saturation." },
+        "calibration.green.hue": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Calibration: Green Primary hue." },
+        "calibration.green.saturation": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Calibration: Green Primary saturation." },
+        "calibration.blue.hue": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Calibration: Blue Primary hue." },
+        "calibration.blue.saturation": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Calibration: Blue Primary saturation." }
+      },
+      "patternProperties": { "^(local|mask|spot)\\.": false },
+      "additionalProperties": {
+        "type": "number",
+        "description": "A parameter a newer Redlamp added: kept and written back unchanged."
+      },
+      "default": {}
+    },
+    "curvePoint": {
+      "description": "A point of the point curve, display-referred, input x to output y.",
+      "type": "object",
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "baseLookReference": {
+      "description": "The Base Look the edit renders with (Lightroom's profile), as in the .redrecipe format.",
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "redlamp/base/... for built-in looks, local/... for looks made or imported on this Mac. Format 1's ids (redlamp.vivid) are read as redlamp/base/vivid."
+        },
+        "version": { "type": "integer", "minimum": 1, "default": 1 },
+        "name": {
+          "type": "string",
+          "description": "The look's name, for display. Defaults to the built-in look's name, or else the id."
+        },
+        "amount": { "type": "number", "minimum": 0, "maximum": 200, "default": 100, "description": "Strength in percent; 100 is the look as designed." },
+        "contentHash": {
+          "$ref": "#/$defs/sha256",
+          "description": "Pins the exact look table, for looks that have one."
+        }
+      },
+      "additionalProperties": false
+    },
+    "appliedRecipe": {
+      "description": "The .redrecipe the edit was last built from. Provenance only: rendering never reads it.",
+      "type": "object",
+      "required": ["id", "version", "name", "amount"],
+      "properties": {
+        "id": { "type": "string" },
+        "version": { "type": "integer", "minimum": 1 },
+        "name": { "type": "string" },
+        "amount": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 200,
+          "description": "The recipe's Amount when it was applied, in percent."
+        }
+      },
+      "additionalProperties": false
+    },
+    "cropRect": {
+      "description": "The crop, in the straightened frame: the oriented, transformed photo turned by crop.angle. The full frame is 0...1 on both axes. Written only when it isn't the full frame.",
+      "type": "object",
+      "required": ["left", "top", "right", "bottom"],
+      "properties": {
+        "left": { "type": "number" },
+        "top": { "type": "number" },
+        "right": { "type": "number" },
+        "bottom": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "orientation": {
+      "description": "The user's rotation and flip, after the camera's EXIF orientation. Written only when it isn't the identity.",
+      "type": "object",
+      "required": ["quarterTurns", "mirrored"],
+      "properties": {
+        "quarterTurns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3,
+          "description": "Clockwise quarter turns, after mirroring."
+        },
+        "mirrored": { "type": "boolean", "description": "Mirrored left to right before turning." }
+      },
+      "additionalProperties": false
+    },
+    "maskLayer": {
+      "description": "A local adjustment: a mask built from components, and its own adjustments.",
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "name": { "type": "string", "default": "Mask" },
+        "isVisible": { "type": "boolean", "default": true, "description": "A hidden mask doesn't render." },
+        "components": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/maskComponent" },
+          "default": [],
+          "description": "Combined in order, each with the coverage of those before it."
+        },
+        "amount": { "type": "number", "minimum": 0, "maximum": 200, "default": 100, "description": "Scales every adjustment of the mask, in percent." },
+        "detail": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Above 0 keeps only textured areas of the mask, below 0 only flat ones. Written only when it isn't 0." },
+        "adjustments": { "$ref": "#/$defs/localAdjustments" }
+      },
+      "additionalProperties": false
+    },
+    "localAdjustments": {
+      "description": "The mask's adjustments, each written only when it isn't 0. Readers clamp a value to its range and drop keys they don't know.",
+      "type": "object",
+      "properties": {
+        "local.temperature": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Temp, relative to the global white balance." },
+        "local.tint": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Tint, relative to the global white balance." },
+        "local.exposure": { "type": "number", "minimum": -4, "maximum": 4, "default": 0, "description": "Exposure, in stops." },
+        "local.contrast": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Contrast." },
+        "local.highlights": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Highlights." },
+        "local.shadows": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Shadows." },
+        "local.whites": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Whites." },
+        "local.blacks": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Blacks." },
+        "local.texture": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Texture." },
+        "local.clarity": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Clarity." },
+        "local.dehaze": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Dehaze." },
+        "local.hue": { "type": "number", "minimum": -180, "maximum": 180, "default": 0, "description": "Hue shift, in degrees." },
+        "local.saturation": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Saturation." },
+        "local.sharpness": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Sharpness." },
+        "local.noise": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Noise reduction." },
+        "local.moire": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Moire reduction." },
+        "local.defringe": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Defringe." },
+        "local.halation": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Halation where the mask covers; the size stays global." },
+        "local.bloom": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Bloom where the mask covers; the size stays global." }
+      },
+      "additionalProperties": false,
+      "default": {}
+    },
+    "maskComponent": {
+      "type": "object",
+      "required": ["id", "shape", "operation", "inverted"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "shape": { "$ref": "#/$defs/maskShape" },
+        "operation": {
+          "enum": ["add", "subtract", "intersect"],
+          "description": "How the component combines with the components before it."
+        },
+        "inverted": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "maskShape": {
+      "description": "Exactly one key, the component's kind, holding its parameters under _0. A kind Redlamp doesn't know renders nothing and is written back unchanged.",
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "properties": {
+        "linear": {
+          "description": "Linear Gradient.",
+          "type": "object",
+          "required": ["_0"],
+          "properties": { "_0": { "$ref": "#/$defs/linearMask" } },
+          "additionalProperties": false
+        },
+        "radial": {
+          "description": "Radial Gradient.",
+          "type": "object",
+          "required": ["_0"],
+          "properties": { "_0": { "$ref": "#/$defs/radialMask" } },
+          "additionalProperties": false
+        },
+        "brush": {
+          "description": "Brush.",
+          "type": "object",
+          "required": ["_0"],
+          "properties": { "_0": { "$ref": "#/$defs/brushMask" } },
+          "additionalProperties": false
+        },
+        "luminanceRange": {
+          "description": "Luminance Range.",
+          "type": "object",
+          "required": ["_0"],
+          "properties": { "_0": { "$ref": "#/$defs/luminanceRangeMask" } },
+          "additionalProperties": false
+        },
+        "colorRange": {
+          "description": "Color Range.",
+          "type": "object",
+          "required": ["_0"],
+          "properties": { "_0": { "$ref": "#/$defs/colorRangeMask" } },
+          "additionalProperties": false
+        },
+        "ai": {
+          "description": "A mask computed by a model: Subject, Sky, Background, Objects, People or Landscape.",
+          "type": "object",
+          "required": ["_0"],
+          "properties": { "_0": { "$ref": "#/$defs/aiMask" } },
+          "additionalProperties": false
+        },
+        "depthRange": {
+          "description": "Depth Range.",
+          "type": "object",
+          "required": ["_0"],
+          "properties": { "_0": { "$ref": "#/$defs/depthRangeMask" } },
+          "additionalProperties": false
+        },
+        "maskReference": {
+          "description": "Another mask's coverage.",
+          "type": "object",
+          "required": ["_0"],
+          "properties": { "_0": { "$ref": "#/$defs/maskReference" } },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": {
+        "description": "A component kind written by a newer Redlamp: renders nothing, kept and written back unchanged."
+      }
+    },
+    "linearMask": {
+      "description": "Full effect at start, fading to none at end.",
+      "type": "object",
+      "required": ["start", "end"],
+      "properties": { "start": { "$ref": "#/$defs/imagePoint" }, "end": { "$ref": "#/$defs/imagePoint" } },
+      "additionalProperties": false
+    },
+    "radialMask": {
+      "description": "An ellipse with a feathered edge, full effect inside.",
+      "type": "object",
+      "required": ["center", "radiusX", "radiusY", "rotation", "feather"],
+      "properties": {
+        "center": { "$ref": "#/$defs/imagePoint" },
+        "radiusX": { "type": "number", "minimum": 0, "description": "A fraction of the image height." },
+        "radiusY": { "type": "number", "minimum": 0, "description": "A fraction of the image height." },
+        "rotation": { "type": "number", "description": "Degrees, clockwise." },
+        "feather": { "type": "number", "minimum": 0, "maximum": 100 }
+      },
+      "additionalProperties": false
+    },
+    "brushMask": {
+      "description": "Painted strokes, in order; erase strokes take coverage away from earlier ones.",
+      "type": "object",
+      "required": ["strokes"],
+      "properties": { "strokes": { "type": "array", "items": { "$ref": "#/$defs/brushStroke" } } },
+      "additionalProperties": false
+    },
+    "brushStroke": {
+      "description": "One stroke: dabs along points, each a soft disc.",
+      "type": "object",
+      "required": ["points", "pressures", "size", "feather", "flow", "density", "erase", "autoMask"],
+      "properties": {
+        "points": { "type": "array", "items": { "$ref": "#/$defs/imagePoint" } },
+        "pressures": {
+          "type": "array",
+          "items": { "type": "number", "minimum": 0, "maximum": 1 },
+          "description": "Pen pressure at each point; empty when the input had none (full pressure)."
+        },
+        "size": {
+          "type": "number",
+          "minimum": 0,
+          "description": "The brush radius, as a fraction of the image height."
+        },
+        "feather": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "The share of the radius that fades out."
+        },
+        "flow": { "type": "number", "minimum": 0, "maximum": 100, "description": "How much each dab adds." },
+        "density": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "The most coverage the stroke can reach."
+        },
+        "erase": { "type": "boolean", "description": "Removes coverage instead of adding it." },
+        "autoMask": { "type": "boolean", "description": "Keeps each dab to colors like the one under its center." }
+      },
+      "additionalProperties": false
+    },
+    "luminanceRangeMask": {
+      "description": "Full coverage for lightness (OKLab L x 100 of the photo with its global edit) between lower and upper, fading to none over the feathers.",
+      "type": "object",
+      "required": ["lower", "upper", "lowerFeather", "upperFeather"],
+      "properties": {
+        "lower": { "type": "number", "minimum": 0, "maximum": 100 },
+        "upper": { "type": "number", "minimum": 0, "maximum": 100 },
+        "lowerFeather": { "type": "number", "minimum": 0, "maximum": 100 },
+        "upperFeather": { "type": "number", "minimum": 0, "maximum": 100 },
+        "samplePoint": {
+          "$ref": "#/$defs/imagePoint",
+          "description": "Where the eyedropper sampled, for its pin. Not used for rendering."
+        }
+      },
+      "additionalProperties": false
+    },
+    "colorRangeMask": {
+      "description": "Colors like any of the samples, read from the photo with its global edit at every render.",
+      "type": "object",
+      "required": ["samples", "refine"],
+      "properties": {
+        "samples": { "type": "array", "maxItems": 5, "items": { "$ref": "#/$defs/colorSample" } },
+        "refine": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "How far from the samples a color may be and still be selected."
+        }
+      },
+      "additionalProperties": false
+    },
+    "colorSample": {
+      "type": "object",
+      "required": ["center", "radius"],
+      "properties": {
+        "center": { "$ref": "#/$defs/imagePoint" },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "description": "The sampled disc's radius, as a fraction of the image height; 0 samples a small spot."
+        }
+      },
+      "additionalProperties": false
+    },
+    "maskBitmap": {
+      "description": "An 8-bit grayscale PNG coverage map in the photo's oriented frame, stored as masks/<sha256>.png.",
+      "type": "object",
+      "required": ["sha256", "width", "height"],
+      "properties": {
+        "sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "The PNG's hash, and its file name in the package's masks folder."
+        },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "aiMask": {
+      "description": "A mask computed by a model and kept as a bitmap, so it renders the same everywhere and changes only when the user updates it.",
+      "type": "object",
+      "required": ["kind", "provider", "revision", "prompts", "analysisHash", "center", "bitmap", "createdAt"],
+      "properties": {
+        "kind": {
+          "enum": ["subject", "sky", "background", "objects", "people", "landscape", "depthRange"],
+          "description": "What the mask is of; depthRange for a depth map."
+        },
+        "provider": { "type": "string", "description": "What computed it, for example apple.vision.foreground." },
+        "revision": { "type": "integer", "description": "The provider's request or model revision." },
+        "osBuild": { "type": "string", "description": "The macOS build, for system models that change with the OS." },
+        "instance": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Which person or object, when the provider found several."
+        },
+        "part": {
+          "enum": [
+            "entirePerson", "faceSkin", "bodySkin", "eyebrows", "eyeSclera", "iris", "lips", "teeth", "hair",
+            "facialHair", "clothes", "water", "vegetation", "mountains", "architecture", "naturalGround",
+            "artificialGround"
+          ],
+          "description": "A part of a person (People) or a Landscape class."
+        },
+        "prompts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/imagePoint" },
+          "description": "Points the user clicked to guide the model."
+        },
+        "excludedPrompts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/imagePoint" },
+          "description": "Points the user clicked to leave out."
+        },
+        "analysisHash": { "type": "string", "description": "A hash of the render the model saw." },
+        "center": { "$ref": "#/$defs/imagePoint" },
+        "bitmap": { "$ref": "#/$defs/maskBitmap", "description": "The model's mask, with the refinements applied." },
+        "createdAt": { "$ref": "#/$defs/date" },
+        "refinements": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/brushStroke" },
+          "description": "Refine Edge strokes, in order, kept so updating the mask can apply them again."
+        }
+      },
+      "additionalProperties": false
+    },
+    "depthRangeMask": {
+      "description": "Full coverage for depths between lower and upper (0 farthest, 100 nearest), fading over the feathers.",
+      "type": "object",
+      "required": ["depth", "lower", "upper", "lowerFeather", "upperFeather"],
+      "properties": {
+        "depth": { "$ref": "#/$defs/aiMask", "description": "The depth map; near is white." },
+        "lower": { "type": "number", "minimum": 0, "maximum": 100 },
+        "upper": { "type": "number", "minimum": 0, "maximum": 100 },
+        "lowerFeather": { "type": "number", "minimum": 0, "maximum": 100 },
+        "upperFeather": { "type": "number", "minimum": 0, "maximum": 100 }
+      },
+      "additionalProperties": false
+    },
+    "maskReference": {
+      "type": "object",
+      "required": ["maskID"],
+      "properties": {
+        "maskID": {
+          "$ref": "#/$defs/uuid",
+          "description": "The id of another mask of the edit. Its own references are ignored."
+        }
+      },
+      "additionalProperties": false
+    },
+    "retouchSpot": {
+      "description": "A Remove, Heal or Clone spot. These types are still evolving.",
+      "type": "object",
+      "required": ["id", "mode", "center", "source", "radius", "feather", "opacity"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "mode": {
+          "enum": ["remove", "heal", "clone"],
+          "description": "Remove fills from the photo around the spot; Heal copies source's texture matched to the spot's surroundings; Clone copies source as it is. Readers treat any other value as heal."
+        },
+        "center": { "$ref": "#/$defs/imagePoint" },
+        "source": {
+          "$ref": "#/$defs/imagePoint",
+          "description": "Where Heal and Clone copy from. Remove doesn't use it and writes center."
+        },
+        "stroke": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/imagePoint" },
+          "description": "A brushed spot's points after its first (center), each relative to center. Written only for a brushed spot."
+        },
+        "region": {
+          "$ref": "#/$defs/aiMask",
+          "description": "A picked person or object: the spot is this mask grown by radius, instead of a circle or stroke."
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "description": "A fraction of the image height: the circle's or brush's radius, or how far a region grows."
+        },
+        "feather": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "The share of the radius that fades out."
+        },
+        "opacity": { "type": "number", "minimum": 0, "maximum": 100 }
+      },
+      "additionalProperties": false
+    },
+    "snapshot": {
+      "description": "A named version of the edit.",
+      "type": "object",
+      "required": ["id", "name", "created", "recipe"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "name": { "type": "string" },
+        "created": { "$ref": "#/$defs/date" },
+        "recipe": { "$ref": "#/$defs/recipe" }
+      },
+      "additionalProperties": false
+    },
+    "metadata": {
+      "description": "Rating, flag and color label. Written only when one is set.",
+      "type": "object",
+      "required": ["rating"],
+      "properties": {
+        "rating": { "type": "integer", "minimum": 0, "maximum": 5, "description": "Stars." },
+        "flag": { "enum": ["pick", "reject"] },
+        "label": { "enum": ["red", "yellow", "green", "blue", "purple"] }
+      },
+      "additionalProperties": false
+    },
+    "historyFile": {
+      "description": "A history session file, history/<id>.json: the first step's whole edit, then each later step as a JSON Patch from the one before.",
+      "type": "object",
+      "required": ["format", "version", "id", "started", "bitmaps", "steps"],
+      "properties": {
+        "format": { "const": "app.redlamp.history" },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1,
+          "description": "The history format version. Redlamp skips a file with a newer one, and never removes it."
+        },
+        "id": { "$ref": "#/$defs/uuid", "description": "The session's id, and the file's name." },
+        "started": { "$ref": "#/$defs/date" },
+        "bitmaps": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sha256" },
+          "description": "Every mask bitmap the steps use, sorted, so the package keeps them without reading every step."
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "prefixItems": [{ "$ref": "#/$defs/historyStep", "required": ["recipe"] }],
+          "items": { "$ref": "#/$defs/historyStep" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "historyStep": {
+      "type": "object",
+      "required": ["id", "action", "title"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "action": { "$ref": "#/$defs/historyAction" },
+        "title": { "type": "string", "description": "What the History panel shows, for example Exposure." },
+        "before": { "type": "string", "description": "The one value the step changed, as it was, for example +0.50." },
+        "after": { "type": "string", "description": "The value as it became." },
+        "recipe": { "$ref": "#/$defs/recipe", "description": "The whole edit; the first step has it." },
+        "patch": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/patchOperation" },
+          "description": "The change from the step before. A step with neither recipe nor patch leaves the edit as it was."
+        }
+      },
+      "additionalProperties": false
+    },
+    "historyAction": {
+      "description": "The kind of step, for its icon: a plain name, adjustment:<parameter key>, or mask:<mask kind>. Readers treat an action they don't know as edit.",
+      "type": "string",
+      "anyOf": [
+        {
+          "enum": [
+            "open", "clear", "restore", "reset", "auto", "treatment", "baseLook", "whiteBalance", "toneCurve", "recipe",
+            "snapshot", "paste", "crop", "rotate", "flip", "straighten", "upright", "mask", "retouch", "edit"
+          ]
+        },
+        { "pattern": "^adjustment:[A-Za-z]+(\\.[A-Za-z]+)+$" },
+        {
+          "pattern": "^mask:(subject|sky|background|objects|people|landscape|brush|linear|radial|colorRange|luminanceRange|depthRange|existingMask)$"
+        }
+      ]
+    },
+    "patchOperation": {
+      "description": "An RFC 6902 JSON Patch operation; Redlamp writes add, remove and replace.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["op", "path"],
+          "properties": { "op": { "const": "remove" }, "path": { "$ref": "#/$defs/jsonPointer" } },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["op", "path", "value"],
+          "properties": {
+            "op": { "enum": ["add", "replace"] },
+            "path": { "$ref": "#/$defs/jsonPointer" },
+            "value": {
+              "type": ["boolean", "number", "string", "array", "object"],
+              "description": "Any JSON value but null."
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "jsonPointer": {
+      "type": "string",
+      "pattern": "^(/([^~/]|~[01])*)*$",
+      "description": "An RFC 6901 JSON Pointer into the edit; - as the last token appends to an array."
+    }
+  }
+}
