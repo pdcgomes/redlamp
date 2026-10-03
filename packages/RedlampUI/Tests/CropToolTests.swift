@@ -90,7 +90,7 @@ struct CropToolTests {
         let model = try await openModel()
         #expect(model.cropOverlay == .thirds)
         #expect(model.perform(.maskOverlay))
-        #expect(model.cropOverlay == .grid)
+        #expect(model.cropOverlay == .diagonal)
         #expect(model.perform(.maskOverlayColor))
         #expect(model.cropOverlayTurns == 1)
 
@@ -105,6 +105,55 @@ struct CropToolTests {
         model.activeTool = .edit
         model.perform(.flagReject)
         #expect(model.recipe.crop == swapped, "outside the crop tool X is Reject again")
+    }
+
+    @Test func `O cycles the overlays in Lightroom's order, then wraps`() async throws {
+        let model = try await openModel()
+        model.cropOverlay = .grid
+        var visited = [model.cropOverlay]
+        for _ in CropOverlay.allCases {
+            #expect(model.perform(.maskOverlay))
+            visited.append(model.cropOverlay)
+        }
+        #expect(visited == [
+            .grid,
+            .thirds,
+            .diagonal,
+            .goldenTriangle,
+            .goldenRatio,
+            .goldenSpiral,
+            .aspectRatios,
+            .grid,
+        ])
+    }
+
+    @Test func `the overlays stay in the crop's frame at any Angle, in landscape and portrait`() async throws {
+        let landscape = try await openModel()
+        let portrait = try await openModel()
+        portrait.swapCropOrientation()
+        let turned = try await openModel()
+        turned.rotate(clockwise: true)
+        for (model, isPortrait) in [(landscape, false), (portrait, true), (turned, true)] {
+            for angle in [-45.0, -12.5, 0, 7, 30, 45] {
+                model.setValue(.cropAngle, angle)
+                // One point a pixel, so the outlines' ratios are measured in the photo's pixels.
+                let size = model.cropFrameSize
+                let frame = CGRect(x: 0, y: 0, width: Double(size.width), height: Double(size.height))
+                let rect = CropOverlayView.rect(of: model.recipe.crop, in: frame)
+                let inside = rect.insetBy(dx: -1e-6, dy: -1e-6)
+                #expect((rect.height > rect.width) == isPortrait, "\(rect) at \(angle)°")
+                for (outline, ratio) in zip(CropOverlay.aspectOutlines(in: rect), CropOverlay.outlineRatios) {
+                    #expect(inside.contains(outline), "\(outline) outside \(rect) at \(angle)°")
+                    let long = max(outline.width, outline.height), short = min(outline.width, outline.height)
+                    #expect(abs(long - short * ratio) <= 1, "\(ratio) is \(outline.size) at \(angle)°")
+                }
+                for turns in 0 ..< 8 {
+                    for arc in GoldenSpiral(in: rect, turns: turns).arcs {
+                        #expect([arc.start, arc.end, arc.control1, arc.control2].allSatisfy(inside.contains))
+                    }
+                }
+            }
+        }
     }
 
     @Test func `⇧O turns the golden spiral through eight orientations, then back to the first`() async throws {
@@ -291,5 +340,26 @@ struct CropOverlayTests {
                 }
             }
         }
+    }
+
+    @Test func `each aspect outline keeps its ratio, centred in the crop, as large as fits and turned with it`() {
+        for rect in Self.frames {
+            let outlines = CropOverlay.aspectOutlines(in: rect)
+            #expect(outlines.count == CropOverlay.outlineRatios.count)
+            for (outline, ratio) in zip(outlines, CropOverlay.outlineRatios) {
+                let long = max(outline.width, outline.height), short = min(outline.width, outline.height)
+                #expect(abs(long - short * ratio) < 1e-9 * long, "\(ratio) is \(outline.size) in \(rect)")
+                #expect(rect.height > rect.width ? outline.height >= outline.width : outline.width >= outline.height)
+                expectInside(CGPoint(x: outline.minX, y: outline.minY), rect)
+                expectInside(CGPoint(x: outline.maxX, y: outline.maxY), rect)
+                #expect(abs(outline.midX - rect.midX) < 1e-9 && abs(outline.midY - rect.midY) < 1e-9)
+                #expect(
+                    abs(outline.width - rect.width) < 1e-9 || abs(outline.height - rect.height) < 1e-9,
+                    "\(ratio) spans the crop one way",
+                )
+            }
+        }
+        let common: [Double] = [1, 5.0 / 4, 7.0 / 5, 3.0 / 2, 4.0 / 3, 16.0 / 9]
+        #expect(common.allSatisfy(CropOverlay.outlineRatios.contains), "1 × 1, 4 × 5, 5 × 7, 2 × 3, 4 × 3, 16 × 9")
     }
 }

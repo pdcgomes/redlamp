@@ -25,11 +25,7 @@ struct CropOverlayView: View {
     var body: some View {
         GeometryReader { geometry in
             let frame = model.canvas.imageRect(in: geometry.size)
-            let crop = model.recipe.crop
-            let rect = CGRect(
-                x: frame.minX + crop.left * frame.width, y: frame.minY + crop.top * frame.height,
-                width: crop.width * frame.width, height: crop.height * frame.height,
-            )
+            let rect = Self.rect(of: model.recipe.crop, in: frame)
             ZStack {
                 // Outside the crop a drag only draws a level line.
                 Color.clear
@@ -86,6 +82,14 @@ struct CropOverlayView: View {
         }
     }
 
+    /// The crop's rectangle on screen, in the straightened frame's.
+    nonisolated static func rect(of crop: CropRect, in frame: CGRect) -> CGRect {
+        CGRect(
+            x: frame.minX + crop.left * frame.width, y: frame.minY + crop.top * frame.height,
+            width: crop.width * frame.width, height: crop.height * frame.height,
+        )
+    }
+
     /// The guide, turned `turns` times where it isn't symmetric.
     private nonisolated static func overlay(_ kind: CropOverlay, turns: Int, in rect: CGRect) -> Path {
         @Sendable func point(_ x: Double, _ y: Double) -> CGPoint {
@@ -134,6 +138,10 @@ struct CropOverlayView: View {
                 }
                 for arc in arcs {
                     path.addCurve(to: arc.end, control1: arc.control1, control2: arc.control2)
+                }
+            case .aspectRatios:
+                for outline in CropOverlay.aspectOutlines(in: rect) {
+                    path.addRect(outline)
                 }
             }
         }
@@ -339,6 +347,22 @@ struct GoldenSpiral: Equatable {
                 arcs.append(Arc(center: place(right, y), start: place(right, bottom), end: place(left, y)))
                 bottom = y
             }
+        }
+    }
+}
+
+extension CropOverlay {
+    /// The Aspect Ratios overlay's ratios, long side over short: Lightroom's 1 × 1, 4 × 5,
+    /// 8.5 × 11, 5 × 7, 2 × 3, 4 × 3, 16 × 9 and 16 × 10.
+    static let outlineRatios: [Double] = [1, 5.0 / 4, 11 / 8.5, 7.0 / 5, 3.0 / 2, 4.0 / 3, 16.0 / 9, 16.0 / 10]
+
+    /// Each ratio's outline centred in `rect`, the largest that fits, and portrait when `rect` is.
+    static func aspectOutlines(in rect: CGRect) -> [CGRect] {
+        outlineRatios.map { ratio in
+            let aspect = rect.height > rect.width ? 1 / ratio : ratio
+            let width = min(rect.width, rect.height * aspect)
+            let height = min(rect.height, rect.width / aspect)
+            return CGRect(x: rect.midX - width / 2, y: rect.midY - height / 2, width: width, height: height)
         }
     }
 }

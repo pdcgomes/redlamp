@@ -32,9 +32,9 @@ public enum CropAspect: Hashable, Sendable, CaseIterable {
     }
 }
 
-/// The composition guides drawn in the crop, Lightroom's.
+/// The composition guides drawn in the crop, Lightroom's, in the order `O` cycles them.
 public enum CropOverlay: Hashable, Sendable, CaseIterable {
-    case thirds, grid, diagonal, goldenRatio, goldenTriangle, goldenSpiral
+    case grid, thirds, diagonal, goldenTriangle, goldenRatio, goldenSpiral, aspectRatios
 
     /// The orientations `⇧O` turns through: the golden spiral's eye in each corner, wound either
     /// way. The triangle alternates between its two.
@@ -42,12 +42,13 @@ public enum CropOverlay: Hashable, Sendable, CaseIterable {
 
     public var title: String {
         switch self {
-        case .thirds: "Thirds"
         case .grid: "Grid"
+        case .thirds: "Thirds"
         case .diagonal: "Diagonal"
-        case .goldenRatio: "Golden Ratio"
         case .goldenTriangle: "Golden Triangle"
+        case .goldenRatio: "Golden Ratio"
         case .goldenSpiral: "Golden Spiral"
+        case .aspectRatios: "Aspect Ratios"
         }
     }
 
