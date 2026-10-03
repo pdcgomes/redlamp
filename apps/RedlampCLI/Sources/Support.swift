@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import ImageIO
+import RedlampDocument
 import RedlampRecipes
 import UniformTypeIdentifiers
 
@@ -94,7 +95,8 @@ enum LookDev {
 }
 
 enum ImageFile {
-    static func write(_ image: CGImage, to url: URL, quality: Double = 0.92) throws {
+    /// Writes `image` to `url`, replacing any file there that isn't `source` or another photo.
+    static func write(_ image: CGImage, to url: URL, quality: Double = 0.92, protecting source: URL? = nil) throws {
         let type: UTType = switch url.pathExtension.lowercased() {
         case "png": .png
         case "tif", "tiff": .tiff
@@ -102,17 +104,30 @@ enum ImageFile {
         default: .jpeg
         }
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        guard let destination = CGImageDestinationCreateWithURL(url as CFURL, type.identifier as CFString, 1, nil)
-        else {
-            throw CLIError(description: "cannot write \(url.path)")
+        try place(at: url, protecting: source) { temporary in
+            guard let destination = CGImageDestinationCreateWithURL(
+                temporary as CFURL, type.identifier as CFString, 1, nil,
+            ) else {
+                throw CLIError(description: "cannot write \(url.path)")
+            }
+            CGImageDestinationAddImage(
+                destination,
+                image,
+                [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary,
+            )
+            guard CGImageDestinationFinalize(destination)
+            else { throw CLIError(description: "failed to write \(url.path)") }
         }
-        CGImageDestinationAddImage(
-            destination,
-            image,
-            [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary,
-        )
-        guard CGImageDestinationFinalize(destination)
-        else { throw CLIError(description: "failed to write \(url.path)") }
+    }
+
+    /// Writes a file to `url` the way the app exports: beside it first, then moved into
+    /// place, and never over `source` or another photo.
+    static func place(at url: URL, protecting source: URL? = nil, writing: (URL) throws -> Void) throws {
+        do {
+            try ImageExporter.place(at: url, source: source, writing: writing)
+        } catch let error as ExportError {
+            throw CLIError(description: error.localizedDescription)
+        }
     }
 
     static func read(_ url: URL) throws -> CGImage {

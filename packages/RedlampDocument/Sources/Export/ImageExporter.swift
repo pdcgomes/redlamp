@@ -4,20 +4,48 @@ import ImageIO
 
 /// Encodes rendered stills and writes them to disk.
 public enum ImageExporter {
-    /// Writes `image` to `url` as `settings` describe, replacing any file there. The file is
-    /// written beside the target first and moved into place, so a failure never leaves a
-    /// partial file or loses the one it would have replaced.
+    /// Writes `image` to `url` as `settings` describe, replacing any file there unless it is a
+    /// photo (see `place(at:source:writing:)`).
     public static func write(
         _ image: CGImage,
         to url: URL,
         settings: ExportSettings,
         metadata: [CFString: Any] = [:],
+        source: URL? = nil,
     ) throws {
+        try place(at: url, source: source) { temporary in
+            if settings.appliesFileSizeLimit {
+                let data = try encodeWithinLimit(image, settings: settings, metadata: metadata)
+                do {
+                    try data.write(to: temporary)
+                } catch {
+                    throw ExportError.writeFailed(url)
+                }
+            } else {
+                guard let destination = CGImageDestinationCreateWithURL(
+                    temporary as CFURL, settings.format.typeIdentifier as CFString, 1, nil,
+                ) else {
+                    throw ExportError.cannotEncode(settings.format)
+                }
+                try finish(destination, image, properties(settings: settings, metadata: metadata), settings.format)
+            }
+        }
+    }
+
+    /// Puts the file `writing` writes to the URL it's given at `url`, replacing any file there.
+    /// The file is written beside the target first and moved into place, so a failure never
+    /// leaves a partial file or loses the one it would have replaced. Throws
+    /// `ExportError.wouldReplacePhoto`, before writing anything, if `url` is `source`, a raw
+    /// file or a photo with edits.
+    public static func place(at url: URL, source: URL? = nil, writing: (URL) throws -> Void) throws {
         let fileManager = FileManager.default
         let folder = url.deletingLastPathComponent()
         var isDirectory: ObjCBool = false
         guard fileManager.fileExists(atPath: folder.path, isDirectory: &isDirectory), isDirectory.boolValue else {
             throw ExportError.folderMissing(folder)
+        }
+        guard !ExportDestination.isPhoto(url, source: source, fileManager: fileManager) else {
+            throw ExportError.wouldReplacePhoto(url)
         }
         let staging: URL
         do {
@@ -29,22 +57,7 @@ public enum ImageExporter {
         }
         defer { try? fileManager.removeItem(at: staging) }
         let temporary = staging.appending(path: url.lastPathComponent, directoryHint: .notDirectory)
-
-        if settings.appliesFileSizeLimit {
-            let data = try encodeWithinLimit(image, settings: settings, metadata: metadata)
-            do {
-                try data.write(to: temporary)
-            } catch {
-                throw ExportError.writeFailed(url)
-            }
-        } else {
-            guard let destination = CGImageDestinationCreateWithURL(
-                temporary as CFURL, settings.format.typeIdentifier as CFString, 1, nil,
-            ) else {
-                throw ExportError.cannotEncode(settings.format)
-            }
-            try finish(destination, image, properties(settings: settings, metadata: metadata), settings.format)
-        }
+        try writing(temporary)
 
         do {
             if fileManager.fileExists(atPath: url.path) {

@@ -241,17 +241,7 @@ func run(_ arguments: [String]) async throws {
     let image = try await engine.renderStill(request)
     let renderTime = clock.now - renderStart
 
-    let type: UTType = switch output.pathExtension.lowercased() {
-    case "png": .png
-    case "tif", "tiff": .tiff
-    case "heic": .heic
-    default: .jpeg
-    }
-    guard let destination = CGImageDestinationCreateWithURL(output as CFURL, type.identifier as CFString, 1, nil) else {
-        throw CLIError(description: "cannot write \(output.path)")
-    }
-    CGImageDestinationAddImage(destination, image, [kCGImageDestinationLossyCompressionQuality: 0.92] as CFDictionary)
-    guard CGImageDestinationFinalize(destination) else { throw CLIError(description: "failed to write \(output.path)") }
+    try ImageFile.write(image, to: output, protecting: input)
     print(
         "\(info.fileName) → \(output.lastPathComponent) \(image.width)x\(image.height)  open \(openTime), render \(renderTime)",
     )
