@@ -123,6 +123,9 @@ public enum SidecarStoreError: Error, Equatable {
     /// The sidecar was written by a newer Redlamp. It is read-only here, so it is never
     /// overwritten or deleted.
     case writtenByNewerVersion(URL)
+    /// The sidecar exists but this build can't decode it (damaged, or a value it doesn't know).
+    /// It may still hold an edit, history and masks, so it is never overwritten or deleted.
+    case unreadable(URL)
 }
 
 /// Reads and writes sidecars.
@@ -183,6 +186,22 @@ public struct SidecarStore: Sendable {
         }) ?? false
     }
 
+    /// Whether the image has a sidecar this build can't decode, though no newer Redlamp wrote it.
+    /// The photo shows unedited, and its sidecar is left as it is.
+    public func isUnreadable(for image: URL) -> Bool {
+        let sidecar = url(for: image)
+        return (try? Self.reading(sidecar) { url in
+            (try? Data(contentsOf: Self.editURL(inSidecar: url))).map { !Self.isNewer($0) && !Self.decodes($0) }
+                ?? false
+        }) ?? false
+    }
+
+    /// Whether the image's sidecar must not be saved over or deleted: a newer Redlamp wrote it, or
+    /// this build can't read it.
+    public func isReadOnly(for image: URL) -> Bool {
+        isWrittenByNewerVersion(for: image) || isUnreadable(for: image)
+    }
+
     /// Writes the sidecar unless nothing but `modified` changed, so unchanged edits don't
     /// wake up sync services. Fields a newer Redlamp added to the file on disk are kept.
     public func save(_ sidecar: Sidecar, for image: URL) throws {
@@ -193,11 +212,12 @@ public struct SidecarStore: Sendable {
         }
     }
 
-    /// Removes the sidecar, unless a newer Redlamp wrote it.
+    /// Removes the sidecar, unless a newer Redlamp wrote it or this build can't read it.
     public func delete(for image: URL) {
         let sidecar = url(for: image)
         try? Self.writing(sidecar, options: .forDeleting) { url in
-            if let data = try? Data(contentsOf: Self.editURL(inSidecar: url)), Self.isNewer(data) {
+            if let data = try? Data(contentsOf: Self.editURL(inSidecar: url)),
+               Self.isNewer(data) || !Self.decodes(data) {
                 return
             }
             try FileManager.default.removeItem(at: url)
@@ -322,14 +342,15 @@ public struct SidecarStore: Sendable {
             if isNewer(data) {
                 throw SidecarStoreError.writtenByNewerVersion(destination)
             }
-            if let existing = try? JSONDecoder.sidecar.decode(Sidecar.self, from: data) {
-                sidecar.unknownFields = existing.unknownFields.merging(sidecar.unknownFields) { _, new in new }
-                if existing.hasSameContent(as: sidecar), existingPackage, hasEveryBitmap(sidecar, in: destination) {
-                    if try writeHistory(of: sidecar, in: destination) {
-                        removeUnusedBitmaps(of: sidecar, in: destination)
-                    }
-                    return
+            guard let existing = try? JSONDecoder.sidecar.decode(Sidecar.self, from: data) else {
+                throw SidecarStoreError.unreadable(destination)
+            }
+            sidecar.unknownFields = existing.unknownFields.merging(sidecar.unknownFields) { _, new in new }
+            if existing.hasSameContent(as: sidecar), existingPackage, hasEveryBitmap(sidecar, in: destination) {
+                if try writeHistory(of: sidecar, in: destination) {
+                    removeUnusedBitmaps(of: sidecar, in: destination)
                 }
+                return
             }
         }
         let json = try JSONEncoder.sidecar.encode(sidecar)
@@ -401,6 +422,10 @@ public struct SidecarStore: Sendable {
         for file in files where file.hasSuffix(".png") && !used.contains(String(file.dropLast(4))) {
             try? FileManager.default.removeItem(at: masks.appending(path: file))
         }
+    }
+
+    private static func decodes(_ data: Data) -> Bool {
+        (try? JSONDecoder.sidecar.decode(Sidecar.self, from: data)) != nil
     }
 
     private static func isNewer(_ data: Data) -> Bool {

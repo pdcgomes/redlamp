@@ -120,7 +120,7 @@ public final class SettingsSync {
         for url in photos {
             guard !Task.isCancelled else { break }
             defer { progress?.done += 1 }
-            guard !store.isWrittenByNewerVersion(for: url) else {
+            guard !store.isReadOnly(for: url) else {
                 skipped += 1
                 continue
             }

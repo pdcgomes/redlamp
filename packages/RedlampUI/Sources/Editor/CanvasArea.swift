@@ -171,6 +171,9 @@ struct CanvasArea: View {
         if model.isShowingOriginal {
             return "Before"
         }
+        if model.isSidecarUnreadable {
+            return "This photo's edit file can't be read  ·  Changes won't be saved"
+        }
         if model.isReadOnly {
             return "Edited in a newer version of Redlamp  ·  Changes won't be saved"
         }

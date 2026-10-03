@@ -19,8 +19,8 @@ struct SettingsSyncTests {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
-        let photos = ["A", "B", "C", "D"].map { folder.appending(path: "\($0).ARW") }
-        let (a, b, c, d) = (photos[0], photos[1], photos[2], photos[3])
+        let photos = ["A", "B", "C", "D", "E"].map { folder.appending(path: "\($0).ARW") }
+        let (a, b, c, d, e) = (photos[0], photos[1], photos[2], photos[3], photos[4])
         let store = SidecarStore()
         var edited = EditRecipe()
         edited[.contrast] = 30
@@ -28,6 +28,8 @@ struct SettingsSyncTests {
         var newer = EditRecipe()
         newer.processVersion = EditRecipe.currentProcessVersion + 1
         try store.save(Sidecar(recipe: newer), for: d)
+        let damaged = Data(#"{"format":"app.redlamp.edit","recipe":{"version":3,"#.utf8)
+        try damaged.write(to: store.url(for: e))
 
         let engine = StubEngine()
         let mask = AIMask(
@@ -59,6 +61,7 @@ struct SettingsSyncTests {
         #expect(history.contains("Sync Settings"))
         #expect(store.load(for: c)?.recipe[.exposure] == 1, "a photo without a sidecar gets one")
         #expect(store.load(for: d)?.recipe[.exposure] == 0, "a newer Redlamp's edit is left alone")
+        #expect(try Data(contentsOf: store.editURL(for: e)) == damaged, "an unreadable sidecar is left alone")
         #expect(model.settingsSync.report?.contains("left alone") == true)
         #expect(model.library.item(for: c)?.hasEdits == true)
 

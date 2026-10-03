@@ -84,6 +84,38 @@ struct SidecarTests {
         #expect(try Data(contentsOf: store.editURL(for: image)) == Data(json.utf8))
     }
 
+    /// A sidecar this build can't decode (damaged, or an unknown value) may still hold an edit, its
+    /// history and masks: it is never saved over or deleted, as a newer one isn't.
+    @Test(arguments: [
+        #"{"format":"app.redlamp.edit","recipe":{"version":3,"processVersion":9,"values":{"basic.exposure":"high"}}}"#,
+        #"{"format":"app.redlamp.edit","recipe":{"version":3,"processVersion":9,"#,
+    ])
+    func `sidecars that can't be read are read only`(json: String) throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        try Data(json.utf8).write(to: store.url(for: image))
+
+        #expect(store.load(for: image) == nil)
+        #expect(store.isUnreadable(for: image))
+        #expect(store.isReadOnly(for: image))
+        #expect(!store.isWrittenByNewerVersion(for: image))
+        #expect(throws: SidecarStoreError.unreadable(store.url(for: image))) {
+            try store.save(Sidecar(recipe: EditRecipe()), for: image)
+        }
+        store.delete(for: image)
+        #expect(try Data(contentsOf: store.editURL(for: image)) == Data(json.utf8))
+    }
+
+    @Test func `a missing or readable sidecar isn't read only`() throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        #expect(!store.isReadOnly(for: image))
+        try store.save(Sidecar(recipe: EditRecipe()), for: image)
+        #expect(!store.isUnreadable(for: image) && !store.isReadOnly(for: image))
+    }
+
     @Test func `format 1 profiles read as base looks and are written back as format 2`() throws {
         let (image, cleanup) = try temporaryImage()
         defer { cleanup() }

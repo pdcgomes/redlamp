@@ -353,7 +353,7 @@ What Redlamp does when it reads a sidecar, which is also what another reader mus
 3. **Unknown values**: a spot's `mode` reads as `heal` and a history step's `action` as `edit`. Any other value outside its list (`treatment`, `whiteBalance`, a component's `operation`, an AI mask's `kind`, `flag`, `label`) makes the sidecar unreadable.
 4. **Values out of range**: parameters and local adjustments are clamped to their ranges. Nothing else is checked.
 5. **History files** with another `format`, a newer `version`, or that can't be read are skipped, and kept.
-6. **A sidecar that can't be read** (a missing required key, a value of the wrong type or outside its list, or a date without a time zone, anywhere in `edit.json`) opens as if the photo had no edit. Redlamp then replaces it on the next save, or deletes it if the photo is left unedited. Validate a sidecar against the schema before writing it.
+6. **A sidecar that can't be read** (a missing required key, a value of the wrong type or outside its list, or a date without a time zone, anywhere in `edit.json`) opens as if the photo had no edit, read-only: Redlamp never overwrites or deletes it (it may still hold an edit, history and masks), says so over the photo, and applying settings to many photos leaves it alone. Validate a sidecar against the schema before writing it.
 
 When writing a sidecar for Redlamp:
 
