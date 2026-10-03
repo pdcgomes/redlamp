@@ -495,7 +495,9 @@ extension RedlampEngine {
         let segmenter = try await objectSegmenter()
         let embedding = try await objectEmbedding(analysis, segmenter: segmenter)
         let mask = try await Task.detached(priority: .userInitiated) {
-            try segmenter.mask(embedding, included: request.prompts, excluded: request.excluded, size: size)
+            try segmenter.mask(
+                embedding, included: request.prompts, excluded: request.excluded, box: request.box, size: size,
+            )
         }.value
         return (mask, segmenter)
     }

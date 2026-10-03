@@ -459,10 +459,13 @@ public struct MaskRequest: Sendable, Hashable {
     public var combined: Bool
     /// For Landscape: which class.
     public var landscape: LandscapeClass
+    /// For Objects: a box around the object (a thing found by name), which bounds it as the
+    /// prompts point at it.
+    public var box: ImageRect?
 
     public init(
         kind: MaskKind, part: PersonPart = .entirePerson, prompts: [ImagePoint] = [], excluded: [ImagePoint] = [],
-        combined: Bool = false, landscape: LandscapeClass = .vegetation,
+        combined: Bool = false, landscape: LandscapeClass = .vegetation, box: ImageRect? = nil,
     ) {
         self.kind = kind
         self.part = part
@@ -470,6 +473,7 @@ public struct MaskRequest: Sendable, Hashable {
         self.excluded = excluded
         self.combined = combined
         self.landscape = landscape
+        self.box = box
     }
 
     /// The request an existing AI mask was made with, to update it. (A mask's `part` is its person

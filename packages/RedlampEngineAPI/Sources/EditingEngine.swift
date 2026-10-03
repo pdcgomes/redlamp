@@ -118,6 +118,17 @@ public protocol EditingEngine: AnyObject, Sendable {
         in photos: [(url: URL, recipe: EditRecipe)], sensitivity: Double, progress: @escaping @Sendable (Int) -> Void,
     ) async -> [URL: [DetectedSpot]]
 
+    /// What `findThings` looks for, by name (litter, a sign, a car), or nothing while its model
+    /// isn't downloaded.
+    func thingsToFind() async -> [String]
+
+    /// The model finding things by name needs, while it isn't downloaded.
+    func modelNeededToFind() async -> ModelInfo?
+
+    /// The `things` in the open photo scoring at least `threshold` (0...1), most certain first,
+    /// one box for each. Throws `MaskComputationError.unsupported(.objects)` without its model.
+    func findThings(_ things: Set<String>, threshold: Double) async throws -> [FoundThing]
+
     /// The focus stack document at `url`, merged now or read from the cache, developed with the
     /// default edit within `maxLongEdge`. `progress` gets 0 ... 1 from any thread. Opening the
     /// document afterwards shows this merge, even if it changed since it was last opened.
@@ -157,5 +168,17 @@ public extension EditingEngine {
         in _: [(url: URL, recipe: EditRecipe)], sensitivity _: Double, progress _: @escaping @Sendable (Int) -> Void,
     ) async -> [URL: [DetectedSpot]] {
         [:]
+    }
+
+    func thingsToFind() async -> [String] {
+        []
+    }
+
+    func modelNeededToFind() async -> ModelInfo? {
+        nil
+    }
+
+    func findThings(_: Set<String>, threshold _: Double) async throws -> [FoundThing] {
+        []
     }
 }

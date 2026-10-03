@@ -43,6 +43,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     let sam3Features = Mutex<(hash: String, features: SAM3Concepts.Features)?>(nil)
     let landscapeCache = Mutex<(hash: String, classes: [LandscapeClass: GrayMask])?>(nil)
     let peoplePartsCache = Mutex<(hash: String, parts: SAM3Concepts.PeopleParts)?>(nil)
+    /// OWLv2, for things found by name, once loaded.
+    let thingFinder = Mutex<OWLv2Detector?>(nil)
     /// Each person's matte for the open photo, solved per pixel, which their parts' edges take.
     let personMatteCache = Mutex<(hash: String, mattes: [GrayMask])?>(nil)
     /// The analysis render at the size masks are stored at.

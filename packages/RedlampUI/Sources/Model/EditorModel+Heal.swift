@@ -128,6 +128,96 @@ public extension EditorModel {
         }
     }
 
+    /// Find's lowest score worth outlining: below it OWLv2's boxes are mostly guesses.
+    static let findThreshold = 0.25
+
+    /// What Find can look for, once its model is there.
+    func loadThingsToFind() async {
+        thingsToFind = await engine.thingsToFind()
+    }
+
+    /// Outlines each `thingToFind` (every thing, when nil) in the open photo, for a click to remove.
+    func findThings() async {
+        guard info != nil, !isFindingThings else { return }
+        findMessage = nil
+        if let model = await engine.modelNeededToFind() {
+            findMessage = "Finding things needs \(model.name), from Settings › Models."
+            return
+        }
+        if thingsToFind.isEmpty {
+            await loadThingsToFind()
+        }
+        let photo = selection
+        let wanted = thingToFind.map { Set([$0]) } ?? Set(thingsToFind)
+        isFindingThings = true
+        defer { isFindingThings = false }
+        do {
+            let found = try await engine.findThings(wanted, threshold: Self.findThreshold)
+            guard selection == photo else { return }
+            foundThings = found
+            findMessage = switch found.count {
+            case 0: "Nothing found."
+            case 1: "Found 1: click it to remove it."
+            default: "Found \(found.count): click one to remove it."
+            }
+        } catch {
+            findMessage = (error as? MaskComputationError)?.description ?? "\(error)"
+        }
+    }
+
+    /// Removes a thing Find outlined: Segment Anything cuts its mask from its box, and a Remove
+    /// spot fills it, as a picked object's.
+    func removeFound(_ found: FoundThing) async {
+        guard let spot = await foundSpot(found) else { return }
+        var next = recipe
+        next.spots.append(spot)
+        commit(next, .retouch, "Remove \(found.thing.capitalized)")
+        selectedSpotID = spot.id
+        foundThings.removeAll { $0.id == found.id }
+    }
+
+    /// Removes everything Find outlined, as one step.
+    func removeAllFound() async {
+        var spots: [RetouchSpot] = []
+        var removed: Set<UUID> = []
+        for found in foundThings {
+            guard let spot = await foundSpot(found) else { continue }
+            spots.append(spot)
+            removed.insert(found.id)
+        }
+        guard !spots.isEmpty else { return }
+        var next = recipe
+        next.spots += spots
+        commit(next, .retouch, "Remove Everything Found")
+        selectedSpotID = nil
+        foundThings.removeAll { removed.contains($0.id) }
+    }
+
+    /// A Remove spot shaped by Segment Anything's mask in `found`'s box, grown a little; nil, with
+    /// a message saying why, when it can't be made.
+    private func foundSpot(_ found: FoundThing) async -> RetouchSpot? {
+        guard info != nil, !isPickingRegion else { return nil }
+        if let model = await engine.modelNeeded(for: .objects) {
+            findMessage = "Removing it needs \(model.name), from Settings › Models."
+            return nil
+        }
+        let photo = selection
+        isPickingRegion = true
+        defer { isPickingRegion = false }
+        do {
+            guard let mask = try await engine.computeMasks(MaskRequest(kind: .objects, box: found.box)).first,
+                  selection == photo
+            else { return nil }
+            return RetouchSpot(
+                mode: .remove, center: mask.center, source: mask.center, region: mask, radius: Self.regionGrowth,
+                feather: spotSettings.feather, opacity: spotSettings.opacity,
+            )
+        } catch {
+            findMessage = (error as? MaskComputationError)?.description ?? "\(error)"
+            return nil
+        }
+    }
+
     var selectedSpot: RetouchSpot? {
         selectedSpotID.flatMap { id in recipe.spots.first { $0.id == id } }
     }

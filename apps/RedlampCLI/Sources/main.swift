@@ -34,6 +34,8 @@ options:
   --heal-brush <x>,<y>,…,<radius>  the same along a brush stroke through the points; --clone-brush
   --remove <x>,<y>,<radius>  fill a spot from the photo around it (content-aware); --remove-brush
   --remove-dust <0…100>    heal the sensor dust found at this sensitivity (50 is the app's)
+  --remove-found <things>  remove what's found by name, e.g. car or "trash,sign" (OWLv2 and Segment
+                           Anything, from Settings › Models)
   --bw                     black & white treatment
   --p3                     encode in Display P3 instead of sRGB
   --16bit                  16 bits per component (PNG/TIFF)
@@ -222,6 +224,26 @@ func run(_ arguments: [String]) async throws {
             print(
                 "dust: \(found.count) specks, \(found.prefix(8).map { String(format: "%.3f,%.3f", $0.center.x, $0.center.y) })",
             )
+        case "--remove-found":
+            let names = try Set(value().split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespaces).lowercased() })
+            let known = await engine.thingsToFind()
+            if let model = await engine.modelNeededToFind() {
+                throw CLIError(description: "--remove-found needs \(model.name), from Redlamp's Settings › Models")
+            }
+            guard names.isSubset(of: known) else {
+                throw CLIError(description: "--remove-found can find \(known.joined(separator: ", "))")
+            }
+            let found = try await engine.findThings(names, threshold: 0.25)
+            for thing in found {
+                guard let mask = try await engine.computeMasks(MaskRequest(kind: .objects, box: thing.box)).first
+                else { continue }
+                // Grown by half a percent of the height, as the Healing tool grows a picked object.
+                recipe.spots.append(RetouchSpot(
+                    mode: .remove, center: mask.center, source: mask.center, region: mask, radius: 0.005,
+                ))
+            }
+            print("found: \(found.map { String(format: "%@ %.2f", $0.thing, $0.score) })")
         case "--bw":
             recipe.treatment = .blackAndWhite
         case "--p3":

@@ -43,6 +43,10 @@ struct HealOverlayView: View {
                 ForEach(model.recipe.spots) { spot in
                     SpotHandles(spot: spot, frame: frame, isSelected: spot.id == model.selectedSpotID)
                 }
+
+                ForEach(model.foundThings) { found in
+                    FoundOutline(found: found, frame: frame)
+                }
             }
         }
     }
@@ -82,6 +86,51 @@ struct HealOverlayView: View {
                 let stroke = points.filter(frame.rect.contains).map(frame.image)
                 Task { await model.addStroke(stroke) }
             }
+    }
+}
+
+/// A thing Find outlined: its box, dashed, with its name and score above it; a click removes it.
+private struct FoundOutline: View {
+    let found: FoundThing
+    let frame: ImageFrame
+
+    @Environment(EditorModel.self) private var model
+    @State private var isHovered = false
+
+    var body: some View {
+        let box = found.box
+        // Through the corners, so a rotated crop turns the box with the photo.
+        let corners = [
+            ImagePoint(x: box.x, y: box.y), ImagePoint(x: box.x + box.width, y: box.y),
+            ImagePoint(x: box.x + box.width, y: box.y + box.height), ImagePoint(x: box.x, y: box.y + box.height),
+        ].map(frame.view)
+        let outline = Path { path in
+            path.addLines(corners)
+            path.closeSubpath()
+        }
+        outline
+            .fill(Color.yellow.opacity(isHovered ? 0.18 : 0.04))
+            .overlay(outline.stroke(
+                Color.yellow.opacity(0.9), style: StrokeStyle(lineWidth: isHovered ? 2 : 1.5, dash: [5, 3]),
+            ))
+            .shadow(color: .black.opacity(0.6), radius: 1)
+            .contentShape(outline)
+            .onHover { isHovered = $0 }
+            .onTapGesture { Task { await model.removeFound(found) } }
+            .help("Remove this \(found.thing)")
+        Color.clear
+            .frame(width: 1, height: 1)
+            .overlay(alignment: .bottomLeading) {
+                Text("\(found.thing) \(Int((found.score * 100).rounded()))%")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Color.yellow)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(Color.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 3))
+                    .fixedSize()
+            }
+            .position(corners[0])
+            .allowsHitTesting(false)
     }
 }
 

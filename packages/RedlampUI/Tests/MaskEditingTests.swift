@@ -135,6 +135,25 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         kind == .objects ? neededModel : nil
     }
 
+    /// What Find can look for and finds, the model it still needs, and what it was last asked for.
+    var things: [String] = []
+    var found: [FoundThing] = []
+    var findingModel: ModelInfo?
+    var lastFind: Set<String>?
+
+    func thingsToFind() async -> [String] {
+        things
+    }
+
+    func modelNeededToFind() async -> ModelInfo? {
+        findingModel
+    }
+
+    func findThings(_ wanted: Set<String>, threshold _: Double) async throws -> [FoundThing] {
+        lastFind = wanted
+        return found.filter { wanted.contains($0.thing) }
+    }
+
     func models() async -> [ModelInfo] {
         neededModel.map { [$0] } ?? []
     }

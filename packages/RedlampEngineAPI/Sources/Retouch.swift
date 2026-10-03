@@ -141,3 +141,18 @@ public struct DetectedSpot: Sendable, Hashable {
         self.strength = strength
     }
 }
+
+/// A thing found in the photo by name (RM-08), for the Healing tool to offer for removal: what
+/// it is, how sure the detector is (0...1), and its box in the photo as shown.
+public struct FoundThing: Sendable, Hashable, Identifiable {
+    public var id = UUID()
+    public var thing: String
+    public var score: Double
+    public var box: ImageRect
+
+    public init(thing: String, score: Double, box: ImageRect) {
+        self.thing = thing
+        self.score = score
+        self.box = box
+    }
+}

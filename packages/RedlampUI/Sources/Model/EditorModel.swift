@@ -231,6 +231,8 @@ public final class EditorModel {
             if activeTool != .heal {
                 dustMessage = nil
                 pickMessage = nil
+                findMessage = nil
+                foundThings = []
             }
             requestRender()
         }
@@ -285,6 +287,13 @@ public final class EditorModel {
     public internal(set) var dustSearch: SettingsSync.Progress?
     /// What the last Remove Dust found, shown in the Healing panel.
     public var dustMessage: String?
+    /// Find (RM-08): what it can look for, what to look for next (everything when nil), the things
+    /// it outlined in the open photo, and what the last search came to.
+    public internal(set) var thingsToFind: [String] = []
+    public var thingToFind: String?
+    public internal(set) var foundThings: [FoundThing] = []
+    public internal(set) var isFindingThings = false
+    public var findMessage: String?
 
     // MARK: Masking state
 
@@ -576,6 +585,7 @@ public final class EditorModel {
         isLoading = false
         cropIntent = loaded.crop
         uprightGuides = []
+        foundThings = []
         isPlacingGuides = false
         let frameSize = loaded.developedSize(imageSize: opened.pixelSize)
         if !hasFrame {

@@ -104,13 +104,23 @@ public final class SAMSegmenter: @unchecked Sendable {
         return Embedding(image: image, featsS0: s0, featsS1: s1)
     }
 
-    /// The object at the included points, without the excluded ones, as a mask of `size`.
-    /// SAM's best-scoring of its three proposals is used.
+    /// The object at the included points (or in `box`), without the excluded ones, as a mask of
+    /// `size`. SAM's best-scoring of its three proposals is used.
     public func mask(
-        _ embedding: Embedding, included: [ImagePoint], excluded: [ImagePoint] = [], size: PixelSize,
+        _ embedding: Embedding, included: [ImagePoint], excluded: [ImagePoint] = [], box: ImageRect? = nil,
+        size: PixelSize,
     ) throws -> GrayMask {
-        let prompts = included.map { ($0, Float(1)) } + excluded.map { ($0, Float(0)) }
-        guard !included.isEmpty, prompts.count <= 16 else { throw MaskComputationError.nothingFound(.objects) }
+        // SAM reads a box as its corners, labelled 2 (top left) and 3 (bottom right).
+        let corners = box.map { box in
+            [
+                (ImagePoint(x: box.x, y: box.y), Float(2)),
+                (ImagePoint(x: box.x + box.width, y: box.y + box.height), Float(3)),
+            ]
+        } ?? []
+        let prompts = included.map { ($0, Float(1)) } + excluded.map { ($0, Float(0)) } + corners
+        guard !included.isEmpty || box != nil, prompts.count <= 16 else {
+            throw MaskComputationError.nothingFound(.objects)
+        }
         let points = try MLMultiArray(shape: [1, NSNumber(value: prompts.count), 2], dataType: .float32)
         let labels = try MLMultiArray(shape: [1, NSNumber(value: prompts.count)], dataType: .float32)
         for (index, (point, label)) in prompts.enumerated() {
@@ -141,11 +151,12 @@ public final class SAMSegmenter: @unchecked Sendable {
         let strides = masks.strides.map(\.intValue)
         // SAM proposes a part, a whole and a larger whole. With one click the best score is often
         // a part (a face rather than the person): among proposals scoring close to the best, the
-        // largest wins. With more clicks the user has said what they mean; the best score wins.
+        // largest wins. With more clicks, or a box, the user has said what they mean; the best
+        // score wins.
         let best = (0 ..< 3).max { a, b in
             let scoreA = scores[a].floatValue
             let scoreB = scores[b].floatValue
-            guard included.count == 1 else { return scoreA < scoreB }
+            guard included.count == 1, box == nil else { return scoreA < scoreB }
             let top = (0 ..< 3).map { scores[$0].floatValue }.max() ?? 0
             let closeA = scoreA >= top - 0.15
             let closeB = scoreB >= top - 0.15

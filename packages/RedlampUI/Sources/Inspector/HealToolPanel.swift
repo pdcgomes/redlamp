@@ -64,6 +64,8 @@ struct HealToolPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            findRow
+
             Text(selected == nil
                 ? "Click the photo to add a spot, or drag to brush one. Its source is found nearby."
                 : "Drag the spot or its source to move it, or its handle to resize it.")
@@ -125,5 +127,51 @@ struct HealToolPanel: View {
         }
         .padding(Theme.panelPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .task { await model.loadThingsToFind() }
+    }
+
+    /// Find: a thing to look for (or everything), outlined on the photo for a click to remove.
+    @ViewBuilder private var findRow: some View {
+        @Bindable var model = model
+        HStack(spacing: 6) {
+            Text("Find")
+                .font(Theme.labelFont)
+                .foregroundStyle(Theme.label)
+            Picker("Find", selection: $model.thingToFind) {
+                Text("Everything").tag(String?.none)
+                Divider()
+                ForEach(model.thingsToFind, id: \.self) { thing in
+                    Text(thing.capitalized).tag(String?.some(thing))
+                }
+            }
+            .labelsHidden()
+            .controlSize(.small)
+            .fixedSize()
+            .disabled(model.thingsToFind.isEmpty)
+            Button("Find") { Task { await model.findThings() } }
+                .controlSize(.small)
+                .disabled(model.isFindingThings)
+                .help("Outline what's chosen wherever it is in the photo; click one to remove it")
+            if model.isFindingThings {
+                ProgressView().controlSize(.small)
+            }
+        }
+        if !model.foundThings.isEmpty {
+            HStack(spacing: 6) {
+                Button("Remove All") { Task { await model.removeAllFound() } }
+                    .controlSize(.small)
+                    .disabled(model.isPickingRegion)
+                    .help("Remove everything outlined, as one step")
+                Button("Clear") { model.foundThings = [] }
+                    .controlSize(.small)
+                    .help("Stop outlining what was found")
+            }
+        }
+        if let message = model.findMessage {
+            Text(message)
+                .font(Theme.labelFont)
+                .foregroundStyle(Theme.label)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }

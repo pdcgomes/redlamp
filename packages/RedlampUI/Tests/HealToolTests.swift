@@ -115,6 +115,70 @@ struct HealToolTests {
         #expect(model.pickMessage == "Nothing was found there." && model.recipe.spots.count == 1)
     }
 
+    private static let car = FoundThing(
+        thing: "car",
+        score: 0.6,
+        box: ImageRect(x: 0.1, y: 0.5, width: 0.3, height: 0.2),
+    )
+    private static let sign = FoundThing(
+        thing: "sign", score: 0.4, box: ImageRect(x: 0.7, y: 0.2, width: 0.1, height: 0.1),
+    )
+
+    @Test func `the thing chosen is outlined, and a click on it removes it by its box`() async throws {
+        let engine = StubEngine()
+        engine.things = ["car", "sign"]
+        engine.found = [Self.car, Self.sign]
+        engine.computed = try [half(true)]
+        let (model, cleanup) = try await openEditor(engine)
+        defer { cleanup() }
+        model.activeTool = .heal
+        await model.loadThingsToFind()
+        #expect(model.thingsToFind == ["car", "sign"])
+        model.thingToFind = "car"
+        await model.findThings()
+        #expect(engine.lastFind == ["car"] && model.foundThings.map(\.thing) == ["car"])
+        #expect(model.findMessage == "Found 1: click it to remove it.")
+        await model.removeFound(model.foundThings[0])
+        #expect(engine.lastRequest?.kind == .objects && engine.lastRequest?.box == Self.car.box)
+        let spot = try #require(model.recipe.spots.first)
+        #expect(spot.mode == .remove && spot.region != nil)
+        #expect(model.history.last?.name == "Remove Car" && model.foundThings.isEmpty)
+    }
+
+    @Test func `with nothing chosen, everything is found, removed in one step, and let go when the tool closes`(
+    ) async throws {
+        let engine = StubEngine()
+        engine.things = ["car", "sign"]
+        engine.found = [Self.car, Self.sign]
+        engine.computed = try [half(true)]
+        let (model, cleanup) = try await openEditor(engine)
+        defer { cleanup() }
+        model.activeTool = .heal
+        await model.findThings()
+        #expect(engine.lastFind == ["car", "sign"] && model.foundThings.count == 2)
+        let steps = model.history.count
+        await model.removeAllFound()
+        #expect(model.recipe.spots.count == 2 && model.history.count == steps + 1)
+        #expect(model.history.last?.name == "Remove Everything Found" && model.foundThings.isEmpty)
+        await model.findThings()
+        #expect(model.foundThings.count == 2)
+        model.activeTool = .edit
+        #expect(model.foundThings.isEmpty && model.findMessage == nil)
+    }
+
+    @Test func `without its model, Find says which one to download`() async throws {
+        let engine = StubEngine()
+        engine.findingModel = ModelInfo(
+            id: "owlv2-base", name: "OWLv2 (base)", purpose: "Find", downloadBytes: 365_090_755, state: .notDownloaded,
+        )
+        let (model, cleanup) = try await openEditor(engine)
+        defer { cleanup() }
+        model.activeTool = .heal
+        await model.findThings()
+        #expect(model.findMessage == "Finding things needs OWLv2 (base), from Settings › Models.")
+        #expect(engine.lastFind == nil && model.foundThings.isEmpty)
+    }
+
     @Test func `a drag brushes a spot that follows the stroke`() async throws {
         let (model, cleanup) = try await openEditor()
         defer { cleanup() }
