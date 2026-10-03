@@ -9,7 +9,7 @@
     ["film", 4],
     ["keyboard", 2],
     ["native", 2],
-    ["end", 2.5]
+    ["end", 3]
   ],
   "short": [
     ["safelight", 2],
@@ -17,6 +17,6 @@
     ["steps", 3.5],
     ["masks", 3],
     ["film", 3],
-    ["end", 2]
+    ["end", 3]
   ]
 }

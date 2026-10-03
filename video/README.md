@@ -27,7 +27,7 @@ mise run video -- render   # render every cut into video/out/
 
 ## Introducing Redlamp
 
-A 100-second film that introduces Redlamp on real captures of the app in its Neutral theme, with 53-second cuts for 9:16 and 4:5 feeds, and a score written in code. It's calmer than the explainer: a scene every ten seconds or so, cut to a 72 BPM grid.
+A 102-second film that introduces Redlamp on real captures of the app in its Neutral theme, with 57-second cuts for 9:16 and 4:5 feeds, and a score written in code. It's calmer than the explainer: a scene every ten seconds or so, cut to a 72 BPM grid, ending on its promise: everything you know, nothing you don't need.
 
 ```bash
 PROMO_OUT=video/public/film/captures scripts/capture-promo.sh ~/Pictures/redlamp-promo   # from the repo root
@@ -41,16 +41,16 @@ npm run introducing                               # every cut and its poster, in
 
 | File | Format |
 | --- | --- |
-| `out/introducing/introducing-redlamp-16x9.mp4` | 1920 × 1080, 100 s: YouTube, X, LinkedIn and Reddit |
-| `out/introducing/introducing-redlamp-9x16.mp4` | 1080 × 1920, 53 s: Shorts, Reels, TikTok and Stories |
-| `out/introducing/introducing-redlamp-4x5.mp4` | 1080 × 1350, 53 s: Instagram and Facebook feeds, Reddit on phones |
+| `out/introducing/introducing-redlamp-16x9.mp4` | 1920 × 1080, 102 s: YouTube, X, LinkedIn and Reddit |
+| `out/introducing/introducing-redlamp-9x16.mp4` | 1080 × 1920, 57 s: Shorts, Reels, TikTok and Stories |
+| `out/introducing/introducing-redlamp-4x5.mp4` | 1080 × 1350, 57 s: Instagram and Facebook feeds, Reddit on phones |
 | `out/introducing/*-poster.jpg` | A poster still for each |
 
 Remotion renders H.264, H.265, VP8 and VP9 (WebM), ProRes and GIF, so any other format is one flag away (`npx remotion render Introducing out/introducing.webm --codec=vp9`), or ffmpeg can transcode the ProRes master.
 
 ### How it's built
 
-- `src/introducing/cuts.json` lists each cut's scenes and their lengths in bars. `Introducing.tsx` lays them out on the bar lines and dissolves across them; `scripts/score.py` writes each cut's score from the same file, with cues on the beats the pictures land on: each History step, each film stock, the keys and the logo.
+- `src/introducing/cuts.json` lists each cut's scenes and their lengths in bars. `Introducing.tsx` lays them out on the bar lines and dissolves across them; `scripts/score.py` writes each cut's score from the same file: a bed of pad, felt piano and bells under a beat that builds scene by scene, from a heartbeat at the MacBook to the full groove at the film looks, then drops away for the closing line. Its cues land on the beats the pictures do: each History step, the push into the display, the edit lifting off, the subject separating, the CineStill wipe, each film stock, the keys, the closing line and the icon.
 - `src/introducing/scenes/` holds the ten scenes: the safelight, the MacBook, the familiar panels and shortcuts, every step in History, the originals, masks, film looks, the keyboard, native, and the end. Each lays itself out for 16:9, 9:16 or 4:5.
 - Everything on screen is the app or the engine. Window captures come from `scripts/capture-promo.sh`, with the Folders panel cleared so only the shot's folder shows, and the edit the app saved for the hero kept beside its capture. `scripts/film-assets.mjs` renders the rest with the redlamp CLI, listing it in `public/film/renders/manifest.json`: the hero raw at every History step of that saved edit, the Subject and Background masks a portrait comes apart along, and one frame through each film stock in the deck. Its `promo.txt` roles add `cutout` and `stocks` to the capture script's.
 - The 3D is CSS 3D in Remotion's Chrome. `components/MacBook.tsx` is a 16-inch MacBook Pro built from the real one's proportions; `components/Space.tsx` holds the camera, and `project()`, which finds where a point of a 3D sheet lands so 2D lines (the History panel's leader lines) can meet it; `components/Sheet.tsx` is a sheet of an onion-skin stack, cut out by a mask when it has one.
