@@ -40,6 +40,13 @@ struct SaveQueueTests {
         try #require(model.info?.url == url)
     }
 
+    /// Waits for `condition`, which the save queue's results make true on the main actor.
+    private func eventually(_ condition: () -> Bool) async throws {
+        for _ in 0 ..< 200 where !condition() {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
     @Test func `rapid edits each saved at once leave the last on disk`() async throws {
         let folder = try Folder()
         defer { folder.remove() }
@@ -182,6 +189,24 @@ struct SaveQueueTests {
         let start = ContinuousClock.now
         #expect(!model.saveBeforeQuitting(within: .milliseconds(300)))
         #expect(ContinuousClock.now - start < .seconds(1))
+    }
+
+    @Test func `a photo's last save is reported even when it is tracked again before the editor hears`() async throws {
+        let folder = try Folder()
+        defer { folder.remove() }
+        let model = EditorModel(engine: StubEngine())
+        try await open(folder.photo, in: model)
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: folder.url.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.url.path) }
+        let gate = DispatchSemaphore(value: 0)
+        defer { gate.signal() }
+        model.setValue(.exposure, 0.8)
+        model.saveNow()
+        model.saves.enqueue(.metadata { _ in gate.wait() }, for: folder.other)
+        model.saves.enqueue(.track(nil, opened: Sidecar(recipe: EditRecipe())), for: folder.photo)
+        try await eventually { model.saveError != nil }
+        #expect(model.saveError?.url == folder.photo)
     }
 
     @Test func `writes run in order on the queue's own thread, and reads after them`() async throws {

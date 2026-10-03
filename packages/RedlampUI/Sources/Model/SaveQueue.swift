@@ -16,6 +16,14 @@ final class SaveQueue: @unchecked Sendable {
         case track(SidecarBase?, opened: Sidecar)
         /// The photo's saves no longer look for another writer's.
         case forget
+
+        /// Writes to the photo's sidecar, rather than telling the queue how to.
+        var isSave: Bool {
+            switch self {
+            case .sidecar, .metadata: true
+            case .track, .forget: false
+            }
+        }
     }
 
     enum Outcome: Sendable {
@@ -33,10 +41,11 @@ final class SaveQueue: @unchecked Sendable {
     private let lock = NSLock()
     /// Writes not started yet, per photo, oldest first.
     private var waiting: [URL: [Write]] = [:]
-    /// Writes asked for and not finished, the one being written included.
+    /// Saves asked for and not finished, the one being written included.
     private var unfinished: [URL: Int] = [:]
     private var waiters: [URL: [CheckedContinuation<Void, Never>]] = [:]
-    typealias Report = @MainActor @Sendable (URL, Write, Outcome) -> Void
+    /// A save's result, and whether a later save of the photo was waiting when it finished.
+    typealias Report = @MainActor @Sendable (URL, Write, Outcome, _ superseded: Bool) -> Void
     private var report: Report?
     /// The tracked photos' bases, and the editor's state each was taken at. Only the queue uses it.
     private var tracking: [URL: (base: SidecarBase, opened: Sidecar)] = [:]
@@ -50,7 +59,7 @@ final class SaveQueue: @unchecked Sendable {
         lock.withLock { self.report = report }
     }
 
-    /// Whether a write asked for `url` hasn't finished.
+    /// Whether a save asked for `url` hasn't finished.
     func isPending(_ url: URL) -> Bool {
         lock.withLock { unfinished[url] != nil }
     }
@@ -65,7 +74,9 @@ final class SaveQueue: @unchecked Sendable {
                 writes[writes.count - 1] = .sidecar(merged)
             } else {
                 writes.append(write)
-                unfinished[url, default: 0] += 1
+                if write.isSave {
+                    unfinished[url, default: 0] += 1
+                }
             }
             waiting[url] = writes
         }
@@ -125,14 +136,16 @@ final class SaveQueue: @unchecked Sendable {
         } catch {
             outcome = .failed(error)
         }
-        let (done, report): ([CheckedContinuation<Void, Never>], Report?) = lock.withLock {
+        guard write.isSave else { return }
+        let (done, report, superseded): ([CheckedContinuation<Void, Never>], Report?, Bool) = lock.withLock {
             let left = unfinished[url, default: 1] - 1
             unfinished[url] = left > 0 ? left : nil
-            return (left > 0 ? [] : waiters.removeValue(forKey: url) ?? [], self.report)
+            let superseded = waiting[url]?.contains(where: \.isSave) ?? false
+            return (left > 0 ? [] : waiters.removeValue(forKey: url) ?? [], self.report, superseded)
         }
         if let report, let outcome {
             DispatchQueue.main.async {
-                MainActor.assumeIsolated { report(url, write, outcome) }
+                MainActor.assumeIsolated { report(url, write, outcome, superseded) }
             }
         }
         done.forEach { $0.resume() }

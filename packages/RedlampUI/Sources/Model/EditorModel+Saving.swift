@@ -44,9 +44,9 @@ extension EditorModel {
         }
     }
 
-    /// A write's result. Only a photo's last write in flight counts: a later one supersedes it.
-    func saved(_ url: URL, _ write: SaveQueue.Write, _ outcome: SaveQueue.Outcome) {
-        guard !saves.isPending(url) else { return }
+    /// A write's result. Only a photo's last save counts: one waiting when it finished supersedes it.
+    func saved(_ url: URL, _ write: SaveQueue.Write, _ outcome: SaveQueue.Outcome, superseded: Bool) {
+        guard !superseded else { return }
         switch outcome {
         case .saved:
             succeeded(url)

@@ -468,7 +468,9 @@ public final class EditorModel {
         canvas.onRenderSizeChange = { [weak self] _ in self?.requestRender() }
         settingsSync.makeEngine = { [weak self] in self?.makeWorkerEngine?() }
         settingsSync.saves = saves
-        saves.reportResults { [weak self] url, write, error in self?.saved(url, write, error) }
+        saves.reportResults { [weak self] url, write, outcome, superseded in
+            self?.saved(url, write, outcome, superseded: superseded)
+        }
         followLibrary()
         let frames = engine.frames()
         framesTask = Task { [weak self] in
@@ -1172,12 +1174,10 @@ public final class EditorModel {
         saveDeadline = editStart == nil ? min(deadline, first + .seconds(2)) : deadline
         guard saveTask == nil else { return }
         saveTask = Task { [weak self] in
-            while let deadline = self?.saveDeadline, deadline > .now {
+            while !Task.isCancelled, let deadline = self?.saveDeadline, deadline > .now {
                 try? await Task.sleep(until: deadline)
-                if Task.isCancelled {
-                    return
-                }
             }
+            guard !Task.isCancelled else { return }
             self?.saveNow()
         }
     }
