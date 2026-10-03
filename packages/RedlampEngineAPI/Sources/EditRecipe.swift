@@ -51,7 +51,9 @@ public struct AppliedRecipe: Codable, Sendable, Hashable {
 public struct EditRecipe: Sendable, Hashable {
     /// Version 2 renamed `profile` to `baseLook` and namespaced built-in look ids. Version 3
     /// added brush, range and AI mask components, whose bitmaps live in a sidecar package.
-    public static let formatVersion = 3
+    /// Version 4 stores the frame style by name (`FrameStyle.key`) rather than by index; a build
+    /// that reads only numbers in `values` sees the version and leaves the file alone.
+    public static let formatVersion = 4
     /// Bumped whenever a change to rendering math would make existing edits look different.
     /// 2: grain is sized to the frame rather than the sensor's pixels, and is strongest in the
     /// low midtones and shadows, as film's is.
@@ -175,12 +177,24 @@ extension EditRecipe: Codable {
         whiteBalanceMode = try container.decodeIfPresent(WhiteBalanceMode.self, forKey: .whiteBalance) ?? .asShot
         pointCurve = try container.decodeIfPresent([CurvePoint].self, forKey: .pointCurve)
             ?? EditRecipe.linearPointCurve
-        let raw = try container.decodeIfPresent([String: Double].self, forKey: .values) ?? [:]
-        for (key, value) in raw {
-            if let parameter = ParameterID(rawValue: key) {
+        let raw = try container.decodeIfPresent([String: StoredValue].self, forKey: .values) ?? [:]
+        for (key, stored) in raw {
+            switch (ParameterID(rawValue: key), stored) {
+            case let (.frameStyle?, .name(name)):
+                guard let style = FrameStyle(key: name) else {
+                    throw DecodingError.dataCorruptedError(
+                        forKey: .values, in: container, debugDescription: "Unknown frame style \(name)",
+                    )
+                }
+                self[.frameStyle] = Double(style.rawValue)
+            case let (parameter?, .number(value)):
                 self[parameter] = value
-            } else {
+            case let (nil, .number(value)):
                 unknownValues[key] = value
+            case (_, .name):
+                throw DecodingError.dataCorruptedError(
+                    forKey: .values, in: container, debugDescription: "\(key) takes a number",
+                )
             }
         }
         masks = try container.decodeIfPresent([MaskLayer].self, forKey: .masks) ?? []
@@ -204,8 +218,15 @@ extension EditRecipe: Codable {
         if hasPointCurve {
             try container.encode(pointCurve, forKey: .pointCurve)
         }
-        let known = Dictionary(uniqueKeysWithValues: values.map { ($0.key.rawValue, $0.value) })
-        try container.encode(unknownValues.merging(known) { _, value in value }, forKey: .values)
+        let known = Dictionary(uniqueKeysWithValues: values.map { parameter, value in
+            (
+                parameter.rawValue,
+                parameter == .frameStyle ? .name(FrameStyle(value: value).key) : StoredValue.number(value),
+            )
+        })
+        try container.encode(
+            unknownValues.mapValues(StoredValue.number).merging(known) { _, value in value }, forKey: .values,
+        )
         if !masks.isEmpty {
             try container.encode(masks, forKey: .masks)
         }
@@ -218,6 +239,30 @@ extension EditRecipe: Codable {
         }
         if !orientation.isIdentity {
             try container.encode(orientation, forKey: .orientation)
+        }
+    }
+
+    /// An entry of `values`: a number, or a choice by name (`FrameStyle.key`). Format 3 stored the
+    /// frame style by its index, which is read too.
+    private enum StoredValue: Codable {
+        case number(Double)
+        case name(String)
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let number = try? container.decode(Double.self) {
+                self = .number(number)
+            } else {
+                self = try .name(container.decode(String.self))
+            }
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            switch self {
+            case let .number(number): try container.encode(number)
+            case let .name(name): try container.encode(name)
+            }
         }
     }
 }

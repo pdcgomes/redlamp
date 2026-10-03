@@ -703,6 +703,9 @@ public struct MaskLayer: Sendable, Hashable, Identifiable {
     /// -100...100: above 0 keeps only textured areas of the mask, below 0 only flat ones.
     public var detail: Double = 0
     public private(set) var adjustments: [ParameterID: Double]
+    /// Adjustments written by a newer Redlamp. They don't affect rendering here, but are written
+    /// back unchanged so saving never erases them.
+    public private(set) var unknownAdjustments: [String: Double] = [:]
 
     public init(
         id: UUID = UUID(),
@@ -768,6 +771,8 @@ extension MaskLayer: Codable {
         for (key, value) in raw {
             if let parameter = ParameterID(rawValue: key) {
                 self[parameter] = value
+            } else {
+                unknownAdjustments[key] = value
             }
         }
     }
@@ -782,9 +787,7 @@ extension MaskLayer: Codable {
         if detail != 0 {
             try container.encode(detail, forKey: .detail)
         }
-        try container.encode(
-            Dictionary(uniqueKeysWithValues: adjustments.map { ($0.key.rawValue, $0.value) }),
-            forKey: .adjustments,
-        )
+        let known = Dictionary(uniqueKeysWithValues: adjustments.map { ($0.key.rawValue, $0.value) })
+        try container.encode(unknownAdjustments.merging(known) { _, value in value }, forKey: .adjustments)
     }
 }

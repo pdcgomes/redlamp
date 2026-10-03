@@ -210,6 +210,7 @@ struct SidecarSchemaTests {
             {"format": "app.redlamp.edit", "modified": "2026-09-30T09:00:00+01:00", "snapshots": [],
              "recipe": {"version": 2, "processVersion": 1, "values": {"basic.exposure": 0.5}}}
             """#,
+            #"{"recipe": {"version": 3, "processVersion": 9, "values": {"effects.frame.style": 3}}}"#,
         ]
         for text in sidecars {
             #expect(try validator.errors(in: json(text)) == [], "\(text)")
@@ -221,6 +222,8 @@ struct SidecarSchemaTests {
         let validator = try validator()
         let edit = try written().edit
         let exposure = ["recipe", "values", "basic.exposure"]
+        let frame = ["recipe", "values", "effects.frame.style"]
+        let adjustments = ["recipe", "masks", "0", "adjustments"]
         let operation = ["recipe", "masks", "0", "components", "1", "operation"]
         let radial = ["recipe", "masks", "2", "components", "1", "shape", "radial", "_0"]
         // Each wrong sidecar, and where its error is.
@@ -230,6 +233,8 @@ struct SidecarSchemaTests {
             ("/recipe/values/basic.exposure", edit.updating(exposure) { _ in .string("bright") }),
             ("/recipe/values/basic.exposure", edit.updating(exposure) { _ in .number(7) }),
             ("/recipe/values/local.exposure", edit.updating(["recipe", "values"]) { $0.adding("local.exposure") }),
+            ("/recipe/values/effects.frame.style", edit.updating(frame) { _ in .string("sprocketHoles") }),
+            ("/recipe/masks/0/adjustments/basic.exposure", edit.updating(adjustments) { $0.adding("basic.exposure") }),
             (pointer(operation), edit.updating(operation) { _ in .string("multiply") }),
             ("\(pointer(radial))/softness", edit.updating(radial) { $0.adding("softness") }),
             ("/modified", edit.updating(["modified"]) { _ in .string("2026-10-03T12:59:01") }),
@@ -274,7 +279,7 @@ struct SidecarSchemaTests {
         ] {
             let properties = validator.schema(at: "\(reference)/properties").objectValue ?? [:]
             #expect(Set(properties.keys) == Set(parameters.map(\.rawValue)), "\(reference)")
-            for parameter in parameters {
+            for parameter in parameters where parameter != .frameStyle {
                 let spec = parameter.spec
                 let entry = properties[parameter.rawValue]
                 #expect(entry?["minimum"] == .number(spec.range.lowerBound), "\(parameter.rawValue)")
@@ -282,6 +287,29 @@ struct SidecarSchemaTests {
                 #expect(entry?["default"] == .number(spec.defaultValue), "\(parameter.rawValue)")
             }
         }
+
+        /// Global keys are dropped from a mask's adjustments, as scoped keys are from `values`.
+        func matches(_ reference: String, _ parameter: ParameterID) -> Bool {
+            let patterns = validator.schema(at: "\(reference)/patternProperties").objectValue ?? [:]
+            return patterns.keys.contains { parameter.rawValue.range(of: $0, options: .regularExpression) != nil }
+        }
+        for parameter in ParameterID.allCases {
+            #expect(matches("#/$defs/values", parameter) == !global.contains(parameter), "\(parameter.rawValue)")
+            #expect(matches("#/$defs/localAdjustments", parameter) == !parameter.isLocal, "\(parameter.rawValue)")
+        }
+    }
+
+    @Test func `the frame style is stored by name and read by number too`() throws {
+        let validator = try validator()
+        let entry = validator.schema(at: "#/$defs/values/properties/effects.frame.style")
+        let names = entry["anyOf"]?.arrayValue?.first?["enum"]?.arrayValue?.compactMap(\.stringValue)
+        #expect(names == FrameStyle.allCases.map(\.key))
+        #expect(entry["default"] == .string(FrameStyle.none.key))
+        let number = entry["anyOf"]?.arrayValue?.last
+        let spec = ParameterID.frameStyle.spec
+        #expect(number?["minimum"] == .number(spec.range.lowerBound))
+        #expect(number?["maximum"] == .number(spec.range.upperBound))
+        #expect(Double(FrameStyle.allCases.count - 1) == spec.range.upperBound)
     }
 
     @Test func `enumerations, versions and limits match the code`() throws {
@@ -968,7 +996,7 @@ private extension JSONValue {
     /// A value of another JSON type, for checking that a decoder rejects it.
     var ofAnotherType: JSONValue {
         switch self {
-        case .string: .number(7)
+        case .string: .bool(true)
         case .number: .string("7")
         case .bool: .string("true")
         case .array: .object([:])

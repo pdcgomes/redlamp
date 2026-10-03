@@ -80,6 +80,57 @@ struct EditRecipeTests {
         ]))
     }
 
+    @Test(arguments: FrameStyle.allCases)
+    func `frame style is written by name and reads back`(style: FrameStyle) throws {
+        var recipe = EditRecipe()
+        recipe[.frameStyle] = Double(style.rawValue)
+        let data = try JSONEncoder().encode(recipe)
+        let written = try JSONDecoder().decode(JSONValue.self, from: data)
+        guard case let .object(root) = written, case let .object(values) = root["values"] else {
+            Issue.record("recipe did not encode as an object")
+            return
+        }
+        #expect(values["effects.frame.style"] == (style == .none ? nil : .string(style.key)))
+        #expect(try JSONDecoder().decode(EditRecipe.self, from: data) == recipe)
+    }
+
+    @Test func `frame style names are stable`() {
+        #expect(FrameStyle.allCases.map(\.key) == ["none", "keyline", "printBorder", "filmRebate", "slideMount"])
+    }
+
+    @Test func `frame style reads the index format 3 wrote`() throws {
+        let json = #"{"version":3,"values":{"effects.frame.style":3,"basic.exposure":0.5}}"#
+        let decoded = try JSONDecoder().decode(EditRecipe.self, from: Data(json.utf8))
+        #expect(decoded[.frameStyle] == Double(FrameStyle.filmRebate.rawValue))
+        #expect(decoded[.exposure] == 0.5)
+    }
+
+    @Test(arguments: [#""sprocketHoles""#, #"true"#])
+    func `an unknown frame style doesn't read`(value: String) {
+        let json = #"{"version":4,"values":{"effects.frame.style":\#(value)}}"#
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(EditRecipe.self, from: Data(json.utf8))
+        }
+    }
+
+    @Test func `mask adjustments keep unknown keys through a round trip`() throws {
+        let json = #"""
+        {"id":"9A1F3C2E-0000-4000-8000-000000000001","name":"Sky","isVisible":true,"components":[],
+         "amount":100,"detail":0,"adjustments":{"local.exposure":-1,"local.future":2,"basic.exposure":3}}
+        """#
+        var mask = try JSONDecoder().decode(MaskLayer.self, from: Data(json.utf8))
+        #expect(mask.adjustments == [.localExposure: -1])
+        mask[.localContrast] = 20
+        let written = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(mask))
+        guard case let .object(root) = written, case let .object(adjustments) = root["adjustments"] else {
+            Issue.record("mask did not encode as an object")
+            return
+        }
+        #expect(adjustments == [
+            "local.exposure": .number(-1), "local.future": .number(2), "local.contrast": .number(20),
+        ])
+    }
+
     @Test func `process version defaults and round trips`() throws {
         #expect(EditRecipe().processVersion == EditRecipe.currentProcessVersion)
         let legacy = try JSONDecoder().decode(EditRecipe.self, from: Data(#"{"version":1}"#.utf8))

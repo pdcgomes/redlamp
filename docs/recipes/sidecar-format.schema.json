@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://redlamp.app/schemas/redlamp-sidecar-3.json",
-  "title": "Redlamp sidecar (.redlamp), format 3: edit.json",
+  "$id": "https://redlamp.app/schemas/redlamp-sidecar-4.json",
+  "title": "Redlamp sidecar (.redlamp), format 4: edit.json",
   "description": "The edit.json of a .redlamp sidecar package. A history session file (history/<id>.json) validates against #/$defs/historyFile. Objects without additionalProperties: false are where Redlamp keeps fields it doesn't know and writes them back unchanged. See sidecar-format.md.",
   "type": "object",
   "required": ["recipe"],
@@ -51,8 +51,8 @@
         "version": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 3,
-          "description": "Format version: the file's syntax, 3 here. Older versions are read and migrated; a newer one makes the sidecar read-only."
+          "maximum": 4,
+          "description": "Format version: the file's syntax, 4 here. Older versions are read and migrated; a newer one makes the sidecar read-only."
         },
         "processVersion": {
           "type": "integer",
@@ -217,7 +217,14 @@
         "effects.leak.variation": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Light leak: Variation." },
         "effects.dust.amount": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Film dust." },
         "effects.scratches.amount": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Film scratches." },
-        "effects.frame.style": { "type": "number", "minimum": 0, "maximum": 4, "default": 0, "description": "Frame style, by number: 0 none, 1 keyline, 2 print border, 3 35 mm rebate, 4 slide mount." },
+        "effects.frame.style": {
+          "anyOf": [
+            { "enum": ["none", "keyline", "printBorder", "filmRebate", "slideMount"] },
+            { "type": "number", "minimum": 0, "maximum": 4, "deprecated": true, "description": "Format 3's number: 0 none, 1 keyline, 2 print border, 3 35 mm rebate, 4 slide mount. Read, never written." }
+          ],
+          "default": "none",
+          "description": "Frame style, by name. Format 3 stored it by number, which is still read."
+        },
         "effects.frame.size": { "type": "number", "minimum": 0, "maximum": 100, "default": 50, "description": "Frame size." },
         "effects.colorChrome": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Color Chrome: deepens highly saturated colors." },
         "effects.colorChromeBlue": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Color Chrome FX Blue: the same, for blues only." },
@@ -333,7 +340,7 @@
       "additionalProperties": false
     },
     "localAdjustments": {
-      "description": "The mask's adjustments, each written only when it isn't 0. Readers clamp a value to its range and drop keys they don't know.",
+      "description": "The mask's adjustments, each written only when it isn't 0. Readers clamp a value to its range. Keys of global, mask and spot parameters don't belong here, and Redlamp drops them.",
       "type": "object",
       "properties": {
         "local.temperature": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Temp, relative to the global white balance." },
@@ -356,7 +363,11 @@
         "local.halation": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Halation where the mask covers; the size stays global." },
         "local.bloom": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Bloom where the mask covers; the size stays global." }
       },
-      "additionalProperties": false,
+      "patternProperties": { "^(wb|basic|toneCurve|mixer|grading|detail|lens|transform|effects|calibration|crop|mask|spot)\\.": false },
+      "additionalProperties": {
+        "type": "number",
+        "description": "An adjustment a newer Redlamp added: kept and written back unchanged."
+      },
       "default": {}
     },
     "maskComponent": {

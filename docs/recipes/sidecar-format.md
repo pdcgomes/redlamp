@@ -80,13 +80,13 @@ A **snapshot** is a named version of the edit, as in Lightroom: `{"id", "name", 
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
-| `version` | integer | | The format version, `3`. Always written. Only used to tell that a sidecar is newer; see [Versions and compatibility](#versions-and-compatibility). |
+| `version` | integer | | The format version, `4`. Always written. Only used to tell that a sidecar is newer; see [Versions and compatibility](#versions-and-compatibility). |
 | `processVersion` | integer | `1` | The rendering behavior the edit was made with, 1 to 9; see [Process versions](#process-versions). Always written. Sidecars from before process versions read as 1. |
 | `treatment` | string | `color` | `color` or `blackAndWhite`. Always written. |
 | `baseLook` | Base Look | Redlamp Color | The look the edit renders with; see [Base Look](#base-look). Always written. |
 | `whiteBalance` | string | `asShot` | The white balance popup: `asShot`, `auto`, `daylight`, `cloudy`, `shade`, `tungsten`, `fluorescent`, `flash` or `custom`. Always written. See [White balance](#white-balance). |
 | `pointCurve` | [{x, y}] | straight line | The point curve: 2 or more points in increasing `x`, both coordinates 0…1, display-referred. Written only when it isn't the straight line from (0, 0) to (1, 1). |
-| `values` | {key: number} | `{}` | The global sliders; see [Parameters](#parameters). Always written, even empty. |
+| `values` | {key: number or name} | `{}` | The global sliders; see [Parameters](#parameters). Always written, even empty. |
 | `masks` | [mask] | `[]` | Local adjustments, applied in order on top of the global edit; at most 16. Written only when there are some. See [Masks](#masks). |
 | `spots` | [spot] | `[]` | Remove, Heal and Clone spots, applied in order before everything else. Written only when there are some. See [Spots](#spots). |
 | `appliedRecipe` | object? | | `{"id", "version", "name", "amount"}`, all required: the `.redrecipe` the edit was last built from, and its Amount in percent (0 to 200). Provenance only; rendering never reads it. |
@@ -120,7 +120,7 @@ Edits never store file paths: installed looks live in `Application Support/Redla
 
 ### Parameters
 
-`values` maps parameter keys to numbers. The keys are `ParameterID` raw values and never change once shipped. Each value is written only when it differs from its default, and a reader clamps it to its range. Keys of local, mask and spot parameters (`local.…`, `mask.…`, `spot.…`) never appear here, and Redlamp drops them if they do. In the table, `a.{b,c}` stands for `a.b` and `a.c`.
+`values` maps parameter keys to numbers, and the frame style to a name. The keys are `ParameterID` raw values and never change once shipped. Each value is written only when it differs from its default, and a reader clamps it to its range. Keys of local, mask and spot parameters (`local.…`, `mask.…`, `spot.…`) never appear here, and Redlamp drops them if they do. In the table, `a.{b,c}` stands for `a.b` and `a.c`.
 
 | Keys | Range | Default | Notes |
 | --- | --- | --- | --- |
@@ -174,13 +174,13 @@ Edits never store file paths: installed looks live in `Application Support/Redla
 | `effects.leak.{amount,variation}` | 0…100 | 0 | Light leaking in at the frame's edges. |
 | `effects.leak.warmth` | −100…100 | 60 | |
 | `effects.dust.amount`, `effects.scratches.amount` | 0…100 | 0 | Dust and scratches on the film. |
-| `effects.frame.style` | 0…4 | 0 | A border drawn over the photo's edges, by number: 0 none, 1 keyline, 2 print border, 3 35 mm rebate, 4 slide mount. |
+| `effects.frame.style` | name | `none` | A border drawn over the photo's edges: `none`, `keyline`, `printBorder`, `filmRebate` (a 35 mm film rebate) or `slideMount`. Format 3 stored it by number, 0 to 4 in that order, which Redlamp still reads. |
 | `effects.frame.size` | 0…100 | 50 | |
 | `effects.colorChrome`, `effects.colorChromeBlue` | 0…100 | 0 | Color Chrome deepens highly saturated colors; Color Chrome FX Blue does so for blues only. |
 | `calibration.shadowsTint` | −100…100 | 0 | |
 | `calibration.{red,green,blue}.{hue,saturation}` | −100…100 | 0 | The primaries' hue and saturation. |
 
-Every value is a number, switches and the frame style included. The defaults are the same in every process version; what a value does can depend on the process version.
+Every other value is a number, switches included. The defaults are the same in every process version; what a value does can depend on the process version.
 
 ### Crop and geometry
 
@@ -203,11 +203,11 @@ A mask is a local adjustment: coverage built from components, and its own adjust
 | `components` | [component] | `[]` | Combined in order. |
 | `amount` | number | 100 | Scales every adjustment of the mask, in percent, 0 to 200. |
 | `detail` | number | 0 | −100 to 100: above 0 keeps only the textured areas of the mask, below 0 only the flat ones. Written only when it isn't 0. |
-| `adjustments` | {key: number} | `{}` | The local parameters below, each written only when it isn't 0. Always written, even empty. |
+| `adjustments` | {key: number} | `{}` | The local parameters below, each written only when it isn't 0, and keys from a newer Redlamp. Always written, even empty. |
 
 Redlamp renders at most 16 visible masks and 64 components across them, and the editor makes no more than 16 masks.
 
-**Local adjustments** all default to 0. A reader clamps each to its range and, unlike `values`, drops keys it doesn't know.
+**Local adjustments** all default to 0. A reader clamps each to its range. As in `values`, Redlamp keeps keys it doesn't know and writes them back, and drops keys of global parameters (`basic.…` and the like).
 
 | Keys | Range | Notes |
 | --- | --- | --- |
@@ -336,35 +336,35 @@ New edits get the current version, 9. An edit keeps its version until the user u
 
 A sidecar carries three version numbers:
 
-- **The format version**, the recipe's `version`, describes the syntax. Version 2 renamed `profile` to `baseLook` and namespaced Redlamp's look ids (`redlamp.vivid` became `redlamp/base/vivid`). Version 3 added brush, range and AI mask components and made sidecars packages. Older versions are read and migrated silently: `profile` is read when there is no `baseLook`, old look ids are mapped to new ones, and the next save writes version 3. A missing `version` reads as 1.
+- **The format version**, the recipe's `version`, describes the syntax. Version 2 renamed `profile` to `baseLook` and namespaced Redlamp's look ids (`redlamp.vivid` became `redlamp/base/vivid`). Version 3 added brush, range and AI mask components and made sidecars packages. Version 4 stores the frame style by name rather than by number; a build that knows only version 3 expects a number there and would fail to read the edit, so the version tells it to leave the sidecar alone instead. Older versions are read and migrated silently: `profile` is read when there is no `baseLook`, old look ids are mapped to new ones, a frame style number is read as its name, and the next save that changes the edit writes version 4. A missing `version` reads as 1.
 - **The process version**, the recipe's `processVersion`, describes the rendering. It is never changed silently.
 - **The history format version**, a history file's `version`.
 
 What Redlamp does when it reads a sidecar, which is also what another reader must do to write one back safely:
 
-1. **A newer format or process version** (`version` above 3 or `processVersion` above 9): Redlamp shows the photo with the edit, rendered with the newest behavior it has, but the sidecar is read-only. Redlamp never overwrites or deletes it, and applying settings to many photos leaves it alone. Only these two numbers are checked; a `version` that isn't an integer is ignored.
+1. **A newer format or process version** (`version` above 4 or `processVersion` above 9): Redlamp shows the photo with the edit, rendered with the newest behavior it has, but the sidecar is read-only. Redlamp never overwrites or deletes it, and applying settings to many photos leaves it alone. Only these two numbers are checked; a `version` that isn't an integer is ignored.
 2. **Unknown keys** are kept and written back unchanged where the format has room for them:
    - top-level keys of `edit.json`;
    - keys of a recipe, in the edit and in snapshots;
-   - keys in `values` (they must be numbers, and don't render);
+   - keys in `values` and in a mask's `adjustments` (they must be numbers, and don't render);
    - component kinds in a mask's `shape` (they render nothing).
 
-   Everywhere else in `edit.json` Redlamp ignores unknown keys, and they are lost the next time it saves: in masks, components, shape parameters, AI masks, bitmaps, spots, snapshots, metadata, the Base Look and applied recipe, the crop and orientation, and local adjustments. It ignores unknown keys in history files too, which it never rewrites. The schema marks all these objects closed (`additionalProperties: false`) and leaves the others open, so a writer that validates its sidecars puts new keys only where Redlamp keeps them. A shape with more than one key loses all but one of them.
-3. **Unknown values**: a spot's `mode` reads as `heal` and a history step's `action` as `edit`. Any other value outside its list (`treatment`, `whiteBalance`, a component's `operation`, an AI mask's `kind`, `flag`, `label`) makes the sidecar unreadable.
+   Everywhere else in `edit.json` Redlamp ignores unknown keys, and they are lost the next time it saves: in masks, components, shape parameters, AI masks, bitmaps, spots, snapshots, metadata, the Base Look, the applied recipe, the crop and orientation. It ignores unknown keys in history files too, which it never rewrites. The schema marks all these objects closed (`additionalProperties: false`) and leaves the others open, so a writer that validates its sidecars puts new keys only where Redlamp keeps them. A shape with more than one key loses all but one of them.
+3. **Unknown values**: a spot's `mode` reads as `heal` and a history step's `action` as `edit`. Any other value outside its list (`treatment`, the frame style, `whiteBalance`, a component's `operation`, an AI mask's `kind`, `flag`, `label`) makes the sidecar unreadable.
 4. **Values out of range**: parameters and local adjustments are clamped to their ranges. Nothing else is checked.
 5. **History files** with another `format`, a newer `version`, or that can't be read are skipped, and kept.
 6. **A sidecar that can't be read** (a missing required key, a value of the wrong type or outside its list, or a date without a time zone, anywhere in `edit.json`) opens as if the photo had no edit, read-only: Redlamp never overwrites or deletes it (it may still hold an edit, history and masks), says so over the photo, and applying settings to many photos leaves it alone. Validate a sidecar against the schema before writing it.
 
 When writing a sidecar for Redlamp:
 
-- write `format`, the recipe's `version` (3) and the `processVersion` the edit was made for, no newer than the Redlamp that will read it;
+- write `format`, the recipe's `version` (4) and the `processVersion` the edit was made for, no newer than the Redlamp that will read it;
 - write only values that differ from their defaults, with the exact keys above, and keep keys you don't understand;
 - write bitmaps before the JSON that names them, and replace `edit.json` atomically, with file coordination on macOS;
 - leave alone a sidecar with a newer format or process version.
 
 ## The schema
 
-[`sidecar-format.schema.json`](sidecar-format.schema.json) is JSON Schema draft 2020-12. Validate `edit.json` against the schema itself and a history file against its `#/$defs/historyFile`. The schema describes what Redlamp writes, and is stricter than Redlamp's reader where the reader is lenient: it checks ranges, lists of values and closed objects that the reader clamps, maps or ignores. It accepts format versions up to 3 and process versions up to 9, so a sidecar from a newer Redlamp needs that Redlamp's schema.
+[`sidecar-format.schema.json`](sidecar-format.schema.json) is JSON Schema draft 2020-12. Validate `edit.json` against the schema itself and a history file against its `#/$defs/historyFile`. The schema describes what Redlamp writes, and is stricter than Redlamp's reader where the reader is lenient: it checks ranges, lists of values and closed objects that the reader clamps, maps or ignores. It accepts format versions up to 4 and process versions up to 9, so a sidecar from a newer Redlamp needs that Redlamp's schema.
 
 Besides annotations, the schema uses only `type`, `enum`, `const`, `minimum`, `maximum`, `pattern`, `properties`, `patternProperties`, `additionalProperties`, `required`, `minProperties`, `maxProperties`, `items`, `prefixItems`, `minItems`, `maxItems`, `anyOf`, `oneOf` and `$ref` to its own `$defs`, so a small validator can check it.
 
@@ -381,7 +381,7 @@ A photo warmed to 5150 K, brightened, straightened by 1.5° and cropped, with a 
   "metadata": {"rating": 3, "flag": "pick"},
   "snapshots": [],
   "recipe": {
-    "version": 3,
+    "version": 4,
     "processVersion": 9,
     "treatment": "color",
     "baseLook": {"id": "redlamp/base/color", "version": 1, "name": "Redlamp Color", "amount": 100},
@@ -416,7 +416,7 @@ The start of the session that made it: the photo as opened, then Exposure, then 
   "bitmaps": [],
   "steps": [
     {"id": "1F2E3D4C-5B6A-4798-8877-665544332211", "action": "open", "title": "Opened",
-     "recipe": {"version": 3, "processVersion": 9, "treatment": "color", "whiteBalance": "asShot", "values": {},
+     "recipe": {"version": 4, "processVersion": 9, "treatment": "color", "whiteBalance": "asShot", "values": {},
                 "baseLook": {"id": "redlamp/base/color", "version": 1, "name": "Redlamp Color", "amount": 100}}},
     {"id": "2A3B4C5D-6E7F-4081-9213-243546576879", "action": "adjustment:basic.exposure", "title": "Exposure",
      "before": "0.00", "after": "+0.35",
