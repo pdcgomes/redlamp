@@ -4,13 +4,28 @@ import RedlampEngineAPI
 
 /// The camera metadata an export carries over from its source file.
 public enum ExportMetadata {
+    /// The TIFF Software tag every export carries, which tells an earlier export, safe to
+    /// write over, from a photo.
+    public static let software = "Redlamp"
+
+    /// Whether the file at `url` is an image Redlamp wrote: its Software tag says so.
+    public static func isExport(_ url: URL) -> Bool {
+        guard let image = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
+              let properties = CGImageSourceCopyPropertiesAtIndex(image, 0, nil) as? [CFString: Any]
+        else { return false }
+        let tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
+        let png = properties[kCGImagePropertyPNGDictionary] as? [CFString: Any]
+        let tag = tiff?[kCGImagePropertyTIFFSoftware] ?? png?[kCGImagePropertyPNGSoftware]
+        return (tag as? String)?.hasPrefix(software) == true
+    }
+
     /// ImageIO properties to write into an export of `source`. Only an allowlist is copied:
     /// maker notes, thumbnails, raw-specific dictionaries and anything describing the source's
     /// pixels (size, orientation, colour space) stay behind.
     public static func properties(
         from source: URL,
         policy: ExportMetadataPolicy,
-        software: String = "Redlamp",
+        software: String = software,
     ) -> [CFString: Any] {
         var tiff: [CFString: Any] = [kCGImagePropertyTIFFSoftware: software]
         var result: [CFString: Any] = [:]

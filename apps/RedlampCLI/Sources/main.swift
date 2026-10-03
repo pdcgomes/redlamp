@@ -241,7 +241,7 @@ func run(_ arguments: [String]) async throws {
     let image = try await engine.renderStill(request)
     let renderTime = clock.now - renderStart
 
-    try ImageFile.write(image, to: output, protecting: input)
+    try ImageFile.write(image, to: output, protecting: [input])
     print(
         "\(info.fileName) → \(output.lastPathComponent) \(image.width)x\(image.height)  open \(openTime), render \(renderTime)",
     )

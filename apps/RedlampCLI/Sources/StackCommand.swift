@@ -60,9 +60,9 @@ enum StackCommand {
             },
         )
         FileHandle.standardError.write(Data("\r".utf8))
-        try ImageFile.write(preview.image, to: URL(fileURLWithPath: output))
+        try ImageFile.write(preview.image, to: URL(fileURLWithPath: output), protecting: frames)
         if let depth = parsed.value("--depth") {
-            try ImageFile.write(preview.depth, to: URL(fileURLWithPath: depth))
+            try ImageFile.write(preview.depth, to: URL(fileURLWithPath: depth), protecting: frames)
         }
         let report = preview.report
         if parsed.has("--json") {
@@ -98,7 +98,9 @@ enum StackCommand {
             + "open \(clock.now - start)")
         guard let output = parsed.value("--output") else { return }
         let request = try StillRequest(recipe: EditRecipe(), maxLongEdge: parsed.int("--size"), purpose: .export)
-        try await ImageFile.write(engine.renderStill(request), to: URL(fileURLWithPath: output))
+        try await ImageFile.write(
+            engine.renderStill(request), to: URL(fileURLWithPath: output), protecting: frames + [url],
+        )
     }
 
     /// Prints the focus stacks the library would suggest in each folder.

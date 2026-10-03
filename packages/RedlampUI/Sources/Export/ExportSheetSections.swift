@@ -8,6 +8,8 @@ struct ExportLocationSection: View {
     let photo: URL
     @Binding var settings: ExportSettings
     @State private var chosenFolder: URL?
+    /// Worked out when the settings change, not on every redraw: it reads files in the folder.
+    @State private var savesAs = ""
 
     private enum Choice: Hashable {
         case original, folder(URL), choose
@@ -33,7 +35,7 @@ struct ExportLocationSection: View {
                 TextField("Name", text: $settings.naming.customName, prompt: Text("Name"))
             }
             LabeledContent("Saves as") {
-                Text(ExportDestination.url(for: photo, settings: settings).lastPathComponent)
+                Text(savesAs)
                     .foregroundStyle(.secondary)
                     .truncationMode(.middle)
                     .lineLimit(1)
@@ -43,6 +45,9 @@ struct ExportLocationSection: View {
             }
         }
         .onAppear { chosenFolder = settings.destinationFolder }
+        .onChange(of: settings, initial: true) {
+            savesAs = ExportDestination.url(for: photo, settings: settings).lastPathComponent
+        }
     }
 
     private var choice: Binding<Choice> {
