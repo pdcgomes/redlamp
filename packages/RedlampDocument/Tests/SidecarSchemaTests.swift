@@ -12,6 +12,7 @@ struct SidecarSchemaTests {
         .deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent()
         .appending(path: "docs/recipes/sidecar-format.schema.json")
+    static let documentURL = schemaURL.deletingLastPathComponent().appending(path: "sidecar-format.md")
 
     private func validator() throws -> SchemaValidator {
         try SchemaValidator(schema: json(Data(contentsOf: Self.schemaURL)))
@@ -238,6 +239,27 @@ struct SidecarSchemaTests {
             let errors = validator.errors(in: sidecar)
             #expect(errors.contains { $0.hasPrefix("\(error):") }, "\(error): \(errors)")
         }
+    }
+
+    @Test func `the examples in the document validate and read`() throws {
+        let validator = try validator()
+        let document = try String(contentsOf: Self.documentURL, encoding: .utf8)
+        let examples = document.components(separatedBy: "```json\n").dropFirst()
+            .compactMap { $0.components(separatedBy: "\n```").first }
+        var kinds: [String] = []
+        for text in examples {
+            let example = try json(text)
+            if example["recipe"] != nil {
+                #expect(validator.errors(in: example) == [])
+                #expect(throws: Never.self) { try JSONDecoder.sidecar.decode(Sidecar.self, from: Data(text.utf8)) }
+                kinds.append("edit")
+            } else {
+                #expect(validator.errors(in: example, against: "#/$defs/historyFile") == [])
+                #expect(throws: Never.self) { try HistorySession(decoding: Data(text.utf8)) }
+                kinds.append("history")
+            }
+        }
+        #expect(kinds == ["edit", "history"])
     }
 
     // MARK: - The schema against the code
