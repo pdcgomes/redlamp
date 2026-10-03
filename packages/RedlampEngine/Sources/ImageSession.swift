@@ -3,6 +3,7 @@ import Metal
 import RedlampColor
 import RedlampEngineAPI
 import RedlampKernels
+import RedlampMasking
 import RedlampServices
 import simd
 
@@ -51,6 +52,8 @@ final class ImageSession: @unchecked Sendable {
     let gainTableMap: GainTableMapTexture?
     /// The profile's look baked into a Base Look (`EmbeddedLook`).
     let embeddedLook: BaseLookDefinition?
+    /// The mattes the file carries, found while the session was built so they're never probed on the main thread.
+    let embeddedMattes: Set<EmbeddedMatte>
     private let chromaticAberration: LateralChromaticAberration.Cache
     /// The session this one copies with Heal and Clone spots in its pyramid (see `RetouchStage`).
     private let retouchedFrom: ImageSession?
@@ -78,7 +81,9 @@ final class ImageSession: @unchecked Sendable {
         hueSatMaps: HueSatMaps? = nil,
         gainTableMap: GainTableMapTexture? = nil,
         embeddedLook: BaseLookDefinition? = nil,
+        embeddedMattes: Set<EmbeddedMatte> = [],
     ) {
+        self.embeddedMattes = embeddedMattes
         self.noiseGain = noiseGain
         dngProfile = decoded.isRaw ? decoded.dngProfile : nil
         self.hueSatMaps = decoded.isRaw ? hueSatMaps : nil
@@ -146,6 +151,7 @@ final class ImageSession: @unchecked Sendable {
         hueSatMaps = original.hueSatMaps
         gainTableMap = original.gainTableMap
         embeddedLook = original.embeddedLook
+        embeddedMattes = original.embeddedMattes
         chromaticAberration = original.chromaticAberration
         retouchedFrom = original
     }

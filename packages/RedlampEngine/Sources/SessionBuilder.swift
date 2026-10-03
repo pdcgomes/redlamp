@@ -3,6 +3,7 @@ import Metal
 import RedlampColor
 import RedlampEngineAPI
 import RedlampKernels
+import RedlampMasking
 import RedlampServices
 import simd
 
@@ -30,6 +31,8 @@ struct SessionBuilder {
     static let hotPixelRatio: Float = 2
 
     func build(_ decoded: DecodedImage) throws -> ImageSession {
+        let url = decoded.info.url
+        let mattes = Prefetch(on: .global(qos: .userInitiated)) { EmbeddedMattes.available(in: url) }
         let width = decoded.width
         let height = decoded.height
         let levels = Int(log2(Double(max(width, height)))) + 1
@@ -113,7 +116,7 @@ struct SessionBuilder {
         info.embeddedBaseLookProcess = embeddedLook != nil && decoded.dngProfile?.gainTableMap != nil ? 5 : nil
         info.lensCorrection = decoded.isRaw ? decoded.lensCorrection : nil
 
-        return ImageSession(
+        return try ImageSession(
             info: info,
             decoded: decoded,
             pyramid: pyramid,
@@ -131,6 +134,7 @@ struct SessionBuilder {
             hueSatMaps: decoded.isRaw ? HueSatMaps(profile: decoded.dngProfile, device: device) : nil,
             gainTableMap: decoded.isRaw ? GainTableMapTexture(decoded.dngProfile?.gainTableMap, device: device) : nil,
             embeddedLook: embeddedLook,
+            embeddedMattes: mattes.value(),
         )
     }
 

@@ -228,7 +228,7 @@ extension RedlampEngine {
         if ModelCatalog.offered.contains(where: { $0.id == Self.sam3ID }) {
             kinds.insert(.landscape)
         }
-        let embeddedDepth = currentSession().map { EmbeddedMattes.available(in: $0.info.url).contains(.depth) } ?? false
+        let embeddedDepth = currentSession()?.embeddedMattes.contains(.depth) ?? false
         let depthModels = [Self.modelID(for: .depthRange), Self.depthAnything3ID]
         if embeddedDepth || ModelCatalog.offered.contains(where: { depthModels.contains($0.id) }) {
             kinds.insert(.depthRange)
@@ -253,7 +253,7 @@ extension RedlampEngine {
         if request.kind == .sky, EmbeddedMattes.read(.sky, from: url) == nil, let sky = try await modelSky(analysis) {
             return [sky]
         }
-        if request.kind == .depthRange, !EmbeddedMattes.available(in: url).contains(.depth) {
+        if request.kind == .depthRange, !session.embeddedMattes.contains(.depth) {
             let image = analysis.image
             let depth: GrayMask
             let provider: String
