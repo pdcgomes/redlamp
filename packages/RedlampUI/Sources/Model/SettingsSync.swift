@@ -40,6 +40,8 @@ public final class SettingsSync {
     /// An engine for photos that aren't open; nil leaves AI masks and Auto white balance as pasted.
     @ObservationIgnored var makeEngine: () -> (any EditingEngine)?
     @ObservationIgnored let store: SidecarStore
+    /// The editor's saves: a photo just left may still be on its way to disk.
+    @ObservationIgnored var saves: SaveQueue?
     @ObservationIgnored private var task: Task<Void, Never>?
     /// The last batch: each photo's edit before (nil: it had no sidecar) and after.
     @ObservationIgnored private var before: [URL: EditRecipe?] = [:]
@@ -132,6 +134,7 @@ public final class SettingsSync {
         for url in photos {
             guard !Task.isCancelled else { break }
             defer { progress?.done += 1 }
+            await saves?.wait(for: url)
             guard store.protection(for: url) == nil else {
                 skipped += 1
                 continue

@@ -1,0 +1,221 @@
+import Foundation
+import RedlampDocument
+import RedlampEngineAPI
+import Testing
+@testable import RedlampUI
+
+/// Saves land in the order they were made: what is on disk once they have is what the editor
+/// shows, however fast the edits, ratings and photo changes come.
+@MainActor
+struct SaveQueueTests {
+    private struct Folder {
+        let url = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+
+        var photo: URL {
+            url.appending(path: "IMG_0001.ARW")
+        }
+
+        var other: URL {
+            url.appending(path: "IMG_0002.ARW")
+        }
+
+        var saved: Sidecar? {
+            SidecarStore().load(for: photo)
+        }
+
+        init() throws {
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        }
+
+        func remove() {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    private func open(_ url: URL, in model: EditorModel) async throws {
+        model.select(url)
+        for _ in 0 ..< 400 where model.info?.url != url {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try #require(model.info?.url == url)
+    }
+
+    @Test func `rapid edits each saved at once leave the last on disk`() async throws {
+        let folder = try Folder()
+        defer { folder.remove() }
+        let model = EditorModel(engine: StubEngine())
+        try await open(folder.photo, in: model)
+
+        for round in 1 ... 100 {
+            for step in 1 ... 6 {
+                model.setValue(.exposure, Double(round * 6 + step) / 1000)
+                model.saveNow()
+            }
+            await model.saves.flush()
+            #expect(folder.saved?.recipe == model.recipe, "round \(round)")
+        }
+    }
+
+    @Test func `edits that never pause are saved within the maximum wait`() async throws {
+        let folder = try Folder()
+        defer { folder.remove() }
+        let model = EditorModel(engine: StubEngine())
+        try await open(folder.photo, in: model)
+
+        let start = ContinuousClock.now
+        var saved: Duration?
+        for step in 1 ... 20 where saved == nil {
+            model.setValue(.exposure, Double(step) / 10)
+            try await Task.sleep(for: .milliseconds(300))
+            if folder.saved != nil {
+                saved = .now - start
+            }
+        }
+        let after = try #require(saved, "saved while the edits went on")
+        #expect(after <= .milliseconds(2500))
+    }
+
+    @Test func `a drag is saved once it pauses`() async throws {
+        let folder = try Folder()
+        defer { folder.remove() }
+        let model = EditorModel(engine: StubEngine())
+        try await open(folder.photo, in: model)
+
+        model.beginEdit(.exposure)
+        for step in 1 ... 30 {
+            model.setSliderValue(.exposure, Double(step) / 10)
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        model.endEdit()
+        #expect(folder.saved == nil, "not while it moved")
+        try await Task.sleep(for: .milliseconds(900))
+        #expect(folder.saved?.recipe == model.recipe)
+    }
+
+    @Test func `a rating and a flag set as the photo opens both reach the file`() async throws {
+        for round in 1 ... 20 {
+            let folder = try Folder()
+            defer { folder.remove() }
+            let model = EditorModel(engine: StubEngine())
+            model.library.insert(LibraryItem(url: folder.photo))
+
+            model.select(folder.photo)
+            _ = model.perform(.rating3)
+            _ = model.perform(.flagPick)
+            try await open(folder.photo, in: model)
+            await model.saves.flush()
+            #expect(folder.saved?.metadata == PhotoMetadata(rating: 3, flag: .pick), "round \(round)")
+            #expect(model.currentMetadata == PhotoMetadata(rating: 3, flag: .pick))
+        }
+    }
+
+    @Test func `the same field set twice as the photo opens keeps the later value`() async throws {
+        for round in 1 ... 20 {
+            let folder = try Folder()
+            defer { folder.remove() }
+            let model = EditorModel(engine: StubEngine())
+            model.library.insert(LibraryItem(url: folder.photo))
+
+            model.select(folder.photo)
+            _ = model.perform(.rating3)
+            _ = model.perform(.rating5)
+            try await open(folder.photo, in: model)
+            await model.saves.flush()
+            #expect(folder.saved?.metadata?.rating == 5, "round \(round)")
+        }
+    }
+
+    @Test func `a rating set as the photo opens never lands over a later edit`() async throws {
+        for round in 1 ... 20 {
+            let folder = try Folder()
+            defer { folder.remove() }
+            let model = EditorModel(engine: StubEngine())
+            model.library.insert(LibraryItem(url: folder.photo))
+
+            model.select(folder.photo)
+            _ = model.perform(.rating3)
+            try await open(folder.photo, in: model)
+            model.setValue(.exposure, 0.5)
+            model.saveNow()
+            await model.saves.flush()
+            #expect(folder.saved?.recipe == model.recipe, "round \(round)")
+            #expect(folder.saved?.metadata?.rating == 3, "round \(round)")
+        }
+    }
+
+    @Test func `leaving a photo and coming back reads what was just saved`() async throws {
+        let folder = try Folder()
+        defer { folder.remove() }
+        let model = EditorModel(engine: StubEngine())
+        try await open(folder.photo, in: model)
+
+        for round in 1 ... 20 {
+            model.setValue(.exposure, Double(round) / 10)
+            let edited = model.recipe
+            try await open(folder.other, in: model)
+            try await open(folder.photo, in: model)
+            #expect(model.recipe == edited, "round \(round)")
+        }
+    }
+
+    @Test func `writes run in order on the queue's own thread, and reads after them`() async throws {
+        let folder = try Folder()
+        defer { folder.remove() }
+        let queue = SaveQueue(store: SidecarStore())
+        var last = EditRecipe()
+        for step in 1 ... 50 {
+            last[.exposure] = Double(step) / 100
+            queue.enqueue(.sidecar(Sidecar(recipe: last)), for: folder.photo)
+            queue.enqueue(.metadata { $0.rating = step % 6 }, for: folder.photo)
+        }
+        let (read, label) = await queue.read { [photo = folder.photo] in
+            (SidecarStore().load(for: photo), String(cString: __dispatch_queue_get_label(nil)))
+        }
+        #expect(read?.recipe == last)
+        #expect(read?.metadata?.rating == 50 % 6)
+        #expect(label == SaveQueue.label)
+    }
+
+    @Test func `waiting for one photo's saves returns once they have landed`() async throws {
+        let folder = try Folder()
+        defer { folder.remove() }
+        let queue = SaveQueue(store: SidecarStore())
+        await queue.wait(for: folder.photo)
+
+        var recipe = EditRecipe()
+        recipe[.exposure] = 1
+        queue.enqueue(.sidecar(Sidecar(recipe: recipe)), for: folder.photo)
+        await queue.wait(for: folder.photo)
+        #expect(folder.saved?.recipe == recipe)
+    }
+
+    @Test func `a save that replaces a waiting one keeps its Clear History`() async throws {
+        let folder = try Folder()
+        defer { folder.remove() }
+        let store = SidecarStore()
+        var recipe = EditRecipe()
+        recipe[.exposure] = 1
+        let earlier = HistorySession(steps: [
+            HistoryStep(action: .open, title: "Opened", recipe: EditRecipe()),
+            HistoryStep(action: .adjustment(.exposure), title: "Exposure", recipe: recipe),
+        ])
+        var first = Sidecar(recipe: recipe, session: earlier)
+        try store.saveOrRemove(first, for: folder.photo)
+        #expect(store.loadHistory(for: folder.photo).count == 1)
+
+        let queue = SaveQueue(store: store)
+        let session = HistorySession(steps: [HistoryStep(action: .clear, title: "History Cleared", recipe: recipe)])
+        // Held up behind a write of another photo, so the two below coalesce.
+        let gate = DispatchSemaphore(value: 0)
+        queue.enqueue(.metadata { _ in gate.wait() }, for: folder.other)
+        first = Sidecar(recipe: recipe, session: session)
+        first.clearsHistory = true
+        queue.enqueue(.sidecar(first), for: folder.photo)
+        recipe[.exposure] = 2
+        queue.enqueue(.sidecar(Sidecar(recipe: recipe, session: session)), for: folder.photo)
+        gate.signal()
+        await queue.flush()
+        #expect(folder.saved?.recipe == recipe)
+        #expect(store.loadHistory(for: folder.photo).allSatisfy { $0.id == session.id })
+    }
+}

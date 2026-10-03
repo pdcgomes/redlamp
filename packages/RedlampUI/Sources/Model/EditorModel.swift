@@ -15,6 +15,7 @@ public final class EditorModel {
     public let engine: any EditingEngine
     public let canvas = CanvasController()
     @ObservationIgnored private let sidecars = SidecarStore()
+    @ObservationIgnored let saves = SaveQueue(store: SidecarStore())
 
     // MARK: Library
 
@@ -441,6 +442,7 @@ public final class EditorModel {
     @ObservationIgnored private var pendingCanvas: (imageSize: PixelSize, firstGeneration: UInt64)?
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored private var saveDeadline: ContinuousClock.Instant?
+    @ObservationIgnored private var unsavedSince: ContinuousClock.Instant?
     @ObservationIgnored private var openTask: Task<Void, Never>?
     @ObservationIgnored private var framesTask: Task<Void, Never>?
 
@@ -458,6 +460,7 @@ public final class EditorModel {
             }
         canvas.onRenderSizeChange = { [weak self] _ in self?.requestRender() }
         settingsSync.makeEngine = { [weak self] in self?.makeWorkerEngine?() }
+        settingsSync.saves = saves
         followLibrary()
         let frames = engine.frames()
         framesTask = Task { [weak self] in
@@ -502,9 +505,11 @@ public final class EditorModel {
         edgeBrushStrokes = []
         openTask?.cancel()
         // The sidecar is read off the main thread even for a photo already decoded: it is
-        // coordinated, and iCloud Drive may have to download it first.
-        let readSidecar = { [sidecars, scheduler = library.scheduler] in
-            try? await scheduler.run(.onScreen) {
+        // coordinated, and iCloud Drive may have to download it first. It waits for the
+        // photo's saves still on their way, so a photo opened again reads what was left.
+        let readSidecar = { [sidecars, saves, scheduler = library.scheduler] in
+            await saves.wait(for: url)
+            return try? await scheduler.run(.onScreen) {
                 OpenedSidecar(sidecar: sidecars.load(for: url), protection: sidecars.protection(for: url))
             }
         }
@@ -569,6 +574,8 @@ public final class EditorModel {
         if read.protection == nil {
             metadataChangesWhileOpening.forEach { $0(&metadata) }
         }
+        // A change made after the file was read isn't in it yet: saving once open puts it there.
+        let savesMetadata = !metadataChangesWhileOpening.isEmpty && read.protection == nil
         if !metadataChangesWhileOpening.isEmpty {
             library.update(opened.url) { $0.metadata = metadata }
             metadataChangesWhileOpening = []
@@ -594,6 +601,9 @@ public final class EditorModel {
             pendingCanvas = (frameSize, generation &+ 1)
         }
         requestRender()
+        if savesMetadata {
+            saveNow()
+        }
     }
 
     private func showOnCanvas(_ imageSize: PixelSize) {
@@ -1104,10 +1114,15 @@ public final class EditorModel {
 
     // MARK: - Persistence
 
-    /// Saves 600 ms after the last change. A drag pushes the deadline back on every event
-    /// rather than spawning a task per event.
+    /// Saves 600 ms after the last change and, outside a drag, at most 2 s after the first one
+    /// not saved, so a run of nudges is on disk while it goes on. A drag waits until it pauses:
+    /// a save wakes the folder watcher, which costs the drag frames. It moves the deadline on
+    /// every event rather than spawning a task per event.
     func scheduleSave() {
-        saveDeadline = .now + .milliseconds(600)
+        let first = unsavedSince ?? .now
+        unsavedSince = first
+        let deadline = ContinuousClock.now + .milliseconds(600)
+        saveDeadline = editStart == nil ? min(deadline, first + .seconds(2)) : deadline
         guard saveTask == nil else { return }
         saveTask = Task { [weak self] in
             while let deadline = self?.saveDeadline, deadline > .now {
@@ -1124,6 +1139,7 @@ public final class EditorModel {
         saveTask?.cancel()
         saveTask = nil
         saveDeadline = nil
+        unsavedSince = nil
         guard let url = selection, info != nil, !isReadOnly else { return }
         let metadata = photoMetadata
         var sidecar = Sidecar(
@@ -1136,10 +1152,7 @@ public final class EditorModel {
         )
         sidecar.clearsHistory = clearsSavedHistory
         clearsSavedHistory = false
-        let store = sidecars
-        Task.detached(priority: .utility) {
-            try? store.saveOrRemove(sidecar, for: url)
-        }
+        saves.enqueue(.sidecar(sidecar), for: url)
         let hasEdits = !recipe.isPristine
         library.update(url) { item in
             item.hasEdits = hasEdits

@@ -336,8 +336,7 @@ public extension EditorModel {
                 // The metadata shown may be the filmstrip's, not yet the file's: only what
                 // `change` set goes to the file, and again onto the file's when it opens.
                 metadataChangesWhileOpening.append(setting)
-                let store = SidecarStore()
-                Task.detached(priority: .utility) { try? Library.writeMetadata(for: url, store: store, setting) }
+                saves.enqueue(.metadata(setting), for: url)
             }
         }
         if advance {
