@@ -203,6 +203,45 @@ public extension EditorModel {
         dustMessage = spots.count == 1 ? "Healed 1 speck of dust." : "Healed \(spots.count) specks of dust."
     }
 
+    /// Remove Dust across the selection: the specks found in the same place on the sensor in
+    /// several of its photos are healed in all of them, the open photo as a step of its own history,
+    /// the others as one batch Undo can put back (`SettingsSync`).
+    func removeDustInSelection() async {
+        guard isMultiSelecting, let open = selection, info != nil, !isFindingDust, settingsSync.progress == nil else {
+            return
+        }
+        saveNow()
+        isFindingDust = true
+        defer {
+            isFindingDust = false
+            dustSearch = nil
+        }
+        let photos = selectedPhotos.map { url in
+            (url: url, recipe: url == open ? recipe : settingsSync.store.load(for: url)?.recipe ?? EditRecipe())
+        }
+        dustSearch = SettingsSync.Progress(title: "Finding Dust", done: 0, total: photos.count)
+        let finder = makeWorkerEngine?() ?? engine
+        let found = await finder.detectDust(in: photos, sensitivity: 50) { [weak self] done in
+            Task { @MainActor in self?.dustSearch?.done = done }
+        }
+        let specks = Set(found.values.flatMap { $0.map { "\($0.center.x),\($0.center.y)" } }).count
+        guard !found.isEmpty else {
+            dustMessage = "No dust found in the same place in two or more photos."
+            return
+        }
+        if let own = found[open], !own.isEmpty {
+            var next = recipe
+            for speck in own {
+                var spot = RetouchSpot(center: speck.center, source: speck.center, radius: speck.radius)
+                spot.source = await engine.retouchSource(for: spot, recipe: recipe) ?? nearbySource(for: spot)
+                next.spots.append(spot)
+            }
+            commit(next, .retouch, "Remove Dust")
+        }
+        settingsSync.run(.healDust(found), on: otherSelectedPhotos, title: "Remove Dust", done: written)
+        dustMessage = "Healed \(specks == 1 ? "1 speck" : "\(specks) specks") of dust in \(found.count == 1 ? "1 photo" : "\(found.count) photos")."
+    }
+
     /// Changes a spot as part of a drag (between `beginEdit` and `endEdit`), or as one step.
     func updateSpot(_ id: UUID, name: String? = nil, _ change: (inout RetouchSpot) -> Void) {
         guard let index = recipe.spots.firstIndex(where: { $0.id == id }) else { return }

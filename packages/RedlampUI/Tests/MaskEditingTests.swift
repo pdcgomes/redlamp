@@ -28,6 +28,18 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         dust
     }
 
+    /// What `detectDust(in:)` finds, and the photos it was asked about.
+    var shootDust: [URL: [DetectedSpot]] = [:]
+    var shootPhotos: [URL] = []
+
+    func detectDust(
+        in photos: [(url: URL, recipe: EditRecipe)], sensitivity _: Double, progress: @escaping @Sendable (Int) -> Void,
+    ) async -> [URL: [DetectedSpot]] {
+        shootPhotos = photos.map(\.url)
+        progress(photos.count)
+        return shootDust
+    }
+
     func open(_ url: URL) async throws -> ImageInfo {
         ImageInfo(url: url, pixelSize: PixelSize(width: 600, height: 400), isRaw: true, sensorDescription: "stub")
     }

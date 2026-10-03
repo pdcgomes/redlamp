@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import RedlampDocument
 import RedlampEngineAPI
 import Testing
 @testable import RedlampUI
@@ -155,6 +156,41 @@ struct HealToolTests {
         #expect(model.dustMessage == "No dust found." && model.recipe.spots.count == 2)
         model.activeTool = .edit
         #expect(model.dustMessage == nil)
+    }
+
+    @Test func `Remove Dust across a selection heals the dust its photos share`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let photos = ["A", "B", "C"].map { folder.appending(path: "\($0).ARW") }
+        let speck = DetectedSpot(center: ImagePoint(x: 0.3, y: 0.2), radius: 0.01, strength: 20)
+        let engine = StubEngine()
+        engine.retouchSource = ImagePoint(x: 0.4, y: 0.2)
+        let worker = StubEngine()
+        worker.retouchSource = ImagePoint(x: 0.35, y: 0.25)
+        worker.shootDust = [photos[0]: [speck], photos[1]: [speck]]
+        let model = EditorModel(engine: engine)
+        model.makeWorkerEngine = { worker }
+        photos.forEach { model.library.insert(LibraryItem(url: $0)) }
+        model.select(photos[0])
+        for _ in 0 ..< 200 where model.info?.url != photos[0] {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        model.selectAllPhotos()
+        model.activeTool = .heal
+        await model.removeDustInSelection()
+        await model.settingsSync.idle()
+        #expect(worker.shootPhotos == photos, "every selected photo is looked at, the open one too")
+        #expect(model.recipe.spots.map(\.center) == [speck.center])
+        #expect(model.recipe.spots.first?.source == ImagePoint(x: 0.4, y: 0.2))
+        #expect(model.history.last?.name == "Remove Dust")
+        let other = try #require(model.settingsSync.store.load(for: photos[1]))
+        #expect(other.recipe.spots.map(\.center) == [speck.center])
+        #expect(other.recipe.spots.first?.source == ImagePoint(x: 0.35, y: 0.25))
+        #expect(model.settingsSync.store.load(for: photos[2]) == nil, "no dust there, nothing written")
+        #expect(model.dustMessage == "Healed 1 speck of dust in 2 photos.")
+        model.undoSync()
+        #expect(model.settingsSync.store.load(for: photos[1]) == nil)
     }
 
     @Test func `Visualize Spots shows in the Healing tool only`() async throws {

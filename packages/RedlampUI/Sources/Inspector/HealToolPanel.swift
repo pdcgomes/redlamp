@@ -76,7 +76,19 @@ struct HealToolPanel: View {
                     .controlSize(.small)
                     .disabled(model.isFindingDust)
                     .help("Find the specks dust on the sensor leaves on smooth areas, and heal them")
-                if model.isFindingDust {
+                if model.isMultiSelecting {
+                    Button("In \(model.selectedPhotos.count) Photos") { Task { await model.removeDustInSelection() } }
+                        .controlSize(.small)
+                        .disabled(model.isFindingDust || model.settingsSync.progress != nil)
+                        .help(
+                            "Heal the dust found in the same place on the sensor in several of the selected photos, in all of them",
+                        )
+                }
+                if let search = model.dustSearch {
+                    Text("\(search.done) of \(search.total)")
+                        .font(Theme.labelFont)
+                        .foregroundStyle(Theme.label)
+                } else if model.isFindingDust {
                     ProgressView().controlSize(.small)
                 } else if let message = model.dustMessage {
                     Text(message)

@@ -275,6 +275,8 @@ public final class EditorModel {
     /// Why the last pick found nothing, shown in the Healing panel.
     public var pickMessage: String?
     public internal(set) var isFindingDust = false
+    /// Remove Dust across a selection, while it looks at each photo.
+    public internal(set) var dustSearch: SettingsSync.Progress?
     /// What the last Remove Dust found, shown in the Healing panel.
     public var dustMessage: String?
 

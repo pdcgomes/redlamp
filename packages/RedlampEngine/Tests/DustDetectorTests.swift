@@ -164,6 +164,50 @@ struct DustDetectorTests {
         #expect(frame.histogram == photo.histogram)
     }
 
+    @Test func `across a shoot, specks in the same sensor place are dust, and reach every frame`() throws {
+        let engine = try RedlampEngine()
+        let session = try scene()
+        let found = try engine.findDust(recipe: EditRecipe(), sensitivity: 50, session: session)
+        #expect(found.count == Self.dust.count)
+        // Four frames: each finds the dust, but the last misses one speck (texture hid it there),
+        // and the first also finds a speck of the scene's own.
+        let scenery = DetectedSpot(center: ImagePoint(x: 0.5, y: 0.1), radius: 0.01, strength: 30)
+        var frames = (0 ..< 4).map { index in
+            ShootDust.Frame(
+                url: URL(fileURLWithPath: "/frame\(index).dng"), recipe: EditRecipe(), session: session, specks: found,
+            )
+        }
+        frames[0].specks.append(scenery)
+        frames[3].specks.removeFirst()
+        // A fifth frame already has a spot over one speck.
+        var healed = EditRecipe()
+        healed.spots = [RetouchSpot(
+            center: found[1].center,
+            source: ImagePoint(x: 0.1, y: 0.1),
+            radius: found[1].radius,
+        )]
+        frames.append(ShootDust.Frame(
+            url: URL(fileURLWithPath: "/frame4.dng"),
+            recipe: healed,
+            session: session,
+            specks: [],
+        ))
+        let dust = ShootDust.consistent(frames)
+        for index in 0 ..< 4 {
+            let spots = dust[frames[index].url] ?? []
+            #expect(spots.count == Self.dust.count, "frame \(index): \(spots.count)")
+            #expect(
+                !spots.contains { abs($0.center.y - 0.1) < 0.02 && abs($0.center.x - 0.5) < 0.02 },
+                "the scene's speck",
+            )
+        }
+        #expect(
+            dust[frames[3].url]?.contains { abs($0.center.x - found[0].center.x) < 0.005 } == true,
+            "the missed one",
+        )
+        #expect(dust[frames[4].url]?.count == Self.dust.count - 1, "the healed one is left")
+    }
+
     @Test func `dust already covered by a spot isn't found again`() throws {
         let engine = try RedlampEngine()
         let session = try scene()

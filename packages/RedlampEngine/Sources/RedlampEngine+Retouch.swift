@@ -3,8 +3,8 @@ import Metal
 import RedlampEngineAPI
 import simd
 
-extension RedlampEngine {
-    public func retouchSource(for spot: RetouchSpot, recipe: EditRecipe) async -> ImagePoint? {
+public extension RedlampEngine {
+    func retouchSource(for spot: RetouchSpot, recipe: EditRecipe) async -> ImagePoint? {
         guard let current = currentSession() else { return nil }
         return await withCheckedContinuation { continuation in
             renderQueue.async { [self] in
@@ -13,7 +13,7 @@ extension RedlampEngine {
         }
     }
 
-    public func detectDust(recipe: EditRecipe, sensitivity: Double) async -> [DetectedSpot] {
+    func detectDust(recipe: EditRecipe, sensitivity: Double) async -> [DetectedSpot] {
         guard let current = currentSession() else { return [] }
         return await withCheckedContinuation { continuation in
             renderQueue.async { [self] in
@@ -23,9 +23,34 @@ extension RedlampEngine {
         }
     }
 
+    func detectDust(
+        in photos: [(url: URL, recipe: EditRecipe)], sensitivity: Double, progress: @escaping @Sendable (Int) -> Void,
+    ) async -> [URL: [DetectedSpot]] {
+        var frames: [ShootDust.Frame] = []
+        for (index, photo) in photos.enumerated() {
+            defer { progress(index + 1) }
+            guard let session = try? await sessions.session(for: photo.url) else { continue }
+            // Repetition across frames weeds out the scene, so each frame is looked at more keenly.
+            let found = await withCheckedContinuation { continuation in
+                renderQueue.async { [self] in
+                    let specks = try? findDust(
+                        recipe: photo.recipe, sensitivity: min(sensitivity + 15, 100), session: session,
+                    )
+                    continuation.resume(returning: specks ?? [])
+                }
+            }
+            frames.append(ShootDust.Frame(url: photo.url, recipe: photo.recipe, session: session, specks: found))
+        }
+        return ShootDust.consistent(frames)
+    }
+
     /// Reads back the pyramid level whose long edge is 2000 to 4000 texels, and looks for dust
     /// there, away from the recipe's spots.
-    func findDust(recipe: EditRecipe, sensitivity: Double, session base: ImageSession) throws -> [DetectedSpot] {
+    internal func findDust(
+        recipe: EditRecipe,
+        sensitivity: Double,
+        session base: ImageSession,
+    ) throws -> [DetectedSpot] {
         guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
         let session = try retouch.session(for: recipe, base: base, commands: commands)
         let pyramid = session.pyramid
@@ -73,7 +98,7 @@ extension RedlampEngine {
     }
 
     /// Reads the pyramid level `RetouchSource` searches, around the spot, back from the GPU.
-    func findRetouchSource(
+    internal func findRetouchSource(
         for spot: RetouchSpot,
         recipe: EditRecipe,
         session base: ImageSession,

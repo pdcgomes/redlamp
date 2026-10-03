@@ -111,6 +111,13 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// on smooth areas, strongest first. `sensitivity` 0...100.
     func detectDust(recipe: EditRecipe, sensitivity: Double) async -> [DetectedSpot]
 
+    /// Sensor dust across a shoot: specks found in the same place on the sensor in several of
+    /// `photos` (each as its edit leaves it), placed in every photo from that sensor, in the photo
+    /// as it's shown. `progress` gets the photos looked at so far, from any thread.
+    func detectDust(
+        in photos: [(url: URL, recipe: EditRecipe)], sensitivity: Double, progress: @escaping @Sendable (Int) -> Void,
+    ) async -> [URL: [DetectedSpot]]
+
     /// The focus stack document at `url`, merged now or read from the cache, developed with the
     /// default edit within `maxLongEdge`. `progress` gets 0 ... 1 from any thread. Opening the
     /// document afterwards shows this merge, even if it changed since it was last opened.
@@ -144,5 +151,11 @@ public extension EditingEngine {
 
     func detectDust(recipe _: EditRecipe, sensitivity _: Double) async -> [DetectedSpot] {
         []
+    }
+
+    func detectDust(
+        in _: [(url: URL, recipe: EditRecipe)], sensitivity _: Double, progress _: @escaping @Sendable (Int) -> Void,
+    ) async -> [URL: [DetectedSpot]] {
+        [:]
     }
 }

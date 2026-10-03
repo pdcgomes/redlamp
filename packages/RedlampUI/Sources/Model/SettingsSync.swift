@@ -18,6 +18,8 @@ public final class SettingsSync {
         case paste(EditRecipe, SettingsSelection)
         /// Every AI mask computed again with today's models.
         case updateAIMasks
+        /// Each photo's sensor dust (found across the selection) healed, a source found for each speck.
+        case healDust([URL: [DetectedSpot]])
     }
 
     public struct Progress: Equatable, Sendable {
@@ -140,6 +142,21 @@ public final class SettingsSync {
                 }
             case .updateAIMasks:
                 masks = nil
+            case let .healDust(found):
+                masks = []
+                let specks = found[url] ?? []
+                guard !specks.isEmpty else { continue }
+                engine = engine ?? makeEngine()
+                var opened = false
+                if let engine {
+                    opened = await (try? engine.open(url)) != nil
+                }
+                for speck in specks {
+                    var spot = RetouchSpot(center: speck.center, source: speck.center, radius: speck.radius)
+                    let found = opened ? await engine?.retouchSource(for: spot, recipe: original) : nil
+                    spot.source = found ?? ImagePoint(x: min(speck.center.x + speck.radius * 2.5, 1), y: speck.center.y)
+                    next.spots.append(spot)
+                }
             }
             let needsMasks = next.masks.contains { layer in
                 (masks?.contains(layer.id) ?? true) && layer.components.contains { $0.shape.isAIRaster }
@@ -220,6 +237,7 @@ private extension SettingsSync.Change {
         switch self {
         case .paste: .paste
         case .updateAIMasks: .mask(nil)
+        case .healDust: .retouch
         }
     }
 }

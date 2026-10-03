@@ -56,7 +56,7 @@ public extension EditorModel {
         settingsSync.run(.paste(source, selection), on: otherSelectedPhotos, title: title, done: written)
     }
 
-    private func written(_ url: URL, _ recipe: EditRecipe) {
+    internal func written(_ url: URL, _ recipe: EditRecipe) {
         library.update(url) { $0.hasEdits = !recipe.isPristine }
     }
 }
