@@ -279,7 +279,7 @@ public struct SidecarStore: Sendable {
     }
 
     /// The write itself, under coordination.
-    private static func write(_ sidecar: Sidecar, to destination: URL) throws {
+    static func write(_ sidecar: Sidecar, to destination: URL) throws {
         let existingPackage = isPackage(destination)
         var sidecar = sidecar
         let existing = try existing(at: destination)

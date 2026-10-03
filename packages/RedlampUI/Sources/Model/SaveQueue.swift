@@ -3,13 +3,27 @@ import RedlampDocument
 
 /// Writes sidecars one at a time, in the order they were asked for, on a serial queue of its
 /// own: coordinated file I/O blocks, so it stays off the main thread and the cooperative pool.
-/// A save asked for while an earlier one of the same session still waits replaces it.
+/// A save asked for while an earlier one of the same session still waits replaces it. A photo
+/// being tracked is saved over its base, so what another writer saved since isn't lost.
 final class SaveQueue: @unchecked Sendable {
     enum Write: Sendable {
         /// The photo's whole sidecar, written as `SidecarStore.saveOrRemove` does.
         case sidecar(Sidecar)
         /// A change to the culling metadata of the sidecar as it is on disk then.
         case metadata(@Sendable (inout PhotoMetadata) -> Void)
+        /// From now on the photo's saves go over `base` (nil: the sidecar as it is then);
+        /// `opened` is the editor's state when it took it, to tell what changed here.
+        case track(SidecarBase?, opened: Sidecar)
+        /// The photo's saves no longer look for another writer's.
+        case forget
+    }
+
+    enum Outcome: Sendable {
+        case saved
+        /// Another writer's edit is on disk, merged with what changed here or as they left it;
+        /// the photo's saves still go over the old base until it is tracked again.
+        case replaced(SidecarBase)
+        case failed(any Error)
     }
 
     static let label = "app.redlamp.saves"
@@ -22,14 +36,16 @@ final class SaveQueue: @unchecked Sendable {
     /// Writes asked for and not finished, the one being written included.
     private var unfinished: [URL: Int] = [:]
     private var waiters: [URL: [CheckedContinuation<Void, Never>]] = [:]
-    typealias Report = @MainActor @Sendable (URL, Write, (any Error)?) -> Void
+    typealias Report = @MainActor @Sendable (URL, Write, Outcome) -> Void
     private var report: Report?
+    /// The tracked photos' bases, and the editor's state each was taken at. Only the queue uses it.
+    private var tracking: [URL: (base: SidecarBase, opened: Sidecar)] = [:]
 
     init(store: SidecarStore) {
         self.store = store
     }
 
-    /// Tells `report`, on the main actor and in order, how each write went: nil, or why it failed.
+    /// Tells `report`, on the main actor and in order, how each save went.
     func reportResults(to report: @escaping Report) {
         lock.withLock { self.report = report }
     }
@@ -103,27 +119,49 @@ final class SaveQueue: @unchecked Sendable {
             return first
         }
         guard let write else { return }
-        var failure: (any Error)?
+        let outcome: Outcome?
         do {
-            switch write {
-            case let .sidecar(sidecar):
-                try store.saveOrRemove(sidecar, for: url)
-            case let .metadata(change):
-                try Library.writeMetadata(for: url, store: store, change)
-            }
+            outcome = try perform(write, for: url)
         } catch {
-            failure = error
+            outcome = .failed(error)
         }
         let (done, report): ([CheckedContinuation<Void, Never>], Report?) = lock.withLock {
             let left = unfinished[url, default: 1] - 1
             unfinished[url] = left > 0 ? left : nil
             return (left > 0 ? [] : waiters.removeValue(forKey: url) ?? [], self.report)
         }
-        if let report {
-            DispatchQueue.main.async { [failure] in
-                MainActor.assumeIsolated { report(url, write, failure) }
+        if let report, let outcome {
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { report(url, write, outcome) }
             }
         }
         done.forEach { $0.resume() }
+    }
+
+    /// Nil for what isn't a save.
+    private func perform(_ write: Write, for url: URL) throws -> Outcome? {
+        switch write {
+        case let .sidecar(sidecar):
+            guard let tracked = tracking[url] else {
+                try store.saveOrRemove(sidecar, for: url)
+                return .saved
+            }
+            switch try store.saveOrRemove(sidecar, for: url, over: tracked.base, opened: tracked.opened) {
+            case let .saved(base):
+                tracking[url] = (base, sidecar)
+                return .saved
+            case let .theirs(base), let .merged(base):
+                return .replaced(base)
+            }
+        case let .metadata(change):
+            try Library.writeMetadata(for: url, store: store, change)
+            return .saved
+        case let .track(base, opened):
+            tracking[url] = (base ?? store.base(for: url), opened)
+            return nil
+        case .forget:
+            tracking[url] = nil
+            return nil
+        }
     }
 }

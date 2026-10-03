@@ -45,23 +45,39 @@ extension EditorModel {
     }
 
     /// A write's result. Only a photo's last write in flight counts: a later one supersedes it.
-    func saved(_ url: URL, _ write: SaveQueue.Write, _ error: (any Error)?) {
+    func saved(_ url: URL, _ write: SaveQueue.Write, _ outcome: SaveQueue.Outcome) {
         guard !saves.isPending(url) else { return }
-        guard let error else {
-            if saveError?.url == url {
-                saveError = nil
-                failedSave = nil
-                saveRetry.task?.cancel()
-                saveRetry = (nil, .seconds(1))
-            }
+        switch outcome {
+        case .saved:
+            succeeded(url)
             if case let .sidecar(sidecar) = write {
-                library.update(url) { item in
-                    item.hasEdits = !sidecar.recipe.isPristine
-                    item.metadata = sidecar.metadata ?? PhotoMetadata()
-                }
+                show(sidecar, for: url)
             }
-            return
+        case let .replaced(base):
+            succeeded(url)
+            show(base.sidecar, for: url)
+            adopt(base, for: url)
+        case let .failed(error):
+            failed(url, write, error)
         }
+    }
+
+    private func succeeded(_ url: URL) {
+        guard saveError?.url == url else { return }
+        saveError = nil
+        failedSave = nil
+        saveRetry.task?.cancel()
+        saveRetry = (nil, .seconds(1))
+    }
+
+    private func show(_ sidecar: Sidecar?, for url: URL) {
+        library.update(url) { item in
+            item.hasEdits = sidecar.map { !$0.recipe.isPristine } ?? false
+            item.metadata = sidecar?.metadata ?? PhotoMetadata()
+        }
+    }
+
+    private func failed(_ url: URL, _ write: SaveQueue.Write, _ error: any Error) {
         showOnDisk(url)
         let protection = Self.protection(of: error)
         if protection != nil, case .metadata = write {

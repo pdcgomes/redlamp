@@ -128,4 +128,84 @@ struct SidecarCoordinationTests {
         let sidecar = Sidecar(recipe: recipe(exposure: 0.7), modified: Date(timeIntervalSince1970: 1000))
         #expect(SidecarStore.merge(sidecar, [sidecar]) == sidecar)
     }
+
+    // MARK: - Another writer while the photo is open
+
+    @Test func `a save over an unchanged base writes, and the next goes over what it wrote`() throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        try store.save(Sidecar(recipe: recipe(exposure: 0.5)), for: image)
+        let (loaded, base) = store.loadWithBase(for: image)
+        let opened = try #require(loaded)
+
+        let first = Sidecar(recipe: recipe(exposure: 1))
+        guard case let .saved(next) = try store.saveOrRemove(first, for: image, over: base, opened: opened) else {
+            Issue.record("saved")
+            return
+        }
+        let second = Sidecar(recipe: recipe(exposure: 2))
+        guard case .saved = try store.saveOrRemove(second, for: image, over: next, opened: first) else {
+            Issue.record("its own save isn't another writer's")
+            return
+        }
+        #expect(store.load(for: image)?.recipe[.exposure] == 2)
+    }
+
+    @Test func `with nothing changed here, another writer's save is left as they wrote it`() throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        try store.save(Sidecar(recipe: recipe(exposure: 0.5)), for: image)
+        let (loaded, base) = store.loadWithBase(for: image)
+        let opened = try #require(loaded)
+        try store.save(Sidecar(recipe: recipe(exposure: 3), metadata: PhotoMetadata(rating: 5)), for: image)
+        let theirs = try Data(contentsOf: store.editURL(for: image))
+
+        guard case let .theirs(now) = try store.saveOrRemove(opened, for: image, over: base, opened: opened) else {
+            Issue.record("theirs")
+            return
+        }
+        #expect(now.sidecar?.recipe[.exposure] == 3)
+        #expect(try Data(contentsOf: store.editURL(for: image)) == theirs)
+    }
+
+    @Test func `what each side changed alone is kept, and the older of two edits becomes a snapshot`() {
+        let base = Sidecar(recipe: recipe(exposure: 0.5), modified: Date(timeIntervalSince1970: 1000))
+        var ours = base
+        ours.recipe[.vibrance] = 10
+        ours.modified = Date(timeIntervalSince1970: 3000)
+        var theirs = base
+        theirs.recipe[.contrast] = 40
+        theirs.metadata = PhotoMetadata(rating: 5)
+        theirs.modified = Date(timeIntervalSince1970: 2000)
+
+        let merged = SidecarStore.merge(ours, theirs, base: base, opened: base)
+        #expect(merged.recipe == ours.recipe)
+        #expect(merged.snapshots.map(\.recipe) == [theirs.recipe])
+        #expect(merged.metadata == PhotoMetadata(rating: 5))
+
+        var rated = base
+        rated.metadata = PhotoMetadata(rating: 2)
+        let onlyTheirEdit = SidecarStore.merge(rated, theirs, base: base, opened: base)
+        #expect(onlyTheirEdit.recipe == theirs.recipe, "edited only there")
+        #expect(onlyTheirEdit.snapshots.isEmpty)
+        #expect(onlyTheirEdit.metadata == PhotoMetadata(rating: 2), "rated in both: this one's, the save being newer")
+    }
+
+    @Test func `an edit a newer version saved meanwhile is never saved over`() throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        try store.save(Sidecar(recipe: recipe(exposure: 0.5)), for: image)
+        let (loaded, base) = store.loadWithBase(for: image)
+        let opened = try #require(loaded)
+        let newer = Data(#"{"format":"app.redlamp.edit","recipe":{"version":999,"processVersion":1}}"#.utf8)
+        try newer.write(to: store.editURL(for: image))
+
+        #expect(throws: SidecarStoreError.self) {
+            try store.saveOrRemove(Sidecar(recipe: recipe(exposure: 1)), for: image, over: base, opened: opened)
+        }
+        #expect(try Data(contentsOf: store.editURL(for: image)) == newer)
+    }
 }

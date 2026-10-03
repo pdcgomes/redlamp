@@ -487,6 +487,9 @@ public final class EditorModel {
         }
         guard url != selection else { return }
         saveNow()
+        if let selection {
+            saves.enqueue(.forget, for: selection)
+        }
         engine.prefetch(workingSet(around: url, comingFrom: selection))
         if let selection {
             previousSelection = selection
@@ -519,8 +522,9 @@ public final class EditorModel {
         let readSidecar = { [sidecars, saves, scheduler = library.scheduler] in
             await saves.wait(for: url)
             return try? await scheduler.run(.onScreen) {
-                OpenedSidecar(
-                    sidecar: sidecars.load(for: url), protection: sidecars.protection(for: url),
+                let (sidecar, base) = sidecars.loadWithBase(for: url)
+                return OpenedSidecar(
+                    sidecar: sidecar, base: base, protection: sidecars.protection(for: url),
                     hasUnmergedConflicts: sidecars.hasUnmergedConflicts(for: url),
                 )
             }
@@ -572,6 +576,8 @@ public final class EditorModel {
     /// A photo's sidecar as read when it opens.
     private struct OpenedSidecar: Sendable {
         var sidecar: Sidecar?
+        /// What the photo's saves go over (nil: the sidecar as it is when the photo opens).
+        var base: SidecarBase?
         /// Shown, but never saved over.
         var protection: SidecarProtection?
         var hasUnmergedConflicts = false
@@ -595,11 +601,7 @@ public final class EditorModel {
             metadataChangesWhileOpening = []
         }
         photoMetadata = metadata
-        var loaded = sidecar?.recipe ?? EditRecipe()
-        if loaded.whiteBalanceMode == .asShot, let wb = opened.asShotWhiteBalance {
-            loaded[.temperature] = wb.temperature
-            loaded[.tint] = wb.tint
-        }
+        let loaded = Self.asShot(sidecar?.recipe ?? EditRecipe(), opened)
         recipe = loaded
         snapshots = sidecar?.snapshots ?? []
         startSession(opening: opened.url, recipe: loaded, hasSidecar: sidecar != nil)
@@ -615,9 +617,40 @@ public final class EditorModel {
             pendingCanvas = (frameSize, generation &+ 1)
         }
         requestRender()
+        if read.protection == nil {
+            saves.enqueue(.track(read.base, opened: sidecarToSave), for: opened.url)
+        }
         if savesMetadata {
             saveNow()
         }
+    }
+
+    /// Shows the open photo as another writer left it, or as merged with them. Not during a drag
+    /// or with a change still to save: that save merges again, and this comes back then.
+    func adopt(_ base: SidecarBase, for url: URL) {
+        guard url == selection, let info, !isReadOnly, editStart == nil, !hasUnsavedChange else { return }
+        let theirs = base.sidecar ?? Sidecar(recipe: EditRecipe())
+        let previous = recipe
+        recipe = Self.asShot(theirs.recipe, info)
+        snapshots = theirs.snapshots
+        photoMetadata = theirs.metadata ?? PhotoMetadata()
+        cropIntent = recipe.crop
+        if recipe != previous {
+            // As a paste, Auto Sync doesn't send it on to the rest of the selection.
+            recordHistory(.paste, "Edit from Another Mac", from: previous)
+            requestRender()
+        }
+        saves.enqueue(.track(base, opened: sidecarToSave), for: url)
+    }
+
+    /// `recipe` with the photo's own white balance when it is As Shot.
+    static func asShot(_ recipe: EditRecipe, _ info: ImageInfo) -> EditRecipe {
+        var recipe = recipe
+        if recipe.whiteBalanceMode == .asShot, let wb = info.asShotWhiteBalance {
+            recipe[.temperature] = wb.temperature
+            recipe[.tint] = wb.tint
+        }
+        return recipe
     }
 
     private func showOnCanvas(_ imageSize: PixelSize) {
@@ -1155,18 +1188,27 @@ public final class EditorModel {
         saveDeadline = nil
         unsavedSince = nil
         guard let url = selection, info != nil, !isReadOnly else { return }
-        let metadata = photoMetadata
-        var sidecar = Sidecar(
-            recipe: recipe, snapshots: snapshots, metadata: metadata.isEmpty ? nil : metadata,
+        var sidecar = sidecarToSave
+        sidecar.clearsHistory = clearsSavedHistory
+        clearsSavedHistory = false
+        // The filmstrip's badge follows once it's on disk (`saved`).
+        saves.enqueue(.sidecar(sidecar), for: url)
+    }
+
+    /// The open photo's edit, metadata and this session's history, as saving writes them.
+    var sidecarToSave: Sidecar {
+        Sidecar(
+            recipe: recipe, snapshots: snapshots, metadata: photoMetadata.isEmpty ? nil : photoMetadata,
             session: HistorySession(
                 id: session.id,
                 started: session.started,
                 steps: Array(history.prefix(historyIndex + 1)),
             ),
         )
-        sidecar.clearsHistory = clearsSavedHistory
-        clearsSavedHistory = false
-        // The filmstrip's badge follows once it's on disk (`saved`).
-        saves.enqueue(.sidecar(sidecar), for: url)
+    }
+
+    /// A change is waiting for its save.
+    var hasUnsavedChange: Bool {
+        saveTask != nil
     }
 }
