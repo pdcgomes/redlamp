@@ -589,6 +589,7 @@ kernel void rl_develop(
     texture3d<float, access::read> hueSatCool [[texture(9)]],
     texture3d<float, access::read> hueSatWarm [[texture(10)]],
     texture3d<float, access::sample> gainTable [[texture(11)]],
+    texture2d<float, access::sample> toneBase [[texture(12)]],
     constant float4 *lensTable [[buffer(5)]],
     uint2 gid [[thread_position_in_grid]])
 {
@@ -618,6 +619,14 @@ kernel void rl_develop(
             camera.r = source.sample(linearSampler, orient(redUV, int(p.geometry.x)), level(p.geometry.y)).r;
             camera.b = source.sample(linearSampler, orient(blueUV, int(p.geometry.x)), level(p.geometry.y)).b;
         }
+    }
+    // Edge-aware tone's detail (process 7, `ToneBase`): this pixel's log luminance above its
+    // region's, in the pyramid's camera RGB as the base was computed, before any correction.
+    float toneDetail = 0.0f;
+    if (p.render.z > 0.5f) {
+        float toneEV = log2(max(dot(camera, float3(0.25f, 0.5f, 0.25f)), 1e-6f));
+        float2 ab = toneBase.sample(linearSampler, sourceUV).rg;
+        toneDetail = toneEV - (ab.x * toneEV + ab.y);
     }
     // The profile's vignetting, at the radius the light was recorded at.
     if (p.lensProfile.x > 0.5f) {
@@ -745,8 +754,10 @@ kernel void rl_develop(
     // Tone controls in log space around middle grey, applied as a luminance ratio.
     float luma = max(dot(scene, kRec2020Luma), 1e-7f);
     float ev = log2(luma / kMiddleGrey);
-    float highlightWeight = smoothstep(-0.5f, 2.5f, ev);
-    float shadowWeight = (1.0f - smoothstep(-4.5f, 0.0f, ev)) * smoothstep(-10.0f, -5.5f, ev);
+    // Highlights and Shadows weigh the region's brightness (process 7), so its detail moves with it.
+    float baseEV = ev - toneDetail;
+    float highlightWeight = smoothstep(-0.5f, 2.5f, baseEV);
+    float shadowWeight = (1.0f - smoothstep(-4.5f, 0.0f, baseEV)) * smoothstep(-10.0f, -5.5f, baseEV);
     float adjustedEV = ev * (1.0f + p.tone.y + localTone.y * 0.32f)
         + (p.tone.z + localTone.z) * 1.25f * highlightWeight
         + (p.tone.w + localTone.w) * 1.6f * shadowWeight

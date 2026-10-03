@@ -204,7 +204,12 @@ enum DevelopParameters {
             7,
         )
         p.grain2 = SIMD4(Float(recipe[.grainColor] / 100), recipe.processVersion >= 2 ? 1 : 0, 0, 0)
-        p.render = SIMD4(recipe.processVersion >= 3 && !session.isRaw ? 1 : 0, recipe.processVersion >= 3 ? 1 : 0, 0, 0)
+        p.render = SIMD4(
+            recipe.processVersion >= 3 && !session.isRaw ? 1 : 0,
+            recipe.processVersion >= 3 ? 1 : 0,
+            recipe.processVersion >= 7 ? 1 : 0,
+            0,
+        )
         p.mood0 = SIMD4(
             Float(recipe[.leakAmount] / 100), Float(recipe[.leakWarmth] / 100),
             Float(recipe[.leakVariation] / 100), Float(recipe[.dustAmount] / 100),

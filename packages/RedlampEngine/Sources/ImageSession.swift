@@ -36,6 +36,8 @@ final class ImageSession: @unchecked Sendable {
     /// Dehaze's airlight and haze map (see `Haze`), in the pyramid's camera RGB.
     let airlight: SIMD3<Float>
     let hazeMap: any MTLTexture
+    /// Edge-aware Highlights and Shadows' base: a guided filter's coefficients (see `ToneBase`).
+    let toneBase: any MTLTexture
     /// The light halation and bloom spread (see `Glow`), mipmapped.
     let glowSource: any MTLTexture
     /// The same, boosting only small lights (process 3).
@@ -69,6 +71,7 @@ final class ImageSession: @unchecked Sendable {
         repairedPixels: Int,
         airlight: SIMD3<Float>,
         hazeMap: any MTLTexture,
+        toneBase: any MTLTexture,
         glowSource: any MTLTexture,
         glowLights: any MTLTexture,
         noiseGain: any MTLTexture,
@@ -84,6 +87,7 @@ final class ImageSession: @unchecked Sendable {
         self.repairedPixels = repairedPixels
         self.airlight = airlight
         self.hazeMap = hazeMap
+        self.toneBase = toneBase
         self.glowSource = glowSource
         self.glowLights = glowLights
         self.noise = noise.scaled(by: SIMD3<Float>(balanceMultipliers))
@@ -134,6 +138,7 @@ final class ImageSession: @unchecked Sendable {
         repairedPixels = original.repairedPixels
         airlight = original.airlight
         hazeMap = original.hazeMap
+        toneBase = original.toneBase
         glowSource = original.glowSource
         glowLights = original.glowLights
         noiseGain = original.noiseGain
