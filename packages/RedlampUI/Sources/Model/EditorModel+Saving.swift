@@ -63,7 +63,7 @@ extension EditorModel {
 
     /// The open photo is saved as it is now, its failed edits shown in it; another's failed
     /// writes are made again, over the base its saves were tracking.
-    private func retry(_ url: URL) {
+    func retry(_ url: URL) {
         if url == selection, info != nil {
             guard !isReadOnly else { return }
             failedSaves[url] = nil

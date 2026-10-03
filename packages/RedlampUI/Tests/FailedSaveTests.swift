@@ -103,6 +103,41 @@ struct FailedSaveTests {
         #expect(SidecarStore().load(for: folder.photo)?.recipe[.exposure] == 0.6)
     }
 
+    @Test func `a photo opened again after its save failed and another writer saved keeps both edits`() async throws {
+        let folder = try Folder()
+        defer { folder.remove() }
+        let model = EditorModel(engine: StubEngine())
+        try await open(folder.photo, in: model)
+
+        try folder.lock()
+        model.setValue(.exposure, 0.6)
+        let ours = model.recipe
+        try await open(folder.other, in: model)
+        await model.saves.flush()
+        try await eventually { model.saveError?.url == folder.photo }
+
+        try folder.unlock()
+        var recipe = EditRecipe()
+        recipe[.contrast] = 40
+        let theirs = Sidecar(
+            recipe: recipe,
+            snapshots: [Snapshot(name: "Made on the other Mac", recipe: EditRecipe())],
+            metadata: PhotoMetadata(rating: 5),
+            modified: Date(timeIntervalSinceNow: 60),
+        )
+        try SidecarStore().save(theirs, for: folder.photo)
+        try await open(folder.photo, in: model)
+        await model.saves.flush()
+
+        let saved = try #require(SidecarStore().load(for: folder.photo))
+        #expect(saved.recipe == theirs.recipe, "theirs is newer")
+        #expect(saved.snapshots.contains { $0.recipe == ours }, "ours kept as a snapshot")
+        #expect(saved.snapshots.contains { $0.name == "Made on the other Mac" })
+        #expect(saved.metadata?.rating == 5)
+        #expect(model.recipe == saved.recipe, "the editor shows what is on disk")
+        #expect(model.snapshots == saved.snapshots)
+    }
+
     @Test func `quitting with a failed save tries it again, and says if it still fails`() async throws {
         let folder = try Folder()
         defer { folder.remove() }

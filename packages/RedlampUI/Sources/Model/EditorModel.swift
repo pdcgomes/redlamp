@@ -493,6 +493,9 @@ public final class EditorModel {
         if let selection {
             saves.enqueue(.forget, for: selection)
         }
+        // Made again before the photo is read, over the base its saves were tracking, so what
+        // another writer saved meanwhile is merged, and the read shows the result.
+        retry(url)
         engine.prefetch(workingSet(around: url, comingFrom: selection))
         if let selection {
             previousSelection = selection
@@ -587,9 +590,9 @@ public final class EditorModel {
     }
 
     private func didOpen(_ opened: ImageInfo, _ read: OpenedSidecar) {
-        // What failed to save when the photo was last open is shown, and saved again, over
-        // the sidecar as it is now.
-        let unsaved = read.protection == nil ? failedSaves.removeValue(forKey: opened.url)?.writes ?? [] : []
+        // Writes that failed again as it opened are shown; its saves go on over the base they
+        // were tracking, so the next one still merges what another writer saved.
+        let unsaved = read.protection == nil ? failedSaves[opened.url]?.writes ?? [] : []
         let sidecar = Self.applying(unsaved, to: read.sidecar)
         info = opened
         availableAIMaskKinds = engine.availableMaskKinds()
@@ -624,14 +627,7 @@ public final class EditorModel {
         }
         requestRender()
         if read.protection == nil {
-            var onDisk = sidecarToSave
-            if !unsaved.isEmpty {
-                onDisk.recipe = Self.asShot(read.sidecar?.recipe ?? EditRecipe(), opened)
-                onDisk.snapshots = read.sidecar?.snapshots ?? []
-                onDisk.metadata = read.sidecar?.metadata
-            }
-            saves.enqueue(.track(read.base, opened: onDisk), for: opened.url)
-            unsaved.forEach { saves.enqueue($0, for: opened.url) }
+            saves.enqueue(.track(read.base, opened: sidecarToSave), for: opened.url)
         }
         if savesMetadata {
             saveNow()

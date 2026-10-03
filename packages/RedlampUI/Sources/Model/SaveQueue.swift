@@ -12,7 +12,9 @@ final class SaveQueue: @unchecked Sendable {
         /// A change to the culling metadata of the sidecar as it is on disk then.
         case metadata(@Sendable (inout PhotoMetadata) -> Void)
         /// From now on the photo's saves go over `base` (nil: the sidecar as it is then);
-        /// `opened` is the editor's state when it took it, to tell what changed here.
+        /// `opened` is the editor's state when it took it, to tell what changed here. A photo
+        /// still tracked whose last save failed keeps the base it had: a newer one would hide
+        /// what another writer saved since.
         case track(SidecarBase?, opened: Sidecar)
         /// The photo's saves no longer look for another writer's, from when its last save has
         /// gone through: one that failed is tried again over the same base.
@@ -200,7 +202,11 @@ final class SaveQueue: @unchecked Sendable {
             try Library.writeMetadata(for: url, store: store, change)
             return .saved
         case let .track(base, opened):
-            tracking[url] = Tracked(base: base ?? store.base(for: url), opened: opened)
+            if tracking[url] != nil, lock.withLock({ failing.contains(url) }) {
+                tracking[url]?.isLeft = false
+            } else {
+                tracking[url] = Tracked(base: base ?? store.base(for: url), opened: opened)
+            }
             return nil
         case .forget:
             if lock.withLock({ failing.contains(url) }) {
