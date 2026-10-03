@@ -123,9 +123,18 @@ public enum SidecarStoreError: Error, Equatable {
     /// The sidecar was written by a newer Redlamp. It is read-only here, so it is never
     /// overwritten or deleted.
     case writtenByNewerVersion(URL)
-    /// The sidecar exists but this build can't decode it (damaged, or a value it doesn't know).
-    /// It may still hold an edit, history and masks, so it is never overwritten or deleted.
+    /// The sidecar's edit doesn't decode in this build, so it is never overwritten or deleted.
     case unreadable(URL)
+}
+
+/// Why a sidecar on disk must be left as it is: saving over it or deleting it would lose an
+/// edit this build can't fully read.
+public enum SidecarProtection: Equatable, Sendable {
+    /// Its file format or process version is newer than this build's.
+    case writtenByNewerVersion
+    /// Its edit doesn't decode: a newer Redlamp added a value this build doesn't know, or the
+    /// file is damaged.
+    case unreadable
 }
 
 /// Reads and writes sidecars.
@@ -180,26 +189,16 @@ public struct SidecarStore: Sendable {
     /// Whether the image's sidecar uses a file format or process version this build
     /// doesn't have. Such edits can be shown, but saving would lose information.
     public func isWrittenByNewerVersion(for image: URL) -> Bool {
-        let sidecar = url(for: image)
-        return (try? Self.reading(sidecar) { url in
-            (try? Data(contentsOf: Self.editURL(inSidecar: url))).map(Self.isNewer) ?? false
-        }) ?? false
+        protection(for: image) == .writtenByNewerVersion
     }
 
-    /// Whether the image has a sidecar this build can't decode, though no newer Redlamp wrote it.
-    /// The photo shows unedited, and its sidecar is left as it is.
-    public func isUnreadable(for image: URL) -> Bool {
+    /// Why the image's sidecar must be left as it is, or nil if it can be saved over or
+    /// deleted (including when there is none, or a package has no edit in it).
+    public func protection(for image: URL) -> SidecarProtection? {
         let sidecar = url(for: image)
         return (try? Self.reading(sidecar) { url in
-            (try? Data(contentsOf: Self.editURL(inSidecar: url))).map { !Self.isNewer($0) && !Self.decodes($0) }
-                ?? false
-        }) ?? false
-    }
-
-    /// Whether the image's sidecar must not be saved over or deleted: a newer Redlamp wrote it, or
-    /// this build can't read it.
-    public func isReadOnly(for image: URL) -> Bool {
-        isWrittenByNewerVersion(for: image) || isUnreadable(for: image)
+            (try? Data(contentsOf: Self.editURL(inSidecar: url))).flatMap(Self.protection)
+        }) ?? nil
     }
 
     /// Writes the sidecar unless nothing but `modified` changed, so unchanged edits don't
@@ -212,12 +211,11 @@ public struct SidecarStore: Sendable {
         }
     }
 
-    /// Removes the sidecar, unless a newer Redlamp wrote it or this build can't read it.
+    /// Removes the sidecar, unless it is protected (see `protection(for:)`).
     public func delete(for image: URL) {
         let sidecar = url(for: image)
         try? Self.writing(sidecar, options: .forDeleting) { url in
-            if let data = try? Data(contentsOf: Self.editURL(inSidecar: url)),
-               Self.isNewer(data) || !Self.decodes(data) {
+            if let data = try? Data(contentsOf: Self.editURL(inSidecar: url)), Self.protection(data) != nil {
                 return
             }
             try FileManager.default.removeItem(at: url)
@@ -424,8 +422,11 @@ public struct SidecarStore: Sendable {
         }
     }
 
-    private static func decodes(_ data: Data) -> Bool {
-        (try? JSONDecoder.sidecar.decode(Sidecar.self, from: data)) != nil
+    private static func protection(_ data: Data) -> SidecarProtection? {
+        if isNewer(data) {
+            return .writtenByNewerVersion
+        }
+        return (try? JSONDecoder.sidecar.decode(Sidecar.self, from: data)) == nil ? .unreadable : nil
     }
 
     private static func isNewer(_ data: Data) -> Bool {

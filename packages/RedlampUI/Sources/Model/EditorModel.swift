@@ -52,12 +52,14 @@ public final class EditorModel {
     public private(set) var info: ImageInfo?
     public private(set) var isLoading = false
     public internal(set) var errorMessage: String?
-    /// The photo's sidecar was written by a newer Redlamp, or can't be read. Its edit is shown (or
-    /// the photo unedited), but changes aren't saved: this version would lose what it doesn't
+    /// The photo's sidecar was written by a newer Redlamp, or can't be read. What can be read
+    /// of its edit is shown, but changes aren't saved: this version would lose what it doesn't
     /// understand.
-    public private(set) var isReadOnly = false
-    /// The photo's sidecar exists but can't be read, so the photo shows unedited and read-only.
-    public private(set) var isSidecarUnreadable = false
+    public var isReadOnly: Bool {
+        readOnlyReason != nil
+    }
+
+    public private(set) var readOnlyReason: SidecarProtection?
     /// The open photo's rating, flag and label, saved with its edit.
     public internal(set) var photoMetadata = PhotoMetadata()
     /// The rating, flag or label changed while the photo was opening, so its sidecar's are stale.
@@ -477,8 +479,7 @@ public final class EditorModel {
         // sets it again before the UI updates.
         info = nil
         errorMessage = nil
-        isReadOnly = false
-        isSidecarUnreadable = false
+        readOnlyReason = nil
         photoMetadata = library.item(for: url)?.metadata ?? PhotoMetadata()
         metadataChangedWhileOpening = false
         eyedropperActive = false
@@ -496,11 +497,7 @@ public final class EditorModel {
         // coordinated, and iCloud Drive may have to download it first.
         let readSidecar = { [sidecars, scheduler = library.scheduler] in
             try? await scheduler.run(.onScreen) {
-                OpenedSidecar(
-                    sidecar: sidecars.load(for: url),
-                    isNewer: sidecars.isWrittenByNewerVersion(for: url),
-                    isUnreadable: sidecars.isUnreadable(for: url),
-                )
+                OpenedSidecar(sidecar: sidecars.load(for: url), protection: sidecars.protection(for: url))
             }
         }
         if let opened = engine.openIfReady(url) {
@@ -550,10 +547,8 @@ public final class EditorModel {
     /// A photo's sidecar as read when it opens.
     private struct OpenedSidecar: Sendable {
         var sidecar: Sidecar?
-        /// Written by a newer Redlamp: shown, but never saved over.
-        var isNewer = false
-        /// There, but undecodable: never saved over or deleted.
-        var isUnreadable = false
+        /// Shown, but never saved over.
+        var protection: SidecarProtection?
     }
 
     private func didOpen(_ opened: ImageInfo, _ read: OpenedSidecar) {
@@ -561,8 +556,7 @@ public final class EditorModel {
         info = opened
         availableAIMaskKinds = engine.availableMaskKinds()
         maskMessage = nil
-        isReadOnly = read.isNewer || read.isUnreadable
-        isSidecarUnreadable = read.isUnreadable
+        readOnlyReason = read.protection
         if !metadataChangedWhileOpening {
             photoMetadata = sidecar?.metadata ?? PhotoMetadata()
         }

@@ -97,9 +97,7 @@ struct SidecarTests {
         try Data(json.utf8).write(to: store.url(for: image))
 
         #expect(store.load(for: image) == nil)
-        #expect(store.isUnreadable(for: image))
-        #expect(store.isReadOnly(for: image))
-        #expect(!store.isWrittenByNewerVersion(for: image))
+        #expect(store.protection(for: image) == .unreadable)
         #expect(throws: SidecarStoreError.unreadable(store.url(for: image))) {
             try store.save(Sidecar(recipe: EditRecipe()), for: image)
         }
@@ -111,9 +109,9 @@ struct SidecarTests {
         let (image, cleanup) = try temporaryImage()
         defer { cleanup() }
         let store = SidecarStore()
-        #expect(!store.isReadOnly(for: image))
+        #expect(store.protection(for: image) == nil)
         try store.save(Sidecar(recipe: EditRecipe()), for: image)
-        #expect(!store.isUnreadable(for: image) && !store.isReadOnly(for: image))
+        #expect(store.protection(for: image) == nil)
     }
 
     @Test func `format 1 profiles read as base looks and are written back as format 2`() throws {
@@ -216,6 +214,78 @@ struct SidecarTests {
         try store.save(Sidecar(recipe: recipe), for: image)
         store.delete(for: image)
         #expect(!FileManager.default.fileExists(atPath: store.url(for: image).path))
+    }
+
+    // MARK: - Unreadable sidecars
+
+    /// Edits this build can't decode, though no version number says a newer Redlamp wrote them:
+    /// an enum value it doesn't know, a truncated file, and a value of the wrong type.
+    static let unreadable = [
+        #"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":1,"treatment":"infrared"}}"#,
+        #"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":1,"values":{"basic.expo"#,
+        #"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":1,"values":{"basic.exposure":"+1"}}}"#,
+    ]
+
+    @Test(arguments: unreadable)
+    func `a sidecar this build can't read is never saved over or deleted`(json: String) throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        let package = store.url(for: image)
+        try FileManager.default.createDirectory(at: package, withIntermediateDirectories: false)
+        try Data(json.utf8).write(to: store.editURL(for: image))
+
+        #expect(store.load(for: image) == nil)
+        #expect(store.protection(for: image) == .unreadable)
+        #expect(throws: SidecarStoreError.unreadable(package)) {
+            try store.save(Sidecar(recipe: EditRecipe()), for: image)
+        }
+        store.delete(for: image)
+        #expect(throws: SidecarStoreError.unreadable(package)) {
+            try Library.writeMetadata(PhotoMetadata(rating: 2), for: image, store: store)
+        }
+        #expect(throws: SidecarStoreError.unreadable(package)) {
+            try Library.writeMetadata(PhotoMetadata(), for: image, store: store)
+        }
+        #expect(try Data(contentsOf: store.editURL(for: image)) == Data(json.utf8))
+    }
+
+    @Test func `a package without its edit is written over`() throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        try FileManager.default.createDirectory(at: store.url(for: image), withIntermediateDirectories: false)
+        #expect(store.protection(for: image) == nil)
+        var recipe = EditRecipe()
+        recipe[.exposure] = 0.5
+        try store.save(Sidecar(recipe: recipe), for: image)
+        #expect(store.load(for: image)?.recipe[.exposure] == 0.5)
+    }
+
+    /// Rolling back to a build that predates this one: what this build writes, it still reads.
+    @Test func `a sidecar this build writes has only fields the previous build reads`() throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        var recipe = EditRecipe()
+        recipe[.exposure] = 0.5
+        recipe.masks = [subjectMask(Data("x".utf8))]
+        try store.save(Sidecar(
+            recipe: recipe,
+            snapshots: [Snapshot(name: "Before", recipe: EditRecipe())],
+            metadata: PhotoMetadata(rating: 3, flag: .pick, label: .red),
+        ), for: image)
+        let written = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: store.editURL(for: image)))
+        guard case let .object(root) = written, case let .object(savedRecipe) = root["recipe"] else {
+            Issue.record("sidecar did not encode as an object")
+            return
+        }
+        #expect(Set(root.keys).isSubset(of: ["format", "recipe", "snapshots", "metadata", "modified"]))
+        #expect(savedRecipe["version"] == .number(Double(EditRecipe.formatVersion)))
+        #expect(store.protection(for: image) == nil)
+        let loaded = try #require(store.load(for: image))
+        #expect(loaded.recipe[.exposure] == 0.5 && loaded.recipe.masks.count == 1)
+        #expect(loaded.snapshots.count == 1 && loaded.metadata == PhotoMetadata(rating: 3, flag: .pick, label: .red))
     }
 
     private func temporaryImage() throws -> (URL, () -> Void) {

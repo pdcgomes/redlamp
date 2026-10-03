@@ -8,8 +8,8 @@ import RedlampEngineAPI
 ///
 /// For each photo it reads the sidecar, pastes, recomputes the AI masks the paste brought (and an
 /// Auto white balance) in an engine of its own, so the open photo is never disturbed, and saves
-/// with a history step. A photo whose sidecar a newer Redlamp wrote is left alone. Undo puts back
-/// what the last batch changed, on every photo not edited since.
+/// with a history step. A photo whose sidecar a newer Redlamp wrote, or this version can't read,
+/// is left alone. Undo puts back what the last batch changed, on every photo not edited since.
 @MainActor
 @Observable
 public final class SettingsSync {
@@ -120,7 +120,7 @@ public final class SettingsSync {
         for url in photos {
             guard !Task.isCancelled else { break }
             defer { progress?.done += 1 }
-            guard !store.isReadOnly(for: url) else {
+            guard store.protection(for: url) == nil else {
                 skipped += 1
                 continue
             }
@@ -223,7 +223,8 @@ public final class SettingsSync {
             parts.append("Stopped before the end.")
         }
         if skipped > 0 {
-            parts.append("\(skipped) photo\(skipped == 1 ? " was" : "s were") left alone: edited by a newer Redlamp.")
+            let photos = "\(skipped) photo\(skipped == 1 ? " was" : "s were")"
+            parts.append("\(photos) left alone: edited by a newer Redlamp, or the edit can't be read.")
         }
         if failedMasks > 0 {
             parts.append("\(failedMasks) AI mask\(failedMasks == 1 ? "" : "s") couldn't be computed for its photo.")
