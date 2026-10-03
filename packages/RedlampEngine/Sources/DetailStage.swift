@@ -121,6 +121,11 @@ struct SharpenSettings: Hashable {
         let texels = sigma / Float(1 << level)
         return texels >= 0.3 ? texels : nil
     }
+
+    /// How many texels the Gaussian of `sigma` texels reaches each way.
+    static func blurRadius(sigma: Float) -> Int {
+        min(Int((3 * max(sigma, 1e-3)).rounded(.up)), 12)
+    }
 }
 
 /// Texture and Clarity: gains on two bands of log-luminance detail, taken from the session's
@@ -260,10 +265,17 @@ final class DetailStage {
     private var entries: [Entry] = []
     /// A region and its overview, and the same for a comparison render.
     private static let maximumEntries = 4
+    /// Per work area: a comparison's two edits.
+    private static let maximumEntriesPerArea = 2
+
+    /// Work areas above this many texels are processed in tiles, so the scratch textures (up to
+    /// 102 bytes a texel) stay under about 700 MB whatever the photo and zoom.
+    var tileTexels = 7_000_000
 
     let residency = DetailResidency()
     let sharpenCache: SharpenCache
-    private var scratch: [MTLPixelFormat: [any MTLTexture]] = [:]
+    /// Each format's working textures by slot, allocated as passes first use them.
+    private var scratch: [MTLPixelFormat: [Int: any MTLTexture]] = [:]
 
     private var emptyMasks: (rasters: any MTLTexture, guide: any MTLTexture)?
 
@@ -275,7 +287,11 @@ final class DetailStage {
 
     /// Every texture the stage keeps between renders.
     var heldTextures: [any MTLTexture] {
-        scratch.values.flatMap(\.self) + entries.map(\.output.texture) + sharpenCache.heldTextures
+        scratch.values.flatMap(\.values) + cachedOutputs + sharpenCache.heldTextures
+    }
+
+    var cachedOutputs: [any MTLTexture] {
+        entries.map(\.output.texture)
     }
 
     private func emptyMaskImages() throws -> (rasters: any MTLTexture, guide: any MTLTexture) {
@@ -326,56 +342,34 @@ final class DetailStage {
             }
         }
 
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .rgba16Float, width: work.size.x, height: work.size.y, mipmapped: false,
+        let texture = try makeWorkTexture(.rgba16Float, work)
+        let passes = Passes(
+            session: session, denoise: denoise, sharpen: sharpen, contrast: contrast, local: local, masks: masks,
         )
-        descriptor.usage = [.shaderRead, .shaderWrite]
-        descriptor.storageMode = .private
-        guard let texture = device.makeTexture(descriptor: descriptor),
-              let encoder = commands.makeComputeCommandEncoder()
-        else {
-            throw EngineError.gpuUnavailable
+        let tiles = Self.tiles(work, halo: passes.halo(level: work.level), limit: tileTexels)
+        if tiles.count == 1 {
+            var measures: SharpenMeasures?
+            if let sharpen {
+                var cached = cachedSharpenMeasures(session, work: work, sigma: sharpen.sigma(atLevel: work.level) ?? 0)
+                if cached.analysis == nil {
+                    cached.analysisTarget = try makeWorkTexture(.rgba16Float, work)
+                    if cached.separation == nil {
+                        cached.separationTarget = try cache
+                            ? makeWorkTexture(.r16Float, work) : scratchTexture(.r16Float, 0, work)
+                    }
+                }
+                measures = cached
+            }
+            guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
+            encoder.label = "Detail"
+            try encode(passes, work: work, into: texture, measures: measures, encoder: encoder)
+            encoder.endEncoding()
+            if cache, let measures, let sharpen {
+                storeSharpenMeasures(measures, session, work: work, sigma: sharpen.sigma(atLevel: work.level) ?? 0)
+            }
+        } else {
+            try encodeTiles(tiles, passes, work: work, into: texture, cache: cache, commands: commands)
         }
-        encoder.label = "Detail"
-        let amounts = local.isEmpty ? nil : try encodeLocal(
-            session: session,
-            local: local,
-            work: work,
-            masks: masks,
-            encoder: encoder,
-        )
-        // Each pass reads the previous one's result; the last writes the output.
-        var remaining = [denoise != nil, sharpen != nil, contrast != nil].filter(\.self).count
-        var source = Source(texture: session.pyramid, origin: work.origin, level: work.level)
-        func target() throws -> any MTLTexture {
-            remaining -= 1
-            guard remaining > 0 else { return texture }
-            let intermediates = try scratchTextures(.rgba16Float, 9, work)
-            // Alternate between two intermediates, never the one being read.
-            return intermediates[4] === source.texture ? intermediates[5] : intermediates[4]
-        }
-        if let denoise {
-            let output = try target()
-            try encodeDenoise(
-                session: session, settings: denoise, work: work, local: amounts, into: output, encoder: encoder,
-            )
-            source = Source(texture: output, origin: .zero, level: 0)
-        }
-        if let sharpen {
-            let output = try target()
-            try encodeSharpen(SharpenRequest(
-                session: session, settings: sharpen, work: work, source: source, local: amounts,
-                softens: local.layers.contains { $0.amounts[2] < 0 }, cache: cache,
-            ), into: output, encoder: encoder)
-            source = Source(texture: output, origin: .zero, level: 0)
-        }
-        if let contrast {
-            try encodeLocalContrast(
-                session: session, settings: contrast, work: work, source: source, local: amounts, into: target(),
-                encoder: encoder,
-            )
-        }
-        encoder.endEncoding()
 
         let levelWidth = Float(max(1, session.pyramid.width >> work.level))
         let levelHeight = Float(max(1, session.pyramid.height >> work.level))
@@ -385,12 +379,228 @@ final class DetailStage {
         ))
         if cache {
             residency.wake(texture)
+            let sameArea = entries.indices
+                .filter { entries[$0].key.session == key.session && entries[$0].key.work == work }
+            if sameArea.count >= Self.maximumEntriesPerArea {
+                entries.remove(at: sameArea[0])
+            }
             entries.append(Entry(key: key, session: session, output: output))
             if entries.count > Self.maximumEntries {
                 entries.removeFirst()
             }
         }
         return output
+    }
+
+    /// What one render of the stage runs, for any work area or tile of it.
+    struct Passes {
+        var session: ImageSession
+        var denoise: DenoiseSettings?
+        var sharpen: SharpenSettings?
+        var contrast: LocalContrastSettings?
+        var local: LocalDetail
+        var masks: MaskBindings
+
+        var softens: Bool {
+            local.layers.contains { $0.amounts[2] < 0 }
+        }
+
+        /// How far around a texel, in work texels, the passes read: tiles overlapping by this much
+        /// render exactly what one pass over the work area does. A multiple of 32, the tile
+        /// non-local means groups texels in.
+        func halo(level: Int) -> Int {
+            // Five à-trous scales of the B3 spline reach 2 × (1 + 2 + 4 + 8 + 16) texels, the luma
+            // energy neighbourhood 16 more, and non-local means' patches across its search 4.
+            var reach = denoise == nil ? 0 : 62 + 16 + 4
+            if let sigma = sharpen?.sigma(atLevel: level) {
+                let blur = SharpenSettings.blurRadius(sigma: sigma)
+                // The separator's denoising, then four Richardson-Lucy iterations of two blurs, and
+                // Masking's gradient of the result; softening blurs the source.
+                reach = max(reach + (softens ? blur : 0), 62 + 8 * blur + 1)
+            }
+            return (reach + 31) / 32 * 32
+        }
+    }
+
+    /// Encodes `passes` over `work`, the last writing `output`.
+    private func encode(
+        _ passes: Passes,
+        work: WorkArea,
+        into output: any MTLTexture,
+        measures: SharpenMeasures?,
+        encoder: any MTLComputeCommandEncoder,
+    ) throws {
+        let session = passes.session
+        let amounts = passes.local.isEmpty ? nil : try encodeLocal(
+            session: session,
+            local: passes.local,
+            work: work,
+            masks: passes.masks,
+            encoder: encoder,
+        )
+        // Each pass reads the previous one's result; the last writes the output.
+        var remaining = [passes.denoise != nil, passes.sharpen != nil, passes.contrast != nil].filter(\.self).count
+        var source = Source(texture: session.pyramid, origin: work.origin, level: work.level)
+        func target() throws -> any MTLTexture {
+            remaining -= 1
+            guard remaining > 0 else { return output }
+            // Alternate between two intermediates, never the one being read.
+            let first = try scratchTexture(.rgba16Float, 4, work)
+            return first === source.texture ? try scratchTexture(.rgba16Float, 5, work) : first
+        }
+        if let denoise = passes.denoise {
+            let output = try target()
+            try encodeDenoise(
+                session: session, settings: denoise, work: work, local: amounts, into: output, encoder: encoder,
+            )
+            source = Source(texture: output, origin: .zero, level: 0)
+        }
+        if let sharpen = passes.sharpen {
+            guard let measures else { throw EngineError.renderFailed("sharpening without its measures") }
+            let output = try target()
+            try encodeSharpen(SharpenRequest(
+                session: session, settings: sharpen, work: work, source: source, local: amounts,
+                softens: passes.softens, measures: measures,
+            ), into: output, encoder: encoder)
+            source = Source(texture: output, origin: .zero, level: 0)
+        }
+        if let contrast = passes.contrast {
+            try encodeLocalContrast(
+                session: session, settings: contrast, work: work, source: source, local: amounts, into: target(),
+                encoder: encoder,
+            )
+        }
+    }
+
+    /// What sharpening has cached of `work`: its analysis, or failing that its separation.
+    private func cachedSharpenMeasures(_ session: ImageSession, work: WorkArea, sigma: Float) -> SharpenMeasures {
+        if let analysis = sharpenCache.analysis(session, work, sigma: sigma) {
+            return SharpenMeasures(analysis: analysis)
+        }
+        return SharpenMeasures(separation: sharpenCache.separation(session, work))
+    }
+
+    private func storeSharpenMeasures(
+        _ measures: SharpenMeasures,
+        _ session: ImageSession,
+        work: WorkArea,
+        sigma: Float,
+    ) {
+        guard measures.analysis == nil, let analysis = measures.analysisTarget else { return }
+        sharpenCache.store(analysis: analysis, session, work, sigma: sigma)
+        if measures.separation == nil, let separation = measures.separationTarget {
+            sharpenCache.store(separation: separation, session, work)
+        }
+    }
+
+    // MARK: - Tiles
+
+    struct Tile {
+        /// The texels the tile renders, relative to the work area's origin.
+        var interior: (origin: SIMD2<Int>, size: SIMD2<Int>)
+        /// The interior with the halo around it, clamped to the work area.
+        var extent: (origin: SIMD2<Int>, size: SIMD2<Int>)
+    }
+
+    /// The fewest tiles, extent included, of at most `limit` texels each covering `work`: the
+    /// whole of it when it fits. Interior edges fall on multiples of 32.
+    static func tiles(_ work: WorkArea, halo: Int, limit: Int) -> [Tile] {
+        func edges(_ length: Int, _ count: Int) -> [Int] {
+            let step = (length + count - 1) / count
+            let aligned = (step + 31) / 32 * 32
+            return Array(Set((0 ... count).map { min($0 * aligned, length) })).sorted()
+        }
+        func layout(_ columns: Int, _ rows: Int) -> [Tile] {
+            let xs = edges(work.size.x, columns), ys = edges(work.size.y, rows)
+            return zip(ys, ys.dropFirst()).flatMap { y0, y1 in
+                zip(xs, xs.dropFirst()).map { x0, x1 in
+                    let low = SIMD2(max(0, x0 - halo), max(0, y0 - halo))
+                    let high = SIMD2(min(work.size.x, x1 + halo), min(work.size.y, y1 + halo))
+                    return Tile(interior: (SIMD2(x0, y0), SIMD2(x1 - x0, y1 - y0)), extent: (low, high &- low))
+                }
+            }
+        }
+        let whole = Tile(interior: (.zero, work.size), extent: (.zero, work.size))
+        guard work.size.x * work.size.y > limit else { return [whole] }
+        var best: (texels: Int, tiles: [Tile])?
+        for columns in 1 ... 16 {
+            for rows in 1 ... 16 {
+                let tiles = layout(columns, rows)
+                guard tiles.allSatisfy({ $0.extent.size.x * $0.extent.size.y <= limit }) else { continue }
+                let texels = tiles.reduce(0) { $0 + $1.extent.size.x * $1.extent.size.y }
+                if best == nil || texels < best!.texels {
+                    best = (texels, tiles)
+                }
+            }
+        }
+        return best?.tiles ?? [whole]
+    }
+
+    /// Encodes `passes` tile by tile, copying each tile's interior into `output`, and into the
+    /// sharpening caches' textures when they are measured here.
+    private func encodeTiles(
+        _ tiles: [Tile],
+        _ passes: Passes,
+        work: WorkArea,
+        into output: any MTLTexture,
+        cache: Bool,
+        commands: any MTLCommandBuffer,
+    ) throws {
+        let sigma = passes.sharpen?.sigma(atLevel: work.level) ?? 0
+        var whole = passes.sharpen.map { _ in cachedSharpenMeasures(passes.session, work: work, sigma: sigma) }
+        if cache, whole != nil, whole?.analysis == nil {
+            whole?.analysisTarget = try makeWorkTexture(.rgba16Float, work)
+            if whole?.separation == nil {
+                whole?.separationTarget = try makeWorkTexture(.r16Float, work)
+            }
+        }
+        for tile in tiles {
+            let area = WorkArea(level: work.level, origin: work.origin &+ tile.extent.origin, size: tile.extent.size)
+            let rendered = try scratchTexture(.rgba16Float, 9, area)
+            var measures: SharpenMeasures?
+            if let whole {
+                let analysis = try scratchTexture(.rgba16Float, 10, area)
+                let separation = try scratchTexture(.r16Float, 0, area)
+                let given = whole.analysis.map { ($0, analysis) } ?? whole.separation.map { ($0, separation) }
+                if let (cached, copy) = given {
+                    guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
+                    blit.copy(from: cached, origin: tile.extent.origin, size: tile.extent.size, to: copy, at: .zero)
+                    blit.endEncoding()
+                }
+                measures = SharpenMeasures(
+                    analysis: whole.analysis == nil ? nil : analysis,
+                    separation: whole.separation == nil ? nil : separation,
+                    analysisTarget: analysis,
+                    separationTarget: separation,
+                )
+            }
+            guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
+            encoder.label = "Detail tile"
+            try encode(passes, work: area, into: rendered, measures: measures, encoder: encoder)
+            encoder.endEncoding()
+
+            guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
+            let inside = tile.interior.origin &- tile.extent.origin
+            blit.copy(from: rendered, origin: inside, size: tile.interior.size, to: output, at: tile.interior.origin)
+            if let whole, let measures {
+                if let analysis = whole.analysisTarget, let tileAnalysis = measures.analysisTarget {
+                    blit.copy(
+                        from: tileAnalysis, origin: inside, size: tile.interior.size, to: analysis,
+                        at: tile.interior.origin,
+                    )
+                }
+                if let separation = whole.separationTarget, let tileSeparation = measures.separationTarget {
+                    blit.copy(
+                        from: tileSeparation, origin: inside, size: tile.interior.size, to: separation,
+                        at: tile.interior.origin,
+                    )
+                }
+            }
+            blit.endEncoding()
+        }
+        if cache, let whole {
+            storeSharpenMeasures(whole, passes.session, work: work, sigma: sigma)
+        }
     }
 
     // MARK: - Geometry
@@ -453,9 +663,9 @@ final class DetailStage {
         encoder: any MTLComputeCommandEncoder,
     ) throws {
         // 0-3 here, 4-5 the passes' intermediates, 6 masks' amounts, 7 sharpening's separation,
-        // 8 each scale's detail.
-        let textures = try scratchTextures(.rgba16Float, 9, work)
-        let details = textures[8]
+        // 8 each scale's detail, 9-10 a tile's result and sharpening analysis.
+        let textures = try (0 ..< 4).map { try scratchTexture(.rgba16Float, $0, work) }
+        let details = try scratchTexture(.rgba16Float, 8, work)
         var params = DenoiseParams(
             origin: SIMD4(Int32(work.origin.x), Int32(work.origin.y), Int32(work.level), 0),
             size: SIMD4(Int32(work.size.x), Int32(work.size.y), 0, 0),
@@ -589,7 +799,7 @@ final class DetailStage {
         masks: MaskBindings,
         encoder: any MTLComputeCommandEncoder,
     ) throws -> any MTLTexture {
-        let output = try scratchTextures(.rgba16Float, 9, work)[6]
+        let output = try scratchTexture(.rgba16Float, 6, work)
         let aspect = session.orientedSize.aspectRatio
         var layers: [MaskLayerGPU] = []
         var maskComponents = MaskComponentEncoder(aspect: aspect, masks: masks, layers: local.referenced)
@@ -630,29 +840,46 @@ final class DetailStage {
         SIMD4(session.cameraToWorking.transpose * SIMD3<Float>(0.2627, 0.6780, 0.0593), 1.0 / 1024)
     }
 
-    /// `count` working textures of `format` covering the work area, reused across renders.
-    func scratchTextures(_ format: MTLPixelFormat, _ count: Int, _ work: WorkArea) throws -> [any MTLTexture] {
-        let existing = scratch[format] ?? []
-        if existing.count >= count, let first = existing.first,
-           first.width >= work.size.x, first.height >= work.size.y {
-            existing.forEach { residency.wake($0) }
+    /// Working texture `slot` of `format`, covering the work area, reused across renders. It grows
+    /// to cover every area it has served unless that would take more than a tile.
+    func scratchTexture(_ format: MTLPixelFormat, _ slot: Int, _ work: WorkArea) throws -> any MTLTexture {
+        let existing = scratch[format]?[slot]
+        if let existing, existing.width >= work.size.x, existing.height >= work.size.y {
+            residency.wake(existing)
             return existing
         }
+        var size = SIMD2(max(work.size.x, existing?.width ?? 0), max(work.size.y, existing?.height ?? 0))
+        if size.x * size.y > tileTexels {
+            size = work.size
+        }
+        let texture = try makeWorkTexture(format, WorkArea(level: work.level, origin: work.origin, size: size))
+        scratch[format, default: [:]][slot] = texture
+        residency.wake(texture)
+        return texture
+    }
+
+    /// A private texture covering the work area.
+    func makeWorkTexture(_ format: MTLPixelFormat, _ work: WorkArea) throws -> any MTLTexture {
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: format,
-            width: max(work.size.x, existing.first?.width ?? 0),
-            height: max(work.size.y, existing.first?.height ?? 0),
-            mipmapped: false,
+            pixelFormat: format, width: work.size.x, height: work.size.y, mipmapped: false,
         )
         descriptor.usage = [.shaderRead, .shaderWrite]
         descriptor.storageMode = .private
-        let textures = try (0 ..< max(count, existing.count)).map { _ in
-            guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
-            return texture
-        }
-        scratch[format] = textures
-        textures.forEach { residency.wake($0) }
-        return textures
+        guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
+        return texture
+    }
+}
+
+private extension MTLBlitCommandEncoder {
+    func copy(
+        from source: any MTLTexture, origin: SIMD2<Int>, size: SIMD2<Int>, to destination: any MTLTexture,
+        at destinationOrigin: SIMD2<Int>,
+    ) {
+        copy(
+            from: source, sourceSlice: 0, sourceLevel: 0, sourceOrigin: MTLOrigin(x: origin.x, y: origin.y, z: 0),
+            sourceSize: MTLSize(width: size.x, height: size.y, depth: 1), to: destination, destinationSlice: 0,
+            destinationLevel: 0, destinationOrigin: MTLOrigin(x: destinationOrigin.x, y: destinationOrigin.y, z: 0),
+        )
     }
 }
 

@@ -14,7 +14,16 @@ struct SharpenRequest {
     var local: (any MTLTexture)?
     /// A mask's negative Sharpness can make the gain negative; softening then blurs the source.
     var softens: Bool
-    var cache: Bool
+    var measures: SharpenMeasures
+}
+
+/// Sharpening's measures of a work area: those given are read, the others measured into their
+/// targets.
+struct SharpenMeasures {
+    var analysis: (any MTLTexture)?
+    var separation: (any MTLTexture)?
+    var analysisTarget: (any MTLTexture)?
+    var separationTarget: (any MTLTexture)?
 }
 
 /// Sharpening's analysis of an area depends only on the photo, the area and the Radius, and the
@@ -110,8 +119,8 @@ extension DetailStage {
         let (session, settings, work, source) = (request.session, request.settings, request.work, request.source)
         let sigma = settings.sigma(atLevel: work.level) ?? 0
         // 0 source log, 1 clean log, 2 blur rows, 3 blurred clean log, 4 blurred source log.
-        let textures = try scratchTextures(.r32Float, 5, work)
-        var passes = SharpenPasses(encoder: encoder, kernels: kernels, rows: textures[2], params: SharpenParams(
+        let rows = try scratchTexture(.r32Float, 2, work)
+        var passes = SharpenPasses(encoder: encoder, kernels: kernels, rows: rows, params: SharpenParams(
             origin: SIMD4(Int32(source.origin.x), Int32(source.origin.y), Int32(source.level), 0),
             size: SIMD4(Int32(work.size.x), Int32(work.size.y), 0, 0),
             luma: Self.luma(session),
@@ -120,25 +129,30 @@ extension DetailStage {
         ))
 
         let analysis: any MTLTexture
-        if let cached = sharpenCache.analysis(session, work, sigma: sigma) {
-            analysis = cached
+        if let measured = request.measures.analysis {
+            analysis = measured
         } else {
-            analysis = try makeWorkTexture(.rgba16Float, work)
-            try encodeSharpenAnalysis(request, textures: textures, into: analysis, passes: &passes)
-            if request.cache {
-                sharpenCache.store(analysis: analysis, session, work, sigma: sigma)
+            guard let target = request.measures.analysisTarget else {
+                throw EngineError.renderFailed("no texture for sharpening's analysis")
             }
+            analysis = target
+            try encodeSharpenAnalysis(request, into: analysis, passes: &passes)
         }
 
-        let (sourceLog, sourceBlurred) = (textures[0], textures[4])
+        var softening: (log: any MTLTexture, blurred: any MTLTexture)?
         if request.softens {
+            let (sourceLog, sourceBlurred) = try (
+                scratchTexture(.r32Float, 0, work),
+                scratchTexture(.r32Float, 4, work),
+            )
             passes.dispatch(kernels.sharpenLog, [source.texture, sourceLog])
             passes.blur(sourceLog, into: sourceBlurred)
+            softening = (sourceLog, sourceBlurred)
         }
         passes.params.size.w = request.local == nil ? 0 : 1
         passes.dispatch(kernels.sharpenApply, [
             source.texture, analysis, output, request.local ?? output,
-            request.softens ? sourceLog : analysis, request.softens ? sourceBlurred : analysis,
+            softening?.log ?? analysis, softening?.blurred ?? analysis,
         ])
     }
 
@@ -147,33 +161,33 @@ extension DetailStage {
     /// log D) and the blurred log D that Masking reads, packed into `analysis`.
     private func encodeSharpenAnalysis(
         _ request: SharpenRequest,
-        textures: [any MTLTexture],
         into analysis: any MTLTexture,
         passes: inout SharpenPasses,
     ) throws {
         let (session, work) = (request.session, request.work)
-        let (logLuma, blurred) = (textures[1], textures[3])
+        let (logLuma, blurred) = try (scratchTexture(.r32Float, 1, work), scratchTexture(.r32Float, 3, work))
         // The deconvolution reads a texture for every tap of every pass, so its images are half
         // floats (half the traffic); its detail changes by under 1/1000 of a stop. The log detail
         // stays in 32-bit floats: the unsharp mask measures differences of hundredths of a stop.
-        let halves = try scratchTextures(.r16Float, 5, work)
-        let (rows, ratio) = (halves[4], halves[3])
-        let estimates = [halves[1], halves[2]]
+        // Slot 0 holds an uncached separation.
+        let halves = try (1 ... 4).map { try scratchTexture(.r16Float, $0, work) }
+        let (rows, ratio) = (halves[3], halves[2])
+        let estimates = [halves[0], halves[1]]
         let linear: any MTLTexture
-        if let cached = sharpenCache.separation(session, work) {
-            linear = cached
+        if let measured = request.measures.separation {
+            linear = measured
         } else {
+            guard let target = request.measures.separationTarget else {
+                throw EngineError.renderFailed("no texture for sharpening's separation")
+            }
             // The separator denoises from the pyramid, whatever the user's own noise reduction did.
-            let separated = try scratchTextures(.rgba16Float, 9, work)[7]
+            let separated = try scratchTexture(.rgba16Float, 7, work)
             try encodeDenoise(
                 session: session, settings: .separator, work: work, local: nil, into: separated,
                 encoder: passes.encoder,
             )
-            linear = request.cache ? try makeWorkTexture(.r16Float, work) : halves[0]
+            linear = target
             passes.dispatch(kernels.sharpenLuma, [separated, linear, logLuma])
-            if request.cache {
-                sharpenCache.store(separation: linear, session, work)
-            }
         }
         // The log always comes from the stored half-float luminance, so a cached separation renders
         // exactly what a fresh one does: the luma kernel on it (weights 1, 0, 0, no floor).
@@ -199,19 +213,6 @@ extension DetailStage {
         passes.blur(logLuma, into: blurred)
         passes.dispatch(kernels.sharpenAnalysis, [logLuma, blurred, estimate, analysis])
     }
-
-    /// A private texture covering the work area.
-    private func makeWorkTexture(_ format: MTLPixelFormat, _ work: WorkArea) throws -> any MTLTexture {
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: format, width: work.size.x, height: work.size.y, mipmapped: false,
-        )
-        descriptor.usage = [.shaderRead, .shaderWrite]
-        descriptor.storageMode = .private
-        guard let texture = kernels.device.makeTexture(descriptor: descriptor) else {
-            throw EngineError.gpuUnavailable
-        }
-        return texture
-    }
 }
 
 /// Encodes sharpening's passes over one work area with shared parameters.
@@ -231,7 +232,7 @@ private struct SharpenPasses {
         self.rows = rows
         self.params = params
         let sigma = max(params.shape.w, 1e-3)
-        let radius = min(Int((3 * sigma).rounded(.up)), 12)
+        let radius = SharpenSettings.blurRadius(sigma: sigma)
         let raw = (0 ... radius).map { exp(-0.5 * Float($0 * $0) / (sigma * sigma)) }
         let total = raw.dropFirst().reduce(raw[0]) { $0 + 2 * $1 }
         weights = [Float(radius)] + raw.map { $0 / total }
