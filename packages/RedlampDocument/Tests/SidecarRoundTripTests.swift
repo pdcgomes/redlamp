@@ -163,6 +163,8 @@ struct SidecarRoundTripTests {
         ("/recipe/masks/0/components/2/shape/brush/_0/strokes/0/tilt", .number(2)),
         ("/recipe/masks/1/components/0/shape/ai/_0/bitmap/format", .string("heic")),
         ("/recipe/values/basic.exposure", .number(9)),
+        ("/recipe/masks/0/adjustments/local.exposure", .number(9)),
+        ("/recipe/spots/0/mode", .string("future")),
     ]
 
     @Test(arguments: lossy)
