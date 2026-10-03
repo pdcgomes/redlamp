@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+#MISE description="Download CC0 raws from raw.pixls.us into tests/fixtures/shoots, for the dust evaluation"
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+# A shoot of eight Nikon Z 6 frames on a tripod (the last two in smaller crop modes), and one frame
+# each from seven more cameras, beside the samples `mise run fixtures` downloads. About 800 MB.
+fetch() { # <folder> <name> <path under raw.pixls.us/data>
+    mkdir -p "$1"
+    if [[ -f "$1/$2" ]]; then
+        echo "==> $2 (cached)"
+        return
+    fi
+    echo "==> $2"
+    curl -sfL -o "$1/$2.part" "https://raw.pixls.us/data/$3"
+    mv "$1/$2.part" "$1/$2"
+}
+
+for frame in 0750 0751 0752 0753 0754 0755 0756 0757; do
+    fetch tests/fixtures/shoots/nikon-z6 "DSC_$frame.NEF" "Nikon/Z%206/DSC_$frame.NEF"
+done
+
+SCENES=(
+    "Canon/EOS%205D%20Mark%20IV/B13A0729.CR2"
+    "Canon/EOS%206D/EOS_6D_RAW.CR2"
+    "Canon/EOS%2080D/IMG_0096.CR2"
+    "Nikon/D7500/RAW_NIKON_D7500_12BIT_COMPRESSED.NEF"
+    "Olympus/E-M1MarkII/Olympus_EM1mk2_Standard_20MP.ORF"
+    "Panasonic/DC-G9/P1000475.RW2"
+    "Sony/ILCE-7RM3/DSC03791.ARW"
+)
+
+for path in "${SCENES[@]}"; do
+    # Make_Model_file, so frames from different cameras can't collide.
+    name="$(echo "$path" | sed 's/%20/-/g; s#/#_#g')"
+    fetch tests/fixtures/shoots/scenes "$name" "$path"
+done

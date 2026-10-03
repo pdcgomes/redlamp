@@ -7,8 +7,8 @@ import simd
 import Testing
 @testable import RedlampEngine
 
-/// The downloaded samples the evaluation reads: tests/fixtures/raw and the shoots
-/// `scripts/fetch-shoot-fixtures.sh` downloads.
+/// The downloaded samples the evaluation reads: those `mise run fixtures` downloads into
+/// tests/fixtures/raw, and `mise run fixtures-shoots` into tests/fixtures/shoots.
 enum DustSamples {
     static let root = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent()
