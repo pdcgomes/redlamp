@@ -14,7 +14,8 @@ final class SaveQueue: @unchecked Sendable {
         /// From now on the photo's saves go over `base` (nil: the sidecar as it is then);
         /// `opened` is the editor's state when it took it, to tell what changed here.
         case track(SidecarBase?, opened: Sidecar)
-        /// The photo's saves no longer look for another writer's.
+        /// The photo's saves no longer look for another writer's, from when its last save has
+        /// gone through: one that failed is tried again over the same base.
         case forget
 
         /// Writes to the photo's sidecar, rather than telling the queue how to.
@@ -48,6 +49,8 @@ final class SaveQueue: @unchecked Sendable {
     /// A save's result, and whether a later save of the photo was waiting when it finished.
     typealias Report = @MainActor @Sendable (URL, Write, Outcome, _ superseded: Bool) -> Void
     private var report: Report?
+    /// Photos whose last save failed, but for a rating on one that must be left as it is.
+    private var failing: Set<URL> = []
     /// A tracked photo's saves.
     private struct Tracked {
         /// What the next save goes over.
@@ -58,6 +61,9 @@ final class SaveQueue: @unchecked Sendable {
         /// into it as into another writer's edit, so what only it has (their snapshots and
         /// metadata, the older edit kept as a snapshot) stays, and the clash isn't found again.
         var merged: Sidecar?
+        /// The editor has left the photo while its last save had failed: once a save goes
+        /// through, it isn't tracked.
+        var isLeft = false
     }
 
     /// Only the queue uses it.
@@ -70,6 +76,11 @@ final class SaveQueue: @unchecked Sendable {
     /// Tells `report`, on the main actor and in order, how each save went.
     func reportResults(to report: @escaping Report) {
         lock.withLock { self.report = report }
+    }
+
+    /// The photos whose last save failed.
+    var failedPhotos: Set<URL> {
+        lock.withLock { failing }
     }
 
     /// Whether a save asked for `url` hasn't finished.
@@ -149,14 +160,22 @@ final class SaveQueue: @unchecked Sendable {
         } catch {
             outcome = .failed(error)
         }
-        guard write.isSave else { return }
-        let (done, report, superseded): ([CheckedContinuation<Void, Never>], Report?, Bool) = lock.withLock {
+        guard write.isSave, let outcome else { return }
+        var report: Report?
+        var superseded = false
+        let done: [CheckedContinuation<Void, Never>] = lock.withLock {
+            switch (outcome, write) {
+            case let (.failed(error), .metadata) where error is SidecarStoreError: break
+            case (.failed, _): failing.insert(url)
+            default: failing.remove(url)
+            }
             let left = unfinished[url, default: 1] - 1
             unfinished[url] = left > 0 ? left : nil
-            let superseded = waiting[url]?.contains(where: \.isSave) ?? false
-            return (left > 0 ? [] : waiters.removeValue(forKey: url) ?? [], self.report, superseded)
+            superseded = waiting[url]?.contains(where: \.isSave) ?? false
+            report = self.report
+            return left > 0 ? [] : waiters.removeValue(forKey: url) ?? []
         }
-        if let report, let outcome {
+        if let report {
             DispatchQueue.main.async {
                 MainActor.assumeIsolated { report(url, write, outcome, superseded) }
             }
@@ -172,7 +191,11 @@ final class SaveQueue: @unchecked Sendable {
                 try store.saveOrRemove(sidecar, for: url)
                 return .saved
             }
-            return try save(sidecar, over: tracked, for: url)
+            let outcome = try save(sidecar, over: tracked, for: url)
+            if tracked.isLeft {
+                tracking[url] = nil
+            }
+            return outcome
         case let .metadata(change):
             try Library.writeMetadata(for: url, store: store, change)
             return .saved
@@ -180,7 +203,11 @@ final class SaveQueue: @unchecked Sendable {
             tracking[url] = Tracked(base: base ?? store.base(for: url), opened: opened)
             return nil
         case .forget:
-            tracking[url] = nil
+            if lock.withLock({ failing.contains(url) }) {
+                tracking[url]?.isLeft = true
+            } else {
+                tracking[url] = nil
+            }
             return nil
         }
     }

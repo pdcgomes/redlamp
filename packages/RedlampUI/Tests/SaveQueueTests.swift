@@ -172,7 +172,7 @@ struct SaveQueueTests {
         try await open(folder.photo, in: model)
 
         model.setValue(.exposure, 0.7)
-        #expect(model.saveBeforeQuitting())
+        #expect(model.saveBeforeQuitting() == .saved)
         #expect(folder.saved?.recipe == model.recipe)
     }
 
@@ -187,7 +187,7 @@ struct SaveQueueTests {
         model.saves.enqueue(.metadata { _ in gate.wait() }, for: folder.other)
         model.setValue(.exposure, 0.7)
         let start = ContinuousClock.now
-        #expect(!model.saveBeforeQuitting(within: .milliseconds(300)))
+        #expect(model.saveBeforeQuitting(within: .milliseconds(300)) == .timedOut)
         #expect(ContinuousClock.now - start < .seconds(1))
     }
 

@@ -66,7 +66,8 @@ public final class EditorModel {
     public internal(set) var hasUnmergedEdits = false
     /// The last save that failed, shown until one goes through (see `EditorModel+Saving`).
     public internal(set) var saveError: SaveError?
-    @ObservationIgnored var failedSave: SaveQueue.Write?
+    /// Each photo's writes that failed, oldest first, until they go through.
+    @ObservationIgnored var failedSaves: [URL: FailedSave] = [:]
     @ObservationIgnored var saveRetry: (task: Task<Void, Never>?, delay: Duration) = (nil, .seconds(1))
     /// The open photo's rating, flag and label, saved with its edit.
     public internal(set) var photoMetadata = PhotoMetadata()
@@ -586,7 +587,10 @@ public final class EditorModel {
     }
 
     private func didOpen(_ opened: ImageInfo, _ read: OpenedSidecar) {
-        let sidecar = read.sidecar
+        // What failed to save when the photo was last open is shown, and saved again, over
+        // the sidecar as it is now.
+        let unsaved = read.protection == nil ? failedSaves.removeValue(forKey: opened.url)?.writes ?? [] : []
+        let sidecar = Self.applying(unsaved, to: read.sidecar)
         info = opened
         availableAIMaskKinds = engine.availableMaskKinds()
         maskMessage = nil
@@ -620,7 +624,14 @@ public final class EditorModel {
         }
         requestRender()
         if read.protection == nil {
-            saves.enqueue(.track(read.base, opened: sidecarToSave), for: opened.url)
+            var onDisk = sidecarToSave
+            if !unsaved.isEmpty {
+                onDisk.recipe = Self.asShot(read.sidecar?.recipe ?? EditRecipe(), opened)
+                onDisk.snapshots = read.sidecar?.snapshots ?? []
+                onDisk.metadata = read.sidecar?.metadata
+            }
+            saves.enqueue(.track(read.base, opened: onDisk), for: opened.url)
+            unsaved.forEach { saves.enqueue($0, for: opened.url) }
         }
         if savesMetadata {
             saveNow()
@@ -643,6 +654,24 @@ public final class EditorModel {
             requestRender()
         }
         saves.enqueue(.track(base, opened: sidecarToSave), for: url)
+    }
+
+    /// `sidecar` as it is once `writes` have been made to it.
+    private static func applying(_ writes: [SaveQueue.Write], to sidecar: Sidecar?) -> Sidecar? {
+        writes.reduce(sidecar) { sidecar, write in
+            switch write {
+            case let .sidecar(saved):
+                return saved
+            case let .metadata(change):
+                var changed = sidecar ?? Sidecar(recipe: EditRecipe())
+                var metadata = changed.metadata ?? PhotoMetadata()
+                change(&metadata)
+                changed.metadata = metadata.isEmpty ? nil : metadata
+                return changed
+            case .track, .forget:
+                return sidecar
+            }
+        }
     }
 
     /// `recipe` with the photo's own white balance when it is As Shot.

@@ -134,7 +134,7 @@ struct RedlampApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static var launch: (@MainActor () -> EditorWindowController)?
-    static var saveBeforeQuitting: (@MainActor () -> Bool)?
+    static var saveBeforeQuitting: (@MainActor () -> QuitSaving)?
     let updates = Updates()
     private var editor: EditorWindowController?
 
@@ -143,12 +143,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Quit, log out, shut down and an update's relaunch all come here. It waits at most about
-    /// 2 s, then quits anyway.
+    /// 2 s for a disk that doesn't answer, then quits anyway; edits that can't be saved are
+    /// only left behind if the user says so.
     func applicationShouldTerminate(_: NSApplication) -> NSApplication.TerminateReply {
-        if Self.saveBeforeQuitting?() == false {
+        switch Self.saveBeforeQuitting?() {
+        case let .unsaved(photos):
+            return Self.quitsWithout(photos) ? .terminateNow : .terminateCancel
+        case .timedOut:
             Logger(subsystem: "app.redlamp.mac", category: "saving").error("Quit before the last edits were saved")
+            return .terminateNow
+        case .saved, nil:
+            return .terminateNow
         }
-        return .terminateNow
+    }
+
+    private static func quitsWithout(_ photos: [URL]) -> Bool {
+        let names = photos.map { $0.deletingPathExtension().lastPathComponent }
+        let alert = NSAlert()
+        alert.messageText = photos.count == 1
+            ? "Edits to \(names[0]) can't be saved"
+            : "Edits to \(photos.count) photos can't be saved"
+        alert.informativeText = (photos.count == 1 ? "" : names.prefix(10).joined(separator: ", ") + "\n\n")
+            + "Quitting now loses them."
+        alert.addButton(withTitle: "Don't Quit")
+        alert.addButton(withTitle: "Quit Anyway")
+        return alert.runModal() == .alertSecondButtonReturn
     }
 
     func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows: Bool) -> Bool {
