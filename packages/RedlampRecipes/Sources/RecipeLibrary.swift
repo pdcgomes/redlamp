@@ -110,17 +110,16 @@ public final class RecipeLibrary {
         try JSONEncoder().encode(favorites.sorted()).write(to: locations.favorites, options: .atomic)
     }
 
-    /// Named sections for a recipe list: Favorites, My Recipes, the bundled groups in
-    /// order, then Installed.
+    /// Named sections for a recipe list: Favorites, your recipes in their lists (My Recipes
+    /// first, then the others by name), the bundled groups in order, then Installed. A list
+    /// of yours named like a bundled group is listed with it.
     public var sections: [(name: String, recipes: [Recipe])] {
         var result: [(String, [Recipe])] = []
         let favorite = all.filter(isFavorite)
         if !favorite.isEmpty {
             result.append(("Favorites", favorite))
         }
-        if !userRecipes.isEmpty {
-            result.append(("My Recipes", userRecipes))
-        }
+        let mine = Dictionary(grouping: userRecipes, by: Self.list(for:))
         var order: [String] = []
         var grouped: [String: [Recipe]] = [:]
         for recipe in bundled {
@@ -129,11 +128,27 @@ public final class RecipeLibrary {
             }
             grouped[recipe.group, default: []].append(recipe)
         }
-        result += order.map { ($0, grouped[$0] ?? []) }
+        let lists = mine.keys.filter { $0 != Self.myRecipes && grouped[$0] == nil }
+            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+        for list in [Self.myRecipes] + lists {
+            if let recipes = mine[list] {
+                result.append((list, recipes))
+            }
+        }
+        result += order.map { ($0, (grouped[$0] ?? []) + (mine[$0] ?? [])) }
         if !installed.isEmpty {
             result.append(("Installed", installed))
         }
         return result
+    }
+
+    static let myRecipes = "My Recipes"
+
+    /// The list one of your recipes appears in: its group, or My Recipes when the group is
+    /// empty or names one of the other sections.
+    static func list(for recipe: Recipe) -> String {
+        let group = recipe.group.trimmingCharacters(in: .whitespacesAndNewlines)
+        return group.isEmpty || ["Favorites", "Installed"].contains(group) ? myRecipes : group
     }
 
     /// Recipes matching `query` by name, group, tag or summary. Lightroom's words work as
@@ -160,6 +175,15 @@ public final class RecipeLibrary {
     /// so edits made with the old version are unaffected.
     @discardableResult
     public func save(_ recipe: Recipe) throws -> Recipe {
+        let saved = try storeLocal(recipe)
+        reload()
+        return saved
+    }
+
+    /// Saves a recipe made here without reading the library again. Recipes made here are
+    /// kept up to date in memory, so saving one twice before the next reload still publishes
+    /// a new version.
+    private func storeLocal(_ recipe: Recipe) throws -> Recipe {
         var recipe = recipe
         if !recipe.isLocal {
             recipe.id = RecipeNamespace.newLocalID()
@@ -176,7 +200,8 @@ public final class RecipeLibrary {
         }
         try FileManager.default.createDirectory(at: locations.recipes, withIntermediateDirectories: true)
         try RecipeFile.write(validated, to: fileURL(forLocal: validated))
-        reload()
+        userRecipes.removeAll { $0.id == validated.id }
+        userRecipes.append(validated)
         return validated
     }
 
@@ -190,29 +215,154 @@ public final class RecipeLibrary {
         return locations.installed.appendingPathComponent("\(slug)@\(recipe.version).\(Recipe.fileExtension)")
     }
 
-    /// Installs a `.redrecipe`, or a `.cube`, `.3dl` or HaldCLUT look table made for
-    /// `tableSpace`. Look tables become a recipe with an embedded Base Look, named by the
-    /// table's title or the file's name.
+    // MARK: - Importing
+
+    /// Installs a file as `read(importing:)` reads it: a `.redrecipe`, a Lightroom develop
+    /// preset, or a `.cube`, `.3dl` or HaldCLUT look table made for `tableSpace`. For a
+    /// preset's report, install what `read(importing:)` returns.
     @discardableResult
     public func install(
         contentsOf url: URL,
         tableSpace: ImportedTableSpace = .sRGB,
     ) throws -> (recipe: Recipe, issues: [RecipeIssue]) {
-        if let imported = try Self.lookTable(contentsOf: url, tableSpace: tableSpace) {
-            let name = imported.title ?? url.deletingPathExtension().lastPathComponent
-            return try (save(LookTableImport.recipe(for: imported.table, name: name)), [])
+        let installed = try install(Self.read(importing: url, tableSpace: tableSpace))
+        return (installed.recipe, installed.issues)
+    }
+
+    /// Installs a file `read(importing:)` read. Recipes made or converted here (look tables
+    /// and presets) join yours; other recipe files are installed as they are. Returns the
+    /// recipe as installed, with the file's issues and a preset's report.
+    @discardableResult
+    public func install(_ imported: RecipeImport) throws -> RecipeImport {
+        var installed = imported
+        installed.recipe = try store(imported)
+        reload()
+        return installed
+    }
+
+    /// Installs the files `read(importing:)` read, reading the library again once at the end.
+    /// A file that can't be installed is listed with the reason, and the rest still install.
+    public func install(_ summary: RecipeImportSummary) -> RecipeImportSummary {
+        var summary = summary
+        for index in summary.items.indices {
+            guard case let .imported(imported) = summary.items[index].outcome else { continue }
+            do {
+                var installed = imported
+                installed.recipe = try store(imported)
+                summary.items[index].outcome = .imported(installed)
+            } catch {
+                summary.items[index].outcome = .failed(Self.reason(error))
+            }
         }
-        let (recipe, issues) = try RecipeFile.read(url)
-        if recipe.isLocal {
-            return try (save(recipe), issues)
+        reload()
+        return summary
+    }
+
+    /// Installs files, and the Lightroom presets in folders, as `install(_:)` does, reading
+    /// the library again once at the end; what came in and what didn't.
+    public func install(contentsOf urls: [URL], tableSpace: ImportedTableSpace = .sRGB) -> RecipeImportSummary {
+        install(Self.read(importing: urls, tableSpace: tableSpace))
+    }
+
+    private func store(_ imported: RecipeImport) throws -> Recipe {
+        let recipe = imported.recipe
+        if recipe.isLocal || imported.report != nil {
+            return try storeLocal(recipe)
         }
         for package in recipe.embeddedBaseLooks {
             try lookStore.save(package)
         }
         try FileManager.default.createDirectory(at: locations.installed, withIntermediateDirectories: true)
         try RecipeFile.write(recipe, to: fileURL(forInstalled: recipe))
-        reload()
-        return (recipe, issues)
+        return recipe
+    }
+
+    /// Reads a file to import as a recipe, without installing it: a `.redrecipe`, a Lightroom
+    /// develop preset, or a `.cube`, `.3dl` or HaldCLUT look table made for `tableSpace`. A
+    /// preset is recognised by its content (`LightroomPreset.isPreset`), so a photo's `.xmp`
+    /// sidecar isn't taken for one. A look table or preset is named `name`, or by its own
+    /// name, or the file's.
+    public static func read(
+        importing url: URL,
+        tableSpace: ImportedTableSpace = .sRGB,
+        name: String? = nil,
+    ) throws -> RecipeImport {
+        if let imported = try lookTable(contentsOf: url, tableSpace: tableSpace) {
+            let name = name ?? imported.title ?? url.deletingPathExtension().lastPathComponent
+            return RecipeImport(recipe: LookTableImport.recipe(for: imported.table, name: name))
+        }
+        let kind = url.pathExtension.lowercased()
+        if kind != Recipe.fileExtension {
+            let data = try contents(of: url)
+            if LightroomPreset.isPreset(data) {
+                return try RecipeImport(LightroomPreset.convert(data, name: name), file: url)
+            }
+            if kind == "xmp" {
+                throw LightroomPresetError.notAPreset
+            }
+        }
+        let (recipe, issues) = try RecipeFile.read(url)
+        return RecipeImport(recipe: recipe, issues: issues)
+    }
+
+    /// Reads files, and the Lightroom presets in folders and their subfolders, as
+    /// `read(importing:)` reads each. A file that can't be read, or a folder without presets,
+    /// is listed with the reason.
+    public static func read(importing urls: [URL], tableSpace: ImportedTableSpace = .sRGB) -> RecipeImportSummary {
+        var items: [RecipeImportSummary.Item] = []
+        var seen = Set<String>()
+        for url in urls {
+            var isFolder: ObjCBool = false
+            FileManager.default.fileExists(atPath: url.path, isDirectory: &isFolder)
+            let files = isFolder.boolValue ? presets(in: url) : [url]
+            if files.isEmpty {
+                items.append(.init(file: url, outcome: .failed("There are no Lightroom presets in this folder")))
+            }
+            for file in files where seen.insert(file.standardizedFileURL.path).inserted {
+                do {
+                    try items.append(.init(
+                        file: file,
+                        outcome: .imported(read(importing: file, tableSpace: tableSpace)),
+                    ))
+                } catch {
+                    items.append(.init(file: file, outcome: .failed(reason(error))))
+                }
+            }
+        }
+        return RecipeImportSummary(items: items)
+    }
+
+    /// The Lightroom develop presets in a folder and its subfolders, in path order: the
+    /// `.xmp` files `LightroomPreset.isPreset` accepts, so photos' sidecars are left out.
+    public static func presets(in folder: URL) -> [URL] {
+        let files = FileManager.default.enumerator(
+            at: folder,
+            includingPropertiesForKeys: [.fileSizeKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants],
+        )
+        var found: [URL] = []
+        while let url = files?.nextObject() as? URL {
+            if url.pathExtension.lowercased() == "xmp", let data = try? contents(of: url),
+               LightroomPreset.isPreset(data) {
+                found.append(url)
+            }
+        }
+        return found.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+    }
+
+    /// A file's bytes, refused past the size a recipe file may have.
+    private static func contents(of url: URL) throws -> Data {
+        if let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+           size > RecipeValidator.maximumFileSize {
+            throw RecipeValidationError(issues: [RecipeIssue(.error, "the file is larger than 16 MB")])
+        }
+        return try Data(contentsOf: url)
+    }
+
+    /// Why a file didn't come in, as a sentence.
+    static func reason(_ error: any Error) -> String {
+        let text = error is CocoaError ? error.localizedDescription : "\(error)"
+        return text.prefix(1).uppercased() + text.dropFirst()
     }
 
     /// The look table in a `.cube` or `.3dl` file or a HaldCLUT image made for `tableSpace`,
@@ -301,5 +451,212 @@ public final class RecipeLibrary {
     /// Every look the engine should know about, for registering at launch.
     public func definitions() -> [BaseLookDefinition] {
         baseLooks.compactMap { try? $0.definition() }
+    }
+}
+
+/// A file brought in as a recipe: a `.redrecipe`, a Lightroom develop preset, or a look table.
+public struct RecipeImport: Sendable, Equatable {
+    public var recipe: Recipe
+    /// What the file's checks found that didn't stop it coming in, such as a value brought
+    /// into range.
+    public var issues: [RecipeIssue]
+    /// For a Lightroom preset, how each of its settings was carried over.
+    public var report: LightroomImportReport?
+
+    public init(recipe: Recipe, issues: [RecipeIssue] = [], report: LightroomImportReport? = nil) {
+        self.recipe = recipe
+        self.issues = issues
+        self.report = report
+    }
+
+    /// A converted Lightroom preset as a recipe made here: named after its file when the
+    /// preset has no name, and listed in the preset's own group, or "Lightroom".
+    public init(_ converted: LightroomPresetImport, file: URL) throws {
+        var recipe = converted.recipe
+        if !recipe.isLocal {
+            recipe.id = RecipeNamespace.newLocalID()
+            recipe.version = 1
+        }
+        if recipe.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            recipe.name = file.deletingPathExtension().lastPathComponent
+        }
+        if Self.defaultGroups.contains(recipe.group.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            recipe.group = "Lightroom"
+        }
+        let (validated, issues) = RecipeValidator.validate(recipe)
+        if issues.contains(where: { $0.severity == .error }) {
+            throw RecipeValidationError(issues: issues)
+        }
+        self.init(recipe: validated, issues: issues, report: converted.report)
+    }
+
+    /// Groups a new recipe gets from Redlamp rather than from the preset.
+    private static let defaultGroups: Set<String> = ["", "My Recipes", "Recipes", "Imported"]
+}
+
+/// What importing files brought in and what didn't, as the Recipes panel's import summary
+/// and `redlamp recipe import` show it.
+public struct RecipeImportSummary: Sendable {
+    public enum Outcome: Sendable {
+        /// The file as a recipe; installed, when the summary comes from installing.
+        case imported(RecipeImport)
+        /// Why the file didn't come in.
+        case failed(String)
+    }
+
+    public struct Item: Sendable {
+        public var file: URL
+        public var outcome: Outcome
+
+        public init(file: URL, outcome: Outcome) {
+            self.file = file
+            self.outcome = outcome
+        }
+    }
+
+    public var items: [Item]
+
+    public init(items: [Item] = []) {
+        self.items = items
+    }
+
+    public var imported: [RecipeImport] {
+        items.compactMap { item -> RecipeImport? in
+            if case let .imported(imported) = item.outcome {
+                imported
+            } else {
+                nil
+            }
+        }
+    }
+
+    /// Each file that didn't come in, with the reason: "Old.xmp: Lightroom process version …".
+    public var failures: [String] {
+        items.compactMap { item -> String? in
+            if case let .failed(reason) = item.outcome {
+                "\(item.file.lastPathComponent): \(reason)"
+            } else {
+                nil
+            }
+        }
+    }
+
+    /// What came in: "Imported 3 Lightroom presets", or "Imported 3 recipes, 2 of them from
+    /// Lightroom presets".
+    public var headline: String {
+        let imported = imported
+        guard !imported.isEmpty else { return "Nothing was imported" }
+        let presets = imported.filter { $0.report != nil }.count
+        if presets == imported.count {
+            return "Imported \(Self.count(presets, "Lightroom preset"))"
+        }
+        let recipes = "Imported \(Self.count(imported.count, "recipe"))"
+        return presets == 0 ? recipes : "\(recipes), \(presets) of them from Lightroom presets"
+    }
+
+    /// Where the installed recipes are listed: "In the Recipes panel under Lightroom".
+    public var placement: String? {
+        var lists: [String] = []
+        for recipe in imported.map(\.recipe) {
+            let list = recipe.isLocal ? RecipeLibrary.list(for: recipe) : "Installed"
+            if !lists.contains(list) {
+                lists.append(list)
+            }
+        }
+        return lists.isEmpty ? nil : "In the Recipes panel under \(Self.joined(lists))"
+    }
+
+    /// A title for the files that didn't come in.
+    public var failureTitle: String {
+        if imported.isEmpty {
+            "Nothing was imported"
+        } else if failures.count == 1 {
+            "A file couldn't be imported"
+        } else {
+            "Some files couldn't be imported"
+        }
+    }
+
+    static func count(_ number: Int, _ noun: String) -> String {
+        "\(number) \(noun)\(number == 1 ? "" : "s")"
+    }
+
+    /// "A", "A and B", "A, B and C".
+    static func joined(_ words: [String]) -> String {
+        guard let last = words.last, words.count > 1 else { return words.first ?? "" }
+        return words.dropLast().joined(separator: ", ") + " and " + last
+    }
+}
+
+public extension RecipeImportSummary.Item {
+    /// The item as `redlamp recipe import` prints it: what the file became, then its issues
+    /// and a preset's report, indented; or why it didn't come in.
+    var text: String {
+        switch outcome {
+        case let .failed(reason):
+            return "\(file.lastPathComponent): \(reason)"
+        case let .imported(imported):
+            let heading = "\(file.lastPathComponent) → \(imported.recipe.group) / \(imported.recipe.name)"
+            let report = imported.report.map { LightroomReportSummary($0).lines } ?? []
+            return ([heading] + (imported.issues.map(\.description) + report).map { "  " + $0 })
+                .joined(separator: "\n")
+        }
+    }
+}
+
+/// A Lightroom preset's report in words, as the Recipes panel's import summary and
+/// `redlamp recipe import` show it: a tally, then each setting with its note under what
+/// happened to it.
+public struct LightroomReportSummary: Sendable, Equatable {
+    public struct Section: Sendable, Equatable {
+        public var outcome: LightroomImportReport.Outcome
+        /// One line a setting: its name, then its note.
+        public var lines: [String]
+
+        /// "Approximated", "Ignored" or "Mapped".
+        public var title: String {
+            switch outcome {
+            case .mapped: "Mapped"
+            case .approximated: "Approximated"
+            case .ignored: "Ignored"
+            }
+        }
+    }
+
+    /// How many settings had each outcome: "12 mapped, 2 approximated, 3 ignored".
+    public var tally: String
+    /// What was approximated, then ignored, then mapped: only outcomes some setting had.
+    public var sections: [Section]
+    /// The preset's `crs:ProcessVersion`, if it has one.
+    public var processVersion: String?
+
+    public init(_ report: LightroomImportReport) {
+        let outcomes: [LightroomImportReport.Outcome] = [.approximated, .ignored, .mapped]
+        sections = outcomes.compactMap { outcome in
+            let entries = report.entries(outcome)
+            return entries.isEmpty ? nil : Section(outcome: outcome, lines: entries.map(Self.line))
+        }
+        let counts = LightroomImportReport.Outcome.allCases.compactMap { outcome in
+            let count = report.entries(outcome).count
+            return count == 0 ? nil : "\(count) \(Section(outcome: outcome, lines: []).title.lowercased())"
+        }
+        tally = counts.isEmpty ? "No settings" : counts.joined(separator: ", ")
+        processVersion = report.processVersion
+    }
+
+    private static func line(_ entry: LightroomImportReport.Entry) -> String {
+        guard let note = entry.note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty else {
+            return entry.setting
+        }
+        return "\(entry.setting): \(note)"
+    }
+
+    /// The report as plain text: the tally with the preset's process version, then each
+    /// section's settings, indented under its title.
+    public var lines: [String] {
+        let version = processVersion.map { " (Lightroom process version \($0))" } ?? ""
+        return ["\(tally)\(version)"] + sections.flatMap { section in
+            ["\(section.title):"] + section.lines.map { "  " + $0 }
+        }
     }
 }
