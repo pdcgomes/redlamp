@@ -797,7 +797,8 @@ kernel void rl_develop(
     // Perceptual color work in OKLCh.
     float3 lab = rec2020ToOKLab(display);
     float chroma = length(lab.yz);
-    float hue = atan2(lab.z, lab.y) * (180.0f / M_PI_F);
+    // An exact grey has no hue, and atan2(0, 0) is NaN under fast math.
+    float hue = chroma > 0.0f ? atan2(lab.z, lab.y) * (180.0f / M_PI_F) : 0.0f;
     if (hue < 0.0f) hue += 360.0f;
 
     float saturation = p.color.y;
