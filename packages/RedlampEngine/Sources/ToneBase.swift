@@ -1,7 +1,4 @@
 import Foundation
-import Metal
-import RedlampEngineAPI
-import RedlampMasking
 import simd
 
 /// The base edge-aware Highlights and Shadows read (TON-05,
@@ -34,16 +31,8 @@ enum ToneBase {
         log2(max(simd_dot(rgb, lumaWeights), 1e-6))
     }
 
-    struct Coefficients {
-        let width: Int
-        let height: Int
-        /// Per texel: the base is `a * ev + b`.
-        let a: [Float]
-        let b: [Float]
-    }
-
-    /// The filter's coefficients for `image` at the map's size.
-    static func coefficients(_ image: AnalysisImage) -> Coefficients {
+    /// The filter's coefficients for `image` at the map's size: the base is `a * ev + b`.
+    static func coefficients(_ image: AnalysisImage) -> GuidedMap {
         let scale = max(1, (Double(max(image.width, image.height)) / Double(mapLongEdge)).rounded(.up))
         let block = Int(scale)
         let width = max(1, (image.width + block - 1) / block)
@@ -66,44 +55,11 @@ enum ToneBase {
         return coefficients(ev, width: width, height: height)
     }
 
-    /// A self-guided filter's coefficients for log luminance `ev`, each averaged over its window.
-    static func coefficients(_ ev: [Float], width: Int, height: Int) -> Coefficients {
+    /// A self-guided filter's coefficients for log luminance `ev`.
+    static func coefficients(_ ev: [Float], width: Int, height: Int) -> GuidedMap {
         let radius = max(1, Int((Float(max(width, height)) * radiusFraction).rounded()))
-        let mean = BoxFilter.blur(ev, width: width, height: height, radius: radius)
-        let meanSquare = BoxFilter.blur(ev.map { $0 * $0 }, width: width, height: height, radius: radius)
-        var a = [Float](repeating: 0, count: ev.count)
-        var b = [Float](repeating: 0, count: ev.count)
-        for index in ev.indices {
-            let variance = max(meanSquare[index] - mean[index] * mean[index], 0)
-            a[index] = variance / (variance + epsilon)
-            b[index] = mean[index] - a[index] * mean[index]
-        }
-        return Coefficients(
-            width: width, height: height,
-            a: BoxFilter.blur(a, width: width, height: height, radius: radius),
-            b: BoxFilter.blur(b, width: width, height: height, radius: radius),
+        return GuidedMap(
+            input: ev, guide: ev, width: width, height: height, radius: radius, epsilon: epsilon,
         )
-    }
-
-    /// The coefficients as a two-channel texture (a, b) for the develop kernel.
-    static func texture(_ coefficients: Coefficients, device: any MTLDevice) throws -> any MTLTexture {
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .rg32Float, width: coefficients.width, height: coefficients.height, mipmapped: false,
-        )
-        descriptor.usage = [.shaderRead]
-        descriptor.storageMode = .shared
-        guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
-        var texels = [Float](repeating: 0, count: coefficients.a.count * 2)
-        for index in coefficients.a.indices {
-            texels[index * 2] = coefficients.a[index]
-            texels[index * 2 + 1] = coefficients.b[index]
-        }
-        texels.withUnsafeBytes { bytes in
-            texture.replace(
-                region: MTLRegionMake2D(0, 0, coefficients.width, coefficients.height), mipmapLevel: 0,
-                withBytes: bytes.baseAddress!, bytesPerRow: coefficients.width * 8,
-            )
-        }
-        return texture
     }
 }

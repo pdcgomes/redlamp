@@ -302,21 +302,32 @@ public enum GuidedFilter {
     public static func filter(
         _ mask: [Float], guide: [Float], width: Int, height: Int, radius: Int, epsilon: Float,
     ) -> [Float] {
+        let (a, b) = coefficients(mask, guide: guide, width: width, height: height, radius: radius, epsilon: epsilon)
+        return mask.indices.map { min(max(a[$0] * guide[$0] + b[$0], 0), 1) }
+    }
+
+    /// The filter's two coefficients per pixel, each averaged over its window: the output is
+    /// `a * guide + b`. Computed on a small map, they can be applied to a larger guide (K. He &
+    /// J. Sun, "Fast guided filter", 2015).
+    public static func coefficients(
+        _ input: [Float], guide: [Float], width: Int, height: Int, radius: Int, epsilon: Float,
+    ) -> (a: [Float], b: [Float]) {
         let meanI = BoxFilter.blur(guide, width: width, height: height, radius: radius)
-        let meanP = BoxFilter.blur(mask, width: width, height: height, radius: radius)
+        let meanP = BoxFilter.blur(input, width: width, height: height, radius: radius)
         let corrI = BoxFilter.blur(zip(guide, guide).map(*), width: width, height: height, radius: radius)
-        let corrIP = BoxFilter.blur(zip(guide, mask).map(*), width: width, height: height, radius: radius)
-        var a = [Float](repeating: 0, count: mask.count)
-        var b = [Float](repeating: 0, count: mask.count)
-        for index in mask.indices {
+        let corrIP = BoxFilter.blur(zip(guide, input).map(*), width: width, height: height, radius: radius)
+        var a = [Float](repeating: 0, count: input.count)
+        var b = [Float](repeating: 0, count: input.count)
+        for index in input.indices {
             let variance = corrI[index] - meanI[index] * meanI[index]
             let covariance = corrIP[index] - meanI[index] * meanP[index]
             a[index] = covariance / (variance + epsilon)
             b[index] = meanP[index] - a[index] * meanI[index]
         }
-        let meanA = BoxFilter.blur(a, width: width, height: height, radius: radius)
-        let meanB = BoxFilter.blur(b, width: width, height: height, radius: radius)
-        return mask.indices.map { min(max(meanA[$0] * guide[$0] + meanB[$0], 0), 1) }
+        return (
+            BoxFilter.blur(a, width: width, height: height, radius: radius),
+            BoxFilter.blur(b, width: width, height: height, radius: radius),
+        )
     }
 
     /// Refines `mask` against the luminance of `image` (any size; resampled to the mask's).

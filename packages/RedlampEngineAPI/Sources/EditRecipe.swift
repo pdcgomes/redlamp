@@ -63,7 +63,9 @@ public struct EditRecipe: Sendable, Hashable {
     /// 6: Fujifilm's lens corrections apply too.
     /// 7: Highlights and Shadows are edge-aware: they move each region by its brightness and keep
     /// the detail inside it (`ToneBase`), instead of a curve on each pixel's own brightness.
-    public static let currentProcessVersion = 7
+    /// 8: Dehaze's haze map follows the photo's edges (`Haze.Refined`), so the sky
+    /// beside a tree or a ridge is dehazed as much as the rest of it.
+    public static let currentProcessVersion = 8
     public static let linearPointCurve = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]
 
     /// Sidecars written before process versions existed are version 1.

@@ -208,7 +208,7 @@ enum DevelopParameters {
             recipe.processVersion >= 3 && !session.isRaw ? 1 : 0,
             recipe.processVersion >= 3 ? 1 : 0,
             recipe.processVersion >= 7 ? 1 : 0,
-            0,
+            recipe.processVersion >= 8 ? 1 : 0,
         )
         p.mood0 = SIMD4(
             Float(recipe[.leakAmount] / 100), Float(recipe[.leakWarmth] / 100),

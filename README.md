@@ -96,7 +96,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] **Noise reduction** (Detail panel): Luminance with Detail and Contrast, and Color with Detail and Smoothness. It is scaled to each photo's own noise: the DNG NoiseProfile tag, else its camera's calibrated profile at its ISO, else measured from the raw data when the file opens (a raw far cleaner than its camera's profile has had noise reduction in camera, so the measurement wins). Luminance keeps fine texture: wavelet shrinkage judges each detail by its neighbourhood, and at 1:1 and in exports a non-local-means pass guided by that result brings back texture where the photo repeats it. It runs as a cached stage in front of the fused kernel, so other sliders stay as fast as before, and exports render in tiles.
 - [x] **Sharpening** (Detail panel): Amount, Radius, Detail and Masking, in the same cached stage after noise reduction. It is noise-aware: detail is measured on a denoised copy of the luminance and applied to the untouched image, so the photo's noise and grain pass through as they were instead of being sharpened. Detail moves from a halo-limited unsharp mask towards Richardson–Lucy deconvolution of the Radius's blur, and holds back halos on strong edges; Masking keeps flat areas untouched. It boosts luminance detail in stops, so it doesn't depend on exposure and leaves colors alone.
 - [x] **Texture and Clarity** (global): gains on medium (about 2–8 px) and larger (about 8–64 px) luminance detail, taken from the image pyramid in the same cached stage, so tiles and zoom levels agree. Negative values soften.
-- [x] **Dehaze** (global and in masks): the dark channel prior (He, Sun and Tang, 2009) with the airlight and a haze map measured when the photo opens; negative values add a neutral veil.
+- [x] **Dehaze** (global and in masks): the dark channel prior (He, Sun and Tang, 2009) with the airlight and a haze map measured when the photo opens; negative values add a neutral veil. For new edits (process version 8) the haze map follows the photo's edges, so the sky beside a tree or a ridge has no pale glow.
 
 **Masking** (Lightroom's model)
 - [x] Each mask is a layer: its own adjustments plus a mask built from components. Components combine with **Add**, **Subtract**, and **Intersect**, and each can be inverted.
@@ -833,7 +833,7 @@ The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on mac
 - [x] Menon Bayer demosaic with a dual pass for flat noisy areas, hot-pixel repair and highlight reconstruction
 - [x] **Recipes:** one format for presets, profiles and LUTs, Base Look tables, camera recipe cards, `.cube` and HaldCLUT import, 39 bundled recipes, and the Recipe Lab
 - [x] Before/After layouts, themes and a Settings window
-- [ ] Edge-aware Highlights and Shadows, and edge-refined Dehaze
+- [x] Edge-aware Highlights and Shadows, and edge-refined Dehaze
 - [ ] **Best-in-class classical noise reduction** on raw data, profiled per camera and ISO
 - [ ] Better X-Trans demosaicing (Markesteijn)
 - [ ] Full DCP camera profiles (dual and triple illuminant), ICC input profiles, and `.3dl` and log-space LUT import
@@ -1173,6 +1173,7 @@ Redlamp builds on the work of others:
 - The Malvar–He–Cutler demosaicing paper, and Menon, Andriani and Calvagno's directional-filtering demosaic (2007)
 - Zhang and Brainard's estimation of saturated pixel values (2004), for highlight reconstruction
 - He, Sun and Tang's dark channel prior (2009), for Dehaze, and Liu, Tanaka and Okutomi's patch-based noise level estimation (2013)
+- He, Sun and Tang's guided filter (2010) and He and Sun's fast guided filter (2015), for mask edges, edge-aware Highlights and Shadows, and Dehaze's haze map, with Vincent's grayscale reconstruction (1993)
 - The à-trous wavelet and generalized Anscombe transform literature, for noise reduction
 - Krzysztof Narkowicz's filmic curve fit
 

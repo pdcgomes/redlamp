@@ -86,10 +86,10 @@ struct SessionBuilder {
         }
         let analysis = AnalysisImage(width: analysisWidth, height: analysisHeight, pixels: pixels)
         let airlight = Haze.airlight(analysis)
-        let toneBase = try ToneBase.texture(ToneBase.coefficients(analysis), device: device)
+        let toneBase = try ToneBase.coefficients(analysis).texture(device: device)
         guard let hazeCommands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
         hazeCommands.label = "Haze map"
-        let hazeMap = try Haze.encodeMap(
+        let (hazeMap, hazeBlocks) = try Haze.encodeMap(
             pyramid: pyramid, airlight: airlight, device: device, kernels: kernels, commands: hazeCommands,
         )
         let glowSource = try Glow.encodeSource(
@@ -107,6 +107,7 @@ struct SessionBuilder {
         if let error = hazeCommands.error {
             throw EngineError.renderFailed(error.localizedDescription)
         }
+        let refinedHaze = try Haze.refined(blocks: hazeBlocks).texture(device: device)
         let colorModel = decoded.isRaw ? decoded.xyzToCamera.flatMap(CameraColorModel.init(xyzToCameraRowMajor:)) : nil
         var info = decoded.info
         info.asShotWhiteBalance = colorModel?.whiteBalance(forMultipliers: decoded.asShotMultipliers)
@@ -127,6 +128,7 @@ struct SessionBuilder {
             repairedPixels: Int(repairedCount.contents().load(as: UInt32.self)),
             airlight: airlight,
             hazeMap: hazeMap,
+            refinedHaze: refinedHaze,
             toneBase: toneBase,
             glowSource: glowSource,
             glowLights: glowLights,

@@ -590,6 +590,7 @@ kernel void rl_develop(
     texture3d<float, access::read> hueSatWarm [[texture(10)]],
     texture3d<float, access::sample> gainTable [[texture(11)]],
     texture2d<float, access::sample> toneBase [[texture(12)]],
+    texture2d<float, access::sample> refinedHaze [[texture(13)]],
     constant float4 *lensTable [[buffer(5)]],
     uint2 gid [[thread_position_in_grid]])
 {
@@ -628,6 +629,9 @@ kernel void rl_develop(
         float2 ab = toneBase.sample(linearSampler, sourceUV).rg;
         toneDetail = toneEV - (ab.x * toneEV + ab.y);
     }
+    // The refined haze map's guide (process 8, `Haze.guide`): brightness over the airlight, in the
+    // same camera RGB, before any correction.
+    float hazeGuide = dot(camera / max(p.haze.xyz, float3(1e-3f)), float3(1.0f / 3.0f));
     // The profile's vignetting, at the radius the light was recorded at.
     if (p.lensProfile.x > 0.5f) {
         camera *= lensTableAt(lensTable, lensRadius(imageUV, p), p).w;
@@ -676,7 +680,13 @@ kernel void rl_develop(
         constexpr sampler hazeSampler(coord::normalized, filter::linear, address::clamp_to_edge);
         float3 airlight = p.haze.xyz;
         if (dehaze > 0.0f) {
-            float dark = hazeMap.sample(hazeSampler, sourceUV).r;
+            float dark;
+            if (p.render.w > 0.5f) {
+                float3 refined = refinedHaze.sample(hazeSampler, sourceUV).rgb;
+                dark = clamp(min(refined.x * hazeGuide + refined.y, refined.z), 0.0f, 1.0f);
+            } else {
+                dark = hazeMap.sample(hazeSampler, sourceUV).r;
+            }
             float transmission = max(1.0f - 0.95f * min(dehaze, 1.0f) * dark, 0.2f);
             camera = max((camera - airlight) / transmission + airlight, 0.0f);
         } else {

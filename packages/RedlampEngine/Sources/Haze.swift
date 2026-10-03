@@ -34,6 +34,103 @@ enum Haze {
         return simd_max(mean, SIMD3(repeating: 1e-3))
     }
 
+    /// The refined map's guided-filter window, as a multiple of the patch radius.
+    /// REDLAMP_HAZE_RADIUS overrides it, to tune.
+    static let refinedRadiusFactor = Float(ProcessInfo.processInfo.environment["REDLAMP_HAZE_RADIUS"] ?? "") ?? 8
+    /// The refined map's edge threshold, as a variance of the guide (brightness over the
+    /// airlight). REDLAMP_HAZE_EPSILON overrides it, to tune.
+    static let refinedEpsilon = Float(ProcessInfo.processInfo.environment["REDLAMP_HAZE_EPSILON"] ?? "") ?? 1e-3
+
+    /// The refined map's guide: a pixel's brightness relative to the airlight. The develop kernel
+    /// computes it the same way.
+    static func guide(_ rgb: SIMD3<Float>, airlight: SIMD3<Float>) -> Float {
+        simd_reduce_add(rgb / airlight) / 3
+    }
+
+    /// The refined haze map (process 8, TON-27): the patch-minimum dark channel guided by the
+    /// photo's brightness, so the haze follows the photo's edges instead of spreading a dark
+    /// object's low haze a patch-width into the sky beside it. Per texel, the haze is
+    /// `min(a * guide + b, ceiling)` with the pixel's own guide.
+    struct Refined {
+        let coefficients: GuidedMap
+        /// The patch minimum's opening by reconstruction: each region grows back from the patch
+        /// minimum as far as its own blocks' darkest channel allows, so the sky beside a dark
+        /// object, even around a narrow tip, gets its own haze back, and the object keeps its
+        /// own. A bright object beside the sky, which the guide alone would take for haze, can't
+        /// have more than its own.
+        let ceiling: [Float]
+
+        /// As a texture (a, b, ceiling) for the develop kernel.
+        func texture(device: any MTLDevice) throws -> any MTLTexture {
+            try coefficients.texture(device: device, third: ceiling)
+        }
+    }
+
+    /// The refined map from the coarse map's blocks (`encodeMap`).
+    static func refined(blocks: any MTLTexture) -> Refined {
+        let width = blocks.width
+        let height = blocks.height
+        var texels = [Float](repeating: 0, count: width * height * 2)
+        texels.withUnsafeMutableBytes { bytes in
+            blocks.getBytes(
+                bytes.baseAddress!, bytesPerRow: width * 8, from: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0,
+            )
+        }
+        return refined(
+            dark: (0 ..< width * height).map { texels[$0 * 2] },
+            guide: (0 ..< width * height).map { texels[$0 * 2 + 1] },
+            width: width, height: height,
+        )
+    }
+
+    /// The same from each block's darkest channel and mean brightness, relative to the airlight.
+    static func refined(dark blockDark: [Float], guide: [Float], width: Int, height: Int) -> Refined {
+        let patchRadius = max(1, Int(Double(max(width, height)) * patchFraction / 2))
+        func patchMinimum(_ values: [Float]) -> [Float] {
+            let rows = minimum(values, width: width, height: height, radius: patchRadius, alongRows: true)
+            return minimum(rows, width: width, height: height, radius: patchRadius, alongRows: false)
+        }
+        let dark = patchMinimum(blockDark)
+        let radius = max(1, Int((Float(patchRadius) * refinedRadiusFactor).rounded()))
+        return Refined(
+            coefficients: GuidedMap(
+                input: dark, guide: guide, width: width, height: height, radius: radius, epsilon: refinedEpsilon,
+            ),
+            ceiling: reconstruction(of: dark, under: blockDark, width: width, height: height),
+        )
+    }
+
+    /// Grayscale reconstruction by dilation (L. Vincent, "Morphological grayscale reconstruction
+    /// in image analysis", 1993): `marker` grown through its 8 neighbours, never above `mask`,
+    /// until it stops changing; forward and backward raster passes.
+    static func reconstruction(of marker: [Float], under mask: [Float], width: Int, height: Int) -> [Float] {
+        var result = zip(marker, mask).map { min($0, $1) }
+        var changed = true
+        while changed {
+            changed = false
+            for backward in [false, true] {
+                for row in 0 ..< height {
+                    let y = backward ? height - 1 - row : row
+                    for column in 0 ..< width {
+                        let x = backward ? width - 1 - column : column
+                        var largest = result[y * width + x]
+                        let dy = backward ? 1 : -1
+                        for (nx, ny) in [(x - 1, y + dy), (x, y + dy), (x + 1, y + dy), (backward ? x + 1 : x - 1, y)]
+                            where nx >= 0 && nx < width && ny >= 0 && ny < height {
+                            largest = max(largest, result[ny * width + nx])
+                        }
+                        let grown = min(largest, mask[y * width + x])
+                        if grown > result[y * width + x] {
+                            result[y * width + x] = grown
+                            changed = true
+                        }
+                    }
+                }
+            }
+        }
+        return result
+    }
+
     private static func minimum(
         _ values: [Float],
         width: Int,
@@ -57,14 +154,15 @@ enum Haze {
     }
 
     /// The haze map: per texel, the darkest channel relative to the airlight over a patch, then
-    /// smoothed so it upsamples without blocks.
+    /// smoothed so it upsamples without blocks. `blocks` keeps each texel's own darkest channel and
+    /// mean brightness, for the refined map.
     static func encodeMap(
         pyramid: any MTLTexture,
         airlight: SIMD3<Float>,
         device: any MTLDevice,
         kernels: KernelLibrary,
         commands: any MTLCommandBuffer,
-    ) throws -> any MTLTexture {
+    ) throws -> (map: any MTLTexture, blocks: any MTLTexture) {
         let block = max(1, Int((Double(max(pyramid.width, pyramid.height)) / Double(mapLongEdge)).rounded(.up)))
         let width = (pyramid.width + block - 1) / block
         let height = (pyramid.height + block - 1) / block
@@ -73,8 +171,14 @@ enum Haze {
         )
         descriptor.usage = [.shaderRead, .shaderWrite]
         descriptor.storageMode = .private
+        let blocksDescriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rg32Float, width: width, height: height, mipmapped: false,
+        )
+        blocksDescriptor.usage = [.shaderRead, .shaderWrite]
+        blocksDescriptor.storageMode = .shared
         guard let map = device.makeTexture(descriptor: descriptor),
               let scratch = device.makeTexture(descriptor: descriptor),
+              let blocks = device.makeTexture(descriptor: blocksDescriptor),
               let encoder = commands.makeComputeCommandEncoder()
         else {
             throw EngineError.gpuUnavailable
@@ -92,15 +196,15 @@ enum Haze {
             encoder.setBytes(&params, length: MemoryLayout<HazeParams>.stride, index: 0)
             encoder.dispatchGrid(width: width, height: height, pipeline: pipeline)
         }
-        dispatch(kernels.hazeDark, pyramid, map)
+        dispatch(kernels.hazeDark, pyramid, blocks)
         for (mode, radius) in [(Int32(0), Int32(patchRadius)), (1, 9)] {
             params.size.w = radius
             params.mode = SIMD4(mode, 0, 0, 0)
-            dispatch(kernels.hazeFilter, map, scratch)
+            dispatch(kernels.hazeFilter, mode == 0 ? blocks : map, scratch)
             params.mode = SIMD4(mode, 1, 0, 0)
             dispatch(kernels.hazeFilter, scratch, map)
         }
         encoder.endEncoding()
-        return map
+        return (map, blocks)
     }
 }

@@ -37,6 +37,8 @@ final class ImageSession: @unchecked Sendable {
     /// Dehaze's airlight and haze map (see `Haze`), in the pyramid's camera RGB.
     let airlight: SIMD3<Float>
     let hazeMap: any MTLTexture
+    /// The refined haze map (process 8): a guided filter's coefficients (see `Haze.Refined`).
+    let refinedHaze: any MTLTexture
     /// Edge-aware Highlights and Shadows' base: a guided filter's coefficients (see `ToneBase`).
     let toneBase: any MTLTexture
     /// The light halation and bloom spread (see `Glow`), mipmapped.
@@ -74,6 +76,7 @@ final class ImageSession: @unchecked Sendable {
         repairedPixels: Int,
         airlight: SIMD3<Float>,
         hazeMap: any MTLTexture,
+        refinedHaze: any MTLTexture,
         toneBase: any MTLTexture,
         glowSource: any MTLTexture,
         glowLights: any MTLTexture,
@@ -92,6 +95,7 @@ final class ImageSession: @unchecked Sendable {
         self.repairedPixels = repairedPixels
         self.airlight = airlight
         self.hazeMap = hazeMap
+        self.refinedHaze = refinedHaze
         self.toneBase = toneBase
         self.glowSource = glowSource
         self.glowLights = glowLights
@@ -143,6 +147,7 @@ final class ImageSession: @unchecked Sendable {
         repairedPixels = original.repairedPixels
         airlight = original.airlight
         hazeMap = original.hazeMap
+        refinedHaze = original.refinedHaze
         toneBase = original.toneBase
         glowSource = original.glowSource
         glowLights = original.glowLights
