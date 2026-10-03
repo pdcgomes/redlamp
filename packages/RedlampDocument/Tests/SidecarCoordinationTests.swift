@@ -193,6 +193,24 @@ struct SidecarCoordinationTests {
         #expect(onlyTheirEdit.metadata == PhotoMetadata(rating: 2), "rated in both: this one's, the save being newer")
     }
 
+    @Test func `metadata fields each side changed alone are all kept`() {
+        var base = Sidecar(recipe: recipe(exposure: 0.5), metadata: PhotoMetadata(rating: 1, label: .red))
+        base.metadata?.unknownFields = ["caption": .string("Dawn"), "keywords": .string("sea")]
+        var ours = base
+        ours.metadata?.flag = .pick
+        ours.metadata?.label = nil
+        ours.metadata?.unknownFields["caption"] = .string("Dusk")
+        var theirs = base
+        theirs.metadata?.rating = 4
+        theirs.metadata?.unknownFields["keywords"] = nil
+        theirs.metadata?.unknownFields["place"] = .string("Porto")
+
+        let merged = SidecarStore.merge(ours, theirs, base: base, opened: base)
+        var expected = PhotoMetadata(rating: 4, flag: .pick)
+        expected.unknownFields = ["caption": .string("Dusk"), "place": .string("Porto")]
+        #expect(merged.metadata == expected)
+    }
+
     @Test func `an edit a newer version saved meanwhile is never saved over`() throws {
         let (image, cleanup) = try temporaryImage()
         defer { cleanup() }

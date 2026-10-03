@@ -106,11 +106,34 @@ extension SidecarStore {
             where !merged.snapshots.contains(where: { $0.id == snapshot.id }) {
             merged.snapshots.append(snapshot)
         }
-        merged.metadata = ours.metadata != opened.metadata ? ours.metadata : theirs.metadata
+        merged.metadata = PhotoMetadata.merge(
+            ours.metadata, theirs.metadata, base: base.metadata, opened: opened.metadata,
+        )
         merged.unknownFields = theirs.unknownFields.merging(ours.unknownFields) { _, new in new }
         merged.session = ours.session
         merged.clearsHistory = false
         merged.modified = max(ours.modified, theirs.modified)
+        return merged
+    }
+}
+
+extension PhotoMetadata {
+    /// Three-way, field by field: each field (an unknown one by its key) takes theirs if only
+    /// they changed it since `base`, and ours, changed here since `opened` or not, otherwise.
+    /// Nil when neither side has any.
+    static func merge(
+        _ ours: PhotoMetadata?, _ theirs: PhotoMetadata?, base: PhotoMetadata?, opened: PhotoMetadata?,
+    ) -> PhotoMetadata? {
+        guard ours != nil || theirs != nil else { return nil }
+        let (ours, theirs) = (ours ?? PhotoMetadata(), theirs ?? PhotoMetadata())
+        let (base, opened) = (base ?? PhotoMetadata(), opened ?? PhotoMetadata())
+        func pick<Value: Equatable>(_ field: (PhotoMetadata) -> Value) -> Value {
+            field(theirs) != field(base) && field(ours) == field(opened) ? field(theirs) : field(ours)
+        }
+        var merged = PhotoMetadata(rating: pick(\.rating), flag: pick(\.flag), label: pick(\.label))
+        for key in Set(ours.unknownFields.keys).union(theirs.unknownFields.keys) {
+            merged.unknownFields[key] = pick { $0.unknownFields[key] }
+        }
         return merged
     }
 }
