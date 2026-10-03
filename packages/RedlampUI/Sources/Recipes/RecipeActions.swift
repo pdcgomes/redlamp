@@ -12,8 +12,14 @@ public enum RecipeActions {
         [UTType(filenameExtension: "cube") ?? .data, UTType(filenameExtension: "3dl") ?? .data, .png, .tiff]
     }
 
+    /// Lightroom develop presets. Photos' `.xmp` sidecars share the extension; the library
+    /// tells them apart by their content.
+    static var presetType: UTType {
+        UTType(filenameExtension: "xmp") ?? .xml
+    }
+
     static var importTypes: [UTType] {
-        [recipeType] + lookTableTypes
+        [recipeType, presetType] + lookTableTypes
     }
 
     /// Asks for a name and the settings to include, then saves the edit to My Recipes.
@@ -37,36 +43,95 @@ public enum RecipeActions {
         window.beginSheet(sheetWindow)
     }
 
-    /// Installs `.redrecipe`, `.cube`, `.3dl` and HaldCLUT files, reading look tables in the
-    /// space the panel's accessory chooses.
+    /// Installs `.redrecipe` files, Lightroom presets (several, or folders of them) and
+    /// `.cube`, `.3dl` and HaldCLUT files, reading look tables in the space the panel's
+    /// accessory chooses, then tells what came in.
     public static func importRecipes(model: EditorModel) {
         guard let chosen = chooseImports(
             importTypes,
-            message: "Choose recipes, .cube or .3dl look tables, or graded HaldCLUT images",
+            message: "Choose recipes, Lightroom presets or folders of them, .cube or .3dl look tables, or graded HaldCLUT images",
             multiple: true,
+            folders: true,
         ) else { return }
-        var failures: [String] = []
-        for url in chosen.urls where model.recipes.install(contentsOf: url, tableSpace: chosen.tableSpace) == nil {
-            failures.append("\(url.lastPathComponent): \(model.recipes.lastError ?? "unknown error")")
-        }
-        if !failures.isEmpty {
+        importFiles(chosen.urls, tableSpace: chosen.tableSpace, model: model)
+    }
+
+    /// Installs files, and the Lightroom presets in folders, as the Recipes panel's import
+    /// does (files dropped on the panel too), then tells what came in: presets' reports in a
+    /// sheet, or the files that didn't come in when no preset did.
+    public static func importFiles(_ urls: [URL], tableSpace: ImportedTableSpace = .sRGB, model: EditorModel) {
+        let summary = model.recipes.install(contentsOf: urls, tableSpace: tableSpace)
+        switch message(for: summary) {
+        case .none:
+            break
+        case let .alert(title, text):
             let alert = NSAlert()
-            alert.messageText = failures.count == 1 ? "A file couldn't be imported" : "Some files couldn't be imported"
-            alert.informativeText = failures.joined(separator: "\n")
+            alert.messageText = title
+            alert.informativeText = text
             alert.runModal()
+        case .sheet:
+            showSummary(summary)
         }
     }
 
-    /// Asks for files of `types` on an open panel whose accessory chooses what the look tables
-    /// among them were made for. Nil when cancelled.
+    /// How an import tells what happened.
+    enum ImportMessage: Equatable {
+        /// Everything came in, and none of it has a report.
+        case none
+        /// The files that didn't come in, when no preset did.
+        case alert(title: String, text: String)
+        /// Each preset's report, then any files that didn't come in.
+        case sheet
+    }
+
+    static func message(for summary: RecipeImportSummary) -> ImportMessage {
+        if summary.imported.contains(where: { $0.report != nil }) {
+            .sheet
+        } else if summary.failures.isEmpty {
+            .none
+        } else {
+            .alert(title: summary.failureTitle, text: summary.failures.joined(separator: "\n"))
+        }
+    }
+
+    private static func showSummary(_ summary: RecipeImportSummary) {
+        guard let window = NSApp.keyWindow ?? NSApp.mainWindow else {
+            let alert = NSAlert()
+            alert.messageText = summary.headline
+            alert.informativeText = ([summary.placement].compactMap(\.self) + summary.failures).joined(separator: "\n")
+            alert.runModal()
+            return
+        }
+        let sheetWindow = NSWindow(
+            contentRect: CGRect(origin: .zero, size: RecipeImportSheet.size),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false,
+        )
+        let close = { [weak window, weak sheetWindow] in
+            if let window, let sheetWindow {
+                window.endSheet(sheetWindow)
+            }
+        }
+        sheetWindow.contentViewController = NSHostingController(rootView: RecipeImportSheet(
+            summary: summary,
+            dismiss: close,
+        ).focusEffectDisabled())
+        window.beginSheet(sheetWindow)
+    }
+
+    /// Asks for files of `types`, and folders when `folders` is set, on an open panel whose
+    /// accessory chooses what the look tables among them were made for. Nil when cancelled.
     static func chooseImports(
         _ types: [UTType],
         message: String,
         multiple: Bool = false,
+        folders: Bool = false,
     ) -> (urls: [URL], tableSpace: ImportedTableSpace)? {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = multiple
-        panel.allowedContentTypes = types
+        panel.canChooseDirectories = folders
+        panel.allowedContentTypes = folders ? types + [.folder] : types
         panel.message = message
         let choice = LookTableSpaceChoice()
         let accessory = NSHostingView(rootView: LookTableSpaceAccessory(choice: choice))

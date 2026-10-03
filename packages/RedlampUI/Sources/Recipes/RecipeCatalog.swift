@@ -121,6 +121,16 @@ public final class RecipeCatalog {
         perform { try library.install(contentsOf: url, tableSpace: tableSpace).recipe }
     }
 
+    /// Installs files, and the Lightroom presets in folders, reading the library once; what
+    /// came in, with each preset's report, and what didn't, with the reasons.
+    @discardableResult
+    public func install(contentsOf urls: [URL], tableSpace: ImportedTableSpace = .sRGB) -> RecipeImportSummary {
+        let summary = library.install(contentsOf: urls, tableSpace: tableSpace)
+        lastError = nil
+        changed()
+        return summary
+    }
+
     public func delete(_ recipe: Recipe) {
         perform { try library.delete(recipe) }
     }

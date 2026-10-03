@@ -195,7 +195,7 @@ final class SidebarListView: PanelColumnScrollView, NSSearchFieldDelegate {
             }
             create.isEnabled = model.info != nil
             menu.addItem(create)
-            menu.addItem(NSMenuItem(title: "Import Recipe, .cube, .3dl or HaldCLUT…") {
+            menu.addItem(NSMenuItem(title: "Import Recipe, Preset, .cube, .3dl or HaldCLUT…") {
                 RecipeActions.importRecipes(model: model)
             })
             menu.popUp(positioning: nil, at: CGPoint(x: 0, y: control.bounds.height + 4), in: control)
