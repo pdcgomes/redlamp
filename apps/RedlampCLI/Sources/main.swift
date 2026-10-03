@@ -31,6 +31,7 @@ options:
   --heal <x>,<y>,<radius>  heal a spot (x, y 0...1 across the photo as shown, radius a fraction
                            of its height) from the best source nearby; --clone copies instead
   --heal-brush <x>,<y>,…,<radius>  the same along a brush stroke through the points; --clone-brush
+  --remove <x>,<y>,<radius>  fill a spot from the photo around it (content-aware); --remove-brush
   --remove-dust <0…100>    heal the sensor dust found at this sensitivity (50 is the app's)
   --bw                     black & white treatment
   --p3                     encode in Display P3 instead of sRGB
@@ -183,9 +184,9 @@ func run(_ arguments: [String]) async throws {
                 format: "upright %@: %d lines in %@, vertical %.1f, horizontal %.1f, rotate %.2f",
                 name, lines.count, "\(clock.now - started)", solved.vertical, solved.horizontal, solved.rotate,
             ))
-        case "--heal", "--clone", "--heal-brush", "--clone-brush":
+        case "--heal", "--clone", "--remove", "--heal-brush", "--clone-brush", "--remove-brush":
             let flag = arguments[index]
-            let mode: RetouchSpot.Mode = flag.hasPrefix("--heal") ? .heal : .clone
+            let mode: RetouchSpot.Mode = flag.hasPrefix("--heal") ? .heal : flag.hasPrefix("--clone") ? .clone : .remove
             let numbers = try value().split(separator: ",").compactMap { Double($0) }
             let brush = flag.hasSuffix("-brush")
             let counted = brush ? numbers.count >= 5 && numbers.count % 2 == 1 : numbers.count == 3
@@ -201,12 +202,14 @@ func run(_ arguments: [String]) async throws {
                 stroke: points.dropFirst().map { ImagePoint(x: $0.x - points[0].x, y: $0.y - points[0].y) },
                 radius: numbers[numbers.count - 1],
             )
-            guard let source = await engine.retouchSource(for: spot, recipe: recipe) else {
-                throw CLIError(description: "no source fits a spot at \(numbers[0]), \(numbers[1])")
+            if mode.usesSource {
+                guard let source = await engine.retouchSource(for: spot, recipe: recipe) else {
+                    throw CLIError(description: "no source fits a spot at \(points[0].x), \(points[0].y)")
+                }
+                spot.source = source
+                print(String(format: "%@ from %.3f, %.3f", mode.name.lowercased(), source.x, source.y))
             }
-            spot.source = source
             recipe.spots.append(spot)
-            print(String(format: "%@ from %.3f, %.3f", mode.name.lowercased(), source.x, source.y))
         case "--remove-dust":
             let sensitivity = try Double(value()) ?? 50
             let found = await engine.detectDust(recipe: recipe, sensitivity: sensitivity)

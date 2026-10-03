@@ -68,7 +68,9 @@ public extension EditorModel {
             mode: spotMode, center: center, source: center, radius: RetouchSpot.radius(size: spotSettings.size),
             feather: spotSettings.feather, opacity: spotSettings.opacity,
         )
-        spot.source = await engine.retouchSource(for: spot, recipe: recipe) ?? nearbySource(for: spot)
+        if spot.mode.usesSource {
+            spot.source = await engine.retouchSource(for: spot, recipe: recipe) ?? nearbySource(for: spot)
+        }
         var next = recipe
         next.spots.append(spot)
         commit(next, .retouch, spot.mode.name)
@@ -98,7 +100,9 @@ public extension EditorModel {
             stroke: kept.dropFirst().map { ImagePoint(x: $0.x - first.x, y: $0.y - first.y) },
             radius: radius, feather: spotSettings.feather, opacity: spotSettings.opacity,
         )
-        spot.source = await engine.retouchSource(for: spot, recipe: recipe) ?? nearbySource(for: spot)
+        if spot.mode.usesSource {
+            spot.source = await engine.retouchSource(for: spot, recipe: recipe) ?? nearbySource(for: spot)
+        }
         var next = recipe
         next.spots.append(spot)
         commit(next, .retouch, "\(spot.mode.name) Brush")
@@ -156,17 +160,24 @@ public extension EditorModel {
         selectedSpotID = nil
     }
 
-    /// Heal or Clone for the next spot, and for the selected one.
-    func setSpotMode(_ mode: RetouchSpot.Mode) {
+    /// Remove, Heal or Clone for the next spot, and for the selected one. A Remove spot becoming
+    /// Heal or Clone finds a source first.
+    func setSpotMode(_ mode: RetouchSpot.Mode) async {
         spotMode = mode
-        if let id = selectedSpotID {
-            updateSpot(id, name: mode.name) { $0.mode = mode }
+        guard var spot = selectedSpot else { return }
+        spot.mode = mode
+        if mode.usesSource, spot.source == spot.center {
+            var earlier = recipe
+            earlier.spots = Array(recipe.spots.prefix { $0.id != spot.id })
+            spot.source = await engine.retouchSource(for: spot, recipe: earlier) ?? nearbySource(for: spot)
         }
+        let changed = spot
+        updateSpot(spot.id, name: mode.name) { $0 = changed }
     }
 
     /// Asks the engine for a source again, as if the selected spot had just been placed.
     func findNewSource() async {
-        guard let spot = selectedSpot else { return }
+        guard let spot = selectedSpot, spot.mode.usesSource else { return }
         var earlier = recipe
         earlier.spots = Array(recipe.spots.prefix { $0.id != spot.id })
         guard let source = await engine.retouchSource(for: spot, recipe: earlier) else { return }

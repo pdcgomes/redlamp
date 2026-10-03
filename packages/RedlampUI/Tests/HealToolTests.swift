@@ -39,12 +39,28 @@ struct HealToolTests {
         let (model, cleanup) = try await openEditor()
         defer { cleanup() }
         model.activeTool = .heal
-        model.setSpotMode(.clone)
+        await model.setSpotMode(.clone)
         await model.addSpot(at: ImagePoint(x: 0.995, y: 0.5))
         let spot = try #require(model.recipe.spots.first)
         #expect(spot.mode == .clone)
         #expect(spot.source.x < spot.center.x && spot.source.y == spot.center.y, "at the right edge, to the left")
         #expect(model.history.last?.name == "Clone")
+    }
+
+    @Test func `a Remove spot needs no source, and finds one when it becomes Heal`() async throws {
+        let engine = StubEngine()
+        engine.retouchSource = ImagePoint(x: 0.2, y: 0.6)
+        let (model, cleanup) = try await openEditor(engine)
+        defer { cleanup() }
+        model.activeTool = .heal
+        await model.setSpotMode(.remove)
+        await model.addSpot(at: ImagePoint(x: 0.5, y: 0.5))
+        let spot = try #require(model.recipe.spots.first)
+        #expect(spot.mode == .remove && spot.source == spot.center && !spot.isEmpty)
+        #expect(model.history.last?.name == "Remove")
+        await model.setSpotMode(.heal)
+        #expect(model.recipe.spots[0].mode == .heal && model.recipe.spots[0].source == ImagePoint(x: 0.2, y: 0.6))
+        #expect(model.history.last?.name == "Heal")
     }
 
     @Test func `a drag brushes a spot that follows the stroke`() async throws {

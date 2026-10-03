@@ -24,7 +24,10 @@ struct HealToolPanel: View {
 
             Picker(
                 "Mode",
-                selection: Binding(get: { selected?.mode ?? model.spotMode }, set: { model.setSpotMode($0) }),
+                selection: Binding(
+                    get: { selected?.mode ?? model.spotMode },
+                    set: { mode in Task { await model.setSpotMode(mode) } },
+                ),
             ) {
                 ForEach(RetouchSpot.Mode.allCases, id: \.self) { mode in
                     Text(mode.name).tag(mode)
@@ -33,7 +36,9 @@ struct HealToolPanel: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .controlSize(.small)
-            .help("Heal matches the source to the light around the spot; Clone copies it as it is")
+            .help(
+                "Remove fills the spot from the photo around it; Heal matches a source to the light around the spot; Clone copies it as it is",
+            )
 
             Text(selected == nil
                 ? "Click the photo to add a spot, or drag to brush one. Its source is found nearby."
@@ -66,7 +71,7 @@ struct HealToolPanel: View {
             HStack(spacing: 6) {
                 Button("Find Source") { Task { await model.findNewSource() } }
                     .controlSize(.small)
-                    .disabled(selected == nil)
+                    .disabled(selected?.mode.usesSource != true)
                     .help("Find the best source for the spot where it is now")
                 Button("Delete") {
                     if let id = model.selectedSpotID {

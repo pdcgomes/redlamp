@@ -281,6 +281,94 @@ struct RetouchTests {
         #expect(nearest >= 8 * 2, "the source comes within \(nearest) of the stroke")
     }
 
+    @Test func `Remove fills a blemish from the texture around it`() throws {
+        let engine = try RedlampEngine()
+        let clean = try render(scene(blemished: false), EditRecipe(), engine: engine)
+        var recipe = EditRecipe()
+        var spot = spot(.remove)
+        spot.source = spot.center
+        recipe.spots = [spot]
+        #expect(!spot.isEmpty)
+        let removed = try render(scene(blemished: true), recipe, engine: engine)
+        let expected = statistics(clean, around: Self.blemish, radius: 8)
+        let result = statistics(removed, around: Self.blemish, radius: 8)
+        #expect(abs(result.mean - expected.mean) < expected.mean * 0.06, "mean \(expected.mean) → \(result.mean)")
+        let ratio = result.deviation / expected.deviation
+        #expect(ratio > 0.5 && ratio < 1.6, "texture \(expected.deviation) → \(result.deviation)")
+    }
+
+    @Test func `Remove continues an edge running through the hole`() throws {
+        // Bright above, dark below, with an object sitting on the line between them.
+        let (width, height) = (Self.width, Self.height)
+        var samples = [UInt16](repeating: 0, count: width * height * 3)
+        var state: UInt64 = 7
+        for y in 0 ..< height {
+            for x in 0 ..< width {
+                state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+                let noise = 0.03 * (Double(state >> 11) / Double(1 << 53) - 0.5)
+                var value = (y < 96 ? 0.6 : 0.15) * (1 + noise)
+                if simd_distance(SIMD2(Double(x) + 0.5, Double(y) + 0.5), SIMD2(192, 96)) < 10 {
+                    value = 0.02
+                }
+                for channel in 0 ..< 3 {
+                    samples[(y * width + x) * 3 + channel] = UInt16(min(max(value, 0), 1) * 65535)
+                }
+            }
+        }
+        let decoded = DecodedImage(
+            width: width, height: height, layout: .linearRGB, samples: samples, blackLevels: [0, 0, 0],
+            whiteLevel: 65535, asShotMultipliers: SIMD3(1, 1, 1), cameraToSRGB: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+            xyzToCamera: nil, orientation: 0, baselineExposure: 0,
+            info: ImageInfo(
+                url: URL(fileURLWithPath: "/edge.dng"), pixelSize: PixelSize(width: width, height: height),
+                isRaw: true, sensorDescription: "synthetic",
+            ),
+        )
+        let session = try SessionBuilder(device: device, queue: queue, kernels: kernels).build(decoded)
+        let engine = try RedlampEngine()
+        var recipe = EditRecipe()
+        let centre = ImagePoint(x: 192 / Double(width), y: 96 / Double(height))
+        recipe.spots = [RetouchSpot(mode: .remove, center: centre, source: centre, radius: 18 / Double(height))]
+        let before = try render(session, EditRecipe(), engine: engine)
+        let after = try render(session, recipe, engine: engine)
+        let bright = before[80 * width + 150], dark = before[112 * width + 150]
+        for x in [186, 192, 198] {
+            #expect(
+                abs(after[88 * width + x] - bright) < bright * 0.1,
+                "above the line at \(x): \(after[88 * width + x])",
+            )
+            #expect(
+                abs(after[104 * width + x] - dark) < dark * 0.25,
+                "below the line at \(x): \(after[104 * width + x])",
+            )
+        }
+    }
+
+    @Test func `a Remove spot is filled once, however the spots after it change`() throws {
+        let session = try scene(blemished: true)
+        let stage = RetouchStage(device: device, kernels: kernels, queue: queue)
+        var spot = spot(.remove)
+        spot.source = spot.center
+        var recipe = EditRecipe()
+        recipe.spots = [spot]
+        func build() throws {
+            let commands = try #require(queue.makeCommandBuffer())
+            _ = try stage.session(for: recipe, base: session, commands: commands)
+            commands.commit()
+            commands.waitUntilCompleted()
+        }
+        try build()
+        #expect(stage.fillsComputed == 1)
+        recipe.spots.append(RetouchSpot(
+            center: ImagePoint(x: 0.8, y: 0.5), source: ImagePoint(x: 0.9, y: 0.5), radius: 0.03,
+        ))
+        try build()
+        #expect(stage.fillsComputed == 1, "the heal spot after it doesn't refill it")
+        recipe.spots[0].center.x += 0.01
+        try build()
+        #expect(stage.fillsComputed == 2)
+    }
+
     @Test func `spots land on the same content whatever the orientation`() throws {
         let spot = RetouchSpot(
             center: ImagePoint(x: 0.25, y: 0.75), source: ImagePoint(x: 0.5, y: 0.5), radius: 0.1,

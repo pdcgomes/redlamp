@@ -120,7 +120,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         comparisons = SurfacePool(device: device)
         comparisonOverviews = SurfacePool(device: device)
         detailStage = DetailStage(device: device, kernels: kernels)
-        retouch = RetouchStage(device: device, kernels: kernels)
+        retouch = RetouchStage(device: device, kernels: kernels, queue: queue)
         masks = try MaskResources(device: device, kernels: kernels)
         baseLooks = try BaseLookRegistry(device: device)
 

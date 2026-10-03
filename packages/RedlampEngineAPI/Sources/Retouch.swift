@@ -1,12 +1,15 @@
 import Foundation
 
-/// One Heal or Clone spot, as in Lightroom's Remove tool: the circle at `center`, or the brush
-/// stroke starting there, is replaced with the same shape at `source`.
+/// One Remove, Heal or Clone spot, as in Lightroom's Remove tool: the circle at `center`, or the
+/// brush stroke starting there, is filled from the photo around it (Remove) or replaced with the
+/// same shape at `source`.
 ///
 /// Points are `ImagePoint`s, so spots stay on the same content whatever the crop, Transform
 /// or lens correction. Spots apply in order, each to the photo as the earlier ones left it.
 public struct RetouchSpot: Codable, Sendable, Hashable, Identifiable {
     public enum Mode: String, Codable, Sendable, Hashable, CaseIterable {
+        /// Filled from the photo around it, patch by patch (content-aware fill); `source` is unused.
+        case remove
         /// The source's texture, matched to the colour and brightness around the spot.
         case heal
         /// The source as it is.
@@ -14,9 +17,21 @@ public struct RetouchSpot: Codable, Sendable, Hashable, Identifiable {
 
         public var name: String {
             switch self {
+            case .remove: "Remove"
             case .heal: "Heal"
             case .clone: "Clone"
             }
+        }
+
+        /// A mode this build doesn't know reads as Heal, so an edit from a newer Redlamp still opens.
+        public init(from decoder: Decoder) throws {
+            let raw = try decoder.singleValueContainer().decode(String.self)
+            self = Mode(rawValue: raw) ?? .heal
+        }
+
+        /// Whether the spot copies from `source`.
+        public var usesSource: Bool {
+            self != .remove
         }
     }
 
@@ -58,7 +73,7 @@ public struct RetouchSpot: Codable, Sendable, Hashable, Identifiable {
 
     /// Whether the spot changes nothing.
     public var isEmpty: Bool {
-        opacity <= 0 || radius <= 0 || center == source
+        opacity <= 0 || radius <= 0 || (mode.usesSource && center == source)
     }
 
     /// The stroke's points, `center` first, where the spot is (or, with `at`, where its source is).

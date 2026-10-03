@@ -342,6 +342,30 @@ public struct RetouchParams {
     }
 }
 
+public struct FillCostParams {
+    public var size: SIMD4<Int32>
+    public var target: SIMD4<Int32>
+    public var candidates: SIMD4<Int32>
+
+    public init(size: SIMD4<Int32>, target: SIMD4<Int32>, candidates: SIMD4<Int32>) {
+        self.size = size
+        self.target = target
+        self.candidates = candidates
+    }
+}
+
+public struct FillRenderParams {
+    public var box: SIMD4<Int32>
+    public var offsets: SIMD4<Int32>
+    public var scale: SIMD4<Float>
+
+    public init(box: SIMD4<Int32>, offsets: SIMD4<Int32>, scale: SIMD4<Float>) {
+        self.box = box
+        self.offsets = offsets
+        self.scale = scale
+    }
+}
+
 public struct HazeParams {
     public var size: SIMD4<Int32>
     public var mode = SIMD4<Int32>(0, 0, 0, 0)

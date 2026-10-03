@@ -105,6 +105,47 @@ private struct SpotHandles: View {
         let radius = max(spot.radius * frame.heightScale, 4)
         let strength = isSelected ? 0.95 : 0.55
 
+        if spot.mode.usesSource {
+            sourceHandles(center: center, source: source, radius: radius, strength: strength)
+        }
+
+        if spot.stroke.isEmpty {
+            Circle()
+                .stroke(Color.white.opacity(strength), lineWidth: isSelected ? 2 : 1)
+                .shadow(color: .black.opacity(0.6), radius: 1)
+                .frame(width: radius * 2, height: radius * 2)
+                .contentShape(Circle())
+                .position(center)
+                .onTapGesture { model.selectedSpotID = spot.id }
+                .gesture(drag("Move Spot") { spot, delta in spot.center = offset(spot.center, by: delta) })
+                .help(spot.mode.name)
+        } else {
+            let outline = SpotShape.outline(spot.points().map(frame.view), width: radius * 2)
+            outline
+                .stroke(Color.white.opacity(strength), lineWidth: isSelected ? 2 : 1)
+                .shadow(color: .black.opacity(0.6), radius: 1)
+                .contentShape(outline)
+                .onTapGesture { model.selectedSpotID = spot.id }
+                .gesture(drag("Move Spot") { spot, delta in spot.center = offset(spot.center, by: delta) })
+                .help("\(spot.mode.name) brush")
+        }
+
+        if isSelected {
+            Circle()
+                .fill(Color.white)
+                .overlay(Circle().strokeBorder(Color.black.opacity(0.6), lineWidth: 1))
+                .frame(width: 9, height: 9)
+                .shadow(color: .black.opacity(0.5), radius: 1.5)
+                .contentShape(Circle().inset(by: -6))
+                .position(CGPoint(x: center.x + radius, y: center.y))
+                .gesture(resize(center: center))
+                .help("Drag to resize")
+        }
+    }
+
+    /// The source's circle or stroke (dashed), and the line from it to the spot.
+    @ViewBuilder
+    private func sourceHandles(center: CGPoint, source: CGPoint, radius: CGFloat, strength: Double) -> some View {
         Path { path in
             let dx = center.x - source.x, dy = center.y - source.y
             let length = hypot(dx, dy)
@@ -130,16 +171,6 @@ private struct SpotHandles: View {
                 .onTapGesture { model.selectedSpotID = spot.id }
                 .gesture(drag("Move Source") { spot, delta in spot.source = offset(spot.source, by: delta) })
                 .help("\(spot.mode.name) source")
-
-            Circle()
-                .stroke(Color.white.opacity(strength), lineWidth: isSelected ? 2 : 1)
-                .shadow(color: .black.opacity(0.6), radius: 1)
-                .frame(width: radius * 2, height: radius * 2)
-                .contentShape(Circle())
-                .position(center)
-                .onTapGesture { model.selectedSpotID = spot.id }
-                .gesture(drag("Move Spot") { spot, delta in spot.center = offset(spot.center, by: delta) })
-                .help(spot.mode.name)
         } else {
             let sourceOutline = SpotShape.outline(spot.points(at: spot.source).map(frame.view), width: radius * 2)
             sourceOutline
@@ -152,27 +183,6 @@ private struct SpotHandles: View {
                 .onTapGesture { model.selectedSpotID = spot.id }
                 .gesture(drag("Move Source") { spot, delta in spot.source = offset(spot.source, by: delta) })
                 .help("\(spot.mode.name) source")
-
-            let outline = SpotShape.outline(spot.points().map(frame.view), width: radius * 2)
-            outline
-                .stroke(Color.white.opacity(strength), lineWidth: isSelected ? 2 : 1)
-                .shadow(color: .black.opacity(0.6), radius: 1)
-                .contentShape(outline)
-                .onTapGesture { model.selectedSpotID = spot.id }
-                .gesture(drag("Move Spot") { spot, delta in spot.center = offset(spot.center, by: delta) })
-                .help("\(spot.mode.name) brush")
-        }
-
-        if isSelected {
-            Circle()
-                .fill(Color.white)
-                .overlay(Circle().strokeBorder(Color.black.opacity(0.6), lineWidth: 1))
-                .frame(width: 9, height: 9)
-                .shadow(color: .black.opacity(0.5), radius: 1.5)
-                .contentShape(Circle().inset(by: -6))
-                .position(CGPoint(x: center.x + radius, y: center.y))
-                .gesture(resize(center: center))
-                .help("Drag to resize")
         }
     }
 
