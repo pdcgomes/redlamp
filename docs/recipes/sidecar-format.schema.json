@@ -217,7 +217,7 @@
         "effects.leak.variation": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Light leak: Variation." },
         "effects.dust.amount": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Film dust." },
         "effects.scratches.amount": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Film scratches." },
-        "effects.frame.style": { "type": "number", "minimum": 0, "maximum": 4, "default": 0, "description": "Frame style, by number: 0 none, 1 keyline, 2 print border, 3 35 mm rebate, 4 slide mount." },
+        "effects.frame.style": { "type": "number", "minimum": 0, "maximum": 4, "default": 0, "description": "Frame style, by number: 0 none, 1 keyline, 2 print border, 3 35 mm rebate, 4 slide mount. The numbers never change." },
         "effects.frame.size": { "type": "number", "minimum": 0, "maximum": 100, "default": 50, "description": "Frame size." },
         "effects.colorChrome": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Color Chrome: deepens highly saturated colors." },
         "effects.colorChromeBlue": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Color Chrome FX Blue: the same, for blues only." },

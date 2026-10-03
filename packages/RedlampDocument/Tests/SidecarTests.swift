@@ -39,6 +39,23 @@ struct SidecarTests {
         #expect(try Data(contentsOf: store.editURL(for: image)) != first)
     }
 
+    /// Dates are written in whole seconds, while a snapshot or AI mask made a moment ago has a
+    /// fraction of one.
+    @Test func `an edit with dates finer than a second is not rewritten`() throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        var recipe = EditRecipe()
+        recipe.masks = [subjectMask(Data("png".utf8), createdAt: Date(timeIntervalSince1970: 1000.25))]
+        let snapshot = Snapshot(name: "Before", created: Date(timeIntervalSince1970: 1000.75), recipe: EditRecipe())
+        let sidecar = Sidecar(recipe: recipe, snapshots: [snapshot])
+        try store.save(sidecar, for: image)
+        let first = try fileNumber(store.editURL(for: image))
+
+        try store.save(sidecar, for: image)
+        #expect(try fileNumber(store.editURL(for: image)) == first)
+    }
+
     @Test func `saving keeps fields a newer version added`() throws {
         let (image, cleanup) = try temporaryImage()
         defer { cleanup() }
@@ -136,11 +153,16 @@ struct SidecarTests {
 
     // MARK: - Packages
 
-    private func subjectMask(_ png: Data) -> MaskLayer {
+    private func subjectMask(_ png: Data, createdAt: Date = Date()) -> MaskLayer {
         MaskLayer(name: "Subject", components: [MaskComponent(shape: .ai(AIMask(
             kind: .subject, provider: "test", revision: 1, analysisHash: "0", center: ImagePoint(x: 0.5, y: 0.5),
-            bitmap: MaskBitmap(png: png, width: 4, height: 2),
+            bitmap: MaskBitmap(png: png, width: 4, height: 2), createdAt: createdAt,
         )))])
+    }
+
+    /// The file's inode: an atomic write replaces the file, so a rewrite changes it.
+    private func fileNumber(_ url: URL) throws -> Int? {
+        try FileManager.default.attributesOfItem(atPath: url.path)[.systemFileNumber] as? Int
     }
 
     @Test func `saves a package with its mask bitmaps`() throws {

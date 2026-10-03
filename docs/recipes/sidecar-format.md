@@ -174,7 +174,7 @@ Edits never store file paths: installed looks live in `Application Support/Redla
 | `effects.leak.{amount,variation}` | 0…100 | 0 | Light leaking in at the frame's edges. |
 | `effects.leak.warmth` | −100…100 | 60 | |
 | `effects.dust.amount`, `effects.scratches.amount` | 0…100 | 0 | Dust and scratches on the film. |
-| `effects.frame.style` | 0…4 | 0 | A border drawn over the photo's edges, by number: 0 none, 1 keyline, 2 print border, 3 35 mm rebate, 4 slide mount. |
+| `effects.frame.style` | 0…4 | 0 | A border drawn over the photo's edges, by number: 0 none, 1 keyline, 2 print border, 3 35 mm rebate, 4 slide mount. The numbers never change; a new style gets the next one. |
 | `effects.frame.size` | 0…100 | 50 | |
 | `effects.colorChrome`, `effects.colorChromeBlue` | 0…100 | 0 | Color Chrome deepens highly saturated colors; Color Chrome FX Blue does so for blues only. |
 | `calibration.shadowsTint` | −100…100 | 0 | |

@@ -325,8 +325,15 @@ public enum GradingRange: String, CaseIterable, Codable, Sendable, Hashable {
 }
 
 /// The borders `ParameterID.frameStyle` draws over the photo's edges.
+///
+/// Sidecars store a style as its raw value. Never change or reuse one: existing edits would draw a
+/// different border.
 public enum FrameStyle: Int, CaseIterable, Sendable {
-    case none, keyline, printBorder, filmRebate, slideMount
+    case none = 0
+    case keyline = 1
+    case printBorder = 2
+    case filmRebate = 3
+    case slideMount = 4
 
     public var name: String {
         switch self {

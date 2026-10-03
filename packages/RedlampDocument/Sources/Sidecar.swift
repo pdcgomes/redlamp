@@ -85,13 +85,15 @@ public struct Sidecar: Sendable, Hashable {
             && session?.hasEdits != true
     }
 
-    /// Same edit, ratings and snapshots, whenever it was written.
+    /// Same edit, ratings and snapshots, whenever it was written. Compared as written, since the
+    /// file keeps dates only to the second.
     public func hasSameContent(as other: Sidecar) -> Bool {
         var other = other
         other.modified = modified
-        other.session = session
-        other.clearsHistory = clearsHistory
-        return self == other
+        guard let written = try? JSONEncoder.sidecar.encode(self),
+              let otherWritten = try? JSONEncoder.sidecar.encode(other)
+        else { return false }
+        return written == otherWritten
     }
 }
 

@@ -80,6 +80,12 @@ struct EditRecipeTests {
         ]))
     }
 
+    @Test func `frame styles keep the numbers sidecars store them by`() {
+        let stored: [FrameStyle: Int] = [.none: 0, .keyline: 1, .printBorder: 2, .filmRebate: 3, .slideMount: 4]
+        #expect(Dictionary(uniqueKeysWithValues: FrameStyle.allCases.map { ($0, $0.rawValue) }) == stored)
+        #expect(ParameterID.frameStyle.spec.range == 0 ... Double(FrameStyle.allCases.count - 1))
+    }
+
     @Test func `process version defaults and round trips`() throws {
         #expect(EditRecipe().processVersion == EditRecipe.currentProcessVersion)
         let legacy = try JSONDecoder().decode(EditRecipe.self, from: Data(#"{"version":1}"#.utf8))
