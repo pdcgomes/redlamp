@@ -7,7 +7,7 @@ import Testing
 /// corrections the file carries as before, and lens profiles that couldn't be read.
 struct LensPanelTextTests {
     static func correction(_ source: LensCorrection.Source, name: String? = nil) -> LensCorrection {
-        let distortion = [SIMD3(repeating: 1), SIMD3(repeating: 1.02)]
+        let distortion: [SIMD3<Double>] = [SIMD3(repeating: 1), SIMD3(repeating: 1.02)]
         return LensCorrection(
             source: source, center: SIMD2(0.5, 0.5), radii: [0, 1], distortion: distortion, vignetting: [1, 1.3],
             profileName: name,
