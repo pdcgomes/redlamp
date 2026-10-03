@@ -4,6 +4,7 @@ import RedlampEngineAPI
 import RedlampKernels
 import RedlampServices
 import simd
+import Synchronization
 
 /// The Detail panel's noise sliders in rendering units: per à-trous scale, how many noise
 /// sigmas of luma and chroma detail to remove. Luma is split into a strength, which masks' Noise
@@ -219,6 +220,8 @@ struct LocalDetail: Hashable {
 /// Owned by the engine's render queue.
 final class DetailStage {
     struct Output {
+        /// Valid only in the command buffer the stage encoded into: once that completes, the
+        /// system may reclaim it.
         let texture: any MTLTexture
         /// The area the texture covers: xy origin, zw size, in normalised source coordinates.
         let area: SIMD4<Float>
@@ -258,7 +261,8 @@ final class DetailStage {
     /// A region and its overview, and the same for a comparison render.
     private static let maximumEntries = 4
 
-    let sharpenCache = SharpenCache()
+    let residency = DetailResidency()
+    let sharpenCache: SharpenCache
     private var scratch: [MTLPixelFormat: [any MTLTexture]] = [:]
 
     private var emptyMasks: (rasters: any MTLTexture, guide: any MTLTexture)?
@@ -266,6 +270,12 @@ final class DetailStage {
     init(device: any MTLDevice, kernels: KernelLibrary) {
         self.device = device
         self.kernels = kernels
+        sharpenCache = SharpenCache(residency: residency)
+    }
+
+    /// Every texture the stage keeps between renders.
+    var heldTextures: [any MTLTexture] {
+        scratch.values.flatMap(\.self) + entries.map(\.output.texture) + sharpenCache.heldTextures
     }
 
     private func emptyMaskImages() throws -> (rasters: any MTLTexture, guide: any MTLTexture) {
@@ -307,10 +317,13 @@ final class DetailStage {
             session: ObjectIdentifier(session), work: work, denoise: denoise, sharpen: sharpen, contrast: contrast,
             local: local,
         )
+        residency.hold(until: commands)
         if let index = entries.firstIndex(where: { $0.key == key }) {
             let entry = entries.remove(at: index)
-            entries.append(entry)
-            return entry.output
+            if residency.wake(entry.output.texture) {
+                entries.append(entry)
+                return entry.output
+            }
         }
 
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
@@ -371,6 +384,7 @@ final class DetailStage {
             Float(work.size.x) / levelWidth, Float(work.size.y) / levelHeight,
         ))
         if cache {
+            residency.wake(texture)
             entries.append(Entry(key: key, session: session, output: output))
             if entries.count > Self.maximumEntries {
                 entries.removeFirst()
@@ -621,6 +635,7 @@ final class DetailStage {
         let existing = scratch[format] ?? []
         if existing.count >= count, let first = existing.first,
            first.width >= work.size.x, first.height >= work.size.y {
+            existing.forEach { residency.wake($0) }
             return existing
         }
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
@@ -636,7 +651,53 @@ final class DetailStage {
             return texture
         }
         scratch[format] = textures
+        textures.forEach { residency.wake($0) }
         return textures
+    }
+}
+
+/// Keeps the detail stage's textures resident only while a command buffer using them is in
+/// flight; in between they are volatile, so the system can reclaim them without a memory
+/// warning. A cached texture it reclaimed is rendered again.
+final class DetailResidency: Sendable {
+    /// Only its purgeable state is changed off the render queue, which Metal allows from any thread.
+    private struct Resident: @unchecked Sendable {
+        let texture: any MTLTexture
+    }
+
+    private struct State {
+        var inFlight = 0
+        var awake: [ObjectIdentifier: Resident] = [:]
+    }
+
+    private let state = Mutex(State())
+
+    /// Keeps the textures woken from now on resident until `commands` completes.
+    func hold(until commands: any MTLCommandBuffer) {
+        state.withLock { $0.inFlight += 1 }
+        commands.addCompletedHandler { [self] _ in
+            state.withLock { state in
+                state.inFlight -= 1
+                guard state.inFlight == 0 else { return }
+                for resident in state.awake.values {
+                    resident.texture.setPurgeableState(.volatile)
+                }
+                state.awake.removeAll()
+            }
+        }
+    }
+
+    /// Makes `texture` resident for the commands being encoded. False when the system had
+    /// reclaimed it, so its contents are gone.
+    @discardableResult
+    func wake(_ texture: any MTLTexture) -> Bool {
+        let resident = Resident(texture: texture)
+        return state.withLock { state in
+            let key = ObjectIdentifier(resident.texture)
+            guard state.awake[key] == nil else { return true }
+            state.awake[key] = resident
+            return resident.texture.setPurgeableState(.nonVolatile) != .empty
+        }
     }
 }
 

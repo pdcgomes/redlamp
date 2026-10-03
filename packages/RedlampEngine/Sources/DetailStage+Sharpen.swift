@@ -45,8 +45,17 @@ final class SharpenCache {
         var linear: any MTLTexture
     }
 
+    private let residency: DetailResidency
     private var analyses: [Analysis] = []
     private var separations: [Separation] = []
+
+    init(residency: DetailResidency) {
+        self.residency = residency
+    }
+
+    var heldTextures: [any MTLTexture] {
+        analyses.map(\.texture) + separations.map(\.linear)
+    }
 
     func analysis(_ session: ImageSession, _ work: DetailStage.WorkArea, sigma: Float) -> (any MTLTexture)? {
         let identifier = ObjectIdentifier(session)
@@ -54,11 +63,13 @@ final class SharpenCache {
             .firstIndex(where: { $0.session == identifier && $0.work == work && $0.sigma == sigma })
         else { return nil }
         let entry = analyses.remove(at: index)
+        guard residency.wake(entry.texture) else { return nil }
         analyses.append(entry)
         return entry.texture
     }
 
     func store(analysis texture: any MTLTexture, _ session: ImageSession, _ work: DetailStage.WorkArea, sigma: Float) {
+        residency.wake(texture)
         analyses.append(Analysis(
             session: ObjectIdentifier(session),
             work: work,
@@ -76,11 +87,13 @@ final class SharpenCache {
         guard let index = separations.firstIndex(where: { $0.session == identifier && $0.work == work })
         else { return nil }
         let entry = separations.remove(at: index)
+        guard residency.wake(entry.linear) else { return nil }
         separations.append(entry)
         return entry.linear
     }
 
     func store(separation linear: any MTLTexture, _ session: ImageSession, _ work: DetailStage.WorkArea) {
+        residency.wake(linear)
         separations.append(Separation(session: ObjectIdentifier(session), work: work, owner: session, linear: linear))
         if separations.count > Self.maximumEntries {
             separations.removeFirst()
