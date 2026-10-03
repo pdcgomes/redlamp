@@ -8,8 +8,8 @@ import RedlampEngineAPI
 ///
 /// For each photo it reads the sidecar, pastes, recomputes the AI masks the paste brought (and an
 /// Auto white balance) in an engine of its own, so the open photo is never disturbed, and saves
-/// with a history step. A photo whose sidecar a newer Redlamp wrote is left alone. Undo puts back
-/// what the last batch changed, on every photo not edited since.
+/// with a history step. A photo whose sidecar a newer Redlamp wrote, or this version can't read,
+/// is left alone. Undo puts back what the last batch changed, on every photo not edited since.
 @MainActor
 @Observable
 public final class SettingsSync {
@@ -43,7 +43,7 @@ public final class SettingsSync {
     @ObservationIgnored private var task: Task<Void, Never>?
     /// The last batch: each photo's edit before (nil: it had no sidecar) and after.
     @ObservationIgnored private var before: [URL: EditRecipe?] = [:]
-    @ObservationIgnored private var written: [URL: EditRecipe] = [:]
+    @ObservationIgnored private var written: [URL: Sidecar] = [:]
     @ObservationIgnored private var title = ""
     /// Auto Sync's steps that came while a batch ran: gathered, and run after it.
     @ObservationIgnored private var pending: (
@@ -97,12 +97,24 @@ public final class SettingsSync {
     func undo(done: @escaping (URL, EditRecipe) -> Void) {
         guard canUndo else { return }
         for (url, after) in written {
-            guard store.load(for: url)?.recipe == after, let previous = before[url] else { continue }
+            guard let current = store.load(for: url), current.recipe == after.recipe,
+                  let previous = before[url] else { continue }
             if let previous {
-                record(previous, from: after, for: url, title: "Undo \(title)", action: .paste)
+                record(previous, from: after.recipe, for: url, title: "Undo \(title)", action: .paste)
                 done(url, previous)
-            } else {
+            } else if current.hasSameContent(as: after) {
                 store.delete(for: url)
+                done(url, EditRecipe())
+            } else {
+                // Rated, say, since the sync made it: only the edit goes back.
+                var reverted = current
+                reverted.recipe = EditRecipe()
+                reverted.modified = Date()
+                reverted.session = HistorySession(steps: [
+                    HistoryStep(action: .open, title: "Opened", recipe: after.recipe),
+                    HistoryStep(action: .paste, title: "Undo \(title)", recipe: reverted.recipe),
+                ])
+                try? store.saveOrRemove(reverted, for: url)
                 done(url, EditRecipe())
             }
         }
@@ -120,7 +132,7 @@ public final class SettingsSync {
         for url in photos {
             guard !Task.isCancelled else { break }
             defer { progress?.done += 1 }
-            guard !store.isReadOnly(for: url) else {
+            guard store.protection(for: url) == nil else {
                 skipped += 1
                 continue
             }
@@ -187,7 +199,7 @@ public final class SettingsSync {
             // updateValue: a photo without a sidecar keeps its nil (a subscript would drop the key).
             before.updateValue(existing?.recipe, forKey: url)
             // As read back, so Undo can tell the photo hasn't been edited since (dates round).
-            written[url] = store.load(for: url)?.recipe ?? next
+            written[url] = store.load(for: url) ?? sidecar
             done(url, next)
         }
         report = Self.report(skipped: skipped, failedMasks: failedMasks, cancelled: Task.isCancelled)
@@ -223,7 +235,8 @@ public final class SettingsSync {
             parts.append("Stopped before the end.")
         }
         if skipped > 0 {
-            parts.append("\(skipped) photo\(skipped == 1 ? " was" : "s were") left alone: edited by a newer Redlamp.")
+            let photos = "\(skipped) photo\(skipped == 1 ? " was" : "s were")"
+            parts.append("\(photos) left alone: edited by a newer Redlamp, or the edit can't be read.")
         }
         if failedMasks > 0 {
             parts.append("\(failedMasks) AI mask\(failedMasks == 1 ? "" : "s") couldn't be computed for its photo.")

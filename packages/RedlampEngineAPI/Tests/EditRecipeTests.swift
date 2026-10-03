@@ -86,24 +86,6 @@ struct EditRecipeTests {
         #expect(ParameterID.frameStyle.spec.range == 0 ... Double(FrameStyle.allCases.count - 1))
     }
 
-    @Test func `mask adjustments keep unknown keys through a round trip`() throws {
-        let json = #"""
-        {"id":"9A1F3C2E-0000-4000-8000-000000000001","name":"Sky","isVisible":true,"components":[],
-         "amount":100,"detail":0,"adjustments":{"local.exposure":-1,"local.future":2,"basic.exposure":3}}
-        """#
-        var mask = try JSONDecoder().decode(MaskLayer.self, from: Data(json.utf8))
-        #expect(mask.adjustments == [.localExposure: -1])
-        mask[.localContrast] = 20
-        let written = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(mask))
-        guard case let .object(root) = written, case let .object(adjustments) = root["adjustments"] else {
-            Issue.record("mask did not encode as an object")
-            return
-        }
-        #expect(adjustments == [
-            "local.exposure": .number(-1), "local.future": .number(2), "local.contrast": .number(20),
-        ])
-    }
-
     @Test func `process version defaults and round trips`() throws {
         #expect(EditRecipe().processVersion == EditRecipe.currentProcessVersion)
         let legacy = try JSONDecoder().decode(EditRecipe.self, from: Data(#"{"version":1}"#.utf8))

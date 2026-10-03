@@ -30,7 +30,6 @@ public extension EditorModel {
         historyIndex = 0
         historyTask?.cancel()
         earlierSessions = []
-        earlierSessionsLoaded = true
         clearsSavedHistory = true
         saveNow()
     }

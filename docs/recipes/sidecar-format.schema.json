@@ -283,7 +283,7 @@
           "description": "The recipe's Amount when it was applied, in percent."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
     },
     "cropRect": {
       "description": "The crop, in the straightened frame: the oriented, transformed photo turned by crop.angle. The full frame is 0...1 on both axes. Written only when it isn't the full frame.",
@@ -330,10 +330,10 @@
         "detail": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Above 0 keeps only textured areas of the mask, below 0 only flat ones. Written only when it isn't 0." },
         "adjustments": { "$ref": "#/$defs/localAdjustments" }
       },
-      "additionalProperties": false
+      "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
     },
     "localAdjustments": {
-      "description": "The mask's adjustments, each written only when it isn't 0. Readers clamp a value to its range. Keys of global, mask and spot parameters don't belong here, and Redlamp drops them.",
+      "description": "The mask's adjustments, each written only when it isn't 0. Readers clamp a value to its range, and keep keys they don't know and write them back unchanged.",
       "type": "object",
       "properties": {
         "local.temperature": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Temp, relative to the global white balance." },
@@ -356,10 +356,9 @@
         "local.halation": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Halation where the mask covers; the size stays global." },
         "local.bloom": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Bloom where the mask covers; the size stays global." }
       },
-      "patternProperties": { "^(wb|basic|toneCurve|mixer|grading|detail|lens|transform|effects|calibration|crop|mask|spot)\\.": false },
       "additionalProperties": {
         "type": "number",
-        "description": "An adjustment a newer Redlamp added: kept and written back unchanged."
+        "description": "A local adjustment a newer Redlamp added: kept and written back unchanged."
       },
       "default": {}
     },
@@ -375,7 +374,7 @@
         },
         "inverted": { "type": "boolean" }
       },
-      "additionalProperties": false
+      "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
     },
     "maskShape": {
       "description": "Exactly one key, the component's kind, holding its parameters under _0. A kind Redlamp doesn't know renders nothing and is written back unchanged.",
@@ -608,7 +607,7 @@
           "description": "Refine Edge strokes, in order, kept so updating the mask can apply them again."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
     },
     "depthRangeMask": {
       "description": "Full coverage for depths between lower and upper (0 farthest, 100 nearest), fading over the feathers.",
@@ -671,7 +670,7 @@
         },
         "opacity": { "type": "number", "minimum": 0, "maximum": 100 }
       },
-      "additionalProperties": false
+      "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
     },
     "snapshot": {
       "description": "A named version of the edit.",
@@ -683,7 +682,7 @@
         "created": { "$ref": "#/$defs/date" },
         "recipe": { "$ref": "#/$defs/recipe" }
       },
-      "additionalProperties": false
+      "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
     },
     "metadata": {
       "description": "Rating, flag and color label. Written only when one is set.",
@@ -694,7 +693,7 @@
         "flag": { "enum": ["pick", "reject"] },
         "label": { "enum": ["red", "yellow", "green", "blue", "purple"] }
       },
-      "additionalProperties": false
+      "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
     },
     "historyFile": {
       "description": "A history session file, history/<id>.json: the first step's whole edit, then each later step as a JSON Patch from the one before.",

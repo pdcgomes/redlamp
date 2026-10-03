@@ -17,6 +17,7 @@ struct RedlampApp: App {
             DebugDecodeCheck.runIfRequested()
             DevelopPanels.usesSwiftUI = LaunchArguments.all.contains("--swiftui-panels")
         #endif
+        LensProfileIssues.current = { LCPProfileLibrary.user.issues }
         let engine: any EditingEngine
         do {
             // Photos decode in the sandboxed decode service, so a damaged file can't crash the editor.

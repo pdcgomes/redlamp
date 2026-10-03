@@ -111,7 +111,7 @@ enum MaskCommand {
             guard let png = mask.bitmap.png else { continue }
             let url = masks.count == 1 ? output : output.deletingLastPathComponent()
                 .appending(path: "\(output.deletingPathExtension().lastPathComponent)-\(number + 1).png")
-            try png.write(to: url)
+            try ImageFile.write(encoded: png, to: url, protecting: [URL(fileURLWithPath: path)])
             print(
                 "\(url.lastPathComponent): \(mask.bitmap.width)x\(mask.bitmap.height) \(mask.provider) r\(mask.revision)",
             )

@@ -102,6 +102,12 @@ struct LCPProfileTests {
         #expect(lens.correctsColorFringes)
     }
 
+    @Test func `the correction is named for the lens as the profile names it, and keeps the name when coded`() throws {
+        let lens = try #require(try Self.correction([SyntheticLCP.Spec()]))
+        #expect(lens.profileName == "Nikon NIKKOR Z 24-70mm f/4 S")
+        #expect(try JSONDecoder().decode(LensCorrection.self, from: JSONEncoder().encode(lens)) == lens)
+    }
+
     @Test func `without colour models every channel follows the rectilinear model`() throws {
         var plain = SyntheticLCP.Spec()
         plain.colour = false

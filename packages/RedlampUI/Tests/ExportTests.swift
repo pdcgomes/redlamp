@@ -137,4 +137,19 @@ struct ExportTests {
         #expect(numbered.lastPathComponent == "IMG_0001-redlamp-2.jpg")
         #expect(engine.stills.isEmpty)
     }
+
+    @Test(arguments: ExistingFilePolicy.allCases)
+    func `no rule for existing files replaces the photo itself`(policy: ExistingFilePolicy) throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let photo = folder.appending(path: "IMG_0001.JPG")
+        try Data("original".utf8).write(to: photo)
+        var settings = ExportSettings()
+        settings.naming = ExportNaming(suffix: "")
+        settings.existingFiles = policy
+        #expect(ExportActions.step(for: settings, photo: photo) == .ready(
+            folder.appending(path: "IMG_0001-2.jpg"), settings,
+        ))
+    }
 }

@@ -81,34 +81,91 @@ struct ParameterToggle: View {
     }
 }
 
-/// Enable Profile Corrections: the lens correction the photo carries (DNG opcodes, Sony's tags),
-/// on by default from process 5. lensfun profiles wait on DEC-04.
+/// The lens profiles in the user's Lens Profiles folder that couldn't be read, by file, with the
+/// reasons. The app supplies them from the engine's profile library, which RedlampUI can't see;
+/// the Lens panel reads them as it updates for each photo.
+@MainActor public enum LensProfileIssues {
+    public static var current: () -> [URL: [String]] = { [:] }
+}
+
+/// Enable Profile Corrections: the lens correction the photo carries (DNG opcodes, the maker's
+/// tags) or a lens profile from the user's folder, on by default from process 5. Under it, the
+/// matched profile's lens, and how many profiles couldn't be read.
 struct ProfileCorrectionsToggle: View {
     @Environment(EditorModel.self) private var model
 
     var body: some View {
         let lens = model.info?.lensCorrection
         let applies = lens.map { model.recipe.processVersion >= $0.source.process } ?? false
+        let issues = LensProfileIssues.current()
+        let notes = [LensPanelText.profile(lens), LensPanelText.issues(issues)].compactMap(\.self)
+        if notes.isEmpty {
+            toggle(lens, applies: applies)
+        } else {
+            VStack(alignment: .leading, spacing: 2) {
+                toggle(lens, applies: applies)
+                ForEach(notes, id: \.text) { note in
+                    Text(note.text)
+                        .font(Theme.captionFont)
+                        .foregroundStyle(Theme.secondaryLabel)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(note.help)
+                }
+            }
+        }
+    }
+
+    private func toggle(_ lens: LensCorrection?, applies: Bool) -> some View {
         Toggle("Enable Profile Corrections", isOn: Binding(
             get: { applies && model.recipe[.lensProfile] > 0.5 },
             set: { model.setValue(.lensProfile, $0 ? 1 : 0) },
         ))
         .disabled(!applies)
-        .help(help(lens, applies: applies))
+        .help(LensPanelText.help(lens, applies: applies))
         .font(Theme.labelFont)
         .toggleStyle(.checkbox)
         .controlSize(.small)
     }
+}
 
-    private func help(_ lens: LensCorrection?, applies: Bool) -> String {
+/// What the Lens panel says about the photo's lens correction and the user's lens profiles.
+enum LensPanelText {
+    struct Note: Equatable {
+        var text: String
+        var help: String
+    }
+
+    /// Enable Profile Corrections' help: where the correction comes from, or why there is none.
+    static func help(_ lens: LensCorrection?, applies: Bool) -> String {
         guard let lens else { return "This photo carries no lens correction" }
         guard applies else {
             return "Edits made before process \(lens.source.process) render without this lens correction"
         }
-        let origin = lens.source == .profile
-            ? "a lens profile in your Lens Profiles folder" : "the \(lens.source.name) file itself"
+        let origin = switch (lens.source, lens.profileName) {
+        case let (.profile, name?): "the lens profile for \(name) in your Lens Profiles folder"
+        case (.profile, nil): "a lens profile in your Lens Profiles folder"
+        default: "the \(lens.source.name) file itself"
+        }
         return "Distortion and vignetting corrections from \(origin)"
             + (lens.correctsColorFringes ? ", with its colour fringe correction" : "")
+    }
+
+    /// The lens a matched profile is for; nil for a correction the file carries.
+    static func profile(_ lens: LensCorrection?) -> Note? {
+        guard let lens, lens.source == .profile, let name = lens.profileName else { return nil }
+        return Note(text: "Profile: \(name)", help: "The lens profile in your Lens Profiles folder for \(name)")
+    }
+
+    /// How many profiles couldn't be read, with each file and its reasons in the help.
+    static func issues(_ issues: [URL: [String]]) -> Note? {
+        guard !issues.isEmpty else { return nil }
+        let files = issues.map { url, reasons in "\(url.lastPathComponent): \(reasons.joined(separator: "; "))" }
+        return Note(
+            text: issues
+                .count == 1 ? "1 lens profile couldn't be read" : "\(issues.count) lens profiles couldn't be read",
+            help: (["In your Lens Profiles folder:"] + files.sorted()).joined(separator: "\n"),
+        )
     }
 }
 

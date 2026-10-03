@@ -298,4 +298,59 @@ struct SidecarHistoryTests {
         #expect(loaded.map(\.id) == [theirs.id, mine.id])
         #expect(loaded.first?.steps.last?.recipe.maskBitmaps.first?.png == png)
     }
+
+    // MARK: - Emptied sidecars
+
+    @Test func `clearing the rating of a reset photo keeps its history`() throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        try store.save(
+            Sidecar(recipe: EditRecipe(), metadata: PhotoMetadata(rating: 2), session: session()),
+            for: image,
+        )
+
+        try Library.writeMetadata(for: image, store: store) { $0 = PhotoMetadata() }
+        #expect(store.loadHistory(for: image).count == 1)
+        // Rolling back: what is kept is an edit the previous build reads.
+        let edit = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: store.editURL(for: image)))
+        guard case let .object(root) = edit else {
+            Issue.record("sidecar did not encode as an object")
+            return
+        }
+        #expect(Set(root.keys).isSubset(of: ["format", "recipe", "snapshots", "metadata", "modified"]))
+        #expect(store.load(for: image)?.recipe.isPristine == true)
+    }
+
+    @Test func `an emptied sidecar keeps fields this build doesn't know`() throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        let json = #"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":1},"keywords":["harbour"]}"#
+        try Data(json.utf8).write(to: store.url(for: image))
+
+        try store.saveOrRemove(Sidecar(recipe: EditRecipe()), for: image)
+        #expect(store.load(for: image)?.unknownFields["keywords"] == .array([.string("harbour")]))
+    }
+
+    @Test func `an emptied sidecar with nothing else in it is removed, and none is made`() throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        var recipe = EditRecipe()
+        recipe[.exposure] = 0.5
+        try store.save(Sidecar(recipe: recipe), for: image)
+
+        try store.saveOrRemove(Sidecar(recipe: EditRecipe()), for: image)
+        #expect(!FileManager.default.fileExists(atPath: store.url(for: image).path))
+        try store.saveOrRemove(Sidecar(recipe: EditRecipe()), for: image)
+        #expect(!FileManager.default.fileExists(atPath: store.url(for: image).path))
+
+        let open = session()
+        try store.save(Sidecar(recipe: #require(open.steps.last?.recipe), session: open), for: image)
+        var cleared = Sidecar(recipe: EditRecipe(), session: HistorySession(steps: []))
+        cleared.clearsHistory = true
+        try store.saveOrRemove(cleared, for: image)
+        #expect(!FileManager.default.fileExists(atPath: store.url(for: image).path), "Clear History on a reset photo")
+    }
 }

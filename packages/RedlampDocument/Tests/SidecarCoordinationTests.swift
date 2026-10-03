@@ -100,6 +100,30 @@ struct SidecarCoordinationTests {
         #expect(fromOther.map(\.recipe) == [older.recipe], "only the edit that lost is kept, once")
     }
 
+    /// Conflicting copies another Mac's Redlamp wrote: one this build can't read, one by a newer
+    /// build, and one it would save back with a value clamped.
+    static let unmergeable = [
+        #"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":1,"treatment":"infrared"}}"#,
+        #"{"format":"app.redlamp.edit","recipe":{"version":99,"processVersion":1}}"#,
+        #"{"format":"app.redlamp.edit","recipe":{"version":3,"processVersion":1,"values":{"basic.exposure":9}}}"#,
+    ]
+
+    @Test(arguments: unmergeable)
+    func `a conflicting copy this build can't merge losslessly leaves every copy unresolved`(json: String) throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        let other = image.deletingLastPathComponent().appending(path: "IMG_0002.ARW")
+        try store.save(Sidecar(recipe: recipe(exposure: 1.5)), for: other)
+        let readable = store.url(for: other)
+        let unmergeable = store.url(for: image)
+        try Data(json.utf8).write(to: unmergeable)
+
+        let current = Sidecar(recipe: recipe(exposure: 0.5), modified: Date(timeIntervalSince1970: 1000))
+        #expect(SidecarStore.merge(current, conflictsAt: [readable, unmergeable]) == nil)
+        #expect(SidecarStore.merge(current, conflictsAt: [readable])?.recipe[.exposure] == 1.5)
+    }
+
     @Test func `merging a copy with itself changes nothing`() {
         let sidecar = Sidecar(recipe: recipe(exposure: 0.7), modified: Date(timeIntervalSince1970: 1000))
         #expect(SidecarStore.merge(sidecar, [sidecar]) == sidecar)

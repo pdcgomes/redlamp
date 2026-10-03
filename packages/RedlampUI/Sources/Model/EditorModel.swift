@@ -52,16 +52,19 @@ public final class EditorModel {
     public private(set) var info: ImageInfo?
     public private(set) var isLoading = false
     public internal(set) var errorMessage: String?
-    /// The photo's sidecar was written by a newer Redlamp, or can't be read. Its edit is shown (or
-    /// the photo unedited), but changes aren't saved: this version would lose what it doesn't
+    /// The photo's sidecar was written by a newer Redlamp, or can't be read. What can be read
+    /// of its edit is shown, but changes aren't saved: this version would lose what it doesn't
     /// understand.
-    public private(set) var isReadOnly = false
-    /// The photo's sidecar exists but can't be read, so the photo shows unedited and read-only.
-    public private(set) var isSidecarUnreadable = false
+    public var isReadOnly: Bool {
+        readOnlyReason != nil
+    }
+
+    public private(set) var readOnlyReason: SidecarProtection?
     /// The open photo's rating, flag and label, saved with its edit.
     public internal(set) var photoMetadata = PhotoMetadata()
-    /// The rating, flag or label changed while the photo was opening, so its sidecar's are stale.
-    @ObservationIgnored var metadataChangedWhileOpening = false
+    /// What was set of the rating, flag and label while the photo was opening, made again on
+    /// its sidecar's when it opens.
+    @ObservationIgnored var metadataChangesWhileOpening: [@Sendable (inout PhotoMetadata) -> Void] = []
     /// Reading `recipe` observes every change to it. Views observe only what they show —
     /// `value(_:)` for one parameter, or `masks`, `pointCurve`, … — so a slider drag
     /// re-evaluates a single row rather than every panel.
@@ -420,8 +423,6 @@ public final class EditorModel {
     @ObservationIgnored var editStart: EditRecipe?
     @ObservationIgnored var editParameter: ParameterID?
     @ObservationIgnored private var session = (id: UUID(), started: Date())
-    /// Whether `earlierSessions` is known: until it is, a sidecar isn't deleted, since it may hold them.
-    @ObservationIgnored var earlierSessionsLoaded = true
     /// The next save removes the earlier sessions' files (Clear History).
     @ObservationIgnored var clearsSavedHistory = false
     @ObservationIgnored var historyTask: Task<Void, Never>?
@@ -477,10 +478,9 @@ public final class EditorModel {
         // sets it again before the UI updates.
         info = nil
         errorMessage = nil
-        isReadOnly = false
-        isSidecarUnreadable = false
+        readOnlyReason = nil
         photoMetadata = library.item(for: url)?.metadata ?? PhotoMetadata()
-        metadataChangedWhileOpening = false
+        metadataChangesWhileOpening = []
         eyedropperActive = false
         previewingRecipe = nil
         previewingEdit = nil
@@ -496,11 +496,7 @@ public final class EditorModel {
         // coordinated, and iCloud Drive may have to download it first.
         let readSidecar = { [sidecars, scheduler = library.scheduler] in
             try? await scheduler.run(.onScreen) {
-                OpenedSidecar(
-                    sidecar: sidecars.load(for: url),
-                    isNewer: sidecars.isWrittenByNewerVersion(for: url),
-                    isUnreadable: sidecars.isUnreadable(for: url),
-                )
+                OpenedSidecar(sidecar: sidecars.load(for: url), protection: sidecars.protection(for: url))
             }
         }
         if let opened = engine.openIfReady(url) {
@@ -550,10 +546,8 @@ public final class EditorModel {
     /// A photo's sidecar as read when it opens.
     private struct OpenedSidecar: Sendable {
         var sidecar: Sidecar?
-        /// Written by a newer Redlamp: shown, but never saved over.
-        var isNewer = false
-        /// There, but undecodable: never saved over or deleted.
-        var isUnreadable = false
+        /// Shown, but never saved over.
+        var protection: SidecarProtection?
     }
 
     private func didOpen(_ opened: ImageInfo, _ read: OpenedSidecar) {
@@ -561,11 +555,16 @@ public final class EditorModel {
         info = opened
         availableAIMaskKinds = engine.availableMaskKinds()
         maskMessage = nil
-        isReadOnly = read.isNewer || read.isUnreadable
-        isSidecarUnreadable = read.isUnreadable
-        if !metadataChangedWhileOpening {
-            photoMetadata = sidecar?.metadata ?? PhotoMetadata()
+        readOnlyReason = read.protection
+        var metadata = sidecar?.metadata ?? PhotoMetadata()
+        if read.protection == nil {
+            metadataChangesWhileOpening.forEach { $0(&metadata) }
         }
+        if !metadataChangesWhileOpening.isEmpty {
+            library.update(opened.url) { $0.metadata = metadata }
+            metadataChangesWhileOpening = []
+        }
+        photoMetadata = metadata
         var loaded = sidecar?.recipe ?? EditRecipe()
         if loaded.whiteBalanceMode == .asShot, let wb = opened.asShotWhiteBalance {
             loaded[.temperature] = wb.temperature
@@ -963,14 +962,12 @@ public final class EditorModel {
         session = (UUID(), Date())
         clearsSavedHistory = false
         earlierSessions = []
-        earlierSessionsLoaded = !hasSidecar
         historyTask?.cancel()
         guard hasSidecar else { return }
         historyTask = Task { [sidecars] in
             let sessions = await Task.detached(priority: .utility) { sidecars.loadHistory(for: url) }.value
             guard selection == url, !Task.isCancelled else { return }
             earlierSessions = sessions.filter { $0.id != session.id }
-            earlierSessionsLoaded = true
         }
     }
 
@@ -1129,14 +1126,9 @@ public final class EditorModel {
         )
         sidecar.clearsHistory = clearsSavedHistory
         clearsSavedHistory = false
-        let pristine = sidecar.isPristine && earlierSessionsLoaded && earlierSessions.isEmpty
         let store = sidecars
         Task.detached(priority: .utility) {
-            if pristine {
-                store.delete(for: url)
-            } else {
-                try? store.save(sidecar, for: url)
-            }
+            try? store.saveOrRemove(sidecar, for: url)
         }
         let hasEdits = !recipe.isPristine
         library.update(url) { item in

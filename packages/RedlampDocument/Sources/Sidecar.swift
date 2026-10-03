@@ -1,11 +1,13 @@
 import Foundation
 import RedlampEngineAPI
 
-public struct Snapshot: Codable, Sendable, Hashable, Identifiable {
+public struct Snapshot: Sendable, Hashable, Identifiable {
     public var id: UUID
     public var name: String
     public var created: Date
     public var recipe: EditRecipe
+    /// Fields written by a newer Redlamp, written back unchanged.
+    public var unknownFields: [String: JSONValue] = [:]
 
     public init(id: UUID = UUID(), name: String, created: Date = Date(), recipe: EditRecipe) {
         self.id = id
@@ -25,11 +27,13 @@ public enum ColorLabel: String, Codable, Sendable, Hashable, CaseIterable {
 }
 
 /// Rating, flag and label: the culling metadata Lightroom lets you set while developing.
-public struct PhotoMetadata: Codable, Sendable, Hashable {
+public struct PhotoMetadata: Sendable, Hashable {
     /// 0–5 stars.
     public var rating: Int
     public var flag: PhotoFlag?
     public var label: ColorLabel?
+    /// Fields written by a newer Redlamp (a caption, say), written back unchanged.
+    public var unknownFields: [String: JSONValue] = [:]
 
     public init(rating: Int = 0, flag: PhotoFlag? = nil, label: ColorLabel? = nil) {
         self.rating = min(max(rating, 0), 5)
@@ -38,7 +42,7 @@ public struct PhotoMetadata: Codable, Sendable, Hashable {
     }
 
     public var isEmpty: Bool {
-        rating == 0 && flag == nil && label == nil
+        rating == 0 && flag == nil && label == nil && unknownFields.isEmpty
     }
 }
 
@@ -83,10 +87,13 @@ public struct Sidecar: Sendable, Hashable {
 
     /// Same edit, ratings and snapshots, whenever it was written. Compared as written, since the
     /// file keeps dates only to the second.
-    func hasSameContent(as other: Sidecar) throws -> Bool {
+    public func hasSameContent(as other: Sidecar) -> Bool {
         var other = other
         other.modified = modified
-        return try JSONEncoder.sidecar.encode(self) == JSONEncoder.sidecar.encode(other)
+        guard let written = try? JSONEncoder.sidecar.encode(self),
+              let otherWritten = try? JSONEncoder.sidecar.encode(other)
+        else { return false }
+        return written == otherWritten
     }
 }
 
@@ -122,9 +129,11 @@ public enum SidecarStoreError: Error, Equatable {
     /// The sidecar was written by a newer Redlamp. It is read-only here, so it is never
     /// overwritten or deleted.
     case writtenByNewerVersion(URL)
-    /// The sidecar exists but this build can't decode it (damaged, or a value it doesn't know).
-    /// It may still hold an edit, history and masks, so it is never overwritten or deleted.
+    /// The sidecar's edit doesn't decode in this build, so it is never overwritten or deleted.
     case unreadable(URL)
+    /// Saving over the sidecar would drop or change what's in it, so it is never overwritten or
+    /// deleted.
+    case lossy(URL)
 }
 
 /// Reads and writes sidecars.
@@ -176,31 +185,6 @@ public struct SidecarStore: Sendable {
         return resolveConflicts(loaded, for: image) ?? loaded
     }
 
-    /// Whether the image's sidecar uses a file format or process version this build
-    /// doesn't have. Such edits can be shown, but saving would lose information.
-    public func isWrittenByNewerVersion(for image: URL) -> Bool {
-        let sidecar = url(for: image)
-        return (try? Self.reading(sidecar) { url in
-            (try? Data(contentsOf: Self.editURL(inSidecar: url))).map(Self.isNewer) ?? false
-        }) ?? false
-    }
-
-    /// Whether the image has a sidecar this build can't decode, though no newer Redlamp wrote it.
-    /// The photo shows unedited, and its sidecar is left as it is.
-    public func isUnreadable(for image: URL) -> Bool {
-        let sidecar = url(for: image)
-        return (try? Self.reading(sidecar) { url in
-            (try? Data(contentsOf: Self.editURL(inSidecar: url))).map { !Self.isNewer($0) && !Self.decodes($0) }
-                ?? false
-        }) ?? false
-    }
-
-    /// Whether the image's sidecar must not be saved over or deleted: a newer Redlamp wrote it, or
-    /// this build can't read it.
-    public func isReadOnly(for image: URL) -> Bool {
-        isWrittenByNewerVersion(for: image) || isUnreadable(for: image)
-    }
-
     /// Writes the sidecar unless nothing but `modified` changed, so unchanged edits don't
     /// wake up sync services. Fields a newer Redlamp added to the file on disk are kept.
     public func save(_ sidecar: Sidecar, for image: URL) throws {
@@ -211,70 +195,31 @@ public struct SidecarStore: Sendable {
         }
     }
 
-    /// Removes the sidecar, unless a newer Redlamp wrote it or this build can't read it.
+    /// Saves the sidecar, or removes it when nothing would be left worth keeping: the edit is
+    /// pristine, the file on disk has no fields this build doesn't know, and no history session
+    /// would remain. A photo without a sidecar doesn't get one just to hold nothing.
+    public func saveOrRemove(_ sidecar: Sidecar, for image: URL) throws {
+        let destination = url(for: image)
+        let options: NSFileCoordinator.WritingOptions = Self.isPackage(destination) ? [] : .forReplacing
+        try Self.writing(destination, options: options) { destination in
+            guard try Self.leavesNothing(sidecar, at: destination) else {
+                return try Self.write(sidecar, to: destination)
+            }
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+        }
+    }
+
+    /// Removes the sidecar, history included, unless it is protected (see `protection(for:)`).
+    /// To save an edit that may have gone back to defaults, use `saveOrRemove`.
     public func delete(for image: URL) {
         let sidecar = url(for: image)
         try? Self.writing(sidecar, options: .forDeleting) { url in
-            if let data = try? Data(contentsOf: Self.editURL(inSidecar: url)),
-               Self.isNewer(data) || !Self.decodes(data) {
+            if Self.protection(atSidecar: url) != nil {
                 return
             }
             try FileManager.default.removeItem(at: url)
-        }
-    }
-
-    // MARK: - Conflicts
-
-    /// Conflicting copies, made when the same photo was edited on two Macs before iCloud Drive
-    /// synced them. The most recently modified edit wins, and every other distinct edit is kept
-    /// as a snapshot of the winner, so nothing is lost; snapshots of every copy are kept too.
-    public static func merge(_ current: Sidecar, _ conflicts: [Sidecar]) -> Sidecar {
-        let copies = [current] + conflicts
-        var winner = copies.reduce(current) { $1.modified > $0.modified ? $1 : $0 }
-        var snapshots = winner.snapshots
-        for copy in copies {
-            for snapshot in copy.snapshots where !snapshots.contains(where: { $0.id == snapshot.id }) {
-                snapshots.append(snapshot)
-            }
-        }
-        for copy in copies
-            where copy.recipe != winner.recipe && !snapshots.contains(where: { $0.recipe == copy.recipe }) {
-            snapshots.append(Snapshot(
-                name: "Edit from another Mac, \(copy.modified.formatted(date: .abbreviated, time: .shortened))",
-                created: copy.modified,
-                recipe: copy.recipe,
-            ))
-        }
-        winner.snapshots = snapshots
-        for copy in copies {
-            winner.unknownFields.merge(copy.unknownFields) { kept, _ in kept }
-        }
-        return winner
-    }
-
-    /// Merges and saves the sidecar's unresolved conflict versions, then marks them resolved;
-    /// nil when there are none (or they can't be merged now, so they stay for the next load).
-    private func resolveConflicts(_ current: Sidecar, for image: URL) -> Sidecar? {
-        let sidecar = url(for: image)
-        guard let versions = NSFileVersion.unresolvedConflictVersionsOfItem(at: sidecar), !versions.isEmpty
-        else { return nil }
-        let merged = Self.merge(current, versions.compactMap { Self.decode(sidecar: $0.url) })
-        do {
-            try save(merged, for: image)
-            try Self.writing(sidecar, options: []) { url in
-                for version in versions {
-                    try Self.copyHistory(from: version.url, into: url)
-                }
-            }
-            for version in versions {
-                version.isResolved = true
-            }
-            try Self.writing(sidecar, options: []) { url in
-                try NSFileVersion.removeOtherVersionsOfItem(at: url)
-            }
-            return merged
-        } catch {
-            return nil
         }
     }
 
@@ -312,7 +257,7 @@ public struct SidecarStore: Sendable {
         return try (result ?? .failure(CocoaError(.fileWriteUnknown))).get()
     }
 
-    private static func editURL(inSidecar sidecar: URL) -> URL {
+    static func editURL(inSidecar sidecar: URL) -> URL {
         isPackage(sidecar) ? sidecar.appending(path: editFile) : sidecar
     }
 
@@ -321,7 +266,7 @@ public struct SidecarStore: Sendable {
     }
 
     /// The sidecar at `sidecar` (a package or a single file), with its mask bitmaps.
-    private static func decode(sidecar: URL) -> Sidecar? {
+    static func decode(sidecar: URL) -> Sidecar? {
         guard let data = try? Data(contentsOf: editURL(inSidecar: sidecar)),
               var decoded = try? JSONDecoder.sidecar.decode(Sidecar.self, from: data)
         else { return nil }
@@ -337,28 +282,24 @@ public struct SidecarStore: Sendable {
     private static func write(_ sidecar: Sidecar, to destination: URL) throws {
         let existingPackage = isPackage(destination)
         var sidecar = sidecar
-        if let data = try? Data(contentsOf: editURL(inSidecar: destination)) {
-            if isNewer(data) {
-                throw SidecarStoreError.writtenByNewerVersion(destination)
-            }
-            guard let existing = try? JSONDecoder.sidecar.decode(Sidecar.self, from: data) else {
-                throw SidecarStoreError.unreadable(destination)
-            }
+        let existing = try existing(at: destination)
+        if let existing {
             sidecar.unknownFields = existing.unknownFields.merging(sidecar.unknownFields) { _, new in new }
-            if try existing.hasSameContent(as: sidecar), existingPackage, hasEveryBitmap(sidecar, in: destination) {
-                if try writeHistory(of: sidecar, in: destination) {
-                    removeUnusedBitmaps(of: sidecar, in: destination)
-                }
-                return
-            }
         }
         let json = try JSONEncoder.sidecar.encode(sidecar)
+        if let existing, existing.hasSameContent(as: sidecar), existingPackage,
+           hasEveryBitmap(sidecar, in: destination) {
+            if try writeHistory(of: sidecar, in: destination) {
+                removeUnusedBitmaps(of: sidecar, in: destination, json: json)
+            }
+            return
+        }
         let fileManager = FileManager.default
         if existingPackage {
             try writeBitmaps(of: sidecar, into: destination)
             try json.write(to: destination.appending(path: editFile), options: .atomic)
             try writeHistory(of: sidecar, in: destination)
-            removeUnusedBitmaps(of: sidecar, in: destination)
+            removeUnusedBitmaps(of: sidecar, in: destination, json: json)
             return
         }
         // A new package, or a single-file sidecar becoming one: built beside it, then moved in.
@@ -408,37 +349,29 @@ public struct SidecarStore: Sendable {
         }
     }
 
-    /// Bitmaps no edit, snapshot or history session names any more. Nothing is removed while a
-    /// session file can't be read, since the bitmaps it needs aren't known.
-    private static func removeUnusedBitmaps(of sidecar: Sidecar, in package: URL) {
+    /// Removes the package's bitmaps that nothing refers to: not the edit, its snapshots or its
+    /// history, nor any field of `json` (the edit as written) or of a history file, where fields
+    /// a newer build added (a mask shape this build doesn't know, say) may name one. Nothing is
+    /// removed while a session file can't be read, since the bitmaps it needs aren't known.
+    private static func removeUnusedBitmaps(of sidecar: Sidecar, in package: URL, json: Data) {
         var used = Set(bitmaps(of: sidecar).map(\.sha256))
+        var written = [json]
         for file in historyFiles(in: package) {
-            guard let summary = historySummary(file) else { return }
+            guard let data = try? Data(contentsOf: file),
+                  let summary = try? JSONDecoder.sidecar.decode(HistoryFile.Summary.self, from: data)
+            else { return }
             used.formUnion(summary.bitmaps ?? [])
+            written.append(data)
         }
         let masks = package.appending(path: masksDirectory)
         let files = (try? FileManager.default.contentsOfDirectory(atPath: masks.path)) ?? []
-        for file in files where file.hasSuffix(".png") && !used.contains(String(file.dropLast(4))) {
-            try? FileManager.default.removeItem(at: masks.appending(path: file))
-        }
-    }
-
-    private static func decodes(_ data: Data) -> Bool {
-        (try? JSONDecoder.sidecar.decode(Sidecar.self, from: data)) != nil
-    }
-
-    private static func isNewer(_ data: Data) -> Bool {
-        struct Probe: Decodable {
-            struct Versions: Decodable {
-                var version: Int?
-                var processVersion: Int?
+        for file in files where file.hasSuffix(".png") {
+            let sha256 = String(file.dropLast(4))
+            let named = written.contains { $0.range(of: Data(sha256.utf8)) != nil }
+            if !used.contains(sha256), !named {
+                try? FileManager.default.removeItem(at: masks.appending(path: file))
             }
-
-            var recipe: Versions?
         }
-        guard let versions = (try? JSONDecoder.sidecar.decode(Probe.self, from: data))?.recipe else { return false }
-        return (versions.version ?? 1) > EditRecipe.formatVersion
-            || (versions.processVersion ?? 1) > EditRecipe.currentProcessVersion
     }
 }
 

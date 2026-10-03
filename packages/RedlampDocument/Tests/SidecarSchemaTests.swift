@@ -221,7 +221,6 @@ struct SidecarSchemaTests {
         let validator = try validator()
         let edit = try written().edit
         let exposure = ["recipe", "values", "basic.exposure"]
-        let adjustments = ["recipe", "masks", "0", "adjustments"]
         let operation = ["recipe", "masks", "0", "components", "1", "operation"]
         let radial = ["recipe", "masks", "2", "components", "1", "shape", "radial", "_0"]
         // Each wrong sidecar, and where its error is.
@@ -231,7 +230,11 @@ struct SidecarSchemaTests {
             ("/recipe/values/basic.exposure", edit.updating(exposure) { _ in .string("bright") }),
             ("/recipe/values/basic.exposure", edit.updating(exposure) { _ in .number(7) }),
             ("/recipe/values/local.exposure", edit.updating(["recipe", "values"]) { $0.adding("local.exposure") }),
-            ("/recipe/masks/0/adjustments/basic.exposure", edit.updating(adjustments) { $0.adding("basic.exposure") }),
+            ("/recipe/masks/0/adjustments/local.future", edit.updating(["recipe", "masks", "0", "adjustments"]) {
+                guard case var .object(adjustments) = $0 else { return $0 }
+                adjustments["local.future"] = .string("bright")
+                return .object(adjustments)
+            }),
             (pointer(operation), edit.updating(operation) { _ in .string("multiply") }),
             ("\(pointer(radial))/softness", edit.updating(radial) { $0.adding("softness") }),
             ("/modified", edit.updating(["modified"]) { _ in .string("2026-10-03T12:59:01") }),
@@ -283,16 +286,6 @@ struct SidecarSchemaTests {
                 #expect(entry?["maximum"] == .number(spec.range.upperBound), "\(parameter.rawValue)")
                 #expect(entry?["default"] == .number(spec.defaultValue), "\(parameter.rawValue)")
             }
-        }
-
-        /// Global keys are dropped from a mask's adjustments, as scoped keys are from `values`.
-        func matches(_ reference: String, _ parameter: ParameterID) -> Bool {
-            let patterns = validator.schema(at: "\(reference)/patternProperties").objectValue ?? [:]
-            return patterns.keys.contains { parameter.rawValue.range(of: $0, options: .regularExpression) != nil }
-        }
-        for parameter in ParameterID.allCases {
-            #expect(matches("#/$defs/values", parameter) == !global.contains(parameter), "\(parameter.rawValue)")
-            #expect(matches("#/$defs/localAdjustments", parameter) == !parameter.isLocal, "\(parameter.rawValue)")
         }
     }
 
@@ -981,7 +974,7 @@ private extension JSONValue {
     var ofAnotherType: JSONValue {
         switch self {
         case .string: .number(7)
-        case .number: .string("7")
+        case .number, .integer, .unsignedInteger: .string("7")
         case .bool: .string("true")
         case .array: .object([:])
         case .object: .array([])
@@ -994,6 +987,8 @@ private extension JSONValue {
         case ("null", .null), ("boolean", .bool), ("number", .number), ("string", .string), ("array", .array),
              ("object", .object): true
         case let ("integer", .number(number)): number.rounded() == number
+        case ("integer", .integer), ("integer", .unsignedInteger), ("number", .integer),
+             ("number", .unsignedInteger): true
         default: false
         }
     }

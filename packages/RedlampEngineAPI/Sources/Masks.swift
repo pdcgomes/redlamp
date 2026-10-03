@@ -224,7 +224,7 @@ public struct MaskBitmap: Codable, Sendable, Hashable {
 
 /// A mask computed by a model (Subject, Sky, People and so on) and kept as a bitmap, so
 /// it renders the same everywhere and only changes on an explicit update.
-public struct AIMask: Codable, Sendable, Hashable {
+public struct AIMask: Sendable, Hashable {
     public var kind: MaskKind
     /// What computed it, for example `apple.vision.foreground`.
     public var provider: String
@@ -249,6 +249,8 @@ public struct AIMask: Codable, Sendable, Hashable {
     /// Refine Edge brush strokes, in order: where the edge was solved again per pixel. Kept so
     /// Update AI Masks can apply them to the new mask.
     public var refinements: [BrushStroke]?
+    /// Fields written by a newer Redlamp, written back unchanged.
+    public var unknownFields: [String: JSONValue] = [:]
 
     public init(
         kind: MaskKind,
@@ -278,6 +280,51 @@ public struct AIMask: Codable, Sendable, Hashable {
         self.center = center
         self.bitmap = bitmap
         self.createdAt = createdAt
+    }
+}
+
+extension AIMask: Codable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case kind, provider, revision, osBuild, instance, part, prompts, excludedPrompts
+        case analysisHash, center, bitmap, createdAt, refinements
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try container.decode(MaskKind.self, forKey: .kind)
+        provider = try container.decode(String.self, forKey: .provider)
+        revision = try container.decode(Int.self, forKey: .revision)
+        osBuild = try container.decodeIfPresent(String.self, forKey: .osBuild)
+        instance = try container.decodeIfPresent(Int.self, forKey: .instance)
+        part = try container.decodeIfPresent(String.self, forKey: .part)
+        prompts = try container.decode([ImagePoint].self, forKey: .prompts)
+        excludedPrompts = try container.decodeIfPresent([ImagePoint].self, forKey: .excludedPrompts)
+        analysisHash = try container.decode(String.self, forKey: .analysisHash)
+        center = try container.decode(ImagePoint.self, forKey: .center)
+        bitmap = try container.decode(MaskBitmap.self, forKey: .bitmap)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        refinements = try container.decodeIfPresent([BrushStroke].self, forKey: .refinements)
+        unknownFields = try decoder.container(keyedBy: DynamicCodingKey.self)
+            .unknownFields(excluding: Set(CodingKeys.allCases.map(\.stringValue)))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var unknown = encoder.container(keyedBy: DynamicCodingKey.self)
+        try unknown.encode(unknownFields)
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(provider, forKey: .provider)
+        try container.encode(revision, forKey: .revision)
+        try container.encodeIfPresent(osBuild, forKey: .osBuild)
+        try container.encodeIfPresent(instance, forKey: .instance)
+        try container.encodeIfPresent(part, forKey: .part)
+        try container.encode(prompts, forKey: .prompts)
+        try container.encodeIfPresent(excludedPrompts, forKey: .excludedPrompts)
+        try container.encode(analysisHash, forKey: .analysisHash)
+        try container.encode(center, forKey: .center)
+        try container.encode(bitmap, forKey: .bitmap)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encodeIfPresent(refinements, forKey: .refinements)
     }
 }
 
@@ -675,17 +722,45 @@ public enum MaskOperation: String, Codable, Sendable, Hashable, CaseIterable {
     }
 }
 
-public struct MaskComponent: Codable, Sendable, Hashable, Identifiable {
+public struct MaskComponent: Sendable, Hashable, Identifiable {
     public var id: UUID
     public var shape: MaskShape
     public var operation: MaskOperation
     public var inverted: Bool
+    /// Fields written by a newer Redlamp, written back unchanged.
+    public var unknownFields: [String: JSONValue] = [:]
 
     public init(id: UUID = UUID(), shape: MaskShape, operation: MaskOperation = .add, inverted: Bool = false) {
         self.id = id
         self.shape = shape
         self.operation = operation
         self.inverted = inverted
+    }
+}
+
+extension MaskComponent: Codable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case id, shape, operation, inverted
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        shape = try container.decode(MaskShape.self, forKey: .shape)
+        operation = try container.decode(MaskOperation.self, forKey: .operation)
+        inverted = try container.decode(Bool.self, forKey: .inverted)
+        unknownFields = try decoder.container(keyedBy: DynamicCodingKey.self)
+            .unknownFields(excluding: Set(CodingKeys.allCases.map(\.stringValue)))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var unknown = encoder.container(keyedBy: DynamicCodingKey.self)
+        try unknown.encode(unknownFields)
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(shape, forKey: .shape)
+        try container.encode(operation, forKey: .operation)
+        try container.encode(inverted, forKey: .inverted)
     }
 }
 
@@ -703,9 +778,11 @@ public struct MaskLayer: Sendable, Hashable, Identifiable {
     /// -100...100: above 0 keeps only textured areas of the mask, below 0 only flat ones.
     public var detail: Double = 0
     public private(set) var adjustments: [ParameterID: Double]
-    /// Adjustments written by a newer Redlamp. They don't affect rendering here, but are written
-    /// back unchanged so saving never erases them.
+    /// Adjustments this build doesn't apply to masks, written by a newer Redlamp: written back
+    /// unchanged until the mask's adjustments are reset.
     public private(set) var unknownAdjustments: [String: Double] = [:]
+    /// Fields written by a newer Redlamp, written back unchanged.
+    public var unknownFields: [String: JSONValue] = [:]
 
     public init(
         id: UUID = UUID(),
@@ -737,6 +814,7 @@ public struct MaskLayer: Sendable, Hashable, Identifiable {
 
     public mutating func resetAdjustments() {
         adjustments = [:]
+        unknownAdjustments = [:]
         amount = 100
         detail = 0
     }
@@ -754,7 +832,7 @@ public struct MaskLayer: Sendable, Hashable, Identifiable {
 }
 
 extension MaskLayer: Codable {
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case id, name, isVisible, components, amount, detail, adjustments
     }
 
@@ -769,15 +847,19 @@ extension MaskLayer: Codable {
         adjustments = [:]
         let raw = try container.decodeIfPresent([String: Double].self, forKey: .adjustments) ?? [:]
         for (key, value) in raw {
-            if let parameter = ParameterID(rawValue: key) {
+            if let parameter = ParameterID(rawValue: key), parameter.isLocal {
                 self[parameter] = value
             } else {
                 unknownAdjustments[key] = value
             }
         }
+        unknownFields = try decoder.container(keyedBy: DynamicCodingKey.self)
+            .unknownFields(excluding: Set(CodingKeys.allCases.map(\.stringValue)))
     }
 
     public func encode(to encoder: Encoder) throws {
+        var unknown = encoder.container(keyedBy: DynamicCodingKey.self)
+        try unknown.encode(unknownFields)
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
         try container.encode(name, forKey: .name)
@@ -787,7 +869,9 @@ extension MaskLayer: Codable {
         if detail != 0 {
             try container.encode(detail, forKey: .detail)
         }
-        let known = Dictionary(uniqueKeysWithValues: adjustments.map { ($0.key.rawValue, $0.value) })
-        try container.encode(unknownAdjustments.merging(known) { _, value in value }, forKey: .adjustments)
+        try container.encode(
+            unknownAdjustments.merging(adjustments.map { ($0.key.rawValue, $0.value) }) { $1 },
+            forKey: .adjustments,
+        )
     }
 }

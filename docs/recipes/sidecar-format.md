@@ -10,7 +10,7 @@ This page is the published format: edit format 3 and history format 1. A machine
 - **Sparse.** Only values that differ from their defaults are written. A missing key means its default, so new settings need no migration and sidecars stay small.
 - **Resolved, not recomputed.** Auto white balance, auto settings, applied recipes and AI masks are stored as the values and bitmaps they produced. Reading a sidecar computes nothing again, so an edit renders the same on every Mac.
 - **Stable rendering.** Every edit records the process version it was made with and keeps rendering that way until the user updates it.
-- **Forward compatible.** Fields a newer Redlamp wrote are kept and written back unchanged where the format has room for them. A sidecar with a newer format or process version is opened read-only.
+- **Forward compatible.** Fields a newer Redlamp wrote are kept and written back unchanged where the format has room for them. A sidecar with a newer format or process version is opened read-only, and so is one that saving would change in any other way, with one exception: a mask shape with more than one key is read as one of them, and saving drops the others.
 - **Safe to sync.** Every read and write is coordinated, files are replaced atomically, and conflicting copies from two Macs are merged without losing an edit.
 
 ## Files
@@ -36,13 +36,13 @@ To show a photo's badges, Redlamp reads only `recipe` and `metadata` from `edit.
 
 - `edit.json` is written to a temporary file and moved into place. Mask bitmaps are written before the edit that names them, and a new package is built beside the photo and moved in whole, so a reader never finds an edit that names a missing or partly written file.
 - A sidecar whose content hasn't changed is not rewritten, so saving an unchanged edit doesn't wake sync services. A change to `modified` alone doesn't count.
-- When it saves, Redlamp deletes the bitmaps that no edit, snapshot or history session uses. It deletes none while a history file can't be read.
+- When it saves, Redlamp deletes the bitmaps that no edit, snapshot or history session uses and that no key of `edit.json` or of a history file names, since a key a newer Redlamp added may refer to one. It deletes none while a history file can't be read.
 - Redlamp deletes the whole sidecar when the edit is back to its defaults (whatever `wb.temperature` and `wb.tint` hold) and there are no snapshots, rating, flag, label, unknown fields or history.
 - Every read and write goes through `NSFileCoordinator`, so iCloud Drive never syncs a half-written package, and a read waits for a sidecar that iCloud Drive has evicted to download. Other tools on macOS should coordinate their writes the same way.
 
 ### Conflicting copies
 
-When a photo is edited on two Macs before iCloud Drive syncs them, iCloud keeps the copies as conflict versions. Redlamp merges them when it next reads the sidecar:
+When a photo is edited on two Macs before iCloud Drive syncs them, iCloud keeps the copies as conflict versions. Redlamp merges them when it next reads the sidecar, if it can read every copy and save it back unchanged (see [Versions and compatibility](#versions-and-compatibility)); otherwise it leaves them all for a Redlamp that can. It removes only the copies it merged.
 
 - the copy with the latest `modified` wins;
 - every other copy whose edit differs becomes a snapshot of the winner, named "Edit from another Mac" with the copy's date;
@@ -203,11 +203,11 @@ A mask is a local adjustment: coverage built from components, and its own adjust
 | `components` | [component] | `[]` | Combined in order. |
 | `amount` | number | 100 | Scales every adjustment of the mask, in percent, 0 to 200. |
 | `detail` | number | 0 | −100 to 100: above 0 keeps only the textured areas of the mask, below 0 only the flat ones. Written only when it isn't 0. |
-| `adjustments` | {key: number} | `{}` | The local parameters below, each written only when it isn't 0, and keys from a newer Redlamp. Always written, even empty. |
+| `adjustments` | {key: number} | `{}` | The local parameters below, each written only when it isn't 0. Always written, even empty. |
 
 Redlamp renders at most 16 visible masks and 64 components across them, and the editor makes no more than 16 masks.
 
-**Local adjustments** all default to 0. A reader clamps each to its range. As in `values`, Redlamp keeps keys it doesn't know and writes them back, and drops keys of global parameters (`basic.…` and the like).
+**Local adjustments** all default to 0. A reader clamps each to its range and, like `values`, keeps keys it doesn't know.
 
 | Keys | Range | Notes |
 | --- | --- | --- |
@@ -342,18 +342,19 @@ A sidecar carries three version numbers:
 
 What Redlamp does when it reads a sidecar, which is also what another reader must do to write one back safely:
 
-1. **A newer format or process version** (`version` above 3 or `processVersion` above 9): Redlamp shows the photo with the edit, rendered with the newest behavior it has, but the sidecar is read-only. Redlamp never overwrites or deletes it, and applying settings to many photos leaves it alone. Only these two numbers are checked; a `version` that isn't an integer is ignored.
+1. **A newer format or process version** (`version` above 3 or `processVersion` above 9): Redlamp shows the photo with the edit, rendered with the newest behavior it has, but the sidecar is read-only. Redlamp never overwrites or deletes a read-only sidecar, its rating, flag and label can't be changed, and applying settings to many photos leaves it alone. Only these two numbers are checked; a `version` that isn't an integer is ignored.
 2. **Unknown keys** are kept and written back unchanged where the format has room for them:
    - top-level keys of `edit.json`;
-   - keys of a recipe, in the edit and in snapshots;
-   - keys in `values` and in a mask's `adjustments` (they must be numbers, and don't render);
+   - keys of a recipe, in the edit and in snapshots, and of a snapshot;
+   - keys in `values` and in a mask's `adjustments` (in both they must be numbers, and don't render);
+   - keys of a mask, a component, an AI mask (a depth range's depth map and a spot's region included), a spot, `metadata` and the applied recipe;
    - component kinds in a mask's `shape` (they render nothing).
 
-   Everywhere else in `edit.json` Redlamp ignores unknown keys, and they are lost the next time it saves: in masks, components, shape parameters, AI masks, bitmaps, spots, snapshots, metadata, the Base Look, the applied recipe, the crop and orientation. It ignores unknown keys in history files too, which it never rewrites. The schema marks all these objects closed (`additionalProperties: false`) and leaves the others open, so a writer that validates its sidecars puts new keys only where Redlamp keeps them. A shape with more than one key loses all but one of them.
-3. **Unknown values**: a spot's `mode` reads as `heal` and a history step's `action` as `edit`. Any other value outside its list (`treatment`, `whiteBalance`, a component's `operation`, an AI mask's `kind`, `flag`, `label`) makes the sidecar unreadable.
-4. **Values out of range**: parameters and local adjustments are clamped to their ranges. Nothing else is checked.
+   Everywhere else in `edit.json` (shape parameters, bitmaps, the Base Look, the crop and orientation) Redlamp has nowhere to keep an unknown key, so a sidecar holding one is read-only. A shape with more than one key loses all but one of them. It ignores unknown keys in history files, which it never rewrites. The schema marks the objects without room for unknown keys closed (`additionalProperties: false`) and leaves the others open, so a writer that validates its sidecars puts new keys only where Redlamp keeps them.
+3. **Unknown values**: a spot's `mode` reads as `heal`, and the sidecar is read-only, since saving would write `heal`; a history step's `action` reads as `edit`. Any other value outside its list (`treatment`, `whiteBalance`, a component's `operation`, an AI mask's `kind`, `flag`, `label`) makes the sidecar unreadable.
+4. **Values out of range**: parameters and local adjustments are clamped to their ranges, and the sidecar is read-only, since saving would write the clamped values. Nothing else is checked.
 5. **History files** with another `format`, a newer `version`, or that can't be read are skipped, and kept.
-6. **A sidecar that can't be read** (a missing required key, a value of the wrong type or outside its list, or a date without a time zone, anywhere in `edit.json`) opens as if the photo had no edit, read-only: Redlamp never overwrites or deletes it (it may still hold an edit, history and masks), says so over the photo, and applying settings to many photos leaves it alone. Validate a sidecar against the schema before writing it.
+6. **A sidecar that can't be read** (a missing required key, a value of the wrong type or outside its list, or a date without a time zone, anywhere in `edit.json`) opens as if the photo had no edit, read-only: Redlamp never overwrites or deletes it (it may still hold an edit, history and masks), says so over the photo, and applying settings to many photos leaves it alone. The same goes for an `edit.json` that is there but can't be opened (no permission, an I/O error, or iCloud Drive can't download it). Validate a sidecar against the schema before writing it.
 
 When writing a sidecar for Redlamp:
 
@@ -364,7 +365,7 @@ When writing a sidecar for Redlamp:
 
 ## The schema
 
-[`sidecar-format.schema.json`](sidecar-format.schema.json) is JSON Schema draft 2020-12. Validate `edit.json` against the schema itself and a history file against its `#/$defs/historyFile`. The schema describes what Redlamp writes, and is stricter than Redlamp's reader where the reader is lenient: it checks ranges, lists of values and closed objects that the reader clamps, maps or ignores. It accepts format versions up to 3 and process versions up to 9, so a sidecar from a newer Redlamp needs that Redlamp's schema.
+[`sidecar-format.schema.json`](sidecar-format.schema.json) is JSON Schema draft 2020-12. Validate `edit.json` against the schema itself and a history file against its `#/$defs/historyFile`. The schema describes what Redlamp writes, and is stricter than Redlamp's reader where the reader is lenient: it checks ranges, lists of values and closed objects, where the reader clamps, maps or has nowhere to keep a key, and so opens the sidecar read-only. It accepts format versions up to 3 and process versions up to 9, so a sidecar from a newer Redlamp needs that Redlamp's schema.
 
 Besides annotations, the schema uses only `type`, `enum`, `const`, `minimum`, `maximum`, `pattern`, `properties`, `patternProperties`, `additionalProperties`, `required`, `minProperties`, `maxProperties`, `items`, `prefixItems`, `minItems`, `maxItems`, `anyOf`, `oneOf` and `$ref` to its own `$defs`, so a small validator can check it.
 

@@ -1,13 +1,43 @@
 import Foundation
+import RedlampEngineAPI
 
 /// Where an export of one photo goes.
 public enum ExportDestination {
-    /// The file `settings` name for `source`, before checking whether it exists.
+    /// The file `settings` name for `source`. A name that is a photo (see `isPhoto`) gets the
+    /// first free number instead, so no rule for existing files can replace one.
     public static func url(for source: URL, settings: ExportSettings) -> URL {
         let folder = settings.destinationFolder ?? source.deletingLastPathComponent()
-        return folder
+        let named = folder
             .appending(path: settings.naming.baseName(for: source), directoryHint: .notDirectory)
             .appendingPathExtension(settings.format.fileExtension)
+        return isPhoto(named, source: source) ? firstFree(named) : named
+    }
+
+    /// Whether the file at `url` is a photo an export must never replace: anything there but an
+    /// earlier export (see `ExportMetadata.isExport`), and always `source` itself (whatever the
+    /// letter case of the name), a raw file, or a file with Redlamp edits.
+    public static func isPhoto(_ url: URL, source: URL?, fileManager: FileManager = .default) -> Bool {
+        guard fileManager.fileExists(atPath: url.path) else { return false }
+        if let source, isSameFile(url, source) {
+            return true
+        }
+        return SupportedFormats.isRaw(url)
+            || fileManager.fileExists(atPath: SidecarStore().url(for: url).path)
+            || !ExportMetadata.isExport(url)
+    }
+
+    /// Through symbolic links; by path, ignoring letter case and Unicode normalisation, when the
+    /// volume gives no file identifiers.
+    private static func isSameFile(_ first: URL, _ second: URL) -> Bool {
+        let first = first.resolvingSymlinksInPath()
+        let second = second.resolvingSymlinksInPath()
+        let key = URLResourceKey.fileResourceIdentifierKey
+        if let one = try? first.resourceValues(forKeys: [key]).fileResourceIdentifier,
+           let other = try? second.resourceValues(forKeys: [key]).fileResourceIdentifier {
+            return one.isEqual(other)
+        }
+        return first.path.precomposedStringWithCanonicalMapping.lowercased()
+            == second.path.precomposedStringWithCanonicalMapping.lowercased()
     }
 
     /// `url`, or the first of `name-2`, `name-3`… that doesn't exist.
@@ -34,6 +64,8 @@ public enum ExportError: Error, LocalizedError, Equatable {
     case fileSizeLimitUnreachable(format: ExportFormat, limitKB: Int, smallestKB: Int)
     case folderMissing(URL)
     case writeFailed(URL)
+    /// The file is a photo, not an earlier export (see `ExportDestination.isPhoto`).
+    case wouldReplacePhoto(URL)
 
     public var errorDescription: String? {
         switch self {
@@ -46,6 +78,8 @@ public enum ExportError: Error, LocalizedError, Equatable {
             "The folder “\(folder.lastPathComponent)” isn't there any more. Choose another in the Export dialog."
         case let .writeFailed(url):
             "“\(url.lastPathComponent)” couldn't be written."
+        case let .wouldReplacePhoto(url):
+            "“\(url.lastPathComponent)” is a photo, so the export wasn't written over it. Choose another name."
         }
     }
 }

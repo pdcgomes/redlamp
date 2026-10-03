@@ -190,34 +190,47 @@ public final class RecipeLibrary {
         return locations.installed.appendingPathComponent("\(slug)@\(recipe.version).\(Recipe.fileExtension)")
     }
 
-    /// Installs a `.redrecipe`, `.cube` or HaldCLUT image. Look tables become a recipe
-    /// with an embedded Base Look.
+    /// Installs a `.redrecipe`, or a `.cube`, `.3dl` or HaldCLUT look table made for
+    /// `tableSpace`. Look tables become a recipe with an embedded Base Look, named by the
+    /// table's title or the file's name.
     @discardableResult
     public func install(
         contentsOf url: URL,
         tableSpace: ImportedTableSpace = .sRGB,
     ) throws -> (recipe: Recipe, issues: [RecipeIssue]) {
-        let name = url.deletingPathExtension().lastPathComponent
+        if let imported = try Self.lookTable(contentsOf: url, tableSpace: tableSpace) {
+            let name = imported.title ?? url.deletingPathExtension().lastPathComponent
+            return try (save(LookTableImport.recipe(for: imported.table, name: name)), [])
+        }
+        let (recipe, issues) = try RecipeFile.read(url)
+        if recipe.isLocal {
+            return try (save(recipe), issues)
+        }
+        for package in recipe.embeddedBaseLooks {
+            try lookStore.save(package)
+        }
+        try FileManager.default.createDirectory(at: locations.installed, withIntermediateDirectories: true)
+        try RecipeFile.write(recipe, to: fileURL(forInstalled: recipe))
+        reload()
+        return (recipe, issues)
+    }
+
+    /// The look table in a `.cube` or `.3dl` file or a HaldCLUT image made for `tableSpace`,
+    /// with the title a `.cube` may give it; nil for any other file.
+    public static func lookTable(
+        contentsOf url: URL,
+        tableSpace: ImportedTableSpace = .sRGB,
+    ) throws -> (table: LookTable, title: String?)? {
         switch url.pathExtension.lowercased() {
         case "cube":
             let cube = try LookTableImport.parseCube(String(contentsOf: url, encoding: .utf8), space: tableSpace)
-            let recipe = LookTableImport.recipe(for: cube.table, name: cube.title ?? name)
-            return try (save(recipe), [])
+            return (cube.table, cube.title)
+        case "3dl":
+            return try (LookTableImport.parse3DL(String(contentsOf: url, encoding: .utf8), space: tableSpace), nil)
         case "png", "tif", "tiff":
-            let table = try LookTableImport.parseHald(LookTableImport.readImage(url), space: tableSpace)
-            return try (save(LookTableImport.recipe(for: table, name: name)), [])
+            return try (LookTableImport.parseHald(LookTableImport.readImage(url), space: tableSpace), nil)
         default:
-            let (recipe, issues) = try RecipeFile.read(url)
-            if recipe.isLocal {
-                return try (save(recipe), issues)
-            }
-            for package in recipe.embeddedBaseLooks {
-                try lookStore.save(package)
-            }
-            try FileManager.default.createDirectory(at: locations.installed, withIntermediateDirectories: true)
-            try RecipeFile.write(recipe, to: fileURL(forInstalled: recipe))
-            reload()
-            return (recipe, issues)
+            return nil
         }
     }
 

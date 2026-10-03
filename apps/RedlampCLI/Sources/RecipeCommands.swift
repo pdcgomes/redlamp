@@ -165,7 +165,7 @@ enum RecipeCommands {
             recipe, image: URL(fileURLWithPath: image), maxLongEdge: arguments.int("--size"),
             amount: arguments.double("--amount") ?? 100,
         )
-        try ImageFile.write(rendered, to: URL(fileURLWithPath: output))
+        try ImageFile.write(rendered, to: URL(fileURLWithPath: output), protecting: [URL(fileURLWithPath: image)])
         print("\(recipe.name) → \(output) \(rendered.width)x\(rendered.height)")
     }
 
@@ -186,7 +186,7 @@ enum RecipeCommands {
         guard !images.isEmpty else { throw CLIError(description: "no images (pass --images, --lookdev or --chart)") }
         let sheet = try await context.renderer()
             .contactSheet(recipes: recipes, images: images, tile: arguments.int("--tile") ?? 240)
-        try ImageFile.write(sheet, to: URL(fileURLWithPath: output))
+        try ImageFile.write(sheet, to: URL(fileURLWithPath: output), protecting: images)
         print("\(recipes.count) recipes × \(images.count) images → \(output) \(sheet.width)x\(sheet.height)")
     }
 

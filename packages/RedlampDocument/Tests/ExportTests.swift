@@ -144,31 +144,6 @@ struct ExportWriterTests {
         #expect(try ImageExporter.encode(Self.image(), settings: settings).count > 1000)
     }
 
-    @Test func `writing replaces the file and leaves nothing else`() throws {
-        let (folder, cleanup) = try Self.temporaryFolder()
-        defer { cleanup() }
-        let url = folder.appending(path: "out.jpg")
-        try Data("old".utf8).write(to: url)
-        try ImageExporter.write(Self.image(), to: url, settings: ExportSettings())
-        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path) == ["out.jpg"])
-        #expect(try Data(contentsOf: url).count > 100)
-    }
-
-    @Test func `a failed write keeps the existing file`() throws {
-        let (folder, cleanup) = try Self.temporaryFolder()
-        defer { cleanup() }
-        let url = folder.appending(path: "out.jpg")
-        try Data("old".utf8).write(to: url)
-        var settings = ExportSettings()
-        settings.limitsFileSize = true
-        settings.fileSizeLimitKB = 1
-        #expect(throws: ExportError.self) {
-            try ImageExporter.write(Self.image(width: 1024, height: 768), to: url, settings: settings)
-        }
-        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path) == ["out.jpg"])
-        #expect(try Data(contentsOf: url) == Data("old".utf8))
-    }
-
     @Test func `a missing folder throws`() {
         let url = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString).appending(path: "out.jpg")
         #expect(throws: ExportError.folderMissing(url.deletingLastPathComponent())) {

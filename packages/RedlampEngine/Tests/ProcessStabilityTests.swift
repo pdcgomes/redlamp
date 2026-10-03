@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import ImageIO
 import IOSurface
 import RedlampColor
 import RedlampEngine
@@ -8,7 +9,7 @@ import simd
 import Testing
 
 /// Every process version keeps rendering as it did when it shipped (ARC-03). Each fixture is
-/// developed with one heavy edit at every process version, from 1 to the current one, and measured
+/// developed with each `Edit` at every process version, from 1 to the current one, and measured
 /// twice: the whole photo exported at `longEdge`, and a window from its middle at full resolution,
 /// as the editor shows it at 1:1. Each keeps its patches' colours (CIELAB, as `CameraGoldenTests`
 /// measures them) and detail, compared with `tests/golden/process/process-<N>`.
@@ -64,17 +65,27 @@ struct ProcessStabilityTests {
             + [folder.appending(path: "DSC_0750.jpg")]
     }()
 
-    static func referenceURL(process: Int, fixture: URL) -> URL {
-        folder.appending(path: "process-\(process)/\(fixture.lastPathComponent).json")
+    enum Edit: String, CaseIterable, Sendable {
+        /// Tone, presence, colour, a curve, grading, grain, halation and a gradient (`heavyEdit`).
+        case heavy
+        /// Brush, luminance range, colour range and AI masks, Heal and Clone spots, an angled
+        /// crop with Transform, and black and white with its mixer (`retouchEdit`).
+        case retouch
     }
 
-    @Test(.enabled(if: EngineSmokeTests.canRender && !recording), arguments: fixtures)
-    func `every process version renders as recorded`(fixture: URL) async throws {
+    static func referenceURL(process: Int, fixture: URL, edit: Edit) -> URL {
+        let suffix = edit == .heavy ? "" : ".\(edit.rawValue)"
+        return folder.appending(path: "process-\(process)/\(fixture.lastPathComponent)\(suffix).json")
+    }
+
+    @Test(.enabled(if: EngineSmokeTests.canRender && !recording), arguments: fixtures, Edit.allCases)
+    func `every process version renders as recorded`(fixture: URL, edit: Edit) async throws {
         let engine = try RedlampEngine()
         let info = try await engine.open(fixture)
-        let name = fixture.lastPathComponent
+        let name = edit == .heavy ? fixture.lastPathComponent : "\(fixture.lastPathComponent) (\(edit.rawValue) edit)"
         for process in Self.versions {
-            guard let data = try? Data(contentsOf: Self.referenceURL(process: process, fixture: fixture)) else {
+            guard let data = try? Data(contentsOf: Self.referenceURL(process: process, fixture: fixture, edit: edit))
+            else {
                 Issue.record("""
                 process \(process) has no reference for \(name); record the missing references with \
                 TEST_RUNNER_REDLAMP_RECORD_PROCESS_GOLDEN=1 mise run test
@@ -82,7 +93,11 @@ struct ProcessStabilityTests {
                 continue
             }
             let reference = try JSONDecoder().decode(Reference.self, from: data)
-            let measured = try await Self.measure(engine, info: info, process: process)
+            let measured = try await Self.measure(
+                engine,
+                info: info,
+                recipe: Self.recipe(edit, process: process, info: info),
+            )
             for (view, now, then) in [
                 ("whole frame", measured.frame, reference.frame), ("1:1 window", measured.oneToOne, reference.oneToOne),
             ] {
@@ -115,20 +130,32 @@ struct ProcessStabilityTests {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         for fixture in Self.fixtures {
-            let missing = Self.versions.filter {
-                !FileManager.default.fileExists(atPath: Self.referenceURL(process: $0, fixture: fixture).path)
+            let missing = Self.versions.flatMap { process in
+                Edit.allCases.filter {
+                    !FileManager.default.fileExists(
+                        atPath: Self.referenceURL(process: process, fixture: fixture, edit: $0).path,
+                    )
+                }.map { (process, $0) }
             }
             guard !missing.isEmpty else { continue }
             let engine = try RedlampEngine()
             let info = try await engine.open(fixture)
-            for process in missing {
-                let url = Self.referenceURL(process: process, fixture: fixture)
+            for (process, edit) in missing {
+                let url = Self.referenceURL(process: process, fixture: fixture, edit: edit)
                 try FileManager.default.createDirectory(
                     at: url.deletingLastPathComponent(), withIntermediateDirectories: true,
                 )
-                try await encoder.encode(Self.measure(engine, info: info, process: process))
-                    .write(to: url, options: .withoutOverwriting)
+                try await encoder.encode(Self.measure(
+                    engine, info: info, recipe: Self.recipe(edit, process: process, info: info),
+                )).write(to: url, options: .withoutOverwriting)
             }
+        }
+    }
+
+    static func recipe(_ edit: Edit, process: Int, info: ImageInfo) throws -> EditRecipe {
+        switch edit {
+        case .heavy: heavyEdit(process: process, info: info)
+        case .retouch: try retouchEdit(process: process)
         }
     }
 
@@ -137,7 +164,7 @@ struct ProcessStabilityTests {
     /// and Clarity, and the file's lens correction (on by default). A photo whose embedded look
     /// comes with a gain table map (ProRAW) uses the look from the process that applies the map,
     /// when the Basic panel starts offering it.
-    static func edit(process: Int, info: ImageInfo) -> EditRecipe {
+    static func heavyEdit(process: Int, info: ImageInfo) -> EditRecipe {
         var recipe = EditRecipe()
         recipe.processVersion = process
         recipe[.exposure] = 0.3
@@ -178,9 +205,94 @@ struct ProcessStabilityTests {
         return recipe
     }
 
-    /// The heavy edit at `process`: the whole photo exported, and the window rendered at 1:1.
-    static func measure(_ engine: RedlampEngine, info: ImageInfo, process: Int) async throws -> Reference {
-        let recipe = edit(process: process, info: info)
+    /// The sky matte `IMG_1361.DNG` carries, as `EmbeddedMattes` read it, kept here so the AI
+    /// mask never changes with the reader or the OS. Every fixture uses it, stretched to its frame.
+    static let skyMatte = folder.appending(path: "IMG_1361.sky.png")
+
+    /// The rest of the editor: a brush, luminance and colour ranges, an AI mask, a Heal circle and
+    /// a brushed Clone, Transform under a crop turned by its angle, and black and white with the
+    /// mixer's luminance. Each local adjustment is mostly exposure, which black and white keeps.
+    /// Heal and Clone sit where both views see them.
+    ///
+    /// Spots are the removal work's (RM-*), and still changing, so they use only what
+    /// `RetouchSpot` has had from the start. A change to how an existing spot renders is a
+    /// process-version question: if it ships as one, the new version records its references here.
+    static func retouchEdit(process: Int) throws -> EditRecipe {
+        var recipe = EditRecipe()
+        recipe.processVersion = process
+        recipe.treatment = .blackAndWhite
+        recipe[.luminanceRed] = -30
+        recipe[.luminanceOrange] = 25
+        recipe[.luminanceYellow] = 20
+        recipe[.luminanceGreen] = -25
+        recipe[.luminanceBlue] = -45
+        recipe.crop = CropRect(left: 0.08, top: 0.1, right: 0.92, bottom: 0.9)
+        recipe[.cropAngle] = 3.5
+        recipe[.transformVertical] = 12
+        recipe[.transformHorizontal] = -8
+
+        func id(_ last: Int) -> UUID {
+            UUID(uuidString: String(format: "8F3A1C52-6D0E-4B7A-9C2F-%012X", last))!
+        }
+        func layer(
+            _ number: Int,
+            _ name: String,
+            _ shape: MaskShape,
+            _ adjustments: [ParameterID: Double],
+        ) -> MaskLayer {
+            MaskLayer(
+                id: id(number), name: name, components: [MaskComponent(id: id(number + 100), shape: shape)],
+                adjustments: adjustments,
+            )
+        }
+        let png = try Data(contentsOf: skyMatte)
+        let source = try #require(CGImageSourceCreateWithData(png as CFData, nil))
+        let properties = try #require(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+        let sky = try AIMask(
+            kind: .sky, provider: "apple.embedded.sky", revision: 1, analysisHash: "",
+            center: ImagePoint(x: 0.5, y: 0.2),
+            bitmap: MaskBitmap(
+                png: png,
+                width: #require(properties[kCGImagePropertyPixelWidth] as? Int),
+                height: #require(properties[kCGImagePropertyPixelHeight] as? Int),
+            ),
+            createdAt: Date(timeIntervalSince1970: 0),
+        )
+        recipe.masks = [
+            layer(1, "Brush", .brush(BrushMask(strokes: [BrushStroke(
+                points: [
+                    ImagePoint(x: 0.12, y: 0.72), ImagePoint(x: 0.3, y: 0.58), ImagePoint(x: 0.5, y: 0.62),
+                    ImagePoint(x: 0.72, y: 0.5),
+                ],
+                size: 0.07, feather: 60, flow: 80,
+            )])), [.localExposure: 0.9]),
+            layer(2, "Lights", .luminanceRange(LuminanceRangeMask(lower: 65, upper: 100, lowerFeather: 15)), [
+                .localExposure: -0.7, .localContrast: 30,
+            ]),
+            layer(3, "Colour", .colorRange(ColorRangeMask(samples: [
+                ColorSample(center: ImagePoint(x: 0.5, y: 0.5), radius: 0.03), ColorSample(center: ImagePoint(
+                    x: 0.3,
+                    y: 0.3,
+                )),
+            ])), [.localExposure: 0.6]),
+            layer(4, "Sky", .ai(sky), [.localExposure: -0.8, .localDehaze: 40]),
+        ]
+        recipe.spots = [
+            RetouchSpot(
+                id: id(200), mode: .heal, center: ImagePoint(x: 0.3, y: 0.4), source: ImagePoint(x: 0.62, y: 0.42),
+                radius: 0.06,
+            ),
+            RetouchSpot(
+                id: id(201), mode: .clone, center: ImagePoint(x: 0.5, y: 0.5), source: ImagePoint(x: 0.46, y: 0.43),
+                stroke: [ImagePoint(x: 0.03, y: 0.01)], radius: 0.02, feather: 30,
+            ),
+        ]
+        return recipe
+    }
+
+    /// `recipe`: the whole photo exported, and the window rendered at 1:1.
+    static func measure(_ engine: RedlampEngine, info: ImageInfo, recipe: EditRecipe) async throws -> Reference {
+        let process = recipe.processVersion
         let image = try await engine.renderStill(StillRequest(
             recipe: recipe, maxLongEdge: longEdge, colorSpace: .sRGB, bitsPerComponent: 16, purpose: .export,
         ))
