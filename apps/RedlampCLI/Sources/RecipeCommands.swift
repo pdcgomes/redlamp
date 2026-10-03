@@ -17,12 +17,17 @@ enum RecipeCommands {
       contact-sheet -o <sheet.png> [--recipes <list>] [--images <file>…] [--lookdev] [--chart]
                     [--original] [--tile <px>]
       hald-identity [-o <identity.png>] [--level <2-16>]
-      import <file.cube|file.3dl|hald.png|recipe.redrecipe> [--space <space>] [--display rec709|srgb]
-             [--name <name>] [-o <out.redrecipe>] [--install]
-                                               a look table is for --space srgb (the default), rec2020
-                                               (Redlamp's own) or camera log footage: slog3-sgamut3cine,
-                                               slog3-sgamut3, logc3-awg3, vlog-vgamut or applelog, with
-                                               output for --display rec709 (gamma 2.4, the default) or srgb
+      import <file|folder>… [--space <space>] [--display rec709|srgb] [--name <name>]
+             [-o <out.redrecipe|folder>] [--install]
+                                               a .redrecipe, a Lightroom .xmp preset (a folder: every
+                                               preset in it) or a .cube, .3dl or HaldCLUT look table; a
+                                               preset's report lists what was mapped, approximated and
+                                               ignored. For several, -o is a folder; exit 1 only when
+                                               nothing converted. A look table is for --space srgb (the
+                                               default), rec2020 (Redlamp's own) or camera log footage:
+                                               slog3-sgamut3cine, slog3-sgamut3, logc3-awg3, vlog-vgamut
+                                               or applelog, with output for --display rec709 (gamma 2.4,
+                                               the default) or srgb
       export <recipe> -o <out.redrecipe> [--cube <out.cube>]
       build-pack [--out <dir>]                 regenerate the bundled LUT Base Looks
       golden [--record]                        compare (or record) golden renders of bundled recipes
@@ -77,7 +82,7 @@ enum RecipeCommands {
         case "render": try await render(context)
         case "contact-sheet": try await contactSheet(context)
         case "hald-identity": try haldIdentity(context)
-        case "import": try importFile(context)
+        case "import": try importFiles(context)
         case "export": try export(context)
         case "build-pack": try StarterPackBuilder
             .build(into: context.arguments.value("--out").map(URL.init(fileURLWithPath:)))
@@ -203,42 +208,108 @@ enum RecipeCommands {
         """)
     }
 
-    static func importFile(_ context: Context) throws {
+    /// One file, read as the app's import reads it, or several files and folders of presets.
+    static func importFiles(_ context: Context) throws {
+        let inputs = context.arguments.positional
+        guard !inputs.isEmpty else { throw CLIError(description: "import needs a file, or a folder of presets") }
+        let space = try tableSpace(context.arguments)
+        var isFolder: ObjCBool = false
+        if inputs.count == 1,
+           !(FileManager.default.fileExists(atPath: inputs[0], isDirectory: &isFolder) && isFolder.boolValue) {
+            try importFile(URL(fileURLWithPath: inputs[0]), space: space, context)
+        } else {
+            try importFiles(inputs.map { URL(fileURLWithPath: $0) }, space: space, context)
+        }
+    }
+
+    /// Without `-o` or `--install` the recipe is the output, on standard output, and the
+    /// report goes to standard error.
+    static func importFile(_ url: URL, space: ImportedTableSpace, _ context: Context) throws {
         let arguments = context.arguments
-        guard let path = arguments.positional.first else { throw CLIError(description: "import needs a file") }
-        let url = URL(fileURLWithPath: path)
-        let space = try tableSpace(arguments)
-        let name = arguments.value("--name") ?? url.deletingPathExtension().lastPathComponent
-        var recipe: Recipe
-        switch url.pathExtension.lowercased() {
-        case "cube":
-            let cube = try LookTableImport.parseCube(String(contentsOf: url, encoding: .utf8), space: space)
-            recipe = LookTableImport.recipe(for: cube.table, name: arguments.value("--name") ?? cube.title ?? name)
-        case "3dl":
-            recipe = try LookTableImport.recipe(
-                for: LookTableImport.parse3DL(String(contentsOf: url, encoding: .utf8), space: space),
-                name: name,
-            )
-        case "png", "tif", "tiff":
-            recipe = try LookTableImport.recipe(
-                for: LookTableImport.parseHald(ImageFile.read(url), space: space),
-                name: name,
-            )
-        default:
-            let (read, issues) = try RecipeFile.read(url)
-            issues.forEach { print($0) }
-            recipe = read
+        var imported = try RecipeLibrary.read(importing: url, tableSpace: space, name: arguments.value("--name"))
+        let output = arguments.value("--output")
+        guard output != nil || arguments.has("--install") else {
+            if imported.report != nil || !imported.issues.isEmpty {
+                printError(RecipeImportSummary.Item(file: url, outcome: .imported(imported)).text)
+            }
+            try print(String(decoding: RecipeFile.encode(imported.recipe), as: UTF8.self))
+            return
         }
         if arguments.has("--install") {
-            recipe = try context.library.install(contentsOf: writeTemporary(recipe)).recipe
-            print("installed \(recipe.id) (\(recipe.name))")
+            imported = try context.library.install(imported)
         }
-        if let output = arguments.value("--output") {
-            try RecipeFile.write(recipe, to: URL(fileURLWithPath: output))
+        if let output {
+            try RecipeFile.write(imported.recipe, to: URL(fileURLWithPath: output))
+        }
+        print(RecipeImportSummary.Item(file: url, outcome: .imported(imported)).text)
+        if arguments.has("--install") {
+            print("installed \(imported.recipe.id) (\(imported.recipe.name))")
+        }
+        if let output {
             print("wrote \(output)")
-        } else if !arguments.has("--install") {
-            try print(String(decoding: RecipeFile.encode(recipe), as: UTF8.self))
         }
+    }
+
+    /// Each file, and every preset in each folder, with its report; installed, or written
+    /// into the `-o` folder, when asked. Files that don't convert are listed on standard
+    /// error, and the command fails only when none converted.
+    static func importFiles(_ inputs: [URL], space: ImportedTableSpace, _ context: Context) throws {
+        let arguments = context.arguments
+        guard arguments.value("--name") == nil else {
+            throw CLIError(description: "--name names the recipe of a single file")
+        }
+        var summary = RecipeLibrary.read(importing: inputs, tableSpace: space)
+        if arguments.has("--install") {
+            summary = context.library.install(summary)
+        }
+        for item in summary.items {
+            if case .failed = item.outcome {
+                printError(item.text)
+            } else {
+                print(item.text)
+            }
+        }
+        let verb = arguments.has("--install") ? "installed" : "converted"
+        let done = summary.imported.count
+        guard done > 0 else {
+            printError("nothing was \(verb)")
+            throw ExitCode(1)
+        }
+        let output = arguments.value("--output")
+        if let output {
+            let folder = URL(fileURLWithPath: output, isDirectory: true)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            var taken = Set<String>()
+            for imported in summary.imported {
+                let name = uniqueName(RecipeFile.fileName(for: imported.recipe), taken: &taken)
+                try RecipeFile.write(imported.recipe, to: folder.appendingPathComponent(name))
+            }
+        }
+        let kept = arguments.has("--install") || output != nil
+        print("\(verb) \(done) of \(summary.items.count) files\(kept ? "" : "; -o <folder> or --install keeps them")")
+        if let output {
+            print("wrote \(done) recipe\(done == 1 ? "" : "s") to \(output)")
+        }
+    }
+
+    /// A line on standard error, after whatever standard output holds, so the two stay in
+    /// order when they go to the same file.
+    static func printError(_ line: String) {
+        fflush(stdout)
+        FileHandle.standardError.write(Data("\(line)\n".utf8))
+    }
+
+    /// `name`, or `name 2`, `name 3`… when this run already used it; file names differ by
+    /// more than case.
+    static func uniqueName(_ name: String, taken: inout Set<String>) -> String {
+        let base = (name as NSString).deletingPathExtension, ext = (name as NSString).pathExtension
+        var candidate = name
+        var number = 2
+        while !taken.insert(candidate.lowercased()).inserted {
+            candidate = "\(base) \(number).\(ext)"
+            number += 1
+        }
+        return candidate
     }
 
     /// `--space` and `--display`: what an imported look table was made for.
@@ -344,13 +415,6 @@ enum RecipeCommands {
             }
         }
         return result
-    }
-
-    static func writeTemporary(_ recipe: Recipe) throws -> URL {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("\(UUID().uuidString).\(Recipe.fileExtension)")
-        try RecipeFile.write(recipe, to: url)
-        return url
     }
 }
 
