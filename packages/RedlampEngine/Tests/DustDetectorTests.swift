@@ -167,11 +167,15 @@ struct DustDetectorTests {
     @Test func `across a shoot, specks in the same sensor place are dust, and reach every frame`() throws {
         let engine = try RedlampEngine()
         let session = try scene()
-        let found = try engine.findDust(recipe: EditRecipe(), sensitivity: 50, session: session)
+        let found = try engine.findSpecks(recipe: EditRecipe(), sensitivity: 50, session: session)
         #expect(found.count == Self.dust.count)
         // Four frames: each finds the dust, but the last misses one speck (texture hid it there),
         // and the first also finds a speck of the scene's own.
-        let scenery = DetectedSpot(center: ImagePoint(x: 0.5, y: 0.1), radius: 0.01, strength: 30)
+        let scenery = ShootDust.Sighting(spot: DetectedSpot(
+            center: ImagePoint(x: 0.5, y: 0.1),
+            radius: 0.01,
+            strength: 30,
+        ))
         var frames = (0 ..< 4).map { index in
             ShootDust.Frame(
                 url: URL(fileURLWithPath: "/frame\(index).dng"), recipe: EditRecipe(), session: session, specks: found,
@@ -182,9 +186,9 @@ struct DustDetectorTests {
         // A fifth frame already has a spot over one speck.
         var healed = EditRecipe()
         healed.spots = [RetouchSpot(
-            center: found[1].center,
+            center: found[1].spot.center,
             source: ImagePoint(x: 0.1, y: 0.1),
-            radius: found[1].radius,
+            radius: found[1].spot.radius,
         )]
         frames.append(ShootDust.Frame(
             url: URL(fileURLWithPath: "/frame4.dng"),
@@ -202,10 +206,31 @@ struct DustDetectorTests {
             )
         }
         #expect(
-            dust[frames[3].url]?.contains { abs($0.center.x - found[0].center.x) < 0.005 } == true,
+            dust[frames[3].url]?.contains { abs($0.center.x - found[0].spot.center.x) < 0.005 } == true,
             "the missed one",
         )
         #expect(dust[frames[4].url]?.count == Self.dust.count - 1, "the healed one is left")
+    }
+
+    @Test func `frames showing the same scene around a speck count once`() throws {
+        let session = try scene()
+        let spot = DetectedSpot(center: ImagePoint(x: 0.3, y: 0.3), radius: 0.01, strength: 20)
+        /// The photo around the speck, in multiples of the noise.
+        func around(_ frequency: Double, _ phase: Double, _ amplitude: Double) -> [Float] {
+            (0 ..< 48).map { Float(amplitude * sin(Double($0) * frequency + phase)) }
+        }
+        func frames(_ surroundings: (Int) -> [Float]) -> [ShootDust.Frame] {
+            (0 ..< 4).map { index in
+                ShootDust.Frame(
+                    url: URL(fileURLWithPath: "/frame\(index).dng"), recipe: EditRecipe(), session: session,
+                    specks: [ShootDust.Sighting(spot: spot, surroundings: surroundings(index))],
+                )
+            }
+        }
+        #expect(ShootDust.consistent(frames { _ in around(1.7, 0, 10) }).isEmpty, "a scene that didn't move")
+        #expect(ShootDust.consistent(frames { _ in around(1.7, 0, 1) }).count == 4, "a plain sky")
+        let moved = ShootDust.consistent(frames { around(1.7 + Double($0), Double($0), 10) })
+        #expect(moved.count == 4, "a scene that moved")
     }
 
     @Test func `dust already covered by a spot isn't found again`() throws {

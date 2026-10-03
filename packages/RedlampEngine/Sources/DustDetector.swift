@@ -6,11 +6,11 @@ import simd
 /// with, a few pixels to a few dozen across, where the photo is smooth enough to show them (sky,
 /// walls, water).
 ///
-/// Blobs are found as differences of Gaussians on log luminance, at four scales: a speck is
+/// Blobs are found as differences of Gaussians on log luminance, at three scales: a speck is
 /// darker than a wider blur of itself. Each must stand out from its neighbourhood by several times
-/// the neighbourhood's own spread (a median absolute deviation, so texture raises the bar where
-/// there is texture), be about round (the Hessian test Lowe uses for SIFT), and darken every
-/// channel alike, since dust has no colour of its own.
+/// the neighbourhood's own spread (a median absolute deviation on rings around it, so texture
+/// raises the bar where there is texture), be about round (the Hessian test Lowe uses for SIFT),
+/// and darken every channel alike, since dust has no colour of its own.
 enum DustDetector {
     /// One level of the pyramid, in sensor coordinates: camera RGB per texel.
     struct Image {
@@ -25,14 +25,17 @@ enum DustDetector {
         var radius: Float
         /// How far it stands out, in multiples of its neighbourhood's spread.
         var strength: Float
+        /// The photo around it: log luminance on three rings, 12, 24 and 48 texels out, sixteen
+        /// points each, less the plane through them, in multiples of the noise. Frames that match
+        /// here show the same scene (a tripod, a burst), so a speck repeating in them proves
+        /// nothing about the sensor.
+        var surroundings: [Float] = []
     }
 
     /// The blurs paired for each scale's difference of Gaussians. Dust's shadow is out of focus, so
     /// it's never smaller than a few pixels of the level searched (about 6 at full size).
     static let scales: [Float] = [2, 4, 8]
     static let ratio: Float = 1.6
-    /// Neighbourhoods the spread is measured in, in texels.
-    static let tile = 64
     static let maximumSpecks = 300
 
     /// `sensitivity` 0...100: how many spreads a speck must stand out by, from 16 down to 4.
@@ -44,12 +47,12 @@ enum DustDetector {
         let threshold = Float(16 - 0.12 * min(max(sensitivity, 0), 100))
         let noise = noiseLevel(logLuma, width: width, height: height)
         var candidates: [Speck] = []
+        var scratch: [Float] = []
         for sigma in scales {
             let narrow = blur(logLuma, width: width, height: height, sigma: sigma)
             let wide = blur(logLuma, width: width, height: height, sigma: sigma * ratio)
             // Positive where a spot is darker than its surroundings.
             let response = zip(wide, narrow).map { $0 - $1 }
-            let spreads = tileSpreads(response, width: width, height: height)
             // What noise alone spreads this scale's response by: dust shows only where the photo
             // is that smooth (sky, walls, water), not on stone, foliage or fabric.
             let smooth = 3 * noise * responseGain(sigma: sigma)
@@ -58,10 +61,13 @@ enum DustDetector {
             for y in margin ..< height - margin {
                 for x in margin ..< width - margin {
                     let value = response[y * width + x]
-                    guard value > 0.004 else { continue }
-                    let spread = max(spreads[(y / tile) * ((width + tile - 1) / tile) + x / tile], 1e-4)
+                    guard value > 0.004, isPeak(response, x: x, y: y, width: width) else { continue }
+                    guard let found = ringSpread(
+                        response, width: width, height: height, x: x, y: y, sigma: sigma, scratch: &scratch,
+                    )
+                    else { continue }
+                    let spread = max(found, 1e-4)
                     guard value > threshold * spread, spread < smooth else { continue }
-                    guard isPeak(response, x: x, y: y, width: width) else { continue }
                     guard isRound(narrow, x: x, y: y, width: width) else { continue }
                     let center = SIMD2(Float(x) + 0.5, Float(y) + 0.5)
                     guard isSpeck(
@@ -73,7 +79,8 @@ enum DustDetector {
                         noise: noise,
                     )
                     else { continue }
-                    guard let radius = softExtent(logLuma, width: width, height: height, center: center, sigma: sigma)
+                    guard let radius = softExtent(logLuma, width: width, height: height, center: center, sigma: sigma),
+                          !hasLookalikes(response, narrow, width: width, height: height, x: x, y: y, sigma: sigma)
                     else { continue }
                     candidates.append(Speck(center: center, radius: radius, strength: value / spread))
                 }
@@ -93,7 +100,30 @@ enum DustDetector {
         let crowded = specks.map { speck in
             specks.filter { simd_distance($0.center, speck.center) < crowding }.count > 3
         }
-        return Array(zip(specks, crowded).filter { !$0.1 }.map(\.0).prefix(maximumSpecks))
+        return zip(specks, crowded).filter { !$0.1 }.prefix(maximumSpecks).map { speck, _ in
+            var speck = speck
+            speck.surroundings = surroundings(
+                logLuma, width: width, height: height, center: speck.center, noise: max(noise, 1e-4),
+            )
+            return speck
+        }
+    }
+
+    /// `Speck.surroundings` for a speck at `center`.
+    static func surroundings(
+        _ logLuma: [Float], width: Int, height: Int, center: SIMD2<Float>, noise: Float,
+    ) -> [Float] {
+        var points: [SIMD3<Float>] = []
+        for radius: Float in [12, 24, 48] {
+            for step in 0 ..< 16 {
+                let angle = Float(step) * .pi / 8
+                let offset = SIMD2(radius * cos(angle), radius * sin(angle))
+                let x = min(max(Int(center.x + offset.x), 0), width - 1)
+                let y = min(max(Int(center.y + offset.y), 0), height - 1)
+                points.append(SIMD3(offset.x, offset.y, logLuma[y * width + x]))
+            }
+        }
+        return planeResiduals(points).map { $0 / noise }
     }
 
     /// Specks with more than three others this near (in texels) are texture.
@@ -143,28 +173,64 @@ enum DustDetector {
         return output
     }
 
-    /// Each tile's median absolute deviation of `values`, scaled to a standard deviation.
-    private static func tileSpreads(_ values: [Float], width: Int, height: Int) -> [Float] {
-        let columns = (width + tile - 1) / tile, rows = (height + tile - 1) / tile
-        var spreads = [Float](repeating: 0, count: columns * rows)
-        var sample: [Float] = []
-        for row in 0 ..< rows {
-            for column in 0 ..< columns {
-                sample.removeAll(keepingCapacity: true)
-                for y in stride(from: row * tile, to: min((row + 1) * tile, height), by: 2) {
-                    for x in stride(from: column * tile, to: min((column + 1) * tile, width), by: 2) {
-                        sample.append(values[y * width + x])
-                    }
-                }
-                guard !sample.isEmpty else { continue }
-                sample.sort()
-                let median = sample[sample.count / 2]
-                var deviations = sample.map { abs($0 - median) }
-                deviations.sort()
-                spreads[row * columns + column] = 1.4826 * deviations[deviations.count / 2]
+    /// The neighbourhood's spread of a scale's response around (x, y): the median absolute
+    /// deviation, scaled to a standard deviation, on rings beyond the reach of the spot's own
+    /// response (about six times the scale), so a big speck doesn't raise its own bar. Nil where
+    /// too little of the rings is inside the image.
+    private static func ringSpread(
+        _ response: [Float], width: Int, height: Int, x: Int, y: Int, sigma: Float, scratch: inout [Float],
+    ) -> Float? {
+        scratch.removeAll(keepingCapacity: true)
+        let inner = max(sigma * 6, 12)
+        for ring in 0 ..< 3 {
+            let radius = inner + Float(ring) * max(sigma * 2, 6)
+            let count = 64
+            for step in 0 ..< count {
+                let angle = (Float(step) + Float(ring) / 3) * 2 * .pi / Float(count)
+                let px = Int((Float(x) + 0.5 + radius * cos(angle)).rounded(.down))
+                let py = Int((Float(y) + 0.5 + radius * sin(angle)).rounded(.down))
+                guard px >= 0, py >= 0, px < width, py < height else { continue }
+                scratch.append(response[py * width + px])
             }
         }
-        return spreads
+        guard scratch.count >= 96 else { return nil }
+        scratch.sort()
+        let median = scratch[scratch.count / 2]
+        for index in scratch.indices {
+            scratch[index] = abs(scratch[index] - median)
+        }
+        scratch.sort()
+        return 1.4826 * scratch[scratch.count / 2]
+    }
+
+    /// Whether two or more spots like this one lie near it, round, standing out about as much
+    /// (half its response to twice it) and as dark: dust is sparse, and spots repeating nearby
+    /// are the scene's (the knots of a fabric, marks in wood). Gaps between bright things (sky
+    /// between clouds) stand out from them but are no darker than the sky around the speck.
+    private static func hasLookalikes(
+        _ response: [Float], _ narrow: [Float], width: Int, height: Int, x: Int, y: Int, sigma: Float,
+    ) -> Bool {
+        let value = response[y * width + x]
+        let level = narrow[y * width + x]
+        let reach = Int(max(sigma * 10, 40))
+        let apart = sigma * 2
+        var found = 0
+        for ny in max(y - reach, 1) ..< min(y + reach + 1, height - 1) {
+            for nx in max(x - reach, 1) ..< min(x + reach + 1, width - 1) {
+                let other = response[ny * width + nx]
+                guard other >= 0.5 * value, other <= 2 * value, narrow[ny * width + nx] <= level + 0.5 * value
+                else { continue }
+                let dx = Float(nx - x), dy = Float(ny - y)
+                guard dx * dx + dy * dy > apart * apart, isPeak(response, x: nx, y: ny, width: width),
+                      isRound(narrow, x: nx, y: ny, width: width)
+                else { continue }
+                found += 1
+                if found >= 2 {
+                    return true
+                }
+            }
+        }
+        return false
     }
 
     private static func isPeak(_ values: [Float], x: Int, y: Int, width: Int) -> Bool {
@@ -280,8 +346,15 @@ enum DustDetector {
     /// The variance left in `points` (x, y, value) once the plane through them is taken away: a
     /// gradient across a sky is not texture.
     private static func planeResidual(_ points: [SIMD3<Float>]) -> Float {
+        guard points.count >= 3 else { return 0 }
+        return planeResiduals(points).map { $0 * $0 }.reduce(0, +) / Float(points.count)
+    }
+
+    /// What's left of each point's value once the least-squares plane through `points` is taken
+    /// away.
+    private static func planeResiduals(_ points: [SIMD3<Float>]) -> [Float] {
         let n = Float(points.count)
-        guard n >= 3 else { return 0 }
+        guard n >= 3 else { return points.map { _ in 0 } }
         let mean = points.reduce(SIMD3<Float>.zero, +) / n
         var sxx: Float = 0, syy: Float = 0, sxy: Float = 0, sxz: Float = 0, syz: Float = 0
         for point in points {
@@ -295,13 +368,10 @@ enum DustDetector {
         let determinant = sxx * syy - sxy * sxy
         let (gx, gy) = abs(determinant) > 1e-6
             ? ((sxz * syy - syz * sxy) / determinant, (syz * sxx - sxz * sxy) / determinant) : (0, 0)
-        var residual: Float = 0
-        for point in points {
+        return points.map { point in
             let d = point - mean
-            let r = d.z - gx * d.x - gy * d.y
-            residual += r * r
+            return d.z - gx * d.x - gy * d.y
         }
-        return residual / n
     }
 
     /// The photo's noise in log luminance: neighbours' differences, by their median absolute

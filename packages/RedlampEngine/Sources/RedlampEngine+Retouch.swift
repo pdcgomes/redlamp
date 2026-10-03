@@ -33,7 +33,7 @@ public extension RedlampEngine {
             // Repetition across frames weeds out the scene, so each frame is looked at more keenly.
             let found = await withCheckedContinuation { continuation in
                 renderQueue.async { [self] in
-                    let specks = try? findDust(
+                    let specks = try? findSpecks(
                         recipe: photo.recipe, sensitivity: min(sensitivity + 15, 100), session: session,
                     )
                     continuation.resume(returning: specks ?? [])
@@ -44,13 +44,21 @@ public extension RedlampEngine {
         return ShootDust.consistent(frames)
     }
 
-    /// Reads back the pyramid level whose long edge is 2000 to 4000 texels, and looks for dust
-    /// there, away from the recipe's spots.
     internal func findDust(
         recipe: EditRecipe,
         sensitivity: Double,
-        session base: ImageSession,
+        session: ImageSession,
     ) throws -> [DetectedSpot] {
+        try findSpecks(recipe: recipe, sensitivity: sensitivity, session: session).map(\.spot)
+    }
+
+    /// Reads back the pyramid level whose long edge is 2000 to 4000 texels, and looks for dust
+    /// there, away from the recipe's spots.
+    internal func findSpecks(
+        recipe: EditRecipe,
+        sensitivity: Double,
+        session base: ImageSession,
+    ) throws -> [ShootDust.Sighting] {
         guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
         let session = try retouch.session(for: recipe, base: base, commands: commands)
         let pyramid = session.pyramid
@@ -90,10 +98,11 @@ public extension RedlampEngine {
                 SIMD2(Double(speck.center.x) / Double(width), Double(speck.center.y) / Double(height)),
                 orientation: session.orientation,
             )
-            return DetectedSpot(
+            let spot = DetectedSpot(
                 center: ImagePoint(x: point.x, y: point.y), radius: Double(speck.radius) / orientedHeight,
                 strength: Double(speck.strength),
             )
+            return ShootDust.Sighting(spot: spot, surroundings: speck.surroundings)
         }
     }
 

@@ -5,13 +5,22 @@ import simd
 /// Dust across a shoot (RM-02): dust sits in the same place on the sensor in every frame, the
 /// scene doesn't. Specks found in several frames, in the same sensor place and of about the same
 /// size, are dust, and are placed in every frame from that sensor, where texture hid them too.
+/// Frames showing the same scene around a speck (a tripod, a burst) count once: a scene that
+/// doesn't move repeats its own specks as faithfully as dust.
 enum ShootDust {
     struct Frame {
         var url: URL
         var recipe: EditRecipe
         var session: ImageSession
-        /// As `findDust` found them, in the photo as shown.
-        var specks: [DetectedSpot]
+        /// As `findSpecks` found them.
+        var specks: [Sighting]
+    }
+
+    /// A speck one frame shows, in the photo as shown, and the photo around it
+    /// (`DustDetector.Speck.surroundings`).
+    struct Sighting {
+        var spot: DetectedSpot
+        var surroundings: [Float] = []
     }
 
     /// A speck in sensor texels (level 0 of the pyramid, before orientation).
@@ -20,6 +29,7 @@ enum ShootDust {
         var center: SIMD2<Float>
         var radius: Float
         var strength: Double
+        var surroundings: [Float]
     }
 
     /// Found in at least this many frames, and this share of them.
@@ -39,8 +49,7 @@ enum ShootDust {
             }
             let needed = max(minimumFrames, Int(ceil(minimumShare * Double(indices.count))))
             for cluster in clusters(specks) {
-                let seen = Set(cluster.map(\.frame))
-                guard seen.count >= needed else { continue }
+                guard views(cluster) >= needed else { continue }
                 let center = SIMD2(median(cluster.map(\.center.x)), median(cluster.map(\.center.y)))
                 let radius = (cluster.map(\.radius).max() ?? 0) * 1.1
                 let strength = cluster.map(\.strength).reduce(0, +) / Double(cluster.count)
@@ -55,16 +64,41 @@ enum ShootDust {
         return result
     }
 
-    private static func sensor(_ spot: DetectedSpot, in frame: Frame, frame index: Int) -> SensorSpeck {
+    private static func sensor(_ sighting: Sighting, in frame: Frame, frame index: Int) -> SensorSpeck {
         let pyramid = frame.session.pyramid
         let orientation = frame.session.orientation
+        let spot = sighting.spot
         let source = sourceCoordinate(SIMD2(spot.center.x, spot.center.y), orientation: orientation)
         let height = Double(orientation >= 5 ? pyramid.width : pyramid.height)
         return SensorSpeck(
             frame: index,
             center: SIMD2(Float(source.x * Double(pyramid.width)), Float(source.y * Double(pyramid.height))),
-            radius: Float(spot.radius * height), strength: spot.strength,
+            radius: Float(spot.radius * height), strength: spot.strength, surroundings: sighting.surroundings,
         )
+    }
+
+    /// How many frames saw the speck around a different scene: frames that agree on it count once.
+    static func views(_ cluster: [SensorSpeck]) -> Int {
+        var seen: Set<Int> = []
+        var distinct: [SensorSpeck] = []
+        for speck in cluster where seen.insert(speck.frame).inserted {
+            if !distinct.contains(where: { sameScene($0.surroundings, speck.surroundings) }) {
+                distinct.append(speck)
+            }
+        }
+        return distinct.count
+    }
+
+    /// Whether two frames show the same scene around a speck: both have texture there, well
+    /// above the noise (four times it), and it matches. Sky or a wall shows nothing to compare,
+    /// so it can't tell.
+    static func sameScene(_ a: [Float], _ b: [Float]) -> Bool {
+        guard a.count == b.count, !a.isEmpty else { return false }
+        let n = Float(a.count)
+        let aa = a.map { $0 * $0 }.reduce(0, +) / n, bb = b.map { $0 * $0 }.reduce(0, +) / n
+        guard aa > 16, bb > 16 else { return false }
+        let ab = zip(a, b).map { $0 * $1 }.reduce(0, +) / n
+        return ab / (aa * bb).squareRoot() > 0.8
     }
 
     private static func shown(

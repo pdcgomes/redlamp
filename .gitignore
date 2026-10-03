@@ -27,6 +27,7 @@ vendor/cache/
 
 # Test fixtures that are downloaded, not committed (CC0 samples from raw.pixls.us)
 tests/fixtures/raw/
+tests/fixtures/shoots/
 
 # Python bytecode from research prototypes
 __pycache__/
