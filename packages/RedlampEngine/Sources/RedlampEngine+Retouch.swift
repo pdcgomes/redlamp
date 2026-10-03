@@ -13,6 +13,65 @@ extension RedlampEngine {
         }
     }
 
+    public func detectDust(recipe: EditRecipe, sensitivity: Double) async -> [DetectedSpot] {
+        guard let current = currentSession() else { return [] }
+        return await withCheckedContinuation { continuation in
+            renderQueue.async { [self] in
+                let found = try? findDust(recipe: recipe, sensitivity: sensitivity, session: current)
+                continuation.resume(returning: found ?? [])
+            }
+        }
+    }
+
+    /// Reads back the pyramid level whose long edge is 2000 to 4000 texels, and looks for dust
+    /// there, away from the recipe's spots.
+    func findDust(recipe: EditRecipe, sensitivity: Double, session base: ImageSession) throws -> [DetectedSpot] {
+        guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
+        let session = try retouch.session(for: recipe, base: base, commands: commands)
+        let pyramid = session.pyramid
+        let longEdge = max(pyramid.width, pyramid.height)
+        let level = min(max(Int(floor(log2(Double(longEdge) / 2000))), 0), pyramid.mipmapLevelCount - 1)
+        let width = max(1, pyramid.width >> level), height = max(1, pyramid.height >> level)
+        guard let buffer = device.makeBuffer(length: width * height * 8, options: .storageModeShared),
+              let blit = commands.makeBlitCommandEncoder()
+        else { throw EngineError.gpuUnavailable }
+        blit.copy(
+            from: pyramid, sourceSlice: 0, sourceLevel: level, sourceOrigin: MTLOrigin(),
+            sourceSize: MTLSize(width: width, height: height, depth: 1), to: buffer, destinationOffset: 0,
+            destinationBytesPerRow: width * 8, destinationBytesPerImage: width * height * 8,
+        )
+        blit.endEncoding()
+        try finish(commands)
+        let halves = buffer.contents().assumingMemoryBound(to: Float16.self)
+        let pixels = (0 ..< width * height).map { index in
+            SIMD3(Float(halves[index * 4]), Float(halves[index * 4 + 1]), Float(halves[index * 4 + 2]))
+        }
+        let weights = DetailStage.luma(session)
+        let specks = DustDetector.detect(
+            DustDetector.Image(width: width, height: height, pixels: pixels),
+            luma: SIMD3(weights.x, weights.y, weights.z), sensitivity: sensitivity,
+        )
+        let orientedHeight = Double(session.orientation >= 5 ? width : height)
+        let placed = recipe.spots.compactMap {
+            RetouchStage.placement($0, orientation: session.orientation, width: width, height: height)
+        }
+        return specks.compactMap { speck in
+            // Already covered by a spot.
+            let covered = placed.contains { placement in
+                placement.points.contains { simd_distance($0, speck.center) < placement.radius + speck.radius }
+            }
+            guard !covered else { return nil }
+            let point = orientedCoordinate(
+                SIMD2(Double(speck.center.x) / Double(width), Double(speck.center.y) / Double(height)),
+                orientation: session.orientation,
+            )
+            return DetectedSpot(
+                center: ImagePoint(x: point.x, y: point.y), radius: Double(speck.radius) / orientedHeight,
+                strength: Double(speck.strength),
+            )
+        }
+    }
+
     /// Reads the pyramid level `RetouchSource` searches, around the spot, back from the GPU.
     func findRetouchSource(
         for spot: RetouchSpot,

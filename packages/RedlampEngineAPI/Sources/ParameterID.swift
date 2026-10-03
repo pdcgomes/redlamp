@@ -216,6 +216,8 @@ public enum ParameterID: String, CaseIterable, Codable, Sendable, Hashable {
     case spotSize = "spot.size"
     case spotFeather = "spot.feather"
     case spotOpacity = "spot.opacity"
+    /// Visualize Spots' sensitivity: a setting of the tool, not of any spot.
+    case spotVisualize = "spot.visualize"
 
     public static let spotParameters: [ParameterID] = [.spotSize, .spotFeather, .spotOpacity]
 

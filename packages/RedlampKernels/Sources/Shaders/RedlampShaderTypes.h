@@ -76,6 +76,7 @@ struct DevelopParams {
     float4 gainTableGrid;     // xy the map's origin, zw its spacing, relative to the raw image
     float4 calibration;       // x Calibration's Shadows Tint (-1 green ... 1 magenta)
     float4 vignette2;         // x Post-Crop Vignetting's Highlights (0...1)
+    float4 spots;             // x 1 = Visualize Spots, y its threshold (log luminance)
 };
 
 // Noise reduction over one work area of the pyramid.

@@ -66,6 +66,44 @@ struct HealToolTests {
         #expect(model.recipe.spots.last?.stroke.isEmpty == true)
     }
 
+    @Test func `Remove Dust heals every speck found, in one step`() async throws {
+        let engine = StubEngine()
+        engine.dust = [
+            DetectedSpot(center: ImagePoint(x: 0.2, y: 0.2), radius: 0.01, strength: 30),
+            DetectedSpot(center: ImagePoint(x: 0.7, y: 0.3), radius: 0.02, strength: 12),
+        ]
+        engine.retouchSource = ImagePoint(x: 0.5, y: 0.5)
+        let (model, cleanup) = try await openEditor(engine)
+        defer { cleanup() }
+        model.activeTool = .heal
+        let steps = model.history.count
+        await model.removeDust()
+        #expect(model.recipe.spots.map(\.center) == engine.dust.map(\.center))
+        #expect(model.recipe.spots.allSatisfy { $0.mode == .heal && $0.source == ImagePoint(x: 0.5, y: 0.5) })
+        #expect(model.recipe.spots.map(\.radius) == [0.01, 0.02])
+        #expect(model.history.count == steps + 1 && model.history.last?.name == "Remove Dust")
+        #expect(model.dustMessage == "Healed 2 specks of dust.")
+        engine.dust = []
+        await model.removeDust()
+        #expect(model.dustMessage == "No dust found." && model.recipe.spots.count == 2)
+        model.activeTool = .edit
+        #expect(model.dustMessage == nil)
+    }
+
+    @Test func `Visualize Spots shows in the Healing tool only`() async throws {
+        let engine = StubEngine()
+        let (model, cleanup) = try await openEditor(engine)
+        defer { cleanup() }
+        model.activeTool = .heal
+        model.visualizeSpots = true
+        #expect(engine.lastRender?.visualizeSpots == 50)
+        model.setSliderValue(.spotVisualize, 80)
+        #expect(engine.lastRender?.visualizeSpots == 80)
+        #expect(model.recipe[.spotVisualize] == 50, "a tool setting, never in the edit")
+        model.activeTool = .edit
+        #expect(engine.lastRender?.visualizeSpots == nil)
+    }
+
     @Test func `the sliders change the selected spot, and the next one`() async throws {
         let (model, cleanup) = try await openEditor()
         defer { cleanup() }

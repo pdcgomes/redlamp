@@ -107,6 +107,10 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// surroundings best, clear of the spot itself. `recipe`'s spots apply first. Nil when none fits.
     func retouchSource(for spot: RetouchSpot, recipe: EditRecipe) async -> ImagePoint?
 
+    /// Sensor dust in the open photo as `recipe`'s spots leave it: soft, dark, colourless specks
+    /// on smooth areas, strongest first. `sensitivity` 0...100.
+    func detectDust(recipe: EditRecipe, sensitivity: Double) async -> [DetectedSpot]
+
     /// The focus stack document at `url`, merged now or read from the cache, developed with the
     /// default edit within `maxLongEdge`. `progress` gets 0 ... 1 from any thread. Opening the
     /// document afterwards shows this merge, even if it changed since it was last opened.
@@ -136,5 +140,9 @@ public extension EditingEngine {
 
     func retouchSource(for _: RetouchSpot, recipe _: EditRecipe) async -> ImagePoint? {
         nil
+    }
+
+    func detectDust(recipe _: EditRecipe, sensitivity _: Double) async -> [DetectedSpot] {
+        []
     }
 }

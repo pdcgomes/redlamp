@@ -31,6 +31,7 @@ options:
   --heal <x>,<y>,<radius>  heal a spot (x, y 0...1 across the photo as shown, radius a fraction
                            of its height) from the best source nearby; --clone copies instead
   --heal-brush <x>,<y>,…,<radius>  the same along a brush stroke through the points; --clone-brush
+  --remove-dust <0…100>    heal the sensor dust found at this sensitivity (50 is the app's)
   --bw                     black & white treatment
   --p3                     encode in Display P3 instead of sRGB
   --16bit                  16 bits per component (PNG/TIFF)
@@ -206,6 +207,17 @@ func run(_ arguments: [String]) async throws {
             spot.source = source
             recipe.spots.append(spot)
             print(String(format: "%@ from %.3f, %.3f", mode.name.lowercased(), source.x, source.y))
+        case "--remove-dust":
+            let sensitivity = try Double(value()) ?? 50
+            let found = await engine.detectDust(recipe: recipe, sensitivity: sensitivity)
+            for speck in found {
+                var spot = RetouchSpot(center: speck.center, source: speck.center, radius: speck.radius)
+                spot.source = await engine.retouchSource(for: spot, recipe: recipe) ?? speck.center
+                recipe.spots.append(spot)
+            }
+            print(
+                "dust: \(found.count) specks, \(found.prefix(8).map { String(format: "%.3f,%.3f", $0.center.x, $0.center.y) })",
+            )
         case "--bw":
             recipe.treatment = .blackAndWhite
         case "--p3":

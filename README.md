@@ -170,7 +170,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 ### In progress
 
 - **Focus stacking:** lens corrections before alignment, halo handling, vendor focus-bracketing tags for detection, and baking a stack to DNG.
-- **Heal and Clone** (`Q`): click the photo to add a spot, which finds its own source nearby; drag the spot or its source to move it, or its handle to resize it, and change Heal or Clone, Size, Feather and Opacity in the panel. Heal matches the source's texture to the light around the spot. Drag instead of clicking to brush a spot along a scratch, wire or twig. Spots are saved with the edit, paste with Copy Settings, and `redlamp render --heal x,y,radius` (or `--heal-brush` through several points) adds one from the command line.
+- **Heal and Clone** (`Q`): click the photo to add a spot, which finds its own source nearby; drag the spot or its source to move it, or its handle to resize it, and change Heal or Clone, Size, Feather and Opacity in the panel. Heal matches the source's texture to the light around the spot. Drag instead of clicking to brush a spot along a scratch, wire or twig. **Remove Dust** finds the soft, colourless specks sensor dust leaves on smooth areas (sky, walls, water) and heals them in one step, and **Visualize Spots** shows the photo's edges in white so the rest stand out. Spots are saved with the edit, paste with Copy Settings, and `redlamp render --heal x,y,radius` (or `--heal-brush` through several points) adds one from the command line, as `--remove-dust 50` heals the dust found.
 - **Tools not yet working:** the Red Eye tool shows what is coming and when.
 
 ### Measured performance
@@ -850,7 +850,7 @@ The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on mac
 ### Phase 3: Pro masking, healing, AI denoise, focus stacking, and looks
 - [x] SAM-class object and face-part masks, depth range, mask refinement, mask presets, and recomputing AI masks for pasted settings
 - [ ] Landscape and body-part masks on a model trained on data we have rights to, and batch updating AI masks across photos
-- [ ] Healing, clone, and content-aware remove, with AI inpainting on the device *(Heal and Clone spots and brushes, with automatic sources, are done)*
+- [ ] Healing, clone, and content-aware remove, with AI inpainting on the device *(Heal and Clone spots and brushes, with automatic sources, Remove Dust and Visualize Spots are done)*
 - [ ] **AI Denoise:** an on-device model working on raw data, matching or beating the best commercial denoisers, with a fast 1:1 preview and non-destructive results
 - [ ] **Focus stacking v1:** stacks detected automatically in the filmstrip, alignment (including focus breathing and handheld sequences), depth-map and pyramid fusion strategies, a retouch brush, and results that stay fully editable *(alignment, depth solve, fusion and `redlamp stack` done)*
 - [ ] Manufacturer lens corrections embedded in RAW files (Sony, Fujifilm, Panasonic, OM System)

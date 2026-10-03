@@ -7,6 +7,7 @@ public struct SpotSettings: Hashable, Sendable {
     public var size: Double = ParameterID.spotSize.spec.defaultValue
     public var feather: Double = ParameterID.spotFeather.spec.defaultValue
     public var opacity: Double = ParameterID.spotOpacity.spec.defaultValue
+    public var visualize: Double = ParameterID.spotVisualize.spec.defaultValue
 
     public init() {}
 
@@ -16,6 +17,7 @@ public struct SpotSettings: Hashable, Sendable {
             case .spotSize: size
             case .spotFeather: feather
             case .spotOpacity: opacity
+            case .spotVisualize: visualize
             default: parameter.spec.defaultValue
             }
         }
@@ -25,6 +27,7 @@ public struct SpotSettings: Hashable, Sendable {
             case .spotSize: size = value
             case .spotFeather: feather = value
             case .spotOpacity: opacity = value
+            case .spotVisualize: visualize = value
             default: break
             }
         }
@@ -102,6 +105,29 @@ public extension EditorModel {
         selectedSpotID = spot.id
     }
 
+    /// Heals every speck of sensor dust the engine finds, in one step.
+    func removeDust() async {
+        guard info != nil, !isFindingDust else { return }
+        isFindingDust = true
+        defer { isFindingDust = false }
+        let found = await engine.detectDust(recipe: recipe, sensitivity: 50)
+        guard !found.isEmpty else {
+            dustMessage = "No dust found."
+            return
+        }
+        var spots: [RetouchSpot] = []
+        for speck in found {
+            var spot = RetouchSpot(center: speck.center, source: speck.center, radius: speck.radius)
+            spot.source = await engine.retouchSource(for: spot, recipe: recipe) ?? nearbySource(for: spot)
+            spots.append(spot)
+        }
+        var next = recipe
+        next.spots += spots
+        commit(next, .retouch, "Remove Dust")
+        selectedSpotID = nil
+        dustMessage = spots.count == 1 ? "Healed 1 speck of dust." : "Healed \(spots.count) specks of dust."
+    }
+
     /// Changes a spot as part of a drag (between `beginEdit` and `endEdit`), or as one step.
     func updateSpot(_ id: UUID, name: String? = nil, _ change: (inout RetouchSpot) -> Void) {
         guard let index = recipe.spots.firstIndex(where: { $0.id == id }) else { return }
@@ -148,12 +174,17 @@ public extension EditorModel {
     }
 
     internal func spotValue(_ parameter: ParameterID) -> Double {
-        selectedSpot?[parameter] ?? spotSettings[parameter]
+        guard parameter != .spotVisualize else { return spotSettings.visualize }
+        return selectedSpot?[parameter] ?? spotSettings[parameter]
     }
 
     /// The selected spot's setting, and the next spot's.
     internal func setSpotValue(_ parameter: ParameterID, _ value: Double) {
         spotSettings[parameter] = value
+        guard parameter != .spotVisualize else {
+            requestRender()
+            return
+        }
         guard let id = selectedSpotID else { return }
         let value = spotSettings[parameter]
         updateSpot(id, name: editStart == nil ? "Spot \(parameter.spec.label)" : nil) { spot in

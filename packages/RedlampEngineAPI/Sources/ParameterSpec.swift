@@ -431,6 +431,7 @@ public enum ParameterCatalog {
             ParameterSpec(.spotSize, "Size", range: 1 ... 100, default: 20, format: .integer),
             ParameterSpec(.spotFeather, "Feather", range: 0 ... 100, default: 50, format: .integer),
             ParameterSpec(.spotOpacity, "Opacity", range: 0 ... 100, default: 100, format: .integer),
+            ParameterSpec(.spotVisualize, "Visualize", range: 1 ... 100, default: 50, format: .integer),
         ]
 
     public static let specs: [ParameterID: ParameterSpec] = Dictionary(

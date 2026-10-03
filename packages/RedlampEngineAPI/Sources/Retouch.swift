@@ -97,3 +97,18 @@ public struct RetouchSpot: Codable, Sendable, Hashable, Identifiable {
         try container.encode(opacity, forKey: .opacity)
     }
 }
+
+/// A speck of sensor dust the engine found (`EditingEngine.detectDust`).
+public struct DetectedSpot: Sendable, Hashable {
+    public var center: ImagePoint
+    /// A fraction of the image height, enough to cover the speck's soft edge.
+    public var radius: Double
+    /// How far it stands out from its surroundings, in multiples of their spread.
+    public var strength: Double
+
+    public init(center: ImagePoint, radius: Double, strength: Double) {
+        self.center = center
+        self.radius = radius
+        self.strength = strength
+    }
+}

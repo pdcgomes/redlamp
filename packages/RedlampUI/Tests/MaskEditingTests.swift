@@ -21,6 +21,13 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         retouchSource
     }
 
+    /// What `detectDust` finds.
+    var dust: [DetectedSpot] = []
+
+    func detectDust(recipe _: EditRecipe, sensitivity _: Double) async -> [DetectedSpot] {
+        dust
+    }
+
     func open(_ url: URL) async throws -> ImageInfo {
         ImageInfo(url: url, pixelSize: PixelSize(width: 600, height: 400), isRaw: true, sensorDescription: "stub")
     }
@@ -30,7 +37,13 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
     }
 
     func prefetch(_: [URL]) {}
-    func render(_: RenderRequest) {}
+    /// The last render asked for.
+    var lastRender: RenderRequest?
+
+    func render(_ request: RenderRequest) {
+        lastRender = request
+    }
+
     func frames() -> AsyncStream<RenderedFrame> {
         AsyncStream { _ in }
     }

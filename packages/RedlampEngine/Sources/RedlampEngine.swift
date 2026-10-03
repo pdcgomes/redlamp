@@ -238,11 +238,12 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             request.recipe, session: session, into: target.texture, size: size, region: region,
             encoding: .linear, showClipping: request.showClipping, maskOverlay: request.maskOverlay,
             maskOverlayColor: request.maskOverlayColor, maskOverlayStyle: request.maskOverlayStyle,
-            commands: commands,
+            commands: commands, visualizeSpots: request.visualizeSpots,
         )
         var overview: SurfacePool.Target?
         var overviewSize = PixelSize.zero
-        if request.region == nil {
+        // Visualize Spots replaces the photo in the frame, not in the histogram.
+        if request.region == nil, request.visualizeSpots == nil {
             try encodeHistogram(texture: target.texture, size: size, linear: true, commands: commands)
         } else {
             overviewSize = developed.fitted(within: PixelSize(width: 1024, height: 1024))
@@ -301,6 +302,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         commands: any MTLCommandBuffer,
         cacheDetail: Bool = true,
         detail: Bool = true,
+        visualizeSpots: Double? = nil,
     ) throws {
         let maskBindings = try prepareMasks(
             recipe, session: session, commands: commands,
@@ -319,6 +321,10 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             maskOverlayStyle: maskOverlayStyle, masks: maskBindings,
         )
         inputs.params.denoised = processed?.area ?? .zero
+        if let visualizeSpots {
+            let sensitivity = Float(min(max(visualizeSpots, 0), 100) / 100)
+            inputs.params.spots = SIMD4(1, 0.002 + 0.1 * (1 - sensitivity) * (1 - sensitivity), 0, 0)
+        }
         encoder.setComputePipelineState(kernels.develop)
         encoder.setTexture(session.pyramid, index: 0)
         encoder.setTexture(texture, index: 1)

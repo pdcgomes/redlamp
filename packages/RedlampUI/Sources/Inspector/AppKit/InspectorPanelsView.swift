@@ -53,7 +53,8 @@ final class InspectorPanelsView: PanelColumnScrollView {
                         top: 0, left: Metrics.panelPadding, bottom: Metrics.panelBottomPadding,
                         right: Metrics.panelPadding,
                     ),
-                    views: PanelRows(model: model).sliders(ParameterID.spotParameters),
+                    views: PanelRows(model: model).sliders(ParameterID.spotParameters)
+                        + [PanelRows(model: model).slider(.spotVisualize) { model.visualizeSpots }],
                 ),
             ]
         default:

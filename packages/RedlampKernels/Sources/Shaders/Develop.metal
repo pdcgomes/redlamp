@@ -972,6 +972,16 @@ kernel void rl_develop(
         }
     }
 
+    // Visualize Spots (RM-02): log luminance against a blur 8 times wider (three levels up the
+    // pyramid), white where they differ by more than the threshold.
+    if (p.spots.x > 0.5f) {
+        float3 weights = p.camToWork0.xyz * kRec2020Luma.x + p.camToWork1.xyz * kRec2020Luma.y
+            + p.camToWork2.xyz * kRec2020Luma.z;
+        float fine = log(max(dot(source.sample(linearSampler, sourceUV, level(p.geometry.y)).rgb, weights), 1e-4f));
+        float wide = log(max(dot(source.sample(linearSampler, sourceUV, level(p.geometry.y + 3.0f)).rgb, weights), 1e-4f));
+        encoded = float3(smoothstep(p.spots.y, p.spots.y * 1.5f, abs(fine - wide)));
+    }
+
     // Output encoding: 0 linear output primaries, 1 sRGB-encoded sRGB, 2 sRGB-encoded Display P3,
     // 4 OKLab (the output primaries are Rec.2020 then).
     int encoding = int(p.geometry.z);

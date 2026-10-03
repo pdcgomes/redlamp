@@ -222,6 +222,9 @@ public final class EditorModel {
                 drawingKind = nil
                 edgeBrushTarget = nil
             }
+            if activeTool != .heal {
+                dustMessage = nil
+            }
             requestRender()
         }
     }
@@ -260,6 +263,14 @@ public final class EditorModel {
     /// What the next spot does, and its settings (what the sliders show with no spot selected).
     public var spotMode: RetouchSpot.Mode = .heal
     public var spotSettings = SpotSettings()
+    /// Lightroom's Visualize Spots, while the Healing tool is active.
+    public var visualizeSpots = false {
+        didSet { requestRender() }
+    }
+
+    public internal(set) var isFindingDust = false
+    /// What the last Remove Dust found, shown in the Healing panel.
+    public var dustMessage: String?
 
     // MARK: Masking state
 
@@ -604,6 +615,7 @@ public final class EditorModel {
         request.maskOverlayColor = maskOverlayColor
         request.maskOverlayStyle = showLuminanceMap && overlay != nil ? .luminanceMap : maskOverlayStyle
         request.showRawClipping = showRawClipping
+        request.visualizeSpots = activeTool == .heal && visualizeSpots ? spotSettings.visualize : nil
         request.comparison = isComparing ? beforeRecipe : nil
         engine.render(request)
     }

@@ -180,6 +180,7 @@ public struct DevelopParams {
     public var gainTableGrid = SIMD4<Float>(0, 0, 1, 1)
     public var calibration = SIMD4<Float>(0, 0, 0, 0)
     public var vignette2 = SIMD4<Float>(0, 0, 0, 0)
+    public var spots = SIMD4<Float>(0, 0, 0, 0)
 
     public init() {}
 

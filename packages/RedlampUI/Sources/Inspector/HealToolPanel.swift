@@ -8,6 +8,7 @@ struct HealToolPanel: View {
     @Environment(EditorModel.self) private var model
 
     var body: some View {
+        @Bindable var model = model
         let selected = model.selectedSpot
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -40,6 +41,27 @@ struct HealToolPanel: View {
                 .font(Theme.labelFont)
                 .foregroundStyle(Theme.label)
                 .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 6) {
+                Button("Remove Dust") { Task { await model.removeDust() } }
+                    .controlSize(.small)
+                    .disabled(model.isFindingDust)
+                    .help("Find the specks dust on the sensor leaves on smooth areas, and heal them")
+                if model.isFindingDust {
+                    ProgressView().controlSize(.small)
+                } else if let message = model.dustMessage {
+                    Text(message)
+                        .font(Theme.labelFont)
+                        .foregroundStyle(Theme.label)
+                }
+            }
+
+            Toggle("Visualize Spots", isOn: $model.visualizeSpots)
+                .toggleStyle(.checkbox)
+                .font(Theme.labelFont)
+                .help(
+                    "Show the photo's edges in white, so dust and specks stand out; Visualize below sets how much shows",
+                )
 
             HStack(spacing: 6) {
                 Button("Find Source") { Task { await model.findNewSource() } }
