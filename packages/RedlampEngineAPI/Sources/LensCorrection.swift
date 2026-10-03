@@ -46,15 +46,20 @@ public struct LensCorrection: Codable, Sendable, Hashable {
     /// Per radius of the recorded photo: the gain that undoes the lens's vignetting. Empty
     /// without vignetting correction.
     public var vignetting: [Double]
+    /// The lens a user's profile names, which the Lens panel shows (LNS-11); nil for a correction
+    /// the file carries. Only a label: the correction renders the same without it.
+    public var profileName: String?
 
     public init(
         source: Source, center: SIMD2<Double>, radii: [Double], distortion: [SIMD3<Double>], vignetting: [Double],
+        profileName: String? = nil,
     ) {
         self.source = source
         self.center = center
         self.radii = radii
         self.distortion = distortion
         self.vignetting = vignetting
+        self.profileName = profileName
     }
 
     /// Whether red and blue are recorded at another scale than green (lateral chromatic aberration).

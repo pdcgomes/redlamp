@@ -17,10 +17,8 @@ extension LCPProfile {
     /// sensor recorded it (before `orientation`, as the reference photos were), shot at
     /// `focalLength` millimetres and f/`aperture`. Every model is taken about the geometric
     /// model's centre (the colour and vignette models' are within a pixel or so of it), and the
-    /// tangential terms are left out, as they are for DNG opcodes.
-    ///
-    /// `LensCorrection` has no source for a user's profile, so it is tagged as DNG opcodes are,
-    /// the same rectilinear model, and applies from their process version.
+    /// tangential terms are left out, as they are for DNG opcodes. The correction is named for the
+    /// lens as the profile's author names it.
     static func correction(
         _ subProfiles: [SubProfile], focalLength: Double?, aperture: Double?, size: PixelSize, orientation: Int,
     ) -> LensCorrection? {
@@ -61,6 +59,7 @@ extension LCPProfile {
             radii: radii,
             distortion: distortion,
             vignetting: vignetting,
+            profileName: subProfiles.lazy.compactMap { $0.lensPrettyName ?? $0.lens ?? $0.profileName }.first,
         )
     }
 
