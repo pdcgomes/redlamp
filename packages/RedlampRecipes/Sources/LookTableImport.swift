@@ -6,11 +6,14 @@ import simd
 import UniformTypeIdentifiers
 
 /// The encoding a third-party table was built for.
-public enum ImportedTableSpace: String, Sendable, CaseIterable {
+public enum ImportedTableSpace: Sendable, Hashable {
     /// sRGB-encoded sRGB, what almost every `.cube` and HaldCLUT file assumes.
     case sRGB
     /// Already Redlamp's own space (display Rec.2020, sRGB transfer).
     case displayRec2020
+    /// A camera's log footage in, a display's encoding out: imported as a scene-referred
+    /// table, which takes the place of Redlamp's tone curve.
+    case cameraLog(CameraLogSpace, output: LookTableOutput = .rec709)
 }
 
 public enum LookTableImportError: Error, CustomStringConvertible, Equatable {
@@ -36,7 +39,8 @@ public enum LookTableImport {
     public static let storedSize = 33
 
     /// Re-expresses a table built for `space` in Redlamp's display Rec.2020 domain, so it
-    /// renders as its author intended: colors are converted in, looked up, and back.
+    /// renders as its author intended: colors are converted in, looked up, and back. Tables
+    /// for camera log footage become scene-referred, at `storedSize` whatever `size` is.
     public static func adapt(
         _ sample: (SIMD3<Float>) -> SIMD3<Float>,
         from space: ImportedTableSpace,
@@ -55,6 +59,13 @@ public enum LookTableImport {
                 let looked = ColorMath.srgbDecode(sample(ColorMath.srgbEncode(inside)))
                 let back = ColorMath.rec709ToRec2020 * (looked + outside)
                 return ColorMath.srgbEncode(simd_max(back, .zero))
+            }
+        case let .cameraLog(camera, output):
+            try LookTable(size: storedSize, space: .sceneLog) { encoded in
+                // The LUT clamps signals outside its domain.
+                let signal = camera.encode(camera.fromRec2020 * SceneLogEncoding.decode(encoded))
+                let display = ColorMath.rec709ToRec2020 * output.decode(sample(signal))
+                return ColorMath.srgbEncode(simd_max(display, .zero))
             }
         }
     }

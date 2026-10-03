@@ -1,8 +1,43 @@
 import Foundation
+import Metal
+import RedlampEngine
 import RedlampEngineAPI
 import RedlampRecipes
 import simd
 import Testing
+
+extension LookTableFixtures {
+    static func bt1886Encode(_ c: SIMD3<Float>) -> SIMD3<Float> {
+        SIMD3(pow(c.x, 1 / 2.4), pow(c.y, 1 / 2.4), pow(c.z, 1 / 2.4))
+    }
+
+    /// A camera's plain conversion to a display: its log and gamut decoded, then `display`
+    /// applied to the scene light in Rec.2020, clipped to Rec.709 and encoded for `output`.
+    static func cameraLUT(
+        _ space: CameraLogSpace,
+        output: LookTableOutput = .rec709,
+        display: (SIMD3<Float>) -> SIMD3<Float> = { $0 },
+    ) -> String {
+        cube(size: 33) { signal in
+            let scene = space.toRec2020 * space.decode(signal)
+            let linear709 = simd_clamp(ColorMath.rec2020ToRec709 * display(scene), .zero, SIMD3(repeating: 1))
+            return output == .rec709 ? bt1886Encode(linear709) : ColorMath.srgbEncode(linear709)
+        }
+    }
+
+    /// CIE 1976 L*a*b* (D65) of an sRGB-encoded colour.
+    static func lab(_ encoded: SIMD3<Float>) -> SIMD3<Float> {
+        let xyz = simd_float3x3(rows: [
+            SIMD3(0.4124564, 0.3575761, 0.1804375),
+            SIMD3(0.2126729, 0.7151522, 0.0721750),
+            SIMD3(0.0193339, 0.1191920, 0.9503041),
+        ]) * ColorMath.srgbDecode(encoded) / SIMD3(0.95047, 1, 1.08883)
+        func f(_ t: Float) -> Float {
+            t > 216 / 24389 ? cbrt(t) : (24389 / 27 * t + 16) / 116
+        }
+        return SIMD3(116 * f(xyz.y) - 16, 500 * (f(xyz.x) - f(xyz.y)), 200 * (f(xyz.y) - f(xyz.z)))
+    }
+}
 
 /// The camera log curves and gamuts against the values their makers publish.
 struct CameraLogSpaceTests {
@@ -128,5 +163,115 @@ struct CameraLogSpaceTests {
         #expect(rec709.y == 0 && rec709.z == 1)
         let half = SIMD3<Float>(repeating: 0.5)
         #expect(LookTableOutput.sRGB.decode(half) == ColorMath.srgbDecode(half))
+    }
+}
+
+/// LUTs for log footage, converted at import into scene-referred tables.
+struct CameraLogImportTests {
+    static let ramp: [Float] = [0.01, 0.02, 0.05, 0.1, 0.18, 0.3, 0.5, 0.7, 0.9]
+
+    /// Scene light through a scene table, as the develop kernel samples it.
+    static func display(_ table: LookTable, scene: Float) -> SIMD3<Float> {
+        table.sample(SceneLogEncoding.encode(SIMD3(repeating: scene)))
+    }
+
+    @Test(arguments: CameraLogSpace.allCases, LookTableOutput.allCases)
+    func `a camera's plain conversion to a display imports as the light it encodes`(
+        space: CameraLogSpace,
+        output: LookTableOutput,
+    ) throws {
+        let cube = LookTableFixtures.cameraLUT(space, output: output)
+        let table = try LookTableImport.parseCube(cube, space: .cameraLog(space, output: output)).table
+        #expect(table.space == .sceneLog && table.size == LookTableImport.storedSize)
+        // Scene tables output display Rec.2020 with the sRGB transfer; greys are their own
+        // light, within half a percent of the display range.
+        for grey in Self.ramp {
+            let error = abs(Self.display(table, scene: grey) - SIMD3(repeating: ColorMath.srgbEncode(grey))).max()
+            #expect(error < 0.005, "\(grey): \(error)")
+        }
+    }
+
+    @Test(arguments: CameraLogSpace.allCases)
+    func `middle grey reaches the LUT at the camera's own grey`(space: CameraLogSpace) throws {
+        // With sRGB output, an identity LUT hands back the signal it was given.
+        let identity = LookTableFixtures.cube(size: 33) { $0 }
+        let table = try LookTableImport.parseCube(identity, space: .cameraLog(space, output: .sRGB)).table
+        let signal = Self.display(table, scene: 0.18)
+        #expect(abs(signal - SIMD3(repeating: space.encode(0.18))).max() < 2e-3, "\(signal)")
+    }
+
+    @Test func `signals outside the LUT's domain clamp to its edges`() throws {
+        // An identity over 0.2...0.6 only.
+        let narrow = LookTableFixtures.cube(size: 17, header: ["DOMAIN_MIN 0.2 0.2 0.2", "DOMAIN_MAX 0.6 0.6 0.6"]) {
+            0.2 + 0.4 * $0
+        }
+        let table = try LookTableImport.parseCube(narrow, space: .cameraLog(.sLog3SGamut3Cine, output: .sRGB)).table
+        // S-Log3 puts these at about 0.11 and 0.83.
+        #expect(abs(Self.display(table, scene: 0.003) - SIMD3(repeating: 0.2)).max() < 2e-3)
+        #expect(abs(Self.display(table, scene: 8) - SIMD3(repeating: 0.6)).max() < 2e-3)
+    }
+
+    @Test func `a .3dl for log footage imports as a scene table too`() throws {
+        let space = CameraLogSpace.logC3
+        let threeDL = LookTableFixtures.threeDL(size: 33) { signal in
+            LookTableFixtures.bt1886Encode(simd_clamp(
+                ColorMath.rec2020ToRec709 * (space.toRec2020 * space.decode(signal)),
+                .zero,
+                SIMD3(repeating: 1),
+            ))
+        }
+        let table = try LookTableImport.parse3DL(threeDL, space: .cameraLog(space))
+        #expect(table.space == .sceneLog)
+        let error = abs(Self.display(table, scene: 0.18) - SIMD3(repeating: ColorMath.srgbEncode(0.18))).max()
+        #expect(error < 0.005)
+    }
+
+    @Test func `a log .cube installs as a recipe with a scene-referred Base Look`() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let url = root.appendingPathComponent("S-Log3 to Rec.709.cube")
+        try LookTableFixtures.cameraLUT(.sLog3SGamut3Cine).write(to: url, atomically: true, encoding: .utf8)
+        let library = RecipeLibrary(root: root, includeBundled: false)
+        let (recipe, issues) = try library.install(contentsOf: url, tableSpace: .cameraLog(.sLog3SGamut3Cine))
+        #expect(issues.isEmpty)
+        #expect(recipe.name == "S-Log3 to Rec.709")
+        let table = try #require(try recipe.embeddedBaseLooks.first?.definition().table)
+        #expect(table.space == .sceneLog)
+        #expect(library.recipe(id: recipe.id) != nil)
+    }
+}
+
+/// Imported log LUTs through the real engine.
+struct CameraLogRenderTests {
+    static let canRender = MTLCreateSystemDefaultDevice() != nil
+
+    /// The plan's check: a log LUT that is Redlamp's own rendering, imported, renders like no
+    /// LUT on the chart's grey ramp, within a CIE ΔE*ab of 1.
+    @Test(.enabled(if: canRender), arguments: CameraLogSpace.allCases)
+    func `a log LUT of Redlamp's own tone curve renders like no LUT on a grey ramp`(space: CameraLogSpace) async throws {
+        let lut = LookTableFixtures.cameraLUT(space) { RedlampToneCurve.apply(simd_max($0, .zero)) }
+        let table = try LookTableImport.parseCube(lut, space: .cameraLog(space)).table
+        let recipe = LookTableImport.recipe(for: table, name: "Redlamp as \(space.name)")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let renderer = try RecipeRenderer(engine: RedlampEngine(), library: RecipeLibrary(root: root))
+        renderer.prepare(recipe)
+        let chart = try RecipeChart.fileURL()
+        let plain = try await renderer.render(edit: EditRecipe(), image: chart, maxLongEdge: nil, sixteenBit: true)
+        let looked = try await renderer.render(
+            edit: recipe.apply(to: EditRecipe()), image: chart, maxLongEdge: nil, sixteenBit: true,
+        )
+        let a = try #require(PixelImage(plain)), b = try #require(PixelImage(looked))
+        /// The ramp is constant down each column; its median ignores the isolated black pixels
+        /// the plain render has in one column, which come from outside the look.
+        func median(_ image: PixelImage, x: Int) -> SIMD3<Float> {
+            let column = RecipeChart.ramp.dropFirst(4).dropLast(4).map { image[x, $0] }
+            return column.sorted { $0.x < $1.x }[column.count / 2]
+        }
+        let worst = (0 ..< a.width).map { x in
+            simd_distance(LookTableFixtures.lab(median(a, x: x)), LookTableFixtures.lab(median(b, x: x)))
+        }.max() ?? 0
+        #expect(worst < 1, "\(space): ΔE*ab \(worst)")
     }
 }
