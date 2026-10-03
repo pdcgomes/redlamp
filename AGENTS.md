@@ -25,7 +25,7 @@ Redlamp is a macOS raw editor in Swift and Metal (`README.md`). These rules appl
 ## Working in parallel
 
 - **Stay inside the paths you own** (the plan's table). Everything else is read-only, including `EditRecipe.currentProcessVersion`, `docs/research/research-tracker.md`, `README.md`, this file, the plan, `Project.swift`, `Workspace.swift` and `.github/`. Ask for changes in your final report.
-- **No agent changes how an existing edit renders.** A rendering change needs a new process version, and that is the orchestrator's call. The process-stability gate (`ProcessStabilityTests`) catches it; a new version records its references with `TEST_RUNNER_REDLAMP_RECORD_PROCESS_GOLDEN=1`, which writes only missing ones.
+- **No agent changes how an existing edit renders.** A rendering change needs a new process version, and that is the orchestrator's call. The process-stability gate (`ProcessStabilityTests`) catches it; a new version records its references with `TEST_RUNNER_REDLAMP_RECORD_PROCESS_GOLDEN=1`, which writes only missing ones, and raises the process version's maximum in `docs/recipes/sidecar-format.schema.json` and its table in `sidecar-format.md` (`SidecarSchemaTests` checks both).
 - **Off limits:** removal (RM-*), the audit fixes (AUD-*), noise (DN-*), `video/` and `web/`; other sessions are working there.
 - **Commit to your own branch** in small, described commits. Never push, merge or rebase onto `main`.
 - **Commit messages** are short and name the tracker row and its issue: `LCP lens profiles: parse and match (LNS-04, #82)`.
