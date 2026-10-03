@@ -28,8 +28,9 @@ final class SaveQueue: @unchecked Sendable {
 
     enum Outcome: Sendable {
         case saved
-        /// Another writer's edit is on disk, merged with what changed here or as they left it;
-        /// the photo's saves still go over the old base until it is tracked again.
+        /// Another writer's edit is on disk, merged with what changed here or as they left it,
+        /// for the editor to show. Until it is tracked again, its saves go over the old base, or,
+        /// when the edit here won the merge, are merged into what was written.
         case replaced(SidecarBase)
         case failed(any Error)
     }
@@ -47,8 +48,20 @@ final class SaveQueue: @unchecked Sendable {
     /// A save's result, and whether a later save of the photo was waiting when it finished.
     typealias Report = @MainActor @Sendable (URL, Write, Outcome, _ superseded: Bool) -> Void
     private var report: Report?
-    /// The tracked photos' bases, and the editor's state each was taken at. Only the queue uses it.
-    private var tracking: [URL: (base: SidecarBase, opened: Sidecar)] = [:]
+    /// A tracked photo's saves.
+    private struct Tracked {
+        /// What the next save goes over.
+        var base: SidecarBase
+        /// The editor's state when it took `base`, or when `merged` was written.
+        var opened: Sidecar
+        /// What a merge the edit here won wrote, until the editor shows it. Each save is merged
+        /// into it as into another writer's edit, so what only it has (their snapshots and
+        /// metadata, the older edit kept as a snapshot) stays, and the clash isn't found again.
+        var merged: Sidecar?
+    }
+
+    /// Only the queue uses it.
+    private var tracking: [URL: Tracked] = [:]
 
     init(store: SidecarStore) {
         self.store = store
@@ -159,22 +172,39 @@ final class SaveQueue: @unchecked Sendable {
                 try store.saveOrRemove(sidecar, for: url)
                 return .saved
             }
-            switch try store.saveOrRemove(sidecar, for: url, over: tracked.base, opened: tracked.opened) {
-            case let .saved(base):
-                tracking[url] = (base, sidecar)
-                return .saved
-            case let .theirs(base), let .merged(base):
-                return .replaced(base)
-            }
+            return try save(sidecar, over: tracked, for: url)
         case let .metadata(change):
             try Library.writeMetadata(for: url, store: store, change)
             return .saved
         case let .track(base, opened):
-            tracking[url] = (base ?? store.base(for: url), opened)
+            tracking[url] = Tracked(base: base ?? store.base(for: url), opened: opened)
             return nil
         case .forget:
             tracking[url] = nil
             return nil
+        }
+    }
+
+    private func save(_ asked: Sidecar, over tracked: Tracked, for url: URL) throws -> Outcome {
+        var sidecar = asked
+        if let merged = tracked.merged {
+            sidecar = SidecarStore.merge(asked, merged, base: tracked.opened, opened: tracked.opened)
+            sidecar.clearsHistory = asked.clearsHistory
+        }
+        let opened = tracked.merged ?? tracked.opened
+        switch try store.saveOrRemove(sidecar, for: url, over: tracked.base, opened: opened) {
+        case let .saved(base):
+            guard tracked.merged != nil else {
+                tracking[url] = Tracked(base: base, opened: sidecar)
+                return .saved
+            }
+            tracking[url] = Tracked(base: base, opened: asked, merged: sidecar)
+            return .replaced(base)
+        case let .merged(base) where base.sidecar?.recipe == asked.recipe:
+            tracking[url] = Tracked(base: base, opened: asked, merged: base.sidecar)
+            return .replaced(base)
+        case let .theirs(base), let .merged(base):
+            return .replaced(base)
         }
     }
 }

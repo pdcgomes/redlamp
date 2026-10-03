@@ -146,6 +146,34 @@ struct OtherWriterTests {
         #expect(sessions.count == 2, "and this session's")
     }
 
+    @Test func `editing on through one clash keeps one snapshot of the other Mac's edit`() async throws {
+        let folder = Folder()
+        try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder.url) }
+        try seedExposure(folder)
+        let model = EditorModel(engine: StubEngine())
+        try await open(folder.photo, in: model)
+
+        model.beginEdit(.vibrance)
+        model.setSliderValue(.vibrance, 5)
+        let theirs = try saveFromAnotherMac(folder.photo)
+        for step in 1 ... 10 {
+            model.setSliderValue(.vibrance, Double(5 + step))
+            model.saveNow()
+            await model.saves.flush()
+        }
+        model.endEdit()
+        try await open(folder.other, in: model)
+        await model.saves.flush()
+
+        let saved = try #require(SidecarStore().load(for: folder.photo))
+        #expect(saved.recipe[.vibrance] == 15)
+        let kept = saved.snapshots.filter { $0.name.hasPrefix("Edit from another Mac") }
+        #expect(kept.map(\.recipe) == [theirs.recipe])
+        #expect(saved.snapshots.contains { $0.name == "Made on the other Mac" })
+        #expect(saved.metadata == PhotoMetadata(rating: 5, flag: .pick))
+    }
+
     @Test func `the editor's own saves never look like another writer's`() async throws {
         let folder = Folder()
         try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
