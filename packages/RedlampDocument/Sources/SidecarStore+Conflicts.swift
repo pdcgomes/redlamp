@@ -4,9 +4,15 @@ public extension SidecarStore {
     /// Conflicting copies, made when the same photo was edited on two Macs before iCloud Drive
     /// synced them. The most recently modified edit wins, and every other distinct edit is kept
     /// as a snapshot of the winner, so nothing is lost; snapshots of every copy are kept too.
+    /// Rating, flag, label and unknown metadata come each from the newest copy that set it.
     static func merge(_ current: Sidecar, _ conflicts: [Sidecar]) -> Sidecar {
         let copies = [current] + conflicts
-        var winner = copies.reduce(current) { $1.modified > $0.modified ? $1 : $0 }
+        let newest = copies.indices.reduce(0) { copies[$1].modified > copies[$0].modified ? $1 : $0 }
+        var winner = copies[newest]
+        let oldestFirst = copies.indices.filter { $0 != newest }.sorted { copies[$0].modified < copies[$1].modified }
+        winner.metadata = (oldestFirst + [newest]).reduce(nil) { merged, index in
+            PhotoMetadata.merge(merged, copies[index].metadata, base: nil, opened: merged)
+        }
         var snapshots = winner.snapshots
         for copy in copies {
             for snapshot in copy.snapshots where !snapshots.contains(where: { $0.id == snapshot.id }) {

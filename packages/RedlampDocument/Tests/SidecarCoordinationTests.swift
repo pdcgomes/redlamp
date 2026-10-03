@@ -100,6 +100,34 @@ struct SidecarCoordinationTests {
         #expect(fromOther.map(\.recipe) == [older.recipe], "only the edit that lost is kept, once")
     }
 
+    @Test func `each copy's rating, flag and label are kept, the newest winning where two set one`() {
+        let rated = Sidecar(
+            recipe: recipe(exposure: 1.5), metadata: PhotoMetadata(rating: 3),
+            modified: Date(timeIntervalSince1970: 2000),
+        )
+        var flagged = Sidecar(
+            recipe: recipe(exposure: 0.5), metadata: PhotoMetadata(rating: 1, flag: .pick, label: .red),
+            modified: Date(timeIntervalSince1970: 1000),
+        )
+        flagged.metadata?.unknownFields = ["caption": .string("Dawn")]
+        let labelled = Sidecar(
+            recipe: recipe(exposure: 0.5), metadata: PhotoMetadata(label: .blue),
+            modified: Date(timeIntervalSince1970: 1500),
+        )
+
+        var expected = PhotoMetadata(rating: 3, flag: .pick, label: .blue)
+        expected.unknownFields = ["caption": .string("Dawn")]
+        #expect(SidecarStore.merge(rated, [flagged, labelled]).metadata == expected)
+        #expect(SidecarStore.merge(flagged, [labelled, rated]).metadata == expected, "whichever copy is current")
+
+        let tied = Sidecar(
+            recipe: recipe(exposure: 0.9), metadata: PhotoMetadata(rating: 5),
+            modified: Date(timeIntervalSince1970: 2000),
+        )
+        let merged = SidecarStore.merge(rated, [tied])
+        #expect(merged.recipe == rated.recipe && merged.metadata?.rating == 3, "a tie goes to the copy whose edit wins")
+    }
+
     /// Conflicting copies another Mac's Redlamp wrote: one this build can't read, one by a newer
     /// build, and one it would save back with a value clamped.
     static let unmergeable = [
