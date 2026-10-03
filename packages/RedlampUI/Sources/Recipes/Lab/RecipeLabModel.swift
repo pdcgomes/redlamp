@@ -398,15 +398,17 @@ public final class RecipeLabModel {
         self.draft = draft
     }
 
+    /// Puts a `.cube`, `.3dl` or HaldCLUT look table, read as made for `space`, into the draft
+    /// as its Base Look; the draft keeps its name, list and settings.
     public func importTable(_ url: URL, space: ImportedTableSpace = .sRGB) {
         do {
-            let table: LookTable = if url.pathExtension.lowercased() == "cube" {
-                try LookTableImport.parseCube(String(contentsOf: url, encoding: .utf8), space: space).table
-            } else {
-                try LookTableImport.parseHald(LookTableImport.readImage(url), space: space)
+            guard let imported = try RecipeLibrary.lookTable(contentsOf: url, tableSpace: space) else {
+                creatorMessage = "Couldn't import: \(url.lastPathComponent) isn't a .cube, .3dl or HaldCLUT file"
+                return
             }
             let id = draft?.id ?? RecipeNamespace.newLocalID()
-            var recipe = LookTableImport.recipe(for: table, name: url.deletingPathExtension().lastPathComponent, id: id)
+            let name = imported.title ?? url.deletingPathExtension().lastPathComponent
+            var recipe = LookTableImport.recipe(for: imported.table, name: name, id: id)
             if let draft {
                 recipe.name = draft.name
                 recipe.group = draft.group
@@ -415,7 +417,7 @@ public final class RecipeLabModel {
             }
             draft = recipe
             draftIncludes = recipe.includes
-            creatorMessage = "Imported a \(table.size)-point table"
+            creatorMessage = "Imported a \(imported.table.size)-point table"
         } catch {
             creatorMessage = "Couldn't import: \(error)"
         }
