@@ -41,12 +41,39 @@ enum CameraBenchWindow {
     }
 
     #if DEBUG || REDLAMP_PROFILING
-        /// `--camera-bench <folder>`: opens the window and tests the folder, for captures.
+        /// For captures, on a Retina screen when one is connected: `--camera-bench` opens the window,
+        /// and `--camera-bench <folder>` tests the folder. Once the results are in,
+        /// `--camera-bench-select <text>` selects the first camera mode whose camera contains the
+        /// text, and `--camera-bench-report` opens What's Sent.
         static func openIfRequested(currentFolder: @escaping () -> URL?) {
             let arguments = LaunchArguments.all
-            guard let index = arguments.firstIndex(of: "--camera-bench"), index + 1 < arguments.count else { return }
+            func value(after flag: String) -> String? {
+                arguments.firstIndex(of: flag).flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }
+            }
+            guard arguments.contains("--camera-bench") else { return }
             show(currentFolder: currentFolder)
-            controller?.model.test([URL(fileURLWithPath: arguments[index + 1])])
+            guard let controller else { return }
+            if let window = controller.window,
+               let visible = NSScreen.screens.first(where: { $0.backingScaleFactor >= 2 })?.visibleFrame {
+                window.setFrameOrigin(NSPoint(
+                    x: visible.midX - window.frame.width / 2, y: visible.midY - window.frame.height / 2,
+                ))
+            }
+            guard let folder = value(after: "--camera-bench"), !folder.hasPrefix("--") else { return }
+            let model = controller.model
+            model.test([URL(fileURLWithPath: folder)])
+            let camera = value(after: "--camera-bench-select")
+            let report = arguments.contains("--camera-bench-report")
+            Task {
+                while model.phase != .results {
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+                if let camera,
+                   let mode = model.modes.first(where: { $0.mode.camera.localizedCaseInsensitiveContains(camera) }) {
+                    model.selectedMode = mode.id
+                }
+                model.showsReport = report
+            }
         }
     #endif
 }

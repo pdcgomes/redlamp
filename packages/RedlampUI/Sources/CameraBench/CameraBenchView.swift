@@ -8,7 +8,6 @@ struct CameraBenchView: View {
     @Bindable var model: CameraBenchModel
     let choose: () -> Void
     @Environment(\.openURL) private var openURL
-    @State private var showsReport = false
 
     var body: some View {
         Group {
@@ -20,7 +19,7 @@ struct CameraBenchView: View {
             }
         }
         .frame(minWidth: 860, minHeight: 560)
-        .sheet(isPresented: $showsReport) { report }
+        .sheet(isPresented: $model.showsReport) { report }
     }
 
     // MARK: - Start
@@ -28,15 +27,22 @@ struct CameraBenchView: View {
     private var start: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Test Your Camera").font(.title.weight(.semibold))
-            Text(
-                "The bench checks how Redlamp opens your camera's raw files, and compares Redlamp's rendering of each with the JPEG your camera saved inside it. It picks up to eight photos for each camera and raw mode it finds.",
-            )
+            Text("""
+            The bench checks how Redlamp opens your camera's raw files, and compares Redlamp's rendering of each \
+            with the JPEG your camera saved inside it. It picks up to eight photos for each camera and raw mode it finds.
+            """)
             .fixedSize(horizontal: false, vertical: true)
             Text(
                 "Your photos stay on this Mac. Only measurements are sent, and only when you choose to, after you've seen exactly what they are.",
             )
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Photos that help most").font(.headline)
+                ForEach(BenchCondition.allCases, id: \.self) { Text("• \($0.title)").foregroundStyle(.secondary) }
+                Text("• Each raw mode your camera offers, such as compressed, uncompressed or a crop mode")
+                    .foregroundStyle(.secondary)
+            }
             HStack(spacing: 12) {
                 Button("Choose Photos or a Folder…", action: choose)
                     .keyboardShortcut(.defaultAction)
@@ -213,7 +219,7 @@ struct CameraBenchView: View {
                     .foregroundStyle(.secondary)
             case let .failed(message): Text(message).foregroundStyle(.red).lineLimit(2)
             }
-            Button("What's Sent…") { showsReport = true }
+            Button("What's Sent…") { model.showsReport = true }
             Button("Send Results") { model.send() }
                 .keyboardShortcut(.defaultAction)
                 .disabled(!model.canSend)
@@ -236,7 +242,7 @@ struct CameraBenchView: View {
             HStack {
                 Button("Reset Contributor ID") { model.resetContributor() }
                 Spacer()
-                Button("Done") { showsReport = false }.keyboardShortcut(.defaultAction)
+                Button("Done") { model.showsReport = false }.keyboardShortcut(.defaultAction)
             }
         }
         .padding(20)

@@ -65,6 +65,8 @@ public final class CameraBenchModel {
     public private(set) var phase = Phase.start
     public private(set) var modes: [Mode] = []
     public var selectedMode: String?
+    /// What's Sent: the report exactly as it would be sent.
+    public var showsReport = false
     public var answers: [String: CameraBenchAnswer.Choice] = [:]
     public var notes: [String: String] = [:]
     public var credit: String {
