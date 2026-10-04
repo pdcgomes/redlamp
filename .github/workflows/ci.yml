@@ -31,6 +31,12 @@ jobs:
       - name: Engine purity gate
         run: scripts/check-engine-purity.sh
 
+      - name: Roadmap and Lightroom comparison in step with the tracker
+        run: scripts/roadmap-sync.py --check
+
+      - name: Camera list in step with the decode tests and LibRaw
+        run: scripts/camera-list.py --check
+
       - name: Cache vendored LibRaw
         uses: actions/cache@v4
         with:

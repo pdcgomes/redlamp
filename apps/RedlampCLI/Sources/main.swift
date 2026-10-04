@@ -243,7 +243,12 @@ func run(_ arguments: [String]) async throws {
                     mode: .remove, center: mask.center, source: mask.center, region: mask, radius: 0.005,
                 ))
             }
-            print("found: \(found.map { String(format: "%@ %.2f", $0.thing, $0.score) })")
+            for thing in found {
+                print(String(
+                    format: "found %@ %.2f at %.3f,%.3f %.3fx%.3f", thing.thing, thing.score,
+                    thing.box.x, thing.box.y, thing.box.width, thing.box.height,
+                ))
+            }
         case "--bw":
             recipe.treatment = .blackAndWhite
         case "--p3":

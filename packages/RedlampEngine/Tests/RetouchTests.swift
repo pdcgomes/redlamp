@@ -298,6 +298,92 @@ struct RetouchTests {
         #expect(ratio > 0.5 && ratio < 1.6, "texture \(expected.deviation) → \(result.deviation)")
     }
 
+    /// Highlights, Shadows, Clarity and Dehaze read maps made from the photo's pixels. Until they're
+    /// made again from the retouched photo, a removed blemish's shape lives on in them: the first
+    /// frame shows it, and the frames after the background refresh don't, as Lightroom's heal.
+    @Test func `a removed blemish's shape leaves the frame once the maps are made again`() async throws {
+        let engine = try RedlampEngine()
+        var recipe = EditRecipe()
+        recipe[.highlights] = -100
+        recipe[.shadows] = 100
+        recipe[.clarity] = 100
+        recipe[.dehaze] = 60
+        let clean = try statistics(
+            render(scene(blemished: false), recipe, engine: engine),
+            around: Self.blemish,
+            radius: 12,
+        )
+        var spot = spot(.remove)
+        spot.source = spot.center
+        recipe.spots = [spot]
+        let session = try scene(blemished: true)
+        let first = try render(session, recipe, engine: engine)
+        var healed = first
+        for _ in 0 ..< 150 where healed == first {
+            try await Task.sleep(for: .milliseconds(20))
+            healed = try render(session, recipe, engine: engine)
+        }
+        let stale = statistics(first, around: Self.blemish, radius: 12).mean
+        let fresh = statistics(healed, around: Self.blemish, radius: 12).mean
+        #expect(abs(stale - clean.mean) > clean.mean * 0.1, "the first frame: \(clean.mean) → \(stale)")
+        #expect(abs(fresh - clean.mean) < clean.mean * 0.04, "after the refresh: \(clean.mean) → \(fresh)")
+        // An edit made before process 10 keeps the photo's maps, as it was made.
+        recipe.processVersion = 9
+        let old = try render(session, recipe, engine: engine)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(try render(session, recipe, engine: engine) == old)
+        #expect(abs(statistics(old, around: Self.blemish, radius: 12).mean - stale) < clean.mean * 0.01)
+    }
+
+    @Test func `a range mask's guide is developed again once the retouched photo's maps are made`() async throws {
+        let engine = try RedlampEngine()
+        let session = try scene(blemished: true)
+        var recipe = EditRecipe()
+        recipe[.highlights] = -100
+        recipe[.shadows] = 100
+        recipe[.clarity] = 100
+        recipe[.dehaze] = 60
+        recipe.spots = [spot(.heal)]
+        recipe.masks = [MaskLayer(
+            name: "Lights", components: [MaskComponent(shape: .luminanceRange(LuminanceRangeMask(lower: 40)))],
+            adjustments: [.localExposure: 1],
+        )]
+        let first = try render(session, recipe, engine: engine)
+        let generation = engine.masks.editGuideGeneration
+        var frame = first
+        for _ in 0 ..< 150 where frame == first {
+            try await Task.sleep(for: .milliseconds(20))
+            frame = try render(session, recipe, engine: engine)
+        }
+        #expect(frame != first)
+        #expect(engine.masks.editGuideGeneration > generation)
+    }
+
+    @Test func `a still's retouched photo has maps of its own, made without what its spots replaced`() throws {
+        let session = try scene(blemished: true)
+        let stage = RetouchStage(device: device, kernels: kernels, queue: queue)
+        var recipe = EditRecipe()
+        recipe.spots = [spot(.heal)]
+        // As a still's edit guide does: the spots go into the still's commands, not run yet.
+        let commands = try #require(queue.makeCommandBuffer())
+        let current = try stage.session(for: recipe, base: session, commands: commands)
+        let fresh = try stage.session(for: recipe, base: session, commands: commands, maps: .fresh)
+        commands.commit()
+        commands.waitUntilCompleted()
+        #expect(current.toneBase === session.toneBase && current.hazeMap === session.hazeMap)
+        #expect(fresh.pyramid === current.pyramid, "the same spots, baked once")
+        #expect(fresh.toneBase !== session.toneBase && fresh.clarityBase !== session.clarityBase)
+        #expect(fresh.hazeMap !== session.hazeMap && fresh.glowSource !== session.glowSource)
+        #expect(fresh.airlight == session.airlight, "the photo's own airlight")
+        let (x, y) = (Int(Self.blemish.x), Int(Self.blemish.y))
+        #expect(session.analysis.pixel(x: x, y: y).y < 0.05, "the photo's analysis copy has the blemish")
+        #expect(fresh.analysis.pixel(x: x, y: y).y > 0.15, "the retouched one doesn't")
+        let later = try #require(queue.makeCommandBuffer())
+        let old = try stage.session(for: recipe, base: session, commands: later)
+        later.commit()
+        #expect(old.toneBase === session.toneBase, "an edit from before process 10 keeps the photo's maps")
+    }
+
     @Test func `Remove continues an edge running through the hole`() throws {
         // Bright above, dark below, with an object sitting on the line between them.
         let (width, height) = (Self.width, Self.height)

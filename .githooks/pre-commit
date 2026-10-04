@@ -27,3 +27,20 @@ if ((${#failed[@]} > 0)); then
     echo "Run \`swiftformat <file>\`, stage the result and commit again (or commit with --no-verify)." >&2
     exit 1
 fi
+
+# The roadmap, the Lightroom comparison and the tracker move together; this reads the working copy.
+if git diff --cached --name-only -- README.md docs/lightroom-comparison.md docs/research/research-tracker.md | grep -q .; then
+    if ! scripts/roadmap-sync.py --check >&2; then
+        echo "The README roadmap or the Lightroom comparison is out of step with the tracker." >&2
+        echo "Run \`scripts/roadmap-sync.py\` (then \`--apply\`), stage the result and commit again." >&2
+        exit 1
+    fi
+fi
+
+if git diff --cached --name-only -- docs/cameras.md tests/decode tests/golden/cameras config/vendored-libs.json \
+    mise/tasks/fixtures mise/tasks/fixtures-shoots research/look-dev/manifest.json | grep -q .; then
+    if ! scripts/camera-list.py --check >&2; then
+        echo "Run \`scripts/camera-list.py --apply\`, stage docs/cameras.md and commit again." >&2
+        exit 1
+    fi
+fi

@@ -14,7 +14,11 @@ extension EditorModel {
         do {
             let image = try await engine.renderStill(request)
             try await Task.detached(priority: .userInitiated) {
-                let metadata = ExportMetadata.properties(from: source, policy: settings.metadata)
+                let metadata = ExportMetadata.properties(
+                    from: source,
+                    policy: settings.metadata,
+                    recipe: request.recipe,
+                )
                 try ImageExporter.write(image, to: url, settings: settings, metadata: metadata, source: source)
             }.value
         } catch {

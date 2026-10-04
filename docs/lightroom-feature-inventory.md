@@ -2,6 +2,8 @@
 
 Source: working knowledge of Lightroom Classic 14.x, Lightroom (desktop) 8.x, and Lightroom mobile, as of about mid-2025. Adobe ships roughly quarterly, so check this list against Adobe's "What's new" pages for anything released since. Items marked **(verify)** are ones where the exact name or availability is uncertain.
 
+The phase tags below are the plan as written in September 2026, kept for reference. Where each feature stands today, and in which phase it's planned now, is in [Redlamp and Lightroom compared](lightroom-comparison.md).
+
 Each feature has a roadmap tag:
 - **[P1]-[P4]:** the plan phase that builds it.
 - **[Later]:** after 1.0.

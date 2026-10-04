@@ -8,8 +8,9 @@ import simd
 /// Remove, Heal and Clone spots baked into a copy of the session's pyramid (see `Retouch.metal`).
 /// The copy stands in for the photo everywhere after it: Detail, the develop kernel and its masks.
 ///
-/// Owned by the engine's render queue.
-final class RetouchStage {
+/// Its state is behind `lock`: the engine renders on one queue, and its maps' refresh works on
+/// others.
+final class RetouchStage: @unchecked Sendable {
     /// Points on a circle's rim for Heal.
     static let rimSamples = 256
     /// The most points on a brushed spot's outline, and on its stroke.
@@ -81,8 +82,34 @@ final class RetouchStage {
     private struct Entry {
         var original: ImageSession
         var spots: [RetouchSpot]
+        /// With the photo's maps.
         var retouched: ImageSession
+        /// Until its own are made, with the maps of the photo's latest retouch that has them, or
+        /// the photo's.
+        var interim: ImageSession
+        /// With maps made from its own pyramid (see `Maps`), once they are.
+        var refreshed: ImageSession?
+        /// The command buffer putting the spots in, until it's known to be done.
+        var baking: (any MTLCommandBuffer)?
     }
+
+    /// How a retouched photo's maps (`SessionBuilder.maps`: Highlights and Shadows', Clarity's,
+    /// Dehaze's and glow's) are brought up to date, from process 10. Until they're made again from
+    /// the retouched pyramid, what the spots replaced lives on in them, and a removed object's
+    /// shape shows wherever those adjustments are used.
+    enum Maps {
+        /// The photo's: an edit from before process 10.
+        case current
+        /// The latest made, then its own made in the background once the spots are in, and the
+        /// photo rendered again (`onRefresh`): an interactive frame.
+        case refreshLater
+        /// Its own, made before it renders: a still, which comes out the same every time.
+        case fresh
+    }
+
+    /// Called, from any thread, once a retouched photo's maps were made again in the background, to
+    /// render the latest frame with them. Set before the stage is used.
+    var onRefresh: (@Sendable () -> Void)?
 
     /// A Remove spot's fill: where each texel of a region at the working level copies from.
     struct FillMap {
@@ -110,6 +137,9 @@ final class RetouchStage {
     private let device: any MTLDevice
     private let queue: any MTLCommandQueue
     private let kernels: KernelLibrary
+    private let lock = NSLock()
+    /// Pyramids whose maps are being made in the background, not to be reused until they're done.
+    private var refreshing: Set<ObjectIdentifier> = []
     private var entries: [Entry] = []
     private var fills: [FillKey: FillMap] = [:]
     private var fillOrder: [FillKey] = []
@@ -125,36 +155,92 @@ final class RetouchStage {
     }
 
     /// `session` with the recipe's spots in its pyramid, encoding the work into `commands`
-    /// unless it's cached. The session itself when the recipe has none.
+    /// unless it's cached, and its maps as `maps` asks. The session itself when the recipe has none.
     func session(
-        for recipe: EditRecipe, base session: ImageSession, commands: any MTLCommandBuffer,
+        for recipe: EditRecipe, base session: ImageSession, commands: any MTLCommandBuffer, maps: Maps = .current,
     ) throws -> ImageSession {
         let original = session.original
         let spots = recipe.spots.filter { !$0.isEmpty }
         guard !spots.isEmpty else { return original }
+        lock.lock()
+        defer { lock.unlock() }
         if let index = entries.firstIndex(where: { $0.original === original && $0.spots == spots }) {
-            let entry = entries.remove(at: index)
+            var entry = entries.remove(at: index)
+            if maps == .fresh, entry.refreshed == nil {
+                try settle(&entry)
+                entry.refreshed = try withOwnMaps(original, pyramid: entry.retouched.pyramid)
+            }
             entries.append(entry)
-            return entry.retouched
+            return pick(entry, maps, after: commands)
         }
-        // Renders wait for their commands, so an evicted copy is free to reuse.
+        // Until its own are made, the maps of this photo's latest retouch that has them, which
+        // differ from this one's least (another removal's object doesn't come back meanwhile).
+        let latest = entries.last { $0.original === original && $0.refreshed != nil }?.refreshed?.maps
+        // Renders wait for their commands, so an evicted copy is free to reuse, once its maps
+        // aren't being made.
         var reusable: (any MTLTexture)?
         if entries.count >= Self.maximumEntries {
             let evicted = entries.removeFirst()
-            if evicted.original === original {
+            if evicted.original === original, !refreshing.contains(ObjectIdentifier(evicted.retouched.pyramid)) {
                 reusable = evicted.retouched.pyramid
             }
         }
+        let texture = try reusable ?? makeCopy(of: original.pyramid)
+        let baking = try bake(spots, of: original, into: texture, commands: maps == .fresh ? nil : commands)
+        let retouched = ImageSession(retouching: original, pyramid: texture)
+        var entry = Entry(
+            original: original, spots: spots, retouched: retouched,
+            interim: latest.map { ImageSession(retouching: original, pyramid: texture, maps: $0) } ?? retouched,
+            baking: baking,
+        )
+        if maps == .fresh {
+            entry.refreshed = try withOwnMaps(original, pyramid: texture)
+        }
+        entries.append(entry)
+        return pick(entry, maps, after: commands)
+    }
+
+    /// The entry's photo with the maps `maps` asks for, starting their refresh when they aren't
+    /// made yet.
+    private func pick(_ entry: Entry, _ maps: Maps, after commands: any MTLCommandBuffer) -> ImageSession {
+        guard maps != .current else { return entry.retouched }
+        if let refreshed = entry.refreshed {
+            return refreshed
+        }
+        refresh(entry, after: commands)
+        return entry.interim
+    }
+
+    /// Makes sure the entry's spots are in its pyramid before it's read back: waits for the
+    /// command buffer putting them in, or, when that isn't committed yet (a render still being
+    /// encoded) or failed, puts them in again in one of its own.
+    private func settle(_ entry: inout Entry) throws {
+        guard let baking = entry.baking else { return }
+        if baking.status == .committed || baking.status == .scheduled {
+            baking.waitUntilCompleted()
+        }
+        if baking.status != .completed {
+            _ = try bake(entry.spots, of: entry.original, into: entry.retouched.pyramid, commands: nil)
+        }
+        entry.baking = nil
+    }
+
+    /// Copies the photo into `texture` and puts the spots in: into `commands`, or with none (or a
+    /// Remove spot not filled before) in command buffers of its own, each waited for. Returns the
+    /// command buffer the work is in while it isn't done.
+    private func bake(
+        _ spots: [RetouchSpot], of original: ImageSession, into texture: any MTLTexture,
+        commands: (any MTLCommandBuffer)?,
+    ) throws -> (any MTLCommandBuffer)? {
         let pyramid = original.pyramid
-        let texture = try reusable ?? makeCopy(of: pyramid)
         // A Remove spot not filled before reads the photo as the spots before it left it, so the
         // spots are then applied in command buffers of their own, each waited for.
         let keys = spots.indices.map { index in
             spots[index]
                 .mode == .remove ? FillKey(session: ObjectIdentifier(original), spots: Array(spots[...index])) : nil
         }
-        let synchronous = keys.contains { $0.map { fills[$0] == nil } ?? false }
-        var buffer = synchronous ? try makeCommandBuffer() : commands
+        let shared = keys.contains { $0.map { fills[$0] == nil } ?? false } ? nil : commands
+        var buffer = try shared ?? makeCommandBuffer()
         guard let blit = buffer.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
         blit.label = "Retouch copy"
         blit.copy(
@@ -186,12 +272,68 @@ final class RetouchStage {
             }
         }
         try generateMipmaps(texture, commands: buffer)
-        if synchronous {
-            try finish(buffer)
+        guard shared == nil else { return shared }
+        try finish(buffer)
+        return nil
+    }
+
+    /// The photo with `pyramid` (its spots already in) and maps made from it.
+    private func withOwnMaps(_ original: ImageSession, pyramid: any MTLTexture) throws -> ImageSession {
+        let maps = try SessionBuilder.maps(
+            of: pyramid, airlight: original.airlight, device: device, queue: queue, kernels: kernels,
+        )
+        return ImageSession(retouching: original, pyramid: pyramid, maps: maps)
+    }
+
+    /// A retouched pyramid on its way to the refresh and back, with the maps made from it. The
+    /// pyramid isn't written while it's being refreshed (`refreshing`), and the maps are read once
+    /// they're made.
+    private struct Refresh: @unchecked Sendable {
+        let pyramid: any MTLTexture
+        var maps: ImageMaps?
+    }
+
+    /// Once `commands` (which puts `entry`'s spots in, or reads them) is done, makes `entry`'s maps
+    /// from its pyramid in the background, if it's still the latest retouch, then keeps them and
+    /// calls `onRefresh`. A drag's frames refresh only where it stops. Called with `lock` held.
+    private func refresh(_ entry: Entry, after commands: any MTLCommandBuffer) {
+        let id = ObjectIdentifier(entry.retouched.pyramid)
+        guard refreshing.insert(id).inserted else { return }
+        let job = Refresh(pyramid: entry.retouched.pyramid)
+        let (original, spots) = (entry.original, entry.spots)
+        commands.addCompletedHandler { [self] _ in
+            DispatchQueue.global(qos: .userInitiated).async { [self] in
+                let latest = lock.withLock {
+                    let latest = entries.last?.retouched.pyramid === job.pyramid
+                    if !latest {
+                        refreshing.remove(id)
+                    }
+                    return latest
+                }
+                guard latest else { return }
+                var made = job
+                made.maps = try? SessionBuilder.maps(
+                    of: job.pyramid, airlight: original.airlight, device: device, queue: queue, kernels: kernels,
+                )
+                let installed = lock.withLock { () -> Bool in
+                    refreshing.remove(id)
+                    guard let maps = made.maps, let index = entries.firstIndex(where: {
+                        $0.retouched.pyramid === made.pyramid && $0.original === original && $0.spots == spots
+                    }) else { return false }
+                    entries[index].baking = nil
+                    // A still may have made them meanwhile; the frame on screen still needs them.
+                    if entries[index].refreshed == nil {
+                        entries[index].refreshed = ImageSession(
+                            retouching: original, pyramid: made.pyramid, maps: maps,
+                        )
+                    }
+                    return true
+                }
+                if installed {
+                    onRefresh?()
+                }
+            }
         }
-        let retouched = ImageSession(retouching: original, pyramid: texture)
-        entries.append(Entry(original: original, spots: spots, retouched: retouched))
-        return retouched
     }
 
     /// Nil when the spot misses the photo.

@@ -1,22 +1,21 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { readRepoFile } from "./repo.ts";
 
 /**
- * The README is the project's status page, so the roadmap and the list of what works
- * today are read from it at build time rather than copied: every push that updates the
- * README updates the site. Item text stays Markdown; `<Inline>` renders it.
+ * The README is the project's status page, so the roadmap and the list of what works today are read from
+ * it at build time rather than copied: every push that updates the README updates the site. Item text
+ * stays Markdown; `<Inline>` renders it. Roadmap items name their tracker rows in a trailing comment
+ * (`<!-- tracker: TON-06 -->`, or `<!-- internal -->`), which is read here and left out of the text.
  */
 
-export type RoadmapItem = { text: string; done: boolean | null };
+export type RoadmapItem = {
+  text: string;
+  /** Ticked, unticked, or null for the unscheduled "Later" list. */
+  done: boolean | null;
+  tracker: string[];
+  internal: boolean;
+};
 export type Phase = { title: string; status: string | null; items: RoadmapItem[] };
 export type FeatureGroup = { title: string; items: string[] };
-
-let cached: string | null = null;
-
-function readme(): string {
-  cached ??= readFileSync(path.join(process.cwd(), "..", "README.md"), "utf8");
-  return cached;
-}
 
 /** The body under `heading` (matched by prefix), up to the next heading of the same or a higher level. */
 function section(markdown: string, heading: string): string {
@@ -38,7 +37,13 @@ function bulletItems(lines: string[]): RoadmapItem[] {
   for (const line of lines) {
     const top = line.match(/^- (?:\[( |x)\] )?(.*)$/);
     if (top) {
-      items.push({ text: top[2].trim(), done: top[1] === undefined ? null : top[1] === "x" });
+      const tag = top[2].match(/<!--(.*?)-->/)?.[1] ?? "";
+      items.push({
+        text: top[2].replace(/\s*<!--.*?-->/g, "").trim(),
+        done: top[1] === undefined ? null : top[1] === "x",
+        tracker: tag.match(/\b(?:[A-Z]{2,4}|P1)-\d+\b/g) ?? [],
+        internal: /\binternal\b/.test(tag),
+      });
       continue;
     }
     const nested = line.match(/^\s+- (.*)$/);
@@ -47,8 +52,8 @@ function bulletItems(lines: string[]): RoadmapItem[] {
   return items;
 }
 
-export function roadmap(): { intro: string; phases: Phase[] } {
-  const body = section(readme(), "## Roadmap");
+export function parseRoadmap(markdown: string): { intro: string; phases: Phase[] } {
+  const body = section(markdown, "## Roadmap");
   const [introPart, ...parts] = body.split(/^### /m);
   const phases = parts
     .map((part) => {
@@ -61,8 +66,8 @@ export function roadmap(): { intro: string; phases: Phase[] } {
   return { intro: introPart.trim(), phases };
 }
 
-export function worksToday(): FeatureGroup[] {
-  const body = section(readme(), "### What works today");
+export function parseWorksToday(markdown: string): FeatureGroup[] {
+  const body = section(markdown, "### What works today");
   const groups: FeatureGroup[] = [];
   let current: FeatureGroup | null = null;
   let pending: string[] = [];
@@ -85,6 +90,29 @@ export function worksToday(): FeatureGroup[] {
   return groups.filter((group) => group.items.length > 0);
 }
 
+export type ItemState = "done" | "in progress" | "not started";
+
+/** Ticked is done; unticked with one of its tracker rows started (or finished) is in progress. */
+export function itemState(item: RoadmapItem, status: (id: string) => string | undefined): ItemState {
+  if (item.done) return "done";
+  const started = item.tracker.some((id) => ["done", "in progress"].includes(status(id) ?? ""));
+  return started ? "in progress" : "not started";
+}
+
+/** The number of a "Phase N: Title" heading, or null for Later and other sections. */
+export function phaseNumber(title: string): number | null {
+  const found = title.match(/^Phase (\d+):/);
+  return found ? Number(found[1]) : null;
+}
+
+export function roadmap(): { intro: string; phases: Phase[] } {
+  return parseRoadmap(readRepoFile("README.md"));
+}
+
+export function worksToday(): FeatureGroup[] {
+  return parseWorksToday(readRepoFile("README.md"));
+}
+
 export function lastUpdated(): string | null {
-  return readme().match(/Last updated: ([^.*]+)/)?.[1].trim() ?? null;
+  return readRepoFile("README.md").match(/Last updated: ([^.*]+)/)?.[1].trim() ?? null;
 }

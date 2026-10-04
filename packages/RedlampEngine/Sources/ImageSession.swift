@@ -129,10 +129,12 @@ final class ImageSession: @unchecked Sendable {
         retouchedFrom = nil
     }
 
-    /// `session` with `pyramid` in place of its own. Analyses made when the photo opened (the
-    /// haze map, the glow source, the noise model) are shared.
-    init(retouching session: ImageSession, pyramid: any MTLTexture) {
+    /// `session` with `pyramid` in place of its own, and `maps` made from it in place of the
+    /// photo's (without them, the photo's: what a spot replaced lives on in them). The airlight,
+    /// the noise model and the calibration are the photo's.
+    init(retouching session: ImageSession, pyramid: any MTLTexture, maps: ImageMaps? = nil) {
         let original = session.original
+        let maps = maps ?? original.maps
         info = original.info
         isRaw = original.isRaw
         self.pyramid = pyramid
@@ -145,17 +147,17 @@ final class ImageSession: @unchecked Sendable {
         asShotMultipliers = original.asShotMultipliers
         balanceMultipliers = original.balanceMultipliers
         baselineExposure = original.baselineExposure
-        analysis = original.analysis
+        analysis = maps.analysis
         noise = original.noise
         sensor = original.sensor
         repairedPixels = original.repairedPixels
         airlight = original.airlight
-        hazeMap = original.hazeMap
-        refinedHaze = original.refinedHaze
-        toneBase = original.toneBase
-        clarityBase = original.clarityBase
-        glowSource = original.glowSource
-        glowLights = original.glowLights
+        hazeMap = maps.hazeMap
+        refinedHaze = maps.refinedHaze
+        toneBase = maps.toneBase
+        clarityBase = maps.clarityBase
+        glowSource = maps.glowSource
+        glowLights = maps.glowLights
         noiseGain = original.noiseGain
         dngProfile = original.dngProfile
         hueSatMaps = original.hueSatMaps
@@ -164,6 +166,14 @@ final class ImageSession: @unchecked Sendable {
         embeddedMattes = original.embeddedMattes
         chromaticAberration = original.chromaticAberration
         retouchedFrom = original
+    }
+
+    /// The maps made from its pixels.
+    var maps: ImageMaps {
+        ImageMaps(
+            analysis: analysis, airlight: airlight, hazeMap: hazeMap, refinedHaze: refinedHaze, toneBase: toneBase,
+            clarityBase: clarityBase, glowSource: glowSource, glowLights: glowLights,
+        )
     }
 
     /// Per-channel gains that move the as-shot balance to the requested white balance.
@@ -212,6 +222,18 @@ enum SensorKind: Sendable {
         case .linearSRGBHalf: self = .bitmap
         }
     }
+}
+
+/// What `SessionBuilder.maps` makes from a pyramid's pixels.
+struct ImageMaps {
+    let analysis: AnalysisImage
+    let airlight: SIMD3<Float>
+    let hazeMap: any MTLTexture
+    let refinedHaze: any MTLTexture
+    let toneBase: any MTLTexture
+    let clarityBase: any MTLTexture
+    let glowSource: any MTLTexture
+    let glowLights: any MTLTexture
 }
 
 /// A downsampled CPU copy of the pyramid in camera RGB (balanced by the as-shot

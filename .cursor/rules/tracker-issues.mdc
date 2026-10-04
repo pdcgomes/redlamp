@@ -23,6 +23,8 @@ scripts/tracker-issues.py          # dry run: read what it will do
 scripts/tracker-issues.py --apply
 ```
 
+Before syncing, bring the README roadmap and the Lightroom comparison (`docs/lightroom-comparison.md`) into step: run `scripts/roadmap-sync.py` (then `--apply`) and settle what it reports, as `.cursor/rules/roadmap-and-comparison.mdc` describes. `tracker-issues.py --apply` refuses to run while they're out of step.
+
 A row that becomes `Done` closes its issue as completed; `Not needed` or `Rejected` closes it as not planned; a row moving back reopens it. When work lands for a tracked item, name its issue in the commit message (`Refine Edge brush (MSK-07, #12)`).
 
 ## Issues people file

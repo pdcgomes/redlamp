@@ -19,9 +19,9 @@ Redlamp is built from scratch in Swift and Metal for Apple Silicon. It focuses o
 
 ![Redlamp editing a Sony α7R V raw file](docs/images/hero.png)
 
-> **Status: pre-alpha, iteration 2 (macOS).** The core RAW pipeline and the Develop workspace work today: Basic (with Texture, Clarity and Dehaze), Tone Curve, Color Mixer, Color Grading, Detail (noise reduction and sharpening) and Effects, **masking** (gradients, brush, color and luminance range, Subject, Sky, Background, People and its parts, Objects, and Depth Range) with local adjustments, and **Recipes**, Redlamp's presets, profiles and LUTs in one, with film looks measured from cameras' own renderings and **[film simulations](#film-simulations)** of 36 film looks from 30 stocks, built from the manufacturers' datasheets. Crop, healing, Landscape masks, lens corrections, focus stacking, and the iPad and iPhone apps are next. See [Where we are](#where-we-are) and the [Roadmap](#roadmap).
+> **Status: pre-alpha, iteration 2 (macOS).** The core RAW pipeline and the Develop workspace work today: Basic (with Texture, Clarity and Dehaze), Tone Curve, Color Mixer, Color Grading, Detail (noise reduction and sharpening), Effects, lens corrections, crop and Upright, **masking** (gradients, brush, color and luminance range, Subject, Sky, Background, People and its parts, Objects, Landscape and Depth Range) with local adjustments, **healing and removal** (Heal, Clone, content-aware Remove and Remove Dust), **focus stacking**, and **Recipes**, Redlamp's presets, profiles and LUTs in one, with film looks measured from cameras' own renderings and **[film simulations](#film-simulations)** of 36 film looks from 30 stocks, built from the manufacturers' datasheets. AI Denoise, generative fill for large areas and the rest of Develop parity are next, then 1.0 and the iPad and iPhone apps. See [Where we are](#where-we-are), the [Roadmap](#roadmap), and [how Redlamp compares with Lightroom](docs/lightroom-comparison.md).
 >
-> This README is the project's primary status page and is kept up to date as work lands. *Last updated: 2 October 2026.*
+> This README is the project's primary status page and is kept up to date as work lands. *Last updated: 4 October 2026.*
 
 ---
 
@@ -222,7 +222,7 @@ With both side panels in AppKit, most of what remains is Core Animation committi
 - Highlights and Shadows are edge-aware for new edits (process version 7): each region moves by its brightness and keeps the texture inside it. Edits made before keep the per-pixel version, and they haven't yet been compared against Lightroom's own exports.
 - X-Trans demosaicing is a first-generation interpolation. A Markesteijn-class demosaic comes in Phase 2.
 - Redlamp's exposure for Fujifilm raws differs from the camera's by up to ±0.9 EV depending on the body; the profiler removes it when measuring looks, and the engine fix is tracked (TON-14).
-- Non-DNG raws use a single-illuminant Adobe-derived matrix (LibRaw's). DNGs interpolate their two calibrations by white balance, and since process 4 apply their embedded profile's HueSatMap, but the Temperature and Tint model still converts with one matrix. The profile's look (LookTable and tone curve) is offered as a Base Look under "In This Photo", Apple ProRAW's look comes with its gain table map, Apple's local tone mapping, so it renders the way the iPhone does. Imported `.dcp` files are next.
+- Non-DNG raws use a single-illuminant Adobe-derived matrix (LibRaw's). DNGs interpolate their two calibrations by white balance, and since process 4 apply their embedded profile's HueSatMap, but the Temperature and Tint model still converts with one matrix. The profile's look (LookTable and tone curve) is offered as a Base Look under "In This Photo", Apple ProRAW's look comes with its gain table map, Apple's local tone mapping, so it renders the way the iPhone does. Importing `.dcp` files is deferred.
 - Landscape masks (mountains, water, vegetation, ground, architecture) and people parts beyond the face (body skin, clothes, and hair without an iPhone matte) come from SAM 3, under Meta's SAM License; a model trained on data Redlamp has rights to, which would replace it, doesn't exist yet ([plan](docs/plans/2026-10-01-masking-plan.md#m8-trained-heads-msk-12-msk-13-only-if-m7-says-so)).
 - Objects (Segment Anything 2.1), Depth Range and Sky (Depth Anything V2 Small and 3) use open models trained partly on data Redlamp couldn't use itself, offered to everyone by the owner's decisions (tracker DEC-24, DEC-02). Vision's own tap-to-segment arrives with macOS 27.
 - AI mask edges are snapped to the photo when the mask is made (a guided filter, freedom-to-operate pending as DEC-05), not refined again at render time.
@@ -808,7 +808,9 @@ The Lab lives in the [component harness](#component-harness). It renders every r
 
 ## Roadmap
 
-The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on macOS, and iPad and iPhone follow in Phase 5, once the main features are complete. The engine stays platform-neutral throughout, so the port is a new shell rather than a rewrite. The Lightroom feature inventory in [`docs/lightroom-feature-inventory.md`](docs/lightroom-feature-inventory.md) tags every Lightroom feature with the phase that delivers it.
+The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on macOS, and iPad and iPhone follow in Phase 5, once the main features are complete. The engine stays platform-neutral throughout, so the port is a new shell rather than a rewrite. Where each Lightroom feature stands, done, in progress, planned or left out, is in [Redlamp and Lightroom compared](docs/lightroom-comparison.md), also at [redlamp.app/compare](https://redlamp.app/compare); the [Lightroom feature inventory](docs/lightroom-feature-inventory.md) is the detailed reference.
+
+Each item names the [tracker](docs/research/research-tracker.md) rows behind it in a comment, and `scripts/roadmap-sync.py` keeps the boxes in step with them.
 
 ### Phase 0: Foundations *(largely done)*
 - [x] mise and Tuist workspace, module graph with enforced boundaries, and an engine purity gate
@@ -816,9 +818,9 @@ The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on mac
 - [x] Engine API contract, headless CLI, and a unit and engine smoke-test suite
 - [x] Lightroom feature inventory
 - [x] GitHub Actions CI: purity gate, SwiftFormat lint, build, and tests, with cached LibRaw and fixtures
-- [ ] Performance lab: a CI runner on Apple Silicon with regression gates that block merges (iPhone and iPad tiers come with Phase 5)
+- [ ] Performance lab: a CI runner on Apple Silicon with regression gates that block merges (iPhone and iPad tiers come with Phase 5) <!-- internal -->
 - [x] Golden-image color regression tests (ΔE2000) for camera files, and a golden render for every bundled recipe version
-- [ ] Written clean-room policy and a license-audit gate in CI
+- [ ] Written clean-room policy and a license-audit gate in CI <!-- internal -->
 
 ### Phase 1: First light *(done)*
 - [x] RAW pipeline core, fused develop kernel, cached pyramid, and latest-wins rendering
@@ -829,54 +831,68 @@ The Mac comes first: Phases 1 to 4 build a high-quality editor and engine on mac
 - [x] Coordinated sidecar I/O for iCloud Drive
 
 ### Phase 2: Develop parity *(in progress)*
-- [x] Texture, Clarity and Dehaze, globally and inside masks, and Moiré and Defringe inside masks
-- [x] Copy Settings with Lightroom's checklist, Sync and Auto Sync across a filmstrip selection
-- [x] Detail panel: noise reduction scaled to each photo's measured noise, and noise-aware sharpening, with Lightroom's controls
-- [x] Menon Bayer demosaic with a dual pass for flat noisy areas, hot-pixel repair and highlight reconstruction
-- [x] **Recipes:** one format for presets, profiles and LUTs, Base Look tables, camera recipe cards, `.cube`, `.3dl` and HaldCLUT import (with LUTs for S-Log3, LogC3, V-Log and Apple Log footage), 39 bundled recipes, and the Recipe Lab
+- [x] Texture, Clarity and Dehaze, globally and inside masks, and Moiré and Defringe inside masks <!-- tracker: MSK-03, TON-27 -->
+- [x] Copy Settings with Lightroom's checklist, Sync and Auto Sync across a filmstrip selection <!-- tracker: EDT-08, EDT-17, EDT-18 -->
+- [x] Detail panel: noise reduction scaled to each photo's measured noise, and noise-aware sharpening, with Lightroom's controls <!-- tracker: DN-02, SHP-01 -->
+- [x] Menon Bayer demosaic with a dual pass for flat noisy areas, hot-pixel repair and highlight reconstruction <!-- tracker: CAM-05, CAM-06, CAM-08 -->
+- [x] **Recipes:** one format for presets, profiles and LUTs, Base Look tables, camera recipe cards, `.cube`, `.3dl` and HaldCLUT import (with LUTs for S-Log3, LogC3, V-Log and Apple Log footage), 39 bundled recipes, and the Recipe Lab <!-- tracker: EDT-07, TON-11, TON-28 -->
 - [x] Before/After layouts, themes and a Settings window
-- [x] Edge-aware Highlights and Shadows, and edge-refined Dehaze
-- [ ] **Best-in-class classical noise reduction** on raw data, profiled per camera and ISO
-- [ ] Better X-Trans demosaicing (Markesteijn)
-- [ ] Full DCP camera profiles (dual and triple illuminant), ICC input profiles, and `.3dl` and log-space LUT import *(`.3dl` and S-Log3, LogC3, V-Log and Apple Log LUTs are done)*
-- [ ] **Film effects for recipes:** halation (the red glow around bright lights), bloom and diffusion, and film grain that varies with density and scales with output size
+- [x] Edge-aware Highlights and Shadows, and edge-refined Dehaze <!-- tracker: TON-05, TON-27 -->
+- [x] **Film effects for recipes:** halation (the red glow around bright lights), bloom and diffusion, and film grain that varies with density and scales with output size <!-- tracker: TON-17, TON-18, TON-19 -->
+- [x] DNG camera profiles: dual-illuminant colour, the embedded HueSatMap, and the profile's own look offered as a Base Look <!-- tracker: CAM-04 -->
 - [x] Calibration panel: Shadows Tint and the red, green and blue primaries' Hue and Saturation, and the Process version, which moves an edit to a newer rendering only when you ask
-- [x] Remove Chromatic Aberration, from the lens profile or measured from the photo's own edges, and Lightroom's Defringe (Purple and Green Amount and Hue)
-- [ ] Lens corrections from the lensfun database and Adobe LCP import *(the corrections raw files carry, DNG opcodes, Sony's and Fujifilm's, manual Distortion and Vignetting, and Adobe LCP profiles you put in Redlamp's Lens Profiles folder are done, in the same geometry map; lensfun waits on counsel)*
-- [x] **Crop and straighten** (aspect presets and lock, composition overlays, Angle and the Straighten tool, Constrain to Image), rotate and flip, and the manual Transform sliders, all one geometry map that masks follow
-- [x] Upright: Auto, Level, Vertical and Full from the photo's own straight edges, found by Redlamp's line detector, and Guided from drawn guides. A correction is applied only when the edges agree on it, so a landscape or a still life is levelled at most, and Auto leaves strong perspective partly in place
-- [x] Brush, color range, and luminance range masks, and Vision AI masks (subject, sky, background, people)
-- [ ] Slider-feel calibration against Lightroom, and Lightroom XMP preset import *(preset import is done, setting by setting, with a report; response curves fitted against Lightroom's renders are next)*
+- [x] Remove Chromatic Aberration, from the lens profile or measured from the photo's own edges, and Lightroom's Defringe (Purple and Green Amount and Hue) <!-- tracker: LNS-09 -->
+- [x] Lens corrections the raw file carries (DNG opcodes, Sony's and Fujifilm's), and manual Distortion and Vignetting, in the same geometry map
+- [x] Adobe LCP lens profiles you put in Redlamp's Lens Profiles folder, named in the Lens Corrections panel <!-- tracker: LNS-04, LNS-11 -->
+- [x] **Crop and straighten** (aspect presets and lock, composition overlays, Angle and the Straighten tool, Constrain to Image), rotate and flip, and the manual Transform sliders, all one geometry map that masks follow <!-- tracker: LNS-06 -->
+- [x] Upright: Auto, Level, Vertical and Full from the photo's own straight edges, found by Redlamp's line detector, and Guided from drawn guides. A correction is applied only when the edges agree on it, so a landscape or a still life is levelled at most, and Auto leaves strong perspective partly in place <!-- tracker: LNS-07 -->
+- [x] Brush, color range, and luminance range masks, and Vision AI masks (subject, sky, background, people) <!-- tracker: MSK-05, MSK-08, MSK-16 -->
+- [x] Lightroom XMP preset import, setting by setting, with a report of what came across
+- [ ] **Best-in-class classical noise reduction** on raw data, profiled per camera and ISO <!-- tracker: DN-01, DN-05, DN-10 -->
+- [ ] Better X-Trans demosaicing (Markesteijn) <!-- tracker: CAM-07 -->
+- [ ] ICC input profiles <!-- tracker: TON-10 -->
+- [ ] Lens corrections from the lensfun database (waits on counsel) <!-- tracker: LNS-03 -->
+- [ ] Slider-feel calibration against Lightroom: response curves fitted against Lightroom's renders <!-- tracker: EDT-11 -->
 - [ ] Photos library integration and a Photos editing extension
 
-### Phase 3: Pro masking, healing, AI denoise, focus stacking, and looks
-- [x] SAM-class object and face-part masks, depth range, mask refinement, mask presets, and recomputing AI masks for pasted settings
-- [ ] Landscape and body-part masks on a model trained on data we have rights to, and batch updating AI masks across photos
-- [ ] Healing, clone, and content-aware remove, with AI inpainting on the device *(Remove with content-aware fill, Heal and Clone spots and brushes, Remove Dust and Visualize Spots, and Find for things named in words are done; generative fill for large areas is next)*
-- [ ] **AI Denoise:** an on-device model working on raw data, matching or beating the best commercial denoisers, with a fast 1:1 preview and non-destructive results
-- [ ] **Focus stacking v1:** stacks detected automatically in the filmstrip, alignment (including focus breathing and handheld sequences), depth-map and pyramid fusion strategies, a retouch brush, and results that stay fully editable *(alignment, depth solve, fusion and `redlamp stack` done)*
-- [ ] Manufacturer lens corrections embedded in RAW files (Sony, Fujifilm, Panasonic, OM System)
-- [ ] `redlamp-profiler`: look matching by black-box measurement *(raw-against-camera-JPEG fitting done: four measured film looks ship)*. Still to do: the remaining film simulations (Eterna, Classic Negative, Nostalgic Negative, Pro Neg, Acros, Reala Ace), which need a shoot with one camera, a chart matrix solve, and a DCP writer
-- [ ] **Analogue film stocks:** film and digital shot side by side with charts, scanned and fitted by the profiler, with halation, bloom and grain per stock
-- [ ] **The agent recipe studio at scale:** many more recipes developed from briefs, once the critics agree with human picks (about 200 pairwise verdicts)
+### Phase 3: Pro masking, healing, AI denoise, focus stacking, and looks *(in progress)*
+- [x] SAM-class object and face-part masks, depth range, mask refinement, mask presets, and recomputing AI masks for pasted settings <!-- tracker: MSK-10, MSK-14, MSK-17 -->
+- [x] Updating AI masks across a selection of photos <!-- tracker: EDT-17 -->
+- [x] Heal and Clone, as spots and brushed strokes, each finding its own source <!-- tracker: RM-01 -->
+- [x] Content-aware Remove, and removing people, objects and things named in words with a click <!-- tracker: RM-07, RM-08 -->
+- [x] Remove Dust and Visualize Spots, for one photo or across a shoot <!-- tracker: RM-02 -->
+- [x] **Focus stacking:** stacks found in the filmstrip, alignment through focus breathing, depth-map fusion (Auto, Smooth and Detail), a retouch brush, and results that develop like a raw
+- [x] `redlamp-profiler`: look matching by black-box measurement against cameras' own JPEGs; four measured film looks ship
+- [ ] Generative fill on the device, for areas too large for content-aware Remove <!-- tracker: RM-10 -->
+- [ ] Landscape and body-part masks on a model trained on data we have rights to <!-- tracker: MSK-13 -->
+- [ ] **AI Denoise:** an on-device model working on raw data, matching or beating the best commercial denoisers, with a fast 1:1 preview and non-destructive results <!-- tracker: DN-06, DN-07, DN-08 -->
+- [ ] Focus stacking: lens corrections before alignment, halo handling, vendors' focus-bracketing tags, and baking a stack to DNG <!-- tracker: FS-01, FS-02, FS-03 -->
+- [ ] Manufacturer lens corrections embedded in Panasonic and OM System raw files <!-- tracker: LNS-02 -->
+- [ ] The remaining film simulations (Eterna, Classic Negative, Nostalgic Negative, Pro Neg, Acros, Reala Ace), which need a shoot with one camera, a chart matrix solve, and a DCP writer <!-- tracker: TON-14, TON-20 -->
+- [ ] **Analogue film stocks:** film and digital shot side by side with charts, scanned and fitted by the profiler, with halation, bloom and grain per stock <!-- tracker: TON-21 -->
+- [ ] **The agent recipe studio at scale:** many more recipes developed from briefs, once the critics agree with human picks (about 200 pairwise verdicts) <!-- internal -->
 
 ### Phase 4: 1.0
-- [ ] Lightroom XMP sidecar import, HDR/EDR editing and export, and batch export
-- [ ] **AI-assisted focus stacking:** learned fusion and halo suppression, occlusion and motion handling, and good stacks from fewer or handheld frames
-- [ ] **AI Super Resolution** (2x and 4x) that stays faithful and doesn't invent detail
-- [ ] Accessibility, usability testing, and the Mac App Store release
+- [ ] Lightroom XMP sidecar import <!-- tracker: EDT-12 -->
+- [ ] HDR and EDR editing and export
+- [ ] Batch export <!-- tracker: EDT-16 -->
+- [ ] The edit embedded in exported files <!-- tracker: EDT-14 -->
+- [ ] **AI-assisted focus stacking:** learned fusion and halo suppression, occlusion and motion handling, and good stacks from fewer or handheld frames <!-- tracker: FS-14 -->
+- [ ] **AI Super Resolution** (2x and 4x) that stays faithful and doesn't invent detail <!-- tracker: SR-01, SR-02 -->
+- [ ] Accessibility, usability testing, and the Mac App Store release <!-- internal -->
 
 ### Phase 5: iPad and iPhone
 - [ ] iPad and iPhone shells on the same engine (compact layout, touch, Apple Pencil), with in-process decoding
 - [ ] Coordinated sidecar I/O through Files, and edits moving between devices
-- [ ] Tiled rendering for large exports within iPhone and iPad memory
-- [ ] On-device timing of the AI models on iPhone and iPad, and performance-lab tiers for both
+- [ ] Tiled rendering for large exports within iPhone and iPad memory <!-- internal; tracker: ARC-05 -->
+- [ ] On-device timing of the AI models on iPhone and iPad, and performance-lab tiers for both <!-- internal; tracker: DN-04 -->
 - [ ] App Store releases for iPad and iPhone
 
 ### Later
 - CloudKit sync with lightweight proxy RAW files
-- A library and catalog, tethered shooting, and panorama and HDR merge
-- More AI features, subject to the research below: lens blur, distraction removal, and personalized auto settings
+- A library and catalog, tethered shooting, and panorama and HDR merge <!-- tracker: OTH-04 -->
+- Importing your own `.dcp` camera profiles (deferred in October 2026)
+- More AI features, subject to the research below: lens blur, distraction removal, and personalized auto settings <!-- tracker: OTH-03, AUT-03, AUT-04 -->
 
 ### Research
 
@@ -1052,7 +1068,7 @@ To add a component, write a scene in `apps/RedlampHarness/Sources/Scenes/` and r
 
 ### Supported files
 
-- **Raw:** through LibRaw 0.22, covering most cameras from Sony (A1, A7 II–IV, A7C, A7R II–V, A7S, A9, a6x00, ZV, RX), Canon, Nikon, Fujifilm (including X-Trans), Panasonic, OM System and Olympus, Pentax, Leica, Hasselblad, and DNG, including Apple ProRAW. Uncompressed, compressed, and lossless compressed formats are all supported. Bodies released after LibRaw 0.22 need a LibRaw update. A camera is verified once a CC0 sample file is in the decode regression suite (`tests/decode/cameras.json`), which checks layout, crop, black and white levels, white balance, color matrix, orientation and the sensor data on every test run; today that covers the Sony A7 III, Fujifilm X-T3, Canon EOS R6, Nikon Z 6 and iPhone 12 Pro ProRAW.
+- **Raw:** through LibRaw 0.22, covering most cameras from Sony (A1, A7 II–IV, A7C, A7R II–V, A7S, A9, a6x00, ZV, RX), Canon, Nikon, Fujifilm (including X-Trans), Panasonic, OM System and Olympus, Pentax, Leica, Hasselblad, and DNG, including Apple ProRAW. Uncompressed, compressed, and lossless compressed formats are all supported. Bodies released after LibRaw 0.22 need a LibRaw update. A camera is verified once a CC0 sample file is in the decode regression suite (`tests/decode/cameras.json`), which checks layout, crop, black and white levels, white balance, color matrix, orientation and the sensor data on every test run; today that covers the Sony A7 III, Fujifilm X-T3, Canon EOS R6, Nikon Z 6, iPhone 12 Pro ProRAW and Google Pixel 4a. [Cameras](docs/cameras.md) (also at [redlamp.app/cameras](https://redlamp.app/cameras)) lists every camera LibRaw reads and which ones Redlamp's tests verify; `scripts/camera-list.py --apply` regenerates it when a sample is added or LibRaw is updated.
 - **Bitmap:** JPEG, HEIC, TIFF, and PNG.
 
 ### Keyboard shortcuts
@@ -1084,7 +1100,7 @@ Edits are saved next to the photo, in `IMG_1234.ARW.redlamp`. It is a package (F
 
 Sidecars carry two version numbers:
 - The **format version** describes the file's syntax. Older formats are migrated silently when read.
-- The **process version** records the rendering behavior the edit was made with, like Lightroom's process versions. An edit keeps rendering the way it did when it was made; moving it to a newer process is always an explicit choice. Process 2 (October 2026) sizes grain to the frame and makes it strongest in the shadows, as film's is. Process 3 shows a JPEG, HEIC, PNG or TIFF as the file at default settings, and gives halation's extra glow only to small lights. Process 4 corrects a DNG's colour with its embedded camera profile's HueSatMap, as Lightroom does. Process 5 applies the lens correction the file carries (DNG warp and vignetting opcodes, Sony's built-in profile), with Enable Profile Corrections in the Lens Corrections panel, and process 6 Fujifilm's too. Process 7 makes Highlights and Shadows edge-aware, process 8 makes Dehaze's haze map follow the photo's edges, and process 9 makes Clarity edge-aware. Edits made before each keep the behaviour they were made with.
+- The **process version** records the rendering behavior the edit was made with, like Lightroom's process versions. An edit keeps rendering the way it did when it was made; moving it to a newer process is always an explicit choice. Process 2 (October 2026) sizes grain to the frame and makes it strongest in the shadows, as film's is. Process 3 shows a JPEG, HEIC, PNG or TIFF as the file at default settings, and gives halation's extra glow only to small lights. Process 4 corrects a DNG's colour with its embedded camera profile's HueSatMap, as Lightroom does. Process 5 applies the lens correction the file carries (DNG warp and vignetting opcodes, Sony's built-in profile), with Enable Profile Corrections in the Lens Corrections panel, and process 6 Fujifilm's too. Process 7 makes Highlights and Shadows edge-aware, process 8 makes Dehaze's haze map follow the photo's edges, process 9 makes Clarity edge-aware, and process 10 works out Highlights and Shadows, Clarity, Dehaze and glow from the photo as its Remove, Heal and Clone spots leave it, so a removed object leaves no trace. Edits made before each keep the behaviour they were made with.
 
 Settings a newer Redlamp wrote, but this version doesn't know, are kept and written back unchanged, at every level of the edit. A sidecar that a save would change in any other way opens read-only, as does one written with a newer format or process version and one that can't be read; none of them is ever overwritten or deleted, and the photo says why it can't be edited. Conflicting iCloud copies are merged only when every one of them can be. Sidecars are only rewritten when their content changes. Saves are written one at a time, in order, at most 2 seconds after an edit (or when a drag pauses); quitting saves first. If a save fails, the photo says so, with Retry, and Redlamp keeps trying; a failed edit is kept and retried when the photo is opened again, and quitting with edits that still can't be saved asks first. When another app or Mac saved the open photo's sidecar meanwhile, Redlamp merges the two edits, keeping each side's changes, and keeps the other edit as a snapshot where both changed the same setting. An interrupted save or delete leaves nothing half-written behind. An export, from the app or the `redlamp` CLI, never replaces a photo: not its source, not a raw file, and not an image Redlamp didn't export. Format 2 renamed `profile` to `baseLook`; format-1 sidecars still read. Format 3 added brush, range and AI mask components and made sidecars packages; a single-file sidecar is read as it is and becomes a package on its next save.
 

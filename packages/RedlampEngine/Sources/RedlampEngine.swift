@@ -26,6 +26,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     private struct RenderState {
         var pending: RenderRequest?
         var isRunning = false
+        /// The latest request, to render again when a retouched photo's maps are made again.
+        var latest: RenderRequest?
     }
 
     private let session = Mutex<ImageSession?>(nil)
@@ -140,6 +142,10 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
                 return try builder.build(SupportedFormats.isStack(url) ? stacks.decode(url) : decoder.decode(url))
             },
         )
+        retouch.onRefresh = { [weak self] in
+            guard let latest = self?.renderState.withLock({ $0.latest }) else { return }
+            self?.render(latest)
+        }
     }
 
     // MARK: - Opening
@@ -184,6 +190,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     public func render(_ request: RenderRequest) {
         let start = renderState.withLock { state -> Bool in
             state.pending = request
+            state.latest = request
             guard !state.isRunning else { return false }
             state.isRunning = true
             return true
@@ -245,7 +252,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
                 request.recipe, session: session, into: target.texture, size: size, region: region,
                 encoding: .linear, showClipping: request.showClipping, maskOverlay: request.maskOverlay,
                 maskOverlayColor: request.maskOverlayColor, maskOverlayStyle: request.maskOverlayStyle,
-                commands: commands, visualizeSpots: request.visualizeSpots,
+                commands: commands, visualizeSpots: request.visualizeSpots, retouchMaps: .refreshLater,
             )
             // Visualize Spots replaces the photo in the frame, not in the histogram.
             if request.region == nil, request.visualizeSpots == nil {
@@ -257,7 +264,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
                     request.recipe, session: session, into: whole.texture, size: overviewSize,
                     encoding: .linear, showClipping: request.showClipping, maskOverlay: request.maskOverlay,
                     maskOverlayColor: request.maskOverlayColor, maskOverlayStyle: request.maskOverlayStyle,
-                    commands: commands,
+                    commands: commands, retouchMaps: .refreshLater,
                 )
                 try encodeHistogram(texture: whole.texture, size: overviewSize, linear: true, commands: commands)
                 overview = whole
@@ -296,6 +303,16 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         )
     }
 
+    /// `session` with the recipe's spots in, and from process 10 the maps `maps` asks for; the
+    /// photo's before.
+    func retouched(
+        _ recipe: EditRecipe, session: ImageSession, commands: any MTLCommandBuffer, maps: RetouchStage.Maps,
+    ) throws -> ImageSession {
+        try retouch.session(
+            for: recipe, base: session, commands: commands, maps: recipe.processVersion >= 10 ? maps : .current,
+        )
+    }
+
     func encodeDevelop(
         _ recipe: EditRecipe,
         session: ImageSession,
@@ -311,12 +328,14 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         cacheDetail: Bool = true,
         detail: Bool = true,
         visualizeSpots: Double? = nil,
+        retouchMaps: RetouchStage.Maps = .current,
     ) throws {
+        let photo = session
+        let session = try retouched(recipe, session: photo, commands: commands, maps: retouchMaps)
         let maskBindings = try prepareMasks(
-            recipe, session: session, commands: commands,
-            needsGuide: maskOverlay != nil && maskOverlayStyle == .luminanceMap,
+            recipe, session: photo, retouched: session, commands: commands,
+            needsGuide: maskOverlay != nil && maskOverlayStyle == .luminanceMap, retouchMaps: retouchMaps,
         )
-        let session = try retouch.session(for: recipe, base: session, commands: commands)
         let processed = detail ? try detailStage.process(
             recipe, session: session, region: region, outputSize: size, commands: commands, cache: cacheDetail,
             masks: maskBindings,
@@ -581,7 +600,7 @@ extension RedlampEngine {
             guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
             try encodeDevelop(
                 recipe, session: session, into: texture, size: size,
-                encoding: encoding, showClipping: false, commands: commands,
+                encoding: encoding, showClipping: false, commands: commands, retouchMaps: .fresh,
             )
             try finish(commands)
         }
@@ -652,6 +671,7 @@ extension RedlampEngine {
                     try encodeDevelop(
                         recipe, session: session, into: scratch, size: tileSize, region: region,
                         encoding: encoding, showClipping: false, commands: commands, cacheDetail: false,
+                        retouchMaps: .fresh,
                     )
                     guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
                     blit.copy(
@@ -736,16 +756,17 @@ extension RedlampEngine {
         }
         let region = request.region ?? .full
         let target = try comparisons.next(size: size)
+        // Cached, so its maps are made once for it, rather than refreshed for the frame.
         try encodeDevelop(
             recipe, session: session, into: target.texture, size: size, region: region,
-            encoding: .linear, showClipping: request.showClipping, commands: commands,
+            encoding: .linear, showClipping: request.showClipping, commands: commands, retouchMaps: .fresh,
         )
         var overview: IOSurfaceRef?
         if request.region != nil {
             let whole = try comparisonOverviews.next(size: overviewSize)
             try encodeDevelop(
                 recipe, session: session, into: whole.texture, size: overviewSize,
-                encoding: .linear, showClipping: request.showClipping, commands: commands,
+                encoding: .linear, showClipping: request.showClipping, commands: commands, retouchMaps: .fresh,
             )
             overview = whole.surface
         }

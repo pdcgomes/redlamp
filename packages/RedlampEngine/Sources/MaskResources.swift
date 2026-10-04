@@ -67,6 +67,14 @@ final class MaskResources {
         case bitmap(String)
     }
 
+    /// The edit guide, the recipe it's for (without its masks), and the photo it was developed
+    /// from: with the recipe's spots in, its maps made again once they are (`RetouchStage.Maps`).
+    private struct EditGuide {
+        var recipe: EditRecipe
+        var texture: any MTLTexture
+        weak var photo: ImageSession?
+    }
+
     /// A photo's rasters and guides while another photo renders.
     private struct Parked {
         weak var session: ImageSession?
@@ -74,7 +82,7 @@ final class MaskResources {
         var keys: [RasterKey?]
         var lastUsed: [UInt64]
         var paintBase: (key: BrushMask, texture: any MTLTexture)?
-        var editGuide: (recipe: EditRecipe, texture: any MTLTexture)?
+        var editGuide: EditGuide?
         var editGuideGeneration: Int
         var analysisGuide: (any MTLTexture)?
 
@@ -121,7 +129,7 @@ final class MaskResources {
     var paintBase: (key: BrushMask, texture: any MTLTexture)?
 
     private(set) var guideSize = PixelSize.zero
-    private var editGuide: (recipe: EditRecipe, texture: any MTLTexture)?
+    private var editGuide: EditGuide?
     /// Never reused, since a photo's guide can be dropped and rendered again while caches still
     /// hold its old number.
     private(set) var editGuideGeneration = 0
@@ -289,22 +297,23 @@ final class MaskResources {
 
     // MARK: - Guides
 
-    /// The edit guide for `recipe` (its masks are ignored), rendering it with `render` when the
-    /// global edit changed since the last one.
+    /// The edit guide for `recipe` (its masks are ignored), developed from `photo`, rendering it
+    /// with `render` when the global edit or the photo changed since the last one.
     func editGuide(
         for recipe: EditRecipe,
+        from photo: ImageSession,
         commands: any MTLCommandBuffer,
         render: (EditRecipe, any MTLTexture) throws -> Void,
     ) throws -> any MTLTexture {
         var global = recipe
         global.masks = []
-        if let editGuide, editGuide.recipe == global {
+        if let editGuide, editGuide.recipe == global, editGuide.photo === photo {
             return editGuide.texture
         }
         let texture = try editGuide?.texture ?? makeGuide()
         try render(global, texture)
         try generateMipmaps(texture, commands: commands)
-        editGuide = (global, texture)
+        editGuide = EditGuide(recipe: global, texture: texture, photo: photo)
         guideGenerations += 1
         editGuideGeneration = guideGenerations
         return texture

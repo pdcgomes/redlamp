@@ -20,6 +20,9 @@ reporter's text above the block. Open issues without an ID are listed as untriag
     scripts/tracker-issues.py --apply         # make the changes
     scripts/tracker-issues.py --only MSK-07,MSK-15
 
+With --apply it first runs `scripts/roadmap-sync.py --check`, and stops while the README roadmap or
+the Lightroom comparison is out of step with the tracker.
+
 Decision rows (DEC-) and recorded skips (SKIP-) stay in the tracker only, unless asked for: the
 decisions are questions for counsel and the owner, not work to pick up. Rows already done when
 they first sync get no issue, unless --include-done.
@@ -255,6 +258,10 @@ def main():
     parser.add_argument("--include-decisions", action="store_true", help="mirror DEC- rows too")
     parser.add_argument("--include-skips", action="store_true", help="mirror SKIP- rows too")
     options = parser.parse_args()
+
+    if options.apply and subprocess.run([sys.executable, str(ROOT / "scripts/roadmap-sync.py"), "--check"]).returncode:
+        sys.exit("The README roadmap or the Lightroom comparison is out of step with the tracker: run "
+                 "scripts/roadmap-sync.py (then --apply), commit, and sync again.")
 
     only = set(options.only.split(",")) if options.only else None
     ROWS.update({row["id"]: row for row in rows()})

@@ -63,57 +63,13 @@ struct SessionBuilder {
 
         guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
         blit.generateMipmaps(for: pyramid)
-        let analysisLevel = max(0, levels - 1 - Int(log2(Double(Self.analysisLongEdge))))
-        let analysisWidth = max(1, width >> analysisLevel)
-        let analysisHeight = max(1, height >> analysisLevel)
-        let rowBytes = analysisWidth * 8
-        guard let readback = device.makeBuffer(length: rowBytes * analysisHeight, options: .storageModeShared) else {
-            throw EngineError.gpuUnavailable
-        }
-        blit.copy(
-            from: pyramid, sourceSlice: 0, sourceLevel: analysisLevel,
-            sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
-            sourceSize: MTLSize(width: analysisWidth, height: analysisHeight, depth: 1),
-            to: readback, destinationOffset: 0,
-            destinationBytesPerRow: rowBytes, destinationBytesPerImage: rowBytes * analysisHeight,
-        )
         blit.endEncoding()
         commands.commit()
         commands.waitUntilCompleted()
         if let error = commands.error {
             throw EngineError.renderFailed(error.localizedDescription)
         }
-
-        let halves = readback.contents().assumingMemoryBound(to: Float16.self)
-        let pixels = (0 ..< analysisWidth * analysisHeight).map { index in
-            SIMD3<Float>(Float(halves[index * 4]), Float(halves[index * 4 + 1]), Float(halves[index * 4 + 2]))
-        }
-        let analysis = AnalysisImage(width: analysisWidth, height: analysisHeight, pixels: pixels)
-        let airlight = Haze.airlight(analysis)
-        let toneBase = try ToneBase.coefficients(analysis).texture(device: device)
-        let clarityBase = try ClarityBase.coefficients(analysis, fullLongEdge: max(width, height))
-            .texture(device: device)
-        guard let hazeCommands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
-        hazeCommands.label = "Haze map"
-        let (hazeMap, hazeBlocks) = try Haze.encodeMap(
-            pyramid: pyramid, airlight: airlight, device: device, kernels: kernels, commands: hazeCommands,
-        )
-        let glowSource = try Glow.encodeSource(
-            pyramid: pyramid,
-            device: device,
-            kernels: kernels,
-            commands: hazeCommands,
-        )
-        let glowLights = try Glow.encodeSource(
-            pyramid: pyramid, device: device, kernels: kernels, commands: hazeCommands, lightsOnly: true,
-        )
-        // Renders run on another queue, so the maps must be finished before the session is.
-        hazeCommands.commit()
-        hazeCommands.waitUntilCompleted()
-        if let error = hazeCommands.error {
-            throw EngineError.renderFailed(error.localizedDescription)
-        }
-        let refinedHaze = try Haze.refined(blocks: hazeBlocks).texture(device: device)
+        let maps = try Self.maps(of: pyramid, airlight: nil, device: device, queue: queue, kernels: kernels)
         let colorModel = decoded.isRaw ? decoded.xyzToCamera.flatMap(CameraColorModel.init(xyzToCameraRowMajor:)) : nil
         var info = decoded.info
         info.asShotWhiteBalance = colorModel?.whiteBalance(forMultipliers: decoded.asShotMultipliers)
@@ -129,21 +85,84 @@ struct SessionBuilder {
             pyramid: pyramid,
             colorModel: colorModel,
             balanceMultipliers: balance,
-            analysis: analysis,
+            analysis: maps.analysis,
             noise: noise,
             repairedPixels: Int(repairedCount.contents().load(as: UInt32.self)),
-            airlight: airlight,
-            hazeMap: hazeMap,
-            refinedHaze: refinedHaze,
-            toneBase: toneBase,
-            clarityBase: clarityBase,
-            glowSource: glowSource,
-            glowLights: glowLights,
+            airlight: maps.airlight,
+            hazeMap: maps.hazeMap,
+            refinedHaze: maps.refinedHaze,
+            toneBase: maps.toneBase,
+            clarityBase: maps.clarityBase,
+            glowSource: maps.glowSource,
+            glowLights: maps.glowLights,
             noiseGain: noiseGain,
             hueSatMaps: decoded.isRaw ? HueSatMaps(profile: decoded.dngProfile, device: device) : nil,
             gainTableMap: decoded.isRaw ? GainTableMapTexture(decoded.dngProfile?.gainTableMap, device: device) : nil,
             embeddedLook: embeddedLook,
             embeddedMattes: mattes.value(),
+        )
+    }
+
+    /// The maps made from the photo's own pixels, from `pyramid` with its mipmaps: its analysis
+    /// copy, Dehaze's haze maps (from `airlight`, or one found in it), edge-aware Highlights and
+    /// Shadows' and Clarity's bases, and the glow sources. Made when a photo opens, and again for a
+    /// retouched copy, so nothing it removed lives on in them.
+    static func maps(
+        of pyramid: any MTLTexture, airlight known: SIMD3<Float>?, device: any MTLDevice, queue: any MTLCommandQueue,
+        kernels: KernelLibrary,
+    ) throws -> ImageMaps {
+        let levels = pyramid.mipmapLevelCount
+        let analysisLevel = max(0, levels - 1 - Int(log2(Double(Self.analysisLongEdge))))
+        let analysisWidth = max(1, pyramid.width >> analysisLevel)
+        let analysisHeight = max(1, pyramid.height >> analysisLevel)
+        let rowBytes = analysisWidth * 8
+        guard let readback = device.makeBuffer(length: rowBytes * analysisHeight, options: .storageModeShared),
+              let commands = queue.makeCommandBuffer(), let blit = commands.makeBlitCommandEncoder()
+        else { throw EngineError.gpuUnavailable }
+        commands.label = "Analysis copy"
+        blit.copy(
+            from: pyramid, sourceSlice: 0, sourceLevel: analysisLevel,
+            sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+            sourceSize: MTLSize(width: analysisWidth, height: analysisHeight, depth: 1),
+            to: readback, destinationOffset: 0,
+            destinationBytesPerRow: rowBytes, destinationBytesPerImage: rowBytes * analysisHeight,
+        )
+        blit.endEncoding()
+        commands.commit()
+        commands.waitUntilCompleted()
+        if let error = commands.error {
+            throw EngineError.renderFailed(error.localizedDescription)
+        }
+        let halves = readback.contents().assumingMemoryBound(to: Float16.self)
+        let pixels = (0 ..< analysisWidth * analysisHeight).map { index in
+            SIMD3<Float>(Float(halves[index * 4]), Float(halves[index * 4 + 1]), Float(halves[index * 4 + 2]))
+        }
+        let analysis = AnalysisImage(width: analysisWidth, height: analysisHeight, pixels: pixels)
+        let airlight = known ?? Haze.airlight(analysis)
+        let toneBase = try ToneBase.coefficients(analysis).texture(device: device)
+        let clarityBase = try ClarityBase.coefficients(analysis, fullLongEdge: max(pyramid.width, pyramid.height))
+            .texture(device: device)
+        guard let hazeCommands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
+        hazeCommands.label = "Haze map"
+        let (hazeMap, hazeBlocks) = try Haze.encodeMap(
+            pyramid: pyramid, airlight: airlight, device: device, kernels: kernels, commands: hazeCommands,
+        )
+        let glowSource = try Glow.encodeSource(
+            pyramid: pyramid, device: device, kernels: kernels, commands: hazeCommands,
+        )
+        let glowLights = try Glow.encodeSource(
+            pyramid: pyramid, device: device, kernels: kernels, commands: hazeCommands, lightsOnly: true,
+        )
+        // Renders run on another queue, so the maps must be finished before the session is.
+        hazeCommands.commit()
+        hazeCommands.waitUntilCompleted()
+        if let error = hazeCommands.error {
+            throw EngineError.renderFailed(error.localizedDescription)
+        }
+        let refinedHaze = try Haze.refined(blocks: hazeBlocks).texture(device: device)
+        return ImageMaps(
+            analysis: analysis, airlight: airlight, hazeMap: hazeMap, refinedHaze: refinedHaze, toneBase: toneBase,
+            clarityBase: clarityBase, glowSource: glowSource, glowLights: glowLights,
         )
     }
 
