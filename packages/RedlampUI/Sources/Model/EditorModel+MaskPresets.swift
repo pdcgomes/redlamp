@@ -63,6 +63,7 @@ public extension EditorModel {
                         ))
                     }
                 } catch {
+                    guard currentVisit == visit else { return }
                     maskMessage = "\(preset.name): \((error as? MaskComputationError)?.description ?? "\(error)")"
                     return
                 }
@@ -105,6 +106,7 @@ public extension EditorModel {
             mask.bitmap = refined
             updateComponent(componentID, in: maskID, shape: .ai(mask), name: "Refine Edges")
         } catch {
+            guard currentVisit == visit else { return }
             maskMessage = "The edges couldn't be refined: \(error)"
         }
     }

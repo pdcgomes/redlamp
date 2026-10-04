@@ -531,6 +531,7 @@ public final class EditorModel {
         drawingKind = nil
         edgeBrushTarget = nil
         edgeBrushStrokes = []
+        pendingModel = nil
         openTask?.cancel()
         // The sidecar is read off the main thread even for a photo already decoded: it is
         // coordinated, and iCloud Drive may have to download it first. It waits for the

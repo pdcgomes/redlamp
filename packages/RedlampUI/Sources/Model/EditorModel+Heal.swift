@@ -113,6 +113,7 @@ public extension EditorModel {
             commit(next, .retouch, "Remove \(pick.name)")
             selectedSpotID = spot.id
         } catch {
+            guard currentVisit == visit else { return }
             pickMessage = "\(error)"
         }
     }
@@ -163,6 +164,7 @@ public extension EditorModel {
             default: "Found \(found.count): click one to remove it."
             }
         } catch {
+            guard currentVisit == visit else { return }
             findMessage = (error as? MaskComputationError)?.description ?? "\(error)"
         }
     }
@@ -216,6 +218,7 @@ public extension EditorModel {
                 feather: spotSettings.feather, opacity: spotSettings.opacity,
             )
         } catch {
+            guard currentVisit == visit else { return nil }
             findMessage = (error as? MaskComputationError)?.description ?? "\(error)"
             return nil
         }
@@ -301,15 +304,13 @@ public extension EditorModel {
     }
 
     /// Remove Dust across the selection: the specks found in the same place on the sensor in
-    /// several of its photos are healed in all of them, the open photo as a step of its own history,
-    /// the others as one batch Undo can put back (`SettingsSync`).
+    /// several of its photos are healed in all of them, the photo open in the editor as a step of its
+    /// own history, the others as one batch Undo can put back (`SettingsSync`).
     func removeDustInSelection() async {
-        guard isMultiSelecting, let open = selection, let visit = currentVisit, !isFindingDust,
-              settingsSync.progress == nil
-        else {
+        guard isMultiSelecting, let open = selection, info != nil, !isFindingDust, settingsSync.progress == nil else {
             return
         }
-        let others = otherSelectedPhotos
+        let targets = [open] + otherSelectedPhotos
         saveNow()
         isFindingDust = true
         defer {
@@ -329,24 +330,42 @@ public extension EditorModel {
             dustMessage = "No dust found in the same place in two or more photos."
             return
         }
-        var left = currentVisit != visit
-        if !left, let own = found[open], !own.isEmpty {
-            var next = recipe
-            for speck in own {
-                var spot = RetouchSpot(center: speck.center, source: speck.center, radius: speck.radius)
-                spot.source = await engine.retouchSource(for: spot, recipe: recipe) ?? nearbySource(for: spot)
-                next.spots.append(spot)
+        // Whichever photo is open when the batch reaches it is healed in the editor, not behind it.
+        var healed: Set<URL> = []
+        settingsSync.run(.healDust(found), on: targets, title: "Remove Dust", inEditor: { [weak self] url in
+            guard let self, await healDustInEditor(found[url] ?? [], on: url) else { return false }
+            if found[url]?.isEmpty == false {
+                healed.insert(url)
             }
-            left = currentVisit != visit
-            if !left {
-                commit(next, .retouch, "Remove Dust")
-            }
+            return true
+        }, done: { [weak self] url, recipe in
+            healed.insert(url)
+            self?.written(url, recipe)
+        })
+        isFindingDust = false
+        dustSearch = nil
+        await settingsSync.idle()
+        dustMessage = healed.isEmpty
+            ? "The dust found couldn't be healed."
+            : "Healed \(specks == 1 ? "1 speck" : "\(specks) specks") of dust in \(healed.count == 1 ? "1 photo" : "\(healed.count) photos")."
+    }
+
+    /// Heals `specks` in `url` as a step of its history when it is the photo open; false when it
+    /// isn't, or stops being open before its sources are found.
+    private func healDustInEditor(_ specks: [DetectedSpot], on url: URL) async -> Bool {
+        guard let visit = currentVisit, visit.url == url else { return false }
+        var spots: [RetouchSpot] = []
+        for speck in specks {
+            var spot = RetouchSpot(center: speck.center, source: speck.center, radius: speck.radius)
+            spot.source = await engine.retouchSource(for: spot, recipe: recipe) ?? nearbySource(for: spot)
+            guard currentVisit == visit else { return await healDustInEditor(specks, on: url) }
+            spots.append(spot)
         }
-        // Left while looking: the photo is healed with the others, and the one open now isn't
-        // written behind the editor's back.
-        let targets = left ? (others + [open]).filter { $0 != selection } : others
-        settingsSync.run(.healDust(found), on: targets, title: "Remove Dust", done: written)
-        dustMessage = "Healed \(specks == 1 ? "1 speck" : "\(specks) specks") of dust in \(found.count == 1 ? "1 photo" : "\(found.count) photos")."
+        guard !spots.isEmpty else { return true }
+        var next = recipe
+        next.spots += spots
+        commit(next, .retouch, "Remove Dust")
+        return true
     }
 
     /// Changes a spot as part of a drag (between `beginEdit` and `endEdit`), or as one step.

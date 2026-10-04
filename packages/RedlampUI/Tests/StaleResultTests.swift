@@ -97,8 +97,15 @@ final class GatedEngine: EditingEngine, @unchecked Sendable {
         return try await base.refineMaskEdges(bitmap)
     }
 
+    /// Refine Edge brush solves still to fail, the next ones first.
+    var failingEdgeSolves = 0
+
     func refineMaskEdges(_ bitmap: MaskBitmap, along strokes: [BrushStroke]) async throws -> MaskBitmap {
         await gate.pass()
+        if failingEdgeSolves > 0 {
+            failingEdgeSolves -= 1
+            throw MaskComputationError.nothingFound(.subject)
+        }
         return try await base.refineMaskEdges(bitmap, along: strokes)
     }
 
@@ -120,7 +127,8 @@ final class GatedEngine: EditingEngine, @unchecked Sendable {
     func detectDust(
         in photos: [(url: URL, recipe: EditRecipe)], sensitivity: Double, progress: @escaping @Sendable (Int) -> Void,
     ) async -> [URL: [DetectedSpot]] {
-        await base.detectDust(in: photos, sensitivity: sensitivity, progress: progress)
+        await gate.pass()
+        return await base.detectDust(in: photos, sensitivity: sensitivity, progress: progress)
     }
 
     func thingsToFind() async -> [String] {
@@ -177,6 +185,7 @@ final class GatedEngine: EditingEngine, @unchecked Sendable {
     }
 
     func downloadModel(_ id: String, progress: @escaping @Sendable (Double) -> Void) async throws {
+        await gate.pass()
         try await base.downloadModel(id, progress: progress)
     }
 
@@ -500,34 +509,179 @@ struct StaleResultTests {
         #expect(EditorState(model) == before)
     }
 
-    @Test func `Remove Dust across a selection heals the open photo through the sync once it is left`() async throws {
+    /// Opens `url` with a subject mask, and arms the Refine Edge brush on it with a stroke painted.
+    private func paintEdgeStroke(on url: URL) async throws {
+        try await open(url, for: .edgeBrush)
+        if model.recipe.masks.isEmpty {
+            await model.createAIMask(.subject)
+        }
+        let mask = try #require(model.recipe.masks.first)
+        let component = try #require(mask.components.first)
+        model.startRefiningEdges(component.id, in: mask.id)
+        model.beginStroke(at: ImagePoint(x: 0.2, y: 0.2))
+        model.continueStroke(to: ImagePoint(x: 0.4, y: 0.2))
+    }
+
+    /// A stroke ended on B while A's is solved, A's solve succeeding or failing.
+    private func solveAcrossSwitch(failing: Bool) async throws {
+        engine.base.computed = [AIMask(
+            kind: .subject, provider: "stub", revision: 1, analysisHash: "h",
+            center: ImagePoint(x: 0.5, y: 0.5), bitmap: MaskBitmap(sha256: "s", width: 4, height: 4),
+        )]
+        try await open(b, for: .edgeBrush)
+        await model.createAIMask(.subject)
+        try await paintEdgeStroke(on: a)
+        engine.gate.hold()
+        engine.failingEdgeSolves = failing ? 1 : 0
+        let solvingA = Task { await model.endEdgeStroke() }
+        for _ in 0 ..< 400 where engine.gate.arrived == 0 {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try #require(engine.gate.arrived > 0)
+        try await paintEdgeStroke(on: b)
+        await model.endEdgeStroke()
+        try await release(solvingA)
+
+        #expect(model.edgeBrushStrokes.isEmpty, "B's stroke was solved")
+        guard case let .ai(refined) = model.recipe.masks.first?.components.first?.shape else {
+            Issue.record("B lost its AI mask")
+            return
+        }
+        #expect(refined.bitmap.sha256 == "s-brushed1")
+        #expect(model.maskMessage == nil, "A's error isn't shown on B")
+    }
+
+    @Test func `a stroke ended on the next photo while the last one's is solved is solved next`() async throws {
         defer { try? FileManager.default.removeItem(at: folder) }
+        try await solveAcrossSwitch(failing: false)
+    }
+
+    @Test func `a stroke that fails on the photo left doesn't touch the next photo's strokes`() async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try await solveAcrossSwitch(failing: true)
+    }
+
+    @Test func `a model agreed to on one photo doesn't start its mask on the next`() async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        engine.base.neededModel = ModelInfo(
+            id: "sam2.1-tiny", name: "Segment Anything 2.1 (tiny)", purpose: "Objects", downloadBytes: 1,
+            state: .notDownloaded,
+        )
+        try await open(a, for: .objectSelection)
+        model.cancelDrawing()
+        await model.startAIMask(.objects)
+        #expect(model.pendingModel != nil)
+        engine.gate.hold()
+        let download = Task { await model.downloadPendingModel() }
+        for _ in 0 ..< 400 where engine.gate.arrived == 0 {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try await open(b, for: .autoTone)
+        try await release(download)
+        #expect(model.drawingKind == nil, "Objects isn't armed on B")
+
+        engine.base.neededModel = ModelInfo(
+            id: "sam2.1-tiny", name: "Segment Anything 2.1 (tiny)", purpose: "Objects", downloadBytes: 1,
+            state: .notDownloaded,
+        )
+        await model.startAIMask(.objects)
+        #expect(model.pendingModel != nil)
+        try await open(a, for: .autoTone)
+        #expect(model.pendingModel == nil, "the question isn't asked on another photo")
+    }
+
+    /// Remove Dust across A, B and C, with dust on A and B; the search waits at `gate` (the
+    /// worker's, or the editor's for the open photo's sources).
+    private func startDustSearch(holding gate: (GatedEngine, GatedEngine) -> Gate) async throws -> (
+        task: Task<Void, Never>, c: URL, speck: DetectedSpot,
+    ) {
         let c = folder.appending(path: "C.ARW")
         let speck = DetectedSpot(center: ImagePoint(x: 0.3, y: 0.2), radius: 0.01, strength: 20)
-        let worker = StubEngine()
-        worker.retouchSource = ImagePoint(x: 0.35, y: 0.25)
-        worker.shootDust = [a: [speck], b: [speck]]
+        let worker = GatedEngine()
+        worker.base.retouchSource = ImagePoint(x: 0.35, y: 0.25)
+        worker.base.shootDust = [a: [speck], b: [speck]]
+        engine.base.retouchSource = ImagePoint(x: 0.4, y: 0.2)
         model.makeWorkerEngine = { worker }
         [a, b, c].forEach { model.library.insert(LibraryItem(url: $0)) }
         try await open(a, for: .removeDust)
         model.selectAllPhotos()
         model.activeTool = .heal
-        engine.gate.hold()
-        let run = Task { await model.removeDustInSelection() }
-        for _ in 0 ..< 400 where engine.gate.arrived == 0 {
+        let held = gate(engine, worker)
+        held.hold()
+        let task = Task { await model.removeDustInSelection() }
+        for _ in 0 ..< 400 where held.arrived == 0 {
             try await Task.sleep(for: .milliseconds(5))
         }
-        try #require(engine.gate.arrived > 0)
+        try #require(held.arrived > 0)
+        return (task, c, speck)
+    }
+
+    private func finish(_ task: Task<Void, Never>) async {
+        engine.gate.release()
+        (model.makeWorkerEngine?() as? GatedEngine)?.gate.release()
+        await task.value
+        await model.settingsSync.idle()
+    }
+
+    private func healedBySync(_ url: URL, _ speck: DetectedSpot) throws {
+        let saved = try #require(model.settingsSync.store.load(for: url))
+        #expect(saved.recipe.spots.map(\.center) == [speck.center])
+        #expect(saved.recipe.spots.first?.source == ImagePoint(x: 0.35, y: 0.25), "the worker found its source")
+    }
+
+    private func healedInEditor(_ speck: DetectedSpot) {
+        #expect(model.recipe.spots.map(\.center) == [speck.center])
+        #expect(model.recipe.spots.first?.source == ImagePoint(x: 0.4, y: 0.2), "the editor found its source")
+        #expect(model.history.last?.name == "Remove Dust")
+    }
+
+    @Test func `Remove Dust across a selection, left while it searches, heals the photo through the sync`(
+    ) async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (task, c, speck) = try await startDustSearch { _, worker in worker.gate }
         try await open(c, for: .removeDust)
         let before = EditorState(model)
-        try await release(run)
-        await model.settingsSync.idle()
-
+        await finish(task)
         #expect(EditorState(model) == before, "nothing lands on the photo opened meanwhile")
-        for url in [a, b] {
-            let saved = try #require(model.settingsSync.store.load(for: url))
-            #expect(saved.recipe.spots.map(\.center) == [speck.center])
-            #expect(saved.recipe.spots.first?.source == ImagePoint(x: 0.35, y: 0.25))
-        }
+        try healedBySync(a, speck)
+        try healedBySync(b, speck)
+        #expect(model.dustMessage == "Healed 1 speck of dust in 2 photos.")
+    }
+
+    @Test func `Remove Dust across a selection, left while the open photo's sources are found, heals it through the sync`(
+    ) async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (task, c, speck) = try await startDustSearch { editor, _ in editor.gate }
+        try await open(c, for: .removeDust)
+        let before = EditorState(model)
+        await finish(task)
+        #expect(EditorState(model) == before)
+        try healedBySync(a, speck)
+        try healedBySync(b, speck)
+        #expect(model.dustMessage == "Healed 1 speck of dust in 2 photos.")
+    }
+
+    @Test func `Remove Dust across a selection heals the photo left and opened again in the editor`() async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (task, c, speck) = try await startDustSearch { _, worker in worker.gate }
+        try await open(c, for: .removeDust)
+        try await open(a, for: .removeDust)
+        await finish(task)
+        healedInEditor(speck)
+        try healedBySync(b, speck)
+        #expect(model.dustMessage == "Healed 1 speck of dust in 2 photos.")
+    }
+
+    @Test func `Remove Dust across a selection heals the photo moved to in the editor, and the one left through the sync`(
+    ) async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (task, _, speck) = try await startDustSearch { _, worker in worker.gate }
+        try await open(b, for: .removeDust)
+        let steps = model.history.count
+        await finish(task)
+        healedInEditor(speck)
+        #expect(model.history.count == steps + 1, "healed once, as a step of its history")
+        try healedBySync(a, speck)
+        #expect(model.dustMessage == "Healed 1 speck of dust in 2 photos.")
     }
 }

@@ -62,6 +62,7 @@ public extension EditorModel {
             }
             selectedComponentID = components.last?.id
         } catch {
+            guard currentVisit == visit else { return }
             maskMessage = (error as? MaskComputationError)?.description ?? error.localizedDescription
         }
     }
@@ -84,7 +85,7 @@ public extension EditorModel {
 
     /// The user agreed: downloads the pending model, then carries on with the mask.
     func downloadPendingModel() async {
-        guard let (model, kind) = pendingModel else { return }
+        guard let (model, kind) = pendingModel, let visit = currentVisit else { return }
         let operation = drawingOperation
         let target = drawingTarget
         pendingModel = nil
@@ -97,6 +98,7 @@ public extension EditorModel {
             }
             availableAIMaskKinds = engine.availableMaskKinds()
             modelDownloadProgress = nil
+            guard currentVisit == visit else { return }
             await startAIMask(kind, operation: operation, addingTo: target)
         } catch {
             maskMessage = "\(model.name) couldn't be downloaded: \(error)"
