@@ -363,6 +363,33 @@ When writing a sidecar for Redlamp:
 - write bitmaps before the JSON that names them, and replace `edit.json` atomically, with file coordination on macOS;
 - leave alone a sidecar with a newer format or process version.
 
+## Edits embedded in exports
+
+An exported file carries the edit that made it in its XMP, as Lightroom's exports carry its develop settings, so the file says how it was made and the edit can be recovered from it. Exports are new files: Redlamp still never writes into a photo.
+
+Exports in every format (JPEG, HEIC, AVIF, PNG and TIFF) carry the edit when the Export dialog's Metadata is All or All Except Location. With None it is left out, like the rest of the metadata. An edit holds no location, so both settings embed the same edit.
+
+The properties are in the namespace `https://redlamp.app/ns/edit/1.0/`, which Redlamp writes with the prefix `redlamp`:
+
+| Property | Value |
+| --- | --- |
+| `Recipe` | The recipe as `edit.json` holds it under `recipe` (see [The recipe](#the-recipe)), written as JSON without whitespace. |
+| `FormatVersion` | The recipe's `version`, for tools that don't read the JSON. |
+| `ProcessVersion` | The recipe's `processVersion`. |
+
+```xml
+<rdf:Description rdf:about="" xmlns:redlamp="https://redlamp.app/ns/edit/1.0/">
+   <redlamp:Recipe>{"baseLook":{"amount":100,"id":"redlamp/base/color","name":"Redlamp Color","version":1},"processVersion":9,"treatment":"color","values":{"basic.exposure":0.35},"version":3,"whiteBalance":"asShot"}</redlamp:Recipe>
+   <redlamp:FormatVersion>3</redlamp:FormatVersion>
+   <redlamp:ProcessVersion>9</redlamp:ProcessVersion>
+</rdf:Description>
+```
+
+- **Only the recipe.** Snapshots, history, rating, flag and label stay in the sidecar. Mask bitmaps aren't embedded: an AI mask, a depth map or a spot's picked region keeps its `bitmap` (`sha256`, `width` and `height`) but not its pixels. Applied to the photo it came from, the recipe finds them in that photo's sidecar, as `masks/<sha256>.png`; anywhere else a missing bitmap covers nothing, as it does in a sidecar. Brush strokes and range masks are in the JSON, so they come back whole.
+- **Size.** An edit is embedded when its XMP takes at most 256,000 bytes. Most edits take a few kilobytes, and a long brush stroke adds about 10 KB. A bigger edit is left out rather than cut short. A JPEG's main XMP segment holds about 64 KB; when the edit doesn't fit there, ImageIO writes `Recipe` in Extended XMP segments, as part 3 of the XMP specification describes, and keeps the other properties in the main segment. A reader without Extended XMP sees the versions but not the recipe. ImageIO doesn't make the segments' GUID the MD5 digest of their content that the specification asks for, so a reader that checks the digest misses the recipe too. The edit counts toward a file size limit, as the rest of the metadata does.
+- **The rest of the metadata is unchanged.** ImageIO keeps some metadata only in XMP: lens details and a rating, and, in HEIC and AVIF, every IPTC field. Redlamp writes the edit beside them, and first checks, on a file of one pixel with the same metadata, that everything else reads back as it does without the edit. If it wouldn't, the edit is left out.
+- **Reading it back.** Find `Recipe` by its namespace, whatever prefix the file gives it, and decode it as a recipe. An edit with a `version` or `processVersion` newer than the reader's is treated as a newer sidecar is; see [Versions and compatibility](#versions-and-compatibility). In Redlamp, `EmbeddedEdit.read` returns the recipe and its format version, or nothing when the file has no edit or it can't be read.
+
 ## The schema
 
 [`sidecar-format.schema.json`](sidecar-format.schema.json) is JSON Schema draft 2020-12. Validate `edit.json` against the schema itself and a history file against its `#/$defs/historyFile`. The schema describes what Redlamp writes, and is stricter than Redlamp's reader where the reader is lenient: it checks ranges, lists of values and closed objects, where the reader clamps, maps or has nowhere to keep a key, and so opens the sidecar read-only. It accepts format versions up to 3 and process versions up to 9, so a sidecar from a newer Redlamp needs that Redlamp's schema.
