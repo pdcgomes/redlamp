@@ -18,12 +18,64 @@ const harness = (file: string, alt: string, caption: string): Shot => ({
   height: 850,
 });
 
-/** Captured by hand, so `mise run screenshots` leaves it alone. */
-export const heroShot = app(
-  "hero.png",
-  "Redlamp editing a Sony α7R V raw file of a dancer at a street parade, with the Develop panels on the right",
-  "Editing a Sony α7R V raw file.",
-);
+/** A hero shot also has a short label for its thumbnail. */
+export type HeroShot = Shot & { label: string };
+
+/** The editor at 1600 × 1000 points, in its default Neutral theme. */
+const hero = (file: string, label: string, alt: string, caption: string): HeroShot => ({
+  src: `/synced/images/${file}`,
+  label,
+  alt,
+  caption,
+  width: 2400,
+  height: 1500,
+});
+
+/** Captured from the author's photos by `scripts/capture-hero.sh`, so `mise run screenshots` leaves them alone. */
+export const heroShots: HeroShot[] = [
+  hero(
+    "hero.png",
+    "Develop",
+    "Redlamp editing a Sony α7R V raw file of a dancer at a street parade, in the Neutral theme, with the Basic and Tone Curve panels on the right",
+    "Editing a Sony α7R V raw file.",
+  ),
+  hero(
+    "hero-palette.png",
+    "Command palette",
+    "The command palette over the photo, searching for “white”: the White Balance and Treatment pickers, the Temp, Tint, Whites and Saturation sliders with their values, and actions with their shortcuts",
+    "⌘K searches every action, every Develop slider and every picker, with each action's shortcut beside it.",
+  ),
+  hero(
+    "hero-slider.png",
+    "Slider bar",
+    "The palette shrunk to a slider bar for Exposure at +0.85 over the photo, with Tint and Contrast beside it and its keys in a hint bar",
+    "↵ on a slider shrinks the palette to a slider bar: ← → step it, ⇧ ten times as far and ⌥ finer, and ↑ ↓ move to the next slider.",
+  ),
+  hero(
+    "hero-shortcuts.png",
+    "Shortcuts",
+    "The Keyboard Shortcuts sheet over the editor, listing the View, Panels, Navigation, Develop, Tools and Masking shortcuts",
+    "Lightroom Classic's Develop shortcuts, and ⌘/ to list them all.",
+  ),
+  hero(
+    "hero-masks.png",
+    "Masks",
+    "A Subject mask on a photo of a motorcyclist in a flowered helmet, shown on black, with the Masks panel and its components on the right",
+    "A Subject mask, made on the device by Apple Vision and shown on black.",
+  ),
+  hero(
+    "hero-film.png",
+    "Film",
+    "CineStill 800T on a night photo of a lit hotel and street lamps by a river, with grain, halation and bloom in the Effects panel",
+    "CineStill 800T, built from its datasheet, with its grain, halation and bloom.",
+  ),
+  hero(
+    "hero-compare.png",
+    "Before / After",
+    "The dancer before and after the edit, side by side, with the Basic panel on the right",
+    "Before and after, side by side; the original renders once and is cached.",
+  ),
+];
 
 export type Feature = {
   id: string;

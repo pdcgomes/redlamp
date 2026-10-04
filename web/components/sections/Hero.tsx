@@ -1,8 +1,8 @@
-import Image from "next/image";
 import { AppIcon } from "@/components/brand/Logo";
+import { HeroShots } from "@/components/sections/HeroShots";
 import { Badge } from "@/components/ui/Badge";
 import { DownloadGlyph, GitHubGlyph, LinkButton } from "@/components/ui/Buttons";
-import { heroShot } from "@/content/features";
+import { heroShots } from "@/content/features";
 import { latestRelease } from "@/lib/github";
 import { site } from "@/lib/site";
 
@@ -56,18 +56,7 @@ export async function Hero() {
           <Badge label="support" value="Ko-fi" href={site.support} />
         </div>
       </div>
-      <figure className="animate-rise mx-auto mt-16 max-w-6xl [animation-delay:520ms]">
-        <Image
-          src={heroShot.src}
-          alt={heroShot.alt}
-          width={heroShot.width}
-          height={heroShot.height}
-          priority
-          sizes="(min-width: 1200px) 1152px, 96vw"
-          className="shot h-auto w-full"
-        />
-        <figcaption className="mt-4 text-center text-[13px] text-dim">{heroShot.caption}</figcaption>
-      </figure>
+      <HeroShots shots={heroShots} />
     </section>
   );
 }

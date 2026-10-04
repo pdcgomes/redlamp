@@ -31,6 +31,16 @@
   --animate-warm-up: warm-up 2.8s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-rise: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-breathe: breathe 7s ease-in-out infinite;
+  --animate-fade-in: fade-in 0.35s ease-out both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes warm-up {

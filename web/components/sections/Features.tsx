@@ -1,9 +1,12 @@
 import Image from "next/image";
 import type { ReactNode } from "react";
 import { Inline } from "@/components/ui/Inline";
+import { LightboxGroup, ShotButton } from "@/components/ui/Lightbox";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { type Feature, features, focusStacking, performance } from "@/content/features";
 import { lastUpdated, worksToday } from "@/lib/readme";
+
+const featureShots = features.flatMap((feature) => (feature.shot ? [feature.shot] : []));
 
 function Check() {
   return (
@@ -74,14 +77,16 @@ function Shot({ feature }: { feature: Feature }) {
   if (!feature.shot) return null;
   return (
     <figure>
-      <Image
-        src={feature.shot.src}
-        alt={feature.shot.alt}
-        width={feature.shot.width}
-        height={feature.shot.height}
-        sizes="(min-width: 1024px) 700px, 94vw"
-        className="shot h-auto w-full"
-      />
+      <ShotButton index={featureShots.indexOf(feature.shot)} label={feature.shot.alt}>
+        <Image
+          src={feature.shot.src}
+          alt={feature.shot.alt}
+          width={feature.shot.width}
+          height={feature.shot.height}
+          sizes="(min-width: 1024px) 700px, 94vw"
+          className="shot h-auto w-full"
+        />
+      </ShotButton>
       <figcaption className="mt-3 text-[13px] text-dim">{feature.shot.caption}</figcaption>
     </figure>
   );
@@ -95,16 +100,18 @@ export function Features() {
           The core RAW pipeline and the Develop workspace work today on macOS 26. Every screenshot here is the app
           itself, on CC0 sample raws.
         </SectionHeading>
-        <div className="mt-20 flex flex-col gap-28">
-          {features.map((feature, index) => (
-            <FlowSection key={feature.id} feature={feature} reverse={index % 2 === 1} media={<Shot feature={feature} />} />
-          ))}
-          <FlowSection
-            feature={{ id: "focus-stacking", ...focusStacking, body: [focusStacking.body] }}
-            reverse={features.length % 2 === 1}
-            media={<StackIllustration />}
-          />
-        </div>
+        <LightboxGroup shots={featureShots}>
+          <div className="mt-20 flex flex-col gap-28">
+            {features.map((feature, index) => (
+              <FlowSection key={feature.id} feature={feature} reverse={index % 2 === 1} media={<Shot feature={feature} />} />
+            ))}
+            <FlowSection
+              feature={{ id: "focus-stacking", ...focusStacking, body: [focusStacking.body] }}
+              reverse={features.length % 2 === 1}
+              media={<StackIllustration />}
+            />
+          </div>
+        </LightboxGroup>
       </div>
     </section>
   );
