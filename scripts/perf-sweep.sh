@@ -6,6 +6,9 @@
 #
 # usage: scripts/perf-sweep.sh [Debug|Release] [parameter] [script]
 #   e.g. scripts/perf-sweep.sh Release exposure "select=3,panel=all"
+#
+# DERIVED_DATA picks the build directory (build/DerivedData). The numbers are also written as
+# JSON to /tmp/redlamp-perf.json, for scripts/perf-record.sh.
 
 set -euo pipefail
 
@@ -14,18 +17,19 @@ CONFIGURATION="${1:-Debug}"
 PARAMETER="${2:-exposure}"
 SCRIPT="${3:-select=3}"
 FIXTURES="$ROOT/tests/fixtures/raw"
-BUNDLE="$ROOT/build/DerivedData/Build/Products/$CONFIGURATION/Redlamp.app"
+DERIVED_DATA="${DERIVED_DATA:-$ROOT/build/DerivedData}"
+BUNDLE="$DERIVED_DATA/Build/Products/$CONFIGURATION/Redlamp.app"
 EXECUTABLE="$BUNDLE/Contents/MacOS/Redlamp"
 
 if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
     xcodebuild build \
         -workspace "$ROOT/Redlamp.xcworkspace" -scheme Redlamp -configuration "$CONFIGURATION" \
-        -destination 'platform=macOS,arch=arm64' -derivedDataPath "$ROOT/build/DerivedData" \
+        -destination 'platform=macOS,arch=arm64' -derivedDataPath "$DERIVED_DATA" \
         SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) REDLAMP_PROFILING' -quiet
 fi
 
 caffeinate -u -d -w $$ &
-rm -f /tmp/redlamp-perf.txt
+rm -f /tmp/redlamp-perf.txt /tmp/redlamp-perf.json
 find "$FIXTURES" -name '*.redlamp' -delete
 
 # Launched through LaunchServices (in the background, without taking focus): a process

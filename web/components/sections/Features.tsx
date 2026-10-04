@@ -3,8 +3,10 @@ import type { ReactNode } from "react";
 import { Inline } from "@/components/ui/Inline";
 import { LightboxGroup, ShotButton } from "@/components/ui/Lightbox";
 import { SectionHeading } from "@/components/ui/SectionHeading";
-import { type Feature, features, focusStacking, performance } from "@/content/features";
+import { type Feature, features, focusStacking } from "@/content/features";
+import { formatEntry, histories } from "@/lib/performance";
 import { lastUpdated, worksToday } from "@/lib/readme";
+import { performance } from "@/lib/repo";
 
 const featureShots = features.flatMap((feature) => (feature.shot ? [feature.shot] : []));
 
@@ -117,20 +119,32 @@ export function Features() {
   );
 }
 
+const STRIP = ["open", "render-fit", "render-full", "export-full"];
+
 export function Performance() {
+  const { metrics, records } = performance();
+  const byId = new Map(histories(metrics, records).map((history) => [history.metric.id, history]));
+  const shown = STRIP.map((id) => byId.get(id)).filter((history) => history !== undefined);
   return (
     <section aria-label="Measured performance" className="px-6 pb-24">
       <div className="surface mx-auto max-w-6xl px-6 py-10 sm:px-10">
         <dl className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-          {performance.map((stat) => (
-            <div key={stat.label}>
-              <dt className="sr-only">{stat.label}</dt>
-              <dd className="font-display text-[clamp(2rem,4vw,2.6rem)] leading-none text-paper">{stat.value}</dd>
-              <dd className="mt-2 text-[14px] text-mute">{stat.label}</dd>
+          {shown.map((history) => (
+            <div key={history.metric.id}>
+              <dt className="sr-only">{history.metric.label}</dt>
+              <dd className="font-display text-[clamp(2rem,4vw,2.6rem)] leading-none text-paper">
+                {formatEntry(history.current.entry, history.metric.unit)}
+              </dd>
+              <dd className="mt-2 text-[14px] text-mute">{history.metric.label}</dd>
             </div>
           ))}
         </dl>
-        <p className="mt-8 text-[12.5px] text-dim">Measured on an Apple M1 Ultra with a Release build.</p>
+        <p className="mt-8 text-[12.5px] text-dim">
+          Measured on an Apple M1 Ultra with a Release build.{" "}
+          <a href="/performance" className="text-ring underline decoration-hairline-strong underline-offset-3 hover:text-paper">
+            Every measurement, and how it has changed
+          </a>
+        </p>
       </div>
     </section>
   );

@@ -190,6 +190,14 @@
             }
         }
 
+        /// The run's numbers by metric ID (docs/performance/metrics.json), for scripts/perf-record.sh.
+        static func writeMetrics(_ metrics: [String: Double]) {
+            let finite = metrics.filter(\.value.isFinite)
+            if let data = try? JSONSerialization.data(withJSONObject: finite, options: [.sortedKeys]) {
+                try? data.write(to: URL(fileURLWithPath: "/tmp/redlamp-perf.json"), options: .atomic)
+            }
+        }
+
         static func trace(_ message: String) {
             let line = "\(Date().formatted(.iso8601.time(includingFractionalSeconds: true))) \(message)\n"
             if let handle = FileHandle(forWritingAtPath: "/tmp/redlamp-debug.log") {
@@ -291,6 +299,14 @@
             ].joined(separator: "\n")
             print(report)
             try? (report + "\n").write(toFile: "/tmp/redlamp-perf.txt", atomically: true, encoding: .utf8)
+            if let summary = monitor.summary(seconds: seconds) {
+                writeMetrics([
+                    "drag-busy": summary.busy * 100,
+                    "drag-median": summary.p50,
+                    "drag-p95": summary.p95,
+                    "drag-p99": summary.p99,
+                ])
+            }
             if LaunchArguments.all.contains("--sweep-quit") {
                 NSApp.terminate(nil)
             }

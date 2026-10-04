@@ -281,13 +281,6 @@ export const paletteSteps: PaletteStep[] = [
   },
 ];
 
-export const performance = [
-  { value: "70–250 ms", label: "to open a 24–26 MP raw file" },
-  { value: "0.6–3 ms", label: "per interactive render at Fit" },
-  { value: "~13 ms", label: "for a full 26 MP frame at 1:1" },
-  { value: "~45 ms", label: "for a full-resolution export render" },
-];
-
 export const principles = [
   {
     title: "Instantly familiar",
