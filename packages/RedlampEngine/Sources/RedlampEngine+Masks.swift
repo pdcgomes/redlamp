@@ -158,9 +158,11 @@ extension RedlampEngine {
     }
 
     /// Draws the recipe's brush and AI rasters and renders the guides its masks read, all ahead
-    /// of the develop pass in `commands`.
+    /// of the develop pass in `commands`. The edit guide is `retouched`, the photo that pass reads
+    /// (`retouched(_:session:commands:maps:)` with `retouchMaps`), developed.
     func prepareMasks(
-        _ recipe: EditRecipe, session: ImageSession, commands: any MTLCommandBuffer, needsGuide: Bool = false,
+        _ recipe: EditRecipe, session: ImageSession, retouched: ImageSession, commands: any MTLCommandBuffer,
+        needsGuide: Bool = false, retouchMaps: RetouchStage.Maps = .current,
     ) throws -> MaskBindings {
         let components = recipe.masks.flatMap(\.components)
         let readsGuide = needsGuide || components.contains { $0.shape.readsEditGuide }
@@ -171,12 +173,12 @@ extension RedlampEngine {
         let render = { [self] (guideRecipe: EditRecipe, texture: any MTLTexture) in
             try encodeDevelop(
                 guideRecipe, session: session, into: texture, size: size, encoding: .okLab, showClipping: false,
-                commands: commands, cacheDetail: false, detail: false,
+                commands: commands, cacheDetail: false, detail: false, retouchMaps: retouchMaps,
             )
         }
         var bindings = MaskBindings()
         if readsGuide {
-            bindings.guide = try masks.editGuide(for: recipe, commands: commands, render: render)
+            bindings.guide = try masks.editGuide(for: recipe, from: retouched, commands: commands, render: render)
             bindings.guideSize = size
             bindings.guideGeneration = masks.editGuideGeneration
         }
@@ -196,10 +198,11 @@ extension RedlampEngine {
         else { throw EngineError.gpuUnavailable }
         masks.use(session, commands: commands)
         let size = masks.guideSize
-        let guide = try masks.editGuide(for: recipe, commands: commands) { [self] global, texture in
+        let retouched = try retouched(recipe, session: session, commands: commands, maps: .refreshLater)
+        let guide = try masks.editGuide(for: recipe, from: retouched, commands: commands) { [self] global, texture in
             try encodeDevelop(
                 global, session: session, into: texture, size: size, encoding: .okLab, showClipping: false,
-                commands: commands, cacheDetail: false, detail: false,
+                commands: commands, cacheDetail: false, detail: false, retouchMaps: .refreshLater,
             )
         }
         let level = min(1, guide.mipmapLevelCount - 1)

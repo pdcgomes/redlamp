@@ -99,12 +99,29 @@ struct MaskInterleavingTests {
         try switchTo(photo, in: resources)
         var rendered = false
         let commands = try #require(queue.makeCommandBuffer())
-        let kept = try resources.editGuide(for: EditRecipe(), commands: commands) { _, _ in rendered = true }
+        let kept = try resources.editGuide(for: EditRecipe(), from: photo, commands: commands) { _, _ in
+            rendered = true
+        }
         commands.commit()
         commands.waitUntilCompleted()
         #expect(!rendered && kept === guide.texture)
         #expect(resources.editGuideGeneration == guide.generation)
         #expect(masks.allSatisfy { resources.keys.contains(MaskResources.key(for: $0.shape)) })
+    }
+
+    @Test func `a guide is rendered again once the photo it's developed from has maps of its own`() throws {
+        let photo = try makeSession()
+        let resources = try MaskResources(device: device, kernels: kernels)
+        let refreshed = ImageSession(retouching: photo, pyramid: photo.pyramid, maps: photo.maps)
+        var renders = 0
+        for source in [photo, photo, refreshed, refreshed] {
+            let commands = try #require(queue.makeCommandBuffer())
+            resources.use(photo, commands: commands)
+            _ = try resources.editGuide(for: EditRecipe(), from: source, commands: commands) { _, _ in renders += 1 }
+            commands.commit()
+            commands.waitUntilCompleted()
+        }
+        #expect(renders == 2)
     }
 
     @Test func `a guide's version number is never reused`() throws {
@@ -333,7 +350,7 @@ struct MaskInterleavingTests {
     ) throws -> (texture: any MTLTexture, generation: Int) {
         let commands = try #require(queue.makeCommandBuffer())
         resources.use(session, commands: commands)
-        let texture = try resources.editGuide(for: recipe, commands: commands) { _, _ in }
+        let texture = try resources.editGuide(for: recipe, from: session, commands: commands) { _, _ in }
         commands.commit()
         commands.waitUntilCompleted()
         return (texture, resources.editGuideGeneration)

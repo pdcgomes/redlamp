@@ -329,8 +329,9 @@ Each step after the first stores its edit as a patch to the JSON of the step bef
 | 7 | Highlights and Shadows are edge-aware: they move each region by its brightness and keep the detail inside it, instead of applying a curve to each pixel's own brightness. |
 | 8 | Dehaze's haze map follows the photo's edges, so the sky beside a tree or a ridge is dehazed as much as the rest of it. |
 | 9 | Clarity is edge-aware: a strong edge isn't treated as detail, so Clarity puts no bright and dark bands along it. |
+| 10 | A photo with Remove, Heal or Clone spots has its Highlights and Shadows, Clarity, Dehaze and glow worked out from the photo as the spots leave it, so a removed object leaves no trace where they're used. |
 
-New edits get the current version, 9. An edit keeps its version until the user updates it (the Process control in the Calibration panel), so every edit keeps rendering as it did when it was made.
+New edits get the current version, 10. An edit keeps its version until the user updates it (the Process control in the Calibration panel), so every edit keeps rendering as it did when it was made.
 
 ## Versions and compatibility
 

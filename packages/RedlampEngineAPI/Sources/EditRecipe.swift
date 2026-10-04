@@ -69,8 +69,10 @@ public struct EditRecipe: Sendable, Hashable {
     /// beside a tree or a ridge is dehazed as much as the rest of it.
     /// 9: Clarity is edge-aware (`ClarityBase`): a strong edge isn't its detail, so it puts no
     /// bright and dark bands along it.
+    /// 10: a retouched photo's maps (Highlights and Shadows', Clarity's, Dehaze's and glow's) are
+    /// made from it (`RetouchStage.Maps`), so a removed object leaves no trace where they're used.
     /// A new version records its references for the process-stability gate (`ProcessStabilityTests`).
-    public static let currentProcessVersion = 9
+    public static let currentProcessVersion = 10
     public static let linearPointCurve = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]
 
     /// Sidecars written before process versions existed are version 1.
