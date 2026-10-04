@@ -1,0 +1,712 @@
+{
+  "areas" : [
+    {
+      "features" : [
+        {
+          "id" : "develop.white-balance",
+          "title" : "White Balance"
+        },
+        {
+          "id" : "develop.treatment",
+          "title" : "Treatment and Base Looks"
+        },
+        {
+          "id" : "develop.tone",
+          "title" : "Tone"
+        },
+        {
+          "id" : "develop.presence",
+          "title" : "Presence"
+        },
+        {
+          "id" : "develop.auto",
+          "title" : "Auto Settings"
+        },
+        {
+          "id" : "develop.tone-curve",
+          "title" : "Tone Curve"
+        },
+        {
+          "id" : "develop.color-mixer",
+          "title" : "Color Mixer"
+        },
+        {
+          "id" : "develop.color-grading",
+          "title" : "Color Grading"
+        },
+        {
+          "id" : "develop.sharpening",
+          "title" : "Sharpening"
+        },
+        {
+          "id" : "develop.noise-reduction",
+          "title" : "Noise Reduction"
+        },
+        {
+          "id" : "develop.lens-corrections",
+          "title" : "Lens Corrections"
+        },
+        {
+          "id" : "develop.transform",
+          "title" : "Transform and Upright"
+        },
+        {
+          "id" : "develop.effects",
+          "title" : "Effects"
+        },
+        {
+          "id" : "develop.camera-recipe",
+          "title" : "Camera Recipe"
+        },
+        {
+          "id" : "develop.calibration",
+          "title" : "Calibration and Process Version"
+        },
+        {
+          "id" : "develop.histogram",
+          "title" : "Histogram"
+        },
+        {
+          "id" : "develop.other",
+          "title" : "Something else in Develop"
+        }
+      ],
+      "id" : "develop",
+      "label" : "component:develop",
+      "summary" : "The Develop panels: white balance, tone, colour, detail, lens, transform and effects.",
+      "title" : "Develop",
+      "tracker" : [
+        "TON",
+        "AUT",
+        "DN",
+        "SHP",
+        "LNS"
+      ]
+    },
+    {
+      "features" : [
+        {
+          "id" : "masking.subject",
+          "title" : "Subject"
+        },
+        {
+          "id" : "masking.sky",
+          "title" : "Sky"
+        },
+        {
+          "id" : "masking.background",
+          "title" : "Background"
+        },
+        {
+          "id" : "masking.objects",
+          "title" : "Objects"
+        },
+        {
+          "id" : "masking.people",
+          "title" : "People"
+        },
+        {
+          "id" : "masking.landscape",
+          "title" : "Landscape"
+        },
+        {
+          "id" : "masking.depth-range",
+          "title" : "Depth Range"
+        },
+        {
+          "id" : "masking.brush",
+          "title" : "Brush"
+        },
+        {
+          "id" : "masking.linear",
+          "title" : "Linear Gradient"
+        },
+        {
+          "id" : "masking.radial",
+          "title" : "Radial Gradient"
+        },
+        {
+          "id" : "masking.color-range",
+          "title" : "Color Range"
+        },
+        {
+          "id" : "masking.luminance-range",
+          "title" : "Luminance Range"
+        },
+        {
+          "id" : "masking.combining",
+          "title" : "Combining Masks"
+        },
+        {
+          "id" : "masking.refine",
+          "title" : "Refine Edges and Edge Brush"
+        },
+        {
+          "id" : "masking.overlay",
+          "title" : "Overlay and Mask List"
+        },
+        {
+          "id" : "masking.local-adjustments",
+          "title" : "Local Adjustments"
+        },
+        {
+          "id" : "masking.presets",
+          "title" : "Mask Presets"
+        },
+        {
+          "id" : "masking.update-ai",
+          "title" : "Update AI Masks"
+        },
+        {
+          "id" : "masking.models",
+          "title" : "AI Model Downloads"
+        },
+        {
+          "id" : "masking.other",
+          "title" : "Something else in Masking"
+        }
+      ],
+      "id" : "masking",
+      "label" : "component:masking",
+      "summary" : "Masks and local adjustments: AI masks, brushes, gradients and ranges.",
+      "title" : "Masking",
+      "tracker" : [
+        "MSK",
+        "INF"
+      ]
+    },
+    {
+      "features" : [
+        {
+          "id" : "crop.crop",
+          "title" : "Crop and Aspect Ratio"
+        },
+        {
+          "id" : "crop.straighten",
+          "title" : "Straighten and Angle"
+        },
+        {
+          "id" : "crop.rotate",
+          "title" : "Rotate and Flip"
+        },
+        {
+          "id" : "crop.overlays",
+          "title" : "Overlays and Guides"
+        },
+        {
+          "id" : "crop.other",
+          "title" : "Something else in Crop & Straighten"
+        }
+      ],
+      "id" : "crop",
+      "label" : "component:crop",
+      "summary" : "Crop, straighten, rotate and flip.",
+      "title" : "Crop & Straighten",
+      "tracker" : [
+        "LNS"
+      ]
+    },
+    {
+      "features" : [
+        {
+          "id" : "healing.remove",
+          "title" : "Remove"
+        },
+        {
+          "id" : "healing.heal",
+          "title" : "Heal"
+        },
+        {
+          "id" : "healing.clone",
+          "title" : "Clone"
+        },
+        {
+          "id" : "healing.picks",
+          "title" : "Person and Object Picks"
+        },
+        {
+          "id" : "healing.find",
+          "title" : "Find and Remove All"
+        },
+        {
+          "id" : "healing.dust",
+          "title" : "Remove Dust"
+        },
+        {
+          "id" : "healing.visualize",
+          "title" : "Visualize Spots"
+        },
+        {
+          "id" : "healing.red-eye",
+          "title" : "Red Eye Correction"
+        },
+        {
+          "id" : "healing.other",
+          "title" : "Something else in Healing"
+        }
+      ],
+      "id" : "healing",
+      "label" : "component:healing",
+      "summary" : "Remove, Heal and Clone, person and object picks, Find, and Remove Dust.",
+      "title" : "Healing",
+      "tracker" : [
+        "RM"
+      ]
+    },
+    {
+      "features" : [
+        {
+          "id" : "recipes.applying",
+          "title" : "Applying Recipes"
+        },
+        {
+          "id" : "recipes.creating",
+          "title" : "Creating and Exporting Recipes"
+        },
+        {
+          "id" : "recipes.importing",
+          "title" : "Importing Presets and LUTs"
+        },
+        {
+          "id" : "recipes.film-looks",
+          "title" : "Film Looks Window"
+        },
+        {
+          "id" : "recipes.favorites",
+          "title" : "Favorites and Search"
+        },
+        {
+          "id" : "recipes.other",
+          "title" : "Something else in Recipes & Looks"
+        }
+      ],
+      "id" : "recipes",
+      "label" : "component:recipes",
+      "summary" : "Recipes, presets, LUTs and the Film Looks window.",
+      "title" : "Recipes & Looks",
+      "tracker" : [
+        "TON",
+        "EDT"
+      ]
+    },
+    {
+      "features" : [
+        {
+          "id" : "history.undo",
+          "title" : "Undo and Redo"
+        },
+        {
+          "id" : "history.history",
+          "title" : "History Panel"
+        },
+        {
+          "id" : "history.sessions",
+          "title" : "Earlier Sessions"
+        },
+        {
+          "id" : "history.snapshots",
+          "title" : "Snapshots"
+        },
+        {
+          "id" : "history.reset",
+          "title" : "Previous and Reset"
+        },
+        {
+          "id" : "history.other",
+          "title" : "Something else in History & Snapshots"
+        }
+      ],
+      "id" : "history",
+      "label" : "component:history",
+      "summary" : "Undo, the History panel, earlier sessions and snapshots.",
+      "title" : "History & Snapshots",
+      "tracker" : [
+        "EDT"
+      ]
+    },
+    {
+      "features" : [
+        {
+          "id" : "sync.copy",
+          "title" : "Copy Settings"
+        },
+        {
+          "id" : "sync.paste",
+          "title" : "Paste and Paste from Previous"
+        },
+        {
+          "id" : "sync.sync",
+          "title" : "Sync Settings"
+        },
+        {
+          "id" : "sync.auto-sync",
+          "title" : "Auto Sync"
+        },
+        {
+          "id" : "sync.other",
+          "title" : "Something else in Copy, Paste & Sync"
+        }
+      ],
+      "id" : "sync",
+      "label" : "component:sync",
+      "summary" : "Copying, pasting and syncing settings between photos.",
+      "title" : "Copy, Paste & Sync",
+      "tracker" : [
+        "EDT"
+      ]
+    },
+    {
+      "features" : [
+        {
+          "id" : "library.folders",
+          "title" : "Folders Panel"
+        },
+        {
+          "id" : "library.subfolders",
+          "title" : "Show Photos in Subfolders"
+        },
+        {
+          "id" : "library.filmstrip",
+          "title" : "Filmstrip and Selecting Photos"
+        },
+        {
+          "id" : "library.thumbnails",
+          "title" : "Thumbnails"
+        },
+        {
+          "id" : "library.ratings",
+          "title" : "Ratings, Flags and Color Labels"
+        },
+        {
+          "id" : "library.disk-changes",
+          "title" : "Changes on Disk"
+        },
+        {
+          "id" : "library.other",
+          "title" : "Something else in Folders & Filmstrip"
+        }
+      ],
+      "id" : "library",
+      "label" : "component:library",
+      "summary" : "Folders, the filmstrip, thumbnails, ratings and flags.",
+      "title" : "Folders & Filmstrip",
+      "tracker" : [
+        "UX"
+      ]
+    },
+    {
+      "features" : [
+        {
+          "id" : "viewing.zoom",
+          "title" : "Zoom and Pan"
+        },
+        {
+          "id" : "viewing.navigator",
+          "title" : "Navigator"
+        },
+        {
+          "id" : "viewing.before-after",
+          "title" : "Before / After"
+        },
+        {
+          "id" : "viewing.clipping",
+          "title" : "Clipping and Sensor Clipping"
+        },
+        {
+          "id" : "viewing.color-assessment",
+          "title" : "Color Assessment View"
+        },
+        {
+          "id" : "viewing.info-overlay",
+          "title" : "Info Overlay"
+        },
+        {
+          "id" : "viewing.lights-out",
+          "title" : "Lights Out and Full Screen"
+        },
+        {
+          "id" : "viewing.display",
+          "title" : "Display Colour and HDR"
+        },
+        {
+          "id" : "viewing.other",
+          "title" : "Something else in Viewing"
+        }
+      ],
+      "id" : "viewing",
+      "label" : "component:viewing",
+      "summary" : "Zoom, Before / After, clipping, overlays and the display.",
+      "title" : "Viewing",
+      "tracker" : [
+        "UX"
+      ]
+    },
+    {
+      "features" : [
+        {
+          "id" : "export.dialog",
+          "title" : "Export Dialog"
+        },
+        {
+          "id" : "export.formats",
+          "title" : "Formats and Quality"
+        },
+        {
+          "id" : "export.size",
+          "title" : "Size and Resizing"
+        },
+        {
+          "id" : "export.metadata",
+          "title" : "Metadata"
+        },
+        {
+          "id" : "export.presets",
+          "title" : "Export Presets and Export with Previous"
+        },
+        {
+          "id" : "export.looks-different",
+          "title" : "Export Looks Different from the Editor"
+        },
+        {
+          "id" : "export.other",
+          "title" : "Something else in Export"
+        }
+      ],
+      "id" : "export",
+      "label" : "component:export",
+      "summary" : "The Export dialog: formats, sizes, metadata and presets.",
+      "title" : "Export",
+      "tracker" : [
+        "EDT"
+      ]
+    },
+    {
+      "features" : [
+        {
+          "id" : "focus-stacking.detection",
+          "title" : "Stack Detection"
+        },
+        {
+          "id" : "focus-stacking.merging",
+          "title" : "Merging"
+        },
+        {
+          "id" : "focus-stacking.workspace",
+          "title" : "Stack Workspace and Retouch"
+        },
+        {
+          "id" : "focus-stacking.depth-map",
+          "title" : "Depth Map"
+        },
+        {
+          "id" : "focus-stacking.alignment",
+          "title" : "Alignment"
+        },
+        {
+          "id" : "focus-stacking.other",
+          "title" : "Something else in Focus Stacking"
+        }
+      ],
+      "id" : "focus-stacking",
+      "label" : "component:focus-stacking",
+      "summary" : "Stack detection, merging and the Stack workspace.",
+      "title" : "Focus Stacking",
+      "tracker" : [
+        "FS"
+      ]
+    },
+    {
+      "features" : [
+        {
+          "id" : "raw.wont-open",
+          "title" : "A Photo Won't Open"
+        },
+        {
+          "id" : "raw.unsupported",
+          "title" : "Unsupported Camera or Format"
+        },
+        {
+          "id" : "raw.colours",
+          "title" : "Colours Look Wrong When a Photo Opens"
+        },
+        {
+          "id" : "raw.demosaic",
+          "title" : "Demosaic Artefacts"
+        },
+        {
+          "id" : "raw.highlights",
+          "title" : "Highlights and Clipped Areas"
+        },
+        {
+          "id" : "raw.hot-pixels",
+          "title" : "Hot Pixels and Banding"
+        },
+        {
+          "id" : "raw.phone",
+          "title" : "Phone DNGs and ProRAW"
+        },
+        {
+          "id" : "raw.bitmap",
+          "title" : "JPEG, HEIC, TIFF and PNG"
+        },
+        {
+          "id" : "raw.other",
+          "title" : "Something else in Photos & Cameras"
+        }
+      ],
+      "id" : "raw",
+      "label" : "component:raw",
+      "summary" : "Opening photos: camera support, colours on open, and raw artefacts.",
+      "title" : "Photos & Cameras",
+      "tracker" : [
+        "CAM"
+      ]
+    },
+    {
+      "features" : [
+        {
+          "id" : "saving.not-saved",
+          "title" : "Edits Not Saved"
+        },
+        {
+          "id" : "saving.sidecars",
+          "title" : "Sidecar Files"
+        },
+        {
+          "id" : "saving.read-only",
+          "title" : "Read-Only or Conflicting Edits"
+        },
+        {
+          "id" : "saving.disks",
+          "title" : "iCloud Drive and External or Network Disks"
+        },
+        {
+          "id" : "saving.other",
+          "title" : "Something else in Saving & Files"
+        }
+      ],
+      "id" : "saving",
+      "label" : "component:saving",
+      "summary" : "Saving edits: sidecar files, conflicts, iCloud Drive and other disks.",
+      "title" : "Saving & Files",
+      "tracker" : [
+        "AUD"
+      ]
+    },
+    {
+      "features" : [
+        {
+          "id" : "workspace.panels",
+          "title" : "Panels and Layout"
+        },
+        {
+          "id" : "workspace.sliders",
+          "title" : "Sliders and Value Fields"
+        },
+        {
+          "id" : "workspace.shortcuts",
+          "title" : "Keyboard Shortcuts"
+        },
+        {
+          "id" : "workspace.palette",
+          "title" : "Command Palette"
+        },
+        {
+          "id" : "workspace.find",
+          "title" : "Find Adjustment"
+        },
+        {
+          "id" : "workspace.toolbar",
+          "title" : "Toolbar"
+        },
+        {
+          "id" : "workspace.themes",
+          "title" : "Themes and Appearance"
+        },
+        {
+          "id" : "workspace.settings",
+          "title" : "Settings"
+        },
+        {
+          "id" : "workspace.updates",
+          "title" : "Updates"
+        },
+        {
+          "id" : "workspace.other",
+          "title" : "Something else in Workspace"
+        }
+      ],
+      "id" : "workspace",
+      "label" : "component:workspace",
+      "summary" : "Panels, sliders, shortcuts, the command palette, themes, settings and updates.",
+      "title" : "Workspace",
+      "tracker" : [
+        "UX"
+      ]
+    },
+    {
+      "features" : [
+        {
+          "id" : "performance.slow-editing",
+          "title" : "Slow or Laggy Editing"
+        },
+        {
+          "id" : "performance.crash",
+          "title" : "Crashes"
+        },
+        {
+          "id" : "performance.freeze",
+          "title" : "Freezes"
+        },
+        {
+          "id" : "performance.memory",
+          "title" : "Memory, Heat and Battery"
+        },
+        {
+          "id" : "performance.slow-library",
+          "title" : "Slow Folders and Thumbnails"
+        },
+        {
+          "id" : "performance.other",
+          "title" : "Something else in Performance & Stability"
+        }
+      ],
+      "id" : "performance",
+      "label" : "component:performance",
+      "summary" : "Speed, crashes, freezes, memory and heat.",
+      "title" : "Performance & Stability",
+      "tracker" : [
+        "ARC",
+        "AUD"
+      ]
+    },
+    {
+      "features" : [
+        {
+          "id" : "other.general",
+          "title" : "General Feedback"
+        },
+        {
+          "id" : "other.website",
+          "title" : "Website and Documentation"
+        },
+        {
+          "id" : "other.cli",
+          "title" : "Command-Line Tool"
+        },
+        {
+          "id" : "other.not-sure",
+          "title" : "Not Sure"
+        }
+      ],
+      "id" : "other",
+      "label" : "component:other",
+      "summary" : "General feedback, the website and docs, and the command-line tool.",
+      "title" : "Something Else",
+      "tracker" : [
+        "EXT"
+      ]
+    }
+  ],
+  "format" : "app.redlamp.feedback-areas"
+}
