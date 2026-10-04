@@ -13,7 +13,7 @@
     "chip" : "Apple M3 Max",
     "commit" : "3b6a9de",
     "decoder" : "LibRaw 0.22.2-Release",
-    "processVersion" : 11,
+    "processVersion" : 12,
     "redlamp" : "0.2.2-prealpha",
     "system" : "macOS 26.5"
   },

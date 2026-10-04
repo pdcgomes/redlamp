@@ -30,7 +30,7 @@ Each check has a version, which changes whenever its measurements or thresholds 
 | `decode.black` | The black level against the masked margins, where the sensor has margins that look masked, and against the 0.1th percentile of the photosites, edge strips and zeros left out (a photosite at 0 is a dead one or padding; their share is recorded) | Margins 3σ (and 2 units) off, or the percentile 1% of the range below | 5σ (and 4 units), or 2% |
 | `decode.white` | Where the photosites clip against LibRaw's white level (CAM-02), and the share clipped | | White within 10% of black |
 | `decode.colour` | The camera's colour matrix and white balance | Multipliers outside 0.2 to 8 | No matrix |
-| `decode.edges` | Lines along each edge at the black level while the image isn't (the Sony A1 II's strip, CAM-13) | | Any |
+| `decode.edges` | Lines along each edge at the black level while the image isn't (the Sony A1 II's strip, CAM-13); a strip the camera's JPEG is dark along too, a fisheye's or a 360° camera's image circle, passes | | Any |
 
 **Against the camera's JPEG**, at 512 pixels, after aligning the two frames with the look profiler's gradient correlation:
 

@@ -84,6 +84,10 @@ public final class CameraBench: @unchecked Sendable {
         checks.append(CameraBenchChecks.rendered(ours != nil))
         let comparison = ours.flatMap { ours in theirs.flatMap { CameraJPEGComparison(ours: ours, theirs: $0) } }
         checks += CameraBenchChecks.preview(comparison, hasPreview: theirs != nil)
+        if let measurements, let index = checks.firstIndex(where: { $0.id == "decode.edges" && $0.verdict == .fail }),
+           let camera = theirs.flatMap({ PixelImage($0, maxLongEdge: CameraJPEGComparison.analysisSize) }) {
+            checks[index] = CameraBenchChecks.edges(measurements, identity: identity, camera: camera)
+        }
 
         let temperature = info.asShotWhiteBalance.map { ($0.temperature).rounded() }
         let photo = CameraBenchPhoto(

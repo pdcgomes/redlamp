@@ -152,6 +152,48 @@ struct CameraBenchTests {
         #expect(check.summary.contains("24 along the bottom"))
     }
 
+    @Test func `a strip the camera's JPEG is dark along too isn't a fault`() {
+        var measured = Self.healthy
+        measured.darkEdges = DarkEdges(top: 10)
+        var identity = Self.identity
+        identity.imageSize = PixelSize(width: 200, height: 100)
+        /// A grey JPEG, black along one upright side.
+        func camera(width: Int, height: Int, blackAt side: Int?) -> PixelImage {
+            var image = PixelImage(
+                width: width,
+                height: height,
+                pixels: Array(repeating: SIMD3(0.5, 0.5, 0.5), count: width * height),
+            )
+            for y in 0 ..< height {
+                for x in 0 ..< width where side == 0 && y < 12 || side == 1 && x >= width - 12 {
+                    image[x, y] = .zero
+                }
+            }
+            return image
+        }
+        #expect(CameraBenchChecks.edges(
+            measured,
+            identity: identity,
+            camera: camera(width: 200, height: 100, blackAt: 0),
+        ).verdict == .pass)
+        #expect(CameraBenchChecks.edges(
+            measured,
+            identity: identity,
+            camera: camera(width: 200, height: 100, blackAt: nil),
+        ).verdict == .fail)
+        identity.orientation = 6
+        #expect(CameraBenchChecks.edges(
+            measured,
+            identity: identity,
+            camera: camera(width: 100, height: 200, blackAt: 1),
+        ).verdict == .pass)
+        #expect(CameraBenchChecks.edges(
+            measured,
+            identity: identity,
+            camera: camera(width: 100, height: 200, blackAt: 0),
+        ).verdict == .fail)
+    }
+
     @Test func `a refused High Efficiency NEF names its tracker row`() {
         let identity = RawFileIdentity(make: "Nikon", model: "Z 8", format: "NEF", refusal: "Unsupported file format")
         let check = CameraBenchChecks.refused(identity, error: EngineError.unsupportedFile("DSC_0001.NEF"))

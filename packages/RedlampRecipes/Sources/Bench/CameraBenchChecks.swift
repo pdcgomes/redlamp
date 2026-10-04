@@ -154,11 +154,15 @@ public enum CameraBenchChecks {
         )
     }
 
-    static func edges(_ m: DecodeMeasurements) -> BenchCheck {
+    /// Strips along the edges at the black level. With the camera's JPEG, a strip the camera's
+    /// rendering is dark along too (a fisheye's or a 360° camera's image circle) isn't a fault.
+    public static func edges(
+        _ m: DecodeMeasurements, identity: RawFileIdentity? = nil, camera: PixelImage? = nil,
+    ) -> BenchCheck {
         guard let edges = m.darkEdges else {
             return BenchCheck(
                 id: "decode.edges",
-                version: 1,
+                version: 2,
                 verdict: .skipped,
                 summary: "Not measured for this sensor.",
             )
@@ -169,16 +173,72 @@ public enum CameraBenchChecks {
         ]
         guard edges.widest > 0 else {
             return BenchCheck(
-                id: "decode.edges", version: 1, verdict: .pass, measurements: numbers,
+                id: "decode.edges", version: 2, verdict: .pass, measurements: numbers,
                 summary: "No empty strips along the edges.",
+            )
+        }
+        if let identity, let camera, cameraIsDark(along: edges, identity: identity, in: camera) {
+            return BenchCheck(
+                id: "decode.edges", version: 2, verdict: .pass, measurements: numbers,
+                summary: "Dark along the edges, as the camera's JPEG is: the lens's image circle, not the decode.",
             )
         }
         let sides = [("top", edges.top), ("bottom", edges.bottom), ("left", edges.left), ("right", edges.right)]
             .filter { $0.1 > 0 }.map { "\($0.1) along the \($0.0)" }
         return BenchCheck(
-            id: "decode.edges", version: 1, verdict: .fail, measurements: numbers,
+            id: "decode.edges", version: 2, verdict: .fail, measurements: numbers,
             summary: "Lines at the black level: " + sides.joined(separator: ", ") + ".",
         )
+    }
+
+    /// Whether the camera's JPEG is dark along every side the decode has a strip on. Strips are
+    /// counted on the sensor; the JPEG is upright, so sides follow the orientation.
+    static func cameraIsDark(along edges: DarkEdges, identity: RawFileIdentity, in camera: PixelImage) -> Bool {
+        let size = identity.imageSize
+        guard size.width > 0, size.height > 0 else { return false }
+        // Sensor side → (upright side, its share of the sensor's height or width).
+        let strips: [(Int, Double)] = [
+            (edges.top, Double(edges.top) / Double(size.height)), (
+                edges.right,
+                Double(edges.right) / Double(size.width),
+            ),
+            (edges.bottom, Double(edges.bottom) / Double(size.height)), (
+                edges.left,
+                Double(edges.left) / Double(size.width),
+            ),
+        ]
+        let turns = switch identity.orientation {
+        case 6: 1
+        case 3: 2
+        case 5: 3
+        default: 0
+        }
+        for (side, strip) in strips.enumerated() where strip.0 > 0 {
+            // 0 top, 1 right, 2 bottom, 3 left, turned clockwise with the photo.
+            let upright = (side + turns) % 4
+            let vertical = upright == 0 || upright == 2
+            let extent = vertical ? camera.height : camera.width
+            let band = max(1, Int((strip.1 * Double(extent)).rounded()))
+            var sum: Float = 0, count: Float = 0
+            for y in 0 ..< camera.height {
+                for x in 0 ..< camera.width {
+                    let inside = switch upright {
+                    case 0: y < band
+                    case 1: x >= camera.width - band
+                    case 2: y >= camera.height - band
+                    default: x < band
+                    }
+                    if inside {
+                        sum += PhotoPairAnalysis.luma(ColorMath.srgbDecode(camera[x, y]))
+                        count += 1
+                    }
+                }
+            }
+            if count == 0 || sum / count > 0.01 {
+                return false
+            }
+        }
+        return true
     }
 
     // MARK: - Against the camera's JPEG
