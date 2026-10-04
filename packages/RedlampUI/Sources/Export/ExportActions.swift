@@ -114,10 +114,20 @@ public enum ExportActions {
                 }
             } catch {
                 let alert = NSAlert(error: error)
+                alert.addButton(withTitle: "OK")
+                alert.addButton(withTitle: "Report This Problem…")
+                let report: @MainActor (NSApplication.ModalResponse) -> Void = { response in
+                    if response == .alertSecondButtonReturn {
+                        model.sendFeedback(FeedbackPrefill(
+                            featureID: "export.dialog",
+                            message: error.localizedDescription,
+                        ))
+                    }
+                }
                 if let window, window.attachedSheet == nil {
-                    alert.beginSheetModal(for: window, completionHandler: nil)
+                    alert.beginSheetModal(for: window, completionHandler: report)
                 } else {
-                    alert.runModal()
+                    report(alert.runModal())
                 }
             }
         }

@@ -30,6 +30,9 @@ let project = Project(
                 // (`generate_keys --account redlamp`).
                 "SUFeedURL": "$(REDLAMP_UPDATE_FEED)",
                 "SUPublicEDKey": "YeTg38oxVFZ0jsLrc0HxH5x7BaPT/IQuS+AsLq/s8Ig=",
+                // The commit a release is built from, named in feedback reports; empty in builds
+                // from source.
+                "RedlampCommit": "$(REDLAMP_COMMIT)",
                 // Sidecars are packages (edit.json plus mask bitmaps), shown as one file.
                 "UTExportedTypeDeclarations": [
                     [
@@ -61,6 +64,7 @@ let project = Project(
                     "CODE_SIGN_STYLE": "Automatic",
                     "CODE_SIGN_IDENTITY": "Apple Development",
                     "REDLAMP_UPDATE_FEED": "",
+                    "REDLAMP_COMMIT": "",
                     // Resources/AppIcon.icon; edit it with Icon Composer.
                     "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
                     // Controls follow the user's system accent; the app ships no accent color.

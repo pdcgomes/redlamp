@@ -132,7 +132,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
 
     /// File & Edit
     case openFolder, export, exportWithPrevious, mergeFocusStack, editFocusStack, showShortcuts, filmLooks
-    case commandPalette
+    case commandPalette, sendFeedback
 
     public var id: String {
         rawValue
@@ -165,7 +165,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
              .flagPick, .flagReject, .unflag, .labelRed, .labelYellow, .labelGreen, .labelBlue:
             .rating
         case .openFolder, .export, .exportWithPrevious, .mergeFocusStack, .editFocusStack, .showShortcuts,
-             .filmLooks, .commandPalette:
+             .filmLooks, .commandPalette, .sendFeedback:
             .file
         }
     }
@@ -267,6 +267,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .filmLooks: "Film Looks"
         case .findAdjustment: "Find Adjustment…"
         case .commandPalette: "Command Palette…"
+        case .sendFeedback: "Report a Bug or Send Feedback…"
         }
     }
 
@@ -363,7 +364,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .openFolder: [.char("o", command: true)]
         case .export: [.char("e", shift: true, command: true)]
         case .exportWithPrevious: [.char("e", shift: true, option: true, command: true)]
-        case .mergeFocusStack, .editFocusStack: []
+        case .mergeFocusStack, .editFocusStack, .sendFeedback: []
         case .showShortcuts: [.char("/", command: true)]
         case .filmLooks: [.char("l", shift: true, command: true)]
         case .findAdjustment: [.char("f", command: true)]

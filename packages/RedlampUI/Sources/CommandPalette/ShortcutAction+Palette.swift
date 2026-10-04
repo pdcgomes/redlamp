@@ -80,6 +80,18 @@ extension ShortcutAction {
         .editFocusStack: ["focus stacking", "stack", "frames", "depth", "retouch"],
         .showShortcuts: ["keys", "help", "shortcuts", "keyboard"],
         .filmLooks: ["film", "stocks", "looks"],
+        .sendFeedback: [
+            "bug",
+            "report",
+            "feedback",
+            "issue",
+            "problem",
+            "idea",
+            "feature request",
+            "github",
+            "crash",
+            "support",
+        ],
     ]
 
     /// The symbol beside the action in the command palette.
@@ -158,6 +170,7 @@ extension ShortcutAction {
         case .editFocusStack: "square.stack.3d.down.right.fill"
         case .showShortcuts: "keyboard"
         case .filmLooks: "film"
+        case .sendFeedback: "exclamationmark.bubble"
         default: "command"
         }
     }
