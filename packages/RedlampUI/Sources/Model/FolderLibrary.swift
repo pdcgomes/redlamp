@@ -170,9 +170,16 @@ public final class FolderLibrary {
                     opened(items)
                 }
                 refreshStacks()
+                let directories = listedDirectories
+                _ = try? await scheduler.run(.background) {
+                    for directory in directories {
+                        SidecarStore.removeLeftovers(in: URL(fileURLWithPath: directory))
+                    }
+                }
             } else {
                 let found = try? await scheduler.run(.onScreen) {
-                    try LibraryItem.items(FolderScanner.list(folder))
+                    defer { SidecarStore.removeLeftovers(in: folder) }
+                    return try LibraryItem.items(FolderScanner.list(folder))
                 }
                 guard self.generation == generation else { return }
                 isListing = false

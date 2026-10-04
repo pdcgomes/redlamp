@@ -48,6 +48,27 @@ struct FolderLibraryTests {
         #expect(diffs.last == LibraryDiff(updated: [2]), "the badge changes only its row")
     }
 
+    @Test func `opening a folder removes what interrupted saves left, once a minute old`() async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try makeFolder(["IMG_1.ARW"])
+        let stale = folder.appending(path: ".IMG_1.ARW.redlamp.\(UUID().uuidString)")
+        let recent = folder.appending(path: ".IMG_1.ARW.redlamp.\(UUID().uuidString)")
+        for directory in [stale, recent] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+            try Data("{}".utf8).write(to: directory.appending(path: "edit.json"))
+        }
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSinceNow: -120)], ofItemAtPath: stale.path,
+        )
+
+        let library = FolderLibrary()
+        var opened = false
+        library.open(folder) { _ in opened = true }
+        try await eventually { opened }
+        #expect(!FileManager.default.fileExists(atPath: stale.path))
+        #expect(FileManager.default.fileExists(atPath: recent.path), "it may still be being written")
+    }
+
     @Test func `a photo added or updated changes only its row`() async throws {
         defer { try? FileManager.default.removeItem(at: folder) }
         try makeFolder(["A.ARW", "C.ARW"])

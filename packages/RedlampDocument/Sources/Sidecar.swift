@@ -206,7 +206,7 @@ public struct SidecarStore: Sendable {
                 return try Self.write(sidecar, to: destination)
             }
             if FileManager.default.fileExists(atPath: destination.path) {
-                try FileManager.default.removeItem(at: destination)
+                try Self.remove(destination)
             }
         }
     }
@@ -219,7 +219,7 @@ public struct SidecarStore: Sendable {
             if Self.protection(atSidecar: url) != nil {
                 return
             }
-            try FileManager.default.removeItem(at: url)
+            try Self.remove(url)
         }
     }
 
@@ -296,15 +296,16 @@ public struct SidecarStore: Sendable {
         }
         let fileManager = FileManager.default
         if existingPackage {
+            // History first: an interrupted save leaves the new step in history, where it can be
+            // restored, rather than an edit its history doesn't record.
             try writeBitmaps(of: sidecar, into: destination)
-            try json.write(to: destination.appending(path: editFile), options: .atomic)
             try writeHistory(of: sidecar, in: destination)
+            try json.write(to: destination.appending(path: editFile), options: .atomic)
             removeUnusedBitmaps(of: sidecar, in: destination, json: json)
             return
         }
         // A new package, or a single-file sidecar becoming one: built beside it, then moved in.
-        let staging = destination.deletingLastPathComponent()
-            .appending(path: ".\(destination.lastPathComponent).\(UUID().uuidString)")
+        let staging = hiddenSibling(of: destination)
         try fileManager.createDirectory(at: staging, withIntermediateDirectories: false)
         do {
             try writeBitmaps(of: sidecar, into: staging)

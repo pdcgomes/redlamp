@@ -53,7 +53,7 @@ public extension SidecarStore {
             }
             if try Self.leavesNothing(sidecar, at: destination) {
                 if FileManager.default.fileExists(atPath: destination.path) {
-                    try FileManager.default.removeItem(at: destination)
+                    try Self.remove(destination)
                 }
                 return .saved(SidecarBase(digest: nil, sidecar: nil))
             }
