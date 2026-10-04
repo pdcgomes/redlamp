@@ -44,7 +44,7 @@ export const features: Feature[] = [
     ],
     points: [
       "Basic, Tone Curve, Color Mixer, Color Grading, Detail and Effects",
-      "Lightroom Classic's shortcuts: 80 actions on 84 key bindings",
+      "Lightroom Classic's shortcuts: 83 actions on 87 key bindings",
       "Find an adjustment (⌘F) by name, or by the words people use",
       "Before and after in three layouts, cached so edits never re-render it",
     ],
