@@ -498,6 +498,92 @@ struct RetouchTests {
         #expect(stage.fillsComputed == 2)
     }
 
+    @Test func `a Remove spot is filled again when a spot after it reaches into what it copies from`() throws {
+        let session = try scene(blemished: true)
+        let stage = RetouchStage(device: device, kernels: kernels, queue: queue)
+        var spot = spot(.remove)
+        spot.source = spot.center
+        var recipe = EditRecipe()
+        recipe.processVersion = 12
+        recipe.spots = [spot]
+        func build() throws {
+            let commands = try #require(queue.makeCommandBuffer())
+            _ = try stage.session(for: recipe, base: session, commands: commands)
+            commands.commit()
+            commands.waitUntilCompleted()
+        }
+        try build()
+        #expect(stage.fillsComputed == 1)
+        recipe.spots.append(RetouchSpot(
+            center: ImagePoint(x: 0.9, y: 0.5), source: ImagePoint(x: 0.95, y: 0.5), radius: 0.03,
+        ))
+        try build()
+        #expect(stage.fillsComputed == 1, "a heal spot beyond what it copies from doesn't refill it")
+        recipe.spots.append(RetouchSpot(
+            center: ImagePoint(x: 0.4, y: 0.6), source: ImagePoint(x: 0.5, y: 0.6), radius: 0.03,
+        ))
+        try build()
+        #expect(stage.fillsComputed == 2, "one within it does")
+    }
+
+    @Test func `a fill copies from nowhere it's told to avoid, however well that matches`() throws {
+        let (width, height) = (64, 48)
+        var state: UInt64 = 3
+        var pixels = (0 ..< width * height).map { _ -> SIMD3<Float> in
+            state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            return SIMD3(repeating: 0.3 + 0.3 * Float(state >> 40) / Float(1 << 24))
+        }
+        let hole = (0 ..< width * height).map {
+            simd_distance(SIMD2(Float($0 % width), Float($0 / width)), SIMD2(18, 24)) < 5
+        }
+        // The hole and what's around it, copied to the right: the best match there is.
+        var avoided = [Bool](repeating: false, count: width * height)
+        for y in 12 ..< 36 {
+            for x in 6 ..< 30 {
+                pixels[y * width + x + 30] = pixels[y * width + x]
+                avoided[y * width + x + 30] = true
+            }
+        }
+        let filler = ContentAwareFill(device: device, queue: queue, kernels: kernels)
+        func sources(_ moves: [SIMD2<Int32>]) -> [Int] {
+            hole.indices.filter { hole[$0] }.map { index in
+                (index / width + Int(moves[index].y)) * width + index % width + Int(moves[index].x)
+            }
+        }
+        let free = try filler.fill(ContentAwareFill.Region(width: width, height: height, pixels: pixels, hole: hole))
+        #expect(sources(free).contains { avoided[$0] }, "without being told, it copies the copy")
+        let told = try filler.fill(ContentAwareFill.Region(
+            width: width, height: height, pixels: pixels, hole: hole, avoided: avoided,
+        ))
+        #expect(!sources(told).contains { avoided[$0] || hole[$0] })
+    }
+
+    @Test func `removing two things at once copies neither into the other's hole`() throws {
+        let engine = try RedlampEngine()
+        // The second a texel from the first one's hole, so it's most of what its edge's patches see.
+        let things = [Self.blemish, Self.blemish + SIMD2(18, 0)]
+        let photo = try scene(blemished: false) { x, y in
+            things.contains { simd_distance(SIMD2(x, y), $0) < 7 }
+        }
+        let clean = try render(scene(blemished: false), EditRecipe(), engine: engine)
+        var recipe = EditRecipe()
+        recipe.processVersion = 12
+        recipe.spots = things.map { thing in
+            let centre = ImagePoint(x: thing.x / Double(Self.width), y: thing.y / Double(Self.height))
+            return RetouchSpot(mode: .remove, center: centre, source: centre, radius: 10 / Double(Self.height))
+        }
+        let removed = try render(photo, recipe, engine: engine)
+        for thing in things {
+            var darkest: Float = .infinity
+            for y in 0 ..< Self.height {
+                for x in 0 ..< Self.width where simd_distance(SIMD2(Double(x) + 0.5, Double(y) + 0.5), thing) < 10 {
+                    darkest = min(darkest, removed[y * Self.width + x] / clean[y * Self.width + x])
+                }
+            }
+            #expect(darkest > 0.6, "the darkest texel in the hole at \(thing), against the clean photo")
+        }
+    }
+
     @Test func `spots land on the same content whatever the orientation`() throws {
         let spot = RetouchSpot(
             center: ImagePoint(x: 0.25, y: 0.75), source: ImagePoint(x: 0.5, y: 0.5), radius: 0.1,

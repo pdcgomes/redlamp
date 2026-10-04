@@ -29,6 +29,8 @@ A row that becomes `Done` closes its issue as completed; `Not needed` or `Reject
 
 ## Issues people file
 
+Reports from the app's Report a Bug or Send Feedback (UX-10) are opened by `redlamp-feedback[bot]`, titled `[Area › Feature] …`, and labelled `in-app`, `bug`, `enhancement` or `question`, and a `component:` label for the area. A hidden `<!-- redlamp-feedback v1 {…} -->` line names the feature ID, and `diagnostics.json` beside the issue holds the photo's edit in the sidecar format, its activity and the Mac's details. The sync leaves `component:` labels alone; `scripts/feedback-labels.py` makes them. The reporter usually has no GitHub account and follows the issue from the app's Your Reports, so put questions to them in comments on the issue.
+
 The sync lists open issues without a tracker ID as untriaged. For each:
 
 - **Bug:** fix it and close it as usual. Bugs don't need a tracker row unless fixing one is a piece of planned work.

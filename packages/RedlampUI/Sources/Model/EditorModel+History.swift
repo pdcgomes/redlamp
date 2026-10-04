@@ -70,6 +70,7 @@ extension EditorModel {
             history.removeFirst(history.count - 500)
         }
         historyIndex = history.count - 1
+        activity.record(.edit, history[historyIndex].name)
     }
 
     /// Records a slider's change as a step: "Exposure", 0.00 → +0.50.

@@ -82,6 +82,7 @@ final class RetouchStage: @unchecked Sendable {
     private struct Entry {
         var original: ImageSession
         var spots: [RetouchSpot]
+        var fills: FillVersion
         /// With the photo's maps.
         var retouched: ImageSession
         /// Until its own are made, with the maps of the photo's latest retouch that has them, or
@@ -123,10 +124,63 @@ final class RetouchStage: @unchecked Sendable {
         var owner: ImageSession
     }
 
-    /// A Remove spot and the spots before it, which its fill depends on.
+    /// How Remove spots are filled. From process 12 (`second`), a fill copies from none of the
+    /// edit's other Remove spots and none of the spots after it, and isn't matched on what those
+    /// after it replace.
+    enum FillVersion: Hashable {
+        case first, second
+    }
+
+    /// A Remove spot and the spots before it, which its fill depends on, and from the second
+    /// version, those after it that reach into its window.
     private struct FillKey: Hashable {
         var session: ObjectIdentifier
         var spots: [RetouchSpot]
+        var later: [RetouchSpot]
+        var version: FillVersion
+    }
+
+    /// Where a Remove spot's fill works: the pyramid level where its hole is at most
+    /// `fillExtent` texels across, and the photo up to twice the hole's size around it, in that
+    /// level's texels.
+    struct FillWindow {
+        var level: Int
+        var low: SIMD2<Int>
+        var high: SIMD2<Int>
+
+        var scale: Float {
+            Float(1 << level)
+        }
+
+        init?(_ placement: Placement, levels: Int, width: Int, height: Int) {
+            let extent = Double(max(placement.size.x, placement.size.y))
+            level = min(max(Int(ceil(log2(extent / RetouchStage.fillExtent))), 0), levels - 1)
+            let scale = Float(1 << level)
+            let levelWidth = max(1, width >> level), levelHeight = max(1, height >> level)
+            let low = SIMD2(Float(placement.origin.x), Float(placement.origin.y)) / scale
+            let high = SIMD2(
+                Float(placement.origin.x + placement.size.x),
+                Float(placement.origin.y + placement.size.y),
+            ) / scale
+            let margin = max(Int(ceil(simd_reduce_max(high - low) * 2)), 24)
+            self.low = SIMD2(max(Int(floor(low.x)) - margin, 0), max(Int(floor(low.y)) - margin, 0))
+            self.high = SIMD2(
+                min(Int(ceil(high.x)) + margin, levelWidth),
+                min(Int(ceil(high.y)) + margin, levelHeight),
+            )
+            guard self.high.x > self.low.x, self.high.y > self.low.y else { return nil }
+        }
+
+        /// Whether `placement`'s box overlaps the window.
+        func reaches(_ placement: Placement) -> Bool {
+            let shift = level
+            let low = SIMD2(placement.origin.x >> shift, placement.origin.y >> shift)
+            let high = SIMD2(
+                (placement.origin.x + placement.size.x + (1 << shift) - 1) >> shift,
+                (placement.origin.y + placement.size.y + (1 << shift) - 1) >> shift,
+            )
+            return low.x < self.high.x && high.x > self.low.x && low.y < self.high.y && high.y > self.low.y
+        }
     }
 
     /// Fills are kept across rebuilds, so moving another spot doesn't fill this one again.
@@ -162,9 +216,12 @@ final class RetouchStage: @unchecked Sendable {
         let original = session.original
         let spots = recipe.spots.filter { !$0.isEmpty }
         guard !spots.isEmpty else { return original }
+        let version: FillVersion = recipe.processVersion >= 12 ? .second : .first
         lock.lock()
         defer { lock.unlock() }
-        if let index = entries.firstIndex(where: { $0.original === original && $0.spots == spots }) {
+        if let index = entries.firstIndex(where: {
+            $0.original === original && $0.spots == spots && $0.fills == version
+        }) {
             var entry = entries.remove(at: index)
             if maps == .fresh, entry.refreshed == nil {
                 try settle(&entry)
@@ -186,10 +243,12 @@ final class RetouchStage: @unchecked Sendable {
             }
         }
         let texture = try reusable ?? makeCopy(of: original.pyramid)
-        let baking = try bake(spots, of: original, into: texture, commands: maps == .fresh ? nil : commands)
+        let baking = try bake(
+            spots, of: original, into: texture, fills: version, commands: maps == .fresh ? nil : commands,
+        )
         let retouched = ImageSession(retouching: original, pyramid: texture)
         var entry = Entry(
-            original: original, spots: spots, retouched: retouched,
+            original: original, spots: spots, fills: version, retouched: retouched,
             interim: latest.map { ImageSession(retouching: original, pyramid: texture, maps: $0) } ?? retouched,
             baking: baking,
         )
@@ -220,24 +279,43 @@ final class RetouchStage: @unchecked Sendable {
             baking.waitUntilCompleted()
         }
         if baking.status != .completed {
-            _ = try bake(entry.spots, of: entry.original, into: entry.retouched.pyramid, commands: nil)
+            _ = try bake(
+                entry.spots, of: entry.original, into: entry.retouched.pyramid, fills: entry.fills,
+                commands: nil,
+            )
         }
         entry.baking = nil
     }
 
     /// Copies the photo into `texture` and puts the spots in: into `commands`, or with none (or a
-    /// Remove spot not filled before) in command buffers of its own, each waited for. Returns the
-    /// command buffer the work is in while it isn't done.
+    /// Remove spot not filled before) in command buffers of its own, each waited for, its Remove
+    /// spots filled as `version` says. Returns the command buffer the work is in while it isn't done.
     private func bake(
-        _ spots: [RetouchSpot], of original: ImageSession, into texture: any MTLTexture,
+        _ spots: [RetouchSpot], of original: ImageSession, into texture: any MTLTexture, fills version: FillVersion,
         commands: (any MTLCommandBuffer)?,
     ) throws -> (any MTLCommandBuffer)? {
         let pyramid = original.pyramid
+        let placements = spots.map {
+            place($0, orientation: original.orientation, width: pyramid.width, height: pyramid.height)
+        }
+        let windows = placements.map { placement in
+            placement.flatMap {
+                FillWindow($0, levels: pyramid.mipmapLevelCount, width: pyramid.width, height: pyramid.height)
+            }
+        }
+        /// The other spots in a Remove spot's window: those after it, and the Remove spots before it.
+        func others(of index: Int) -> (later: [Int], earlier: [Int]) {
+            guard version == .second, let window = windows[index] else { return ([], []) }
+            let near = spots.indices.filter { $0 != index && placements[$0].map(window.reaches) ?? false }
+            return (near.filter { $0 > index }, near.filter { $0 < index && spots[$0].mode == .remove })
+        }
         // A Remove spot not filled before reads the photo as the spots before it left it, so the
         // spots are then applied in command buffers of their own, each waited for.
         let keys = spots.indices.map { index in
-            spots[index]
-                .mode == .remove ? FillKey(session: ObjectIdentifier(original), spots: Array(spots[...index])) : nil
+            spots[index].mode == .remove ? FillKey(
+                session: ObjectIdentifier(original), spots: Array(spots[...index]),
+                later: others(of: index).later.map { spots[$0] }, version: version,
+            ) : nil
         }
         let shared = keys.contains { $0.map { fills[$0] == nil } ?? false } ? nil : commands
         var buffer = try shared ?? makeCommandBuffer()
@@ -250,9 +328,7 @@ final class RetouchStage: @unchecked Sendable {
         )
         blit.endEncoding()
         for (index, spot) in spots.enumerated() {
-            guard let placement = place(
-                spot, orientation: original.orientation, width: pyramid.width, height: pyramid.height,
-            ) else { continue }
+            guard let placement = placements[index] else { continue }
             guard let key = keys[index] else {
                 try encode(spot, placement: placement, into: texture, commands: buffer)
                 continue
@@ -260,7 +336,14 @@ final class RetouchStage: @unchecked Sendable {
             if fills[key] == nil {
                 try generateMipmaps(texture, commands: buffer)
                 try finish(buffer)
-                fills[key] = try computeFill(placement, texture: texture, owner: original)
+                let (later, earlier) = others(of: index)
+                fills[key] = try windows[index].flatMap { window in
+                    try computeFill(
+                        placement, window: window, texture: texture, owner: original,
+                        avoiding: (later + earlier).compactMap { placements[$0] },
+                        replacing: later.compactMap { placements[$0] },
+                    )
+                }
                 fillOrder.append(key)
                 if fillOrder.count > Self.maximumFills {
                     fills[fillOrder.removeFirst()] = nil
@@ -300,7 +383,7 @@ final class RetouchStage: @unchecked Sendable {
         let id = ObjectIdentifier(entry.retouched.pyramid)
         guard refreshing.insert(id).inserted else { return }
         let job = Refresh(pyramid: entry.retouched.pyramid)
-        let (original, spots) = (entry.original, entry.spots)
+        let (original, spots, version) = (entry.original, entry.spots, entry.fills)
         commands.addCompletedHandler { [self] _ in
             DispatchQueue.global(qos: .userInitiated).async { [self] in
                 let latest = lock.withLock {
@@ -319,6 +402,7 @@ final class RetouchStage: @unchecked Sendable {
                     refreshing.remove(id)
                     guard let maps = made.maps, let index = entries.firstIndex(where: {
                         $0.retouched.pyramid === made.pyramid && $0.original === original && $0.spots == spots
+                            && $0.fills == version
                     }) else { return false }
                     entries[index].baking = nil
                     // A still may have made them meanwhile; the frame on screen still needs them.
@@ -601,26 +685,16 @@ final class RetouchStage: @unchecked Sendable {
         return nearest
     }
 
-    /// Fills the spot's hole (`ContentAwareFill`) on the pyramid level where it's at most
-    /// `fillExtent` texels across, from the photo up to twice its size around it, read back from
-    /// `texture` as it now is.
-    private func computeFill(_ placement: Placement, texture: any MTLTexture, owner: ImageSession) throws -> FillMap? {
+    /// Fills the spot's hole (`ContentAwareFill`) in its window, read back from `texture` as it
+    /// now is, copying from none of `avoiding` and matching on none of `replacing`.
+    private func computeFill(
+        _ placement: Placement, window: FillWindow, texture: any MTLTexture, owner: ImageSession,
+        avoiding: [Placement], replacing: [Placement],
+    ) throws -> FillMap? {
         fillsComputed += 1
-        let extent = Double(max(placement.size.x, placement.size.y))
-        let level = min(max(Int(ceil(log2(extent / Self.fillExtent))), 0), texture.mipmapLevelCount - 1)
-        let scale = Float(1 << level)
-        let levelWidth = max(1, texture.width >> level), levelHeight = max(1, texture.height >> level)
-        let low = SIMD2<Float>(Float(placement.origin.x), Float(placement.origin.y)) / scale
-        let high = SIMD2<Float>(
-            Float(placement.origin.x + placement.size.x),
-            Float(placement.origin.y + placement.size.y),
-        )
-            / scale
-        let margin = max(Int(ceil(simd_reduce_max(high - low) * 2)), 24)
-        let x0 = max(Int(floor(low.x)) - margin, 0), y0 = max(Int(floor(low.y)) - margin, 0)
-        let x1 = min(Int(ceil(high.x)) + margin, levelWidth), y1 = min(Int(ceil(high.y)) + margin, levelHeight)
-        guard x1 > x0, y1 > y0 else { return nil }
-        let (width, height) = (x1 - x0, y1 - y0)
+        let (level, scale) = (window.level, window.scale)
+        let (x0, y0) = (window.low.x, window.low.y)
+        let (width, height) = (window.high.x - window.low.x, window.high.y - window.low.y)
         guard let readback = device.makeBuffer(length: width * height * 8, options: .storageModeShared) else {
             throw EngineError.gpuUnavailable
         }
@@ -638,18 +712,30 @@ final class RetouchStage: @unchecked Sendable {
         var hole: [Bool] = []
         pixels.reserveCapacity(width * height)
         hole.reserveCapacity(width * height)
-        // Texels whose centre the spot covers, or is within three quarters of a texel of.
-        let reach = placement.radius + 0.75 * scale
+        var avoided = avoiding.isEmpty ? [] : [Bool](repeating: false, count: width * height)
+        var replaced = replacing.isEmpty ? [] : [Bool](repeating: false, count: width * height)
+        /// Texels whose centre a spot covers, or is within three quarters of a texel of.
+        func covers(_ spot: Placement, _ centre: SIMD2<Float>) -> Bool {
+            spot.covers(centre, reach: spot.radius + 0.75 * scale)
+        }
         for y in 0 ..< height {
             for x in 0 ..< width {
                 let index = (y * width + x) * 4
                 let rgb = SIMD3(Float(halves[index]), Float(halves[index + 1]), Float(halves[index + 2]))
                 pixels.append(simd_max(rgb, .zero).squareRoot())
                 let centre = (SIMD2(Float(x0 + x), Float(y0 + y)) + 0.5) * scale
-                hole.append(placement.covers(centre, reach: reach))
+                hole.append(covers(placement, centre))
+                if !avoided.isEmpty {
+                    avoided[y * width + x] = avoiding.contains { covers($0, centre) }
+                }
+                if !replaced.isEmpty {
+                    replaced[y * width + x] = replacing.contains { covers($0, centre) }
+                }
             }
         }
-        let moves = try filler.fill(ContentAwareFill.Region(width: width, height: height, pixels: pixels, hole: hole))
+        let moves = try filler.fill(ContentAwareFill.Region(
+            width: width, height: height, pixels: pixels, hole: hole, avoided: avoided, replaced: replaced,
+        ))
         // Around the hole, each texel takes the nearest hole texel's move, so the fill reaches
         // the spot's rim, where Heal's seams are measured.
         var offsets = moves.map { SIMD2(Float($0.x), Float($0.y)) * scale }

@@ -238,8 +238,15 @@ func run(_ arguments: [String]) async throws {
             }
             let found = try await engine.findThings(names, threshold: 0.25)
             for thing in found {
-                guard let mask = try await engine.computeMasks(MaskRequest(kind: .objects, box: thing.box)).first
-                else { continue }
+                let mask: AIMask
+                do {
+                    guard let first = try await engine.computeMasks(MaskRequest(kind: .objects, box: thing.box)).first
+                    else { continue }
+                    mask = first
+                } catch MaskComputationError.nothingFound {
+                    print(String(format: "skipped %@ %.2f: no shape found in its box", thing.thing, thing.score))
+                    continue
+                }
                 // Grown by half a percent of the height, as the Healing tool grows a picked object.
                 recipe.spots.append(RetouchSpot(
                     mode: .remove, center: mask.center, source: mask.center, region: mask, radius: 0.005,

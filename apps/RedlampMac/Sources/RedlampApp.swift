@@ -38,6 +38,7 @@ struct RedlampApp: App {
         model.onToggleFullScreen = { NSApp.keyWindow?.toggleFullScreen(nil) }
         model.onToggleToolbar = { NSApp.keyWindow?.toggleToolbarShown(nil) }
         model.onTestCamera = { AppDelegate.showCameraBench?() }
+        model.onSendFeedback = { prefill in FeedbackActions.present(model: model, prefill: prefill) }
         let theme = ThemeSettings()
         let exports = ExportPresetStore()
         _model = State(initialValue: model)
@@ -60,6 +61,7 @@ struct RedlampApp: App {
             )
             editor.showWindow(nil)
             keyboard.install(model: model)
+            FeedbackActions.start()
             Self.openInitialFolder(model: model)
             #if DEBUG || REDLAMP_PROFILING
                 DebugSnapshot.scheduleIfRequested(model: model)

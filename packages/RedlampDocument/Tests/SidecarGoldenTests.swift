@@ -57,7 +57,7 @@ struct SidecarGoldenTests {
         + #""00000000-0000-0000-0000-000000000032","inverted":false,"operation":"add","shape":{"maskReference":{"_0":{"#
         + #""maskID":"00000000-0000-0000-0000-000000000002"}}}}],"id":"00000000-0000-0000-0000-000000000003","isVisibl"#
         + #"e":true,"name":"Depth"}],"orientation":{"mirrored":false,"quarterTurns":1},"pointCurve":[{"x":0,"y":0.05},"#
-        + #"{"x":0.5,"y":0.55},{"x":1,"y":1}],"processVersion":11,"spots":[{"center":{"x":0.3,"y":0.3},"feather":50,"id"#
+        + #"{"x":0.5,"y":0.55},{"x":1,"y":1}],"processVersion":12,"spots":[{"center":{"x":0.3,"y":0.3},"feather":50,"id"#
         + #"":"00000000-0000-0000-0000-000000000004","mode":"heal","opacity":100,"radius":0.02,"source":{"x":0.6,"y":0"#
         + #".3}},{"center":{"x":0.2,"y":0.7},"feather":20,"id":"00000000-0000-0000-0000-000000000006","mode":"clone",""#
         + #"opacity":90,"radius":0.01,"source":{"x":0.5,"y":0.7},"stroke":[{"x":0.01,"y":0},{"x":0.02,"y":0.01}]},{"ce"#
@@ -68,7 +68,7 @@ struct SidecarGoldenTests {
         + #"nt":"blackAndWhite","values":{"basic.exposure":0.7,"wb.temperature":6500},"version":3,"whiteBalance":"dayl"#
         + #"ight"},"snapshots":[{"created":"1970-01-01T00:16:40Z","id":"00000000-0000-0000-0000-000000000005","name":""#
         + #"Before","recipe":{"baseLook":{"amount":100,"id":"redlamp/base/color","name":"Redlamp Color","version":1},""#
-        + #"processVersion":11,"treatment":"color","values":{},"version":3,"whiteBalance":"asShot"}}]}"#
+        + #"processVersion":12,"treatment":"color","values":{},"version":3,"whiteBalance":"asShot"}}]}"#
 
     /// `SidecarSamples.ordinary`, decoded and written again by main's encoder.
     static let ordinary = [

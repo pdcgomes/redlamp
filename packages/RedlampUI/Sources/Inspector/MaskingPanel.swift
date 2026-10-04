@@ -230,6 +230,11 @@ struct MaskStatus: View {
                 Image(systemName: "exclamationmark.triangle")
                 Text(message).fixedSize(horizontal: false, vertical: true)
                 Spacer()
+                Button("Report…") {
+                    model.sendFeedback(FeedbackPrefill(featureID: FeedbackContext.suggestion(model), message: message))
+                }
+                .buttonStyle(.link)
+                .help("Report a Bug about this message")
                 Button {
                     model.maskMessage = nil
                 } label: {

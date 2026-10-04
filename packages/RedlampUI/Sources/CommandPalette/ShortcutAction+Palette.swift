@@ -81,6 +81,18 @@ extension ShortcutAction {
         .showShortcuts: ["keys", "help", "shortcuts", "keyboard"],
         .filmLooks: ["film", "stocks", "looks"],
         .testCamera: ["camera", "bench", "raw support", "verify", "test", "unsupported camera"],
+        .sendFeedback: [
+            "bug",
+            "report",
+            "feedback",
+            "issue",
+            "problem",
+            "idea",
+            "feature request",
+            "github",
+            "crash",
+            "support",
+        ],
     ]
 
     /// The symbol beside the action in the command palette.
@@ -160,6 +172,7 @@ extension ShortcutAction {
         case .showShortcuts: "keyboard"
         case .filmLooks: "film"
         case .testCamera: "camera.badge.ellipsis"
+        case .sendFeedback: "exclamationmark.bubble"
         default: "command"
         }
     }

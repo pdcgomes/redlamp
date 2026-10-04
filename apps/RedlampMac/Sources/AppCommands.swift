@@ -112,6 +112,9 @@ struct AppCommands: Commands {
 
         CommandGroup(after: .help) {
             Button("Welcome to Redlamp", action: onWelcome)
+            item(.sendFeedback)
+            Button("Your Reports…") { FeedbackActions.presentReports(model: model) }
+                .disabled(model.isModalDialogOpen)
             item(.showShortcuts)
             item(.testCamera)
             Divider()
