@@ -77,6 +77,7 @@ struct RedlampApp: App {
             AppCommands(
                 model: model,
                 updates: appDelegate.updates,
+                onWelcome: { appDelegate.showWelcome() },
                 onOpen: { Self.openPanel(model: model) },
                 onExport: { ExportActions.present(model: model, store: exports) },
                 onExportWithPrevious: { ExportActions.exportWithPrevious(model: model, store: exports) },
@@ -137,9 +138,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static var saveBeforeQuitting: (@MainActor () -> QuitSaving)?
     let updates = Updates()
     private var editor: EditorWindowController?
+    private var welcome: WelcomeWindowController?
 
     func applicationDidFinishLaunching(_: Notification) {
         editor = Self.launch?()
+        if Welcome.opensAtLaunch(arguments: LaunchArguments.all) {
+            showWelcome()
+        }
+    }
+
+    /// The welcome window, over the editor: by itself at the first launch, and from Help ›
+    /// Welcome to Redlamp.
+    func showWelcome() {
+        if let welcome {
+            welcome.showWindow(nil)
+            return
+        }
+        let film = Bundle.main.url(forResource: "Welcome", withExtension: "mp4")
+        let welcome = WelcomeWindowController(film: film) { [weak self] in
+            self?.welcome = nil
+        }
+        self.welcome = welcome
+        welcome.present(over: editor?.window)
+        Welcome.markShown()
     }
 
     /// Quit, log out, shut down and an update's relaunch all come here. It waits at most about
