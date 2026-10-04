@@ -2,10 +2,12 @@ import RedlampDesign
 import RedlampEngineAPI
 import SwiftUI
 
-/// The Crop & Straighten tool's options, above its Angle slider: the aspect and its lock,
-/// Constrain to Image, quarter turns and flips, and Reset.
+/// The Crop & Straighten tool's options, above its Angle slider: the aspect and its lock, the
+/// overlay and which overlays and ratios it uses, Constrain to Image, quarter turns and flips,
+/// and Reset.
 struct CropToolPanel: View {
     @Environment(EditorModel.self) private var model
+    @State private var choosingOverlays = false
 
     var body: some View {
         @Bindable var model = model
@@ -52,7 +54,18 @@ struct CropToolPanel: View {
                 }
                 .labelsHidden()
                 .controlSize(.small)
-                .help("O cycles the overlay, ⇧O turns it, X swaps the crop's orientation")
+                .help("O cycles the chosen overlays, ⇧O turns it, X swaps the crop's orientation")
+                Button {
+                    choosingOverlays.toggle()
+                } label: {
+                    Image(systemName: "checklist")
+                }
+                .buttonStyle(.borderless)
+                .help("Choose Overlays to Cycle and Aspect Ratios")
+                .popover(isPresented: $choosingOverlays, arrowEdge: .leading) {
+                    CropOverlayChooser()
+                        .environment(model)
+                }
             }
 
             Toggle("Constrain to Image", isOn: $model.constrainCropToImage)
@@ -94,5 +107,42 @@ struct CropToolPanel: View {
         }
         .buttonStyle(.borderless)
         .help(help)
+    }
+}
+
+/// Lightroom's Choose Overlays to Cycle and Choose Aspect Ratios, side by side. The last one
+/// checked in each list can't be cleared.
+struct CropOverlayChooser: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        let choices = model.cropOverlayChoices
+        HStack(alignment: .top, spacing: 24) {
+            VStack(alignment: .leading, spacing: 6) {
+                heading("Overlays to Cycle", "O steps through these")
+                ForEach(CropOverlay.allCases, id: \.self) { overlay in
+                    Toggle(overlay.title, isOn: $model.cropOverlayChoices[overlay])
+                        .disabled(choices.overlays == [overlay])
+                }
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                heading("Aspect Ratios", "For the Aspect Ratios overlay")
+                ForEach(CropOverlay.AspectRatio.allCases, id: \.self) { ratio in
+                    Toggle(ratio.title, isOn: $model.cropOverlayChoices[ratio])
+                        .disabled(choices.ratios == [ratio])
+                }
+            }
+        }
+        .toggleStyle(.checkbox)
+        .padding(14)
+    }
+
+    private func heading(_ title: String, _ caption: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.headline)
+            Text(caption).font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(.bottom, 2)
     }
 }

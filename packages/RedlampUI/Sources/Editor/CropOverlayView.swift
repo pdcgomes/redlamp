@@ -3,9 +3,10 @@ import RedlampEngineAPI
 import SwiftUI
 
 /// The crop frame, drawn over the whole straightened frame while the Crop tool is active:
-/// the outside dimmed, a composition guide (`O` cycles it), and handles on the corners and edges. Dragging a
-/// handle resizes (keeping the aspect when it is locked), dragging inside moves the crop, and
-/// ⌘-dragging (or any drag after Straighten) draws a line to level the photo along.
+/// the outside dimmed, a composition guide (`O` cycles the chosen ones), and handles on the
+/// corners and edges. Dragging a handle resizes (keeping the aspect when it is locked),
+/// dragging inside moves the crop, and ⌘-dragging (or any drag after Straighten) draws a line
+/// to level the photo along.
 struct CropOverlayView: View {
     @Environment(EditorModel.self) private var model
     @State private var dragStart: CropRect?
@@ -43,9 +44,11 @@ struct CropOverlayView: View {
                     .stroke(Color.white.opacity(0.18), lineWidth: 0.5)
                     .allowsHitTesting(false)
 
-                Self.overlay(model.cropOverlay, turns: model.cropOverlayTurns, in: rect)
-                    .stroke(Color.white.opacity(0.35), lineWidth: 0.5)
-                    .allowsHitTesting(false)
+                Self.overlay(
+                    model.cropOverlay, turns: model.cropOverlayTurns, ratios: model.cropOverlayChoices.ratios, in: rect,
+                )
+                .stroke(Color.white.opacity(0.35), lineWidth: 0.5)
+                .allowsHitTesting(false)
 
                 Rectangle()
                     .path(in: rect)
@@ -90,8 +93,11 @@ struct CropOverlayView: View {
         )
     }
 
-    /// The guide, turned `turns` times where it isn't symmetric.
-    private nonisolated static func overlay(_ kind: CropOverlay, turns: Int, in rect: CGRect) -> Path {
+    /// The guide, turned `turns` times where it isn't symmetric; the Aspect Ratios overlay
+    /// outlines `ratios`.
+    private nonisolated static func overlay(
+        _ kind: CropOverlay, turns: Int, ratios: Set<CropOverlay.AspectRatio>, in rect: CGRect,
+    ) -> Path {
         @Sendable func point(_ x: Double, _ y: Double) -> CGPoint {
             CGPoint(x: rect.minX + rect.width * x, y: rect.minY + rect.height * y)
         }
@@ -140,7 +146,7 @@ struct CropOverlayView: View {
                     path.addCurve(to: arc.end, control1: arc.control1, control2: arc.control2)
                 }
             case .aspectRatios:
-                for outline in CropOverlay.aspectOutlines(in: rect) {
+                for outline in CropOverlay.aspectOutlines(in: rect, ratios: ratios) {
                     path.addRect(outline)
                 }
             }
@@ -352,14 +358,11 @@ struct GoldenSpiral: Equatable {
 }
 
 extension CropOverlay {
-    /// The Aspect Ratios overlay's ratios, long side over short: Lightroom's 1 × 1, 4 × 5,
-    /// 8.5 × 11, 5 × 7, 2 × 3, 4 × 3, 16 × 9 and 16 × 10.
-    static let outlineRatios: [Double] = [1, 5.0 / 4, 11 / 8.5, 7.0 / 5, 3.0 / 2, 4.0 / 3, 16.0 / 9, 16.0 / 10]
-
-    /// Each ratio's outline centred in `rect`, the largest that fits, and portrait when `rect` is.
-    static func aspectOutlines(in rect: CGRect) -> [CGRect] {
-        outlineRatios.map { ratio in
-            let aspect = rect.height > rect.width ? 1 / ratio : ratio
+    /// The outlines of `ratios`, in Lightroom's order: each centred in `rect`, the largest that
+    /// fits, and portrait when `rect` is.
+    static func aspectOutlines(in rect: CGRect, ratios: Set<AspectRatio> = Set(AspectRatio.allCases)) -> [CGRect] {
+        AspectRatio.allCases.filter(ratios.contains).map { ratio in
+            let aspect = rect.height > rect.width ? 1 / ratio.value : ratio.value
             let width = min(rect.width, rect.height * aspect)
             let height = min(rect.height, rect.width / aspect)
             return CGRect(x: rect.midX - width / 2, y: rect.midY - height / 2, width: width, height: height)
