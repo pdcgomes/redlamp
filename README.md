@@ -229,8 +229,11 @@ With both side panels in AppKit, most of what remains is Core Animation committi
 - Local Whites and Blacks are approximated with tonal-region gains.
 - The app is not sandboxed yet (required later for the Mac App Store), but photos decode in a sandboxed service with no file access (`RedlampDecoder.xpc`, sent each file's bytes), so a damaged file can't crash the editor. Focus-stack frames and filmstrip thumbnails still decode in the app. iPad and iPhone come in Phase 5.
 - Sidecars are read and written under file coordination, so iCloud Drive syncs them safely and conflicting copies merge (the newest edit wins, the others become snapshots). A photo that is open doesn't reload yet when another Mac changes its edit.
+- Nikon's High Efficiency NEFs (HE and HE\*, from the Z 8, Z 9, Z 6III and Z f) don't open: LibRaw 0.22 can't read them (CAM-12). Bodies LibRaw 0.22.2 doesn't list need a LibRaw update: the Sony A7 V doesn't open, and the A1 II opens with a black strip along the bottom (CAM-13).
 
 **Fixed in iteration 2:**
+- Phase One IIQ files develop with the back's black levels subtracted and its calibration applied; they had a magenta cast.
+- Hasselblad FFF files (Phocus's format) open as raws.
 - White balance now works for linear DNGs such as iPhone ProRAW.
 - The Navigator outlines the zoomed viewport.
 - The loading placeholder now shows while a photo decodes.
@@ -962,7 +965,7 @@ This section is for working on Redlamp. To just use it, see [Installation](#inst
 git clone https://github.com/pdcgomes/redlamp.git && cd redlamp
 mise install              # Tuist, SwiftFormat, SwiftLint at pinned versions
 mise run generate         # builds vendored LibRaw, then generates Redlamp.xcworkspace
-mise run fixtures         # optional: downloads CC0 sample raw files into tests/fixtures/raw
+mise run fixtures         # optional: downloads CC0 sample raw files (about 1.4 GB) into tests/fixtures
 mise run fixtures-shoots  # optional: about 800 MB more, for the dust evaluation
 mise run run -- tests/fixtures/raw    # build and launch, opening a folder
 ```
@@ -996,7 +999,7 @@ mise run render -- render ~/Pictures/DSC01234.ARW -o out.jpg --size 2048 \
 | `mise run test` (`t`) | Engine purity gate plus all unit and engine tests |
 | `mise run lint` (`l`) | Purity gate, SwiftFormat (lint mode), and SwiftLint |
 | `mise run vendor` (`v`) | Build the vendored C/C++ libraries (pinned version and SHA in `config/vendored-libs.json`) |
-| `mise run fixtures` | Download CC0 sample raw files |
+| `mise run fixtures` | Download CC0 sample raw files: the development samples into `tests/fixtures/raw`, and the camera coverage set (`tests/decode/samples.json`, checksums verified) into `tests/fixtures/cameras` |
 | `mise run lookdev` | Download the 40-image CC0 look-development set into `build/look-dev` (checksums verified) |
 | `mise run profile-data` | Download the CC0 Fujifilm raw and camera-JPEG pairs the look profiler fits against |
 | `mise run render` | Build and run the `redlamp` CLI |
@@ -1068,7 +1071,7 @@ To add a component, write a scene in `apps/RedlampHarness/Sources/Scenes/` and r
 
 ### Supported files
 
-- **Raw:** through LibRaw 0.22, covering most cameras from Sony (A1, A7 II–IV, A7C, A7R II–V, A7S, A9, a6x00, ZV, RX), Canon, Nikon, Fujifilm (including X-Trans), Panasonic, OM System and Olympus, Pentax, Leica, Hasselblad, and DNG, including Apple ProRAW. Uncompressed, compressed, and lossless compressed formats are all supported. Bodies released after LibRaw 0.22 need a LibRaw update. A camera is verified once a CC0 sample file is in the decode regression suite (`tests/decode/cameras.json`), which checks layout, crop, black and white levels, white balance, color matrix, orientation and the sensor data on every test run; today that covers the Sony A7 III, Fujifilm X-T3, Canon EOS R6, Nikon Z 6, iPhone 12 Pro ProRAW and Google Pixel 4a. [Cameras](docs/cameras.md) (also at [redlamp.app/cameras](https://redlamp.app/cameras)) lists every camera LibRaw reads and which ones Redlamp's tests verify; `scripts/camera-list.py --apply` regenerates it when a sample is added or LibRaw is updated.
+- **Raw:** through LibRaw 0.22, covering most cameras from Canon, Nikon, Sony, Fujifilm (X-Trans and GFX), Panasonic, OM System and Olympus, Pentax and Ricoh, Leica, Hasselblad (3FR and FFF), Phase One (IIQ), Sigma (the fp and fp L; not Foveon X3F files), Samsung and DJI, and DNG, including Apple ProRAW. Uncompressed, compressed and lossless compressed formats are supported, except Nikon's High Efficiency NEFs (HE and HE\*), which LibRaw can't read yet. Bodies LibRaw 0.22 doesn't list need a LibRaw update. A camera is verified once a CC0 sample file is in the decode regression suite (`tests/decode/cameras.json`), which checks layout, crop, black and white levels, white balance, color matrix, orientation and the sensor data on every test run, and compares its colours at the default edit with a recorded reference. 25 cameras are verified: medium format from Hasselblad (the X2D 100C in 3FR and FFF, the X1D II 50C) and Phase One (the IQ4 150MP), and one or more bodies from Fujifilm (the GFX100 II among them), Canon, Nikon, Sony, Panasonic, OM System, Pentax, Ricoh, Leica, Sigma, Samsung, DJI, Apple and Google, listed with their samples in `tests/decode/samples.json` (`mise run fixtures` downloads them). [Cameras](docs/cameras.md) (also at [redlamp.app/cameras](https://redlamp.app/cameras)) lists every camera LibRaw reads and which ones Redlamp's tests verify; `scripts/camera-list.py --apply` regenerates it when a sample is added or LibRaw is updated.
 - **Bitmap:** JPEG, HEIC, TIFF, and PNG.
 
 ### Keyboard shortcuts
