@@ -175,7 +175,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 
 ### Measured performance
 
-Measured on an Apple M1 Ultra with a Release build.
+Measured on an Apple M1 Ultra with a Release build. Every figure since 29 September, the benchmark harness's runs, and what's got faster or slower are at [redlamp.app/performance](https://redlamp.app/performance), from [`docs/performance/history.jsonl`](docs/performance/history.jsonl); `scripts/perf-record.sh` records a run.
 
 | Operation | Time |
 | --- | --- |
@@ -833,7 +833,8 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [x] Engine API contract, headless CLI, and a unit and engine smoke-test suite
 - [x] Lightroom feature inventory
 - [x] GitHub Actions CI: purity gate, SwiftFormat lint, build, and tests, with cached LibRaw and fixtures
-- [ ] Performance lab: a CI runner on Apple Silicon with regression gates that block merges (iPhone and iPad tiers come with Phase 5) <!-- internal -->
+- [x] A benchmark harness and a recorded performance history, drawn at [redlamp.app/performance](https://redlamp.app/performance) <!-- internal -->
+- [ ] Performance lab: a CI runner on Apple Silicon with regression gates that block merges (iPhone and iPad tiers come with Phase 5) <!-- internal; tracker: ARC-06 -->
 - [x] Golden-image color regression tests (ΔE2000) for camera files, and a golden render for every bundled recipe version
 - [ ] Written clean-room policy and a license-audit gate in CI <!-- internal -->
 

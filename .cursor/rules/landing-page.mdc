@@ -1,6 +1,6 @@
 ---
 description: Keep the redlamp.app landing page (web/) in step with the README whenever work lands
-globs: README.md,docs/lightroom-comparison.md,docs/cameras.md,tests/decode/**,mise/tasks/fixtures*,config/vendored-libs.json,docs/images/**,docs/brand/**,packages/RedlampRecipes/Sources/Film/**,web/**
+globs: README.md,docs/lightroom-comparison.md,docs/cameras.md,docs/performance/**,tests/decode/**,mise/tasks/fixtures*,config/vendored-libs.json,docs/images/**,docs/brand/**,packages/RedlampRecipes/Sources/Film/**,web/**
 alwaysApply: false
 ---
 
@@ -12,6 +12,7 @@ The README is the status page, and `web/` (redlamp.app) presents it. When you up
 
 - **Roadmap** and **Everything that works today** are parsed from the README at build time by `web/lib/readme.ts`. Each roadmap item's state (done, in progress, not started) and each phase's tracked-work counts come from the tracker rows the item names (`web/lib/tracker.ts`).
 - **The Compare page** (`/compare`) and the comparison summary under the roadmap are read from `docs/lightroom-comparison.md` (`web/lib/comparison.ts`); its tracker IDs link to their GitHub issues (`trackerIssues` in `web/lib/github.ts`). Keep it in step with `.cursor/rules/roadmap-and-comparison.mdc`.
+- **The Performance page** (`/performance`) and the home page's performance strip are read from `docs/performance/metrics.json` and `history.jsonl` (`web/lib/performance.ts`); `scripts/perf-record.sh` adds a run, as `.cursor/rules/performance.mdc` describes.
 - **The Cameras page** (`/cameras`) is read from `docs/cameras.md` (`web/lib/cameras.ts`), whose lists `scripts/camera-list.py` generates from the decode tests (`tests/decode/cameras.json`), the sample downloads (`mise run fixtures`, `fixtures-shoots`, the look-development manifest) and the vendored LibRaw's camera list. When you add a sample to the decode tests or update LibRaw, run `scripts/camera-list.py --apply` (with LibRaw's source in `vendor/cache`, from `scripts/vendor-libraw.sh`) and commit `docs/cameras.md`; the pre-commit hook, `mise run lint` and CI check it. Only the text above its generated block is written by hand.
 - **Screenshots, film icons, sample sheets and logos** are copied from `docs/` by `web/scripts/sync-assets.mjs`.
 - **The download button**, the version in the hero's status pill and the Homebrew "(with the first release)" note follow the latest GitHub release (`web/lib/github.ts`).
@@ -28,7 +29,7 @@ Keep the shapes the parsers rely on, or update them:
 | A headline feature lands, or a feature row's claims change | The matching entry in `web/content/features.ts` (title, body, points, screenshot) |
 | The command palette's keys or behaviour change | `commandPalette` and `paletteSteps` in `web/content/features.ts`, and its close-ups (`palette-*` in `scripts/capture-screenshots.sh`) |
 | The editor's look changes (panels, layout, the default theme), or a hero shot's feature does | The hero shots: `scripts/capture-hero.sh <photo folder>` regenerates `docs/images/hero*.png`, which the README and `heroShots` in `web/content/features.ts` show, with their captions |
-| Measured performance numbers change | `performance` in `web/content/features.ts`, and the speed feature's points |
+| Measured performance numbers change | Record a run (`scripts/perf-record.sh`); the speed feature's points in `web/content/features.ts` are written by hand |
 | The number of keyboard shortcuts changes | The develop feature's points in `web/content/features.ts` |
 | A film stock is added, renamed or re-tuned | `web/content/films.ts` (with its icon and `look-<id>.jpg` in `docs/images/film/`) |
 | Goals change | `principles` in `web/content/features.ts` |
