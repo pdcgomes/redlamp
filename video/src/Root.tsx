@@ -3,6 +3,7 @@ import { durationOf, Explainer, type ExplainerProps } from "./Explainer";
 import { loadManifest } from "./introducing/assets";
 import { durationOf as filmDuration, Introducing, type IntroducingProps } from "./introducing/Introducing";
 import { stories } from "./introducing/Posters";
+import { Welcome } from "./introducing/Welcome";
 import { stills } from "./stills";
 import { canvas } from "./stills/canvas";
 import "./theme";
@@ -79,6 +80,7 @@ export function RemotionRoot() {
         {stories.map(({ id, component, durationInFrames }) => (
           <Composition key={id} id={id} component={component} durationInFrames={durationInFrames} fps={FPS} width={1080} height={1920} />
         ))}
+        <Composition id="Welcome" component={Welcome} durationInFrames={filmDuration("welcome")} fps={FPS} width={1920} height={1080} />
       </Folder>
       <Folder name="Stills">
         {stills.map(({ id, component }) => (

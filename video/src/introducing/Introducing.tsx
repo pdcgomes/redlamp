@@ -40,7 +40,7 @@ export const cuts = Object.fromEntries(
   Object.entries(cutBars).map(([cut, scenes]) => [cut, scenes.map(([id, bars]) => [String(id), Number(bars) * BAR] as [string, number])]),
 ) as Record<Cut, [string, number][]>;
 
-const OVERLAP = 12;
+export const OVERLAP = 12;
 
 export function durationOf(cut: Cut): number {
   return cuts[cut].reduce((sum, [, length]) => sum + length, 0);
