@@ -26,11 +26,20 @@ The pre-commit hook, `mise run lint` and CI run `scripts/roadmap-sync.py --check
 ## Writing comparison rows
 
 - **High level:** features in words users know (Lightroom's names where Lightroom has the feature), not individual sliders or tracker rows. One clear status per row.
-- **Redlamp:** Done (works in the app on `main`), In progress, Planned (with its phase, P0 to P5), Later (after 1.0), Out of scope (with the reason in Notes).
+- **Redlamp:** Done (works in the app on `main`), In progress, Planned (with its phase, P0 to P5), Later (after 1.0), Undecided (Lightroom has it and the owner hasn't decided; the default for a feature Lightroom adds), Out of scope (with the reason in Notes). Only the owner moves a row out of Undecided.
 - **vs Lightroom,** on Done rows only. Leave it blank unless one applies; blank reads "Not yet compared", or "Only in Redlamp" when Lightroom says No. Compared needs its evidence linked in Notes; matching sliders isn't matching results. Behind names the gap, and every gap in the README's Known limitations shows up as Behind or in Notes. Beyond and Different say what and how.
 - **Tracker:** the rows the feature was built under or waits on. Leave it blank rather than list a row that doesn't deliver the feature.
 - **Notes:** a short sentence, inline Markdown, no pipes. Only claims the README or the tracker make; Adobe's cloud requirements as plain facts; no superlatives (`docs/brand/README.md`).
-- **The Lightroom side:** re-check it against Adobe's "What's new" pages when Adobe ships (about quarterly) and update the "Lightroom checked against" line. Adobe's site refuses automated requests from the agent sandbox, so this falls to the owner.
+## Keeping up with Lightroom
+
+Adobe ships about every two months. `scripts/roadmap-sync.py` warns once the comparison's `<!-- lightroom-checked: … -->` date is more than 45 days old. Then:
+
+1. Run `scripts/lightroom-releases.py`: it lists The Lightroom Queen's "What's new" post for each release since the comment's `through` month, with each post's feature headings as a checklist.
+2. For each feature, add a line in your own words, with the post's link, to the release's entry in section 22 of `docs/lightroom-feature-inventory.md`. Never copy the posts' text.
+3. If photographers would recognise it, add a comparison row (Undecided unless Redlamp already has it or plans it), or update an existing row: its Lightroom column, a Behind that a new Lightroom feature creates, a Beyond it removes.
+4. Update the comment (`checked` is today, `through` is the last release's month) and the "Lightroom checked against" line.
+
+Adobe's own "What's new" pages are the authority, but they refuse automated requests from the agent sandbox; the line says when they haven't been checked.
 
 ## Check
 

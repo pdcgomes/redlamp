@@ -13,6 +13,7 @@ const barColour: Record<(typeof statuses)[number], string> = {
   "In progress": "rgba(255,176,138,0.85)",
   Planned: "rgba(217,208,203,0.32)",
   Later: "rgba(243,238,232,0.13)",
+  Undecided: "rgba(243,238,232,0.09)",
   "Out of scope": "rgba(243,238,232,0.07)",
 };
 
@@ -48,7 +49,7 @@ export default async function OpenGraphImage() {
             <div key={status} style={{ display: "flex", width: `${(counts[status] / total) * 100}%`, background: barColour[status] }} />
           ))}
         </div>
-        <div style={{ display: "flex", gap: 44, fontSize: 28 }}>
+        <div style={{ display: "flex", gap: 34, fontSize: 26 }}>
           {statuses.map((status) => (
             <div key={status} style={{ display: "flex", gap: 12 }}>
               <span style={{ color: "rgba(243,238,232,0.6)" }}>{status}</span>
