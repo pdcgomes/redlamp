@@ -81,7 +81,7 @@ A **snapshot** is a named version of the edit, as in Lightroom: `{"id", "name", 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `version` | integer | | The format version, `3`. Always written. Only used to tell that a sidecar is newer; see [Versions and compatibility](#versions-and-compatibility). |
-| `processVersion` | integer | `1` | The rendering behavior the edit was made with, 1 to 9; see [Process versions](#process-versions). Always written. Sidecars from before process versions read as 1. |
+| `processVersion` | integer | `1` | The rendering behavior the edit was made with, 1 to 10; see [Process versions](#process-versions). Always written. Sidecars from before process versions read as 1. |
 | `treatment` | string | `color` | `color` or `blackAndWhite`. Always written. |
 | `baseLook` | Base Look | Redlamp Color | The look the edit renders with; see [Base Look](#base-look). Always written. |
 | `whiteBalance` | string | `asShot` | The white balance popup: `asShot`, `auto`, `daylight`, `cloudy`, `shade`, `tungsten`, `fluorescent`, `flash` or `custom`. Always written. See [White balance](#white-balance). |
@@ -329,8 +329,9 @@ Each step after the first stores its edit as a patch to the JSON of the step bef
 | 7 | Highlights and Shadows are edge-aware: they move each region by its brightness and keep the detail inside it, instead of applying a curve to each pixel's own brightness. |
 | 8 | Dehaze's haze map follows the photo's edges, so the sky beside a tree or a ridge is dehazed as much as the rest of it. |
 | 9 | Clarity is edge-aware: a strong edge isn't treated as detail, so Clarity puts no bright and dark bands along it. |
+| 10 | Texture, Clarity and sharpening work on one split of the noise-reduced luminance into bands of detail. Texture boosts medium detail and holds back the step of an edge, so it makes no halos, and negative Texture smooths that detail; sharpening restores detail that stands above the noise and leaves flat noise as noise reduction left it. |
 
-New edits get the current version, 9. An edit keeps its version until the user updates it (the Process control in the Calibration panel), so every edit keeps rendering as it did when it was made.
+New edits get the current version, 10. An edit keeps its version until the user updates it (the Process control in the Calibration panel), so every edit keeps rendering as it did when it was made.
 
 ## Versions and compatibility
 
@@ -342,7 +343,7 @@ A sidecar carries three version numbers:
 
 What Redlamp does when it reads a sidecar, which is also what another reader must do to write one back safely:
 
-1. **A newer format or process version** (`version` above 3 or `processVersion` above 9): Redlamp shows the photo with the edit, rendered with the newest behavior it has, but the sidecar is read-only. Redlamp never overwrites or deletes a read-only sidecar, its rating, flag and label can't be changed, and applying settings to many photos leaves it alone. Only these two numbers are checked; a `version` that isn't an integer is ignored.
+1. **A newer format or process version** (`version` above 3 or `processVersion` above 10): Redlamp shows the photo with the edit, rendered with the newest behavior it has, but the sidecar is read-only. Redlamp never overwrites or deletes a read-only sidecar, its rating, flag and label can't be changed, and applying settings to many photos leaves it alone. Only these two numbers are checked; a `version` that isn't an integer is ignored.
 2. **Unknown keys** are kept and written back unchanged where the format has room for them:
    - top-level keys of `edit.json`;
    - keys of a recipe, in the edit and in snapshots, and of a snapshot;
@@ -365,7 +366,7 @@ When writing a sidecar for Redlamp:
 
 ## The schema
 
-[`sidecar-format.schema.json`](sidecar-format.schema.json) is JSON Schema draft 2020-12. Validate `edit.json` against the schema itself and a history file against its `#/$defs/historyFile`. The schema describes what Redlamp writes, and is stricter than Redlamp's reader where the reader is lenient: it checks ranges, lists of values and closed objects, where the reader clamps, maps or has nowhere to keep a key, and so opens the sidecar read-only. It accepts format versions up to 3 and process versions up to 9, so a sidecar from a newer Redlamp needs that Redlamp's schema.
+[`sidecar-format.schema.json`](sidecar-format.schema.json) is JSON Schema draft 2020-12. Validate `edit.json` against the schema itself and a history file against its `#/$defs/historyFile`. The schema describes what Redlamp writes, and is stricter than Redlamp's reader where the reader is lenient: it checks ranges, lists of values and closed objects, where the reader clamps, maps or has nowhere to keep a key, and so opens the sidecar read-only. It accepts format versions up to 3 and process versions up to 10, so a sidecar from a newer Redlamp needs that Redlamp's schema.
 
 Besides annotations, the schema uses only `type`, `enum`, `const`, `minimum`, `maximum`, `pattern`, `properties`, `patternProperties`, `additionalProperties`, `required`, `minProperties`, `maxProperties`, `items`, `prefixItems`, `minItems`, `maxItems`, `anyOf`, `oneOf` and `$ref` to its own `$defs`, so a small validator can check it.
 

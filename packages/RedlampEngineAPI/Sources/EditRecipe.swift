@@ -69,8 +69,11 @@ public struct EditRecipe: Sendable, Hashable {
     /// beside a tree or a ridge is dehazed as much as the rest of it.
     /// 9: Clarity is edge-aware (`ClarityBase`): a strong edge isn't its detail, so it puts no
     /// bright and dark bands along it.
+    /// 10: Texture, Clarity and sharpening work on one band split of the noise-reduced luminance
+    /// (`DetailStage.Ladder`): Texture boosts medium detail and holds back an edge's step, so it
+    /// makes no halos; sharpening restores detail above the noise and leaves flat noise alone.
     /// A new version records its references for the process-stability gate (`ProcessStabilityTests`).
-    public static let currentProcessVersion = 9
+    public static let currentProcessVersion = 10
     public static let linearPointCurve = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]
 
     /// Sidecars written before process versions existed are version 1.
