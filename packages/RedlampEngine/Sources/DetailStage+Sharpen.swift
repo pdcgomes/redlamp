@@ -15,6 +15,16 @@ struct SharpenRequest {
     /// A mask's negative Sharpness can make the gain negative; softening then blurs the source.
     var softens: Bool
     var measures: SharpenMeasures
+    /// Process 11: the separator keeps the ladder's bands that stand out of the noise instead of
+    /// denoising the pyramid.
+    var ladder: Ladder?
+}
+
+/// Sharpening's analysis of a work area, and the source's log luminance and its blur when a
+/// mask softens.
+struct SharpenMeasured {
+    var analysis: any MTLTexture
+    var softening: (log: any MTLTexture, blurred: any MTLTexture)?
 }
 
 /// Sharpening's measures of a work area: those given are read, the others measured into their
@@ -40,6 +50,8 @@ final class SharpenCache {
         var session: ObjectIdentifier
         var work: DetailStage.WorkArea
         var sigma: Float
+        /// Process 11: the ladder the separator read.
+        var ladder: LadderKey?
         /// Keeps the session alive so its identifier can't be reused while cached.
         var owner: ImageSession
         /// x unsharp detail, y deconvolution detail, z blurred log luminance.
@@ -66,10 +78,16 @@ final class SharpenCache {
         analyses.map(\.texture) + separations.map(\.linear)
     }
 
-    func analysis(_ session: ImageSession, _ work: DetailStage.WorkArea, sigma: Float) -> (any MTLTexture)? {
+    func analysis(
+        _ session: ImageSession,
+        _ work: DetailStage.WorkArea,
+        sigma: Float,
+        ladder: LadderKey? = nil,
+    ) -> (any MTLTexture)? {
         let identifier = ObjectIdentifier(session)
-        guard let index = analyses
-            .firstIndex(where: { $0.session == identifier && $0.work == work && $0.sigma == sigma })
+        guard let index = analyses.firstIndex(where: {
+            $0.session == identifier && $0.work == work && $0.sigma == sigma && $0.ladder == ladder
+        })
         else { return nil }
         let entry = analyses.remove(at: index)
         guard residency.wake(entry.texture) else { return nil }
@@ -77,12 +95,19 @@ final class SharpenCache {
         return entry.texture
     }
 
-    func store(analysis texture: any MTLTexture, _ session: ImageSession, _ work: DetailStage.WorkArea, sigma: Float) {
+    func store(
+        analysis texture: any MTLTexture,
+        _ session: ImageSession,
+        _ work: DetailStage.WorkArea,
+        sigma: Float,
+        ladder: LadderKey? = nil,
+    ) {
         residency.wake(texture)
         analyses.append(Analysis(
             session: ObjectIdentifier(session),
             work: work,
             sigma: sigma,
+            ladder: ladder,
             owner: session,
             texture: texture,
         ))
@@ -127,19 +152,48 @@ extension DetailStage {
         into output: any MTLTexture,
         encoder: any MTLComputeCommandEncoder,
     ) throws {
+        var passes = try sharpenPasses(request, encoder: encoder)
+        let measured = try encodeSharpenMeasures(request, passes: &passes)
+        passes.params.size.w = request.local == nil ? 0 : 1
+        passes.dispatch(kernels.sharpenApply, [
+            request.source.texture, measured.analysis, output, request.local ?? output,
+            measured.softening?.log ?? measured.analysis, measured.softening?.blurred ?? measured.analysis,
+        ])
+    }
+
+    /// What sharpening reads besides the source: its analysis and, when a mask softens, the
+    /// source's log luminance and its blur.
+    func encodeSharpenMeasures(
+        _ request: SharpenRequest,
+        encoder: any MTLComputeCommandEncoder,
+    ) throws -> SharpenMeasured {
+        var passes = try sharpenPasses(request, encoder: encoder)
+        return try encodeSharpenMeasures(request, passes: &passes)
+    }
+
+    private func sharpenPasses(
+        _ request: SharpenRequest,
+        encoder: any MTLComputeCommandEncoder,
+    ) throws -> SharpenPasses {
         let (session, settings, work, source) = (request.session, request.settings, request.work, request.source)
         let sigma = settings.sigma(atLevel: work.level) ?? 0
         // 0 source log, 1 clean log, 2 blur rows, 3 blurred clean log, 4 blurred source log.
         let blurs = request.measures.analysis == nil || request.softens
         let rows = blurs ? try scratchTexture(.r32Float, 2, work) : nil
-        var passes = SharpenPasses(encoder: encoder, kernels: kernels, rows: rows, params: SharpenParams(
+        return SharpenPasses(encoder: encoder, kernels: kernels, rows: rows, params: SharpenParams(
             origin: SIMD4(Int32(source.origin.x), Int32(source.origin.y), Int32(source.level), 0),
             size: SIMD4(Int32(work.size.x), Int32(work.size.y), 0, 0),
             luma: Self.luma(session),
             shape: SIMD4(settings.gain, settings.haloScale, settings.edgeThreshold, sigma),
             deconvolution: SIMD4(settings.deconvolution, 0, request.softens ? 1 : 0, 0),
         ))
+    }
 
+    private func encodeSharpenMeasures(
+        _ request: SharpenRequest,
+        passes: inout SharpenPasses,
+    ) throws -> SharpenMeasured {
+        let work = request.work
         let analysis: any MTLTexture
         if let measured = request.measures.analysis {
             analysis = measured
@@ -157,15 +211,11 @@ extension DetailStage {
                 scratchTexture(.r32Float, 0, work),
                 scratchTexture(.r32Float, 4, work),
             )
-            passes.dispatch(kernels.sharpenLog, [source.texture, sourceLog])
+            passes.dispatch(kernels.sharpenLog, [request.source.texture, sourceLog])
             try passes.blur(sourceLog, into: sourceBlurred)
             softening = (sourceLog, sourceBlurred)
         }
-        passes.params.size.w = request.local == nil ? 0 : 1
-        passes.dispatch(kernels.sharpenApply, [
-            source.texture, analysis, output, request.local ?? output,
-            softening?.log ?? analysis, softening?.blurred ?? analysis,
-        ])
+        return SharpenMeasured(analysis: analysis, softening: softening)
     }
 
     /// What sharpening measures on the separator's clean luminance D: the unsharp detail
@@ -192,14 +242,24 @@ extension DetailStage {
             guard let target = request.measures.separationTarget else {
                 throw EngineError.renderFailed("no texture for sharpening's separation")
             }
-            // The separator denoises from the pyramid, whatever the user's own noise reduction did.
-            let separated = try scratchTexture(.rgba16Float, 7, work)
-            try encodeDenoise(
-                session: session, settings: .separator, work: work, local: nil, into: separated,
-                encoder: passes.encoder,
-            )
             linear = target
-            passes.dispatch(kernels.sharpenLuma, [separated, linear, logLuma])
+            if let ladder = request.ladder {
+                encodeLadderSeparation(
+                    session: session,
+                    ladder: ladder,
+                    work: work,
+                    into: linear,
+                    encoder: passes.encoder,
+                )
+            } else {
+                // The separator denoises from the pyramid, whatever the user's own noise reduction did.
+                let separated = try scratchTexture(.rgba16Float, 7, work)
+                try encodeDenoise(
+                    session: session, settings: .separator, work: work, local: nil, into: separated,
+                    encoder: passes.encoder,
+                )
+                passes.dispatch(kernels.sharpenLuma, [separated, linear, logLuma])
+            }
         }
         // The log always comes from the stored half-float luminance, so a cached separation renders
         // exactly what a fresh one does: the luma kernel on it (weights 1, 0, 0, no floor).
