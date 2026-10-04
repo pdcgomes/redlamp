@@ -197,7 +197,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Output sharpening | Yes | Planned | | P4 | | |
 | Edit in Photoshop or another app | Yes | Planned | | P4 | | |
 | Content Credentials | Yes | Planned | | P3 | RM-03 | |
-| The edit embedded in exported files | Yes | In progress | | P4 | EDT-14 | |
+| The edit embedded in exported files | Yes | Done | | | EDT-14 | |
 | Command-line rendering and export | No | Done | | | | The `redlamp` tool |
 
 ## Library and organising

@@ -146,7 +146,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] **Culling while you develop:** star ratings, pick/reject flags and color labels, shown on the filmstrip. There's also an Info overlay (`I`), Lights Out (`L`), full-screen preview (`F`), and Paste from Previous (`⌥⌘V` and the Previous button).
 - [x] **Copy, paste and sync settings, as Lightroom does:** Copy Settings… (`⇧⌘C`) opens a checklist of every setting and mask, remembered for next time; Paste (`⇧⌘V`) applies what was ticked, and recomputes the pasted AI masks for the photo. ⌘- and ⇧-click select several photos in the filmstrip: Sync… (`⇧⌘S`) and Paste reach all of them in the background, with Undo, and Auto Sync (`⌥⇧⌘A`) repeats every change.
 - [x] Non-destructive edits, saved automatically to a sidecar file next to each photo (`IMG_1234.ARW.redlamp`).
-- [x] **Export dialog** (`⇧⌘E`): JPEG, HEIC and AVIF (lossy, with quality and an optional file size limit) or PNG and TIFF (lossless, with TIFF compression), 8, 10 or 16 bits, sRGB or Display P3. Resize by long edge, short edge, width and height, megapixels or percentage, keep all metadata, all but the location, or none, and choose the folder and file name. Built-in and saved presets, and Export with Previous (`⌥⇧⌘E`) repeats the last export without the dialog.
+- [x] **Export dialog** (`⇧⌘E`): JPEG, HEIC and AVIF (lossy, with quality and an optional file size limit) or PNG and TIFF (lossless, with TIFF compression), 8, 10 or 16 bits, sRGB or Display P3. Resize by long edge, short edge, width and height, megapixels or percentage, keep all metadata, all but the location, or none (the first two also embed the edit recipe in the file's XMP, [format](docs/recipes/sidecar-format.md)), and choose the folder and file name. Built-in and saved presets, and Export with Previous (`⌥⇧⌘E`) repeats the last export without the dialog.
 - [x] A headless `redlamp` command-line tool for rendering and export. Exports smaller than the photo are developed at full resolution and downscaled last, so sharpening, noise reduction and texture look the same at every size.
 
 ### Recipes and looks
@@ -876,7 +876,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [ ] Lightroom XMP sidecar import <!-- tracker: EDT-12 -->
 - [ ] HDR and EDR editing and export
 - [ ] Batch export <!-- tracker: EDT-16 -->
-- [ ] The edit embedded in exported files <!-- tracker: EDT-14 -->
+- [x] The edit embedded in exported files <!-- tracker: EDT-14 -->
 - [ ] **AI-assisted focus stacking:** learned fusion and halo suppression, occlusion and motion handling, and good stacks from fewer or handheld frames <!-- tracker: FS-14 -->
 - [ ] **AI Super Resolution** (2x and 4x) that stays faithful and doesn't invent detail <!-- tracker: SR-01, SR-02 -->
 - [ ] Accessibility, usability testing, and the Mac App Store release <!-- internal -->
