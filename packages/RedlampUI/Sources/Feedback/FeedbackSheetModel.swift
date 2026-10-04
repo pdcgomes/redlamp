@@ -24,6 +24,8 @@ public final class FeedbackSheetModel {
         case form
         case sending
         case sent(FeedbackResult)
+        /// Kept in the outbox until redlamp.app can be reached.
+        case queued
     }
 
     public var phase: Phase
@@ -38,12 +40,16 @@ public final class FeedbackSheetModel {
     public let windowShot: FeedbackReport.Screenshot?
     public var includesWindowShot = false
     public var error: String?
+    /// The last send couldn't reach redlamp.app, so the report can wait in the outbox.
+    public private(set) var unreachable = false
     public private(set) var restoredDraft = false
     public let dryRun: Bool
     private let sender: any FeedbackSending
     @ObservationIgnored private let defaults: UserDefaults
     /// Called with what was sent and what the relay did, for Your Reports.
     @ObservationIgnored public var onSent: ((FeedbackReport, FeedbackResult) -> Void)?
+    /// Puts a report in the outbox.
+    @ObservationIgnored public var onQueue: ((FeedbackSubmission) -> Void)?
 
     /// Raise it when the note's words change, so everyone reads them again.
     static let noteVersion = 1
@@ -158,6 +164,7 @@ public final class FeedbackSheetModel {
     public func send() async {
         guard canSend else { return }
         error = nil
+        unreachable = false
         phase = .sending
         let outgoing = outgoing
         do {
@@ -170,8 +177,24 @@ public final class FeedbackSheetModel {
             phase = .sent(result)
         } catch {
             self.error = error.localizedDescription
+            if case .unreachable = error as? FeedbackError {
+                unreachable = true
+            }
             phase = .form
         }
+    }
+
+    /// The report as the relay would get it, for the outbox, a file or GitHub's own page.
+    public func submission() throws -> FeedbackSubmission {
+        try outgoing.submission(context: context, system: system, log: log, dryRun: false)
+    }
+
+    /// Keeps the report until Redlamp can reach redlamp.app; the draft is done with.
+    public func queue() {
+        guard let submission = try? submission(), let onQueue else { return }
+        onQueue(submission)
+        defaults.removeObject(forKey: Self.draftKey)
+        phase = .queued
     }
 
     private func saveDraft() {

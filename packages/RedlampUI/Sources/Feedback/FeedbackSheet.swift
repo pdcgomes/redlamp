@@ -7,6 +7,8 @@ import UniformTypeIdentifiers
 struct FeedbackSheet: View {
     @Bindable var sheet: FeedbackSheetModel
     let dismiss: () -> Void
+    /// Closes the sheet and opens Your Reports.
+    let showReports: () -> Void
 
     static let size = CGSize(width: 620, height: 780)
 
@@ -16,9 +18,11 @@ struct FeedbackSheet: View {
             case .note:
                 FeedbackNote(accept: sheet.acceptNote, dismiss: dismiss)
             case .form, .sending:
-                FeedbackForm(sheet: sheet, dismiss: dismiss)
+                FeedbackForm(sheet: sheet, dismiss: dismiss, showReports: showReports)
             case let .sent(result):
                 FeedbackSent(result: result, dismiss: dismiss)
+            case .queued:
+                FeedbackQueued(dismiss: dismiss, showReports: showReports)
             }
         }
         .frame(width: Self.size.width, height: Self.size.height)
@@ -69,6 +73,8 @@ private struct FeedbackNote: View {
 private struct FeedbackForm: View {
     @Bindable var sheet: FeedbackSheetModel
     let dismiss: () -> Void
+    let showReports: () -> Void
+    @Environment(\.openURL) private var openURL
     @State private var choosingArea = false
     @State private var previewing = false
 
@@ -175,6 +181,10 @@ private struct FeedbackForm: View {
 
                 Section {
                     TextField("GitHub username", text: $sheet.report.githubUsername, prompt: Text("Optional"))
+                    HStack {
+                        Spacer()
+                        Button("Your Reports…", action: showReports)
+                    }
                 } header: {
                     Text("Hearing back")
                 } footer: {
@@ -208,6 +218,15 @@ private struct FeedbackForm: View {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .symbolRenderingMode(.multicolor)
                     .font(.callout)
+                HStack {
+                    if sheet.unreachable {
+                        Button("Send When Online", action: sheet.queue)
+                            .help("Keep the report and send it the next time Redlamp can reach redlamp.app")
+                    }
+                    Button("Save Report…", action: saveReport)
+                    Button("File on GitHub Instead…", action: fileOnGitHub)
+                        .help("Opens GitHub's new-issue page and copies the whole report; needs a GitHub account")
+                }
             }
             HStack {
                 Text(sheet.dryRun
@@ -227,6 +246,26 @@ private struct FeedbackForm: View {
                 .disabled(!sheet.canSend)
             }
         }
+    }
+
+    private func saveReport() {
+        guard let submission = try? sheet.submission() else { return }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "Redlamp Report \(Date().formatted(.iso8601.year().month().day()))"
+        panel.message = "Saves the report as a folder: report.md, its screenshots and diagnostics.json."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try FeedbackFallbacks.save(submission, to: url)
+        } catch {
+            sheet.error = "The report couldn't be saved: \(error.localizedDescription)"
+        }
+    }
+
+    private func fileOnGitHub() {
+        guard let submission = try? sheet.submission() else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(FeedbackFallbacks.clipboardText(for: submission), forType: .string)
+        openURL(FeedbackFallbacks.newIssueURL(for: submission))
     }
 
     private var titlePrompt: String {
@@ -392,6 +431,33 @@ private struct ReportPreview: View {
         }
         .padding(20)
         .frame(width: 660, height: 660)
+    }
+}
+
+private struct FeedbackQueued: View {
+    let dismiss: () -> Void
+    let showReports: () -> Void
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Spacer()
+            Image(systemName: "tray.and.arrow.up")
+                .font(.system(size: 40, weight: .light))
+                .foregroundStyle(.secondary)
+            Text("Saved, to send later").font(.title2.weight(.semibold))
+            Text("Redlamp sends it the next time it can reach redlamp.app. Until then it waits in Your Reports.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: 420)
+                .multilineTextAlignment(.center)
+            Spacer()
+            HStack {
+                Button("Your Reports…", action: showReports)
+                Spacer()
+                Button("Done", action: dismiss).keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
     }
 }
 

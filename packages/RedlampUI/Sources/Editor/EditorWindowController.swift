@@ -98,6 +98,9 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
                 guard let self else { return }
                 root.showsOverlays = model.showShortcuts || model.commandPalette != nil
             },
+            Tracker { [weak self] in
+                self?.feedbackItem?.badge = Self.feedbackBadge
+            },
         ]
     }
 
@@ -159,6 +162,7 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
                 identifier, "Feedback", "exclamationmark.bubble", help: "Report a Bug or Send Feedback",
                 action: #selector(sendFeedback),
             )
+            item.badge = Self.feedbackBadge
             feedbackItem = item
             return item
         default:
@@ -205,6 +209,12 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
     @objc private func viewGroupChanged(_ group: NSToolbarItemGroup) {
         model.showBefore = group.isSelected(at: 0)
         model.filmstripVisible = group.isSelected(at: 1)
+    }
+
+    /// Reports with a reply or a change of state since they were seen, and reports waiting to be sent.
+    private static var feedbackBadge: NSItemBadge? {
+        let count = FeedbackHistory.shared.newsCount + FeedbackHistory.shared.queued.count
+        return count > 0 ? .count(count) : nil
     }
 
     @objc private func sendFeedback() {

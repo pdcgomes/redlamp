@@ -55,6 +55,7 @@ struct RedlampApp: App {
             )
             editor.showWindow(nil)
             keyboard.install(model: model)
+            FeedbackActions.start()
             Self.openInitialFolder(model: model)
             #if DEBUG || REDLAMP_PROFILING
                 DebugSnapshot.scheduleIfRequested(model: model)
