@@ -164,6 +164,45 @@ struct EngineMemoryTests {
         #expect(cached == kept)
     }
 
+    /// A command buffer can take the address of an earlier one that has been released; what the
+    /// stage cached from the earlier one is not the later one's to forget.
+    @Test func `a failed command buffer at an earlier one's address leaves its cache alone`() throws {
+        let session = try helpers.makeSession(.bayer, width: 640, height: 480, signal: Self.smooth)
+        let stage = DetailStage(device: helpers.device, kernels: helpers.kernels)
+        var clarity = DetailStageTests.untouched
+        clarity[.clarity] = 25
+        let earlier = try autoreleasepool {
+            let commands = try #require(helpers.queue.makeCommandBuffer())
+            _ = try stage.process(
+                clarity, session: session, region: .full, outputSize: session.orientedSize, commands: commands,
+            )
+            let handled = DispatchSemaphore(value: 0)
+            commands.addCompletedHandler { _ in handled.signal() }
+            commands.commit()
+            handled.wait()
+            return ObjectIdentifier(commands)
+        }
+        let kept = Set((stage.cachedOutputs + stage.sharpenCache.heldTextures).map(ObjectIdentifier.init))
+        var reused: (any MTLCommandBuffer)?
+        for _ in 0 ..< 1000 where reused == nil {
+            try autoreleasepool {
+                let commands = try #require(helpers.queue.makeCommandBuffer())
+                if ObjectIdentifier(commands) == earlier {
+                    reused = commands
+                }
+            }
+        }
+        let commands = try #require(reused, "no command buffer took the earlier one's address")
+        _ = try stage.process(
+            Self.everyPass, session: session, region: .full, outputSize: session.orientedSize, commands: commands,
+        )
+        commands.commit()
+        commands.waitUntilCompleted()
+        stage.forget(commands)
+        let cached = Set((stage.cachedOutputs + stage.sharpenCache.heldTextures).map(ObjectIdentifier.init))
+        #expect(cached == kept)
+    }
+
     /// Textures an encoded command buffer uses stay resident until it completes, however many
     /// others complete meanwhile.
     @Test func `textures stay resident while a command buffer using them is in flight`() async throws {
