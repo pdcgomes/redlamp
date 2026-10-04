@@ -85,7 +85,16 @@ SCENES = {
         "piano": "last",
         "cues": [("drop", 0), ("word", 2), ("icon", 6)],
     },
+    # The app's welcome (src/introducing/Welcome.tsx): the opening's last chord, held while the logo
+    # rises and the window's pages appear, then the fade.
+    "hold": {8: ([("Dadd9", 8)], [0, 0]), "piano": None, "cues": []},
 }
+
+# A cut that opens as another does sounds just as that one's opening: its sounds are drawn as that
+# cut's are, and it plays in that cut's room (the reverb, drawn after every scene) at that cut's
+# level. On its own the level would follow the loudness target, which would make the welcome's
+# quiet opening far louder than the film's.
+OPENS_LIKE = {"welcome": "film"}
 
 RISE = [81, 83, 85, 86, 88]
 DECK = [78, 81, 76, 83, 74]
@@ -392,11 +401,21 @@ def write(path, x):
         f.writeframes(pcm.tobytes())
 
 
+def fresh():
+    """Starts the random sounds over, as at the start of a run, so a cut draws them as the run's
+    first cut does."""
+    global rng
+    rng = np.random.default_rng(7)
+    _cache.clear()
+
+
 def jitter(seconds=0.004):
     return rng.uniform(-seconds, seconds)
 
 
-def score(cut, scenes):
+def score(cut, scenes, room=None, save=True):
+    """Writes a cut's score, and returns its room and level: its reverb and the gain that levelled
+    it. `room` plays the cut in another's instead (`OPENS_LIKE`)."""
     total = sum(bars * 4 for _, bars in scenes) * BEAT
     samples = int(total * SR) + SR * 8
     pads, low, keys, drums, fx = (Bus(samples) for _ in range(5))
@@ -561,25 +580,37 @@ def score(cut, scenes):
     buses = (pads, low, keys, drums, fx)
     dry = sum(bus.dry for bus in buses)
     send = sum(bus.send for bus in buses)
-    wet = convolve(send, reverb())[: samples]
+    ir, gain = room or (reverb(), None)
+    wet = convolve(send, ir)[: samples]
     n = int(total * SR)
     mix = highpass(lowpass(dry + wet * 0.85, 14000, order=1), 32)[:n]
     # A little air on top: +2.5 dB from about 6 kHz, so the ticks and bells carry on small speakers.
     mix = shape(mix, lambda f: np.sqrt(1 + (10 ** (2.5 / 10) - 1) / (1 + (6000 / np.maximum(f, 1e-3)) ** 2)))
     # Level: about -16 LUFS, quiet enough to sit under a voice or a feed's own sound, with a soft
     # knee above -2 dBFS instead of clipping, and a fade at the very end.
-    mix *= 10 ** ((-15.3 - loudness(mix)) / 20)
+    if gain is None:
+        gain = 10 ** ((-15.3 - loudness(mix)) / 20)
+    mix *= gain
     knee = 0.79
     over = np.abs(mix) > knee
     mix[over] = np.sign(mix[over]) * (knee + (1 - knee) * np.tanh((np.abs(mix[over]) - knee) / (1 - knee)))
     fade = np.clip((n - np.arange(n)) / (2.2 * SR), 0, 1) ** 1.5
     mix *= fade[:, None]
-    out = ROOT / "public/film" / f"score-{cut}.wav"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    write(out, mix)
-    print(f"==> {out.relative_to(ROOT)} ({total:.1f} s)")
+    if save:
+        out = ROOT / "public/film" / f"score-{cut}.wav"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        write(out, mix)
+        print(f"==> {out.relative_to(ROOT)} ({total:.1f} s)")
+    return ir, gain
 
 
 cuts = json.loads((ROOT / "src/introducing/cuts.json").read_text())
 for cut in sys.argv[1:] or list(cuts):
-    score(cut, cuts[cut])
+    if cut in OPENS_LIKE:
+        like = OPENS_LIKE[cut]
+        fresh()
+        room = score(like, cuts[like], save=False)
+        fresh()
+        score(cut, cuts[cut], room)
+    else:
+        score(cut, cuts[cut])

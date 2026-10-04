@@ -59,6 +59,13 @@ Remotion renders H.264, H.265, VP8 and VP9 (WebM), ProRes and GIF, so any other 
 
 The score is synthesised in `scripts/score.py` and nothing in it is sampled, so it's free to use. To use a licensed track instead, put it in `public/` and pass `--props='{"cut":"film","musicSrc":"audio/track.wav"}'`; anything at 72 BPM keeps the cuts on the beat.
 
+### The app's welcome
+
+The app opens with the film's opening the first time it runs, and again from Help › Welcome to Redlamp. `npm run welcome` renders it into `../apps/RedlampMac/Resources/Welcome.mp4`, which the app ships. `src/introducing/Welcome.tsx` plays the opening as it is, with the length the film gives it, then raises the logo to the top of the frame, where the window's pages appear (`packages/RedlampUI/Sources/Welcome/`), and holds the last frame while the score dies away. It runs 16.7 s at 1920 × 1080, for a 960 × 540 point window.
+
+- The score is the `welcome` cut in `cuts.json`: the opening, then two bars that hold its last chord. `score.py` draws the opening's sounds as it draws the film's and plays them in the film's reverb at the film's level, so they sound as they do in the film. Levelled to −16 LUFS on its own, the quiet opening would come out far louder.
+- It's HEVC Main10, about 2.5 MB, encoded by VideoToolbox through Remotion's ffmpeg from a ProRes 4444 master. In 8 bits the glow's dark gradient bands on the held frame, and Remotion's own HEVC encoder is 8-bit only.
+
 ## Stills
 
 Nine product-brief images for the Reddit announcement, at 2880 × 1800 (a Mac App Store size), each a headline and a few words over real captures of the app. The [design](../docs/plans/2026-10-01-reddit-screenshots-design.md) has their copy and which posts use them.
