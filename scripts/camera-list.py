@@ -4,7 +4,7 @@
 Three lists, between the document's `cameras:begin` and `cameras:end` markers:
 
   - verified: the CC0 raw.pixls.us samples in the decode tests (tests/decode/cameras.json), with
-    their download paths from `mise run fixtures` or the camera coverage set
+    their decoded size, their download paths from `mise run fixtures` or the camera coverage set
     (tests/decode/samples.json) and whether a colour reference is recorded (tests/golden/cameras)
   - in an evaluation set: bodies whose CC0 samples the look-development set
     (research/look-dev/manifest.json) and the dust evaluation (`mise run fixtures-shoots`) develop
@@ -138,7 +138,8 @@ def generate(libraw):
         name = named(camera)
         verified_keys.add(key(name))
         reference = "Yes" if (ROOT / f"tests/golden/cameras/{file}.json").exists() else "No"
-        verified.append((name, file.rsplit(".", 1)[1].upper(), record.get("layout", ""), reference, link))
+        resolution = f"{record['width'] * record['height'] / 1e6:.0f} MP"
+        verified.append((name, file.rsplit(".", 1)[1].upper(), record.get("layout", ""), resolution, reference, link))
     verified.sort(key=lambda row: (row[0].lower(), row[1]))
 
     evaluation, seen = [], set(verified_keys)
@@ -174,8 +175,8 @@ def generate(libraw):
         "",
         "## Verified by the decode tests",
         "",
-        "| Camera | Format | Sensor | Colour reference | Sample |",
-        "| --- | --- | --- | --- | --- |",
+        "| Camera | Format | Sensor | Resolution | Colour reference | Sample |",
+        "| --- | --- | --- | --- | --- | --- |",
         *(f"| {' | '.join(row)} |" for row in verified),
         "",
         "## In an evaluation set",

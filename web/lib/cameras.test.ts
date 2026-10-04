@@ -11,9 +11,9 @@ Intro.
 
 ## Verified by the decode tests
 
-| Camera | Format | Sensor | Colour reference | Sample |
-| --- | --- | --- | --- | --- |
-| Sony ILCE-7M3 (A7 III) | ARW | Bayer RGGB | Yes | [_DSC0009.ARW](https://raw.pixls.us/data/Sony/ILCE-7M3/_DSC0009.ARW) |
+| Camera | Format | Sensor | Resolution | Colour reference | Sample |
+| --- | --- | --- | --- | --- | --- |
+| Sony ILCE-7M3 (A7 III) | ARW | Bayer RGGB | 24 MP | Yes | [_DSC0009.ARW](https://raw.pixls.us/data/Sony/ILCE-7M3/_DSC0009.ARW) |
 
 ## In an evaluation set
 
@@ -42,6 +42,7 @@ test("parseCameras reads the verified and evaluation tables, and LibRaw's list b
       camera: "Sony ILCE-7M3 (A7 III)",
       format: "ARW",
       sensor: "Bayer RGGB",
+      resolution: "24 MP",
       colourReference: true,
       sample: { name: "_DSC0009.ARW", href: "https://raw.pixls.us/data/Sony/ILCE-7M3/_DSC0009.ARW" },
     },
