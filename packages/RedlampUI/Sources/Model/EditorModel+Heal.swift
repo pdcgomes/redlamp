@@ -360,8 +360,8 @@ public extension EditorModel {
             healed.insert(url)
             self?.written(url, recipe)
         })
-        isFindingDust = false
         dustSearch = nil
+        // Still finding dust until the batch is done: it heals the open photo in the editor too.
         await settingsSync.idle()
         dustMessage = healed.isEmpty
             ? "The dust found couldn't be healed."

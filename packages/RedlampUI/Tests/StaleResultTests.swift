@@ -684,4 +684,17 @@ struct StaleResultTests {
         try healedBySync(a, speck)
         #expect(model.dustMessage == "Healed 1 speck of dust in 2 photos.")
     }
+
+    @Test func `Remove Dust on the open photo waits for a Remove Dust batch, so no speck is healed twice`(
+    ) async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (task, _, speck) = try await startDustSearch { editor, _ in editor.gate }
+        engine.base.dust = [speck]
+        #expect(model.isFindingDust, "Remove Dust is disabled while the batch runs")
+        let single = Task { await model.removeDust() }
+        await finish(task)
+        await single.value
+        healedInEditor(speck)
+        try healedBySync(b, speck)
+    }
 }
