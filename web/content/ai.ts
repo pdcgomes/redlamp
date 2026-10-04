@@ -2,13 +2,14 @@ import { site } from "@/lib/site";
 
 /**
  * The home page's AI disclosure (#ai): how Redlamp is built with AI agents, and where the app itself uses AI.
- * Inline Markdown, as `Inline` renders it, so repository paths link to GitHub. It states only what the
- * repository shows: the commits' trailers, AGENTS.md, the tracker, the wave plans, CI and the README.
+ * Inline Markdown, as `Inline` renders it, so repository paths link to GitHub. It states what the repository
+ * shows (the commits' trailers, AGENTS.md, the tracker, the wave plans, CI and the README) and, for his own
+ * part and the models, what Pedro says.
  */
 export const aiDisclosure = {
   eyebrow: "AI disclosure",
   title: "Redlamp is built with AI agents.",
-  intro: `Agents in Cursor, an AI code editor, write Redlamp's code, tests and documentation, and nearly every commit in [its history](${site.github}/commits/main) is co-authored by Cursor's agent. Pedro, who started the project, directs the work. This is how it's divided and checked.`,
+  intro: `Agents in Cursor, an AI code editor, write Redlamp's code, tests and documentation, with models from several providers. Nearly every commit in [its history](${site.github}/commits/main) is co-authored by Cursor's agent. Pedro, who started the project, directs the work. This is how it's divided and checked.`,
   items: [
     {
       title: "What the agents do",
@@ -16,7 +17,7 @@ export const aiDisclosure = {
     },
     {
       title: "What Pedro does",
-      body: "He decides what Redlamp does and in what order. Work is planned in the project's [tracker](docs/research/research-tracker.md), where new items wait until he accepts them and each decision is recorded with its reasons. He approves the rules the agents work under, and the plan for each wave.",
+      body: "He sets Redlamp's vision and direction, its design and its standards, makes the high-level architecture decisions and drives the research. Work is planned in the project's [tracker](docs/research/research-tracker.md), where new items wait until he accepts them and each decision is recorded with its reasons. He tries changes in the app, on his own photos, and reviews some of them; the tests check the rest.",
     },
     {
       title: "How changes are checked",
