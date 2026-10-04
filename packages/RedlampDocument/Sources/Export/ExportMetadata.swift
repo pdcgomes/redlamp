@@ -1,8 +1,9 @@
+import CoreGraphics
 import Foundation
 import ImageIO
 import RedlampEngineAPI
 
-/// The camera metadata an export carries over from its source file.
+/// The metadata an export carries: the camera's, from its source file, and the edit that made it.
 public enum ExportMetadata {
     /// The TIFF Software tag every export carries, which tells an earlier export, safe to
     /// write over, from a photo.
@@ -21,11 +22,41 @@ public enum ExportMetadata {
 
     /// ImageIO properties to write into an export of `source`. Only an allowlist is copied:
     /// maker notes, thumbnails, raw-specific dictionaries and anything describing the source's
-    /// pixels (size, orientation, colour space) stay behind.
+    /// pixels (size, orientation, colour space) stay behind. Unless `policy` is `.none`, they carry
+    /// `recipe` too, for `addImage` to embed in the file's XMP (see `EmbeddedEdit`).
     public static func properties(
         from source: URL,
         policy: ExportMetadataPolicy,
+        recipe: EditRecipe? = nil,
         software: String = software,
+    ) -> [CFString: Any] {
+        var result = copied(from: source, policy: policy, software: software)
+        if policy != .none, let recipe, let edit = EmbeddedEdit.xmp(for: recipe) {
+            result[EmbeddedEdit.propertyKey] = edit
+        }
+        return result
+    }
+
+    /// Adds `image` to `destination` with `properties`, and the edit they carry in its XMP.
+    static func addImage(
+        _ image: CGImage,
+        to destination: CGImageDestination,
+        properties: [CFString: Any],
+        format: ExportFormat,
+    ) {
+        var properties = properties
+        let edit = properties.removeValue(forKey: EmbeddedEdit.propertyKey) as? Data
+        if let edit, let xmp = EmbeddedEdit.xmp(adding: edit, to: properties, format: format, like: image) {
+            CGImageDestinationAddImageAndMetadata(destination, image, xmp, properties as CFDictionary)
+        } else {
+            CGImageDestinationAddImage(destination, image, properties as CFDictionary)
+        }
+    }
+
+    private static func copied(
+        from source: URL,
+        policy: ExportMetadataPolicy,
+        software: String,
     ) -> [CFString: Any] {
         var tiff: [CFString: Any] = [kCGImagePropertyTIFFSoftware: software]
         var result: [CFString: Any] = [:]

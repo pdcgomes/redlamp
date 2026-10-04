@@ -66,5 +66,5 @@ test("statusCounts counts every row once", () => {
   const { groups } = parseComparison(
     doc(["| A | Yes | Done | | | | |", "| B | No | Done | | | | |", "| C | Yes | Later | | | | |"].join("\n")),
   );
-  assert.deepEqual(statusCounts(groups), { Done: 2, "In progress": 0, Planned: 0, Later: 1, "Out of scope": 0 });
+  assert.deepEqual(statusCounts(groups), { Done: 2, "In progress": 0, Planned: 0, Later: 1, Undecided: 0, "Out of scope": 0 });
 });

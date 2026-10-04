@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Comparison, type TrackerLinks } from "@/components/sections/Comparison";
 import { ComparisonSummary } from "@/components/sections/ComparisonSummary";
+import { Inline } from "@/components/ui/Inline";
 import { trackerIssues } from "@/lib/github";
 import { comparison, sourceCommit } from "@/lib/repo";
 import { site } from "@/lib/site";
@@ -23,6 +24,7 @@ const legend: [string, string][] = [
   ["In progress", "being built."],
   ["Planned", "on the roadmap, in the phase shown."],
   ["Later", "after 1.0."],
+  ["Undecided", "Lightroom has it; Redlamp hasn't decided yet."],
   ["Out of scope", "left out, with the reason."],
   ["Not yet compared", "works, but its results haven't been checked against Lightroom's side by side."],
   ["Behind, Beyond or Different", "a known gap, more than Lightroom does, or a different approach by design."],
@@ -59,7 +61,11 @@ export default async function ComparePage() {
             ))}
           </dl>
           <p className="text-[12.5px] leading-relaxed text-dim">
-            {checkedAgainst ? `Lightroom checked against: ${checkedAgainst} ` : null}
+            {checkedAgainst ? (
+              <>
+                Lightroom checked against: <Inline md={checkedAgainst} />{" "}
+              </>
+            ) : null}
             Read from{" "}
             <a href={source} className="underline decoration-hairline-strong underline-offset-3 hover:text-mute">
               docs/lightroom-comparison.md

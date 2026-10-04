@@ -2,7 +2,8 @@
 
 A high-level list of the features photographers know from Lightroom, and where Redlamp stands on each: what works today, what's being built, what's planned, and what Redlamp leaves out. It is published at [redlamp.app/compare](https://redlamp.app/compare). It isn't a control-by-control mirror of Lightroom; the [Lightroom feature inventory](lightroom-feature-inventory.md) is the detailed reference, and the [research tracker](research/research-tracker.md) holds the work behind each row.
 
-**Lightroom checked against:** Lightroom Classic 14 and Lightroom 8, as of mid-2025. Features Adobe has added since then aren't listed yet.
+**Lightroom checked against:** Lightroom Classic 15.6 and the Lightroom Desktop and mobile releases of September 2026, from [The Lightroom Queen's release notes](https://www.lightroomqueen.com/whats-new-in-lightroom-2026-09/) (checked 4 October 2026); not yet against Adobe's own pages.
+<!-- lightroom-checked: 2026-10-04; through: 2026-09 -->
 
 ## How to read it
 
@@ -12,6 +13,7 @@ A high-level list of the features photographers know from Lightroom, and where R
   - **In progress:** being built.
   - **Planned:** on the roadmap; Phase says which phase.
   - **Later:** after 1.0.
+  - **Undecided:** Lightroom has it, and Redlamp hasn't decided whether to build it.
   - **Out of scope:** left out, with the reason.
 - **vs Lightroom** (Done rows only). Blank means the feature works but its results haven't been checked against Lightroom's side by side; with "No" in the Lightroom column, it means the feature is only in Redlamp.
   - **Compared:** checked against Lightroom's results; Notes link the evidence.
@@ -20,7 +22,7 @@ A high-level list of the features photographers know from Lightroom, and where R
   - **Different:** works differently by design; Notes say how.
 - **Tracker:** the tracker rows behind the feature. Each has a GitHub issue, and the website links to it.
 
-`scripts/roadmap-sync.py` keeps the Redlamp and Phase columns in step with the tracker and the README roadmap (`--apply` updates them); write the other columns, and rows for new features, by hand. `.cursor/rules/roadmap-and-comparison.mdc` describes the rules.
+`scripts/lightroom-releases.py` lists what Lightroom has added since the check above. `scripts/roadmap-sync.py` keeps the Redlamp and Phase columns in step with the tracker and the README roadmap (`--apply` updates them); write the other columns, and rows for new features, by hand. `.cursor/rules/roadmap-and-comparison.mdc` describes the rules.
 
 ## Files and cameras
 
@@ -32,6 +34,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | JPEG XL DNGs | Yes | In progress | | P2 | CAM-10 | Linear ones (iPhone ProRAW) open; JPEG XL mosaic DNGs don't yet |
 | JPEG, HEIC, TIFF and PNG | Yes | Done | | | TON-23 | Shown as the file at default settings, as Lightroom does |
 | PSD, AVIF and JPEG XL files | Yes | Planned | | P2 | | |
+| WebP files | Yes (Classic) | Undecided | | | | |
 | Per-camera raw defaults | Yes | Planned | | P2 | EDT-06 | By camera, lens, ISO and file type |
 | Tethered capture | Yes (Classic) | Later | | | | |
 | Video | Yes (basic trims) | Out of scope | | | | Redlamp develops still photos |
@@ -51,7 +54,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Color Mixer: hue, saturation and luminance per colour | Yes | Done | | | | Works in OKLCh |
 | Black and white | Yes | Done | | | | |
 | B&W mix: brightness per colour band | Yes | Planned | | P2 | | Today the Color Mixer's Luminance shapes a black-and-white photo |
-| Point Color | Yes | Planned | | P3 | | |
+| Point Color | Yes | Planned | | P3 | | Lightroom's now has a Variance slider too |
 | Color Grading | Yes | Done | | | | Shadows, midtones, highlights and global wheels, with Blending and Balance |
 | Profiles | Yes | Done | Different | | EDT-04 | Profiles are Base Looks inside Recipes: six built-in looks and the film looks, each with an Amount slider (0–200) |
 | Camera-matching looks | Yes | Done | Different | | TON-14 | Four looks measured from Fujifilm cameras' own JPEGs (one provisional), under Redlamp's own names |
@@ -108,8 +111,9 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Subject, Sky and Background | Yes | Done | | | MSK-08, MSK-17 | Computed on the Mac; photos are never uploaded. Sky also uses Depth Anything 3, an open model trained partly on data Redlamp couldn't use itself. Edges are solved when a mask is made, not refined again as you edit |
 | People and their parts | Yes | Done | | | MSK-08, MSK-13 | Face parts from Apple Vision; body skin, clothes and hair from SAM 3, a download under Meta's SAM License |
 | Objects | Yes | Done | | | MSK-10 | Hover to preview, click to select (Segment Anything 2.1, an 80 MB download, an open model trained partly on data Redlamp couldn't use itself) |
-| Landscape | Yes | Done | | | MSK-17 | Water, vegetation, mountains, architecture and ground, from SAM 3 (a 988 MB download under Meta's SAM License) |
+| Landscape | Yes | Done | Behind | | MSK-17 | Water, vegetation, mountains, architecture and ground, from SAM 3 (a 988 MB download under Meta's SAM License); Lightroom's also finds snow |
 | Depth Range | Yes | Done | | | MSK-14 | From the photo's own depth map, or estimated by Depth Anything, an open model trained partly on data Redlamp couldn't use itself |
+| Refine AI mask edges | Yes | Done | Different | | MSK-07 | Refine Edges, and a Refine Edge brush that solves an edge again where you paint; Lightroom has Feather and Edge sliders |
 | Mask presets (Blue Sky, Whiten Teeth and others) | Yes | Done | | | | Save your own from any mask |
 | Add, Subtract, Intersect, invert and duplicate | Yes | Done | | | | |
 | Local adjustments in masks | Yes | Done | Behind | | MSK-03 | Local Whites and Blacks are approximated with tonal-region gains |
@@ -130,6 +134,15 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Reflection removal | Yes | Later | | | | |
 | Red Eye and Pet Eye | Yes | Planned | | P3 | OTH-01 | |
 
+## Generative and cloud AI
+
+| Feature | Lightroom | Redlamp | vs Lightroom | Phase | Tracker | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| Generative Expand: fill beyond the frame | Yes (Desktop and mobile, not Classic) | Undecided | | | | |
+| Generative Upscale (Topaz) | Yes (Desktop; cloud, credits) | Undecided | | | DEC-14 | Redlamp's planned Super Resolution is faithful rather than generative |
+| AI sharpening for blur and missed focus (Topaz) | Yes (Desktop; cloud, credits) | Undecided | | | SHP-03 | Proposed for Redlamp as a head on its own raw denoiser, on the Mac |
+| Edit by describing the result (Prompt to Edit, Firefly) | Yes (Desktop early access; cloud, credits) | Undecided | | | | |
+
 ## Presets and looks
 
 | Feature | Lightroom | Redlamp | vs Lightroom | Phase | Tracker | Notes |
@@ -137,7 +150,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Presets | Yes | Done | Different | | EDT-07 | Presets, profiles and LUTs are all Recipes, with an Amount slider; Lightroom's words still work in search |
 | Lightroom presets (`.xmp`) | Yes | Done | | | EDT-11 | Imported with a report of what came across exactly, approximately or not at all. Sliders aren't yet calibrated against Lightroom's renders, so a preset can look different |
 | LUTs (`.cube`, `.3dl`, HaldCLUT) | Partly | Done | Beyond | | TON-11, TON-28 | Imported directly, including LUTs made for camera log footage; Lightroom takes LUTs only wrapped as profiles |
-| Film stock simulations (Portra, Tri-X and others) | No | Done | | | TON-22, TON-26 | 36 looks from 30 stocks, built from the manufacturers' datasheets |
+| Film stock simulations (Portra, Tri-X and others) | Partly (film-inspired presets) | Done | Beyond | | TON-22, TON-26 | 36 looks from 30 stocks, built from the manufacturers' datasheets; Lightroom's film-inspired presets don't replicate particular films |
 | Film looks fitted from film shot beside digital | No | Planned | | P3 | TON-21 | With charts and lab scans, per stock |
 | Camera recipe cards | No | Done | | | | Fujifilm-style recipes, typed in as the card lists them |
 | Premium and recommended presets | Yes (cloud) | Out of scope | | | | Redlamp has no cloud service |
@@ -151,6 +164,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Sync and Auto Sync | Yes | Done | | | EDT-17, EDT-18 | |
 | Ratings, flags and colour labels | Yes | Done | | | | Saved with the photo's edit, shown on the filmstrip |
 | Batch export | Yes | Planned | | P4 | EDT-16 | |
+| Batch rename | Yes | Undecided | | | | |
 | Open photos edited in Lightroom | Yes | Planned | | P4 | EDT-12 | Converts Lightroom's XMP sidecars once, and never writes them |
 
 ## History and versions
@@ -197,7 +211,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Output sharpening | Yes | Planned | | P4 | | |
 | Edit in Photoshop or another app | Yes | Planned | | P4 | | |
 | Content Credentials | Yes | Planned | | P3 | RM-03 | |
-| The edit embedded in exported files | Yes | In progress | | P4 | EDT-14 | |
+| The edit embedded in exported files | Yes | Done | | | EDT-14 | |
 | Command-line rendering and export | No | Done | | | | The `redlamp` tool |
 
 ## Library and organising
@@ -208,7 +222,8 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Keywords and metadata editing | Yes | Later | | | | |
 | People (face recognition) and Map | Yes | Later | | | | |
 | AI search | Yes | Later | | | | |
-| Culling in a grid, and AI-assisted culling | Yes | Later | | | OTH-02 | Rating, flagging and labelling work in the filmstrip today |
+| Culling in a grid, and AI-assisted culling | Yes | Later | | | OTH-02 | Lightroom's Assisted Culling judges sharpness, faces and eyes; rating, flagging and labelling work in Redlamp's filmstrip today |
+| Stacking similar photos, and finding duplicates | Yes | Later | | | | |
 
 ## Print, book, slideshow and web
 
@@ -216,7 +231,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | --- | --- | --- | --- | --- | --- | --- |
 | Print | Yes (Classic) | Out of scope | | | | Redlamp develops photos; it doesn't lay out prints |
 | Book, Slideshow and Web | Yes (Classic) | Out of scope | | | | |
-| Publish services and sharing to Adobe's web | Yes | Out of scope | | | | |
+| Publish services, and sharing to Adobe's web and Firefly | Yes (cloud) | Out of scope | | | | Redlamp has no cloud service |
 
 ## Platforms and sync
 

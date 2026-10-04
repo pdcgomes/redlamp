@@ -113,7 +113,8 @@ public struct ExportSheet: View {
             } footer: {
                 Text("""
                 Camera, lens, exposure and capture date come from the original. Location is \
-                its GPS position and the city and country fields.
+                its GPS position and the city and country fields. All and All Except Location \
+                also embed the edit, so the file says how it was made.
                 """)
                 .formFooter()
             }
