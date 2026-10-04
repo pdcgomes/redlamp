@@ -47,6 +47,7 @@ struct RedlampApp: App {
 
         let keyboard = KeyboardShortcuts()
         AppDelegate.saveBeforeQuitting = { model.saveBeforeQuitting() }
+        CameraBenchWindow.sendFeedback = { prefill in model.onSendFeedback?(prefill) }
         AppDelegate.showCameraBench = { CameraBenchWindow.show(currentFolder: { model.folder }) }
         #if DEBUG || REDLAMP_PROFILING
             AppDelegate

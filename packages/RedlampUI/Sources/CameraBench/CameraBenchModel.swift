@@ -261,29 +261,49 @@ public final class CameraBenchModel {
 
     // MARK: - Problems
 
-    /// A new GitHub issue about a mode's warnings and failures, filled in for the person to read
-    /// and send; the photos stay on this Mac.
-    public func problemURL(_ mode: Mode) -> URL? {
+    /// Opens Report a Bug or Send Feedback (UX-10), set by the app; without it, problems are
+    /// reported as a filled-in GitHub issue.
+    @ObservationIgnored public var onReportProblem: ((FeedbackPrefill) -> Void)?
+
+    /// What the bench found wrong with a mode, in words, for a report; the photos stay on this Mac.
+    public func problemSummary(_ mode: Mode) -> String? {
         let problems = mode.checks.filter { $0.verdict >= .warn }
         guard !problems.isEmpty else { return nil }
         let environment = report.environment
         let lines = problems.map { check in
-            "- **\(check.id)** (\(check.verdict.rawValue)): \(check.summary)" + (check.tracker.map { " (\($0))" } ?? "")
+            "- \(CameraBenchView.title(check.id)) (\(check.verdict.rawValue)): \(check.summary)"
+                + (check.tracker.map { " (\($0))" } ?? "")
         }
-        let body = """
-        The camera bench found this with \(mode.photos.count) photo\(mode.photos.count == 1 ? "" : "s") from my camera.
-
-        **Camera:** \(mode.mode.camera), \(mode.mode.label)
-
+        let photos = mode.photos.count == 1 ? "1 photo" : "\(mode.photos.count) photos"
+        return """
+        The camera bench found this with \(photos) from my camera, \(mode.mode.camera), \(mode.mode.label):
         \(lines.joined(separator: "\n"))
-
-        Redlamp \(environment.redlamp), \(environment.decoder), process \(environment
-            .processVersion), bench \(environment.bench), \(environment.system)
+        Redlamp \(environment.redlamp), \(environment.decoder), process \(environment.processVersion), \
+        bench \(environment.bench).
         """
+    }
+
+    /// The feedback report for a mode's problems, in the Photos & Cameras feature they concern.
+    public func problemReport(_ mode: Mode) -> FeedbackPrefill? {
+        guard let summary = problemSummary(mode) else { return nil }
+        let worst = mode.checks.filter { $0.verdict >= .warn }.max { $0.verdict < $1.verdict }?.id ?? ""
+        let feature = switch worst {
+        case "decode.opens": mode.checks.contains { $0.tracker != nil } ? "raw.unsupported" : "raw.wont-open"
+        case "decode.colour", "preview.cast", "preview.colour": "raw.colours"
+        case "decode.white", "preview.highlights": "raw.highlights"
+        case "preview.structure": "raw.demosaic"
+        default: "raw.unsupported"
+        }
+        return FeedbackPrefill(kind: .bug, featureID: feature, message: summary)
+    }
+
+    /// A new GitHub issue about a mode's problems, filled in for the person to read and send.
+    public func problemURL(_ mode: Mode) -> URL? {
+        guard let summary = problemSummary(mode) else { return nil }
         var components = URLComponents(string: "https://github.com/pdcgomes/redlamp/issues/new")!
         components.queryItems = [
             URLQueryItem(name: "title", value: "Camera bench: \(mode.mode.camera), \(mode.mode.label)"),
-            URLQueryItem(name: "body", value: body),
+            URLQueryItem(name: "body", value: summary),
         ]
         return components.url
     }

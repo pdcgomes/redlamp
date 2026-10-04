@@ -11,6 +11,10 @@ import RedlampUI
 enum CameraBenchWindow {
     private static var controller: CameraBenchWindowController?
 
+    /// Problems are reported through the editor's Report a Bug or Send Feedback, which opens
+    /// over the editor window.
+    static var sendFeedback: ((FeedbackPrefill) -> Void)?
+
     static func show(currentFolder: @escaping () -> URL?) {
         if let controller {
             controller.showWindow(nil)
@@ -25,6 +29,12 @@ enum CameraBenchWindow {
             currentFolder: currentFolder,
             version: (redlamp: version, commit: info?["RedlampCommit"] as? String),
         )
+        model.onReportProblem = sendFeedback.map { send in
+            { prefill in
+                NSApp.windows.first { $0.windowController is EditorWindowController }?.makeKeyAndOrderFront(nil)
+                send(prefill)
+            }
+        }
         let window = CameraBenchWindowController(model: model) { Self.controller = nil }
         controller = window
         window.showWindow(nil)

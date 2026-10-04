@@ -121,6 +121,16 @@ struct CameraBenchModelTests {
         #expect(!url.absoluteString.contains("DSC0000"))
     }
 
+    @Test func `a problem becomes a feedback report under Photos & Cameras`() async throws {
+        let model = try await tested()
+        let mode = try #require(model.modes.first { $0.verdict >= .warn })
+        let report = try #require(model.problemReport(mode))
+        #expect(report.featureID?.hasPrefix("raw.") == true)
+        #expect(FeedbackArea.topic(report.featureID ?? "") != nil)
+        #expect(report.message?.contains(mode.mode.camera) == true)
+        #expect(report.message?.contains("DSC0000") == false)
+    }
+
     @Test func `what a mode still needs leaves out what its photos cover`() async throws {
         let model = try await tested()
         let mode = try #require(model.modes.first)

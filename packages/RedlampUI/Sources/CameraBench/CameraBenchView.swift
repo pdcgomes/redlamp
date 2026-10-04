@@ -170,7 +170,9 @@ struct CameraBenchView: View {
             ), axis: .vertical)
                 .lineLimit(2 ... 4)
                 .frame(maxWidth: 480)
-            if let url = model.problemURL(mode) {
+            if let report = model.problemReport(mode), let onReportProblem = model.onReportProblem {
+                Button("Report This Problem…") { onReportProblem(report) }
+            } else if let url = model.problemURL(mode) {
                 Button("Report This Problem…") { openURL(url) }
             }
         }
