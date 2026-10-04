@@ -21,6 +21,20 @@ final class ContentAwareFill {
         var pixels: [SIMD3<Float>]
         /// The pixels to fill.
         let hole: [Bool]
+        /// Pixels no source patch may touch, since the edit removes or covers them too; empty for
+        /// none.
+        var avoided: [Bool] = []
+        /// Pixels the edit replaces after this fill, which patches aren't matched on either;
+        /// empty for none.
+        var replaced: [Bool] = []
+
+        func avoids(_ index: Int) -> Bool {
+            hole[index] || !avoided.isEmpty && avoided[index]
+        }
+
+        func knows(_ index: Int) -> Bool {
+            !hole[index] && (replaced.isEmpty || !replaced[index])
+        }
     }
 
     /// Patches are (2 × half + 1) texels across.
@@ -54,14 +68,15 @@ final class ContentAwareFill {
         let sourceOK = sourceBuffer.contents().bindMemory(to: UInt8.self, capacity: count)
         for index in 0 ..< count {
             image[index] = SIMD4(region.pixels[index], 0)
-            known[index] = region.hole[index] ? 0 : 1
+            known[index] = region.knows(index) ? 1 : 0
         }
-        // A source patch lies inside the region and touches no hole pixel (an integral image of the hole).
+        // A source patch lies inside the region and touches no hole or avoided pixel (an integral
+        // image of them).
         var integral = [Int](repeating: 0, count: (width + 1) * (height + 1))
         for y in 0 ..< height {
             var row = 0
             for x in 0 ..< width {
-                row += region.hole[y * width + x] ? 1 : 0
+                row += region.avoids(y * width + x) ? 1 : 0
                 integral[(y + 1) * (width + 1) + x + 1] = integral[y * (width + 1) + x + 1] + row
             }
         }
@@ -95,7 +110,8 @@ final class ContentAwareFill {
                 high = simd_max(high, SIMD2(x, y))
             }
         }
-        var confidence = region.hole.map { $0 ? Float(0) : 1 }
+        var confidence = (0 ..< count).map { region.knows($0) ? Float(1) : 0 }
+        var pending = region.hole
         var remaining = region.hole.filter(\.self).count
         func luma(_ index: Int) -> Float {
             simd_dot(SIMD3(image[index].x, image[index].y, image[index].z), SIMD3(0.27, 0.67, 0.06))
@@ -106,6 +122,7 @@ final class ContentAwareFill {
                 height: height,
                 low: low,
                 high: high,
+                pending: pending,
                 known: known,
                 confidence: confidence,
                 luma: luma,
@@ -160,9 +177,10 @@ final class ContentAwareFill {
             for dy in -half ... half {
                 for dx in -half ... half {
                     let t = target &+ SIMD2(dx, dy)
-                    guard t.x >= 0, t.y >= 0, t.x < width, t.y < height, known[t.y * width + t.x] == 0 else { continue }
+                    guard t.x >= 0, t.y >= 0, t.x < width, t.y < height, pending[t.y * width + t.x] else { continue }
                     let s = source &+ SIMD2(dx, dy)
                     image[t.y * width + t.x] = image[s.y * width + s.x]
+                    pending[t.y * width + t.x] = false
                     known[t.y * width + t.x] = 1
                     confidence[t.y * width + t.x] = patchConfidence
                     offsets[t.y * width + t.x] = SIMD2(Int32(source.x - target.x), Int32(source.y - target.y))
@@ -176,12 +194,12 @@ final class ContentAwareFill {
     /// The front pixel to fill next: the highest confidence times data term, the first in scan
     /// order on a tie.
     private func nextTarget(
-        width: Int, height: Int, low: SIMD2<Int>, high: SIMD2<Int>, known: UnsafeMutablePointer<UInt8>,
-        confidence: [Float], luma: (Int) -> Float,
+        width: Int, height: Int, low: SIMD2<Int>, high: SIMD2<Int>, pending: [Bool],
+        known: UnsafeMutablePointer<UInt8>, confidence: [Float], luma: (Int) -> Float,
     ) -> SIMD2<Int>? {
         var best: (priority: Float, point: SIMD2<Int>)?
         for y in low.y ... high.y {
-            for x in low.x ... high.x where known[y * width + x] == 0 {
+            for x in low.x ... high.x where pending[y * width + x] {
                 let onFront = [(1, 0), (-1, 0), (0, 1), (0, -1)].contains { dx, dy in
                     let (nx, ny) = (x + dx, y + dy)
                     return nx >= 0 && ny >= 0 && nx < width && ny < height && known[ny * width + nx] == 1

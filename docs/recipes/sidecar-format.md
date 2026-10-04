@@ -331,8 +331,9 @@ Each step after the first stores its edit as a patch to the JSON of the step bef
 | 9 | Clarity is edge-aware: a strong edge isn't treated as detail, so Clarity puts no bright and dark bands along it. |
 | 10 | A photo with Remove, Heal or Clone spots has its Highlights and Shadows, Clarity, Dehaze and glow worked out from the photo as the spots leave it, so a removed object leaves no trace where they're used. |
 | 11 | Texture, Clarity and sharpening work on one split of the noise-reduced luminance into bands of detail. Texture boosts medium detail and holds back the step of an edge, so it makes no halos, and negative Texture smooths that detail; sharpening restores detail that stands above the noise and leaves flat noise as noise reduction left it. |
+| 12 | A Remove spot is filled only from what the edit keeps: never from its other Remove spots or from the spots after it, so removing several things at once doesn't copy one into another's hole. |
 
-New edits get the current version, 11. An edit keeps its version until the user updates it (the Process control in the Calibration panel), so every edit keeps rendering as it did when it was made.
+New edits get the current version, 12. An edit keeps its version until the user updates it (the Process control in the Calibration panel), so every edit keeps rendering as it did when it was made.
 
 ## Versions and compatibility
 
