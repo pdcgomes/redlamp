@@ -46,8 +46,10 @@ jobs:
       - name: Cache sample raw files
         uses: actions/cache@v4
         with:
-          path: tests/fixtures/raw
-          key: fixtures-${{ hashFiles('mise/tasks/fixtures') }}
+          path: |
+            tests/fixtures/raw
+            tests/fixtures/cameras
+          key: fixtures-${{ hashFiles('mise/tasks/fixtures', 'tests/decode/samples.json') }}
 
       - name: Fetch fixtures
         run: mise run fixtures

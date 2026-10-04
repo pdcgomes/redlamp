@@ -64,6 +64,72 @@
       0.598
     ]
   },
+  "Canon_EOS-5D-Mark-IV.CR2" : {
+    "asShotMultipliers" : [
+      1.9844,
+      1,
+      1.4756
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      512,
+      511,
+      512,
+      511
+    ],
+    "height" : 4502,
+    "layout" : "Bayer RGGB",
+    "make" : "Canon",
+    "model" : "EOS 5D Mark IV",
+    "orientation" : 0,
+    "sampleChecksum" : "c90af69f99d72af",
+    "whiteLevel" : 16383,
+    "width" : 6744,
+    "xyzToCamera" : [
+      0.6446,
+      -0.0366,
+      -0.0864,
+      -0.4436,
+      1.2204,
+      0.2513,
+      -0.0952,
+      0.2496,
+      0.6348
+    ]
+  },
+  "Canon_EOS-R5-Mark-II.CR3" : {
+    "asShotMultipliers" : [
+      1.835,
+      1,
+      1.7627
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      512,
+      512,
+      512,
+      512
+    ],
+    "height" : 5488,
+    "layout" : "Bayer RGGB",
+    "make" : "Canon",
+    "model" : "EOS R5 Mark II",
+    "orientation" : 0,
+    "sampleChecksum" : "7b0eb3182fdc467c",
+    "whiteLevel" : 16383,
+    "width" : 8222,
+    "xyzToCamera" : [
+      0.9396,
+      -0.2598,
+      -0.1207,
+      -0.4408,
+      1.2296,
+      0.2369,
+      -0.0505,
+      0.1575,
+      0.6077
+    ]
+  },
   "Canon_EOS_R6_RAW_ISO_100_nocrop_nodual.CR3" : {
     "asShotMultipliers" : [
       1.8057,
@@ -95,6 +161,39 @@
       -0.1013,
       0.2415,
       0.5509
+    ]
+  },
+  "DJI_FC4382.DNG" : {
+    "asShotMultipliers" : [
+      1.9517,
+      1,
+      1.7034
+    ],
+    "baselineExposure" : 1.32,
+    "blackLevels" : [
+      1024,
+      1024,
+      1024,
+      1024
+    ],
+    "height" : 3024,
+    "layout" : "Bayer GRBG",
+    "make" : "DJI",
+    "model" : "FC4382",
+    "orientation" : 0,
+    "sampleChecksum" : "8a992801454d0b79",
+    "whiteLevel" : 65472,
+    "width" : 4032,
+    "xyzToCamera" : [
+      0.7424,
+      -0.1536,
+      -0.1024,
+      -0.4352,
+      1.2366,
+      0.1651,
+      -0.0256,
+      0.1616,
+      0.5078
     ]
   },
   "DSC_0750.NEF" : {
@@ -130,6 +229,236 @@
       0.7557
     ]
   },
+  "Fujifilm_GFX100-II.RAF" : {
+    "asShotMultipliers" : [
+      1.8742,
+      1,
+      1.6258
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      1024,
+      1024,
+      1024,
+      1024
+    ],
+    "height" : 8746,
+    "layout" : "Bayer RGGB",
+    "make" : "Fujifilm",
+    "model" : "GFX100 II",
+    "orientation" : 0,
+    "sampleChecksum" : "bf0cf367c24713c2",
+    "whiteLevel" : 15872,
+    "width" : 11662,
+    "xyzToCamera" : [
+      1.2806,
+      -0.5779,
+      -0.111,
+      -0.3546,
+      1.1507,
+      0.2318,
+      -0.0177,
+      0.0996,
+      0.5715
+    ]
+  },
+  "Fujifilm_X-T5.RAF" : {
+    "asShotMultipliers" : [
+      2.1026,
+      1,
+      1.6192
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020,
+      1020
+    ],
+    "height" : 5178,
+    "layout" : "X-Trans",
+    "make" : "Fujifilm",
+    "model" : "X-T5",
+    "orientation" : 0,
+    "sampleChecksum" : "e462e2fa4ba45ae0",
+    "whiteLevel" : 16383,
+    "width" : 7752,
+    "xyzToCamera" : [
+      1.1809,
+      -0.5358,
+      -0.1141,
+      -0.4248,
+      1.2164,
+      0.2343,
+      -0.0514,
+      0.1097,
+      0.5848
+    ]
+  },
+  "Hasselblad_L2D-20c.DNG" : {
+    "asShotMultipliers" : [
+      2.2712,
+      1,
+      1.9517
+    ],
+    "baselineExposure" : 0.47,
+    "blackLevels" : [
+      4096,
+      4096,
+      4096,
+      4096
+    ],
+    "height" : 3956,
+    "layout" : "Bayer RGGB",
+    "make" : "Hasselblad",
+    "model" : "L2D-20c",
+    "orientation" : 0,
+    "sampleChecksum" : "97643fa675111126",
+    "whiteLevel" : 65535,
+    "width" : 5280,
+    "xyzToCamera" : [
+      0.8575,
+      -0.3219,
+      -0.0868,
+      -0.3351,
+      1.1451,
+      0.1593,
+      0.0207,
+      0.0468,
+      0.4876
+    ]
+  },
+  "Hasselblad_X1D-II-50C.3FR" : {
+    "asShotMultipliers" : [
+      2.571,
+      1,
+      1.5002
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      256,
+      256,
+      256,
+      256
+    ],
+    "height" : 6208,
+    "layout" : "Bayer RGGB",
+    "make" : "Hasselblad",
+    "model" : "X1D II 50C",
+    "orientation" : 0,
+    "sampleChecksum" : "9db20cebea4d6ca1",
+    "whiteLevel" : 65535,
+    "width" : 8278,
+    "xyzToCamera" : [
+      1.0887,
+      -0.6152,
+      0.1034,
+      -0.3564,
+      1.2412,
+      0.4224,
+      0.0063,
+      0.0626,
+      1.0123
+    ]
+  },
+  "Hasselblad_X2D-100C.3FR" : {
+    "asShotMultipliers" : [
+      2.6304,
+      1,
+      1.5908
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      4093,
+      4093,
+      4093,
+      4094
+    ],
+    "height" : 8750,
+    "layout" : "Bayer RGGB",
+    "make" : "Hasselblad",
+    "model" : "X2D 100C-100c",
+    "orientation" : 0,
+    "sampleChecksum" : "bc756b23bfdcd59d",
+    "whiteLevel" : 65530,
+    "width" : 11664,
+    "xyzToCamera" : [
+      0.6468,
+      -0.1899,
+      -0.0545,
+      -0.4526,
+      1.2267,
+      0.2542,
+      -0.0388,
+      0.1276,
+      0.6096
+    ]
+  },
+  "Hasselblad_X2D-100C.fff" : {
+    "asShotMultipliers" : [
+      2.6304,
+      1,
+      1.5908
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      4093,
+      4093,
+      4093,
+      4093
+    ],
+    "height" : 8750,
+    "layout" : "Bayer RGGB",
+    "make" : "Hasselblad",
+    "model" : "X2D 100C-100c",
+    "orientation" : 0,
+    "sampleChecksum" : "7a12c509cbd1b6b3",
+    "whiteLevel" : 65534,
+    "width" : 11664,
+    "xyzToCamera" : [
+      0.6468,
+      -0.1899,
+      -0.0545,
+      -0.4526,
+      1.2267,
+      0.2542,
+      -0.0388,
+      0.1276,
+      0.6096
+    ]
+  },
   "IMG_1361.DNG" : {
     "asShotMultipliers" : [
       2.2273,
@@ -160,6 +489,105 @@
       -0.1063,
       0.235,
       0.4307
+    ]
+  },
+  "Leica_M10-R.DNG" : {
+    "asShotMultipliers" : [
+      3.2383,
+      1,
+      1.5391
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      0,
+      0,
+      0,
+      0
+    ],
+    "height" : 5208,
+    "layout" : "Bayer GBRG",
+    "make" : "Leica",
+    "model" : "M10-R",
+    "orientation" : 0,
+    "sampleChecksum" : "573a9fc49aa2284c",
+    "whiteLevel" : 15000,
+    "width" : 7872,
+    "xyzToCamera" : [
+      0.909,
+      -0.3342,
+      -0.074,
+      -0.4006,
+      1.3456,
+      0.0493,
+      -0.0569,
+      0.2266,
+      0.6871
+    ]
+  },
+  "Nikon_Z-8.NEF" : {
+    "asShotMultipliers" : [
+      1.9082,
+      1,
+      1.5371
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      1008,
+      1008,
+      1008,
+      1008
+    ],
+    "height" : 5520,
+    "layout" : "Bayer RGGB",
+    "make" : "Nikon",
+    "model" : "Z 8",
+    "orientation" : 0,
+    "sampleChecksum" : "716e1158bab28b76",
+    "whiteLevel" : 16383,
+    "width" : 8280,
+    "xyzToCamera" : [
+      1.1423,
+      -0.4564,
+      -0.1123,
+      -0.4816,
+      1.2895,
+      0.2119,
+      -0.021,
+      0.1061,
+      0.7282
+    ]
+  },
+  "OM-System_OM-1-Mark-II.orf" : {
+    "asShotMultipliers" : [
+      2.2813,
+      1,
+      1.8125
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      255,
+      254,
+      254,
+      255
+    ],
+    "height" : 3912,
+    "layout" : "Bayer RGGB",
+    "make" : "OM Digital",
+    "model" : "OM-1MarkII",
+    "orientation" : 0,
+    "sampleChecksum" : "8e54b859f7c09c89",
+    "whiteLevel" : 4095,
+    "width" : 5220,
+    "xyzToCamera" : [
+      0.9488,
+      -0.3984,
+      -0.0714,
+      -0.2887,
+      1.0945,
+      0.2229,
+      -0.0137,
+      0.096,
+      0.5786
     ]
   },
   "PXL_20201121_100251397.dng" : {
@@ -193,6 +621,269 @@
       -0.0739,
       0.2132,
       0.5474
+    ]
+  },
+  "Panasonic_DC-S5M2.RW2" : {
+    "asShotMultipliers" : [
+      2.0547,
+      1,
+      1.6641
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      512,
+      512,
+      512,
+      512
+    ],
+    "height" : 4008,
+    "layout" : "Bayer RGGB",
+    "make" : "Panasonic",
+    "model" : "DC-S5M2",
+    "orientation" : 0,
+    "sampleChecksum" : "7f1a583dac8113a3",
+    "whiteLevel" : 16383,
+    "width" : 6008,
+    "xyzToCamera" : [
+      1.0308,
+      -0.4206,
+      -0.0783,
+      -0.4088,
+      1.2102,
+      0.2229,
+      -0.0125,
+      0.1051,
+      0.5912
+    ]
+  },
+  "Pentax_K-3-Mark-III.PEF" : {
+    "asShotMultipliers" : [
+      2.4609,
+      1,
+      1.7031
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      64,
+      64,
+      64,
+      64
+    ],
+    "height" : 4160,
+    "layout" : "Bayer RGGB",
+    "make" : "Pentax",
+    "model" : "K-3 Mark III",
+    "orientation" : 0,
+    "sampleChecksum" : "e741d6d7d958850c",
+    "whiteLevel" : 16383,
+    "width" : 6224,
+    "xyzToCamera" : [
+      0.9251,
+      -0.3817,
+      -0.1069,
+      -0.4627,
+      1.2667,
+      0.2175,
+      -0.0798,
+      0.166,
+      0.5633
+    ]
+  },
+  "Phase-One_IQ4-150MP.iiq" : {
+    "asShotMultipliers" : [
+      3.24,
+      1,
+      1.52
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      0,
+      0,
+      0,
+      0
+    ],
+    "height" : 10652,
+    "layout" : "Bayer RGGB",
+    "make" : "Phase One",
+    "model" : "IQ4 150MP",
+    "orientation" : 0,
+    "sampleChecksum" : "356e8ae118a57d37",
+    "whiteLevel" : 64508,
+    "width" : 14204,
+    "xyzToCamera" : [
+      0.6644,
+      -0.2257,
+      -0.0804,
+      -0.6459,
+      1.4562,
+      0.2019,
+      -0.1221,
+      0.1876,
+      0.6411
+    ]
+  },
+  "Ricoh_GR-III.DNG" : {
+    "asShotMultipliers" : [
+      2.6484,
+      1,
+      1.7266
+    ],
+    "baselineExposure" : -0.5062,
+    "blackLevels" : [
+      64,
+      64,
+      64,
+      64
+    ],
+    "height" : 4024,
+    "layout" : "Bayer RGGB",
+    "make" : "Ricoh",
+    "model" : "GR III",
+    "orientation" : 0,
+    "sampleChecksum" : "3ff1c96945b02f72",
+    "whiteLevel" : 16314,
+    "width" : 6020,
+    "xyzToCamera" : [
+      0.6127,
+      -0.1777,
+      -0.0585,
+      -0.5913,
+      1.3699,
+      0.2428,
+      -0.1088,
+      0.178,
+      0.6017
+    ]
+  },
+  "Samsung_Galaxy-S23-Ultra.dng" : {
+    "asShotMultipliers" : [
+      2.0118,
+      1,
+      1.784
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      0,
+      0,
+      0
+    ],
+    "height" : 2736,
+    "layout" : "linear RGB",
+    "make" : "Samsung",
+    "model" : "Galaxy S23 Ultra",
+    "orientation" : 0,
+    "sampleChecksum" : "93e5da7c630e2a38",
+    "whiteLevel" : 4095,
+    "width" : 3648,
+    "xyzToCamera" : [
+      0.7168,
+      -0.1406,
+      -0.1162,
+      -0.5752,
+      1.4512,
+      0.0869,
+      -0.166,
+      0.3379,
+      0.4727
+    ]
+  },
+  "Samsung_NX1.srw" : {
+    "asShotMultipliers" : [
+      1.8008,
+      1,
+      1.7578
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      128,
+      128,
+      128,
+      128
+    ],
+    "height" : 4336,
+    "layout" : "Bayer GRBG",
+    "make" : "Samsung",
+    "model" : "NX1",
+    "orientation" : 0,
+    "sampleChecksum" : "384489c8c0a94a82",
+    "whiteLevel" : 16383,
+    "width" : 6496,
+    "xyzToCamera" : [
+      1.0686,
+      -0.4042,
+      -0.1052,
+      -0.3595,
+      1.3238,
+      0.0276,
+      -0.0464,
+      0.1259,
+      0.5931
+    ]
+  },
+  "Sigma_fp.DNG" : {
+    "asShotMultipliers" : [
+      1.9727,
+      1,
+      1.6719
+    ],
+    "baselineExposure" : 1,
+    "blackLevels" : [
+      1024,
+      1024,
+      1024,
+      1024
+    ],
+    "height" : 4042,
+    "layout" : "Bayer RGGB",
+    "make" : "Sigma",
+    "model" : "fp",
+    "orientation" : 0,
+    "sampleChecksum" : "f7b92f1904d6cc31",
+    "whiteLevel" : 16383,
+    "width" : 6064,
+    "xyzToCamera" : [
+      0.8252,
+      -0.2044,
+      -0.1744,
+      -0.4961,
+      1.1648,
+      0.0631,
+      -0.1156,
+      0.1607,
+      0.3607
+    ]
+  },
+  "Sony_ILCE-7M4.ARW" : {
+    "asShotMultipliers" : [
+      2.3682,
+      1,
+      1.7578
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      512,
+      512,
+      512,
+      512
+    ],
+    "height" : 4688,
+    "layout" : "Bayer RGGB",
+    "make" : "Sony",
+    "model" : "ILCE-7M4",
+    "orientation" : 0,
+    "sampleChecksum" : "64140337539b3c23",
+    "whiteLevel" : 16383,
+    "width" : 7028,
+    "xyzToCamera" : [
+      0.746,
+      -0.2365,
+      -0.0588,
+      -0.5687,
+      1.3442,
+      0.2474,
+      -0.0624,
+      0.1156,
+      0.6584
     ]
   },
   "_DSC0009.ARW" : {

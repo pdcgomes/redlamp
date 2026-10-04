@@ -15,6 +15,7 @@ Redlamp is a macOS raw editor in Swift and Metal (`README.md`). These rules appl
   ```bash
   mkdir -p tests/fixtures vendor Tuist
   cp -cR "$MAIN/tests/fixtures/raw" tests/fixtures/
+  [ -d "$MAIN/tests/fixtures/cameras" ] && cp -cR "$MAIN/tests/fixtures/cameras" tests/fixtures/
   [ -d "$MAIN/tests/fixtures/shoots" ] && cp -cR "$MAIN/tests/fixtures/shoots" tests/fixtures/
   cp -cR "$MAIN/vendor/build" "$MAIN/vendor/cache" vendor/
   cp -cR "$MAIN/Tuist/.build" Tuist/

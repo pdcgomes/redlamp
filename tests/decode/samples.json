@@ -1,0 +1,232 @@
+{
+  "version": 1,
+  "description": "The camera coverage set: one CC0 sample per main camera maker and format from raw.pixls.us, beside the development samples in tests/fixtures/raw. `mise run fixtures` downloads them into tests/fixtures/cameras (never committed) and checks each file's SHA-256; the decode regression suite and the camera colour goldens check every one.",
+  "gaps": [
+    "Nikon's High Efficiency NEFs (HE and HE*, from the Z 8, Z 9, Z 6III and Z f) can't be decoded: LibRaw 0.22 reads only standard compression. They are refused with an error.",
+    "Bodies newer than LibRaw 0.22.2: the Sony A7 V is refused; the Sony A1 II decodes with a black strip along the bottom.",
+    "No CC0 samples of the Leica M11, SL3 or Q3, or of iPhones after the 12 Pro.",
+    "Sigma's Foveon X3F files, GoPro's GPR and JPEG XL mosaic DNGs aren't supported."
+  ],
+  "samples": [
+    {
+      "file": "Hasselblad_X2D-100C.3FR",
+      "camera": "Hasselblad X2D 100C",
+      "mode": "16bit (4:3)",
+      "covers": "Hasselblad's current body: 100 MP, uncompressed 16-bit 3FR",
+      "url": "https://raw.pixls.us/getfile.php/6565/nice/Hasselblad%20-%20X2D%20100C%20-%2016bit%20%284%3A3%29.3FR",
+      "sha256": "dcc5a4abe3498e6f25e89bb491995fd12c3b669d9277c71b45b49210d3e56280",
+      "megabytes": 203.4,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Hasselblad_X2D-100C.fff",
+      "camera": "Hasselblad X2D 100C",
+      "mode": "16bit (4:3)",
+      "covers": "the same frame as an FFF from Phocus, in Hasselblad's lossless compression",
+      "url": "https://raw.pixls.us/getfile.php/6566/nice/Hasselblad%20-%20X2D%20100C%20-%2016bit%20%284%3A3%29.fff",
+      "sha256": "44c38665694e07baf47f1fc34fb9ea0f1bf70eb71b7390183d3c0ef23d164e0f",
+      "megabytes": 153.4,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Hasselblad_X1D-II-50C.3FR",
+      "camera": "Hasselblad X1D II 50C",
+      "mode": "16bit (4:3)",
+      "covers": "Hasselblad's 50 MP generation, uncompressed 3FR",
+      "url": "https://raw.pixls.us/getfile.php/3941/nice/Hasselblad%20-%20X1D%20II%2050C%20-%2016bit%20%284%3A3%29.3FR",
+      "sha256": "809d498263d6f07cbaa4b9a5be97933057b4ab21e7243bb7afbe3862f3b48b47",
+      "megabytes": 103.4,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Hasselblad_L2D-20c.DNG",
+      "camera": "Hasselblad L2D-20c (DJI Mavic 3)",
+      "mode": "16bit (4:3)",
+      "covers": "the Hasselblad camera on DJI's Mavic 3: a drone DNG",
+      "url": "https://raw.pixls.us/getfile.php/5140/nice/Hasselblad%20-%20L2D-20c%20-%2016bit%20%284%3A3%29.DNG",
+      "sha256": "dbe98cb202f884ff11e0144899613b26d33cf9cddd9f1a62226f4352397f18e4",
+      "megabytes": 41.5,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Phase-One_IQ4-150MP.iiq",
+      "camera": "Phase One IQ4 150MP",
+      "mode": "IIQ L (4:3)",
+      "covers": "Phase One's 151 MP back, IIQ L: black levels and calibration LibRaw applies in raw2image",
+      "url": "https://raw.pixls.us/getfile.php/3900/nice/Phase%20One%20-%20IQ4%20150MP%20-%20IIQ%20L%20%284%3A3%29.iiq",
+      "sha256": "c8c94e41b39416ef2535280e1022d040fb9a60bd4fba804cc3db36cc7082b855",
+      "megabytes": 160.6,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Fujifilm_GFX100-II.RAF",
+      "camera": "Fujifilm GFX100 II",
+      "mode": "14bit 14bit compressed (4:3)",
+      "covers": "Fujifilm's 102 MP medium format: compressed Bayer RAF",
+      "url": "https://raw.pixls.us/getfile.php/7179/nice/Fujifilm%20-%20GFX100%20II%20-%2014bit%2014bit%20compressed%20%284%3A3%29.RAF",
+      "sha256": "6685f914523a00db587deeb4192f7287dc019718ffe1c3e217d6b01c8cebe1ee",
+      "megabytes": 82.8,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Fujifilm_X-T5.RAF",
+      "camera": "Fujifilm X-T5",
+      "mode": "14bit 14bit compressed (3:2)",
+      "covers": "40 MP X-Trans 5: compressed X-Trans RAF",
+      "url": "https://raw.pixls.us/getfile.php/6122/nice/Fujifilm%20-%20X-T5%20-%2014bit%2014bit%20compressed%20%283%3A2%29.RAF",
+      "sha256": "b2a067e7fda16338f15c2532caa12b238b2415dc1c75a96a6d24d3445cfd0ae3",
+      "megabytes": 41.1,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Canon_EOS-R5-Mark-II.CR3",
+      "camera": "Canon EOS R5 Mark II",
+      "mode": "CRAW (3:2)",
+      "covers": "Canon's current high-resolution body in C-RAW, the lossy CR3",
+      "url": "https://raw.pixls.us/getfile.php/7882/nice/Canon%20-%20EOS%20R5%20Mark%20II%20-%20CRAW%20%283%3A2%29.CR3",
+      "sha256": "b3c08a5c7a97299dfd58896a12b939e7b43ec78682761812524825e6e5d087be",
+      "megabytes": 26.2,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Canon_EOS-5D-Mark-IV.CR2",
+      "camera": "Canon EOS 5D Mark IV",
+      "mode": "RAW (3:2)",
+      "covers": "CR2, the format of Canon's DSLRs",
+      "url": "https://raw.pixls.us/getfile.php/983/nice/Canon%20-%20EOS%205D%20Mark%20IV%20-%20RAW%20%283%3A2%29.CR2",
+      "sha256": "02b23f9cc6dc4c99fb39aa4d1f65ac227804d06461ac1bd0f842aa2f3beb8fe4",
+      "megabytes": 32.3,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Nikon_Z-8.NEF",
+      "camera": "Nikon Z 8",
+      "mode": "8bit 8bit compressed (3:2)",
+      "covers": "Nikon's 45 MP flagship sensor, lossless compressed NEF",
+      "url": "https://raw.pixls.us/getfile.php/6617/nice/Nikon%20-%20Z%208%20-%208bit%208bit%20compressed%20%283%3A2%29.NEF",
+      "sha256": "c13a8675294456b9c979e6c1e556951654f35377b2870af2874bfb556f21ce40",
+      "megabytes": 58.0,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Sony_ILCE-7M4.ARW",
+      "camera": "Sony ILCE-7M4",
+      "mode": "14bit (4:3)",
+      "covers": "Sony A7 IV, lossless compressed ARW (tiled)",
+      "url": "https://raw.pixls.us/getfile.php/6929/nice/Sony%20-%20ILCE-7M4%20-%2014bit%20%284%3A3%29.ARW",
+      "sha256": "851b43c2116c4139104a5036f83ac3b6a148789b2142214dd7192c13972b25b6",
+      "megabytes": 46.9,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Panasonic_DC-S5M2.RW2",
+      "camera": "Panasonic DC-S5 MkII",
+      "mode": "14bit (3:2)",
+      "covers": "Panasonic S5 II: RW2 in the encoding LibRaw 0.22 added",
+      "url": "https://raw.pixls.us/getfile.php/7790/nice/Panasonic%20-%20DC-S5M2%20-%2014bit%20%283%3A2%29.RW2",
+      "sha256": "53a171521a7f9af6910b4ab61c5a4a42de0cceb24166e15b07eee1e00675028f",
+      "megabytes": 35.6,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "OM-System_OM-1-Mark-II.orf",
+      "camera": "OM Digital Solutions OM-1 Mark II",
+      "mode": "16bit (4:3)",
+      "covers": "OM System (Olympus) ORF",
+      "url": "https://raw.pixls.us/getfile.php/7262/nice/OM%20System%20-%20OM-1%20Mark%20II%20-%2016bit%20%284%3A3%29.orf",
+      "sha256": "d0fe58daf2f0bd749ecb18311e55408f0e7804de8e5e6580e815eae50d834cbd",
+      "megabytes": 21.4,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Pentax_K-3-Mark-III.PEF",
+      "camera": "Pentax K-3 Mark III",
+      "mode": "14bit (3:2)",
+      "covers": "Pentax PEF",
+      "url": "https://raw.pixls.us/getfile.php/4677/nice/Pentax%20-%20K-3%20Mark%20III%20-%2014bit%20%283%3A2%29.PEF",
+      "sha256": "351be88038b2dd28af39e11dbece6de74efd71119a9ef667d35cdf02dcff919f",
+      "megabytes": 30.8,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Ricoh_GR-III.DNG",
+      "camera": "Ricoh GR III",
+      "mode": "14bit (3:2)",
+      "covers": "Ricoh GR III DNG",
+      "url": "https://raw.pixls.us/getfile.php/3115/nice/Ricoh%20-%20GR%20III%20-%2014bit%20%283%3A2%29.DNG",
+      "sha256": "05513ee72f7cac4165534c9f64995412084f414a033c80c473c79fd94154292e",
+      "megabytes": 31.8,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Leica_M10-R.DNG",
+      "camera": "Leica M10-R",
+      "mode": "16bit compressed (3:2)",
+      "covers": "Leica M10-R: 41 MP compressed DNG with a GBRG mosaic",
+      "url": "https://raw.pixls.us/getfile.php/7853/nice/Leica%20-%20M10-R%20-%2016bit%20compressed%20%283%3A2%29.DNG",
+      "sha256": "ba35d25d521c7ddbc4feca69c8cdbe071ac65dcd6cf2c93374391bf6f3662b8d",
+      "megabytes": 52.3,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Sigma_fp.DNG",
+      "camera": "Sigma fp",
+      "mode": "14bit (3:2)",
+      "covers": "Sigma fp DNG (Foveon X3F files aren't supported)",
+      "url": "https://raw.pixls.us/getfile.php/7273/nice/Sigma%20-%20fp%20-%2014bit%20%283%3A2%29.DNG",
+      "sha256": "0844bcf23a49e21b5c2f8489de55ce38fb7b594e3ed337d6b9af2dd9341354e9",
+      "megabytes": 33.1,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Samsung_NX1.srw",
+      "camera": "Samsung NX1",
+      "mode": "14bit (3:2)",
+      "covers": "Samsung NX1 SRW (LibRaw 0.22's new decoder)",
+      "url": "https://raw.pixls.us/getfile.php/837/nice/Samsung%20-%20NX1%20-%2014bit%20%283%3A2%29.srw",
+      "sha256": "ec57f83c23094766b723ba9446cdf79388c527934d6689c1ac5b1b6ab3ea8378",
+      "megabytes": 35.2,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Samsung_Galaxy-S23-Ultra.dng",
+      "camera": "Samsung Galaxy S23 Ultra",
+      "mode": "4:3",
+      "covers": "a Samsung phone's linear DNG",
+      "url": "https://raw.pixls.us/getfile.php/6758/nice/Samsung%20-%20Galaxy%20S23%20Ultra%20-%204%3A3.dng",
+      "sha256": "4f9d1b085b328b6c7ae21437c4106889cb38d52fab604a786091bf5fe5ef3da4",
+      "megabytes": 29.9,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "DJI_FC4382.DNG",
+      "camera": "DJI Mavic 3 Pro (FC4382)",
+      "mode": "16bit (4:3)",
+      "covers": "a DJI camera's DNG: the Mavic 3 Pro Cine's FC4382",
+      "url": "https://raw.pixls.us/getfile.php/7823/nice/DJI%20-%20FC4382%20-%2016bit%20%284%3A3%29.DNG",
+      "sha256": "f33ddaf2a7fa70b395abced251faccea11100d2ab7e54ae0a6adbff043d72027",
+      "megabytes": 14.2,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    }
+  ]
+}
