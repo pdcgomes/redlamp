@@ -114,6 +114,11 @@ final class SharpenCache {
         analyses.removeAll { textures.contains(ObjectIdentifier($0.texture)) }
         separations.removeAll { textures.contains(ObjectIdentifier($0.linear)) }
     }
+
+    func removeAll() {
+        analyses.removeAll()
+        separations.removeAll()
+    }
 }
 
 extension DetailStage {

@@ -277,6 +277,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         commands.waitUntilCompleted()
         if let error = commands.error {
             comparison = nil
+            detailStage.forget(commands)
             throw EngineError.renderFailed(error.localizedDescription)
         }
         comparison = compared
@@ -669,7 +670,7 @@ extension RedlampEngine {
     }
 
     /// Encodes into `commands`; if that fails they are dropped uncommitted, and the detail stage
-    /// forgets what it cached from them.
+    /// lets go of its textures.
     func encoding<T>(_ commands: any MTLCommandBuffer, _ encode: () throws -> T) throws -> T {
         do {
             return try encode()
@@ -679,10 +680,13 @@ extension RedlampEngine {
         }
     }
 
+    /// Commits `commands` and waits; if they fail on the GPU, the detail stage forgets what it
+    /// cached from them.
     func finish(_ commands: any MTLCommandBuffer) throws {
         commands.commit()
         commands.waitUntilCompleted()
         if let error = commands.error {
+            detailStage.forget(commands)
             throw EngineError.renderFailed(error.localizedDescription)
         }
     }

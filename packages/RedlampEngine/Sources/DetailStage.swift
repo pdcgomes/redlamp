@@ -361,6 +361,9 @@ final class DetailStage {
             session: ObjectIdentifier(session), work: work, denoise: passes.denoise, sharpen: passes.sharpen,
             contrast: passes.contrast, local: passes.local,
         )
+        if residency.hasDropped {
+            dropTextures()
+        }
         residency.hold(until: commands)
         if encoding?.commands != ObjectIdentifier(commands) {
             encoding = (ObjectIdentifier(commands), [])
@@ -477,12 +480,29 @@ final class DetailStage {
     /// Forgets what was cached from `commands`, which will never run, and stops keeping its
     /// textures resident. For a render that failed after the stage encoded into it.
     func abandon(_ commands: any MTLCommandBuffer) {
-        if let encoding, encoding.commands == ObjectIdentifier(commands) {
-            entries.removeAll { encoding.cached.contains(ObjectIdentifier($0.output.texture)) }
-            sharpenCache.forget(encoding.cached)
-        }
-        encoding = nil
         residency.abandon(commands)
+        dropTextures()
+    }
+
+    /// Forgets what was cached from `commands`, which failed on the GPU, so its textures hold
+    /// nothing rendered.
+    func forget(_ commands: any MTLCommandBuffer) {
+        guard let encoding, encoding.commands == ObjectIdentifier(commands) else { return }
+        entries.removeAll { encoding.cached.contains(ObjectIdentifier($0.output.texture)) }
+        sharpenCache.forget(encoding.cached)
+        self.encoding = nil
+    }
+
+    /// Lets go of every texture, for a command buffer dropped uncommitted. Metal's validation
+    /// layer then counts the textures encoded into it as in use for good, and aborts when one is
+    /// made volatile, so none of them is parked.
+    private func dropTextures() {
+        entries.removeAll()
+        sharpenCache.removeAll()
+        scratch.removeAll()
+        layout = nil
+        encoding = nil
+        residency.reset()
     }
 
     /// What one render of the stage runs, for any work area or tile of it.
@@ -667,12 +687,11 @@ final class DetailStage {
         }
     }
 
-    /// The tiles for `work`, preferring ones that fit the scratch textures already made; the last
-    /// layout is kept, since a drag asks for the same one every frame.
+    /// The tiles for `work`, preferring ones that fit the scratch textures already made and
+    /// reusable at `limit`; the last layout is kept, since a drag asks for the same one every frame.
     private func tileLayout(_ work: WorkArea, halo: Int, limit: Int) -> [Tile] {
-        let shape = scratch.values.flatMap(\.values).map { SIMD2($0.width, $0.height) }.reduce(nil) { shape, size in
-            shape.map { simd_min($0, size) } ?? size
-        }
+        let shape = scratch.values.flatMap(\.values).map { SIMD2($0.width, $0.height) }.filter { $0.x * $0.y <= limit }
+            .reduce(nil) { shape, size in shape.map { simd_min($0, size) } ?? size }
         let key = LayoutKey(size: work.size, halo: max(halo - haloShortfall, 0), limit: limit, shape: shape)
         if let layout, layout.key == key {
             return layout.tiles
@@ -1022,10 +1041,12 @@ final class DetailStage {
     }
 
     /// Working texture `slot` of `format`, covering the work area, reused across renders. It grows
-    /// to cover every area it has served unless that would take more than a tile.
+    /// to cover every area it has served unless that would take more than the render's tiles may;
+    /// one larger than that, made for larger tiles, is replaced.
     func scratchTexture(_ format: MTLPixelFormat, _ slot: Int, _ work: WorkArea) throws -> any MTLTexture {
         let existing = scratch[format]?[slot]
-        if let existing, existing.width >= work.size.x, existing.height >= work.size.y {
+        if let existing, existing.width >= work.size.x, existing.height >= work.size.y,
+           existing.width * existing.height <= scratchLimit {
             residency.wake(existing)
             return existing
         }
@@ -1076,8 +1097,8 @@ final class DetailResidency: Sendable {
         weak var texture: (any MTLTexture)?
     }
 
-    /// A command buffer dropped without being committed or abandoned is released, and stops
-    /// counting then.
+    /// Weak, so holding doesn't keep a dropped command buffer alive: one released uncommitted
+    /// runs its completed handlers, which release its hold.
     private struct Hold: @unchecked Sendable {
         weak var commands: (any MTLCommandBuffer)?
     }
@@ -1087,9 +1108,11 @@ final class DetailResidency: Sendable {
         var awake: [ObjectIdentifier: Resident] = [:]
         /// Counts holds, so a park scheduled before the latest one is skipped.
         var generation = 0
+        /// A held command buffer was dropped uncommitted: nothing is parked until `reset`.
+        var dropped = false
 
         mutating func dropReleased() {
-            holds = holds.filter { $0.value.commands != nil }
+            awake = awake.filter { $0.value.texture != nil }
         }
     }
 
@@ -1119,13 +1142,29 @@ final class DetailResidency: Sendable {
             return true
         }
         if first {
-            commands.addCompletedHandler { [self] _ in release(key) }
+            // Also run when a buffer is released uncommitted.
+            commands.addCompletedHandler { [self] commands in
+                release(key, dropped: commands.status != .completed && commands.status != .error)
+            }
         }
     }
 
     /// Stops holding for `commands`, which will never be committed.
     func abandon(_ commands: any MTLCommandBuffer) {
-        release(ObjectIdentifier(commands))
+        release(ObjectIdentifier(commands), dropped: true)
+    }
+
+    /// Whether a command buffer was dropped uncommitted since `reset`.
+    var hasDropped: Bool {
+        state.withLock(\.dropped)
+    }
+
+    /// Stops tracking the textures woken so far, which the stage has let go of.
+    func reset() {
+        state.withLock { state in
+            state.awake.removeAll()
+            state.dropped = false
+        }
     }
 
     /// Makes `texture` resident for the commands being encoded. False when the system had
@@ -1142,9 +1181,10 @@ final class DetailResidency: Sendable {
         }
     }
 
-    private func release(_ key: ObjectIdentifier) {
+    private func release(_ key: ObjectIdentifier, dropped: Bool) {
         let generation: Int? = state.withLock { state in
-            state.holds[key] = nil
+            let held = state.holds.removeValue(forKey: key) != nil
+            state.dropped = state.dropped || held && dropped
             state.dropReleased()
             return state.holds.isEmpty ? state.generation : nil
         }
@@ -1157,7 +1197,7 @@ final class DetailResidency: Sendable {
     private func park(ifStill generation: Int) {
         state.withLock { state in
             state.dropReleased()
-            guard state.generation == generation, state.holds.isEmpty else { return }
+            guard state.generation == generation, state.holds.isEmpty, !state.dropped else { return }
             for resident in state.awake.values {
                 resident.texture?.setPurgeableState(.volatile)
             }

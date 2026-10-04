@@ -113,7 +113,8 @@ struct EngineMemoryTests {
         let session = try helpers.makeSession(.bayer, width: 640, height: 480, signal: Self.smooth)
         for abandons in [true, false] {
             let stage = DetailStage(device: helpers.device, kernels: helpers.kernels)
-            do {
+            // Released at the end of the pool, not whenever the task's pool drains.
+            try autoreleasepool {
                 let commands = try #require(helpers.queue.makeCommandBuffer())
                 _ = try stage.process(
                     Self.everyPass, session: session, region: .full, outputSize: session.orientedSize,
@@ -140,6 +141,27 @@ struct EngineMemoryTests {
                 #expect(Self.differing(again.texels, fresh.texels) == 0)
             }
         }
+    }
+
+    /// A command buffer that fails on the GPU leaves its textures unwritten: the engine has the
+    /// stage forget what it cached from the buffer, as it does for one that never ran.
+    @Test func `a command buffer that failed on the GPU leaves nothing cached`() throws {
+        let session = try helpers.makeSession(.bayer, width: 640, height: 480, signal: Self.smooth)
+        let stage = DetailStage(device: helpers.device, kernels: helpers.kernels)
+        var clarity = DetailStageTests.untouched
+        clarity[.clarity] = 25
+        // An earlier render's output, which the failure must not take with it.
+        _ = try render(stage, session, clarity)
+        let kept = Set((stage.cachedOutputs + stage.sharpenCache.heldTextures).map(ObjectIdentifier.init))
+        let commands = try #require(helpers.queue.makeCommandBuffer())
+        _ = try stage.process(
+            Self.everyPass, session: session, region: .full, outputSize: session.orientedSize, commands: commands,
+        )
+        commands.commit()
+        commands.waitUntilCompleted()
+        stage.forget(commands)
+        let cached = Set((stage.cachedOutputs + stage.sharpenCache.heldTextures).map(ObjectIdentifier.init))
+        #expect(cached == kept)
     }
 
     /// Textures an encoded command buffer uses stay resident until it completes, however many
@@ -236,6 +258,27 @@ struct EngineMemoryTests {
         #expect(stage.tileCount == 4)
         let scratch = Self.scratchBytes(stage)
         #expect(scratch <= Self.scratchBudget, "scratch \(scratch >> 20) MB")
+    }
+
+    /// A 20 MP view with noise reduction alone (few textures, so large tiles), then every pass
+    /// (more textures, so smaller tiles), a noise drag with the analysis cached and a new Radius:
+    /// textures made for larger tiles are not reused for smaller ones, which would take the
+    /// scratch over the budget.
+    @Test func `scratch made for larger tiles is not reused past the budget`() throws {
+        let session = try helpers.makeSession(.bayer, width: 5400, height: 3700)
+        let stage = DetailStage(device: helpers.device, kernels: helpers.kernels)
+        var noiseOnly = DetailStageTests.untouched
+        noiseOnly[.noiseLuminance] = 40
+        var noise = Self.everyPass
+        noise[.noiseLuminance] = 60
+        var radius = noise
+        radius[.sharpenRadius] = 1.5
+        let recipes = [("noise alone", noiseOnly), ("every pass", Self.everyPass), ("noise", noise), ("radius", radius)]
+        for (name, recipe) in recipes {
+            _ = try render(stage, session, recipe)
+            let scratch = Self.scratchBytes(stage)
+            #expect(scratch <= Self.scratchBudget, "\(name), \(stage.tileCount) tiles: scratch \(scratch >> 20) MB")
+        }
     }
 
     /// A tiled frame and a differently shaped area that fits in one pass, rendered in turn, as an
@@ -365,6 +408,33 @@ struct EngineMemoryTests {
             tiled.haloShortfall = halved ? halo / 2 : 32
             let tiles = try helpers.processAndRead(tiled, session, recipe)
             #expect(Self.differing(whole.texels, tiles.texels) > 0, "\(name), halo \(halo)")
+        }
+    }
+
+    /// With the sharpening analysis cached and Clarity reading the texel itself, the tiles overlap
+    /// by the one texel Masking's gradient reads; a texel short shows on an odd-sized area.
+    @Test func `a halo one texel short shows`() throws {
+        let session = try helpers.makeSession(.bayer, width: 641, height: 479, signal: Self.blocks)
+        var before = DetailStageTests.untouched
+        before[.sharpenAmount] = 40
+        before[.sharpenMasking] = 50
+        before[.clarity] = 25
+        var recipe = before
+        recipe[.sharpenAmount] = 80
+        let whole = try helpers.processAndRead(
+            DetailStage(device: helpers.device, kernels: helpers.kernels), session, recipe,
+        )
+        for shortfall in [0, 1] {
+            let tiled = DetailStage(device: helpers.device, kernels: helpers.kernels)
+            tiled.scratchBudget = 118 * 100_000
+            _ = try helpers.processAndRead(tiled, session, before)
+            let measures = SharpenMeasures(analysis: tiled.sharpenCache.heldTextures.first)
+            #expect(try passes(session, recipe).halo(level: 0, measures: measures) == 1)
+            tiled.haloShortfall = shortfall
+            let tiles = try helpers.processAndRead(tiled, session, recipe)
+            #expect(tiled.tileCount > 1)
+            let differing = Self.differing(whole.texels, tiles.texels)
+            #expect(shortfall == 0 ? differing == 0 : differing > 0, "\(shortfall) short: \(differing)")
         }
     }
 
