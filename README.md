@@ -191,6 +191,8 @@ Measured on an Apple M1 Ultra with a Release build.
 | Detail stage on a 1:1 region (about 10 MP of pyramid texels), GPU time: noise reduction, Texture and Clarity | ~5 ms, ~1 ms |
 | Detail stage for a 2560 × 1600 view at 1:1 of a 24 MP frame, GPU time: noise reduction alone (Luminance 50); default sharpening, first render; while dragging Radius; while dragging Amount, Detail or Masking (cached analysis); while dragging Luminance | ~3.6 ms, ~7.2 ms, ~5.5 ms, ~2.2 ms, ~4.3 ms |
 
+The detail stage holds about 1.3 GB of GPU memory at 1:1 on a 24 MP photo and 2.3 GB on a 60 MP one, with noise reduction and sharpening on (3.1 GB and 7.5 GB before the [memory audit](docs/research/research-tracker.md), AUD-03); large views render in tiles within its budget, and nothing is kept once rendering stops for half a second.
+
 Folders and the filmstrip on 50,000 photos in 500 folders (`scripts/make-folder-fixture.sh`, then `--folders-perf`), measured while the Mac was busy with other work (load average about 18):
 
 | Operation | Time |
