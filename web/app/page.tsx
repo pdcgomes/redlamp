@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AIDisclosure } from "@/components/sections/AIDisclosure";
 import { CommandPalette } from "@/components/sections/CommandPalette";
 import { EverythingToday, Features, Performance } from "@/components/sections/Features";
 import { Films } from "@/components/sections/Films";
@@ -27,6 +28,7 @@ export default function HomePage() {
       <Gallery shots={gallery} />
       <Roadmap />
       <WatchFilm />
+      <AIDisclosure />
       <OpenSource />
     </>
   );

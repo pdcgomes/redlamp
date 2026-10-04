@@ -36,6 +36,7 @@ Keep the shapes the parsers rely on, or update them:
 | Goals change | `principles` in `web/content/features.ts` |
 | Status changes (alpha, beta, iPad/iPhone) | `status`, `stage` (the status badge) and `homebrew` in `web/lib/site.ts`, and the hero copy in `web/components/sections/Hero.tsx`. A new stage also changes the version suffix in `Version.xcconfig` (`-prealpha`, `-alpha`, `-beta`) |
 | A new screenshot is added to `docs/images` | Use it in a feature row or add it to `gallery` in `web/content/features.ts` |
+| An AI feature lands or changes models, or how agents build Redlamp changes (`AGENTS.md`, waves, the agent recipe studio, CI) | `aiDisclosure` in `web/content/ai.ts` |
 
 Write site copy in the brand voice from `docs/brand/README.md`: calm, plain and precise, with no exclamation marks or superlatives, and only claims the README makes.
 

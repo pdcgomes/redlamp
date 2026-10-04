@@ -27,6 +27,9 @@ export function SiteFooter() {
           <a className="text-mute hover:text-paper" href="/performance">
             Performance
           </a>
+          <a className="text-mute hover:text-paper" href="/#ai">
+            AI disclosure
+          </a>
           <a className="text-mute hover:text-paper" href={site.github}>
             Source on GitHub
           </a>
