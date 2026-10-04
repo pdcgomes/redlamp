@@ -32,15 +32,25 @@ struct CameraGoldenTests {
     static let folder = root.appending(path: "tests/golden/cameras")
     static let updating = ProcessInfo.processInfo.environment["REDLAMP_UPDATE_CAMERA_GOLDEN"] == "1"
 
-    /// The supported cameras' samples: those in the decode regression record.
-    static let samples: [URL] = {
+    /// Names with a decode regression record: the supported cameras.
+    static let recorded: Set<String> = {
         let record = root.appending(path: "tests/decode/cameras.json")
         guard let data = try? Data(contentsOf: record),
               let names = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else {
             return []
         }
-        return EngineSmokeTests.fixtures.filter { names[$0.lastPathComponent] != nil }
+        return Set(names.keys)
+    }()
+
+    /// The supported cameras' development samples.
+    static let samples = EngineSmokeTests.fixtures.filter { recorded.contains($0.lastPathComponent) }
+
+    /// The camera coverage set (`tests/decode/samples.json`), downloaded beside the fixtures.
+    static let cameras: [URL] = {
+        let folder = root.appending(path: "tests/fixtures/cameras")
+        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+        return files.filter { recorded.contains($0.lastPathComponent) }.sorted { $0.path < $1.path }
     }()
 
     static func goldenURL(_ sample: URL) -> URL {
@@ -49,12 +59,22 @@ struct CameraGoldenTests {
 
     @Test(.enabled(if: EngineSmokeTests.canRender && !updating), arguments: samples)
     func `develops in the recorded colours`(sample: URL) async throws {
+        try await Self.expectRecordedColours(sample)
+    }
+
+    /// One at a time: the medium-format samples take up to 2 GB each to open.
+    @Test(.enabled(if: EngineSmokeTests.canRender && !cameras.isEmpty && !updating), .serialized, arguments: cameras)
+    func `each camera's sample develops in the recorded colours`(sample: URL) async throws {
+        try await Self.expectRecordedColours(sample)
+    }
+
+    static func expectRecordedColours(_ sample: URL) async throws {
         let data = try #require(
-            try? Data(contentsOf: Self.goldenURL(sample)),
+            try? Data(contentsOf: goldenURL(sample)),
             "no golden for \(sample.lastPathComponent); record it",
         )
         let golden = try JSONDecoder().decode(Golden.self, from: data)
-        let measured = try await Self.measure(sample)
+        let measured = try await measure(sample)
         try #require(measured.lab.count == golden.lab.count, "the patch grid changed")
         let differences = zip(measured.lab, golden.lab).map { a, b in
             CIELab.deltaE2000(SIMD3(a[0], a[1], a[2]), SIMD3(b[0], b[1], b[2]))
@@ -62,7 +82,7 @@ struct CameraGoldenTests {
         let mean = differences.reduce(0, +) / Double(differences.count)
         let worst = differences.max() ?? 0
         #expect(
-            mean < Self.meanLimit && worst < Self.worstLimit,
+            mean < meanLimit && worst < worstLimit,
             "\(sample.lastPathComponent): mean ΔE2000 \(mean), worst \(worst)",
         )
     }
@@ -72,7 +92,7 @@ struct CameraGoldenTests {
         try FileManager.default.createDirectory(at: Self.folder, withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        for sample in Self.samples {
+        for sample in Self.samples + Self.cameras {
             try await encoder.encode(Self.measure(sample)).write(to: Self.goldenURL(sample), options: .atomic)
         }
     }

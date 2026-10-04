@@ -3,10 +3,10 @@ import RedlampEngineAPI
 import RedlampServices
 import Testing
 
-/// Decodes every sample file in `tests/fixtures/raw` (CC0 files from raw.pixls.us) and compares
-/// everything development depends on with `tests/decode/cameras.json`: layout, crop, black and
-/// white levels, as-shot white balance, color matrix, orientation, baseline exposure and a
-/// checksum of the sensor data.
+/// Decodes every sample file in `tests/fixtures/raw` and `tests/fixtures/cameras` (CC0 files from
+/// raw.pixls.us) and compares everything development depends on with `tests/decode/cameras.json`:
+/// layout, crop, black and white levels, as-shot white balance, color matrix, orientation,
+/// baseline exposure and a checksum of the sensor data.
 ///
 /// A camera counts as supported only once it has a sample here. After an intended decoder change
 /// (a LibRaw update, a fix), regenerate the file and review its diff:
@@ -18,37 +18,54 @@ struct DecodeRegressionTests {
     static let goldenURL = root.appending(path: "tests/decode/cameras.json")
     static let updating = ProcessInfo.processInfo.environment["REDLAMP_UPDATE_DECODE_GOLDEN"] == "1"
 
-    static let fixtures: [URL] = {
-        let folder = root.appending(path: "tests/fixtures/raw")
-        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+    /// The development samples other tests use too.
+    static let fixtures = raws(in: "tests/fixtures/raw")
+    /// The camera coverage set (`tests/decode/samples.json`): one sample per main maker and format.
+    static let cameras = raws(in: "tests/fixtures/cameras")
+
+    static func raws(in folder: String) -> [URL] {
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: root.appending(path: folder), includingPropertiesForKeys: nil,
+        )) ?? []
         return files.filter(SupportedFormats.isRaw).sorted { $0.lastPathComponent < $1.lastPathComponent }
-    }()
+    }
 
     static func loadGolden() throws -> [String: DecodeSummary] {
         let data = try Data(contentsOf: goldenURL)
         return try JSONDecoder().decode([String: DecodeSummary].self, from: data)
     }
 
-    @Test(.enabled(if: !fixtures.isEmpty && !updating), arguments: fixtures)
-    func `decodes like the golden record`(url: URL) throws {
+    static func expectGolden(_ url: URL) throws {
         let golden = try #require(
-            try Self.loadGolden()[url.lastPathComponent],
+            try loadGolden()[url.lastPathComponent],
             "no golden record for \(url.lastPathComponent); regenerate tests/decode/cameras.json",
         )
         let decoded = try DecodeSummary(ImageDecoder.decode(url))
         #expect(decoded == golden)
     }
 
+    @Test(.enabled(if: !fixtures.isEmpty && !updating), arguments: fixtures)
+    func `decodes like the golden record`(url: URL) throws {
+        try Self.expectGolden(url)
+    }
+
+    /// One at a time: the medium-format samples take up to 2 GB each to decode.
+    @Test(.enabled(if: !cameras.isEmpty && !updating), .serialized, arguments: cameras)
+    func `each camera's sample decodes like the golden record`(url: URL) throws {
+        try Self.expectGolden(url)
+    }
+
     @Test(.enabled(if: !fixtures.isEmpty && !updating))
     func `every golden record has its sample`() throws {
-        let names = Set(Self.fixtures.map(\.lastPathComponent))
-        #expect(try Set(Self.loadGolden().keys).subtracting(names).isEmpty)
+        let names = Set((Self.fixtures + Self.cameras).map(\.lastPathComponent))
+        let missing = try Set(Self.loadGolden().keys).subtracting(names)
+        #expect(missing.isEmpty, "\(missing.sorted()) missing; `mise run fixtures` downloads them")
     }
 
     @Test(.enabled(if: updating))
     func `regenerate golden records`() throws {
         var golden: [String: DecodeSummary] = [:]
-        for url in Self.fixtures {
+        for url in Self.fixtures + Self.cameras {
             golden[url.lastPathComponent] = try DecodeSummary(ImageDecoder.decode(url))
         }
         let encoder = JSONEncoder()
@@ -98,9 +115,12 @@ struct DecodeSummary: Codable, Equatable {
         orientation = image.orientation
         baselineExposure = rounded(image.baselineExposure)
         var hash: UInt64 = 0xCBF2_9CE4_8422_2325
-        for sample in image.samples {
-            hash = (hash ^ UInt64(sample & 0xFF)) &* 0x0000_0100_0000_01B3
-            hash = (hash ^ UInt64(sample >> 8)) &* 0x0000_0100_0000_01B3
+        // Through the buffer: iterating the array itself is over ten times slower in a test build.
+        image.samples.withUnsafeBufferPointer { samples in
+            for sample in samples {
+                hash = (hash ^ UInt64(sample & 0xFF)) &* 0x0000_0100_0000_01B3
+                hash = (hash ^ UInt64(sample >> 8)) &* 0x0000_0100_0000_01B3
+            }
         }
         sampleChecksum = String(hash, radix: 16)
     }
