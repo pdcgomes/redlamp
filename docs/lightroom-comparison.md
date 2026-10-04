@@ -131,7 +131,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Content-aware Remove | Yes | Done | | | RM-07 | A classical fill on the Mac; large areas wait for generative fill |
 | Remove people and objects with a click | Yes | Done | | | RM-08 | |
 | Find and remove things named in words | No | Done | | | RM-08 | Trash, signs, cables and more, found anywhere in the photo; something as large as a car leaves a smeared patch until generative fill arrives |
-| Generative Remove | Yes (cloud, credits) | Planned | | P3 | RM-10 | An opt-in download that runs on the Mac, labelled as generated fill |
+| Generative Remove | Yes (cloud, credits) | In progress | | P3 | RM-10 | An opt-in download that runs on the Mac, labelled as generated fill |
 | Dust removal and Visualize Spots | Yes | Done | | | RM-02 | Also across a shoot: specks in the same place on the sensor are healed in every photo |
 | Reflection removal | Yes | Later | | | | |
 | Red Eye and Pet Eye | Yes | Planned | | P3 | OTH-01 | |

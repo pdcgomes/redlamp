@@ -24,6 +24,17 @@ export function GitHubGlyph({ className = "size-4" }: { className?: string }) {
   );
 }
 
+export function ProductHuntGlyph({ className = "size-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 40 40" aria-hidden className={className} fill="currentColor">
+      <path
+        fillRule="evenodd"
+        d="M20 0a20 20 0 1 1 0 40a20 20 0 1 1 0-40ZM22.667 10H13v20h4v-6h5.667a7 7 0 1 0 0-14ZM22.667 14H17v6h5.667a3 3 0 1 0 0-6Z"
+      />
+    </svg>
+  );
+}
+
 export function DownloadGlyph({ className = "size-4" }: { className?: string }) {
   return (
     <svg viewBox="0 0 16 16" aria-hidden className={className} fill="currentColor">
