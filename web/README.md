@@ -47,3 +47,28 @@ draft: true              # optional: shown by `mise run site`, left out of produ
 - Enable **Include files outside the root directory in the Build Step**, so the build can read `README.md` and `docs/`.
 - Domain: `redlamp.app`.
 - Enable **Web Analytics** in the project's Analytics tab. `<Analytics />` in `app/layout.tsx` reports page views from deployments on Vercel; under `mise run site` it only logs them to the browser console.
+
+## The feedback relay
+
+Redlamp's Report a Bug or Send Feedback (`packages/RedlampUI/Sources/Feedback`) posts each report to `POST /api/feedback`, which files it as a GitHub issue as the Redlamp Feedback GitHub App, so people need no GitHub account. The app writes the issue; the relay checks it (kind, labels, sizes, that screenshots are JPEGs and diagnostics are JSON), stores the attachments in a public attachments repo, links them into the body, and files the issue with only the labels that already exist. `GET /api/feedback/status?numbers=12,15` gives the state of the reports a Mac has sent, for its Your Reports list. The logic is in `lib/feedback.ts` and `lib/github-app.ts`, tested by `lib/feedback.test.ts`.
+
+Its settings, for Production and Preview (Preview files into the attachments repo, so tests never reach the real issues):
+
+| Variable | Value |
+| --- | --- |
+| `FEEDBACK_ENABLED` | `1` to accept reports; anything else switches the relay off (it answers 503) |
+| `FEEDBACK_GITHUB_APP_ID` | The app's ID, on its General page |
+| `FEEDBACK_GITHUB_INSTALLATION_ID` | Its installation on `pdcgomes` |
+| `FEEDBACK_GITHUB_APP_PRIVATE_KEY` | The app's private key (sensitive): the PEM, or the PEM in base64 |
+| `FEEDBACK_REPO` | `pdcgomes/redlamp` in Production, `pdcgomes/redlamp-feedback` in Preview |
+| `FEEDBACK_ASSETS_REPO` | `pdcgomes/redlamp-feedback` |
+
+The app needs Issues and Contents (read and write) on both repos. `scripts/feedback-labels.py --apply` makes the `in-app` and `component:` labels from `docs/feedback/areas.json`; run it after the areas change. Anything in the attachments repo is public, and a file removed from it stays in its history until the history is rewritten.
+
+To try the relay locally, run it with the settings above and point a Debug build of Redlamp at it:
+
+```bash
+FEEDBACK_ENABLED=1 FEEDBACK_REPO=pdcgomes/redlamp-feedback … npx next dev --port 3123
+defaults write app.redlamp.mac FeedbackEndpoint http://localhost:3123/api/feedback
+defaults write app.redlamp.mac FeedbackSendsLive -bool YES   # Debug builds send dry runs otherwise
+```
