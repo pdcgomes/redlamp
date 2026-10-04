@@ -47,7 +47,9 @@ private struct FeedbackNote: View {
                     "Redlamp is made by one person, and every report is read by that person. Bugs get looked into, and ideas shape what comes next.",
                 )
                 Text(
-                    "Reports are posted on GitHub, in Redlamp's public issues, where anyone can read them. You'll see everything a report holds before you send it, and nothing that names you, your files or where they are goes with it unless you add it.",
+                    "Reports are posted on GitHub, in Redlamp's public issues, where anyone can read them. "
+                        + "You'll see everything a report holds before you send it, and nothing that names you, "
+                        + "your files or where they are goes with it unless you add it.",
                 )
                 Text(
                     "Please keep it friendly and constructive. Saying what you saw, and what you expected instead, helps most.",

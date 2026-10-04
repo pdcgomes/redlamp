@@ -147,6 +147,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] **Copy, paste and sync settings, as Lightroom does:** Copy Settings… (`⇧⌘C`) opens a checklist of every setting and mask, remembered for next time; Paste (`⇧⌘V`) applies what was ticked, and recomputes the pasted AI masks for the photo. ⌘- and ⇧-click select several photos in the filmstrip: Sync… (`⇧⌘S`) and Paste reach all of them in the background, with Undo, and Auto Sync (`⌥⇧⌘A`) repeats every change.
 - [x] Non-destructive edits, saved automatically to a sidecar file next to each photo (`IMG_1234.ARW.redlamp`).
 - [x] **Export dialog** (`⇧⌘E`): JPEG, HEIC and AVIF (lossy, with quality and an optional file size limit) or PNG and TIFF (lossless, with TIFF compression), 8, 10 or 16 bits, sRGB or Display P3. Resize by long edge, short edge, width and height, megapixels or percentage, keep all metadata, all but the location, or none, and choose the folder and file name. Built-in and saved presets, and Export with Previous (`⌥⇧⌘E`) repeats the last export without the dialog.
+- [x] **Report a Bug or Send Feedback** (the toolbar's Feedback button, the Help menu or the command palette, and Report… beside an error): files a GitHub issue for you, with no GitHub account needed, under an area picked from a list that mirrors the app (such as Masking › Objects), suggested from what you were doing. The report carries what you did in the last minutes, the open photo's camera and edit, and the Mac's details, and you see all of it before it's sent ([what it contains](#reporting-bugs-and-feedback)). Help › Your Reports lists what you've sent, with each issue's state and replies.
 - [x] A headless `redlamp` command-line tool for rendering and export. Exports smaller than the photo are developed at full resolution and downscaled last, so sharpening, noise reduction and texture look the same at every size.
 
 ### Recipes and looks
@@ -1164,9 +1165,19 @@ flowchart LR
 - **CI-enforced boundaries.** `scripts/check-engine-purity.sh` fails the build if an engine package imports a UI framework, or if a UI package imports engine internals.
 - **The parameter schema is shared.** Slider names, ranges, defaults, and whether a parameter renders yet are defined once, in `RedlampEngineAPI`, and both the engine and the UI read them.
 
+### Reporting bugs and feedback
+
+Report a Bug or Send Feedback (the toolbar's Feedback button, or Help › Report a Bug or Send Feedback…) files an issue in [Redlamp's GitHub issues](https://github.com/pdcgomes/redlamp/issues), which are public. It goes through redlamp.app, which files it as the Redlamp Feedback bot, so you don't need a GitHub account. The first time, a short note asks you to keep reports friendly; Preview the Report shows exactly what will be posted.
+
+You choose the area (Develop › Noise Reduction, Masking › Objects, Export › Formats and Quality, and so on through every part of the app; the list is in [docs/feedback/areas.json](docs/feedback/areas.json)), and the sheet suggests the one you were using. Each of these goes with your words unless you turn it off: the Redlamp version and the Mac (model, chip, memory, GPU, displays, macOS); the open photo's format, camera, lens, exposure, size and the kind of disk it's on; its edit (the settings you changed, masks and how they were made, the recipe) and this session's history; what you did in the last 15 minutes (photos opened, tools, panels, actions, edits, messages, exports, slow renders); and Redlamp's own log. A `diagnostics.json` beside the issue holds the same in full, with the edit in the sidecar format, so it can be tried on another photo from the same camera.
+
+Paths, folder names, location and serial numbers are never included, and neither is the photo: photos are named Photo A, Photo B unless you choose to include file names, and a screenshot of Redlamp's window is sent only if you tick it. Images you add lose their metadata first. Screenshots and `diagnostics.json` are stored in the public [redlamp-feedback](https://github.com/pdcgomes/redlamp-feedback) repository. To show a video, add it to the issue on GitHub once it's sent.
+
+Help › Your Reports lists the reports sent from this Mac (kept in `~/Library/Application Support/Redlamp/Feedback`), each opening on GitHub, where anyone can read it and its replies. Once you've sent one, Redlamp asks redlamp.app every few hours how your reports are doing, and the Feedback button counts replies and changes; turn this off in Your Reports. A report that can't be sent waits there and goes when redlamp.app can be reached, or can be saved as files or filed on GitHub's own page instead. Debug builds send dry runs (see [web/README.md](web/README.md) to try the relay locally).
+
 ## Contributing
 
-Redlamp is at an early stage and moving quickly. Issues and discussion are very welcome.
+Redlamp is at an early stage and moving quickly. Issues and discussion are very welcome: Report a Bug or Send Feedback in the app files an issue for you, with the details that help.
 
 - **Clean-room policy.** No GPL or LGPL code or data. Algorithms are implemented from published papers and specifications. Reading GPL projects such as darktable and RawTherapee to understand an idea is fine, but never port, translate or paraphrase their code, and never copy their data (profiles, tables, presets).
 - **Third-party components:** LibRaw is used under its CDDL-1.0 option. Planned additions are lcms2 (MIT) and the lensfun database (CC-BY-SA, data only).

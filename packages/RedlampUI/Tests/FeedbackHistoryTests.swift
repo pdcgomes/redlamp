@@ -138,7 +138,7 @@ struct FeedbackHistoryTests {
         #expect(history.reports.first?.featureID == "export.dialog")
     }
 
-    @Test func `GitHub's own page gets as much of the report as fits, and the clipboard all of it`() {
+    @Test func `the new-issue page gets as much of the report as fits, and the clipboard all of it`() {
         var long = submission()
         long.body = "![Screenshot 1](attachment:screenshot-1.jpg)\n" + String(
             repeating: "Words with spaces. ",
@@ -300,10 +300,12 @@ struct FeedbackRelayTests {
 
     @Test func `statuses come from the relay's status route`() async throws {
         let relay = relay()
-        Stub.answer = (
-            200,
-            #"{"issues":[{"number":12,"state":"closed","stateReason":"not_planned","title":"MSK-18: Drops","comments":3,"updatedAt":"2026-10-04T08:01:59Z","milestone":"Phase 3: Pro masking","url":"https://github.com/pdcgomes/redlamp/issues/12"},{"number":13,"state":"missing","stateReason":null,"title":null,"comments":0,"updatedAt":null,"milestone":null,"url":null}]}"#,
-        )
+        let closed = #"{"number":12,"state":"closed","stateReason":"not_planned","title":"MSK-18: Drops","comments":3,"#
+            + #""updatedAt":"2026-10-04T08:01:59Z","milestone":"Phase 3: Pro masking","#
+            + #""url":"https://github.com/pdcgomes/redlamp/issues/12"}"#
+        let missing = #"{"number":13,"state":"missing","stateReason":null,"title":null,"comments":0,"#
+            + #""updatedAt":null,"milestone":null,"url":null}"#
+        Stub.answer = (200, #"{"issues":["# + closed + "," + missing + "]}")
         let statuses = try await relay.statuses(of: [12, 13])
         #expect(Stub.requests.first?.0.url?.absoluteString == "https://relay.test/api/feedback/status?numbers=12,13")
         #expect(statuses.map(\.summary) == ["Closed as not planned", "Removed"])

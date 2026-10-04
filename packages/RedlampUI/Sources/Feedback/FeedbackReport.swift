@@ -371,9 +371,11 @@ public struct FeedbackReport: Codable, Sendable, Hashable {
     private static func cell(_ text: String) -> String {
         sanitized(text).replacingOccurrences(of: "|", with: "\\|").replacingOccurrences(of: "\n", with: " ")
     }
+}
 
-    // MARK: - diagnostics.json
+// MARK: - diagnostics.json
 
+extension FeedbackReport {
     private struct Diagnostics: Encodable {
         let format = "app.redlamp.feedback-diagnostics"
         let formatVersion = 1
