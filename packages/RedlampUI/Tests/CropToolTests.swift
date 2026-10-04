@@ -16,6 +16,8 @@ struct CropToolTests {
         }
         try #require(model.info != nil)
         model.activeTool = .crop
+        // The overlay choices are the app's, kept in user defaults: each test starts from Lightroom's.
+        model.cropOverlayChoices = CropOverlayChoices()
         return model
     }
 
@@ -127,6 +129,31 @@ struct CropToolTests {
         ])
     }
 
+    @Test func `the O key skips overlays not chosen, and one left out stays until it is pressed`() async throws {
+        let model = try await openModel()
+        defer { model.cropOverlayChoices = CropOverlayChoices() }
+        for overlay in [CropOverlay.grid, .diagonal, .goldenRatio, .goldenSpiral] {
+            model.cropOverlayChoices[overlay] = false
+        }
+        var visited = [model.cropOverlay]
+        for _ in 0 ..< 4 {
+            #expect(model.perform(.maskOverlay))
+            visited.append(model.cropOverlay)
+        }
+        #expect(visited == [.thirds, .goldenTriangle, .aspectRatios, .thirds, .goldenTriangle])
+
+        model.cropOverlayChoices[.goldenTriangle] = false
+        #expect(model.cropOverlay == .goldenTriangle, "still shown, though no longer chosen")
+        model.perform(.maskOverlay)
+        #expect(model.cropOverlay == .aspectRatios)
+        // One picked from the Overlay menu that isn't chosen shows too; O goes on from there.
+        model.cropOverlay = .goldenSpiral
+        model.perform(.maskOverlay)
+        #expect(model.cropOverlay == .aspectRatios)
+        model.perform(.maskOverlay)
+        #expect(model.cropOverlay == .thirds)
+    }
+
     @Test func `the overlays stay in the crop's frame at any Angle, in landscape and portrait`() async throws {
         let landscape = try await openModel()
         let portrait = try await openModel()
@@ -142,10 +169,10 @@ struct CropToolTests {
                 let rect = CropOverlayView.rect(of: model.recipe.crop, in: frame)
                 let inside = rect.insetBy(dx: -1e-6, dy: -1e-6)
                 #expect((rect.height > rect.width) == isPortrait, "\(rect) at \(angle)°")
-                for (outline, ratio) in zip(CropOverlay.aspectOutlines(in: rect), CropOverlay.outlineRatios) {
+                for (outline, ratio) in zip(CropOverlay.aspectOutlines(in: rect), CropOverlay.AspectRatio.allCases) {
                     #expect(inside.contains(outline), "\(outline) outside \(rect) at \(angle)°")
                     let long = max(outline.width, outline.height), short = min(outline.width, outline.height)
-                    #expect(abs(long - short * ratio) <= 1, "\(ratio) is \(outline.size) at \(angle)°")
+                    #expect(abs(long - short * ratio.value) <= 1, "\(ratio.title) is \(outline.size) at \(angle)°")
                 }
                 for turns in 0 ..< 8 {
                     for arc in GoldenSpiral(in: rect, turns: turns).arcs {
@@ -345,10 +372,10 @@ struct CropOverlayTests {
     @Test func `each aspect outline keeps its ratio, centred in the crop, as large as fits and turned with it`() {
         for rect in Self.frames {
             let outlines = CropOverlay.aspectOutlines(in: rect)
-            #expect(outlines.count == CropOverlay.outlineRatios.count)
-            for (outline, ratio) in zip(outlines, CropOverlay.outlineRatios) {
+            #expect(outlines.count == CropOverlay.AspectRatio.allCases.count)
+            for (outline, ratio) in zip(outlines, CropOverlay.AspectRatio.allCases) {
                 let long = max(outline.width, outline.height), short = min(outline.width, outline.height)
-                #expect(abs(long - short * ratio) < 1e-9 * long, "\(ratio) is \(outline.size) in \(rect)")
+                #expect(abs(long - short * ratio.value) < 1e-9 * long, "\(ratio.title) is \(outline.size) in \(rect)")
                 #expect(rect.height > rect.width ? outline.height >= outline.width : outline.width >= outline.height)
                 expectInside(CGPoint(x: outline.minX, y: outline.minY), rect)
                 expectInside(CGPoint(x: outline.maxX, y: outline.maxY), rect)
@@ -360,6 +387,7 @@ struct CropOverlayTests {
             }
         }
         let common: [Double] = [1, 5.0 / 4, 7.0 / 5, 3.0 / 2, 4.0 / 3, 16.0 / 9]
-        #expect(common.allSatisfy(CropOverlay.outlineRatios.contains), "1 × 1, 4 × 5, 5 × 7, 2 × 3, 4 × 3, 16 × 9")
+        let values = CropOverlay.AspectRatio.allCases.map(\.value)
+        #expect(common.allSatisfy(values.contains), "1 × 1, 4 × 5, 5 × 7, 2 × 3, 4 × 3, 16 × 9")
     }
 }
