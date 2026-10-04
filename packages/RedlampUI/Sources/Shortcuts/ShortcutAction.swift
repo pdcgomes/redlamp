@@ -133,6 +133,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     /// File & Edit
     case openFolder, export, exportWithPrevious, mergeFocusStack, editFocusStack, showShortcuts, filmLooks
     case commandPalette
+    case testCamera
 
     public var id: String {
         rawValue
@@ -166,6 +167,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
             .rating
         case .openFolder, .export, .exportWithPrevious, .mergeFocusStack, .editFocusStack, .showShortcuts,
              .filmLooks, .commandPalette:
+            .file
+        case .testCamera:
             .file
         }
     }
@@ -267,6 +270,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .filmLooks: "Film Looks"
         case .findAdjustment: "Find Adjustment…"
         case .commandPalette: "Command Palette…"
+        case .testCamera: "Test Your Camera…"
         }
     }
 
@@ -368,6 +372,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .filmLooks: [.char("l", shift: true, command: true)]
         case .findAdjustment: [.char("f", command: true)]
         case .commandPalette: [.char("k", command: true)]
+        case .testCamera: []
         }
     }
 

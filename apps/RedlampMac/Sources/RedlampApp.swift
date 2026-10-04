@@ -37,6 +37,7 @@ struct RedlampApp: App {
         }
         model.onToggleFullScreen = { NSApp.keyWindow?.toggleFullScreen(nil) }
         model.onToggleToolbar = { NSApp.keyWindow?.toggleToolbarShown(nil) }
+        model.onTestCamera = { AppDelegate.showCameraBench?() }
         let theme = ThemeSettings()
         let exports = ExportPresetStore()
         _model = State(initialValue: model)
@@ -45,6 +46,7 @@ struct RedlampApp: App {
 
         let keyboard = KeyboardShortcuts()
         AppDelegate.saveBeforeQuitting = { model.saveBeforeQuitting() }
+        AppDelegate.showCameraBench = { CameraBenchWindow.show(currentFolder: { model.folder }) }
         AppDelegate.launch = {
             let editor = EditorWindowController(
                 model: model, theme: theme,
@@ -136,6 +138,7 @@ struct RedlampApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static var launch: (@MainActor () -> EditorWindowController)?
     static var saveBeforeQuitting: (@MainActor () -> QuitSaving)?
+    static var showCameraBench: (@MainActor () -> Void)?
     let updates = Updates()
     private var editor: EditorWindowController?
     private var welcome: WelcomeWindowController?

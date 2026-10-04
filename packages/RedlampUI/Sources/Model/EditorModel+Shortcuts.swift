@@ -159,6 +159,9 @@ public extension EditorModel {
             guard stackWorkspace == nil, let selection, SupportedFormats.isStack(selection) else { return false }
             openStackWorkspace(selection)
         case .openFolder, .export, .exportWithPrevious, .filmLooks: return false
+        case .testCamera:
+            guard let onTestCamera else { return false }
+            onTestCamera()
         default:
             return false
         }
@@ -203,6 +206,7 @@ public extension EditorModel {
         case .autoWhiteBalance, .whiteBalanceSelector: return whiteBalance
         case .editTool, .maskingTool, .cancel, .showShortcuts, .openFolder, .filmLooks, .commandPalette:
             return true
+        case .testCamera: return onTestCamera != nil
         case .cropTool, .healTool, .rotateLeft, .rotateRight: return photo
         case .cropAspectLock: return activeTool == .crop
         case .mergeFocusStack: return stackWorkspace == nil && !stackSuggestions.isEmpty
