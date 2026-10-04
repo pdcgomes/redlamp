@@ -81,45 +81,32 @@ struct W4Baseline {
             ("1:1 2560x1600", centred(2560, 1600), PixelSize(width: 2560, height: 1600)),
             ("fit 3900x2600 (level 0)", .full, frame.fitted(within: PixelSize(width: 3900, height: 2600))),
             ("fit 2400x1600 (level 1)", .full, frame.fitted(within: PixelSize(width: 2400, height: 1600))),
-            ("fit 1200x800 (level 2)", .full, frame.fitted(within: PixelSize(width: 1200, height: 800))),
         ]
         typealias Case = (String, Bool, (Int) -> EditRecipe)
+        let process = Int(ProcessInfo.processInfo.environment["W4_PROCESS"] ?? "") ?? EditRecipe.currentProcessVersion
+        func edit(_ change: (inout EditRecipe) -> Void) -> EditRecipe {
+            var r = EditRecipe()
+            r.processVersion = process
+            change(&r)
+            return r
+        }
         let cases: [Case] = [
-            ("NR Color 25 (default)", false, { _ in var r = Self.base(); r[.noiseColor] = 25; return r }),
-            ("NR Luminance 50 + Color 25", false, { _ in
-                var r = Self.base(); r[.noiseLuminance] = 50; r[.noiseColor] = 25; return r
-            }),
-            ("Sharpening 40, uncached", false, { _ in var r = Self.base(); r[.sharpenAmount] = 40; return r }),
-            ("Sharpening, Amount drag (analysis cached)", true, { step in
-                var r = Self.base(); r[.sharpenAmount] = Double(40 + step); return r
-            }),
-            ("Sharpening, Radius drag (separation cached)", true, { step in
-                var r = Self.base(); r[.sharpenAmount] = 40; r[.sharpenRadius] = 1 + 0.05 * Double(step); return r
-            }),
-            ("Texture 50", false, { _ in var r = Self.base(); r[.texture] = 50; return r }),
-            ("Clarity 50 (process 9)", false, { _ in var r = Self.base(); r[.clarity] = 50; return r }),
-            ("Clarity 50 (process 8)", false, { _ in
-                var r = Self.base(); r.processVersion = 8; r[.clarity] = 50; return r
-            }),
+            ("Default edit, uncached", false, { _ in edit { _ in } }),
+            ("Heavy: NR L50, Texture 50, Clarity 50, mask, uncached", false, { _ in edit { r in
+                r[.noiseLuminance] = 50; r[.texture] = 50; r[.clarity] = 50
+                r.masks = [Self.gradientMask(.localTexture, 50)]
+            } }),
+            ("Texture drag", true, { step in edit { $0[.texture] = Double(20 + step) } }),
             (
-                "Texture 50 + Clarity 50",
-                false,
-                { _ in var r = Self.base(); r[.texture] = 50; r[.clarity] = 50; return r },
+                "Texture drag, NR L50",
+                true,
+                { step in edit { $0[.noiseLuminance] = 50; $0[.texture] = Double(20 + step) } },
             ),
-            ("Mask Texture 50 only", false, { _ in
-                var r = Self.base(); r.masks = [Self.gradientMask(.localTexture, 50)]; return r
-            }),
-            ("Default edit (Color 25, sharpening 40), uncached", false, { _ in EditRecipe() }),
-            ("Default edit, Texture drag (caches on)", true, { step in
-                var r = EditRecipe(); r[.texture] = Double(20 + step); return r
-            }),
-            ("Default edit + NR L50, Texture drag (caches on)", true, { step in
-                var r = EditRecipe(); r[.noiseLuminance] = 50; r[.texture] = Double(20 + step); return r
-            }),
-            ("All: NR L50 C25, sharpening 40, Texture 50, Clarity 50, mask, uncached", false, { _ in
-                var r = EditRecipe(); r[.noiseLuminance] = 50; r[.texture] = 50; r[.clarity] = 50
-                r.masks = [Self.gradientMask(.localTexture, 50)]; return r
-            }),
+            ("Clarity drag", true, { step in edit { $0[.clarity] = Double(20 + step) } }),
+            ("Amount drag", true, { step in edit { $0[.sharpenAmount] = Double(40 + step) } }),
+            ("Masking drag", true, { step in edit { $0[.sharpenMasking] = Double(10 + step) } }),
+            ("Radius drag", true, { step in edit { $0[.sharpenRadius] = 1 + 0.05 * Double(step) } }),
+            ("Luminance drag", true, { step in edit { $0[.noiseLuminance] = Double(20 + step) } }),
         ]
         var lines = ["start \(Self.load())"]
         for (viewName, region, size) in views {
@@ -128,7 +115,10 @@ struct W4Baseline {
                 geometry: GeometryMap(recipe: EditRecipe(), imageSize: frame, lens: session.info.lensCorrection),
                 region: region, outputSize: size,
             )
-            lines.append("\(viewName): work level \(work.level), \(work.size.x)x\(work.size.y) texels")
+            lines
+                .append(
+                    "process \(process), \(viewName): work level \(work.level), \(work.size.x)x\(work.size.y) texels",
+                )
             for (label, cache, recipe) in cases {
                 let stage = DetailStage(device: device, kernels: kernels)
                 var buffers: [any MTLCommandBuffer] = []

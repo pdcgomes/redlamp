@@ -42,3 +42,25 @@ Chosen from the crops in `crops/` (base, process 9, process 10; Texture 100 unle
   as process 9, most of whose change there is boosted sky noise.
 - Negative Texture is not limited: it smooths and makes no halos, and without the limit the preview
   follows the export (ARC-04 correlation 0.86 rather than 0.846 at 1000 px).
+
+## GPU times, process 9 against 10
+
+The harness's `timing` part with `TEST_RUNNER_W4_PROCESS=9` and `=10`, on `DSC_0750.NEF` (6064×4040) on an
+M1 Ultra: median GPU time of the stage's command buffer over 16 renders. Other sessions were building;
+the one-minute load average was 27–31 throughout. Drags change the slider each render with the caches on.
+
+| ms, process 9 → 10 | 1:1 (2689×1728 texels) | Fit level 0 (6064×4040) | Fit level 1 (3032×2020) |
+| --- | --- | --- | --- |
+| Default edit, uncached | 8.7 → 6.8 | 62.9 → 40.8 | 11.8 → 8.9 |
+| Heavy edit (NR L50, Texture, Clarity, mask), uncached | 16.0 → 10.1 | 71.4 → 62.8 | 13.6 → 11.3 |
+| Texture drag | 3.1 → 0.27 | 20.8 → 27.2 | 3.8 → 0.27 |
+| Texture drag with Luminance 50 | 6.3 → 0.28 | 36.6 → 42.9 | 8.1 → 0.28 |
+| Clarity drag | 3.6 → 0.23 | 20.6 → 27.1 | 5.5 → 0.33 |
+| Amount drag | 2.7 → 0.20 | 19.4 → 27.1 | 5.1 → 0.28 |
+| Masking drag | 2.6 → 0.24 | 24.8 → 27.3 | 4.1 → 0.31 |
+| Radius drag | 6.2 → 2.8 | 36.4 → 48.3 | 6.8 → 3.4 |
+| Luminance drag | 5.8 → 9.7 | 41.1 → 58.3 | 5.3 → 10.8 |
+
+At fit level 0 the work area is 24 megapixels, above `DetailStage.ladderCacheTexels` (16M), so no ladder
+is cached and every drag renders the stage afresh. Caching it there (18 bytes a texel, 440 MB) takes the
+stage to 1438 MB against `EngineMemoryTests`' 1200 MB.
