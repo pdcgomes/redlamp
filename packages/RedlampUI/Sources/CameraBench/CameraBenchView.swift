@@ -163,7 +163,7 @@ struct CameraBenchView: View {
                 }
             }
             .labelsHidden()
-            .frame(width: 260)
+            .fixedSize()
             TextField("Anything to add (optional)", text: Binding(
                 get: { model.notes[mode.id] ?? "" },
                 set: { model.notes[mode.id] = $0 },

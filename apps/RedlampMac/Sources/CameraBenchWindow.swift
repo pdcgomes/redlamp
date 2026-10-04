@@ -29,4 +29,14 @@ enum CameraBenchWindow {
         controller = window
         window.showWindow(nil)
     }
+
+    #if DEBUG || REDLAMP_PROFILING
+        /// `--camera-bench <folder>`: opens the window and tests the folder, for captures.
+        static func openIfRequested(currentFolder: @escaping () -> URL?) {
+            let arguments = LaunchArguments.all
+            guard let index = arguments.firstIndex(of: "--camera-bench"), index + 1 < arguments.count else { return }
+            show(currentFolder: currentFolder)
+            controller?.model.test([URL(fileURLWithPath: arguments[index + 1])])
+        }
+    #endif
 }
