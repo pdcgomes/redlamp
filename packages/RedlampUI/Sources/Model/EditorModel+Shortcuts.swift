@@ -8,6 +8,14 @@ public extension EditorModel {
     /// the key event can continue to the rest of the app.
     @discardableResult
     func perform(_ action: ShortcutAction, shifted: Bool = false) -> Bool {
+        let performed = runShortcut(action, shifted: shifted)
+        if performed {
+            activity.record(.action, action.title)
+        }
+        return performed
+    }
+
+    private func runShortcut(_ action: ShortcutAction, shifted: Bool) -> Bool {
         guard !isModalDialogOpen else { return false }
         guard action.isAvailable else { return false }
         switch action {

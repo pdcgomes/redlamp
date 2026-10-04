@@ -14,6 +14,10 @@ import RedlampRecipes
 public final class EditorModel {
     public let engine: any EditingEngine
     public let canvas = CanvasController()
+    /// What happened this session, for feedback reports.
+    public let activity = ActivityLog()
+    @ObservationIgnored private var activityRecorder: ActivityRecorder?
+    @ObservationIgnored private var openStarted: ContinuousClock.Instant?
     @ObservationIgnored private let sidecars = SidecarStore()
     @ObservationIgnored let saves = SaveQueue(store: SidecarStore())
 
@@ -488,6 +492,7 @@ public final class EditorModel {
                 self?.receive(frame)
             }
         }
+        activityRecorder = ActivityRecorder(model: self)
     }
 
     // MARK: - Opening a photo (folders: EditorModel+Library)
@@ -511,6 +516,7 @@ public final class EditorModel {
         }
         selection = url
         visits += 1
+        openStarted = .now
         selectionIndex = library.index(of: url)
         library.remember(url)
         // Cleared first so the resets below don't render the outgoing photo; a ready photo
@@ -574,6 +580,7 @@ public final class EditorModel {
             } catch {
                 guard selection == url else { return }
                 isLoading = false
+                activity.record(.photo, "\(activity.alias(for: url)) (\(url.pathExtension.uppercased())) didn't open")
                 errorMessage = error.localizedDescription
             }
         }
@@ -600,12 +607,25 @@ public final class EditorModel {
         var hasUnmergedConflicts = false
     }
 
+    /// "Opened Photo A: CR3, Canon EOS R5, 8192 × 5464, with an edit, in 1.2 s".
+    private func recordOpening(_ opened: ImageInfo, edited: Bool) {
+        var parts = [opened.url.pathExtension.uppercased()]
+        parts += [opened.cameraName].compactMap(\.self)
+        parts.append("\(opened.pixelSize.width) × \(opened.pixelSize.height)")
+        parts.append(edited ? "with an edit" : "unedited")
+        if let openStarted {
+            parts.append(String(format: "in %.1f s", (ContinuousClock.now - openStarted) / .seconds(1)))
+        }
+        activity.record(.photo, "Opened \(activity.alias(for: opened.url)): \(parts.joined(separator: ", "))")
+    }
+
     private func didOpen(_ opened: ImageInfo, _ read: OpenedSidecar) {
         // Writes that failed again as it opened are shown; its saves go on over the base they
         // were tracking, so the next one still merges what another writer saved.
         let unsaved = read.protection == nil ? failedSaves[opened.url]?.writes ?? [] : []
         let sidecar = Self.applying(unsaved, to: read.sidecar)
         info = opened
+        recordOpening(opened, edited: sidecar != nil)
         availableAIMaskKinds = engine.availableMaskKinds()
         maskMessage = nil
         readOnlyReason = read.protection
@@ -1059,6 +1079,7 @@ public final class EditorModel {
 
     public func goToHistory(_ index: Int) {
         guard history.indices.contains(index) else { return }
+        activity.record(.edit, "Went to history step “\(history[index].name)”")
         historyIndex = index
         recipe = history[index].recipe
         requestRender()
