@@ -47,6 +47,36 @@ enum OpticalBlack {
         return rows.isEmpty && columns.isEmpty ? nil : BandingCorrection(rows: rows, columns: columns)
     }
 
+    /// The left margin's (else the top margin's) median against the black level, and its noise,
+    /// for the camera bench: an offset means the stated black level is off. Nil where the margins
+    /// are too narrow, hold one constant value (padding, not photosites) or vary like an image.
+    static func marginLevel(
+        raw: UnsafePointer<UInt16>, pitch: Int, top: Int, left: Int, width: Int, height: Int,
+        white: Float, black: (_ x: Int, _ y: Int) -> Float,
+    ) -> (offset: Float, noise: Float)? {
+        func residual(x: Int, y: Int) -> Float {
+            Float(raw[(y + top) * pitch + x + left]) - black(x, y)
+        }
+        let lines: [[Float]]
+        if left - 2 * guardBand >= minimumSamples {
+            let samples = (guardBand - left) ..< -guardBand
+            lines = stride(from: 0, to: height, by: max(1, height / 256))
+                .map { y in samples.map { residual(x: $0, y: y) } }
+        } else if top - 2 * guardBand >= minimumSamples {
+            let samples = (guardBand - top) ..< -guardBand
+            lines = stride(from: 0, to: width, by: max(1, width / 256))
+                .map { x in samples.map { residual(x: x, y: $0) } }
+        } else {
+            return nil
+        }
+        let values = lines.joined()
+        guard let lowest = values.min(), let highest = values.max(), highest > lowest else { return nil }
+        // A median absolute deviation of zero is a quiet margin, not a noiseless one.
+        let (median, sigma) = robustLevel(lines)
+        guard sigma < 0.02 * white else { return nil }
+        return (median, max(sigma, 0.5))
+    }
+
     /// The residuals' median and robust noise sigma (median absolute deviation), from a sparse sample.
     static func robustLevel(_ lines: [[Float]]) -> (median: Float, sigma: Float) {
         let step = max(1, lines.count / 512)

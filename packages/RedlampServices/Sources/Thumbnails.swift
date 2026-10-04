@@ -41,8 +41,46 @@ public enum Thumbnails {
     /// mark in the footprint after they were freed.
     static func embeddedPreview(of url: URL, maxPixelSize: Int) -> CGImage? {
         guard let file = try? NSData(contentsOf: url, options: .alwaysMapped),
-              let (preview, flip) = smallestPreview(in: Data(referencing: file), atLeast: maxPixelSize),
-              let jpeg = bytes(of: preview, in: file),
+              let (preview, flip) = smallestPreview(in: Data(referencing: file), atLeast: maxPixelSize)
+        else { return nil }
+        return decode(preview, flip: flip, in: file, maxPixelSize: maxPixelSize)
+    }
+
+    /// The largest JPEG a raw file embeds, which is the camera's own rendering, upright and at
+    /// most `maxPixelSize` on its long edge: what the camera bench compares Redlamp's with.
+    public static func cameraPreview(of url: URL, maxPixelSize: Int) -> CGImage? {
+        guard let file = try? NSData(contentsOf: url, options: .alwaysMapped),
+              let raw = libraw_init(0)
+        else { return nil }
+        defer { libraw_close(raw) }
+        let opened = Data(referencing: file).withUnsafeBytes { libraw_open_buffer(raw, $0.baseAddress, $0.count) }
+        guard opened == LIBRAW_SUCCESS.rawValue,
+              let largest = previews(in: raw).max(by: { max($0.width, $0.height) < max($1.width, $1.height) })
+        else { return nil }
+        let edge = max(largest.width, largest.height)
+        return decode(
+            largest,
+            flip: raw.pointee.sizes.flip,
+            in: file,
+            maxPixelSize: edge > 0 ? min(edge, maxPixelSize) : maxPixelSize,
+        )
+    }
+
+    /// The JPEG previews LibRaw found in an opened file.
+    static func previews(in raw: UnsafeMutablePointer<libraw_data_t>) -> [Preview] {
+        let count = min(Int(raw.pointee.thumbs_list.thumbcount), Int(LIBRAW_THUMBNAIL_MAXCOUNT))
+        return withUnsafeBytes(of: raw.pointee.thumbs_list.thumblist) { bytes in
+            Array(bytes.bindMemory(to: libraw_thumbnail_item_t.self).prefix(count))
+        }
+        .filter { $0.tformat == LIBRAW_INTERNAL_THUMBNAIL_JPEG && $0.tlength > 0 }
+        .map {
+            Preview(offset: Int($0.toffset), length: Int($0.tlength), width: Int($0.twidth), height: Int($0.theight))
+        }
+    }
+
+    /// A preview decoded from the mapped file at `maxPixelSize`, turned upright.
+    static func decode(_ preview: Preview, flip: Int32, in file: NSData, maxPixelSize: Int) -> CGImage? {
+        guard let jpeg = bytes(of: preview, in: file),
               let source = CGImageSourceCreateWithData(jpeg as CFData, nil)
         else { return nil }
         // The preview itself, never its own (often 160 px) EXIF thumbnail; scaled as it decodes.
@@ -75,16 +113,9 @@ public enum Thumbnails {
         guard let raw = libraw_init(0) else { return nil }
         defer { libraw_close(raw) }
         let opened = file.withUnsafeBytes { libraw_open_buffer(raw, $0.baseAddress, $0.count) }
-        guard opened == LIBRAW_SUCCESS.rawValue else { return nil }
-        let count = min(Int(raw.pointee.thumbs_list.thumbcount), Int(LIBRAW_THUMBNAIL_MAXCOUNT))
-        let previews = withUnsafeBytes(of: raw.pointee.thumbs_list.thumblist) { bytes in
-            Array(bytes.bindMemory(to: libraw_thumbnail_item_t.self).prefix(count))
-        }
-        .filter { $0.tformat == LIBRAW_INTERNAL_THUMBNAIL_JPEG && $0.tlength > 0 }
-        .map {
-            Preview(offset: Int($0.toffset), length: Int($0.tlength), width: Int($0.twidth), height: Int($0.theight))
-        }
-        guard let chosen = choose(previews, atLeast: maxPixelSize) else { return nil }
+        guard opened == LIBRAW_SUCCESS.rawValue,
+              let chosen = choose(previews(in: raw), atLeast: maxPixelSize)
+        else { return nil }
         return (chosen, raw.pointee.sizes.flip)
     }
 

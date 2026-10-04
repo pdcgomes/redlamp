@@ -43,12 +43,17 @@ enum RawDecoder {
         let filters = raw.pointee.idata.filters
         let colors = Int(raw.pointee.idata.colors)
         let black = Float(raw.pointee.color.black)
-        var whiteLevel = Float(raw.pointee.color.maximum)
+        let nominalWhite = Float(raw.pointee.color.maximum)
+        var whiteLevel = nominalWhite
 
         let layout: DecodedImage.Layout
         let samples: [UInt16]
         let blackLevels: [Float]
         var banding: BandingCorrection?
+        var darkPercentile: Double?
+        var clippedShare: Double?
+        var margin: (offset: Float, noise: Float)?
+        var darkEdges: DarkEdges?
 
         if let jpegXL {
             layout = .linearRGB
@@ -71,14 +76,29 @@ enum RawDecoder {
             whiteLevel = histogram.withUnsafeBufferPointer {
                 WhiteLevel.measured(histogram: $0, nominal: whiteLevel, total: width * height)
             }
-            banding = phaseOne ? nil : OpticalBlack.measure(
-                raw: rawImage, pitch: pitch / MemoryLayout<UInt16>.size, top: top, left: left,
-                width: width, height: height, white: whiteLevel,
-            ) { [blackLevels] x, y in
+            let patternBlack = { [blackLevels] (x: Int, y: Int) -> Float in
                 let column = (x % pattern.width + pattern.width) % pattern.width
                 let row = (y % pattern.height + pattern.height) % pattern.height
                 return blackLevels[row * pattern.width + column]
             }
+            banding = phaseOne ? nil : OpticalBlack.measure(
+                raw: rawImage, pitch: pitch / MemoryLayout<UInt16>.size, top: top, left: left,
+                width: width, height: height, white: whiteLevel, black: patternBlack,
+            )
+            (darkPercentile, clippedShare) = histogram.withUnsafeBufferPointer { [whiteLevel] counts in
+                (
+                    RawMeasurement.darkPercentile(counts, total: width * height),
+                    RawMeasurement.clippedShare(counts, total: width * height, white: whiteLevel),
+                )
+            }
+            margin = phaseOne ? nil : OpticalBlack.marginLevel(
+                raw: rawImage, pitch: pitch / MemoryLayout<UInt16>.size, top: top, left: left,
+                width: width, height: height, white: whiteLevel, black: patternBlack,
+            )
+            darkEdges = RawMeasurement.darkEdges(
+                samples, width: width, height: height,
+                black: blackLevels.reduce(0, +) / Float(blackLevels.count), white: whiteLevel,
+            )
         } else if colors >= 3, let pixels = raw.pointee.rawdata.color3_image {
             layout = .linearRGB
             samples = copyRGB(
@@ -123,7 +143,7 @@ enum RawDecoder {
         let orientedSize = orientation == 5 || orientation == 6
             ? PixelSize(width: height, height: width)
             : PixelSize(width: width, height: height)
-        let info = ImageInfo(
+        var info = ImageInfo(
             url: url,
             pixelSize: orientedSize,
             isRaw: true,
@@ -136,6 +156,20 @@ enum RawDecoder {
             aperture: other.aperture > 0 ? Double(other.aperture) : nil,
             focalLength: other.focal_len > 0 ? Double(other.focal_len) : nil,
             captureDate: other.timestamp > 0 ? Date(timeIntervalSince1970: TimeInterval(other.timestamp)) : nil,
+        )
+        let meanBlack = blackLevels.reduce(0, +) / Float(max(blackLevels.count, 1))
+        info.diagnostics = DecodeDiagnostics(
+            identity: identity(raw, url: url),
+            measurements: DecodeMeasurements(
+                black: Double(meanBlack),
+                opticalBlack: margin.map { Double(meanBlack + $0.offset) },
+                opticalBlackNoise: margin.map { Double($0.noise) },
+                darkPercentile: darkPercentile,
+                nominalWhite: Double(nominalWhite),
+                white: Double(whiteLevel),
+                clippedShare: clippedShare,
+                darkEdges: darkEdges,
+            ),
         )
 
         var decoded = DecodedImage(
@@ -230,7 +264,7 @@ enum RawDecoder {
         }
     }
 
-    private static func string(_ pointer: UnsafePointer<CChar>?) -> String? {
+    static func string(_ pointer: UnsafePointer<CChar>?) -> String? {
         guard let pointer else { return nil }
         let value = String(cString: pointer).trimmingCharacters(in: .whitespaces)
         return value.isEmpty ? nil : value
@@ -242,7 +276,7 @@ enum RawDecoder {
         return Int((filters >> shift) & 3)
     }
 
-    private static func cfaPattern(_ raw: UnsafeMutablePointer<libraw_data_t>, filters: UInt32) throws -> CFAPattern {
+    static func cfaPattern(_ raw: UnsafeMutablePointer<libraw_data_t>, filters: UInt32) throws -> CFAPattern {
         if filters == 9 {
             let colors = (0 ..< 36).map { UInt8(clamping: rl_xtrans(raw, Int32($0 / 6), Int32($0 % 6))) }
             return CFAPattern(width: 6, height: 6, colors: colors)
