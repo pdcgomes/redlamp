@@ -306,6 +306,68 @@ public struct LocalContrastParams {
     }
 }
 
+public struct LadderParams {
+    public var origin: SIMD4<Int32>
+    public var size: SIMD4<Int32>
+    public var place: SIMD4<Int32>
+    public var luma: SIMD4<Float>
+    public var a: SIMD4<Float>
+    public var b: SIMD4<Float>
+    public var thresholds: SIMD4<Float>
+
+    public init(
+        origin: SIMD4<Int32>,
+        size: SIMD4<Int32>,
+        place: SIMD4<Int32>,
+        luma: SIMD4<Float>,
+        a: SIMD4<Float> = .zero,
+        b: SIMD4<Float> = .zero,
+        thresholds: SIMD4<Float> = .zero,
+    ) {
+        self.origin = origin
+        self.size = size
+        self.place = place
+        self.luma = luma
+        self.a = a
+        self.b = b
+        self.thresholds = thresholds
+    }
+}
+
+public struct DetailApplyParams {
+    public var origin: SIMD4<Int32>
+    public var size: SIMD4<Int32>
+    public var place: SIMD4<Int32>
+    public var bands: SIMD4<Int32>
+    public var luma: SIMD4<Float>
+    public var texture: SIMD4<Float>
+    public var clarity: SIMD4<Float>
+    public var sharpen: SIMD4<Float>
+    public var frame: SIMD4<Float>
+
+    public init(
+        origin: SIMD4<Int32>,
+        size: SIMD4<Int32>,
+        place: SIMD4<Int32>,
+        bands: SIMD4<Int32>,
+        luma: SIMD4<Float>,
+        texture: SIMD4<Float>,
+        clarity: SIMD4<Float>,
+        sharpen: SIMD4<Float>,
+        frame: SIMD4<Float>,
+    ) {
+        self.origin = origin
+        self.size = size
+        self.place = place
+        self.bands = bands
+        self.luma = luma
+        self.texture = texture
+        self.clarity = clarity
+        self.sharpen = sharpen
+        self.frame = frame
+    }
+}
+
 public struct DetailLocalParams {
     public var place: SIMD4<Int32>
     public var size: SIMD4<Int32>

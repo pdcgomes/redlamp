@@ -57,7 +57,7 @@
         "processVersion": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 10,
+          "maximum": 11,
           "default": 1,
           "description": "The rendering behavior the edit was made with (see sidecar-format.md). A newer one makes the sidecar read-only."
         },
