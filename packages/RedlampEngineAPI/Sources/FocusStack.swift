@@ -115,11 +115,26 @@ public struct FocusStackReport: Sendable, Hashable, Codable {
     public var confidentDepthFraction: Double
     /// Seconds per phase: decode, align, depth, fuse, total.
     public var timings: [String: Double]
+    /// Frames the merge left out because they didn't decode; nil when every frame is in.
+    public var failedFrames: [FailedFrame]?
+
+    public struct FailedFrame: Sendable, Hashable, Codable {
+        /// Index in the given order.
+        public var index: Int
+        public var reason: String
+
+        public init(index: Int, reason: String) {
+            self.index = index
+            self.reason = reason
+        }
+    }
 
     public init(
         frames: Int, reference: Int, width: Int, height: Int, maximumScaleChange: Double,
         minimumCorrelation: Double, confidentDepthFraction: Double, timings: [String: Double],
+        failedFrames: [FailedFrame]? = nil,
     ) {
+        self.failedFrames = failedFrames
         self.frames = frames
         self.reference = reference
         self.width = width

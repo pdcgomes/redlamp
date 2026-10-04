@@ -71,20 +71,24 @@ final class FocusStackCache: Sendable {
     let budget: Int
     let device: any MTLDevice
     let kernels: KernelLibrary
+    /// The engine's decoder, so frames decode where its photos do (the Mac app's decode service).
+    let decoder: any ImageDecoding
 
     init(
         device: any MTLDevice, kernels: KernelLibrary, root: URL = FocusStackCache.defaultRoot,
         budget: Int = FocusStackCache.defaultBudget,
+        decoder: any ImageDecoding = InProcessDecoder(),
     ) {
         self.device = device
         self.kernels = kernels
         self.root = root
         self.budget = budget
+        self.decoder = decoder
     }
 
     /// Any supported file: a stack document through the cache, anything else from disk.
     func decode(_ url: URL) throws -> DecodedImage {
-        try SupportedFormats.isStack(url) ? stack(at: url).decoded : ImageDecoder.decode(url)
+        try SupportedFormats.isStack(url) ? stack(at: url).decoded : decoder.decode(url)
     }
 
     /// The stack document at `url`, from the cache or merged now.
@@ -104,7 +108,9 @@ final class FocusStackCache: Sendable {
         let merged = try merged(frames, strategy: document.strategy, documentURL: url, progress: progress)
         guard !strokes.isEmpty else { return merged }
         let retouched = try retouch(merged, with: strokes, document: document, at: url)
-        try? save(retouched, to: folder, document: url)
+        if retouched.report.failedFrames == nil {
+            try? save(retouched, to: folder, document: url)
+        }
         return retouched
     }
 
@@ -118,7 +124,9 @@ final class FocusStackCache: Sendable {
             return cached
         }
         let merged = try merge(frames, strategy: strategy, documentURL: documentURL, progress: progress)
-        try? save(merged, to: folder)
+        if merged.report.failedFrames == nil {
+            try? save(merged, to: folder)
+        }
         return merged
     }
 
@@ -153,8 +161,31 @@ final class FocusStackCache: Sendable {
 
     // MARK: - Merging
 
-    /// Decodes, aligns and fuses `urls` (in focus order).
+    /// Decodes, aligns and fuses `urls` (in focus order). A frame that doesn't decode is left out
+    /// and reported, as long as two others do; a merge missing frames isn't cached, so the next
+    /// open tries them again.
     func merge(
+        _ urls: [URL], strategy: FocusStackStrategy, documentURL: URL?, progress: (Double) -> Void,
+    ) throws -> MergedStack {
+        var included = Array(urls.indices)
+        var failed: [FocusStackReport.FailedFrame] = []
+        while true {
+            do {
+                let merged = try mergeFrames(
+                    included.map { urls[$0] }, strategy: strategy, documentURL: documentURL, progress: progress,
+                )
+                return failed.isEmpty ? merged : merged.spread(over: included, of: urls.count, failed: failed)
+            } catch let failure as FrameDecodeFailure {
+                failed.append(FocusStackReport.FailedFrame(
+                    index: included[failure.index], reason: failure.error.localizedDescription,
+                ))
+                included.remove(at: failure.index)
+                guard included.count >= 2 else { throw failure.error }
+            }
+        }
+    }
+
+    private func mergeFrames(
         _ urls: [URL], strategy: FocusStackStrategy, documentURL: URL?, progress: (Double) -> Void,
     ) throws -> MergedStack {
         guard urls.count >= 2 else { throw EngineError.renderFailed("a focus stack needs at least two frames") }
@@ -175,9 +206,14 @@ final class FocusStackCache: Sendable {
                 precondition(order[position] == index, "frames must load in stack order, twice")
                 for ahead in position ..< min(position + Self.decodesAhead + 1, order.count)
                     where pending[ahead] == nil {
-                    let url = urls[order[ahead]]
+                    let (frame, url, decoder) = (order[ahead], urls[order[ahead]], decoder)
                     pending[ahead] = Prefetch(on: decodes) {
-                        var decoded = try ImageDecoder.decode(url)
+                        var decoded: DecodedImage
+                        do {
+                            decoded = try decoder.decode(url)
+                        } catch {
+                            throw FrameDecodeFailure(index: frame, error: error)
+                        }
                         decoded.noiseProfile = decoded.noise
                         return decoded
                     }

@@ -132,7 +132,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         masks = try MaskResources(device: device, kernels: kernels)
         baseLooks = try BaseLookRegistry(device: device)
 
-        let stacks = FocusStackCache(device: device, kernels: kernels, root: stackCache)
+        let stacks = FocusStackCache(device: device, kernels: kernels, root: stackCache, decoder: decoder)
         self.stacks = stacks
         let builder = SessionBuilder(device: device, queue: buildQueue, kernels: kernels, lensProfiles: lensProfiles)
         let signposter = signposts

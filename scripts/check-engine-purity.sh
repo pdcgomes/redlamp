@@ -60,6 +60,21 @@ for package in "${UI_PACKAGES[@]}"; do
     fi
 done
 
+# The engine and the UI decode through an ImageDecoding (the Mac app's sandboxed decode service),
+# never with the decoders themselves, so a damaged file can't take the app down. Only
+# RedlampServices' InProcessDecoder calls them, for the CLI and tests.
+DIRECT_DECODE='\b(ImageDecoder|RawDecoder|BitmapDecoder)\.decode\('
+for package in RedlampEngine RedlampUI; do
+    dir="$ROOT/packages/$package/Sources"
+    [[ -d "$dir" ]] || continue
+    if matches=$(grep -RInE --include='*.swift' "$DIRECT_DECODE" "$dir"); then
+        echo "Direct decoder call in $package (decode through the engine's ImageDecoding):"
+        echo "$matches"
+        echo
+        failed=1
+    fi
+done
+
 if [[ $failed -ne 0 ]]; then
     exit 1
 fi

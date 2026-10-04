@@ -162,16 +162,39 @@ public extension DecodedImage {
 #if os(macOS)
     /// Decodes in `RedlampDecoder.xpc`, the app's sandboxed decode service, so a damaged or
     /// hostile file can only crash the service, never the editor. Each decode gets its own
-    /// connection, so neighbouring photos decode in parallel as they do in-process. Without the
-    /// service (a build that doesn't bundle it), decoding falls back to this process.
+    /// connection, so neighbouring photos decode in parallel as they do in-process. A process that
+    /// doesn't bundle the service (the CLI, tests) decodes in-process; one that does never does,
+    /// so a service that can't start fails the photo rather than giving up the isolation.
     public final class DecodeServiceClient: ImageDecoding {
         public static let serviceName = "app.redlamp.mac.decoder"
 
-        public init() {}
+        let serviceName: String
+        let isBundled: Bool
+
+        public convenience init() {
+            self.init(serviceName: Self.serviceName, isBundled: Self.bundles(Self.serviceName))
+        }
+
+        init(serviceName: String, isBundled: Bool) {
+            self.serviceName = serviceName
+            self.isBundled = isBundled
+        }
+
+        /// Whether the main bundle carries the XPC service named `serviceName`.
+        static func bundles(_ serviceName: String, in bundle: Bundle = .main) -> Bool {
+            let services = bundle.bundleURL.appending(path: "Contents/XPCServices", directoryHint: .isDirectory)
+            let contents = (try? FileManager.default.contentsOfDirectory(at: services, includingPropertiesForKeys: nil))
+                ?? []
+            return contents.contains { $0.pathExtension == "xpc" && Bundle(url: $0)?.bundleIdentifier == serviceName }
+        }
+
+        static let unavailable = EngineError
+            .decodeFailed("Redlamp's decoder isn't available; try quitting and reopening Redlamp")
 
         public func decode(_ url: URL) throws -> DecodedImage {
+            guard isBundled else { return try InProcessDecoder().decode(url) }
             let file = try Data(contentsOf: url, options: .alwaysMapped)
-            let connection = NSXPCConnection(serviceName: Self.serviceName)
+            let connection = NSXPCConnection(serviceName: serviceName)
             connection.remoteObjectInterface = NSXPCInterface(with: DecodeServiceProtocol.self)
             connection.resume()
             defer { connection.invalidate() }
@@ -193,16 +216,16 @@ public extension DecodedImage {
             case let .success(image):
                 return image
             case let .failure(error as NSError) where error.domain == NSCocoaErrorDomain
-                && error.code == NSXPCConnectionInvalid:
-                return try InProcessDecoder().decode(url)
-            case let .failure(error as NSError) where error.domain == NSCocoaErrorDomain
                 && error.code == NSXPCConnectionInterrupted:
                 throw EngineError
                     .decodeFailed("the decoder stopped while reading \(url.lastPathComponent); the file may be damaged")
+            case let .failure(error as NSError) where error.domain == NSCocoaErrorDomain
+                && error.code == NSXPCConnectionInvalid:
+                throw Self.unavailable
             case let .failure(error):
                 throw error
             case nil:
-                return try InProcessDecoder().decode(url)
+                throw Self.unavailable
             }
         }
     }

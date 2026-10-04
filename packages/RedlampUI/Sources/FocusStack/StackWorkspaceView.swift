@@ -194,7 +194,10 @@ struct StackWorkspaceView: View {
 
     private func summary(_ report: FocusStackReport) -> String {
         let seconds = report.timings["total"].map { String(format: " · merged in %.0f s", $0) } ?? ""
-        return "\(report.width) × \(report.height)"
+        let failed = report.failedFrames.map { frames in
+            frames.count == 1 ? " · 1 frame couldn't be read, left out" : " · \(frames.count) frames couldn't be read, left out"
+        } ?? ""
+        return "\(report.width) × \(report.height)" + failed
             + String(format: " · focus breathing %.1f%%", report.maximumScaleChange * 100)
             + String(format: " · depth confident over %.0f%%", report.confidentDepthFraction * 100)
             + seconds

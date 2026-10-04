@@ -5,13 +5,20 @@ import RedlampServices
 import simd
 
 extension FocusStackCache {
-    /// `stack` with each stroke painting its source over it, in order.
+    /// `stack` with each stroke painting its source over it, in order; strokes from a frame the
+    /// merge left out are skipped.
     func retouch(
         _ stack: MergedStack, with strokes: [FocusStackStroke], document: FocusStackDocument, at url: URL,
     ) throws -> MergedStack {
         var samples = stack.decoded.samples
         var sources: [FocusStackStroke.Source: [UInt16]] = [:]
+        let failed = Set((stack.report.failedFrames ?? []).compactMap { frame in
+            document.frames.indices.contains(frame.index) ? document.frames[frame.index] : nil
+        })
         for stroke in strokes {
+            if case let .frame(path) = stroke.source, failed.contains(path) {
+                continue
+            }
             let source = try sources[stroke.source] ?? pixels(
                 of: stroke.source,
                 like: stack,
@@ -50,7 +57,7 @@ extension FocusStackCache {
         guard let queue = device.makeCommandQueue() else { throw EngineError.gpuUnavailable }
         let builder = SessionBuilder(device: device, queue: queue, kernels: kernels)
         let stacker = FocusStacker(device: device, queue: queue, kernels: kernels)
-        let frame = try builder.demosaic(ImageDecoder.decode(url))
+        let frame = try builder.demosaic(decoder.decode(url))
         let warped = try stacker.makeTexture(.rgba16Float, stack.frameWidth, stack.frameHeight)
         let crop = stack.crop
         let rowBytes = crop.width * 8
