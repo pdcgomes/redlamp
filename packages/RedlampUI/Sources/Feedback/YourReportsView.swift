@@ -121,8 +121,26 @@ private struct ReportRow: View {
                     .padding(.vertical, 2)
                     .background(Capsule().fill(Color.accentColor.opacity(0.2)))
             }
+            if let status = report.status {
+                HStack(spacing: 4) {
+                    Image(systemName: status.symbol).foregroundStyle(colour(status))
+                    Text(status.badge).foregroundStyle(.secondary)
+                }
+                .font(.caption.weight(.medium))
+                .frame(minWidth: 96, alignment: .leading)
+                .help(status.summary)
+            }
         }
         .contentShape(Rectangle())
+    }
+
+    /// GitHub's colours: green while open, purple once completed, grey otherwise.
+    private func colour(_ status: IssueStatus) -> Color {
+        switch (status.state, status.stateReason) {
+        case ("open", _): .green
+        case ("closed", "not_planned"), ("closed", "duplicate"), ("missing", _): .secondary
+        default: .purple
+        }
     }
 
     private var symbol: String {
@@ -133,11 +151,10 @@ private struct ReportRow: View {
         }
     }
 
-    /// "#12 · Open · 2 replies · Tracked as MSK-18 · Phase 3 · sent 4 Oct 2026".
+    /// "#12 · 2 replies · Tracked as MSK-18 · Phase 3 · sent 4 Oct 2026"; the state is beside it.
     private var details: String {
         var parts = ["#\(report.number)"]
         if let status = report.status {
-            parts.append(status.summary)
             if status.comments > 0 {
                 parts.append(status.comments == 1 ? "1 reply" : "\(status.comments) replies")
             }

@@ -121,6 +121,17 @@ struct FeedbackHistoryTests {
         #expect(status(1, state: "missing").summary == "Removed")
     }
 
+    @Test func `each state has its own label and mark`() {
+        let states = [
+            status(1), status(1, state: "closed"),
+            IssueStatus(number: 1, state: "closed", stateReason: "not_planned", comments: 0),
+            IssueStatus(number: 1, state: "closed", stateReason: "duplicate", comments: 0),
+            status(1, state: "missing"),
+        ]
+        #expect(states.map(\.badge) == ["Open", "Completed", "Not planned", "Duplicate", "Removed"])
+        #expect(Set(states.map(\.symbol)).count == states.count)
+    }
+
     @Test func `a report that couldn't be sent waits, and moves to the sent list once it is`() async throws {
         let sender = Sender()
         sender.result = .failure(.unreachable("offline"))

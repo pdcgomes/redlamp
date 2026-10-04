@@ -25,6 +25,29 @@ public struct IssueStatus: Codable, Sendable, Hashable {
         }
     }
 
+    /// The label beside a report in Your Reports.
+    public var badge: String {
+        switch (state, stateReason) {
+        case ("open", _): "Open"
+        case ("closed", "completed"): "Completed"
+        case ("closed", "not_planned"): "Not planned"
+        case ("closed", "duplicate"): "Duplicate"
+        case ("closed", _): "Closed"
+        default: "Removed"
+        }
+    }
+
+    /// GitHub's marks for an issue's state: a ringed dot while open, a tick once completed.
+    public var symbol: String {
+        switch (state, stateReason) {
+        case ("open", _): "smallcircle.filled.circle"
+        case ("closed", "not_planned"): "slash.circle"
+        case ("closed", "duplicate"): "square.on.square"
+        case ("closed", _): "checkmark.circle"
+        default: "xmark.circle"
+        }
+    }
+
     /// The tracker ID the issue took when triaged into the roadmap ("MSK-18: …").
     public var trackerID: String? {
         title?.firstMatch(of: /^\[?((?:[A-Z]{2,4}|P1)-\d+)\]?[:\s]/).map { String($0.1) }
