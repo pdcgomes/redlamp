@@ -1,0 +1,168 @@
+{
+  "answers" : [
+    {
+      "choice" : "same",
+      "mode" : "Sony|ILCE-7M3|sony_arw2_load_raw|14|6024x4024",
+      "note" : "Shot in daylight."
+    }
+  ],
+  "contributor" : "8E2C1F4A-0B7D-4C3E-9A51-6D2F8B0E7C19",
+  "credit" : "A. Photographer",
+  "environment" : {
+    "bench" : 1,
+    "chip" : "Apple M3 Max",
+    "commit" : "3b6a9de",
+    "decoder" : "LibRaw 0.22.2-Release",
+    "processVersion" : 11,
+    "redlamp" : "0.2.2-prealpha",
+    "system" : "macOS 26.5"
+  },
+  "format" : 1,
+  "photos" : [
+    {
+      "asShotTemperature" : 5600,
+      "checks" : [
+        {
+          "id" : "decode.opens",
+          "measurements" : {
+
+          },
+          "summary" : "Redlamp opened the file.",
+          "verdict" : "pass",
+          "version" : 1
+        },
+        {
+          "id" : "preview.cast",
+          "measurements" : {
+            "cast" : 4.5,
+            "neutralSamples" : 812
+          },
+          "summary" : "A colour cast where the camera's is neutral (4.5).",
+          "tracker" : "CAM-13",
+          "verdict" : "warn",
+          "version" : 1
+        }
+      ],
+      "conditions" : [
+        "baseISO",
+        "clippedHighlights"
+      ],
+      "decodeSeconds" : 0.84,
+      "fileHash" : "abababababababababababababababababababababababababababababababab",
+      "identity" : {
+        "aperture" : 8,
+        "asShotMultipliers" : [
+          2.2,
+          1,
+          1.75
+        ],
+        "bitsPerSample" : 14,
+        "decoder" : "sony_arw2_load_raw",
+        "dngVersion" : 0,
+        "exposureTime" : 0.004,
+        "focalLength" : 35,
+        "format" : "ARW",
+        "imageSize" : {
+          "height" : 4024,
+          "width" : 6024
+        },
+        "iso" : 100,
+        "lens" : "FE 24-70mm F2.8 GM II",
+        "make" : "Sony",
+        "model" : "ILCE-7M3",
+        "normalizedMake" : "Sony",
+        "normalizedModel" : "ILCE-7M3",
+        "orientation" : 0,
+        "previews" : [
+          {
+            "height" : 1080,
+            "width" : 1616
+          },
+          {
+            "height" : 4000,
+            "width" : 6000
+          }
+        ],
+        "rawSize" : {
+          "height" : 4024,
+          "width" : 6048
+        },
+        "sensor" : "Bayer RGGB",
+        "software" : "ILCE-7M3 v4.01"
+      },
+      "measurements" : {
+        "black" : 512,
+        "clippedShare" : 0.002,
+        "colorMatrix" : [
+          0.74,
+          -0.24,
+          -0.06,
+          -0.54,
+          1.32,
+          0.25,
+          -0.1,
+          0.18,
+          0.66
+        ],
+        "darkEdges" : {
+          "bottom" : 0,
+          "left" : 0,
+          "right" : 0,
+          "top" : 0
+        },
+        "darkPercentile" : 509,
+        "nominalWhite" : 16383,
+        "opticalBlack" : 512.4,
+        "opticalBlackNoise" : 1.6,
+        "white" : 16383
+      },
+      "mode" : {
+        "camera" : "Sony ILCE-7M3",
+        "key" : "Sony|ILCE-7M3|sony_arw2_load_raw|14|6024x4024",
+        "label" : "14-bit compressed ARW, 6024 × 4024"
+      },
+      "renderSeconds" : 0.31
+    },
+    {
+      "checks" : [
+        {
+          "id" : "decode.opens",
+          "measurements" : {
+
+          },
+          "summary" : "Nikon's High Efficiency NEFs (HE and HE*) don't open yet: LibRaw 0.22 can't read them.",
+          "tracker" : "CAM-12",
+          "verdict" : "fail",
+          "version" : 1
+        }
+      ],
+      "conditions" : [
+
+      ],
+      "fileHash" : "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "identity" : {
+        "format" : "NEF",
+        "imageSize" : {
+          "height" : 0,
+          "width" : 0
+        },
+        "make" : "NIKON CORPORATION",
+        "model" : "NIKON Z 8",
+        "orientation" : 0,
+        "previews" : [
+
+        ],
+        "rawSize" : {
+          "height" : 0,
+          "width" : 0
+        },
+        "refusal" : "Unsupported file format"
+      },
+      "mode" : {
+        "camera" : "NIKON CORPORATION NIKON Z 8",
+        "key" : "NIKON CORPORATION|NIKON Z 8|refused|-|0x0",
+        "label" : "refused NEF"
+      }
+    }
+  ]
+}

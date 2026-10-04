@@ -15,6 +15,7 @@ usage: redlamp info <image>
        redlamp mask <image> …       write an AI mask as a PNG (redlamp mask --help)
        redlamp noise <command> …    calibrate a camera's noise profile (redlamp noise --help)
        redlamp bench [files…]       time the engine and print the results as JSON (redlamp bench --help)
+       redlamp camera-bench <raws…> test raws against their camera's own JPEG (redlamp camera-bench --help)
        redlamp mcp                  the engine as an MCP server on stdin/stdout
 
 options:
@@ -288,6 +289,8 @@ do {
         try await NoiseCommand.run(Array(arguments.dropFirst()))
     case "bench":
         try await BenchCommand.run(Array(arguments.dropFirst()))
+    case "camera-bench":
+        try await CameraBenchCommand.run(Array(arguments.dropFirst()))
     case "mcp":
         try await MCPServer().run()
     default:
