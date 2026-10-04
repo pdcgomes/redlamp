@@ -1,0 +1,424 @@
+{
+  "description": "Every metric on redlamp.app/performance. measuredBy: the harness that records it (bench: redlamp bench; sweep: scripts/perf-sweep.sh; folders: scripts/folders-perf.sh), or [] when only the README's history has it. readme: how scripts/perf-backfill.py finds it in past READMEs: a table row whose label starts with `row` (`phrase` picks one of several values in the cell by the label's own wording; `columns` reads a table whose columns are stages, the last being current), or a `pattern` in the text, with an optional `before` pattern for a figure quoted from before a change.",
+  "groups": [
+    "Opening",
+    "Editing",
+    "Export",
+    "Detail",
+    "Focus stacking",
+    "Memory",
+    "Folders",
+    "Responsiveness"
+  ],
+  "metrics": [
+    {
+      "id": "open",
+      "label": "Open a raw file",
+      "detail": "Decode, GPU upload, demosaic and pyramid, for a 24–26 MP raw",
+      "unit": "ms",
+      "group": "Opening",
+      "better": "lower",
+      "measuredBy": [
+        "bench"
+      ],
+      "readme": {
+        "row": "Open a 24–26 MP raw file"
+      }
+    },
+    {
+      "id": "render-fit",
+      "label": "Render at Fit while editing",
+      "detail": "Every adjustment in one fused pass, at a 2560 × 1600 view",
+      "unit": "ms",
+      "group": "Editing",
+      "better": "lower",
+      "measuredBy": [
+        "bench"
+      ],
+      "readme": {
+        "row": "Interactive render at Fit (every adjustment, fused)"
+      }
+    },
+    {
+      "id": "render-fit-masks",
+      "label": "Render at Fit with two gradient masks",
+      "detail": "A linear and a radial mask, each with local adjustments",
+      "unit": "ms",
+      "group": "Editing",
+      "better": "lower",
+      "measuredBy": [
+        "bench"
+      ],
+      "readme": {
+        "row": "Interactive render at Fit with two gradient masks"
+      }
+    },
+    {
+      "id": "render-full",
+      "label": "Render the whole photo at 1:1",
+      "detail": "The full frame at full resolution, as when zoomed in",
+      "unit": "ms",
+      "group": "Editing",
+      "better": "lower",
+      "measuredBy": [
+        "bench"
+      ],
+      "readme": {
+        "row": "Interactive render at 1:1 (full"
+      }
+    },
+    {
+      "id": "export-full",
+      "label": "Full-resolution export render",
+      "detail": "Developed at full resolution, read back for encoding",
+      "unit": "ms",
+      "group": "Export",
+      "better": "lower",
+      "measuredBy": [
+        "bench"
+      ],
+      "readme": {
+        "row": "Full-resolution export render (24–26 MP)"
+      }
+    },
+    {
+      "id": "export-full-nr",
+      "label": "Full-resolution export with noise reduction",
+      "detail": "Luminance 50, rendered in tiles",
+      "unit": "ms",
+      "group": "Export",
+      "better": "lower",
+      "measuredBy": [
+        "bench"
+      ],
+      "readme": {
+        "row": "Full-resolution export render with noise reduction"
+      }
+    },
+    {
+      "id": "detail-region-nr",
+      "label": "Detail stage at 1:1: noise reduction",
+      "detail": "GPU time on a 1:1 region of about 10 MP of pyramid texels",
+      "unit": "ms",
+      "group": "Detail",
+      "better": "lower",
+      "measuredBy": [],
+      "readme": {
+        "row": "Detail stage on a 1:1 region",
+        "phrase": "noise reduction"
+      }
+    },
+    {
+      "id": "detail-region-texture",
+      "label": "Detail stage at 1:1: Texture and Clarity",
+      "detail": "GPU time on the same region",
+      "unit": "ms",
+      "group": "Detail",
+      "better": "lower",
+      "measuredBy": [],
+      "readme": {
+        "row": "Detail stage on a 1:1 region",
+        "phrase": "Texture and Clarity"
+      }
+    },
+    {
+      "id": "detail-view-nr",
+      "label": "Noise reduction for a 1:1 view",
+      "detail": "GPU time, Luminance 50, a 2560 × 1600 view of a 24 MP photo",
+      "unit": "ms",
+      "group": "Detail",
+      "better": "lower",
+      "measuredBy": [],
+      "readme": {
+        "row": "Detail stage for a 2560 × 1600 view",
+        "phrase": "noise reduction alone"
+      }
+    },
+    {
+      "id": "detail-view-sharpen",
+      "label": "Default sharpening for a 1:1 view, first render",
+      "detail": "GPU time, the same view",
+      "unit": "ms",
+      "group": "Detail",
+      "better": "lower",
+      "measuredBy": [],
+      "readme": {
+        "row": "Detail stage for a 2560 × 1600 view",
+        "phrase": "default sharpening, first render"
+      }
+    },
+    {
+      "id": "detail-view-radius",
+      "label": "Dragging sharpening's Radius at 1:1",
+      "detail": "GPU time per frame, the same view",
+      "unit": "ms",
+      "group": "Detail",
+      "better": "lower",
+      "measuredBy": [],
+      "readme": {
+        "row": "Detail stage for a 2560 × 1600 view",
+        "phrase": "while dragging Radius"
+      }
+    },
+    {
+      "id": "detail-view-amount",
+      "label": "Dragging sharpening's Amount at 1:1",
+      "detail": "GPU time per frame, with the analysis cached",
+      "unit": "ms",
+      "group": "Detail",
+      "better": "lower",
+      "measuredBy": [],
+      "readme": {
+        "row": "Detail stage for a 2560 × 1600 view",
+        "phrase": "while dragging Amount"
+      }
+    },
+    {
+      "id": "detail-view-luminance",
+      "label": "Dragging noise reduction's Luminance at 1:1",
+      "detail": "GPU time per frame, the same view",
+      "unit": "ms",
+      "group": "Detail",
+      "better": "lower",
+      "measuredBy": [],
+      "readme": {
+        "row": "Detail stage for a 2560 × 1600 view",
+        "phrase": "while dragging Luminance"
+      }
+    },
+    {
+      "id": "stack-cr3",
+      "label": "Focus stack of 25 Canon CR3 frames",
+      "detail": "17 MP frames: decode, align, depth map and fusion",
+      "unit": "s",
+      "group": "Focus stacking",
+      "better": "lower",
+      "measuredBy": [],
+      "readme": {
+        "row": "Focus stack of 25 × 17 MP Canon CR3 frames"
+      }
+    },
+    {
+      "id": "stack-jpeg",
+      "label": "Focus stack of 109 JPEG frames",
+      "detail": "4 MP frames",
+      "unit": "s",
+      "group": "Focus stacking",
+      "better": "lower",
+      "measuredBy": [],
+      "readme": {
+        "row": "Focus stack of 109 × 4 MP JPEG frames"
+      }
+    },
+    {
+      "id": "stack-reopen",
+      "label": "Reopen a merged focus stack",
+      "detail": "From its cache",
+      "unit": "s",
+      "group": "Focus stacking",
+      "better": "lower",
+      "measuredBy": [],
+      "readme": {
+        "row": "Reopen a merged focus stack from its cache"
+      }
+    },
+    {
+      "id": "detail-memory-24mp",
+      "label": "Detail stage GPU memory, 24 MP at 1:1",
+      "detail": "With noise reduction and sharpening on",
+      "unit": "GB",
+      "group": "Memory",
+      "better": "lower",
+      "measuredBy": [],
+      "readme": {
+        "pattern": "about ([\\d.]+) GB of GPU memory at 1:1 on a 24 MP photo",
+        "before": "\\(([\\d.]+) GB and [\\d.]+ GB before"
+      }
+    },
+    {
+      "id": "detail-memory-60mp",
+      "label": "Detail stage GPU memory, 60 MP at 1:1",
+      "detail": "With noise reduction and sharpening on",
+      "unit": "GB",
+      "group": "Memory",
+      "better": "lower",
+      "measuredBy": [],
+      "readme": {
+        "pattern": "on a 24 MP photo and ([\\d.]+) GB on a 60 MP one",
+        "before": "\\([\\d.]+ GB and ([\\d.]+) GB before"
+      }
+    },
+    {
+      "id": "folders-peak-memory",
+      "label": "Peak memory browsing 50,000 photos",
+      "detail": "The app's footprint while listing, decoding and warming thumbnails",
+      "unit": "MB",
+      "group": "Memory",
+      "better": "lower",
+      "measuredBy": [
+        "folders"
+      ],
+      "readme": {
+        "row": "Peak memory"
+      }
+    },
+    {
+      "id": "folders-first",
+      "label": "First photos in the filmstrip",
+      "detail": "50,000 photos in 500 folders, Show Photos in Subfolders on",
+      "unit": "ms",
+      "group": "Folders",
+      "better": "lower",
+      "measuredBy": [
+        "folders"
+      ],
+      "readme": {
+        "row": "First photos in the filmstrip"
+      }
+    },
+    {
+      "id": "folders-list",
+      "label": "All 50,000 photos listed",
+      "detail": "500 folders, in parallel, in order",
+      "unit": "ms",
+      "group": "Folders",
+      "better": "lower",
+      "measuredBy": [
+        "folders"
+      ],
+      "readme": {
+        "row": "All 50,000 photos listed"
+      }
+    },
+    {
+      "id": "folders-thumbs",
+      "label": "Visible thumbnails from the raw files",
+      "detail": "The first screenful, decoded from the files",
+      "unit": "ms",
+      "group": "Folders",
+      "better": "lower",
+      "measuredBy": [
+        "folders"
+      ],
+      "readme": {
+        "row": "The visible thumbnails"
+      }
+    },
+    {
+      "id": "folders-warm",
+      "label": "Thumbnails warmed from the raw files",
+      "detail": "In the background, while you're not waiting",
+      "unit": "/s",
+      "group": "Folders",
+      "better": "higher",
+      "measuredBy": [
+        "folders"
+      ],
+      "readme": {
+        "row": "Background warming from the raw files"
+      }
+    },
+    {
+      "id": "folders-cache",
+      "label": "Thumbnails from the disk cache",
+      "detail": "Read back from the per-folder cache",
+      "unit": "/s",
+      "group": "Folders",
+      "better": "higher",
+      "measuredBy": [
+        "folders"
+      ],
+      "readme": {
+        "row": "Thumbnails from the disk cache"
+      }
+    },
+    {
+      "id": "folders-main-listing",
+      "label": "Main thread while listing and warming (p99)",
+      "detail": "The slowest 1% of run-loop iterations",
+      "unit": "ms",
+      "group": "Responsiveness",
+      "better": "lower",
+      "measuredBy": [
+        "folders"
+      ],
+      "readme": {
+        "row": "Main thread while listing, decoding and warming"
+      }
+    },
+    {
+      "id": "folders-main-scroll",
+      "label": "Main thread scrolling the filmstrip (p99)",
+      "detail": "End to end at 120 Hz",
+      "unit": "ms",
+      "group": "Responsiveness",
+      "better": "lower",
+      "measuredBy": [
+        "folders"
+      ],
+      "readme": {
+        "row": "Main thread while scrolling the filmstrip"
+      }
+    },
+    {
+      "id": "drag-busy",
+      "label": "Main thread busy while dragging a slider",
+      "detail": "120 events a second, every panel open",
+      "unit": "%",
+      "group": "Responsiveness",
+      "better": "lower",
+      "measuredBy": [
+        "sweep"
+      ],
+      "readme": {
+        "row": "Time busy",
+        "columns": true
+      }
+    },
+    {
+      "id": "drag-median",
+      "label": "Typical run-loop iteration while dragging",
+      "detail": "The median",
+      "unit": "ms",
+      "group": "Responsiveness",
+      "better": "lower",
+      "measuredBy": [
+        "sweep"
+      ],
+      "readme": {
+        "row": "Typical run-loop iteration",
+        "columns": true
+      }
+    },
+    {
+      "id": "drag-p95",
+      "label": "Slowest 5% of iterations while dragging",
+      "detail": "The 95th percentile",
+      "unit": "ms",
+      "group": "Responsiveness",
+      "better": "lower",
+      "measuredBy": [
+        "sweep"
+      ],
+      "readme": {
+        "row": "Slowest 5% of",
+        "columns": true
+      }
+    },
+    {
+      "id": "drag-p99",
+      "label": "Slowest 1% of iterations while dragging",
+      "detail": "The 99th percentile",
+      "unit": "ms",
+      "group": "Responsiveness",
+      "better": "lower",
+      "measuredBy": [
+        "sweep"
+      ],
+      "readme": {
+        "row": "Slowest 1% of iterations",
+        "columns": true
+      }
+    }
+  ]
+}

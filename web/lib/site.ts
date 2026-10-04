@@ -16,6 +16,14 @@ export const site = {
   readme: `${github}#readme`,
   contributing: `${github}#contributing`,
   support: "https://ko-fi.com/pdcgomes",
+  /** The film, published on YouTube. Its poster is the film's own (video/out/introducing). */
+  film: {
+    title: "Introducing Redlamp",
+    youtube: "lvdLOtdbUX4",
+    url: "https://www.youtube.com/watch?v=lvdLOtdbUX4",
+    duration: "1:42",
+    poster: "/video/introducing-redlamp-poster.jpg",
+  },
   license: { name: "MPL-2.0", long: "Mozilla Public License 2.0", url: `${github}/blob/main/LICENSE` },
   rawPixls: "https://raw.pixls.us",
   buildFromSource: [

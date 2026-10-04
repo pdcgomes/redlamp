@@ -10,8 +10,9 @@
     ///   `EditorModel.applyDebugCommand`), e.g. `select=3,exposure=0.5,panel=all`. `select`
     ///   also takes a file name, `mask=<kind>[:<part>]` computes an AI mask, such as
     ///   `mask=sky` or `mask=people:faceSkin`, and `overlay=<style>` shows masks in one of
-    ///   `MaskOverlayStyle`'s modes, such as `overlay=imageOnBlack`; `quit=now` quits there
-    ///   and then, as ⌘Q would.
+    ///   `MaskOverlayStyle`'s modes, such as `overlay=imageOnBlack`; `palette=<steps>` drives
+    ///   the command palette as the harness's `--palette-steps` does, such as
+    ///   `palette=open;type:exposure;enter;right`; `quit=now` quits there and then, as ⌘Q would.
     /// - `--snapshot <path.png> [--snapshot-delay <s>] [--snapshot-quit]` writes an image of
     ///   the window without Screen Recording permission (glass materials are approximated;
     ///   `scripts/capture-screenshots.sh` uses real window captures instead). An open sheet is
@@ -102,6 +103,8 @@
                     forName: UserDefaults.argumentDomain,
                 )
                 model.sendFeedback()
+            case "palette":
+                await drivePalette(value, model: model)
             case "quit":
                 NSApp.terminate(nil)
             default:
@@ -122,6 +125,29 @@
             guard let kind = MaskKind(rawValue: parts[0]) else { return }
             let part = parts.count > 1 ? PersonPart(rawValue: parts[1]) : nil
             await model.createAIMask(kind, part: part ?? .entirePerson)
+        }
+
+        private static let paletteKeys: [String: PaletteKey] = [
+            "up": .up, "down": .down, "left": .left([]), "right": .right([]), "shift-right": .right(.shift),
+            "enter": .submit, "esc": .escape, "delete": .deleteBackward,
+        ]
+
+        /// Steps between `;`: `open`, `sliders`, `type:<text>` (`_` for a space, since launch
+        /// arguments split on spaces), `up`, `down`, `left`, `right`, `shift-right`, `enter`, `esc`,
+        /// `delete`, and `shift`, which holds ⇧ so its hint in the slider bar lights up.
+        private static func drivePalette(_ steps: String, model: EditorModel) async {
+            for step in steps.split(separator: ";").map(String.init) {
+                if step == "open" || step == "sliders" {
+                    model.openCommandPalette(scope: step == "open" ? .all : .sliders)
+                } else if let key = paletteKeys[step] {
+                    model.commandPalette?.handle(key)
+                } else if step == "shift" {
+                    model.commandPalette?.heldModifiers = .shift
+                } else if step.hasPrefix("type:") {
+                    model.commandPalette?.setText(step.dropFirst(5).replacingOccurrences(of: "_", with: " "))
+                }
+                try? await Task.sleep(for: .milliseconds(250))
+            }
         }
 
         private static func openStack(_ selection: URL, showing value: String, model: EditorModel) async {

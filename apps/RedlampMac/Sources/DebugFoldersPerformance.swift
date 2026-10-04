@@ -170,6 +170,16 @@
                 format: "Peak footprint: %.0f MB; thumbnails in memory %d MB once settled",
                 mb(memory.peak), thumbnailsHeld >> 20,
             ))
+            DebugPerformance.writeMetrics([
+                "folders-first": seconds(measured.firstItems) * 1000,
+                "folders-list": seconds(measured.listed) * 1000,
+                "folders-thumbs": seconds(measured.visible) * 1000,
+                "folders-warm": measured.warmRate,
+                "folders-cache": measured.packRate,
+                "folders-main-listing": measured.busy?.p99 ?? .infinity,
+                "folders-main-scroll": measured.scrolling?.p99 ?? .infinity,
+                "folders-peak-memory": mb(memory.peak),
+            ])
             let budgets = budgets(measured, memory: memory, thumbnailBudget: loader.budget)
             finish(
                 lines,

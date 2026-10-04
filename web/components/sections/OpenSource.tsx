@@ -1,34 +1,9 @@
-import { existsSync } from "node:fs";
-import path from "node:path";
 import { AppIcon } from "@/components/brand/Logo";
 import { Badge } from "@/components/ui/Badge";
 import { GitHubGlyph, LinkButton } from "@/components/ui/Buttons";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { latestRelease } from "@/lib/github";
 import { site } from "@/lib/site";
-
-const video = { src: "/video/redlamp-explainer.mp4", poster: "/video/redlamp-explainer-poster.jpg" };
-
-/** Shown once the explainer has been rendered into public/video (see video/). */
-export function ExplainerVideo() {
-  if (!existsSync(path.join(process.cwd(), "public", video.src))) return null;
-  return (
-    <section id="film-explainer" aria-label="Redlamp in 24 seconds" className="px-6 pb-24">
-      <div className="mx-auto max-w-5xl">
-        <p className="eyebrow text-center">Redlamp in 24 seconds</p>
-        <video
-          className="shot mt-6 aspect-video w-full rounded-2xl border border-hairline bg-bakelite"
-          controls
-          preload="none"
-          playsInline
-          poster={video.poster}
-        >
-          <source src={video.src} type="video/mp4" />
-        </video>
-      </div>
-    </section>
-  );
-}
 
 export async function OpenSource() {
   const release = await latestRelease();

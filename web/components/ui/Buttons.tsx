@@ -33,6 +33,14 @@ export function DownloadGlyph({ className = "size-4" }: { className?: string }) 
   );
 }
 
+export function PlayGlyph({ className = "size-3.5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden className={className} fill="currentColor">
+      <path d="M4.5 2.6v10.8a.6.6 0 0 0 .92.5l8.3-5.4a.6.6 0 0 0 0-1L5.42 2.1a.6.6 0 0 0-.92.5Z" />
+    </svg>
+  );
+}
+
 export function StarGlyph({ className = "size-3.5" }: { className?: string }) {
   return (
     <svg viewBox="0 0 16 16" aria-hidden className={className} fill="currentColor">

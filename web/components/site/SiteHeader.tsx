@@ -1,4 +1,5 @@
 import { Lockup } from "@/components/brand/Logo";
+import { MobileMenu } from "@/components/site/MobileMenu";
 import { GitHubGlyph, StarGlyph } from "@/components/ui/Buttons";
 import { formatCount, starCount } from "@/lib/github";
 import { site } from "@/lib/site";
@@ -10,6 +11,7 @@ const links = [
   { href: "/#roadmap", label: "Roadmap" },
   { href: "/compare", label: "Compare" },
   { href: "/cameras", label: "Cameras" },
+  { href: "/performance", label: "Performance" },
   { href: "/blog", label: "Blog" },
 ];
 
@@ -48,6 +50,7 @@ export async function SiteHeader() {
               </span>
             ) : null}
           </a>
+          <MobileMenu links={links} />
         </nav>
       </div>
     </header>

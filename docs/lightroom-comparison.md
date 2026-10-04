@@ -32,6 +32,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Fujifilm X-Trans raw files | Yes | Done | Behind | | CAM-07 | A first-generation demosaic; a Markesteijn-class one is planned. Fujifilm exposure differs from the camera's by up to ±0.9 EV, depending on the body |
 | Apple ProRAW and other phone DNGs | Yes | Done | | | CAM-03, CAM-04, TON-09 | Gain maps and embedded camera profiles are applied, and ProRAW can render with the iPhone's own look |
 | JPEG XL DNGs | Yes | In progress | | P2 | CAM-10 | Linear ones (iPhone ProRAW) open; JPEG XL mosaic DNGs don't yet |
+| Testing your own camera | No | In progress | | P2 | CAM-14, CAM-15, CAM-16, CAM-17 | The camera bench checks your raws against the camera's own JPEG on your Mac, and sends only the measurements, which add to the cameras page |
 | JPEG, HEIC, TIFF and PNG | Yes | Done | | | TON-23 | Shown as the file at default settings, as Lightroom does |
 | PSD, AVIF and JPEG XL files | Yes | Planned | | P2 | | |
 | WebP files | Yes (Classic) | Undecided | | | | |

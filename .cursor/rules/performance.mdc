@@ -1,0 +1,37 @@
+---
+description: Record Redlamp's performance after work that can change it, and keep redlamp.app/performance honest
+globs: packages/RedlampEngine/**,packages/RedlampKernels/**,packages/RedlampServices/Sources/RawDecoder*.swift,packages/RedlampUI/Sources/Editor/**,packages/RedlampUI/Sources/Inspector/**,packages/RedlampUI/Sources/Filmstrip/**,packages/RedlampUI/Sources/Sidebar/**,apps/RedlampMac/Sources/Debug*Performance.swift,apps/RedlampCLI/Sources/BenchCommand.swift,docs/performance/**,scripts/perf-*,web/**
+alwaysApply: false
+---
+
+# Performance
+
+Speed is one of Redlamp's promises, and redlamp.app/performance shows it over time from `docs/performance/history.jsonl`: one record per run, with its commit, machine and load. The metrics, their units and groups are in `docs/performance/metrics.json`.
+
+## After work that can change speed or memory
+
+Rendering, decoding, the detail stage, masks, the filmstrip and folders, the Develop panels:
+
+1. On a quiet Mac (nothing else building), run `scripts/perf-record.sh`. It builds Release, runs `redlamp bench` on the CC0 fixtures, the slider sweep and, if `/tmp/rl-fixture-50k.noindex` exists, the folders run, appends one record and prints what moved beyond its noise (10%, or the runs' own spread).
+2. A metric that got slower: find out why before moving on. Fix it, or, when the cost buys something (quality, correctness), say so in the commit message; the page shows the commit's subject beside the change.
+3. Commit the new line of `history.jsonl` with the change it measures.
+4. If the README's "Measured performance" tables quote a figure that moved, update it from the record.
+
+A run under load (a load average above 8) is recorded as noisy: drawn, never compared. Never edit or delete past records; a mistaken run is followed by a correct one.
+
+During an agent wave, parallel builds make every number noisy: wave agents don't record, and name performance-sensitive changes in their final report; the orchestrator records after merging.
+
+## Adding a metric
+
+Add it to `metrics.json` (ID, label, detail, unit, group, which way is better, `measuredBy`), measure it in `redlamp bench` or a harness's `writeMetrics`, and run `scripts/perf-record.sh`. A metric the README recorded before can be backfilled: give it a `readme` entry and run `scripts/perf-backfill.py --apply`, which rewrites only the README records.
+
+## On the page
+
+No Lightroom figures: Redlamp hasn't measured Lightroom on the same photos, and publishing its benchmarks waits on DEC-13. Words are plain: "faster", "slower", "less memory", with the figures and dates.
+
+## Check
+
+```bash
+scripts/perf-history.py report
+cd web && npm test && npm run build
+```

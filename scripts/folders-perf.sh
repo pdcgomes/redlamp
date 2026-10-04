@@ -31,7 +31,7 @@ if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
         SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) REDLAMP_PROFILING' -quiet
 fi
 
-rm -f /tmp/redlamp-perf.txt /tmp/redlamp-memory.txt
+rm -f /tmp/redlamp-perf.txt /tmp/redlamp-perf.json /tmp/redlamp-memory.txt
 ENV_FLAGS=()
 for assignment in ${APP_ENV:-}; do
     ENV_FLAGS+=(--env "$assignment")

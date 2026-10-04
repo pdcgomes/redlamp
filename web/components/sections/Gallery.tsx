@@ -1,16 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { Lightbox } from "@/components/ui/Lightbox";
 import type { Shot } from "@/content/features";
 
 export function Gallery({ shots }: { shots: Shot[] }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const [open, setOpen] = useState<Shot | null>(null);
-
-  useEffect(() => {
-    if (open) dialog.current?.showModal();
-  }, [open]);
+  const [open, setOpen] = useState<number | null>(null);
 
   return (
     <section id="gallery" aria-labelledby="gallery-title" className="px-6 pb-24">
@@ -19,8 +15,13 @@ export function Gallery({ shots }: { shots: Shot[] }) {
           More of the app
         </h2>
         <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {shots.map((shot) => (
-            <button key={shot.src} onClick={() => setOpen(shot)} className="group text-left">
+          {shots.map((shot, index) => (
+            <button
+              key={shot.src}
+              onClick={() => setOpen(index)}
+              aria-haspopup="dialog"
+              className="group cursor-zoom-in text-left"
+            >
               <Image
                 src={shot.src}
                 alt={shot.alt}
@@ -34,33 +35,7 @@ export function Gallery({ shots }: { shots: Shot[] }) {
           ))}
         </div>
       </div>
-      <dialog
-        ref={dialog}
-        onClose={() => setOpen(null)}
-        onClick={(event) => {
-          if (event.target === dialog.current) dialog.current?.close();
-        }}
-        className="m-auto max-h-[92vh] w-[min(96vw,1500px)] bg-transparent p-0 backdrop:bg-wall/85 backdrop:backdrop-blur-sm"
-      >
-        {open ? (
-          <figure className="flex flex-col items-center gap-3">
-            <Image
-              src={open.src}
-              alt={open.alt}
-              width={open.width}
-              height={open.height}
-              sizes="96vw"
-              className="shot h-auto max-h-[84vh] w-auto"
-            />
-            <figcaption className="flex items-center gap-4 text-[13px] text-mute">
-              {open.caption}
-              <button onClick={() => dialog.current?.close()} className="button-secondary rounded-pill px-3 py-1 text-paper">
-                Close
-              </button>
-            </figcaption>
-          </figure>
-        ) : null}
-      </dialog>
+      <Lightbox shots={shots} index={open} onIndex={setOpen} onClose={() => setOpen(null)} />
     </section>
   );
 }
