@@ -18,6 +18,7 @@ mise run site -- build   # production build
 - **The download button** links to the latest GitHub release's zip, and the status pill at the top shows that release's version (`lib/github.ts`, refreshed hourly). The button stays hidden until the first release.
 - **Features, film descriptions and principles** are curated in `content/`.
 - **The film**, Introducing Redlamp, plays from YouTube (`film` in `lib/site.ts`), in its privacy-enhanced mode and only once the visitor presses play: until then the page shows the film's own poster (`public/video/introducing-redlamp-poster.jpg`, from `video/out/introducing`) and makes no request to YouTube. The 24-second explainer in `public/video` is the first blog post's.
+- **The Product Hunt card** at the foot of the home page is Product Hunt's embed for Redlamp, drawn in the brand's materials (`components/ui/ProductHuntCard.tsx`). Its link and the listing's tagline are `productHunt` in `lib/site.ts`, to update when the listing changes. It shows the site's own app icon, so the page makes no request to Product Hunt.
 - **Blog posts** are Markdown files in `content/blog/`; see below.
 
 ## The blog

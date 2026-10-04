@@ -1,6 +1,7 @@
 import { AppIcon } from "@/components/brand/Logo";
 import { Badge } from "@/components/ui/Badge";
 import { GitHubGlyph, LinkButton } from "@/components/ui/Buttons";
+import { ProductHuntCard } from "@/components/ui/ProductHuntCard";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { latestRelease } from "@/lib/github";
 import { site } from "@/lib/site";
@@ -38,7 +39,8 @@ export async function OpenSource() {
               <LinkButton href={site.support}>Support Redlamp</LinkButton>
             </div>
           </div>
-          <div className="flex flex-col gap-5">
+          {/* Stacked, the column fits the screen and the commands scroll; side by side, it widens to show them whole. */}
+          <div className="flex min-w-0 flex-col gap-5 lg:min-w-auto">
             <div>
               <p className="text-[14px] font-semibold text-paper">Build from source</p>
               <p className="mt-1 text-[13px] text-mute">An Apple Silicon Mac with macOS 26, Xcode 26 and mise.</p>
@@ -53,6 +55,10 @@ export async function OpenSource() {
               <pre className="mt-3 overflow-x-auto rounded-xl border border-hairline bg-wall/80 p-4 font-mono text-[12.5px] leading-relaxed text-ring">
                 {site.homebrew.map((line) => `$ ${line}`).join("\n")}
               </pre>
+            </div>
+            <div>
+              <p className="text-[14px] font-semibold text-paper">Product Hunt</p>
+              <ProductHuntCard className="mt-3" />
             </div>
           </div>
         </div>
