@@ -537,9 +537,23 @@ struct DetailStageTests {
     }
 
     func readBack(_ texture: any MTLTexture, level: Int, width: Int, height: Int) throws -> [SIMD3<Float>] {
+        let commands = try #require(queue.makeCommandBuffer())
+        let read = try encodeReadBack(texture, level: level, width: width, height: height, commands: commands)
+        commands.commit()
+        commands.waitUntilCompleted()
+        return read()
+    }
+
+    /// Copies a level of `texture` out in `commands`; the result is read once they complete.
+    func encodeReadBack(
+        _ texture: any MTLTexture,
+        level: Int = 0,
+        width: Int,
+        height: Int,
+        commands: any MTLCommandBuffer,
+    ) throws -> () -> [SIMD3<Float>] {
         let rowBytes = width * 8
         let buffer = try #require(device.makeBuffer(length: rowBytes * height, options: .storageModeShared))
-        let commands = try #require(queue.makeCommandBuffer())
         let blit = try #require(commands.makeBlitCommandEncoder())
         blit.copy(
             from: texture, sourceSlice: 0, sourceLevel: level, sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
@@ -548,25 +562,39 @@ struct DetailStageTests {
             destinationBytesPerImage: rowBytes * height,
         )
         blit.endEncoding()
+        return {
+            let halves = buffer.contents().assumingMemoryBound(to: Float16.self)
+            return (0 ..< width * height).map { index in
+                SIMD3(Float(halves[index * 4]), Float(halves[index * 4 + 1]), Float(halves[index * 4 + 2]))
+            }
+        }
+    }
+
+    /// The stage's output texels, read back by the command buffer that rendered them: once it
+    /// completes, a cached output may be reclaimed.
+    func processAndRead(
+        _ stage: DetailStage,
+        _ session: ImageSession,
+        _ recipe: EditRecipe,
+        region: ImageRect = .full,
+        outputSize: PixelSize? = nil,
+        cache: Bool = true,
+    ) throws -> (texels: [SIMD3<Float>], output: DetailStage.Output) {
+        let commands = try #require(queue.makeCommandBuffer())
+        let output = try #require(try stage.process(
+            recipe, session: session, region: region, outputSize: outputSize ?? session.orientedSize,
+            commands: commands, cache: cache,
+        ))
+        let texture = output.texture
+        let read = try encodeReadBack(texture, width: texture.width, height: texture.height, commands: commands)
         commands.commit()
         commands.waitUntilCompleted()
-        let halves = buffer.contents().assumingMemoryBound(to: Float16.self)
-        return (0 ..< width * height).map { index in
-            SIMD3(Float(halves[index * 4]), Float(halves[index * 4 + 1]), Float(halves[index * 4 + 2]))
-        }
+        return (read(), output)
     }
 
     /// The whole image through the detail stage at full resolution.
     func processed(_ session: ImageSession, recipe: EditRecipe) throws -> [SIMD3<Float>] {
-        let stage = DetailStage(device: device, kernels: kernels)
-        let commands = try #require(queue.makeCommandBuffer())
-        let size = session.orientedSize
-        let output = try #require(try stage.process(
-            recipe, session: session, region: .full, outputSize: size, commands: commands,
-        ))
-        commands.commit()
-        commands.waitUntilCompleted()
-        return try readBack(output.texture, level: 0, width: size.width, height: size.height)
+        try processAndRead(DetailStage(device: device, kernels: kernels), session, recipe).texels
     }
 
     func statistics(of pixels: [SIMD3<Float>]) -> (mean: SIMD3<Float>, deviation: SIMD3<Float>) {

@@ -43,6 +43,19 @@ struct DenoiseSettings: Hashable {
         luma > 0 || chroma.contains { $0 > 0 }
     }
 
+    /// How far around a texel, in work texels, noise reduction at `level` reads.
+    func reach(level: Int) -> Int {
+        // Each scale's rows and columns read the B3 spline's two taps each way at its spacing; the
+        // coarsest scale's detail then has its energy measured over its own neighbourhood.
+        let coarsest = 1 << (Self.scaleCount - 1)
+        var reach = 2 * (2 * coarsest - 1) + Int(lumaRadius) * coarsest
+        if nonLocalWidth > 0, level == 0 {
+            // Each search offset compares 3×3 patches.
+            reach += Int(Self.nonLocalSearch) + 1
+        }
+        return reach
+    }
+
     /// Sharpening's separator: noise removed at a fixed number of sigmas per scale, luma and chroma
     /// (sharpening reads Rec. 2020 luminance, which picks up the chroma axes' noise too), so the
     /// detail it boosts is detail, not noise. Chosen by `shp01_calibrate.py`: at 3 sigmas flat
@@ -268,14 +281,40 @@ final class DetailStage {
     /// Per work area: a comparison's two edits.
     private static let maximumEntriesPerArea = 2
 
-    /// Work areas above this many texels are processed in tiles, so the scratch textures (up to
-    /// 102 bytes a texel) stay under about 700 MB whatever the photo and zoom.
-    var tileTexels = 7_000_000
+    /// The scratch textures' bytes, whatever the photo and zoom: work areas whose passes would
+    /// need more are processed in tiles. A little under 720 MB, for the textures' padding.
+    var scratchBudget = 704 << 20
+    /// Texels taken off the overlap tiles need, which only a test that the overlap matters sets.
+    var haloShortfall = 0
 
     let residency = DetailResidency()
     let sharpenCache: SharpenCache
-    /// Each format's working textures by slot, allocated as passes first use them.
+    /// Each format's working textures by slot, allocated as passes first use them, for one photo.
     private var scratch: [MTLPixelFormat: [Int: any MTLTexture]] = [:]
+    private var scratchPhoto: PhotoKey?
+    /// While tiles are encoded, the largest one's size: every scratch texture is made that size.
+    private var scratchFloor: SIMD2<Int>?
+    /// The texels a scratch texture may grow to in the render being encoded.
+    private var scratchLimit = 0
+    private var layout: (key: LayoutKey, tiles: [Tile])?
+    /// The command buffer being encoded and the textures cached from it, which `abandon` forgets.
+    private var encoding: (commands: ObjectIdentifier, cached: Set<ObjectIdentifier>)?
+    /// Textures made so far and their bytes.
+    private(set) var allocated = (count: 0, bytes: 0)
+    /// The tiles the last render was processed in.
+    private(set) var tileCount = 0
+
+    private struct PhotoKey: Equatable {
+        var url: URL
+        var size: PixelSize
+    }
+
+    private struct LayoutKey: Equatable {
+        var size: SIMD2<Int>
+        var halo: Int
+        var limit: Int
+        var shape: SIMD2<Int>?
+    }
 
     private var emptyMasks: (rasters: any MTLTexture, guide: any MTLTexture)?
 
@@ -317,6 +356,25 @@ final class DetailStage {
         guard outputSize.width > 0 else { return nil }
         let geometry = GeometryMap(recipe: recipe, imageSize: session.orientedSize, lens: session.info.lensCorrection)
         let work = Self.workArea(session: session, geometry: geometry, region: region, outputSize: outputSize)
+        guard let passes = Self.passes(recipe, session: session, level: work.level, masks: masks) else { return nil }
+        let key = Key(
+            session: ObjectIdentifier(session), work: work, denoise: passes.denoise, sharpen: passes.sharpen,
+            contrast: passes.contrast, local: passes.local,
+        )
+        residency.hold(until: commands)
+        if encoding?.commands != ObjectIdentifier(commands) {
+            encoding = (ObjectIdentifier(commands), [])
+        }
+        do {
+            return try process(key, passes, session: session, work: work, commands: commands, cache: cache)
+        } catch {
+            abandon(commands)
+            throw error
+        }
+    }
+
+    /// The passes `recipe` needs at a work level: nil when it needs none.
+    static func passes(_ recipe: EditRecipe, session: ImageSession, level: Int, masks: MaskBindings) -> Passes? {
         let denoiseSettings = DenoiseSettings(recipe: recipe)
         let sharpenSettings = SharpenSettings(recipe: recipe)
         let contrastSettings = LocalContrastSettings(recipe: recipe)
@@ -325,15 +383,23 @@ final class DetailStage {
             local.guideGeneration = masks.guideGeneration
         }
         let denoise = denoiseSettings.isActive || local.uses(3) ? denoiseSettings : nil
-        let sharpen = sharpenSettings.sigma(atLevel: work.level) != nil && (sharpenSettings.gain > 0 || local.uses(2))
+        let sharpen = sharpenSettings.sigma(atLevel: level) != nil && (sharpenSettings.gain > 0 || local.uses(2))
             ? sharpenSettings : nil
         let contrast = contrastSettings.isActive || local.uses(0) || local.uses(1) ? contrastSettings : nil
         guard denoise != nil || sharpen != nil || contrast != nil else { return nil }
-        let key = Key(
-            session: ObjectIdentifier(session), work: work, denoise: denoise, sharpen: sharpen, contrast: contrast,
-            local: local,
+        return Passes(
+            session: session, denoise: denoise, sharpen: sharpen, contrast: contrast, local: local, masks: masks,
         )
-        residency.hold(until: commands)
+    }
+
+    private func process(
+        _ key: Key,
+        _ passes: Passes,
+        session: ImageSession,
+        work: WorkArea,
+        commands: any MTLCommandBuffer,
+        cache: Bool,
+    ) throws -> Output {
         if let index = entries.firstIndex(where: { $0.key == key }) {
             let entry = entries.remove(at: index)
             if residency.wake(entry.output.texture) {
@@ -341,34 +407,49 @@ final class DetailStage {
                 return entry.output
             }
         }
+        let photo = PhotoKey(url: session.info.url, size: session.info.pixelSize)
+        if photo != scratchPhoto {
+            scratch.removeAll()
+            layout = nil
+            scratchPhoto = photo
+        }
 
         let texture = try makeWorkTexture(.rgba16Float, work)
-        let passes = Passes(
-            session: session, denoise: denoise, sharpen: sharpen, contrast: contrast, local: local, masks: masks,
+        let sigma = key.sharpen?.sigma(atLevel: work.level) ?? 0
+        var measures = key.sharpen.map { _ in cachedSharpenMeasures(session, work: work, sigma: sigma) }
+        // With the analysis cached and nothing else to run, the final pass reads only the texel
+        // itself, so it needs no tiles whatever the area.
+        let appliesOnly = key.denoise == nil && key.contrast == nil && key.local.isEmpty && measures?.analysis != nil
+        scratchLimit = tileLimit(passes, measures: measures)
+        let tiles = appliesOnly ? [Tile(whole: work)] : tileLayout(
+            work,
+            halo: passes.halo(level: work.level, measures: measures),
+            limit: scratchLimit,
         )
-        let tiles = Self.tiles(work, halo: passes.halo(level: work.level), limit: tileTexels)
+        tileCount = tiles.count
         if tiles.count == 1 {
-            var measures: SharpenMeasures?
-            if let sharpen {
-                var cached = cachedSharpenMeasures(session, work: work, sigma: sharpen.sigma(atLevel: work.level) ?? 0)
-                if cached.analysis == nil {
-                    cached.analysisTarget = try makeWorkTexture(.rgba16Float, work)
-                    if cached.separation == nil {
-                        cached.separationTarget = try cache
-                            ? makeWorkTexture(.r16Float, work) : scratchTexture(.r16Float, 0, work)
-                    }
+            if measures != nil, measures?.analysis == nil {
+                measures?.analysisTarget = try makeWorkTexture(.rgba16Float, work)
+                if measures?.separation == nil {
+                    measures?.separationTarget = try cache
+                        ? makeWorkTexture(.r16Float, work) : scratchTexture(.r16Float, 0, work)
                 }
-                measures = cached
             }
             guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
             encoder.label = "Detail"
             try encode(passes, work: work, into: texture, measures: measures, encoder: encoder)
             encoder.endEncoding()
-            if cache, let measures, let sharpen {
-                storeSharpenMeasures(measures, session, work: work, sigma: sharpen.sigma(atLevel: work.level) ?? 0)
-            }
         } else {
-            try encodeTiles(tiles, passes, work: work, into: texture, cache: cache, commands: commands)
+            if cache, measures != nil, measures?.analysis == nil {
+                measures?.analysisTarget = try makeWorkTexture(.rgba16Float, work)
+                if measures?.separation == nil {
+                    measures?.separationTarget = try makeWorkTexture(.r16Float, work)
+                }
+            }
+            try encodeTiles(tiles, passes, work: work, into: texture, measures: measures, commands: commands)
+        }
+        if cache, let measures {
+            storeSharpenMeasures(measures, session, work: work, sigma: sigma)
         }
 
         let levelWidth = Float(max(1, session.pyramid.width >> work.level))
@@ -379,6 +460,7 @@ final class DetailStage {
         ))
         if cache {
             residency.wake(texture)
+            encoding?.cached.insert(ObjectIdentifier(texture))
             let sameArea = entries.indices
                 .filter { entries[$0].key.session == key.session && entries[$0].key.work == work }
             if sameArea.count >= Self.maximumEntriesPerArea {
@@ -390,6 +472,17 @@ final class DetailStage {
             }
         }
         return output
+    }
+
+    /// Forgets what was cached from `commands`, which will never run, and stops keeping its
+    /// textures resident. For a render that failed after the stage encoded into it.
+    func abandon(_ commands: any MTLCommandBuffer) {
+        if let encoding, encoding.commands == ObjectIdentifier(commands) {
+            entries.removeAll { encoding.cached.contains(ObjectIdentifier($0.output.texture)) }
+            sharpenCache.forget(encoding.cached)
+        }
+        encoding = nil
+        residency.abandon(commands)
     }
 
     /// What one render of the stage runs, for any work area or tile of it.
@@ -406,20 +499,81 @@ final class DetailStage {
         }
 
         /// How far around a texel, in work texels, the passes read: tiles overlapping by this much
-        /// render exactly what one pass over the work area does. A multiple of 32, the tile
-        /// non-local means groups texels in.
-        func halo(level: Int) -> Int {
-            // Five à-trous scales of the B3 spline reach 2 × (1 + 2 + 4 + 8 + 16) texels, the luma
-            // energy neighbourhood 16 more, and non-local means' patches across its search 4.
-            var reach = denoise == nil ? 0 : 62 + 16 + 4
+        /// render exactly what one pass over the work area does. Masks' amounts, Texture and
+        /// Clarity read their source at the texel itself. What `measures` already holds, each tile
+        /// copies rather than computes.
+        func halo(level: Int, measures: SharpenMeasures?) -> Int {
+            var reach = denoise?.reach(level: level) ?? 0
             if let sigma = sharpen?.sigma(atLevel: level) {
                 let blur = SharpenSettings.blurRadius(sigma: sigma)
-                // The separator's denoising, then four Richardson-Lucy iterations of two blurs, and
-                // Masking's gradient of the result; softening blurs the source.
-                reach = max(reach + (softens ? blur : 0), 62 + 8 * blur + 1)
+                // The analysis: the separator's denoising, then two blurs per Richardson-Lucy
+                // iteration; the final pass reads its gradient for Masking. Softening blurs the
+                // source.
+                let separation = measures?.separation == nil ? DenoiseSettings.separator.reach(level: level) : 0
+                let analysis = measures?.analysis == nil ? separation + 2 * SharpenSettings.iterations * blur : 0
+                reach = max(reach + (softens ? blur : 0), analysis + 1)
             }
-            return (reach + 31) / 32 * 32
+            return reach
         }
+
+        /// The scratch textures the passes use when tiled, given what `measures` holds.
+        func scratchSlots(measures: SharpenMeasures?) -> Set<ScratchSlot> {
+            func rgba(_ indices: Int...) -> [ScratchSlot] {
+                indices.map { ScratchSlot(format: .rgba16Float, index: $0) }
+            }
+            var slots = Set(rgba(9))
+            let count = [denoise != nil, sharpen != nil, contrast != nil].count(where: \.self)
+            slots.formUnion(rgba(4, 5).prefix(max(count - 1, 0)))
+            if !local.isEmpty {
+                slots.formUnion(rgba(6))
+            }
+            let separates = sharpen != nil && measures?.analysis == nil && measures?.separation == nil
+            if denoise != nil || separates {
+                slots.formUnion(rgba(0, 1, 2, 3, 8))
+            }
+            guard sharpen != nil else { return slots }
+            slots.formUnion(rgba(10) + [ScratchSlot(format: .r16Float, index: 0)])
+            if separates {
+                slots.formUnion(rgba(7))
+            }
+            if measures?.analysis == nil {
+                slots.formUnion([1, 2, 3].map { ScratchSlot(format: .r32Float, index: $0) })
+                slots.formUnion((1 ... 4).map { ScratchSlot(format: .r16Float, index: $0) })
+            }
+            if softens {
+                slots.formUnion([0, 2, 4].map { ScratchSlot(format: .r32Float, index: $0) })
+            }
+            return slots
+        }
+    }
+
+    struct ScratchSlot: Hashable {
+        var format: MTLPixelFormat
+        var index: Int
+
+        var bytesPerTexel: Int {
+            switch format {
+            case .rgba16Float: 8
+            case .r32Float: 4
+            default: 2
+            }
+        }
+    }
+
+    /// The scratch slots held now.
+    var scratchSlots: Set<ScratchSlot> {
+        Set(scratch.flatMap { format, textures in textures.keys.map { ScratchSlot(format: format, index: $0) } })
+    }
+
+    /// The most texels a tile of `passes` may cover, extent included, so the scratch textures
+    /// they use, at that size, and those held for other passes fit the budget.
+    func tileLimit(_ passes: Passes, measures: SharpenMeasures?) -> Int {
+        let slots = passes.scratchSlots(measures: measures)
+        let others = scratch.flatMap { format, textures in
+            textures.filter { !slots.contains(ScratchSlot(format: format, index: $0.key)) }.values
+        }
+        let available = scratchBudget - others.reduce(0) { $0 + $1.allocatedSize }
+        return max(available, 0) / slots.reduce(0) { $0 + $1.bytesPerTexel }
     }
 
     /// Encodes `passes` over `work`, the last writing `output`.
@@ -488,8 +642,10 @@ final class DetailStage {
     ) {
         guard measures.analysis == nil, let analysis = measures.analysisTarget else { return }
         sharpenCache.store(analysis: analysis, session, work, sigma: sigma)
+        encoding?.cached.insert(ObjectIdentifier(analysis))
         if measures.separation == nil, let separation = measures.separationTarget {
             sharpenCache.store(separation: separation, session, work)
+            encoding?.cached.insert(ObjectIdentifier(separation))
         }
     }
 
@@ -500,11 +656,39 @@ final class DetailStage {
         var interior: (origin: SIMD2<Int>, size: SIMD2<Int>)
         /// The interior with the halo around it, clamped to the work area.
         var extent: (origin: SIMD2<Int>, size: SIMD2<Int>)
+
+        init(interior: (origin: SIMD2<Int>, size: SIMD2<Int>), extent: (origin: SIMD2<Int>, size: SIMD2<Int>)) {
+            self.interior = interior
+            self.extent = extent
+        }
+
+        init(whole work: WorkArea) {
+            self.init(interior: (.zero, work.size), extent: (.zero, work.size))
+        }
     }
 
-    /// The fewest tiles, extent included, of at most `limit` texels each covering `work`: the
-    /// whole of it when it fits. Interior edges fall on multiples of 32.
-    static func tiles(_ work: WorkArea, halo: Int, limit: Int) -> [Tile] {
+    /// The tiles for `work`, preferring ones that fit the scratch textures already made; the last
+    /// layout is kept, since a drag asks for the same one every frame.
+    private func tileLayout(_ work: WorkArea, halo: Int, limit: Int) -> [Tile] {
+        let shape = scratch.values.flatMap(\.values).map { SIMD2($0.width, $0.height) }.reduce(nil) { shape, size in
+            shape.map { simd_min($0, size) } ?? size
+        }
+        let key = LayoutKey(size: work.size, halo: max(halo - haloShortfall, 0), limit: limit, shape: shape)
+        if let layout, layout.key == key {
+            return layout.tiles
+        }
+        let tiles = Self.tiles(work, halo: key.halo, limit: key.limit, fitting: shape)
+        layout = (key, tiles)
+        return tiles
+    }
+
+    /// The fewest tiles covering `work`, then the fewest texels in all, whose largest extent
+    /// (the size of the scratch textures) covers at most `limit` texels: the whole of it when it
+    /// fits. Every tile costs a few passes' fixed overhead. Of those, a layout whose tiles fit in
+    /// `shape` is taken when it costs at most a quarter more texels. Interior edges and extents'
+    /// starts fall on multiples of 32: non-local means decides per block of texels within each
+    /// 32×32 group whether to search, so a tile must group texels as the whole area does.
+    static func tiles(_ work: WorkArea, halo: Int, limit: Int, fitting shape: SIMD2<Int>? = nil) -> [Tile] {
         func edges(_ length: Int, _ count: Int) -> [Int] {
             let step = (length + count - 1) / count
             let aligned = (step + 31) / 32 * 32
@@ -514,46 +698,46 @@ final class DetailStage {
             let xs = edges(work.size.x, columns), ys = edges(work.size.y, rows)
             return zip(ys, ys.dropFirst()).flatMap { y0, y1 in
                 zip(xs, xs.dropFirst()).map { x0, x1 in
-                    let low = SIMD2(max(0, x0 - halo), max(0, y0 - halo))
+                    let low = SIMD2(max(0, x0 - halo) / 32 * 32, max(0, y0 - halo) / 32 * 32)
                     let high = SIMD2(min(work.size.x, x1 + halo), min(work.size.y, y1 + halo))
                     return Tile(interior: (SIMD2(x0, y0), SIMD2(x1 - x0, y1 - y0)), extent: (low, high &- low))
                 }
             }
         }
-        let whole = Tile(interior: (.zero, work.size), extent: (.zero, work.size))
-        guard work.size.x * work.size.y > limit else { return [whole] }
-        var best: (texels: Int, tiles: [Tile])?
-        for columns in 1 ... 16 {
-            for rows in 1 ... 16 {
-                let tiles = layout(columns, rows)
-                guard tiles.allSatisfy({ $0.extent.size.x * $0.extent.size.y <= limit }) else { continue }
-                let texels = tiles.reduce(0) { $0 + $1.extent.size.x * $1.extent.size.y }
-                if best == nil || texels < best!.texels {
-                    best = (texels, tiles)
-                }
-            }
+        guard work.size.x * work.size.y > limit else { return [Tile(whole: work)] }
+        let candidates = (1 ... 16).flatMap { columns in (1 ... 16).map { layout(columns, $0) } }.filter { tiles in
+            let largest = tiles.map(\.extent.size).reduce(.zero, simd_max)
+            return largest.x * largest.y <= limit
         }
-        return best?.tiles ?? [whole]
+        func texels(_ tiles: [Tile]) -> Int {
+            tiles.reduce(0) { $0 + $1.extent.size.x * $1.extent.size.y }
+        }
+        guard let count = candidates.map(\.count).min() else { return [Tile(whole: work)] }
+        let fewest = candidates.filter { $0.count == count }.map { (texels: texels($0), tiles: $0) }
+        let best = fewest.min { $0.texels < $1.texels }
+        let fitting = fewest.filter { candidate in
+            shape.map { shape in
+                candidate.tiles.allSatisfy { $0.extent.size.x <= shape.x && $0.extent.size.y <= shape.y }
+            } ?? false
+        }.min { $0.texels < $1.texels }
+        if let best, let fitting, fitting.texels * 4 <= best.texels * 5 {
+            return fitting.tiles
+        }
+        return best?.tiles ?? [Tile(whole: work)]
     }
 
     /// Encodes `passes` tile by tile, copying each tile's interior into `output`, and into the
-    /// sharpening caches' textures when they are measured here.
+    /// sharpening measures' targets when there are any.
     private func encodeTiles(
         _ tiles: [Tile],
         _ passes: Passes,
         work: WorkArea,
         into output: any MTLTexture,
-        cache: Bool,
+        measures whole: SharpenMeasures?,
         commands: any MTLCommandBuffer,
     ) throws {
-        let sigma = passes.sharpen?.sigma(atLevel: work.level) ?? 0
-        var whole = passes.sharpen.map { _ in cachedSharpenMeasures(passes.session, work: work, sigma: sigma) }
-        if cache, whole != nil, whole?.analysis == nil {
-            whole?.analysisTarget = try makeWorkTexture(.rgba16Float, work)
-            if whole?.separation == nil {
-                whole?.separationTarget = try makeWorkTexture(.r16Float, work)
-            }
-        }
+        scratchFloor = tiles.map(\.extent.size).reduce(.zero, simd_max)
+        defer { scratchFloor = nil }
         for tile in tiles {
             let area = WorkArea(level: work.level, origin: work.origin &+ tile.extent.origin, size: tile.extent.size)
             let rendered = try scratchTexture(.rgba16Float, 9, area)
@@ -597,9 +781,6 @@ final class DetailStage {
                 }
             }
             blit.endEncoding()
-        }
-        if cache, let whole {
-            storeSharpenMeasures(whole, passes.session, work: work, sigma: sigma)
         }
     }
 
@@ -848,9 +1029,10 @@ final class DetailStage {
             residency.wake(existing)
             return existing
         }
-        var size = SIMD2(max(work.size.x, existing?.width ?? 0), max(work.size.y, existing?.height ?? 0))
-        if size.x * size.y > tileTexels {
-            size = work.size
+        let needed = simd_max(work.size, scratchFloor ?? .zero)
+        var size = simd_max(needed, existing.map { SIMD2($0.width, $0.height) } ?? .zero)
+        if size.x * size.y > scratchLimit {
+            size = needed
         }
         let texture = try makeWorkTexture(format, WorkArea(level: work.level, origin: work.origin, size: size))
         scratch[format, default: [:]][slot] = texture
@@ -866,6 +1048,7 @@ final class DetailStage {
         descriptor.usage = [.shaderRead, .shaderWrite]
         descriptor.storageMode = .private
         guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
+        allocated = (allocated.count + 1, allocated.bytes + texture.allocatedSize)
         return texture
     }
 }
@@ -883,35 +1066,66 @@ private extension MTLBlitCommandEncoder {
     }
 }
 
-/// Keeps the detail stage's textures resident only while a command buffer using them is in
-/// flight; in between they are volatile, so the system can reclaim them without a memory
-/// warning. A cached texture it reclaimed is rendered again.
+/// Keeps the detail stage's textures resident while a command buffer using them is being encoded
+/// or run, and for a moment after the last one, so a drag doesn't toggle them every frame; then
+/// they are volatile, so the system can reclaim them without a memory warning. A cached texture
+/// it reclaimed is rendered again.
 final class DetailResidency: Sendable {
     /// Only its purgeable state is changed off the render queue, which Metal allows from any thread.
     private struct Resident: @unchecked Sendable {
-        let texture: any MTLTexture
+        weak var texture: (any MTLTexture)?
+    }
+
+    /// A command buffer dropped without being committed or abandoned is released, and stops
+    /// counting then.
+    private struct Hold: @unchecked Sendable {
+        weak var commands: (any MTLCommandBuffer)?
     }
 
     private struct State {
-        var inFlight = 0
+        var holds: [ObjectIdentifier: Hold] = [:]
         var awake: [ObjectIdentifier: Resident] = [:]
+        /// Counts holds, so a park scheduled before the latest one is skipped.
+        var generation = 0
+
+        mutating func dropReleased() {
+            holds = holds.filter { $0.value.commands != nil }
+        }
     }
 
     private let state = Mutex(State())
+    private let parkDelay: DispatchTimeInterval
 
-    /// Keeps the textures woken from now on resident until `commands` completes.
-    func hold(until commands: any MTLCommandBuffer) {
-        state.withLock { $0.inFlight += 1 }
-        commands.addCompletedHandler { [self] _ in
-            state.withLock { state in
-                state.inFlight -= 1
-                guard state.inFlight == 0 else { return }
-                for resident in state.awake.values {
-                    resident.texture.setPurgeableState(.volatile)
-                }
-                state.awake.removeAll()
-            }
+    init(parkDelay: DispatchTimeInterval = .milliseconds(500)) {
+        self.parkDelay = parkDelay
+    }
+
+    /// Whether nothing is held and every texture woken since has been made volatile again.
+    var isParked: Bool {
+        state.withLock { state in
+            state.dropReleased()
+            return state.holds.isEmpty && state.awake.isEmpty
         }
+    }
+
+    /// Keeps the textures woken from now on resident until `commands` completes or is abandoned.
+    func hold(until commands: any MTLCommandBuffer) {
+        let hold = Hold(commands: commands)
+        let key = ObjectIdentifier(commands)
+        let first = state.withLock { state in
+            state.generation += 1
+            guard state.holds[key]?.commands !== hold.commands else { return false }
+            state.holds[key] = hold
+            return true
+        }
+        if first {
+            commands.addCompletedHandler { [self] _ in release(key) }
+        }
+    }
+
+    /// Stops holding for `commands`, which will never be committed.
+    func abandon(_ commands: any MTLCommandBuffer) {
+        release(ObjectIdentifier(commands))
     }
 
     /// Makes `texture` resident for the commands being encoded. False when the system had
@@ -920,10 +1134,34 @@ final class DetailResidency: Sendable {
     func wake(_ texture: any MTLTexture) -> Bool {
         let resident = Resident(texture: texture)
         return state.withLock { state in
-            let key = ObjectIdentifier(resident.texture)
-            guard state.awake[key] == nil else { return true }
+            guard let texture = resident.texture else { return false }
+            let key = ObjectIdentifier(texture)
+            guard state.awake[key]?.texture !== texture else { return true }
             state.awake[key] = resident
-            return resident.texture.setPurgeableState(.nonVolatile) != .empty
+            return texture.setPurgeableState(.nonVolatile) != .empty
+        }
+    }
+
+    private func release(_ key: ObjectIdentifier) {
+        let generation: Int? = state.withLock { state in
+            state.holds[key] = nil
+            state.dropReleased()
+            return state.holds.isEmpty ? state.generation : nil
+        }
+        guard let generation else { return }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + parkDelay) { [self] in
+            park(ifStill: generation)
+        }
+    }
+
+    private func park(ifStill generation: Int) {
+        state.withLock { state in
+            state.dropReleased()
+            guard state.generation == generation, state.holds.isEmpty else { return }
+            for resident in state.awake.values {
+                resident.texture?.setPurgeableState(.volatile)
+            }
+            state.awake.removeAll()
         }
     }
 }

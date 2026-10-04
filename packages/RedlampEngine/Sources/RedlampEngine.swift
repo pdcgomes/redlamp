@@ -238,38 +238,41 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
 
         guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
         commands.label = "Interactive render"
-        try encodeDevelop(
-            request.recipe, session: session, into: target.texture, size: size, region: region,
-            encoding: .linear, showClipping: request.showClipping, maskOverlay: request.maskOverlay,
-            maskOverlayColor: request.maskOverlayColor, maskOverlayStyle: request.maskOverlayStyle,
-            commands: commands, visualizeSpots: request.visualizeSpots,
-        )
         var overview: SurfacePool.Target?
         var overviewSize = PixelSize.zero
-        // Visualize Spots replaces the photo in the frame, not in the histogram.
-        if request.region == nil, request.visualizeSpots == nil {
-            try encodeHistogram(texture: target.texture, size: size, linear: true, commands: commands)
-        } else {
-            overviewSize = developed.fitted(within: PixelSize(width: 1024, height: 1024))
-            let whole = try overviews.next(size: overviewSize)
+        let compared = try encoding(commands) {
             try encodeDevelop(
-                request.recipe, session: session, into: whole.texture, size: overviewSize,
+                request.recipe, session: session, into: target.texture, size: size, region: region,
                 encoding: .linear, showClipping: request.showClipping, maskOverlay: request.maskOverlay,
                 maskOverlayColor: request.maskOverlayColor, maskOverlayStyle: request.maskOverlayStyle,
-                commands: commands,
+                commands: commands, visualizeSpots: request.visualizeSpots,
             )
-            try encodeHistogram(texture: whole.texture, size: overviewSize, linear: true, commands: commands)
-            overview = whole
-        }
-        // After the histogram, which describes the photo rather than the overlay.
-        if request.showRawClipping {
-            try encodeRawClipping(
-                request.recipe, session: session, into: target.texture, size: size, region: region, commands: commands,
+            // Visualize Spots replaces the photo in the frame, not in the histogram.
+            if request.region == nil, request.visualizeSpots == nil {
+                try encodeHistogram(texture: target.texture, size: size, linear: true, commands: commands)
+            } else {
+                overviewSize = developed.fitted(within: PixelSize(width: 1024, height: 1024))
+                let whole = try overviews.next(size: overviewSize)
+                try encodeDevelop(
+                    request.recipe, session: session, into: whole.texture, size: overviewSize,
+                    encoding: .linear, showClipping: request.showClipping, maskOverlay: request.maskOverlay,
+                    maskOverlayColor: request.maskOverlayColor, maskOverlayStyle: request.maskOverlayStyle,
+                    commands: commands,
+                )
+                try encodeHistogram(texture: whole.texture, size: overviewSize, linear: true, commands: commands)
+                overview = whole
+            }
+            // After the histogram, which describes the photo rather than the overlay.
+            if request.showRawClipping {
+                try encodeRawClipping(
+                    request.recipe, session: session, into: target.texture, size: size, region: region,
+                    commands: commands,
+                )
+            }
+            return try encodeComparison(
+                request, session: session, size: size, overviewSize: overviewSize, commands: commands,
             )
         }
-        let compared = try encodeComparison(
-            request, session: session, size: size, overviewSize: overviewSize, commands: commands,
-        )
         commands.commit()
         commands.waitUntilCompleted()
         if let error = commands.error {
@@ -644,22 +647,35 @@ extension RedlampEngine {
                     height: Double(tileSize.height) / Double(size.height),
                 )
                 guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
-                try encodeDevelop(
-                    recipe, session: session, into: scratch, size: tileSize, region: region,
-                    encoding: encoding, showClipping: false, commands: commands, cacheDetail: false,
-                )
-                guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
-                blit.copy(
-                    from: scratch, sourceSlice: 0, sourceLevel: 0,
-                    sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
-                    sourceSize: MTLSize(width: tileSize.width, height: tileSize.height, depth: 1),
-                    to: texture, destinationSlice: 0, destinationLevel: 0,
-                    destinationOrigin: MTLOrigin(x: x, y: y, z: 0),
-                )
-                blit.endEncoding()
+                try self.encoding(commands) {
+                    try encodeDevelop(
+                        recipe, session: session, into: scratch, size: tileSize, region: region,
+                        encoding: encoding, showClipping: false, commands: commands, cacheDetail: false,
+                    )
+                    guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
+                    blit.copy(
+                        from: scratch, sourceSlice: 0, sourceLevel: 0,
+                        sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+                        sourceSize: MTLSize(width: tileSize.width, height: tileSize.height, depth: 1),
+                        to: texture, destinationSlice: 0, destinationLevel: 0,
+                        destinationOrigin: MTLOrigin(x: x, y: y, z: 0),
+                    )
+                    blit.endEncoding()
+                }
                 try finish(commands)
                 try yieldBetweenTiles()
             }
+        }
+    }
+
+    /// Encodes into `commands`; if that fails they are dropped uncommitted, and the detail stage
+    /// forgets what it cached from them.
+    func encoding<T>(_ commands: any MTLCommandBuffer, _ encode: () throws -> T) throws -> T {
+        do {
+            return try encode()
+        } catch {
+            detailStage.abandon(commands)
+            throw error
         }
     }
 

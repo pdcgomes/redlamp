@@ -35,14 +35,7 @@ extension DetailStageTests {
         }
         let stage = DetailStage(device: device, kernels: kernels)
         func render(_ stage: DetailStage, _ recipe: EditRecipe) throws -> [SIMD3<Float>] {
-            let commands = try #require(queue.makeCommandBuffer())
-            let size = session.orientedSize
-            let output = try #require(try stage.process(
-                recipe, session: session, region: .full, outputSize: size, commands: commands,
-            ))
-            commands.commit()
-            commands.waitUntilCompleted()
-            return try readBack(output.texture, level: 0, width: size.width, height: size.height)
+            try processAndRead(stage, session, recipe).texels
         }
         var recipe = Self.untouched
         recipe[.sharpenAmount] = 60

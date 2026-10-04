@@ -10,6 +10,8 @@ import Testing
 struct EngineMemoryTests {
     /// What the detail stage may keep resident once a render has finished.
     static let idleBudget = 64 << 20
+    /// The detail stage's scratch textures during any render.
+    static let scratchBudget = 720 << 20
 
     let helpers: DetailStageTests
 
@@ -28,10 +30,33 @@ struct EngineMemoryTests {
         return recipe
     }()
 
-    func render(_ stage: DetailStage, _ session: ImageSession, _ recipe: EditRecipe) throws -> any MTLTexture {
+    /// Every pass, with a mask whose negative Sharpness softens: the most scratch textures.
+    var softened: EditRecipe {
+        var recipe = Self.everyPass
+        recipe.masks = [helpers.leftHalf(.localSharpness, -100)]
+        return recipe
+    }
+
+    /// A smooth scene, and one of hard-edged blocks whose filters' reach shows at once.
+    static func smooth(_ x: Int, _ y: Int) -> Float {
+        Float(0.2 + 0.1 * sin(Double(x) / 3) * cos(Double(y) / 5))
+    }
+
+    static func blocks(_ x: Int, _ y: Int) -> Float {
+        (x / 7 + y / 5).isMultiple(of: 2) ? 0.04 : 0.7
+    }
+
+    func render(
+        _ stage: DetailStage,
+        _ session: ImageSession,
+        _ recipe: EditRecipe,
+        region: ImageRect = .full,
+        outputSize: PixelSize? = nil,
+    ) throws -> any MTLTexture {
         let commands = try #require(helpers.queue.makeCommandBuffer())
         let output = try #require(try stage.process(
-            recipe, session: session, region: .full, outputSize: session.orientedSize, commands: commands,
+            recipe, session: session, region: region, outputSize: outputSize ?? session.orientedSize,
+            commands: commands,
         ))
         commands.commit()
         commands.waitUntilCompleted()
@@ -43,13 +68,34 @@ struct EngineMemoryTests {
             .reduce(0) { $0 + $1.allocatedSize }
     }
 
-    /// Completion handlers can run just after `waitUntilCompleted` returns.
+    /// Resident bytes once no command buffer holds the stage's textures and it has parked them.
     static func settledResidentBytes(_ stage: DetailStage) async throws -> Int {
-        for _ in 0 ..< 50 where residentBytes(stage) > idleBudget {
+        for _ in 0 ..< 150 where !stage.residency.isParked {
             try await Task.sleep(for: .milliseconds(20))
         }
         return residentBytes(stage)
     }
+
+    /// Texels that differ; comparing the arrays themselves would describe their difference.
+    static func differing(_ first: [SIMD3<Float>], _ second: [SIMD3<Float>]) -> Int {
+        zip(first, second).count(where: { $0 != $1 }) + abs(first.count - second.count)
+    }
+
+    static func scratchBytes(_ stage: DetailStage) -> Int {
+        let cached = Set((stage.sharpenCache.heldTextures + stage.cachedOutputs).map(ObjectIdentifier.init))
+        return stage.heldTextures.filter { !cached.contains(ObjectIdentifier($0)) }.reduce(0) { $0 + $1.allocatedSize }
+    }
+
+    /// Bytes the stage allocated during `body` besides the output and the sharpening caches, all
+    /// alive until its command buffer completes.
+    func scratchAllocated(_ stage: DetailStage, _ body: () throws -> Void) rethrows -> Int {
+        let before = stage.allocated.bytes
+        try body()
+        let cached = (stage.sharpenCache.heldTextures + stage.cachedOutputs).reduce(0) { $0 + $1.allocatedSize }
+        return stage.allocated.bytes - before - cached
+    }
+
+    // MARK: - Between renders
 
     @Test func `the detail stage keeps little resident between renders`() async throws {
         let session = try helpers.makeSession(.bayer, width: 6000, height: 4000)
@@ -60,93 +106,330 @@ struct EngineMemoryTests {
         #expect(resident <= Self.idleBudget, "\(resident >> 20) MB of \(held >> 20) MB resident after a 1:1 render")
     }
 
+    /// A render that fails after the stage encoded into its command buffer drops the buffer
+    /// uncommitted. The engine abandons it; one dropped without that stops counting once it is
+    /// released.
+    @Test func `a dropped command buffer leaves nothing resident`() async throws {
+        let session = try helpers.makeSession(.bayer, width: 640, height: 480, signal: Self.smooth)
+        for abandons in [true, false] {
+            let stage = DetailStage(device: helpers.device, kernels: helpers.kernels)
+            do {
+                let commands = try #require(helpers.queue.makeCommandBuffer())
+                _ = try stage.process(
+                    Self.everyPass, session: session, region: .full, outputSize: session.orientedSize,
+                    commands: commands,
+                )
+                if abandons {
+                    stage.abandon(commands)
+                }
+            }
+            if !abandons {
+                var changed = Self.everyPass
+                changed[.sharpenAmount] = 90
+                _ = try render(stage, session, changed)
+            }
+            let resident = try await Self.settledResidentBytes(stage)
+            #expect(stage.residency.isParked, "abandoned: \(abandons)")
+            #expect(resident <= Self.idleBudget, "abandoned: \(abandons): \(resident >> 20) MB resident")
+            if abandons {
+                // Nothing it cached from the abandoned buffer, which never ran, is read.
+                let again = try helpers.processAndRead(stage, session, Self.everyPass)
+                let fresh = try helpers.processAndRead(
+                    DetailStage(device: helpers.device, kernels: helpers.kernels), session, Self.everyPass,
+                )
+                #expect(Self.differing(again.texels, fresh.texels) == 0)
+            }
+        }
+    }
+
+    /// Textures an encoded command buffer uses stay resident until it completes, however many
+    /// others complete meanwhile.
+    @Test func `textures stay resident while a command buffer using them is in flight`() async throws {
+        let session = try helpers.makeSession(.bayer, width: 640, height: 480, signal: Self.smooth)
+        let stage = DetailStage(device: helpers.device, kernels: helpers.kernels)
+        let pending = try #require(helpers.queue.makeCommandBuffer())
+        _ = try stage.process(
+            Self.everyPass, session: session, region: .full, outputSize: session.orientedSize, commands: pending,
+        )
+        let used = stage.heldTextures
+        var changed = Self.everyPass
+        changed[.sharpenAmount] = 90
+        _ = try render(stage, session, changed)
+        try await Task.sleep(for: .seconds(1))
+        #expect(!stage.residency.isParked)
+        #expect(used.allSatisfy { $0.setPurgeableState(.keepCurrent) == .nonVolatile })
+        pending.commit()
+        await pending.completed()
+        let resident = try await Self.settledResidentBytes(stage)
+        #expect(resident <= Self.idleBudget, "\(resident >> 20) MB resident")
+    }
+
+    // MARK: - During a render
+
     /// A whole 24 MP frame at 1:1 is processed in tiles, so the scratch textures stay the size of
     /// a tile; the cached output and sharpening analysis cover the frame, 18 bytes a texel.
     @Test func `the detail stage's memory during a 1:1 render is bounded`() throws {
         let session = try helpers.makeSession(.bayer, width: 6000, height: 4000)
         let stage = DetailStage(device: helpers.device, kernels: helpers.kernels)
-        _ = try render(stage, session, Self.everyPass)
-        let cached = Set((stage.sharpenCache.heldTextures + stage.cachedOutputs).map(ObjectIdentifier.init))
-        let scratch = stage.heldTextures.filter { !cached.contains(ObjectIdentifier($0)) }
-            .reduce(0) { $0 + $1.allocatedSize }
+        let allocated = try scratchAllocated(stage) { _ = try render(stage, session, softened) }
+        let scratch = Self.scratchBytes(stage)
         let total = stage.heldTextures.reduce(0) { $0 + $1.allocatedSize }
-        #expect(scratch <= 720 << 20, "scratch \(scratch >> 20) MB")
+        #expect(allocated <= Self.scratchBudget, "scratch allocated during the render: \(allocated >> 20) MB")
+        #expect(scratch <= Self.scratchBudget, "scratch \(scratch >> 20) MB")
         #expect(total <= 1200 << 20, "\(total >> 20) MB in all")
     }
 
-    /// Tiles overlap by as much as the passes read around a texel, so they render exactly what
-    /// one pass over the work area does, including from the sharpening caches.
-    @Test func `tiled work areas render what one pass renders`() throws {
-        let session = try helpers.makeSession(.bayer, width: 640, height: 480) { x, y in
-            Float(0.2 + 0.1 * sin(Double(x) / 3) * cos(Double(y) / 5))
+    /// Every scratch texture is made once, the size of the grid's largest tile, however many
+    /// tiles there are.
+    @Test func `a grid of tiles makes each scratch texture once`() throws {
+        let session = try helpers.makeSession(.bayer, width: 6000, height: 4000)
+        let stage = DetailStage(device: helpers.device, kernels: helpers.kernels)
+        stage.scratchBudget = 118 * 1_500_000
+        let recipe = softened
+        let work = DetailStage.WorkArea(level: 0, origin: .zero, size: SIMD2(6000, 4000))
+        let tiles = try DetailStage.tiles(
+            work, halo: passes(session, recipe).halo(level: 0, measures: nil),
+            limit: stage.tileLimit(passes(session, recipe), measures: nil),
+        )
+        #expect(Set(tiles.map(\.interior.origin.x)).count >= 3 && Set(tiles.map(\.interior.origin.y)).count >= 3)
+        let allocated = try scratchAllocated(stage) { _ = try render(stage, session, recipe) }
+        #expect(stage.tileCount == tiles.count)
+        #expect(allocated <= stage.scratchBudget, "\(allocated >> 20) MB for \(tiles.count) tiles")
+    }
+
+    /// The tile limit counts the scratch textures the passes use, so it must name every one.
+    @Test func `the scratch slots a render uses are the ones its passes count`() throws {
+        let session = try helpers.makeSession(.bayer, width: 640, height: 480, signal: Self.smooth)
+        var sharpenOnly = DetailStageTests.untouched
+        sharpenOnly[.sharpenAmount] = 60
+        var noiseOnly = DetailStageTests.untouched
+        noiseOnly[.noiseLuminance] = 40
+        var contrastOnly = DetailStageTests.untouched
+        contrastOnly[.clarity] = 25
+        var unevenNoise = Self.everyPass
+        unevenNoise.masks = [helpers.leftHalf(.localNoise, -100)]
+        let recipes = [
+            ("every pass", Self.everyPass), ("softened", softened), ("sharpening", sharpenOnly), ("noise", noiseOnly),
+            ("Clarity", contrastOnly), ("uneven noise", unevenNoise),
+        ]
+        for (name, recipe) in recipes {
+            let predicted = try passes(session, recipe).scratchSlots(measures: nil)
+            let stage = DetailStage(device: helpers.device, kernels: helpers.kernels)
+            stage.scratchBudget = 150_000 * predicted.reduce(0) { $0 + $1.bytesPerTexel }
+            _ = try render(stage, session, recipe)
+            #expect(stage.tileCount > 1, "\(name)")
+            #expect(stage.scratchSlots == predicted, "\(name)")
         }
-        let size = session.orientedSize
+    }
+
+    /// A 24 MP frame at 1:1 after its Fit view, then a new Amount, as the editor renders them:
+    /// as few tiles as the scratch the passes use allows, since each tile costs a little.
+    @Test func `a 24 MP frame at 1:1 takes as few tiles as its passes' scratch allows`() throws {
+        let session = try helpers.makeSession(.bayer, width: 6000, height: 4000)
+        let stage = DetailStage(device: helpers.device, kernels: helpers.kernels)
+        _ = try render(stage, session, Self.everyPass, outputSize: PixelSize(width: 3000, height: 2000))
+        _ = try render(stage, session, Self.everyPass)
+        #expect(stage.tileCount == 4)
+        var changed = Self.everyPass
+        changed[.sharpenAmount] = 90
+        _ = try render(stage, session, changed)
+        #expect(stage.tileCount == 4)
+        let scratch = Self.scratchBytes(stage)
+        #expect(scratch <= Self.scratchBudget, "scratch \(scratch >> 20) MB")
+    }
+
+    /// A tiled frame and a differently shaped area that fits in one pass, rendered in turn, as an
+    /// export's tiles are between interactive renders: the textures are made for the first two.
+    @Test func `alternating work areas reuse the scratch textures`() throws {
+        let session = try helpers.makeSession(.bayer, width: 4000, height: 3000)
+        let stage = DetailStage(device: helpers.device, kernels: helpers.kernels)
+        stage.scratchBudget = 118 * 3_000_000
+        let wide = ImageRect(x: 0.1, y: 0.2, width: 0.475, height: 1250.0 / 3000)
+        let wideSize = PixelSize(width: 1900, height: 1250)
+        func both() throws {
+            _ = try render(stage, session, Self.everyPass)
+            _ = try render(stage, session, Self.everyPass, region: wide, outputSize: wideSize)
+        }
+        try both()
+        let before = stage.allocated.count
+        var changed = Self.everyPass
+        for amount in [70.0, 80] {
+            changed[.sharpenAmount] = amount
+            _ = try render(stage, session, changed)
+            _ = try render(stage, session, changed, region: wide, outputSize: wideSize)
+        }
+        // Each render makes its output and nothing else.
+        #expect(stage.allocated.count - before == 4)
+    }
+
+    /// The largest photos at 1:1, then a smaller photo: the scratch textures follow the photo
+    /// open now.
+    @Test func `a 60 MP frame stays within the scratch budget and a smaller photo shrinks it`() throws {
+        let stage = DetailStage(device: helpers.device, kernels: helpers.kernels)
+        do {
+            let large = try helpers.makeSession(.bayer, width: 9504, height: 6336)
+            let allocated = try scratchAllocated(stage) { _ = try render(stage, large, softened) }
+            #expect(allocated <= Self.scratchBudget, "\(allocated >> 20) MB allocated")
+            #expect(Self.scratchBytes(stage) <= Self.scratchBudget)
+        }
+        let small = try helpers.makeSession(.bayer, width: 4000, height: 3000)
+        _ = try render(stage, small, Self.everyPass, outputSize: PixelSize(width: 2000, height: 1500))
+        let scratch = Self.scratchBytes(stage)
+        #expect(scratch < 400 << 20, "\(scratch >> 20) MB of scratch after opening a 12 MP photo")
+    }
+
+    // MARK: - Tiles
+
+    func passes(_ session: ImageSession, _ recipe: EditRecipe) throws -> DetailStage.Passes {
+        try #require(DetailStage.passes(recipe, session: session, level: 0, masks: .none))
+    }
+
+    var tiledRecipes: [(String, EditRecipe)] {
         var widest = Self.everyPass
         widest[.noiseLuminance] = 100
         widest[.sharpenRadius] = 3
         widest[.sharpenMasking] = 50
-        var softened = Self.everyPass
-        softened.masks = [helpers.leftHalf(.localSharpness, -100)]
         var unevenNoise = Self.everyPass
         unevenNoise.masks = [helpers.leftHalf(.localNoise, -100)]
         var newAmount = Self.everyPass
         newAmount[.sharpenAmount] = 90
         var newRadius = newAmount
         newRadius[.sharpenRadius] = 1.5
-        let tiled = DetailStage(device: helpers.device, kernels: helpers.kernels)
-        tiled.tileTexels = 170_000
-        let work = DetailStage.WorkArea(level: 0, origin: .zero, size: SIMD2(size.width, size.height))
-        for recipe in [Self.everyPass, widest, softened] {
-            let passes = DetailStage.Passes(
-                session: session, denoise: DenoiseSettings(recipe: recipe), sharpen: SharpenSettings(recipe: recipe),
-                contrast: LocalContrastSettings(recipe: recipe), local: LocalDetail(recipe: recipe), masks: .none,
-            )
-            #expect(DetailStage.tiles(work, halo: passes.halo(level: 0), limit: tiled.tileTexels).count >= 4)
-        }
         // In order, so the last two find the analysis and then the separation cached.
-        for (name, recipe) in [
+        return [
             ("every pass", Self.everyPass), ("widest", widest), ("softened", softened), ("uneven noise", unevenNoise),
             ("every pass again", Self.everyPass), ("new Amount", newAmount), ("new Radius", newRadius),
-        ] {
-            let whole = try helpers.readBack(
-                render(DetailStage(device: helpers.device, kernels: helpers.kernels), session, recipe),
-                level: 0, width: size.width, height: size.height,
+        ]
+    }
+
+    /// Tiles overlap by as much as the passes read around a texel, so they render exactly what
+    /// one pass over the work area does, including from the sharpening caches: for smooth and
+    /// hard-edged scenes, an odd size, and a region away from the photo's corner.
+    @Test func `tiled work areas render what one pass renders`() throws {
+        let region = ImageRect(x: 0.13, y: 0.21, width: 0.74, height: 0.69)
+        for (scene, signal) in [("smooth", Self.smooth), ("blocks", Self.blocks)] {
+            let session = try helpers.makeSession(.bayer, width: 961, height: 719, signal: signal)
+            let size = session.orientedSize
+            let regionSize = PixelSize(
+                width: Int(region.width * Double(size.width)), height: Int(region.height * Double(size.height)),
             )
-            let tiles = try helpers.readBack(
-                render(tiled, session, recipe), level: 0, width: size.width, height: size.height,
-            )
-            let differing = zip(whole, tiles).count(where: { $0 != $1 })
-            #expect(differing == 0, "\(name): \(differing) texels differ")
+            for (area, outputSize) in [(ImageRect.full, size), (region, regionSize)] {
+                let tiled = DetailStage(device: helpers.device, kernels: helpers.kernels)
+                tiled.scratchBudget = 118 * 300_000
+                var tileCounts: [Int] = []
+                for (name, recipe) in tiledRecipes {
+                    let whole = try helpers.processAndRead(
+                        DetailStage(device: helpers.device, kernels: helpers.kernels), session, recipe, region: area,
+                        outputSize: outputSize,
+                    )
+                    let tiles = try helpers.processAndRead(tiled, session, recipe, region: area, outputSize: outputSize)
+                    tileCounts.append(tiled.tileCount)
+                    let differing = Self.differing(whole.texels, tiles.texels)
+                    #expect(differing == 0, "\(scene), \(area == .full ? "full" : "region"), \(name): \(differing)")
+                }
+                #expect(tileCounts.allSatisfy { $0 >= 2 } && tileCounts.contains { $0 >= 4 }, "\(tileCounts)")
+            }
         }
     }
 
+    /// Tiles overlapping by less than the passes read render something else, so the test above
+    /// would notice a halo that fell short. The filters' farthest taps weigh too little to show
+    /// in half floats a few texels short; softening's blur of the source shows 32 short. With the
+    /// sharpening analysis or separation cached, the tiles need less, and still all of it.
+    @Test func `a halo short of the passes' reach shows`() throws {
+        let session = try helpers.makeSession(.bayer, width: 641, height: 479, signal: Self.blocks)
+        let recipes = tiledRecipes
+        let cases: [(name: String, recipe: EditRecipe, before: EditRecipe?, halved: Bool)] = [
+            (recipes[0].0, recipes[0].1, nil, true), (recipes[1].0, recipes[1].1, nil, true),
+            (recipes[2].0, recipes[2].1, nil, false),
+            (recipes[5].0, recipes[5].1, Self.everyPass, true), (recipes[6].0, recipes[6].1, Self.everyPass, true),
+        ]
+        for (name, recipe, before, halved) in cases {
+            let whole = try helpers.processAndRead(
+                DetailStage(device: helpers.device, kernels: helpers.kernels), session, recipe,
+            )
+            let tiled = DetailStage(device: helpers.device, kernels: helpers.kernels)
+            tiled.scratchBudget = 118 * 200_000
+            var measures: SharpenMeasures?
+            if let before {
+                _ = try helpers.processAndRead(tiled, session, before)
+                let sigma = try #require(SharpenSettings(recipe: recipe).sigma(atLevel: 0))
+                let work = DetailStage.WorkArea(level: 0, origin: .zero, size: SIMD2(641, 479))
+                measures = SharpenMeasures(
+                    analysis: tiled.sharpenCache.analysis(session, work, sigma: sigma),
+                    separation: tiled.sharpenCache.separation(session, work),
+                )
+                #expect(measures?.separation != nil)
+            }
+            let halo = try passes(session, recipe).halo(level: 0, measures: measures)
+            tiled.haloShortfall = halved ? halo / 2 : 32
+            let tiles = try helpers.processAndRead(tiled, session, recipe)
+            #expect(Self.differing(whole.texels, tiles.texels) > 0, "\(name), halo \(halo)")
+        }
+    }
+
+    /// Dragging Amount over a frame larger than a tile reads only the cached analysis: no tiles,
+    /// no scratch, the output alone.
+    @Test func `an Amount drag over a large area runs the apply pass alone`() async throws {
+        let session = try helpers.makeSession(.bayer, width: 1280, height: 960, signal: Self.blocks)
+        var recipe = DetailStageTests.untouched
+        recipe[.sharpenAmount] = 60
+        let stage = DetailStage(device: helpers.device, kernels: helpers.kernels)
+        stage.scratchBudget = 118 * 400_000
+        _ = try render(stage, session, recipe)
+        _ = try await Self.settledResidentBytes(stage)
+        let cached = Set((stage.sharpenCache.heldTextures + stage.cachedOutputs).map(ObjectIdentifier.init))
+        let scratch = stage.heldTextures.filter { !cached.contains(ObjectIdentifier($0)) }
+        #expect(!scratch.isEmpty)
+
+        recipe[.sharpenAmount] = 90
+        let before = stage.allocated.count
+        let commands = try #require(helpers.queue.makeCommandBuffer())
+        let output = try #require(try stage.process(
+            recipe, session: session, region: .full, outputSize: session.orientedSize, commands: commands,
+        ))
+        #expect(stage.allocated.count - before == 1)
+        #expect(scratch.allSatisfy { $0.setPurgeableState(.keepCurrent) == .volatile }, "scratch was used")
+        let read = try helpers.encodeReadBack(
+            output.texture, width: output.texture.width, height: output.texture.height, commands: commands,
+        )
+        commands.commit()
+        await commands.completed()
+        let fresh = try helpers.processAndRead(
+            DetailStage(device: helpers.device, kernels: helpers.kernels),
+            session,
+            recipe,
+        )
+        #expect(Self.differing(read(), fresh.texels) == 0)
+    }
+
+    // MARK: - Reclaimed textures
+
     /// The system may empty the stage's textures between renders; it then renders them again.
     @Test func `a reclaimed stage renders what a fresh one does`() async throws {
-        let session = try helpers.makeSession(.bayer, width: 640, height: 480) { x, y in
-            Float(0.2 + 0.1 * sin(Double(x) / 3) * cos(Double(y) / 5))
-        }
-        let size = session.orientedSize
+        let session = try helpers.makeSession(.bayer, width: 640, height: 480, signal: Self.smooth)
         let stage = DetailStage(device: helpers.device, kernels: helpers.kernels)
-        var output = try render(stage, session, Self.everyPass)
+        _ = try render(stage, session, Self.everyPass)
         // The same edit is a cached output; a new Amount reuses the cached sharpening analysis.
         var changedAmount = Self.everyPass
         changedAmount[.sharpenAmount] = 90
         for recipe in [Self.everyPass, changedAmount] {
             _ = try await Self.settledResidentBytes(stage)
-            let reclaimedTextures = Set(stage.heldTextures.map(ObjectIdentifier.init))
-            for texture in stage.heldTextures {
+            // Held here, so new textures can't take their addresses.
+            let reclaimedTextures = stage.heldTextures
+            for texture in reclaimedTextures {
                 texture.setPurgeableState(.volatile)
                 texture.setPurgeableState(.empty)
             }
-            output = try render(stage, session, recipe)
-            #expect(!reclaimedTextures.contains(ObjectIdentifier(output)))
-            #expect(stage.sharpenCache.heldTextures.contains { !reclaimedTextures.contains(ObjectIdentifier($0)) })
-            let reclaimed = try helpers.readBack(output, level: 0, width: size.width, height: size.height)
-            let fresh = try helpers.readBack(
-                render(DetailStage(device: helpers.device, kernels: helpers.kernels), session, recipe),
-                level: 0, width: size.width, height: size.height,
+            let reclaimed = try helpers.processAndRead(stage, session, recipe)
+            #expect(!reclaimedTextures.contains { $0 === reclaimed.output.texture })
+            #expect(stage.sharpenCache.heldTextures.contains { texture in
+                !reclaimedTextures.contains { $0 === texture }
+            })
+            let fresh = try helpers.processAndRead(
+                DetailStage(device: helpers.device, kernels: helpers.kernels), session, recipe,
             )
-            #expect(reclaimed == fresh)
+            #expect(Self.differing(reclaimed.texels, fresh.texels) == 0)
         }
     }
 }

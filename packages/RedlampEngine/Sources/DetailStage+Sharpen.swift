@@ -108,6 +108,12 @@ final class SharpenCache {
             separations.removeFirst()
         }
     }
+
+    /// Drops the entries holding any of `textures`, which were never rendered.
+    func forget(_ textures: Set<ObjectIdentifier>) {
+        analyses.removeAll { textures.contains(ObjectIdentifier($0.texture)) }
+        separations.removeAll { textures.contains(ObjectIdentifier($0.linear)) }
+    }
 }
 
 extension DetailStage {
@@ -119,7 +125,8 @@ extension DetailStage {
         let (session, settings, work, source) = (request.session, request.settings, request.work, request.source)
         let sigma = settings.sigma(atLevel: work.level) ?? 0
         // 0 source log, 1 clean log, 2 blur rows, 3 blurred clean log, 4 blurred source log.
-        let rows = try scratchTexture(.r32Float, 2, work)
+        let blurs = request.measures.analysis == nil || request.softens
+        let rows = blurs ? try scratchTexture(.r32Float, 2, work) : nil
         var passes = SharpenPasses(encoder: encoder, kernels: kernels, rows: rows, params: SharpenParams(
             origin: SIMD4(Int32(source.origin.x), Int32(source.origin.y), Int32(source.level), 0),
             size: SIMD4(Int32(work.size.x), Int32(work.size.y), 0, 0),
@@ -146,7 +153,7 @@ extension DetailStage {
                 scratchTexture(.r32Float, 4, work),
             )
             passes.dispatch(kernels.sharpenLog, [source.texture, sourceLog])
-            passes.blur(sourceLog, into: sourceBlurred)
+            try passes.blur(sourceLog, into: sourceBlurred)
             softening = (sourceLog, sourceBlurred)
         }
         passes.params.size.w = request.local == nil ? 0 : 1
@@ -210,7 +217,7 @@ extension DetailStage {
             passes.dispatch(kernels.deconvolveColumns, [rows, estimate, next])
             estimate = next
         }
-        passes.blur(logLuma, into: blurred)
+        try passes.blur(logLuma, into: blurred)
         passes.dispatch(kernels.sharpenAnalysis, [logLuma, blurred, estimate, analysis])
     }
 }
@@ -219,14 +226,19 @@ extension DetailStage {
 private struct SharpenPasses {
     let encoder: any MTLComputeCommandEncoder
     let kernels: KernelLibrary
-    /// Scratch for the first direction of a blur.
-    let rows: any MTLTexture
+    /// Scratch for the first direction of a blur, when the passes blur at all.
+    let rows: (any MTLTexture)?
     var params: SharpenParams
     /// The blurs' Gaussian, once per area instead of per tap: the radius, then the normalised
     /// weight at each offset 0 ... radius.
     private var weights: [Float]
 
-    init(encoder: any MTLComputeCommandEncoder, kernels: KernelLibrary, rows: any MTLTexture, params: SharpenParams) {
+    init(
+        encoder: any MTLComputeCommandEncoder,
+        kernels: KernelLibrary,
+        rows: (any MTLTexture)?,
+        params: SharpenParams,
+    ) {
         self.encoder = encoder
         self.kernels = kernels
         self.rows = rows
@@ -249,7 +261,8 @@ private struct SharpenPasses {
     }
 
     /// A separable Gaussian blur of the Radius's sigma.
-    mutating func blur(_ input: any MTLTexture, into result: any MTLTexture) {
+    mutating func blur(_ input: any MTLTexture, into result: any MTLTexture) throws {
+        guard let rows else { throw EngineError.renderFailed("a sharpening blur without its scratch") }
         params.size.z = 0
         dispatch(kernels.sharpenBlur, [input, rows])
         params.size.z = 1
