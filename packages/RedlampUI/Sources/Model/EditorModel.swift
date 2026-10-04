@@ -410,6 +410,8 @@ public final class EditorModel {
     /// Window-level effects the app layer performs (full screen, toolbar visibility).
     @ObservationIgnored public var onToggleFullScreen: (() -> Void)?
     @ObservationIgnored public var onToggleToolbar: (() -> Void)?
+    /// Opens Report a Bug or Send Feedback; the app presents it (`FeedbackActions`).
+    @ObservationIgnored public var onSendFeedback: ((FeedbackPrefill?) -> Void)?
 
     /// Every recipe and Base Look on this machine.
     public let recipes: RecipeCatalog

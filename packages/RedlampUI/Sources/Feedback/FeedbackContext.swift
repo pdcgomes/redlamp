@@ -151,7 +151,8 @@ public extension FeedbackContext {
         case .crop, .redEye:
             return FeedbackArea.featureID(for: model.activeTool)
         case .edit:
-            if let parameter = model.focusedParameter, let id = FeedbackArea.featureID(for: parameter) {
+            if let parameter = model.focusedParameter ?? model.editParameter,
+               let id = FeedbackArea.featureID(for: parameter) {
                 return id
             }
             guard model.history.indices.contains(model.historyIndex) else { return nil }

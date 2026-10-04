@@ -145,11 +145,18 @@ struct CanvasArea: View {
             }
 
             if let message = model.errorMessage {
-                Label(message, systemImage: "exclamationmark.triangle")
-                    .font(.callout)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .glassEffect(.regular, in: .capsule)
+                HStack(spacing: 10) {
+                    Label(message, systemImage: "exclamationmark.triangle")
+                    Button("Report…") {
+                        model.sendFeedback(FeedbackPrefill(featureID: "raw.wont-open", message: message))
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Report a Bug about this photo not opening")
+                }
+                .font(.callout)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .glassEffect(.regular, in: .capsule)
             }
 
             if model.library.count == 0, model.selection == nil {
@@ -237,6 +244,11 @@ private struct SaveErrorBanner: View {
             }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([error.url]) }
                 .buttonStyle(.borderless)
+            Button("Report…") {
+                model.sendFeedback(FeedbackPrefill(featureID: "saving.not-saved", message: error.message))
+            }
+            .buttonStyle(.borderless)
+            .help("Report a Bug about edits not saving")
         }
         .font(.system(size: 12, weight: .medium))
         .padding(.horizontal, 14)

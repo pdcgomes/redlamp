@@ -19,6 +19,7 @@
     ///   the selected stack document (`stack=depth` showing the depth map, `stack=retouch`
     ///   painting one stroke from the frame under the cursor). `window=<name>` opens a window
     ///   from the Window menu by its title in kebab case, such as `window=film-looks`.
+    ///   `feedback=form` opens Report a Bug or Send Feedback (`feedback=note` at its note).
     /// - `--window-size <width>x<height>` sizes the editor's content in points and centres it
     ///   on a Retina screen if there is one, so captures are 2×, without touching its saved
     ///   frame (`scripts/capture-promo.sh`). Windows a script opens are centred there too.
@@ -88,6 +89,13 @@
                 await createMask(value, model: model)
             case "overlay":
                 model.maskOverlayStyle = MaskOverlayStyle.allCases.first { value == "\($0)" } ?? model.maskOverlayStyle
+            case "feedback":
+                // For this launch only: the defaults are shared with an installed Redlamp.
+                UserDefaults.standard.setVolatileDomain(
+                    ["feedback.noteAccepted": value == "note" ? 0 : 1, "feedback.draft": Data()],
+                    forName: UserDefaults.argumentDomain,
+                )
+                model.sendFeedback()
             case "quit":
                 NSApp.terminate(nil)
             default:

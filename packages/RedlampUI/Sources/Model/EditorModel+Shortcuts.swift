@@ -15,6 +15,13 @@ public extension EditorModel {
         return performed
     }
 
+    /// Report a Bug or Send Feedback, from the toolbar, the menus, the palette, or a message on
+    /// screen (which `prefill` quotes).
+    func sendFeedback(_ prefill: FeedbackPrefill? = nil) {
+        guard !isModalDialogOpen, let onSendFeedback else { return }
+        onSendFeedback(prefill)
+    }
+
     private func runShortcut(_ action: ShortcutAction, shifted: Bool) -> Bool {
         guard !isModalDialogOpen else { return false }
         guard action.isAvailable else { return false }
@@ -166,6 +173,9 @@ public extension EditorModel {
         case .editFocusStack:
             guard stackWorkspace == nil, let selection, SupportedFormats.isStack(selection) else { return false }
             openStackWorkspace(selection)
+        case .sendFeedback:
+            guard onSendFeedback != nil else { return false }
+            sendFeedback()
         case .openFolder, .export, .exportWithPrevious, .filmLooks: return false
         default:
             return false
@@ -211,6 +221,7 @@ public extension EditorModel {
         case .autoWhiteBalance, .whiteBalanceSelector: return whiteBalance
         case .editTool, .maskingTool, .cancel, .showShortcuts, .openFolder, .filmLooks, .commandPalette:
             return true
+        case .sendFeedback: return onSendFeedback != nil
         case .cropTool, .healTool, .rotateLeft, .rotateRight: return photo
         case .cropAspectLock: return activeTool == .crop
         case .mergeFocusStack: return stackWorkspace == nil && !stackSuggestions.isEmpty

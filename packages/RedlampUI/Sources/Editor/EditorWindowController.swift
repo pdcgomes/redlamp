@@ -15,6 +15,7 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
     private var trackers: [Tracker] = []
     private weak var exportItem: NSToolbarItem?
     private weak var viewGroup: NSToolbarItemGroup?
+    private weak var feedbackItem: NSToolbarItem?
     private lazy var themePopover: NSPopover = {
         let popover = NSPopover()
         popover.behavior = .transient
@@ -107,7 +108,7 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
             .toggleSidebar, .sidebarTrackingSeparator,
             .flexibleSpace, .openFolder, .export, .space, .view,
             .inspectorTrackingSeparator,
-            .theme, .flexibleSpace, .toggleInspector,
+            .theme, .feedback, .flexibleSpace, .toggleInspector,
         ]
     }
 
@@ -153,6 +154,13 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
             return group
         case .theme:
             return button(identifier, "Theme", "paintpalette", help: "Theme", action: #selector(showTheme(_:)))
+        case .feedback:
+            let item = button(
+                identifier, "Feedback", "exclamationmark.bubble", help: "Report a Bug or Send Feedback",
+                action: #selector(sendFeedback),
+            )
+            feedbackItem = item
+            return item
         default:
             return nil
         }
@@ -199,6 +207,10 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
         model.filmstripVisible = group.isSelected(at: 1)
     }
 
+    @objc private func sendFeedback() {
+        model.sendFeedback()
+    }
+
     @objc private func showTheme(_ item: NSToolbarItem) {
         if themePopover.isShown {
             themePopover.close()
@@ -213,6 +225,7 @@ private extension NSToolbarItem.Identifier {
     static let export = Self("export")
     static let view = Self("view")
     static let theme = Self("theme")
+    static let feedback = Self("feedback")
 }
 
 /// The window's content: the split view, and the ⌘/ and ⌘K overlays above it, which must

@@ -37,6 +37,7 @@ struct RedlampApp: App {
         }
         model.onToggleFullScreen = { NSApp.keyWindow?.toggleFullScreen(nil) }
         model.onToggleToolbar = { NSApp.keyWindow?.toggleToolbarShown(nil) }
+        model.onSendFeedback = { prefill in FeedbackActions.present(model: model, prefill: prefill) }
         let theme = ThemeSettings()
         let exports = ExportPresetStore()
         _model = State(initialValue: model)

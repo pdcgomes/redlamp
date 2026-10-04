@@ -110,6 +110,7 @@ struct AppCommands: Commands {
         }
 
         CommandGroup(after: .help) {
+            item(.sendFeedback)
             item(.showShortcuts)
             Divider()
             Button("Support Redlamp") { openURL(SettingsView.supportURL) }
