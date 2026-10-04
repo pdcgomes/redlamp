@@ -1,7 +1,7 @@
 import { AppIcon } from "@/components/brand/Logo";
 import { HeroShots } from "@/components/sections/HeroShots";
 import { Badge } from "@/components/ui/Badge";
-import { DownloadGlyph, GitHubGlyph, LinkButton } from "@/components/ui/Buttons";
+import { DownloadGlyph, GitHubGlyph, LinkButton, PlayGlyph } from "@/components/ui/Buttons";
 import { heroShots } from "@/content/features";
 import { latestRelease } from "@/lib/github";
 import { site } from "@/lib/site";
@@ -42,6 +42,10 @@ export async function Hero() {
           <LinkButton href={site.github} variant={release ? "secondary" : "primary"}>
             <GitHubGlyph />
             View on GitHub
+          </LinkButton>
+          <LinkButton href="#watch">
+            <PlayGlyph />
+            Watch the film
           </LinkButton>
           <LinkButton href="#open-source">Build from source</LinkButton>
         </div>

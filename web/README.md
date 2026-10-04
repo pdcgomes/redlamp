@@ -17,7 +17,7 @@ mise run site -- build   # production build
 - **The lightbox:** every screenshot on the home page opens full size in `components/ui/Lightbox.tsx`, with ← → (or a swipe) through its own section's shots. The hero shows one shot at a time, chosen from the thumbnails beneath it (`components/sections/HeroShots.tsx`).
 - **The download button** links to the latest GitHub release's zip, and the status pill at the top shows that release's version (`lib/github.ts`, refreshed hourly). The button stays hidden until the first release.
 - **Features, film descriptions and principles** are curated in `content/`.
-- **The explainer video** appears once `public/video/redlamp-explainer.mp4` and its poster exist; render them from `video/`.
+- **The film**, Introducing Redlamp, plays from YouTube (`film` in `lib/site.ts`), in its privacy-enhanced mode and only once the visitor presses play: until then the page shows the film's own poster (`public/video/introducing-redlamp-poster.jpg`, from `video/out/introducing`) and makes no request to YouTube. The 24-second explainer in `public/video` is the first blog post's.
 - **Blog posts** are Markdown files in `content/blog/`; see below.
 
 ## The blog

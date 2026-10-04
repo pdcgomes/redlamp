@@ -28,6 +28,7 @@ Keep the shapes the parsers rely on, or update them:
 | --- | --- |
 | A headline feature lands, or a feature row's claims change | The matching entry in `web/content/features.ts` (title, body, points, screenshot) |
 | The command palette's keys or behaviour change | `commandPalette` and `paletteSteps` in `web/content/features.ts`, and its close-ups (`palette-*` in `scripts/capture-screenshots.sh`) |
+| A new cut of the film is published | `film` in `web/lib/site.ts` (YouTube ID, link, duration), its poster in `web/public/video`, and the README's link under the hero |
 | The editor's look changes (panels, layout, the default theme), or a hero shot's feature does | The hero shots: `scripts/capture-hero.sh <photo folder>` regenerates `docs/images/hero*.png`, which the README and `heroShots` in `web/content/features.ts` show, with their captions |
 | Measured performance numbers change | Record a run (`scripts/perf-record.sh`); the speed feature's points in `web/content/features.ts` are written by hand |
 | The number of keyboard shortcuts changes | The develop feature's points in `web/content/features.ts` |
