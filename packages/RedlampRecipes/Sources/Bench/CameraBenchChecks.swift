@@ -87,6 +87,7 @@ public enum CameraBenchChecks {
                 findings.append(String(format: "the masked margins sit at %.1f, not the stated %.1f", optical, m.black))
             }
         }
+        numbers["zeroShare"] = m.zeroShare
         if let dark = m.darkPercentile {
             numbers["darkPercentile"] = dark
             let below = (m.black - dark) / range
@@ -102,7 +103,7 @@ public enum CameraBenchChecks {
         let summary = findings.isEmpty
             ? String(format: "The black level (%.1f) agrees with the sensor.", m.black)
             : "The black level may be wrong: " + findings.joined(separator: "; ") + "."
-        return BenchCheck(id: "decode.black", version: 1, verdict: verdict, measurements: numbers, summary: summary)
+        return BenchCheck(id: "decode.black", version: 2, verdict: verdict, measurements: numbers, summary: summary)
     }
 
     static func white(_ m: DecodeMeasurements) -> BenchCheck {

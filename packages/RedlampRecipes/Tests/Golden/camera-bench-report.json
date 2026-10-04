@@ -114,7 +114,8 @@
         "nominalWhite" : 16383,
         "opticalBlack" : 512.4,
         "opticalBlackNoise" : 1.6,
-        "white" : 16383
+        "white" : 16383,
+        "zeroShare" : 0.0001
       },
       "mode" : {
         "camera" : "Sony ILCE-7M3",

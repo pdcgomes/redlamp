@@ -95,10 +95,11 @@
         "black": { "type": "number" },
         "opticalBlack": { "type": "number", "description": "The masked margins' level, where they look masked." },
         "opticalBlackNoise": { "type": "number" },
-        "darkPercentile": { "type": "number", "description": "The 0.1th percentile of the photosites." },
+        "darkPercentile": { "type": "number", "description": "The 0.1th percentile of the photosites, edge strips and zeros left out." },
         "nominalWhite": { "type": "number", "description": "LibRaw's white level." },
         "white": { "type": "number", "description": "Where the photosites clip, which Redlamp uses." },
         "clippedShare": { "type": "number", "minimum": 0, "maximum": 1 },
+        "zeroShare": { "type": "number", "minimum": 0, "maximum": 1, "description": "The share of photosites at exactly 0: dead ones or padding." },
         "darkEdges": {
           "type": "object",
           "required": ["top", "bottom", "left", "right"],

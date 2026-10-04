@@ -100,7 +100,7 @@ struct CameraBenchTests {
 
     static let healthy = DecodeMeasurements(
         black: 512, opticalBlack: 512.4, opticalBlackNoise: 1.6, darkPercentile: 509, nominalWhite: 16383, white: 16383,
-        clippedShare: 0.002, darkEdges: DarkEdges(), colorMatrix: [
+        clippedShare: 0.002, zeroShare: 0.0001, darkEdges: DarkEdges(), colorMatrix: [
             0.74,
             -0.24,
             -0.06,

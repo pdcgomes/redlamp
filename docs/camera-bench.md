@@ -27,7 +27,7 @@ Each check has a version, which changes whenever its measurements or thresholds 
 | Check | What it measures | Warn | Fail |
 | --- | --- | --- | --- |
 | `decode.opens` | Whether Redlamp opens the file; a known refusal names its tracker row (CAM-10, CAM-12, CAM-13) | | Doesn't open |
-| `decode.black` | The black level against the masked margins, where the sensor has margins that look masked, and the 0.1th percentile against it | Margins 3σ (and 2 units) off, or the percentile 1% of the range below | 5σ (and 4 units), or 2% |
+| `decode.black` | The black level against the masked margins, where the sensor has margins that look masked, and against the 0.1th percentile of the photosites, edge strips and zeros left out (a photosite at 0 is a dead one or padding; their share is recorded) | Margins 3σ (and 2 units) off, or the percentile 1% of the range below | 5σ (and 4 units), or 2% |
 | `decode.white` | Where the photosites clip against LibRaw's white level (CAM-02), and the share clipped | | White within 10% of black |
 | `decode.colour` | The camera's colour matrix and white balance | Multipliers outside 0.2 to 8 | No matrix |
 | `decode.edges` | Lines along each edge at the black level while the image isn't (the Sony A1 II's strip, CAM-13) | | Any |

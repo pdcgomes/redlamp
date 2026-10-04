@@ -52,6 +52,7 @@ enum RawDecoder {
         var banding: BandingCorrection?
         var darkPercentile: Double?
         var clippedShare: Double?
+        var zeroShare: Double?
         var margin: (offset: Float, noise: Float)?
         var darkEdges: DarkEdges?
 
@@ -85,12 +86,13 @@ enum RawDecoder {
                 raw: rawImage, pitch: pitch / MemoryLayout<UInt16>.size, top: top, left: left,
                 width: width, height: height, white: whiteLevel, black: patternBlack,
             )
-            (darkPercentile, clippedShare) = histogram.withUnsafeBufferPointer { [whiteLevel] counts in
+            (clippedShare, zeroShare) = histogram.withUnsafeBufferPointer { [whiteLevel] counts in
                 (
-                    RawMeasurement.darkPercentile(counts, total: width * height),
                     RawMeasurement.clippedShare(counts, total: width * height, white: whiteLevel),
+                    RawMeasurement.zeroShare(counts, total: width * height),
                 )
             }
+            darkPercentile = RawMeasurement.darkPercentile(samples, width: width, height: height)
             margin = phaseOne ? nil : OpticalBlack.marginLevel(
                 raw: rawImage, pitch: pitch / MemoryLayout<UInt16>.size, top: top, left: left,
                 width: width, height: height, white: whiteLevel, black: patternBlack,
@@ -168,6 +170,7 @@ enum RawDecoder {
                 nominalWhite: Double(nominalWhite),
                 white: Double(whiteLevel),
                 clippedShare: clippedShare,
+                zeroShare: zeroShare,
                 darkEdges: darkEdges,
                 colorMatrix: xyzToCamera.contains { $0 != 0 } && xyzToCamera.allSatisfy(\.isFinite)
                     ? xyzToCamera.map { ($0 * 10000).rounded() / 10000 } : nil,

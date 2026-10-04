@@ -117,23 +117,26 @@ public struct DecodeMeasurements: Codable, Sendable, Hashable {
     /// The masked margins' level and noise, where the sensor has margins that look masked.
     public var opticalBlack: Double?
     public var opticalBlackNoise: Double?
-    /// The 0.1th percentile of the image's photosites: far below the black level when the
-    /// stated black is too high.
+    /// The 0.1th percentile of the image's photosites, edge strips and zeros left out: far below
+    /// the black level when the stated black is too high.
     public var darkPercentile: Double?
     /// LibRaw's white level, and where the photosites clip (CAM-02's clip spike).
     public var nominalWhite: Double
     public var white: Double
     /// The share of photosites at the clip point.
     public var clippedShare: Double?
+    /// The share of photosites at exactly 0: dead ones or padding.
+    public var zeroShare: Double?
     public var darkEdges: DarkEdges?
     /// XYZ → camera RGB, row-major, rounded to four places; nil when the camera has no matrix.
     public var colorMatrix: [Double]?
 
     public init(
         black: Double, opticalBlack: Double? = nil, opticalBlackNoise: Double? = nil, darkPercentile: Double? = nil,
-        nominalWhite: Double, white: Double, clippedShare: Double? = nil, darkEdges: DarkEdges? = nil,
-        colorMatrix: [Double]? = nil,
+        nominalWhite: Double, white: Double, clippedShare: Double? = nil, zeroShare: Double? = nil,
+        darkEdges: DarkEdges? = nil, colorMatrix: [Double]? = nil,
     ) {
+        self.zeroShare = zeroShare
         self.colorMatrix = colorMatrix
         self.black = black
         self.opticalBlack = opticalBlack

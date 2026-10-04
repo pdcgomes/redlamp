@@ -107,18 +107,37 @@ enum RawMeasurement {
     /// Lines checked along each edge for a dark strip.
     static let edgeLimit = 64
 
-    /// The 0.1th percentile of the photosites.
-    static func darkPercentile(_ histogram: UnsafeBufferPointer<UInt32>, total: Int) -> Double? {
+    /// The 0.1th percentile of a mosaic's photosites inside the reach of the edge strips, from every
+    /// other row and column. Zeros are left out: a photosite at 0 is a dead one or padding (CHDK
+    /// writes its bad pixels as 0), not a dark one.
+    static func darkPercentile(_ samples: [UInt16], width: Int, height: Int) -> Double? {
+        let inset = edgeLimit
+        guard width > 2 * inset + 2, height > 2 * inset + 2, samples.count >= width * height else { return nil }
+        var counts = [UInt32](repeating: 0, count: 65536)
+        var total = 0
+        samples.withUnsafeBufferPointer { values in
+            for y in stride(from: inset, to: height - inset, by: 2) {
+                for x in stride(from: inset, to: width - inset, by: 2) where values[y * width + x] != 0 {
+                    counts[Int(values[y * width + x])] &+= 1
+                    total += 1
+                }
+            }
+        }
         guard total > 0 else { return nil }
         let target = max(1, total / 1000)
         var seen = 0
-        for (value, count) in histogram.enumerated() {
+        for (value, count) in counts.enumerated() {
             seen += Int(count)
             if seen >= target {
                 return Double(value)
             }
         }
         return nil
+    }
+
+    /// The share of photosites at exactly 0: dead ones or padding.
+    static func zeroShare(_ histogram: UnsafeBufferPointer<UInt32>, total: Int) -> Double {
+        total > 0 && !histogram.isEmpty ? Double(histogram[0]) / Double(total) : 0
     }
 
     /// The share of photosites within the clip spike's width of `white`.
