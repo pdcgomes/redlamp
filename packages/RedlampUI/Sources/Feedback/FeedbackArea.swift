@@ -1,4 +1,5 @@
 import Foundation
+import RedlampDocument
 import RedlampEngineAPI
 
 /// Where a report belongs: an area of the app and one of its features, named as the UI names
@@ -185,6 +186,29 @@ public extension FeedbackArea {
         case .colorRange: "masking.color-range"
         case .luminanceRange: "masking.luminance-range"
         case .existingMask: "masking.combining"
+        }
+    }
+
+    /// The feature a history step comes from; `nil` for steps that don't say (opening, clearing).
+    static func featureID(for action: HistoryAction) -> String? {
+        switch action {
+        case let .adjustment(parameter): featureID(for: parameter)
+        case .auto: "develop.auto"
+        case .treatment, .baseLook: "develop.treatment"
+        case .whiteBalance: "develop.white-balance"
+        case .toneCurve: "develop.tone-curve"
+        case .upright: "develop.transform"
+        case .crop: "crop.crop"
+        case .straighten: "crop.straighten"
+        case .rotate, .flip: "crop.rotate"
+        case let .mask(kind): kind.map(featureID(for:)) ?? "masking.other"
+        case .retouch: "healing.heal"
+        case .recipe: "recipes.applying"
+        case .paste: "sync.paste"
+        case .snapshot: "history.snapshots"
+        case .restore: "history.sessions"
+        case .reset: "history.reset"
+        case .open, .clear, .edit: nil
         }
     }
 

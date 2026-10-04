@@ -163,14 +163,14 @@ final class ActivityRecorder {
     }
 
     /// "Objects, subtract Brush, inverted Sky".
-    static func describe(_ outline: MaskOutline) -> String {
+    nonisolated static func describe(_ outline: MaskOutline) -> String {
         outline.components.enumerated().map { index, component in
             let kind = (component.inverted ? "inverted " : "") + (component.kind?.name ?? "a newer kind")
             return index == 0 ? kind : "\(component.operation.name.lowercased()) \(kind)"
         }.joined(separator: ", ")
     }
 
-    static func name(_ state: ProcessInfo.ThermalState) -> String {
+    nonisolated static func name(_ state: ProcessInfo.ThermalState) -> String {
         switch state {
         case .nominal: "nominal"
         case .fair: "fair"
