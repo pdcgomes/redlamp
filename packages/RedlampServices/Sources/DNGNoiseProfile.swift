@@ -42,7 +42,7 @@ enum DNGNoiseProfile {
         let plane = { (channel: Int) in pairs >= 3 ? channel : 0 }
         let a = SIMD3<Float>((0 ..< 3).map { Float(values[plane($0) * 2]) })
         let b = SIMD3<Float>((0 ..< 3).map { Float(values[plane($0) * 2 + 1]) })
-        guard a.max() > 0 || b.max() > 0 else { return nil }
+        guard a.max() > 0 || b.max() > 0, (a + b).max().isFinite else { return nil }
         return NoiseModel(a: a, b: b)
     }
 }

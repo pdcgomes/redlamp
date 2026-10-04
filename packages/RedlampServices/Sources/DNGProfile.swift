@@ -30,6 +30,10 @@ public struct DNGProfile: Codable, Sendable, Hashable {
             self.entries = entries
             self.srgbValues = srgbValues
         }
+
+        var isValid: Bool {
+            Self(hues: hues, saturations: saturations, values: values, entries: entries, srgbValues: srgbValues) != nil
+        }
     }
 
     /// A ProfileGainTableMap (DNG 1.6) or ProfileGainTableMap2 (1.7): a grid of gain tables over
@@ -221,6 +225,13 @@ public struct DNGProfile: Codable, Sendable, Hashable {
             rows: rows, columns: columns, spacing: SIMD2(f64(16), f64(8)), origin: SIMD2(f64(32), f64(24)),
             points: points, weights: (0 ..< 5).map { f32(44 + $0 * 4) }, gamma: gamma, gains: gains,
         )
+    }
+
+    /// As `read` makes it: maps `HSVMap.init` accepts, at most one per illuminant, a curve
+    /// `isValidCurve` accepts, and a finite offset. The gain table map checks itself as it decodes.
+    var isValid: Bool {
+        hueSatMaps.count <= 2 && (hueSatMaps + [lookTable].compactMap(\.self)).allSatisfy(\.isValid)
+            && toneCurve.map(Self.isValidCurve) ?? true && baselineExposureOffset.isFinite
     }
 
     /// At least two points in 0...1 with increasing inputs.

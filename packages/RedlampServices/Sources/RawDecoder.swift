@@ -96,15 +96,16 @@ enum RawDecoder {
         if asShot.x <= 0 || asShot.y <= 0 || asShot.z <= 0 {
             asShot = SIMD3((0 ..< 3).map { Double(rl_pre_mul(raw, Int32($0))) })
         }
-        if asShot.y > 0 {
+        if asShot.y > 0, (asShot / asShot.y * 0).sum() == 0 {
             asShot /= asShot.y
         } else {
             asShot = SIMD3(1, 1, 1)
         }
 
-        let cameraToSRGB = (0 ..< 3).flatMap { row in
+        let rgbCam = (0 ..< 3).flatMap { row in
             (0 ..< 3).map { col in Double(rl_rgb_cam(raw, Int32(row), Int32(col))) }
         }
+        let cameraToSRGB = rgbCam.allSatisfy(\.isFinite) ? rgbCam : DNGColorCalibration.identity
         var xyzToCamera = (0 ..< 3).flatMap { row in
             (0 ..< 3).map { col in Double(rl_cam_xyz(raw, Int32(row), Int32(col))) }
         }
@@ -141,7 +142,7 @@ enum RawDecoder {
             whiteLevel: whiteLevel,
             asShotMultipliers: asShot,
             cameraToSRGB: cameraToSRGB,
-            xyzToCamera: xyzToCamera.contains { $0 != 0 } ? xyzToCamera : nil,
+            xyzToCamera: xyzToCamera.contains { $0 != 0 } && xyzToCamera.allSatisfy(\.isFinite) ? xyzToCamera : nil,
             orientation: [0, 3, 5, 6].contains(orientation) ? orientation : 0,
             baselineExposure: plausibleBaselineExposure(rl_baseline_exposure(raw)),
             info: info,

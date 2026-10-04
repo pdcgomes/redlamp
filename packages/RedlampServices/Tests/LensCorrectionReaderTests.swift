@@ -50,6 +50,17 @@ struct LensCorrectionReaderTests {
         #expect(turned.center == SIMD2(0.5, 0.4))
     }
 
+    @Test func `a vignetting opcode whose gains aren't numbers is left out`() throws {
+        for k in [[Double.nan, 0, 0, 0, 0], [1e308, 1e308, 0, 0, 0]] {
+            let lens = try #require(LensCorrectionReader.read(
+                Self.dng(opcodes: Self.warp([1, -0.05, 0, 0], center: [0.5, 0.5]) + Self.vignette(k)),
+                url: URL(fileURLWithPath: "/tmp/t.dng"),
+                orientation: 0,
+            ))
+            #expect(lens.vignetting.isEmpty && !lens.distortion.isEmpty && lens.isValid, "\(k)")
+        }
+    }
+
     /// One WarpRectilinear opcode, big-endian: one coefficient set, no tangential terms.
     private static func warp(_ k: [Double], center: [Double]) -> Data {
         var parameters = Data()

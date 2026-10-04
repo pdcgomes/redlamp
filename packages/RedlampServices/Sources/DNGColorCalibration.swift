@@ -32,6 +32,18 @@ public struct DNGColorCalibration: Codable, Sendable, Hashable {
         self.analogBalance = analogBalance
     }
 
+    /// As `read` makes them: one or two calibrations of finite 3 x 3 matrices, and a balance per channel.
+    var isValid: Bool {
+        func isMatrix(_ values: [Double]) -> Bool {
+            values.count == 9 && values.allSatisfy(\.isFinite)
+        }
+        return (1 ... 2).contains(calibrations.count) && analogBalance.count == 3
+            && analogBalance.allSatisfy(\.isFinite) && calibrations.allSatisfy {
+                $0.temperature.isFinite && $0.temperature > 0 && isMatrix($0.colorMatrix)
+                    && isMatrix($0.cameraCalibration) && $0.forwardMatrix.map(isMatrix) ?? true
+            }
+    }
+
     static let identity: [Double] = [1, 0, 0, 0, 1, 0, 0, 0, 1]
 
     /// Correlated colour temperatures of the EXIF LightSource codes DNG uses for its illuminants.

@@ -62,6 +62,15 @@ public struct LensCorrection: Codable, Sendable, Hashable {
         self.profileName = profileName
     }
 
+    /// What `interpolate` relies on: at least two finite, increasing radii, and tables empty or
+    /// one finite entry per radius, about a finite centre.
+    public var isValid: Bool {
+        radii.count >= 2 && radii.allSatisfy(\.isFinite) && zip(radii, radii.dropFirst()).allSatisfy { $0 < $1 }
+            && [0, radii.count].contains(distortion.count) && [0, radii.count].contains(vignetting.count)
+            && distortion.allSatisfy { ($0 * 0).sum() == 0 } && vignetting.allSatisfy(\.isFinite)
+            && (center * 0).sum() == 0
+    }
+
     /// Whether red and blue are recorded at another scale than green (lateral chromatic aberration).
     public var correctsColorFringes: Bool {
         distortion.contains { abs($0.x - $0.y) > 1e-7 || abs($0.z - $0.y) > 1e-7 }
@@ -157,8 +166,8 @@ public extension LensCorrection {
             source: .dng,
             center: center,
             radii: radii,
-            distortion: distortion,
-            vignetting: vignetting,
+            distortion: distortion.allSatisfy { ($0 * 0).sum() == 0 } ? distortion : [],
+            vignetting: vignetting.allSatisfy(\.isFinite) ? vignetting : [],
         )
     }
 

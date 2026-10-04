@@ -59,25 +59,45 @@ public extension DecodedImage {
         var banding: BandingCorrection?
 
         /// What the app relies on before it touches the samples: one per pixel and channel, a
-        /// colour filter pattern that indexes itself, and gain maps it can apply.
+        /// colour filter pattern that indexes itself, a black level per position the kernels
+        /// read, 3 x 3 matrices, finite numbers, and tables it can index and apply.
         var isValid: Bool {
             let channels: Int
+            let blackCount: Int?
             switch layout {
             case let .mosaic(pattern):
                 guard pattern.isValid else { return false }
-                channels = 1
+                (channels, blackCount) = (1, pattern.width * pattern.height)
             case .linearRGB:
-                channels = 3
+                (channels, blackCount) = (3, 3)
             case let .balancedCameraHalf(pattern):
                 guard pattern?.isValid ?? true else { return false }
-                channels = 4
+                (channels, blackCount) = (4, nil)
             case .linearSRGBHalf:
-                channels = 4
+                (channels, blackCount) = (4, nil)
             }
             let (pixels, pixelsOverflow) = width.multipliedReportingOverflow(by: height)
             let (samples, samplesOverflow) = pixels.multipliedReportingOverflow(by: channels)
-            return width > 0 && height > 0 && !pixelsOverflow && !samplesOverflow && samples == sampleCount
-                && GainMap.areValid(gainMaps)
+            guard width > 0, height > 0, !pixelsOverflow, !samplesOverflow, samples == sampleCount,
+                  GainMap.areValid(gainMaps)
+            else { return false }
+            let swapped = orientation == 5 || orientation == 6
+            let orientedSize = swapped ? PixelSize(width: height, height: width) : PixelSize(
+                width: width,
+                height: height,
+            )
+            return blackCount.map { blackLevels.count == $0 } ?? true && blackLevels.allSatisfy(\.isFinite)
+                && whiteLevel.isFinite && (asShotMultipliers * 0).sum() == 0 && baselineExposure.isFinite
+                && Self.isMatrix(cameraToSRGB) && xyzToCamera.map(Self.isMatrix) ?? true
+                && [0, 3, 5, 6].contains(orientation) && info.pixelSize == orientedSize
+                && info.lensCorrection?.isValid ?? true && lensCorrection?.isValid ?? true
+                && noiseProfile.map { ($0.a * 0 + $0.b * 0).sum() == 0 } ?? true
+                && dngColor?.isValid ?? true && dngProfile?.isValid ?? true
+                && banding.map { ($0.rows + $0.columns).allSatisfy(\.isFinite) } ?? true
+        }
+
+        static func isMatrix(_ values: [Double]) -> Bool {
+            values.count == 9 && values.allSatisfy(\.isFinite)
         }
     }
 
