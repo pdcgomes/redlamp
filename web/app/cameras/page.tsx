@@ -23,6 +23,9 @@ export default function CamerasPage() {
   const commit = sourceCommit();
   // A camera verified in more than one format has a row for each.
   const verifiedCameras = new Set(verified.map((camera) => camera.camera)).size;
+  // Modes with something to read (a problem, or the full checklist met) get a row; the rest a list.
+  const benchChecked = bench.filter((camera) => camera.evidence !== "Reported working");
+  const benchWorking = bench.filter((camera) => camera.evidence === "Reported working");
   const stats = [
     { value: verifiedCameras, label: "verified by Redlamp's decode tests" },
     { value: bench.length, label: "camera modes tested with the camera bench" },
@@ -135,37 +138,56 @@ export default function CamerasPage() {
                 </a>
               </p>
             </div>
-            <div className="surface mt-6 overflow-hidden">
-              <table className="w-full border-collapse text-left text-[14px]">
-                <thead className="hidden text-[11px] tracking-[0.12em] text-dim uppercase md:table-header-group">
-                  <tr className="border-b border-hairline">
-                    <th className="py-3 pr-3 pl-5 font-semibold">Camera</th>
-                    <th className="px-3 py-3 font-semibold">Evidence</th>
-                    <th className="px-3 py-3 font-semibold">Photos</th>
-                    <th className="py-3 pr-5 pl-3 font-semibold">Problems</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bench.map((camera) => (
-                    <tr key={`${camera.camera} ${camera.mode}`} className="border-b border-hairline align-top last:border-b-0">
-                      <td className="py-3.5 pr-3 pl-5">
-                        <p className="font-medium text-paper">{camera.camera}</p>
-                        <p className="mt-1 text-[13px] text-mute">{camera.mode}</p>
-                        <p className="mt-1 text-[13px] text-mute md:hidden">
-                          {camera.evidence} · {camera.photos} {camera.photos === 1 ? "photo" : "photos"}
-                        </p>
-                        {camera.problems ? <p className="mt-1 text-[13px] text-mute md:hidden">{camera.problems}</p> : null}
-                      </td>
-                      <td className="hidden px-3 py-3.5 whitespace-nowrap text-mute md:table-cell">{camera.evidence}</td>
-                      <td className="hidden px-3 py-3.5 text-mute md:table-cell">
-                        {camera.photos} from {camera.photographers} {camera.photographers === 1 ? "photographer" : "photographers"}
-                      </td>
-                      <td className="hidden py-3.5 pr-5 pl-3 text-[13px] text-mute md:table-cell">{camera.problems ?? ""}</td>
+            {benchChecked.length > 0 ? (
+              <div className="surface mt-6 overflow-hidden">
+                <table className="w-full border-collapse text-left text-[14px]">
+                  <thead className="hidden text-[11px] tracking-[0.12em] text-dim uppercase md:table-header-group">
+                    <tr className="border-b border-hairline">
+                      <th className="py-3 pr-3 pl-5 font-semibold">Camera</th>
+                      <th className="px-3 py-3 font-semibold">Evidence</th>
+                      <th className="px-3 py-3 font-semibold">Photos</th>
+                      <th className="py-3 pr-5 pl-3 font-semibold">Problems</th>
                     </tr>
+                  </thead>
+                  <tbody>
+                    {benchChecked.map((camera) => (
+                      <tr key={`${camera.camera} ${camera.mode}`} className="border-b border-hairline align-top last:border-b-0">
+                        <td className="py-3.5 pr-3 pl-5">
+                          <p className="font-medium text-paper">{camera.camera}</p>
+                          <p className="mt-1 text-[13px] text-mute">{camera.mode}</p>
+                          <p className="mt-1 text-[13px] text-mute md:hidden">
+                            {camera.evidence} · {camera.photos} {camera.photos === 1 ? "photo" : "photos"}
+                          </p>
+                          {camera.problems ? <p className="mt-1 text-[13px] text-mute md:hidden">{camera.problems}</p> : null}
+                        </td>
+                        <td className="hidden px-3 py-3.5 whitespace-nowrap text-mute md:table-cell">{camera.evidence}</td>
+                        <td className="hidden px-3 py-3.5 text-mute md:table-cell">
+                          {camera.photos} from {camera.photographers}{" "}
+                          {camera.photographers === 1 ? "photographer" : "photographers"}
+                        </td>
+                        <td className="hidden py-3.5 pr-5 pl-3 text-[13px] text-mute md:table-cell">{camera.problems ?? ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+            {benchWorking.length > 0 ? (
+              <details className="surface mt-6 p-5 sm:p-6">
+                <summary className="cursor-pointer text-[15px] text-paper">
+                  Reported working: {benchWorking.length.toLocaleString("en-GB")} camera modes, each opened with
+                  nothing failing
+                </summary>
+                <ul className="mt-5 grid gap-x-8 gap-y-2.5 text-[14px] sm:grid-cols-2 lg:grid-cols-3">
+                  {benchWorking.map((camera) => (
+                    <li key={`${camera.camera} ${camera.mode}`} className="flex flex-col">
+                      <span className="text-paper">{camera.camera}</span>
+                      <span className="text-[12.5px] text-dim">{camera.mode}</span>
+                    </li>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </ul>
+              </details>
+            ) : null}
           </>
         ) : null}
 

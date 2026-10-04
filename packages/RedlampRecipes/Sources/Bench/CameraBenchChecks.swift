@@ -10,6 +10,10 @@ public enum CameraBenchChecks {
         /// least this many raw units).
         static let marginSigmas = (warn: 3.0, fail: 5.0)
         static let marginUnits = (warn: 2.0, fail: 4.0)
+        /// And, to fail, more than this share of the range: what shows in the shadows.
+        static let marginRange = 0.01
+        /// Margins below this share of the stated black are padding.
+        static let paddingShare = 0.25
         /// How far below the stated black the 0.1th percentile may sit, as a share of the range.
         static let belowBlack = (warn: 0.01, fail: 0.02)
         /// Multipliers further than this from green's, either way, are implausible.
@@ -74,11 +78,15 @@ public enum CameraBenchChecks {
         var numbers = ["black": m.black, "white": m.white]
         var verdict = BenchVerdict.pass
         var findings: [String] = []
-        if let optical = m.opticalBlack, let noise = m.opticalBlackNoise {
+        // Margins far below the stated black are padding, not masked photosites (the Fujifilm F770EXR's).
+        if let optical = m.opticalBlack, let noise = m.opticalBlackNoise, optical >= Threshold.paddingShare * m.black {
             numbers["opticalBlack"] = optical
             numbers["opticalBlackNoise"] = noise
             let offset = abs(optical - m.black)
-            if offset > max(Threshold.marginUnits.fail, Threshold.marginSigmas.fail * noise) {
+            // A camera can offset its margins from the image area by a little (Pentax's, CHDK's), so only an
+            // offset that would show in the shadows fails.
+            if offset > max(Threshold.marginUnits.fail, Threshold.marginSigmas.fail * noise),
+               offset > Threshold.marginRange * range {
                 verdict = .fail
             } else if offset > max(Threshold.marginUnits.warn, Threshold.marginSigmas.warn * noise) {
                 verdict = max(verdict, .warn)
@@ -103,7 +111,7 @@ public enum CameraBenchChecks {
         let summary = findings.isEmpty
             ? String(format: "The black level (%.1f) agrees with the sensor.", m.black)
             : "The black level may be wrong: " + findings.joined(separator: "; ") + "."
-        return BenchCheck(id: "decode.black", version: 2, verdict: verdict, measurements: numbers, summary: summary)
+        return BenchCheck(id: "decode.black", version: 3, verdict: verdict, measurements: numbers, summary: summary)
     }
 
     static func white(_ m: DecodeMeasurements) -> BenchCheck {

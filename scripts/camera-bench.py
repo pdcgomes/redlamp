@@ -13,7 +13,8 @@ adds the tiers to docs/cameras.md, and redlamp.app/api/bench/summary serves what
     scripts/camera-bench.py --reports a.json --as "Pedro's X-T5"   # add local reports
 
 A check's evidence counts only at the newest version of that check any report has, so a check that
-changed (decode.black version 2) isn't judged on older measurements.
+changed isn't judged on older measurements. Where a newer version only changed thresholds, older
+results are judged again from the measurements they carry (decode.black 2, as 3).
 """
 
 import argparse
@@ -40,6 +41,51 @@ PROBLEM_CONTRIBUTORS = 2
 
 def key(name):
     return re.sub(r"[^a-z0-9]", "", re.sub(r"\(.*?\)", "", (name or "").lower()))
+
+
+def worse(a, b):
+    order = ["skipped", "pass", "warn", "fail"]
+    return a if order.index(a) >= order.index(b) else b
+
+
+def black_v3(numbers):
+    """decode.black version 3 (CameraBenchChecks.black) from a version 2 or 3 result's measurements."""
+    black, white = numbers["black"], numbers["white"]
+    span = max(white - black, 1)
+    verdict, findings = "pass", []
+    optical, noise = numbers.get("opticalBlack"), numbers.get("opticalBlackNoise")
+    if optical is not None and noise is not None and optical >= 0.25 * black:
+        offset = abs(optical - black)
+        if offset > max(4, 5 * noise) and offset > 0.01 * span:
+            verdict = "fail"
+        elif offset > max(2, 3 * noise):
+            verdict = worse(verdict, "warn")
+        if offset > max(2, 3 * noise):
+            findings.append(f"the masked margins sit at {optical:.1f}, not the stated {black:.1f}")
+    dark = numbers.get("darkPercentile")
+    if dark is not None:
+        below = (black - dark) / span
+        if below > 0.02:
+            verdict = "fail"
+        elif below > 0.01:
+            verdict = worse(verdict, "warn")
+        if below > 0.01:
+            findings.append(f"many photosites sit {below * 100:.1f}% of the range below it")
+    summary = (f"The black level ({black:.1f}) agrees with the sensor." if not findings
+               else "The black level may be wrong: " + "; ".join(findings) + ".")
+    return verdict, summary
+
+
+# Check → (the oldest version whose measurements the current rule reads, the current version, the rule).
+REJUDGED = {"decode.black": (2, 3, black_v3)}
+
+
+def rejudge(check):
+    rule = REJUDGED.get(check["id"])
+    if not rule or not rule[0] <= check["version"] < rule[1] or check["verdict"] == "skipped":
+        return check
+    verdict, summary = rule[2](check["measurements"])
+    return {**check, "version": rule[1], "verdict": verdict, "summary": summary}
 
 
 def verified_cameras():
@@ -86,6 +132,7 @@ def aggregate(reports, verified, decoder):
     for contributor, report, received in reports:
         environment = report.get("environment", {})
         for photo in report.get("photos", []):
+            photo = {**photo, "checks": [rejudge(check) for check in photo["checks"]]}
             identity = photo.get("identity", {})
             entry = {"contributor": contributor, "photo": photo, "received": received or "",
                      "decoder": environment.get("decoder", ""), "redlamp": environment.get("redlamp", ""),

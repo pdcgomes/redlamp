@@ -126,10 +126,18 @@ struct CameraBenchTests {
         #expect(checks.map(\.verdict) == [.pass, .pass, .pass, .pass])
     }
 
-    @Test func `masked margins away from the stated black fail the black check`() {
+    @Test func `masked margins far from the stated black fail the black check, a little off warns`() {
         var measured = Self.healthy
-        measured.opticalBlack = 540
+        measured.opticalBlack = 700
         #expect(CameraBenchChecks.black(measured).verdict == .fail)
+        measured.opticalBlack = 540
+        #expect(CameraBenchChecks.black(measured).verdict == .warn)
+    }
+
+    @Test func `margins of padding far below the stated black aren't held against it`() {
+        var measured = Self.healthy
+        measured.opticalBlack = 0.5
+        #expect(CameraBenchChecks.black(measured).verdict == .pass)
     }
 
     @Test func `a missing colour matrix fails the colour check`() {
