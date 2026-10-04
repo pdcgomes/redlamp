@@ -16,7 +16,9 @@ export type RepoFile =
   | "docs/research/research-tracker.md"
   | "docs/cameras.md"
   | "docs/performance/metrics.json"
-  | "docs/performance/history.jsonl";
+  | "docs/performance/history.jsonl"
+  | "docs/camera-bench.schema.json"
+  | "docs/camera-bench.json";
 
 const cache = new Map<RepoFile, string>();
 
@@ -35,6 +37,10 @@ function load(file: RepoFile): string {
       return readFileSync(path.join(process.cwd(), "..", "docs", "performance", "metrics.json"), "utf8");
     case "docs/performance/history.jsonl":
       return readFileSync(path.join(process.cwd(), "..", "docs", "performance", "history.jsonl"), "utf8");
+    case "docs/camera-bench.schema.json":
+      return readFileSync(path.join(process.cwd(), "..", "docs", "camera-bench.schema.json"), "utf8");
+    case "docs/camera-bench.json":
+      return readFileSync(path.join(process.cwd(), "..", "docs", "camera-bench.json"), "utf8");
   }
 }
 
@@ -73,6 +79,20 @@ export function performance(): { metrics: Metrics; records: RunRecord[] } {
     performanceCache = { metrics, records: parseHistory(readRepoFile("docs/performance/history.jsonl"), metrics) };
   }
   return performanceCache;
+}
+
+/** The camera bench report format (docs/camera-bench.schema.json), which the relay checks reports against. */
+export function cameraBenchSchema(): Record<string, unknown> {
+  return JSON.parse(readRepoFile("docs/camera-bench.schema.json")) as Record<string, unknown>;
+}
+
+/** The camera bench's public evidence (docs/camera-bench.json), or null before the aggregator first writes it. */
+export function cameraBenchEvidence(): unknown {
+  try {
+    return JSON.parse(readRepoFile("docs/camera-bench.json"));
+  } catch {
+    return null;
+  }
 }
 
 /** The commit the site was built from: Vercel's, else the checkout's; null when neither is known. */

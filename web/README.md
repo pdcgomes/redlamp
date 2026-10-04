@@ -74,3 +74,23 @@ FEEDBACK_ENABLED=1 FEEDBACK_REPO=pdcgomes/redlamp-feedback … npx next dev --po
 defaults write app.redlamp.mac FeedbackEndpoint http://localhost:3123/api/feedback
 defaults write app.redlamp.mac FeedbackSendsLive -bool YES   # Debug builds send dry runs otherwise
 ```
+
+## The camera bench relay
+
+Redlamp's Camera Bench (`packages/RedlampUI/Sources/CameraBench`, [docs/camera-bench.md](../docs/camera-bench.md)) posts each report to `POST /api/bench`. The relay checks it against `docs/camera-bench.schema.json`, whose objects are closed so nothing but measurements gets through, and keeps it in a private repository as one file per submission (`submissions/<yyyy>/<mm>/<id>.json`, with the day it arrived and the app's version; no IP address or other request detail). A request with `X-Redlamp-Dry-Run: 1`, as Debug builds send, is checked and nothing is kept. `GET /api/bench/summary` serves what each camera mode still needs, cut down from `docs/camera-bench.json`, which `scripts/camera-bench.py` writes; the app downloads the whole list, so the site never learns which cameras someone has. The logic is in `lib/bench.ts`, tested by `lib/bench.test.ts`.
+
+It uses the Redlamp Feedback app's `FEEDBACK_GITHUB_*` settings, and these:
+
+| Variable | Value |
+| --- | --- |
+| `BENCH_ENABLED` | `1` to keep reports; anything else switches it off (it answers 503, and dry runs still work) |
+| `BENCH_REPO` | `pdcgomes/redlamp-bench`, a private repository the app is installed on with Contents (read and write) |
+| `BENCH_PREFIX` | Optional: a folder for every path; Preview deployments use `preview/` unless it's set |
+
+To try it locally with a Debug build:
+
+```bash
+BENCH_ENABLED=1 BENCH_REPO=pdcgomes/redlamp-bench … npx next dev --port 3123
+defaults write app.redlamp.mac CameraBenchEndpoint http://localhost:3123/api/bench
+defaults write app.redlamp.mac CameraBenchSendsLive -bool YES   # Debug builds send dry runs otherwise
+```
