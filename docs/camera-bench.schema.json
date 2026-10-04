@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://redlamp.app/schemas/camera-bench-report-1.json",
+  "title": "Redlamp camera bench report, format 1",
+  "description": "What redlamp camera-bench writes and the app's Camera Bench window sends (CAM-14, CAM-16). Measurements only: no pixels, file names, paths, GPS, serial numbers, owner fields or capture times. Every object is closed, so a report carrying anything else is refused. See camera-bench.md.",
+  "type": "object",
+  "required": ["format", "environment", "photos", "answers"],
+  "properties": {
+    "format": { "const": 1, "description": "This format's version." },
+    "environment": { "$ref": "#/$defs/environment" },
+    "photos": { "type": "array", "items": { "$ref": "#/$defs/photo" }, "minItems": 1, "maxItems": 200 },
+    "answers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/answer" },
+      "maxItems": 200,
+      "description": "One per camera mode, from the bench window; empty from the command line."
+    },
+    "contributor": {
+      "type": "string",
+      "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$",
+      "description": "A random ID per Mac, which can be reset, so contributors can be counted. Never published."
+    },
+    "credit": { "type": "string", "maxLength": 80, "description": "A name to credit, when the contributor gives one." }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "environment": {
+      "type": "object",
+      "required": ["redlamp", "decoder", "processVersion", "bench", "system"],
+      "properties": {
+        "redlamp": { "type": "string", "maxLength": 40, "description": "Redlamp's version, such as 0.2.2-prealpha." },
+        "commit": { "type": "string", "maxLength": 40 },
+        "decoder": { "type": "string", "maxLength": 40, "description": "The raw decoder and its version, such as LibRaw 0.22.2-Release." },
+        "processVersion": { "type": "integer", "minimum": 1, "description": "The process version of the default rendering." },
+        "bench": { "type": "integer", "minimum": 1, "description": "The bench's own version: its checks and how it chooses photos." },
+        "system": { "type": "string", "maxLength": 40, "description": "Such as macOS 26.5." },
+        "chip": { "type": "string", "maxLength": 60, "description": "Such as Apple M3 Max." }
+      },
+      "additionalProperties": false
+    },
+    "size": {
+      "type": "object",
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 0 },
+        "height": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "mode": {
+      "type": "object",
+      "description": "A camera and one of its raw modes: what evidence is counted in.",
+      "required": ["key", "camera", "label"],
+      "properties": {
+        "key": { "type": "string", "maxLength": 200, "description": "make|model|decoder|bits|widthxheight." },
+        "camera": { "type": "string", "maxLength": 120 },
+        "label": { "type": "string", "maxLength": 160, "description": "Such as 14-bit compressed ARW, 6024 × 4024." }
+      },
+      "additionalProperties": false
+    },
+    "identity": {
+      "type": "object",
+      "description": "What the file states about its camera, raw mode and capture settings.",
+      "required": ["format", "rawSize", "imageSize", "orientation", "previews"],
+      "properties": {
+        "make": { "type": "string", "maxLength": 80 },
+        "model": { "type": "string", "maxLength": 80 },
+        "normalizedMake": { "type": "string", "maxLength": 80, "description": "LibRaw's normalised name." },
+        "normalizedModel": { "type": "string", "maxLength": 80 },
+        "lens": { "type": "string", "maxLength": 120 },
+        "software": { "type": "string", "maxLength": 80, "description": "The camera's firmware, or the software that wrote the file." },
+        "format": { "type": "string", "maxLength": 8, "description": "The file's extension, upper case." },
+        "decoder": { "type": "string", "maxLength": 60, "description": "LibRaw's unpacking routine, such as sony_arw2_load_raw." },
+        "bitsPerSample": { "type": "integer", "minimum": 0 },
+        "dngVersion": { "type": "integer", "minimum": 0 },
+        "sensor": { "type": "string", "maxLength": 40, "description": "Bayer RGGB, X-Trans or linear." },
+        "rawSize": { "$ref": "#/$defs/size" },
+        "imageSize": { "$ref": "#/$defs/size" },
+        "iso": { "type": "number", "minimum": 0 },
+        "exposureTime": { "type": "number", "minimum": 0 },
+        "aperture": { "type": "number", "minimum": 0 },
+        "focalLength": { "type": "number", "minimum": 0 },
+        "orientation": { "enum": [0, 3, 5, 6], "description": "LibRaw's orientation code." },
+        "asShotMultipliers": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+        "previews": { "type": "array", "items": { "$ref": "#/$defs/size" }, "maxItems": 16 },
+        "refusal": { "type": "string", "maxLength": 200, "description": "Why LibRaw wouldn't open the file." }
+      },
+      "additionalProperties": false
+    },
+    "measurements": {
+      "type": "object",
+      "description": "What the decode measured, in raw units.",
+      "required": ["black", "nominalWhite", "white"],
+      "properties": {
+        "black": { "type": "number" },
+        "opticalBlack": { "type": "number", "description": "The masked margins' level, where they look masked." },
+        "opticalBlackNoise": { "type": "number" },
+        "darkPercentile": { "type": "number", "description": "The 0.1th percentile of the photosites, edge strips and zeros left out." },
+        "nominalWhite": { "type": "number", "description": "LibRaw's white level." },
+        "white": { "type": "number", "description": "Where the photosites clip, which Redlamp uses." },
+        "clippedShare": { "type": "number", "minimum": 0, "maximum": 1 },
+        "zeroShare": { "type": "number", "minimum": 0, "maximum": 1, "description": "The share of photosites at exactly 0: dead ones or padding." },
+        "darkEdges": {
+          "type": "object",
+          "required": ["top", "bottom", "left", "right"],
+          "properties": {
+            "top": { "type": "integer", "minimum": 0 },
+            "bottom": { "type": "integer", "minimum": 0 },
+            "left": { "type": "integer", "minimum": 0 },
+            "right": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "colorMatrix": { "type": "array", "items": { "type": "number" }, "minItems": 9, "maxItems": 9, "description": "XYZ to camera RGB, row-major." }
+      },
+      "additionalProperties": false
+    },
+    "check": {
+      "type": "object",
+      "required": ["id", "version", "verdict", "measurements", "summary"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^(decode|render|preview)\\.[a-z]+$" },
+        "version": { "type": "integer", "minimum": 1 },
+        "verdict": { "enum": ["skipped", "pass", "warn", "fail"] },
+        "measurements": {
+          "type": "object",
+          "additionalProperties": { "type": "number" },
+          "maxProperties": 16,
+          "description": "The numbers the verdict came from, so it can be judged again."
+        },
+        "summary": { "type": "string", "maxLength": 300 },
+        "tracker": { "type": "string", "pattern": "^[A-Z]+-[0-9]+$", "description": "A tracker row that already covers what was found." }
+      },
+      "additionalProperties": false
+    },
+    "photo": {
+      "type": "object",
+      "required": ["fileHash", "mode", "identity", "checks", "conditions"],
+      "properties": {
+        "fileHash": { "type": "string", "pattern": "^([0-9a-f]{64})?$", "description": "A SHA-256 of the file, so a photo sent twice counts once. Never published." },
+        "mode": { "$ref": "#/$defs/mode" },
+        "identity": { "$ref": "#/$defs/identity" },
+        "measurements": { "$ref": "#/$defs/measurements" },
+        "asShotTemperature": { "type": "number", "minimum": 0, "description": "The camera's white balance, in kelvin." },
+        "checks": { "type": "array", "items": { "$ref": "#/$defs/check" }, "maxItems": 32 },
+        "conditions": {
+          "type": "array",
+          "items": { "enum": ["baseISO", "highISO", "portrait", "clippedHighlights", "warmLight"] },
+          "maxItems": 5
+        },
+        "decodeSeconds": { "type": "number", "minimum": 0 },
+        "renderSeconds": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "answer": {
+      "type": "object",
+      "required": ["mode", "choice"],
+      "properties": {
+        "mode": { "type": "string", "maxLength": 200, "description": "The camera mode's key." },
+        "choice": { "enum": ["same", "colours", "brightness", "framing", "artefacts", "notSure"] },
+        "note": { "type": "string", "maxLength": 500 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

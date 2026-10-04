@@ -410,6 +410,8 @@ public final class EditorModel {
     /// Window-level effects the app layer performs (full screen, toolbar visibility).
     @ObservationIgnored public var onToggleFullScreen: (() -> Void)?
     @ObservationIgnored public var onToggleToolbar: (() -> Void)?
+    /// Opens the Camera Bench window (CAM-15), which the app owns.
+    @ObservationIgnored public var onTestCamera: (() -> Void)?
     /// Opens Report a Bug or Send Feedback; the app presents it (`FeedbackActions`).
     @ObservationIgnored public var onSendFeedback: ((FeedbackPrefill?) -> Void)?
 

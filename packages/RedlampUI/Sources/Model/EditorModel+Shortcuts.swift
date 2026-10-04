@@ -177,6 +177,9 @@ public extension EditorModel {
             guard onSendFeedback != nil else { return false }
             sendFeedback()
         case .openFolder, .export, .exportWithPrevious, .filmLooks: return false
+        case .testCamera:
+            guard let onTestCamera else { return false }
+            onTestCamera()
         default:
             return false
         }
@@ -221,6 +224,7 @@ public extension EditorModel {
         case .autoWhiteBalance, .whiteBalanceSelector: return whiteBalance
         case .editTool, .maskingTool, .cancel, .showShortcuts, .openFolder, .filmLooks, .commandPalette:
             return true
+        case .testCamera: return onTestCamera != nil
         case .sendFeedback: return onSendFeedback != nil
         case .cropTool, .healTool, .rotateLeft, .rotateRight: return photo
         case .cropAspectLock: return activeTool == .crop

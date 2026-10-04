@@ -3,7 +3,14 @@
 import { useState } from "react";
 import type { CameraMake } from "@/lib/cameras";
 
-const markLabel = { verified: "Verified", evaluation: "In an evaluation set" } as const;
+const markLabel = {
+  verified: "Verified",
+  tested: "Tested by photographers",
+  problem: "Problem reported",
+  working: "Reported working",
+  unconfirmed: "Problem found once",
+  evaluation: "In an evaluation set",
+} as const;
 
 /** Every camera LibRaw reads, by make, with a search that matches the make or the model. */
 export function CameraList({ makes }: { makes: CameraMake[] }) {
@@ -49,7 +56,11 @@ export function CameraList({ makes }: { makes: CameraMake[] }) {
                   <li key={model.name} className="flex flex-wrap items-baseline gap-x-2">
                     <span className={model.mark ? "text-paper" : undefined}>{model.name}</span>
                     {model.mark ? (
-                      <span className={`text-[11.5px] font-medium ${model.mark === "verified" ? "text-filament" : "text-ring"}`}>
+                      <span
+                        className={`text-[11.5px] font-medium ${
+                          model.mark === "verified" || model.mark === "tested" ? "text-filament" : "text-ring"
+                        }`}
+                      >
                         {markLabel[model.mark]}
                       </span>
                     ) : null}

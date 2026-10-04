@@ -62,6 +62,8 @@ public struct ImageInfo: Codable, Sendable, Hashable {
     /// The lens correction the file carries (DNG opcodes or the maker's tags), applied by
     /// Enable Profile Corrections.
     public var lensCorrection: LensCorrection?
+    /// What the raw decode measured, for the camera bench (CAM-14); nil for bitmaps.
+    public var diagnostics: DecodeDiagnostics?
 
     public init(
         url: URL,

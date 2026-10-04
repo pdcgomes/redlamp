@@ -80,6 +80,7 @@ extension ShortcutAction {
         .editFocusStack: ["focus stacking", "stack", "frames", "depth", "retouch"],
         .showShortcuts: ["keys", "help", "shortcuts", "keyboard"],
         .filmLooks: ["film", "stocks", "looks"],
+        .testCamera: ["camera", "bench", "raw support", "verify", "test", "unsupported camera"],
         .sendFeedback: [
             "bug",
             "report",
@@ -170,6 +171,7 @@ extension ShortcutAction {
         case .editFocusStack: "square.stack.3d.down.right.fill"
         case .showShortcuts: "keyboard"
         case .filmLooks: "film"
+        case .testCamera: "camera.badge.ellipsis"
         case .sendFeedback: "exclamationmark.bubble"
         default: "command"
         }

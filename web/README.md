@@ -13,6 +13,7 @@ mise run site -- build   # production build
 - **The Compare page** (`/compare`) is read from `docs/lightroom-comparison.md` (`lib/comparison.ts`). Each tracker ID links to its GitHub issue, looked up hourly (`trackerIssues` in `lib/github.ts`); a `GITHUB_TOKEN` in the deployment's environment lifts GitHub's limit for anonymous requests, and without an answer from GitHub the links search for the ID instead. `scripts/roadmap-sync.py` keeps the comparison and the roadmap in step with the tracker.
 - **The Performance page** (`/performance`) and the home page's performance strip are read from `docs/performance/metrics.json` and `docs/performance/history.jsonl` (`lib/performance.ts`), which `scripts/perf-record.sh` and `scripts/perf-backfill.py` write; the charts are drawn in SVG by `components/charts/`.
 - **The Cameras page** (`/cameras`) is read from `docs/cameras.md` (`lib/cameras.ts`), whose camera lists `scripts/camera-list.py` generates from the decode tests, the CC0 sample downloads and LibRaw's own camera list.
+- **Test your camera** (`/cameras/test`) shows how to run the app's camera bench. Its steps are curated in `content/camera-bench.ts`; its screenshots are `docs/images/camera-bench-*.png`, captured from a development build with `--camera-bench <folder>`, `--camera-bench-select <camera>` and `--camera-bench-report` (`apps/RedlampMac/Sources/CameraBenchWindow.swift`) on the raw fixtures.
 - **Screenshots, film icons, sample sheets and logos** are copied from `docs/` into `public/synced` by `scripts/sync-assets.mjs`, which runs before every `dev` and `build`. Regenerate them with `mise run screenshots` and `redlamp recipe film --all --install --readme`, and the hero shots (`heroShots` in `content/features.ts`) with `scripts/capture-hero.sh <photo folder>`.
 - **The lightbox:** every screenshot on the home page opens full size in `components/ui/Lightbox.tsx`, with ← → (or a swipe) through its own section's shots. The hero shows one shot at a time, chosen from the thumbnails beneath it (`components/sections/HeroShots.tsx`).
 - **The download button** links to the latest GitHub release's zip, and the status pill at the top shows that release's version (`lib/github.ts`, refreshed hourly). The button stays hidden until the first release.
@@ -74,4 +75,24 @@ To try the relay locally, run it with the settings above and point a Debug build
 FEEDBACK_ENABLED=1 FEEDBACK_REPO=pdcgomes/redlamp-feedback … npx next dev --port 3123
 defaults write app.redlamp.mac FeedbackEndpoint http://localhost:3123/api/feedback
 defaults write app.redlamp.mac FeedbackSendsLive -bool YES   # Debug builds send dry runs otherwise
+```
+
+## The camera bench relay
+
+Redlamp's Camera Bench (`packages/RedlampUI/Sources/CameraBench`, [docs/camera-bench.md](../docs/camera-bench.md)) posts each report to `POST /api/bench`. The relay checks it against `docs/camera-bench.schema.json`, whose objects are closed so nothing but measurements gets through, and keeps it in a private repository as one file per submission (`submissions/<yyyy>/<mm>/<id>.json`, with the day it arrived and the app's version; no IP address or other request detail). A request with `X-Redlamp-Dry-Run: 1`, as Debug builds send, is checked and nothing is kept. `GET /api/bench/summary` serves what each camera mode still needs, cut down from `docs/camera-bench.json`, which `scripts/camera-bench.py` writes; the app downloads the whole list, so the site never learns which cameras someone has. The logic is in `lib/bench.ts`, tested by `lib/bench.test.ts`.
+
+It uses the Redlamp Feedback app's `FEEDBACK_GITHUB_*` settings, and these:
+
+| Variable | Value |
+| --- | --- |
+| `BENCH_ENABLED` | `1` to keep reports; anything else switches it off (it answers 503, and dry runs still work) |
+| `BENCH_REPO` | `pdcgomes/redlamp-bench`, a private repository the app is installed on with Contents (read and write) |
+| `BENCH_PREFIX` | Optional: a folder for every path; Preview deployments use `preview/` unless it's set |
+
+To try it locally with a Debug build:
+
+```bash
+BENCH_ENABLED=1 BENCH_REPO=pdcgomes/redlamp-bench … npx next dev --port 3123
+defaults write app.redlamp.mac CameraBenchEndpoint http://localhost:3123/api/bench
+defaults write app.redlamp.mac CameraBenchSendsLive -bool YES   # Debug builds send dry runs otherwise
 ```

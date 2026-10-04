@@ -116,6 +116,7 @@ struct AppCommands: Commands {
             Button("Your Reports…") { FeedbackActions.presentReports(model: model) }
                 .disabled(model.isModalDialogOpen)
             item(.showShortcuts)
+            item(.testCamera)
             Divider()
             Button("Support Redlamp") { openURL(SettingsView.supportURL) }
         }

@@ -37,6 +37,7 @@ struct RedlampApp: App {
         }
         model.onToggleFullScreen = { NSApp.keyWindow?.toggleFullScreen(nil) }
         model.onToggleToolbar = { NSApp.keyWindow?.toggleToolbarShown(nil) }
+        model.onTestCamera = { AppDelegate.showCameraBench?() }
         model.onSendFeedback = { prefill in FeedbackActions.present(model: model, prefill: prefill) }
         let theme = ThemeSettings()
         let exports = ExportPresetStore()
@@ -46,6 +47,12 @@ struct RedlampApp: App {
 
         let keyboard = KeyboardShortcuts()
         AppDelegate.saveBeforeQuitting = { model.saveBeforeQuitting() }
+        CameraBenchWindow.sendFeedback = { prefill in model.onSendFeedback?(prefill) }
+        AppDelegate.showCameraBench = { CameraBenchWindow.show(currentFolder: { model.folder }) }
+        #if DEBUG || REDLAMP_PROFILING
+            AppDelegate
+                .openCameraBenchIfRequested = { CameraBenchWindow.openIfRequested(currentFolder: { model.folder }) }
+        #endif
         AppDelegate.launch = {
             let editor = EditorWindowController(
                 model: model, theme: theme,
@@ -138,6 +145,8 @@ struct RedlampApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static var launch: (@MainActor () -> EditorWindowController)?
     static var saveBeforeQuitting: (@MainActor () -> QuitSaving)?
+    static var showCameraBench: (@MainActor () -> Void)?
+    static var openCameraBenchIfRequested: (@MainActor () -> Void)?
     let updates = Updates()
     private var editor: EditorWindowController?
     private var welcome: WelcomeWindowController?
@@ -147,6 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if Welcome.opensAtLaunch(arguments: LaunchArguments.all) {
             showWelcome()
         }
+        Self.openCameraBenchIfRequested?()
     }
 
     /// The welcome window, over the editor: by itself at the first launch, and from Help ›
