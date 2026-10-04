@@ -164,9 +164,10 @@ kernel void rl_detail_apply(
         float gain = textureAmount > 0.0f ? p.texture.z * textureAmount : 0.5f * textureAmount;
         float band = log2(ladderLevel(detail, coarsest, p.bands.x) + floorLuma)
             - log2(ladderLevel(detail, coarsest, p.bands.y) + floorLuma);
-        // The limit holds back what an edge's step puts in the band, where halos would come from.
+        // The limit holds back what an edge's step puts in the band, where halos would come from;
+        // softening makes none.
         float limit = p.texture.y;
-        boost += p.texture.w * gain * limit * tanh(band / limit);
+        boost += p.texture.w * gain * (gain > 0.0f ? limit * tanh(band / limit) : band);
     }
 
     float clarityAmount = p.clarity.x + amounts.y;

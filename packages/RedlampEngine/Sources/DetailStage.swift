@@ -183,8 +183,14 @@ struct LocalContrastSettings: Hashable {
     /// band's finer levels, so a preview shows what a downscaled full-resolution render does
     /// (`PreviewExportTests`).
     static func textureWeight(level: Int) -> Float {
-        [1, 0.994, 1.11, 0.68, 0.415][min(max(level, 0), 4)]
+        textureWeights[min(max(level, 0), 4)]
     }
+
+    private static let textureWeights: [Float] = {
+        let tuned = (ProcessInfo.processInfo.environment["REDLAMP_TEXTURE_WEIGHTS"] ?? "")
+            .split(separator: ",").compactMap { Float($0) }
+        return tuned.count == 5 ? tuned : [1, 0.994, 1.11, 0.70, 0.415]
+    }()
 
     var isActive: Bool {
         texture != 0 || clarity != 0
