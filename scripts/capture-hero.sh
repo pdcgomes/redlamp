@@ -18,7 +18,7 @@ OUT="$ROOT/docs/images"
 [[ $# -eq 1 && -d "$1" ]] || { echo "usage: scripts/capture-hero.sh <photo folder>" >&2; exit 1; }
 
 # Each image in docs/images, and the capture-promo.sh shot it's made from.
-SHOTS="hero:hero hero-palette:palette-search hero-slider:palette-slider hero-shortcuts:shortcuts hero-masks:masks-subject
+SHOTS="hero:hero hero-palette:palette-search hero-slider:palette-slider hero-shortcuts:shortcuts hero-masks:masks-overlay
     hero-film:film-after hero-compare:before-after"
 
 wanted=""

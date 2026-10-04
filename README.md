@@ -759,9 +759,9 @@ Kodak, Portra, Ektar, Gold, Vision3, Tri-X, Fujifilm, Superia, Provia, Velvia, I
 
 ![The slider bar for Exposure at +0.85 over the photo, with Tint and Contrast beside it and its keys in a hint bar](docs/images/hero-slider.png)
 
-**A Subject mask, shown on black.** Made on the device by Apple Vision, with nothing to download. The Masks panel lists the mask's components, which combine by add, subtract and intersect.
+**A Subject mask in the red overlay.** Made on the device by Apple Vision, with nothing to download, and given its own Exposure and Clarity. The Masks panel lists the mask's components, which combine by add, subtract and intersect.
 
-![A Subject mask on a photo of a motorcyclist in a flowered helmet, shown on black, with the Masks panel on the right](docs/images/hero-masks.png)
+![The dancer selected by a Subject mask, shown in the red mask overlay, with the mask's Exposure and Clarity raised in the Masks panel on the right](docs/images/hero-masks.png)
 
 **Masking on a Sony A7 III ARW.** A linear gradient darkens and cools the sky, and a feathered radial gradient warms and lifts the trees. The red overlay shows the selected mask's coverage.
 

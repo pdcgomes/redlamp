@@ -60,8 +60,8 @@ export const heroShots: HeroShot[] = [
   hero(
     "hero-masks.png",
     "Masks",
-    "A Subject mask on a photo of a motorcyclist in a flowered helmet, shown on black, with the Masks panel and its components on the right",
-    "A Subject mask, made on the device by Apple Vision and shown on black.",
+    "The dancer selected by a Subject mask, shown in the red mask overlay, with the mask's Exposure and Clarity raised in the Masks panel on the right",
+    "A Subject mask in the red overlay, made on the device by Apple Vision, with its own Exposure and Clarity.",
   ),
   hero(
     "hero-film.png",
