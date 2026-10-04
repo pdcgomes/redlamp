@@ -54,16 +54,17 @@ public enum Thumbnails {
         else { return nil }
         defer { libraw_close(raw) }
         let opened = Data(referencing: file).withUnsafeBytes { libraw_open_buffer(raw, $0.baseAddress, $0.count) }
-        guard opened == LIBRAW_SUCCESS.rawValue,
-              let largest = previews(in: raw).max(by: { max($0.width, $0.height) < max($1.width, $1.height) })
-        else { return nil }
-        let edge = max(largest.width, largest.height)
-        return decode(
-            largest,
-            flip: raw.pointee.sizes.flip,
-            in: file,
-            maxPixelSize: edge > 0 ? min(edge, maxPixelSize) : maxPixelSize,
-        )
+        guard opened == LIBRAW_SUCCESS.rawValue else { return nil }
+        // Largest first; some files list a preview ImageIO can't read beside one it can.
+        let edge = { (preview: Preview) in max(preview.width, preview.height) }
+        for preview in previews(in: raw).sorted(by: { edge($0) > edge($1) }) {
+            let size = edge(preview) > 0 ? min(edge(preview), maxPixelSize) : maxPixelSize
+            if let image = decode(preview, flip: raw.pointee.sizes.flip, in: file, maxPixelSize: size),
+               max(image.width, image.height) >= 64 {
+                return image
+            }
+        }
+        return nil
     }
 
     /// The JPEG previews LibRaw found in an opened file.

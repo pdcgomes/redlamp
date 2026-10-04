@@ -8,6 +8,8 @@ import Testing
 /// The decode diagnostics the camera bench judges (CAM-14), on every sample camera.
 struct RawDiagnosticsTests {
     static let samples = DecodeRegressionTests.fixtures + DecodeRegressionTests.cameras
+    /// Newer Canon CR3s embed their preview as HEVC, which isn't a JPEG to compare with.
+    static let hevcPreviews: Set = ["Canon_EOS-R5-Mark-II.CR3"]
 
     @Test(.enabled(if: !samples.isEmpty), .serialized, arguments: samples)
     func `every sample's decode carries its identity and measurements`(url: URL) throws {
@@ -42,6 +44,16 @@ struct RawDiagnosticsTests {
         #expect(identified == decoded)
     }
 
+    @Test(.enabled(if: !samples.isEmpty), arguments: samples)
+    func `a file that lists a preview gives the camera's JPEG`(url: URL) throws {
+        let identity = try #require(ImageDecoder.identify(url))
+        guard identity.previews.contains(where: { max($0.width, $0.height) >= 640 }),
+              !Self.hevcPreviews.contains(url.lastPathComponent)
+        else { return }
+        let preview = try #require(Thumbnails.cameraPreview(of: url, maxPixelSize: 1024), "\(url.lastPathComponent)")
+        #expect(max(preview.width, preview.height) >= 640)
+    }
+
     @Test(.enabled(if: !samples.isEmpty))
     func `the decode service's archive carries the diagnostics`() throws {
         let url = try #require(Self.samples.first)
@@ -72,9 +84,9 @@ struct RawDiagnosticsTests {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
         let url = folder.appending(path: "refused.NEF")
-        let context = try #require(try CGContext(
-            data: nil, width: 64, height: 48, bitsPerComponent: 8, bytesPerRow: 0,
-            space: #require(CGColorSpace(name: CGColorSpace.sRGB)),
+        let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+        let context = try #require(CGContext(
+            data: nil, width: 64, height: 48, bitsPerComponent: 8, bytesPerRow: 0, space: space,
             bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue,
         ))
         let destination = try #require(CGImageDestinationCreateWithURL(url as CFURL, "public.jpeg" as CFString, 1, nil))
@@ -85,7 +97,8 @@ struct RawDiagnosticsTests {
             ],
             kCGImagePropertyExifDictionary: [kCGImagePropertyExifISOSpeedRatings: [400]],
         ]
-        try CGImageDestinationAddImage(destination, #require(context.makeImage()), properties as CFDictionary)
+        let image = try #require(context.makeImage())
+        CGImageDestinationAddImage(destination, image, properties as CFDictionary)
         #expect(CGImageDestinationFinalize(destination))
 
         let identity = try #require(ImageDecoder.identify(url))

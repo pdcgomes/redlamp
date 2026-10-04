@@ -11,4 +11,8 @@ extension RedlampEngine: RawFileInspecting {
     public func cameraPreview(of url: URL, maxLongEdge: Int) -> CGImage? {
         Thumbnails.cameraPreview(of: url, maxPixelSize: maxLongEdge)
     }
+
+    public var rawDecoderVersion: String {
+        ImageDecoder.rawDecoderVersion
+    }
 }

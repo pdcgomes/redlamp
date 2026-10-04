@@ -169,6 +169,8 @@ enum RawDecoder {
                 white: Double(whiteLevel),
                 clippedShare: clippedShare,
                 darkEdges: darkEdges,
+                colorMatrix: xyzToCamera.contains { $0 != 0 } && xyzToCamera.allSatisfy(\.isFinite)
+                    ? xyzToCamera.map { ($0 * 10000).rounded() / 10000 } : nil,
             ),
         )
 

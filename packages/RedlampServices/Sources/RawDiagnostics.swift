@@ -9,6 +9,11 @@ public extension ImageDecoder {
     static func identify(_ url: URL) -> RawFileIdentity? {
         SupportedFormats.isRaw(url) ? RawDecoder.identify(url) : nil
     }
+
+    /// "LibRaw 0.22.2".
+    static var rawDecoderVersion: String {
+        "LibRaw \(String(cString: libraw_version()))"
+    }
 }
 
 extension RawDecoder {
@@ -26,7 +31,7 @@ extension RawDecoder {
     static func identity(_ raw: UnsafeMutablePointer<libraw_data_t>, url: URL) -> RawFileIdentity {
         var decoderInfo = libraw_decoder_info_t()
         let decoder = libraw_get_decoder_info(raw, &decoderInfo) == 0
-            ? decoderInfo.decoder_name.map { String(cString: $0) } : nil
+            ? decoderInfo.decoder_name.map { String(cString: $0).replacingOccurrences(of: "()", with: "") } : nil
         let idata = raw.pointee.idata
         let sizes = raw.pointee.sizes
         let other = raw.pointee.other

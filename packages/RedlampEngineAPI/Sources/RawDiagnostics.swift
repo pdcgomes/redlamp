@@ -68,11 +68,24 @@ public struct RawFileIdentity: Codable, Sendable, Hashable {
         self.refusal = refusal
     }
 
-    /// The camera as people know it: LibRaw's normalised names, else the file's own.
+    /// The camera as people know it: LibRaw's normalised make, and `displayModel`.
     public var camera: String {
-        let make = normalizedMake ?? make ?? "Unknown"
-        let model = normalizedModel ?? model ?? "camera"
-        return model.localizedCaseInsensitiveContains(make) ? model : "\(make) \(model)"
+        let maker = normalizedMake ?? make ?? "Unknown"
+        return displayModel.localizedCaseInsensitiveContains(maker) ? displayModel : "\(maker) \(displayModel)"
+    }
+
+    /// LibRaw's normalised model without a format suffix, unless it names something other than
+    /// the file's own model (as it does for Hasselblad's 3FR and FFF files).
+    public var displayModel: String {
+        guard let model else { return normalizedModel ?? "camera" }
+        guard var normalized = normalizedModel else { return model }
+        for suffix in ["-3FR", "-FFF"] where normalized.hasSuffix(suffix) {
+            normalized.removeLast(suffix.count)
+        }
+        func start(_ name: String) -> String {
+            String(name.lowercased().filter { $0.isLetter || $0.isNumber }.prefix(2))
+        }
+        return start(normalized) == start(model) ? normalized : model
     }
 }
 
@@ -113,11 +126,15 @@ public struct DecodeMeasurements: Codable, Sendable, Hashable {
     /// The share of photosites at the clip point.
     public var clippedShare: Double?
     public var darkEdges: DarkEdges?
+    /// XYZ → camera RGB, row-major, rounded to four places; nil when the camera has no matrix.
+    public var colorMatrix: [Double]?
 
     public init(
         black: Double, opticalBlack: Double? = nil, opticalBlackNoise: Double? = nil, darkPercentile: Double? = nil,
         nominalWhite: Double, white: Double, clippedShare: Double? = nil, darkEdges: DarkEdges? = nil,
+        colorMatrix: [Double]? = nil,
     ) {
+        self.colorMatrix = colorMatrix
         self.black = black
         self.opticalBlack = opticalBlack
         self.opticalBlackNoise = opticalBlackNoise
@@ -150,4 +167,7 @@ public protocol RawFileInspecting: Sendable {
     /// The largest JPEG the file embeds, which is the camera's own rendering, upright and at
     /// most `maxLongEdge` on its long edge.
     func cameraPreview(of url: URL, maxLongEdge: Int) -> CGImage?
+
+    /// The raw decoder and its version, such as "LibRaw 0.22.2".
+    var rawDecoderVersion: String { get }
 }
