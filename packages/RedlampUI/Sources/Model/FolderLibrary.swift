@@ -178,8 +178,7 @@ public final class FolderLibrary {
                 }
             } else {
                 let found = try? await scheduler.run(.onScreen) {
-                    defer { SidecarStore.removeLeftovers(in: folder) }
-                    return try LibraryItem.items(FolderScanner.list(folder))
+                    try LibraryItem.items(FolderScanner.list(folder))
                 }
                 guard self.generation == generation else { return }
                 isListing = false
@@ -191,6 +190,7 @@ public final class FolderLibrary {
                 probeSidecars(in: 0 ..< items.count, generation: generation)
                 opened(items)
                 refreshStacks()
+                _ = try? await scheduler.run(.background) { SidecarStore.removeLeftovers(in: folder) }
             }
         }
     }

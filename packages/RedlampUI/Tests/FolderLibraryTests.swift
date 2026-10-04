@@ -63,8 +63,14 @@ struct FolderLibraryTests {
 
         let library = FolderLibrary()
         var opened = false
-        library.open(folder) { _ in opened = true }
+        var listedBeforeSweeping = false
+        library.open(folder) { _ in
+            opened = true
+            listedBeforeSweeping = FileManager.default.fileExists(atPath: stale.path)
+        }
         try await eventually { opened }
+        #expect(listedBeforeSweeping, "the sweep runs in the background, after the listing")
+        try await eventually { !FileManager.default.fileExists(atPath: stale.path) }
         #expect(!FileManager.default.fileExists(atPath: stale.path))
         #expect(FileManager.default.fileExists(atPath: recent.path), "it may still be being written")
     }
