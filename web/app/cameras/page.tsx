@@ -18,13 +18,14 @@ export const metadata: Metadata = {
 const link = "text-paper underline decoration-hairline-strong underline-offset-3 hover:decoration-paper";
 
 export default function CamerasPage() {
-  const { libraw, verified, evaluated, makes } = cameras();
+  const { libraw, verified, bench, evaluated, makes } = cameras();
   const supported = makes.reduce((sum, make) => sum + make.models.length, 0);
   const commit = sourceCommit();
   // A camera verified in more than one format has a row for each.
   const verifiedCameras = new Set(verified.map((camera) => camera.camera)).size;
   const stats = [
     { value: verifiedCameras, label: "verified by Redlamp's decode tests" },
+    { value: bench.length, label: "camera modes tested with the camera bench" },
     { value: evaluated.length, label: "developed in Redlamp's evaluation sets" },
     { value: supported.toLocaleString("en-GB"), label: `read by LibRaw ${libraw}` },
   ];
@@ -49,11 +50,12 @@ export default function CamerasPage() {
             <a href={site.rawPixls} className={link}>
               raw.pixls.us
             </a>{" "}
-            come first, then the ones its evaluation sets develop, then everything LibRaw reads.
+            come first, then camera modes tested with Redlamp&apos;s camera bench, then the ones its evaluation sets
+            develop, then everything LibRaw reads.
           </p>
         </div>
 
-        <dl className="surface mt-10 grid gap-6 p-6 sm:grid-cols-3 sm:p-8">
+        <dl className="surface mt-10 grid gap-6 p-6 sm:grid-cols-2 sm:p-8 lg:grid-cols-4">
           {stats.map((stat) => (
             <div key={stat.label} className="flex flex-col-reverse">
               <dt className="mt-2 text-[14px] text-mute">{stat.label}</dt>
@@ -118,6 +120,55 @@ export default function CamerasPage() {
           </table>
         </div>
 
+        {bench.length > 0 ? (
+          <>
+            <div className="mt-16 max-w-3xl">
+              <h2 className="font-display text-[24px] leading-snug">Tested with the camera bench</h2>
+              <p className="mt-3 text-[15px] leading-relaxed text-mute">
+                The camera bench checks how each raw decodes and compares Redlamp&apos;s rendering with the JPEG the
+                camera saved inside it, on the Mac the photos are on; only the measurements are sent. Evidence is
+                counted per camera mode, since one body&apos;s raw modes can fail separately. Tested by photographers
+                means three photographers and ten photos covering base and high ISO, a portrait frame, clipped
+                highlights and warm light, with nothing failing; a problem is reported once two photographers see it.{" "}
+                <a href={`${site.github}/blob/main/docs/camera-bench.md`} className={link}>
+                  How the bench works
+                </a>
+              </p>
+            </div>
+            <div className="surface mt-6 overflow-hidden">
+              <table className="w-full border-collapse text-left text-[14px]">
+                <thead className="hidden text-[11px] tracking-[0.12em] text-dim uppercase md:table-header-group">
+                  <tr className="border-b border-hairline">
+                    <th className="py-3 pr-3 pl-5 font-semibold">Camera</th>
+                    <th className="px-3 py-3 font-semibold">Evidence</th>
+                    <th className="px-3 py-3 font-semibold">Photos</th>
+                    <th className="py-3 pr-5 pl-3 font-semibold">Problems</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bench.map((camera) => (
+                    <tr key={`${camera.camera} ${camera.mode}`} className="border-b border-hairline align-top last:border-b-0">
+                      <td className="py-3.5 pr-3 pl-5">
+                        <p className="font-medium text-paper">{camera.camera}</p>
+                        <p className="mt-1 text-[13px] text-mute">{camera.mode}</p>
+                        <p className="mt-1 text-[13px] text-mute md:hidden">
+                          {camera.evidence} · {camera.photos} {camera.photos === 1 ? "photo" : "photos"}
+                        </p>
+                        {camera.problems ? <p className="mt-1 text-[13px] text-mute md:hidden">{camera.problems}</p> : null}
+                      </td>
+                      <td className="hidden px-3 py-3.5 whitespace-nowrap text-mute md:table-cell">{camera.evidence}</td>
+                      <td className="hidden px-3 py-3.5 text-mute md:table-cell">
+                        {camera.photos} from {camera.photographers} {camera.photographers === 1 ? "photographer" : "photographers"}
+                      </td>
+                      <td className="hidden py-3.5 pr-5 pl-3 text-[13px] text-mute md:table-cell">{camera.problems ?? ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : null}
+
         <div className="mt-16 max-w-3xl">
           <h2 className="font-display text-[24px] leading-snug">In an evaluation set</h2>
           <p className="mt-3 text-[15px] leading-relaxed text-mute">
@@ -155,7 +206,8 @@ export default function CamerasPage() {
         <div className="surface mt-14 flex flex-col gap-3 p-6 sm:p-8">
           <h2 className="font-display text-[20px] leading-snug">Is your camera missing from the verified list?</h2>
           <p className="max-w-3xl text-[15px] leading-relaxed text-mute">
-            A CC0 sample is how a camera gets into the tests. Upload one to{" "}
+            Test it with Redlamp: Help › Test Your Camera… runs the camera bench on your own photos, which stay on
+            your Mac, and sends only the measurements. A CC0 sample is how a camera gets into the tests: upload one to{" "}
             <a href={site.rawPixls} className={link}>
               raw.pixls.us
             </a>{" "}
@@ -170,8 +222,8 @@ export default function CamerasPage() {
             <a href={`${site.github}/blob/main/docs/cameras.md`} className="underline decoration-hairline-strong underline-offset-3 hover:text-mute">
               docs/cameras.md
             </a>
-            {commit ? ` at commit ${commit}` : ""}, which scripts/camera-list.py generates from the decode tests and
-            LibRaw&apos;s camera list.
+            {commit ? ` at commit ${commit}` : ""}, which scripts/camera-list.py generates from the decode tests, the
+            camera bench&apos;s evidence and LibRaw&apos;s camera list.
           </p>
         </div>
       </div>
