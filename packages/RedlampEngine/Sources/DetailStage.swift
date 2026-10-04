@@ -310,8 +310,9 @@ final class DetailStage {
     /// A region and its overview, and the same for a comparison render.
     private static let maximumEntries = 4
     /// The largest work area whose ladder is cached, 18 bytes a texel: a 5K display's view at
-    /// 1:1 with its margins. Larger areas run noise reduction and the ladder on every render.
-    static let ladderCacheTexels = 16 << 20
+    /// 1:1 with its margins. Larger areas keep only the noise-reduced source, 8 bytes a texel, out
+    /// of the scratch budget, and take the ladder on every render.
+    var ladderCacheTexels = 16 << 20
     /// Per work area: a comparison's two edits.
     private static let maximumEntriesPerArea = 2
 
@@ -461,7 +462,13 @@ final class DetailStage {
             session: key.session, work: work, denoise: key.denoise, local: key.local.uses(3) ? key.local : nil,
         ) : nil
         var ladder = ladderKey.map { LadderMeasures(ladder: ladderCache.ladder($0)) }
-        let cachesLadder = cache && work.size.x * work.size.y <= Self.ladderCacheTexels
+        let cachesLadder = cache && work.size.x * work.size.y <= ladderCacheTexels
+        // Kept only where it leaves at least half the scratch budget for the tiles.
+        let keepsDenoised = cache && !cachesLadder && key.denoise != nil && ladder != nil
+            && Self.allocatedTexels(work.size) * 8 <= scratchBudget / 2
+        if keepsDenoised, ladder?.ladder == nil, let ladderKey {
+            ladder?.denoised = ladderCache.denoised(ladderKey)
+        }
         var measures = key.sharpen.map { _ in
             cachedSharpenMeasures(session, work: work, sigma: sigma, ladder: ladderKey)
         }
@@ -472,7 +479,13 @@ final class DetailStage {
         } else {
             key.denoise == nil && key.contrast == nil && key.local.isEmpty && measures?.analysis != nil
         }
-        scratchLimit = tileLimit(passes, measures: measures, ladder: ladder)
+        // The noise-reduced source a large area keeps comes out of the scratch budget, so the
+        // stage holds no more than it would without it.
+        let keeping = keepsDenoised && ladder?.ladder == nil && ladder?.denoised == nil
+        scratchLimit = tileLimit(
+            passes, measures: measures, ladder: ladder,
+            reserved: keeping ? Self.allocatedTexels(work.size) * 8 : 0,
+        )
         let tiles = appliesOnly ? [Tile(whole: work)] : tileLayout(
             work,
             halo: passes.halo(level: work.level, measures: measures, ladder: ladder),
@@ -490,6 +503,13 @@ final class DetailStage {
             if ladder != nil, ladder?.ladder == nil {
                 ladder?.target = try cachesLadder
                     ? makeLadder(work, denoised: key.denoise != nil) : scratchLadder(work, denoised: key.denoise != nil)
+                if keepsDenoised {
+                    if ladder?.denoised == nil {
+                        ladder?.denoisedTarget = try makeWorkTexture(.rgba16Float, work)
+                    }
+                    let source = ladder?.denoised ?? ladder?.denoisedTarget
+                    ladder?.target?.denoised = source
+                }
             }
             guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
             encoder.label = "Detail"
@@ -505,6 +525,9 @@ final class DetailStage {
             if cachesLadder, ladder != nil, ladder?.ladder == nil {
                 ladder?.target = try makeLadder(work, denoised: key.denoise != nil)
             }
+            if keepsDenoised, ladder?.ladder == nil, ladder?.denoised == nil {
+                ladder?.denoisedTarget = try makeWorkTexture(.rgba16Float, work)
+            }
             try encodeTiles(
                 tiles, passes, work: work, into: texture, measures: measures, ladder: ladder, commands: commands,
             )
@@ -515,6 +538,10 @@ final class DetailStage {
         if cachesLadder, let ladderKey, ladder?.ladder == nil, let target = ladder?.target {
             ladderCache.store(target, key: ladderKey, owner: session)
             target.textures.forEach { encoding?.cached.insert(ObjectIdentifier($0)) }
+        }
+        if let ladderKey, let denoised = ladder?.denoisedTarget {
+            ladderCache.store(denoised: denoised, key: ladderKey, owner: session)
+            encoding?.cached.insert(ObjectIdentifier(denoised))
         }
 
         let levelWidth = Float(max(1, session.pyramid.width >> work.level))
@@ -618,7 +645,7 @@ final class DetailStage {
         /// the ladder; the final pass reads them at the texel, and the analysis's gradient.
         private func decomposedHalo(level: Int, measures: SharpenMeasures?, ladder: LadderMeasures?) -> Int {
             let cached = ladder?.ladder != nil
-            let source = cached ? 0 : denoise?.reach(level: level) ?? 0
+            let source = cached || ladder?.denoised != nil ? 0 : denoise?.reach(level: level) ?? 0
             let decomposition = cached ? 0 : source + Ladder.reach
             var reach = decomposition
             if let sigma = sharpen?.sigma(atLevel: level) {
@@ -640,12 +667,12 @@ final class DetailStage {
                 if !local.isEmpty {
                     slots.formUnion(rgba(6))
                 }
-                if denoise != nil {
+                if denoise != nil, ladder?.ladder != nil || ladder?.denoised == nil {
                     slots.formUnion(rgba(4))
                 }
                 if ladder?.ladder == nil {
                     slots.formUnion([1, 2, 3].map { ScratchSlot(format: .r32Float, index: $0) })
-                    if denoise != nil {
+                    if denoise != nil, ladder?.denoised == nil {
                         slots.formUnion(rgba(0, 1, 2, 3, 8))
                     }
                 }
@@ -704,14 +731,21 @@ final class DetailStage {
         Set(scratch.flatMap { format, textures in textures.keys.map { ScratchSlot(format: format, index: $0) } })
     }
 
+    /// Metal allocates textures in 64-texel blocks each way.
+    static func allocatedTexels(_ size: SIMD2<Int>) -> Int {
+        (size.x + 63) / 64 * 64 * ((size.y + 63) / 64 * 64)
+    }
+
     /// The most texels a tile of `passes` may cover, extent included, so the scratch textures
-    /// they use, at that size, and those held for other passes fit the budget.
-    func tileLimit(_ passes: Passes, measures: SharpenMeasures?, ladder: LadderMeasures? = nil) -> Int {
+    /// they use, at that size, those held for other passes and `reserved` bytes fit the budget.
+    func tileLimit(
+        _ passes: Passes, measures: SharpenMeasures?, ladder: LadderMeasures? = nil, reserved: Int = 0,
+    ) -> Int {
         let slots = passes.scratchSlots(measures: measures, ladder: ladder)
         let others = scratch.flatMap { format, textures in
             textures.filter { !slots.contains(ScratchSlot(format: format, index: $0.key)) }.values
         }
-        let available = scratchBudget - others.reduce(0) { $0 + $1.allocatedSize }
+        let available = scratchBudget - reserved - others.reduce(0) { $0 + $1.allocatedSize }
         return max(available, 0) / slots.reduce(0) { $0 + $1.bytesPerTexel }
     }
 
@@ -854,10 +888,7 @@ final class DetailStage {
                 }
             }
         }
-        /// Metal allocates textures in 64-texel blocks each way.
-        func allocated(_ size: SIMD2<Int>) -> Int {
-            (size.x + 63) / 64 * 64 * ((size.y + 63) / 64 * 64)
-        }
+        let allocated = Self.allocatedTexels
         guard allocated(work.size) > limit else { return [Tile(whole: work)] }
         let candidates = (1 ... 16).flatMap { columns in (1 ... 16).map { layout(columns, $0) } }.filter { tiles in
             allocated(tiles.map(\.extent.size).reduce(.zero, simd_max)) <= limit
@@ -914,7 +945,8 @@ final class DetailStage {
             }
             var ladder: LadderMeasures?
             if let wholeLadder {
-                let tileLadder = try scratchLadder(area, denoised: passes.denoise != nil)
+                let kept = wholeLadder.ladder == nil ? wholeLadder.denoised : nil
+                var tileLadder = try scratchLadder(area, denoised: passes.denoise != nil && kept == nil)
                 if let cached = wholeLadder.ladder {
                     guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
                     for (texture, copy) in zip(cached.textures, tileLadder.textures) {
@@ -928,6 +960,10 @@ final class DetailStage {
                     }
                     blit.endEncoding()
                     ladder = LadderMeasures(ladder: tileLadder)
+                } else if let kept {
+                    tileLadder.denoised = kept
+                    tileLadder.denoisedOrigin = tile.extent.origin
+                    ladder = LadderMeasures(target: tileLadder, denoised: kept)
                 } else {
                     ladder = LadderMeasures(target: tileLadder)
                 }
@@ -940,6 +976,11 @@ final class DetailStage {
             guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
             let inside = tile.interior.origin &- tile.extent.origin
             blit.copy(from: rendered, origin: inside, size: tile.interior.size, to: output, at: tile.interior.origin)
+            if let whole = wholeLadder?.denoisedTarget, let tileDenoised = ladder?.target?.denoised {
+                blit.copy(
+                    from: tileDenoised, origin: inside, size: tile.interior.size, to: whole, at: tile.interior.origin,
+                )
+            }
             if let whole = wholeLadder?.target, let tileLadder = ladder?.target {
                 for (texture, copy) in zip(tileLadder.textures, whole.textures) {
                     blit.copy(

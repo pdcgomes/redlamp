@@ -254,6 +254,47 @@ struct DetailDecompositionTests {
         }
     }
 
+    /// Areas too large for their ladder keep the noise-reduced source: drags render what a fresh
+    /// stage renders, whole and in tiles, and those that leave noise reduction alone make only the
+    /// output once one has sized the scratch to their tiles.
+    @Test(arguments: [false, true])
+    func `drags over a large area render what a fresh stage renders`(tiled: Bool) throws {
+        let session = try base.makeSession(.bayer, width: 1024, height: 768, signal: Self.smooth)
+        let stage = DetailStage(device: base.device, kernels: base.kernels)
+        stage.ladderCacheTexels = 0
+        if tiled {
+            stage.scratchBudget = 118 * 300_000
+        }
+        var recipe = Self.everyPass
+        recipe.masks = [base.leftHalf(.localClarity, 40)]
+        _ = try base.processAndRead(stage, session, recipe)
+        #expect(stage.ladderCache.heldTextures.count == 1)
+        let drags: [(ParameterID, Double, keepsSource: Bool)] = [
+            (.texture, 60, true), (.clarity, -30, true), (.sharpenAmount, 120, true), (.sharpenMasking, 40, true),
+            (.sharpenRadius, 2, false), (.noiseLuminance, 55, false), (.texture, -40, true),
+        ]
+        var settled = false
+        for (parameter, value, keepsSource) in drags {
+            recipe[parameter] = value
+            let before = stage.allocated.count
+            let cached = try base.processAndRead(stage, session, recipe).texels
+            defer { settled = keepsSource }
+            if tiled {
+                #expect(stage.tileCount >= 2, "\(parameter): \(stage.tileCount) tile")
+            }
+            let fresh = try base.processAndRead(
+                DetailStage(device: base.device, kernels: base.kernels),
+                session,
+                recipe,
+            )
+            let worst = zip(cached, fresh.texels).map { simd_abs($0 - $1).max() }.max() ?? 0
+            #expect(worst == 0, "\(parameter): \(worst)")
+            if keepsSource, settled || !tiled {
+                #expect(stage.allocated.count - before == 1, "\(parameter) made more than its output")
+            }
+        }
+    }
+
     // MARK: - Tiles and regions
 
     /// Tiles overlap by as much as the passes read, from scratch and from the caches, so they

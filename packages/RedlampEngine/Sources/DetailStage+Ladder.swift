@@ -15,6 +15,8 @@ struct Ladder {
 
     /// The noise-reduced source, when noise reduction runs; otherwise the pyramid is the source.
     var denoised: (any MTLTexture)?
+    /// Where the work area starts in `denoised`, which may cover a larger one.
+    var denoisedOrigin = SIMD2<Int>.zero
     /// Band j in channel j.
     var bands: any MTLTexture
     var residual: any MTLTexture
@@ -25,7 +27,7 @@ struct Ladder {
 
     /// The source the ladder was taken from.
     func source(_ session: ImageSession, work: DetailStage.WorkArea) -> DetailStage.Source {
-        denoised.map { DetailStage.Source(texture: $0, origin: .zero, level: 0) }
+        denoised.map { DetailStage.Source(texture: $0, origin: denoisedOrigin, level: 0) }
             ?? DetailStage.Source(texture: session.pyramid, origin: work.origin, level: work.level)
     }
 
@@ -52,15 +54,20 @@ struct LadderKey: Hashable {
     var local: LocalDetail?
 }
 
-/// A work area's ladder: given, it is read; otherwise it is taken into `target`.
+/// A work area's ladder: given, it is read; otherwise it is taken into `target`, from `denoised`
+/// when that is given rather than run, and the noise-reduced source is kept in `denoisedTarget`
+/// when given.
 struct LadderMeasures {
     var ladder: Ladder?
     var target: Ladder?
+    var denoised: (any MTLTexture)?
+    var denoisedTarget: (any MTLTexture)?
 }
 
 /// The ladder of the view and its overview, so dragging Texture, Clarity, sharpening's Amount,
 /// Detail or Masking, or a mask's amounts, reruns only the final pass, and dragging Radius only
-/// sharpening's analysis.
+/// sharpening's analysis. Areas too large for their ladder keep only the noise-reduced source,
+/// so those drags rerun the ladder but not noise reduction.
 ///
 /// Owned by the engine's render queue, through `DetailStage`.
 final class LadderCache {
@@ -70,7 +77,12 @@ final class LadderCache {
         var key: LadderKey
         /// Keeps the session alive so its identifier can't be reused while cached.
         var owner: ImageSession
-        var ladder: Ladder
+        var ladder: Ladder?
+        var denoised: (any MTLTexture)?
+
+        var textures: [any MTLTexture] {
+            ladder?.textures ?? denoised.map { [$0] } ?? []
+        }
     }
 
     private let residency: DetailResidency
@@ -81,20 +93,37 @@ final class LadderCache {
     }
 
     var heldTextures: [any MTLTexture] {
-        entries.flatMap(\.ladder.textures)
+        entries.flatMap(\.textures)
     }
 
     func ladder(_ key: LadderKey) -> Ladder? {
+        entry(key)?.ladder
+    }
+
+    /// The noise-reduced source kept for `key` in place of its ladder.
+    func denoised(_ key: LadderKey) -> (any MTLTexture)? {
+        entry(key)?.denoised
+    }
+
+    private func entry(_ key: LadderKey) -> Entry? {
         guard let index = entries.firstIndex(where: { $0.key == key }) else { return nil }
         let entry = entries.remove(at: index)
-        guard entry.ladder.textures.allSatisfy({ residency.wake($0) }) else { return nil }
+        guard entry.textures.allSatisfy({ residency.wake($0) }) else { return nil }
         entries.append(entry)
-        return entry.ladder
+        return entry
     }
 
     func store(_ ladder: Ladder, key: LadderKey, owner: ImageSession) {
-        ladder.textures.forEach { residency.wake($0) }
-        entries.append(Entry(key: key, owner: owner, ladder: ladder))
+        store(Entry(key: key, owner: owner, ladder: ladder))
+    }
+
+    func store(denoised: any MTLTexture, key: LadderKey, owner: ImageSession) {
+        store(Entry(key: key, owner: owner, denoised: denoised))
+    }
+
+    private func store(_ entry: Entry) {
+        entry.textures.forEach { residency.wake($0) }
+        entries.append(entry)
         if entries.count > Self.maximumEntries {
             entries.removeFirst()
         }
@@ -102,7 +131,7 @@ final class LadderCache {
 
     /// Drops the entries holding any of `textures`, which were never rendered.
     func forget(_ textures: Set<ObjectIdentifier>) {
-        entries.removeAll { $0.ladder.textures.contains { textures.contains(ObjectIdentifier($0)) } }
+        entries.removeAll { $0.textures.contains { textures.contains(ObjectIdentifier($0)) } }
     }
 
     func removeAll() {
@@ -236,7 +265,7 @@ extension DetailStage {
             ladder = given
         } else {
             guard let target = measured.target else { throw EngineError.renderFailed("no textures for the ladder") }
-            if let denoise = passes.denoise, let denoised = target.denoised {
+            if measured.denoised == nil, let denoise = passes.denoise, let denoised = target.denoised {
                 try encodeDenoise(
                     session: session, settings: denoise, work: work, local: amounts, into: denoised, encoder: encoder,
                 )

@@ -289,14 +289,18 @@ struct EngineMemoryTests {
     }
 
     /// A 24 MP frame at 1:1 after its Fit view, then a new Amount, as the editor renders them:
-    /// as few tiles as the scratch the passes use allows, since each tile costs a little.
+    /// as few tiles as the scratch the passes use allows, since each tile costs a little. Process
+    /// 9: at process 10 the frame keeps its noise-reduced source out of the scratch budget
+    /// (`DetailDecompositionTests`).
     @Test func `a 24 MP frame at 1:1 takes as few tiles as its passes' scratch allows`() throws {
         let session = try helpers.makeSession(.bayer, width: 6000, height: 4000)
         let stage = DetailStage(device: helpers.device, kernels: helpers.kernels)
-        _ = try render(stage, session, Self.everyPass, outputSize: PixelSize(width: 3000, height: 2000))
-        _ = try render(stage, session, Self.everyPass)
+        var recipe = Self.everyPass
+        recipe.processVersion = 9
+        _ = try render(stage, session, recipe, outputSize: PixelSize(width: 3000, height: 2000))
+        _ = try render(stage, session, recipe)
         #expect(stage.tileCount == 4)
-        var changed = Self.everyPass
+        var changed = recipe
         changed[.sharpenAmount] = 90
         _ = try render(stage, session, changed)
         #expect(stage.tileCount == 4)

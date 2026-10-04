@@ -137,8 +137,9 @@ struct W4Baseline {
                 buffers.last?.waitUntilCompleted()
                 let times = buffers.dropFirst(8).map { ($0.gpuEndTime - $0.gpuStartTime) * 1000 }.sorted()
                 lines.append(String(
-                    format: "  %@: median %.2f ms, min %.2f, p90 %.2f  (%@)", label, times[times.count / 2],
-                    times[0], times[Int(Double(times.count) * 0.9)], Self.load(),
+                    format: "  %@: median %.2f ms, min %.2f, p90 %.2f, %d MB held, %d tiles  (%@)", label,
+                    times[times.count / 2], times[0], times[Int(Double(times.count) * 0.9)],
+                    stage.heldTextures.reduce(0) { $0 + $1.allocatedSize } >> 20, stage.tileCount, Self.load(),
                 ))
                 try print(#require(lines.last))
             }

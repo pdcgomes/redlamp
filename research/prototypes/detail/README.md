@@ -61,6 +61,20 @@ the one-minute load average was 27–31 throughout. Drags change the slider each
 | Radius drag | 6.2 → 2.8 | 36.4 → 48.3 | 6.8 → 3.4 |
 | Luminance drag | 5.8 → 9.7 | 41.1 → 58.3 | 5.3 → 10.8 |
 
-At fit level 0 the work area is 24 megapixels, above `DetailStage.ladderCacheTexels` (16M), so no ladder
-is cached and every drag renders the stage afresh. Caching it there (18 bytes a texel, 440 MB) takes the
-stage to 1438 MB against `EngineMemoryTests`' 1200 MB.
+At fit level 0 the work area is 24 megapixels, above `DetailStage.ladderCacheTexels` (16M), so the stage
+keeps only the noise-reduced source (8 bytes a texel, taken out of the scratch budget, so the stage stays
+within `EngineMemoryTests`' 1200 MB) and takes the ladder on each drag. Measured after that change (load
+32–41, process 9 measured again beside it):
+
+| Fit level 0, ms | Process 9 | Process 10 |
+| --- | --- | --- |
+| Texture drag | 21.0 | 11.6 |
+| Texture drag with Luminance 50 | 36.7 | 12.1 |
+| Clarity drag | 20.5 | 12.8 |
+| Amount drag | 19.4 | 11.9 |
+| Masking drag | 19.6 | 11.3 |
+| Radius drag | 36.2 | 26.1 |
+| Luminance drag | 35.3 | 62.1 |
+
+Each drag runs in 3 tiles: the ladder of the whole frame, the final pass, and copies of the cached
+sharpening analysis into each tile and of each tile into the output.
