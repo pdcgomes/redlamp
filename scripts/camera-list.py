@@ -9,7 +9,8 @@ Three lists, between the document's `cameras:begin` and `cameras:end` markers:
   - in an evaluation set: bodies whose CC0 samples the look-development set
     (research/look-dev/manifest.json) and the dust evaluation (`mise run fixtures-shoots`) develop
   - supported by LibRaw: every camera in the vendored LibRaw's own list (src/tables/cameralist.cpp),
-    at the version config/vendored-libs.json pins
+    at the version config/vendored-libs.json pins and with the options scripts/vendor-libraw.sh
+    builds it with (without the GoPro SDK or X3F tools, their cameras aren't listed)
 
     scripts/camera-list.py            # dry run: is the document current?
     scripts/camera-list.py --apply    # rewrite the generated block
@@ -47,11 +48,35 @@ def libraw_version():
     return json.loads((ROOT / "config/vendored-libs.json").read_text())["LibRaw"]["version"]
 
 
+def libraw_defines():
+    """The macros Redlamp's LibRaw build defines, which decide which cameras its list includes."""
+    return set(re.findall(r"-D(\w+)", (ROOT / "scripts/vendor-libraw.sh").read_text()))
+
+
+def compiled(source, defined):
+    """The lines of a C source that its #ifdef, #ifndef, #else and #endif keep for `defined`."""
+    kept, conditions = [], []
+    for line in source.splitlines():
+        directive = re.match(r"\s*#\s*(ifdef|ifndef|if|else|endif)\b\s*(\w*)", line)
+        if not directive:
+            if all(conditions):
+                kept.append(line)
+            continue
+        word, name = directive.groups()
+        if word == "endif":
+            conditions.pop()
+        elif word == "else":
+            conditions[-1] = not conditions[-1]
+        else:
+            conditions.append(word == "if" or (name in defined) == (word == "ifdef"))
+    return "\n".join(kept)
+
+
 def libraw_cameras(version):
     """LibRaw's camera list, from its source if it's here, else from the document; None if neither has it."""
     source = ROOT / f"vendor/cache/LibRaw-{version}/src/tables/cameralist.cpp"
     if source.exists():
-        return re.findall(r'^\s*"(.*?)",', source.read_text(), re.M)
+        return re.findall(r'^\s*"(.*?)",', compiled(source.read_text(), libraw_defines()), re.M)
     current = DOCUMENT.read_text() if DOCUMENT.exists() else ""
     if f"## Supported by LibRaw {version}\n" not in current:
         return None
