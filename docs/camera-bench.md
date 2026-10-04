@@ -12,7 +12,7 @@ redlamp camera-bench ~/Pictures/2026 -o report.json --pairs /tmp/pairs
 
 Folders are searched for raws. Photos are grouped by camera mode, and up to eight per mode are chosen to cover the evidence checklist below (`--per-mode`, or `--all` for every file). `-o` writes the report in the format the app sends ([`camera-bench.schema.json`](camera-bench.schema.json)); `--pairs` writes each photo's rendering beside the camera's. The command exits with status 2 when a check fails.
 
-In the app, Help › Test Your Camera… opens the Camera Bench window, which runs the same checks and asks one question per camera mode before anything is sent.
+In the app, Help › Test Your Camera… opens the Camera Bench window, which runs the same checks and asks one question per camera mode before anything is sent. [redlamp.app/cameras/test](https://redlamp.app/cameras/test) walks through it with screenshots.
 
 ## Camera modes
 

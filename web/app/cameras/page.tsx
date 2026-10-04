@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { CameraList } from "@/components/sections/CameraList";
+import { LinkButton } from "@/components/ui/Buttons";
 import { cameras, sourceCommit } from "@/lib/repo";
 import { site } from "@/lib/site";
 
@@ -67,6 +68,21 @@ export default function CamerasPage() {
           ))}
         </dl>
 
+        <div className="surface mt-6 flex flex-col gap-6 p-6 sm:p-8 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-3xl">
+            <h2 className="font-display text-[22px] leading-snug text-paper">Help test your camera</h2>
+            <p className="mt-2 text-[15px] leading-relaxed text-mute">
+              Redlamp&apos;s tests check {verifiedCameras} cameras on CC0 samples, and LibRaw reads{" "}
+              {supported.toLocaleString("en-GB")}. Every other camera depends on people who own one. The camera bench in
+              Redlamp checks yours on your Mac, against the JPEG your camera saved inside each raw file, and sends only
+              the measurements, which add to this page. It takes a few minutes, with photos you already have.
+            </p>
+          </div>
+          <LinkButton href="/cameras/test" variant="primary" className="shrink-0 self-start lg:self-center">
+            Test your camera
+          </LinkButton>
+        </div>
+
         <div className="mt-16 max-w-3xl">
           <h2 className="font-display text-[24px] leading-snug">Verified</h2>
           <p className="mt-3 text-[15px] leading-relaxed text-mute">
@@ -133,9 +149,14 @@ export default function CamerasPage() {
                 counted per camera mode, since one body&apos;s raw modes can fail separately. Tested by photographers
                 means three photographers and ten photos covering base and high ISO, a portrait frame, clipped
                 highlights and warm light, with nothing failing; a problem is reported once two photographers see it.{" "}
+                <a href="/cameras/test" className={link}>
+                  Test your camera
+                </a>{" "}
+                or read{" "}
                 <a href={`${site.github}/blob/main/docs/camera-bench.md`} className={link}>
-                  How the bench works
+                  how the bench works
                 </a>
+                .
               </p>
             </div>
             {benchChecked.length > 0 ? (
@@ -228,8 +249,11 @@ export default function CamerasPage() {
         <div className="surface mt-14 flex flex-col gap-3 p-6 sm:p-8">
           <h2 className="font-display text-[20px] leading-snug">Is your camera missing from the verified list?</h2>
           <p className="max-w-3xl text-[15px] leading-relaxed text-mute">
-            Test it with Redlamp: Help › Test Your Camera… runs the camera bench on your own photos, which stay on
-            your Mac, and sends only the measurements. A CC0 sample is how a camera gets into the tests: upload one to{" "}
+            <a href="/cameras/test" className={link}>
+              Test it with Redlamp
+            </a>
+            : Help › Test Your Camera… runs the camera bench on your own photos, which stay on your Mac, and sends only
+            the measurements. A CC0 sample is how a camera gets into the tests: upload one to{" "}
             <a href={site.rawPixls} className={link}>
               raw.pixls.us
             </a>{" "}

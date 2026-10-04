@@ -24,6 +24,9 @@ export function SiteFooter() {
           <a className="text-mute hover:text-paper" href="/cameras">
             Supported cameras
           </a>
+          <a className="text-mute hover:text-paper" href="/cameras/test">
+            Test your camera
+          </a>
           <a className="text-mute hover:text-paper" href="/performance">
             Performance
           </a>
