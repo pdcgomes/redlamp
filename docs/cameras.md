@@ -17,34 +17,34 @@ Is your camera missing from the verified list? Upload a CC0 sample to [raw.pixls
 
 ## Verified by the decode tests
 
-| Camera | Format | Sensor | Colour reference | Sample |
-| --- | --- | --- | --- | --- |
-| Apple iPhone 12 Pro | DNG | linear RGB | Yes | [IMG_1361.DNG](https://raw.pixls.us/data/Apple/iPhone%2012%20Pro/IMG_1361.DNG) |
-| Canon EOS 5D Mark IV | CR2 | Bayer RGGB | Yes | [Canon_EOS-5D-Mark-IV.CR2](https://raw.pixls.us/getfile.php/983/nice/Canon%20-%20EOS%205D%20Mark%20IV%20-%20RAW%20%283%3A2%29.CR2) |
-| Canon EOS R5 Mark II | CR3 | Bayer RGGB | Yes | [Canon_EOS-R5-Mark-II.CR3](https://raw.pixls.us/getfile.php/7882/nice/Canon%20-%20EOS%20R5%20Mark%20II%20-%20CRAW%20%283%3A2%29.CR3) |
-| Canon EOS R6 | CR3 | Bayer RGGB | Yes | [Canon_EOS_R6_RAW_ISO_100_nocrop_nodual.CR3](https://raw.pixls.us/data/Canon/EOS%20R6/Canon_EOS_R6_RAW_ISO_100_nocrop_nodual.CR3) |
-| DJI Mavic 3 Pro | DNG | Bayer GRBG | Yes | [DJI_FC4382.DNG](https://raw.pixls.us/getfile.php/7823/nice/DJI%20-%20FC4382%20-%2016bit%20%284%3A3%29.DNG) |
-| Fujifilm GFX 100 II | RAF | Bayer RGGB | Yes | [Fujifilm_GFX100-II.RAF](https://raw.pixls.us/getfile.php/7179/nice/Fujifilm%20-%20GFX100%20II%20-%2014bit%2014bit%20compressed%20%284%3A3%29.RAF) |
-| Fujifilm X-T3 | RAF | X-Trans | Yes | [AFXT2720.RAF](https://raw.pixls.us/data/Fujifilm/X-T3/AFXT2720.RAF) |
-| Fujifilm X-T5 | RAF | X-Trans | Yes | [Fujifilm_X-T5.RAF](https://raw.pixls.us/getfile.php/6122/nice/Fujifilm%20-%20X-T5%20-%2014bit%2014bit%20compressed%20%283%3A2%29.RAF) |
-| Google Pixel 4a | DNG | Bayer RGGB | Yes | [PXL_20201121_100251397.dng](https://raw.pixls.us/data/Google/Pixel%204a/PXL_20201121_100251397.dng) |
-| Hasselblad L2D-20c (DJI Mavic 3) | DNG | Bayer RGGB | Yes | [Hasselblad_L2D-20c.DNG](https://raw.pixls.us/getfile.php/5140/nice/Hasselblad%20-%20L2D-20c%20-%2016bit%20%284%3A3%29.DNG) |
-| Hasselblad X1D II 50C | 3FR | Bayer RGGB | Yes | [Hasselblad_X1D-II-50C.3FR](https://raw.pixls.us/getfile.php/3941/nice/Hasselblad%20-%20X1D%20II%2050C%20-%2016bit%20%284%3A3%29.3FR) |
-| Hasselblad X2D 100C | 3FR | Bayer RGGB | Yes | [Hasselblad_X2D-100C.3FR](https://raw.pixls.us/getfile.php/6565/nice/Hasselblad%20-%20X2D%20100C%20-%2016bit%20%284%3A3%29.3FR) |
-| Hasselblad X2D 100C | FFF | Bayer RGGB | Yes | [Hasselblad_X2D-100C.fff](https://raw.pixls.us/getfile.php/6566/nice/Hasselblad%20-%20X2D%20100C%20-%2016bit%20%284%3A3%29.fff) |
-| Leica M10-R | DNG | Bayer GBRG | Yes | [Leica_M10-R.DNG](https://raw.pixls.us/getfile.php/7853/nice/Leica%20-%20M10-R%20-%2016bit%20compressed%20%283%3A2%29.DNG) |
-| Nikon Z 6 | NEF | Bayer RGGB | Yes | [DSC_0750.NEF](https://raw.pixls.us/data/Nikon/Z%206/DSC_0750.NEF) |
-| Nikon Z 8 (HE/HE* formats are not supported yet) | NEF | Bayer RGGB | Yes | [Nikon_Z-8.NEF](https://raw.pixls.us/getfile.php/6617/nice/Nikon%20-%20Z%208%20-%208bit%208bit%20compressed%20%283%3A2%29.NEF) |
-| OM Digital Solutions OM-1 Mark II | ORF | Bayer RGGB | Yes | [OM-System_OM-1-Mark-II.orf](https://raw.pixls.us/getfile.php/7262/nice/OM%20System%20-%20OM-1%20Mark%20II%20-%2016bit%20%284%3A3%29.orf) |
-| Panasonic DC-S5 MkII | RW2 | Bayer RGGB | Yes | [Panasonic_DC-S5M2.RW2](https://raw.pixls.us/getfile.php/7790/nice/Panasonic%20-%20DC-S5M2%20-%2014bit%20%283%3A2%29.RW2) |
-| Pentax K-3 Mark III | PEF | Bayer RGGB | Yes | [Pentax_K-3-Mark-III.PEF](https://raw.pixls.us/getfile.php/4677/nice/Pentax%20-%20K-3%20Mark%20III%20-%2014bit%20%283%3A2%29.PEF) |
-| Phase One IQ4 150MP | IIQ | Bayer RGGB | Yes | [Phase-One_IQ4-150MP.iiq](https://raw.pixls.us/getfile.php/3900/nice/Phase%20One%20-%20IQ4%20150MP%20-%20IIQ%20L%20%284%3A3%29.iiq) |
-| Ricoh GR III | DNG | Bayer RGGB | Yes | [Ricoh_GR-III.DNG](https://raw.pixls.us/getfile.php/3115/nice/Ricoh%20-%20GR%20III%20-%2014bit%20%283%3A2%29.DNG) |
-| Samsung Galaxy S23 Ultra | DNG | linear RGB | Yes | [Samsung_Galaxy-S23-Ultra.dng](https://raw.pixls.us/getfile.php/6758/nice/Samsung%20-%20Galaxy%20S23%20Ultra%20-%204%3A3.dng) |
-| Samsung NX1 | SRW | Bayer GRBG | Yes | [Samsung_NX1.srw](https://raw.pixls.us/getfile.php/837/nice/Samsung%20-%20NX1%20-%2014bit%20%283%3A2%29.srw) |
-| Sigma fp | DNG | Bayer RGGB | Yes | [Sigma_fp.DNG](https://raw.pixls.us/getfile.php/7273/nice/Sigma%20-%20fp%20-%2014bit%20%283%3A2%29.DNG) |
-| Sony ILCE-7M3 (A7 III) | ARW | Bayer RGGB | Yes | [_DSC0009.ARW](https://raw.pixls.us/data/Sony/ILCE-7M3/_DSC0009.ARW) |
-| Sony ILCE-7M4 (A7 IV) | ARW | Bayer RGGB | Yes | [Sony_ILCE-7M4.ARW](https://raw.pixls.us/getfile.php/6929/nice/Sony%20-%20ILCE-7M4%20-%2014bit%20%284%3A3%29.ARW) |
+| Camera | Format | Sensor | Resolution | Colour reference | Sample |
+| --- | --- | --- | --- | --- | --- |
+| Apple iPhone 12 Pro | DNG | linear RGB | 12 MP | Yes | [IMG_1361.DNG](https://raw.pixls.us/data/Apple/iPhone%2012%20Pro/IMG_1361.DNG) |
+| Canon EOS 5D Mark IV | CR2 | Bayer RGGB | 30 MP | Yes | [Canon_EOS-5D-Mark-IV.CR2](https://raw.pixls.us/getfile.php/983/nice/Canon%20-%20EOS%205D%20Mark%20IV%20-%20RAW%20%283%3A2%29.CR2) |
+| Canon EOS R5 Mark II | CR3 | Bayer RGGB | 45 MP | Yes | [Canon_EOS-R5-Mark-II.CR3](https://raw.pixls.us/getfile.php/7882/nice/Canon%20-%20EOS%20R5%20Mark%20II%20-%20CRAW%20%283%3A2%29.CR3) |
+| Canon EOS R6 | CR3 | Bayer RGGB | 20 MP | Yes | [Canon_EOS_R6_RAW_ISO_100_nocrop_nodual.CR3](https://raw.pixls.us/data/Canon/EOS%20R6/Canon_EOS_R6_RAW_ISO_100_nocrop_nodual.CR3) |
+| DJI Mavic 3 Pro | DNG | Bayer GRBG | 12 MP | Yes | [DJI_FC4382.DNG](https://raw.pixls.us/getfile.php/7823/nice/DJI%20-%20FC4382%20-%2016bit%20%284%3A3%29.DNG) |
+| Fujifilm GFX 100 II | RAF | Bayer RGGB | 102 MP | Yes | [Fujifilm_GFX100-II.RAF](https://raw.pixls.us/getfile.php/7179/nice/Fujifilm%20-%20GFX100%20II%20-%2014bit%2014bit%20compressed%20%284%3A3%29.RAF) |
+| Fujifilm X-T3 | RAF | X-Trans | 26 MP | Yes | [AFXT2720.RAF](https://raw.pixls.us/data/Fujifilm/X-T3/AFXT2720.RAF) |
+| Fujifilm X-T5 | RAF | X-Trans | 40 MP | Yes | [Fujifilm_X-T5.RAF](https://raw.pixls.us/getfile.php/6122/nice/Fujifilm%20-%20X-T5%20-%2014bit%2014bit%20compressed%20%283%3A2%29.RAF) |
+| Google Pixel 4a | DNG | Bayer RGGB | 12 MP | Yes | [PXL_20201121_100251397.dng](https://raw.pixls.us/data/Google/Pixel%204a/PXL_20201121_100251397.dng) |
+| Hasselblad L2D-20c (DJI Mavic 3) | DNG | Bayer RGGB | 21 MP | Yes | [Hasselblad_L2D-20c.DNG](https://raw.pixls.us/getfile.php/5140/nice/Hasselblad%20-%20L2D-20c%20-%2016bit%20%284%3A3%29.DNG) |
+| Hasselblad X1D II 50C | 3FR | Bayer RGGB | 51 MP | Yes | [Hasselblad_X1D-II-50C.3FR](https://raw.pixls.us/getfile.php/3941/nice/Hasselblad%20-%20X1D%20II%2050C%20-%2016bit%20%284%3A3%29.3FR) |
+| Hasselblad X2D 100C | 3FR | Bayer RGGB | 102 MP | Yes | [Hasselblad_X2D-100C.3FR](https://raw.pixls.us/getfile.php/6565/nice/Hasselblad%20-%20X2D%20100C%20-%2016bit%20%284%3A3%29.3FR) |
+| Hasselblad X2D 100C | FFF | Bayer RGGB | 102 MP | Yes | [Hasselblad_X2D-100C.fff](https://raw.pixls.us/getfile.php/6566/nice/Hasselblad%20-%20X2D%20100C%20-%2016bit%20%284%3A3%29.fff) |
+| Leica M10-R | DNG | Bayer GBRG | 41 MP | Yes | [Leica_M10-R.DNG](https://raw.pixls.us/getfile.php/7853/nice/Leica%20-%20M10-R%20-%2016bit%20compressed%20%283%3A2%29.DNG) |
+| Nikon Z 6 | NEF | Bayer RGGB | 24 MP | Yes | [DSC_0750.NEF](https://raw.pixls.us/data/Nikon/Z%206/DSC_0750.NEF) |
+| Nikon Z 8 (HE/HE* formats are not supported yet) | NEF | Bayer RGGB | 46 MP | Yes | [Nikon_Z-8.NEF](https://raw.pixls.us/getfile.php/6617/nice/Nikon%20-%20Z%208%20-%208bit%208bit%20compressed%20%283%3A2%29.NEF) |
+| OM Digital Solutions OM-1 Mark II | ORF | Bayer RGGB | 20 MP | Yes | [OM-System_OM-1-Mark-II.orf](https://raw.pixls.us/getfile.php/7262/nice/OM%20System%20-%20OM-1%20Mark%20II%20-%2016bit%20%284%3A3%29.orf) |
+| Panasonic DC-S5 MkII | RW2 | Bayer RGGB | 24 MP | Yes | [Panasonic_DC-S5M2.RW2](https://raw.pixls.us/getfile.php/7790/nice/Panasonic%20-%20DC-S5M2%20-%2014bit%20%283%3A2%29.RW2) |
+| Pentax K-3 Mark III | PEF | Bayer RGGB | 26 MP | Yes | [Pentax_K-3-Mark-III.PEF](https://raw.pixls.us/getfile.php/4677/nice/Pentax%20-%20K-3%20Mark%20III%20-%2014bit%20%283%3A2%29.PEF) |
+| Phase One IQ4 150MP | IIQ | Bayer RGGB | 151 MP | Yes | [Phase-One_IQ4-150MP.iiq](https://raw.pixls.us/getfile.php/3900/nice/Phase%20One%20-%20IQ4%20150MP%20-%20IIQ%20L%20%284%3A3%29.iiq) |
+| Ricoh GR III | DNG | Bayer RGGB | 24 MP | Yes | [Ricoh_GR-III.DNG](https://raw.pixls.us/getfile.php/3115/nice/Ricoh%20-%20GR%20III%20-%2014bit%20%283%3A2%29.DNG) |
+| Samsung Galaxy S23 Ultra | DNG | linear RGB | 10 MP | Yes | [Samsung_Galaxy-S23-Ultra.dng](https://raw.pixls.us/getfile.php/6758/nice/Samsung%20-%20Galaxy%20S23%20Ultra%20-%204%3A3.dng) |
+| Samsung NX1 | SRW | Bayer GRBG | 28 MP | Yes | [Samsung_NX1.srw](https://raw.pixls.us/getfile.php/837/nice/Samsung%20-%20NX1%20-%2014bit%20%283%3A2%29.srw) |
+| Sigma fp | DNG | Bayer RGGB | 25 MP | Yes | [Sigma_fp.DNG](https://raw.pixls.us/getfile.php/7273/nice/Sigma%20-%20fp%20-%2014bit%20%283%3A2%29.DNG) |
+| Sony ILCE-7M3 (A7 III) | ARW | Bayer RGGB | 24 MP | Yes | [_DSC0009.ARW](https://raw.pixls.us/data/Sony/ILCE-7M3/_DSC0009.ARW) |
+| Sony ILCE-7M4 (A7 IV) | ARW | Bayer RGGB | 33 MP | Yes | [Sony_ILCE-7M4.ARW](https://raw.pixls.us/getfile.php/6929/nice/Sony%20-%20ILCE-7M4%20-%2014bit%20%284%3A3%29.ARW) |
 
 ## In an evaluation set
 

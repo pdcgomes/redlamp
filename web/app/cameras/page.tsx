@@ -21,8 +21,10 @@ export default function CamerasPage() {
   const { libraw, verified, evaluated, makes } = cameras();
   const supported = makes.reduce((sum, make) => sum + make.models.length, 0);
   const commit = sourceCommit();
+  // A camera verified in more than one format has a row for each.
+  const verifiedCameras = new Set(verified.map((camera) => camera.camera)).size;
   const stats = [
-    { value: verified.length, label: "verified by Redlamp's decode tests" },
+    { value: verifiedCameras, label: "verified by Redlamp's decode tests" },
     { value: evaluated.length, label: "developed in Redlamp's evaluation sets" },
     { value: supported.toLocaleString("en-GB"), label: `read by LibRaw ${libraw}` },
   ];
@@ -75,17 +77,19 @@ export default function CamerasPage() {
                 <th className="py-3 pr-3 pl-5 font-semibold">Camera</th>
                 <th className="px-3 py-3 font-semibold">Format</th>
                 <th className="px-3 py-3 font-semibold">Sensor</th>
+                <th className="px-3 py-3 font-semibold">Resolution</th>
                 <th className="px-3 py-3 font-semibold">Colour reference</th>
                 <th className="py-3 pr-5 pl-3 font-semibold">Sample</th>
               </tr>
             </thead>
             <tbody>
               {verified.map((camera) => (
-                <tr key={camera.camera} className="border-b border-hairline align-top last:border-b-0">
+                <tr key={`${camera.camera} ${camera.format}`} className="border-b border-hairline align-top last:border-b-0">
                   <td className="py-3.5 pr-3 pl-5">
                     <p className="font-medium text-paper">{camera.camera}</p>
                     <p className="mt-1 text-[13px] text-mute md:hidden">
                       {camera.format} · {camera.sensor}
+                      {camera.resolution ? ` · ${camera.resolution}` : ""}
                       {camera.colourReference ? " · colour reference" : ""}
                     </p>
                     {camera.sample ? (
@@ -98,7 +102,8 @@ export default function CamerasPage() {
                     ) : null}
                   </td>
                   <td className="hidden px-3 py-3.5 font-mono text-[13px] text-mute md:table-cell">{camera.format}</td>
-                  <td className="hidden px-3 py-3.5 text-mute md:table-cell">{camera.sensor}</td>
+                  <td className="hidden px-3 py-3.5 whitespace-nowrap text-mute md:table-cell">{camera.sensor}</td>
+                  <td className="hidden px-3 py-3.5 whitespace-nowrap text-mute md:table-cell">{camera.resolution}</td>
                   <td className="hidden px-3 py-3.5 text-mute md:table-cell">{camera.colourReference ? "Yes" : "No"}</td>
                   <td className="hidden py-3.5 pr-5 pl-3 md:table-cell">
                     {camera.sample ? (
