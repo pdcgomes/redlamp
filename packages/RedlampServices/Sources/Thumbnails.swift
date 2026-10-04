@@ -100,7 +100,9 @@ public enum Thumbnails {
     /// The preview's bytes where they are in the mapped file, which they keep mapped for as long as
     /// anything (ImageIO) holds them.
     static func bytes(of preview: Preview, in file: NSData) -> Data? {
-        guard preview.offset >= 0, preview.length > 0, preview.offset + preview.length <= file.length else {
+        guard preview.offset >= 0, preview.length > 0, preview.offset <= file.length,
+              preview.length <= file.length - preview.offset
+        else {
             return nil
         }
         return Data(

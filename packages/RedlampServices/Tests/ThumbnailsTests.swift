@@ -76,6 +76,20 @@ struct ThumbnailsTests {
         #expect(Thumbnails.bytes(of: outside, in: NSData()) == nil)
     }
 
+    @Test func `a preview a file places past its end is refused, however large its offset or length`() {
+        let file = NSData(bytes: [0xFF, 0xD8, 0xFF, 0xD9] as [UInt8], length: 4)
+        for preview in [
+            Thumbnails.Preview(offset: 1, length: .max, width: 192, height: 128),
+            Thumbnails.Preview(offset: .max, length: 1, width: 192, height: 128),
+            Thumbnails.Preview(offset: 2, length: 3, width: 192, height: 128),
+            Thumbnails.Preview(offset: -1, length: 2, width: 192, height: 128),
+        ] {
+            #expect(Thumbnails.bytes(of: preview, in: file) == nil, "\(preview)")
+        }
+        #expect(Thumbnails.bytes(of: Thumbnails.Preview(offset: 0, length: 4, width: 1, height: 1), in: file)?
+            .count == 4)
+    }
+
     @Test func `the smallest preview that fits is chosen`() {
         let small = Thumbnails.Preview(offset: 0, length: 1, width: 160, height: 120)
         let medium = Thumbnails.Preview(offset: 1, length: 1, width: 1616, height: 1080)
