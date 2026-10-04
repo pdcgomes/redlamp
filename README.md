@@ -19,6 +19,8 @@ Redlamp is built from scratch in Swift and Metal for Apple Silicon. It focuses o
 
 ![Redlamp editing a Sony α7R V raw file](docs/images/hero.png)
 
+<p align="center"><a href="https://www.youtube.com/watch?v=lvdLOtdbUX4"><b>Watch the film: Introducing Redlamp</b></a> (1:42, on YouTube)</p>
+
 > **Status: pre-alpha, iteration 2 (macOS).** The core RAW pipeline and the Develop workspace work today: Basic (with Texture, Clarity and Dehaze), Tone Curve, Color Mixer, Color Grading, Detail (noise reduction and sharpening), Effects, lens corrections, crop and Upright, **masking** (gradients, brush, color and luminance range, Subject, Sky, Background, People and its parts, Objects, Landscape and Depth Range) with local adjustments, **healing and removal** (Heal, Clone, content-aware Remove and Remove Dust), **focus stacking**, and **Recipes**, Redlamp's presets, profiles and LUTs in one, with film looks measured from cameras' own renderings and **[film simulations](#film-simulations)** of 36 film looks from 30 stocks, built from the manufacturers' datasheets. AI Denoise, generative fill for large areas and the rest of Develop parity are next, then 1.0 and the iPad and iPhone apps. See [Where we are](#where-we-are), the [Roadmap](#roadmap), and [how Redlamp compares with Lightroom](docs/lightroom-comparison.md).
 >
 > This README is the project's primary status page and is kept up to date as work lands. *Last updated: 4 October 2026.*
