@@ -22,8 +22,7 @@ public extension EditorModel {
         _ kind: MaskKind, part: PersonPart = .entirePerson, landscape: LandscapeClass = .vegetation,
         operation: MaskOperation = .add, addingTo target: UUID? = nil,
     ) async {
-        guard info != nil, aiMaskProgress == nil else { return }
-        let photo = selection
+        guard let visit = currentVisit, aiMaskProgress == nil else { return }
         activeTool = .masking
         cancelDrawing()
         aiMaskProgress = kind
@@ -34,7 +33,7 @@ public extension EditorModel {
         )
         do {
             let masks = try await engine.computeMasks(request)
-            guard selection == photo else { return }
+            guard currentVisit == visit else { return }
             guard !masks.isEmpty else {
                 let error: MaskComputationError = kind == .landscape ? .notFound(landscape)
                     : kind == .people && part != .entirePerson ? .notFound(part) : .nothingFound(kind)
@@ -122,13 +121,12 @@ public extension EditorModel {
     /// Recomputes every AI mask of the edit (of the masks `in`, when given) with today's models,
     /// keeping each component's place, operation and inversion. A person is matched by their index.
     func updateAIMasks(in masks: Set<UUID>? = nil) async {
-        guard info != nil, aiMaskProgress == nil else { return }
-        let photo = selection
+        guard let visit = currentVisit, aiMaskProgress == nil else { return }
         aiMaskProgress = .subject
         maskMessage = nil
         defer { aiMaskProgress = nil }
         let (next, failed) = await Self.recomputingAIMasks(recipe, in: masks, engine: engine)
-        guard selection == photo else { return }
+        guard currentVisit == visit else { return }
         if failed > 0 {
             maskMessage = "\(failed) AI mask\(failed == 1 ? "" : "s") couldn't be updated and kept their previous result."
         }

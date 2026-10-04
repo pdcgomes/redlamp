@@ -229,9 +229,10 @@ public extension EditorModel {
     /// Automatic Upright from the photo's detected edges. Guides give way to it; with too few
     /// edges to go on, the edit stays as it is.
     func applyUpright(_ mode: UprightMode) {
+        guard let visit = currentVisit else { return }
         Task {
             let lines = await engine.detectLines()
-            guard let info,
+            guard currentVisit == visit, let info,
                   let solved = Transform(recipe: recipe).upright(
                       mode, lines: lines, imageSize: info.pixelSize, orientation: recipe.orientation,
                   )

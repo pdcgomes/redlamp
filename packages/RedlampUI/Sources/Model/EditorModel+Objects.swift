@@ -26,7 +26,7 @@ public extension EditorModel {
     /// Previews the object under the pointer (only before the first click: after it, clicks refine).
     func hoverObject(at point: ImagePoint?) {
         objectHoverTask?.cancel()
-        guard drawingKind == .objects, let point, selectedObject == nil else {
+        guard drawingKind == .objects, let point, selectedObject == nil, let visit = currentVisit else {
             objectPreview = nil
             return
         }
@@ -34,13 +34,13 @@ public extension EditorModel {
             try? await Task.sleep(for: .milliseconds(40))
             guard let self, !Task.isCancelled else { return }
             let preview = try? await engine.previewObjectMask(MaskRequest(kind: .objects, prompts: [point]))
-            guard !Task.isCancelled, drawingKind == .objects else { return }
+            guard !Task.isCancelled, currentVisit == visit, drawingKind == .objects else { return }
             objectPreview = preview
         }
     }
 
     func selectObject(at point: ImagePoint, excluding: Bool = false) async {
-        guard drawingKind == .objects, info != nil, aiMaskProgress == nil else { return }
+        guard drawingKind == .objects, let visit = currentVisit, aiMaskProgress == nil else { return }
         objectHoverTask?.cancel()
         objectPreview = nil
         aiMaskProgress = .objects
@@ -58,7 +58,7 @@ public extension EditorModel {
         do {
             guard let mask = try await engine.computeMasks(
                 MaskRequest(kind: .objects, prompts: prompts, excluded: excluded),
-            ).first, drawingKind == .objects else { return }
+            ).first, currentVisit == visit, drawingKind == .objects else { return }
             var next = recipe
             let name: String
             if let existing {

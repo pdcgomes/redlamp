@@ -51,6 +51,15 @@ public final class EditorModel {
     // MARK: Current image
 
     public private(set) var info: ImageInfo?
+    /// Counts photos opened. The engine analyses whatever photo is open when a request reaches
+    /// it, so a result applies only if the visit it started in is still the current one: not
+    /// after a switch to another photo, nor after switching back.
+    @ObservationIgnored private var visits = 0
+    /// The open photo, in this visit of it. Taken before an analysis starts, and compared after.
+    var currentVisit: PhotoVisit? {
+        info.map { PhotoVisit(url: $0.url, number: visits) }
+    }
+
     public private(set) var isLoading = false
     public internal(set) var errorMessage: String?
     /// The photo's sidecar was written by a newer Redlamp, or can't be read. What can be read
@@ -501,6 +510,7 @@ public final class EditorModel {
             previousSelection = selection
         }
         selection = url
+        visits += 1
         selectionIndex = library.index(of: url)
         library.remember(url)
         // Cleared first so the resets below don't render the outgoing photo; a ready photo
@@ -940,8 +950,9 @@ public final class EditorModel {
             guard let wb = info?.asShotWhiteBalance else { return }
             applyWhiteBalance(wb, mode: .asShot)
         case .auto:
+            guard let visit = currentVisit else { return }
             Task {
-                if let wb = await engine.autoWhiteBalance() {
+                if let wb = await engine.autoWhiteBalance(), currentVisit == visit {
                     applyWhiteBalance(wb, mode: .auto)
                 }
             }
@@ -957,9 +968,12 @@ public final class EditorModel {
     }
 
     public func sampleWhiteBalance(at point: CGPoint) {
+        guard let visit = currentVisit else { return }
         Task {
             guard let photoPoint = imagePoint(forCanvas: point) else { return }
-            if let wb = await engine.whiteBalance(sampledAt: photoPoint) {
+            let wb = await engine.whiteBalance(sampledAt: photoPoint)
+            guard currentVisit == visit else { return }
+            if let wb {
                 applyWhiteBalance(wb, mode: .custom, selector: true)
             }
             eyedropperActive = false
@@ -988,9 +1002,10 @@ public final class EditorModel {
     }
 
     public func autoTone() {
+        guard let visit = currentVisit else { return }
         Task {
             let values = await engine.autoTone(for: recipe)
-            guard !values.isEmpty else { return }
+            guard currentVisit == visit, !values.isEmpty else { return }
             var next = recipe
             for (parameter, value) in values {
                 next[parameter] = value
@@ -1236,4 +1251,10 @@ public final class EditorModel {
     var hasUnsavedChange: Bool {
         saveTask != nil
     }
+}
+
+/// One visit of a photo in the editor: opening it again, or opening another, starts a new one.
+struct PhotoVisit: Equatable {
+    var url: URL
+    var number: Int
 }

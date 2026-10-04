@@ -79,7 +79,7 @@ public extension EditorModel {
 
     /// Removes the person or object under `point` (`spotPick`), its own mask grown a little.
     func pickRegion(at point: ImagePoint) async {
-        guard info != nil, spotPick != .spot, !isPickingRegion else { return }
+        guard let visit = currentVisit, spotPick != .spot, !isPickingRegion else { return }
         let pick = spotPick
         let kind: MaskKind = pick == .person ? .people : .objects
         pickMessage = nil
@@ -91,12 +91,14 @@ public extension EditorModel {
             pickMessage = "Picking objects needs \(model.name), from Settings › Models."
             return
         }
+        guard currentVisit == visit else { return }
         isPickingRegion = true
         defer { isPickingRegion = false }
         do {
             let found = try await engine.computeMasks(
                 pick == .person ? MaskRequest(kind: .people) : MaskRequest(kind: .objects, prompts: [point]),
             )
+            guard currentVisit == visit else { return }
             let chosen = pick == .person ? Self.mask(at: point, in: found) : found.first
             guard let mask = chosen else {
                 pickMessage = pick == .person ? "No one is there." : "Nothing was found there."
@@ -147,13 +149,13 @@ public extension EditorModel {
         if thingsToFind.isEmpty {
             await loadThingsToFind()
         }
-        let photo = selection
+        guard let visit = currentVisit else { return }
         let wanted = thingToFind.map { Set([$0]) } ?? Set(thingsToFind)
         isFindingThings = true
         defer { isFindingThings = false }
         do {
             let found = try await engine.findThings(wanted, threshold: Self.findThreshold)
-            guard selection == photo else { return }
+            guard currentVisit == visit else { return }
             foundThings = found
             findMessage = switch found.count {
             case 0: "Nothing found."
@@ -178,6 +180,7 @@ public extension EditorModel {
 
     /// Removes everything Find outlined, as one step.
     func removeAllFound() async {
+        let visit = currentVisit
         var spots: [RetouchSpot] = []
         var removed: Set<UUID> = []
         for found in foundThings {
@@ -185,7 +188,7 @@ public extension EditorModel {
             spots.append(spot)
             removed.insert(found.id)
         }
-        guard !spots.isEmpty else { return }
+        guard !spots.isEmpty, currentVisit == visit else { return }
         var next = recipe
         next.spots += spots
         commit(next, .retouch, "Remove Everything Found")
@@ -201,12 +204,12 @@ public extension EditorModel {
             findMessage = "Removing it needs \(model.name), from Settings › Models."
             return nil
         }
-        let photo = selection
+        guard let visit = currentVisit else { return nil }
         isPickingRegion = true
         defer { isPickingRegion = false }
         do {
             guard let mask = try await engine.computeMasks(MaskRequest(kind: .objects, box: found.box)).first,
-                  selection == photo
+                  currentVisit == visit
             else { return nil }
             return RetouchSpot(
                 mode: .remove, center: mask.center, source: mask.center, region: mask, radius: Self.regionGrowth,
@@ -224,13 +227,14 @@ public extension EditorModel {
 
     /// Adds a spot at `center` with the tool's settings, copying from the source the engine finds.
     func addSpot(at center: ImagePoint) async {
-        guard info != nil else { return }
+        guard let visit = currentVisit else { return }
         var spot = RetouchSpot(
             mode: spotMode, center: center, source: center, radius: RetouchSpot.radius(size: spotSettings.size),
             feather: spotSettings.feather, opacity: spotSettings.opacity,
         )
         if spot.mode.usesSource {
             spot.source = await engine.retouchSource(for: spot, recipe: recipe) ?? nearbySource(for: spot)
+            guard currentVisit == visit else { return }
         }
         var next = recipe
         next.spots.append(spot)
@@ -241,7 +245,7 @@ public extension EditorModel {
     /// Adds a brushed spot along `points`, painted with the tool's settings; a stroke too short to
     /// be one adds a circle.
     func addStroke(_ points: [ImagePoint]) async {
-        guard info != nil, let first = points.first else { return }
+        guard let visit = currentVisit, let first = points.first else { return }
         let radius = RetouchSpot.radius(size: spotSettings.size)
         let aspect = Double(info?.pixelSize.width ?? 1) / Double(max(info?.pixelSize.height ?? 1, 1))
         // A quarter of the brush apart is plenty to follow the hand.
@@ -263,6 +267,7 @@ public extension EditorModel {
         )
         if spot.mode.usesSource {
             spot.source = await engine.retouchSource(for: spot, recipe: recipe) ?? nearbySource(for: spot)
+            guard currentVisit == visit else { return }
         }
         var next = recipe
         next.spots.append(spot)
@@ -272,10 +277,11 @@ public extension EditorModel {
 
     /// Heals every speck of sensor dust the engine finds, in one step.
     func removeDust() async {
-        guard info != nil, !isFindingDust else { return }
+        guard let visit = currentVisit, !isFindingDust else { return }
         isFindingDust = true
         defer { isFindingDust = false }
         let found = await engine.detectDust(recipe: recipe, sensitivity: 50)
+        guard currentVisit == visit else { return }
         guard !found.isEmpty else {
             dustMessage = "No dust found."
             return
@@ -286,6 +292,7 @@ public extension EditorModel {
             spot.source = await engine.retouchSource(for: spot, recipe: recipe) ?? nearbySource(for: spot)
             spots.append(spot)
         }
+        guard currentVisit == visit else { return }
         var next = recipe
         next.spots += spots
         commit(next, .retouch, "Remove Dust")
@@ -297,9 +304,12 @@ public extension EditorModel {
     /// several of its photos are healed in all of them, the open photo as a step of its own history,
     /// the others as one batch Undo can put back (`SettingsSync`).
     func removeDustInSelection() async {
-        guard isMultiSelecting, let open = selection, info != nil, !isFindingDust, settingsSync.progress == nil else {
+        guard isMultiSelecting, let open = selection, let visit = currentVisit, !isFindingDust,
+              settingsSync.progress == nil
+        else {
             return
         }
+        let others = otherSelectedPhotos
         saveNow()
         isFindingDust = true
         defer {
@@ -319,16 +329,23 @@ public extension EditorModel {
             dustMessage = "No dust found in the same place in two or more photos."
             return
         }
-        if let own = found[open], !own.isEmpty {
+        var left = currentVisit != visit
+        if !left, let own = found[open], !own.isEmpty {
             var next = recipe
             for speck in own {
                 var spot = RetouchSpot(center: speck.center, source: speck.center, radius: speck.radius)
                 spot.source = await engine.retouchSource(for: spot, recipe: recipe) ?? nearbySource(for: spot)
                 next.spots.append(spot)
             }
-            commit(next, .retouch, "Remove Dust")
+            left = currentVisit != visit
+            if !left {
+                commit(next, .retouch, "Remove Dust")
+            }
         }
-        settingsSync.run(.healDust(found), on: otherSelectedPhotos, title: "Remove Dust", done: written)
+        // Left while looking: the photo is healed with the others, and the one open now isn't
+        // written behind the editor's back.
+        let targets = left ? (others + [open]).filter { $0 != selection } : others
+        settingsSync.run(.healDust(found), on: targets, title: "Remove Dust", done: written)
         dustMessage = "Healed \(specks == 1 ? "1 speck" : "\(specks) specks") of dust in \(found.count == 1 ? "1 photo" : "\(found.count) photos")."
     }
 
@@ -364,12 +381,13 @@ public extension EditorModel {
     /// Heal or Clone finds a source first.
     func setSpotMode(_ mode: RetouchSpot.Mode) async {
         spotMode = mode
-        guard var spot = selectedSpot else { return }
+        guard var spot = selectedSpot, let visit = currentVisit else { return }
         spot.mode = mode
         if mode.usesSource, spot.source == spot.center {
             var earlier = recipe
             earlier.spots = Array(recipe.spots.prefix { $0.id != spot.id })
             spot.source = await engine.retouchSource(for: spot, recipe: earlier) ?? nearbySource(for: spot)
+            guard currentVisit == visit else { return }
         }
         let changed = spot
         updateSpot(spot.id, name: mode.name) { $0 = changed }
@@ -377,10 +395,11 @@ public extension EditorModel {
 
     /// Asks the engine for a source again, as if the selected spot had just been placed.
     func findNewSource() async {
-        guard let spot = selectedSpot, spot.mode.usesSource else { return }
+        guard let spot = selectedSpot, spot.mode.usesSource, let visit = currentVisit else { return }
         var earlier = recipe
         earlier.spots = Array(recipe.spots.prefix { $0.id != spot.id })
-        guard let source = await engine.retouchSource(for: spot, recipe: earlier) else { return }
+        guard let source = await engine.retouchSource(for: spot, recipe: earlier), currentVisit == visit
+        else { return }
         updateSpot(spot.id, name: "New Source") { $0.source = source }
     }
 
