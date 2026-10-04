@@ -18,6 +18,12 @@ export function SiteFooter() {
           <a className="text-mute hover:text-paper" href="/blog">
             Blog
           </a>
+          <a className="text-mute hover:text-paper" href="/compare">
+            Compare with Lightroom
+          </a>
+          <a className="text-mute hover:text-paper" href="/cameras">
+            Supported cameras
+          </a>
           <a className="text-mute hover:text-paper" href={site.github}>
             Source on GitHub
           </a>

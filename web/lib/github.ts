@@ -1,8 +1,11 @@
 import { site } from "@/lib/site";
+import { type Issue, issueNumbers } from "@/lib/tracker";
 
+/** A read-only token, if the deployment has one, lifts GitHub's limit for anonymous requests; none is needed. */
 function fetchRepo(path = ""): Promise<Response> {
+  const token = process.env.GITHUB_TOKEN;
   return fetch(`https://api.github.com/repos/${site.githubRepo}${path}`, {
-    headers: { Accept: "application/vnd.github+json" },
+    headers: { Accept: "application/vnd.github+json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     next: { revalidate: 3600 },
     signal: AbortSignal.timeout(4000),
   });
@@ -42,6 +45,26 @@ export async function latestRelease(): Promise<Release | null> {
   } catch {
     return fallback;
   }
+}
+
+/**
+ * Tracker IDs to their issue numbers (the issues scripts/tracker-issues.py files), refreshed hourly.
+ * Whatever GitHub doesn't answer is left out, and those rows link to a search instead.
+ */
+export async function trackerIssues(): Promise<Map<string, number>> {
+  const issues: Issue[] = [];
+  try {
+    for (let page = 1; page <= 10; page += 1) {
+      const response = await fetchRepo(`/issues?state=all&labels=tracker&per_page=100&page=${page}`);
+      if (!response.ok) break;
+      const batch = (await response.json()) as Issue[];
+      issues.push(...batch);
+      if (batch.length < 100) break;
+    }
+  } catch {
+    // Keep what arrived.
+  }
+  return issueNumbers(issues);
 }
 
 export function formatCount(count: number): string {
