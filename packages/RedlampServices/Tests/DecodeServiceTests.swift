@@ -47,18 +47,12 @@ struct DecodeServiceTests {
     }
 
     @Test(.enabled(if: !DecodeRegressionTests.fixtures.isEmpty))
-    func `a bundled decoder that can't start fails the photo instead of decoding in the app`() throws {
+    func `a decoder whose service can't start fails the photo instead of decoding in the app`() throws {
         let url = try #require(DecodeRegressionTests.fixtures.first)
-        let unreachable = DecodeServiceClient(serviceName: "app.redlamp.mac.no-such-decoder", isBundled: true)
-        #expect(throws: EngineError.self) { try unreachable.decode(url) }
-        do {
-            _ = try unreachable.decode(url)
-        } catch {
-            #expect(error.localizedDescription.contains("decoder isn't available"))
+        // A test bundles no decode service, like an app that lost its own.
+        for client in [DecodeServiceClient(), DecodeServiceClient(serviceName: "app.redlamp.mac.no-such-decoder")] {
+            #expect(throws: EngineError.decoderUnavailable, "\(client.serviceName)") { _ = try client.decode(url) }
         }
-        let unbundled = DecodeServiceClient(serviceName: "app.redlamp.mac.no-such-decoder", isBundled: false)
-        #expect(try unbundled.decode(url).samples == ImageDecoder.decode(url).samples, "the CLI and tests decode here")
-        #expect(!DecodeServiceClient.bundles(DecodeServiceClient.serviceName), "a test bundles no service")
     }
 
     @Test func `a damaged archive is an error, not a crash`() {

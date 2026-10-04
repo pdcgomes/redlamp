@@ -258,7 +258,7 @@ public struct RenderedFrame: @unchecked Sendable {
     }
 }
 
-public enum EngineError: Error, LocalizedError, Codable, Sendable {
+public enum EngineError: Error, LocalizedError, Codable, Sendable, Equatable {
     case noImageOpen
     case unsupportedFile(String)
     case decodeFailed(String)
