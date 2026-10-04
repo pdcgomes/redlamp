@@ -9,7 +9,9 @@
 #
 # The folder needs a promo.txt naming the photo for each role, one `role = file name` per line:
 #
-#   hero = DSC04439.ARW        the editor in images 1 and 8, and the panels, shortcuts and palette
+#   hero = DSC04439.ARW        the editor in images 1 and 8, the panels, shortcuts and palette,
+#                              and the website's hero shots (the palette's search, its slider bar,
+#                              and before and after)
 #   portrait = DSC02005.jpg    People masks (image 3): a clear face
 #   subject = DSC02035.jpg     the Subject mask (image 3)
 #   landscape = DSC00310.ARW   the Sky mask (image 3): a big sky
@@ -152,6 +154,10 @@ if [[ -n "$HERO" ]]; then
     capture shortcuts "$PHOTOS" "$hero,action=showShortcuts"
     # Image 7 waits for a release with the command palette; builds without it capture the editor.
     capture palette "$PHOTOS" "$hero,action=commandPalette"
+    # For scripts/capture-hero.sh: a search, the slider bar a slider opens, and before and after.
+    capture palette-search "$PHOTOS" "$hero,palette=open;type:white"
+    capture palette-slider "$PHOTOS" "$hero,palette=open;type:exposure;enter;right;right"
+    capture before-after "$PHOTOS" "$hero,compare=sideBySide,before=1"
 fi
 # Masks show as Image on Black, or in green: never the default red, since the glow is each
 # image's one red light.
