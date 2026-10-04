@@ -42,6 +42,10 @@ public final class KernelLibrary: @unchecked Sendable {
     public let sharpenApply: any MTLComputePipelineState
     public let localContrast: any MTLComputePipelineState
     public let detailLocal: any MTLComputePipelineState
+    public let ladderRows: any MTLComputePipelineState
+    public let ladderColumns: any MTLComputePipelineState
+    public let ladderSeparate: any MTLComputePipelineState
+    public let detailApply: any MTLComputePipelineState
     public let hazeDark: any MTLComputePipelineState
     public let hazeFilter: any MTLComputePipelineState
     public let glowSource: any MTLComputePipelineState
@@ -104,6 +108,10 @@ public final class KernelLibrary: @unchecked Sendable {
         sharpenApply = try pipeline("rl_sharpen_apply")
         localContrast = try pipeline("rl_local_contrast")
         detailLocal = try pipeline("rl_detail_local")
+        ladderRows = try pipeline("rl_ladder_rows")
+        ladderColumns = try pipeline("rl_ladder_columns")
+        ladderSeparate = try pipeline("rl_ladder_separate")
+        detailApply = try pipeline("rl_detail_apply")
         hazeDark = try pipeline("rl_haze_dark")
         hazeFilter = try pipeline("rl_haze_filter")
         glowSource = try pipeline("rl_glow_source")

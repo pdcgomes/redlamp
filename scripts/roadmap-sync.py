@@ -21,6 +21,7 @@ It exits with 1 while anything is out of step, so the pre-commit hook, `mise run
 """
 
 import argparse
+import datetime
 import importlib.util
 import pathlib
 import re
@@ -35,9 +36,12 @@ spec.loader.exec_module(tracker)
 
 ID = re.compile(r"\b(?:[A-Z]{2,4}|P1)-\d+\b")
 LIGHTROOM = re.compile(r"^(Yes|Partly|No)\b")
-STATUSES = ("Done", "In progress", "Planned", "Later", "Out of scope")
+STATUSES = ("Done", "In progress", "Planned", "Later", "Undecided", "Out of scope")
 VERSUS = ("", "Compared", "Behind", "Beyond", "Different")
 COLUMNS = ["Feature", "Lightroom", "Redlamp", "vs Lightroom", "Phase", "Tracker", "Notes"]
+# Adobe ships about every two months; past this, the comparison's Lightroom side is probably behind.
+LIGHTROOM_STALE_DAYS = 45
+CHECKED = re.compile(r"<!-- lightroom-checked: (\d{4}-\d{2}-\d{2}); through: (\d{4}-\d{2}) -->")
 STARTED = ("done", "in progress")
 FINISHED = ("done", "not needed")
 
@@ -170,7 +174,7 @@ def check_comparison(lines, items, rows, phases, report):
             report.error(COMPARISON, index,
                          f"{name}: Done, but none of {', '.join(ids)} has started; list the rows it was built "
                          "under, or mark it Behind if they are the work that closes a gap")
-        elif status in ("Later", "Out of scope") and started:
+        elif status in ("Later", "Undecided", "Out of scope") and started:
             report.error(COMPARISON, index,
                          f"{name}: {status}, but {', '.join(started)} has started; is it Planned, In progress or Done?")
         if status == "Planned" and not ids:
@@ -246,6 +250,12 @@ def main():
     compared = {i.strip() for row in comparison_rows(comparison_lines)
                 for i in row["cells"].get("Tracker", "").split(",") if i.strip()}
     roadmap_edits = check_roadmap(readme_lines, items, compared, rows, report)
+    marker = next(((index, found) for index, line in enumerate(comparison_lines) if (found := CHECKED.search(line))), None)
+    if marker is None:
+        report.error(COMPARISON, 0, "no <!-- lightroom-checked: YYYY-MM-DD; through: YYYY-MM --> comment")
+    elif (datetime.date.today() - datetime.date.fromisoformat(marker[1].group(1))).days > LIGHTROOM_STALE_DAYS:
+        report.warn(COMPARISON, marker[0], f"the Lightroom side was last checked on {marker[1].group(1)}; run "
+                    "scripts/lightroom-releases.py and bring it up to date")
 
     for line in report.errors:
         print(f"error   {line}")

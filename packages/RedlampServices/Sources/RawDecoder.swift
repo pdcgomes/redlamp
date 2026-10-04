@@ -58,15 +58,20 @@ enum RawDecoder {
             let pattern = try cfaPattern(raw, filters: filters)
             layout = .mosaic(pattern)
             var histogram = [UInt32](repeating: 0, count: 65536)
-            samples = copyMosaic(
-                rawImage, width: width, height: height, top: top, left: left,
-                pitchBytes: pitch, histogram: &histogram,
-            )
+            // LibRaw applies a Phase One back's black levels and calibration only in raw2image: its
+            // unpacked data and margins still hold the black it reports as subtracted.
+            let phaseOne = raw.pointee.color.phase_one_data.format != 0
+            samples = try phaseOne
+                ? correctedPhaseOneMosaic(raw, filters: filters, url: url, histogram: &histogram)
+                : copyMosaic(
+                    rawImage, width: width, height: height, top: top, left: left,
+                    pitchBytes: pitch, histogram: &histogram,
+                )
             blackLevels = blackPattern(raw, filters: filters, pattern: pattern, base: black)
             whiteLevel = histogram.withUnsafeBufferPointer {
                 WhiteLevel.measured(histogram: $0, nominal: whiteLevel, total: width * height)
             }
-            banding = OpticalBlack.measure(
+            banding = phaseOne ? nil : OpticalBlack.measure(
                 raw: rawImage, pitch: pitch / MemoryLayout<UInt16>.size, top: top, left: left,
                 width: width, height: height, white: whiteLevel,
             ) { [blackLevels] x, y in
@@ -291,6 +296,45 @@ enum RawDecoder {
                     destination.update(from: row, count: width)
                     for x in 0 ..< width {
                         counts[Int(row[x])] &+= 1
+                    }
+                }
+                count = width * height
+            }
+        }
+    }
+
+    /// A Phase One mosaic from LibRaw's `raw2image`, which subtracts the back's black levels
+    /// (global, per row and per column) and applies its flat-field and sensor-half corrections.
+    private static func correctedPhaseOneMosaic(
+        _ raw: UnsafeMutablePointer<libraw_data_t>,
+        filters: UInt32,
+        url: URL,
+        histogram: inout [UInt32],
+    ) throws -> [UInt16] {
+        try check(libraw_raw2image(raw), url: url)
+        defer { libraw_free_image(raw) }
+        guard let image = raw.pointee.image else { throw EngineError.decodeFailed("LibRaw returned no image") }
+        let sizes = raw.pointee.sizes
+        let width = Int(sizes.width)
+        let height = Int(sizes.height)
+        let stride = Int(sizes.iwidth)
+        guard stride == width, Int(sizes.iheight) == height else {
+            throw EngineError.decodeFailed("LibRaw shrank the Phase One image")
+        }
+        // LibRaw's `filters` repeats every 8 rows and 2 columns; each photosite's value sits in
+        // its own colour's channel of the 4-channel image.
+        let channels = (0 ..< 16).map { bayerColor(filters, row: $0 >> 1, col: $0 & 1) }
+        let values = UnsafeRawPointer(image).assumingMemoryBound(to: UInt16.self)
+        return histogram.withUnsafeMutableBufferPointer { counts in
+            [UInt16](unsafeUninitializedCapacity: width * height) { buffer, count in
+                for y in 0 ..< height {
+                    let row = values + y * stride * 4
+                    let destination = buffer.baseAddress! + y * width
+                    let phase = (y & 7) << 1
+                    for x in 0 ..< width {
+                        let value = row[x * 4 + channels[phase | (x & 1)]]
+                        destination[x] = value
+                        counts[Int(value)] &+= 1
                     }
                 }
                 count = width * height

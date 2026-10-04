@@ -7,7 +7,14 @@ import { tableRows } from "./tables.ts";
  */
 
 export type Link = { name: string; href: string };
-export type VerifiedCamera = { camera: string; format: string; sensor: string; colourReference: boolean; sample: Link | null };
+export type VerifiedCamera = {
+  camera: string;
+  format: string;
+  sensor: string;
+  resolution: string;
+  colourReference: boolean;
+  sample: Link | null;
+};
 export type EvaluatedCamera = { camera: string; set: string; sample: Link | null };
 export type CameraMark = "verified" | "evaluation" | null;
 export type CameraMake = { make: string; models: { name: string; mark: CameraMark }[] };
@@ -28,6 +35,7 @@ export function parseCameras(markdown: string): Cameras {
       camera: cells.Camera,
       format: cells.Format,
       sensor: cells.Sensor,
+      resolution: cells.Resolution ?? "",
       colourReference: cells["Colour reference"] === "Yes",
       sample: link(cells.Sample),
     }));

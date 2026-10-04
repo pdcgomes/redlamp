@@ -23,14 +23,20 @@ enum ClarityBase {
     /// Added to luminance before the log, as the detail stage does (`DetailStage.luma`).
     static let floor: Float = 1.0 / 1024
 
-    static func logLuminance(_ rgb: SIMD3<Float>) -> Float {
-        log2(max(simd_dot(rgb, ToneBase.lumaWeights), 0) + floor)
+    static func logLuminance(_ rgb: SIMD3<Float>, weights: SIMD3<Float> = ToneBase.lumaWeights) -> Float {
+        log2(max(simd_dot(rgb, weights), 0) + floor)
     }
 
-    /// The coefficients for `image`, a photo `fullLongEdge` pixels on its long side.
-    static func coefficients(_ image: AnalysisImage, fullLongEdge: Int) -> GuidedMap {
+    /// The coefficients for `image`, a photo `fullLongEdge` pixels on its long side, in the
+    /// luminance of `weights` (process 11 uses the ladder's, `DetailStage.luma`).
+    static func coefficients(
+        _ image: AnalysisImage,
+        fullLongEdge: Int,
+        weights: SIMD3<Float> = ToneBase.lumaWeights,
+    ) -> GuidedMap {
         coefficients(
-            image.pixels.map(logLuminance), width: image.width, height: image.height, fullLongEdge: fullLongEdge,
+            image.pixels.map { logLuminance($0, weights: weights) }, width: image.width, height: image.height,
+            fullLongEdge: fullLongEdge,
         )
     }
 

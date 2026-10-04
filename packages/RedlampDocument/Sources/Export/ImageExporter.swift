@@ -136,7 +136,7 @@ public enum ImageExporter {
         _ properties: [CFString: Any],
         _ format: ExportFormat,
     ) throws {
-        CGImageDestinationAddImage(destination, image, properties as CFDictionary)
+        ExportMetadata.addImage(image, to: destination, properties: properties, format: format)
         guard CGImageDestinationFinalize(destination) else { throw ExportError.cannotEncode(format) }
     }
 

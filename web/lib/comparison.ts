@@ -7,7 +7,7 @@ import { tableRows } from "./tables.ts";
  * here, so the page's client component can share it; `comparison()` in repo.ts reads the file.
  */
 
-export const statuses = ["Done", "In progress", "Planned", "Later", "Out of scope"] as const;
+export const statuses = ["Done", "In progress", "Planned", "Later", "Undecided", "Out of scope"] as const;
 export type Status = (typeof statuses)[number];
 export const versusLabels = ["Compared", "Behind", "Beyond", "Different"] as const;
 export type Versus = (typeof versusLabels)[number];
@@ -73,6 +73,7 @@ export const statusStyle: Record<Status, { text: string; dot: string; bar: strin
   "In progress": { text: "text-filament", dot: "bg-filament", bar: "bg-filament/80" },
   Planned: { text: "text-ring", dot: "border border-ring", bar: "bg-ring/30" },
   Later: { text: "text-mute", dot: "border border-dashed border-mute", bar: "bg-paper/12" },
+  Undecided: { text: "text-mute", dot: "border border-dotted border-dim", bar: "bg-paper/9" },
   "Out of scope": { text: "text-dim", dot: "bg-dim/50", bar: "bg-paper/6" },
 };
 

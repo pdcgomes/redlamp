@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Download CC0 sample raw files from raw.pixls.us into tests/fixtures/raw"
+#MISE description="Download CC0 sample raw files from raw.pixls.us into tests/fixtures/raw and tests/fixtures/cameras"
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
@@ -26,3 +26,33 @@ for path in "${FILES[@]}"; do
     echo "==> $name"
     curl -sfL -o "$name" "https://raw.pixls.us/data/$path"
 done
+
+# The camera coverage set (tests/decode/samples.json): one sample per main maker and format, about 1.2 GB.
+cd "$(git rev-parse --show-toplevel)"
+python3 - <<'EOF'
+import hashlib, json, os, subprocess, sys
+
+def sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as file:
+        for block in iter(lambda: file.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+manifest = json.load(open("tests/decode/samples.json"))
+os.makedirs("tests/fixtures/cameras", exist_ok=True)
+failed = 0
+for sample in manifest["samples"]:
+    path = os.path.join("tests/fixtures/cameras", sample["file"])
+    if os.path.exists(path) and sha256(path) == sample["sha256"]:
+        print(f"==> {sample['file']} (cached)")
+        continue
+    print(f"==> {sample['file']} ({sample['megabytes']} MB)")
+    subprocess.run(["curl", "-sfL", "-o", path + ".part", sample["url"]], check=False)
+    if os.path.exists(path + ".part") and sha256(path + ".part") == sample["sha256"]:
+        os.replace(path + ".part", path)
+    else:
+        print(f"    checksum mismatch or download failed: {sample['url']}", file=sys.stderr)
+        failed += 1
+sys.exit(1 if failed else 0)
+EOF

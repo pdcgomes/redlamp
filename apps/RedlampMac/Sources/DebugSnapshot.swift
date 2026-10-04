@@ -2,7 +2,7 @@
     import AppKit
     import RedlampCanvas
     import RedlampEngineAPI
-    import RedlampUI
+    @_spi(Harness) import RedlampUI
 
     /// Development aids for screenshots and visual checks:
     ///
@@ -18,9 +18,10 @@
     ///   captured instead of the window; `stack=open` in a script opens the Stack workspace on
     ///   the selected stack document (`stack=depth` showing the depth map, `stack=retouch`
     ///   painting one stroke from the frame under the cursor). `window=<name>` opens a window
-    ///   from the Window menu by its title in kebab case, such as `window=film-looks`.
-    ///   `feedback=form` opens Report a Bug or Send Feedback (`feedback=note` at its note), and
-    ///   `feedback=reports` Your Reports.
+    ///   from the Window menu by its title in kebab case, such as `window=film-looks`;
+    ///   `welcome=<step>` opens the welcome window playing its film (`film`) or on a page
+    ///   (`about`, `help`). `feedback=form` opens Report a Bug or Send Feedback
+    ///   (`feedback=note` at its note), and `feedback=reports` Your Reports.
     /// - `--window-size <width>x<height>` sizes the editor's content in points and centres it
     ///   on a Retina screen if there is one, so captures are 2×, without touching its saved
     ///   frame (`scripts/capture-promo.sh`). Windows a script opens are centred there too.
@@ -84,6 +85,8 @@
                 await openStack(selection, showing: value, model: model)
             case "window":
                 await openWindow(titled: value.split(separator: "-").map(\.capitalized).joined(separator: " "))
+            case "welcome":
+                await openWelcome(at: value)
             case "select" where Int(value) == nil:
                 await select(named: value, model: model)
             case "mask":
@@ -170,6 +173,23 @@
                     return
                 }
                 try? await Task.sleep(for: .milliseconds(100))
+            }
+        }
+
+        /// Opens the welcome window on the capture screen, playing its film (`film`) or on a page
+        /// (`about`, `help`).
+        private static func openWelcome(at step: String) async {
+            openMenuWindow(titled: "Welcome to Redlamp")
+            guard let welcome = NSApp.windows.lazy.compactMap({ $0.windowController as? WelcomeWindowController })
+                .first else {
+                return
+            }
+            if let captureScreen, let window = welcome.window {
+                center(window, on: captureScreen)
+            }
+            for _ in 0 ..< (["about": 1, "help": 2][step] ?? 0) {
+                welcome.next()
+                try? await Task.sleep(for: .seconds(1))
             }
         }
 

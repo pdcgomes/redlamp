@@ -1,6 +1,6 @@
 # Lightroom Feature Inventory (Editing-Focused)
 
-Source: working knowledge of Lightroom Classic 14.x, Lightroom (desktop) 8.x, and Lightroom mobile, as of about mid-2025. Adobe ships roughly quarterly, so check this list against Adobe's "What's new" pages for anything released since. Items marked **(verify)** are ones where the exact name or availability is uncertain.
+Source: working knowledge of Lightroom Classic 14.x, Lightroom (desktop) 8.x, and Lightroom mobile, as of about mid-2025, with what Lightroom has added since in section 22. Adobe ships about every two months; `scripts/lightroom-releases.py` lists the releases since the comparison was last checked. Items marked **(verify)** are ones where the exact name or availability is uncertain.
 
 The phase tags below are the plan as written in September 2026, kept for reference. Where each feature stands today, and in which phase it's planned now, is in [Redlamp and Lightroom compared](lightroom-comparison.md).
 
@@ -219,6 +219,20 @@ Each feature has a roadmap tag:
 - Smart (AI) search [Later]
 - Import presets, rename on import, backup on import, and watched folders [Later]
 - Syncing the cloud library [Skip; CloudKit is on the roadmap's Later list]
+
+## 22. Added from Lightroom Classic 14.4 to 15.6 (June 2025 to September 2026)
+
+Summarised from The Lightroom Queen's release notes, one post per release (linked), and not yet checked against Adobe's own pages. Where each stands for Redlamp is in [the comparison](lightroom-comparison.md).
+
+- **Classic 14.4, June 2025** ([notes](https://www.lightroomqueen.com/whats-new-in-lightroom-2025-06/)): more Quick Actions on mobile, and AI tools on mobile download the original first.
+- **Classic 14.5, August 2025** ([notes](https://www.lightroomqueen.com/whats-new-in-lightroom-2025-08/)): saved checkbox sets for Copy, Sync and new presets; previews built on the GPU; Generative Remove improved.
+- **Classic 15.0, October 2025** ([notes](https://www.lightroomqueen.com/whats-new-in-lightroom-2025-10/)): a Variance slider in Point Color; Assisted Culling (AI sorting by sharpness, faces and eyes) and stacking by visual similarity; zooming while cropping; an HDR Limit slider; an improved Reflections model; dust removal; Snow in Landscape masks; Adaptive Landscape presets; Edit in Photoshop changes.
+- **Classic 15.1, December 2025** ([notes](https://www.lightroomqueen.com/whats-new-in-lightroom-2025-12/)): better import previews; sharing and albums in the cloud apps; Assisted Culling in Desktop.
+- **Classic 15.2, February 2026** ([notes](https://www.lightroomqueen.com/whats-new-in-lightroom-2026-02/)): WebP import (Classic) and export; sending a photo to Firefly for prompt-based edits; Topaz Generative Upscale (2x and 4x, Desktop, generative credits).
+- **Classic 15.3, April 2026** ([notes](https://www.lightroomqueen.com/whats-new-in-lightroom-2026-04/)): film-inspired presets and profiles that don't replicate particular films; natural-language search in the cloud apps; AI updates for Copy, Paste and Sync run in the background; a warning when exporting AI edits; zooming while cropping in Desktop.
+- **Classic 15.4, June 2026** ([notes](https://www.lightroomqueen.com/whats-new-in-lightroom-2026-06/)): keyword syncing; duplicate detection; an interactive histogram in Desktop; an improved Select Subject model; custom colour labels; Topaz AI sharpening (Desktop, generative credits).
+- **Classic 15.5, August 2026** ([notes](https://www.lightroomqueen.com/whats-new-in-lightroom-2026-08/)): Feather and Edge sliders for AI masks; Generative Expand (Desktop and mobile, not Classic); Render to DNG (a rendered image in a DNG wrapper, not a raw); crop improvements.
+- **Classic 15.6, September 2026** ([notes](https://www.lightroomqueen.com/whats-new-in-lightroom-2026-09/)): Reflection Removal improved; Prompt to Edit (Desktop, early access, generative credits).
 
 ## Notable Gaps We Could Beat Lightroom On
 Candidates, not commitments:
