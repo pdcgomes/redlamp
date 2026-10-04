@@ -98,7 +98,7 @@ public extension EditorModel {
         // In the Crop tool, O and ⇧O cycle and turn its overlay, as in Lightroom.
         case .maskOverlay:
             if activeTool == .crop {
-                cropOverlay = cropOverlay.next
+                cropOverlay = cropOverlayChoices.overlay(after: cropOverlay)
                 return true
             }
             guard activeTool == .masking else { return false }

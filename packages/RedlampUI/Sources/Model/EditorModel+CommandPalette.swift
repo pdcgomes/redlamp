@@ -46,7 +46,10 @@ public extension EditorModel {
     /// The edit with `mode`'s white balance, for previewing it.
     func edit(withWhiteBalance mode: WhiteBalanceMode) async -> EditRecipe? {
         if mode == .auto, autoWhiteBalance == nil {
-            autoWhiteBalance = await engine.autoWhiteBalance()
+            let visit = currentVisit
+            let wb = await engine.autoWhiteBalance()
+            guard visit != nil, currentVisit == visit else { return nil }
+            autoWhiteBalance = wb
         }
         guard let wb = resolveWhiteBalance(mode) else { return nil }
         var edit = recipe

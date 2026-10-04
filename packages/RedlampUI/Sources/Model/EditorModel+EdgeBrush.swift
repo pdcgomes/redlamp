@@ -70,7 +70,7 @@ public extension EditorModel {
         guard !isSolvingEdges else { return }
         isSolvingEdges = true
         defer { isSolvingEdges = false }
-        let photo = selection
+        var visit = currentVisit
         while let next = edgeBrushStrokes.first, next.finished {
             let target = next.target
             guard case let .ai(mask) = component(target)?.shape else {
@@ -79,9 +79,10 @@ public extension EditorModel {
             }
             do {
                 let refined = try await engine.refineMaskEdges(mask.bitmap, along: [next.stroke])
-                guard selection == photo else {
-                    edgeBrushStrokes.removeAll()
-                    return
+                // Another photo opened meanwhile: its strokes replaced these, and are solved next.
+                guard currentVisit == visit else {
+                    visit = currentVisit
+                    continue
                 }
                 if case var .ai(current) = component(target)?.shape {
                     current.bitmap = refined
@@ -89,6 +90,10 @@ public extension EditorModel {
                     updateComponent(target.component, in: target.mask, shape: .ai(current), name: "Refine Edge Brush")
                 }
             } catch {
+                guard currentVisit == visit else {
+                    visit = currentVisit
+                    continue
+                }
                 maskMessage = "The edge couldn't be refined: \(error)"
                 edgeBrushStrokes.removeAll { $0.finished }
                 return

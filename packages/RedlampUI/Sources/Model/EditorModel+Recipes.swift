@@ -16,9 +16,11 @@ public extension EditorModel {
                 recipe.name
             }
         }
-        if needsAutoWhiteBalance(recipe), autoWhiteBalance == nil {
+        if needsAutoWhiteBalance(recipe), autoWhiteBalance == nil, let visit = currentVisit {
             Task {
-                autoWhiteBalance = await engine.autoWhiteBalance()
+                let wb = await engine.autoWhiteBalance()
+                guard currentVisit == visit else { return }
+                autoWhiteBalance = wb
                 apply()
             }
         } else {
@@ -31,9 +33,11 @@ public extension EditorModel {
         guard previewingRecipe != recipe else { return }
         if let recipe {
             recipes.prepare(recipe)
-            if needsAutoWhiteBalance(recipe), autoWhiteBalance == nil {
+            if needsAutoWhiteBalance(recipe), autoWhiteBalance == nil, let visit = currentVisit {
                 Task {
-                    autoWhiteBalance = await engine.autoWhiteBalance()
+                    let wb = await engine.autoWhiteBalance()
+                    guard currentVisit == visit else { return }
+                    autoWhiteBalance = wb
                     requestRender()
                 }
             }

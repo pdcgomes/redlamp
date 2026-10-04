@@ -43,8 +43,7 @@ public extension EditorModel {
 
     /// Adds the preset as a new mask, computing its AI components for this photo.
     func applyMaskPreset(_ preset: MaskPreset) async {
-        guard info != nil, aiMaskProgress == nil else { return }
-        let photo = selection
+        guard let visit = currentVisit, aiMaskProgress == nil else { return }
         activeTool = .masking
         aiMaskProgress = preset.aiKinds.first ?? .subject
         maskMessage = nil
@@ -64,12 +63,13 @@ public extension EditorModel {
                         ))
                     }
                 } catch {
+                    guard currentVisit == visit else { return }
                     maskMessage = "\(preset.name): \((error as? MaskComputationError)?.description ?? "\(error)")"
                     return
                 }
             }
         }
-        guard selection == photo, !components.isEmpty, recipe.masks.count < MaskLayer.maximumLayers else { return }
+        guard currentVisit == visit, !components.isEmpty, recipe.masks.count < MaskLayer.maximumLayers else { return }
         var mask = MaskLayer(
             name: preset.name, components: components, amount: preset.amount, adjustments: preset.localAdjustments,
         )
@@ -90,7 +90,9 @@ public extension EditorModel {
 
     /// Snaps an AI mask's edges to the photo's (a wider guided filter than when it was made).
     func refineEdges(_ componentID: UUID, in maskID: UUID) async {
-        guard let component = recipe.mask(maskID)?.components.first(where: { $0.id == componentID }) else { return }
+        guard let visit = currentVisit,
+              let component = recipe.mask(maskID)?.components.first(where: { $0.id == componentID })
+        else { return }
         let bitmap: MaskBitmap
         switch component.shape {
         case let .ai(mask): bitmap = mask.bitmap
@@ -98,11 +100,13 @@ public extension EditorModel {
         }
         do {
             let refined = try await engine.refineMaskEdges(bitmap)
-            guard case var .ai(mask) = recipe.mask(maskID)?.components.first(where: { $0.id == componentID })?.shape
+            guard currentVisit == visit,
+                  case var .ai(mask) = recipe.mask(maskID)?.components.first(where: { $0.id == componentID })?.shape
             else { return }
             mask.bitmap = refined
             updateComponent(componentID, in: maskID, shape: .ai(mask), name: "Refine Edges")
         } catch {
+            guard currentVisit == visit else { return }
             maskMessage = "The edges couldn't be refined: \(error)"
         }
     }

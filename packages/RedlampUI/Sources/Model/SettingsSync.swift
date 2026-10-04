@@ -58,8 +58,13 @@ public final class SettingsSync {
     }
 
     /// Starts `change` on `photos`, recorded in each one's history as `title`; `done` is told of
-    /// each photo written.
-    func run(_ change: Change, on photos: [URL], title: String, done: @escaping (URL, EditRecipe) -> Void) {
+    /// each photo written. `inEditor` is asked about each photo as the batch reaches it: true
+    /// when it is open in the editor, which made the change itself, so the batch leaves it.
+    func run(
+        _ change: Change, on photos: [URL], title: String,
+        inEditor: @escaping (URL) async -> Bool = { _ in false },
+        done: @escaping (URL, EditRecipe) -> Void,
+    ) {
         guard progress == nil, !photos.isEmpty else { return }
         progress = Progress(title: title, done: 0, total: photos.count)
         self.title = title
@@ -67,7 +72,7 @@ public final class SettingsSync {
         before = [:]
         written = [:]
         task = Task { [weak self] in
-            await self?.process(change, photos, title: title, done: done)
+            await self?.process(change, photos, title: title, inEditor: inEditor, done: done)
         }
     }
 
@@ -126,7 +131,8 @@ public final class SettingsSync {
     }
 
     private func process(
-        _ change: Change, _ photos: [URL], title: String, done: @escaping (URL, EditRecipe) -> Void,
+        _ change: Change, _ photos: [URL], title: String, inEditor: (URL) async -> Bool,
+        done: @escaping (URL, EditRecipe) -> Void,
     ) async {
         var engine: (any EditingEngine)?
         var skipped = 0
@@ -134,6 +140,7 @@ public final class SettingsSync {
         for url in photos {
             guard !Task.isCancelled else { break }
             defer { progress?.done += 1 }
+            guard await !inEditor(url) else { continue }
             await saves?.wait(for: url)
             guard store.protection(for: url) == nil else {
                 skipped += 1

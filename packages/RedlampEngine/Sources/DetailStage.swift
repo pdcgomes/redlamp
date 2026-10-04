@@ -334,8 +334,8 @@ final class DetailStage {
     /// The texels a scratch texture may grow to in the render being encoded.
     private var scratchLimit = 0
     private var layout: (key: LayoutKey, tiles: [Tile])?
-    /// The command buffer being encoded and the textures cached from it, which `abandon` forgets.
-    private var encoding: (commands: ObjectIdentifier, cached: Set<ObjectIdentifier>)?
+    /// The command buffer being encoded and the textures cached from it, which `forget` forgets.
+    private var encoding: Encoding?
     /// Textures made so far and their bytes.
     private(set) var allocated = (count: 0, bytes: 0)
     /// The tiles the last render was processed in.
@@ -403,8 +403,8 @@ final class DetailStage {
             dropTextures()
         }
         residency.hold(until: commands)
-        if encoding?.commands != ObjectIdentifier(commands) {
-            encoding = (ObjectIdentifier(commands), [])
+        if encoding?.commands !== commands {
+            encoding = Encoding(commands: commands)
         }
         do {
             return try process(key, passes, session: session, work: work, commands: commands, cache: cache)
@@ -549,7 +549,7 @@ final class DetailStage {
     /// Forgets what was cached from `commands`, which failed on the GPU, so its textures hold
     /// nothing rendered.
     func forget(_ commands: any MTLCommandBuffer) {
-        guard let encoding, encoding.commands == ObjectIdentifier(commands) else { return }
+        guard let encoding, encoding.commands === commands else { return }
         entries.removeAll { encoding.cached.contains(ObjectIdentifier($0.output.texture)) }
         sharpenCache.forget(encoding.cached)
         ladderCache.forget(encoding.cached)
@@ -567,6 +567,12 @@ final class DetailStage {
         layout = nil
         encoding = nil
         residency.reset()
+    }
+
+    /// Weak, so a later command buffer at a released one's address isn't taken for it.
+    private struct Encoding {
+        weak var commands: (any MTLCommandBuffer)?
+        var cached: Set<ObjectIdentifier> = []
     }
 
     /// What one render of the stage runs, for any work area or tile of it.

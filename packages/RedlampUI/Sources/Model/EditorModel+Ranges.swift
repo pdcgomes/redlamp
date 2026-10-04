@@ -76,10 +76,10 @@ public extension EditorModel {
 
     /// The Luminance Range eyedropper: a range around the lightness under `point`.
     func sampleLuminanceRange(at point: ImagePoint) async {
-        guard drawingKind == .luminanceRange, info != nil else { return }
+        guard drawingKind == .luminanceRange, let visit = currentVisit else { return }
         let global = recipe
         guard let color = await engine.maskColor(sampledAt: CGPoint(x: point.x, y: point.y), recipe: global),
-              drawingKind == .luminanceRange
+              currentVisit == visit, drawingKind == .luminanceRange
         else { return }
         let range = LuminanceRangeMask.sampled(lightness: color.x * 100, at: point)
         var next = recipe

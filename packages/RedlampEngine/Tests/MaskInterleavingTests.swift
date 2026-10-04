@@ -277,6 +277,8 @@ struct MaskInterleavingTests {
         let drawnBefore = slicesDrawn()
         _ = engine.openIfReady(exported)
         let export = Task { try await engine.renderStill(request) }
+        // `slicesDrawn()` synced on the render queue, so the export above has let go of the
+        // lane: from here on `isDraining` means this export started.
         while !engine.stillLanes.withLock({ $0.isDraining }) {
             try await Task.sleep(for: .milliseconds(1))
         }
