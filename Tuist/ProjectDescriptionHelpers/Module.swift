@@ -14,6 +14,7 @@ public enum Module: String, CaseIterable {
     case document = "RedlampDocument"
     case recipes = "RedlampRecipes"
     case masking = "RedlampMasking"
+    case generative = "RedlampGenerative"
     case engine = "RedlampEngine"
     case canvas = "RedlampCanvas"
     case design = "RedlampDesign"
@@ -34,19 +35,20 @@ public enum Module: String, CaseIterable {
     /// Whether the module belongs to the platform-neutral engine side of the boundary.
     public var isEngineLayer: Bool {
         switch self {
-        case .engineAPI, .kernels, .color, .services, .document, .recipes, .masking, .engine: true
+        case .engineAPI, .kernels, .color, .services, .document, .recipes, .masking, .generative, .engine: true
         case .canvas, .design, .ui: false
         }
     }
 
     /// The engine builds for every platform from day one. The UI layers are macOS-only
     /// until the iPad and iPhone shells land.
+    /// Generative fill is offered on the Mac only (DEC-23).
     public var destinations: Destinations {
-        isEngineLayer ? [.mac, .iPhone, .iPad] : [.mac]
+        isEngineLayer && self != .generative ? [.mac, .iPhone, .iPad] : [.mac]
     }
 
     public var deploymentTargets: DeploymentTargets {
-        isEngineLayer
+        isEngineLayer && self != .generative
             ? .multiplatform(iOS: redlampIOSVersion, macOS: redlampMacOSVersion)
             : .macOS(redlampMacOSVersion)
     }
@@ -67,6 +69,8 @@ public enum Module: String, CaseIterable {
         case .recipes: [.engineAPI]
         // Masks computed from the photo (Apple Vision, embedded mattes) and mask bitmaps.
         case .masking: [.engineAPI]
+        // Generative models on MLX (generative fill, RM-10), kept apart so nothing else links MLX.
+        case .generative: [.engineAPI]
         case .engine: [.engineAPI, .kernels, .color, .services, .masking]
         case .canvas: [.engineAPI]
         case .design: [.engineAPI]

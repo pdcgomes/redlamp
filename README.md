@@ -1201,7 +1201,7 @@ Help › Your Reports lists the reports sent from this Mac (kept in `~/Library/A
 Redlamp is at an early stage and moving quickly. Issues and discussion are very welcome: Report a Bug or Send Feedback in the app files an issue for you, with the details that help.
 
 - **Clean-room policy.** No GPL or LGPL code or data. Algorithms are implemented from published papers and specifications. Reading GPL projects such as darktable and RawTherapee to understand an idea is fine, but never port, translate or paraphrase their code, and never copy their data (profiles, tables, presets).
-- **Third-party components:** LibRaw is used under its CDDL-1.0 option. Planned additions are lcms2 (MIT) and the lensfun database (CC-BY-SA, data only).
+- **Third-party components:** LibRaw is used under its CDDL-1.0 option. MLX Swift (MIT) and Swift Numerics (Apache-2.0) run generative fill's models on the Mac. Planned additions are lcms2 (MIT) and the lensfun database (CC-BY-SA, data only).
 - **Conventions:**
   - Run `mise run setup` once, so commits are linted, and `mise run lint` and `mise run test` before sending changes.
   - Keep engine code free of UI imports.
