@@ -6,6 +6,12 @@ import RedlampServices
 struct FrameDecodeFailure: Error {
     let index: Int
     let error: any Error
+
+    /// `error` from decoding frame `index`; a decoder that isn't available fails every frame, so
+    /// its error stays as it is and fails the merge.
+    static func wrapping(_ error: any Error, frame index: Int) -> any Error {
+        error as? EngineError == .decoderUnavailable ? error : FrameDecodeFailure(index: index, error: error)
+    }
 }
 
 extension MergedStack {

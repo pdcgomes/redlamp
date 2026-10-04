@@ -77,7 +77,7 @@ final class FocusStackCache: Sendable {
     init(
         device: any MTLDevice, kernels: KernelLibrary, root: URL = FocusStackCache.defaultRoot,
         budget: Int = FocusStackCache.defaultBudget,
-        decoder: any ImageDecoding = InProcessDecoder(),
+        decoder: any ImageDecoding,
     ) {
         self.device = device
         self.kernels = kernels
@@ -163,7 +163,8 @@ final class FocusStackCache: Sendable {
 
     /// Decodes, aligns and fuses `urls` (in focus order). A frame that doesn't decode is left out
     /// and reported, as long as two others do; a merge missing frames isn't cached, so the next
-    /// open tries them again.
+    /// open tries them again. A decoder that isn't available fails the merge at once, since no
+    /// frame would decode.
     func merge(
         _ urls: [URL], strategy: FocusStackStrategy, documentURL: URL?, progress: (Double) -> Void,
     ) throws -> MergedStack {
@@ -212,7 +213,7 @@ final class FocusStackCache: Sendable {
                         do {
                             decoded = try decoder.decode(url)
                         } catch {
-                            throw FrameDecodeFailure(index: frame, error: error)
+                            throw FrameDecodeFailure.wrapping(error, frame: frame)
                         }
                         decoded.noiseProfile = decoded.noise
                         return decoded

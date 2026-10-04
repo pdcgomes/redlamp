@@ -75,6 +75,20 @@ for package in RedlampEngine RedlampUI; do
     fi
 done
 
+# Nor do they make their own InProcessDecoder: the only one is the default of RedlampEngine's
+# initialiser, for the CLI and tests, which the Mac app replaces with the decode service.
+ENGINE_DEFAULT='/RedlampEngine/Sources/RedlampEngine\.swift:[0-9]+:[[:space:]]*decoder: any ImageDecoding = InProcessDecoder\(\),$'
+for package in RedlampEngine RedlampUI; do
+    dir="$ROOT/packages/$package/Sources"
+    [[ -d "$dir" ]] || continue
+    if matches=$(grep -RInE --include='*.swift' '\bInProcessDecoder\(' "$dir" | grep -vE "$ENGINE_DEFAULT"); then
+        echo "InProcessDecoder made in $package (use the engine's decoder):"
+        echo "$matches"
+        echo
+        failed=1
+    fi
+done
+
 if [[ $failed -ne 0 ]]; then
     exit 1
 fi
