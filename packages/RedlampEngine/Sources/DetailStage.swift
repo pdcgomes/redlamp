@@ -168,9 +168,10 @@ struct LocalContrastSettings: Hashable {
     /// isn't boosted into halos while texture, well under it, is. REDLAMP_TEXTURE_LIMIT
     /// overrides it, to tune.
     static let textureLimit = Float(ProcessInfo.processInfo.environment["REDLAMP_TEXTURE_LIMIT"] ?? "") ?? 0.25
-    /// Process 10: positive Texture's gain on its band, per unit of the slider: the limit takes a
-    /// little off texture too. REDLAMP_TEXTURE_GAIN overrides it, to tune.
-    static let textureGain = Float(ProcessInfo.processInfo.environment["REDLAMP_TEXTURE_GAIN"] ?? "") ?? 1.2
+    /// Process 10: positive Texture's gain on its band, per unit of the slider, so texture shows
+    /// about as strongly as at process 9 though the limit takes some off it. REDLAMP_TEXTURE_GAIN
+    /// overrides it, to tune.
+    static let textureGain = Float(ProcessInfo.processInfo.environment["REDLAMP_TEXTURE_GAIN"] ?? "") ?? 1.6
 
     init(recipe: EditRecipe) {
         texture = Float(recipe[.texture] / 100)
