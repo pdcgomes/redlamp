@@ -8,7 +8,7 @@ A user suggested "a uniformity tool, similar to what Capture One does", especial
 - Lightroom added a **Variance** slider to Point Color in Classic 15.0 (October 2025), which reduces or increases the colour differences inside the sampled range. Redlamp's Lightroom comparison plans Point Color for Phase 3, with no tracker row.
 - Redlamp has the pieces around it (colour work in OKLCh, Color Range masks, Face Skin and Body Skin masks) but nothing that reduces colour variation.
 - In a prototype on one portrait, pulling hue and saturation towards the skin's own colour more than halved the face's hue spread (5.9° to 2.8°), cut its chroma spread by 31% and evened the redness around the nose, with lightness untouched. Pulling lightness too flattened the face: a third of its shading and 42% of its pore-scale texture went. Applied per pixel, the pull also removed 29% of the fine colour detail; low-passed over the photo, it kept all of it.
-- Proposed: **TON-29**, Point Color with Capture One's uniformity, globally and inside masks, with an Even Skin Tone mask preset (Phase 3, M); **TON-30**, a spatial version that evens regions of skin and keeps fine detail and the face's shading, as Even Skin does (Phase 3, M).
+- Proposed: **TON-29**, Point Color with Capture One's uniformity, globally and inside masks, with an Even Skin Tone mask preset (M); **TON-30**, a spatial version that evens regions of skin and keeps fine detail and the face's shading, as Even Skin does (Phase 3, M). On 4 October 2026 the owner accepted TON-29 for Phase 2 and deferred TON-30 until TON-29 has shipped.
 
 ## 1. Capture One
 
@@ -94,7 +94,6 @@ Cost: a few arithmetic operations per swatch per pixel in the fused kernel.
 
 ## 6. Open questions
 
-- Phase: the comparison has Point Color in Phase 3; as a Develop panel control it could move into Phase 2.
 - Controls: one signed Variance slider (Lightroom's), three Uniformity sliders (Capture One's), or both, with Variance driving all three.
 - Comparison: Capture One and Lightroom measured on the same portraits, which needs both apps.
 - Coverage: more portraits, with lighter and darker skin and stronger redness; the prototype ran on one.

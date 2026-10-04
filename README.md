@@ -871,6 +871,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [ ] Better X-Trans demosaicing (Markesteijn) <!-- tracker: CAM-07 -->
 - [ ] **Camera bench:** test your own camera's raws against the camera's own JPEG on your Mac, and send only the measurements, which build the evidence on the cameras page <!-- tracker: CAM-14, CAM-15, CAM-16, CAM-17 -->
 - [ ] ICC input profiles <!-- tracker: TON-10 -->
+- [ ] **Point Color**, globally and inside masks, with Capture One's uniformity for evening out skin tones <!-- tracker: TON-29 -->
 - [ ] Lens corrections from the lensfun database (waits on counsel) <!-- tracker: LNS-03 -->
 - [ ] Slider-feel calibration against Lightroom: response curves fitted against Lightroom's renders <!-- tracker: EDT-11 -->
 - [ ] Photos library integration and a Photos editing extension
