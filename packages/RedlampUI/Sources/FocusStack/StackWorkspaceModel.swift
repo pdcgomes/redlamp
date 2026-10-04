@@ -15,6 +15,8 @@ public final class StackWorkspaceModel: Identifiable {
     /// Every frame, included or not, in name (capture) order.
     public private(set) var frames: [URL] = []
     public private(set) var excluded: Set<URL> = []
+    /// Included frames the preview's merge left out because they couldn't be read.
+    public private(set) var unreadable: Set<URL> = []
     public var strategy = FocusStackStrategy.auto
     public var showsDepth = false
     public private(set) var preview: FocusStackPreview?
@@ -137,7 +139,14 @@ public final class StackWorkspaceModel: Identifiable {
                     }
                 }
             }
+            let frames = included
             self.preview = preview
+            unreadable = Set((preview.report.failedFrames ?? []).compactMap { failed in
+                frames.indices.contains(failed.index) ? frames[failed.index] : nil
+            })
+            if case let .frame(frame) = brushSource, unreadable.contains(frame) {
+                brushSource = .underCursor
+            }
             depthMap = Self.depthMap(preview.depth)
             merged = settings
         } catch {
@@ -147,13 +156,17 @@ public final class StackWorkspaceModel: Identifiable {
 
     // MARK: - Retouching
 
-    /// The frame sharpest at `point` (oriented, normalised), from the preview's depth map.
+    /// The frame sharpest at `point` (oriented, normalised), from the preview's depth map: of the
+    /// frames that could be read, the nearest in focus.
     public func frame(at point: CGPoint) -> URL? {
         guard let depth = depthMap, !included.isEmpty else { return nil }
         let x = min(max(Int(point.x * CGFloat(depth.width)), 0), depth.width - 1)
         let y = min(max(Int(point.y * CGFloat(depth.height)), 0), depth.height - 1)
-        let value = Double(depth.bytes[y * depth.width + x]) / 255
-        return included[Int((value * Double(included.count - 1)).rounded())]
+        let position = Double(depth.bytes[y * depth.width + x]) / 255 * Double(included.count - 1)
+        return included.indices
+            .filter { !unreadable.contains(included[$0]) }
+            .min { abs(Double($0) - position) < abs(Double($1) - position) }
+            .map { included[$0] }
     }
 
     /// Adds a stroke along `points` (oriented, normalised) from the brush's source, and applies it.
@@ -165,6 +178,7 @@ public final class StackWorkspaceModel: Identifiable {
             guard let frame = frame(at: first) else { return }
             source = .frame(relativePath(frame))
         case let .frame(frame):
+            guard !unreadable.contains(frame) else { return }
             source = .frame(relativePath(frame))
         case let .strategy(other):
             source = .strategy(other)

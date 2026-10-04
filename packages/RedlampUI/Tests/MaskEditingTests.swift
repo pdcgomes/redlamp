@@ -249,10 +249,14 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         true
     }
 
+    /// What `focusStack` merges every stack into; nil fails the merge.
+    var focusStackPreview: FocusStackPreview?
+
     func focusStack(
         at _: URL, maxLongEdge _: Int, progress _: @escaping @Sendable (Double) -> Void,
     ) async throws -> FocusStackPreview {
-        throw CancellationError()
+        guard let focusStackPreview else { throw CancellationError() }
+        return focusStackPreview
     }
 }
 

@@ -124,12 +124,15 @@ struct StackWorkspaceView: View {
                         frame: frame,
                         thumbnail: workspace.thumbnails[frame],
                         isIncluded: !workspace.excluded.contains(frame),
+                        isUnreadable: workspace.unreadable.contains(frame),
                         isReference: frame == workspace.referenceFrame,
                         isSource: workspace.isRetouching && workspace.brushSource == .frame(frame),
                     )
                     .onTapGesture {
                         if workspace.isRetouching {
-                            workspace.brushSource = .frame(frame)
+                            if !workspace.unreadable.contains(frame) {
+                                workspace.brushSource = .frame(frame)
+                            }
                         } else {
                             workspace.toggle(frame)
                         }
@@ -208,6 +211,7 @@ private struct StackFrameCell: View {
     let frame: URL
     let thumbnail: CGImage?
     let isIncluded: Bool
+    let isUnreadable: Bool
     let isReference: Bool
     let isSource: Bool
 
@@ -220,14 +224,14 @@ private struct StackFrameCell: View {
                     .scaledToFit()
                     .padding(3)
             }
-            if !isIncluded {
-                Image(systemName: "eye.slash")
+            if !isIncluded || isUnreadable {
+                Image(systemName: isIncluded ? "exclamationmark.triangle" : "eye.slash")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.9))
             }
         }
         .frame(width: 96, height: 70)
-        .opacity(isIncluded ? 1 : 0.4)
+        .opacity(isIncluded && !isUnreadable ? 1 : 0.4)
         .overlay(
             RoundedRectangle(cornerRadius: 4)
                 .strokeBorder(isSource ? Color.accentColor : .clear, lineWidth: 2),
@@ -244,7 +248,11 @@ private struct StackFrameCell: View {
                     .help("Reference frame: the narrowest view, which sets the framing")
             }
         }
-        .help("\(frame.lastPathComponent) — click to \(isIncluded ? "leave out" : "include")")
+        .help(
+            isUnreadable && isIncluded
+                ? "\(frame.lastPathComponent) couldn't be read, so the merge left it out — click to leave it out of the stack"
+                : "\(frame.lastPathComponent) — click to \(isIncluded ? "leave out" : "include")",
+        )
     }
 }
 
