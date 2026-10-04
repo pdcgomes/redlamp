@@ -1,6 +1,6 @@
 #include "RedlampShaderTypes.h"
 
-// Process 10: one decomposition behind Texture, Clarity and sharpening. An à-trous B3-spline
+// Process 11: one decomposition behind Texture, Clarity and sharpening. An à-trous B3-spline
 // ladder of the work area's linear luminance (after noise reduction): c0 is the luminance, each
 // coarser level c(s+1) the B3 spline of c(s) with holes 2^s, and band s = c(s) - c(s+1). Four
 // bands and the residual c4 reconstruct the luminance exactly. Texture reads the ratio of two

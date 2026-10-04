@@ -15,7 +15,7 @@ struct SharpenRequest {
     /// A mask's negative Sharpness can make the gain negative; softening then blurs the source.
     var softens: Bool
     var measures: SharpenMeasures
-    /// Process 10: the separator keeps the ladder's bands that stand out of the noise instead of
+    /// Process 11: the separator keeps the ladder's bands that stand out of the noise instead of
     /// denoising the pyramid.
     var ladder: Ladder?
 }
@@ -50,7 +50,7 @@ final class SharpenCache {
         var session: ObjectIdentifier
         var work: DetailStage.WorkArea
         var sigma: Float
-        /// Process 10: the ladder the separator read.
+        /// Process 11: the ladder the separator read.
         var ladder: LadderKey?
         /// Keeps the session alive so its identifier can't be reused while cached.
         var owner: ImageSession

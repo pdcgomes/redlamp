@@ -290,13 +290,13 @@ struct EngineMemoryTests {
 
     /// A 24 MP frame at 1:1 after its Fit view, then a new Amount, as the editor renders them:
     /// as few tiles as the scratch the passes use allows, since each tile costs a little. Process
-    /// 9: at process 10 the frame keeps its noise-reduced source out of the scratch budget
+    /// 10: at process 11 the frame keeps its noise-reduced source out of the scratch budget
     /// (`DetailDecompositionTests`).
     @Test func `a 24 MP frame at 1:1 takes as few tiles as its passes' scratch allows`() throws {
         let session = try helpers.makeSession(.bayer, width: 6000, height: 4000)
         let stage = DetailStage(device: helpers.device, kernels: helpers.kernels)
         var recipe = Self.everyPass
-        recipe.processVersion = 9
+        recipe.processVersion = 10
         _ = try render(stage, session, recipe, outputSize: PixelSize(width: 3000, height: 2000))
         _ = try render(stage, session, recipe)
         #expect(stage.tileCount == 4)
@@ -386,8 +386,8 @@ struct EngineMemoryTests {
         newAmount[.sharpenAmount] = 90
         var newRadius = newAmount
         newRadius[.sharpenRadius] = 1.5
-        // In order, so the last two find the analysis and then the separation cached. Process 9,
-        // whose passes still tile with the analysis cached; process 10's tiles are tested in
+        // In order, so the last two find the analysis and then the separation cached. Process 10,
+        // whose passes still tile with the analysis cached; process 11's tiles are tested in
         // `DetailDecompositionTests`.
         let recipes = [
             ("every pass", Self.everyPass), ("widest", widest), ("softened", softened), ("uneven noise", unevenNoise),
@@ -395,7 +395,7 @@ struct EngineMemoryTests {
         ]
         return recipes.map { name, recipe in
             var recipe = recipe
-            recipe.processVersion = 9
+            recipe.processVersion = 10
             return (name, recipe)
         }
     }
@@ -472,8 +472,8 @@ struct EngineMemoryTests {
     @Test func `a halo one texel short shows`() throws {
         let session = try helpers.makeSession(.bayer, width: 641, height: 479, signal: Self.smooth)
         var before = DetailStageTests.untouched
-        // Process 9: process 10 reads its cached ladder at the texel too, so it needs no tiles.
-        before.processVersion = 9
+        // Process 10: process 11 reads its cached ladder at the texel too, so it needs no tiles.
+        before.processVersion = 10
         before[.sharpenAmount] = 40
         before[.sharpenMasking] = 50
         before[.clarity] = 25

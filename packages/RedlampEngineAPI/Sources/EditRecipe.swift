@@ -71,8 +71,11 @@ public struct EditRecipe: Sendable, Hashable {
     /// bright and dark bands along it.
     /// 10: a retouched photo's maps (Highlights and Shadows', Clarity's, Dehaze's and glow's) are
     /// made from it (`RetouchStage.Maps`), so a removed object leaves no trace where they're used.
+    /// 11: Texture, Clarity and sharpening work on one band split of the noise-reduced luminance
+    /// (`DetailStage.Ladder`): Texture boosts medium detail and holds back an edge's step, so it
+    /// makes no halos; sharpening restores detail above the noise and leaves flat noise alone.
     /// A new version records its references for the process-stability gate (`ProcessStabilityTests`).
-    public static let currentProcessVersion = 10
+    public static let currentProcessVersion = 11
     public static let linearPointCurve = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]
 
     /// Sidecars written before process versions existed are version 1.

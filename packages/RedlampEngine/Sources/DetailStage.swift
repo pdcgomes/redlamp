@@ -118,10 +118,10 @@ struct SharpenSettings: Hashable {
     var deconvolution: Float
     /// Local gradient, in stops per texel, below which nothing is sharpened (Masking).
     var edgeThreshold: Float
-    /// Process 10: the separator is the ladder's bands that stand out of the noise (`Ladder`).
+    /// Process 11: the separator is the ladder's bands that stand out of the noise (`Ladder`).
     var decomposition: Bool
 
-    /// Process 10's separator keeps the ladder's detail above this many noise sigmas, as the
+    /// Process 11's separator keeps the ladder's detail above this many noise sigmas, as the
     /// pyramid separator does (`DenoiseSettings.separator`).
     static let separatorSigmas: Float = 3
 
@@ -133,7 +133,7 @@ struct SharpenSettings: Hashable {
         deconvolution = detail
         let masking = Float(recipe[.sharpenMasking] / 100)
         edgeThreshold = 0.3 * masking * masking
-        decomposition = recipe.processVersion >= 10
+        decomposition = recipe.processVersion >= 11
     }
 
     /// The blur sigma in texels of a pyramid level; nil where it is too fine to show.
@@ -160,15 +160,15 @@ struct LocalContrastSettings: Hashable {
     var clarity: Float
     /// Process 9: Clarity's band ends at an edge-preserving base (`ClarityBase`) instead of a level.
     var edgeAware: Bool
-    /// Process 10: both bands come from the ladder (`Ladder`) of the noise-reduced luminance.
+    /// Process 11: both bands come from the ladder (`Ladder`) of the noise-reduced luminance.
     var decomposition: Bool
     /// Clarity's detail saturates at about this many stops, which holds back halos.
     static let clarityLimit: Float = 0.5
-    /// Process 10: Texture's detail saturates at about this many stops, so the step of an edge
+    /// Process 11: Texture's detail saturates at about this many stops, so the step of an edge
     /// isn't boosted into halos while texture, well under it, is. REDLAMP_TEXTURE_LIMIT
     /// overrides it, to tune.
     static let textureLimit = Float(ProcessInfo.processInfo.environment["REDLAMP_TEXTURE_LIMIT"] ?? "") ?? 0.25
-    /// Process 10: positive Texture's gain on its band, per unit of the slider, so texture shows
+    /// Process 11: positive Texture's gain on its band, per unit of the slider, so texture shows
     /// about as strongly as at process 9 though the limit takes some off it. REDLAMP_TEXTURE_GAIN
     /// overrides it, to tune.
     static let textureGain = Float(ProcessInfo.processInfo.environment["REDLAMP_TEXTURE_GAIN"] ?? "") ?? 1.6
@@ -177,10 +177,10 @@ struct LocalContrastSettings: Hashable {
         texture = Float(recipe[.texture] / 100)
         clarity = Float(recipe[.clarity] / 100)
         edgeAware = recipe.processVersion >= 9
-        decomposition = recipe.processVersion >= 10
+        decomposition = recipe.processVersion >= 11
     }
 
-    /// Process 10: Texture's weight when rendering at `level`, where the texels stand in for the
+    /// Process 11: Texture's weight when rendering at `level`, where the texels stand in for the
     /// band's finer levels, so a preview shows what a downscaled full-resolution render does
     /// (`PreviewExportTests`).
     static func textureWeight(level: Int) -> Float {
@@ -325,7 +325,7 @@ final class DetailStage {
     let residency = DetailResidency()
     let sharpenCache: SharpenCache
     let ladderCache: LadderCache
-    /// Process 10's Clarity base per photo, in the ladder's luminance, made when first needed.
+    /// Process 11's Clarity base per photo, in the ladder's luminance, made when first needed.
     var clarityBases: [(owner: ImageSession, texture: any MTLTexture)] = []
     /// Each format's working textures by slot, allocated as passes first use them, for one photo.
     private var scratch: [MTLPixelFormat: [Int: any MTLTexture]] = [:]
@@ -611,7 +611,7 @@ final class DetailStage {
         var local: LocalDetail
         var masks: MaskBindings
 
-        /// Process 10: Texture, Clarity and sharpening read the ladder (`Ladder`).
+        /// Process 11: Texture, Clarity and sharpening read the ladder (`Ladder`).
         var decomposes: Bool {
             (sharpen?.decomposition ?? contrast?.decomposition) ?? false
         }
@@ -641,7 +641,7 @@ final class DetailStage {
             return reach
         }
 
-        /// Process 10: the ladder reads the noise reduction's result, and sharpening's analysis
+        /// Process 11: the ladder reads the noise reduction's result, and sharpening's analysis
         /// the ladder; the final pass reads them at the texel, and the analysis's gradient.
         private func decomposedHalo(level: Int, measures: SharpenMeasures?, ladder: LadderMeasures?) -> Int {
             let cached = ladder?.ladder != nil
@@ -814,7 +814,7 @@ final class DetailStage {
         if let analysis = sharpenCache.analysis(session, work, sigma: sigma, ladder: ladder) {
             return SharpenMeasures(analysis: analysis)
         }
-        // Process 10's separation comes from the ladder in one pass, so it isn't cached.
+        // Process 11's separation comes from the ladder in one pass, so it isn't cached.
         return SharpenMeasures(separation: ladder == nil ? sharpenCache.separation(session, work) : nil)
     }
 
@@ -1474,7 +1474,7 @@ enum NoiseCalibration {
         [0.8908, 0.2007, 0.0856, 0.0413, 0.0205].map { SIMD3(repeating: Float($0) / Float(1 << level)) }
     }
 
-    /// Process 10: the noise in each band of the ladder of linear luminance, per unit of the
+    /// Process 11: the noise in each band of the ladder of linear luminance, per unit of the
     /// luminance's own noise (`Ladder`), at pyramid levels 0 to 2. Measured as the table above
     /// (`DetailStageTests`, with `REDLAMP_CALIBRATE_NOISE=1`).
     static let ladderBayer: [SIMD4<Float>] = [

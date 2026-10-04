@@ -5,13 +5,13 @@ import RedlampEngine
 import RedlampEngineAPI
 import Testing
 
-/// Process 10: the fitted preview shows Texture and Clarity as strongly as an export at the same
+/// Process 11: the fitted preview shows Texture and Clarity as strongly as an export at the same
 /// size does (ARC-04), at sizes that render from different pyramid levels. Measured as in
 /// `PreviewExportTests`: each filter's change in linear luminance.
 ///
 /// At 700 px the preview renders from level 3, which has lost the 2 to 8 px texture the export's
 /// Texture works on before downscaling, so the two agree in strength but not in where (a
-/// correlation of about 0.8, as at process 9); only the strength is held there.
+/// correlation of about 0.8, as at process 10); only the strength is held there.
 struct DetailPreviewTests {
     private static let decode: [Double] = (0 ..< 256).map { value in
         let c = Double(value) / 255
@@ -71,7 +71,7 @@ struct DetailPreviewTests {
         }
 
         var unedited = EditRecipe()
-        unedited.processVersion = 10
+        unedited.processVersion = 11
         let previewBase = try await preview(unedited)
         let exportBase = try await export(unedited)
         try #require(previewBase.count == exportBase.count)

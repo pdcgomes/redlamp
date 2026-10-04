@@ -6,7 +6,7 @@ import simd
 import Testing
 @testable import RedlampEngine
 
-/// Process 10's ladder of linear luminance (`Ladder`), on synthetic sensors through the real
+/// Process 11's ladder of linear luminance (`Ladder`), on synthetic sensors through the real
 /// session builder.
 @Suite(.enabled(if: MTLCreateSystemDefaultDevice() != nil))
 struct DetailLadderTests {

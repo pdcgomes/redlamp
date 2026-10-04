@@ -5,7 +5,7 @@ import simd
 import Testing
 @testable import RedlampEngine
 
-/// Process 10: Texture, Clarity and sharpening read one ladder of the noise-reduced luminance
+/// Process 11: Texture, Clarity and sharpening read one ladder of the noise-reduced luminance
 /// (`Ladder`, `docs/plans/2026-10-03-detail-decomposition-design.md`).
 @Suite(.enabled(if: MTLCreateSystemDefaultDevice() != nil))
 struct DetailDecompositionTests {
@@ -23,7 +23,7 @@ struct DetailDecompositionTests {
     }
 
     /// Noise reduction, sharpening, Texture and Clarity.
-    static let everyPass = process(10) { recipe in
+    static let everyPass = process(11) { recipe in
         recipe[.noiseLuminance] = 40
         recipe[.noiseColor] = 30
         recipe[.sharpenAmount] = 60
@@ -52,8 +52,8 @@ struct DetailDecompositionTests {
     }
 
     /// A dark and a bright half 3.3 stops apart, with Texture-sized stripes (6 px, ±0.1 stops) on
-    /// both. Process 9's Texture takes the edge for detail and puts a dark band on its dark side
-    /// and a bright one on its bright side; process 10's limit leaves a fraction of them for the
+    /// both. Process 10's Texture takes the edge for detail and puts a dark band on its dark side
+    /// and a bright one on its bright side; process 11's limit leaves a fraction of them for the
     /// same boost of the stripes.
     @Test func `texture puts little halo along a strong edge`() throws {
         let width = 1024
@@ -75,9 +75,9 @@ struct DetailDecompositionTests {
             let boost = log2(spread(output[edge - 300 ..< edge - 156]) / spread(source[edge - 300 ..< edge - 156]))
             return (dark, bright, boost)
         }
-        let before = try measure(9)
-        let after = try measure(10)
-        print("texture beside the edge: process 9 \(before), process 10 \(after)")
+        let before = try measure(10)
+        let after = try measure(11)
+        print("texture beside the edge: process 10 \(before), process 11 \(after)")
         #expect(after.boost > 0.4, "stripes boosted by \(after.boost) stops")
         #expect(abs(after.dark) / after.boost < abs(before.dark) / before.boost / 3, "dark side")
         #expect(abs(after.bright) / after.boost < abs(before.bright) / before.boost / 1.5, "bright side")
@@ -88,7 +88,7 @@ struct DetailDecompositionTests {
             let session = try base.makeSession(.bayer, width: 1024, height: 256, noiseScale: 0) { x, _ in
                 Float(0.2 * pow(2, 0.5 * sin(2 * .pi * Double(x) / period)))
             }
-            let output = try logRow(base.processed(session, recipe: Self.process(10) { $0[.texture] = texture }))
+            let output = try logRow(base.processed(session, recipe: Self.process(11) { $0[.texture] = texture }))
             let source = try logRow(base.readLevel(session, level: 0))
             return spread(output[128 ..< 896]) / spread(source[128 ..< 896])
         }
@@ -99,7 +99,7 @@ struct DetailDecompositionTests {
 
     /// Texture reads the noise-reduced luminance, so for each stop it boosts texture by (noise-free
     /// stripes, without noise reduction) it puts back less of the noise noise reduction took out
-    /// than process 9, which read the pyramid.
+    /// than process 10, which read the pyramid.
     @Test func `texture puts less noise back after noise reduction`() throws {
         let flat = try base.makeSession(.bayer, width: 768, height: 512)
         let stripes = try base.makeSession(.bayer, width: 1024, height: 256, noiseScale: 0) { x, _ in
@@ -119,17 +119,17 @@ struct DetailDecompositionTests {
             let boost = log2(spread(output[128 ..< 896]) / spread(source[128 ..< 896]))
             return (log2(noise / denoised) / boost, boost)
         }
-        let before = try perStop(9)
-        let after = try perStop(10)
-        print("noise growth (stops) per stop of texture after Luminance 60: process 9 \(before), process 10 \(after)")
-        #expect(after.noise < before.noise * 0.8, "process 10 \(after), process 9 \(before)")
+        let before = try perStop(10)
+        let after = try perStop(11)
+        print("noise growth (stops) per stop of texture after Luminance 60: process 10 \(before), process 11 \(after)")
+        #expect(after.noise < before.noise * 0.8, "process 11 \(after), process 10 \(before)")
     }
 
     @Test func `a mask's texture only works inside it`() throws {
         let session = try base.makeSession(.bayer, width: 768, height: 256, noiseScale: 0) { x, _ in
             Float(0.2 * pow(2, 0.5 * sin(2 * .pi * Double(x) / 6)))
         }
-        let recipe = Self.process(10) { $0.masks = [base.leftHalf(.localTexture, 100)] }
+        let recipe = Self.process(11) { $0.masks = [base.leftHalf(.localTexture, 100)] }
         let before = try logRow(base.readLevel(session, level: 0), width: 768)
         let after = try logRow(base.processed(session, recipe: recipe), width: 768)
         let inside = spread(after[64 ..< 300]) / spread(before[64 ..< 300])
@@ -161,8 +161,8 @@ struct DetailDecompositionTests {
             )
         }
         let perLevel = try measure(8)
-        let ladder = try measure(10)
-        print("clarity beside the edge: per level \(perLevel), process 10 \(ladder)")
+        let ladder = try measure(11)
+        print("clarity beside the edge: per level \(perLevel), process 11 \(ladder)")
         #expect(ladder.gain > 1.1, "stripes: \(ladder.gain)")
         let perStop = { (band: Float, gain: Float) in abs(band) / log2(gain) }
         #expect(perStop(ladder.bright, ladder.gain) < perStop(perLevel.bright, perLevel.gain) / 3, "\(ladder)")
@@ -177,7 +177,7 @@ struct DetailDecompositionTests {
         let session = try base.makeSession(.bayer, width: 512, height: 384)
         let before = try base.statistics(of: base.readLevel(session, level: 0)).deviation
         for (detail, masking) in [(0.0, 0.0), (25, 0), (100, 0), (25, 100)] {
-            let recipe = Self.process(10) { recipe in
+            let recipe = Self.process(11) { recipe in
                 recipe[.sharpenAmount] = 100
                 recipe[.sharpenDetail] = detail
                 recipe[.sharpenMasking] = masking
@@ -210,7 +210,7 @@ struct DetailDecompositionTests {
             return (differences.map { $0 * $0 }.reduce(0, +) / Float(differences.count)).squareRoot()
         }
         func sharpened(detail: Double) throws -> Float {
-            try error(base.processed(soft, recipe: Self.process(10) { recipe in
+            try error(base.processed(soft, recipe: Self.process(11) { recipe in
                 recipe[.sharpenAmount] = 100
                 recipe[.sharpenRadius] = sigma / 0.8
                 recipe[.sharpenDetail] = detail

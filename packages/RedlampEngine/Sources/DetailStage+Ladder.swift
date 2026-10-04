@@ -4,7 +4,7 @@ import RedlampEngineAPI
 import RedlampKernels
 import simd
 
-/// Process 10's decomposition of a work area (`DetailLadder.metal`): an à-trous B3-spline ladder
+/// Process 11's decomposition of a work area (`DetailLadder.metal`): an à-trous B3-spline ladder
 /// of the noise-reduced linear luminance, which Texture, Clarity and sharpening's separator all
 /// read. Rendering at level L, the texels are the ladder's level 0 and its band j spans
 /// full-resolution scales L + j to L + j + 1.
@@ -140,7 +140,7 @@ final class LadderCache {
 }
 
 extension DetailStage {
-    /// Process 10's Clarity base for `session`: `ClarityBase` in the ladder's luminance, so
+    /// Process 11's Clarity base for `session`: `ClarityBase` in the ladder's luminance, so
     /// Clarity's band and its base measure the same thing.
     func clarityBase(_ session: ImageSession) throws -> any MTLTexture {
         if let base = clarityBases.first(where: { $0.owner === session }) {
@@ -246,7 +246,7 @@ extension DetailStage {
         encoder.dispatchGrid(width: work.size.x, height: work.size.y, pipeline: kernels.ladderSeparate)
     }
 
-    /// Process 10's passes over `work`: noise reduction and the ladder unless given, sharpening's
+    /// Process 11's passes over `work`: noise reduction and the ladder unless given, sharpening's
     /// analysis unless given, then Texture, Clarity and sharpening in one pass into `output`.
     func encodeDecomposed(
         _ passes: Passes,

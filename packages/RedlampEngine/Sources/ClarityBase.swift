@@ -28,7 +28,7 @@ enum ClarityBase {
     }
 
     /// The coefficients for `image`, a photo `fullLongEdge` pixels on its long side, in the
-    /// luminance of `weights` (process 10 uses the ladder's, `DetailStage.luma`).
+    /// luminance of `weights` (process 11 uses the ladder's, `DetailStage.luma`).
     static func coefficients(
         _ image: AnalysisImage,
         fullLongEdge: Int,
