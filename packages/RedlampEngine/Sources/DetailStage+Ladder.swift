@@ -155,8 +155,9 @@ extension DetailStage {
         into ladder: Ladder,
         encoder: any MTLComputeCommandEncoder,
     ) throws {
-        let rows = try scratchTexture(.r32Float, 5, work)
-        let levels = try [scratchTexture(.r32Float, 6, work), scratchTexture(.r32Float, 7, work)]
+        // Sharpening's analysis takes these slots over once the ladder is done.
+        let rows = try scratchTexture(.r32Float, 2, work)
+        let levels = try [scratchTexture(.r32Float, 1, work), scratchTexture(.r32Float, 3, work)]
         var params = LadderParams(
             origin: SIMD4(Int32(source.origin.x), Int32(source.origin.y), Int32(source.level), 0),
             size: SIMD4(Int32(work.size.x), Int32(work.size.y), 0, 1),

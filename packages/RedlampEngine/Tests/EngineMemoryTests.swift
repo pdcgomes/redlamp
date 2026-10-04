@@ -81,17 +81,22 @@ struct EngineMemoryTests {
         zip(first, second).count(where: { $0 != $1 }) + abs(first.count - second.count)
     }
 
+    /// The output, sharpening and ladder caches.
+    static func cachedTextures(_ stage: DetailStage) -> [any MTLTexture] {
+        stage.sharpenCache.heldTextures + stage.ladderCache.heldTextures + stage.cachedOutputs
+    }
+
     static func scratchBytes(_ stage: DetailStage) -> Int {
-        let cached = Set((stage.sharpenCache.heldTextures + stage.cachedOutputs).map(ObjectIdentifier.init))
+        let cached = Set(cachedTextures(stage).map(ObjectIdentifier.init))
         return stage.heldTextures.filter { !cached.contains(ObjectIdentifier($0)) }.reduce(0) { $0 + $1.allocatedSize }
     }
 
-    /// Bytes the stage allocated during `body` besides the output and the sharpening caches, all
-    /// alive until its command buffer completes.
+    /// Bytes the stage allocated during `body` besides the output, sharpening and ladder caches,
+    /// all alive until its command buffer completes.
     func scratchAllocated(_ stage: DetailStage, _ body: () throws -> Void) rethrows -> Int {
         let before = stage.allocated.bytes
         try body()
-        let cached = (stage.sharpenCache.heldTextures + stage.cachedOutputs).reduce(0) { $0 + $1.allocatedSize }
+        let cached = Self.cachedTextures(stage).reduce(0) { $0 + $1.allocatedSize }
         return stage.allocated.bytes - before - cached
     }
 
@@ -338,11 +343,18 @@ struct EngineMemoryTests {
         newAmount[.sharpenAmount] = 90
         var newRadius = newAmount
         newRadius[.sharpenRadius] = 1.5
-        // In order, so the last two find the analysis and then the separation cached.
-        return [
+        // In order, so the last two find the analysis and then the separation cached. Process 9,
+        // whose passes still tile with the analysis cached; process 10's tiles are tested in
+        // `DetailDecompositionTests`.
+        let recipes = [
             ("every pass", Self.everyPass), ("widest", widest), ("softened", softened), ("uneven noise", unevenNoise),
             ("every pass again", Self.everyPass), ("new Amount", newAmount), ("new Radius", newRadius),
         ]
+        return recipes.map { name, recipe in
+            var recipe = recipe
+            recipe.processVersion = 9
+            return (name, recipe)
+        }
     }
 
     /// Tiles overlap by as much as the passes read around a texel, so they render exactly what
@@ -385,7 +397,7 @@ struct EngineMemoryTests {
         let cases: [(name: String, recipe: EditRecipe, before: EditRecipe?, halved: Bool)] = [
             (recipes[0].0, recipes[0].1, nil, true), (recipes[1].0, recipes[1].1, nil, true),
             (recipes[2].0, recipes[2].1, nil, false),
-            (recipes[5].0, recipes[5].1, Self.everyPass, true), (recipes[6].0, recipes[6].1, Self.everyPass, true),
+            (recipes[5].0, recipes[5].1, recipes[0].1, true), (recipes[6].0, recipes[6].1, recipes[0].1, true),
         ]
         for (name, recipe, before, halved) in cases {
             let whole = try helpers.processAndRead(
@@ -412,10 +424,13 @@ struct EngineMemoryTests {
     }
 
     /// With the sharpening analysis cached and Clarity reading the texel itself, the tiles overlap
-    /// by the one texel Masking's gradient reads; a texel short shows on an odd-sized area.
+    /// by the one texel Masking's gradient reads; a texel short shows on an odd-sized area whose
+    /// gradients cross Masking's threshold everywhere.
     @Test func `a halo one texel short shows`() throws {
-        let session = try helpers.makeSession(.bayer, width: 641, height: 479, signal: Self.blocks)
+        let session = try helpers.makeSession(.bayer, width: 641, height: 479, signal: Self.smooth)
         var before = DetailStageTests.untouched
+        // Process 9: process 10 reads its cached ladder at the texel too, so it needs no tiles.
+        before.processVersion = 9
         before[.sharpenAmount] = 40
         before[.sharpenMasking] = 50
         before[.clarity] = 25
@@ -448,7 +463,7 @@ struct EngineMemoryTests {
         stage.scratchBudget = 118 * 400_000
         _ = try render(stage, session, recipe)
         _ = try await Self.settledResidentBytes(stage)
-        let cached = Set((stage.sharpenCache.heldTextures + stage.cachedOutputs).map(ObjectIdentifier.init))
+        let cached = Set(Self.cachedTextures(stage).map(ObjectIdentifier.init))
         let scratch = stage.heldTextures.filter { !cached.contains(ObjectIdentifier($0)) }
         #expect(!scratch.isEmpty)
 

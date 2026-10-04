@@ -302,6 +302,9 @@ final class DetailStage {
     private var entries: [Entry] = []
     /// A region and its overview, and the same for a comparison render.
     private static let maximumEntries = 4
+    /// The largest work area whose ladder is cached, 18 bytes a texel: a 5K display's view at
+    /// 1:1 with its margins. Larger areas run noise reduction and the ladder on every render.
+    static let ladderCacheTexels = 16 << 20
     /// Per work area: a comparison's two edits.
     private static let maximumEntriesPerArea = 2
 
@@ -451,6 +454,7 @@ final class DetailStage {
             session: key.session, work: work, denoise: key.denoise, local: key.local.uses(3) ? key.local : nil,
         ) : nil
         var ladder = ladderKey.map { LadderMeasures(ladder: ladderCache.ladder($0)) }
+        let cachesLadder = cache && work.size.x * work.size.y <= Self.ladderCacheTexels
         var measures = key.sharpen.map { _ in
             cachedSharpenMeasures(session, work: work, sigma: sigma, ladder: ladderKey)
         }
@@ -477,7 +481,7 @@ final class DetailStage {
                 }
             }
             if ladder != nil, ladder?.ladder == nil {
-                ladder?.target = try cache
+                ladder?.target = try cachesLadder
                     ? makeLadder(work, denoised: key.denoise != nil) : scratchLadder(work, denoised: key.denoise != nil)
             }
             guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
@@ -491,7 +495,7 @@ final class DetailStage {
                     measures?.separationTarget = try makeWorkTexture(.r16Float, work)
                 }
             }
-            if cache, ladder != nil, ladder?.ladder == nil {
+            if cachesLadder, ladder != nil, ladder?.ladder == nil {
                 ladder?.target = try makeLadder(work, denoised: key.denoise != nil)
             }
             try encodeTiles(
@@ -501,7 +505,7 @@ final class DetailStage {
         if cache, let measures {
             storeSharpenMeasures(measures, session, work: work, sigma: sigma, ladder: ladderKey)
         }
-        if cache, let ladderKey, ladder?.ladder == nil, let target = ladder?.target {
+        if cachesLadder, let ladderKey, ladder?.ladder == nil, let target = ladder?.target {
             ladderCache.store(target, key: ladderKey, owner: session)
             target.textures.forEach { encoding?.cached.insert(ObjectIdentifier($0)) }
         }
@@ -627,7 +631,7 @@ final class DetailStage {
                     slots.formUnion(rgba(4))
                 }
                 if ladder?.ladder == nil {
-                    slots.formUnion([5, 6, 7].map { ScratchSlot(format: .r32Float, index: $0) })
+                    slots.formUnion([1, 2, 3].map { ScratchSlot(format: .r32Float, index: $0) })
                     if denoise != nil {
                         slots.formUnion(rgba(0, 1, 2, 3, 8))
                     }
@@ -837,10 +841,13 @@ final class DetailStage {
                 }
             }
         }
-        guard work.size.x * work.size.y > limit else { return [Tile(whole: work)] }
+        /// Metal allocates textures in 64-texel blocks each way.
+        func allocated(_ size: SIMD2<Int>) -> Int {
+            (size.x + 63) / 64 * 64 * ((size.y + 63) / 64 * 64)
+        }
+        guard allocated(work.size) > limit else { return [Tile(whole: work)] }
         let candidates = (1 ... 16).flatMap { columns in (1 ... 16).map { layout(columns, $0) } }.filter { tiles in
-            let largest = tiles.map(\.extent.size).reduce(.zero, simd_max)
-            return largest.x * largest.y <= limit
+            allocated(tiles.map(\.extent.size).reduce(.zero, simd_max)) <= limit
         }
         func texels(_ tiles: [Tile]) -> Int {
             tiles.reduce(0) { $0 + $1.extent.size.x * $1.extent.size.y }
