@@ -50,11 +50,7 @@ enum RawDecoder {
         let samples: [UInt16]
         let blackLevels: [Float]
         var banding: BandingCorrection?
-        var darkPercentile: Double?
-        var clippedShare: Double?
-        var zeroShare: Double?
-        var margin: (offset: Float, noise: Float)?
-        var darkEdges: DarkEdges?
+        var mosaic: MosaicMeasures?
 
         if let jpegXL {
             layout = .linearRGB
@@ -86,20 +82,12 @@ enum RawDecoder {
                 raw: rawImage, pitch: pitch / MemoryLayout<UInt16>.size, top: top, left: left,
                 width: width, height: height, white: whiteLevel, black: patternBlack,
             )
-            (clippedShare, zeroShare) = histogram.withUnsafeBufferPointer { [whiteLevel] counts in
-                (
-                    RawMeasurement.clippedShare(counts, total: width * height, white: whiteLevel),
-                    RawMeasurement.zeroShare(counts, total: width * height),
-                )
-            }
-            darkPercentile = RawMeasurement.darkPercentile(samples, width: width, height: height)
-            margin = phaseOne ? nil : OpticalBlack.marginLevel(
-                raw: rawImage, pitch: pitch / MemoryLayout<UInt16>.size, top: top, left: left,
-                width: width, height: height, white: whiteLevel, black: patternBlack,
-            )
-            darkEdges = RawMeasurement.darkEdges(
-                samples, width: width, height: height,
-                black: blackLevels.reduce(0, +) / Float(blackLevels.count), white: whiteLevel,
+            mosaic = MosaicMeasures(
+                samples: samples, histogram: histogram, width: width, height: height, blackLevels: blackLevels,
+                white: whiteLevel, margin: phaseOne ? nil : OpticalBlack.marginLevel(
+                    raw: rawImage, pitch: pitch / MemoryLayout<UInt16>.size, top: top, left: left,
+                    width: width, height: height, white: whiteLevel, black: patternBlack,
+                ),
             )
         } else if colors >= 3, let pixels = raw.pointee.rawdata.color3_image {
             layout = .linearRGB
@@ -159,22 +147,9 @@ enum RawDecoder {
             focalLength: other.focal_len > 0 ? Double(other.focal_len) : nil,
             captureDate: other.timestamp > 0 ? Date(timeIntervalSince1970: TimeInterval(other.timestamp)) : nil,
         )
-        let meanBlack = blackLevels.reduce(0, +) / Float(max(blackLevels.count, 1))
-        info.diagnostics = DecodeDiagnostics(
-            identity: identity(raw, url: url),
-            measurements: DecodeMeasurements(
-                black: Double(meanBlack),
-                opticalBlack: margin.map { Double(meanBlack + $0.offset) },
-                opticalBlackNoise: margin.map { Double($0.noise) },
-                darkPercentile: darkPercentile,
-                nominalWhite: Double(nominalWhite),
-                white: Double(whiteLevel),
-                clippedShare: clippedShare,
-                zeroShare: zeroShare,
-                darkEdges: darkEdges,
-                colorMatrix: xyzToCamera.contains { $0 != 0 } && xyzToCamera.allSatisfy(\.isFinite)
-                    ? xyzToCamera.map { ($0 * 10000).rounded() / 10000 } : nil,
-            ),
+        info.diagnostics = diagnostics(
+            raw, url: url, blackLevels: blackLevels, nominalWhite: nominalWhite, white: whiteLevel,
+            xyzToCamera: xyzToCamera, mosaic: mosaic,
         )
 
         var decoded = DecodedImage(

@@ -65,6 +65,30 @@ extension RawDecoder {
         )
     }
 
+    /// A decode's identity and measurements, for its `ImageInfo`.
+    static func diagnostics(
+        _ raw: UnsafeMutablePointer<libraw_data_t>, url: URL, blackLevels: [Float], nominalWhite: Float, white: Float,
+        xyzToCamera: [Double], mosaic: MosaicMeasures?,
+    ) -> DecodeDiagnostics {
+        let black = blackLevels.reduce(0, +) / Float(max(blackLevels.count, 1))
+        let matrix = xyzToCamera.contains { $0 != 0 } && xyzToCamera.allSatisfy(\.isFinite)
+        return DecodeDiagnostics(
+            identity: identity(raw, url: url),
+            measurements: DecodeMeasurements(
+                black: Double(black),
+                opticalBlack: mosaic?.margin.map { Double(black + $0.offset) },
+                opticalBlackNoise: mosaic?.margin.map { Double($0.noise) },
+                darkPercentile: mosaic?.darkPercentile,
+                nominalWhite: Double(nominalWhite),
+                white: Double(white),
+                clippedShare: mosaic?.clippedShare,
+                zeroShare: mosaic?.zeroShare,
+                darkEdges: mosaic?.darkEdges,
+                colorMatrix: matrix ? xyzToCamera.map { ($0 * 10000).rounded() / 10000 } : nil,
+            ),
+        )
+    }
+
     /// What ImageIO reads from a file's EXIF, for a file LibRaw won't open.
     static func exifIdentity(_ url: URL) -> RawFileIdentity? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
@@ -96,9 +120,37 @@ extension RawDecoder {
     static func text(_ field: some Any) -> String? {
         withUnsafeBytes(of: field) { bytes in
             let end = bytes.firstIndex(of: 0) ?? bytes.count
-            let value = String(decoding: bytes[..<end], as: UTF8.self).trimmingCharacters(in: .whitespaces)
+            let value = String(bytes: bytes[..<end], encoding: .utf8)?.trimmingCharacters(in: .whitespaces) ?? ""
             return value.isEmpty ? nil : value
         }
+    }
+}
+
+/// What a mosaic decode measures for the camera bench, beside what development needs.
+struct MosaicMeasures {
+    var darkPercentile: Double?
+    var clippedShare: Double
+    var zeroShare: Double
+    var darkEdges: DarkEdges?
+    /// The masked margins' offset from the black level and their noise.
+    var margin: (offset: Float, noise: Float)?
+
+    init(
+        samples: [UInt16], histogram: [UInt32], width: Int, height: Int, blackLevels: [Float], white: Float,
+        margin: (offset: Float, noise: Float)?,
+    ) {
+        (clippedShare, zeroShare) = histogram.withUnsafeBufferPointer { counts in
+            (
+                RawMeasurement.clippedShare(counts, total: width * height, white: white),
+                RawMeasurement.zeroShare(counts, total: width * height),
+            )
+        }
+        darkPercentile = RawMeasurement.darkPercentile(samples, width: width, height: height)
+        darkEdges = RawMeasurement.darkEdges(
+            samples, width: width, height: height, black: blackLevels.reduce(0, +) / Float(blackLevels.count),
+            white: white,
+        )
+        self.margin = margin
     }
 }
 

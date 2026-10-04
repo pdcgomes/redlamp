@@ -110,7 +110,7 @@ struct CameraBenchModelTests {
             try await Task.sleep(for: .milliseconds(10))
         }
         #expect(model.sending == .sent(id: "submission-1", dryRun: true))
-        #expect(relay.sent.map { String(decoding: $0, as: UTF8.self) } == [shown])
+        #expect(relay.sent == [Data(shown.utf8)])
     }
 
     @Test func `a mode with problems can be reported, without file names`() async throws {
