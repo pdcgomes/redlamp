@@ -9,7 +9,7 @@ import { site } from "@/lib/site";
 
 const title = "Test your camera with Redlamp";
 const description =
-  "Help Redlamp support your camera: the camera bench checks your own raw files on your Mac, against the JPEG your camera saved, and sends only the measurements.";
+  "Help Redlamp support your camera. The camera bench checks your raw files on your Mac, compares them with the JPEGs your camera saved, and sends only the measurements.";
 
 export const metadata: Metadata = {
   title: "Test your camera",
@@ -37,7 +37,8 @@ export default async function TestYourCameraPage() {
   const { verified, bench, makes } = cameras();
   const read = makes.reduce((sum, make) => sum + make.models.length, 0);
   const verifiedCameras = new Set(verified.map((camera) => camera.camera)).size;
-  const problems = bench.filter((camera) => camera.problems).length;
+  const benchCameras = new Set(bench.map((camera) => camera.camera)).size;
+  const withProblems = new Set(bench.filter((camera) => camera.problems).map((camera) => camera.camera)).size;
   const release = await latestRelease();
   return (
     <section className="px-6 pt-16 pb-24">
@@ -50,20 +51,21 @@ export default async function TestYourCameraPage() {
           </p>
           <h1 className="font-display mt-3 text-[clamp(2.2rem,5vw,3.4rem)] leading-[1.05] text-paper">{title}</h1>
           <p className="mt-5 text-[17px] leading-relaxed text-mute">
-            LibRaw reads the raw files of {read.toLocaleString("en-GB")} cameras, and Redlamp&apos;s own tests check{" "}
-            {verifiedCameras} of them, on CC0 samples. Every other camera depends on people who own one. The camera bench
-            in Redlamp checks how your camera&apos;s raw files open, on your Mac, against the JPEG your camera saved
-            inside each one, and sends only the measurements, so the{" "}
+            LibRaw can read the raw files of {read.toLocaleString("en-GB")} cameras, but Redlamp&apos;s own decode
+            tests cover {verifiedCameras} of them, using CC0 sample photos. For every other camera, Redlamp relies on
+            the people who own one. The camera bench, built into Redlamp, opens your raw files on your Mac and compares
+            each one with the JPEG your camera saved inside it. Only the measurements are sent. Combined with everyone
+            else&apos;s, they let the{" "}
             <a href="/cameras" className={link}>
               cameras page
             </a>{" "}
-            can say which cameras work and what to fix.
+            show which cameras work and what needs fixing.
           </p>
           <p className="mt-4 text-[17px] leading-relaxed text-mute">
-            It takes a few minutes, with photos you already have.
+            It takes a few minutes and works with photos you already have.
             {hasBench(release?.version)
               ? ""
-              : " The camera bench is new: it comes with Redlamp's next release, and builds from source have it today."}
+              : " The camera bench comes with Redlamp's next release; if you build Redlamp from source, it's in your build now."}
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <LinkButton href={release?.url ?? `${site.github}/releases/latest`} variant="primary">
@@ -121,20 +123,23 @@ export default async function TestYourCameraPage() {
           <div className="surface p-6">
             <h2 className="font-display text-[18px] text-paper">What happens to your results</h2>
             <p className="mt-2 text-[14px] leading-relaxed text-mute">
-              They&apos;re kept privately and combined into evidence for each camera mode, which the{" "}
+              Your results are stored privately and combined with everyone else&apos;s for the same camera and raw
+              mode, and the{" "}
               <a href="/cameras" className={link}>
                 cameras page
               </a>{" "}
-              shows. A mode is reported working once a photo opens with nothing failing, and tested by photographers
-              once three people have sent ten photos covering the conditions in step 2, with nothing failing. A failure
-              two people see is reported as a problem, and goes on Redlamp&apos;s tracker.
+              shows where each stands. A mode is reported working once one photo opens with no check failing. It counts
+              as tested by photographers when three people have sent ten photos between them that cover base and high
+              ISO, portrait orientation, clipped highlights and warm light. No more than one photo in ten may fail a
+              check, and two people must answer that the photos look the same. A failure seen by two people, or an
+              answer that the photos differ, marks it as a problem.
             </p>
           </div>
           <div className="surface p-6">
-            <h2 className="font-display text-[18px] text-paper">Make your camera verified</h2>
+            <h2 className="font-display text-[18px] text-paper">Get your camera verified</h2>
             <p className="mt-2 text-[14px] leading-relaxed text-mute">
-              A camera is verified once a CC0 sample of it is in Redlamp&apos;s decode tests, which check it on every
-              change. If you&apos;re willing to give one photo to the public domain, upload it to{" "}
+              A camera counts as verified once a CC0 sample photo from it is part of Redlamp&apos;s decode tests, which
+              run on every change. If you&apos;re happy to release one photo into the public domain, upload it to{" "}
               <a href={site.rawPixls} className={link}>
                 raw.pixls.us
               </a>{" "}
@@ -142,23 +147,25 @@ export default async function TestYourCameraPage() {
               <a href={`${site.github}/issues/new`} className={link}>
                 open an issue
               </a>{" "}
-              naming it.
+              with a link to it.
             </p>
           </div>
           <div className="surface p-6">
             <h2 className="font-display text-[18px] text-paper">From the command line</h2>
             <p className="mt-2 text-[14px] leading-relaxed text-mute">
-              Built from source, <code className="whitespace-nowrap text-paper">redlamp camera-bench</code> runs the same checks on files
-              or folders, and writes the report (<code className="whitespace-nowrap text-paper">-o</code>) and the side-by-side pairs (
-              <code className="whitespace-nowrap text-paper">--pairs</code>).
+              If you build Redlamp from source,{" "}
+              <code className="whitespace-nowrap text-paper">redlamp camera-bench</code> runs the same checks on files
+              or folders. Add <code className="whitespace-nowrap text-paper">-o</code> to
+              save the report and <code className="whitespace-nowrap text-paper">--pairs</code> to save the
+              side-by-side images.
             </p>
           </div>
         </div>
 
         <p className="mt-10 max-w-3xl text-[13px] leading-relaxed text-dim">
-          The first evidence is the bench&apos;s own run over raw.pixls.us&apos;s CC0 files: {bench.length} camera modes,{" "}
-          {problems} of them with a problem found. The screenshots show the Camera Bench on Redlamp&apos;s CC0 test
-          samples.
+          The first results come from running the bench on the CC0 files at raw.pixls.us: {benchCameras} cameras, with a
+          problem found in {withProblems} of them. The screenshots show the Camera Bench on Redlamp&apos;s own CC0 test
+          photos.
         </p>
       </div>
     </section>

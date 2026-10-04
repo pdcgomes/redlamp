@@ -27,9 +27,10 @@ export default function CamerasPage() {
   // Modes with something to read (a problem, or the full checklist met) get a row; the rest a list.
   const benchChecked = bench.filter((camera) => camera.evidence !== "Reported working");
   const benchWorking = bench.filter((camera) => camera.evidence === "Reported working");
+  const benchCameras = new Set(bench.map((camera) => camera.camera)).size;
   const stats = [
     { value: verifiedCameras, label: "verified by Redlamp's decode tests" },
-    { value: bench.length, label: "camera modes tested with the camera bench" },
+    { value: benchCameras, label: "tested with the camera bench" },
     { value: evaluated.length, label: "developed in Redlamp's evaluation sets" },
     { value: supported.toLocaleString("en-GB"), label: `read by LibRaw ${libraw}` },
   ];
@@ -54,7 +55,7 @@ export default function CamerasPage() {
             <a href={site.rawPixls} className={link}>
               raw.pixls.us
             </a>{" "}
-            come first, then camera modes tested with Redlamp&apos;s camera bench, then the ones its evaluation sets
+            come first, then the cameras tested with Redlamp&apos;s camera bench, then the ones its evaluation sets
             develop, then everything LibRaw reads.
           </p>
         </div>
@@ -70,12 +71,13 @@ export default function CamerasPage() {
 
         <div className="surface mt-6 flex flex-col gap-6 p-6 sm:p-8 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-3xl">
-            <h2 className="font-display text-[22px] leading-snug text-paper">Help test your camera</h2>
+            <h2 className="font-display text-[22px] leading-snug text-paper">Help Redlamp support your camera</h2>
             <p className="mt-2 text-[15px] leading-relaxed text-mute">
-              Redlamp&apos;s tests check {verifiedCameras} cameras on CC0 samples, and LibRaw reads{" "}
-              {supported.toLocaleString("en-GB")}. Every other camera depends on people who own one. The camera bench in
-              Redlamp checks yours on your Mac, against the JPEG your camera saved inside each raw file, and sends only
-              the measurements, which add to this page. It takes a few minutes, with photos you already have.
+              Redlamp&apos;s decode tests cover {verifiedCameras} cameras, using CC0 sample photos, while LibRaw
+              reads {supported.toLocaleString("en-GB")}. For the others, Redlamp needs results from photographers who
+              own them. The camera bench in Redlamp tests your camera&apos;s raw files on your Mac, compares them with
+              the JPEGs your camera saved, and sends only the measurements; the results appear on this page. It takes a
+              few minutes and works with photos you already have.
             </p>
           </div>
           <LinkButton href="/cameras/test" variant="primary" className="shrink-0 self-start lg:self-center">
@@ -144,11 +146,13 @@ export default function CamerasPage() {
             <div className="mt-16 max-w-3xl">
               <h2 className="font-display text-[24px] leading-snug">Tested with the camera bench</h2>
               <p className="mt-3 text-[15px] leading-relaxed text-mute">
-                The camera bench checks how each raw decodes and compares Redlamp&apos;s rendering with the JPEG the
-                camera saved inside it, on the Mac the photos are on; only the measurements are sent. Evidence is
-                counted per camera mode, since one body&apos;s raw modes can fail separately. Tested by photographers
-                means three photographers and ten photos covering base and high ISO, a portrait frame, clipped
-                highlights and warm light, with nothing failing; a problem is reported once two photographers see it.{" "}
+                The camera bench checks how each raw file decodes and compares Redlamp&apos;s rendering with the JPEG
+                the camera saved inside it. It runs on the photographer&apos;s own Mac and sends only the measurements.
+                Results are kept separately for each of a camera&apos;s raw modes, because one mode can fail where
+                another works. Tested by photographers means three photographers have sent ten photos between them that
+                cover base and high ISO, portrait orientation, clipped highlights and warm light; no more than one photo
+                in ten failed a check, and two photographers answered that the photos look the same. A problem is
+                reported once two photographers see the same failure, or one says the photos differ.{" "}
                 <a href="/cameras/test" className={link}>
                   Test your camera
                 </a>{" "}
@@ -196,8 +200,8 @@ export default function CamerasPage() {
             {benchWorking.length > 0 ? (
               <details className="surface mt-6 p-5 sm:p-6">
                 <summary className="cursor-pointer text-[15px] text-paper">
-                  Reported working: {benchWorking.length.toLocaleString("en-GB")} camera modes, each opened with
-                  nothing failing
+                  Reported working: {benchWorking.length.toLocaleString("en-GB")} raw modes, each with a photo that
+                  opened with no check failing
                 </summary>
                 <ul className="mt-5 grid gap-x-8 gap-y-2.5 text-[14px] sm:grid-cols-2 lg:grid-cols-3">
                   {benchWorking.map((camera) => (
@@ -250,10 +254,10 @@ export default function CamerasPage() {
           <h2 className="font-display text-[20px] leading-snug">Is your camera missing from the verified list?</h2>
           <p className="max-w-3xl text-[15px] leading-relaxed text-mute">
             <a href="/cameras/test" className={link}>
-              Test it with Redlamp
+              Test it with the camera bench
             </a>
-            : Help › Test Your Camera… runs the camera bench on your own photos, which stay on your Mac, and sends only
-            the measurements. A CC0 sample is how a camera gets into the tests: upload one to{" "}
+            . In Redlamp, Help › Test Your Camera… checks your own photos without them leaving your Mac, and sends only
+            the measurements. To get your camera into Redlamp&apos;s tests, upload a CC0 sample to{" "}
             <a href={site.rawPixls} className={link}>
               raw.pixls.us
             </a>{" "}
@@ -261,7 +265,7 @@ export default function CamerasPage() {
             <a href={`${site.github}/issues/new`} className={link}>
               open an issue
             </a>{" "}
-            naming it.
+            with a link to it.
           </p>
           <p className="text-[12.5px] text-dim">
             Read from{" "}
