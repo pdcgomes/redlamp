@@ -263,6 +263,30 @@ struct LibraryIndexerTests {
         }
     }
 
+    @Test func `a run writes thousands of batches, one photo each, without its commits deepening the stack`(
+    ) async throws {
+        // Were each commit to run 192 bytes deeper than the last, a cooperative thread's 512 KB stack
+        // would run out about 2,800 batches in.
+        let photos = 5000
+        let folder = try TemporaryFolder()
+        let indexFolder = FileManager.default.temporaryDirectory
+            .appending(path: "redlamp-indexer-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let index = try await LibraryIndex.open(at: indexFolder.appending(path: "Index.sqlite"), readers: 2)
+        defer {
+            index.closeAndWait()
+            try? FileManager.default.removeItem(at: indexFolder)
+        }
+        let indexer = LibraryIndexer(
+            index: index, fileSystem: ListedPhotos(in: folder.url, count: photos),
+            configuration: .testing(batchSize: 1),
+        )
+        let run = await IndexerRun.collect(indexer.index([folder.url]))
+        #expect(run.failures.isEmpty, "\(run.failures)")
+        #expect(run.summary?.photosInserted == photos)
+        #expect(run.insertions.count == photos)
+        #expect(try await index.read { try $0.photoCount() } == photos)
+    }
+
     @Test func `the folders asked for are indexed first`() async throws {
         let sandbox = try await IndexerSandbox.make(.init(photos: 900, seed: 28, shapes: []))
         defer { sandbox.remove() }

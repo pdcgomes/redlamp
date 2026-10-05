@@ -57,12 +57,20 @@ extension LibraryIndexer {
         init(indexer: LibraryIndexer, events: AsyncStream<LibraryIndexerEvent>.Continuation) {
             self.indexer = indexer
             self.events = events
-            let committed = Mutex<(@Sendable (Batcher.Outcome) -> Void)?>(nil)
+            // A reference, not a closure, in the `Mutex`: a function `withLock` lends out `inout` can
+            // come back wrapped in another reabstraction thunk, and each batch's call would then run
+            // one thunk deeper than the last.
+            let owner = Mutex(Owner())
             batcher = Batcher(
                 index: indexer.index, configuration: indexer.configuration, scheduler: indexer.scheduler,
-                thumbnails: indexer.thumbnails, committed: { outcome in committed.withLock { $0 }?(outcome) },
+                thumbnails: indexer.thumbnails, committed: { outcome in owner.withLock { $0.run }?.committed(outcome) },
             )
-            committed.withLock { $0 = { [weak self] outcome in self?.committed(outcome) } }
+            owner.withLock { $0.run = self }
+        }
+
+        /// The run its batcher reports to, held without keeping it.
+        private struct Owner {
+            weak var run: Run?
         }
 
         func perform(_ request: Request) async {

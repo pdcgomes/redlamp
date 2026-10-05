@@ -93,6 +93,46 @@ final class SwitchingFileSystem: LibraryFileSystem {
     }
 }
 
+/// A folder of photos that exist only in its listing, on a volume of their own: each reads as its
+/// name, in which ImageIO finds nothing. A run over as many photos as a test needs writes no files.
+final class ListedPhotos: LibraryFileSystem {
+    let folder: String
+    let names: [String]
+    private static let modified = Date(timeIntervalSince1970: 1_700_000_000)
+
+    init(in folder: URL, count: Int) {
+        self.folder = LibraryIndexer.path(folder)
+        names = (1 ... count).map { "IMG_\($0).JPG" }
+    }
+
+    func contentsOfDirectory(at url: URL) throws -> [FileEntry] {
+        guard LibraryIndexer.path(url) == folder else { throw CocoaError(.fileReadNoSuchFile) }
+        return names.map { FileEntry(name: $0, size: Int64($0.utf8.count), modified: Self.modified) }
+    }
+
+    func attributes(of url: URL) throws -> FileEntry {
+        let path = LibraryIndexer.path(url)
+        if path == folder {
+            return FileEntry(name: url.lastPathComponent, isDirectory: true, modified: Self.modified)
+        }
+        guard (path as NSString).deletingLastPathComponent == folder else { throw CocoaError(.fileReadNoSuchFile) }
+        return FileEntry(
+            name: url.lastPathComponent,
+            size: Int64(url.lastPathComponent.utf8.count),
+            modified: Self.modified,
+        )
+    }
+
+    func read(_ url: URL, range: Range<Int>) throws -> Data {
+        let bytes = try Data(attributes(of: url).name.utf8)
+        return bytes[min(range.lowerBound, bytes.count) ..< min(range.upperBound, bytes.count)]
+    }
+
+    func volume(of _: URL) throws -> VolumeInfo {
+        VolumeInfo(uuid: "LISTED-PHOTOS", name: "Listed", isLocal: true, isInternal: true)
+    }
+}
+
 /// A fixture in a folder of its own, and an index for it in another.
 struct IndexerSandbox {
     let folder: TemporaryFolder
@@ -153,6 +193,14 @@ struct IndexerRun {
     var inserted: [Int64] {
         events.flatMap { event -> [Int64] in
             guard case let .photosInserted(ids) = event else { return [] }
+            return ids
+        }
+    }
+
+    /// The photos each written batch inserted, a list a batch.
+    var insertions: [[Int64]] {
+        events.compactMap { event in
+            guard case let .photosInserted(ids) = event else { return nil }
             return ids
         }
     }
