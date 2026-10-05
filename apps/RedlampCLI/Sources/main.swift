@@ -3,6 +3,7 @@ import Foundation
 import ImageIO
 import RedlampEngine
 import RedlampEngineAPI
+import RedlampGenerative
 import RedlampRecipes
 import RedlampServices
 import UniformTypeIdentifiers
@@ -38,6 +39,10 @@ options:
   --remove-dust <0…100>    heal the sensor dust found at this sensitivity (50 is the app's)
   --remove-found <things>  remove what's found by name, e.g. car or "trash,sign" (OWLv2 and Segment
                            Anything, from Settings › Models)
+  --generative [<seed>]    fill every Remove spot so far with generative fill (FLUX.2 [klein] 4B, from
+                           Settings › Models, or REDLAMP_GENERATIVE_MODEL); --fill-prompt <name>
+                           picks the prompt (empty, background or remove), --fill-reference what
+                           the model looks at (photo, filled or none); both before --generative
   --bw                     black & white treatment
   --p3                     encode in Display P3 instead of sRGB
   --16bit                  16 bits per component (PNG/TIFF)
@@ -64,6 +69,7 @@ func run(_ arguments: [String]) async throws {
     guard arguments.count >= 2 else { throw CLIError(description: usage) }
     let command = arguments[0]
     let input = URL(fileURLWithPath: arguments[1])
+    RedlampEngine.register(generativeFiller: { FluxFiller(model: $0) })
     let engine = try RedlampEngine(decoder: InProcessDecoder(), lensProfiles: .user)
     let clock = ContinuousClock()
 
@@ -85,6 +91,7 @@ func run(_ arguments: [String]) async throws {
 
     var recipe = EditRecipe()
     var output: URL?
+    var fillOptions = GenerativeFillOptions()
     var request = StillRequest(recipe: recipe, purpose: .export)
     var index = 2
     func value() throws -> String {
@@ -257,6 +264,41 @@ func run(_ arguments: [String]) async throws {
                     format: "found %@ %.2f at %.3f,%.3f %.3fx%.3f", thing.thing, thing.score,
                     thing.box.x, thing.box.y, thing.box.width, thing.box.height,
                 ))
+            }
+        case "--fill-prompt":
+            fillOptions.prompt = try value()
+        case "--fill-reference":
+            let name = try value()
+            guard let reference = GenerativeFillReference(rawValue: name) else {
+                throw CLIError(description: "--fill-reference is photo, filled, softened or none")
+            }
+            fillOptions.reference = reference
+        case "--generative":
+            var seed = 0
+            if index + 1 < arguments.count, let number = Int(arguments[index + 1]) {
+                seed = number
+                index += 1
+            }
+            if case let .unavailable(reason) = await engine.generativeFillAvailability() {
+                throw CLIError(description: "--generative: \(reason)")
+            }
+            if case let .needsModel(model) = await engine.generativeFillAvailability() {
+                throw CLIError(description: "--generative needs \(model.name), from Redlamp's Settings › Models")
+            }
+            for position in recipe.spots.indices where recipe.spots[position].mode == .remove
+                && recipe.spots[position].fill == nil {
+                let started = clock.now
+                let fills = try await engine.generateFills(
+                    for: recipe.spots[position], in: recipe, seeds: [seed], options: fillOptions,
+                ) { _ in }
+                recipe.spots[position].fill = fills.first
+                if let fill = fills.first {
+                    print(String(
+                        format: "generative fill %d: %dx%d over %dx%d px, prompt %@, seed %d, in %@", position,
+                        fill.bitmap.width, fill.bitmap.height, fill.box.width, fill.box.height, fill.prompt,
+                        fill.seed, "\(clock.now - started)",
+                    ))
+                }
             }
         case "--bw":
             recipe.treatment = .blackAndWhite

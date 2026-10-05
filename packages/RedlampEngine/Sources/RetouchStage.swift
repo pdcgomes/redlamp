@@ -3,6 +3,7 @@ import Metal
 import RedlampEngineAPI
 import RedlampKernels
 import RedlampMasking
+import RedlampServices
 import simd
 
 /// Remove, Heal and Clone spots baked into a copy of the session's pyramid (see `Retouch.metal`).
@@ -198,6 +199,9 @@ final class RetouchStage: @unchecked Sendable {
     private var fills: [FillKey: FillMap] = [:]
     private var fillOrder: [FillKey] = []
     private var regions: [RegionKey: Placement] = [:]
+    /// Generative fills' bitmaps on the GPU, by hash, the most recent last.
+    private var storedFills: [String: any MTLTexture] = [:]
+    private var storedOrder: [String] = []
     private lazy var filler = ContentAwareFill(device: device, queue: queue, kernels: kernels)
     /// Fills computed so far (not found in the cache), for tests.
     private(set) var fillsComputed = 0
@@ -298,6 +302,7 @@ final class RetouchStage: @unchecked Sendable {
         let placements = spots.map {
             place($0, orientation: original.orientation, width: pyramid.width, height: pyramid.height)
         }
+        let stored = spots.map { storedFill(of: $0, width: pyramid.width, height: pyramid.height) }
         let windows = placements.map { placement in
             placement.flatMap {
                 FillWindow($0, levels: pyramid.mipmapLevelCount, width: pyramid.width, height: pyramid.height)
@@ -312,7 +317,7 @@ final class RetouchStage: @unchecked Sendable {
         // A Remove spot not filled before reads the photo as the spots before it left it, so the
         // spots are then applied in command buffers of their own, each waited for.
         let keys = spots.indices.map { index in
-            spots[index].mode == .remove ? FillKey(
+            spots[index].mode == .remove && stored[index] == nil ? FillKey(
                 session: ObjectIdentifier(original), spots: Array(spots[...index]),
                 later: others(of: index).later.map { spots[$0] }, version: version,
             ) : nil
@@ -329,6 +334,13 @@ final class RetouchStage: @unchecked Sendable {
         blit.endEncoding()
         for (index, spot) in spots.enumerated() {
             guard let placement = placements[index] else { continue }
+            if let fill = spot.fill, let bitmap = stored[index] {
+                try encodeStoredFill(
+                    spot, fill: fill, bitmap: bitmap, noise: original.noise, placement: placement, into: texture,
+                    commands: buffer,
+                )
+                continue
+            }
             guard let key = keys[index] else {
                 try encode(spot, placement: placement, into: texture, commands: buffer)
                 continue
@@ -810,6 +822,76 @@ final class RetouchStage: @unchecked Sendable {
         encoder.dispatchGrid(width: size.x, height: size.y, pipeline: kernels.fillRender)
         encoder.endEncoding()
         try encode(spot, placement: placement, into: texture, commands: commands, fill: (fill, origin))
+    }
+
+    /// A Remove spot's generative fill on the GPU, when it has one made for a photo this size whose
+    /// bitmap is loaded; otherwise the spot is filled from the photo. Called with `lock` held.
+    private func storedFill(of spot: RetouchSpot, width: Int, height: Int) -> (any MTLTexture)? {
+        guard spot.mode == .remove, let fill = spot.fill, fill.photoSize == PixelSize(width: width, height: height),
+              let png = fill.bitmap.png
+        else { return nil }
+        if let texture = storedFills[fill.bitmap.sha256] {
+            return texture
+        }
+        guard let decoded = GeneratedFillCodec.decode(png) else { return nil }
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba16Float, width: decoded.width, height: decoded.height, mipmapped: false,
+        )
+        descriptor.usage = [.shaderRead]
+        descriptor.storageMode = .shared
+        guard let texture = device.makeTexture(descriptor: descriptor) else { return nil }
+        let halves = decoded.values.map(Float16.init)
+        halves.withUnsafeBytes { bytes in
+            texture.replace(
+                region: MTLRegionMake2D(0, 0, decoded.width, decoded.height), mipmapLevel: 0,
+                withBytes: bytes.baseAddress!, bytesPerRow: decoded.width * 8,
+            )
+        }
+        storedFills[fill.bitmap.sha256] = texture
+        storedOrder.append(fill.bitmap.sha256)
+        if storedOrder.count > 16 {
+            storedFills[storedOrder.removeFirst()] = nil
+        }
+        return texture
+    }
+
+    /// Renders a generative fill at full resolution (`rl_fill_stored`), with the photo's noise,
+    /// then blends it in as Heal does.
+    private func encodeStoredFill(
+        _ spot: RetouchSpot, fill: GeneratedFill, bitmap: any MTLTexture, noise: NoiseModel, placement: Placement,
+        into texture: any MTLTexture, commands: any MTLCommandBuffer,
+    ) throws {
+        let margin = 8
+        let origin = SIMD2(max(placement.origin.x - margin, 0), max(placement.origin.y - margin, 0))
+        let end = SIMD2(
+            min(placement.origin.x + placement.size.x + margin, texture.width),
+            min(placement.origin.y + placement.size.y + margin, texture.height),
+        )
+        guard end.x > origin.x, end.y > origin.y else { return }
+        let size = end &- origin
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: texture.pixelFormat, width: size.x, height: size.y, mipmapped: false,
+        )
+        descriptor.usage = [.shaderRead, .shaderWrite]
+        descriptor.storageMode = .private
+        guard let scratch = device.makeTexture(descriptor: descriptor),
+              let encoder = commands.makeComputeCommandEncoder()
+        else { throw EngineError.gpuUnavailable }
+        encoder.label = "Generated fill"
+        var params = FillStoredParams(
+            box: SIMD4(Int32(origin.x), Int32(origin.y), Int32(size.x), Int32(size.y)),
+            fill: SIMD4(Int32(fill.box.x), Int32(fill.box.y), Int32(fill.box.width), Int32(fill.box.height)),
+            noiseA: SIMD4(noise.a, 0), noiseB: SIMD4(noise.b, 0),
+            peak: SIMD4(Float(fill.peak), Float(bitPattern: UInt32(truncatingIfNeeded: fill.seed)), 0, 0),
+        )
+        encoder.setComputePipelineState(kernels.fillStored)
+        encoder.setTexture(texture, index: 0)
+        encoder.setTexture(bitmap, index: 1)
+        encoder.setTexture(scratch, index: 2)
+        encoder.setBytes(&params, length: MemoryLayout<FillStoredParams>.stride, index: 0)
+        encoder.dispatchGrid(width: size.x, height: size.y, pipeline: kernels.fillStored)
+        encoder.endEncoding()
+        try encode(spot, placement: placement, into: texture, commands: commands, fill: (scratch, origin))
     }
 
     /// Writes the spot into a scratch texture, then copies that over the pyramid, so a source

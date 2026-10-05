@@ -60,6 +60,7 @@ public final class KernelLibrary: @unchecked Sendable {
     public let retouchApply: any MTLComputePipelineState
     public let fillCosts: any MTLComputePipelineState
     public let fillRender: any MTLComputePipelineState
+    public let fillStored: any MTLComputePipelineState
 
     public init(device: any MTLDevice) throws {
         self.device = device
@@ -126,6 +127,7 @@ public final class KernelLibrary: @unchecked Sendable {
         retouchApply = try pipeline("rl_retouch_apply")
         fillCosts = try pipeline("rl_fill_costs")
         fillRender = try pipeline("rl_fill_render")
+        fillStored = try pipeline("rl_fill_stored")
     }
 }
 

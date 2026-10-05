@@ -2,6 +2,7 @@ import AppKit
 import OSLog
 import RedlampEngine
 import RedlampEngineAPI
+import RedlampGenerative
 import RedlampServices
 @_spi(Harness) import RedlampUI
 import SwiftUI
@@ -20,6 +21,7 @@ struct RedlampApp: App {
             DevelopPanels.usesSwiftUI = LaunchArguments.all.contains("--swiftui-panels")
         #endif
         LensProfileIssues.current = { LCPProfileLibrary.user.issues }
+        RedlampEngine.register(generativeFiller: { FluxFiller(model: $0) })
         let engine: any EditingEngine
         do {
             // Photos decode in the sandboxed decode service, so a damaged file can't crash the editor.

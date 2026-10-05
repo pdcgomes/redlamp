@@ -337,7 +337,7 @@ public extension EditRecipe {
             case let .depthRange(range): range.depth.bitmap
             default: nil
             }
-        } + spots.compactMap(\.region?.bitmap)
+        } + spots.compactMap(\.region?.bitmap) + spots.compactMap(\.fill?.bitmap)
     }
 
     /// Fills in the bytes of the edit's mask bitmaps from `bytes(sha256)`.
@@ -357,9 +357,14 @@ public extension EditRecipe {
             }
         }
         for index in spots.indices {
-            guard var region = spots[index].region, region.bitmap.png == nil else { continue }
-            region.bitmap.png = bytes(region.bitmap.sha256)
-            spots[index].region = region
+            if var region = spots[index].region, region.bitmap.png == nil {
+                region.bitmap.png = bytes(region.bitmap.sha256)
+                spots[index].region = region
+            }
+            if var fill = spots[index].fill, fill.bitmap.png == nil {
+                fill.bitmap.png = bytes(fill.bitmap.sha256)
+                spots[index].fill = fill
+            }
         }
     }
 }

@@ -73,3 +73,45 @@ kernel void rl_fill_render(
     }
     out.write(sum, gid);
 }
+
+struct FillStoredParams {
+    int4 box;       // xy origin, zw size of the area rendered, in level-0 texels
+    int4 fill;      // xy origin, zw size of the stored fill, in level-0 texels
+    float4 noiseA;  // the photo's noise: variance a · value + b per channel, in pyramid units
+    float4 noiseB;
+    float4 peak;    // x: the stored values' scale (value = stored² · peak); y: the spot's seed
+};
+
+static inline float fillHash(uint2 p, uint salt) {
+    uint h = p.x * 0x8da6b343u ^ p.y * 0xd8163841u ^ salt * 0xcb1ab31fu;
+    h ^= h >> 15; h *= 0x2c1b3c6du; h ^= h >> 12; h *= 0x297a2d39u; h ^= h >> 15;
+    return (float(h >> 8) + 0.5f) / 16777216.0f;
+}
+
+// A generative fill kept with the edit (RM-10), at full resolution: the stored fill sampled
+// bilinearly over its box, with noise the photo's own noise model gives its values (the fill comes
+// out cleaner than the sensor), and the photo as it is outside the box.
+kernel void rl_fill_stored(
+    texture2d<float, access::read> image [[texture(0)]],
+    texture2d<float, access::sample> stored [[texture(1)]],
+    texture2d<float, access::write> out [[texture(2)]],
+    constant FillStoredParams &p [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    if (int(gid.x) >= p.box.z || int(gid.y) >= p.box.w) return;
+    int2 at = p.box.xy + int2(gid);
+    float2 uv = (float2(at - p.fill.xy) + 0.5f) / float2(p.fill.zw);
+    if (any(uv < 0.0f) || any(uv > 1.0f)) {
+        out.write(image.read(uint2(at)), gid);
+        return;
+    }
+    constexpr sampler bilinear(coord::normalized, address::clamp_to_edge, filter::linear);
+    float3 encoded = stored.sample(bilinear, uv).rgb;
+    float3 value = encoded * encoded * p.peak.x;
+    uint salt = as_type<uint>(p.peak.y);
+    float r1 = sqrt(-2.0f * log(fillHash(uint2(at), salt))), a1 = 6.2831853f * fillHash(uint2(at), salt + 1u);
+    float r2 = sqrt(-2.0f * log(fillHash(uint2(at), salt + 2u))), a2 = 6.2831853f * fillHash(uint2(at), salt + 3u);
+    float3 gaussian = float3(r1 * cos(a1), r1 * sin(a1), r2 * cos(a2));
+    float3 deviation = sqrt(max(p.noiseA.xyz * value + p.noiseB.xyz, 0.0f));
+    out.write(float4(max(value + deviation * gaussian, 0.0f), 1.0f), gid);
+}

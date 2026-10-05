@@ -52,6 +52,9 @@ public struct RetouchSpot: Codable, Sendable, Hashable, Identifiable {
     public var feather: Double
     /// 0...100.
     public var opacity: Double
+    /// A Remove spot's fill made by a generative model (RM-10), in place of filling it from the
+    /// photo around it. A build that doesn't know it keeps it and fills the spot from the photo.
+    public var fill: GeneratedFill?
     /// Fields written by a newer Redlamp, written back unchanged.
     public var unknownFields: [String: JSONValue] = [:]
 
@@ -67,7 +70,9 @@ public struct RetouchSpot: Codable, Sendable, Hashable, Identifiable {
         radius: Double,
         feather: Double = 50,
         opacity: Double = 100,
+        fill: GeneratedFill? = nil,
     ) {
+        self.fill = fill
         self.id = id
         self.mode = mode
         self.center = center
@@ -91,7 +96,7 @@ public struct RetouchSpot: Codable, Sendable, Hashable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case id, mode, center, source, stroke, region, radius, feather, opacity
+        case id, mode, center, source, stroke, region, radius, feather, opacity, fill
     }
 
     public init(from decoder: Decoder) throws {
@@ -105,6 +110,7 @@ public struct RetouchSpot: Codable, Sendable, Hashable, Identifiable {
         radius = try container.decode(Double.self, forKey: .radius)
         feather = try container.decode(Double.self, forKey: .feather)
         opacity = try container.decode(Double.self, forKey: .opacity)
+        fill = try container.decodeIfPresent(GeneratedFill.self, forKey: .fill)
         unknownFields = try decoder.container(keyedBy: DynamicCodingKey.self)
             .unknownFields(excluding: Set(CodingKeys.allCases.map(\.stringValue)))
     }
@@ -124,6 +130,88 @@ public struct RetouchSpot: Codable, Sendable, Hashable, Identifiable {
         try container.encode(radius, forKey: .radius)
         try container.encode(feather, forKey: .feather)
         try container.encode(opacity, forKey: .opacity)
+        try container.encodeIfPresent(fill, forKey: .fill)
+    }
+}
+
+/// A Remove spot's fill made by a generative model (RM-10), kept with the edit so it renders the
+/// same everywhere, whatever Mac opens it and whether or not it has the model.
+public struct GeneratedFill: Codable, Sendable, Hashable {
+    /// Where the fill goes, in the photo's full-size pixels before its orientation is applied.
+    public struct Box: Codable, Sendable, Hashable {
+        public var x: Int
+        public var y: Int
+        public var width: Int
+        public var height: Int
+
+        public init(x: Int, y: Int, width: Int, height: Int) {
+            self.x = x
+            self.y = y
+            self.width = width
+            self.height = height
+        }
+    }
+
+    /// The fill in the photo's camera RGB, white balanced as shot, linear: a 16-bit RGB PNG of
+    /// each value divided by `peak`, square-rooted, kept with the edit's bitmaps.
+    public var bitmap: MaskBitmap
+    public var peak: Double
+    public var box: Box
+    /// The size of the photo it was made for: a fill made for a photo decoded at another size is
+    /// left out, and the spot filled from the photo.
+    public var photoSize: PixelSize
+    /// The model's manifest and version, and the seed and prompt that made the fill.
+    public var model: String
+    public var modelVersion: Int
+    public var seed: Int
+    public var prompt: String
+    /// Fields written by a newer Redlamp, written back unchanged.
+    public var unknownFields: [String: JSONValue] = [:]
+
+    public init(
+        bitmap: MaskBitmap, peak: Double, box: Box, photoSize: PixelSize, model: String, modelVersion: Int, seed: Int,
+        prompt: String,
+    ) {
+        self.bitmap = bitmap
+        self.peak = peak
+        self.box = box
+        self.photoSize = photoSize
+        self.model = model
+        self.modelVersion = modelVersion
+        self.seed = seed
+        self.prompt = prompt
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case bitmap, peak, box, photoSize, model, modelVersion, seed, prompt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        bitmap = try container.decode(MaskBitmap.self, forKey: .bitmap)
+        peak = try container.decode(Double.self, forKey: .peak)
+        box = try container.decode(Box.self, forKey: .box)
+        photoSize = try container.decode(PixelSize.self, forKey: .photoSize)
+        model = try container.decode(String.self, forKey: .model)
+        modelVersion = try container.decode(Int.self, forKey: .modelVersion)
+        seed = try container.decode(Int.self, forKey: .seed)
+        prompt = try container.decode(String.self, forKey: .prompt)
+        unknownFields = try decoder.container(keyedBy: DynamicCodingKey.self)
+            .unknownFields(excluding: Set(CodingKeys.allCases.map(\.stringValue)))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var unknown = encoder.container(keyedBy: DynamicCodingKey.self)
+        try unknown.encode(unknownFields)
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(bitmap, forKey: .bitmap)
+        try container.encode(peak, forKey: .peak)
+        try container.encode(box, forKey: .box)
+        try container.encode(photoSize, forKey: .photoSize)
+        try container.encode(model, forKey: .model)
+        try container.encode(modelVersion, forKey: .modelVersion)
+        try container.encode(seed, forKey: .seed)
+        try container.encode(prompt, forKey: .prompt)
     }
 }
 

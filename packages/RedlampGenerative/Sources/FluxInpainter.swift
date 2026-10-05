@@ -84,24 +84,23 @@ public final class FluxInpainter {
 
     /// Repaints `mask`'s area (1 repaints, 0 keeps) of `image` `[h, w, 3]` in -1…1, each side a
     /// multiple of 16, guided by a prompt's `embeddings` `[512, 7680]`, from `noise`
-    /// (`noise(width:height:seed:)`), with `reference` images beside the image if any. Returns the
-    /// final latents `[tokens, 128]` and the decoded image `[h, w, 3]` in -1…1. `progress` hears
-    /// each step as it's done.
+    /// (`noise(width:height:seed:)`), looking at `references` (in -1…1; nil for the image itself,
+    /// as the pipeline does, empty for none). Returns the final latents `[tokens, 128]` and the
+    /// decoded image `[h, w, 3]` in -1…1. `progress` hears each step as it's done.
     public func inpaint(
         image: MLXArray, mask: MLXArray, embeddings: MLXArray, noise: MLXArray, steps: Int = 4,
-        references: [MLXArray] = [], progress: ((Int) -> Void)? = nil,
+        references: [MLXArray]? = nil, progress: ((Int) -> Void)? = nil,
     ) -> (latents: MLXArray, image: MLXArray) {
         let (rows, columns) = (image.dim(0) / 16, image.dim(1) / 16)
         let count = rows * columns
         let imageLatents = vae.encode(image).reshaped([count, 128])
-        var conditions = [imageLatents]
-        var conditionIDs = [Self.gridIDs(rows: rows, columns: columns, time: 10)]
-        for (index, reference) in references.enumerated() {
-            let latents = vae.encode(reference)
+        var conditions: [MLXArray] = []
+        var conditionIDs: [MLXArray] = []
+        for (index, reference) in (references ?? [image]).enumerated() {
+            let latents = references == nil ? imageLatents.reshaped([rows, columns, 128]) : vae.encode(reference)
             conditions.append(latents.reshaped([-1, 128]))
-            conditionIDs.append(Self.gridIDs(rows: latents.dim(0), columns: latents.dim(1), time: 20 + 10 * index))
+            conditionIDs.append(Self.gridIDs(rows: latents.dim(0), columns: latents.dim(1), time: 10 + 10 * index))
         }
-        let condition = concatenated(conditions, axis: 0)
         let imageIDs = concatenated([Self.gridIDs(rows: rows, columns: columns, time: 0)] + conditionIDs, axis: 0)
         let textIDs = Self.textIDs(count: embeddings.dim(0))
         let latentMask = Self.latentMask(mask)
@@ -111,7 +110,7 @@ public final class FluxInpainter {
         var latents = noise
         for step in 0 ..< steps {
             let velocity = transformer.velocity(
-                image: concatenated([latents, condition], axis: 0), context: embeddings, imageIDs: imageIDs,
+                image: concatenated([latents] + conditions, axis: 0), context: embeddings, imageIDs: imageIDs,
                 textIDs: textIDs, timestep: sigmas[step], outputs: count,
             )
             latents = latents + (sigmas[step + 1] - sigmas[step]) * velocity

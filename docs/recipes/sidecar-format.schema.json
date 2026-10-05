@@ -668,7 +668,50 @@
           "maximum": 100,
           "description": "The share of the radius that fades out."
         },
-        "opacity": { "type": "number", "minimum": 0, "maximum": 100 }
+        "opacity": { "type": "number", "minimum": 0, "maximum": 100 },
+        "fill": {
+          "$ref": "#/$defs/generatedFill",
+          "description": "A Remove spot's fill made by a generative model, used instead of filling it from the photo."
+        }
+      },
+      "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
+    },
+    "generatedFill": {
+      "description": "A Remove spot's fill made by a generative model (RM-10), kept so it renders the same everywhere.",
+      "type": "object",
+      "required": ["bitmap", "peak", "box", "photoSize", "model", "modelVersion", "seed", "prompt"],
+      "properties": {
+        "bitmap": {
+          "$ref": "#/$defs/maskBitmap",
+          "description": "A 16-bit RGB PNG in the package's masks folder: the photo's camera RGB, white balanced as shot and linear, divided by peak and square-rooted."
+        },
+        "peak": { "type": "number", "minimum": 0, "description": "The scale the bitmap's values are stored at." },
+        "box": {
+          "description": "Where the bitmap goes, in the photo's full-size pixels before its orientation.",
+          "type": "object",
+          "required": ["x", "y", "width", "height"],
+          "properties": {
+            "x": { "type": "integer", "minimum": 0 },
+            "y": { "type": "integer", "minimum": 0 },
+            "width": { "type": "integer", "minimum": 1 },
+            "height": { "type": "integer", "minimum": 1 }
+          },
+          "additionalProperties": false
+        },
+        "photoSize": {
+          "description": "The photo's full size before its orientation, as the fill was made for it. A reader whose decode of the photo is another size fills the spot from the photo instead.",
+          "type": "object",
+          "required": ["width", "height"],
+          "properties": {
+            "width": { "type": "integer", "minimum": 1 },
+            "height": { "type": "integer", "minimum": 1 }
+          },
+          "additionalProperties": false
+        },
+        "model": { "type": "string", "description": "The model's manifest id, for example flux2-klein-4b-fill." },
+        "modelVersion": { "type": "integer", "minimum": 1 },
+        "seed": { "type": "integer", "minimum": 0 },
+        "prompt": { "type": "string", "description": "The name of the prompt it was made with, from those the model carries." }
       },
       "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
     },

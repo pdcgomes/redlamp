@@ -287,8 +287,22 @@ Remove, Heal and Clone spots apply in order, before everything else, each to the
 | `radius` | number | **Required.** A fraction of the image height: the circle's or brush's radius (the Size slider gives 0.004 to 0.204), or how far a region grows past its edge (0.005). |
 | `feather` | number | **Required.** 0 to 100: the share of the radius that fades out. |
 | `opacity` | number | **Required.** 0 to 100. |
+| `fill` | generated fill? | A Remove spot's fill made by a generative model, used instead of filling the spot from the photo. A reader that doesn't know the field keeps it and fills the spot from the photo. |
 
 A spot whose opacity or radius is 0, or a Heal or Clone spot whose source is its center, changes nothing.
+
+A generated fill (Generative Remove, made by FLUX.2 [klein] 4B in Redlamp) is kept as pixels, so it renders the same on any Mac, with the model or without:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `bitmap` | object | **Required.** `{"sha256", "width", "height"}`: a 16-bit RGB PNG in the package's `masks/` folder, holding the photo's camera RGB (white balanced as shot, linear) divided by `peak` and square-rooted. |
+| `peak` | number | **Required.** The scale the values are stored at. |
+| `box` | object | **Required.** `{"x", "y", "width", "height"}`: where the bitmap goes, in the photo's full-size pixels before its orientation. The photo's noise is added as it renders. |
+| `photoSize` | object | **Required.** `{"width", "height"}`: the photo's full size as the fill was made for it. A reader whose decode of the photo is another size fills the spot from the photo instead. |
+| `model` | string | **Required.** The model's manifest id (`flux2-klein-4b-fill`). |
+| `modelVersion` | integer | **Required.** |
+| `seed` | integer | **Required.** |
+| `prompt` | string | **Required.** The name of the prompt it was made with (`remove`). |
 
 ## History files
 
@@ -395,7 +409,7 @@ The properties are in the namespace `https://redlamp.app/ns/edit/1.0/`, which Re
 
 ## The schema
 
-[`sidecar-format.schema.json`](sidecar-format.schema.json) is JSON Schema draft 2020-12. Validate `edit.json` against the schema itself and a history file against its `#/$defs/historyFile`. The schema describes what Redlamp writes, and is stricter than Redlamp's reader where the reader is lenient: it checks ranges, lists of values and closed objects, where the reader clamps, maps or has nowhere to keep a key, and so opens the sidecar read-only. It accepts format versions up to 3 and process versions up to 11, so a sidecar from a newer Redlamp needs that Redlamp's schema.
+[`sidecar-format.schema.json`](sidecar-format.schema.json) is JSON Schema draft 2020-12. Validate `edit.json` against the schema itself and a history file against its `#/$defs/historyFile`. The schema describes what Redlamp writes, and is stricter than Redlamp's reader where the reader is lenient: it checks ranges, lists of values and closed objects, where the reader clamps, maps or has nowhere to keep a key, and so opens the sidecar read-only. It accepts format versions up to 3 and process versions up to 12, so a sidecar from a newer Redlamp needs that Redlamp's schema.
 
 Besides annotations, the schema uses only `type`, `enum`, `const`, `minimum`, `maximum`, `pattern`, `properties`, `patternProperties`, `additionalProperties`, `required`, `minProperties`, `maxProperties`, `items`, `prefixItems`, `minItems`, `maxItems`, `anyOf`, `oneOf` and `$ref` to its own `$defs`, so a small validator can check it.
 

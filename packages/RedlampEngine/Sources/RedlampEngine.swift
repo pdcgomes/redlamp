@@ -53,6 +53,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     let matteCache = Mutex<AnalysisCache?>(nil)
     /// Set once the Masking tool has opened: photos opened after get their AI masks ready too.
     let masksWanted = Mutex(false)
+    /// What generative fill runs on, once loaded, and the model folder it was loaded from.
+    let generativeFiller = Mutex<(directory: URL, filler: any GenerativeFiller)?>(nil)
 
     func currentSession() -> ImageSession? {
         session.withLock { $0 }

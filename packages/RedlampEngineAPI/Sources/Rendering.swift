@@ -250,6 +250,8 @@ public enum EngineError: Error, LocalizedError, Codable, Sendable {
     case gpuUnavailable
     case renderFailed(String)
     case imageChanged
+    /// Generative fill can't run here, and why.
+    case generativeFillUnavailable(String)
 
     public var errorDescription: String? {
         switch self {
@@ -260,6 +262,7 @@ public enum EngineError: Error, LocalizedError, Codable, Sendable {
         case let .notSupportedYet(formats, _): "\(formats) aren't supported yet."
         case .gpuUnavailable: "No Metal GPU is available."
         case let .renderFailed(reason): "Rendering failed: \(reason)"
+        case let .generativeFillUnavailable(reason): reason
         }
     }
 

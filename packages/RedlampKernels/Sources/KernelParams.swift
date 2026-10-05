@@ -428,6 +428,24 @@ public struct FillRenderParams {
     }
 }
 
+public struct FillStoredParams {
+    public var box: SIMD4<Int32>
+    public var fill: SIMD4<Int32>
+    public var noiseA: SIMD4<Float>
+    public var noiseB: SIMD4<Float>
+    public var peak: SIMD4<Float>
+
+    public init(
+        box: SIMD4<Int32>, fill: SIMD4<Int32>, noiseA: SIMD4<Float>, noiseB: SIMD4<Float>, peak: SIMD4<Float>,
+    ) {
+        self.box = box
+        self.fill = fill
+        self.noiseA = noiseA
+        self.noiseB = noiseB
+        self.peak = peak
+    }
+}
+
 public struct HazeParams {
     public var size: SIMD4<Int32>
     public var mode = SIMD4<Int32>(0, 0, 0, 0)

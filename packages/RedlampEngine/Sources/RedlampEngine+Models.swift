@@ -46,7 +46,7 @@ public extension RedlampEngine {
         try await ModelStore.shared.remove(manifest)
     }
 
-    private func info(_ manifest: ModelManifest) async -> ModelInfo {
+    internal func info(_ manifest: ModelManifest) async -> ModelInfo {
         let state: ModelInfo.State = switch await ModelStore.shared.state(of: manifest) {
         case .notDownloaded: .notDownloaded
         case let .downloading(fraction): .downloading(fraction)

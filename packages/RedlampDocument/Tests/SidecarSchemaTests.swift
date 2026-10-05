@@ -81,7 +81,7 @@ struct SidecarSchemaTests {
             }
 
             let bitmaps = sidecar.recipe.maskBitmaps + sidecar.snapshots.flatMap(\.recipe.maskBitmaps)
-            #expect(bitmaps.count == 8)
+            #expect(bitmaps.count == 9)
             for bitmap in bitmaps {
                 #expect(try Data(contentsOf: store.bitmapURL(bitmap.sha256, for: image)) == bitmap.png)
             }
@@ -585,6 +585,15 @@ enum RichSidecar {
             RetouchSpot(mode: .clone, center: point(0.6, 0.62), source: point(0.6, 0.7), stroke: stroke, radius: 0.015),
             RetouchSpot(mode: .remove, center: person.center, source: person.center, region: person, radius: 0.005),
             RetouchSpot(mode: .remove, center: dust, source: dust, radius: 0.006),
+            RetouchSpot(
+                mode: .remove, center: point(0.4, 0.75), source: point(0.4, 0.75), radius: 0.03,
+                fill: GeneratedFill(
+                    bitmap: MaskBitmap(png: Data("generated".utf8), width: 96, height: 64), peak: 1.37,
+                    box: GeneratedFill.Box(x: 1600, y: 2900, width: 384, height: 256),
+                    photoSize: PixelSize(width: 6000, height: 4000), model: "flux2-klein-4b-fill", modelVersion: 1,
+                    seed: 7, prompt: "remove",
+                ),
+            ),
         ]
     }
 

@@ -60,8 +60,19 @@ struct HandCodedTypeTests {
     }
 
     @Test func `spots, recipes and looks`() throws {
-        try check(everything.recipe.spots[1], notWritten: ["region"])
-        try check(everything.recipe.spots[2], notWritten: ["stroke"])
+        try check(everything.recipe.spots[1], notWritten: ["region", "fill"])
+        try check(everything.recipe.spots[2], notWritten: ["stroke", "fill"])
+        let generated = RetouchSpot(
+            mode: .remove, center: ImagePoint(x: 0.5, y: 0.6), source: ImagePoint(x: 0.5, y: 0.6), radius: 0.04,
+            fill: GeneratedFill(
+                bitmap: MaskBitmap(sha256: String(repeating: "a", count: 64), width: 32, height: 24), peak: 1.5,
+                box: GeneratedFill.Box(x: 120, y: 200, width: 128, height: 96),
+                photoSize: PixelSize(width: 640, height: 480), model: "flux2-klein-4b-fill", modelVersion: 1, seed: 11,
+                prompt: "remove",
+            ),
+        )
+        try check(generated, notWritten: ["stroke", "region"])
+        try check(#require(generated.fill))
         try check(#require(everything.recipe.appliedRecipe))
         try check(everything.recipe.baseLook)
         try check(

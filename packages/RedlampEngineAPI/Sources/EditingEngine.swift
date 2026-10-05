@@ -129,6 +129,20 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// one box for each. Throws `MaskComputationError.unsupported(.objects)` without its model.
     func findThings(_ things: Set<String>, threshold: Double) async throws -> [FoundThing]
 
+    /// Whether a Remove spot can be filled generatively on this Mac (RM-10).
+    func generativeFillAvailability() async -> GenerativeFillAvailability
+
+    /// Fills for `spot`, a Remove spot of the open photo's `recipe`, one for each of `seeds`: the
+    /// photo around it, with the spots before it in, repainted where the spot is by the generative
+    /// model, as `options` say. `progress` hears 0…1 from any thread.
+    func generateFills(
+        for spot: RetouchSpot, in recipe: EditRecipe, seeds: [Int], options: GenerativeFillOptions,
+        progress: @escaping @Sendable (Double) -> Void,
+    ) async throws -> [GeneratedFill]
+
+    /// Frees the generative model's memory (the Healing tool closed).
+    func releaseGenerativeFill() async
+
     /// The focus stack document at `url`, merged now or read from the cache, developed with the
     /// default edit within `maxLongEdge`. `progress` gets 0 ... 1 from any thread. Opening the
     /// document afterwards shows this merge, even if it changed since it was last opened.
@@ -181,4 +195,17 @@ public extension EditingEngine {
     func findThings(_: Set<String>, threshold _: Double) async throws -> [FoundThing] {
         []
     }
+
+    func generativeFillAvailability() async -> GenerativeFillAvailability {
+        .unavailable("This build has no generative model.")
+    }
+
+    func generateFills(
+        for _: RetouchSpot, in _: EditRecipe, seeds _: [Int], options _: GenerativeFillOptions,
+        progress _: @escaping @Sendable (Double) -> Void,
+    ) async throws -> [GeneratedFill] {
+        []
+    }
+
+    func releaseGenerativeFill() async {}
 }

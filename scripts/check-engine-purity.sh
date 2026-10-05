@@ -24,6 +24,7 @@ ENGINE_PACKAGES=(
     RedlampRecipes
     RedlampMasking
     RedlampEngine
+    RedlampGenerative
 )
 UI_PACKAGES=(
     RedlampCanvas
@@ -32,7 +33,7 @@ UI_PACKAGES=(
 )
 
 FORBIDDEN_IN_ENGINE='^[[:space:]]*(@preconcurrency[[:space:]]+)?import[[:space:]]+(AppKit|UIKit|SwiftUI|Cocoa|RedlampUI|RedlampCanvas|RedlampDesign)\b'
-FORBIDDEN_IN_UI='^[[:space:]]*(@preconcurrency[[:space:]]+)?import[[:space:]]+(RedlampEngine|RedlampKernels|RedlampColor|RedlampServices|RedlampMasking)\b'
+FORBIDDEN_IN_UI='^[[:space:]]*(@preconcurrency[[:space:]]+)?import[[:space:]]+(RedlampEngine|RedlampKernels|RedlampColor|RedlampServices|RedlampMasking|RedlampGenerative)\b'
 
 failed=0
 
