@@ -31,6 +31,10 @@
           "title" : "Color Mixer"
         },
         {
+          "id" : "develop.point-color",
+          "title" : "Point Color"
+        },
+        {
           "id" : "develop.color-grading",
           "title" : "Color Grading"
         },

@@ -38,6 +38,11 @@ public extension FeedbackArea {
                     ["hsl", "hue", "saturation", "luminance", "color", "b&w mix"],
                 ),
                 FeedbackFeature(
+                    "point-color",
+                    "Point Color",
+                    ["swatch", "uniformity", "variance", "skin tone", "even skin", "visualize range"],
+                ),
+                FeedbackFeature(
                     "color-grading",
                     "Color Grading",
                     ["split toning", "wheels", "midtones", "blending", "balance"],

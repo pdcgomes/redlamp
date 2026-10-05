@@ -282,6 +282,8 @@ public extension EditorModel {
             cancelDrawing()
         } else if eyedropperActive {
             eyedropperActive = false
+        } else if pointColorEyedropperActive {
+            pointColorEyedropperActive = false
         } else if isPlacingGuides {
             isPlacingGuides = false
         } else if isStraightening {

@@ -265,7 +265,42 @@ public final class EditorModel {
     /// A middle-grey surround and white frame for judging colour (ISO 12646).
     public var colorAssessment = false
 
-    public var eyedropperActive = false
+    public var eyedropperActive = false {
+        didSet {
+            if eyedropperActive {
+                pointColorEyedropperActive = false
+            }
+        }
+    }
+
+    /// Point Color's eyedropper: a click on the photo adds a swatch of the colour there. It and
+    /// the white balance eyedropper are never on together.
+    public var pointColorEyedropperActive = false {
+        didSet {
+            if pointColorEyedropperActive {
+                eyedropperActive = false
+            }
+        }
+    }
+
+    /// The Point Color swatch the sliders edit (see `selectedPointColorSwatch`).
+    public var selectedPointColorSwatchID: UUID? {
+        didSet {
+            if visualizePointColorRange {
+                requestRender()
+            }
+        }
+    }
+
+    /// Point Color's Visualize Range, for the selected swatch.
+    public var visualizePointColorRange = false {
+        didSet {
+            if visualizePointColorRange != oldValue {
+                requestRender()
+            }
+        }
+    }
+
     public var activeTool: EditTool = .edit {
         didSet {
             if activeTool != .masking {
@@ -716,7 +751,7 @@ public final class EditorModel {
         readOnlyReason = nil
         hasUnmergedEdits = false
         photoMetadata = library.item(for: url)?.metadata ?? PhotoMetadata()
-        eyedropperActive = false
+        endEyedroppers()
         previewingRecipe = nil
         previewingEdit = nil
         // A tuple: assigning nil notifies even when it is nil already.
@@ -914,6 +949,7 @@ public final class EditorModel {
         request.maskOverlayOpacity = maskOverlayOpacity
         request.showRawClipping = showRawClipping
         request.visualizeSpots = activeTool == .heal && visualizeSpots ? spotSettings.visualize : nil
+        request.visualizePointColor = visualizePointColorRange ? selectedPointColorSwatch?.id : nil
         request.comparison = isComparing ? beforeRecipe : nil
         engine.render(request)
     }
@@ -1062,6 +1098,10 @@ public final class EditorModel {
     }
 
     public func resetParameters(_ parameters: [ParameterID], name: String) {
+        if parameters.first?.isPointColorScoped == true {
+            resetPointColorValues(parameters, name: name)
+            return
+        }
         var next = recipe
         next.reset(parameters.filter { $0 != .temperature && $0 != .tint })
         if parameters.contains(.temperature) || parameters.contains(.tint) {

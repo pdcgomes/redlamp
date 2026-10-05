@@ -159,6 +159,15 @@ extension HarnessScene {
                 ColorMixerPanelView.make(model: $0)
             },
             panelParity(
+                id: "point-color",
+                title: "Point Color",
+                symbol: "eyedropper",
+                reference: { ColorMixerPanel(mixer: .pointColor) },
+            ) {
+                HarnessEditor.ensurePointColorSwatches()
+                return ColorMixerPanelView.make(model: $0, mixer: .pointColor)
+            },
+            panelParity(
                 id: "color-grading",
                 title: "Color Grading",
                 symbol: "circle.grid.cross",

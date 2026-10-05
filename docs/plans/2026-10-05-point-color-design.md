@@ -2,7 +2,7 @@
 
 Lightroom's Point Color, with Capture One's uniformity: pick a colour on the photo, shift it and the colours near it, and pull those colours together, so blotchy skin evens out to one tone. It works on the whole photo and inside masks, and an Even Skin Tone mask preset does it for skin in one step. Tracker: TON-29 (#181); it waits on TON-31 (#190), where the colour controls sit, and TON-30 (#182), the spatial version, follows it. The research, sources and a prototype's measurements are in [the note](../research/notes/TON-29-colour-uniformity.md).
 
-**Status (2026-10-05):** approved; building on the `point-color/build` branch. Steps 1 (`model`), 2 (`kernel`) and 3's eyedropper (`probe`) done; the mask's own colour moved to step 5, with masks' swatches.
+**Status (2026-10-05):** approved; building on the `point-color/build` branch. Steps 1 (`model`), 2 (`kernel`), 3's eyedropper (`probe`) and 4 (`panel`) done; the mask's own colour moved to step 5, with masks' swatches, and the command palette and the Delete key to step 7.
 
 ## Decisions (the owner)
 
@@ -42,10 +42,11 @@ In the develop kernel, right after the Color Mixer: after the tone curve and the
 
 ## The panel
 
-- **The Color Mixer panel** gains Point Color beside HSL and Color in its picker, as Lightroom's Color Mixer has Point Color. It shows the swatches (the eyedropper adds one; click selects; Delete removes), then Shift, Uniformity and Range for the selected swatch, and Visualize Range.
+- **The Color Mixer panel** gains Point Color beside HSL and Color in its picker, as Lightroom's Color Mixer has Point Color. It shows the swatches (the eyedropper adds one, up to eight, and with eight picks the selected swatch's colour again; click selects; the bin deletes the selected one), then Shift, Uniformity and Range for the selected swatch, dimmed until there is one, and Visualize Range. Leaving the mode ends the eyedropper and Visualize Range; the white balance eyedropper and Point Color's are never on together.
 - **The mask panel** gets the same section, with the mask's own colour as a choice for a swatch's colour.
-- **The command palette** finds Point Color and its sliders, which act on the selected swatch.
-- **The component harness** gets a Point Color specimen beside the Color Mixer's.
+- **The command palette** finds Point Color and its sliders, which act on the selected swatch, and the Delete key deletes it (step 7: the palette's sliders need a swatch to act on).
+- **The component harness** gets a Point Color specimen beside the Color Mixer's: the Point Color parity scene, with two swatches.
+- **Report a Bug** lists Point Color as a feature of Develop (`develop.point-color`), and its sliders report it.
 
 ## The Even Skin Tone preset
 
@@ -67,7 +68,7 @@ In the develop kernel, right after the Color Mixer: after the tone curve and the
 4. `panel`: the Color Mixer's Point Color mode and its harness specimen.
 5. `masks`: swatches in masks (the GPU layout and the mask panel), the mask's own colour, and the Even Skin Tone preset.
 6. `tune`: the prototype and the engine on more portraits, for the preset's values and the default range; the preview against a downscaled export; a performance run after merging.
-7. `docs`: the README, the comparison, the tracker and the sidecar format; the Lightroom preset mapping when its fields are known.
+7. `docs`: the README, the comparison, the tracker and the sidecar format; the Lightroom preset mapping when its fields are known; the command palette's Point Color sliders and the Delete key.
 
 ## Testing
 
@@ -75,7 +76,7 @@ In the develop kernel, right after the Color Mixer: after the tone curve and the
 - **Renders:** on a synthetic chart with skin-like patches, colours in the range move towards the swatch and colours outside it don't; a mask's swatch acts only under the mask; golden renders for Point Color edits.
 - **Stability:** edits without Point Color render exactly as before (`ProcessStabilityTests`).
 - **Format:** round trips, unknown keys inside a swatch kept, and the schema.
-- **The app:** the end-to-end suite's contract (ARC-07, ARC-08) claims Point Color's mode, sliders and eyedropper in a scenario, and the feedback catalogue lists Point Color as a feature of the Color Mixer area.
+- **The app:** the end-to-end suite's contract (ARC-07, ARC-08) claims Point Color's sliders and eyedropper in a scenario (`develop.point-color`: a click on the canvas adds the swatch), and the feedback catalogue lists Point Color as a feature of Develop.
 
 ## Gates
 

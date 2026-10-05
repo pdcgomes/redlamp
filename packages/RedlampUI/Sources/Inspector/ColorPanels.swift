@@ -3,9 +3,10 @@ import RedlampEngineAPI
 import SwiftUI
 
 @_spi(Harness) public struct ColorMixerPanel: View {
-    enum Mixer: String, CaseIterable {
+    public enum Mixer: String, CaseIterable {
         case hsl = "HSL"
         case color = "Color"
+        case pointColor = "Point Color"
     }
 
     enum Attribute: String, CaseIterable {
@@ -23,9 +24,12 @@ import SwiftUI
         }
     }
 
-    @State private var state = ColorMixerState()
+    @Environment(EditorModel.self) private var model
+    @State private var state: ColorMixerState
 
-    public init() {}
+    public init(mixer: Mixer = .hsl) {
+        _state = State(initialValue: ColorMixerState(mixer: mixer))
+    }
 
     public var body: some View {
         PanelSection(panel: .colorMixer) {
@@ -59,6 +63,24 @@ import SwiftUI
                 ParameterSlider(parameter: state.band.hueParameter, label: "Hue")
                 ParameterSlider(parameter: state.band.saturationParameter, label: "Saturation")
                 ParameterSlider(parameter: state.band.luminanceParameter, label: "Luminance")
+
+            case .pointColor:
+                let picked = model.selectedPointColorSwatch != nil
+                PointColorSwatches()
+                    .padding(.bottom, 2)
+                ForEach(PointColorGroup.all) { group in
+                    SubsectionHeader(title: group.title, parameters: group.parameters)
+                    ForEach(group.parameters, id: \.self) { parameter in
+                        ParameterSlider(parameter: parameter, label: PointColorGroup.label(parameter), enabled: picked)
+                    }
+                }
+                PointColorVisualizeToggle()
+                    .padding(.top, 4)
+            }
+        }
+        .onChange(of: state.mixer) { _, mixer in
+            if mixer != .pointColor {
+                model.leavePointColor()
             }
         }
     }
@@ -93,6 +115,10 @@ final class ColorMixerState {
     }
 
     @ObservationIgnored var onChange: () -> Void = {}
+
+    init(mixer: ColorMixerPanel.Mixer = .hsl) {
+        self.mixer = mixer
+    }
 }
 
 struct MixerPicker: View {

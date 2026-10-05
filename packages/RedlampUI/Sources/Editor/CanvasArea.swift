@@ -20,13 +20,13 @@ struct CanvasArea: View {
                     controller: model.canvas,
                     clickAction: model.isSpacePanning ? .zoom
                         : [.masking, .crop, .heal].contains(model.activeTool) || model.isPlacingGuides
-                        ? .none : (model.eyedropperActive ? .sample : .zoom),
+                        ? .none : (model.eyedropperActive || model.pointColorEyedropperActive ? .sample : .zoom),
                     surround: model.colorAssessment
                         ? CanvasMetalView.assessmentSurround
                         : [CanvasMetalView.defaultSurround, 0.003, 0][min(model.lightsOut, 2)],
                     whiteFrame: model.colorAssessment ? CanvasMetalView.assessmentFrame : 0,
                     forwardsCoveredEvents: model.commandPalette == nil,
-                    onSample: { model.sampleWhiteBalance(at: $0) },
+                    onSample: { model.sampleEyedropper(at: $0) },
                     onCommandScroll: { model.scrollSizedBrush(by: $0, feather: $1) },
                 )
             }
@@ -83,7 +83,8 @@ struct CanvasArea: View {
                 if model.lightsOut == 0, model.commandPalette == nil,
                    model.exportStatus != nil
                    || model.isShowingOriginal || model.previewingRecipe != nil || model.previewingEdit != nil
-                   || model.eyedropperActive || model.drawingKind != nil || model.notice != nil
+                   || model.eyedropperActive || model.pointColorEyedropperActive || model.drawingKind != nil
+                   || model.notice != nil
                    || (model.info != nil && model.isBaseLookMissing) {
                     StatusPill(text: statusText)
                 }
@@ -183,6 +184,9 @@ struct CanvasArea: View {
         }
         if model.eyedropperActive {
             return "Click a neutral area to set white balance  ·  Esc to cancel"
+        }
+        if model.pointColorEyedropperActive {
+            return "Click a colour to add a Point Color swatch  ·  Esc to cancel"
         }
         if let recipe = model.previewingRecipe {
             return "Preview: \(recipe.name)"

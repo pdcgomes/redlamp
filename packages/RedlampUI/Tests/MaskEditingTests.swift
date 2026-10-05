@@ -150,6 +150,13 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         sampledColor
     }
 
+    /// What Point Color's eyedropper finds.
+    var pointColorSample: OKLCh? = OKLCh(lightness: 0.7, chroma: 0.08, hue: 55)
+
+    func pointColorInput(sampledAt _: CGPoint, radius _: Double, recipe _: EditRecipe) async -> OKLCh? {
+        pointColorSample
+    }
+
     var computed: [AIMask] = []
 
     var lastRequest: MaskRequest?

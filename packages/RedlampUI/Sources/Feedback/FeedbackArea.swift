@@ -134,6 +134,9 @@ public extension FeedbackArea {
         if PanelID.cameraRecipeParameters.contains(parameter) {
             return "develop.camera-recipe"
         }
+        if parameter.isPointColorScoped {
+            return "develop.point-color"
+        }
         switch parameter {
         case .temperature, .tint: return "develop.white-balance"
         case .exposure, .contrast, .highlights, .shadows, .whites, .blacks: return "develop.tone"

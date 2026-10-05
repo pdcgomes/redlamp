@@ -11,6 +11,7 @@
             toneAndPresence,
             toneCurve,
             colorMixer,
+            pointColor,
             colorGrading,
             detail,
             lensAndTransform,
@@ -171,6 +172,32 @@
             }
             try app.choose(.resetAll)
             app.covered(.feature("develop.color-mixer"), via: .model)
+        }
+
+        static let pointColor = Scenario(
+            "develop.point-color",
+            "Point Color: a swatch picked on the photo, each of its sliders, Visualize Range, and delete",
+            claims: [.feature("develop.point-color")] + ParameterID.pointColorParameters.map { Claim.parameter($0) },
+        ) { app in
+            try app.openWorking()
+            try app.main { $0.pointColorEyedropperActive = true }
+            try app.click(.canvas)
+            try app.wait("a Point Color swatch") { !$0.recipe.pointColor.isEmpty && !$0.pointColorEyedropperActive }
+            app.covered(.feature("develop.point-color"), via: .mouse)
+            for parameter in ParameterID.pointColorParameters {
+                try app.set(parameter, parameter.spec.defaultValue == 0 ? 40 : 70)
+                app.covered(.parameter(parameter), via: .model)
+            }
+            try app.expectRenders("Visualize Range") {
+                try app.main { $0.visualizePointColorRange = true }
+            }
+            try app.main { model in
+                model.visualizePointColorRange = false
+                if let swatch = model.selectedPointColorSwatch {
+                    model.deletePointColorSwatch(swatch.id)
+                }
+            }
+            try app.wait("the swatch deleted") { $0.recipe.pointColor.isEmpty }
         }
 
         static let colorGrading = Scenario(

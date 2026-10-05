@@ -85,6 +85,11 @@ extension EditorModel {
             recordHistory(.retouch, "Spot \(spec.label)", from: previous) { recipe in
                 spec.formatted(recipe.spots.first { $0.id == spot }?[parameter] ?? spec.defaultValue)
             }
+        } else if parameter.isPointColorScoped {
+            let swatch = selectedPointColorSwatch?.id
+            recordHistory(.edit, "Point Color \(spec.label)", from: previous) { recipe in
+                spec.formatted(recipe.pointColor.first { $0.id == swatch }?[parameter] ?? spec.defaultValue)
+            }
         } else if parameter.isMaskScoped {
             let mask = selectedMaskID
             let component = selectedComponentID

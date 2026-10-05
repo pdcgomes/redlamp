@@ -73,6 +73,18 @@ enum HarnessEditor {
         }
     }
 
+    /// Gives the Point Color scene two swatches to show, a skin tone selected.
+    static func ensurePointColorSwatches() {
+        Task {
+            while model.info == nil {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            guard model.recipe.pointColor.isEmpty else { return }
+            model.addPointColorSwatch(OKLCh(lightness: 0.6, chroma: 0.1, hue: 240))
+            model.addPointColorSwatch(OKLCh(lightness: 0.7, chroma: 0.08, hue: 55))
+        }
+    }
+
     /// `tests/fixtures/raw` in this checkout (`mise run fixtures` downloads it).
     private static let fixtures = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent()

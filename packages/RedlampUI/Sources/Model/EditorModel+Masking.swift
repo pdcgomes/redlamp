@@ -372,10 +372,14 @@ public extension EditorModel {
 
     // MARK: - Slider routing
 
-    /// Sliders call these; mask-scoped parameters go to the selected mask.
+    /// Sliders call these; mask-scoped parameters go to the selected mask, Point Color's to the
+    /// selected swatch.
     func sliderValue(_ parameter: ParameterID) -> Double {
         if parameter.isSpotScoped {
             return spotValue(parameter)
+        }
+        if parameter.isPointColorScoped {
+            return pointColorValue(parameter)
         }
         return parameter.isMaskScoped ? maskValue(parameter) : value(parameter)
     }
@@ -383,6 +387,8 @@ public extension EditorModel {
     func setSliderValue(_ parameter: ParameterID, _ value: Double) {
         if parameter.isSpotScoped {
             setSpotValue(parameter, value)
+        } else if parameter.isPointColorScoped {
+            setPointColorValue(parameter, value)
         } else if parameter.isMaskScoped {
             setMaskValue(parameter, value)
         } else {
@@ -393,6 +399,8 @@ public extension EditorModel {
     func resetSlider(_ parameter: ParameterID) {
         if parameter.isSpotScoped {
             setSpotValue(parameter, parameter.spec.defaultValue)
+        } else if parameter.isPointColorScoped {
+            setPointColorValue(parameter, parameter.spec.defaultValue)
         } else if parameter.isMaskScoped {
             setMaskValue(parameter, parameter.spec.defaultValue)
         } else {
