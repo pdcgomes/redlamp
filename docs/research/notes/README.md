@@ -21,5 +21,15 @@ and test-data lists.
 | [H1-topaz-teardown.md](H1-topaz-teardown.md) | Appendix to H: Topaz product lineup, disclosures, the Adobe partnership and acquisition, inferred architecture |
 | [H2-open-model-survey.md](H2-open-model-survey.md) | Appendix to H: licences (including whether internal evaluation is allowed) for upscaling, deblur, all-in-one and face models, and evaluation tooling |
 
+Later notes, each behind tracker rows or another findings document:
+
+| Note | Scope |
+| --- | --- |
+| [MSK-17-sky-bakeoff.md](MSK-17-sky-bakeoff.md) | The sky mask bake-off (1 October 2026) |
+| [CAM-14-seed-run.md](CAM-14-seed-run.md) | The camera bench over raw.pixls.us and what it found (4 October 2026) |
+| [TON-29-colour-uniformity.md](TON-29-colour-uniformity.md) | Colour uniformity for skin: Capture One's tools, a prototype, and how Redlamp could build it (4 October 2026) |
+| [TC-architecture-and-workflow.md](TC-architecture-and-workflow.md), [TC-capture-one-teardown.md](TC-capture-one-teardown.md), [TC-lightroom-and-other-tools.md](TC-lightroom-and-other-tools.md), [TC-routes-and-licences.md](TC-routes-and-licences.md) | Evidence for the [tethered capture findings](../tethering-findings.md) (5 October 2026) |
+| [CAM-12-nikon-high-efficiency.md](CAM-12-nikon-high-efficiency.md) | Nikon's High Efficiency NEFs: the format, how Redlamp handles them, and the routes to opening them (5 October 2026) |
+
 Some notes mention scratch scripts under `/tmp/`. Those were one-off measurement harnesses and are not
 kept; the reproducible prototypes are in [research/prototypes](../../../research/prototypes/README.md).
