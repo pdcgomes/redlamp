@@ -22,7 +22,7 @@ public extension DuplicateReview {
             lines.append(
                 "\(kept.url.lastPathComponent): \(group.copies.count) copies of \(Self.bytes(group.size))\(captured)",
             )
-            for copy in group.copies {
+            for copy in [kept] + group.copies.filter({ $0.photo != kept.photo }) {
                 let keep = copy.photo == group.keeper.photo
                 var notes = keep ? [group.keeper.description] : []
                 notes += Self.notes(copy)
@@ -182,13 +182,15 @@ public extension DuplicateReview {
         "\(BenchResult.grouped(value)) \(noun)\(value == 1 ? "" : "s")"
     }
 
-    /// Megabytes of 1,000,000 bytes, as drives count them, or gigabytes from 1,000 MB.
+    /// Megabytes of 1,000,000 bytes, as drives count them; gigabytes from 1,000 MB, kilobytes below
+    /// 1 MB, bytes below 1 KB.
     static func bytes(_ value: Int64) -> String {
-        let megabytes = Double(value) / 1_000_000
-        if megabytes >= 1000 {
-            return String(format: "%.2f GB", megabytes / 1000)
+        switch value {
+        case 1_000_000_000...: String(format: "%.2f GB", Double(value) / 1e9)
+        case 1_000_000...: String(format: "%.1f MB", Double(value) / 1e6)
+        case 1000...: "\(value / 1000) KB"
+        default: "\(value) bytes"
         }
-        return megabytes >= 1 ? String(format: "%.1f MB", megabytes) : "\(BenchResult.grouped(Int(value / 1000))) KB"
     }
 
     /// `2019-06-14 10:32:05`: the capture time as the camera wrote it, which the index keeps as UTC.

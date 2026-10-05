@@ -26,7 +26,7 @@ extension LibraryCommand {
         let grouped = clock.now - grouping
         report(
             "\(count(candidates.photosGrouped)) photos grouped by content key and size in "
-                + String(format: "%.0f ms", grouped.seconds * 1000) + ": \(count(candidates.photoCount)) candidates "
+                + String(format: "%.1f ms", grouped.seconds * 1000) + ": \(count(candidates.photoCount)) candidates "
                 + "in \(count(candidates.groups.count)) groups",
         )
         let reported = Mutex(clock.now)

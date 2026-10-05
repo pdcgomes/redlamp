@@ -56,13 +56,8 @@ public struct DuplicateRemovalPlan: Sendable, Hashable, Codable {
     public init(_ review: DuplicateReview, removing photos: some Sequence<Int64>) throws(Refusal) {
         guard review.checkedFiles else { throw .unchecked }
         let chosen = Set(photos)
-        var groupOf: [Int64: DuplicateReview.Group] = [:]
-        for group in review.groups {
-            for copy in group.copies {
-                groupOf[copy.photo] = group
-            }
-        }
-        if let stray = chosen.sorted().first(where: { groupOf[$0] == nil }) {
+        let copies = Set(review.groups.flatMap { $0.copies.map(\.photo) })
+        if let stray = chosen.sorted().first(where: { !copies.contains($0) }) {
             throw .notADuplicate(photo: stray)
         }
         var removals: [Removal] = []
