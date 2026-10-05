@@ -92,10 +92,11 @@ struct WelcomeTests {
     }
 
     /// The window is the film's size, and Escape (sent up from wherever focus is) skips the film,
-    /// then closes the window.
+    /// then closes the window. Reduce Motion is given, not read from this Mac: GitHub's runners
+    /// turn it on.
     @Test func `escape skips the film, then closes the window`() throws {
         var closed = false
-        let controller = WelcomeWindowController(film: Self.film) { closed = true }
+        let controller = WelcomeWindowController(film: Self.film, reduceMotion: false) { closed = true }
         let window = try #require(controller.window)
         let content = try #require(window.contentView)
         #expect(window.frame.size == WelcomeView.size, "the film fills the window, titlebar included")
@@ -105,6 +106,14 @@ struct WelcomeTests {
         #expect(controller.model.step == .about)
         #expect(!closed)
         content.doCommand(by: #selector(NSResponder.cancelOperation(_:)))
+        #expect(closed)
+    }
+
+    @Test func `with Reduce Motion, the window opens on the first page and escape closes it`() throws {
+        var closed = false
+        let controller = WelcomeWindowController(film: Self.film, reduceMotion: true) { closed = true }
+        #expect(controller.model.step == .about)
+        try #require(controller.window?.contentView).doCommand(by: #selector(NSResponder.cancelOperation(_:)))
         #expect(closed)
     }
 }

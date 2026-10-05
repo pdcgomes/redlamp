@@ -9,10 +9,14 @@ public final class WelcomeWindowController: NSWindowController, NSWindowDelegate
     let model: WelcomeModel
     private let onClose: () -> Void
 
-    /// `film` is the app's Welcome.mp4 (video/scripts/welcome.mjs); without it the pages show
-    /// straight away.
-    public init(film: URL?, onClose: @escaping () -> Void) {
-        model = WelcomeModel(film: film, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+    /// `film` is the app's Welcome.mp4 (video/scripts/welcome.mjs); without it, or with Reduce
+    /// Motion on (the system's setting unless given), the pages show straight away.
+    public init(
+        film: URL?,
+        reduceMotion: Bool = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+        onClose: @escaping () -> Void,
+    ) {
+        model = WelcomeModel(film: film, reduceMotion: reduceMotion)
         self.onClose = onClose
         let window = FilmWindow.make(
             title: "Welcome to Redlamp",
