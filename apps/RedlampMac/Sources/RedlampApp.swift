@@ -12,6 +12,7 @@ struct RedlampApp: App {
     @State private var model: EditorModel
     @State private var theme: ThemeSettings
     @State private var exports: ExportPresetStore
+    @AppStorage(WhatsNewStore.opensKey) private var showsWhatsNew = true
 
     init() {
         #if DEBUG || REDLAMP_PROFILING
@@ -39,6 +40,14 @@ struct RedlampApp: App {
         model.onToggleToolbar = { NSApp.keyWindow?.toggleToolbarShown(nil) }
         model.onTestCamera = { AppDelegate.showCameraBench?() }
         model.onSendFeedback = { prefill in FeedbackActions.present(model: model, prefill: prefill) }
+        AppDelegate.isEditorBusy = { model.isModalDialogOpen }
+        AppDelegate.performWhatsNew = { action in
+            switch action {
+            case .app(.filmLooks, _): AppDelegate.performMenuItem(titled: ShortcutAction.filmLooks.title)
+            case let .app(app, _): model.perform(app.shortcut)
+            case let .link(url, _): NSWorkspace.shared.open(url)
+            }
+        }
         let theme = ThemeSettings()
         let exports = ExportPresetStore()
         _model = State(initialValue: model)
@@ -87,6 +96,7 @@ struct RedlampApp: App {
                 model: model,
                 updates: appDelegate.updates,
                 onWelcome: { appDelegate.showWelcome() },
+                onWhatsNew: { appDelegate.showRecentNews() },
                 onOpen: { Self.openPanel(model: model) },
                 onExport: { ExportActions.present(model: model, store: exports) },
                 onExportWithPrevious: { ExportActions.exportWithPrevious(model: model, store: exports) },
@@ -100,6 +110,7 @@ struct RedlampApp: App {
                 checksForUpdates: appDelegate.updates.map { updates in
                     Binding(get: { updates.checksAutomatically }, set: { updates.setChecksAutomatically($0) })
                 },
+                showsWhatsNew: appDelegate.updates == nil ? nil : $showsWhatsNew,
             )
             .focusEffectDisabled()
         }
@@ -147,16 +158,92 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static var saveBeforeQuitting: (@MainActor () -> QuitSaving)?
     static var showCameraBench: (@MainActor () -> Void)?
     static var openCameraBenchIfRequested: (@MainActor () -> Void)?
+    static var isEditorBusy: (@MainActor () -> Bool)?
+    static var performWhatsNew: (@MainActor (WhatsNewItem.Action) -> Void)?
+    /// How long after launch the highlights may still open; later, they wait for the next launch.
+    static let newsWait: TimeInterval = 10
     let updates = Updates()
     private var editor: EditorWindowController?
     private var welcome: WelcomeWindowController?
+    private var whatsNew: WhatsNewWindowController?
+    /// Made when first needed, so a capture's `--whats-new-endpoint` is in place by then.
+    private lazy var whatsNewLoader = WhatsNewLoader()
 
     func applicationDidFinishLaunching(_: Notification) {
         editor = Self.launch?()
-        if Welcome.opensAtLaunch(arguments: LaunchArguments.all) {
+        let welcomeOpens = Welcome.opensAtLaunch(arguments: LaunchArguments.all)
+        if welcomeOpens {
             showWelcome()
         }
+        lookForNews(firstLaunch: welcomeOpens && !LaunchArguments.all.contains("--welcome"))
         Self.openCameraBenchIfRequested?()
+    }
+
+    /// Builds from source have every highlight: their version is the last release's until the next.
+    private var newsVersion: AppVersion? {
+        updates == nil ? nil : AppVersion.current
+    }
+
+    /// After an update, the highlights not yet shown open over the editor if they're ready within
+    /// a few seconds and nothing else has started; otherwise they wait for the next launch.
+    private func lookForNews(firstLaunch: Bool) {
+        let launch = WhatsNew.atLaunch(
+            arguments: LaunchArguments.all, updatesItself: updates != nil,
+            opensAfterUpdates: whatsNewLoader.store.opensAfterUpdates, welcomeOpens: firstLaunch,
+        )
+        guard launch != .nothing else { return }
+        let started = Date.now
+        Task {
+            guard let pages = await whatsNewLoader.atLaunch(launch, version: newsVersion) else { return }
+            let undisturbed = welcome == nil && NSApp.isActive && !(Self.isEditorBusy?() ?? false)
+            guard launch == .open || (undisturbed && Date.now.timeIntervalSince(started) < Self.newsWait)
+            else { return }
+            showWhatsNew(pages)
+        }
+    }
+
+    /// Help › What's New in Redlamp: the recent highlights, from the site or, offline, the last
+    /// ones it sent. With neither, nothing opens, and the next launch or choice asks again.
+    func showRecentNews() {
+        if let whatsNew {
+            whatsNew.showWindow(nil)
+            return
+        }
+        Task {
+            let pages = await whatsNewLoader.recent(version: newsVersion)
+            guard !pages.items.isEmpty else { return }
+            showWhatsNew(pages)
+        }
+    }
+
+    private func showWhatsNew(_ pages: WhatsNewPages) {
+        whatsNew?.close()
+        let film = Bundle.main.url(forResource: "Welcome", withExtension: "mp4")
+        let whatsNew = WhatsNewWindowController(
+            pages: pages, film: film,
+            onAction: { Self.performWhatsNew?($0) },
+            onClose: { [weak self] in self?.whatsNew = nil },
+        )
+        self.whatsNew = whatsNew
+        whatsNew.present(over: editor?.window)
+        whatsNewLoader.markShown(pages)
+    }
+
+    /// Runs a menu item by its title, as choosing it would.
+    static func performMenuItem(titled title: String) {
+        func find(_ menu: NSMenu) -> (NSMenu, Int)? {
+            for (index, item) in menu.items.enumerated() {
+                if item.title == title {
+                    return (menu, index)
+                }
+                if let found = item.submenu.flatMap(find) {
+                    return found
+                }
+            }
+            return nil
+        }
+        guard let menu = NSApp.mainMenu, let (owner, index) = find(menu) else { return }
+        owner.performActionForItem(at: index)
     }
 
     /// The welcome window, over the editor: by itself at the first launch, and from Help ›

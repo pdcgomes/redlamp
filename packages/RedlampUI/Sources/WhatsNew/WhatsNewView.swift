@@ -129,7 +129,9 @@ private struct ItemPage: View {
             }
             .frame(maxHeight: .infinity)
             HStack(spacing: 14) {
-                PageDots(count: model.items.count, current: index)
+                if model.items.count > 1 {
+                    PageDots(count: model.items.count, current: index)
+                }
                 Spacer()
                 Button("Back", action: model.back)
                     .buttonStyle(.plain)

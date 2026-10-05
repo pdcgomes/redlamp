@@ -71,14 +71,15 @@ A paragraph or two, at most 600 characters, with bold, italics, code and links.
 - **A button** is an `action` from the list above, or a `link` (https) to a page instead, with its `actionTitle`.
 - **The feed changes with the site, not the app:** a highlight can go up or be corrected after a release. The app looks on each new version, and at most once a day after that.
 - **Checks:** a missing or malformed field, an image that's missing, too narrow or the wrong shape, Markdown beyond inline formatting, or an action the app doesn't offer stops the build, naming the item. `npm test` covers these rules in `lib/whats-new.ts`.
-- **Drafts** are in every build but Production. To see one in the app, point a build at a local site or a Preview deployment:
+- **Drafts** are in every build but Production. To see one in the app, point a build at a Preview deployment. The app didn't load the feed from `mise run site` over plain http when this was written, so use https:
 
 ```bash
-mise run site
-defaults write app.redlamp.mac WhatsNewEndpoint http://localhost:3000/api/whats-new
+defaults write app.redlamp.mac WhatsNewEndpoint https://<preview>.vercel.app/api/whats-new
 # Help › What's New in Redlamp, or launch with --whats-new
 defaults delete app.redlamp.mac WhatsNewEndpoint
 ```
+
+- **If the feed can't be had,** nothing opens and nothing is said: the app tries again at its next launch, or the next time What's New is chosen from the Help menu.
 
 ## Deploying on Vercel
 

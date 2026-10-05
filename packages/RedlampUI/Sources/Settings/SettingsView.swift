@@ -11,13 +11,19 @@ public struct SettingsView: View {
     @Bindable var theme: ThemeSettings
     let engine: (any EditingEngine)?
     let checksForUpdates: Binding<Bool>?
+    let showsWhatsNew: Binding<Bool>?
 
     /// `checksForUpdates` is Sparkle's automatic-check setting, from builds that update
-    /// themselves; the app passes it in because this package doesn't link Sparkle.
-    public init(theme: ThemeSettings, engine: (any EditingEngine)? = nil, checksForUpdates: Binding<Bool>? = nil) {
+    /// themselves; the app passes it in because this package doesn't link Sparkle. `showsWhatsNew`
+    /// is whether What's New opens after an update, in those builds too.
+    public init(
+        theme: ThemeSettings, engine: (any EditingEngine)? = nil, checksForUpdates: Binding<Bool>? = nil,
+        showsWhatsNew: Binding<Bool>? = nil,
+    ) {
         self.theme = theme
         self.engine = engine
         self.checksForUpdates = checksForUpdates
+        self.showsWhatsNew = showsWhatsNew
     }
 
     public var body: some View {
@@ -31,7 +37,7 @@ public struct SettingsView: View {
                 }
             }
             Tab("About", systemImage: "info.circle") {
-                AboutSettings(checksForUpdates: checksForUpdates)
+                AboutSettings(checksForUpdates: checksForUpdates, showsWhatsNew: showsWhatsNew)
             }
         }
         .frame(width: 500)
@@ -136,6 +142,7 @@ private struct CommandPaletteThemeSettings: View {
 
 private struct AboutSettings: View {
     let checksForUpdates: Binding<Bool>?
+    let showsWhatsNew: Binding<Bool>?
     private let info = Bundle.main.infoDictionary ?? [:]
 
     var body: some View {
@@ -152,6 +159,9 @@ private struct AboutSettings: View {
             if let checksForUpdates {
                 Toggle("Automatically check for updates", isOn: checksForUpdates)
                     .padding(.top, 4)
+            }
+            if let showsWhatsNew {
+                Toggle("Show what's new after updates", isOn: showsWhatsNew)
             }
             Text("Redlamp develops your raw photos without ever touching the originals.")
                 .multilineTextAlignment(.center)

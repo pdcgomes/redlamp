@@ -7,6 +7,7 @@ struct AppCommands: Commands {
     let model: EditorModel
     let updates: Updates?
     let onWelcome: () -> Void
+    let onWhatsNew: () -> Void
     let onOpen: () -> Void
     let onExport: () -> Void
     let onExportWithPrevious: () -> Void
@@ -117,6 +118,7 @@ struct AppCommands: Commands {
 
         CommandGroup(after: .help) {
             Button("Welcome to Redlamp", action: onWelcome)
+            Button(WhatsNewWindowController.title, action: onWhatsNew)
             item(.sendFeedback)
             Button("Your Reports…") { FeedbackActions.presentReports(model: model) }
                 .disabled(model.isModalDialogOpen)

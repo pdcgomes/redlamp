@@ -27,8 +27,8 @@ public struct WhatsNewRelay: WhatsNewSource {
         self.timeout = timeout
     }
 
-    /// `defaults write app.redlamp.mac WhatsNewEndpoint http://localhost:3000/api/whats-new` points
-    /// a build at a local site or a preview deployment, drafts included.
+    /// `defaults write app.redlamp.mac WhatsNewEndpoint https://<preview>.vercel.app/api/whats-new`
+    /// points a build at a preview deployment, drafts included.
     public static var configuredEndpoint: URL {
         UserDefaults.standard.string(forKey: "WhatsNewEndpoint").flatMap(URL.init(string:)) ?? defaultEndpoint
     }

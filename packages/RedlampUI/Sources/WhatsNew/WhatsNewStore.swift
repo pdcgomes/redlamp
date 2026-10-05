@@ -11,7 +11,7 @@ public final class WhatsNewStore {
     static let seenKey = "whatsNew.seen"
     static let floorKey = "whatsNew.floor"
     static let checkedKey = "whatsNew.checked"
-    static let opensKey = "whatsNew.opensAfterUpdates"
+    public static let opensKey = "whatsNew.opensAfterUpdates"
     /// The site is asked on each new version, and at most this often after that.
     static let checkInterval: TimeInterval = 24 * 3600
 
