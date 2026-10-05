@@ -1,0 +1,130 @@
+import Foundation
+
+public extension BenchScenarios {
+    /// Adds the query engine's scenarios (LIB-06) after the others: search as you type, and facets.
+    static func registerQueries() {
+        register(SearchScenario())
+        register(FacetScenario())
+    }
+}
+
+/// Types every query of the manifest a character at a time into the query engine, over an index of
+/// the fixture, as the filter bar does: how soon the first page of 100 and the count come (the
+/// design's budget: p95 under 16 ms), how soon every photo comes in order, and that each query, typed
+/// in full, finds as many photos as the manifest says. The index is made with `LibraryIndexer` the
+/// first time and kept for the next runs; the search reads only the Mac's own disk, so the fixture's
+/// volume profile doesn't matter.
+public struct SearchScenario: BenchScenario {
+    public let name = "search"
+    static let budget = 16.0
+    let indexFolder: URL?
+
+    public init() {
+        indexFolder = nil
+    }
+
+    /// Keeps the index in `indexFolder` rather than in the temporary folder.
+    init(indexFolder: URL?) {
+        self.indexFolder = indexFolder
+    }
+
+    public func run(_ context: BenchContext) async throws -> [BenchResult] {
+        let setup = try await QueryScenario.engine(for: context, in: indexFolder)
+        let engine = setup.engine
+        let clock = ContinuousClock()
+        var firsts: [Duration] = []
+        var completes: [Duration] = []
+        var counts: [Int] = []
+        for query in FixtureQuery.corpus {
+            let characters = Array(query.text)
+            for length in 1 ... characters.count {
+                let started = clock.now
+                let parsed = try LibraryQuery(parsing: String(characters[..<length]), asYouType: true)
+                var first: Duration?
+                var last: QueryResult?
+                for try await result in engine.search(parsed) {
+                    first = first ?? clock.now - started
+                    last = result
+                }
+                firsts.append(first ?? clock.now - started)
+                completes.append(clock.now - started)
+                if length == characters.count {
+                    counts.append(last?.count ?? 0)
+                }
+            }
+        }
+        await setup.index.close()
+
+        let photos = Double(engine.store?.count ?? 0)
+        var results = [
+            BenchResult(
+                scenario: name, id: "library-search-load", name: "Column store built",
+                value: setup.loaded.seconds * 1000, unit: "ms",
+            ),
+            BenchResult(
+                scenario: name, id: "library-search-memory", name: "Column store, a photo",
+                value: Double(engine.store?.memoryFootprint ?? 0) / max(photos, 1), unit: "bytes",
+            ),
+            BenchResult(
+                scenario: name, id: "library-search-first-p50",
+                name: "First page and count, p50 of \(firsts.count) keystrokes",
+                value: QueryScenario.percentile(firsts, 0.5), unit: "ms",
+            ),
+            BenchResult(
+                scenario: name, id: "library-search-first", name: "First page and count, p95",
+                value: QueryScenario.percentile(firsts, 0.95), unit: "ms", budget: .below(Self.budget, "ms"),
+            ),
+            BenchResult(
+                scenario: name, id: "library-search-all", name: "Every photo in order, p95",
+                value: QueryScenario.percentile(completes, 0.95), unit: "ms",
+            ),
+        ]
+        for (number, (query, count)) in zip(FixtureQuery.corpus, counts).enumerated() {
+            let expected = Double(context.manifest.count(of: query.text) ?? -1)
+            results.append(BenchResult(
+                scenario: name, id: "library-search-count-\(number + 1)", name: "Photos for \(query.text)",
+                value: Double(count), unit: "photos", budget: .exactly(expected, "photos"),
+            ))
+        }
+        return results
+    }
+}
+
+/// What the query scenarios share: an index of the fixture, and a query engine over it.
+enum QueryScenario {
+    /// Where the index of the fixture is kept between runs: in the temporary folder, under the
+    /// fixture's name, its size and seed, and its path.
+    static func indexFolder(for context: BenchContext) -> URL {
+        var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+        for byte in context.fixture.standardizedFileURL.path.utf8 {
+            hash = (hash ^ UInt64(byte)) &* 0x100_0000_01B3
+        }
+        let spec = context.manifest.spec
+        let name = "\(context.fixture.lastPathComponent)-\(spec.photos)-\(spec.seed)-\(String(hash, radix: 16))"
+        return FileManager.default.temporaryDirectory
+            .appending(path: "redlamp-bench-query/\(name)", directoryHint: .isDirectory)
+    }
+
+    /// The fixture's index, indexed with `LibraryIndexer` unless it holds the manifest's photos
+    /// already, and a query engine over it with its column store loaded, and how long that took.
+    static func engine(for context: BenchContext, in folder: URL?) async throws
+        -> (index: LibraryIndex, engine: QueryEngine, loaded: Duration) {
+        let url = (folder ?? indexFolder(for: context)).appending(path: "Index.sqlite")
+        let index = try await LibraryIndex.open(at: url)
+        if try await index.read({ try $0.photoCount() }) != context.manifest.totals.photos {
+            for await _ in LibraryIndexer(index: index).index([context.fixture]) {}
+        }
+        let engine = QueryEngine(index: index)
+        let clock = ContinuousClock()
+        let started = clock.now
+        try await engine.load()
+        return (index, engine, clock.now - started)
+    }
+
+    /// The `fraction` percentile of `durations`, in milliseconds.
+    static func percentile(_ durations: [Duration], _ fraction: Double) -> Double {
+        let sorted = durations.sorted()
+        guard !sorted.isEmpty else { return 0 }
+        return sorted[min(sorted.count - 1, Int(Double(sorted.count) * fraction))].seconds * 1000
+    }
+}
