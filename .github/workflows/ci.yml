@@ -49,10 +49,14 @@ jobs:
           path: |
             tests/fixtures/raw
             tests/fixtures/cameras
-          key: fixtures-${{ hashFiles('mise/tasks/fixtures', 'tests/decode/samples.json') }}
+            tests/fixtures/shoots
+          key: fixtures-${{ hashFiles('mise/tasks/fixtures', 'mise/tasks/fixtures-shoots', 'tests/decode/samples.json') }}
 
+      # The shoots are the dust evaluation's (DustEvaluationTests): without them it skips.
       - name: Fetch fixtures
-        run: mise run fixtures
+        run: |
+          mise run fixtures
+          mise run fixtures-shoots
 
       - name: Generate workspace
         run: mise run generate
