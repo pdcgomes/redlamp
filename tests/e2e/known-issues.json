@@ -9,6 +9,10 @@
     {
       "frame": "CFPrefsPlistSource sendFullyPreparedMessage",
       "reason": "cfprefsd answering a small preference write slowly while the Mac is heavily loaded; seen at a load average of 15"
+    },
+    {
+      "frame": "QLSeamlessDocumentOpener _checkSeamlessOpeningState",
+      "reason": "an AppKit timer asking launchd whether Quick Look's helper is running; no Redlamp code is on the stack; seen at a load average of 26"
     }
   ]
 }
