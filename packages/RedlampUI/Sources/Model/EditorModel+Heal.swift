@@ -112,6 +112,7 @@ public extension EditorModel {
             next.spots.append(spot)
             commit(next, .retouch, "Remove \(pick.name)")
             selectedSpotID = spot.id
+            fillNewSpotGeneratively(spot)
         } catch {
             guard currentVisit == visit else { return }
             pickMessage = "\(error)"
@@ -177,6 +178,7 @@ public extension EditorModel {
         next.spots.append(spot)
         commit(next, .retouch, "Remove \(found.thing.capitalized)")
         selectedSpotID = spot.id
+        fillNewSpotGeneratively(spot)
         foundThings.removeAll { $0.id == found.id }
     }
 
@@ -195,6 +197,9 @@ public extension EditorModel {
         next.spots += spots
         commit(next, .retouch, "Remove Everything Found")
         selectedSpotID = nil
+        if fillsNewSpotsGeneratively {
+            fillGeneratively(spots.map(\.id), variations: 1)
+        }
         foundThings.removeAll { removed.contains($0.id) }
     }
 
@@ -224,6 +229,13 @@ public extension EditorModel {
         }
     }
 
+    /// A new Remove spot, filled generatively when Fill is Generative.
+    private func fillNewSpotGeneratively(_ spot: RetouchSpot) {
+        if spot.mode == .remove, fillsNewSpotsGeneratively {
+            fillGeneratively([spot.id])
+        }
+    }
+
     var selectedSpot: RetouchSpot? {
         selectedSpotID.flatMap { id in recipe.spots.first { $0.id == id } }
     }
@@ -243,6 +255,7 @@ public extension EditorModel {
         next.spots.append(spot)
         commit(next, .retouch, spot.mode.name)
         selectedSpotID = spot.id
+        fillNewSpotGeneratively(spot)
     }
 
     /// Adds a brushed spot along `points`, painted with the tool's settings; a stroke too short to
@@ -276,6 +289,7 @@ public extension EditorModel {
         next.spots.append(spot)
         commit(next, .retouch, "\(spot.mode.name) Brush")
         selectedSpotID = spot.id
+        fillNewSpotGeneratively(spot)
     }
 
     /// Heals every speck of sensor dust the engine finds, in one step.
@@ -373,6 +387,7 @@ public extension EditorModel {
         guard let index = recipe.spots.firstIndex(where: { $0.id == id }) else { return }
         var next = recipe
         change(&next.spots[index])
+        dropMovedFill(&next.spots[index])
         if let name, editStart == nil {
             commit(next, .retouch, name)
         } else {

@@ -40,6 +40,10 @@ struct HealToolPanel: View {
                 "Remove fills the spot from the photo around it; Heal matches a source to the light around the spot; Clone copies it as it is",
             )
 
+            if (selected?.mode ?? model.spotMode) == .remove, model.offersGenerativeFill {
+                generativeRows(selected)
+            }
+
             HStack(spacing: 6) {
                 Text("Click picks")
                     .font(Theme.labelFont)
@@ -127,7 +131,113 @@ struct HealToolPanel: View {
         }
         .padding(Theme.panelPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .task { await model.loadThingsToFind() }
+        .task {
+            await model.loadThingsToFind()
+            await model.loadGenerativeFill()
+        }
+    }
+
+    /// Generative Remove (RM-10): Fill, the model's download, the fill being made, and the selected
+    /// spot's fills to choose from, labelled as generated.
+    @ViewBuilder private func generativeRows(_ selected: RetouchSpot?) -> some View {
+        @Bindable var model = model
+        let availability = model.generativeAvailability
+        HStack(spacing: 6) {
+            Text("Fill")
+                .font(Theme.labelFont)
+                .foregroundStyle(Theme.label)
+            Picker("Fill", selection: $model.fillsGeneratively) {
+                Text("Content-Aware").tag(false)
+                Text("Generative").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.small)
+            .help(
+                "Content-Aware fills from the photo around the spot; Generative repaints it with an image model on this Mac, for areas too large to fill from the photo",
+            )
+        }
+        if model.fillsGeneratively, case let .needsModel(info) = availability {
+            VStack(alignment: .leading, spacing: 6) {
+                note(
+                    "Generative fill uses \(info.name), a \(info.formattedSize) download. It runs on this Mac; your photos are never uploaded. Its training data is undisclosed, so what it makes is labelled as generated fill."
+                        + (info.licence.map { " Its licence: \($0)." } ?? ""),
+                )
+                HStack {
+                    if let url = info.licenceURL {
+                        Link("Read the licence", destination: url).font(Theme.labelFont)
+                    }
+                    Spacer()
+                    if let fraction = model.generativeDownload {
+                        ProgressView(value: fraction).frame(width: 90)
+                    } else {
+                        Button("Not Now") { model.fillsGeneratively = false }
+                            .controlSize(.small)
+                        Button("Download") { Task { await model.downloadGenerativeModel() } }
+                            .controlSize(.small)
+                    }
+                }
+            }
+        }
+        if let generating = model.generating {
+            HStack(spacing: 6) {
+                ProgressView(value: generating.progress)
+                    .frame(width: 110)
+                Text("Generating")
+                    .font(Theme.labelFont)
+                    .foregroundStyle(Theme.label)
+                Spacer()
+                Button("Cancel") { model.cancelGenerativeFill() }
+                    .controlSize(.small)
+            }
+        }
+        if let selected, selected.mode == .remove {
+            if let variations = model.fillVariations(of: selected) {
+                HStack(spacing: 6) {
+                    Label("Generated fill", systemImage: "sparkles")
+                        .font(Theme.labelFont)
+                        .foregroundStyle(Theme.value)
+                        .help("This spot is filled by FLUX.2 [klein] 4B, an image model, rather than from the photo")
+                    Spacer()
+                    if variations.count > 1 {
+                        Button { model.showFillVariation(-1) } label: { Image(systemName: "chevron.left") }
+                            .buttonStyle(.borderless)
+                            .help("The previous fill")
+                        Text("\(variations.index + 1) of \(variations.count)")
+                            .font(Theme.labelFont.monospacedDigit())
+                            .foregroundStyle(Theme.label)
+                        Button { model.showFillVariation(1) } label: { Image(systemName: "chevron.right") }
+                            .buttonStyle(.borderless)
+                            .help("The next fill")
+                    }
+                }
+                HStack(spacing: 6) {
+                    Button("More") { model.fillGeneratively([selected.id], more: true) }
+                        .controlSize(.small)
+                        .disabled(availability != .ready || model.generating != nil)
+                        .help("Make \(EditorModel.fillVariations) more fills to choose from")
+                    Button("Content-Aware") { model.useContentAwareFill() }
+                        .controlSize(.small)
+                        .help("Fill the spot from the photo around it instead")
+                }
+            } else if availability == .ready, model.generating == nil {
+                Button("Fill Generatively") { model.fillGeneratively([selected.id]) }
+                    .controlSize(.small)
+                    .help(
+                        "Repaint this spot with the image model, with \(EditorModel.fillVariations) fills to choose from",
+                    )
+            }
+        }
+        if let message = model.generativeMessage {
+            note(message)
+        }
+    }
+
+    private func note(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.labelFont)
+            .foregroundStyle(Theme.label)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     /// Find: a thing to look for (or everything), outlined on the photo for a click to remove.

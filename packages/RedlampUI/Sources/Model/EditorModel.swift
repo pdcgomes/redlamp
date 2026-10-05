@@ -258,6 +258,9 @@ public final class EditorModel {
                 pickMessage = nil
                 findMessage = nil
                 foundThings = []
+                if oldValue == .heal {
+                    releaseGenerativeFill()
+                }
             }
             requestRender()
         }
@@ -296,6 +299,24 @@ public final class EditorModel {
     public var selectedSpotID: UUID?
     /// What the next spot does, and its settings (what the sliders show with no spot selected).
     public var spotMode: RetouchSpot.Mode = .heal
+    /// Generative Remove (RM-10): new Remove spots are filled by the generative model, as Lightroom's
+    /// Generative AI switch does. Kept across launches.
+    public var fillsGeneratively = UserDefaults.standard.bool(forKey: "app.redlamp.generativeRemove") {
+        didSet { UserDefaults.standard.set(fillsGeneratively, forKey: "app.redlamp.generativeRemove") }
+    }
+
+    /// Whether generative fill can run here, as the Healing tool last asked.
+    public internal(set) var generativeAvailability = GenerativeFillAvailability.unavailable("")
+    /// The fill being made: its spot, how far along the spots being filled are (0…1), and the work,
+    /// to cancel.
+    public internal(set) var generating: (spot: UUID, progress: Double)?
+    var generatingTask: Task<Void, Never>?
+    /// Each spot's fills made this session, the one in the edit among them; the others are kept only
+    /// until the photo closes.
+    public internal(set) var generatedFills: [UUID: [GeneratedFill]] = [:]
+    public internal(set) var generativeMessage: String?
+    /// The generative model's download, 0…1, while it runs.
+    public internal(set) var generativeDownload: Double?
     public var spotSettings = SpotSettings()
     /// Lightroom's Visualize Spots, while the Healing tool is active.
     public var visualizeSpots = false {
@@ -668,6 +689,8 @@ public final class EditorModel {
         cropIntent = loaded.crop
         uprightGuides = []
         foundThings = []
+        cancelGenerativeFill()
+        generatedFills = [:]
         isPlacingGuides = false
         let frameSize = loaded.developedSize(imageSize: opened.pixelSize)
         if !hasFrame {

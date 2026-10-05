@@ -149,6 +149,27 @@ private enum SpotShape {
 }
 
 /// One spot: its circle, its source's, the line between them, and a handle to resize it.
+/// The label under a spot filled by the generative model, or being filled (RM-10).
+private struct GeneratedLabel: View {
+    let isGenerating: Bool
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if isGenerating {
+                ProgressView().controlSize(.mini)
+            } else {
+                Image(systemName: "sparkles")
+            }
+            Text(isGenerating ? "Generating" : "Generated")
+        }
+        .font(.system(size: 10, weight: .medium))
+        .foregroundStyle(.white)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Capsule().fill(Color.black.opacity(0.55)))
+    }
+}
+
 private struct SpotHandles: View {
     let spot: RetouchSpot
     let frame: ImageFrame
@@ -167,6 +188,13 @@ private struct SpotHandles: View {
             regionHandles(region, center: center)
         } else {
             shapeHandles(center: center, source: source, radius: radius, strength: strength)
+        }
+
+        let isGenerating = model.generating?.spot == spot.id
+        if spot.fill != nil || isGenerating {
+            GeneratedLabel(isGenerating: isGenerating)
+                .position(x: center.x, y: center.y + (spot.region == nil ? radius : 0) + 14)
+                .allowsHitTesting(false)
         }
     }
 
@@ -308,8 +336,12 @@ private struct SpotHandles: View {
                 model.updateSpot(spot.id) { $0 = moved }
             }
             .onEnded { _ in
+                let refills = original?.fill != nil || model.generating?.spot == spot.id
                 original = nil
                 model.endEdit(.retouch, name)
+                if refills {
+                    model.refillGeneratively(spot.id)
+                }
             }
     }
 
@@ -326,11 +358,15 @@ private struct SpotHandles: View {
                 model.updateSpot(spot.id) { $0.radius = radius }
             }
             .onEnded { _ in
+                let refills = original?.fill != nil || model.generating?.spot == spot.id
                 original = nil
                 if let resized = model.recipe.spots.first(where: { $0.id == spot.id }) {
                     model.spotSettings.size = RetouchSpot.size(radius: resized.radius)
                 }
                 model.endEdit(.retouch, "Resize Spot")
+                if refills {
+                    model.refillGeneratively(spot.id)
+                }
             }
     }
 }

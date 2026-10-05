@@ -40,6 +40,39 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         return shootDust
     }
 
+    /// Whether generative fill can run; the spots `generateFills` was asked to fill, how long it
+    /// takes, and how often the model was let go.
+    var generativeAvailability = GenerativeFillAvailability.unavailable("")
+    var generatedFor: [UUID] = []
+    var generationTime = Duration.zero
+    var generativeReleases = 0
+
+    func generativeFillAvailability() async -> GenerativeFillAvailability {
+        generativeAvailability
+    }
+
+    /// One fill for each seed, each with its own bitmap.
+    func generateFills(
+        for spot: RetouchSpot, in _: EditRecipe, seeds: [Int], options _: GenerativeFillOptions,
+        progress: @escaping @Sendable (Double) -> Void,
+    ) async throws -> [GeneratedFill] {
+        generatedFor.append(spot.id)
+        let made = generatedFor.count
+        progress(0.5)
+        try await Task.sleep(for: generationTime)
+        return seeds.map { seed in
+            GeneratedFill(
+                bitmap: MaskBitmap(png: Data("fill \(made) \(seed)".utf8), width: 1, height: 1), peak: 1,
+                box: .init(x: 0, y: 0, width: 1, height: 1), photoSize: PixelSize(width: 1, height: 1),
+                model: "stub", modelVersion: 1, seed: seed, prompt: "remove",
+            )
+        }
+    }
+
+    func releaseGenerativeFill() async {
+        generativeReleases += 1
+    }
+
     /// What `open` throws instead of opening the photo.
     var openError: (any Error)?
 
