@@ -116,8 +116,8 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Landscape | Yes | Done | | | MSK-17, MSK-22 | Water, vegetation, mountains, architecture, ground and snow, from SAM 3 (a 988 MB download under Meta's SAM License) |
 | Snow in Landscape masks, and adaptive Landscape presets | Yes | Done | | | MSK-22 | |
 | Depth Range | Yes | Done | | | MSK-14 | From the photo's own depth map, or estimated by Depth Anything, an open model trained partly on data Redlamp couldn't use itself |
-| Refine AI mask edges | Yes | Done | Different | | MSK-07 | Refine Edges, and a Refine Edge brush that solves an edge again where you paint; Lightroom has Feather and Edge sliders |
-| Feather and Edge sliders for AI masks, with edges refined at full resolution | Yes | Planned | | P3 | MSK-18 | Lightroom Classic 15.5 added the sliders |
+| Refine AI mask edges | Yes | Done | Different | | MSK-07 | Refine Edges, and a Refine Edge brush that solves an edge again where you paint; from process 13, edges refined at full resolution as the photo is drawn |
+| Feather and Edge sliders for AI masks, with edges refined at full resolution | Yes | Done | | | MSK-18 | Lightroom Classic 15.5 added the sliders |
 | Mask presets (Blue Sky, Whiten Teeth and others) | Yes | Done | | | | Save your own from any mask |
 | Add, Subtract, Intersect, invert and duplicate | Yes | Done | | | | |
 | Reorder masks and components, every overlay mode and its opacity | Yes | Done | | | MSK-21 | |
