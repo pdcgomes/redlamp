@@ -102,8 +102,6 @@ I approved the [design](https://github.com/pdcgomes/redlamp/blob/main/docs/plans
 - **It comes in tiers.** A smoke run under five minutes, a full run under thirty, performance budgets that only count on a quiet Mac, random walks through the app whose failures can be replayed, and a black-box check of the signed app itself.
 - **It gates the release.** `mise run release` will refuse to ship without a passing run for the same commit.
 
-To be honest about where it is: the design and its two tracker rows, [ARC-07](https://github.com/pdcgomes/redlamp/issues/212) and [ARC-08](https://github.com/pdcgomes/redlamp/issues/213), landed this morning, and both still say Not started. An agent is working on a spike on its own branch, to find out whether events sent to a background app reach AppKit the way real ones do, and whether the app keeps rendering while hidden. Nothing runs yet, so there's no run to show you. When there is, it becomes one more check in the room, and a failing run becomes a problem like any other.
-
 ## What's next
 
 0.2.4 ships once its Needs you list is empty. For the suite, the smoke tier and the release gate come first (ARC-07), then scenarios for every area, from Develop to the camera bench (ARC-08).
