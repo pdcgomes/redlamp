@@ -12,9 +12,10 @@ public extension LibraryIndex {
         public let database: SQLiteDatabase
     }
 
-    /// The columns of a photo's text in `photo_text`, for searching only some of them.
+    /// The columns of a photo's text in `photo_text`, for searching only some of them. Folders,
+    /// cameras and lenses are matched in their own tables (`QueryEngine`).
     enum TextColumn: String, Sendable, CaseIterable {
-        case name, folder, keywords, title, caption, camera, lens
+        case name, keywords, title, caption
     }
 }
 
@@ -163,8 +164,8 @@ public extension IndexQueries {
 
     // MARK: - Text, keywords, cameras and lenses
 
-    /// The IDs of the photos whose text contains `text`, ignoring case, in ID order: in any of
-    /// their text columns, or only in `column`. Text shorter than three characters matches
+    /// The IDs of the photos whose name, keywords, title or caption contain `text`, ignoring case,
+    /// in ID order, or only those whose `column` does. Text shorter than three characters matches
     /// nothing, since the index holds trigrams.
     func photoIDs(matching text: String, in column: LibraryIndex.TextColumn? = nil, limit: Int? = nil) throws
         -> [Int64] {

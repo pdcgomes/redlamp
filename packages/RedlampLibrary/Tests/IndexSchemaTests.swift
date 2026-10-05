@@ -16,7 +16,9 @@ struct IndexSchemaTests {
         try names.map { name in try database.prepare("PRAGMA \(name)").first { $0.string(at: 0) ?? "" } ?? "" }
     }
 
-    @Test func `a new index has the design's tables and settings, at schema version 1`() async throws {
+    private static let version = LibraryIndex.migrations.count
+
+    @Test func `a new index has the design's tables and settings, at the current schema version`() async throws {
         defer { try? FileManager.default.removeItem(at: directory) }
         let index = try await LibraryIndex.open(at: url)
         defer { index.closeAndWait() }
@@ -41,7 +43,10 @@ struct IndexSchemaTests {
         ]
         #expect(designed.isSubset(of: tables))
         #expect(text?.contains("tokenize='trigram'") == true && text?.contains("contentless_delete=1") == true)
-        #expect(writer == ["wal", "1", "\(1 << 30)", "2", "-16384", "1"], "WAL, NORMAL, 1 GB mapped, in memory, 16 MB")
+        #expect(
+            writer == ["wal", "1", "\(1 << 30)", "2", "-16384", "\(Self.version)"],
+            "WAL, NORMAL, 1 GB mapped, in memory, 16 MB",
+        )
         #expect(reader == ["\(1 << 30)", "2", "-16384"])
     }
 
@@ -55,10 +60,10 @@ struct IndexSchemaTests {
         defer { reopened.closeAndWait() }
         let volumes = try await reopened.read { try $0.volumes() }
         #expect(volumes.map(\.uuid) == ["A"] && volumes.first?.kind == .spinning)
-        #expect(try await reopened.read { try $0.database.userVersion } == 1)
+        #expect(try await reopened.read { try $0.database.userVersion } == Self.version)
     }
 
-    @Test func `a migration from version 1 to 2 runs once, in its own transaction`() async throws {
+    @Test func `a migration to the next version runs once, in its own transaction`() async throws {
         defer { try? FileManager.default.removeItem(at: directory) }
         let first = try await LibraryIndex.open(at: url)
         try await first.write { try $0.setSetting("kept", for: "before") }
@@ -76,13 +81,13 @@ struct IndexSchemaTests {
                 .map { $0.string(at: 0) ?? "" }
             return try (reader.database.userVersion, columns, reader.setting("before"))
         }
-        #expect(version == 2 && columns.contains("pixel_aspect") && kept == "kept")
+        #expect(version == Self.version + 1 && columns.contains("pixel_aspect") && kept == "kept")
         await migrated.close()
 
         // Adding the column twice would fail, so opening again shows the step didn't run again.
         let again = try await LibraryIndex.open(at: url, migrations: migrations)
         defer { again.closeAndWait() }
-        #expect(try await again.read { try $0.database.userVersion } == 2)
+        #expect(try await again.read { try $0.database.userVersion } == Self.version + 1)
     }
 
     @Test func `a migration that fails leaves the index at its version, unchanged`() async throws {
@@ -105,7 +110,7 @@ struct IndexSchemaTests {
                 reader.database.prepare("SELECT name FROM sqlite_master").map { $0.string(at: 0) ?? "" },
             )
         }
-        #expect(version == 1 && !tables.contains("half_done"))
+        #expect(version == Self.version && !tables.contains("half_done"))
     }
 
     @Test func `an index from a newer Redlamp is refused`() async throws {
@@ -113,7 +118,7 @@ struct IndexSchemaTests {
         try await LibraryIndex.open(at: url).close()
         try SQLiteDatabase(path: url.path).setUserVersion(5)
 
-        await #expect(throws: LibraryIndexError.newerVersion(found: 5, supported: 1)) {
+        await #expect(throws: LibraryIndexError.newerVersion(found: 5, supported: Self.version)) {
             try await LibraryIndex.open(at: url)
         }
     }

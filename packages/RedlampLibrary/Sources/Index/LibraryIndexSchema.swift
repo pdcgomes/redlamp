@@ -5,10 +5,14 @@ extension LibraryIndex {
     typealias Migration = @Sendable (SQLiteDatabase) throws -> Void
 
     /// The schema's steps in order: the first makes version 1 from an empty database.
-    static let migrations: [Migration] = [createVersion1]
+    static let migrations: [Migration] = [createVersion1, migrateToVersion2]
 
     static func createVersion1(_ database: SQLiteDatabase) throws {
         try database.execute(schemaVersion1)
+    }
+
+    static func migrateToVersion2(_ database: SQLiteDatabase) throws {
+        try database.execute(schemaVersion2)
     }
 
     /// Brings `database` up to the last version `migrations` knows, one step per transaction.
@@ -78,5 +82,31 @@ extension LibraryIndex {
         p.title AS title, p.caption AS caption, c.name AS camera, l.name AS lens
       FROM photos p LEFT JOIN folders f ON f.id = p.folder LEFT JOIN cameras c ON c.id = p.camera
         LEFT JOIN lenses l ON l.id = p.lens;
+    """
+
+    /// The design's Results (LIB-05): the text index holds names, keywords, titles and captions, which
+    /// added photos at 17,700 a second where all seven text columns managed 12,100; folders, cameras
+    /// and lenses are matched in their own tables, thousands of rows rather than millions. And there's
+    /// no index on the content key, which alone took a replica of the inserts from 104,000 rows a
+    /// second to 20,000: lookups by content key load the keys into a set once instead.
+    ///
+    /// The text of photos already indexed is written again from the view in one statement, so FTS5
+    /// writes its terms out once.
+    static let schemaVersion2 = """
+    DROP INDEX photos_content_key;
+    DROP VIEW photo_text_rows;
+    DROP TABLE photo_text;
+    CREATE VIRTUAL TABLE photo_text USING fts5(name, keywords, title, caption,
+      content='', contentless_delete=1, tokenize='trigram');     -- rowid is photos.id
+
+    CREATE VIEW photo_text_rows AS
+      SELECT p.id AS id, p.name AS name,
+        (SELECT group_concat(k.path, ' ') FROM photo_keywords pk JOIN keywords k ON k.id = pk.keyword
+          WHERE pk.photo = p.id) AS keywords,
+        p.title AS title, p.caption AS caption
+      FROM photos p;
+
+    INSERT INTO photo_text (rowid, name, keywords, title, caption)
+      SELECT id, name, keywords, title, caption FROM photo_text_rows;
     """
 }

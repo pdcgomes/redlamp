@@ -68,7 +68,7 @@ struct IndexSnapshotTests {
         #expect(try await index.read { try $0.photoIDs(matching: "frame 42") }.count == 1)
         #expect(FileManager.default.fileExists(atPath: sandbox.url.path + ".damaged"))
         try await index.write { try $0.upsertPhotos([PhotoRecord(folder: folder, name: "Restored.JPG")]) }
-        #expect(try await index.read { try $0.database.userVersion } == 1)
+        #expect(try await index.read { try $0.database.userVersion } == LibraryIndex.migrations.count)
     }
 
     @Test func `an index damaged past its header fails its check and is restored`() async throws {
@@ -111,6 +111,6 @@ struct IndexSnapshotTests {
         #expect(outcome == .rebuilt)
         #expect(try await index.read { try $0.photoCount() } == 0)
         #expect(try await index.quickCheck())
-        #expect(try await index.read { try $0.database.userVersion } == 1)
+        #expect(try await index.read { try $0.database.userVersion } == LibraryIndex.migrations.count)
     }
 }

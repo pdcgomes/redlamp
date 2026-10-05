@@ -112,7 +112,6 @@ public extension LibraryIndex.Writer {
     /// their rows and their photos' IDs.
     func moveFolder(_ folder: Int64, to path: String, parent: Int64?) throws {
         guard let old = try self.folder(id: folder)?.path, old != path else { return }
-        let photos = try photoIDs(inSubtreeOf: folder)
         let descendants = try database.cached("""
         UPDATE folders SET path = ?4 || substr(path, length(?1) + 1) WHERE path >= ?2 AND path < ?3
         """)
@@ -124,7 +123,6 @@ public extension LibraryIndex.Writer {
         try moved.bind(parent, at: 2)
         try moved.bind(folder, at: 3)
         try moved.run()
-        try writeText(replacing: photos)
     }
 
     /// Removes `folder`, every folder under it and all their photos.
@@ -143,9 +141,7 @@ public extension LibraryIndex.Writer {
     /// call: each call writes its photos' text once all its rows are in.
     @discardableResult
     func upsertPhotos(_ photos: [PhotoRecord]) throws -> [Int64] {
-        let existing = try database.cached("""
-        SELECT id, title, caption, camera, lens FROM photos WHERE folder = ? AND name = ?
-        """)
+        let existing = try database.cached("SELECT id, title, caption FROM photos WHERE folder = ? AND name = ?")
         let upsert = try database.cached(Self.upsertPhoto)
         var ids: [Int64] = []
         ids.reserveCapacity(photos.count)
@@ -157,9 +153,8 @@ public extension LibraryIndex.Writer {
             try existing.bind(photo.name, at: 2)
             let before = try existing.first { row in
                 (
-                    id: row.int64(at: 0), unchanged: row.string(at: 1) == photo.title
-                        && row.string(at: 2) == photo.caption && row.optionalInt64(at: 3) == photo.camera
-                        && row.optionalInt64(at: 4) == photo.lens,
+                    id: row.int64(at: 0),
+                    unchanged: row.string(at: 1) == photo.title && row.string(at: 2) == photo.caption,
                 )
             }
             try bind(photo, to: upsert)
@@ -464,17 +459,14 @@ private extension LibraryIndex.Writer {
             try delete.bind(id, at: 1)
             try delete.run()
         }
-        let select = try database.cached("""
-        SELECT name, folder, keywords, title, caption, camera, lens FROM photo_text_rows WHERE id = ?
-        """)
+        let select = try database.cached("SELECT name, keywords, title, caption FROM photo_text_rows WHERE id = ?")
         let insert = try database.cached("""
-        INSERT INTO photo_text (rowid, name, folder, keywords, title, caption, camera, lens)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO photo_text (rowid, name, keywords, title, caption) VALUES (?, ?, ?, ?, ?)
         """)
         for id in added + replaced {
             try select.bind(id, at: 1)
             let found = try select.first { row in
-                for column in Int32(0) ..< 7 {
+                for column in Int32(0) ..< 4 {
                     try insert.bind(column, of: row, at: column + 2)
                 }
                 return true

@@ -3,7 +3,7 @@ import Testing
 @testable import RedlampLibrary
 
 struct IndexTextTests {
-    @Test func `text search finds substrings of names, folders, keywords, titles, captions, cameras and lenses`(
+    @Test func `text search finds substrings of names, keywords, titles and captions, not of folders, cameras or lenses`(
     ) async throws {
         let sandbox = try await IndexSandbox.make()
         defer { sandbox.remove() }
@@ -24,18 +24,7 @@ struct IndexTextTests {
         let found = try await sandbox.index.read { reader in
             try searches.map { try reader.photoIDs(matching: $0) }
         }
-        #expect(found == [
-            [ids[0]],
-            [ids[0]],
-            [ids[0]],
-            [ids[0]],
-            [ids[0]],
-            [ids[0]],
-            [ids[1]],
-            [ids[1]],
-            [ids[1]],
-            ids,
-        ])
+        #expect(found == [[ids[0]], [], [ids[0]], [ids[0]], [], [], [ids[1]], [], [ids[1]], []])
     }
 
     @Test func `text search follows a photo's renames, edits, keywords and deletion`() async throws {
@@ -58,7 +47,6 @@ struct IndexTextTests {
         #expect(try await search("1234").isEmpty)
         #expect(try await search("porto").isEmpty)
         #expect(try await search("sunset") == [id])
-        #expect(try await search("faro") == [id])
         #expect(try await search("ribeira") == [id])
 
         try await sandbox.index.write { try $0.addKeyword("Events/Festival", toPhotos: [id]) }
@@ -69,10 +57,10 @@ struct IndexTextTests {
 
         try await sandbox.index.write { try $0.deletePhotos([id]) }
         #expect(try await search("sunset").isEmpty)
-        #expect(try await search("faro").isEmpty)
+        #expect(try await search("ribeira").isEmpty)
     }
 
-    @Test func `moved folders and photos carry their text with them`() async throws {
+    @Test func `moved photos carry their text with them, and a moved folder's photos keep theirs`() async throws {
         let sandbox = try await IndexSandbox.make()
         defer { sandbox.remove() }
         let folders = try await sandbox.addFolders(["Lisbon", "Lisbon/Day 1", "Porto"])
@@ -89,7 +77,7 @@ struct IndexTextTests {
         }
         let searches = ["lisboa", "lisbon", "herons", "ribeira", "douro", "img_000"]
         let found = try await sandbox.index.read { reader in try searches.map { try reader.photoIDs(matching: $0) } }
-        #expect(found == [[ids[0], ids[1]], [], [ids[0]], [ids[1]], [ids[2]], [ids[0]]])
+        #expect(found == [[], [], [ids[0]], [ids[1]], [ids[2]], [ids[0]]])
     }
 
     @Test func `short text matches nothing, quotes are searched as written, and a column can be chosen`() async throws {
@@ -100,15 +88,15 @@ struct IndexTextTests {
             PhotoRecord(folder: folder, name: "The \"Tram\" 28.jpg"),
             PhotoRecord(folder: folder, name: "IMG_0002.jpg", caption: "tram stop"),
         ])
-        let (short, quoted, inNames, inFolders, limited) = try await sandbox.index.read { reader in
+        let (short, quoted, inNames, inCaptions, limited) = try await sandbox.index.read { reader in
             try (
                 reader.photoIDs(matching: "tr"), reader.photoIDs(matching: "\"Tram\""),
-                reader.photoIDs(matching: "tram", in: .name), reader.photoIDs(matching: "tram", in: .folder),
+                reader.photoIDs(matching: "tram", in: .name), reader.photoIDs(matching: "tram", in: .caption),
                 reader.photoIDs(matching: "tram", limit: 1),
             )
         }
         #expect(short.isEmpty, "trigrams need three characters")
         #expect(quoted == [ids[0]])
-        #expect(inNames == [ids[0]] && inFolders == ids && limited == [ids[0]])
+        #expect(inNames == [ids[0]] && inCaptions == [ids[1]] && limited == [ids[0]])
     }
 }
