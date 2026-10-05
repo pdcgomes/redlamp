@@ -2,9 +2,8 @@
 title: How I release Redlamp
 summary: Agents build Redlamp on a bunch of branches at once, but a release still needs one person to say yes. This is the room where that happens, and the test suite I'm building to back it up.
 date: 2026-10-05
-cover: whats-new-highlights.png
-coverAlt: Redlamp's What's New window for 0.2.4, listing one highlight, Test your camera, above a lit Continue button
-draft: true
+cover: release-room-overview.png
+coverAlt: The release room for 0.2.4-prealpha in Cursor, with its readiness lines on the left and the Needs you list on the right
 ---
 
 Redlamp's first release went out on the 1st of October. By the evening of the 4th there had been six. That isn't me showing off, it's a symptom. At any moment a bunch of agents are working on Redlamp, each on its own branch in its own copy of the repository, and things land on main all day. As I write this there are more than a dozen of those copies on my SSD.
@@ -26,8 +25,6 @@ That last one isn't hypothetical. CI on main hasn't passed since the morning of 
 So I asked for a skill to prepare releases, with a canvas as the checklist, where nothing runs until I've approved everything. I wanted to keep a chat open on it, or start it whenever, and for it to always know what the latest release is and what the upcoming one is. In my words at the time: treat this canvas and skill as the coordination room where all things release happen.
 
 A canvas is a small React page that Cursor shows beside the chat. Each line of work on Redlamp already keeps one (a [workstream canvas](https://github.com/pdcgomes/redlamp/blob/main/.cursor/skills/workstream-canvas/SKILL.md)), so I can see where it stands without reading the transcript. The release room is the same idea, but there's only ever one: when a release ships, it goes into the room's history and the next one opens.
-
-<!-- image: release-room-overview.png. The release room canvas in Cursor, Overview tab, for 0.2.4-prealpha: the title with its "preparing" stage, the line "Before it ships: …", the Checks passed and Waiting on you stats, the Readiness lines (Scope, What's New, Checks, Problems, Release plan) on the left and the Needs you list on the right. Cropped to the canvas pane only. Caption: "The release room for 0.2.4. Readiness on the left, what's waiting on me on the right." -->
 
 The room doesn't remember versions, it works them out. Every time the skill starts, it runs [`scripts/release-status.py`](https://github.com/pdcgomes/redlamp/blob/main/scripts/release-status.py) first, which asks GitHub and git and nothing else. This is part of what it said this morning:
 
@@ -65,27 +62,31 @@ The part I use most is a list on the right called Needs you. It only holds thing
 
 Each item has three buttons. **Done** and **Skip** fold it away, with an Undo, and the agent picks up my marks the next time it updates the room. **Ask the agent** opens a new chat with the room attached and a prompt naming the item, and marks it "With an agent". So when something needs looking into, like why CI is red, I can hand it off without writing the brief myself.
 
-<!-- image: needs-you.gif. A short screen recording (3 to 5 seconds) of the release room's Needs you list: clicking Done on one item, which folds into the Done section with "Marked done by you … Undo", then clicking Undo so it comes back. Cropped to the Needs you column only. Caption: "Done folds an item away, and Undo brings it back. The agent reads the marks at its next update." -->
+![The release room's Needs you list, before and after the first item is marked done](needs-you.gif "Done folds an item away, and Undo brings it back. The agent reads the marks at its next update.")
 
 The last item is always **Approve the release**, and it always blocks. Its Done button says Approve. Nothing in the release plan runs until I press it or say so in the chat, and even then the agent tells me what it's about to run before it runs it. If anything changes after I approve, say a new commit on origin/main or a check failing again, the approval lapses and it asks again.
 
-For 0.2.4 there are six items as I write this: say what goes in, switch on the camera bench's relay or ship without Send Results, decide each problem, approve What's New's copy, try the release candidate myself, and approve the release. None of them is done yet.
+For 0.2.4 there were six items. Approving What's New's copy is done, so five are left as I write this: say what goes in, switch on the camera bench's relay or ship without Send Results, decide each problem, try the release candidate myself, and approve the release.
 
-<!-- image: release-room-problems.png. The release room's Problems tab: each problem's title and note, its kind and source (failing check · CI, incomplete · CAM-16, risk · git, incomplete · RM-10, limitation · README) and its decision on the right. Cropped to the canvas pane. Caption: "Every known problem waits for a decision, and the decision stays on record." -->
+![The release room's Problems tab, with five problems and the decision on each](release-room-problems.png "Every known problem waits for a decision, and the decision stays on record.")
 
 ## What's New
 
 0.2.4 is also the first release with What's New, a window that opens once after an update with the release's highlights, at most four. Sparkle's update window already lists every commit; this is the short version. Its content comes from redlamp.app rather than the app, so a highlight can be corrected after a release.
 
+![What's New for 0.2.4, listing its two highlights under the logo](whats-new-highlights.png "The highlights, under the logo as it rises.")
+
 ![The Test your camera page in What's New, with a screenshot of the Camera Bench and a Test Your Camera button](whats-new-test-your-camera.png "Each highlight gets a page, and can carry a button that opens the feature.")
 
-That changes the order of things: the highlights have to be live before the release is. In the room, each one goes from candidate to drafted to approved, which only I can do, to published, which means the live feed actually serves it. This release has one, [Test your camera](/blog/testing-cameras-i-dont-own), which has a post of its own.
+That changes the order of things: the highlights have to be live before the release is. In the room, each one goes from candidate to drafted to approved, which only I can do, to published, which means the live feed actually serves it. This release has two, both live already: [Test your camera](/blog/testing-cameras-i-dont-own), which has a post of its own, and copying settings from the filmstrip's right-click menu.
 
 ## The checks, and why my Mac counts more than CI
 
 The checks run on the release candidate: origin/main plus whatever I've put in scope. The main one is every test suite on my Mac, which runs the GPU tests CI skips. Within it, the process-stability tests are read on their own: they render real edits and compare them with what was recorded, and an existing edit that renders differently blocks the release. Then lint, the website's build, a dry run of the release, an update from an older copy through Sparkle (I click Install Update), and performance on a quiet Mac.
 
-Now, CI. The latest finished run on main fails in three places: two dust detection evaluations, the process-stability tests, and a test of the welcome window. I suspect GitHub's runner, at least for the first two, but I don't know yet, and that's exactly the kind of thing I don't want waved through. So in the room it's a problem waiting for my decision. If my Mac passes the same tests, it's probably the runner and I can ship as is. If it doesn't, an edit renders differently, and that blocks the release. The suite hasn't run on the 0.2.4 candidate yet, so for now it says undecided.
+![The release room's Checks tab: CI on main failed, and the other checks not run yet, each with its command](release-room-checks.png "Each check says what it runs and how it went. One that hasn't run says so.")
+
+Now, CI. The latest finished run on main fails in three places: two dust detection evaluations, the process-stability tests, and a test of the welcome window. Some of that may be GitHub's runner rather than Redlamp, but that's exactly the kind of thing I don't want waved through. In the room it was a problem waiting for my decision, and I decided to fix it first. An agent is on it as I write this, on its own branch, and the release waits until CI is green again.
 
 ## The regression suite
 
