@@ -6,6 +6,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { Marked, type Tokens } from "marked";
+import { readFrontMatter } from "./front-matter.ts";
 
 export type Post = {
   slug: string;
@@ -27,18 +28,14 @@ export function assetPath(slug: string, src: string): string {
   return /^([a-z][a-z0-9+.-]*:|\/|#)/i.test(src) ? src : `/synced/blog/${slug}/${src.replace(/^\.\//, "")}`;
 }
 
-/** Reads a post's front matter: `key: value` lines between two `---` lines. */
+/** Reads a post's front matter (`lib/front-matter.ts`). */
 export function parsePost(slug: string, source: string): Post {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
     throw new Error(`Blog post folder "${slug}" is its URL, so name it in lowercase letters, digits and hyphens`);
   }
-  const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
-  if (!match) throw new Error(`Blog post "${slug}" has no front matter`);
-  const fields = new Map<string, string>();
-  for (const line of match[1].split(/\r?\n/)) {
-    const field = line.match(/^(\w+):\s*(.*?)\s*$/);
-    if (field) fields.set(field[1], field[2].replace(/^(["'])(.*)\1$/, "$2"));
-  }
+  const front = readFrontMatter(source);
+  if (!front) throw new Error(`Blog post "${slug}" has no front matter`);
+  const { fields } = front;
   const required = (key: string) => {
     const value = fields.get(key);
     if (!value) throw new Error(`Blog post "${slug}" needs a ${key} in its front matter`);
@@ -57,7 +54,7 @@ export function parsePost(slug: string, source: string): Post {
     cover: cover ? assetPath(slug, cover) : undefined,
     coverAlt: fields.get("coverAlt"),
     draft: fields.get("draft") === "true",
-    body: match[2],
+    body: front.body,
   };
 }
 

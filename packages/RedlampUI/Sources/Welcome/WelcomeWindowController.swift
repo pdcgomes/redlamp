@@ -1,5 +1,4 @@
 import AppKit
-import RedlampDesign
 import SwiftUI
 
 /// The welcome window: the film's opening with its sound, then two pages, what Redlamp is and
@@ -15,27 +14,11 @@ public final class WelcomeWindowController: NSWindowController, NSWindowDelegate
     public init(film: URL?, onClose: @escaping () -> Void) {
         model = WelcomeModel(film: film, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
         self.onClose = onClose
-        let window = NSWindow(
-            contentRect: CGRect(origin: .zero, size: WelcomeView.size),
-            styleMask: [.titled, .closable, .fullSizeContentView],
-            backing: .buffered, defer: false,
+        let window = FilmWindow.make(
+            title: "Welcome to Redlamp",
+            size: WelcomeView.size,
+            content: WelcomeView(model: model),
         )
-        window.title = "Welcome to Redlamp"
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.isMovableByWindowBackground = true
-        window.backgroundColor = Brand.wall.nsColor
-        window.appearance = NSAppearance(named: .darkAqua)
-        window.isReleasedWhenClosed = false
-        window.isRestorable = false
-        window.tabbingMode = .disallowed
-        window.collectionBehavior = [.fullScreenAuxiliary]
-        window.standardWindowButton(.miniaturizeButton)?.isHidden = true
-        window.standardWindowButton(.zoomButton)?.isHidden = true
-        // The film fills the window, titlebar included; left to size it, SwiftUI adds the titlebar.
-        let content = NSHostingView(rootView: WelcomeView(model: model))
-        content.sizingOptions = []
-        window.contentView = content
         super.init(window: window)
         window.delegate = self
         model.onFinish = { [weak self] in self?.finish() }
@@ -49,16 +32,7 @@ public final class WelcomeWindowController: NSWindowController, NSWindowDelegate
     /// Opens it centred on `editor` and starts the film.
     public func present(over editor: NSWindow?) {
         guard let window else { return }
-        if let editor, let screen = editor.screen ?? NSScreen.main {
-            let frame = window.frame
-            let visible = screen.visibleFrame
-            window.setFrameOrigin(CGPoint(
-                x: min(max(editor.frame.midX - frame.width / 2, visible.minX), visible.maxX - frame.width),
-                y: min(max(editor.frame.midY - frame.height / 2, visible.minY), visible.maxY - frame.height),
-            ))
-        } else {
-            window.center()
-        }
+        FilmWindow.centre(window, over: editor)
         showWindow(nil)
         model.start()
     }

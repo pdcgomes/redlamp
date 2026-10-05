@@ -21,6 +21,7 @@ mise run site -- build   # production build
 - **The film**, Introducing Redlamp, plays from YouTube (`film` in `lib/site.ts`), in its privacy-enhanced mode and only once the visitor presses play: until then the page shows the film's own poster (`public/video/introducing-redlamp-poster.jpg`, from `video/out/introducing`) and makes no request to YouTube. The 24-second explainer in `public/video` is the first blog post's.
 - **The Product Hunt card** at the foot of the home page is Product Hunt's embed for Redlamp, drawn in the brand's materials (`components/ui/ProductHuntCard.tsx`). Its link and the listing's tagline are `productHunt` in `lib/site.ts`, to update when the listing changes. It shows the site's own app icon, so the page makes no request to Product Hunt.
 - **Blog posts** are Markdown files in `content/blog/`; see below.
+- **What's New**, each release's highlights for the app, are Markdown files in `content/whats-new/`, served as JSON and linked from no page; see below.
 
 ## The blog
 
@@ -43,6 +44,42 @@ draft: true              # optional: shown by `mise run site`, left out of produ
 - Raw HTML passes through, for embeds such as the explainer video in the first post.
 - A post without a title, summary or date stops the build, naming the post.
 - `npm test` covers the front matter and Markdown rules in `lib/blog.ts`.
+
+## What's New
+
+Redlamp's What's New window (`packages/RedlampUI/Sources/WhatsNew`) shows each release's highlights once after an update, and again from Help › What's New in Redlamp. It reads them from `GET /api/whats-new`, which is built with the site, linked from no page and left out of the sitemap. Each highlight is `content/whats-new/<id>/index.md`, with its screenshot beside it:
+
+```markdown
+---
+version: 0.2.4-prealpha          # the release it's in, as Version.xcconfig writes it
+date: 2026-10-06
+symbol: camera.badge.ellipsis    # an SF Symbol, for the list of highlights
+title: Test your camera          # at most 40 characters
+summary: One line for the list of highlights, at most 90 characters.
+image: results.png               # a PNG or JPEG beside this file, at least 1040 px wide, 4:3 to 16:9
+imageAlt: What the screenshot shows
+action: testCamera               # optional: a button that opens testCamera, sendFeedback, filmLooks, showShortcuts or commandPalette
+actionTitle: Test Your Camera…
+draft: true                      # optional: left out of Production
+---
+
+A paragraph or two, at most 600 characters, with bold, italics, code and links.
+```
+
+- **Only the highlights:** a release has at most four, and the build stops on a fifth. Sparkle's release notes keep the list of every change.
+- **Write each highlight for the release it ships in.** The app opens each one once, for people who have that version or a later one. Someone installing Redlamp for the first time sees the welcome instead, and the highlights already in their version count as seen.
+- **A button** is an `action` from the list above, or a `link` (https) to a page instead, with its `actionTitle`.
+- **The feed changes with the site, not the app:** a highlight can go up or be corrected after a release. The app looks on each new version, and at most once a day after that.
+- **Checks:** a missing or malformed field, an image that's missing, too narrow or the wrong shape, Markdown beyond inline formatting, or an action the app doesn't offer stops the build, naming the item. `npm test` covers these rules in `lib/whats-new.ts`.
+- **Drafts** are in every build but Production. To see one in the app, point a build at a Preview deployment. The app didn't load the feed from `mise run site` over plain http when this was written, so use https:
+
+```bash
+defaults write app.redlamp.mac WhatsNewEndpoint https://<preview>.vercel.app/api/whats-new
+# Help › What's New in Redlamp, or launch with --whats-new
+defaults delete app.redlamp.mac WhatsNewEndpoint
+```
+
+- **If the feed can't be had,** nothing opens and nothing is said: the app tries again at its next launch, or the next time What's New is chosen from the Help menu.
 
 ## Deploying on Vercel
 

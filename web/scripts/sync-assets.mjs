@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Copies the screenshots, film assets and brand files the website and the explainer video
 // use from docs/ into each project's public/synced, so they are never committed twice, and
-// the blog posts' images into the website's.
+// the blog posts' and What's New items' images into the website's.
 // On Vercel this needs "Include files outside the root directory in the Build Step".
 
 import { cpSync, existsSync, mkdirSync, rmSync, readdirSync } from "node:fs";
@@ -44,16 +44,18 @@ for (const target of targets) {
   }
 }
 
-// Each post's own images sit beside its index.md, in web/content/blog/<slug>/.
-const blog = path.join(repo, "web", "content", "blog");
-if (existsSync(blog)) {
-  for (const post of readdirSync(blog, { withFileTypes: true })) {
+// Each blog post's and What's New item's own images sit beside its index.md, in
+// web/content/<kind>/<slug>/.
+for (const kind of ["blog", "whats-new"]) {
+  const content = path.join(repo, "web", "content", kind);
+  if (!existsSync(content)) continue;
+  for (const post of readdirSync(content, { withFileTypes: true })) {
     if (!post.isDirectory()) continue;
-    const dest = path.join(repo, "web", "public", "synced", "blog", post.name);
-    for (const entry of readdirSync(path.join(blog, post.name), { withFileTypes: true })) {
+    const dest = path.join(repo, "web", "public", "synced", kind, post.name);
+    for (const entry of readdirSync(path.join(content, post.name), { withFileTypes: true })) {
       if (!entry.isFile() || entry.name.endsWith(".md")) continue;
       mkdirSync(dest, { recursive: true });
-      cpSync(path.join(blog, post.name, entry.name), path.join(dest, entry.name));
+      cpSync(path.join(content, post.name, entry.name), path.join(dest, entry.name));
       copied += 1;
     }
   }

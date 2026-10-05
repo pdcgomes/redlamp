@@ -22,7 +22,11 @@
     ///   from the Window menu by its title in kebab case, such as `window=film-looks`;
     ///   `welcome=<step>` opens the welcome window playing its film (`film`) or on a page
     ///   (`about`, `help`). `feedback=form` opens Report a Bug or Send Feedback
-    ///   (`feedback=note` at its note), and `feedback=reports` Your Reports.
+    ///   (`feedback=note` at its note), and `feedback=reports` Your Reports. `whats-new=<step>`
+    ///   opens What's New from the Help menu playing its film (`film`), on its highlights
+    ///   (`highlights`) or on a page (`page1`, `page2`, …).
+    /// - `--whats-new-endpoint <url>` reads What's New from elsewhere for this launch: a Preview
+    ///   deployment's `/api/whats-new`, or a `file://` feed whose image URLs are absolute.
     /// - `--window-size <width>x<height>` sizes the editor's content in points and centres it
     ///   on a Retina screen if there is one, so captures are 2×, without touching its saved
     ///   frame (`scripts/capture-promo.sh`). Windows a script opens are centred there too.
@@ -36,6 +40,12 @@
 
             if let size = value(after: "--window-size").flatMap(parseSize) {
                 resizeEditor(to: size)
+            }
+            if let endpoint = value(after: "--whats-new-endpoint") {
+                // For this launch only: the defaults are shared with an installed Redlamp.
+                var arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+                arguments["WhatsNewEndpoint"] = endpoint
+                UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
             }
 
             // Deliberately never activates the app: stealing focus while someone types
@@ -88,6 +98,8 @@
                 await openWindow(titled: value.split(separator: "-").map(\.capitalized).joined(separator: " "))
             case "welcome":
                 await openWelcome(at: value)
+            case "whats-new":
+                await openWhatsNew(at: value)
             case "select" where Int(value) == nil:
                 await select(named: value, model: model)
             case "mask":
@@ -220,19 +232,27 @@
         }
 
         private static func openMenuWindow(titled title: String) {
-            func find(_ menu: NSMenu) -> (NSMenu, Int)? {
-                for (index, item) in menu.items.enumerated() {
-                    if item.title == title {
-                        return (menu, index)
-                    }
-                    if let found = item.submenu.flatMap(find) {
-                        return found
-                    }
-                }
-                return nil
+            AppDelegate.performMenuItem(titled: title)
+        }
+
+        /// Opens What's New from the Help menu on the capture screen, playing its film (`film`), on
+        /// its highlights (`highlights`) or on a page (`page1`, `page2`, …).
+        private static func openWhatsNew(at step: String) async {
+            openMenuWindow(titled: WhatsNewWindowController.title)
+            var whatsNew: WhatsNewWindowController?
+            for _ in 0 ..< 100 where whatsNew == nil {
+                try? await Task.sleep(for: .milliseconds(100))
+                whatsNew = NSApp.windows.lazy.compactMap { $0.windowController as? WhatsNewWindowController }.first
             }
-            guard let menu = NSApp.mainMenu, let (owner, index) = find(menu) else { return }
-            owner.performActionForItem(at: index)
+            guard let whatsNew else { return }
+            if let captureScreen, let window = whatsNew.window {
+                center(window, on: captureScreen)
+            }
+            let steps = step == "highlights" ? 1 : step.hasPrefix("page") ? 1 + (Int(step.dropFirst(4)) ?? 1) : 0
+            for _ in 0 ..< steps {
+                whatsNew.next()
+                try? await Task.sleep(for: .seconds(1))
+            }
         }
 
         static func capture(to url: URL) {
