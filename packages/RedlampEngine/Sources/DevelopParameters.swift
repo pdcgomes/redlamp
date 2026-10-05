@@ -207,7 +207,10 @@ enum DevelopParameters {
             Float(recipe[.grainRoughness] / 100),
             7,
         )
-        p.grain2 = SIMD4(Float(recipe[.grainColor] / 100), recipe.processVersion >= 2 ? 1 : 0, 0, 0)
+        p.grain2 = SIMD4(
+            Float(recipe[.grainColor] / 100), recipe.processVersion >= 2 ? 1 : 0, recipe.processVersion >= 13 ? 1 : 0,
+            Float(recipe[.blacks] / 100),
+        )
         p.render = SIMD4(
             recipe.processVersion >= 3 && !session.isRaw ? 1 : 0,
             recipe.processVersion >= 3 ? 1 : 0,

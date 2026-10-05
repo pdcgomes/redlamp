@@ -329,6 +329,42 @@ struct MaskRenderTests {
         #expect(after <= 2, "process 13 steps within \(after) px")
     }
 
+    /// From process 13 a mask's Whites and Blacks are end points, as the global sliders are: under
+    /// full coverage they render as the same global values, and add to them (MSK-24).
+    @Test func `from process 13, a mask's Whites and Blacks move the end points as the global sliders do`() throws {
+        let session = try makeSession(width: 256, height: 16) { x, _ in
+            SIMD3(repeating: Float(pow(2, Double(x) / 256 * 10 - 10)))
+        }
+        let everywhere = GrayMask(width: 16, height: 1, pixels: [UInt8](repeating: 255, count: 16))
+        func masked(whites: Double, blacks: Double) throws -> MaskLayer {
+            var mask = try MaskLayer(name: "All", components: [MaskComponent(shape: .ai(AIMask(
+                kind: .subject, provider: "test", revision: 1, analysisHash: "0", center: ImagePoint(x: 0.5, y: 0.5),
+                bitmap: #require(everywhere.bitmap()),
+            )))])
+            mask[.localWhites] = whites
+            mask[.localBlacks] = blacks
+            return mask
+        }
+        func difference(_ a: [SIMD3<Float>], _ b: [SIMD3<Float>]) -> Float {
+            zip(a, b).map { simd_abs($0 - $1).max() }.max() ?? 1
+        }
+        var global = EditRecipe()
+        global[.whites] = 40
+        global[.blacks] = -30
+        var local = EditRecipe()
+        local.masks = try [masked(whites: 40, blacks: -30)]
+        var both = EditRecipe()
+        both[.blacks] = 20
+        both.masks = try [masked(whites: 40, blacks: -50)]
+        let reference = try render(global, session: session)
+        #expect(try difference(render(local, session: session), reference) < 2e-3)
+        #expect(try difference(render(both, session: session), reference) < 2e-3, "local Blacks add to global")
+
+        local.processVersion = 12
+        global.processVersion = 12
+        #expect(try difference(render(local, session: session), render(global, session: session)) > 0.01)
+    }
+
     @Test func `bitmap mask covers where the bitmap is white`() throws {
         let session = try makeSession(width: 300, height: 200) { _, _ in SIMD3(repeating: 0.18) }
         let gray = GrayMask(width: 150, height: 100, pixels: (0 ..< 150 * 100).map { $0 % 150 < 75 ? 255 : 0 })

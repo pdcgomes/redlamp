@@ -774,11 +774,16 @@ kernel void rl_develop(
     float baseEV = ev - toneDetail;
     float highlightWeight = smoothstep(-0.5f, 2.5f, baseEV);
     float shadowWeight = (1.0f - smoothstep(-4.5f, 0.0f, baseEV)) * smoothstep(-10.0f, -5.5f, baseEV);
+    // From process 13 the masks' Whites and Blacks move this pixel's white and black points, as
+    // the global sliders move the photo's; before, they weighed its brightest and darkest tones.
+    bool maskEndPoints = p.grain2.z > 0.5f;
     float adjustedEV = ev * (1.0f + p.tone.y + localTone.y * 0.32f)
         + (p.tone.z + localTone.z) * 1.25f * highlightWeight
-        + (p.tone.w + localTone.w) * 1.6f * shadowWeight
-        + localTone2.x * 0.9f * smoothstep(0.5f, 3.0f, ev)
-        + localTone2.y * 0.9f * (1.0f - smoothstep(-8.0f, -2.5f, ev));
+        + (p.tone.w + localTone.w) * 1.6f * shadowWeight;
+    if (!maskEndPoints) {
+        adjustedEV += localTone2.x * 0.9f * smoothstep(0.5f, 3.0f, ev)
+            + localTone2.y * 0.9f * (1.0f - smoothstep(-8.0f, -2.5f, ev));
+    }
     // Dynamic range: compress highlights above +0.5 EV (monotonic for compression <= 0.5).
     if (p.recipe.z > 0.0f) {
         adjustedEV -= p.recipe.z * smoothstep(0.5f, 4.5f, adjustedEV) * (adjustedEV - 0.5f);
@@ -786,13 +791,21 @@ kernel void rl_develop(
     scene *= exp2(adjustedEV - ev);
 
     // Black and white points, then the tone curve to display-referred (still Rec.2020 primaries).
+    // A mask's Whites scale the white point as the global slider does (DevelopParameters), and
+    // its Blacks add to the global Blacks before they set the black point.
+    float whitePoint = p.tone2.x;
     float blackPoint = p.tone2.y;
+    if (maskEndPoints) {
+        whitePoint *= exp2(-0.85f * localTone2.x);
+        float blacks = p.grain2.w + localTone2.y;
+        blackPoint = blacks > 0.0f ? -0.012f * blacks : -0.008f * blacks;
+    }
     scene = max((scene - blackPoint) / (1.0f - blackPoint), 0.0f);
-    float3 display = toneCurve(scene / p.tone2.x);
+    float3 display = toneCurve(scene / whitePoint);
 
     // A scene-referred Base Look (a film model) takes the place of the tone curve.
     if (p.lookTable.x > 0.0f && p.lookTable.z > 0.5f) {
-        float3 film = sampleLookTable(lookTable, sceneLogEncode3(scene / p.tone2.x), p.lookTable.y);
+        float3 film = sampleLookTable(lookTable, sceneLogEncode3(scene / whitePoint), p.lookTable.y);
         display = max(mix(display, srgbDecode3(max(film, 0.0f)), p.lookTable.x), 0.0f);
     }
     // A display-referred Base Look's table, on the tone curve's output, under every user color control.
