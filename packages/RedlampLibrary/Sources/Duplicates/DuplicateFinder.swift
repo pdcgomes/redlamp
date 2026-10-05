@@ -24,8 +24,10 @@ public struct DuplicateFinder: Sendable {
         public var bytesRead: Int64 = 0
     }
 
-    /// What one operation reads of a file.
+    /// What one operation reads of a file where several are read at once, and where one is: the
+    /// volume waits between one file's operations, for as long as the next takes to be sent.
     static let chunkLength = 1 << 20
+    static let soleFileChunkLength = 4 << 20
     /// Hashes written to the index together, at most.
     static let hashBatch = 64
 
@@ -76,6 +78,7 @@ public struct DuplicateFinder: Sendable {
     static func sha256(
         of url: URL, size: Int, on io: VolumeIO, read: @Sendable (Int) -> Void = { _ in },
     ) async throws -> Data {
+        let chunkLength = filesAtOnce(on: io) == 1 ? soleFileChunkLength : chunkLength
         /// The last part asks for a byte more, so a file that has grown is found.
         func range(from offset: Int) -> Range<Int> {
             offset ..< (offset + chunkLength >= size ? size + 1 : offset + chunkLength)
