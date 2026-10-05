@@ -66,4 +66,18 @@ A throwaway probe in a Debug build, re-identified as `app.redlamp.mac.e2e` and n
 - **Storage**: `open --env` passed no variables at all here; launching the executable directly does, and `CFFIXED_USER_HOME` then moves the home, Application Support and Caches into the run directory. The bundle ID gives the run its own defaults domain. (The owner's `app.redlamp.mac` domain has `FeedbackSendsLive` on, so a run in that domain would have filed real issues even from Debug.)
 - **Background rendering** isn't throttled: sweeping Exposure for a second delivered a frame for every change (101 to 114 across runs), with the window reported visible.
 
+## Results (2026-10-05)
+
+- **Built:** the driver (`packages/RedlampAutomation`: 63 scenarios in the full tier, 4 in the performance tier and the soak walk), the supervisor (`scripts/e2e.py`, `mise run e2e`), the contract and driver tests (14, in `mise run test`), identifiers and their presence tests (3, in `RedlampUITests`), and the release gate in `mise/tasks/release`.
+- **Timing on the owner's M1 Ultra, busy (load averages of 20 to 58):** the smoke tier about 2.3 minutes, the full tier about 5 minutes, the performance tier about 3 minutes after its build.
+- **Coverage:** 412 claims from the app's catalogues: 385 claimed by scenarios, 27 exempt with a reason in `tests/e2e/exemptions.json` (the catch-all "Something else" features, rendering quality owned by the golden and decode tests, and what only the release's black box can check).
+- **A dry-run release** (`REF=HEAD DRY_RUN=1 mise run release`) built and signed with Developer ID, ran the suite from its worktree and stopped on a failing check, as the gate should. The black box passed 8 of 8 on a Release candidate; an agent's shell can't send the app Apple events, so it quit the app by SIGTERM there.
+- **Found in the app:**
+  - Rotate Left and Right (⌘[ and ⌘]) had no menu item, and the Develop key monitor leaves ⌘ keys to the menu bar, so the keys did nothing; they're in the Photo menu now.
+  - `canPerform` had no case for Depth Range Mask, so the command palette always showed it as unavailable; fixed.
+  - Sheets attached only to a key or main window, so nothing could open them while Redlamp wasn't active; they fall back to the editor's window now.
+  - A long session's memory keeps growing after its caches fill, by about 1.8 MB an editing step (5 GB over about 3,000 steps of the soak walk, with and without Metal's validation layer). The soak tier bounds it at 3 MB a step; finding where it goes is for the owner to schedule.
+  - On a Portuguese keyboard, SwiftUI shows Zoom In as ⌘* rather than ⌘=, and `[` and `]` have no key of their own, so Decrease and Increase Rating can't be typed there; the suite runs those from the command palette.
+- **What the suite can't do with synthetic events:** SwiftUI's menu shortcuts with ⇧ or ⌥ (⇧⌘C, ⇧⌘V, ⇧⌘Z, ⌥⌘A, ⇧⌘U, ⇧⌘N) are taken by the menu bar but don't run, while their menu items do; the suite checks those items' key equivalents and runs them from the menu, and the owner checks the keys by hand. The Previous Photo menu item is sometimes stale on a first try straight after its photo changes; the retry passes, and the report shows it as flaky.
+
 Decision (measured): the supervisor launches the executable directly with its environment, not through `open`. A run is background by default; steps that need a key window (SwiftUI gestures on the canvas) activate the app only when the run allows focus (`--focus`, which the release tier uses, saying so before it starts), and otherwise take the model's path, which the coverage records as such.

@@ -181,6 +181,8 @@
             }
             recorder.write("scenario-end", fields)
             recorder.currentScenario = nil
+            // After every scenario, so a launch stopped later keeps what it covered.
+            recorder.writeCoverage(menuItems: [])
             usable = app.recover()
         }
 

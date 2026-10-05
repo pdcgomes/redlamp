@@ -317,9 +317,11 @@ def launch(app: Path, run_dir: Path, group: str, scenarios: list[str], args) -> 
         time.sleep(0.5)
         events = read_events(events_path)[already:]
         for event in events:
+            # Any event is progress; a walk gets its own length on top.
+            deadline = max(deadline, time.time() + args.timeout)
             if event.get("event") == "scenario-start":
                 current = event.get("scenario")
-                deadline = time.time() + args.timeout
+                deadline = time.time() + args.timeout + (args.soak_seconds if str(current).startswith("soak.") else 0)
             elif event.get("event") == "scenario-end":
                 current = None
                 deadline = time.time() + 120

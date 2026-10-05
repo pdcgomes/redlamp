@@ -56,16 +56,17 @@
         /// Adds this launch's coverage to what earlier launches of the same group recorded.
         func writeCoverage(menuItems: [String]) {
             var coverage = state.withLock { $0.coverage }
+            var items = Set(menuItems)
             if let data = try? Data(contentsOf: coverageURL),
-               let earlier = (try? JSONSerialization
-                   .jsonObject(with: data) as? [String: Any])?["claims"] as? [String: [String]] {
-                for (claim, paths) in earlier {
+               let earlier = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
+                for (claim, paths) in earlier["claims"] as? [String: [String]] ?? [:] {
                     coverage[claim, default: []].formUnion(paths)
                 }
+                items.formUnion(earlier["menuItems"] as? [String] ?? [])
             }
             let object: [String: Any] = [
                 "claims": coverage.mapValues { $0.sorted() },
-                "menuItems": menuItems,
+                "menuItems": items.sorted(),
             ]
             if let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .prettyPrinted]) {
                 try? data.write(to: coverageURL, options: .atomic)
