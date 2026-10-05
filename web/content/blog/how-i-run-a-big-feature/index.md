@@ -4,7 +4,6 @@ summary: Redlamp's library is the largest thing it has taken on, built by a stri
 date: 2026-10-05
 cover: board-overview.png
 coverAlt: The library's board in Cursor, with overall progress across the library's core and a progress bar for each milestone
-draft: true
 ---
 
 Redlamp is a raw photo editor for the Mac that I'm building with AI agents. I decide what gets built, try it and review it; agents in Cursor, each working in a chat of its own, write most of the code. Until now Redlamp has been an editor. You open a folder of photos and develop them, and each photo's edit is saved in a small file beside it, called a sidecar.
