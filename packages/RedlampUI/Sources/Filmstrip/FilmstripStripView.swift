@@ -24,6 +24,8 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     private let model: EditorModel
     private var observation: LibraryObservation?
     private var tracker: Tracker?
+    /// The selection and marks as last followed. Cells are drawn from these, not from the model,
+    /// which can be a turn ahead, so `follow` knows every cell it has to change.
     private var selected: URL?
     private var marked: Set<URL> = []
     private var prefetching: [URL: UInt64] = [:]
@@ -98,7 +100,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         guard let item = view as? FilmstripItem, model.items.indices.contains(indexPath.item) else { return view }
         let photo = model.items[indexPath.item]
         item.cell.configure(photo, image: model.thumbnailLoader.cached(photo))
-        item.cell.isSelected = photo.url == model.selection
+        item.cell.isSelected = photo.url == selected
         item.cell.isInSelection = marked.contains(photo.url)
         item.cell.onClick = { [weak self] modifiers in
             self?.model.click(
