@@ -1,8 +1,8 @@
 # Tethered capture baselines: Lightroom Classic and other tethering tools
 
-Desk research for Redlamp's tethered-capture workstream. Capture One is researched separately and is not covered here.
+Evidence for the [tethered capture findings](../tethering-findings.md): what Lightroom Classic and the other tethering tools offer, and whether sandboxed Mac App Store apps control USB cameras. Capture One is in its own [teardown](TC-capture-one-teardown.md).
 
-All sources were checked on **2026-10-05** unless a note says otherwise. **Evidence** is what a primary source says (vendor page, help article, release notes, App Store listing). **Assessment** is our reading of it. Where a source could not be reached, the text says so.
+All sources were checked on **2026-10-05** unless a note says otherwise; Apple's `com.apple.security.device.usb` sentence and Cascable Studio's App Store listing were checked again against their primary sources the same day. **Evidence** is what a primary source says (vendor page, help article, release notes, App Store listing). **Assessment** is our reading of it. Where a source could not be reached, the text says so.
 
 **Access notes.** `helpx.adobe.com` returned HTTP 403 to curl, and headless Chrome did not return within 40 s on two attempts, so every Adobe help page below was read from an Internet Archive snapshot; the snapshot date and the page's own "Last updated" date are given in the sources list. `community.adobe.com`, `adobe.com` product pages and Canon's regional EOS Utility pages (`canon-europe.com`, `usa.canon.com`, `canon.com.au`) were blocked (403 or connection errors). The Lightroom Queen (lightroomqueen.com, Victoria Bampton's site) is a secondary source; it is used for release-by-release tethering history, which Adobe's own pages no longer list in full, and is labelled as such.
 

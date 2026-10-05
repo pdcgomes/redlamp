@@ -98,6 +98,8 @@ Evidence for the [tethered capture findings](../tethering-findings.md): what Cap
 
 Where Redlamp could go beyond: tethered focus brackets straight into its own stacking (Capture One sends them to Helicon Focus), focus peaking and clipping in Live View, recipes and Copy Settings' checklist for the next captures, and published, community-checked camera support.
 
+The rest of the study's evidence is in the notes beside this one; what it adds up to is in the [findings](../tethering-findings.md).
+
 ## Sources
 
 All from support.captureone.com, read on 5 October 2026 through the help centre API; the release notes and the 232 articles read are those whose titles mention tethering, Live View, capture, sessions, wireless, Studio or release notes. Article IDs are in the links above.
