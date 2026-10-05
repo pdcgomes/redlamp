@@ -51,7 +51,7 @@ struct FixtureImages: Sendable {
         if !photo.embeddedKeywords.isEmpty || photo.caption != nil {
             bytes += Self.segment(0xED, Self.photoshop(Self.iim(photo)))
         }
-        bytes += jpegs[photo.index % jpegs.count]
+        bytes += jpegs[photo.content % jpegs.count]
         return Data(bytes)
     }
 
@@ -102,7 +102,7 @@ struct FixtureImages: Sendable {
     // MARK: - HEIC
 
     private func heic(_ photo: FixturePhoto) -> Data {
-        let template = heics[photo.index % heics.count]
+        let template = heics[photo.content % heics.count]
         var bytes = template.bytes
         let tiff = Self.exif(photo)
         precondition(

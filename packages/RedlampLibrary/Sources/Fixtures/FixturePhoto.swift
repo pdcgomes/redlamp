@@ -54,6 +54,26 @@ public struct FixturePhoto: Sendable, Hashable {
     public let xmp: OtherXMP?
     /// For a raw, the index of the source it's a clone of.
     public let source: Int?
+    /// For a duplicate, the index of the photo whose file it has, byte for byte (LIB-39). Its sidecar
+    /// and other app's `.xmp` are its own.
+    public let original: Int?
+
+    /// Its place in the library, or its original's for a duplicate: which of the encoded images it's
+    /// drawn from.
+    var content: Int {
+        original ?? index
+    }
+
+    /// This photo's place, name, sidecar and `.xmp`, with `copied`'s file.
+    func copy(of copied: FixturePhoto, named name: String) -> FixturePhoto {
+        FixturePhoto(
+            index: index, folder: folder, name: name, kind: copied.kind, make: copied.make, model: copied.model,
+            lens: copied.lens, iso: copied.iso, aperture: copied.aperture, exposureTime: copied.exposureTime,
+            focalLength: copied.focalLength, captured: copied.captured, location: copied.location,
+            embeddedKeywords: copied.embeddedKeywords, caption: copied.caption, sidecar: sidecar, xmp: xmp,
+            source: copied.source, original: copied.index,
+        )
+    }
 
     /// Below the fixture's root.
     public var path: String {

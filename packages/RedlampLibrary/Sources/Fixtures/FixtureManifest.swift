@@ -32,6 +32,9 @@ public struct FixtureManifest: Sendable, Hashable, Codable {
         public var withKeywords = 0
         public var withCaption = 0
         public var folders = 0
+        /// Photos that are copies of another photo of the fixture, byte for byte (LIB-39): what
+        /// removing every copy but one would remove. Nil in a fixture made without them.
+        public var duplicates: Int?
 
         public init() {}
 
@@ -48,6 +51,9 @@ public struct FixtureManifest: Sendable, Hashable, Codable {
             withLocation += photo.location == nil ? 0 : 1
             withKeywords += photo.keywords.isEmpty ? 0 : 1
             withCaption += photo.caption == nil ? 0 : 1
+            if photo.original != nil {
+                duplicates = (duplicates ?? 0) + 1
+            }
         }
 
         mutating func add(_ other: Totals) {
@@ -61,6 +67,9 @@ public struct FixtureManifest: Sendable, Hashable, Codable {
             withLocation += other.withLocation
             withKeywords += other.withKeywords
             withCaption += other.withCaption
+            if let copies = other.duplicates {
+                duplicates = (duplicates ?? 0) + copies
+            }
         }
     }
 
@@ -109,6 +118,9 @@ extension LibraryFixture {
         var totals = tally.totals
         let paths = allFolderPaths
         totals.folders = paths.count
+        if spec.duplicateShare != nil {
+            totals.duplicates = totals.duplicates ?? 0
+        }
         return FixtureManifest(
             spec: spec,
             rawSources: rawSources.map(\.name),

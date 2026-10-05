@@ -21,15 +21,20 @@ public struct LibraryFixture: Sendable {
         public var xmpShare: Double
         /// Photos with a location; a raw has its source's.
         public var locationShare: Double
-        /// Photos with IPTC keywords and a caption; raws and photos with an `.xmp` have none.
+        /// Photos with IPTC keywords and a caption; raws and photos with an `.xmp` have none, but for
+        /// duplicates of photos that have them.
         public var iptcShare: Double
         /// The folder shapes besides the years, which take the photos the others don't.
         public var shapes: [Shape]
+        /// Photos that are copies of an earlier photo, byte for byte, with sidecars and `.xmp` of
+        /// their own (LIB-39); nil for none, so a fixture made without them keeps its files and manifest.
+        public var duplicateShare: Double?
 
         public init(
             photos: Int, seed: UInt64 = 1, rawShare: Double = 0.2, heicShare: Double = 0.1,
             sidecarShare: Double = 0.15, xmpShare: Double = 0.05, locationShare: Double = 1.0 / 3,
             iptcShare: Double = 0.2, shapes: [Shape] = Shape.allCases.filter { $0 != .years },
+            duplicateShare: Double = 0,
         ) {
             self.photos = max(photos, 0)
             self.seed = seed
@@ -40,6 +45,7 @@ public struct LibraryFixture: Sendable {
             self.locationShare = locationShare
             self.iptcShare = iptcShare
             self.shapes = Shape.allCases.filter { $0 != .years && shapes.contains($0) }
+            self.duplicateShare = duplicateShare > 0 ? min(duplicateShare, 1) : nil
         }
     }
 
@@ -190,10 +196,11 @@ public struct LibraryFixture: Sendable {
 
         let ext = raw?.url.pathExtension ?? (kind == .heic ? "HEIC" : "JPG")
         let number = folder.firstNumber + index - folder.photos.lowerBound
-        return FixturePhoto(
+        let prefix = raw.map(Self.prefix) ?? camera.prefix
+        let photo = FixturePhoto(
             index: index,
             folder: folder.path,
-            name: Self.name(folder.naming, number: number, prefix: raw.map(Self.prefix) ?? camera.prefix, ext: ext),
+            name: Self.name(folder.naming, number: number, prefix: prefix, ext: ext),
             kind: kind,
             make: raw.map(\.make) ?? camera.make,
             model: raw.map(\.model) ?? camera.model,
@@ -209,7 +216,22 @@ public struct LibraryFixture: Sendable {
             sidecar: sidecar,
             xmp: xmp,
             source: source,
+            original: nil,
         )
+        guard let original = original(of: index) else { return photo }
+        let copied = self.photo(at: original)
+        let copyExt = (copied.name as NSString).pathExtension
+        return photo.copy(of: copied, named: Self.name(folder.naming, number: number, prefix: prefix, ext: copyExt))
+    }
+
+    /// The earlier photo whose file photo `index` is a copy of, itself not a copy; nil for a photo
+    /// that isn't one. Drawn from a sequence of its own, so photos are what they'd be without copies.
+    func original(of index: Int) -> Int? {
+        guard let share = spec.duplicateShare, index > 0 else { return nil }
+        var random = SeededRandom(seed: spec.seed, stream: .max - 1 - UInt64(index))
+        guard random.chance(share) else { return nil }
+        let earlier = random.int(below: index)
+        return original(of: earlier) ?? earlier
     }
 
     /// The share of raws the spec gets with these sources.
