@@ -3,6 +3,8 @@ import Synchronization
 
 /// A volume as slow as `profile` says. Each operation runs on `base`, so its listings and bytes
 /// are the real ones, and then waits on `clock` until the simulated volume would have answered.
+/// Its writes can be made to fail, folders put on volumes of their own and the Trash kept in a
+/// folder (`SimulatedFileSystem+Writing.swift`).
 public final class SimulatedFileSystem: LibraryFileSystem {
     /// What a listing moves for each entry: a name and its attributes, as a network file
     /// system's directory reply carries them.
@@ -12,6 +14,7 @@ public final class SimulatedFileSystem: LibraryFileSystem {
     public let profile: VolumeProfile
     private let clock: any SimulationClock
     private let model: Mutex<VolumeModel>
+    let writing = Mutex(WriteState())
 
     public init(
         base: any LibraryFileSystem = LocalFileSystem(), profile: VolumeProfile, seed: UInt64 = 0,
@@ -42,6 +45,12 @@ public final class SimulatedFileSystem: LibraryFileSystem {
 
     public func volume(of url: URL) throws -> VolumeInfo {
         let info = try simulate(url, bytes: { _ in 0 }) { try base.volume(of: url) }
+        if let mounted = mount(of: url) {
+            return VolumeInfo(
+                uuid: mounted.uuid, name: mounted.name,
+                isLocal: profile.isLocal ?? info.isLocal, isInternal: profile.isInternal ?? info.isInternal,
+            )
+        }
         return VolumeInfo(
             uuid: info.uuid, name: info.name,
             isLocal: profile.isLocal ?? info.isLocal, isInternal: profile.isInternal ?? info.isInternal,
@@ -52,7 +61,7 @@ public final class SimulatedFileSystem: LibraryFileSystem {
     /// so the volume's time comes on top of the time of the disk underneath. An operation that
     /// fails on `base` costs the volume's time too; one made after the volume has gone fails
     /// however `base` answered.
-    private func simulate<T>(_ url: URL, bytes: (T) -> Int, _ operation: () throws -> T) throws -> T {
+    func simulate<T>(_ url: URL, bytes: (T) -> Int, _ operation: () throws -> T) throws -> T {
         let result = Result(catching: operation)
         let arrived = clock.now
         let size = (try? result.get()).map(bytes) ?? 0

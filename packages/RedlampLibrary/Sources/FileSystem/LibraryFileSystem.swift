@@ -52,12 +52,13 @@ public enum LibraryFileSystemError: Error, Equatable, Sendable {
 }
 
 /// Every file operation the library makes on the photos' volumes: listing a folder, a file's
-/// attributes, reading part of a file, and which volume a file is on. The indexer, change
-/// detection and file operations go through it, so the harness can put any of them on a
-/// simulated spinning disk or network volume (`SimulatedFileSystem`).
+/// attributes, reading part of a file, which volume a file is on, and the file operations' writes
+/// (LIB-26). The indexer, change detection and file operations go through it, so the harness can
+/// put any of them on a simulated spinning disk or network volume (`SimulatedFileSystem`).
 ///
 /// Every call blocks until the volume answers, as the file system does: call it from the
-/// scheduler's lanes, never from the main thread or Swift's cooperative pool.
+/// scheduler's lanes, never from the main thread or Swift's cooperative pool. What the writes make
+/// is named in Unicode's composed form (NFC), as the index then has it.
 public protocol LibraryFileSystem: Sendable {
     /// The folder's entries in no particular order, hidden ones left out.
     func contentsOfDirectory(at url: URL) throws -> [FileEntry]
@@ -65,4 +66,53 @@ public protocol LibraryFileSystem: Sendable {
     /// The bytes of `range`, fewer when the file ends inside it.
     func read(_ url: URL, range: Range<Int>) throws -> Data
     func volume(of url: URL) throws -> VolumeInfo
+
+    /// Renames or moves a file or folder on its volume, never replacing anything: `EEXIST` when
+    /// something is at `destination` (unless it's the file itself, its name changed only in case or
+    /// form), and `EXDEV` when `destination` is on another volume, which only `copyItem` crosses.
+    func moveItem(at source: URL, to destination: URL) throws
+    /// Copies a file, or a folder and everything in it, to `destination`, where nothing may be, with
+    /// its dates; it's on the disk when this returns.
+    func copyItem(at source: URL, to destination: URL) throws
+    /// Makes a folder, `EEXIST` when something is there; with `intermediates`, the folders above it
+    /// too, and a folder already there is no error.
+    func createDirectory(at url: URL, withIntermediateDirectories intermediates: Bool) throws
+    /// Removes a file, or a folder and everything in it.
+    func removeItem(at url: URL) throws
+    /// Moves a file or folder to its volume's Trash, and returns where it went.
+    func trashItem(at url: URL) throws -> URL
+    /// The folder `trashItem` moves `url` to.
+    func trashDirectory(for url: URL) throws -> URL
+}
+
+/// A file system that only reads: its writes throw `EROFS`.
+public extension LibraryFileSystem {
+    func moveItem(at _: URL, to _: URL) throws {
+        throw POSIXError(.EROFS)
+    }
+
+    func copyItem(at _: URL, to _: URL) throws {
+        throw POSIXError(.EROFS)
+    }
+
+    func createDirectory(at _: URL, withIntermediateDirectories _: Bool) throws {
+        throw POSIXError(.EROFS)
+    }
+
+    func removeItem(at _: URL) throws {
+        throw POSIXError(.EROFS)
+    }
+
+    func trashItem(at _: URL) throws -> URL {
+        throw POSIXError(.EROFS)
+    }
+
+    func trashDirectory(for _: URL) throws -> URL {
+        throw POSIXError(.EROFS)
+    }
+
+    /// Whether something is at `url`: a file, a folder or a link.
+    func exists(_ url: URL) -> Bool {
+        (try? attributes(of: url)) != nil
+    }
 }
