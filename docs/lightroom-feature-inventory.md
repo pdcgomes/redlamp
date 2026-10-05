@@ -20,7 +20,7 @@ Each feature has a roadmap tag:
 - Smart Previews, meaning editing without the original [Later, with CloudKit proxies]
 - Embedded-preview-first display [P1]
 - Per-camera raw defaults: Adobe Default, Camera Settings, a preset, or overrides per camera model, serial number, or ISO [P2]
-- Tethered capture for Canon, Nikon, and Sony [Later]
+- Tethered capture (Classic) for Canon, Nikon, Sony, Fujifilm (since 14.4) and Leica (since 15.0), with Live View and a watched folder (Auto Import) for other cameras; see the [tethered capture findings](research/tethering-findings.md) [Later]
 - In-app camera with Pro mode, DNG, and HDR capture (mobile) [Later]
 - Video (basic trims and adjustments) [Skip]
 

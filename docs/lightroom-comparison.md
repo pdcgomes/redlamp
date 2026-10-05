@@ -37,7 +37,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | PSD, AVIF and JPEG XL files | Yes | Planned | | P2 | | |
 | WebP files | Yes (Classic) | Undecided | | | | |
 | Per-camera raw defaults | Yes | Planned | | P2 | EDT-06 | By camera, lens, ISO and file type |
-| Tethered capture | Yes (Classic) | Later | | | | |
+| Tethered capture | Yes (Classic) | Later | | | TET-01, TET-02, TET-04, TET-06, TET-07, TET-08, TET-09, TET-11, TET-13, TET-14 | Researched in October 2026: capture sessions and a hot folder for any camera first, then camera control and Live View for Canon, Nikon, Sony and Fujifilm, and wireless ([findings](https://github.com/pdcgomes/redlamp/blob/main/docs/research/tethering-findings.md)) |
 | Video | Yes (basic trims) | Out of scope | | | | Redlamp develops still photos |
 
 ## Light and colour

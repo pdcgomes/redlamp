@@ -912,7 +912,8 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 
 ### Later
 - CloudKit sync with lightweight proxy RAW files
-- A library and catalog, tethered shooting, and panorama and HDR merge <!-- tracker: OTH-04 -->
+- A library and catalog, and panorama and HDR merge <!-- tracker: OTH-04 -->
+- **Tethered shooting:** capture sessions with settings for the next captures and a hot folder for any camera, then camera control and Live View for Canon, Nikon, Sony and Fujifilm, wireless, and focus brackets straight into a stack ([research](docs/research/tethering-findings.md)) <!-- tracker: TET-01, TET-02, TET-04, TET-06, TET-07, TET-08, TET-09, TET-11, TET-13, TET-14 -->
 - Importing your own `.dcp` camera profiles (deferred in October 2026)
 - More AI features, subject to the research below: lens blur, distraction removal, and personalized auto settings <!-- tracker: OTH-03, AUT-03, AUT-04 -->
 
