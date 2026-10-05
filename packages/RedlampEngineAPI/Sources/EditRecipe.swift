@@ -88,6 +88,8 @@ public struct EditRecipe: Sendable, Hashable {
     public var whiteBalanceMode: WhiteBalanceMode = .asShot
     public var pointCurve: [CurvePoint] = EditRecipe.linearPointCurve
     public private(set) var values: [ParameterID: Double] = [:]
+    /// Point Color's swatches, right after the Color Mixer.
+    public var pointColor: [PointColorSwatch] = []
     /// Local adjustments, applied in order on top of the global edit.
     public var masks: [MaskLayer] = []
     /// Heal and Clone spots, applied in order before everything else.
@@ -113,7 +115,7 @@ public struct EditRecipe: Sendable, Hashable {
     public subscript(parameter: ParameterID) -> Double {
         get { values[parameter] ?? parameter.spec.defaultValue }
         set {
-            guard !parameter.isMaskScoped, !parameter.isSpotScoped else { return }
+            guard !parameter.isMaskScoped, !parameter.isSpotScoped, !parameter.isPointColorScoped else { return }
             let spec = parameter.spec
             let clamped = spec.clamp(newValue)
             if abs(clamped - spec.defaultValue) < 1e-9 {
@@ -141,6 +143,7 @@ public struct EditRecipe: Sendable, Hashable {
             && baseLook == BuiltInBaseLook.color.reference
             && whiteBalanceMode == .asShot
             && pointCurve == EditRecipe.linearPointCurve
+            && pointColor.isEmpty
             && masks.isEmpty
             && spots.isEmpty
             && appliedRecipe == nil
@@ -169,8 +172,8 @@ public struct EditRecipe: Sendable, Hashable {
 
 extension EditRecipe: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case version, processVersion, treatment, baseLook, whiteBalance, pointCurve, values, masks, appliedRecipe
-        case crop, orientation, spots
+        case version, processVersion, treatment, baseLook, whiteBalance, pointCurve, values, pointColor, masks
+        case appliedRecipe, crop, orientation, spots
         /// Format version 1's name for `baseLook`; read, never written.
         case profile
     }
@@ -193,6 +196,7 @@ extension EditRecipe: Codable {
                 unknownValues[key] = value
             }
         }
+        pointColor = try container.decodeIfPresent([PointColorSwatch].self, forKey: .pointColor) ?? []
         masks = try container.decodeIfPresent([MaskLayer].self, forKey: .masks) ?? []
         spots = try container.decodeIfPresent([RetouchSpot].self, forKey: .spots) ?? []
         appliedRecipe = try container.decodeIfPresent(AppliedRecipe.self, forKey: .appliedRecipe)
@@ -216,6 +220,9 @@ extension EditRecipe: Codable {
         }
         let known = Dictionary(uniqueKeysWithValues: values.map { ($0.key.rawValue, $0.value) })
         try container.encode(unknownValues.merging(known) { _, value in value }, forKey: .values)
+        if !pointColor.isEmpty {
+            try container.encode(pointColor, forKey: .pointColor)
+        }
         if !masks.isEmpty {
             try container.encode(masks, forKey: .masks)
         }

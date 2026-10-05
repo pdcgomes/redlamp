@@ -41,14 +41,36 @@ struct HandCodedTypeTests {
 
     @Test func `the sidecar and its edit`() throws {
         try check(everything, notWritten: ["session", "clearsHistory"])
-        try check(everything.recipe, renamed: ["whiteBalanceMode": "whiteBalance"])
+        try check(everything.recipe, renamed: ["whiteBalanceMode": "whiteBalance"], notWritten: ["pointColor"])
+        var colored = everything.recipe
+        colored.pointColor = [Self.pickedSwatch]
+        try check(colored, renamed: ["whiteBalanceMode": "whiteBalance"])
         try check(#require(everything.snapshots.first))
         try check(#require(everything.metadata))
     }
 
+    /// A swatch picked on the photo, every setting away from its default.
+    private static let pickedSwatch = PointColorSwatch(
+        color: .oklch(OKLCh(lightness: 0.62, chroma: 0.07, hue: 52)),
+        picked: ColorSample(center: ImagePoint(x: 0.4, y: 0.3), radius: 0.01),
+        values: Dictionary(uniqueKeysWithValues: ParameterID.pointColorParameters.enumerated().map {
+            ($0.element, $0.element.spec.defaultValue + 10 + Double($0.offset))
+        }),
+    )
+
+    @Test func `swatches and their colours`() throws {
+        try check(Self.pickedSwatch)
+        try check(OKLCh(lightness: 0.5, chroma: 0.1, hue: 200))
+        let typical = PointColorSwatch(color: .mask, values: [.pointColorHueUniformity: 50])
+        try check(typical, notWritten: ["picked"])
+        var masked = everything.recipe.masks[0]
+        masked.pointColor = [typical]
+        try check(masked, notWritten: ["curves"])
+    }
+
     @Test func `mask layers, components and AI masks`() throws {
         let masks = everything.recipe.masks
-        try check(masks[0], notWritten: ["curves"])
+        try check(masks[0], notWritten: ["curves", "pointColor"])
         var curved = masks[0]
         var curves = MaskCurves()
         for (index, channel) in MaskCurves.Channel.allCases.enumerated() {
@@ -57,7 +79,7 @@ struct HandCodedTypeTests {
             ]
         }
         curved.curves = curves
-        try check(curved)
+        try check(curved, notWritten: ["pointColor"])
         try check(curves)
         for component in masks.flatMap(\.components) {
             try check(component)

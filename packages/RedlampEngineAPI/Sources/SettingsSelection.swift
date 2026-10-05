@@ -10,6 +10,8 @@ public enum EditField: String, Sendable, Hashable, CaseIterable {
     case baseLook
     case whiteBalanceMode
     case pointCurve
+    /// Point Color's swatches on the edit (a mask's own travel with the mask).
+    case pointColor
     case crop
     case orientation
     case processVersion
@@ -80,6 +82,7 @@ public struct SettingsGroup: Sendable, Hashable, Identifiable {
             SettingsItem("colorMixer.hue", "Hue", ColorBand.allCases.map(\.hueParameter)),
             SettingsItem("colorMixer.saturation", "Saturation", ColorBand.allCases.map(\.saturationParameter)),
             SettingsItem("colorMixer.luminance", "Luminance", ColorBand.allCases.map(\.luminanceParameter)),
+            SettingsItem("colorMixer.pointColor", "Point Color", fields: [.pointColor]),
         ]),
         SettingsGroup(id: "colorGrading", name: "Color Grading", items: [
             SettingsItem(
@@ -335,6 +338,7 @@ public extension EditRecipe {
         case .baseLook: baseLook == other.baseLook && appliedRecipe == other.appliedRecipe
         case .whiteBalanceMode: whiteBalanceMode == other.whiteBalanceMode
         case .pointCurve: pointCurve == other.pointCurve
+        case .pointColor: pointColor == other.pointColor
         case .crop: crop == other.crop
         case .orientation: orientation == other.orientation
         case .processVersion: processVersion == other.processVersion
@@ -350,6 +354,7 @@ public extension EditRecipe {
             appliedRecipe = source.appliedRecipe
         case .whiteBalanceMode: whiteBalanceMode = source.whiteBalanceMode
         case .pointCurve: pointCurve = source.pointCurve
+        case .pointColor: pointColor = source.pointColor
         case .crop: crop = source.crop
         case .orientation: orientation = source.orientation
         case .processVersion: processVersion = source.processVersion

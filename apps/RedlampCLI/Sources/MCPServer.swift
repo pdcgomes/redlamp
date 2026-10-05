@@ -456,7 +456,8 @@ extension MCPServer {
     // MARK: - Results
 
     private func schema() throws -> String {
-        let global = ParameterCatalog.all.filter { !$0.id.isMaskScoped && !$0.id.isSpotScoped }
+        let global = ParameterCatalog.all
+            .filter { !$0.id.isMaskScoped && !$0.id.isSpotScoped && !$0.id.isPointColorScoped }
         let parameters = global.map { spec -> [String: Any] in
             [
                 "key": spec.id.rawValue, "label": spec.label, "min": spec.range.lowerBound,

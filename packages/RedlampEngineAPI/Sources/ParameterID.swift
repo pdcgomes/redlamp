@@ -232,9 +232,35 @@ public enum ParameterID: String, CaseIterable, Codable, Sendable, Hashable {
 
     public static let spotParameters: [ParameterID] = [.spotSize, .spotFeather, .spotOpacity]
 
+    /// The selected Point Color swatch's settings (stored on the swatch, not as adjustments):
+    /// Lightroom's shifts, Capture One's uniformity (above 0 pulls the colours in the swatch's
+    /// range towards its colour, below 0 pushes them apart), and the range it selects.
+    case pointColorHueShift = "pointColor.shift.hue"
+    case pointColorSaturationShift = "pointColor.shift.saturation"
+    case pointColorLuminanceShift = "pointColor.shift.luminance"
+    case pointColorHueUniformity = "pointColor.uniformity.hue"
+    case pointColorSaturationUniformity = "pointColor.uniformity.saturation"
+    case pointColorLuminanceUniformity = "pointColor.uniformity.luminance"
+    case pointColorHueRange = "pointColor.range.hue"
+    case pointColorSaturationRange = "pointColor.range.saturation"
+    case pointColorLuminanceRange = "pointColor.range.luminance"
+    case pointColorSmoothness = "pointColor.range.smoothness"
+
+    /// A swatch's settings, in the panel's order.
+    public static let pointColorParameters: [ParameterID] = [
+        .pointColorHueShift, .pointColorSaturationShift, .pointColorLuminanceShift,
+        .pointColorHueUniformity, .pointColorSaturationUniformity, .pointColorLuminanceUniformity,
+        .pointColorHueRange, .pointColorSaturationRange, .pointColorLuminanceRange, .pointColorSmoothness,
+    ]
+
     /// A Heal or Clone spot's setting; never stored in the global recipe.
     public var isSpotScoped: Bool {
         rawValue.hasPrefix("spot.")
+    }
+
+    /// A Point Color swatch's setting; never stored in the global recipe or a mask's adjustments.
+    public var isPointColorScoped: Bool {
+        rawValue.hasPrefix("pointColor.")
     }
 
     /// A per-mask adjustment, stored in `MaskLayer.adjustments`.

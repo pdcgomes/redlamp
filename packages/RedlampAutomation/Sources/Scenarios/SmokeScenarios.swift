@@ -353,7 +353,7 @@
             try app.click(.sliderLabel(parameter), count: 2)
             // Reset is the photo's own default: As Shot for white balance.
             try app.wait("\(spec.label) to reset") { model in
-                parameter.isMaskScoped || parameter.isSpotScoped
+                parameter.isMaskScoped || parameter.isSpotScoped || parameter.isPointColorScoped
                     ? abs(model.sliderValue(parameter) - spec.defaultValue) < 1e-9 : !model.isEdited(parameter)
             }
             app.covered(.parameter(parameter), via: .mouse)

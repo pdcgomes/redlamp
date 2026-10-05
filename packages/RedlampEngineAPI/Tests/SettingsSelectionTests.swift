@@ -8,7 +8,7 @@ struct SettingsSelectionTests {
     @Test func `the checklist covers every parameter once`() {
         let listed = SettingsGroup.allItems.flatMap(\.parameters)
         #expect(Set(listed).count == listed.count, "a parameter on two lines")
-        let global = ParameterID.allCases.filter { !$0.isMaskScoped && !$0.isSpotScoped }
+        let global = ParameterID.allCases.filter { !$0.isMaskScoped && !$0.isSpotScoped && !$0.isPointColorScoped }
         #expect(Set(listed) == Set(global), "missing: \(Set(global).subtracting(listed))")
         #expect(Set(SettingsGroup.allItems.flatMap(\.fields)) == Set(EditField.allCases))
         #expect(Set(SettingsGroup.allItems.map(\.id)).count == SettingsGroup.allItems.count)

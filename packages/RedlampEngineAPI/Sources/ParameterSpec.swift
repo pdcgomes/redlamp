@@ -436,6 +436,28 @@ public enum ParameterCatalog {
             ParameterSpec(.spotFeather, "Feather", range: 0 ... 100, default: 50, format: .integer),
             ParameterSpec(.spotOpacity, "Opacity", range: 0 ... 100, default: 100, format: .integer),
             ParameterSpec(.spotVisualize, "Visualize", range: 1 ... 100, default: 50, format: .integer),
+            ParameterSpec(.pointColorHueShift, "Hue Shift"),
+            ParameterSpec(.pointColorSaturationShift, "Saturation Shift"),
+            ParameterSpec(.pointColorLuminanceShift, "Luminance Shift"),
+            ParameterSpec(.pointColorHueUniformity, "Hue Uniformity"),
+            ParameterSpec(.pointColorSaturationUniformity, "Saturation Uniformity"),
+            ParameterSpec(.pointColorLuminanceUniformity, "Luminance Uniformity"),
+            ParameterSpec(.pointColorHueRange, "Hue Range", range: 0 ... 100, default: 50, format: .integer),
+            ParameterSpec(
+                .pointColorSaturationRange,
+                "Saturation Range",
+                range: 0 ... 100,
+                default: 50,
+                format: .integer,
+            ),
+            ParameterSpec(
+                .pointColorLuminanceRange,
+                "Luminance Range",
+                range: 0 ... 100,
+                default: 50,
+                format: .integer,
+            ),
+            ParameterSpec(.pointColorSmoothness, "Smoothness", range: 0 ... 100, default: 50, format: .integer),
         ]
 
     public static let specs: [ParameterID: ParameterSpec] = Dictionary(

@@ -87,6 +87,7 @@ A **snapshot** is a named version of the edit, as in Lightroom: `{"id", "name", 
 | `whiteBalance` | string | `asShot` | The white balance popup: `asShot`, `auto`, `daylight`, `cloudy`, `shade`, `tungsten`, `fluorescent`, `flash` or `custom`. Always written. See [White balance](#white-balance). |
 | `pointCurve` | [{x, y}] | straight line | The point curve: 2 or more points in increasing `x`, both coordinates 0…1, display-referred. Written only when it isn't the straight line from (0, 0) to (1, 1). |
 | `values` | {key: number} | `{}` | The global sliders; see [Parameters](#parameters). Always written, even empty. |
+| `pointColor` | [swatch] | `[]` | Point Color's swatches, applied right after the Color Mixer; at most 8. Written only when there are some. See [Point Color](#point-color). |
 | `masks` | [mask] | `[]` | Local adjustments, applied in order on top of the global edit; at most 16. Written only when there are some. See [Masks](#masks). |
 | `spots` | [spot] | `[]` | Remove, Heal and Clone spots, applied in order before everything else. Written only when there are some. See [Spots](#spots). |
 | `appliedRecipe` | object? | | `{"id", "version", "name", "amount"}`, all required: the `.redrecipe` the edit was last built from, and its Amount in percent (0 to 200). Provenance only; rendering never reads it. |
@@ -191,6 +192,24 @@ Every value is a number, switches and the frame style included. The defaults are
 
 Followed from a pixel of the developed photo back to the image point it shows, the geometry applies in this order: the crop and its angle, then Transform, then `orientation`, then lens distortion (the manual Distortion slider, then the photo's own lens profile).
 
+### Point Color
+
+A swatch is a colour, the range of colours around it that it selects, and what it does to them: Lightroom's Point Color with Capture One's uniformity. The edit's swatches apply right after the Color Mixer, on the colours after the tone curve; a mask's apply after them, as far as the mask covers.
+
+| Field | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `id` | UUID | | **Required.** |
+| `color` | object or string | | **Required.** `{"lightness", "chroma", "hue"}`, all required: the colour in OKLCh, lightness 0 (black) to 1 (white) on screen, hue in degrees. It stays put when other settings change, as the Color Mixer's bands do. On a mask only, `"mask"`: the colour typical of what the mask covers, worked out for each photo, so a preset and a pasted mask adapt to the photo they land on. Any other string makes the sidecar unreadable. |
+| `picked` | sample? | | Where the colour was picked, as a Color Range sample: `{"center", "radius"}`. Written only when it was picked on the photo. |
+| `values` | {key: number} | `{}` | The settings below, each written only when it isn't its default. Always written, even empty. A reader clamps each to its range and keeps keys it doesn't know. |
+
+| Keys | Range | Default | Notes |
+| --- | --- | --- | --- |
+| `pointColor.shift.{hue,saturation,luminance}` | −100…100 | 0 | Lightroom's shifts: turn the selected colours' hue, and change their saturation and luminance. |
+| `pointColor.uniformity.{hue,saturation,luminance}` | −100…100 | 0 | Capture One's uniformity: above 0, the selected colours move towards the swatch's on that axis (at 100 all the way, where the swatch selects fully); below 0 they move apart, as Lightroom's Variance raised does, never so far that colours change order. |
+| `pointColor.range.{hue,saturation,luminance}` | 0…100 | 50 | How far a colour may be from the swatch's on each axis and still be selected. |
+| `pointColor.range.smoothness` | 0…100 | 50 | How gradually the selection fades out at the range's edge. |
+
 ### Masks
 
 A mask is a local adjustment: coverage built from components, and its own adjustments.
@@ -205,6 +224,7 @@ A mask is a local adjustment: coverage built from components, and its own adjust
 | `detail` | number | 0 | −100 to 100: above 0 keeps only the textured areas of the mask, below 0 only the flat ones. Written only when it isn't 0. |
 | `adjustments` | {key: number} | `{}` | The local parameters below, each written only when it isn't 0. Always written, even empty. |
 | `curves` | object? | | The mask's Curves: `{"rgb", "red", "green", "blue"}`, each a point curve like the edit's `pointCurve`, written only when it isn't straight. The RGB curve applies to every channel, then each channel's own, on the display-referred values the global point curve works on, as far as the mask covers and scaled by its amount. Missing when every curve is straight. |
+| `pointColor` | [swatch] | `[]` | The mask's own Point Color swatches, after the edit's, as far as the mask covers and scaled by its amount; at most 8. Written only when there are some. See [Point Color](#point-color). |
 
 Redlamp renders at most 16 visible masks and 64 components across them, and the editor makes no more than 16 masks.
 
@@ -370,12 +390,12 @@ What Redlamp does when it reads a sidecar, which is also what another reader mus
 2. **Unknown keys** are kept and written back unchanged where the format has room for them:
    - top-level keys of `edit.json`;
    - keys of a recipe, in the edit and in snapshots, and of a snapshot;
-   - keys in `values` and in a mask's `adjustments` (in both they must be numbers, and don't render);
-   - keys of a mask, a component, an AI mask (a depth range's depth map and a spot's region included), a spot, `metadata` and the applied recipe;
+   - keys in `values`, in a mask's `adjustments` and in a swatch's `values` (they must be numbers, and don't render);
+   - keys of a mask, a component, an AI mask (a depth range's depth map and a spot's region included), a Point Color swatch, a spot, `metadata` and the applied recipe;
    - component kinds in a mask's `shape` (they render nothing).
 
    Everywhere else in `edit.json` (shape parameters, bitmaps, the Base Look, the crop and orientation) Redlamp has nowhere to keep an unknown key, so a sidecar holding one is read-only. A shape with more than one key is read as one of them (the first in the order of the kinds table in [Masks](#masks), or else the first by name), and the sidecar is read-only. It ignores unknown keys in history files, which it never rewrites. The schema marks the objects without room for unknown keys closed (`additionalProperties: false`) and leaves the others open, so a writer that validates its sidecars puts new keys only where Redlamp keeps them.
-3. **Unknown values**: a spot's `mode` reads as `heal`, and the sidecar is read-only, since saving would write `heal`; a history step's `action` reads as `edit`. Any other value outside its list (`treatment`, `whiteBalance`, a component's `operation`, an AI mask's `kind`, `flag`, `label`) makes the sidecar unreadable.
+3. **Unknown values**: a spot's `mode` reads as `heal`, and the sidecar is read-only, since saving would write `heal`; a history step's `action` reads as `edit`. Any other value outside its list (`treatment`, `whiteBalance`, a component's `operation`, an AI mask's `kind`, a swatch's `color`, `flag`, `label`) makes the sidecar unreadable.
 4. **Values out of range**: parameters and local adjustments are clamped to their ranges, and the sidecar is read-only, since saving would write the clamped values. Nothing else is checked.
 5. **History files** with another `format`, a newer `version`, or that can't be read are skipped, and kept.
 6. **A sidecar that can't be read** (a missing required key, a value of the wrong type or outside its list, or a date without a time zone, anywhere in `edit.json`) opens as if the photo had no edit, read-only: Redlamp never overwrites or deletes it (it may still hold an edit, history and masks), says so over the photo, and applying settings to many photos leaves it alone. The same goes for an `edit.json` that is there but can't be opened (no permission, an I/O error, or iCloud Drive can't download it). Validate a sidecar against the schema before writing it.

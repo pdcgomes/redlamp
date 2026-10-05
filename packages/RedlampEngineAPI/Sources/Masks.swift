@@ -839,6 +839,9 @@ public struct MaskLayer: Sendable, Hashable, Identifiable {
         }
     }
 
+    /// The mask's Point Color swatches, after the edit's own, as far as the mask covers.
+    public var pointColor: [PointColorSwatch] = []
+
     /// Adjustments this build doesn't apply to masks, written by a newer Redlamp: written back
     /// unchanged until the mask's adjustments are reset.
     public private(set) var unknownAdjustments: [String: Double] = [:]
@@ -877,6 +880,7 @@ public struct MaskLayer: Sendable, Hashable, Identifiable {
         adjustments = [:]
         unknownAdjustments = [:]
         curves = nil
+        pointColor = []
         amount = 100
         detail = 0
     }
@@ -895,7 +899,7 @@ public struct MaskLayer: Sendable, Hashable, Identifiable {
 
 extension MaskLayer: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case id, name, isVisible, components, amount, detail, adjustments, curves
+        case id, name, isVisible, components, amount, detail, adjustments, curves, pointColor
     }
 
     public init(from decoder: Decoder) throws {
@@ -908,6 +912,7 @@ extension MaskLayer: Codable {
         detail = try container.decodeIfPresent(Double.self, forKey: .detail) ?? 0
         let curves = try container.decodeIfPresent(MaskCurves.self, forKey: .curves)
         self.curves = curves?.isIdentity == true ? nil : curves
+        pointColor = try container.decodeIfPresent([PointColorSwatch].self, forKey: .pointColor) ?? []
         adjustments = [:]
         let raw = try container.decodeIfPresent([String: Double].self, forKey: .adjustments) ?? [:]
         for (key, value) in raw {
@@ -938,6 +943,9 @@ extension MaskLayer: Codable {
             forKey: .adjustments,
         )
         try container.encodeIfPresent(curves, forKey: .curves)
+        if !pointColor.isEmpty {
+            try container.encode(pointColor, forKey: .pointColor)
+        }
     }
 }
 

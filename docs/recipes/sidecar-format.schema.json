@@ -84,6 +84,13 @@
           "description": "The point curve, in increasing x. Written only when it isn't the straight line."
         },
         "values": { "$ref": "#/$defs/values" },
+        "pointColor": {
+          "type": "array",
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/pointColorSwatch" },
+          "default": [],
+          "description": "Point Color's swatches, applied right after the Color Mixer, each changing the colours near its own. Written only when there is one."
+        },
         "masks": {
           "type": "array",
           "maxItems": 16,
@@ -339,6 +346,13 @@
             "blue": { "type": "array", "items": { "$ref": "#/$defs/curvePoint" }, "minItems": 2 }
           },
           "additionalProperties": { "description": "A curve a newer Redlamp added: kept and written back unchanged." }
+        },
+        "pointColor": {
+          "type": "array",
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/pointColorSwatch" },
+          "default": [],
+          "description": "The mask's own Point Color swatches, after the edit's, as far as the mask covers and scaled by its amount. Written only when there is one."
         }
       },
       "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
@@ -547,6 +561,52 @@
         }
       },
       "additionalProperties": false
+    },
+    "pointColorSwatch": {
+      "description": "One of Point Color's swatches: a colour, the range of colours around it that it selects, and what it does to them.",
+      "type": "object",
+      "required": ["id", "color"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "color": {
+          "description": "The colour the swatch selects around: picked on the photo or carried by a preset, in OKLCh; or, on a mask only, \"mask\": the colour typical of what the mask covers, worked out for each photo.",
+          "oneOf": [{ "$ref": "#/$defs/oklch" }, { "const": "mask" }]
+        },
+        "picked": { "$ref": "#/$defs/colorSample", "description": "Where the colour was picked, when it was." },
+        "values": { "$ref": "#/$defs/pointColorValues" }
+      },
+      "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
+    },
+    "oklch": {
+      "description": "A colour in OKLCh, as the colour controls see it after the tone curve.",
+      "type": "object",
+      "required": ["lightness", "chroma", "hue"],
+      "properties": {
+        "lightness": { "type": "number", "description": "OKLab lightness: 0 is black and 1 white on screen." },
+        "chroma": { "type": "number", "minimum": 0 },
+        "hue": { "type": "number", "minimum": 0, "maximum": 360, "description": "Degrees." }
+      },
+      "additionalProperties": false
+    },
+    "pointColorValues": {
+      "description": "A swatch's settings, each written only when it isn't its default. Readers clamp a value to its range, and keep keys they don't know and write them back unchanged.",
+      "type": "object",
+      "properties": {
+        "pointColor.shift.hue": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Hue Shift: turns the selected colours' hue." },
+        "pointColor.shift.saturation": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Saturation Shift." },
+        "pointColor.shift.luminance": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Luminance Shift." },
+        "pointColor.uniformity.hue": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Hue Uniformity: above 0 the selected colours' hue moves towards the swatch's, below 0 away from it." },
+        "pointColor.uniformity.saturation": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Saturation Uniformity, the same on chroma." },
+        "pointColor.uniformity.luminance": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Luminance Uniformity, the same on lightness." },
+        "pointColor.range.hue": { "type": "number", "minimum": 0, "maximum": 100, "default": 50, "description": "Hue Range: how far in hue a colour may be from the swatch's and still be selected." },
+        "pointColor.range.saturation": { "type": "number", "minimum": 0, "maximum": 100, "default": 50, "description": "Saturation Range, the same in chroma." },
+        "pointColor.range.luminance": { "type": "number", "minimum": 0, "maximum": 100, "default": 50, "description": "Luminance Range, the same in lightness." },
+        "pointColor.range.smoothness": { "type": "number", "minimum": 0, "maximum": 100, "default": 50, "description": "Smoothness: how gradually the selection fades out at the range's edge." }
+      },
+      "additionalProperties": {
+        "type": "number",
+        "description": "A setting a newer Redlamp added: kept and written back unchanged."
+      }
     },
     "colorSample": {
       "type": "object",

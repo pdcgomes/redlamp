@@ -271,11 +271,13 @@ struct SidecarSchemaTests {
 
     @Test func `parameters match the catalog`() throws {
         let validator = try validator()
-        let global = ParameterID.allCases.filter { !$0.isMaskScoped && !$0.isSpotScoped }
+        let global = ParameterID.allCases.filter { !$0.isMaskScoped && !$0.isSpotScoped && !$0.isPointColorScoped }
         #expect(Set(ParameterID.localParameters) == Set(ParameterID.allCases.filter(\.isLocal)))
+        #expect(Set(ParameterID.pointColorParameters) == Set(ParameterID.allCases.filter(\.isPointColorScoped)))
         for (reference, parameters) in [
             ("#/$defs/values", global),
             ("#/$defs/localAdjustments", ParameterID.localParameters),
+            ("#/$defs/pointColorValues", ParameterID.pointColorParameters),
         ] {
             let properties = validator.schema(at: "\(reference)/properties").objectValue ?? [:]
             #expect(Set(properties.keys) == Set(parameters.map(\.rawValue)), "\(reference)")
@@ -455,6 +457,17 @@ enum RichSidecar {
         recipe.crop = CropRect(left: 0.08, top: 0.05, right: 0.94, bottom: 0.9)
         recipe.orientation = ImageOrientation(quarterTurns: 1, mirrored: true)
         recipe.appliedRecipe = AppliedRecipe(id: "redlamp/film/portra-400", version: 2, name: "Portra 400", amount: 120)
+        recipe.pointColor = [
+            PointColorSwatch(
+                color: .oklch(OKLCh(lightness: 0.64, chroma: 0.08, hue: 48)),
+                picked: ColorSample(center: point(0.42, 0.36), radius: 0.012),
+                values: farEnds(of: ParameterID.pointColorParameters),
+            ),
+            PointColorSwatch(
+                color: .oklch(OKLCh(lightness: 0.5, chroma: 0.12, hue: 250)),
+                values: [.pointColorHueRange: 30],
+            ),
+        ]
         recipe.masks = masks()
         recipe.spots = spots()
         return recipe
@@ -474,7 +487,8 @@ enum RichSidecar {
         recipe.treatment = .blackAndWhite
         recipe.baseLook = BuiltInBaseLook.monochrome.reference.withAmount(120)
         recipe.whiteBalanceMode = .daylight
-        for (parameter, value) in farEnds(of: ParameterID.allCases.filter { !$0.isMaskScoped && !$0.isSpotScoped }) {
+        let global = ParameterID.allCases.filter { !$0.isMaskScoped && !$0.isSpotScoped && !$0.isPointColorScoped }
+        for (parameter, value) in farEnds(of: global) {
             recipe[parameter] = value
         }
         return recipe
@@ -577,9 +591,13 @@ enum RichSidecar {
             ]
         }
         every.curves = curves
+        var evened = layer("Faces", faces, [.localTexture: -20])
+        evened.pointColor = [
+            PointColorSwatch(color: .mask, values: [.pointColorHueUniformity: 50, .pointColorSaturationUniformity: 35]),
+        ]
         return [
             layer("Background", [MaskComponent(shape: .depthRange(depth))], [.localSharpness: -60]),
-            layer("Faces", faces, [.localTexture: -20]),
+            evened,
             layer("Trees", [MaskComponent(shape: .ai(trees))], [.localSaturation: 10]),
             every,
         ]

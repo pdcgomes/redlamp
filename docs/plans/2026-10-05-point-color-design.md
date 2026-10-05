@@ -2,7 +2,7 @@
 
 Lightroom's Point Color, with Capture One's uniformity: pick a colour on the photo, shift it and the colours near it, and pull those colours together, so blotchy skin evens out to one tone. It works on the whole photo and inside masks, and an Even Skin Tone mask preset does it for skin in one step. Tracker: TON-29 (#181); it waits on TON-31 (#190), where the colour controls sit, and TON-30 (#182), the spatial version, follows it. The research, sources and a prototype's measurements are in [the note](../research/notes/TON-29-colour-uniformity.md).
 
-**Status (2026-10-05):** approved; building, step 1 (`model`).
+**Status (2026-10-05):** approved; building on the `point-color/build` branch. Step 1 (`model`) done.
 
 ## Decisions (the owner)
 
@@ -55,7 +55,7 @@ In the develop kernel, right after the Color Mixer: after the tone curve and the
 
 ## Format and interoperability
 
-- **`pointColor`,** a list of swatches on the recipe and on each mask: an `id`, the `color` (OKLCh `L`, `C`, `h`, or `"mask"`), `picked` (where it was picked from, when it was), and `range`, `shift` and `uniformity` (numbers only). Older Redlamps keep the key, as they keep recipe and mask keys they don't know, and don't render it, as with any newer setting. No new format or process version: edits without Point Color render as they did. `sidecar-format.md` and the schema describe it (`SidecarSchemaTests`).
+- **`pointColor`,** a list of swatches on the recipe and on each mask: an `id`, the `color` (OKLCh `lightness`, `chroma` and `hue`, or `"mask"`), `picked` (a Color Range sample: where it was picked, when it was), and `values`, its settings under `pointColor.…` keys. Those settings are parameters scoped to the selected swatch, as `local.…` ones are to the selected mask, so the panel's slider rows, the command palette and the regression catalogue handle them as they do the others. Older Redlamps keep the key, as they keep recipe and mask keys they don't know, and don't render it, as with any newer setting. No new format or process version: edits without Point Color render, and are written, as they were (`SidecarGoldenTests`). `sidecar-format.md` and the schema describe it (`SidecarSchemaTests`).
 - **Copy Settings:** a Point Color item in the Color Mixer group; masks carry their own swatches.
 - **Lightroom presets:** their `PointColors` are ignored today. They map once Lightroom's fields are known, from a preset with Point Color and Variance set (asked of the owner).
 

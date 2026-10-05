@@ -112,6 +112,46 @@
     {
       "claim": "action.virtualCopy",
       "reason": "Virtual Copy is planned for Phase 2; the menu checks that its item is there and disabled"
+    },
+    {
+      "claim": "parameter.pointColor.shift.hue",
+      "reason": "A Point Color swatch's setting with no panel yet: the Color Mixer's Point Color mode arrives in TON-29's step 4 (docs/plans/2026-10-05-point-color-design.md), with the scenario that drags each slider"
+    },
+    {
+      "claim": "parameter.pointColor.shift.saturation",
+      "reason": "A Point Color swatch's setting with no panel yet: the Color Mixer's Point Color mode arrives in TON-29's step 4 (docs/plans/2026-10-05-point-color-design.md), with the scenario that drags each slider"
+    },
+    {
+      "claim": "parameter.pointColor.shift.luminance",
+      "reason": "A Point Color swatch's setting with no panel yet: the Color Mixer's Point Color mode arrives in TON-29's step 4 (docs/plans/2026-10-05-point-color-design.md), with the scenario that drags each slider"
+    },
+    {
+      "claim": "parameter.pointColor.uniformity.hue",
+      "reason": "A Point Color swatch's setting with no panel yet: the Color Mixer's Point Color mode arrives in TON-29's step 4 (docs/plans/2026-10-05-point-color-design.md), with the scenario that drags each slider"
+    },
+    {
+      "claim": "parameter.pointColor.uniformity.saturation",
+      "reason": "A Point Color swatch's setting with no panel yet: the Color Mixer's Point Color mode arrives in TON-29's step 4 (docs/plans/2026-10-05-point-color-design.md), with the scenario that drags each slider"
+    },
+    {
+      "claim": "parameter.pointColor.uniformity.luminance",
+      "reason": "A Point Color swatch's setting with no panel yet: the Color Mixer's Point Color mode arrives in TON-29's step 4 (docs/plans/2026-10-05-point-color-design.md), with the scenario that drags each slider"
+    },
+    {
+      "claim": "parameter.pointColor.range.hue",
+      "reason": "A Point Color swatch's setting with no panel yet: the Color Mixer's Point Color mode arrives in TON-29's step 4 (docs/plans/2026-10-05-point-color-design.md), with the scenario that drags each slider"
+    },
+    {
+      "claim": "parameter.pointColor.range.saturation",
+      "reason": "A Point Color swatch's setting with no panel yet: the Color Mixer's Point Color mode arrives in TON-29's step 4 (docs/plans/2026-10-05-point-color-design.md), with the scenario that drags each slider"
+    },
+    {
+      "claim": "parameter.pointColor.range.luminance",
+      "reason": "A Point Color swatch's setting with no panel yet: the Color Mixer's Point Color mode arrives in TON-29's step 4 (docs/plans/2026-10-05-point-color-design.md), with the scenario that drags each slider"
+    },
+    {
+      "claim": "parameter.pointColor.range.smoothness",
+      "reason": "A Point Color swatch's setting with no panel yet: the Color Mixer's Point Color mode arrives in TON-29's step 4 (docs/plans/2026-10-05-point-color-design.md), with the scenario that drags each slider"
     }
   ]
 }
