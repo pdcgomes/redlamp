@@ -21,8 +21,8 @@ public struct LibraryFixture: Sendable {
         public var xmpShare: Double
         /// Photos with a location; a raw has its source's.
         public var locationShare: Double
-        /// Photos with IPTC keywords and a caption; raws and photos with an `.xmp` have none, but for
-        /// duplicates of photos that have them.
+        /// Photos with IPTC keywords and a caption; raws and photos with an `.xmp` have none, unless
+        /// they're duplicates of a photo with them.
         public var iptcShare: Double
         /// The folder shapes besides the years, which take the photos the others don't.
         public var shapes: [Shape]
