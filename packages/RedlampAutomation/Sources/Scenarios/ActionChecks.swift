@@ -101,11 +101,15 @@
                 })
             case .toggleZoom: .toggle(action) { "\($0.canvas.zoom)" }
             case .zoomIn:
-                ActionCheck(action: action, observe: { "\($0.canvas.zoom)" }, restore: { app in
+                ActionCheck(action: action, setUp: { app in
+                    try app.waitForCanvas()
+                    try app.main { $0.canvas.zoom = .fit }
+                }, observe: { "\($0.canvas.zoom)" }, restore: { app in
                     try app.main { $0.canvas.zoom = .fit }
                 })
             case .zoomOut:
                 ActionCheck(action: action, setUp: { app in
+                    try app.waitForCanvas()
                     try app.main { $0.canvas.zoom = .scale(2) }
                 }, observe: { "\($0.canvas.zoom)" }, restore: { app in
                     try app.main { $0.canvas.zoom = .fit }

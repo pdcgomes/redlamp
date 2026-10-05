@@ -336,7 +336,10 @@ def owner_state() -> dict:
 
 
 def owner_app_running() -> bool:
-    out = subprocess.run(["pgrep", "-fl", "Redlamp.app/Contents/MacOS/Redlamp"], capture_output=True, text=True).stdout
+    """Whether a Redlamp other than the test app runs: the app, or the command-line tool, which
+    shares the owner's caches (another session's renders, say)."""
+    out = subprocess.run(["pgrep", "-fl", r"Redlamp\.app/Contents/MacOS/Redlamp|/redlamp( |$)"],
+                         capture_output=True, text=True).stdout
     return any(NAME not in line for line in out.splitlines() if line.strip())
 
 

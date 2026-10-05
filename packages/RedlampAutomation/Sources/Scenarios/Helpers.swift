@@ -45,6 +45,15 @@
             try wait(what, timeout: timeout) { _ in done.isSet }
         }
 
+        /// Waits until the canvas is laid out with the photo shown, so zooming has steps to take and
+        /// showing the photo no longer resets the zoom.
+        func waitForCanvas() throws {
+            try wait("the canvas laid out with the photo") { model in
+                model.canvas.viewSize.width > 0 && model.canvas.imageSize.width > 0 && model.hasFrame
+            }
+            pause(0.2)
+        }
+
         func openWorking() throws {
             try open(workingPhoto())
         }
