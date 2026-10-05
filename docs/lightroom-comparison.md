@@ -112,7 +112,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Subject, Sky and Background | Yes | Done | | | MSK-08, MSK-17 | Computed on the Mac; photos are never uploaded. Sky also uses Depth Anything 3, an open model trained partly on data Redlamp couldn't use itself. Edges are solved when a mask is made, not refined again as you edit |
 | People and their parts | Yes | Done | | | MSK-08, MSK-13 | Face parts from Apple Vision; body skin, clothes and hair from SAM 3, a download under Meta's SAM License |
 | Objects | Yes | Done | | | MSK-10 | Hover to preview, click to select (Segment Anything 2.1, an 80 MB download, an open model trained partly on data Redlamp couldn't use itself) |
-| Objects by rectangle and brush | Yes | Planned | | P3 | MSK-19 | |
+| Objects by rectangle and brush | Yes | Done | | | MSK-19 | |
 | Landscape | Yes | Done | Behind | | MSK-17 | Water, vegetation, mountains, architecture and ground, from SAM 3 (a 988 MB download under Meta's SAM License); Lightroom's also finds snow |
 | Snow in Landscape masks, and adaptive Landscape presets | Yes | Planned | | P3 | MSK-22 | |
 | Depth Range | Yes | Done | | | MSK-14 | From the photo's own depth map, or estimated by Depth Anything, an open model trained partly on data Redlamp couldn't use itself |
