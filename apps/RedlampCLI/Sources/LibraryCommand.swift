@@ -11,6 +11,8 @@ enum LibraryCommand {
            redlamp library index <folder>… --index <path> [--profile <profile>]
            redlamp library search <query> --index <path> [--sort captured|name|rating|edited] [--descending]
                                   [--json] [--limit <n>]
+           redlamp library stats --index <path> [--json]
+           redlamp library sidecars <root> --index <path> [--move beside|mac] [--dry-run] [--json]
       fixture  makes a synthetic library in <folder>: a fifth of the photos APFS clones of the raws in
                --raw-sources (tests/fixtures/raw) with their capture dates rewritten, the rest small JPEGs
                and HEICs with varied EXIF, GPS and IPTC; sidecars on 15% and other apps' .xmp on 5%; folders
@@ -28,6 +30,14 @@ enum LibraryCommand {
                camera:"X-T5" date:2024-06..2024-08 sunset), over the index at <path> and prints the photos'
                paths in order (when they were taken, unless --sort says otherwise), then how many photos it
                found and how long it took. --limit prints only the first <n>; --json prints JSON.
+      stats    prints what the index at <path> holds: its photos and folders, its roots and where each keeps
+               its sidecars, its volumes and which are offline, how many photos are edited, rated, picked,
+               rejected and labelled, and the sizes of the index and of the store beside it. --json prints JSON.
+      sidecars prints where <root> keeps its .redlamp sidecars and how many are beside the photos, on this Mac
+               and in both places. --move takes them beside the photos or to this Mac: each copied, checked and
+               only then removed where it was, never over another, and other apps' .xmp left beside the
+               photos; a sidecar in both places stops the move before it starts. --dry-run says what would
+               move. A move a forced quit interrupted is finished first. Exits 1 when something wasn't moved.
     """
 
     private static var scenarioNames: String {
@@ -38,6 +48,7 @@ enum LibraryCommand {
         BenchScenarios.registerIndexing()
         BenchScenarios.registerQueries()
         BenchScenarios.registerStore()
+        BenchScenarios.registerLists()
         guard let command = arguments.first, !arguments.contains("--help") else {
             print(usage)
             return
@@ -47,6 +58,8 @@ enum LibraryCommand {
         case "bench": try await bench(Array(arguments.dropFirst()))
         case "index": try await index(Array(arguments.dropFirst()))
         case "search": try await search(Array(arguments.dropFirst()))
+        case "stats": try await stats(Array(arguments.dropFirst()))
+        case "sidecars": try await sidecars(Array(arguments.dropFirst()))
         default: throw CLIError(description: "unknown library command \(command)\n\n\(usage)")
         }
     }
