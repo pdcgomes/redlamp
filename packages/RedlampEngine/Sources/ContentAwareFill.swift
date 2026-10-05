@@ -116,18 +116,26 @@ final class ContentAwareFill {
         func luma(_ index: Int) -> Float {
             simd_dot(SIMD3(image[index].x, image[index].y, image[index].z), SIMD3(0.27, 0.67, 0.06))
         }
-        while remaining > 0 {
-            guard let target = nextTarget(
-                width: width,
-                height: height,
-                low: low,
-                high: high,
-                pending: pending,
-                known: known,
-                confidence: confidence,
-                luma: luma,
+        // The front's priorities, recomputed only where a patch changed them: what a scan of the
+        // whole front would choose, in a fraction of the time on large holes.
+        var front = Front(width: width)
+        func prioritise(_ x: Int, _ y: Int) {
+            let index = y * width + x
+            guard pending[index], onFront(x, y, width: width, height: height, known: known) else { return }
+            let point = SIMD2(x, y)
+            front.push(
+                index, priority: averageConfidence(point, width: width, height: height, confidence: confidence)
+                    * (dataTerm(point, width: width, height: height, known: known, luma: luma) + 0.001),
             )
-            else { break }
+        }
+        for y in low.y ... high.y {
+            for x in low.x ... high.x {
+                prioritise(x, y)
+            }
+        }
+        while remaining > 0 {
+            guard let next = front.pop(where: { pending[$0] }) else { break }
+            let target = SIMD2(next % width, next / width)
             var params = FillCostParams(
                 size: SIMD4(Int32(width), Int32(height), Int32(half), Int32(Self.stride)),
                 target: SIMD4(Int32(target.x), Int32(target.y), 0, 0),
@@ -187,33 +195,81 @@ final class ContentAwareFill {
                     remaining -= 1
                 }
             }
+            // Confidence reaches a patch's width beyond what it filled; the front and the data
+            // term less.
+            for y in max(target.y - 2 * half, low.y) ... min(target.y + 2 * half, high.y) {
+                for x in max(target.x - 2 * half, low.x) ... min(target.x + 2 * half, high.x) {
+                    prioritise(x, y)
+                }
+            }
         }
         return offsets
     }
 
-    /// The front pixel to fill next: the highest confidence times data term, the first in scan
-    /// order on a tie.
-    private func nextTarget(
-        width: Int, height: Int, low: SIMD2<Int>, high: SIMD2<Int>, pending: [Bool],
-        known: UnsafeMutablePointer<UInt8>, confidence: [Float], luma: (Int) -> Float,
-    ) -> SIMD2<Int>? {
-        var best: (priority: Float, point: SIMD2<Int>)?
-        for y in low.y ... high.y {
-            for x in low.x ... high.x where pending[y * width + x] {
-                let onFront = [(1, 0), (-1, 0), (0, 1), (0, -1)].contains { dx, dy in
-                    let (nx, ny) = (x + dx, y + dy)
-                    return nx >= 0 && ny >= 0 && nx < width && ny < height && known[ny * width + nx] == 1
-                }
-                guard onFront else { continue }
-                let point = SIMD2(x, y)
-                let priority = averageConfidence(point, width: width, height: height, confidence: confidence)
-                    * (dataTerm(point, width: width, height: height, known: known, luma: luma) + 0.001)
-                if best.map({ priority > $0.priority }) ?? true {
-                    best = (priority, point)
-                }
+    /// Pending pixels and their priorities, highest first, the first in scan order on a tie; a
+    /// pixel pushed again supersedes its earlier entries.
+    private struct Front {
+        private var heap: [(priority: Float, index: Int, version: Int)] = []
+        private var versions: [Int: Int] = [:]
+        let width: Int
+
+        init(width: Int) {
+            self.width = width
+        }
+
+        mutating func push(_ index: Int, priority: Float) {
+            let version = (versions[index] ?? 0) + 1
+            versions[index] = version
+            heap.append((priority, index, version))
+            var child = heap.count - 1
+            while child > 0 {
+                let parent = (child - 1) / 2
+                guard Self.precedes(heap[child], heap[parent]) else { break }
+                heap.swapAt(child, parent)
+                child = parent
             }
         }
-        return best?.point
+
+        /// The highest-priority pixel still current and `valid`.
+        mutating func pop(where valid: (Int) -> Bool) -> Int? {
+            while let top = heap.first {
+                let last = heap.removeLast()
+                if !heap.isEmpty {
+                    heap[0] = last
+                    var parent = 0
+                    while true {
+                        let (left, right) = (2 * parent + 1, 2 * parent + 2)
+                        var first = parent
+                        if left < heap.count, Self.precedes(heap[left], heap[first]) {
+                            first = left
+                        }
+                        if right < heap.count, Self.precedes(heap[right], heap[first]) {
+                            first = right
+                        }
+                        guard first != parent else { break }
+                        heap.swapAt(parent, first)
+                        parent = first
+                    }
+                }
+                if versions[top.index] == top.version, valid(top.index) {
+                    return top.index
+                }
+            }
+            return nil
+        }
+
+        private static func precedes(
+            _ a: (priority: Float, index: Int, version: Int), _ b: (priority: Float, index: Int, version: Int),
+        ) -> Bool {
+            a.priority > b.priority || a.priority == b.priority && a.index < b.index
+        }
+    }
+
+    private func onFront(_ x: Int, _ y: Int, width: Int, height: Int, known: UnsafeMutablePointer<UInt8>) -> Bool {
+        [(1, 0), (-1, 0), (0, 1), (0, -1)].contains { dx, dy in
+            let (nx, ny) = (x + dx, y + dy)
+            return nx >= 0 && ny >= 0 && nx < width && ny < height && known[ny * width + nx] == 1
+        }
     }
 
     private func averageConfidence(_ point: SIMD2<Int>, width: Int, height: Int, confidence: [Float]) -> Float {
