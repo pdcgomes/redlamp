@@ -78,6 +78,24 @@ Findings:
 
 The figures (`build/proto-out/uniformity/`) aren't committed: the photo is of an identifiable person.
 
+### Even Skin Tone on four portraits (the build's step 6)
+
+[`research/prototypes/colour/even_skin_tone.py`](../../../research/prototypes/colour/even_skin_tone.py) ports the develop kernel's Point Color as built (each axis of the range a trapezoid, uniformity scaling distances from the swatch's colour, the mask's coverage) and the mask's own colour as `PointColor.metal` measures it, and tries the Even Skin Tone preset on four portraits of the masking edge-case set (`DSC01584`, `DSC02005`, `DSC02424`, `DSC03301`; JPEG renders, not committed). The mask is SAM 3's face (eyes, brows and lips included, which the app's Face Skin leaves out) with its body skin. Scores are over the mask's colourful part (chroma 0.02 or more): the interquartile range of hue and of log2 chroma, the share of a and b's detail below 2 px left, and spill, the mean change (ΔE × 100) of colours the range should leave alone (more than 45° of hue from the skin's, or near-grey).
+
+| Portrait | Hue spread | Chroma spread | Colour detail left | Spill |
+| --- | --- | --- | --- | --- |
+| DSC02005, warm light | 7.6° → 4.2° | 0.86 → 0.58 stops | 67% | 0.13 |
+| DSC01584 | 5.6° → 2.9° | 0.45 → 0.30 stops | 69% | 0.06 |
+| DSC02424, white clothes | 6.3° → 3.4° | 0.33 → 0.22 stops | 65% | 0.00 |
+| DSC03301, low key, darker skin | 10.4° → 6.1° | 0.69 → 0.50 stops | 71% | 0.02 |
+
+Findings:
+
+1. **The preset's values hold across the four:** hue spread down 41–48%, chroma spread down 28–33%, almost nothing else moving. Hue 30 and Saturation 20 take off about a quarter of the hue spread and keep 80% of the colour detail; Hue 70 and Saturation 50 take off two thirds and keep 52–60%. The mask's Amount scales the effect in between.
+2. **Near-greys must not set the mask's own colour.** With every pixel under the mask counted, `DSC02424`'s body skin, which takes in the white clothes, made the median grey (chroma 0.003): the swatch selected none of the skin. In `DSC03301`, a low-key portrait, the median came out at chroma 0.010, and the swatch selected 79% of the skin and took a fifth off its hue spread. Leaving near-greys out (weighted by chroma from 0.01 to 0.03) gives both the skin's colour (chroma 0.037 and 0.032), and moves the other two medians by under 0.05 in lightness and half a degree in hue. The kernel measures it that way.
+3. **The Luminance Range is wide enough:** at 37 the swatch selects 92–96% of the skin, and 50 or 60 add 1–2%.
+4. **Per pixel, fine colour detail goes:** about a third of it at the preset's values, as in the first prototype. That is TON-30's to keep.
+
 ## 5. How Redlamp could do it
 
 **TON-29, Point Color with uniformity.** In the develop kernel's OKLCh stage, beside the Color Mixer, each swatch has a reference colour (picked, or the median under its mask on the edit guide), hue, chroma and lightness ranges with a falloff, Lightroom's shifts, and Capture One's three uniformity amounts. What has to hold:
@@ -96,7 +114,7 @@ Cost: a few arithmetic operations per swatch per pixel in the fused kernel.
 
 - Controls: one signed Variance slider (Lightroom's), three Uniformity sliders (Capture One's), or both, with Variance driving all three.
 - Comparison: Capture One and Lightroom measured on the same portraits, which needs both apps.
-- Coverage: more portraits, with lighter and darker skin and stronger redness; the prototype ran on one.
+- Coverage: more portraits, with lighter skin and stronger redness (sunburn, rosacea), from raws through the engine rather than JPEG renders; the preset's values were checked on four.
 
 ## Sources
 

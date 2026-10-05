@@ -69,6 +69,30 @@ struct PointColorMaskRenderTests: PointColorRendering {
         #expect(abs(hueDifference(Double(measured.z), shown.z)) < 1, "hue \(measured.z) against \(shown.z)")
     }
 
+    @Test func `near-greys under a mask, outnumbering its colours, don't make its own colour grey`() throws {
+        // Under the mask, two thirds near-white (a white shirt) and a third skin.
+        let session = try makeSession(width: 160, height: 40) { x, _ in
+            x < 50 ? SIMD3(0.6, 0.6, 0.6) : x < 80 ? Self.skin : Self.blue
+        }
+        let engine = try RedlampEngine()
+        let skin = try lch(render(EditRecipe(), session: session)[20 * 160 + 60])
+        var recipe = EditRecipe()
+        recipe.masks = [leftMask([PointColorSwatch(color: .mask, values: [.pointColorHueUniformity: 50])])]
+        let commands = try #require(queue.makeCommandBuffer())
+        let colors = try #require(try engine.encodeMaskPointColors(
+            [0], recipe: recipe, session: session, commands: commands, retouchMaps: .current,
+        ))
+        let shared = try #require(device.makeBuffer(length: colors.length, options: .storageModeShared))
+        let blit = try #require(commands.makeBlitCommandEncoder())
+        blit.copy(from: colors, sourceOffset: 0, to: shared, destinationOffset: 0, size: colors.length)
+        blit.endEncoding()
+        commands.commit()
+        commands.waitUntilCompleted()
+        let measured = shared.contents().assumingMemoryBound(to: SIMD4<Float>.self)[0]
+        #expect(abs(Double(measured.y) - skin.y) < 0.01, "the skin's chroma: \(measured.y) against \(skin.y)")
+        #expect(abs(hueDifference(Double(measured.z), skin.z)) < 1, "and its hue: \(measured.z) against \(skin.z)")
+    }
+
     @Test func `a swatch of the mask's own colour pulls what it covers to the median under it`() throws {
         // Hues from 30° to 70° across the left half, a blue on the right.
         let session = try makeSession(width: 160, height: 40) { x, _ in

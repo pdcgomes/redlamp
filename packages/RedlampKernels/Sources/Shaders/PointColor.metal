@@ -3,7 +3,9 @@ using namespace metal;
 
 // A mask's own colour for Point Color (TON-29): the weighted median of what Point Color receives
 // under the mask, from a small render of it (output encoding 5) whose alpha is the mask's coverage.
-// Three histograms, of OKLab lightness, a and b, then the median of each.
+// Three histograms, of OKLab lightness, a and b, then the median of each. Near-greys under the mask
+// (white clothes, grey hair, teeth) are left out: Point Color barely changes them, and where they
+// outnumber the skin they'd make its colour grey.
 
 constant uint kPointColorBins = 1024;
 // The histograms' spans: lightness 0...1.25 (highlights past white included), a and b ±0.5.
@@ -23,7 +25,8 @@ kernel void rl_point_color_histogram(
     float4 texel = input.read(gid);
     // Soft edges count for less, and the faintest not at all.
     if (texel.w < 0.25f) return;
-    uint weight = uint(texel.w * 255.0f + 0.5f);
+    uint weight = uint(texel.w * smoothstep(0.01f, 0.03f, length(texel.yz)) * 255.0f + 0.5f);
+    if (weight == 0) return;
     float opponent = 2.0f * kPointColorOpponentSpan;
     atomic_fetch_add_explicit(
         &bins[pointColorBin(texel.x, 0.0f, kPointColorLightnessSpan)], weight, memory_order_relaxed);
