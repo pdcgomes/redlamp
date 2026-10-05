@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+#MISE description="Run the end-to-end regression suite (smoke by default; --tier full, release, performance or soak)"
+#MISE alias="e"
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+if [ ! -d Redlamp.xcworkspace ]; then
+    mise run generate
+fi
+
+exec scripts/e2e.py "$@"

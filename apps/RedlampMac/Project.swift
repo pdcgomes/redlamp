@@ -54,6 +54,7 @@ let project = Project(
                 Module.canvas.dependency,
                 Module.design.dependency,
                 Module.ui.dependency,
+                Module.automation.dependency,
                 Module.generative.dependency,
                 .external(name: "Sparkle"),
                 .target(name: "RedlampDecoder"),

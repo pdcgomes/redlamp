@@ -30,6 +30,7 @@ UI_PACKAGES=(
     RedlampCanvas
     RedlampDesign
     RedlampUI
+    RedlampAutomation
 )
 
 FORBIDDEN_IN_ENGINE='^[[:space:]]*(@preconcurrency[[:space:]]+)?import[[:space:]]+(AppKit|UIKit|SwiftUI|Cocoa|RedlampUI|RedlampCanvas|RedlampDesign)\b'

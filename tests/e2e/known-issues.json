@@ -1,0 +1,10 @@
+{
+  "format": "app.redlamp.e2e-known-issues",
+  "knownIssues": [],
+  "knownStalls": [
+    {
+      "frame": "_initBridgeAndStuff",
+      "reason": "AppKit connects to the open and save panel service the first time a panel is made; Redlamp's own code isn't involved"
+    }
+  ]
+}

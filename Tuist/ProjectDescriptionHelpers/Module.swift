@@ -19,6 +19,9 @@ public enum Module: String, CaseIterable {
     case canvas = "RedlampCanvas"
     case design = "RedlampDesign"
     case ui = "RedlampUI"
+    /// The regression suite's driver (ARC-07): scenarios that work the app through its own
+    /// input paths. Its sources compile only in Debug and profiling builds.
+    case automation = "RedlampAutomation"
 
     public var name: String {
         rawValue
@@ -36,7 +39,7 @@ public enum Module: String, CaseIterable {
     public var isEngineLayer: Bool {
         switch self {
         case .engineAPI, .kernels, .color, .services, .document, .recipes, .masking, .generative, .engine: true
-        case .canvas, .design, .ui: false
+        case .canvas, .design, .ui, .automation: false
         }
     }
 
@@ -75,6 +78,7 @@ public enum Module: String, CaseIterable {
         case .canvas: [.engineAPI]
         case .design: [.engineAPI]
         case .ui: [.engineAPI, .canvas, .design, .document, .recipes]
+        case .automation: [.engineAPI, .canvas, .design, .document, .recipes, .ui]
         }
     }
 }

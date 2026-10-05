@@ -1,0 +1,6 @@
+{
+  "format": "app.redlamp.e2e-exemptions",
+  "exemptions": [
+    { "claim": "action.virtualCopy", "reason": "Virtual Copy is planned for Phase 2; the menu checks that its item is there and disabled" }
+  ]
+}
