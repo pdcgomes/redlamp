@@ -115,8 +115,16 @@ private struct FloatingFilmstrip: View {
     @State private var overStrip = false
     @State private var hiding: Task<Void, Never>?
 
+    private var shown: Bool {
+        #if DEBUG || REDLAMP_PROFILING
+            if model.keepsFilmstripShown {
+                return true
+            }
+        #endif
+        return revealed || model.selection == nil
+    }
+
     var body: some View {
-        let shown = revealed || model.selection == nil
         ZStack(alignment: .bottom) {
             Color.clear
                 .frame(height: PanelMetrics.filmstripTrigger)

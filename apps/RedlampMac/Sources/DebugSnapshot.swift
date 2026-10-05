@@ -24,7 +24,10 @@
     ///   (`about`, `help`). `feedback=form` opens Report a Bug or Send Feedback
     ///   (`feedback=note` at its note), and `feedback=reports` Your Reports. `whats-new=<step>`
     ///   opens What's New from the Help menu playing its film (`film`), on its highlights
-    ///   (`highlights`) or on a page (`page1`, `page2`, …).
+    ///   (`highlights`) or on a page (`page1`, `page2`, …). `filmstrip=shown` keeps the filmstrip
+    ///   up with a photo selected, `extend=<n>` selects from the open photo to the nth, as ⇧-click
+    ///   does, and `filmstrip-menu=<n>` opens the context menu of the nth photo on screen; the menu
+    ///   holds the app, so it comes last.
     /// - `--whats-new-endpoint <url>` reads What's New from elsewhere for this launch: a Preview
     ///   deployment's `/api/whats-new`, or a `file://` feed whose image URLs are absolute.
     /// - `--window-size <width>x<height>` sizes the editor's content in points and centres it
@@ -100,6 +103,8 @@
                 await openWelcome(at: value)
             case "whats-new":
                 await openWhatsNew(at: value)
+            case "filmstrip-menu":
+                await showFilmstripMenu(at: Int(value) ?? 0)
             case "select" where Int(value) == nil:
                 await select(named: value, model: model)
             case "mask":
@@ -233,6 +238,37 @@
 
         private static func openMenuWindow(titled title: String) {
             AppDelegate.performMenuItem(titled: title)
+        }
+
+        /// Opens the context menu of the filmstrip's `index`th photo on screen, rising from its
+        /// middle as a right-click there does near the bottom of the screen, with the photo ringed.
+        /// The menu holds the app until it closes, so it comes last in a script.
+        private static func showFilmstripMenu(at index: Int) async {
+            try? await Task.sleep(for: .seconds(1))
+            guard let root = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil })?.contentView,
+                  let window = root.window
+            else { return }
+            func cells(in view: NSView) -> [NSView] {
+                (String(describing: type(of: view)) == "FilmstripCellView" ? [view] : []) + view.subviews.flatMap(cells)
+            }
+            let onScreen = cells(in: root).filter { !$0.isHiddenOrHasHiddenAncestor }
+                .sorted { $0.convert($0.bounds, to: nil).minX < $1.convert($1.bounds, to: nil).minX }
+            guard onScreen.indices.contains(index) else { return }
+            let cell = onScreen[index]
+            let middle = NSPoint(x: cell.bounds.midX, y: cell.bounds.midY)
+            guard let click = NSEvent.mouseEvent(
+                with: .rightMouseDown, location: cell.convert(middle, to: nil), modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil,
+                eventNumber: 0, clickCount: 1, pressure: 1,
+            ), let menu = cell.menu(for: click) else { return }
+            // `NSMenu.popUpContextMenu` opens downwards, out of the window, when the screen has room below.
+            let height = menu.size.height
+            let corner = NSPoint(x: middle.x, y: cell.isFlipped ? middle.y - height : middle.y + height)
+            DispatchQueue.main.async {
+                cell.willOpenMenu(menu, with: click)
+                menu.popUp(positioning: nil, at: corner, in: cell)
+                cell.didCloseMenu(menu, with: click)
+            }
         }
 
         /// Opens What's New from the Help menu on the capture screen, playing its film (`film`), on
