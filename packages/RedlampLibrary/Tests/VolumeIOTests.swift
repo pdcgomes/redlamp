@@ -195,6 +195,54 @@ struct VolumeIOTests {
         #expect(statistics.longestOperation < .milliseconds(300), "\(statistics.longestOperation)")
     }
 
+    /// A file system whose reads hang until released, then fail as a network that stopped answering.
+    final class HangingFileSystem: LibraryFileSystem {
+        let gate = IndexGate()
+
+        func contentsOfDirectory(at _: URL) throws -> [FileEntry] {
+            []
+        }
+
+        func attributes(of url: URL) throws -> FileEntry {
+            FileEntry(name: url.lastPathComponent, isDirectory: true)
+        }
+
+        func read(_ url: URL, range _: Range<Int>) throws -> Data {
+            gate.wait()
+            throw LibraryFileSystemError.timedOut(url)
+        }
+
+        func volume(of _: URL) throws -> VolumeInfo {
+            VolumeInfo(uuid: "HANGING", name: nil, isLocal: false, isInternal: false)
+        }
+    }
+
+    @Test func `an operation given up on that fails later doesn't take away a volume that's back`() async throws {
+        let fileSystem = HangingFileSystem()
+        let probe = URL(fileURLWithPath: "/Volumes/Hanging")
+        let io = try VolumeIO(
+            volume: fileSystem.volume(of: probe), fileSystem: fileSystem, probe: probe, timeout: .milliseconds(100),
+            probeIntervals: .milliseconds(20) ... .milliseconds(40),
+        )
+        let file = probe.appending(path: "IMG_0001.JPG")
+        await #expect(throws: LibraryFileSystemError.timedOut(file)) {
+            try await io.read(file, range: 0 ..< 10)
+        }
+        await io.waitUntilReachable()
+        let seen = Mutex<[Bool]>([])
+        let changes = io.reachabilityChanges()
+        let watching = Task {
+            for await reachable in changes {
+                seen.withLock { $0.append(reachable) }
+            }
+        }
+        fileSystem.gate.open()
+        try await Task.sleep(for: .milliseconds(200))
+        watching.cancel()
+        #expect(seen.withLock { $0 }.isEmpty && io.isReachable)
+        #expect(io.statistics.timeouts == 1)
+    }
+
     @Test func `reads go through the volume's file system, and are counted`() async throws {
         let folder = try TemporaryFolder()
         try folder.write("IMG_0001.JPG", bytes: 3000)

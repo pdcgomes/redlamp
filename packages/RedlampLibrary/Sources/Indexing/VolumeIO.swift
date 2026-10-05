@@ -315,12 +315,12 @@ public final class VolumeIO: Sendable {
         _ id: UInt64, generation: Int, start: Duration, end: Duration, bytes: Int, waited: Bool, measured: Bool,
         failure: (any Error)?,
     ) {
-        let gone = failure.map(Self.isVolumeFailure) ?? false
-        state.withLock { state in
-            guard let tracked = state.tracked.removeValue(forKey: id) else { return }
+        // An operation given up on says nothing of the volume now: it may have come back since.
+        let gone = state.withLock { state -> Bool in
+            guard let tracked = state.tracked.removeValue(forKey: id) else { return false }
             if tracked.expired {
                 state.stuck -= 1
-                return
+                return false
             }
             state.running -= 1
             state.operations += 1
@@ -329,6 +329,7 @@ public final class VolumeIO: Sendable {
             if measured, failure == nil {
                 state.concurrency.record(generation: generation, start: start, end: end, bytes: bytes, waited: waited)
             }
+            return failure.map(Self.isVolumeFailure) ?? false
         }
         if gone {
             markUnreachable()
