@@ -34,7 +34,6 @@ flowchart LR
   subgraph sources [Camera sources]
     ICC["ImageCaptureCore: USB PTP, any maker"]
     PTPIP["PTP/IP over Network.framework: Wi-Fi and Ethernet"]
-    Helper["Maker SDK in its own XPC helper"]
     Hot["Hot folder: the maker's app writes files"]
   end
   subgraph capture [RedlampCapture, platform-neutral]
@@ -43,7 +42,6 @@ flowchart LR
   end
   ICC --> Driver
   PTPIP --> Driver
-  Helper --> Session
   Hot --> Session
   Driver --> Session
   Session -->|"bytes"| Decoder["RedlampDecoder.xpc"]
@@ -54,10 +52,7 @@ flowchart LR
 
 - **A `RedlampCapture` package** on the engine side of the boundary: platform-neutral (ImageCaptureCore and Network.framework exist on macOS and iPadOS), no UI imports, upstream `[.engineAPI]`, and added to `ENGINE_PACKAGES` in `scripts/check-engine-purity.sh`. `RedlampUI` gains it upstream. It holds the PTP containers, a driver per maker protocol (standard PTP, then each maker's extension), the capture session and its file handling.
 - **Transports:** ImageCaptureCore for USB (it owns the device; the app sends PTP commands through `requestSendPTPCommand` and receives events through `ptpEventHandler`), PTP/IP over TCP with Network.framework for cameras on Wi-Fi or Ethernet, and the hot folder.
-- **Makers' binary SDKs**, where one is the only route, each in its own XPC helper beside `RedlampDecoder.xpc`:
-  - Crashes: a vendor library crashing takes down the helper, not the editor. Capture One's notes record crashes "during tethering with Live View enabled" on specific Sony cameras (16.7.1).
-  - Licences: closed binaries stay out of the MPL-2.0 sources. The helper is built only where the SDK is present (the release Mac), and builds from source leave it out, as builds from source leave out Sparkle's update feed today.
-  - Sandbox: each helper gets only the USB or network entitlement it needs.
+- **No maker SDKs** (the owner's decision, 5 October 2026, DEC-29 and SKIP-16): every camera is driven through Redlamp's own PTP code. The XPC helper this note first proposed for makers' binary SDKs isn't needed. A PTP session that misbehaves can still be moved into a helper later, since Capture One's notes record crashes "during tethering with Live View enabled" on specific Sony cameras (16.7.1).
 - **Live View:** the camera's JPEG frames decoded by ImageIO into IOSurfaces and drawn by the canvas as rendered frames are, with grid, overlay image, focus peaking (UX-06) and clipping as Metal passes. The recipe's look can be applied to the frames as a preview, labelled as approximate, since the camera has already rendered them.
 - **Ordering and safety:**
   - Every frame is on disk (or the card) before anything else happens to it.
