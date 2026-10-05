@@ -4,7 +4,7 @@ summary: Redlamp can open raw files from 1,258 cameras, and its tests check 25 o
 date: 2026-10-05
 cover: /synced/images/camera-bench-results.png
 coverAlt: The Camera Bench in Redlamp, with a Fujifilm X-T3 that passed every check and Redlamp's rendering next to the camera's own JPEG
-draft: true
+draft: false
 ---
 
 Shortly after the first release, someone asked whether Redlamp handles Hasselblad raws. Good question. I don't own a Hasselblad, and I don't know anyone who owns a modern one (the X2D is 100 megapixels, so I'd quite like to).
@@ -91,5 +91,5 @@ The bench ships with Redlamp 0.2.4. Once you have it, open Help › Test Your Ca
 
 If something looks wrong, Report This Problem opens a bug report with everything the bench found already filled in, so you only need to describe what you saw. And if you're happy to give a photo away, upload it to [raw.pixls.us](https://raw.pixls.us) under CC0 and [open an issue](https://github.com/pdcgomes/redlamp/issues) with a link to it. That's how the Hasselblads got in.
 
-Thanks for reading,\
+Thanks for reading,  
 Pedro
