@@ -122,7 +122,7 @@ def make_test_copy(built: Path, destination: Path) -> Path:
 # ---------------------------------------------------------------- the run's home
 
 def prepare_photos(photos: Path) -> list[str]:
-    """APFS clones of the sample raws, a JPEG and the bitmaps made from it."""
+    """APFS clones of the sample raws, the process gate's bitmap and other formats made from it."""
     photos.mkdir(parents=True)
     raw = ROOT / "tests/fixtures/raw"
     names = []
@@ -133,14 +133,14 @@ def prepare_photos(photos: Path) -> list[str]:
         names.append(source.name)
     if not names:
         sys.exit("no sample raws in tests/fixtures/raw: run `mise run fixtures`")
-    jpeg = ROOT / "tests/golden/process/DSC_0750.jpg"
-    run(["cp", "-c", str(jpeg), str(photos / "Bitmap.jpg")])
-    for extension, kind in [("png", "png"), ("tif", "tiff"), ("heic", "heic")]:
-        subprocess.run(["sips", "-s", "format", kind, str(jpeg), "--out", str(photos / f"Bitmap.{extension}")],
+    bitmap = ROOT / "tests/golden/process/DSC_0750.png"
+    run(["cp", "-c", str(bitmap), str(photos / "Bitmap.png")])
+    for extension, kind in [("jpg", "jpeg"), ("tif", "tiff"), ("heic", "heic")]:
+        subprocess.run(["sips", "-s", "format", kind, str(bitmap), "--out", str(photos / f"Bitmap.{extension}")],
                        capture_output=True)
     names = sorted(p.name for p in photos.iterdir() if not p.name.startswith(".") and p.is_file())
     # In subfolders, so the folder's own photos all open: a focus bracket and a damaged raw.
-    subprocess.run(["swift", str(ROOT / "scripts/make-focus-bracket.swift"), str(jpeg), str(photos / "Bracket"), "5"],
+    subprocess.run(["swift", str(ROOT / "scripts/make-focus-bracket.swift"), str(photos / "Bitmap.jpg"), str(photos / "Bracket"), "5"],
                    capture_output=True, timeout=300)
     damaged = photos / "Damaged"
     damaged.mkdir()
