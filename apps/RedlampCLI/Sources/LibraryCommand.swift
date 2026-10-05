@@ -8,6 +8,7 @@ enum LibraryCommand {
     static let usage = """
     usage: redlamp library fixture <folder> --photos <n> [--seed <s>] [--raw-sources <folder>]
            redlamp library bench <fixture> [--profile <profile>] [--scenario <name>…] [--json <path>]
+           redlamp library index <folder>… --index <path> [--profile <profile>]
       fixture  makes a synthetic library in <folder>: a fifth of the photos APFS clones of the raws in
                --raw-sources (tests/fixtures/raw) with their capture dates rewritten, the rest small JPEGs
                and HEICs with varied EXIF, GPS and IPTC; sidecars on 15% and other apps' .xmp on 5%; folders
@@ -16,6 +17,10 @@ enum LibraryCommand {
       bench    measures the fixture through a simulated volume (ssd, spinning, nas, wifi or vpn; ssd by
                default) and prints one line per measurement, ending PASS or FAIL where there's a budget;
                exits 1 when a budget fails. --json writes the report. Scenarios: \(scenarioNames).
+      index    adds the folders to the library index at <path> (made if there's none) and indexes them: every
+               folder listed, and each photo that's new or changed since it was indexed read once. Prints its
+               progress and a summary; exits 1 when a photo couldn't be read or a volume stopped answering.
+               --profile reads through a simulated volume, as bench does.
     """
 
     private static var scenarioNames: String {
@@ -23,6 +28,7 @@ enum LibraryCommand {
     }
 
     static func run(_ arguments: [String]) async throws {
+        BenchScenarios.registerIndexing()
         guard let command = arguments.first, !arguments.contains("--help") else {
             print(usage)
             return
@@ -30,6 +36,7 @@ enum LibraryCommand {
         switch command {
         case "fixture": try fixture(Array(arguments.dropFirst()))
         case "bench": try await bench(Array(arguments.dropFirst()))
+        case "index": try await index(Array(arguments.dropFirst()))
         default: throw CLIError(description: "unknown library command \(command)\n\n\(usage)")
         }
     }
