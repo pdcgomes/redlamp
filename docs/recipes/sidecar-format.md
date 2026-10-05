@@ -217,6 +217,8 @@ Redlamp renders at most 16 visible masks and 64 components across them, and the 
 | `local.hue` | −180…180 | A hue shift, in degrees. |
 | `local.moire` | 0…100 | Moiré reduction. |
 | `local.{halation,bloom}` | −100…100 | The film glow effects, more or less where the mask covers; their sizes stay global. |
+| `local.color.hue` | 0…360 | The Color swatch's hue, as on a color wheel: 0 is red. |
+| `local.color.saturation` | 0…100 | The Color swatch's strength, a tint of its hue over what the mask covers, as Color Grading's Global wheel tints; 0 is no tint. |
 
 A **component** is `{"id", "shape", "operation", "inverted"}`, all required. `operation` is `add`, `subtract` or `intersect`: how the component combines with the coverage of the components before it. `inverted` inverts the component's own coverage first.
 

@@ -182,6 +182,30 @@ struct MaskRenderTests {
         #expect(simd_abs(fallback - tints[1]).max() < 1e-4, "55% until it's changed")
     }
 
+    @Test func `a mask's Color swatch tints what it covers, and no swatch leaves the photo as it was`() throws {
+        let session = try makeSession(width: 200, height: 100) { _, _ in SIMD3(repeating: 0.18) }
+        var mask = MaskLayer(name: "Centre", components: [MaskComponent(shape: .radial(RadialMask(
+            center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.3, radiusY: 0.3, feather: 0,
+        )))])
+        var recipe = EditRecipe()
+        recipe.masks = [mask]
+        let plain = try render(EditRecipe(), session: session)
+        let none = try render(recipe, session: session)
+        #expect(zip(none, plain).allSatisfy { $0 == $1 }, "a mask with no adjustment changes nothing")
+
+        mask[.localColorHue] = 220
+        mask[.localColorSaturation] = 100
+        recipe.masks = [mask]
+        let tinted = try render(recipe, session: session)
+        let (centre, corner) = (50 * 200 + 100, 5 * 200 + 5)
+        #expect(tinted[centre].z > tinted[centre].x + 0.02, "blue where the mask covers: \(tinted[centre])")
+        #expect(simd_abs(tinted[corner] - plain[corner]).max() < 1e-4, "nothing outside it")
+        mask.amount = 50
+        recipe.masks = [mask]
+        let half = try render(recipe, session: session)[centre]
+        #expect(half.z - half.x < tinted[centre].z - tinted[centre].x, "Amount scales the tint")
+    }
+
     @Test func `Image on B&W shows the mask in colour and the rest in grey`() throws {
         let session = try makeSession(width: 200, height: 100) { _, _ in SIMD3(0.4, 0.2, 0.1) }
         let mask = MaskLayer(name: "Centre", components: [MaskComponent(shape: .radial(RadialMask(

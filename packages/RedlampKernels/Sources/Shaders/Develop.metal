@@ -653,6 +653,7 @@ kernel void rl_develop(
     float localDehaze = 0.0f;
     float2 localGlow = 0.0f;
     float2 localFringe = 0.0f;
+    float2 localSwatch = 0.0f;
     MaskImages maskImages = { maskRasters, maskGuide };
     float textureMagnitude = -1.0f;
     for (int i = 0; i < layerCount; i++) {
@@ -669,6 +670,7 @@ kernel void rl_develop(
         localDehaze += coverage[i] * layers[i].detail.x;
         localGlow += coverage[i] * layers[i].glow.xy;
         localFringe += coverage[i] * layers[i].glow.zw;
+        localSwatch += coverage[i] * layers[i].swatch.xy;
     }
 
     // Scene-referred: white balance (global and local), camera matrix, exposure.
@@ -859,6 +861,9 @@ kernel void rl_develop(
         lab.z += offset.y;
         lab.x += offset.z;
     }
+    // The masks' Color swatches tint as Color Grading's Global wheel does.
+    lab.y += localSwatch.x;
+    lab.z += localSwatch.y;
 
     // Curve, vignette and grain work on sRGB-transfer-encoded Rec.2020 values; the gamut is
     // only reduced to the output's at the end.

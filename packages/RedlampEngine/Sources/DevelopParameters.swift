@@ -346,10 +346,23 @@ enum DevelopParameters {
                 tone2: SIMD4(value(.localWhites), value(.localBlacks), Float(first), Float(count)),
                 detail: SIMD4(value(.localDehaze), Float(mask.detail / 100), Float(detailLevel), 0),
                 glow: SIMD4(value(.localHalation), value(.localBloom), value(.localDefringe), value(.localMoire)),
+                swatch: SIMD4(lowHalf: swatch(of: mask, scale: scale), highHalf: .zero),
             ))
         }
         return (layers, encoder.finished(), overlayIndex)
     }
+
+    /// The OKLab (a, b) a mask's Color swatch tints by: its hue's direction on a color wheel, as
+    /// Color Grading's wheels, at its saturation, scaled by the mask's Amount.
+    static func swatch(of mask: MaskLayer, scale: Double) -> SIMD2<Float> {
+        let saturation = mask[.localColorSaturation] / 100 * scale
+        guard saturation != 0 else { return .zero }
+        let offset = OKLab.direction(forWheelHue: mask[.localColorHue]) * saturation * swatchStrength
+        return SIMD2(Float(offset.x), Float(offset.y))
+    }
+
+    /// The swatch's tint at full saturation, in OKLab chroma (Color Grading's Global wheel's is 0.06).
+    static let swatchStrength = 0.1
 
     /// The pyramid level a mask's Detail measures texture at: about 2048 px on the long side,
     /// whatever the zoom.

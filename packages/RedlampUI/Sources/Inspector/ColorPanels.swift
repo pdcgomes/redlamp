@@ -254,17 +254,37 @@ struct GradingViewPicker: View {
     }
 }
 
-/// A grading wheel: angle is hue, distance from centre is saturation.
+/// A grading wheel: angle is hue, distance from centre is saturation. Color Grading's ranges and a
+/// mask's Color swatch use it.
 struct ColorWheel: View {
-    let range: GradingRange
+    let hueParameter: ParameterID
+    let saturationParameter: ParameterID
+    /// What it's called in its help, and the History step a drag makes.
+    let label: String
+    let stepName: String
     let diameter: CGFloat
 
     @Environment(EditorModel.self) private var model
     @State private var dragging = false
 
+    init(range: GradingRange, diameter: CGFloat) {
+        self.init(
+            hue: range.hueParameter, saturation: range.saturationParameter, label: range.name,
+            stepName: "\(range.name) Grading", diameter: diameter,
+        )
+    }
+
+    init(hue: ParameterID, saturation: ParameterID, label: String, stepName: String, diameter: CGFloat) {
+        hueParameter = hue
+        saturationParameter = saturation
+        self.label = label
+        self.stepName = stepName
+        self.diameter = diameter
+    }
+
     var body: some View {
-        let hue = model.value(range.hueParameter)
-        let saturation = model.value(range.saturationParameter)
+        let hue = model.sliderValue(hueParameter)
+        let saturation = model.sliderValue(saturationParameter)
         let radius = diameter / 2
         let angle = hue * .pi / 180
         let distance = saturation / 100 * radius
@@ -316,18 +336,25 @@ struct ColorWheel: View {
                         degrees += 360
                     }
                     let amount = min(hypot(dx, dy) / radius, 1) * 100
-                    model.setValue(range.hueParameter, degrees)
-                    model.setValue(range.saturationParameter, amount)
+                    model.setSliderValue(hueParameter, degrees)
+                    model.setSliderValue(saturationParameter, amount)
                 }
                 .onEnded { _ in
                     dragging = false
-                    model.endEdit(.adjustment(range.hueParameter), "\(range.name) Grading")
+                    model.endEdit(hueParameter.isMaskScoped ? .mask(nil) : .adjustment(hueParameter), stepName)
                 },
         )
         .simultaneousGesture(TapGesture(count: 2).onEnded {
-            model.resetParameters([range.hueParameter, range.saturationParameter], name: "Reset \(range.name) Grading")
+            if hueParameter.isMaskScoped {
+                model.beginEdit()
+                model.resetSlider(hueParameter)
+                model.resetSlider(saturationParameter)
+                model.endEdit(.mask(nil), "Reset \(stepName)")
+            } else {
+                model.resetParameters([hueParameter, saturationParameter], name: "Reset \(stepName)")
+            }
         })
-        .help("\(range.name): hue \(Int(hue))°, saturation \(Int(saturation)). Double-click to reset.")
+        .help("\(label): hue \(Int(hue))°, saturation \(Int(saturation)). Double-click to reset.")
     }
 }
 

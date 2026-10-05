@@ -137,12 +137,13 @@ final class MaskingPanelView: ColumnView {
         }
         views.append(rows.header(mask.name, [], accessory: rows.native(ResetMaskButton(mask: mask))))
         views += [rows.slider(.maskAmount), rows.slider(.maskDetail), rows.gap()]
-        for parameter in ParameterID.localParameters {
+        for parameter in ParameterID.localParameters where !ParameterID.swatchParameters.contains(parameter) {
             views.append(rows.slider(parameter))
             if MaskingPanel.gapAfter.contains(parameter) {
                 views.append(rows.gap())
             }
         }
+        views.append(rows.native(MaskColorSwatch()))
         return ColumnView(
             spacing: Metrics.panelRowSpacing,
             insets: NSEdgeInsets(

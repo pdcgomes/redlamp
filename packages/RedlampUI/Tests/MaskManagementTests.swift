@@ -61,6 +61,20 @@ struct MaskManagementTests {
         #expect(model.history.last?.name == "Reorder Components")
     }
 
+    @Test func `the Color swatch tints the selected mask, as one step`() async throws {
+        let (model, cleanup) = try await openEditor()
+        defer { cleanup() }
+        let mask = try radialMask(model, at: 0.5)
+        #expect(ParameterID.swatchParameters.allSatisfy(\.isMaskScoped))
+        model.beginEdit()
+        model.setSliderValue(.localColorHue, 220)
+        model.setSliderValue(.localColorSaturation, 40)
+        model.endEdit(.mask(nil), "Radial 1 Color")
+        #expect(model.recipe.mask(mask)?[.localColorHue] == 220 && model.recipe
+            .mask(mask)?[.localColorSaturation] == 40)
+        #expect(model.sliderValue(.localColorSaturation) == 40 && model.history.last?.name == "Radial 1 Color")
+    }
+
     @Test func `the overlay's opacity and Image on B&W reach the render`() async throws {
         let engine = StubEngine()
         let (model, cleanup) = try await openEditor(engine)

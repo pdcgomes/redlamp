@@ -420,6 +420,8 @@ public enum ParameterCatalog {
             ParameterSpec(.localDefringe, "Defringe", range: -100 ... 100),
             ParameterSpec(.localHalation, "Halation"),
             ParameterSpec(.localBloom, "Bloom"),
+            ParameterSpec(.localColorHue, "Color Hue", range: 0 ... 360, format: .integer, track: .gradingHue),
+            ParameterSpec(.localColorSaturation, "Color Saturation", range: 0 ... 100, format: .integer),
             ParameterSpec(.maskAmount, "Amount", range: 0 ... 200, default: 100, format: .integer),
             ParameterSpec(.maskFeather, "Feather", range: 0 ... 100, default: 50, format: .integer),
             ParameterSpec(.maskBrushSize, "Size", range: 1 ... 100, default: 25, format: .integer),

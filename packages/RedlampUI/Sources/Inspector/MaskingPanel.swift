@@ -163,6 +163,58 @@ private struct Reorderable: ViewModifier {
     }
 }
 
+/// The mask's Color swatch: a tint of a hue and saturation over what the mask covers, picked on a
+/// wheel as Color Grading's are.
+struct MaskColorSwatch: View {
+    @Environment(EditorModel.self) private var model
+    @State private var picking = false
+
+    var body: some View {
+        let hue = model.sliderValue(.localColorHue)
+        let saturation = model.sliderValue(.localColorSaturation)
+        HStack {
+            Text("Color")
+                .font(Theme.labelFont)
+                .foregroundStyle(Theme.label)
+            Spacer()
+            Button {
+                picking.toggle()
+            } label: {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(saturation > 0 ? Color
+                            .wheelHue(hue, saturation: saturation / 100, brightness: 0.95) : .clear)
+                    if saturation == 0 {
+                        Path { path in
+                            path.move(to: CGPoint(x: 2, y: 14))
+                            path.addLine(to: CGPoint(x: 32, y: 2))
+                        }
+                        .stroke(Color.red.opacity(0.7), lineWidth: 1)
+                    }
+                    RoundedRectangle(cornerRadius: 3).strokeBorder(Theme.secondaryLabel, lineWidth: 1)
+                }
+                .frame(width: 34, height: 16)
+            }
+            .buttonStyle(.plain)
+            .help(saturation > 0 ? "Color: hue \(Int(hue))°, saturation \(Int(saturation))" :
+                "Color: none. Click to tint the mask")
+            .popover(isPresented: $picking, arrowEdge: .leading) {
+                VStack(spacing: 10) {
+                    ColorWheel(
+                        hue: .localColorHue, saturation: .localColorSaturation, label: "Color",
+                        stepName: "\(model.selectedMask?.name ?? "Mask") Color", diameter: 150,
+                    )
+                    ParameterSlider(parameter: .localColorHue)
+                    ParameterSlider(parameter: .localColorSaturation)
+                }
+                .padding(12)
+                .frame(width: 240)
+                .environment(model)
+            }
+        }
+    }
+}
+
 struct MaskActionsBar: View {
     @Environment(EditorModel.self) private var model
 
@@ -644,12 +696,14 @@ private struct SelectedMaskEditor: View {
             ParameterSlider(parameter: .maskAmount)
             ParameterSlider(parameter: .maskDetail)
             Spacer().frame(height: 4)
-            ForEach(ParameterID.localParameters, id: \.self) { parameter in
+            ForEach(ParameterID.localParameters.filter { !ParameterID.swatchParameters.contains($0) }, id: \.self) {
+                parameter in
                 ParameterSlider(parameter: parameter)
                 if MaskingPanel.gapAfter.contains(parameter) {
                     Spacer().frame(height: 4)
                 }
             }
+            MaskColorSwatch()
         }
         .padding(.horizontal, Theme.panelPadding)
         .padding(.bottom, 14)

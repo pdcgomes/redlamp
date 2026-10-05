@@ -354,7 +354,9 @@
         "local.moire": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Moire reduction." },
         "local.defringe": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Defringe." },
         "local.halation": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Halation where the mask covers; the size stays global." },
-        "local.bloom": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Bloom where the mask covers; the size stays global." }
+        "local.bloom": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Bloom where the mask covers; the size stays global." },
+        "local.color.hue": { "type": "number", "minimum": 0, "maximum": 360, "default": 0, "description": "The Color swatch's hue, as on a color wheel (0 is red)." },
+        "local.color.saturation": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "The Color swatch's strength: how much it tints what the mask covers; 0 for no tint." }
       },
       "additionalProperties": {
         "type": "number",
