@@ -37,6 +37,28 @@ public extension IndexQueries {
     func isMarkedOffline(volume uuid: String) throws -> Bool {
         try setting(LibraryIndex.Writer.offlineKey(uuid)) != nil
     }
+
+    /// How far the index has applied the event history of the volume with `uuid`; nil when it has
+    /// recorded none.
+    func eventHistory(ofVolume uuid: String) throws -> VolumeEventHistory? {
+        guard let volume = try volume(uuid: uuid), let database = volume.eventDatabase,
+              let event = volume.lastEvent
+        else { return nil }
+        return VolumeEventHistory(eventDatabase: database, lastEvent: event)
+    }
+}
+
+/// How far the index has applied a volume's event history (LIB-08): the history's database, and the
+/// last of its events whose changes are in the index.
+public struct VolumeEventHistory: Sendable, Hashable {
+    /// The UUID of the volume's event database (`FSEventsCopyUUIDForDevice`).
+    public var eventDatabase: String
+    public var lastEvent: UInt64
+
+    public init(eventDatabase: String, lastEvent: UInt64) {
+        self.eventDatabase = eventDatabase
+        self.lastEvent = lastEvent
+    }
 }
 
 public extension LibraryIndex.Writer {
@@ -59,6 +81,15 @@ public extension LibraryIndex.Writer {
         let changed = database.changes
         try setSetting(offline ? "1" : nil, for: Self.offlineKey(uuid))
         return changed
+    }
+
+    /// Records that the index holds the changes of the volume with `uuid` up to `history.lastEvent`
+    /// of its event database; returns false when the index has no such volume.
+    @discardableResult
+    func setEventHistory(_ history: VolumeEventHistory, ofVolume uuid: String) throws -> Bool {
+        guard let volume = try volume(uuid: uuid) else { return false }
+        try setLastEvent(history.lastEvent, eventDatabase: history.eventDatabase, forVolume: volume.id)
+        return true
     }
 
     internal static func offlineKey(_ uuid: String) -> String {
