@@ -54,9 +54,35 @@ public struct PhotoListDiff: Sendable, Hashable {
     /// Photos whose rows didn't change keep their order, so every change is the changed photos'
     /// own: a photo that left or arrived, or one whose row now sorts elsewhere. A changed photo
     /// stays put when it's between the same unchanged photos, and in the same order as the changed
-    /// photos beside it, as before; otherwise it moves. Unchanged photos found out of order (a
-    /// change `changed` didn't name) move as few as keep the rest in order.
+    /// photos beside it, as before; otherwise it moves. When the lists without the changed photos
+    /// are the same, one pass along both finds that, and only the changed photos are looked at;
+    /// otherwise (a change `changed` didn't name) every photo is, and the unchanged ones found out
+    /// of order move as few as keep the rest in order.
     init(from old: PhotoList, to new: PhotoList, changed: RowBits) {
+        if Self.othersMatch(old, new, changed) {
+            var removed: [Int] = []
+            var inserted: [Int] = []
+            var changedInBoth: [Move] = []
+            changed.forEach { row in
+                let id = Int64(row)
+                switch (old.index(of: id), new.index(of: id)) {
+                case let (from?, to?): changedInBoth.append(Move(from: from, to: to))
+                case let (from?, nil): removed.append(from)
+                case let (nil, to?): inserted.append(to)
+                case (nil, nil): break
+                }
+                return true
+            }
+            removed.sort()
+            inserted.sort()
+            changedInBoth.sort { $0.to < $1.to }
+            let (moved, stays) = Self.place(changedInBoth, leftOld: removed, arrivedNew: inserted)
+            self.init(
+                removed: IndexSet(removed), inserted: IndexSet(inserted), moved: moved.sorted { $0.to < $1.to },
+                updated: IndexSet(stays),
+            )
+            return
+        }
         let changedWords = changed.wordCount
         func isChanged(_ id: Int64) -> Bool {
             Int(id >> 6) < changedWords && changed.contains(Int(id))
@@ -100,42 +126,82 @@ public struct PhotoListDiff: Sendable, Hashable {
             moved = zip(unchanged, keeps).compactMap { $1 ? nil : $0 }
         }
 
-        var updated = IndexRuns()
-        if !changedInBoth.isEmpty {
-            // How many of the photos kept in place come before an index, before and after.
-            let leftOld = (removed.indexes + changedInBoth.map(\.from) + moved.map(\.from)).sorted()
-            let arrivedNew = (inserted.indexes + changedInBoth.map(\.to) + moved.map(\.to)).sorted()
-            func keptBefore(_ index: Int, _ others: [Int]) -> Int {
-                index - Self.countBelow(index, in: others)
+        let (changedMoves, stays) = Self.place(
+            changedInBoth, leftOld: (removed.indexes + moved.map(\.from)).sorted(),
+            arrivedNew: (inserted.indexes + moved.map(\.to)).sorted(),
+        )
+        self.init(
+            removed: removed.indexSet, inserted: inserted.indexSet,
+            moved: (moved + changedMoves).sorted { $0.to < $1.to }, updated: IndexSet(stays),
+        )
+    }
+
+    /// Whether `old` and `new` are the same once the photos in `changed` are left out of both.
+    private static func othersMatch(_ old: PhotoList, _ new: PhotoList, _ changed: RowBits) -> Bool {
+        old.ids.withUnsafeBufferPointer { old in
+            new.ids.withUnsafeBufferPointer { new in
+                changed.words.withUnsafeBufferPointer { changed in
+                    func isChanged(_ id: Int64) -> Bool {
+                        let word = Int(id >> 6)
+                        return word < changed.count && changed[word] >> UInt64(id & 63) & 1 != 0
+                    }
+                    var (left, right) = (0, 0)
+                    while true {
+                        while left < old.count, isChanged(old[left]) {
+                            left += 1
+                        }
+                        while right < new.count, isChanged(new[right]) {
+                            right += 1
+                        }
+                        guard left < old.count, right < new.count else {
+                            return left == old.count && right == new.count
+                        }
+                        guard old[left] == new[right] else { return false }
+                        left += 1
+                        right += 1
+                    }
+                }
             }
-            var gaps: [Int: [Move]] = [:]
-            for move in changedInBoth {
-                let gap = keptBefore(move.from, leftOld)
-                if gap == keptBefore(move.to, arrivedNew) {
-                    gaps[gap, default: []].append(move)
+        }
+    }
+
+    /// Which of the changed photos in both lists (`changedInBoth`, in their order after the change)
+    /// move, and the indexes of those that stay, given the indexes of the other photos that aren't
+    /// kept in place: those that left or moved (`leftOld`), and those that arrived or moved
+    /// (`arrivedNew`), each sorted.
+    private static func place(
+        _ changedInBoth: [Move],
+        leftOld: [Int],
+        arrivedNew: [Int],
+    ) -> (moved: [Move], stays: [Int]) {
+        guard !changedInBoth.isEmpty else { return ([], []) }
+        let leftOld = (leftOld + changedInBoth.map(\.from)).sorted()
+        let arrivedNew = (arrivedNew + changedInBoth.map(\.to)).sorted()
+        /// How many of the photos kept in place come before an index, before the change and after.
+        func keptBefore(_ index: Int, _ others: [Int]) -> Int {
+            index - countBelow(index, in: others)
+        }
+        var moved: [Move] = []
+        var gaps: [Int: [Move]] = [:]
+        for move in changedInBoth {
+            let gap = keptBefore(move.from, leftOld)
+            if gap == keptBefore(move.to, arrivedNew) {
+                gaps[gap, default: []].append(move)
+            } else {
+                moved.append(move)
+            }
+        }
+        var stays: [Int] = []
+        for group in gaps.values {
+            for (move, keep) in zip(group, longestIncreasing(group.map(\.from))) {
+                if keep {
+                    stays.append(move.to)
                 } else {
                     moved.append(move)
                 }
             }
-            var stays: [Int] = []
-            for group in gaps.values {
-                let keeps = Self.longestIncreasing(group.map(\.from))
-                for (move, keep) in zip(group, keeps) {
-                    if keep {
-                        stays.append(move.to)
-                    } else {
-                        moved.append(move)
-                    }
-                }
-            }
-            for index in stays.sorted() {
-                updated.append(index)
-            }
         }
-        self.init(
-            removed: removed.indexSet, inserted: inserted.indexSet, moved: moved.sorted { $0.to < $1.to },
-            updated: updated.indexSet,
-        )
+        return (moved, stays.sorted())
     }
 
     /// Applies the diff to `elements`, the list's before it, making each photo inserted from its

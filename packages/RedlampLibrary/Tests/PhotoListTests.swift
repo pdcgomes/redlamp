@@ -164,6 +164,27 @@ struct PhotoListTests {
         #expect(try diff.updated == IndexSet(integer: #require(after.index(of: ids[2]))))
     }
 
+    @Test func `the lists scenario finds the manifest's counts, and its diffs put every photo in place`() async throws {
+        let fixture = try TemporaryFolder()
+        let summary = try LibraryFixture(spec: .init(photos: 200, seed: 44)).write(to: fixture.url)
+        let indexFolder = try TemporaryFolder()
+        let context = BenchContext(fixture: fixture.url, manifest: summary.manifest, profile: .ssd)
+        let results = try await ListScenario(photos: 20000, indexFolder: indexFolder.url).run(context)
+        let counted = results.filter { $0.budget?.kind == .exactly }
+        #expect(
+            counted.count == 8 && counted.allSatisfy { $0.passed == true },
+            "\(counted.filter { $0.passed != true })",
+        )
+        for id in [
+            "library-lists-all",
+            "library-lists-diff",
+            "library-lists-extend",
+            "library-lists-fixture-folder-count",
+        ] {
+            #expect(results.contains { $0.id == id }, "\(id)")
+        }
+    }
+
     // MARK: - Statistics
 
     @Test func `the statistics count a small fixture's photos, folders, roots and volumes`() async throws {
