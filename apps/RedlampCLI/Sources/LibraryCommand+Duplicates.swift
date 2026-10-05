@@ -1,4 +1,5 @@
 import Foundation
+import RedlampDocument
 import RedlampLibrary
 import Synchronization
 
@@ -19,7 +20,8 @@ extension LibraryCommand {
         let confirming = options.has("--confirm")
 
         let index = try await LibraryIndex.open(at: url)
-        let finder = DuplicateFinder(index: index)
+        let sidecars = try await SidecarStore(locator: LibrarySidecars(index: index).locator())
+        let finder = DuplicateFinder(index: index, sidecars: sidecars)
         let clock = ContinuousClock()
         let grouping = clock.now
         let candidates = try await finder.candidates()

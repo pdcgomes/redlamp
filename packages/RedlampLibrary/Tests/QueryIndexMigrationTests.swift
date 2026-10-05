@@ -55,7 +55,7 @@ struct QueryIndexMigrationTests {
                 reader.photo(id: id)?.contentKey,
             )
         }
-        #expect(version == 2 && LibraryIndex.migrations.count == 2)
+        #expect(version == 3 && LibraryIndex.migrations.count == 3)
         #expect(columns == ["name", "keywords", "title", "caption"])
         #expect(keyIndexes == 0 && key == Self.key)
 

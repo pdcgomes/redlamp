@@ -6,7 +6,7 @@ import Synchronization
 /// run on them (LIB-04), as docs/plans/2026-10-05-library-design.md describes.
 enum LibraryCommand {
     static let usage = """
-    usage: redlamp library fixture <folder> --photos <n> [--seed <s>] [--raw-sources <folder>]
+    usage: redlamp library fixture <folder> --photos <n> [--seed <s>] [--raw-sources <folder>] [--duplicates <share>]
            redlamp library bench <fixture> [--profile <profile>] [--scenario <name>…] [--photos <n>] [--json <path>]
            redlamp library index <folder>… --index <path> [--profile <profile>]
            redlamp library search <query> --index <path> [--sort captured|name|rating|edited] [--descending]
@@ -15,11 +15,13 @@ enum LibraryCommand {
            redlamp library sidecars <root> --index <path> [--move beside|mac] [--dry-run] [--json]
            redlamp library names <template> --index <path> [<query>] [--json] [--limit <n>]
                                  [--text [<name>=]<text>]
+           redlamp library duplicates --index <path> [--confirm] [--json]
       fixture  makes a synthetic library in <folder>: a fifth of the photos APFS clones of the raws in
                --raw-sources (tests/fixtures/raw) with their capture dates rewritten, the rest small JPEGs
                and HEICs with varied EXIF, GPS and IPTC; sidecars on 15% and other apps' .xmp on 5%; folders
                of every shape; and manifest.json, with what each query must return. Running it again
-               finishes an interrupted fixture.
+               finishes an interrupted fixture. --duplicates makes that share of the photos byte-for-byte copies
+               of earlier ones, with sidecars of their own (none by default).
       bench    measures the fixture through a simulated volume (ssd, spinning, nas, wifi or vpn; ssd by
                default) and prints one line per measurement, ending PASS or FAIL where there's a budget;
                exits 1 when a budget fails. --json writes the report. --photos sets how many thumbnails the
@@ -43,6 +45,12 @@ enum LibraryCommand {
       names    prints each photo <query> finds: its path, the name <template> gives it, any number added to
                tell it apart, and tokens that came out empty. --text gives {text} and {text:shoot}. A dry
                run: nothing is renamed.
+      duplicates groups the photos in the index at <path> whose content keys and sizes agree, and prints each
+               group's copies, the copy proposed to keep and why, and what removing all but the proposed copies
+               would free. --confirm reads every candidate whole and compares full SHA-256 hashes, which the
+               index keeps, so an unchanged file is never read again; without it only hashes recorded earlier
+               count. Lists the candidates that turned out different and those offline or not read; --json
+               prints JSON. It removes nothing.
     """
 
     private static var scenarioNames: String {
@@ -55,6 +63,7 @@ enum LibraryCommand {
         BenchScenarios.registerStore()
         BenchScenarios.registerLists()
         BenchScenarios.registerNaming()
+        BenchScenarios.registerDuplicates()
         guard let command = arguments.first, !arguments.contains("--help") else {
             print(usage)
             return
@@ -67,12 +76,13 @@ enum LibraryCommand {
         case "stats": try await stats(Array(arguments.dropFirst()))
         case "sidecars": try await sidecars(Array(arguments.dropFirst()))
         case "names": try await names(Array(arguments.dropFirst()))
+        case "duplicates": try await duplicates(Array(arguments.dropFirst()))
         default: throw CLIError(description: "unknown library command \(command)\n\n\(usage)")
         }
     }
 
     private static func fixture(_ arguments: [String]) throws {
-        let options = try Arguments(arguments, valued: ["--photos", "--seed", "--raw-sources"])
+        let options = try Arguments(arguments, valued: ["--photos", "--seed", "--raw-sources", "--duplicates"])
         guard options.positional.count == 1, let photos = try options.int("--photos"), photos > 0 else {
             throw CLIError(description: "fixture needs a folder and --photos\n\n\(usage)")
         }
@@ -90,7 +100,10 @@ enum LibraryCommand {
             FileHandle.standardError.write(Data("no raws in \(rawFolder.path): the fixture has none\n".utf8))
         }
 
-        let fixture = LibraryFixture(spec: LibraryFixture.Spec(photos: photos, seed: seed), rawSources: sources)
+        let duplicates = try options.double("--duplicates") ?? 0
+        let fixture = LibraryFixture(
+            spec: LibraryFixture.Spec(photos: photos, seed: seed, duplicateShare: duplicates), rawSources: sources,
+        )
         let reported = Mutex(0)
         let clock = ContinuousClock()
         let started = clock.now
