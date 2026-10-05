@@ -14,7 +14,7 @@ cask "redlamp" do
   end
 
   depends_on arch: :arm64
-  depends_on macos: ">= :tahoe"
+  depends_on macos: :tahoe
 
   app "Redlamp.app"
   binary "#{appdir}/Redlamp.app/Contents/Helpers/redlamp"
