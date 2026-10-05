@@ -18,7 +18,7 @@ public struct FixtureQuery: Sendable {
         self.matches = matches
     }
 
-    /// The queries every manifest counts, each typed a character at a time by the search scenarios.
+    /// The queries every manifest counts.
     public static let corpus: [FixtureQuery] = [
         FixtureQuery("rating>=3") { $0.rating >= 3 },
         FixtureQuery("rating:5") { $0.rating == 5 },

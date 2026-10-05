@@ -48,11 +48,13 @@ public final class SimulatedFileSystem: LibraryFileSystem {
         )
     }
 
-    /// Runs `operation`, then waits for the volume. An operation that fails on `base` costs the
-    /// volume's time too; one made after the volume has gone fails however `base` answered.
+    /// Runs `operation`, then waits for the volume as though the operation reached it only then,
+    /// so the volume's time comes on top of the time of the disk underneath. An operation that
+    /// fails on `base` costs the volume's time too; one made after the volume has gone fails
+    /// however `base` answered.
     private func simulate<T>(_ url: URL, bytes: (T) -> Int, _ operation: () throws -> T) throws -> T {
-        let arrived = clock.now
         let result = Result(catching: operation)
+        let arrived = clock.now
         let size = (try? result.get()).map(bytes) ?? 0
         let outcome = model.withLock { $0.schedule(url.path, bytes: size, arriving: arrived) }
         clock.sleep(until: outcome.at)

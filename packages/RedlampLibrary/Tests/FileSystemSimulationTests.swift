@@ -89,6 +89,40 @@ struct FileSystemSimulationTests {
         #expect(volume.operations == 2)
     }
 
+    @Test func `a volume's time comes on top of the time of the disk underneath`() throws {
+        struct SlowDisk: LibraryFileSystem {
+            let clock: ManualClock
+
+            func contentsOfDirectory(at _: URL) throws -> [FileEntry] {
+                wait()
+                return [FileEntry(name: "IMG_0001.JPG")]
+            }
+
+            func attributes(of url: URL) throws -> FileEntry {
+                wait()
+                return FileEntry(name: url.lastPathComponent)
+            }
+
+            func read(_: URL, range _: Range<Int>) throws -> Data {
+                wait()
+                return Data(count: 11000)
+            }
+
+            func volume(of _: URL) throws -> VolumeInfo {
+                VolumeInfo(uuid: nil, name: nil, isLocal: true, isInternal: true)
+            }
+
+            private func wait() {
+                clock.sleep(until: clock.now + .milliseconds(5))
+            }
+        }
+        let clock = ManualClock()
+        let volume = SimulatedFileSystem(base: SlowDisk(clock: clock), profile: .nas, clock: clock)
+        _ = try volume.read(URL(fileURLWithPath: "/IMG_0001.JPG"), range: 0 ..< 11000)
+        // 5 ms on the disk, then 0.8 ms of latency and 11 KB at 110 MB/s.
+        #expect(isAbout(milliseconds(clock.now), 5 + 0.8 + 0.1))
+    }
+
     @Test func `a missing file costs the volume's time before it fails`() throws {
         let folder = try TemporaryFolder()
         let clock = ManualClock()
