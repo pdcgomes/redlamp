@@ -5,6 +5,7 @@
     import RedlampDesign
     import RedlampDocument
     import RedlampEngineAPI
+    import RedlampLibrary
     @_spi(Harness) import RedlampUI
 
     /// `--folders-perf <folder> [--folders-perf-warm 3000] [--folders-perf-memory]
@@ -54,6 +55,17 @@
             // The folder opens without a photo being selected, so the editor's decoded photos
             // don't count against the folders' memory.
             let library = FolderLibrary()
+            // The library is on as in the app, unless it's turned off, but in a folder of its own:
+            // it hasn't indexed the fixture, so Folders lists it.
+            let libraryPaths = LibraryPaths(root: FileManager.default.temporaryDirectory
+                .appending(path: "folders-perf-library-\(UUID().uuidString)", directoryHint: .isDirectory))
+            defer { try? FileManager.default.removeItem(at: libraryPaths.root) }
+            if LibraryService.isEnabled(.standard) {
+                library.attach(LibraryService(paths: libraryPaths, sidecars: library.sidecars) { url, size in
+                    engine.decodeThumbnail(for: url, maxPixelSize: size)
+                })
+            }
+            lines.append("The library: \(library.service == nil ? "off" : "on, without the fixture")")
             let model = EditorModel(engine: engine, library: library, thumbnailLoader: loader)
             let memory = MemoryPhases(breakdowns: arguments.contains("--folders-perf-memory")) {
                 let running = WorkScheduler.shared.load().running
@@ -230,7 +242,7 @@
         }
 
         /// Scrolls an offscreen filmstrip end to end in 4 s, at 120 Hz, watching the main thread.
-        private static func scroll(_ model: EditorModel) async -> (MainThreadMonitor.Summary?, String) {
+        static func scroll(_ model: EditorModel) async -> (MainThreadMonitor.Summary?, String) {
             DebugPerformance.trace("folders-perf: scrolling")
             let window = NSWindow(
                 contentRect: CGRect(x: 0, y: 0, width: 1200, height: FilmstripViews.height), styleMask: [.borderless],
