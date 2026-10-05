@@ -255,6 +255,50 @@ Every one has a menu item and most a mouse gesture: stars, flag and label on a c
 
 Renames, moves, new folders and moves to the Trash go through a journal in `LibraryPaths.root` written before anything moves: each step's source and destination, the photo's sidecar and other apps' `.xmp`. A forced quit leaves a journal the next launch finishes or rolls back; Undo replays it backwards. Nothing is ever overwritten; a collision stops the batch before it starts, in the preview.
 
+### Naming templates
+
+One grammar names files for renaming, importing (LIB-27), batch export (EDT-16) and capture sessions (TET-01): `NamingTemplate`, in `Sources/Naming/`. Text is kept as it's written, and tokens in braces put in a photo's fields, each with values after colons and modifiers after bars, applied left to right: `{date:yyyyMMdd-HHmmss.SS}-{camera|lower}-{sequence:4}`.
+
+```text
+template := (text | token)*
+text     := (a character but { and } | "{{" | "}}")+
+token    := "{" name (":" value)* ("|" name (":" value)*)* "}"
+value    := bare | quoted          -- bare: no : | { } or ", and the spaces at its ends dropped
+quoted   := '"' (a character but '"' | '""')* '"'
+```
+
+- **The only escapes are doubled characters:** `{{` and `}}` for braces in the name, and `""` for a quote in a quoted value. Backslashes mean nothing, so a regular expression is written as it reads: `{original|regex:"^IMG_(\d+)$":"Photo $1"}`.
+- **The text reads back.** `description` is the template's canonical text (names in small letters, values bare where they can be), which parses back to the same template; presets keep it. Its parts, and where each is in that text, are what a template editor shows as tokens.
+- **Errors** name the characters at fault in a sentence: `camra isn't a token; did you mean camera?`, `this { isn't closed: end the token with }`, `Q isn't part of a date: use yyyy, MM, dd, HH, mm, ss or SSS, and put text in 'quotes'`. As you type, a token still open at the end is left out, so the preview follows the typing; a name that isn't a token is an error as soon as something follows it.
+
+| Tokens | |
+| --- | --- |
+| Dates | `{date}` (`taken`) when the photo was taken, by the camera's clock; `{modified}`; `{now}`, when the job runs. A format in Unicode's date pattern letters (`yyyyMMdd` by default), with `S` to `SSSSSS` the fraction of the second from the photo's sub-second time and `Z` the offset; then a zone: the camera's own (`{date}`'s default), `local`, `utc`, an offset (`+0530`) or a zone's name (`Europe/Lisbon`), reached from the offset the camera recorded |
+| Camera | `{camera}` "Nikon Z 6", `{make}` "Nikon", `{model}` "Z 6", `{lens}`, `{iso}`, `{aperture}` (`f`) "2.8", `{shutter}` "1-250" or "2", `{focal}` "35", `{width}`, `{height}` |
+| Metadata | `{title}`, `{caption}`, `{creator}`, `{copyright}`, `{city}`, `{state}`, `{country}`, `{sublocation}`, `{keywords}` (the last part of each, joined by spaces or the value given), `{rating}` (`stars`), `{label}`, `{flag}` |
+| File | `{name}` (`filename`), the name now, and `{original}`, before Redlamp first renamed it, both taking characters (`{original:-4..}`); `{number}`, the digits that end the original name (Lightroom's original number suffix); `{ext}`; `{folder}`, and `{folder:2}` for its parent |
+| Numbers | `{sequence:4}` (`seq`) in the job, `{sequence:4:folder}` in each folder the photos go to and `{sequence:4:extension}` among the photos with the raw's extension, from the job's first number; `{total}`; `{counter:shoot:4}`, a named counter that carries on from one job and session to the next |
+| Text | `{text}` and `{text:shoot}`, texts the job is given: Lightroom's Custom Text and Shoot Name |
+
+Modifiers: `upper`, `lower` and `title` (each word's first letter in capitals); `range:5..8`, characters counted from 1 at the start or from -1 at the end, either end open; `replace:IMG_:Photo-`; `regex:pattern:template:i`, in ICU's syntax, with `$1` for a group and `i` to ignore case; `default:Untitled`, which also stops the token being flagged as empty, so `default:""` marks one that may be; and `before:"("` and `after:" - "`, text put beside the value only when there is one.
+
+- **Fields** come in a `NamingFields` value the caller fills from the index, the capture metadata and the sidecar (it has initializers for `PhotoRecord`, `CaptureMetadata` and `PhotoMetadata`), so naming reads no file.
+- **Names are safe on macOS, on network shares and on Windows.** `/ : \ * ? " < > |` and control characters become `-` or `_` (an option, as replacing spaces is); marks that change which way text reads are dropped; leading dots and spaces and trailing spaces are trimmed; device names Windows keeps (`CON`, `NUL`, `COM1`) get an ending; names are in Unicode's composed form (NFC); and a name, its extension and the 8 bytes its `.redlamp` sidecar adds fit in 255 bytes of UTF-8. A long name loses its longest text fields first, evenly and between characters, so its dates and numbers stay. Extensions are kept, or put in small or capital letters.
+- **Batches** (`NamingJob`, made once for a preview and named again at each keystroke). A raw and its JPEG (one folder, one name but for the extension) share a name made from the raw's fields and count once in sequences, and sequences follow the order the photos are given. No two photos get one name in a folder, ignoring case and Unicode's forms as APFS does, and none takes the name of a file already in the folder the photos go to, given as its listing. A name is taken by a file of that name with any extension, or by its sidecars, so a new name never pairs photos that aren't a raw and its JPEG. A photo that keeps its name keeps it; the others get theirs in capture order, and those after the first are numbered from 2 (`Wedding-2`), also in capture order. The job's own photos and their sidecars leave their names free, and the file operations order the renames, through temporary names where they form a cycle. Each photo's result says what was decided: the number it took and who has the name without it, the tokens that came out empty, and what was changed to make the name safe. A template that makes nothing leaves the photo its name.
+- **Presets** (`NamingPreset`: a name, a template and its options, as JSON) include Lightroom Classic's nine file naming templates under their own names (Custom Name - Sequence, Date - Filename, Shoot Name - Original File Number and the others), and three of Redlamp's: the capture time to the millisecond, a shoot name with a counter, and a sequence in each folder.
+- **`redlamp library names <template> --index <path> [<query>]`** prints each photo's path and its new name, the numbers and empty tokens beside it, and a summary, with `--json` and `--limit` as `search` has them and `--text` for the job's texts. It never renames.
+
+Measured with `NamingBenchTests` (`REDLAMP_NAMING_BENCH=1`) and `redlamp library bench … --scenario naming`, on synthetic photos (a fifth of them a raw beside its JPEG, times to the millisecond, each folder's listing) on the M1 Ultra with other builds running (load average 46 to 72):
+
+| | Measured | Budget |
+| --- | --- | --- |
+| 10,000 files named as five templates are typed, 194 keystrokes | p50 3.2 to 3.9 ms, p95 5.2 to 6.2 ms | p95 under 16 ms |
+| 1,000,000 files: the job made (pairs, sequences, listings) | 564 to 578 ms | |
+| 1,000,000 files: named, collisions resolved | 159 to 221 ms | |
+| 1,000,000 files: made and named, off the main thread | 723 to 798 ms | under 2 s |
+
+What it changed: the first version took 3.7 s for the million, keeping 13 to 16 cores busy at a thirtieth of their speed, because threads counting references to the same template's arrays, and to the job's, waited on each other. Each chunk of 2,048 photos now compiles its own template and reads the job through pointers, collisions are resolved folder by folder in parallel, and listings are checked against each folder's own photos. Making the job is now the larger part, grouping the photos by folder and name on one thread; spreading that over the folders would bring a million under half a second.
+
 ## The stress harness (LIB-03, LIB-04)
 
 - **Fixtures** (`redlamp library fixture <folder> --photos <n> --seed <s>`) in `/Volumes/SSD/redlamp-tmp/library-fixtures/` on the owner's Mac (not backed up):
