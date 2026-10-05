@@ -476,8 +476,8 @@ final class DetailStage {
             && work.size.x * work.size.y <= ladderCacheTexels
             ? LadderKey(session: key.session, work: work, denoise: key.denoise, local: key.local) : nil
         var kept = sourceKey.map { KeptSource(given: ladderCache.denoised($0)) }
-        if kept != nil, kept?.given == nil {
-            kept?.target = try makeWorkTexture(.rgba16Float, work)
+        if kept != nil, kept?.given == nil, let sourceKey {
+            kept?.target = try ladderCache.reclaimDenoised(sourceKey) ?? makeWorkTexture(.rgba16Float, work)
         }
         let denoised = kept?.given != nil
         var measures = key.sharpen.map { _ in

@@ -139,6 +139,17 @@ final class LadderCache {
         store(denoised: denoised, key: key, owner: owner)
     }
 
+    /// Before process 11: takes out the noise-reduced source kept for `key`'s area under other
+    /// settings, to be written over. Renders wait for their commands, so none still reads it.
+    func reclaimDenoised(_ key: LadderKey) -> (any MTLTexture)? {
+        guard let index = entries.firstIndex(where: {
+            $0.ladder == nil && $0.key.session == key.session && $0.key.work == key.work
+        }) else { return nil }
+        let entry = entries.remove(at: index)
+        guard let texture = entry.denoised, residency.wake(texture) else { return nil }
+        return texture
+    }
+
     private func store(_ entry: Entry) {
         entry.textures.forEach { residency.wake($0) }
         entries.append(entry)

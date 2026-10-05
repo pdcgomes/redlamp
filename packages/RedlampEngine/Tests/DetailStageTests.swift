@@ -384,6 +384,26 @@ struct DetailStageTests {
         #expect(stage.noiseReductions > before, "a mask's Noise")
     }
 
+    /// A Noise drag before process 11 writes its noise-reduced source over the one it replaces, so
+    /// each tick makes only its output, as before the source was kept, and holds one source.
+    @Test func `noise drags before process 11 reuse the kept source`() throws {
+        let session = try makeSession(.bayer, width: 1024, height: 768) { x, y in
+            Float(0.2 + 0.1 * sin(Double(x) / 3) * cos(Double(y) / 5))
+        }
+        let stage = DetailStage(device: device, kernels: kernels)
+        var recipe = Self.everyPassBeforeLadder
+        _ = try processAndRead(stage, session, recipe)
+        for luminance in [45.0, 50, 55] {
+            recipe[.noiseLuminance] = luminance
+            let before = stage.allocated.count
+            let cached = try processAndRead(stage, session, recipe).texels
+            #expect(stage.allocated.count - before == 1, "Luminance \(luminance) made more than its output")
+            #expect(stage.ladderCache.heldTextures.count == 1)
+            let fresh = try processAndRead(DetailStage(device: device, kernels: kernels), session, recipe).texels
+            #expect(EngineMemoryTests.differing(cached, fresh) == 0, "Luminance \(luminance)")
+        }
+    }
+
     /// With the noise-reduced source kept, tiles overlap by only what sharpening and local contrast
     /// read of it, and a halo short of that shows.
     @Test func `a halo short of the kept source's reach shows`() throws {
