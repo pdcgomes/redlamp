@@ -13,6 +13,8 @@ enum LibraryCommand {
                                   [--json] [--limit <n>]
            redlamp library stats --index <path> [--json]
            redlamp library sidecars <root> --index <path> [--move beside|mac] [--dry-run] [--json]
+           redlamp library names <template> --index <path> [<query>] [--json] [--limit <n>]
+                                 [--text [<name>=]<text>]
       fixture  makes a synthetic library in <folder>: a fifth of the photos APFS clones of the raws in
                --raw-sources (tests/fixtures/raw) with their capture dates rewritten, the rest small JPEGs
                and HEICs with varied EXIF, GPS and IPTC; sidecars on 15% and other apps' .xmp on 5%; folders
@@ -38,6 +40,9 @@ enum LibraryCommand {
                only then removed where it was, never over another, and other apps' .xmp left beside the
                photos; a sidecar in both places stops the move before it starts. --dry-run says what would
                move. A move a forced quit interrupted is finished first. Exits 1 when something wasn't moved.
+      names    prints each photo <query> finds: its path, the name <template> gives it, any number added to
+               tell it apart, and tokens that came out empty. --text gives {text} and {text:shoot}. A dry
+               run: nothing is renamed.
     """
 
     private static var scenarioNames: String {
@@ -49,6 +54,7 @@ enum LibraryCommand {
         BenchScenarios.registerQueries()
         BenchScenarios.registerStore()
         BenchScenarios.registerLists()
+        BenchScenarios.registerNaming()
         guard let command = arguments.first, !arguments.contains("--help") else {
             print(usage)
             return
@@ -60,6 +66,7 @@ enum LibraryCommand {
         case "search": try await search(Array(arguments.dropFirst()))
         case "stats": try await stats(Array(arguments.dropFirst()))
         case "sidecars": try await sidecars(Array(arguments.dropFirst()))
+        case "names": try await names(Array(arguments.dropFirst()))
         default: throw CLIError(description: "unknown library command \(command)\n\n\(usage)")
         }
     }
