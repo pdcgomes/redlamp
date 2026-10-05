@@ -409,9 +409,10 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     }
 
     /// The Keyboard Shortcuts sheet's groups: every action with a key.
-    static let byCategory: [(ShortcutCategory, [ShortcutAction])] = ShortcutCategory.allCases.map { category in
-        (category, allCases.filter { $0.category == category && !$0.combos.isEmpty })
-    }
+    @_spi(Harness) public static let byCategory: [(ShortcutCategory, [ShortcutAction])] = ShortcutCategory.allCases
+        .map { category in
+            (category, allCases.filter { $0.category == category && !$0.combos.isEmpty })
+        }
 
     /// Resolves a key press. Exact matches win; actions that accept Shift also match
     /// with Shift held (and receive `shifted == true`).

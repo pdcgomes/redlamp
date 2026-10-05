@@ -1,5 +1,5 @@
 import Testing
-@testable import RedlampUI
+@_spi(Harness) @testable import RedlampUI
 
 struct ShortcutRegistryTests {
     @Test func `every key combo belongs to exactly one action`() {

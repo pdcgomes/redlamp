@@ -57,20 +57,33 @@
 
         /// The photo actions and sliders are checked on: a raw, so white balance applies.
         func workingPhoto() throws -> String {
+            try wait("the folder's photos", timeout: 30) { !$0.items.isEmpty }
             let names = try photoNames()
-            return names.first { $0.hasSuffix(".ARW") } ?? names.first { !$0.hasPrefix("Bitmap") } ?? names[0]
+            guard let name = names.first(where: { $0.hasSuffix(".ARW") }) ?? names
+                .first(where: { !$0.hasPrefix("Bitmap") })
+                ?? names.first
+            else { throw ScenarioFailure("The folder has no photos") }
+            return name
         }
 
         /// Opens `name` by clicking its filmstrip cell, and waits until it has rendered.
-        func open(_ name: String) throws {
+        func open(_ name: String, byKeys: Bool = false) throws {
             if try main({ $0.selection?.lastPathComponent }) == name {
                 return
             }
             if try exists(.filmstrip(name)) {
                 try click(.filmstrip(name))
                 covered(.feature("library.filmstrip"), via: .mouse)
+            } else if !byKeys {
+                // The filmstrip slides in only under the pointer: choosing the photo as a click would.
+                guard let url = try main({ model in model.items.first { $0.url.lastPathComponent == name }?.url })
+                else {
+                    throw ScenarioFailure("\(name) isn't in the filmstrip")
+                }
+                try main { $0.select(url) }
+                covered(.feature("library.filmstrip"), via: .model)
             } else {
-                // The filmstrip slides in only under the pointer; ← and → step through it.
+                // ← and → step through the filmstrip.
                 let (target, current) = try main { model -> (Int?, Int?) in
                     let names = model.items.map(\.url.lastPathComponent)
                     return (
@@ -91,10 +104,17 @@
     }
 
     enum SmokeScenarios {
+        /// Leaving an edit is last in its launch, so the relaunch finds the photo it was left on.
         static let all: [Scenario] = [
-            photos, actionsByKey, actionsByMenu, panelSliders, export, leaveAnEdit, relaunch, identifiers,
+            photos,
+            actionsByKey,
+            actionsByMenu,
+            panelSliders,
+            export,
+            identifiers,
             keyEquivalents,
         ]
+        static let last: [Scenario] = [leaveAnEdit, relaunch]
 
         /// Not in any tier: each ⌘ action's menu item, its key equivalent, and whether AppKit's
         /// matching takes the driver's event for it.
@@ -238,7 +258,7 @@
             try app.expect(names.count >= 6, "The filmstrip lists \(names.count) photos")
             try app.checkEach(names, { "open \($0)" }) { name in
                 let mark = try app.mark()
-                try app.open(name)
+                try app.open(name, byKeys: true)
                 try app.expectNoErrors(since: mark)
                 let error = try app.main { $0.errorMessage }
                 try app.expect(error == nil, "\(name) shows \(error ?? "")")

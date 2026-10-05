@@ -35,7 +35,7 @@
             }
         }
 
-        public static func startIfRequested(model: EditorModel, arguments: [String]) {
+        public static func startIfRequested(model: EditorModel, arguments: [String], host: AutomationHost? = nil) {
             func value(after flag: String) -> String? {
                 arguments.firstIndex(of: flag).flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }
             }
@@ -58,7 +58,7 @@
             let app = RunningApp(
                 model: model, recorder: recorder, photos: URL(fileURLWithPath: plan.photos),
                 runDirectory: directory, allowsFocus: plan.focus, seed: plan.seed, steps: plan.steps ?? [],
-                knownIssues: plan.knownIssues ?? [:], knownStalls: plan.knownStalls ?? [:],
+                knownIssues: plan.knownIssues ?? [:], knownStalls: plan.knownStalls ?? [:], host: host,
             )
             let watchdog = Watchdog(recorder: recorder)
             recorder.write("launch", [
@@ -82,13 +82,20 @@
         let recorder: Recorder
         let watchdog: Watchdog
         let launch: String
+        /// Whether the editor can still be used; a dialog that won't close ends the launch, and
+        /// the supervisor runs the rest in a fresh one.
+        private let state = UsableBox()
+        private var usable: Bool {
+            get { state.value }
+            nonmutating set { state.value = newValue }
+        }
 
         func run(_ ids: [String]) {
             let launched = Date()
             let catalogue = Dictionary(uniqueKeysWithValues: Catalogue.all.map { ($0.id, $0) })
             do {
                 try app.wait("the editor window", timeout: 60) { _ in Views.editorWindow != nil }
-                if launch == LaunchGroup.main.rawValue {
+                if launch != LaunchGroup.relaunch.rawValue {
                     try app.settle(timeout: 90)
                 }
                 recorder.write(
@@ -101,6 +108,10 @@
                 return
             }
             for id in ids {
+                guard usable else {
+                    recorder.write("launch-abandoned", ["reason": "a dialog wouldn't close", "next": id])
+                    break
+                }
                 guard let scenario = catalogue[id] else {
                     recorder.write("scenario-end", ["scenario": id, "status": "failed", "message": "No scenario \(id)"])
                     continue
@@ -111,6 +122,7 @@
         }
 
         private func run(_ scenario: Scenario) {
+            guard usable else { return }
             recorder.currentScenario = scenario.id
             recorder.write("scenario-start", ["title": scenario.title])
             _ = watchdog.takeStalls()
@@ -169,7 +181,7 @@
             }
             recorder.write("scenario-end", fields)
             recorder.currentScenario = nil
-            app.recover()
+            usable = app.recover()
         }
 
         private func finish() {
@@ -179,6 +191,10 @@
             watchdog.stop()
             MainThread.post { NSApp.terminate(nil) }
         }
+    }
+
+    final class UsableBox: @unchecked Sendable {
+        var value = true
     }
 
     /// Carries the monitor from the main thread to the driver's and back; it's only touched on main.
@@ -191,8 +207,9 @@
 
     extension RunningApp {
         /// Puts the editor back as a scenario expects to find it, whatever the last one left:
-        /// no dialog, no palette, the Edit tool, the photo open.
-        func recover() {
+        /// no dialog, no palette, the Edit tool, the photo open. Returns whether it could.
+        @discardableResult
+        func recover() -> Bool {
             for _ in 0 ..< 3
                 where (try? main({ _ in NSApp.modalWindow != nil || Views.editorWindow?.attachedSheet != nil })) ==
                 true {
@@ -220,6 +237,8 @@
                 }
             }
             pause(0.2)
+            return (try? main { model in !model.isModalDialogOpen && Views.editorWindow?.attachedSheet == nil }) ??
+                false
         }
     }
 #endif

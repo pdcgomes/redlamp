@@ -82,7 +82,9 @@ struct RedlampApp: App {
             #if DEBUG || REDLAMP_PROFILING
                 DebugSnapshot.scheduleIfRequested(model: model)
                 DebugPerformance.scheduleIfRequested(model: model)
-                Automation.startIfRequested(model: model, arguments: LaunchArguments.all)
+                Automation.startIfRequested(
+                    model: model, arguments: LaunchArguments.all, host: AutomationHost(theme: theme, exports: exports),
+                )
             #endif
             return editor
         }

@@ -39,12 +39,7 @@ public enum FeedbackActions {
         let windowNumber = window.windowNumber
         Task {
             async let shot = Screenshots.capture(windowNumber: windowNumber)
-            let models = await model.engine.models()
-            let system = SystemSnapshot.capture(models: models)
-            let sheet = await FeedbackSheetModel(
-                context: context, system: system, windowShot: shot, prefill: prefill,
-                sender: FeedbackRelay(client: client), dryRun: !FeedbackRelay.sendsLive,
-            )
+            let sheet = await makeSheet(model: model, context: context, windowShot: shot, prefill: prefill)
             sheet.onSent = { report, result in
                 if case let .filed(number, url) = result {
                     history.record(report, number: number, url: url)
@@ -59,6 +54,21 @@ public enum FeedbackActions {
             }
             sheet.log = await AppLogTail.entries(since: sessionStart)
         }
+    }
+
+    /// The sheet's model as Report a Bug builds it: what the editor shows now, the Mac's
+    /// details, and the relay it sends to.
+    @_spi(Harness) public static func makeSheet(
+        model: EditorModel, context: FeedbackContext? = nil, windowShot: FeedbackReport.Screenshot? = nil,
+        prefill: FeedbackPrefill? = nil,
+    ) async -> FeedbackSheetModel {
+        let context = context ?? FeedbackContext.capture(from: model)
+        let models = await model.engine.models()
+        let system = SystemSnapshot.capture(models: models)
+        return FeedbackSheetModel(
+            context: context, system: system, windowShot: windowShot, prefill: prefill,
+            sender: FeedbackRelay(client: client), dryRun: !FeedbackRelay.sendsLive,
+        )
     }
 
     public static func presentReports(model: EditorModel, history: FeedbackHistory = .shared) {

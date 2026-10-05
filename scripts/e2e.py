@@ -135,7 +135,16 @@ def prepare_photos(photos: Path) -> list[str]:
     for extension, kind in [("png", "png"), ("tif", "tiff"), ("heic", "heic")]:
         subprocess.run(["sips", "-s", "format", kind, str(jpeg), "--out", str(photos / f"Bitmap.{extension}")],
                        capture_output=True)
-    return sorted(p.name for p in photos.iterdir() if not p.name.startswith("."))
+    names = sorted(p.name for p in photos.iterdir() if not p.name.startswith(".") and p.is_file())
+    # In subfolders, so the folder's own photos all open: a focus bracket and a damaged raw.
+    subprocess.run(["swift", str(ROOT / "scripts/make-focus-bracket.swift"), str(jpeg), str(photos / "Bracket"), "5"],
+                   capture_output=True, timeout=300)
+    damaged = photos / "Damaged"
+    damaged.mkdir()
+    nef = next((p for p in sorted(raw.iterdir()) if p.suffix.upper() == ".NEF"), None)
+    if nef:
+        (damaged / "Damaged.NEF").write_bytes(nef.read_bytes()[:4096])
+    return names
 
 
 def seed_models(home: Path) -> None:
@@ -293,7 +302,7 @@ def launch(app: Path, run_dir: Path, group: str, scenarios: list[str], args) -> 
     if args.validation:
         env["MTL_DEBUG_LAYER"] = "1"
     command = [str(app / "Contents/MacOS/Redlamp")]
-    if group == "main":
+    if group != "relaunch":
         command.append(str(run_dir / "photos"))
     command += ["--e2e", str(run_dir), "--e2e-launch", group]
     started = time.time()
@@ -348,9 +357,43 @@ def outcomes(run_dir: Path, group: str) -> tuple[dict[str, dict], list[dict], st
     return results, hangs, open_scenario
 
 
+# ---------------------------------------------------------------- performance
+
+def wait_for_quiet(limit: float) -> tuple[bool, float]:
+    """Waits up to `limit` seconds for the load average to fall to QUIET_LOAD or below."""
+    deadline = time.time() + limit
+    current = load()
+    while current > QUIET_LOAD and time.time() < deadline:
+        log(f"The Mac is busy (load average {current:.1f}); waiting for it to be quiet before measuring")
+        time.sleep(30)
+        current = load()
+    return current <= QUIET_LOAD, current
+
+
+def judge_performance(run_dir: Path, quiet: bool) -> dict:
+    """The run's metrics against tests/e2e/budgets.json; a busy run is measured but not judged."""
+    metrics_path = run_dir / "metrics.json"
+    metrics = json.loads(metrics_path.read_text()) if metrics_path.exists() else {}
+    for event in read_events(run_dir / "events-performance.jsonl"):
+        if event.get("event") == "ready" and "e2e-launch" not in metrics:
+            metrics["e2e-launch"] = event.get("seconds", 0) * 1000
+    metrics_path.write_text(json.dumps(metrics, indent=2, sort_keys=True))
+    budgets = json.loads((ROOT / "tests/e2e/budgets.json").read_text())["budgets"]
+    over = []
+    for metric, budget in budgets.items():
+        value = metrics.get(metric)
+        if value is None:
+            over.append(f"{metric} wasn't measured")
+        elif "max" in budget and value > budget["max"]:
+            over.append(f"{metric} {value:.1f}, over its budget of {budget['max']}")
+        elif "min" in budget and value < budget["min"]:
+            over.append(f"{metric} {value:.1f}, under its floor of {budget['min']}")
+    return {"metrics": metrics, "quiet": quiet, "over": over, "judged": quiet}
+
+
 # ---------------------------------------------------------------- the report
 
-def coverage(run_dir: Path, catalogue: dict) -> dict:
+def coverage(run_dir: Path, catalogue: dict, ran: set[str]) -> dict:
     claims: dict[str, set[str]] = {}
     menu_items: set[str] = set()
     for path in run_dir.glob("coverage-*.json"):
@@ -360,8 +403,11 @@ def coverage(run_dir: Path, catalogue: dict) -> dict:
         menu_items.update(data.get("menuItems", []))
     exemptions = json.loads((ROOT / "tests/e2e/exemptions.json").read_text())["exemptions"]
     exempt = {item["claim"]: item["reason"] for item in exemptions}
+    # Every required claim has a scenario (the contract tests check that); a run is judged on
+    # the claims of the scenarios it ran.
+    claimed = {claim for scenario in catalogue["scenarios"] if scenario["id"] in ran for claim in scenario["claims"]}
     required = catalogue["required"]
-    missing = [claim for claim in required if claim not in claims and claim not in exempt]
+    missing = [claim for claim in required if claim in claimed and claim not in claims and claim not in exempt]
     return {
         "required": len(required),
         "covered": len([c for c in required if c in claims]),
@@ -405,6 +451,16 @@ def write_report(run_dir: Path, report: dict) -> None:
                   f"{len(cover['missing'])} missing."]
         if cover["missing"] and report["coverageRequired"]:
             lines += [""] + [f"- `{claim}`" for claim in cover["missing"]]
+    perf = report.get("performance")
+    if perf:
+        lines += ["", "## Performance", ""]
+        if not perf["judged"]:
+            lines.append(f"Measured on a busy Mac, so the budgets weren't judged{': accepted by ' + perf['accepted'] if perf.get('accepted') else ''}.")
+        elif perf["over"]:
+            lines += [f"- {item}" for item in perf["over"]]
+        else:
+            lines.append("Every metric is within its budget.")
+        lines += ["", "| Metric | Value |", "| --- | --- |"] + [f"| `{k}` | {v:.1f} |" for k, v in sorted(perf["metrics"].items())]
     state = report["ownerState"]
     lines += ["", "## Isolation", "", state["summary"]]
     if report.get("relay"):
@@ -566,6 +622,9 @@ def main() -> int:
     parser.add_argument("--no-validation", dest="validation", action="store_false", help="Metal's validation layer off")
     parser.add_argument("--out", type=Path, help="the run directory (default build/e2e/<commit>-<time>)")
     parser.add_argument("--blackbox", type=Path, metavar="APP", help="check a signed release app as a black box instead")
+    parser.add_argument("--quiet-wait", type=float, default=900, help="seconds to wait for a quiet Mac before measuring")
+    parser.add_argument("--accept-busy", action="store_true", help="accept performance measured on a busy Mac, unjudged")
+    parser.add_argument("--record", action="store_true", help="append the performance run to docs/performance/history.jsonl")
     parser.add_argument("--no-update", dest="update", action="store_false", help="with --blackbox: skip the Sparkle update")
     parser.add_argument("--passing-report", nargs="+", metavar="COMMIT",
                         help="print a passing report for one of these commits at --tier, if there is one, and exit 0")
@@ -611,9 +670,13 @@ def main() -> int:
         sys.exit("the test app didn't write its catalogue (is the driver compiled in?)")
     catalogue = json.loads(catalogue_path.read_text())
     tiers = {"release": {"full", "soak"}}.get(tier, {tier})
+    performance_ids = [s["id"] for s in catalogue["scenarios"] if "performance" in s["tiers"]] \
+        if tier in ("performance", "release") and not args.scenario else []
+    if tier == "performance":
+        tiers = set()
     chosen = [s for s in catalogue["scenarios"]
               if (s["id"] in args.scenario if args.scenario else tiers & set(s["tiers"]))]
-    if not chosen:
+    if not chosen and not performance_ids:
         sys.exit("no scenarios chosen")
     log(f"{len(chosen)} scenarios, {len(photos)} photos, seed {args.seed}, run directory {run_dir}")
 
@@ -662,16 +725,38 @@ def main() -> int:
                         result = dict(result, status="flaky", message=f"passed on retry; first: {previous.get('message', '')}")
                     results[scenario_id] = result
             done = [i for i in remaining if i in group_results]
-            if stopped:
-                # Scenarios after the one that stopped the app run in a fresh launch.
-                remaining = [i for i in remaining if i not in group_results]
-            else:
-                remaining = []
+            # Scenarios a launch didn't reach (it stopped, or a dialog wouldn't close) run in a fresh one.
+            remaining = [i for i in remaining if i not in group_results]
             # One retry, in a fresh app, for what failed (not the relaunch group, whose state is spent).
             if not remaining and group == "main" and not retrying:
                 retry_main = [i for i in ids if results.get(i, {}).get("status") == "failed" and attempts.get(i, 0) < 2]
             if outcome["returncode"] not in (0, None) and not stopped and not outcome["timedOut"]:
                 log(f"{group}: the app exited with {outcome['returncode']}")
+
+    performance = None
+    if performance_ids:
+        quiet, current = wait_for_quiet(args.quiet_wait)
+        validation, args.validation = args.validation, False
+        log(f"Performance: {len(performance_ids)} scenario(s), load average {current:.1f}")
+        launch(app, run_dir, "performance", performance_ids, args)
+        args.validation = validation
+        perf_results, perf_hangs, _ = outcomes(run_dir, "performance")
+        hangs += perf_hangs
+        for scenario_id in performance_ids:
+            results[scenario_id] = perf_results.get(scenario_id, {"status": "failed", "message": "never ran"})
+        quiet = quiet and load() <= QUIET_LOAD
+        performance = judge_performance(run_dir, quiet)
+        if not quiet:
+            if args.accept_busy:
+                performance["accepted"] = "--accept-busy"
+            elif sys.stdin.isatty():
+                answer = input(f"The Mac was busy while measuring, so the budgets can't be judged. Accept? [y/N] ")
+                if answer.strip().lower().startswith("y"):
+                    performance["accepted"] = "the owner, at the prompt"
+        if args.record:
+            subprocess.run([str(ROOT / "scripts/perf-history.py"), "append", "--e2e", str(run_dir / "metrics.json"),
+                            "--source", "e2e", "--load-before", f"{load_before:.2f}", "--load-after", f"{load():.2f}"])
+        chosen += [s for s in catalogue["scenarios"] if s["id"] in performance_ids]
 
     relay.shutdown()
     load_after = load()
@@ -686,7 +771,7 @@ def main() -> int:
         state_summary = f"The run changed {len(changed)} of the owner's Redlamp files or preferences: " + ", ".join(changed[:10])
     isolation_failed = bool(changed) and not (owner_running or owner_app_running())
 
-    cover = coverage(run_dir, catalogue)
+    cover = coverage(run_dir, catalogue, {s["id"] for s in chosen})
     coverage_required = tier in ("full", "release") and not args.scenario
     scenarios = []
     by_id = {s["id"]: s for s in chosen}
@@ -710,6 +795,10 @@ def main() -> int:
         problems.append(f"{len(cover['missing'])} claim(s) not covered")
     if isolation_failed:
         problems.append("the run changed the owner's state")
+    if performance and performance["judged"] and performance["over"]:
+        problems.append(f"{len(performance['over'])} performance budget(s) missed")
+    if performance and not performance["judged"] and not performance.get("accepted"):
+        problems.append("performance was measured on a busy Mac and not accepted")
     passed = len([s for s in scenarios if s["status"] == "passed"])
     summary = f"{passed} passed, {len(flaky)} flaky, {len(skipped)} skipped, {len(failed)} failed of {len(scenarios)}."
     report = {
@@ -721,7 +810,7 @@ def main() -> int:
         "summary": summary, "scenarios": scenarios, "crashes": crashes, "hangs": hangs,
         "coverage": cover, "coverageRequired": coverage_required,
         "ownerState": {"changed": changed, "ownerAppRunning": owner_running, "summary": state_summary},
-        "relay": relay.count,
+        "relay": relay.count, "performance": performance,
     }
     write_report(run_dir, report)
     defaults("delete", BUNDLE_ID)

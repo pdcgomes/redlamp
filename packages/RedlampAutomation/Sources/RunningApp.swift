@@ -23,10 +23,13 @@
         /// Steps known to fail, by name, with why (`tests/e2e/known-issues.json`): reported, not failed.
         let knownIssues: [String: String]
         let knownStalls: [String: String]
+        /// The app's theme and export presets, when it handed them over.
+        public let host: AutomationHost?
 
         init(
             model: EditorModel, recorder: Recorder, photos: URL, runDirectory: URL, allowsFocus: Bool, seed: UInt64,
             steps: [String] = [], knownIssues: [String: String] = [:], knownStalls: [String: String] = [:],
+            host: AutomationHost? = nil,
         ) {
             self.model = model
             self.recorder = recorder
@@ -37,6 +40,7 @@
             self.steps = steps
             self.knownIssues = knownIssues
             self.knownStalls = knownStalls
+            self.host = host
         }
 
         // MARK: - The main thread
@@ -104,30 +108,28 @@
             try main { $0.sliderValue(parameter) }
         }
 
-        /// Where the activity log stands, so a check can ask what happened since.
+        /// Where the activity log stands, so a check can ask what happened since. The log keeps
+        /// its last 500 events, so the mark is the newest event's time and repeats, not a count.
         public struct Mark: Sendable {
-            let count: Int
-            let lastRepeats: Int
+            let time: Date
+            let text: String
+            let repeats: Int
         }
 
         public func mark() throws -> Mark {
             try main { model in
-                Mark(count: model.activity.events.count, lastRepeats: model.activity.events.last?.count ?? 0)
+                let last = model.activity.events.last
+                return Mark(time: last?.time ?? .distantPast, text: last?.text ?? "", repeats: last?.count ?? 0)
             }
         }
 
         /// Events the activity log recorded since `mark`, a repeat of the last one included.
         public func activity(since mark: Mark) throws -> [ActivityLog.Event] {
             try main { model in
-                let events = model.activity.events
-                var new = Array(events.dropFirst(min(mark.count, events.count)))
-                if let last = events.last, events.count == mark.count, last.count > mark.lastRepeats {
-                    new.append(last)
+                model.activity.events.filter { event in
+                    event.time > mark
+                        .time || (event.time == mark.time && event.text == mark.text && event.count > mark.repeats)
                 }
-                if events.count < mark.count {
-                    new = events.suffix(5)
-                }
-                return new
             }
         }
 

@@ -1,6 +1,117 @@
 {
   "format": "app.redlamp.e2e-exemptions",
   "exemptions": [
-    { "claim": "action.virtualCopy", "reason": "Virtual Copy is planned for Phase 2; the menu checks that its item is there and disabled" }
+    {
+      "claim": "feature.develop.other",
+      "reason": "A catch-all for reports that fit no other feature: there is nothing of its own to exercise"
+    },
+    {
+      "claim": "feature.masking.other",
+      "reason": "A catch-all for reports that fit no other feature: there is nothing of its own to exercise"
+    },
+    {
+      "claim": "feature.crop.other",
+      "reason": "A catch-all for reports that fit no other feature: there is nothing of its own to exercise"
+    },
+    {
+      "claim": "feature.healing.other",
+      "reason": "A catch-all for reports that fit no other feature: there is nothing of its own to exercise"
+    },
+    {
+      "claim": "feature.recipes.other",
+      "reason": "A catch-all for reports that fit no other feature: there is nothing of its own to exercise"
+    },
+    {
+      "claim": "feature.history.other",
+      "reason": "A catch-all for reports that fit no other feature: there is nothing of its own to exercise"
+    },
+    {
+      "claim": "feature.sync.other",
+      "reason": "A catch-all for reports that fit no other feature: there is nothing of its own to exercise"
+    },
+    {
+      "claim": "feature.library.other",
+      "reason": "A catch-all for reports that fit no other feature: there is nothing of its own to exercise"
+    },
+    {
+      "claim": "feature.viewing.other",
+      "reason": "A catch-all for reports that fit no other feature: there is nothing of its own to exercise"
+    },
+    {
+      "claim": "feature.export.other",
+      "reason": "A catch-all for reports that fit no other feature: there is nothing of its own to exercise"
+    },
+    {
+      "claim": "feature.focus-stacking.other",
+      "reason": "A catch-all for reports that fit no other feature: there is nothing of its own to exercise"
+    },
+    {
+      "claim": "feature.raw.other",
+      "reason": "A catch-all for reports that fit no other feature: there is nothing of its own to exercise"
+    },
+    {
+      "claim": "feature.saving.other",
+      "reason": "A catch-all for reports that fit no other feature: there is nothing of its own to exercise"
+    },
+    {
+      "claim": "feature.workspace.other",
+      "reason": "A catch-all for reports that fit no other feature: there is nothing of its own to exercise"
+    },
+    {
+      "claim": "feature.performance.other",
+      "reason": "A catch-all for reports that fit no other feature: there is nothing of its own to exercise"
+    },
+    {
+      "claim": "feature.other.general",
+      "reason": "A catch-all for reports that fit no other feature: there is nothing of its own to exercise"
+    },
+    {
+      "claim": "feature.other.not-sure",
+      "reason": "A catch-all for reports that fit no other feature: there is nothing of its own to exercise"
+    },
+    {
+      "claim": "feature.raw.colours",
+      "reason": "How a photo's colours render is checked by the camera and process golden tests (CameraGoldenTests, ProcessStabilityTests), not by working the app"
+    },
+    {
+      "claim": "feature.raw.demosaic",
+      "reason": "Demosaic quality is checked by the engine's decode and golden tests, not by working the app"
+    },
+    {
+      "claim": "feature.raw.highlights",
+      "reason": "Highlight reconstruction is checked by the engine's golden tests, not by working the app"
+    },
+    {
+      "claim": "feature.raw.hot-pixels",
+      "reason": "Hot pixels and banding are checked by the engine's decode regression tests, not by working the app"
+    },
+    {
+      "claim": "feature.raw.unsupported",
+      "reason": "There's no CC0 sample of an unsupported raw (such as Nikon's High Efficiency NEF) in the fixtures; a damaged file stands in for one that won't open"
+    },
+    {
+      "claim": "feature.export.looks-different",
+      "reason": "Whether an export matches the editor is the rendering gates' job (ARC-03 and ARC-04: preview against a downscaled export)"
+    },
+    {
+      "claim": "feature.workspace.updates",
+      "reason": "Updates are checked on the signed app by the release gate's black box (scripts/test-update.sh --auto), since test builds have no update feed"
+    },
+    {
+      "claim": "feature.other.cli",
+      "reason": "The command-line tool is checked by the release gate's black box (the bundled CLI renders a photo) and by its own commands' tests"
+    },
+    {
+      "claim": "feature.other.website",
+      "reason": "The website isn't part of the app; web/ has its own tests"
+    },
+    {
+      "claim": "feature.saving.disks",
+      "reason": "Needs iCloud Drive or an external or network disk; the conflict merges and coordinated writes are unit-tested (SidecarSafetyTests, OtherWriterTests)"
+    },
+    {
+      "claim": "action.virtualCopy",
+      "reason": "Virtual Copy is planned for Phase 2; the menu checks that its item is there and disabled"
+    }
   ]
 }

@@ -53,8 +53,16 @@
             state.withLock { _ = $0.coverage[claim.description, default: []].insert(path.rawValue) }
         }
 
+        /// Adds this launch's coverage to what earlier launches of the same group recorded.
         func writeCoverage(menuItems: [String]) {
-            let coverage = state.withLock { $0.coverage }
+            var coverage = state.withLock { $0.coverage }
+            if let data = try? Data(contentsOf: coverageURL),
+               let earlier = (try? JSONSerialization
+                   .jsonObject(with: data) as? [String: Any])?["claims"] as? [String: [String]] {
+                for (claim, paths) in earlier {
+                    coverage[claim, default: []].formUnion(paths)
+                }
+            }
             let object: [String: Any] = [
                 "claims": coverage.mapValues { $0.sorted() },
                 "menuItems": menuItems,

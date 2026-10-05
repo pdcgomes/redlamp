@@ -223,11 +223,26 @@
         /// Cancel, Return for the default button. Returns whether a button took it.
         @discardableResult
         func pressInSheet(_ combo: KeyCombo) throws -> Bool {
-            let event = try main { _ in try Keyboard.event(combo) }
-            return try main { _ in
+            let taken = try main { _ -> Bool in
                 guard let sheet = NSApp.modalWindow ?? Views.editorWindow?.attachedSheet else { return false }
-                return sheet.performKeyEquivalent(with: event)
+                return try sheet.performKeyEquivalent(with: Keyboard.event(combo))
             }
+            guard combo.key == .escape else { return taken }
+            // Escape is a key event, not a key equivalent: its window turns it into cancelOperation.
+            for attempt in 0 ..< 2 where try sheetIsUp() {
+                pause(0.2)
+                try main { _ in
+                    guard let sheet = NSApp.modalWindow ?? Views.editorWindow?.attachedSheet else { return }
+                    if attempt == 0 {
+                        try sheet.sendEvent(Keyboard.event(combo))
+                    } else {
+                        let responder = sheet.firstResponder ?? sheet.contentView
+                        _ = responder?.tryToPerform(#selector(NSResponder.cancelOperation(_:)), with: nil)
+                    }
+                }
+            }
+            pause(0.2)
+            return try !sheetIsUp()
         }
 
         /// Waits for a sheet to come up, as a menu item or key may open one.

@@ -106,7 +106,7 @@
                 })
             case .zoomOut:
                 ActionCheck(action: action, setUp: { app in
-                    try app.main { $0.canvas.zoom = .oneToOne }
+                    try app.main { $0.canvas.zoom = .scale(2) }
                 }, observe: { "\($0.canvas.zoom)" }, restore: { app in
                     try app.main { $0.canvas.zoom = .fit }
                 })
@@ -371,6 +371,20 @@
             let before = try observe.map { observe in try app.main { observe($0) } }
             let enabled = try app.main { $0.canPerform(action) }
             try app.expect(enabled || appRuns, "\(action.title) isn't available after its set-up")
+            if path == .key, let combo = action.combos.first, !combo.command,
+               case let .character(character) = combo.key,
+               try !app.main({ _ in Keyboard.hasKey(for: character) }) {
+                // This keyboard layout has no key for it: run it as such a person would.
+                try app.runFromPalette(action)
+                if let observe, let before {
+                    try app
+                        .wait("\(action.title) to change what it changes (was \(before))", timeout: 5) {
+                            observe($0) != before
+                        }
+                }
+                try restore(app)
+                return
+            }
             switch path {
             case .key where action.combos.first.map { $0.command && ($0.shift || $0.option) } == true:
                 try app.expectKeyBinding(action)
