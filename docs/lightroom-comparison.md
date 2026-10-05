@@ -209,6 +209,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Typing a slider's value | Yes | Done | | | UX-01 | Arithmetic works too (`x+15`) |
 | A value on every control, and values that scrub when dragged | Yes | Done | | | UX-28, UX-29 | Including the grading wheels, the curve's points, Base Look Amount and the Masks panel's sizes and ranges, each typed or scrubbed |
 | Lightroom Classic's keyboard shortcuts | Yes | Done | | | | 98 actions on 96 key bindings |
+| Your own keyboard shortcuts | No | Planned | | P4 | LIB-36 | Any action on the key you choose, with keymaps for people coming from Lightroom Classic, Photo Mechanic and Bridge |
 | Command palette | No | Done | | | UX-07 | Every action and slider from the keyboard (⌘K) |
 | Sensor clipping and a colour-assessment view | No | Done | | | UX-05 | |
 | Soft proofing | Yes (Classic) | Planned | | P4 | | |
@@ -247,6 +248,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Library and Develop modules | Yes (Classic) | Planned | | P4 | LIB-13 | One window, switched by a key or a click, with the selection, source and filmstrip carried across |
 | Search and filters | Yes | In progress | | P4 | LIB-06, LIB-12, LIB-18, LIB-19 | Results as you type, with one query language for the filter bar, the command palette, smart collections and the command line |
 | Grid, Loupe, Compare and Survey | Yes | Planned | | P4 | LIB-14, LIB-16, LIB-17 | Held arrow keys move through photos without waiting; thumbnails show the edit |
+| Sensor clipping while culling | No | Planned | | P4 | LIB-38 | In the loupe and Compare, with a raw histogram, since a raw's embedded JPEG hides clipping |
 | Rating, flagging and labelling many photos at once | Yes | Planned | | P4 | LIB-15 | With Undo, custom label names and colours, and marks; by key, by mouse or from the command palette |
 | Keywords | Yes | Planned | | P4 | LIB-21 | |
 | Metadata editing and presets | Yes | Planned | | P4 | LIB-22 | |
@@ -256,10 +258,11 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Moving files and folders | Yes (Classic) | Planned | | P4 | LIB-26 | With a preview and Undo |
 | Stacks | Yes | Planned | | P4 | LIB-28 | Raw and JPEG pairs, bursts and focus stacks |
 | Bringing a Lightroom Classic catalog | Yes | Planned | | P4 | LIB-29, LIB-30 | Ratings, flags, labels, keywords and collections, from a copy of the catalog, with a report; Capture One and darktable libraries too |
+| Duplicates | Yes | Planned | | P4 | LIB-39 | Exact copies, moved to the Trash only from a list you confirm, with Undo |
 | People (face recognition) and Map | Yes | Later | | | LIB-34, LIB-35 | |
 | AI search | Yes | Later | | | LIB-32, LIB-33 | On the Mac |
 | AI-assisted culling | Yes | Later | | | OTH-02 | Lightroom's Assisted Culling judges sharpness, faces and eyes; rating, flagging and labelling work in Redlamp's filmstrip today |
-| Similar photos and duplicates | Yes | Later | | | LIB-31 | |
+| Similar photos | Yes | Later | | | LIB-31 | |
 
 ## Print, book, slideshow and web
 
@@ -277,6 +280,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Windows | Yes | Out of scope | | | | Redlamp is built for Apple's platforms |
 | iPad and iPhone | Yes | Planned | | P5 | | The same engine, after 1.0 |
 | Edits shared between Macs | Yes (cloud) | Done | Behind | | | Through iCloud Drive: sidecars sync safely and conflicting copies merge. A photo that's open doesn't reload yet when another Mac changes its edit |
+| A library shared between Macs | Yes (cloud) | Planned | | P4 | LIB-37 | Ratings, keywords and collections another Mac changes, through iCloud Drive or a shared volume, merged field by field |
 | Edits moving between your Mac, iPad and iPhone | Yes (cloud) | Planned | | P5 | | Through iCloud Drive and Files, rather than Adobe's cloud |
 | Cloud sync with smart previews | Yes (cloud) | Later | | | | |
 | Photos library and a Photos editing extension | Partly (mobile) | Planned | | P2 | | |

@@ -175,7 +175,7 @@ The culling tools judge focus, open eyes, faces and near-duplicates and differ i
 
 ## 7. Proposed tracker changes
 
-For the owner to decide; this study doesn't edit the tracker. Numbers in brackets are recommendations in section 5, which link the evidence.
+The owner accepted all of them on 5 October 2026: the new rows are LIB-36 to LIB-38, LIB-31's exact duplicates became LIB-39, and the skips are SKIP-18 to SKIP-20. Numbers in brackets are recommendations in section 5, which link the evidence.
 
 **New rows**
 
