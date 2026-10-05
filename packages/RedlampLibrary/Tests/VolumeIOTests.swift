@@ -13,16 +13,24 @@ struct VolumeIOTests {
     static func settle(
         on profile: VolumeProfile, bytes: Int, initial: Int, operations: Int = 6000, waited: Bool = true,
     ) -> (concurrency: VolumeConcurrency, widths: [Int]) {
+        settle(on: profile, sizes: { _ in bytes }, initial: initial, operations: operations, waited: waited)
+    }
+
+    /// As `settle(on:bytes:…)`, with operation `n` moving `sizes(n)` bytes.
+    static func settle(
+        on profile: VolumeProfile, sizes: (Int) -> Int, initial: Int, operations: Int, waited: Bool = true,
+    ) -> (concurrency: VolumeConcurrency, widths: [Int]) {
         var model = VolumeModel(profile: profile, seed: 3)
         var concurrency = VolumeConcurrency(initial: initial, range: 1 ... 16)
-        var inFlight: [(start: Duration, end: Duration, generation: Int)] = []
+        var inFlight: [(start: Duration, end: Duration, generation: Int, bytes: Int)] = []
         var now = Duration.zero
         var issued = 0
         var widths: [Int] = []
         while issued < operations || !inFlight.isEmpty {
             while inFlight.count < concurrency.width, issued < operations {
+                let bytes = sizes(issued)
                 let outcome = model.schedule("/IMG_\(issued).JPG", bytes: bytes, arriving: now)
-                inFlight.append((now, outcome.at, concurrency.generation))
+                inFlight.append((now, outcome.at, concurrency.generation, bytes))
                 issued += 1
             }
             let next = inFlight.indices.min { inFlight[$0].end < inFlight[$1].end }!
@@ -32,7 +40,7 @@ struct VolumeIOTests {
                 generation: done.generation,
                 start: done.start,
                 end: done.end,
-                bytes: bytes,
+                bytes: done.bytes,
                 waited: waited,
             )
             if widths.last != concurrency.width {
@@ -74,6 +82,17 @@ struct VolumeIOTests {
         #expect(widths.allSatisfy { $0 <= 5 }, "\(widths)")
         let throughput = try #require(concurrency.last).throughput
         #expect(throughput > 0.7 * 110_000_000, "\(throughput)")
+    }
+
+    @Test func `stretches of larger files don't narrow the readers of a volume that serves them side by side`() {
+        // Raws' heads after small JPEGs, as a library's folders go: bytes a second jump with each
+        // stretch whatever the width, but each read's latency doesn't grow with the width.
+        let parallel = VolumeProfile(name: "parallel", latency: .milliseconds(1), jitter: 0.3, maxInFlight: 32)
+        let (concurrency, widths) = Self.settle(
+            on: parallel, sizes: { ($0 / 300) % 3 == 2 ? 256 * 1024 : 40000 }, initial: 2, operations: 30000,
+        )
+        #expect(concurrency.width >= 12, "\(widths)")
+        #expect(widths.drop { $0 < 12 }.allSatisfy { $0 >= 10 }, "\(widths)")
     }
 
     @Test func `when operations don't wait for a place, the volume isn't the limit and the width stays`() {

@@ -61,7 +61,7 @@ final class CountingFileSystem: LibraryFileSystem {
 }
 
 /// A file system that's another until it's switched: a volume that goes and comes back.
-final class SwitchingFileSystem: LibraryFileSystem, SimulatesReads {
+final class SwitchingFileSystem: LibraryFileSystem {
     private let current: Mutex<any LibraryFileSystem>
 
     init(_ initial: any LibraryFileSystem) {

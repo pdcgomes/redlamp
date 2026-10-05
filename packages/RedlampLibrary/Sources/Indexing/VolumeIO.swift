@@ -115,9 +115,9 @@ public final class VolumeIO: Sendable {
         try await perform(url, priority: priority, bytes: \.count) { try $0.read(url, range: range) }
     }
 
-    /// Runs `operation` on the volume's file system as one of its operations, about `url`. With
-    /// `measured` false it doesn't count towards the width: work that isn't only the volume's
-    /// (ImageIO reading a file itself, which parses it as it goes).
+    /// Runs `operation` on the volume's file system as one of its operations, about `url`. It holds
+    /// a place in flight until it returns; with `measured` false the width isn't adapted by it, for
+    /// work that isn't only the volume's.
     public func perform<T: Sendable>(
         _ url: URL, priority: Priority = .normal, measured: Bool = true,
         bytes: @escaping @Sendable (T) -> Int = { _ in 0 },

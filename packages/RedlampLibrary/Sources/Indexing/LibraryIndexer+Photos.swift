@@ -2,14 +2,11 @@ import Foundation
 import RedlampDocument
 import RedlampEngineAPI
 
-/// A file system whose costs are simulated: what ImageIO and `SidecarStore` read from the disk
-/// themselves is charged to it as a ranged read first, so it costs what it would on the volume.
-protocol SimulatesReads: LibraryFileSystem {}
-
-extension SimulatedFileSystem: SimulatesReads {}
-
 extension LibraryIndexer.Run {
-    /// The most a fallback to ImageIO reading a file itself is charged, on a simulated volume.
+    /// What's read through the volume's readers before ImageIO or `SidecarStore` reads a file
+    /// itself, at most: all that ImageIO reads of the raws whose heads don't hold their metadata
+    /// (16 to 740 KB), and a whole sidecar. They then read it from memory, on the scheduler's lanes,
+    /// without holding a place on the volume while they parse.
     static let chargedFileRead = 1 << 20
 
     func process(_ job: LibraryIndexer.PhotoJob, on volume: LibraryIndexer.VolumeWork) async throws {
@@ -31,7 +28,7 @@ extension LibraryIndexer.Run {
             await batcher.add([.photo(photo)])
         case .sidecar:
             guard var record = job.existing,
-                  let summary = try await sidecar(of: job, on: volume, priority: priority)
+                  let summary = try await sidecar(of: job, on: volume, priority: priority, lane: lane)
             else {
                 let photo = try await read(job, on: volume, priority: priority, lane: lane)
                 count(photo, in: job.folder)
@@ -91,16 +88,15 @@ extension LibraryIndexer.Run {
             Self.parse(head: head, size: size, url: url, xmp: read)
         }
         if parsed.needsFile {
-            parsed.metadata = try await io.perform(url, priority: priority, measured: false) { fileSystem in
-                if fileSystem is any SimulatesReads {
-                    _ = try fileSystem.read(url, range: 0 ..< min(size, Self.chargedFileRead))
-                }
-                return PhotoMetadataReader.read(url: url)
+            let headLength = PhotoMetadataReader.headLength
+            if size > headLength {
+                _ = try await io.read(url, range: headLength ..< min(size, Self.chargedFileRead), priority: priority)
             }
+            parsed.metadata = try await indexer.scheduler.run(lane) { PhotoMetadataReader.read(url: url) }
         }
         var summary: SidecarSummary?
         if job.sidecar != nil {
-            summary = try await sidecar(of: job, on: volume, priority: priority)
+            summary = try await sidecar(of: job, on: volume, priority: priority, lane: lane)
         }
         var record = Self.record(
             job, key: parsed.key, metadata: parsed.metadata, sidecar: summary, xmp: parsed.xmp,
@@ -125,17 +121,16 @@ extension LibraryIndexer.Run {
     /// The organising fields of the photo's `.redlamp` sidecar; nil when it can't be read.
     func sidecar(
         of job: LibraryIndexer.PhotoJob, on volume: LibraryIndexer.VolumeWork, priority: VolumeIO.Priority,
+        lane: WorkScheduler.Lane,
     ) async throws -> SidecarSummary? {
         guard let entry = job.sidecar else { return nil }
         let photo = URL(fileURLWithPath: job.folder + "/" + job.entry.name, isDirectory: false)
         let package = URL(fileURLWithPath: job.folder + "/" + entry.name, isDirectory: entry.isDirectory)
         let edit = entry.isDirectory ? package.appending(path: SidecarStore.editFile) : package
-        return try await volume.io.perform(package, priority: priority, measured: false) { fileSystem in
-            if fileSystem is any SimulatesReads {
-                _ = try? fileSystem.read(edit, range: 0 ..< Self.chargedFileRead)
-            }
-            return SidecarStore().summary(for: photo)
+        _ = try await Self.ignoringMissing {
+            try await volume.io.read(edit, range: 0 ..< Self.chargedFileRead, priority: priority)
         }
+        return try await indexer.scheduler.run(lane) { SidecarStore().summary(for: photo) }
     }
 
     struct ParsedHead: Sendable {

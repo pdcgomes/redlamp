@@ -35,10 +35,14 @@ struct LibraryIndexerTests {
         #expect(summary.foldersListed == totals.folders + 1 && summary.foldersIndexed == totals.folders + 1)
 
         let photos = (0 ..< totals.photos).map(sandbox.fixture.photo(at:))
-        // One read of each photo's head, and nothing else of it.
+        // One read of each photo's head; a raw whose head doesn't hold its metadata is read on past
+        // it once, before ImageIO reads it itself.
         let reads = counting.counts.reads
         #expect(counting.counts.heads == totals.photos)
-        #expect(photos.allSatisfy { reads[sandbox.url($0).path] == 1 })
+        let readOn = photos.filter { reads[sandbox.url($0).path] != 1 }
+        #expect(readOn.allSatisfy { $0.kind == .raw && reads[sandbox.url($0).path] == 2 })
+        let bySource = Dictionary(grouping: photos.filter { $0.kind == .raw }) { $0.source ?? -1 }
+        #expect(bySource.values.allSatisfy { Set($0.map { reads[sandbox.url($0).path] }).count == 1 })
 
         let rows = try await Self.rows(sandbox)
         let (cameras, keywords, folders, unfinished) = try await sandbox.index.read { reader in
