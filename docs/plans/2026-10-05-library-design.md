@@ -288,12 +288,12 @@ Modifiers: `upper`, `lower` and `title` (each word's first letter in capitals); 
 - **Presets** (`NamingPreset`: a name, a template and its options, as JSON) include Lightroom Classic's nine file naming templates under their own names (Custom Name - Sequence, Date - Filename, Shoot Name - Original File Number and the others), and three of Redlamp's: the capture time to the millisecond, a shoot name with a counter, and a sequence in each folder.
 - **`redlamp library names <template> --index <path> [<query>]`** prints each photo's path and its new name, the numbers and empty tokens beside it, and a summary, with `--json` and `--limit` as `search` has them and `--text` for the job's texts. It never renames.
 
-Measured with `NamingBenchTests` (`REDLAMP_NAMING_BENCH=1`) and `redlamp library bench … --scenario naming`, on synthetic photos (a fifth of them a raw beside its JPEG, times to the millisecond, each folder's listing) on the M1 Ultra with other builds running (load average 46 to 72):
+Measured with `NamingBenchTests` (`REDLAMP_NAMING_BENCH=1`) and `redlamp library bench … --scenario naming`, on synthetic photos (a fifth of them a raw beside its JPEG, times to the millisecond, each folder's listing) on the M1 Ultra with other builds running (load average 31 to 72), three runs:
 
 | | Measured | Budget |
 | --- | --- | --- |
-| 10,000 files named as five templates are typed, 194 keystrokes | p50 3.2 to 3.9 ms, p95 5.2 to 6.2 ms | p95 under 16 ms |
-| 1,000,000 files: the job made (pairs, sequences, listings) | 564 to 578 ms | |
+| 10,000 files named as five templates are typed, 194 keystrokes | p50 3.1 to 3.9 ms, p95 5.2 to 6.2 ms | p95 under 16 ms |
+| 1,000,000 files: the job made (pairs, sequences, listings) | 545 to 578 ms | |
 | 1,000,000 files: named, collisions resolved | 159 to 221 ms | |
 | 1,000,000 files: made and named, off the main thread | 723 to 798 ms | under 2 s |
 
