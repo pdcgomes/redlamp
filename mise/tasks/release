@@ -147,9 +147,15 @@ mise run notarize -- "$APP"
 ditto -c -k --keepParent "$APP" "$ZIP"
 
 # GitHub's generated notes are only a changelog link, since nothing lands through pull requests.
+# The release's highlights, chosen in the release room, lead when docs/releases/<version>.md has them.
 NOTES="$OUT/notes.md"
 PREVIOUS="$(git describe --tags --abbrev=0 --match 'v*' "$COMMIT")"
+HIGHLIGHTS="docs/releases/$VERSION.md"
 {
+    if git cat-file -e "$COMMIT:$HIGHLIGHTS" 2>/dev/null; then
+        git show "$COMMIT:$HIGHLIGHTS"
+        echo
+    fi
     echo "Changes since ${PREVIOUS#v}:"
     echo
     git log --no-merges --format='- %s' --invert-grep --grep='^Cask: ' --grep="^Version $VERSION\$" \
