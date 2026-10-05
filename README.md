@@ -113,7 +113,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] **Mask presets:** Blue Sky, Brighten Subject, Darken Background, Smooth Skin, Whiten Teeth and Pop Eyes compute their masks for each photo; save your own from any mask.
 - [x] **Beyond Lightroom:** a mask's **Detail** keeps only its textured (or only its flat) areas, and any mask can be reused as a component of another (**Existing Mask** in Add, Subtract and Intersect).
 - [x] **Local adjustments:** Temp, Tint, Exposure, Contrast, Highlights, Shadows, Whites, Blacks, Texture, Clarity, Dehaze, Hue, Saturation, Sharpness, and Noise, plus the mask's Amount (0–200%).
-- [x] **Mask management:** a mask overlay (`O`) in Lightroom's modes (Color Overlay, on B&W, Image on Black or White, B&W) and colors, and a mask list where you can show and hide, rename, duplicate, "duplicate and invert", reset, and delete masks.
+- [x] **Mask management:** a mask overlay (`O`) in Lightroom's modes (Color Overlay, on B&W, Image on Black or White, B&W, Image on B&W), colors and opacity, and a mask list where you can show and hide, rename, duplicate, "duplicate and invert", reset, delete, and drag to reorder masks and their components.
 - [x] **Fast by design:** gradients and ranges are evaluated per pixel inside the same fused GPU kernel, and brush and AI masks are read from GPU textures. Up to 16 masks cost well under a millisecond extra at Fit.
 - [x] **Models on demand:** Settings › Models lists the downloadable models with their size, and removes them. Every model runs on the Mac; photos are never uploaded. Each shows its licence, which comes with the download. Models still under licence review are offered only when you turn on evaluation models.
 
@@ -879,7 +879,8 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [ ] Slider-feel calibration against Lightroom: response curves fitted against Lightroom's renders <!-- tracker: EDT-11 -->
 - [ ] Photos library integration and a Photos editing extension
 - [x] Tools that behave like Lightroom's: zoom and pan in every tool, and every brush sized from the keyboard and pointer with its size shown as it changes <!-- tracker: UX-15 -->
-- [ ] Masks: reorder masks and components, every overlay mode and its opacity, a Color swatch, and local Whites and Blacks as true end points <!-- tracker: MSK-21, MSK-23, MSK-24 -->
+- [x] Masks: reorder masks and components, every overlay mode and its opacity <!-- tracker: MSK-21 -->
+- [ ] Masks: a Color swatch, and local Whites and Blacks as true end points <!-- tracker: MSK-23, MSK-24 -->
 
 ### Phase 3: Pro masking, healing, AI denoise, focus stacking, and looks *(in progress)*
 - [x] SAM-class object and face-part masks, depth range, mask refinement, mask presets, and recomputing AI masks for pasted settings <!-- tracker: MSK-10, MSK-14, MSK-17 -->

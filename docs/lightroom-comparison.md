@@ -120,7 +120,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Feather and Edge sliders for AI masks, with edges refined at full resolution | Yes | Planned | | P3 | MSK-18 | Lightroom Classic 15.5 added the sliders |
 | Mask presets (Blue Sky, Whiten Teeth and others) | Yes | Done | | | | Save your own from any mask |
 | Add, Subtract, Intersect, invert and duplicate | Yes | Done | | | | |
-| Reorder masks and components, every overlay mode and its opacity | Yes | Planned | | P2 | MSK-21 | |
+| Reorder masks and components, every overlay mode and its opacity | Yes | Done | | | MSK-21 | |
 | Local adjustments in masks | Yes | Done | Behind | | MSK-03 | Local Whites and Blacks are approximated with tonal-region gains |
 | Local Whites and Blacks as true end points | Yes | Planned | | P2 | MSK-24 | |
 | Color swatch inside masks | Yes | Planned | | P2 | MSK-23 | |
