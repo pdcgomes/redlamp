@@ -47,7 +47,12 @@ struct AppCommands: Commands {
             item(.syncSettings)
             item(.syncSettingsAgain)
             item(.undoSync)
-            item(.toggleAutoSync)
+            Toggle(ShortcutAction.toggleAutoSync.title, isOn: Binding(
+                get: { model.settingsSync.isAutoSyncing },
+                set: { _ in model.perform(.toggleAutoSync) },
+            ))
+            .keyboardShortcut(ShortcutAction.toggleAutoSync.combos.first?.keyboardShortcut)
+            .disabled(!model.canPerform(.toggleAutoSync))
             Divider()
             item(.autoTone)
             item(.autoWhiteBalance)

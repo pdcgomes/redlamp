@@ -1084,10 +1084,17 @@ public final class EditorModel {
     public func goToHistory(_ index: Int) {
         guard history.indices.contains(index) else { return }
         activity.record(.edit, "Went to history step “\(history[index].name)”")
+        let back = index < historyIndex
         historyIndex = index
         recipe = history[index].recipe
         requestRender()
         scheduleSave()
+        followHistory(back: back)
+    }
+
+    /// The open photo's history session, which an Auto Sync run follows.
+    var historySessionID: UUID {
+        session.id
     }
 
     /// A new session for the photo just opened; its earlier ones load in the background.

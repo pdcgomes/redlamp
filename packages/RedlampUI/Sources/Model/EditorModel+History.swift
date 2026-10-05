@@ -28,6 +28,7 @@ public extension EditorModel {
     func clearHistory() {
         history = [HistoryStep(action: .clear, title: "History Cleared", recipe: recipe)]
         historyIndex = 0
+        settingsSync.endRun()
         historyTask?.cancel()
         earlierSessions = []
         clearsSavedHistory = true
@@ -61,6 +62,7 @@ extension EditorModel {
             }
         }
         if historyIndex < history.count - 1 {
+            settingsSync.forget(history[(historyIndex + 1)...].map(\.id))
             history.removeSubrange((historyIndex + 1)...)
         }
         history.append(HistoryStep(

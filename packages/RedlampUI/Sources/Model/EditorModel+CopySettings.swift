@@ -58,9 +58,9 @@ public extension EditorModel {
     /// ⇧⌘V: what was copied, onto the open photo, and onto the rest of the selection.
     func pasteSettings() {
         guard let clipboard else { return }
-        paste(clipboard.source, clipboard.selection, name: "Paste Settings")
+        let step = paste(clipboard.source, clipboard.selection, name: "Paste Settings")
         if isMultiSelecting {
-            sync(clipboard.source, clipboard.selection, title: "Paste Settings")
+            sync(clipboard.source, clipboard.selection, title: "Paste Settings", step: step)
         }
     }
 
@@ -70,9 +70,9 @@ public extension EditorModel {
         guard let previous = previousSelection, info != nil,
               let sidecar = SidecarStore().load(for: previous)
         else { return }
-        paste(sidecar.recipe, copySelection, name: "Paste from Previous")
+        let step = paste(sidecar.recipe, copySelection, name: "Paste from Previous")
         if isMultiSelecting {
-            sync(sidecar.recipe, copySelection, title: "Paste from Previous")
+            sync(sidecar.recipe, copySelection, title: "Paste from Previous", step: step)
         }
     }
 
@@ -126,9 +126,12 @@ public extension EditorModel {
     }
 
     /// Pastes onto the open photo as one step, then recomputes the AI masks it brought for this
-    /// photo. White balance As Shot reads this photo's own; Auto is measured again for it.
-    internal func paste(_ source: EditRecipe, _ selection: SettingsSelection, name: String) {
-        guard info != nil else { return }
+    /// photo. White balance As Shot reads this photo's own; Auto is measured again for it. Returns
+    /// the step it recorded, if it changed anything.
+    @discardableResult
+    internal func paste(_ source: EditRecipe, _ selection: SettingsSelection, name: String) -> UUID? {
+        guard info != nil else { return nil }
+        let previous = history.indices.contains(historyIndex) ? history[historyIndex].id : nil
         let pasted = recipe.pasting(source, selection)
             .reusingAIMasks(from: recipe, in: EditRecipe.pastedMasks(from: source, selection))
         var next = pasted.recipe
@@ -138,10 +141,12 @@ public extension EditorModel {
             next[.tint] = wb.tint
         }
         commit(next, .paste, name)
+        let step = history.indices.contains(historyIndex) ? history[historyIndex].id : nil
         if pastesWhiteBalance, next.whiteBalanceMode == .auto {
             setWhiteBalanceMode(.auto)
         }
         updatePastedAIMasks(pasted.recompute)
+        return step == previous ? nil : step
     }
 }
 
