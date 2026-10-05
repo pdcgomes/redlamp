@@ -5,7 +5,7 @@ extension LibraryIndex {
     typealias Migration = @Sendable (SQLiteDatabase) throws -> Void
 
     /// The schema's steps in order: the first makes version 1 from an empty database.
-    static let migrations: [Migration] = [createVersion1, migrateToVersion2]
+    static let migrations: [Migration] = [createVersion1, migrateToVersion2, migrateToVersion3]
 
     static func createVersion1(_ database: SQLiteDatabase) throws {
         try database.execute(schemaVersion1)
@@ -13,6 +13,10 @@ extension LibraryIndex {
 
     static func migrateToVersion2(_ database: SQLiteDatabase) throws {
         try database.execute(schemaVersion2)
+    }
+
+    static func migrateToVersion3(_ database: SQLiteDatabase) throws {
+        try database.execute(schemaVersion3)
     }
 
     /// Brings `database` up to the last version `migrations` knows, one step per transaction.
@@ -108,5 +112,13 @@ extension LibraryIndex {
 
     INSERT INTO photo_text (rowid, name, keywords, title, caption)
       SELECT id, name, keywords, title, caption FROM photo_text_rows;
+    """
+
+    /// The full SHA-256 of photos confirmed as duplicates or not (LIB-39), with the size, modification
+    /// date and content key their files had when they were read: a hash stands for its photo while
+    /// the photo's row has them still, so an unchanged file is never read twice.
+    static let schemaVersion3 = """
+    CREATE TABLE photo_hashes (photo INTEGER PRIMARY KEY, size INTEGER NOT NULL, modified REAL NOT NULL,
+      content_key BLOB NOT NULL, sha256 BLOB NOT NULL);          -- photo is photos.id
     """
 }
