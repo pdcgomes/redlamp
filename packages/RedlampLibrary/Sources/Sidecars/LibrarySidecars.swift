@@ -67,27 +67,37 @@ public struct LibrarySidecars: Sendable {
         let roots = try await index.read { reader in
             try reader.roots().filter { try reader.setting(Self.probedKey($0.id)) == nil }
         }
-        var chosen: [Int64] = []
-        for root in roots {
-            let folder = URL(fileURLWithPath: root.path, isDirectory: true)
-            guard let probe = await Self.answer(within: timeout, {
-                Self.canWrite(in: folder).map { (writable: $0, inVolume: Self.pathInVolume(of: folder)) }
-            }), let probe else { continue }
-            try await index.write { writer in
-                guard try writer.setting(Self.probedKey(root.id)) == nil else { return }
-                if !probe.writable {
-                    try writer.setSidecars(.onThisMac, forRoot: root.id)
-                }
-                try writer.setSetting("1", for: Self.probedKey(root.id))
-                if let inVolume = probe.inVolume {
-                    try writer.setSetting(inVolume, for: Self.pathKey(root.id))
+        let probes = await withTaskGroup(of: (Int64, (writable: Bool, inVolume: String?))?.self) { group in
+            for root in roots {
+                let folder = URL(fileURLWithPath: root.path, isDirectory: true)
+                group.addTask {
+                    let probe = await Self.answer(within: timeout) {
+                        Self.canWrite(in: folder).map { (writable: $0, inVolume: Self.pathInVolume(of: folder)) }
+                    }
+                    return (probe ?? nil).map { (root.id, $0) }
                 }
             }
-            if !probe.writable {
-                chosen.append(root.id)
+            return await group.reduce(into: [(Int64, (writable: Bool, inVolume: String?))]()) { probes, probe in
+                if let probe {
+                    probes.append(probe)
+                }
             }
         }
-        return chosen
+        return try await index.write { writer -> [Int64] in
+            var chosen: [Int64] = []
+            for (root, probe) in probes.sorted(by: { $0.0 < $1.0 }) {
+                guard try writer.setting(Self.probedKey(root)) == nil else { continue }
+                if !probe.writable {
+                    try writer.setSidecars(.onThisMac, forRoot: root)
+                    chosen.append(root)
+                }
+                try writer.setSetting("1", for: Self.probedKey(root))
+                if let inVolume = probe.inVolume {
+                    try writer.setSetting(inVolume, for: Self.pathKey(root))
+                }
+            }
+            return chosen
+        }
     }
 
     // MARK: - Census

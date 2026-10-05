@@ -3,8 +3,9 @@ import RedlampDocument
 import Synchronization
 
 /// The sidecar locator each indexer run reads sidecars through: made the first time the run reads
-/// one, after probing the roots that haven't been (`LibrarySidecars.choosePlacements`), so a run
-/// sees the roots' placements as they were when it started reading.
+/// one, so a run sees the roots' placements as they were when it started reading. The roots that
+/// haven't been probed are probed then (`LibrarySidecars.choosePlacements`) without the run waiting:
+/// a placement decides where sidecars are written, and the run reads both places whatever it is.
 enum IndexerSidecars {
     private struct Entry {
         weak var run: AnyObject?
@@ -22,7 +23,9 @@ enum IndexerSidecars {
             entries = entries.filter { $0.value.run != nil }
             let task = Task {
                 let sidecars = LibrarySidecars(index: index)
-                _ = try? await sidecars.choosePlacements()
+                Task(priority: .utility) {
+                    _ = try? await sidecars.choosePlacements()
+                }
                 return await (try? sidecars.locator()) ?? .besidePhotos
             }
             entries[key] = Entry(run: run, locator: task)
