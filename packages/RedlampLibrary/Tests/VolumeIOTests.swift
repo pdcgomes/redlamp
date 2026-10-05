@@ -147,6 +147,54 @@ struct VolumeIOTests {
         }
     }
 
+    /// A file system whose reads each take `delay`.
+    final class SlowFileSystem: LibraryFileSystem {
+        let delay: Duration
+
+        init(delay: Duration) {
+            self.delay = delay
+        }
+
+        func contentsOfDirectory(at _: URL) throws -> [FileEntry] {
+            []
+        }
+
+        func attributes(of url: URL) throws -> FileEntry {
+            FileEntry(name: url.lastPathComponent)
+        }
+
+        func read(_: URL, range: Range<Int>) throws -> Data {
+            Thread.sleep(forTimeInterval: delay.seconds)
+            return Data(count: range.count)
+        }
+
+        func volume(of _: URL) throws -> VolumeInfo {
+            VolumeInfo(uuid: "SLOW", name: nil, isLocal: true, isInternal: false)
+        }
+    }
+
+    @Test func `waiting for a place doesn't count towards the timeout, so a slow volume that answers isn't gone`(
+    ) async throws {
+        let fileSystem = SlowFileSystem(delay: .milliseconds(30))
+        let probe = URL(fileURLWithPath: "/Volumes/Slow")
+        let io = try VolumeIO(
+            volume: fileSystem.volume(of: probe), fileSystem: fileSystem, probe: probe, timeout: .milliseconds(300),
+            maximumWidth: 1,
+        )
+        try await withThrowingTaskGroup(of: Int.self) { group in
+            for index in 0 ..< 12 {
+                group.addTask { try await io.read(probe.appending(path: "IMG_\(index).JPG"), range: 0 ..< 100).count }
+            }
+            for try await count in group {
+                #expect(count == 100)
+            }
+        }
+        let statistics = io.statistics
+        #expect(statistics.timeouts == 0 && statistics.isReachable)
+        #expect(statistics.longestWait > .milliseconds(300), "\(statistics.longestWait)")
+        #expect(statistics.longestOperation < .milliseconds(300), "\(statistics.longestOperation)")
+    }
+
     @Test func `reads go through the volume's file system, and are counted`() async throws {
         let folder = try TemporaryFolder()
         try folder.write("IMG_0001.JPG", bytes: 3000)

@@ -5,9 +5,10 @@ import Synchronization
 
 /// The readers of one volume. Every file operation the library makes on the volume goes through
 /// them: as many at once as the volume serves best (`VolumeConcurrency`), the listings and the
-/// photos on screen first, and none waiting longer than `timeout`, from when it's asked for to when
-/// it's answered. A volume that fails as gone, or doesn't answer in time, is unreachable: what waits
-/// and what's asked next fails at once, while a probe asks every so often whether it's back.
+/// photos on screen first, and none waiting on the volume longer than `timeout` from when it's
+/// sent. A volume that fails as gone, or doesn't answer in time, is unreachable: what waits and
+/// what's asked next fails at once, while a probe asks every so often whether it's back. Waiting for
+/// a place in flight doesn't count towards the timeout: a volume that answers slowly is only slow.
 ///
 /// Operations run on GCD's threads, since they block on the volume, which Swift's cooperative pool
 /// must not. A caller that stops waiting (its timeout passed) leaves the thread to finish alone.
@@ -31,6 +32,8 @@ public final class VolumeIO: Sendable {
         public var bytes: Int
         /// The longest any caller waited for an answer, queueing included.
         public var longestWait: Duration
+        /// The longest an operation was in flight before it was answered or given up on.
+        public var longestOperation: Duration
         public var timeouts: Int
         public var isReachable: Bool
     }
@@ -91,8 +94,8 @@ public final class VolumeIO: Sendable {
             Statistics(
                 width: state.concurrency.width, throughput: state.concurrency.throughput,
                 operationsPerSecond: state.concurrency.last?.operationsPerSecond ?? 0, operations: state.operations,
-                bytes: state.bytes, longestWait: state.longestWait, timeouts: state.timeouts,
-                isReachable: state.reachable,
+                bytes: state.bytes, longestWait: state.longestWait, longestOperation: state.longestOperation,
+                timeouts: state.timeouts, isReachable: state.reachable,
             )
         }
     }
@@ -139,7 +142,6 @@ public final class VolumeIO: Sendable {
                 let clock = clock
                 let job = Job(
                     priority: priority,
-                    deadline: .now() + timeout.seconds,
                     run: { [self] generation, waited in
                         let start = clock.now
                         let result = Result { try operation(fileSystem) }
@@ -209,7 +211,6 @@ public final class VolumeIO: Sendable {
 
     private struct Job: Sendable {
         let priority: Priority
-        let deadline: DispatchTime
         let run: @Sendable (_ generation: Int, _ waited: Bool) -> Void
         let fail: @Sendable (any Error) -> Void
         let url: URL
@@ -218,7 +219,9 @@ public final class VolumeIO: Sendable {
     private struct Tracked {
         var job: Job
         var waited: Bool
-        var started = false
+        /// When it was sent to the volume, by the clock and by its deadline's; nil while it waits.
+        var started: Duration?
+        var deadline: DispatchTime?
         var expired = false
     }
 
@@ -239,6 +242,7 @@ public final class VolumeIO: Sendable {
         var operations = 0
         var bytes = 0
         var longestWait = Duration.zero
+        var longestOperation = Duration.zero
         var timeouts = 0
 
         mutating func next() -> (UInt64, Tracked)? {
@@ -251,7 +255,7 @@ public final class VolumeIO: Sendable {
                         queues[lane].removeFirst(heads[lane])
                         heads[lane] = 0
                     }
-                    if let tracked = tracked[id], !tracked.started {
+                    if let tracked = tracked[id], tracked.started == nil {
                         return (id, tracked)
                     }
                 }
@@ -261,7 +265,7 @@ public final class VolumeIO: Sendable {
 
         /// The jobs that haven't started, taken out.
         mutating func takeQueued() -> [Job] {
-            let queued = tracked.filter { !$0.value.started }
+            let queued = tracked.filter { $0.value.started == nil }
             for id in queued.keys {
                 tracked.removeValue(forKey: id)
             }
@@ -288,10 +292,13 @@ public final class VolumeIO: Sendable {
     }
 
     private func pump() {
+        let now = clock.now
+        let deadline = DispatchTime.now() + timeout.seconds
         let starting = state.withLock { state -> [(Job, Int, Bool)] in
             var starting: [(Job, Int, Bool)] = []
             while state.running < state.concurrency.width, let (id, tracked) = state.next() {
-                state.tracked[id]?.started = true
+                state.tracked[id]?.started = now
+                state.tracked[id]?.deadline = deadline
                 state.running += 1
                 starting.append((tracked.job, state.concurrency.generation, tracked.waited))
             }
@@ -318,6 +325,7 @@ public final class VolumeIO: Sendable {
             state.running -= 1
             state.operations += 1
             state.bytes += bytes
+            state.longestOperation = max(state.longestOperation, end - (tracked.started ?? start))
             if measured, failure == nil {
                 state.concurrency.record(generation: generation, start: start, end: end, bytes: bytes, waited: waited)
             }
@@ -330,7 +338,7 @@ public final class VolumeIO: Sendable {
 
     private func cancel(_ id: UInt64) {
         let job = state.withLock { state -> Job? in
-            guard let tracked = state.tracked[id], !tracked.started else { return nil }
+            guard let tracked = state.tracked[id], tracked.started == nil else { return nil }
             state.tracked.removeValue(forKey: id)
             return tracked.job
         }
@@ -343,7 +351,7 @@ public final class VolumeIO: Sendable {
         state.withLock { $0.longestWait = max($0.longestWait, waited) }
     }
 
-    /// Checks the deadlines of the operations waiting and running, as long as there are any.
+    /// Checks the deadlines of the operations in flight, as long as any wait or run.
     private func watch() {
         let start = state.withLock { state -> Bool in
             guard !state.watching else { return false }
@@ -368,18 +376,17 @@ public final class VolumeIO: Sendable {
 
     private func checkDeadlines() {
         let now = DispatchTime.now()
+        let clockNow = clock.now
         let (expired, again) = state.withLock { state -> ([Job], Bool) in
             var expired: [Job] = []
-            for (id, tracked) in state.tracked where !tracked.expired && tracked.job.deadline <= now {
+            for (id, tracked) in state.tracked {
+                guard !tracked.expired, let deadline = tracked.deadline, deadline <= now else { continue }
                 expired.append(tracked.job)
-                if tracked.started {
-                    state.tracked[id]?.expired = true
-                    state.running -= 1
-                    state.stuck += 1
-                } else {
-                    state.tracked.removeValue(forKey: id)
-                }
+                state.tracked[id]?.expired = true
+                state.running -= 1
+                state.stuck += 1
                 state.timeouts += 1
+                state.longestOperation = max(state.longestOperation, clockNow - (tracked.started ?? clockNow))
             }
             let again = state.tracked.contains { !$0.value.expired }
             state.watching = again

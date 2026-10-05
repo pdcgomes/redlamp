@@ -2,9 +2,9 @@ import Foundation
 import Synchronization
 
 /// Indexes the fixture through a volume that stops answering partway, its operations hanging, and
-/// then comes back: no caller waits much beyond the readers' timeout, the photos indexed before it
-/// went are marked offline, and once it's back indexing resumes, reading only the photos it hadn't
-/// written.
+/// then comes back: no operation waits on the volume much beyond the readers' timeout, the photos
+/// indexed before it went are marked offline, and once it's back indexing resumes, reading only the
+/// photos it hadn't written.
 public struct VanishingVolumeScenario: BenchScenario {
     public let name = "vanishing-volume"
     /// The readers' timeout. Operations on the volume once it has gone hang for `hang`, then fail.
@@ -30,7 +30,9 @@ public struct VanishingVolumeScenario: BenchScenario {
         let indexer = LibraryIndexer(index: index, volumes: volumes)
         let first = await IndexingScenario.timed(indexer.index([context.fixture]))
         let (written, offline) = try await index.read { try ($0.photoCount(), $0.photoCount(withState: .offline)) }
-        let longestWait = volumes.all.map(\.statistics.longestWait).max() ?? .zero
+        let statistics = volumes.all.map(\.statistics)
+        let longestOperation = statistics.map(\.longestOperation).max() ?? .zero
+        let longestWait = statistics.map(\.longestWait).max() ?? .zero
 
         volume.reconnect(to: context.fileSystem())
         let clock = ContinuousClock()
@@ -49,8 +51,12 @@ public struct VanishingVolumeScenario: BenchScenario {
         return [
             BenchResult(
                 scenario: name, id: "library-vanish-wait",
-                name: "Longest wait for the volume, its timeout \(BenchResult.format(timeout, "ms"))",
-                value: longestWait.seconds * 1000, unit: "ms", budget: .below(timeout * 1.25, "ms"),
+                name: "Longest an operation waited on the volume, its timeout \(BenchResult.format(timeout, "ms"))",
+                value: longestOperation.seconds * 1000, unit: "ms", budget: .below(timeout * 1.25, "ms"),
+            ),
+            BenchResult(
+                scenario: name, id: "library-vanish-caller", name: "Longest a caller waited, queueing included",
+                value: longestWait.seconds * 1000, unit: "ms",
             ),
             BenchResult(
                 scenario: name, id: "library-vanish-run", name: "Indexing until the volume went",
