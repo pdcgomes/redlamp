@@ -133,6 +133,55 @@ final class ListedPhotos: LibraryFileSystem {
     }
 }
 
+/// Another file system whose first read waits until it's let go: a run caught with a photo half read.
+final class HoldingFileSystem: LibraryFileSystem {
+    let base: any LibraryFileSystem
+    private let holding = Mutex(true)
+    private let started = DispatchSemaphore(value: 0)
+    private let released = DispatchSemaphore(value: 0)
+
+    init(_ base: any LibraryFileSystem) {
+        self.base = base
+    }
+
+    /// Returns once the first read is waiting.
+    func held() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global().async { [started] in
+                started.wait()
+                continuation.resume()
+            }
+        }
+    }
+
+    func release() {
+        released.signal()
+    }
+
+    func contentsOfDirectory(at url: URL) throws -> [FileEntry] {
+        try base.contentsOfDirectory(at: url)
+    }
+
+    func attributes(of url: URL) throws -> FileEntry {
+        try base.attributes(of: url)
+    }
+
+    func read(_ url: URL, range: Range<Int>) throws -> Data {
+        if holding.withLock({ first in
+            defer { first = false }
+            return first
+        }) {
+            started.signal()
+            released.wait()
+        }
+        return try base.read(url, range: range)
+    }
+
+    func volume(of url: URL) throws -> VolumeInfo {
+        try base.volume(of: url)
+    }
+}
+
 /// A fixture in a folder of its own, and an index for it in another.
 struct IndexerSandbox {
     let folder: TemporaryFolder

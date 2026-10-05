@@ -459,9 +459,11 @@ extension LibraryIndexer {
                 } catch {
                     if VolumeIO.isVolumeFailure(error) || !volume.io.isReachable {
                         await volumeFailed(volume)
-                    } else if !(error is CancellationError) {
+                    } else {
                         state.withLock { $0.work[job.folder]?.failed = true }
-                        failed(job.folder + "/" + job.entry.name, error)
+                        if !(error is CancellationError) {
+                            failed(job.folder + "/" + job.entry.name, error)
+                        }
                     }
                 }
                 await jobFinished(in: job.folder)
@@ -621,6 +623,7 @@ extension LibraryIndexer {
         var pending: Int
         var inserted = 0
         var updated = 0
+        /// A job's photo wasn't written: it couldn't be read, or the run was cancelled while it was.
         var failed = false
         var vanished: [Int64]
     }

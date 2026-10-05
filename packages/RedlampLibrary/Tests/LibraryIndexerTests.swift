@@ -287,6 +287,36 @@ struct LibraryIndexerTests {
         #expect(try await index.read { try $0.photoCount() } == photos)
     }
 
+    @Test func `a run cancelled with a folder's photos half read leaves the folder to the next run`() async throws {
+        let folder = try TemporaryFolder()
+        let indexFolder = FileManager.default.temporaryDirectory
+            .appending(path: "redlamp-indexer-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let index = try await LibraryIndex.open(at: indexFolder.appending(path: "Index.sqlite"), readers: 2)
+        defer {
+            index.closeAndWait()
+            try? FileManager.default.removeItem(at: indexFolder)
+        }
+        // One reader: while the first photo's read is held, the others wait for it, and are cancelled.
+        let holding = HoldingFileSystem(ListedPhotos(in: folder.url, count: 4))
+        let volumes = VolumeIORegistry(fileSystem: holding, configuration: .init(maximumWidth: 1))
+        let indexer = LibraryIndexer(index: index, volumes: volumes, configuration: .testing())
+        let first = Task { await IndexerRun.collect(indexer.index([folder.url])) }
+        await holding.held()
+        try await Task.sleep(for: .milliseconds(100))
+        first.cancel()
+        holding.release()
+        _ = await first.value
+        await indexer.settle()
+        let written = try await index.read { try $0.photoCount() }
+        #expect(written < 4)
+
+        let run = await IndexerRun.collect(indexer.index([folder.url]))
+        #expect(run.failures.isEmpty, "\(run.failures)")
+        #expect(run.summary?.headsRead == 4 - written)
+        let (count, unfinished) = try await index.read { try ($0.photoCount(), $0.foldersToIndex()) }
+        #expect(count == 4 && unfinished.isEmpty)
+    }
+
     @Test func `the folders asked for are indexed first`() async throws {
         let sandbox = try await IndexerSandbox.make(.init(photos: 900, seed: 28, shapes: []))
         defer { sandbox.remove() }
