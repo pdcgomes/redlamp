@@ -878,6 +878,8 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [ ] Lens corrections from the lensfun database (waits on counsel) <!-- tracker: LNS-03 -->
 - [ ] Slider-feel calibration against Lightroom: response curves fitted against Lightroom's renders <!-- tracker: EDT-11 -->
 - [ ] Photos library integration and a Photos editing extension
+- [ ] Tools that behave like Lightroom's: zoom and pan in every tool, and every brush sized from the keyboard and pointer with its size shown as it changes <!-- tracker: UX-15 -->
+- [ ] Masks: reorder masks and components, every overlay mode and its opacity, a Color swatch, and local Whites and Blacks as true end points <!-- tracker: MSK-21, MSK-23, MSK-24 -->
 
 ### Phase 3: Pro masking, healing, AI denoise, focus stacking, and looks *(in progress)*
 - [x] SAM-class object and face-part masks, depth range, mask refinement, mask presets, and recomputing AI masks for pasted settings <!-- tracker: MSK-10, MSK-14, MSK-17 -->
@@ -889,7 +891,8 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [x] `redlamp-profiler`: look matching by black-box measurement against cameras' own JPEGs; four measured film looks ship
 - [ ] Generative fill on the device, for areas too large for content-aware Remove <!-- tracker: RM-10 -->
 - [ ] Landscape and body-part masks on a model trained on data we have rights to <!-- tracker: MSK-13 -->
-- [ ] **AI Denoise:** an on-device model working on raw data, matching or beating the best commercial denoisers, with a fast 1:1 preview and non-destructive results <!-- tracker: DN-06, DN-07, DN-08 -->
+- [ ] AI mask edges refined at full resolution, with Feather and Edge sliders <!-- tracker: MSK-07, MSK-18 -->
+- [ ] Curves inside masks, Objects selected by rectangle or brush, and Snow and adaptive Landscape presets <!-- tracker: MSK-19, MSK-20, MSK-22 -->- [ ] **AI Denoise:** an on-device model working on raw data, matching or beating the best commercial denoisers, with a fast 1:1 preview and non-destructive results <!-- tracker: DN-06, DN-07, DN-08 -->
 - [ ] Focus stacking: lens corrections before alignment, halo handling, vendors' focus-bracketing tags, and baking a stack to DNG <!-- tracker: FS-01, FS-02, FS-03 -->
 - [ ] Manufacturer lens corrections embedded in Panasonic and OM System raw files <!-- tracker: LNS-02 -->
 - [ ] The remaining film simulations (Eterna, Classic Negative, Nostalgic Negative, Pro Neg, Acros, Reala Ace), which need a shoot with one camera, a chart matrix solve, and a DCP writer <!-- tracker: TON-14, TON-20 -->

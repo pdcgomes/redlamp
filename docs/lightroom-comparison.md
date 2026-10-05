@@ -112,13 +112,19 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Subject, Sky and Background | Yes | Done | | | MSK-08, MSK-17 | Computed on the Mac; photos are never uploaded. Sky also uses Depth Anything 3, an open model trained partly on data Redlamp couldn't use itself. Edges are solved when a mask is made, not refined again as you edit |
 | People and their parts | Yes | Done | | | MSK-08, MSK-13 | Face parts from Apple Vision; body skin, clothes and hair from SAM 3, a download under Meta's SAM License |
 | Objects | Yes | Done | | | MSK-10 | Hover to preview, click to select (Segment Anything 2.1, an 80 MB download, an open model trained partly on data Redlamp couldn't use itself) |
+| Objects by rectangle and brush | Yes | Planned | | P3 | MSK-19 | |
 | Landscape | Yes | Done | Behind | | MSK-17 | Water, vegetation, mountains, architecture and ground, from SAM 3 (a 988 MB download under Meta's SAM License); Lightroom's also finds snow |
+| Snow in Landscape masks, and adaptive Landscape presets | Yes | Planned | | P3 | MSK-22 | |
 | Depth Range | Yes | Done | | | MSK-14 | From the photo's own depth map, or estimated by Depth Anything, an open model trained partly on data Redlamp couldn't use itself |
 | Refine AI mask edges | Yes | Done | Different | | MSK-07 | Refine Edges, and a Refine Edge brush that solves an edge again where you paint; Lightroom has Feather and Edge sliders |
+| Feather and Edge sliders for AI masks, with edges refined at full resolution | Yes | Planned | | P3 | MSK-18 | Lightroom Classic 15.5 added the sliders |
 | Mask presets (Blue Sky, Whiten Teeth and others) | Yes | Done | | | | Save your own from any mask |
 | Add, Subtract, Intersect, invert and duplicate | Yes | Done | | | | |
+| Reorder masks and components, every overlay mode and its opacity | Yes | Planned | | P2 | MSK-21 | |
 | Local adjustments in masks | Yes | Done | Behind | | MSK-03 | Local Whites and Blacks are approximated with tonal-region gains |
-| Curves inside masks | Yes | Planned | | P3 | | |
+| Local Whites and Blacks as true end points | Yes | Planned | | P2 | MSK-24 | |
+| Color swatch inside masks | Yes | Planned | | P2 | MSK-23 | |
+| Curves inside masks | Yes | Planned | | P3 | MSK-20 | |
 | Point Color inside masks | Yes | Planned | | P2 | TON-29 | With an Even Skin Tone preset on Face Skin and Body Skin |
 | Update AI masks across photos | Yes | Done | | | EDT-17 | Pasted and synced settings recompute their AI masks for each photo |
 | Reuse a mask inside another, and keep only its textured areas | Partly | Done | Beyond | | MSK-04, MSK-06 | Lightroom can start a new mask from an existing one; Redlamp also adds, subtracts or intersects one inside another, and a mask's Detail keeps only its textured or flat areas |
@@ -184,6 +190,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Feature | Lightroom | Redlamp | vs Lightroom | Phase | Tracker | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | Zoom, Navigator and clipping | Yes | Done | Behind | | | Fit, Fill, 1:1 and 2:1; Lightroom zooms to 11:1 |
+| Zoom, pan and brush sizes in every tool | Yes | Planned | | P2 | UX-15 | The wheel zooms and Space pans while masking, healing and cropping, and every brush sizes with [ and ] or ⌘-scroll |
 | Histogram you can drag to adjust | Yes | Done | | | | |
 | Lightroom Classic's keyboard shortcuts | Yes | Done | | | | 97 actions on 96 key bindings |
 | Command palette | No | Done | | | UX-07 | Every action and slider from the keyboard (⌘K) |
