@@ -2,13 +2,15 @@
 
 Lightroom's Point Color, with Capture One's uniformity: pick a colour on the photo, shift it and the colours near it, and pull those colours together, so blotchy skin evens out to one tone. It works on the whole photo and inside masks, and an Even Skin Tone mask preset does it for skin in one step. Tracker: TON-29 (#181); it waits on TON-31 (#190), where the colour controls sit, and TON-30 (#182), the spatial version, follows it. The research, sources and a prototype's measurements are in [the note](../research/notes/TON-29-colour-uniformity.md).
 
-**Status (2026-10-05):** proposed, waiting on the owner's approval. Building starts after TON-31's comparison.
+**Status (2026-10-05):** approved; building, step 1 (`model`).
 
 ## Decisions (the owner)
 
 - **Phase 2** (2026-10-04): Point Color is Develop parity.
 - **TON-30 waits** until TON-29 has shipped (2026-10-04).
 - **TON-31 first** (2026-10-05): the comparison of the colour controls before and after the tone curve runs before Point Color is built, so Point Color goes where they end up.
+- **The colour controls stay after the tone curve** (2026-10-05), as [TON-31's A/B](../research/notes/TON-31-colour-stage.md) recommends, to revisit with HDR output in Phase 4. Point Color goes right after the Color Mixer, there.
+- **The design approved** (2026-10-05), with three Uniformity sliders and up to 8 swatches on the edit and on each mask.
 
 ## A swatch
 
@@ -23,7 +25,7 @@ The swatch stores a colour, not a place on the photo, so it means the same in pr
 
 ## The arithmetic
 
-In the develop kernel, right after the Color Mixer. Today that's after the tone curve and the Base Look, in OKLCh; if TON-31 moves the Color Mixer before the tone curve, Point Color moves with it, and its lightness range is set on scene-referred lightness.
+In the develop kernel, right after the Color Mixer: after the tone curve and the Base Look, in OKLCh, where TON-31 kept the colour controls.
 
 - **The weight** is the product of three trapezoids around the swatch's colour, one per axis, with smooth edges (as the Luminance Range mask's), hue measured on the circle. It is multiplied by the pixel's colourfulness, as the Color Mixer's shifts are, since hue means little near grey.
 - **The pull** works on each axis's distance from the swatch: hue as the shorter arc, chroma as a ratio, lightness as a difference. A uniformity `u` above 0 scales the distance by `1 − u·w`, where `w` is the weight. Since `w` falls away from the swatch's colour, the mapping's slope, `1 − u·(w + d·w′)`, is at least `1 − u`: colours never change order.
@@ -77,11 +79,8 @@ In the develop kernel, right after the Color Mixer. Today that's after the tone 
 
 ## Gates
 
-- Building waits on TON-31's comparison.
 - Performance-sensitive: the develop kernel's per-pixel work and the two renders of Point Color's input; recorded after merging.
 
 ## Open questions
 
-- **Controls:** three Uniformity sliders (proposed here), or Lightroom's single Variance, or both with Variance driving all three.
-- **Swatches:** 8 on the edit and 8 per mask, or fewer.
 - **Lightroom's semantics:** what its ranges and Variance do on each axis isn't checked against Adobe's pages or measured.
