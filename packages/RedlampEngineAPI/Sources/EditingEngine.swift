@@ -44,6 +44,11 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// masks select on.
     func maskColor(sampledAt point: CGPoint, recipe: EditRecipe) async -> SIMD3<Double>?
 
+    /// What Point Color receives with `recipe`, its masks included, averaged over a disc of `radius`
+    /// (a fraction of the image height; 0 for a click) around `point` (normalised, oriented): the
+    /// colour the eyedropper gives a new swatch.
+    func pointColorInput(sampledAt point: CGPoint, radius: Double, recipe: EditRecipe) async -> OKLCh?
+
     /// Computes AI masks of the current image: one for Subject, Background or Sky, one per person
     /// for People. Throws `MaskComputationError` when the mask can't be made.
     func computeMasks(_ request: MaskRequest) async throws -> [AIMask]
@@ -157,6 +162,10 @@ public protocol EditingEngine: AnyObject, Sendable {
 
 public extension EditingEngine {
     func warmUpMasks() {}
+
+    func pointColorInput(sampledAt _: CGPoint, radius _: Double, recipe _: EditRecipe) async -> OKLCh? {
+        nil
+    }
 
     func availablePersonParts() -> Set<PersonPart> {
         Set(PersonPart.allCases)

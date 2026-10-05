@@ -549,4 +549,7 @@ public enum OutputEncoding: Float {
     case linearSRGB = 3
     /// OKLab of the Rec.2020 result, for the guides range masks and Auto Mask select on.
     case okLab = 4
+    /// OKLab of what Point Color receives, right after the Color Mixer, masks' adjustments before it
+    /// included: the colour the eyedropper gives a swatch. Nothing after it is drawn.
+    case pointColorInput = 5
 }

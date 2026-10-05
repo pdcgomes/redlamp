@@ -870,9 +870,15 @@ kernel void rl_develop(
     // then shifts them. Every swatch reads the same colour, and their changes add up; chroma's goes
     // through the gamut-relative boost below with the other saturation changes.
     float visualizedWeight = 1.0f;
+    float selectedChroma = chroma * max(saturation, 0.0f);
+    // Output encoding 5: what Point Color receives, for the eyedropper.
+    if (int(p.geometry.z) == 5) {
+        float radians = hue * (M_PI_F / 180.0f);
+        out.write(float4(lab.x, selectedChroma * cos(radians), selectedChroma * sin(radians), 1.0f), gid);
+        return;
+    }
     int swatches = min(int(p.pointColor.x), kMaxPointColorSwatches);
     if (swatches > 0) {
-        float selectedChroma = chroma * max(saturation, 0.0f);
         float hueChange = 0.0f, chromaStops = 0.0f, lightnessChange = 0.0f;
         for (int i = 0; i < swatches; i++) {
             PointColorGPU s = pointColor[i];

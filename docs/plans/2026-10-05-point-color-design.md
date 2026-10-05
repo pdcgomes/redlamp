@@ -2,7 +2,7 @@
 
 Lightroom's Point Color, with Capture One's uniformity: pick a colour on the photo, shift it and the colours near it, and pull those colours together, so blotchy skin evens out to one tone. It works on the whole photo and inside masks, and an Even Skin Tone mask preset does it for skin in one step. Tracker: TON-29 (#181); it waits on TON-31 (#190), where the colour controls sit, and TON-30 (#182), the spatial version, follows it. The research, sources and a prototype's measurements are in [the note](../research/notes/TON-29-colour-uniformity.md).
 
-**Status (2026-10-05):** approved; building on the `point-color/build` branch. Steps 1 (`model`) and 2 (`kernel`) done.
+**Status (2026-10-05):** approved; building on the `point-color/build` branch. Steps 1 (`model`), 2 (`kernel`) and 3's eyedropper (`probe`) done; the mask's own colour moved to step 5, with masks' swatches.
 
 ## Decisions (the owner)
 
@@ -36,7 +36,7 @@ In the develop kernel, right after the Color Mixer: after the tone curve and the
 
 ## The swatch's colour
 
-- **Picking.** The eyedropper works like Color Range's (a click, or a drag for a larger disc). It reads the colour that Point Color receives there, averaged over the disc. That needs its own sample: the edit guide holds the edit's final colours, Point Color's own effect included. A one-off render of Point Color's input, at the guide's size (2048 px), is read as `sampleEditGuide` reads the edit guide.
+- **Picking.** The eyedropper works like Color Range's (a click, or a drag for a larger disc). It reads the colour that Point Color receives there, averaged over the disc. That needs its own sample: the edit guide holds the edit's final colours, Point Color's own effect included. A one-off render of Point Color's input, with the edit's masks, at the guide's size (2048 px), is read as `sampleEditGuide` reads the edit guide (`RedlampEngine.pointColorInput(sampledAt:radius:recipe:)`).
 - **The mask's own colour,** for a swatch on a mask: the median of Point Color's input under the mask. It comes from a small render of Point Color's input with the edit's masks (512 px, about a quarter of a megapixel), made again when anything before Point Color, the mask or the photo changes, and handed to the develop pass in a small buffer. It follows the photo's white balance, and works on every photo the mask is pasted to: AI masks are recomputed for each photo, and so is their colour.
 - **Visualize Range,** as in Lightroom: the develop kernel shows the selected swatch's selection, colour where it selects and grey elsewhere, as Visualize Spots draws its own view.
 
@@ -63,9 +63,9 @@ In the develop kernel, right after the Color Mixer: after the tone curve and the
 
 1. `model`: swatches in `RedlampEngineAPI` (recipe and mask), the format and schema, and Copy Settings, with tests.
 2. `kernel`: the stage, the push-apart limit and Visualize Range, with unit and render tests.
-3. `probe`: the render of Point Color's input, the eyedropper's sample, and the mask's own colour.
+3. `probe`: the render of Point Color's input and the eyedropper's sample.
 4. `panel`: the Color Mixer's Point Color mode and its harness specimen.
-5. `masks`: swatches in masks (the GPU layout and the mask panel), and the Even Skin Tone preset.
+5. `masks`: swatches in masks (the GPU layout and the mask panel), the mask's own colour, and the Even Skin Tone preset.
 6. `tune`: the prototype and the engine on more portraits, for the preset's values and the default range; the preview against a downscaled export; a performance run after merging.
 7. `docs`: the README, the comparison, the tracker and the sidecar format; the Lightroom preset mapping when its fields are known.
 

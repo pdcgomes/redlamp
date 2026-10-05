@@ -130,6 +130,33 @@ struct PointColorRenderTests {
         #expect(try render(recipe, session: session) == plain, "without Visualize Range, a neutral swatch is no swatch")
     }
 
+    @Test func `the eyedropper reads what Point Color receives, global edits and masks included`() throws {
+        let session = try halves()
+        let engine = try RedlampEngine()
+        let shown = try lch(render(EditRecipe(), session: session)[left])
+        let spot = CGPoint(x: 0.25, y: 0.5)
+        let plain = try engine.samplePointColorInput(at: spot, radius: 0, recipe: EditRecipe(), session: session)
+        #expect(abs(plain.lightness - shown.x) < 0.003, "lightness \(plain.lightness) against \(shown.x)")
+        #expect(abs(plain.chroma - shown.y) < 0.003, "chroma \(plain.chroma) against \(shown.y)")
+        #expect(abs(hueDifference(plain.hue, shown.z)) < 1, "hue \(plain.hue) against \(shown.z)")
+
+        var saturated = EditRecipe()
+        saturated[.saturation] = 40
+        let more = try engine.samplePointColorInput(at: spot, radius: 0, recipe: saturated, session: session)
+        #expect(more.chroma > plain.chroma + 0.01, "Saturation comes before Point Color")
+
+        var masked = EditRecipe()
+        var mask = MaskLayer(name: "Left", components: [MaskComponent(shape: .radial(RadialMask(
+            center: ImagePoint(x: 0.25, y: 0.5), radiusX: 0.2, radiusY: 0.9, feather: 0,
+        )))])
+        mask[.localExposure] = 1
+        masked.masks = [mask]
+        let brighter = try engine.samplePointColorInput(at: spot, radius: 0.1, recipe: masked, session: session)
+        #expect(brighter.lightness > plain.lightness + 0.03, "a mask's Exposure comes before it too")
+        let wide = try engine.samplePointColorInput(at: spot, radius: 0.1, recipe: EditRecipe(), session: session)
+        #expect(abs(wide.chroma - plain.chroma) < 0.003, "a wider disc of one colour averages to it")
+    }
+
     // MARK: - Helpers
 
     /// OKLab lightness, chroma and hue (degrees) of a linear Display P3 output pixel.
