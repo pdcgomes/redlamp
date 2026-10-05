@@ -213,21 +213,56 @@ public final class SAMSegmenter: @unchecked Sendable {
 }
 
 /// Core ML models compiled once per version, kept in Caches (compiling takes seconds).
+///
+/// Core ML compiles into the temporary folder, as large as the model (SAM 3's encoder is
+/// 850 MB), so one compile runs at a time: callers that ask while it runs wait and find it
+/// in Caches, rather than each compiling a copy.
 enum CompiledModels {
+    private static let lock = NSLock()
+    /// Older than this, a compile left in the temporary folder belongs to a launch that ended
+    /// before moving it into Caches.
+    static let leftoverAge: TimeInterval = 60 * 60
+
     static var root: URL {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appending(path: "app.redlamp/CompiledModels")
     }
 
     static func compiled(package: URL, key: String) throws -> URL {
+        lock.lock()
+        defer { lock.unlock() }
         let destination = root.appending(path: "\(key).mlmodelc")
         if FileManager.default.fileExists(atPath: destination.path) {
             return destination
         }
+        removeLeftovers(of: package.deletingPathExtension().lastPathComponent)
         let compiled = try MLModel.compileModel(at: package)
+        defer { try? FileManager.default.removeItem(at: compiled) }
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try? FileManager.default.removeItem(at: destination)
         try FileManager.default.moveItem(at: compiled, to: destination)
         return destination
+    }
+
+    /// Removes compiles of the named model, `<name>.mlmodelc` or `<name>_<UUID>.mlmodelc`,
+    /// that earlier launches left in `directory`.
+    static func removeLeftovers(
+        of name: String,
+        in directory: URL = FileManager.default.temporaryDirectory,
+        now: Date = Date(),
+    ) {
+        let fileManager = FileManager.default
+        guard let items = try? fileManager.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: [.contentModificationDateKey],
+        ) else { return }
+        for item in items where item.pathExtension == "mlmodelc" {
+            let stem = item.deletingPathExtension().lastPathComponent
+            guard stem == name || stem.hasPrefix("\(name)_"),
+                  let modified = try? item.resourceValues(forKeys: [.contentModificationDateKey])
+                  .contentModificationDate,
+                  now.timeIntervalSince(modified) > leftoverAge
+            else { continue }
+            try? fileManager.removeItem(at: item)
+        }
     }
 }

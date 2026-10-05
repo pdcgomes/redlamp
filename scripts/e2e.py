@@ -149,13 +149,44 @@ def prepare_photos(photos: Path) -> list[str]:
     return names
 
 
+# Kept between runs on the checkout's volume, so each test home gets clones (no space, no
+# copying) of the models and their compiles, rather than a copy of every model compiled anew.
+CACHE = ROOT / "build/e2e/cache"
+COMPILED = Path("Library/Caches/app.redlamp/CompiledModels")
+RUNS_KEPT = 8
+
+
 def seed_models(home: Path) -> None:
-    """Clones of the models already downloaded, so no scenario downloads one."""
+    """The models already downloaded, so no scenario downloads one, and their compiles."""
     owner = HOME / "Library/Application Support/Redlamp/Models"
     if owner.is_dir():
+        (CACHE / "Models").mkdir(parents=True, exist_ok=True)
+        subprocess.run(["rsync", "-a", "--delete", f"{owner}/", str(CACHE / "Models")], capture_output=True)
         target = home / "Library/Application Support/Redlamp"
         target.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["cp", "-cR", str(owner), str(target)], capture_output=True)
+        subprocess.run(["cp", "-cR", str(CACHE / "Models"), str(target)], capture_output=True)
+    if (CACHE / "CompiledModels").is_dir():
+        (home / COMPILED).parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["cp", "-cR", str(CACHE / "CompiledModels"), str((home / COMPILED).parent)], capture_output=True)
+
+
+def keep_compiled_models(home: Path) -> None:
+    """Keeps the compiles a run made for the next run."""
+    compiled = home / COMPILED
+    if not compiled.is_dir():
+        return
+    (CACHE / "CompiledModels").mkdir(parents=True, exist_ok=True)
+    for model in compiled.glob("*.mlmodelc"):
+        if not (CACHE / "CompiledModels" / model.name).exists():
+            subprocess.run(["cp", "-cR", str(model), str(CACHE / "CompiledModels")], capture_output=True)
+
+
+def prune_runs(keep: int = RUNS_KEPT) -> None:
+    """Removes all but the newest runs' folders."""
+    runs = sorted((p for p in (ROOT / "build/e2e").iterdir() if p.is_dir() and p.name != "cache" and not p.name.endswith(".app")),
+                  key=lambda p: p.stat().st_mtime, reverse=True)
+    for old in runs[keep:]:
+        shutil.rmtree(old, ignore_errors=True)
 
 
 def defaults(*arguments: str) -> None:
@@ -832,6 +863,8 @@ def main() -> int:
     }
     write_report(run_dir, report)
     defaults("delete", BUNDLE_ID)
+    keep_compiled_models(home)
+    prune_runs()
     log(f"{report['verdict']}. {summary}")
     log(f"Report: {run_dir / 'report.md'}")
     return 1 if problems else 0
