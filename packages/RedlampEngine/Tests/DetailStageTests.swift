@@ -327,6 +327,27 @@ struct DetailStageTests {
         #expect(inside < outside * 0.6, "inside \(inside), outside \(outside)")
     }
 
+    // MARK: - Caches
+
+    /// At Luminance 0, masks bound for Texture, Clarity or Sharpness change how noise reduction
+    /// runs, so what the stage kept from a render without them isn't read once one is added.
+    @Test(arguments: [10, EditRecipe.currentProcessVersion])
+    func `adding a mask that leaves noise alone renders what a fresh stage renders`(process: Int) throws {
+        let session = try makeSession(.bayer, width: 640, height: 480) { x, y in
+            Float(0.2 + 0.1 * sin(Double(x) / 3) * cos(Double(y) / 5))
+        }
+        let stage = DetailStage(device: device, kernels: kernels)
+        var recipe = Self.untouched
+        recipe.processVersion = process
+        recipe[.noiseColor] = 30
+        recipe[.sharpenAmount] = 60
+        _ = try processAndRead(stage, session, recipe)
+        recipe.masks = [leftHalf(.localTexture, 50)]
+        let cached = try processAndRead(stage, session, recipe).texels
+        let fresh = try processAndRead(DetailStage(device: device, kernels: kernels), session, recipe).texels
+        #expect(EngineMemoryTests.differing(cached, fresh) == 0)
+    }
+
     // MARK: - Sensor cleanup
 
     @Test func `hot pixels are repaired`() throws {

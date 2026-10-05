@@ -367,7 +367,7 @@ struct DetailDecompositionTests {
                 _ = try base.processAndRead(tiled, session, before)
                 let key = LadderKey(
                     session: ObjectIdentifier(session), work: work, denoise: DenoiseSettings(recipe: recipe),
-                    local: nil,
+                    local: LocalDetail(recipe: recipe),
                 )
                 ladder = LadderMeasures(ladder: tiled.ladderCache.ladder(key))
                 #expect(ladder?.ladder != nil, "\(name): the ladder is cached")

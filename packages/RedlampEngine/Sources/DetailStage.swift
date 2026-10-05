@@ -458,9 +458,8 @@ final class DetailStage {
 
         let texture = try makeWorkTexture(.rgba16Float, work)
         let sigma = key.sharpen?.sigma(atLevel: work.level) ?? 0
-        let ladderKey = passes.decomposes ? LadderKey(
-            session: key.session, work: work, denoise: key.denoise, local: key.local.uses(3) ? key.local : nil,
-        ) : nil
+        let ladderKey = passes.decomposes
+            ? LadderKey(session: key.session, work: work, denoise: key.denoise, local: key.local) : nil
         var ladder = ladderKey.map { LadderMeasures(ladder: ladderCache.ladder($0)) }
         let cachesLadder = cache && work.size.x * work.size.y <= ladderCacheTexels
         // Kept only where it leaves at least half the scratch budget for the tiles.

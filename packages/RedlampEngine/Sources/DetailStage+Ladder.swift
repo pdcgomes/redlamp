@@ -52,6 +52,17 @@ struct LadderKey: Hashable {
     var denoise: DenoiseSettings?
     /// The masks, when any sets Noise, which noise reduction reads.
     var local: LocalDetail?
+    /// Whether masks' amounts are bound at Luminance 0: noise reduction then runs its energy and
+    /// non-local passes, which it otherwise leaves out.
+    var masked = false
+
+    init(session: ObjectIdentifier, work: DetailStage.WorkArea, denoise: DenoiseSettings?, local: LocalDetail) {
+        self.session = session
+        self.work = work
+        self.denoise = denoise
+        self.local = local.uses(3) ? local : nil
+        masked = !local.isEmpty && denoise?.luma == 0
+    }
 }
 
 /// A work area's ladder: given, it is read; otherwise it is taken into `target`, from `denoised`
