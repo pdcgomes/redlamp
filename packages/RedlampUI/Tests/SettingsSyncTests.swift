@@ -243,7 +243,138 @@ struct SettingsSyncTests {
         let synced = try #require(SidecarStore().load(for: photos[1])?.recipe)
         #expect(synced[.exposure] == 0.5 && synced[.contrast] == 20 && synced[.vibrance] == 15)
         #expect(synced[.clarity] == 10, "only what the steps changed")
-        let titles = SidecarStore().loadHistory(for: photos[1]).flatMap(\.steps).map(\.title)
-        #expect(titles.contains("Auto Sync"))
+        let sessions = SidecarStore().loadHistory(for: photos[1])
+        #expect(sessions.count == 1, "one session for the run")
+        #expect(sessions.first?.steps.first?.title == "Opened")
+        #expect(sessions.first?.steps.dropFirst().allSatisfy { $0.title.hasPrefix("Auto Sync: ") } == true)
+    }
+
+    private func autoSyncing(
+        _ names: [String],
+        own: [String: EditRecipe] = [:],
+    ) async throws -> (EditorModel, [URL], URL) {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let photos = names.map { folder.appending(path: "\($0).ARW") }
+        for (name, recipe) in own {
+            try SidecarStore().save(Sidecar(recipe: recipe), for: folder.appending(path: "\(name).ARW"))
+        }
+        let model = EditorModel(engine: StubEngine())
+        photos.forEach { model.library.insert(LibraryItem(url: $0)) }
+        try await open(model, photos[0])
+        model.selectAllPhotos()
+        model.toggleAutoSync()
+        return (model, photos, folder)
+    }
+
+    private func edit(_ url: URL) -> EditRecipe? {
+        SidecarStore().load(for: url)?.recipe
+    }
+
+    /// Lightroom's undo: B's own exposure comes back, and Redo takes it to the open photo's again.
+    @Test func `undo with auto sync on gives each photo its own edit back`() async throws {
+        var own = EditRecipe()
+        own[.exposure] = 0.3
+        own[.clarity] = 10
+        let (model, photos, folder) = try await autoSyncing(["A", "B"], own: ["B": own])
+        defer {
+            model.toggleAutoSync()
+            try? FileManager.default.removeItem(at: folder)
+        }
+        model.setValue(.exposure, 1)
+        await model.settingsSync.idle()
+        #expect(edit(photos[1])?[.exposure] == 1)
+
+        model.undo()
+        await model.settingsSync.idle()
+        #expect(edit(photos[1])?[.exposure] == 0.3 && edit(photos[1])?[.clarity] == 10)
+        model.redo()
+        await model.settingsSync.idle()
+        #expect(edit(photos[1])?[.exposure] == 1 && edit(photos[1])?[.clarity] == 10)
+        let sessions = SidecarStore().loadHistory(for: photos[1])
+        #expect(sessions.count == 1)
+        #expect(sessions.first?.steps.map(\.title) == [
+            "Opened", "Auto Sync: Exposure", "Undo Auto Sync", "Redo Auto Sync",
+        ])
+    }
+
+    /// A click on an earlier step takes B back past several; a new step after it starts a branch.
+    @Test func `history clicks and a new step after undo move the other photos with the open one`() async throws {
+        var own = EditRecipe()
+        own[.exposure] = 0.3
+        let (model, photos, folder) = try await autoSyncing(["A", "B", "C"], own: ["B": own])
+        defer {
+            model.toggleAutoSync()
+            try? FileManager.default.removeItem(at: folder)
+        }
+        model.setValue(.exposure, 1)
+        model.setValue(.contrast, 20)
+        model.setValue(.vibrance, 15)
+        await model.settingsSync.idle()
+        #expect(edit(photos[1])?[.vibrance] == 15 && edit(photos[2])?[.vibrance] == 15)
+
+        model.goToHistory(1)
+        await model.settingsSync.idle()
+        let back = try #require(edit(photos[1]))
+        #expect(back[.exposure] == 1 && back[.contrast] == 0 && back[.vibrance] == 0)
+
+        model.setValue(.clarity, 5)
+        await model.settingsSync.idle()
+        model.undo()
+        await model.settingsSync.idle()
+        let undone = try #require(edit(photos[1]))
+        #expect(undone[.clarity] == 0 && undone[.exposure] == 1 && undone[.contrast] == 0)
+
+        model.goToHistory(0)
+        await model.settingsSync.idle()
+        #expect(edit(photos[1])?[.exposure] == 0.3, "B's own")
+        #expect(edit(photos[2])?.isPristine == true, "C had no edit")
+    }
+
+    /// A photo changed elsewhere since Auto Sync wrote it keeps that change.
+    @Test func `a photo edited since auto sync wrote it is left alone`() async throws {
+        let (model, photos, folder) = try await autoSyncing(["A", "B"])
+        defer {
+            model.toggleAutoSync()
+            try? FileManager.default.removeItem(at: folder)
+        }
+        model.setValue(.exposure, 1)
+        await model.settingsSync.idle()
+        var sidecar = try #require(SidecarStore().load(for: photos[1]))
+        sidecar.recipe[.contrast] = 40
+        try SidecarStore().save(sidecar, for: photos[1])
+
+        model.undo()
+        await model.settingsSync.idle()
+        #expect(edit(photos[1])?[.exposure] == 1 && edit(photos[1])?[.contrast] == 40)
+        #expect(model.settingsSync.report?.contains("edited since") == true)
+    }
+
+    /// With Auto Sync on, a paste onto the selection is part of the run: Undo takes it back on B.
+    @Test func `undo takes back a paste made while auto sync is on`() async throws {
+        var own = EditRecipe()
+        own[.exposure] = 0.3
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let photos = ["A", "B"].map { folder.appending(path: "\($0).ARW") }
+        try SidecarStore().save(Sidecar(recipe: own), for: photos[1])
+        let model = EditorModel(engine: StubEngine())
+        photos.forEach { model.library.insert(LibraryItem(url: $0)) }
+        model.copySelection = .default
+        try await open(model, photos[0])
+        model.setValue(.exposure, 2)
+        model.copySettings()
+        model.setValue(.exposure, 0)
+        model.selectAllPhotos()
+        model.toggleAutoSync()
+        defer { model.toggleAutoSync() }
+
+        model.pasteSettings()
+        await model.settingsSync.idle()
+        #expect(model.recipe[.exposure] == 2 && edit(photos[1])?[.exposure] == 2)
+        model.undo()
+        await model.settingsSync.idle()
+        #expect(model.recipe[.exposure] == 0 && edit(photos[1])?[.exposure] == 0.3)
     }
 }

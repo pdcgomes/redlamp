@@ -1,8 +1,8 @@
 # Copy, paste and sync settings: design
 
-Lightroom's model: choose which settings carry from one photo to others, then paste them onto one photo, sync them across a selection, or let Auto Sync repeat every change. Tracker: EDT-08 (the picker and its safe defaults), EDT-17 (a selection, Sync and batch AI mask updates) and EDT-18 (Auto Sync).
+Lightroom's model: choose which settings carry from one photo to others, then paste them onto one photo, sync them across a selection, or let Auto Sync repeat every change. Tracker: EDT-08 (the picker and its safe defaults), EDT-17 (a selection, Sync and batch AI mask updates), EDT-18 (Auto Sync), EDT-19 (the filmstrip's context menu) and EDT-20 (Auto Sync's undo, and batches that wait their turn).
 
-**Status (2026-10-02):** built, all five steps: the model (`SettingsSelection`), the checklist and Paste on the open photo, the filmstrip's selection, the worker (`SettingsSync`), and Auto Sync. Not yet in the checklist: retouch spots, being added to the edit; until they have an item a paste leaves the target's own.
+**Status (2026-10-05):** built, all seven steps: the model (`SettingsSelection`), the checklist and Paste on the open photo, the filmstrip's selection, the worker (`SettingsSync`), Auto Sync, the filmstrip's context menu, and Auto Sync's undo. Heal and Clone spots are an item of their own, unticked the first time.
 
 ## Decisions (2026-10-02, the owner)
 
@@ -58,8 +58,28 @@ Check All and Check None. A group's checkbox ticks or clears its items, and show
 
 A toggle beside the filmstrip's selection count (⌥⇧⌘A). While it is on with several photos selected, each history step on the active photo is pasted onto the others: only what that step changed (the parameters, fields and masks that differ from the step before), through the worker, coalesced while steps arrive. A slider drag syncs when it ends. Turning it on doesn't sync anything by itself.
 
+## The filmstrip's context menu (step 6, decided 2026-10-04)
+
+Right-click or Control-click a photo in the filmstrip, as in Lightroom and Finder:
+
+- **A selected photo** (the open one, or one selected with it): the Photo menu's Copy Settings…, Copy Settings with Last Choice, Paste Settings, Paste Settings from Previous, Sync Settings…, Sync Settings with Last Choice, Undo Sync Settings and Auto Sync (with its checkmark), with their keys. They act on the selection as they do in the menu bar.
+- **Any other photo:** Copy Settings…, Copy Settings with Last Choice and Paste Settings act on that photo alone, without opening it. Copying reads its sidecar (a photo with no edit copies the default edit; one whose edit can't be read copies nothing), and the checklist says which photo it's from. Pasting is a one-photo batch, with its AI masks computed for it and Undo Sync Settings to take it back. These items show no keys: the keys act on the open photo.
+- Items that don't apply are left out. While the menu is open, the photo it acts on is ringed in the accent colour. VoiceOver's Show Menu opens the same menu.
+
+## Auto Sync's undo (step 7, decided 2026-10-04)
+
+- **Batches wait their turn.** One that arrives while another runs is queued, never dropped; Auto Sync's steps merge into an Auto Sync batch waiting at the end. So Paste reaches the whole selection even while a sync runs, and Paste from Previous reaches it too.
+- **Deleted masks reach the other photos.** A step's changes list the masks it took away (`SettingsSelection.removedMasks`, never saved); a paste removes them from the target, unless the source has them again, with the components of other masks that reused them.
+- **AI masks aren't computed twice.** A pasted AI mask that asks for what the target's own copy already answers (the same request, instance, Refine Edge strokes, provider, revision and OS build, computed for that photo) keeps the target's result. So a slider on an AI mask doesn't recompute it on every photo.
+- **A run.** While Auto Sync is on with one open photo, the batches that follow its steps make a run. Each other photo keeps one history session for the run, its steps named after the open photo's ("Auto Sync: Exposure"). The run remembers what each step carried, and for each photo its edit before the run, the steps that reached it and what the run last wrote.
+- **Undo, Redo and history clicks** on the open photo give each photo of the run its edit at that step, as Lightroom does: its edit before the run, with the open photo's edit pasted for what the steps not undone carried to it. A photo whose own exposure Auto Sync overwrote gets it back. A photo edited since the run last wrote it is left alone, and the filmstrip says so. A new step after an Undo forgets the steps it replaced.
+- **Pastes while Auto Sync is on join the run,** so Undo takes them back on the other photos too. Other batches (Sync Settings, Update AI Masks, a paste onto one photo, Undo Sync Settings) take the photos they write out of the run. The run ends when Auto Sync is turned off, another photo opens, or history is cleared. With Auto Sync off, nothing changed: Undo after a paste onto several photos undoes only the open one, and Undo Sync Settings the rest.
+- Photo ▸ Auto Sync shows a checkmark when it's on.
+
 ## Testing
 
 - **Model:** every item's coverage; untouched groups reset the target; unticked groups keep the target's; masks replace by identity and are otherwise added; the layer limit; unknown values kept; process version only when ticked.
 - **Open photo:** the checklist's remembered choice; Paste as one history step; only pasted AI masks recomputed; Previous with the last choice.
 - **Selection and worker** (with the stub engine and a temporary folder): Sync writes each sidecar and history step; AI masks recomputed per photo; skipped newer sidecars; Undo restores all; Auto Sync carries only what changed.
+- **Context menu:** the items on a selected photo and on another; pasting onto another photo leaves the open photo and the selection; copying from one reads its sidecar; a cell's right-click and its ring.
+- **Auto Sync's undo:** a batch arriving mid-run waits; Paste from Previous reaches the selection; a deleted mask is carried and an AI mask's slider doesn't recompute it; one session per run; Undo gives B its own +0.3 back and Redo takes it to +1; a history click several steps back and a new step after Undo; a photo edited since is left alone; a paste made while Auto Sync is on is undone on B.

@@ -46,14 +46,43 @@ public extension EditorModel {
 
     /// With Auto Sync on, what the step just recorded changed goes to the rest of the selection.
     internal func autoSync(from previous: EditRecipe) {
-        guard settingsSync.isAutoSyncing, isMultiSelecting, info != nil else { return }
-        let changes = SettingsSelection.changes(from: previous, to: recipe)
-        settingsSync.autoSync(recipe, changes, on: otherSelectedPhotos, done: written)
+        guard settingsSync.isAutoSyncing, isMultiSelecting, info != nil,
+              history.indices.contains(historyIndex) else { return }
+        let step = history[historyIndex]
+        settingsSync.autoSync(recipe, step: SettingsSync.RunStep(
+            session: historySessionID, id: step.id, title: step.title,
+            carried: SettingsSelection.changes(from: previous, to: recipe),
+        ), on: otherSelectedPhotos, done: written)
     }
 
-    internal func sync(_ source: EditRecipe, _ selection: SettingsSelection, title: String) {
+    /// With Auto Sync on, Undo, Redo and history clicks take the rest of the selection with them:
+    /// each photo gets back its edit at that step.
+    internal func followHistory(back: Bool) {
+        guard settingsSync.isAutoSyncing, isMultiSelecting, info != nil else { return }
+        settingsSync.follow(
+            recipe, undone: Set(history[(historyIndex + 1)...].map(\.id)), session: historySessionID,
+            on: otherSelectedPhotos, title: back ? "Undo Auto Sync" : "Redo Auto Sync", done: written,
+        )
+    }
+
+    /// `selection` of `source` onto the rest of the selection. `step`, the open photo's step that
+    /// pasted the same, makes it part of an Auto Sync run.
+    internal func sync(_ source: EditRecipe, _ selection: SettingsSelection, title: String, step: UUID? = nil) {
         saveNow()
-        settingsSync.run(.paste(source, selection), on: otherSelectedPhotos, title: title, done: written)
+        var runStep: SettingsSync.RunStep?
+        if let step {
+            let pasted = EditRecipe.pastedMasks(from: source, selection)
+            runStep = SettingsSync.RunStep(
+                session: historySessionID,
+                id: step,
+                title: title,
+                carried: SettingsSelection(
+                    items: selection.items, masks: !pasted.isEmpty,
+                    excludedMasks: Set(recipe.masks.map(\.id)).subtracting(pasted),
+                ),
+            )
+        }
+        settingsSync.run(.paste(source, selection), on: otherSelectedPhotos, title: title, step: runStep, done: written)
     }
 
     internal func written(_ url: URL, _ recipe: EditRecipe) {

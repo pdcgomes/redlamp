@@ -19,6 +19,14 @@ Every workstream keeps one canvas the owner can open beside the chat to see wher
 2. Replace every value in the `workstream` object, and delete the example rows that don't belong. Leave the rendering code alone; an empty list hides its section or tab.
 3. Link the canvas in your reply: `[Workstream title](/absolute/path/ws-slug.canvas.tsx)`.
 
+## A plan's todos are its steps
+
+When the work has a plan (plan mode's `~/.cursor/plans/<name>.plan.md`, or one in `docs/plans/`), the canvas shows every todo:
+
+- **The canvas is the plan's first todo.** Plan mode can't write it, so it's written as soon as the plan is approved, before any other todo starts.
+- **One step per todo,** in the plan's order, with the todo's ID as the step's `id`, a short `step` and `detail` from its content, and `doneWhen` from the plan. Link the plan under `links`.
+- **A todo and its step change in the same turn:** pending is `not started`, in_progress is `in progress`, completed is `done` and cancelled is `dropped`. `blocked` is the canvas's own, with the step's `note` saying what it waits on. A todo added or split gets its step at once, so the two lists stay one to one.
+
 ## What it shows
 
 - **Overview:** progress through the plan; **Needs you**, open items first (blocking ones on top, with a command to copy) and done items folded underneath with what came of them; the Ready and Blocked lanes; the latest log entries.
@@ -32,6 +40,7 @@ Update in the same turn as the event, by editing only the `workstream` object:
 | Event | Update |
 | --- | --- |
 | A step starts or lands (commit) | Its `plan` status and `ref`; a `log` entry; `status`, `updated`, `lastCommit` |
+| A todo changes status, or is added, split or cancelled | Its `plan` step, mapped as in [A plan's todos are its steps](#a-plans-todos-are-its-steps) |
 | Something only the owner can do | A `needsYou` item: exactly what to do and where (settings, paths, the shell line in `command`), what it `unblocks`, and `blocking: true` when work waits on it |
 | The owner did it | `done: true`, and `detail` starting "Done:" with what came of it. Keep the item |
 | The owner decides, or you choose between approaches | Append to `decisions`: date, decision, why, and `by` (Owner, Measured, Default) |
