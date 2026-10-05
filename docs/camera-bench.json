@@ -3,7 +3,7 @@
  "description": "The camera bench's evidence per camera mode (docs/camera-bench.md), written by scripts/camera-bench.py.",
  "thresholds": "DEC-28 (proposed)",
  "decoder": "LibRaw 0.22.2",
- "generated": "2026-10-04",
+ "generated": "2026-10-05",
  "modes": [
   {
    "key": "Apple|iPhone10,1 back camera|lossless_dng_load_raw|16|4032x3024",
@@ -15782,6 +15782,96 @@
    ]
   },
   {
+   "key": "Fujifilm|X100S|unpacked_load_raw|14|4934x3296",
+   "camera": "Fujifilm X100S",
+   "label": "14-bit uncompressed RAF, 4934 × 3296",
+   "tier": "problem",
+   "verified": false,
+   "contributors": 1,
+   "photos": 5,
+   "conditions": [
+    "warmLight"
+   ],
+   "needs": [
+    "baseISO",
+    "highISO",
+    "portrait",
+    "clippedHighlights"
+   ],
+   "answers": {
+    "brightness": 1
+   },
+   "checks": {
+    "decode.black": {
+     "pass": 5,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.colour": {
+     "pass": 5,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.edges": {
+     "pass": 5,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.opens": {
+     "pass": 5,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.white": {
+     "pass": 5,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.cast": {
+     "pass": 5,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.colour": {
+     "pass": 5,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.exposure": {
+     "pass": 4,
+     "warn": 1,
+     "fail": 0
+    },
+    "preview.framing": {
+     "pass": 5,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.orientation": {
+     "pass": 5,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.structure": {
+     "pass": 5,
+     "warn": 0,
+     "fail": 0
+    },
+    "render.default": {
+     "pass": 5,
+     "warn": 0,
+     "fail": 0
+    }
+   },
+   "problems": [],
+   "decoders": [
+    "LibRaw 0.22.2-Release"
+   ],
+   "redlamp": [
+    "0.2.4-prealpha"
+   ]
+  },
+  {
    "key": "Fujifilm|X100S|lossless_dng_load_raw|16|4936x3296",
    "camera": "Fujifilm X100S",
    "label": "16-bit lossless DNG, 4936 × 3296",
@@ -28754,125 +28844,35 @@
    ]
   },
   {
-   "key": "Nikon|Z50_2|nikon_load_raw|14|3728x3728",
+   "key": "Nikon|Z50_2|nikon_he_load_raw|14|3728x3728",
    "camera": "Nikon Z50_2",
-   "label": "14-bit compressed NEF, 3728 × 3728",
+   "label": "14-bit nikon_he NEF, 3728 × 3728",
    "tier": "unconfirmed",
    "verified": false,
    "contributors": 1,
    "photos": 1,
    "conditions": [
-    "baseISO",
-    "clippedHighlights"
+    "baseISO"
    ],
    "needs": [
     "highISO",
     "portrait",
+    "clippedHighlights",
     "warmLight"
    ],
    "answers": {},
    "checks": {
-    "decode.black": {
-     "pass": 0,
-     "warn": 0,
-     "fail": 1
-    },
-    "decode.colour": {
-     "pass": 0,
-     "warn": 0,
-     "fail": 1
-    },
-    "decode.edges": {
-     "pass": 0,
-     "warn": 0,
-     "fail": 1
-    },
     "decode.opens": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    },
-    "decode.white": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    },
-    "preview.cast": {
      "pass": 0,
      "warn": 0,
      "fail": 1
-    },
-    "preview.colour": {
-     "pass": 0,
-     "warn": 1,
-     "fail": 0
-    },
-    "preview.exposure": {
-     "pass": 0,
-     "warn": 1,
-     "fail": 0
-    },
-    "preview.framing": {
-     "pass": 0,
-     "warn": 0,
-     "fail": 1
-    },
-    "preview.orientation": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    },
-    "preview.structure": {
-     "pass": 0,
-     "warn": 0,
-     "fail": 1
-    },
-    "render.default": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
     }
    },
    "problems": [
     {
-     "check": "decode.black",
-     "summary": "The black level may be wrong: many photosites sit 5.1% of the range below it.",
-     "tracker": null,
-     "contributors": 1,
-     "photos": 1
-    },
-    {
-     "check": "decode.colour",
-     "summary": "The camera has no colour matrix, so its colours can't be right.",
-     "tracker": null,
-     "contributors": 1,
-     "photos": 1
-    },
-    {
-     "check": "decode.edges",
-     "summary": "Lines at the black level: 1 along the bottom.",
-     "tracker": null,
-     "contributors": 1,
-     "photos": 1
-    },
-    {
-     "check": "preview.cast",
-     "summary": "A colour cast where the camera's is neutral (16.3).",
-     "tracker": null,
-     "contributors": 1,
-     "photos": 1
-    },
-    {
-     "check": "preview.framing",
-     "summary": "Framed differently from the camera's: scale 0.915, offset 0.039, aspect 1.000 against 1.000.",
-     "tracker": null,
-     "contributors": 1,
-     "photos": 1
-    },
-    {
-     "check": "preview.structure",
-     "summary": "The detail doesn't match the camera's well (correlation -0.12).",
-     "tracker": null,
+     "check": "decode.opens",
+     "summary": "Nikon's High Efficiency NEFs (HE and HE*) don't open yet: LibRaw 0.22 can't read them.",
+     "tracker": "CAM-12",
      "contributors": 1,
      "photos": 1
     }
@@ -28885,111 +28885,35 @@
    ]
   },
   {
-   "key": "Nikon|Z5_2|nikon_load_raw|14|4000x2672",
+   "key": "Nikon|Z5_2|nikon_he_load_raw|14|4000x2672",
    "camera": "Nikon Z5_2",
-   "label": "14-bit compressed NEF, 4000 × 2672",
+   "label": "14-bit nikon_he NEF, 4000 × 2672",
    "tier": "unconfirmed",
    "verified": false,
    "contributors": 1,
    "photos": 1,
    "conditions": [
-    "baseISO",
-    "clippedHighlights"
+    "baseISO"
    ],
    "needs": [
     "highISO",
     "portrait",
+    "clippedHighlights",
     "warmLight"
    ],
    "answers": {},
    "checks": {
-    "decode.black": {
-     "pass": 0,
-     "warn": 0,
-     "fail": 1
-    },
-    "decode.colour": {
-     "pass": 0,
-     "warn": 0,
-     "fail": 1
-    },
-    "decode.edges": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    },
     "decode.opens": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    },
-    "decode.white": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    },
-    "preview.cast": {
      "pass": 0,
      "warn": 0,
      "fail": 1
-    },
-    "preview.colour": {
-     "pass": 0,
-     "warn": 1,
-     "fail": 0
-    },
-    "preview.exposure": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    },
-    "preview.framing": {
-     "pass": 0,
-     "warn": 1,
-     "fail": 0
-    },
-    "preview.orientation": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    },
-    "preview.structure": {
-     "pass": 0,
-     "warn": 0,
-     "fail": 1
-    },
-    "render.default": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
     }
    },
    "problems": [
     {
-     "check": "decode.black",
-     "summary": "The black level may be wrong: many photosites sit 5.4% of the range below it.",
-     "tracker": null,
-     "contributors": 1,
-     "photos": 1
-    },
-    {
-     "check": "decode.colour",
-     "summary": "The camera has no colour matrix, so its colours can't be right.",
-     "tracker": null,
-     "contributors": 1,
-     "photos": 1
-    },
-    {
-     "check": "preview.cast",
-     "summary": "A colour cast where the camera's is neutral (19.7).",
-     "tracker": null,
-     "contributors": 1,
-     "photos": 1
-    },
-    {
-     "check": "preview.structure",
-     "summary": "The detail doesn't match the camera's well (correlation -0.26).",
-     "tracker": null,
+     "check": "decode.opens",
+     "summary": "Nikon's High Efficiency NEFs (HE and HE*) don't open yet: LibRaw 0.22 can't read them.",
+     "tracker": "CAM-12",
      "contributors": 1,
      "photos": 1
     }
@@ -41322,6 +41246,194 @@
    ],
    "redlamp": [
     "development"
+   ]
+  },
+  {
+   "key": "Panasonic|DMC-LX3|panasonic_load_raw|12|3664x2754",
+   "camera": "Panasonic DMC-LX3",
+   "label": "12-bit compressed RW2, 3664 × 2754",
+   "tier": "problem",
+   "verified": false,
+   "contributors": 1,
+   "photos": 6,
+   "conditions": [
+    "baseISO",
+    "clippedHighlights",
+    "warmLight"
+   ],
+   "needs": [
+    "highISO",
+    "portrait"
+   ],
+   "answers": {
+    "colours": 1
+   },
+   "checks": {
+    "decode.black": {
+     "pass": 6,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.colour": {
+     "pass": 6,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.edges": {
+     "pass": 6,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.opens": {
+     "pass": 6,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.white": {
+     "pass": 6,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.cast": {
+     "pass": 4,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.colour": {
+     "pass": 6,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.exposure": {
+     "pass": 6,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.framing": {
+     "pass": 5,
+     "warn": 1,
+     "fail": 0
+    },
+    "preview.highlights": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.orientation": {
+     "pass": 6,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.structure": {
+     "pass": 6,
+     "warn": 0,
+     "fail": 0
+    },
+    "render.default": {
+     "pass": 6,
+     "warn": 0,
+     "fail": 0
+    }
+   },
+   "problems": [],
+   "decoders": [
+    "LibRaw 0.22.2-Release"
+   ],
+   "redlamp": [
+    "0.2.4-prealpha"
+   ]
+  },
+  {
+   "key": "Panasonic|DMC-LX3|panasonic_load_raw|12|3792x2538",
+   "camera": "Panasonic DMC-LX3",
+   "label": "12-bit compressed RW2, 3792 × 2538",
+   "tier": "working",
+   "verified": false,
+   "contributors": 1,
+   "photos": 8,
+   "conditions": [
+    "baseISO",
+    "portrait",
+    "clippedHighlights",
+    "warmLight"
+   ],
+   "needs": [
+    "highISO"
+   ],
+   "answers": {},
+   "checks": {
+    "decode.black": {
+     "pass": 8,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.colour": {
+     "pass": 8,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.edges": {
+     "pass": 8,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.opens": {
+     "pass": 8,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.white": {
+     "pass": 8,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.cast": {
+     "pass": 5,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.colour": {
+     "pass": 8,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.exposure": {
+     "pass": 8,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.framing": {
+     "pass": 7,
+     "warn": 1,
+     "fail": 0
+    },
+    "preview.highlights": {
+     "pass": 3,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.orientation": {
+     "pass": 8,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.structure": {
+     "pass": 8,
+     "warn": 0,
+     "fail": 0
+    },
+    "render.default": {
+     "pass": 8,
+     "warn": 0,
+     "fail": 0
+    }
+   },
+   "problems": [],
+   "decoders": [
+    "LibRaw 0.22.2-Release"
+   ],
+   "redlamp": [
+    "0.2.4-prealpha"
    ]
   },
   {
