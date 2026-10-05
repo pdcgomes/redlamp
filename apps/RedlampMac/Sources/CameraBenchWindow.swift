@@ -6,7 +6,8 @@ import RedlampUI
 
 /// Help › Test Your Camera…: one Camera Bench window, whose bench has an engine of its own, so
 /// testing photos never disturbs the photo open in the editor. Photos decode in the decode
-/// service, as the editor's do.
+/// service, as the editor's do; identifying each file and reading the camera's own preview
+/// still parse it with LibRaw and ImageIO in the app (DATA-17).
 @MainActor
 enum CameraBenchWindow {
     private static var controller: CameraBenchWindowController?
