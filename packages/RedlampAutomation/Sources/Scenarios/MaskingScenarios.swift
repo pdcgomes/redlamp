@@ -172,6 +172,8 @@
                 .feature("masking.update-ai"),
                 .feature("masking.refine"),
                 .feature("masking.models"),
+                .parameter(.maskAIFeather),
+                .parameter(.maskAIEdge),
             ],
         ) { app in
             try app.openWorking()
@@ -196,6 +198,20 @@
                 let component = try app.main { $0.masks.first { $0.id == mask }?.components.first?.id }
                 if let component {
                     try app.run("Refine Edges", timeout: 240) { await $0.refineEdges(component, in: mask) }
+                    // The AI mask's Feather and Edge (MSK-18).
+                    try app.main { model in
+                        model.selectMask(mask)
+                        model.selectedComponentID = component
+                    }
+                    for parameter in [ParameterID.maskAIFeather, .maskAIEdge] {
+                        try app.set(parameter, 40)
+                        app.covered(.parameter(parameter), via: .model)
+                    }
+                    let shaped = try app.main { model -> Bool in
+                        guard case let .ai(ai) = model.recipe.mask(mask)?.components.first?.shape else { return false }
+                        return ai.feather == 40 && ai.edge == 40
+                    }
+                    try app.expect(shaped, "Feather and Edge weren't set on the AI mask")
                 }
                 app.covered([.feature("masking.update-ai"), .feature("masking.refine")], via: .model)
             }

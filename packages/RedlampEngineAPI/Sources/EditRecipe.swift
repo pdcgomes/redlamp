@@ -78,7 +78,7 @@ public struct EditRecipe: Sendable, Hashable {
     /// spots after it (`RetouchStage.FillVersion`), so removing several things at once doesn't
     /// copy one into another's hole.
     /// A new version records its references for the process-stability gate (`ProcessStabilityTests`).
-    public static let currentProcessVersion = 12
+    public static let currentProcessVersion = 13
     public static let linearPointCurve = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]
 
     /// Sidecars written before process versions existed are version 1.

@@ -27,10 +27,20 @@ constant float kMaskDepth = 7.0f;
 
 // The images range and raster components read. `guide` is OKLab (L 0...1) of the photo with its
 // global edit, over the whole oriented frame; `rasters` holds brush and AI coverage in mask space.
+// `edges` holds AI masks' guided filter coefficients (a, b, trust) in the sensor's orientation
+// (process 13, MaskEdges.swift), applied to the pixel's log luminance `ev` at `sourceUV`.
 struct MaskImages {
     texture2d_array<float, access::sample> rasters;
     texture2d<float, access::sample> guide;
+    texture2d_array<float, access::sample> edges;
+    float2 sourceUV;
+    float ev;
 };
+
+// The camera RGB luminance the edge coefficients are guided by (ToneBase.logLuminance).
+static inline float maskEdgeEV(float3 camera) {
+    return log2(max(dot(camera, float3(0.25f, 0.5f, 0.25f)), 1e-6f));
+}
 
 static inline float2 maskUV(float2 p, float inverseAspect) {
     return float2(p.x * inverseAspect, p.y);
@@ -74,8 +84,16 @@ static inline float evaluateMaskComponent(MaskComponentGPU c, float2 p, MaskImag
         float inner = min(1.0f - clamp(c.shape.w, 0.0f, 1.0f), 0.999f);
         weight = 1.0f - smoothstep(inner, 1.0f, distance);
     } else if (kind < 3.5f) {
-        // geometry: x slice, y 1 / aspect.
+        // geometry: x slice, y 1 / aspect; for an AI mask from process 13, z its edge coefficients'
+        // slice plus one and w the guide's offset: its edge follows the photo's own, where the
+        // photo has one, at the pixel's resolution.
         weight = images.rasters.sample(maskSampler, maskUV(p, c.geometry.y), uint(c.geometry.x)).r;
+        if (c.geometry.z > 0.5f) {
+            constexpr sampler edgeSampler(coord::normalized, filter::linear, address::clamp_to_edge);
+            float3 e = images.edges.sample(edgeSampler, images.sourceUV, uint(c.geometry.z - 0.5f)).xyz;
+            float guided = clamp(e.x * (images.ev - c.geometry.w) + e.y, 0.0f, 1.0f);
+            weight = mix(weight, guided, clamp(e.z, 0.0f, 1.0f));
+        }
     } else if (kind < 4.5f) {
         // geometry: lightness where coverage starts, is full, stops being full, ends (0...1);
         // rotation: x 1 / aspect, y guide level.

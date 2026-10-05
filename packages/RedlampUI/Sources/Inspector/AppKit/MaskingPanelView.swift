@@ -132,6 +132,9 @@ final class MaskingPanelView: ColumnView {
             views.append(PaddingView(rows.native(LuminanceRangeEditor()), top: 6))
         case .depthRange:
             views.append(PaddingView(rows.native(DepthRangeEditor()), top: 6))
+        case let kind? where kind.isAI:
+            views.append(PaddingView(rows.slider(.maskAIFeather), top: 6))
+            views.append(rows.slider(.maskAIEdge))
         default:
             break
         }

@@ -213,6 +213,9 @@ public enum ParameterID: String, CaseIterable, Codable, Sendable, Hashable {
     case maskDetail = "mask.detail"
     /// The selected Color Range component's Refine.
     case maskColorRefine = "mask.colorRange.refine"
+    /// The selected AI component's Feather and Edge.
+    case maskAIFeather = "mask.ai.feather"
+    case maskAIEdge = "mask.ai.edge"
 
     /// The brush settings, in Lightroom's order.
     public static let brushParameters: [ParameterID] = [

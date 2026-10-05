@@ -243,6 +243,10 @@ public struct AIMask: Sendable, Hashable {
     /// For Objects: the box dragged around the thing, or the one Find found it in, in the photo's
     /// oriented frame.
     public var box: ImageRect?
+    /// Feather (0...100) softens the mask's edge and Edge (-100...100) moves it out or in, as
+    /// Lightroom's sliders for AI masks do; both leave the mask as it is at 0.
+    public var feather: Double = 0
+    public var edge: Double = 0
     /// Hash of the render the model saw.
     public var analysisHash: String
     public var center: ImagePoint
@@ -290,7 +294,7 @@ public struct AIMask: Sendable, Hashable {
 
 extension AIMask: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case kind, provider, revision, osBuild, instance, part, prompts, excludedPrompts, box
+        case kind, provider, revision, osBuild, instance, part, prompts, excludedPrompts, box, feather, edge
         case analysisHash, center, bitmap, createdAt, refinements
     }
 
@@ -318,6 +322,8 @@ extension AIMask: Codable {
         prompts = try container.decode([ImagePoint].self, forKey: .prompts)
         excludedPrompts = try container.decodeIfPresent([ImagePoint].self, forKey: .excludedPrompts)
         box = try container.decodeIfPresent(Edges.self, forKey: .box)?.box
+        feather = try container.decodeIfPresent(Double.self, forKey: .feather) ?? 0
+        edge = try container.decodeIfPresent(Double.self, forKey: .edge) ?? 0
         analysisHash = try container.decode(String.self, forKey: .analysisHash)
         center = try container.decode(ImagePoint.self, forKey: .center)
         bitmap = try container.decode(MaskBitmap.self, forKey: .bitmap)
@@ -340,6 +346,12 @@ extension AIMask: Codable {
         try container.encode(prompts, forKey: .prompts)
         try container.encodeIfPresent(excludedPrompts, forKey: .excludedPrompts)
         try container.encodeIfPresent(box.map(Edges.init), forKey: .box)
+        if feather != 0 {
+            try container.encode(feather, forKey: .feather)
+        }
+        if edge != 0 {
+            try container.encode(edge, forKey: .edge)
+        }
         try container.encode(analysisHash, forKey: .analysisHash)
         try container.encode(center, forKey: .center)
         try container.encode(bitmap, forKey: .bitmap)

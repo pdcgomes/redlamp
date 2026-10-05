@@ -57,7 +57,7 @@
         "processVersion": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 12,
+          "maximum": 13,
           "default": 1,
           "description": "The rendering behavior the edit was made with (see sidecar-format.md). A newer one makes the sidecar read-only."
         },
@@ -622,6 +622,8 @@
           "additionalProperties": false,
           "description": "For Objects, the box dragged around the thing, or the one Find found it in, in the oriented frame, 0...1. Updating the mask asks the model with it again."
         },
+        "feather": { "type": "number", "minimum": 0, "maximum": 100, "default": 0, "description": "Softens the mask's edge. Written only when it isn't 0." },
+        "edge": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Moves the mask's edge out (above 0) or in (below 0). Written only when it isn't 0." },
         "analysisHash": { "type": "string", "description": "A hash of the render the model saw." },
         "center": { "$ref": "#/$defs/imagePoint" },
         "bitmap": { "$ref": "#/$defs/maskBitmap", "description": "The model's mask, with the refinements applied." },

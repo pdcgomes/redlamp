@@ -67,6 +67,32 @@ struct GrayMaskTests {
         #expect(bytes == expected, "float16 features and mask for each prompt")
     }
 
+    /// Feather and Edge (MSK-18): nothing at 0, Edge grows or shrinks the mask, Feather softens it.
+    @Test func `Feather softens a mask and Edge moves its edge, and neither changes it at 0`() {
+        let (width, height) = (200, 20)
+        let mask = GrayMask(
+            width: width,
+            height: height,
+            pixels: (0 ..< width * height).map { $0 % width < 100 ? 255 : 0 },
+        )
+        #expect(mask.shaped(feather: 0, edge: 0, reach: 10).pixels == mask.pixels)
+        func covered(_ shaped: GrayMask) -> Int {
+            (0 ..< width).filter { shaped[$0, 10] > 127 }.count
+        }
+        func soft(_ shaped: GrayMask) -> Int {
+            (0 ..< width).filter { shaped[$0, 10] > 12 && shaped[$0, 10] < 243 }.count
+        }
+        let grown = mask.shaped(feather: 0, edge: 100, reach: 10)
+        let shrunk = mask.shaped(feather: 0, edge: -100, reach: 10)
+        #expect(
+            abs(covered(grown) - 110) <= 2 && abs(covered(shrunk) - 90) <= 2,
+            "\(covered(grown)) and \(covered(shrunk))",
+        )
+        #expect(soft(grown) <= 3, "Edge alone keeps the edge sharp")
+        let feathered = mask.shaped(feather: 100, edge: 0, reach: 10)
+        #expect(soft(feathered) >= 10 && abs(covered(feathered) - 100) <= 1, "\(soft(feathered)) soft pixels")
+    }
+
     /// A beard is facial hair, not hair, and a sleeve clothes, not skin.
     @Test func `people parts are exclusive by precedence`() {
         let parts = SAM3Concepts.exclusive([

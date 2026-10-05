@@ -354,7 +354,7 @@ final class DetailStage {
         var shape: SIMD2<Int>?
     }
 
-    private var emptyMasks: (rasters: any MTLTexture, guide: any MTLTexture)?
+    private var emptyMasks: (rasters: any MTLTexture, guide: any MTLTexture, edges: any MTLTexture)?
 
     init(device: any MTLDevice, kernels: KernelLibrary) {
         self.device = device
@@ -372,7 +372,7 @@ final class DetailStage {
         entries.map(\.output.texture)
     }
 
-    private func emptyMaskImages() throws -> (rasters: any MTLTexture, guide: any MTLTexture) {
+    private func emptyMaskImages() throws -> (rasters: any MTLTexture, guide: any MTLTexture, edges: any MTLTexture) {
         if let emptyMasks {
             return emptyMasks
         }
@@ -1232,6 +1232,7 @@ final class DetailStage {
         let empty = try emptyMaskImages()
         encoder.setTexture(masks.rasters ?? empty.rasters, index: 2)
         encoder.setTexture(masks.guide ?? empty.guide, index: 3)
+        encoder.setTexture(masks.edges ?? empty.edges, index: 4)
         if components.isEmpty {
             components = [.empty]
         }

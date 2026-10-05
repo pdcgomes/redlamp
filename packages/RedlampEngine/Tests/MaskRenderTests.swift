@@ -303,6 +303,32 @@ struct MaskRenderTests {
 
     // MARK: - Bitmaps
 
+    /// A sharp edge in the photo under an AI mask of its bright side at half the analysis grid's
+    /// resolution, as Vision's masks are on large photos: drawn at full size, process 12 ramps
+    /// over the mask's pixels upsampled eightfold, and process 13 steps at the photo's edge
+    /// (MSK-07). The B&W overlay shows the coverage.
+    @Test func `from process 13, an AI mask's edge follows the photo's at full size`() throws {
+        let (width, height) = (4096, 128)
+        let session = try makeSession(width: width, height: height) { x, _ in SIMD3(repeating: x < 2048 ? 0.05 : 0.4) }
+        let gray = GrayMask(width: 512, height: 16, pixels: (0 ..< 512 * 16).map { $0 % 512 < 256 ? 0 : 255 })
+        let mask = try MaskLayer(name: "Subject", components: [MaskComponent(shape: .ai(AIMask(
+            kind: .subject, provider: "test", revision: 1, analysisHash: "0", center: ImagePoint(x: 0.75, y: 0.5),
+            bitmap: #require(gray.bitmap()),
+        )))])
+        var recipe = EditRecipe()
+        recipe.masks = [mask]
+        /// Pixels of the row between 20% and 80% coverage (sRGB-encoded grey, shown linear).
+        func ramp(_ version: Int) throws -> Int {
+            recipe.processVersion = version
+            let shown = try render(recipe, session: session, overlay: mask.id, style: .blackAndWhite)
+            let row = height / 2 * width
+            return (1900 ..< 2200).filter { shown[row + $0].y > 0.033 && shown[row + $0].y < 0.604 }.count
+        }
+        let (before, after) = try (ramp(12), ramp(13))
+        #expect(before >= 4, "process 12 ramps over \(before) px")
+        #expect(after <= 2, "process 13 steps within \(after) px")
+    }
+
     @Test func `bitmap mask covers where the bitmap is white`() throws {
         let session = try makeSession(width: 300, height: 200) { _, _ in SIMD3(repeating: 0.18) }
         let gray = GrayMask(width: 150, height: 100, pixels: (0 ..< 150 * 100).map { $0 % 150 < 75 ? 255 : 0 })

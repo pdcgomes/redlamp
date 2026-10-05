@@ -313,6 +313,11 @@ public extension EditorModel {
                 return range.refine
             }
             return parameter.spec.defaultValue
+        case .maskAIFeather, .maskAIEdge:
+            if case let .ai(ai) = component?.shape {
+                return parameter == .maskAIFeather ? ai.feather : ai.edge
+            }
+            return parameter.spec.defaultValue
         default:
             return mask[parameter]
         }
@@ -344,6 +349,16 @@ public extension EditorModel {
                    case var .colorRange(range) = mask.components[index].shape {
                     range.refine = quantized
                     mask.components[index].shape = .colorRange(range)
+                }
+            case .maskAIFeather, .maskAIEdge:
+                if let index = mask.components.firstIndex(where: { $0.id == componentID }),
+                   case var .ai(ai) = mask.components[index].shape {
+                    if parameter == .maskAIFeather {
+                        ai.feather = quantized
+                    } else {
+                        ai.edge = quantized
+                    }
+                    mask.components[index].shape = .ai(ai)
                 }
             default:
                 mask[parameter] = quantized

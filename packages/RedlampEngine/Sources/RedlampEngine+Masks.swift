@@ -187,6 +187,12 @@ extension RedlampEngine {
                 ? try masks.analysisGuide(commands: commands, render: render) : nil
             bindings.slices = try masks.slices(for: rasterComponents, analysisGuide: analysis, commands: commands)
             bindings.rasters = masks.rasters
+            if recipe.processVersion >= 13,
+               let edges = try masks.edges(for: rasterComponents, session: session, commands: commands) {
+                bindings.edges = edges.texture
+                bindings.edgeSlices = edges.slices
+                bindings.edgeOffset = edges.offset
+            }
         }
         return bindings
     }

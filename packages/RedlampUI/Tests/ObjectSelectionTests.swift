@@ -1,7 +1,7 @@
 import Foundation
 import RedlampEngineAPI
 import Testing
-@testable import RedlampUI
+@_spi(Harness) @testable import RedlampUI
 
 /// Objects masks by rectangle and brush, beside hover and click (MSK-19).
 @MainActor
@@ -63,6 +63,25 @@ struct ObjectSelectionTests {
         await model.selectObject(along: [ImagePoint(x: 0.3, y: 0.5), ImagePoint(x: 0.3, y: 0.6)], excluding: true)
         #expect(engine.lastRequest?.excluded.count == 2 && engine.lastRequest?.prompts.count == 8)
         #expect(model.history.last?.name == "Remove from Object")
+    }
+
+    @Test func `Feather and Edge shape the selected AI component, and show for it`() async throws {
+        let (model, _, cleanup) = try await openEditor()
+        defer { cleanup() }
+        await model.selectObject(in: ImageRect(x: 0.2, y: 0.3, width: 0.4, height: 0.3))
+        let mask = try #require(model.recipe.masks.first)
+        model.cancelDrawing()
+        model.selectMask(mask.id)
+        model.selectedComponentID = mask.components.first?.id
+        #expect(MaskingPanel.componentTools(model) == .objects)
+        model.setSliderValue(.maskAIFeather, 30)
+        model.setSliderValue(.maskAIEdge, -20)
+        guard case let .ai(ai) = model.recipe.masks.first?.components.first?.shape else {
+            Issue.record("no AI component")
+            return
+        }
+        #expect(ai.feather == 30 && ai.edge == -20)
+        #expect(model.sliderValue(.maskAIFeather) == 30 && model.sliderValue(.maskAIEdge) == -20)
     }
 
     @Test func `points along a stroke are spread by its length`() {

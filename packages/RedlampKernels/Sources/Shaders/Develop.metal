@@ -593,6 +593,7 @@ kernel void rl_develop(
     texture2d<float, access::sample> refinedHaze [[texture(13)]],
     constant float4 *lensTable [[buffer(5)]],
     constant float *maskCurves [[buffer(6)]],
+    texture2d_array<float, access::sample> maskEdges [[texture(14)]],
     uint2 gid [[thread_position_in_grid]])
 {
     uint width = uint(p.outputSize.x);
@@ -622,6 +623,8 @@ kernel void rl_develop(
             camera.b = source.sample(linearSampler, orient(blueUV, int(p.geometry.x)), level(p.geometry.y)).b;
         }
     }
+    // What AI mask edges are guided by (process 13), before any correction.
+    float maskEV = maskEdgeEV(camera);
     // Edge-aware tone's detail (process 7, `ToneBase`): this pixel's log luminance above its
     // region's, in the pyramid's camera RGB as the base was computed, before any correction.
     float toneDetail = 0.0f;
@@ -655,7 +658,7 @@ kernel void rl_develop(
     float2 localGlow = 0.0f;
     float2 localFringe = 0.0f;
     float2 localSwatch = 0.0f;
-    MaskImages maskImages = { maskRasters, maskGuide };
+    MaskImages maskImages = { maskRasters, maskGuide, maskEdges, sourceUV, maskEV };
     float textureMagnitude = -1.0f;
     for (int i = 0; i < layerCount; i++) {
         coverage[i] = evaluateMaskLayer(layers[i], components, maskPosition, maskImages);

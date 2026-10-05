@@ -187,6 +187,25 @@ public struct GrayMask: Sendable, Hashable {
         return GrayMask(width: width, height: height, coverage: values)
     }
 
+    /// Feather and Edge, as an AI mask's sliders set them: Edge (-100...100) moves the edge out
+    /// or in by up to `reach` pixels, Feather (0...100) softens it over about twice that. The mask
+    /// is blurred (twice a box of half the larger reach, so a straight edge ramps over twice it),
+    /// then cut at a level Edge moves from the middle, as sharply as Feather allows. At 0 and 0 it
+    /// is the mask itself.
+    public func shaped(feather: Double, edge: Double, reach: Int) -> GrayMask {
+        guard feather != 0 || edge != 0, reach > 0 else { return self }
+        let featherReach = min(max(feather, 0), 100) / 100 * Double(reach)
+        let edgeReach = min(abs(edge), 100) / 100 * Double(reach)
+        let larger = max(featherReach, edgeReach)
+        let blurred = blurred(radius: max(Int((larger / 2).rounded()), 1)).coverage
+        let softness = Float(max(0.5 * featherReach / larger, 0.02))
+        let level = min(max(Float(0.5 - min(max(edge, -100), 100) / 200 * edgeReach / larger), softness), 1 - softness)
+        return GrayMask(width: width, height: height, coverage: blurred.map { value in
+            let t = min(max((value - (level - softness)) / (2 * softness), 0), 1)
+            return t * t * (3 - 2 * t)
+        })
+    }
+
     /// Rotates or flips a mask stored in a file's native orientation into the oriented frame
     /// (EXIF orientation codes 1-8).
     public func oriented(exif orientation: Int) -> GrayMask {

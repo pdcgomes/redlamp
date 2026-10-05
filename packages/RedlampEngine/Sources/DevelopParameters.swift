@@ -438,8 +438,10 @@ enum DevelopParameters {
             guard let slice = masks.slices[component.id] else {
                 return MaskComponentGPU(geometry: .zero, shape: SIMD4(0, operation, inverted, 0), rotation: .zero)
             }
+            // z: the AI mask's edge coefficients' slice plus one (process 13), w the guide's offset.
+            let edges = masks.edgeSlices[component.id].map { Float($0 + 1) } ?? 0
             return MaskComponentGPU(
-                geometry: SIMD4(Float(slice), inverseAspect, 0, 0),
+                geometry: SIMD4(Float(slice), inverseAspect, edges, masks.edgeOffset),
                 shape: SIMD4(3, operation, inverted, 0),
                 rotation: .zero,
             )

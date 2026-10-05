@@ -740,6 +740,10 @@ private struct SelectedMaskEditor: View {
             case .depthRange:
                 DepthRangeEditor()
                     .padding(.top, 6)
+            case let kind? where kind.isAI:
+                ParameterSlider(parameter: .maskAIFeather)
+                    .padding(.top, 6)
+                ParameterSlider(parameter: .maskAIEdge)
             default:
                 EmptyView()
             }
@@ -777,7 +781,10 @@ extension MaskingPanel {
             return .brush
         }
         let kind = model.selectedComponentOutline?.kind
-        return [.radial, .brush, .colorRange, .luminanceRange, .depthRange].contains(kind) ? kind : nil
+        if let kind, kind.isAI {
+            return kind
+        }
+        return [.radial, .brush, .colorRange, .luminanceRange].contains(kind) ? kind : nil
     }
 }
 

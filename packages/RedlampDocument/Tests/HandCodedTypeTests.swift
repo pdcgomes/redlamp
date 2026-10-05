@@ -66,7 +66,7 @@ struct HandCodedTypeTests {
             Issue.record("the sample's second subject component isn't an AI mask")
             return
         }
-        try check(person, notWritten: ["box"])
+        try check(person, notWritten: ["box", "feather", "edge"])
         let object = AIMask(
             kind: .objects, provider: "redlamp.sam2.1", revision: 1, prompts: [ImagePoint(x: 0.4, y: 0.5)],
             excludedPrompts: [ImagePoint(x: 0.45, y: 0.55)], box: ImageRect(
@@ -79,7 +79,10 @@ struct HandCodedTypeTests {
             bitmap: MaskBitmap(sha256: String(repeating: "b", count: 64), width: 64, height: 48),
             createdAt: Date(timeIntervalSince1970: 1_790_000_000),
         )
-        try check(object, notWritten: ["osBuild", "instance", "part", "refinements"])
+        var shaped = object
+        shaped.feather = 25
+        shaped.edge = -10
+        try check(shaped, notWritten: ["osBuild", "instance", "part", "refinements"])
     }
 
     @Test func `spots, recipes and looks`() throws {

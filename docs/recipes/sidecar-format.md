@@ -270,6 +270,8 @@ An AI mask was computed by a model from the photo without any edit, and is kept 
 | `prompts` | [point] | **Required.** Points the user clicked to guide the model; often empty. |
 | `excludedPrompts` | [point]? | Points the user clicked to leave out. |
 | `box` | object? | For Objects, the box dragged around the thing, or the one Find found it in: `{"left", "top", "right", "bottom"}` in the oriented frame, 0…1. Updating the mask asks the model with it again. |
+| `feather` | number? | 0…100: softens the mask's edge, over up to 3% of the mask's long edge. Written only when it isn't 0. |
+| `edge` | number? | −100…100: moves the mask's edge out (above 0) or in (below 0), by up to 1.5% of the mask's long edge. Written only when it isn't 0. Both are applied to the bitmap as it's drawn, which stays as the model made it. |
 | `analysisHash` | string | **Required.** A hash of the render the model saw. |
 | `center` | point | **Required.** Where the mask's pin is drawn. |
 | `bitmap` | object | **Required.** `{"sha256", "width", "height"}`: the mask as an 8-bit grayscale PNG, `masks/<sha256>.png` in the package, covering the photo in its oriented frame, white for full coverage. The refinements are already applied. A bitmap file that is missing covers nothing. |
@@ -350,6 +352,7 @@ Each step after the first stores its edit as a patch to the JSON of the step bef
 | 10 | A photo with Remove, Heal or Clone spots has its Highlights and Shadows, Clarity, Dehaze and glow worked out from the photo as the spots leave it, so a removed object leaves no trace where they're used. |
 | 11 | Texture, Clarity and sharpening work on one split of the noise-reduced luminance into bands of detail. Texture boosts medium detail and holds back the step of an edge, so it makes no halos, and negative Texture smooths that detail; sharpening restores detail that stands above the noise and leaves flat noise as noise reduction left it. |
 | 12 | A Remove spot is filled only from what the edit keeps: never from its other Remove spots or from the spots after it, so removing several things at once doesn't copy one into another's hole. |
+| 13 | AI masks' edges are refined at the size the photo is drawn at, by a guided filter guided by the photo's own luminance, so an edge stays as sharp as the photo's at full size instead of showing the mask's pixels. Where the photo has no edge for a mask's to follow, the mask keeps its own. |
 
 New edits get the current version, 12. An edit keeps its version until the user updates it (the Process control in the Calibration panel), so every edit keeps rendering as it did when it was made.
 

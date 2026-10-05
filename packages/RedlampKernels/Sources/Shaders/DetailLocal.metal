@@ -18,6 +18,7 @@ kernel void rl_detail_local(
     constant MaskComponentGPU *components [[buffer(2)]],
     texture2d_array<float, access::sample> maskRasters [[texture(2)]],
     texture2d<float, access::sample> maskGuide [[texture(3)]],
+    texture2d_array<float, access::sample> maskEdges [[texture(4)]],
     uint2 gid [[thread_position_in_grid]])
 {
     if (int(gid.x) >= p.size.x || int(gid.y) >= p.size.y) return;
@@ -26,8 +27,9 @@ kernel void rl_detail_local(
     float2 uv = unorient((float2(p.place.xy) + float2(gid) + 0.5f) / levelSize, p.place.w);
     float2 position = float2(uv.x * p.geometry.x, uv.y);
     float4 amounts = 0.0f;
-    MaskImages maskImages = { maskRasters, maskGuide };
     float2 sourceUV = (float2(p.place.xy) + float2(gid) + 0.5f) / levelSize;
+    float ev = maskEdgeEV(pyramid.read(uint2(p.place.xy) + gid, level).rgb);
+    MaskImages maskImages = { maskRasters, maskGuide, maskEdges, sourceUV, ev };
     float textureMagnitude = -1.0f;
     for (int i = 0; i < min(p.size.z, kMaxMaskLayers); i++) {
         float coverage = evaluateMaskLayer(layers[i], components, position, maskImages);
