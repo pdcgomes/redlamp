@@ -878,7 +878,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [ ] Lens corrections from the lensfun database (waits on counsel) <!-- tracker: LNS-03 -->
 - [ ] Slider-feel calibration against Lightroom: response curves fitted against Lightroom's renders <!-- tracker: EDT-11 -->
 - [ ] Photos library integration and a Photos editing extension
-- [ ] Tools that behave like Lightroom's: zoom and pan in every tool, and every brush sized from the keyboard and pointer with its size shown as it changes <!-- tracker: UX-15 -->
+- [x] Tools that behave like Lightroom's: zoom and pan in every tool, and every brush sized from the keyboard and pointer with its size shown as it changes <!-- tracker: UX-15 -->
 - [ ] Masks: reorder masks and components, every overlay mode and its opacity, a Color swatch, and local Whites and Blacks as true end points <!-- tracker: MSK-21, MSK-23, MSK-24 -->
 
 ### Phase 3: Pro masking, healing, AI denoise, focus stacking, and looks *(in progress)*

@@ -190,7 +190,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Feature | Lightroom | Redlamp | vs Lightroom | Phase | Tracker | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | Zoom, Navigator and clipping | Yes | Done | Behind | | | Fit, Fill, 1:1 and 2:1; Lightroom zooms to 11:1 |
-| Zoom, pan and brush sizes in every tool | Yes | Planned | | P2 | UX-15 | The wheel zooms and Space pans while masking, healing and cropping, and every brush sizes with [ and ] or ⌘-scroll |
+| Zoom, pan and brush sizes in every tool | Yes | Done | | | UX-15 | The wheel zooms and Space pans while masking, healing and cropping, and every brush sizes with [ and ] or ⌘-scroll |
 | Histogram you can drag to adjust | Yes | Done | | | | |
 | Lightroom Classic's keyboard shortcuts | Yes | Done | | | | 97 actions on 96 key bindings |
 | Command palette | No | Done | | | UX-07 | Every action and slider from the keyboard (⌘K) |
