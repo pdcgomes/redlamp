@@ -98,6 +98,21 @@ struct FilmstripTests {
         #expect(cell(strip, 0)?.isSelected == false)
     }
 
+    /// The strip follows the selection a turn after it changes; cells drawn in between, while the
+    /// strip scrolls or reloads, mustn't keep a highlight it never followed.
+    @Test func `a photo selected only briefly isn't left highlighted`() async throws {
+        defer { cleanUp() }
+        let (model, strip, window) = try await showStrip(count: 20)
+        defer { window.contentView = nil }
+        model.select(model.items[2].url)
+        strip.collectionView.reloadData()
+        strip.collectionView.layoutSubtreeIfNeeded()
+        model.select(model.items[4].url)
+        try await eventually { cell(strip, 4)?.isSelected == true }
+        #expect(cell(strip, 2)?.isSelected == false)
+        #expect(cell(strip, 0)?.isSelected == false)
+    }
+
     private func titles(_ menu: NSMenu?) -> [String] {
         menu?.items.filter { !$0.isSeparatorItem }.map(\.title) ?? []
     }
