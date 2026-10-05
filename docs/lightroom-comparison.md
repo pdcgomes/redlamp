@@ -162,8 +162,8 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Feature | Lightroom | Redlamp | vs Lightroom | Phase | Tracker | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | Folders | Yes (Classic) | Done | Different | | UX-08 | A working set of folders, not a catalog; nothing on disk is moved |
-| Copy and paste settings | Yes | Done | | | EDT-08 | Lightroom's checklist, remembered |
-| Sync and Auto Sync | Yes | Done | | | EDT-17, EDT-18 | |
+| Copy and paste settings | Yes | Done | | | EDT-08, EDT-19 | Lightroom's checklist, remembered; also from a filmstrip photo's context menu |
+| Sync and Auto Sync | Yes | Done | | | EDT-17, EDT-18, EDT-20 | Undo with Auto Sync on gives each photo its own edit back, as in Lightroom |
 | Ratings, flags and colour labels | Yes | Done | | | | Saved with the photo's edit, shown on the filmstrip |
 | Batch export | Yes | Planned | | P4 | EDT-16 | |
 | Batch rename | Yes | Undecided | | | | |

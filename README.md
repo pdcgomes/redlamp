@@ -852,7 +852,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 
 ### Phase 2: Develop parity *(in progress)*
 - [x] Texture, Clarity and Dehaze, globally and inside masks, and Moiré and Defringe inside masks <!-- tracker: MSK-03, TON-27 -->
-- [x] Copy Settings with Lightroom's checklist, Sync and Auto Sync across a filmstrip selection <!-- tracker: EDT-08, EDT-17, EDT-18 -->
+- [x] Copy Settings with Lightroom's checklist, Sync and Auto Sync across a filmstrip selection <!-- tracker: EDT-08, EDT-17, EDT-18, EDT-19, EDT-20 -->
 - [x] Detail panel: noise reduction scaled to each photo's measured noise, and noise-aware sharpening, with Lightroom's controls <!-- tracker: DN-02, SHP-01 -->
 - [x] Menon Bayer demosaic with a dual pass for flat noisy areas, hot-pixel repair and highlight reconstruction <!-- tracker: CAM-05, CAM-06, CAM-08 -->
 - [x] **Recipes:** one format for presets, profiles and LUTs, Base Look tables, camera recipe cards, `.cube`, `.3dl` and HaldCLUT import (with LUTs for S-Log3, LogC3, V-Log and Apple Log footage), 39 bundled recipes, and the Recipe Lab <!-- tracker: EDT-07, TON-11, TON-28 -->
