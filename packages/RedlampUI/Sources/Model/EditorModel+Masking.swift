@@ -148,6 +148,18 @@ public extension EditorModel {
         selectedComponentID = component.id
     }
 
+    /// Moves a component of `maskID` to `target`'s place, as dragging it onto `target` does. The
+    /// components combine in order, so this can change what the mask covers.
+    func moveComponent(_ componentID: UUID, in maskID: UUID, onto target: UUID) {
+        guard componentID != target, let mask = recipe.mask(maskID),
+              let from = mask.components.firstIndex(where: { $0.id == componentID }),
+              let to = mask.components.firstIndex(where: { $0.id == target })
+        else { return }
+        mutateMask(maskID, name: "Reorder Components", kind: kind(of: componentID)) { mask in
+            mask.components.insert(mask.components.remove(at: from), at: to)
+        }
+    }
+
     func deleteComponent(_ componentID: UUID, in maskID: UUID) {
         guard let mask = recipe.mask(maskID) else { return }
         if mask.components.count <= 1 {
@@ -196,6 +208,17 @@ public extension EditorModel {
         next.masks.append(copy)
         selectedMaskID = copy.id
         commit(next, .mask(nil), inverted ? "Duplicate and Invert \(original.name)" : "Duplicate \(original.name)")
+    }
+
+    /// Moves mask `id` to `target`'s place, as dragging it onto `target` in the Masks panel does.
+    /// Masks add up, so the order changes only the list.
+    func moveMask(_ id: UUID, onto target: UUID) {
+        guard id != target, let from = recipe.masks.firstIndex(where: { $0.id == id }),
+              let to = recipe.masks.firstIndex(where: { $0.id == target })
+        else { return }
+        var next = recipe
+        next.masks.insert(next.masks.remove(at: from), at: to)
+        commit(next, .mask(nil), "Reorder Masks")
     }
 
     func renameMask(_ id: UUID, to name: String) {

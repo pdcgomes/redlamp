@@ -254,6 +254,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
                 request.recipe, session: session, into: target.texture, size: size, region: region,
                 encoding: .linear, showClipping: request.showClipping, maskOverlay: request.maskOverlay,
                 maskOverlayColor: request.maskOverlayColor, maskOverlayStyle: request.maskOverlayStyle,
+                maskOverlayOpacity: request.maskOverlayOpacity,
                 commands: commands, visualizeSpots: request.visualizeSpots, retouchMaps: .refreshLater,
             )
             // Visualize Spots replaces the photo in the frame, not in the histogram.
@@ -266,6 +267,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
                     request.recipe, session: session, into: whole.texture, size: overviewSize,
                     encoding: .linear, showClipping: request.showClipping, maskOverlay: request.maskOverlay,
                     maskOverlayColor: request.maskOverlayColor, maskOverlayStyle: request.maskOverlayStyle,
+                    maskOverlayOpacity: request.maskOverlayOpacity,
                     commands: commands, retouchMaps: .refreshLater,
                 )
                 try encodeHistogram(texture: whole.texture, size: overviewSize, linear: true, commands: commands)
@@ -326,6 +328,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         maskOverlay: UUID? = nil,
         maskOverlayColor: MaskOverlayColor = .red,
         maskOverlayStyle: MaskOverlayStyle = .colorOverlay,
+        maskOverlayOpacity: Double = MaskOverlayStyle.defaultOpacity,
         commands: any MTLCommandBuffer,
         cacheDetail: Bool = true,
         detail: Bool = true,
@@ -347,7 +350,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             recipe: recipe, session: session, baseLook: baseLooks.resolve(recipe.baseLook), outputSize: size,
             region: region, encoding: encoding,
             showClipping: showClipping, maskOverlay: maskOverlay, maskOverlayColor: maskOverlayColor,
-            maskOverlayStyle: maskOverlayStyle, masks: maskBindings,
+            maskOverlayStyle: maskOverlayStyle, maskOverlayOpacity: maskOverlayOpacity, masks: maskBindings,
         )
         inputs.params.denoised = processed?.area ?? .zero
         if let visualizeSpots {

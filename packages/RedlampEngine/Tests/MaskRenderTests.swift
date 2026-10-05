@@ -165,6 +165,38 @@ struct MaskRenderTests {
         #expect(worst < 1e-4, "differs by \(worst)")
     }
 
+    @Test func `the overlay's opacity sets how strongly it tints the mask`() throws {
+        let session = try makeSession(width: 200, height: 100) { _, _ in SIMD3(repeating: 0.18) }
+        let mask = MaskLayer(name: "Centre", components: [MaskComponent(shape: .radial(RadialMask(
+            center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.3, radiusY: 0.3, feather: 0,
+        )))])
+        var recipe = EditRecipe()
+        recipe.masks = [mask]
+        let centre = 50 * 200 + 100
+        let plain = try render(recipe, session: session)[centre]
+        let tints = try [0, 0.55, 1].map { try render(recipe, session: session, overlay: mask.id, opacity: $0)[centre] }
+        #expect(simd_abs(tints[0] - plain).max() < 1e-3, "no tint at 0%")
+        #expect(tints[0].x < tints[1].x && tints[1].x < tints[2].x && tints[2].y < tints[1].y)
+        #expect(tints[2].x > 10 * tints[2].y, "the overlay's red at 100%")
+        let fallback = try render(recipe, session: session, overlay: mask.id)[centre]
+        #expect(simd_abs(fallback - tints[1]).max() < 1e-4, "55% until it's changed")
+    }
+
+    @Test func `Image on B&W shows the mask in colour and the rest in grey`() throws {
+        let session = try makeSession(width: 200, height: 100) { _, _ in SIMD3(0.4, 0.2, 0.1) }
+        let mask = MaskLayer(name: "Centre", components: [MaskComponent(shape: .radial(RadialMask(
+            center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.3, radiusY: 0.3, feather: 0,
+        )))])
+        var recipe = EditRecipe()
+        recipe.masks = [mask]
+        let (centre, corner) = (50 * 200 + 100, 5 * 200 + 5)
+        let plain = try render(recipe, session: session)
+        let shown = try render(recipe, session: session, overlay: mask.id, style: .imageOnBlackAndWhite)
+        #expect(simd_abs(shown[centre] - plain[centre]).max() < 1e-3, "the mask as it is")
+        #expect(shown[corner].max() - shown[corner].min() < 1e-3, "grey outside: \(shown[corner])")
+        #expect(plain[corner].x - plain[corner].z > 0.05, "the photo outside is coloured")
+    }
+
     // MARK: - Refinements
 
     /// A layer reusing another's coverage covers the same area, even when that mask is hidden.
@@ -361,12 +393,14 @@ struct MaskRenderTests {
     /// The whole photo at full size, as linear output.
     private func render(
         _ recipe: EditRecipe, session: ImageSession, engine: RedlampEngine? = nil, overlay: UUID? = nil,
+        style: MaskOverlayStyle = .colorOverlay, opacity: Double = MaskOverlayStyle.defaultOpacity,
     ) throws -> [SIMD3<Float>] {
         let engine = try engine ?? RedlampEngine()
         let size = session.orientedSize
-        let frame = try engine.renderFrame(
-            RenderRequest(recipe: recipe, targetSize: size, maskOverlay: overlay, generation: 0), session: session,
-        )
+        var request = RenderRequest(recipe: recipe, targetSize: size, maskOverlay: overlay, generation: 0)
+        request.maskOverlayStyle = style
+        request.maskOverlayOpacity = opacity
+        let frame = try engine.renderFrame(request, session: session)
         let surface = frame.surface
         IOSurfaceLock(surface, .readOnly, nil)
         defer { IOSurfaceUnlock(surface, .readOnly, nil) }

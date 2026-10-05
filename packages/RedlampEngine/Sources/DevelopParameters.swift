@@ -76,6 +76,7 @@ enum DevelopParameters {
         maskOverlay: UUID? = nil,
         maskOverlayColor: MaskOverlayColor = .red,
         maskOverlayStyle: MaskOverlayStyle = .colorOverlay,
+        maskOverlayOpacity: Double = MaskOverlayStyle.defaultOpacity,
         masks: MaskBindings = .none,
     ) -> DevelopInputs {
         var p = DevelopParams()
@@ -284,7 +285,10 @@ enum DevelopParameters {
         }
         p.masks = SIMD4(
             Float(layers.count), Float(overlayIndex ?? -1), Float(components.count),
-            Float(maskOverlayColor.rawValue + 8 * maskOverlayStyle.rawValue),
+            Float(
+                maskOverlayColor.rawValue + 8 * maskOverlayStyle.rawValue
+                    + 64 * Int((min(max(maskOverlayOpacity, 0), 1) * 100).rounded()),
+            ),
         )
 
         let lut = ToneCurveMath.isIdentity(recipe) ? [Float](repeating: 0, count: 4) : ToneCurveMath.lut(for: recipe)

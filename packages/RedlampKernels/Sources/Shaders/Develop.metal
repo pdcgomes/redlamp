@@ -958,7 +958,8 @@ kernel void rl_develop(
         else if (all(encoded <= 0.002f)) encoded = float3(0.15f, 0.35f, 1.0f);
     }
 
-    // The selected mask's overlay: masks.w is the colour plus 8 × the style (MaskOverlayStyle).
+    // The selected mask's overlay: masks.w is the colour, plus 8 × the style (MaskOverlayStyle),
+    // plus 64 × the tint's opacity in percent.
     int overlay = int(p.masks.y);
     if (overlay >= 0 && overlay < layerCount) {
         const float3 overlayColors[4] = {
@@ -966,20 +967,22 @@ kernel void rl_develop(
         };
         int code = int(p.masks.w);
         float3 tint = overlayColors[clamp(code & 7, 0, 3)];
+        float opacity = float(code >> 6) / 100.0f;
         float cover = coverage[overlay];
         float grey = dot(encoded, float3(0.2126f, 0.7152f, 0.0722f));
-        switch (code >> 3) {
-        case 1: encoded = mix(float3(grey), tint, cover * 0.55f); break;
+        switch ((code >> 3) & 7) {
+        case 1: encoded = mix(float3(grey), tint, cover * opacity); break;
         case 2: encoded *= cover; break;
         case 3: encoded = mix(float3(1.0f), encoded, cover); break;
         case 4: encoded = float3(cover); break;
         case 5: {
             constexpr sampler guideSampler(coord::normalized, filter::linear, address::clamp_to_edge);
             float lightness = maskGuide.sample(guideSampler, imageUV).x;
-            encoded = mix(float3(lightness), tint, cover * 0.55f);
+            encoded = mix(float3(lightness), tint, cover * opacity);
             break;
         }
-        default: encoded = mix(encoded, tint, cover * 0.55f); break;
+        case 6: encoded = mix(float3(grey), encoded, cover); break;
+        default: encoded = mix(encoded, tint, cover * opacity); break;
         }
     }
 

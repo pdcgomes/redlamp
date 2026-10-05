@@ -38,6 +38,9 @@ public struct RenderRequest: Sendable, Hashable {
     public var maskOverlay: UUID?
     public var maskOverlayColor: MaskOverlayColor = .red
     public var maskOverlayStyle: MaskOverlayStyle = .colorOverlay
+    /// How strongly the tinting modes (Color Overlay, Color Overlay on B&W, the luminance map) tint
+    /// the mask, 0...1.
+    public var maskOverlayOpacity = MaskOverlayStyle.defaultOpacity
     /// Shows the photo as Lightroom's Visualize Spots does, white where it differs from a wider
     /// blur of itself, so dust and specks stand out, at this sensitivity (0...100). The overview
     /// and the histogram still show the photo.
@@ -70,6 +73,7 @@ public struct RenderRequest: Sendable, Hashable {
 /// Luminance Range shows while it is edited.
 public enum MaskOverlayStyle: Int, Sendable, Hashable, CaseIterable {
     case colorOverlay, colorOverlayOnBlackAndWhite, imageOnBlack, imageOnWhite, blackAndWhite, luminanceMap
+    case imageOnBlackAndWhite
 
     public var name: String {
         switch self {
@@ -79,13 +83,27 @@ public enum MaskOverlayStyle: Int, Sendable, Hashable, CaseIterable {
         case .imageOnWhite: "Image on White"
         case .blackAndWhite: "B&W"
         case .luminanceMap: "Luminance Map"
+        case .imageOnBlackAndWhite: "Image on B&W"
         }
     }
 
-    /// The modes offered in the overlay menu (the luminance map belongs to Luminance Range).
+    /// The modes offered in the overlay menu, in Lightroom's order (the luminance map belongs to
+    /// Luminance Range).
     public static let menu: [MaskOverlayStyle] = [
         .colorOverlay, .colorOverlayOnBlackAndWhite, .imageOnBlack, .imageOnWhite, .blackAndWhite,
+        .imageOnBlackAndWhite,
     ]
+
+    /// Whether the mode tints the mask, so the overlay's opacity applies.
+    public var tints: Bool {
+        switch self {
+        case .colorOverlay, .colorOverlayOnBlackAndWhite, .luminanceMap: true
+        case .imageOnBlack, .imageOnWhite, .blackAndWhite, .imageOnBlackAndWhite: false
+        }
+    }
+
+    /// The tint's opacity until it's changed.
+    public static let defaultOpacity = 0.55
 }
 
 /// Mask overlay colors, cycled with Shift-O as in Lightroom.

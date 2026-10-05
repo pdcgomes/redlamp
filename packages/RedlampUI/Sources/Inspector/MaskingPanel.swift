@@ -55,6 +55,7 @@ import SwiftUI
 
 struct MasksHeaderBar: View {
     @Environment(EditorModel.self) private var model
+    @State private var choosingOverlay = false
 
     var body: some View {
         @Bindable var model = model
@@ -68,29 +69,97 @@ struct MasksHeaderBar: View {
                 .controlSize(.small)
                 .font(Theme.captionFont)
                 .help("Show Overlay (O)")
-            Menu {
-                Picker("Overlay Mode", selection: $model.maskOverlayStyle) {
+            Button {
+                choosingOverlay.toggle()
+            } label: {
+                Image(systemName: "circle.lefthalf.striped.horizontal")
+            }
+            .buttonStyle(.plain)
+            .help("Overlay mode, color and opacity")
+            .popover(isPresented: $choosingOverlay, arrowEdge: .leading) {
+                MaskOverlayOptions()
+                    .environment(model)
+            }
+        }
+        .padding(.horizontal, Theme.panelPadding)
+        .padding(.vertical, 10)
+    }
+}
+
+/// The overlay's mode, and for the modes that tint, its color and opacity, as Lightroom's overlay
+/// options.
+struct MaskOverlayOptions: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        let tints = model.maskOverlayStyle.tints
+        Grid(alignment: .leading, verticalSpacing: 8) {
+            GridRow {
+                Text("Mode")
+                Picker("Mode", selection: $model.maskOverlayStyle) {
                     ForEach(MaskOverlayStyle.menu, id: \.self) { style in
                         Text(style.name).tag(style)
                     }
                 }
-                .pickerStyle(.inline)
-                Picker("Overlay Color", selection: $model.maskOverlayColor) {
+                .labelsHidden()
+            }
+            GridRow {
+                Text("Color")
+                Picker("Color", selection: $model.maskOverlayColor) {
                     ForEach(MaskOverlayColor.allCases, id: \.self) { color in
                         Text(color.name).tag(color)
                     }
                 }
-                .pickerStyle(.inline)
-            } label: {
-                Image(systemName: "circle.lefthalf.striped.horizontal")
+                .labelsHidden()
+                .disabled(!tints)
             }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .fixedSize()
-            .help("Overlay mode and color")
+            GridRow {
+                Text("Opacity")
+                HStack {
+                    Slider(value: $model.maskOverlayOpacity, in: 0 ... 1)
+                    Text("\(Int((model.maskOverlayOpacity * 100).rounded()))%")
+                        .monospacedDigit()
+                        .frame(width: 36, alignment: .trailing)
+                }
+                .disabled(!tints)
+            }
         }
-        .padding(.horizontal, Theme.panelPadding)
-        .padding(.vertical, 10)
+        .font(Theme.labelFont)
+        .controlSize(.small)
+        .padding(12)
+        .frame(width: 250)
+    }
+}
+
+/// Drag to reorder: the row carries `payload`, and a row dropped on by another of its kind gives
+/// it its place.
+private struct Reorderable: ViewModifier {
+    let payload: String
+    let isEnabled: Bool
+    let drop: (String) -> Bool
+    @State private var isTargeted = false
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .draggable(payload)
+                .dropDestination(for: String.self) { items, _ in
+                    items.first.map(drop) ?? false
+                } isTargeted: { isTargeted = $0 }
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(
+                    Color.accentColor,
+                    lineWidth: isTargeted ? 1.5 : 0,
+                ))
+        } else {
+            content
+        }
+    }
+
+    /// The ID in a payload of `kind`, or nil for anything else dropped.
+    static func id(in payload: String, kind: String) -> UUID? {
+        guard payload.hasPrefix("redlamp.\(kind):") else { return nil }
+        return UUID(uuidString: String(payload.dropFirst("redlamp.\(kind):".count)))
     }
 }
 
@@ -488,6 +557,11 @@ struct MaskList: View {
                     renaming = mask.id
                 }
                 .onTapGesture { model.selectMask(mask.id) }
+                .modifier(Reorderable(payload: "redlamp.mask:\(mask.id.uuidString)", isEnabled: renaming != mask.id) {
+                    guard let dragged = Reorderable.id(in: $0, kind: "mask") else { return false }
+                    model.moveMask(dragged, onto: mask.id)
+                    return true
+                })
                 .contextMenu {
                     Button("Rename…") {
                         draftName = mask.name
@@ -861,6 +935,11 @@ struct ComponentRow: View {
         .background(RoundedRectangle(cornerRadius: 6).fill(selected ? Theme.selection : .clear))
         .contentShape(Rectangle())
         .onTapGesture { model.selectedComponentID = component.id }
+        .modifier(Reorderable(payload: "redlamp.component:\(component.id.uuidString)", isEnabled: true) {
+            guard let dragged = Reorderable.id(in: $0, kind: "component") else { return false }
+            model.moveComponent(dragged, in: mask.id, onto: component.id)
+            return true
+        })
         .contextMenu {
             ForEach(MaskOperation.allCases, id: \.self) { operation in
                 Button("Set to \(operation.name)") { model.setComponentOperation(component.id, in: mask.id, operation) }

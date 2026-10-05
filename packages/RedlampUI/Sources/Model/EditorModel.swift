@@ -433,6 +433,11 @@ public final class EditorModel {
         didSet { requestRender() }
     }
 
+    /// How strongly the overlay tints the mask in the Color Overlay modes, 0...1.
+    public var maskOverlayOpacity = MaskOverlayStyle.defaultOpacity {
+        didSet { requestRender() }
+    }
+
     /// Luminance Range's "Show Luminance Map": the photo's lightness in grey, the range tinted.
     public var showLuminanceMap = false {
         didSet { requestRender() }
@@ -799,6 +804,7 @@ public final class EditorModel {
         )
         request.maskOverlayColor = maskOverlayColor
         request.maskOverlayStyle = showLuminanceMap && overlay != nil ? .luminanceMap : maskOverlayStyle
+        request.maskOverlayOpacity = maskOverlayOpacity
         request.showRawClipping = showRawClipping
         request.visualizeSpots = activeTool == .heal && visualizeSpots ? spotSettings.visualize : nil
         request.comparison = isComparing ? beforeRecipe : nil
