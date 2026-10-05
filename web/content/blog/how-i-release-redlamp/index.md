@@ -33,16 +33,16 @@ The room doesn't remember versions, it works them out. Every time the skill star
 
 ```
 Latest release:   0.2.3-prealpha (2026-10-04, from GitHub)
-Upcoming release: 0.2.4-prealpha, build 601 (the next patch, as `mise run release` bumps it)
+Upcoming release: 0.2.4-prealpha, build 601 (the next patch, …)
 origin/main:      1065b5b Blog: publish Testing cameras I don't own
 
 Changes since 0.2.3-prealpha: 59 commits
-  CAM-14   Done         Camera bench: decode diagnostics …  (10 commits)
-  CAM-15   Done         The Camera Bench window: photos or a folder …  (8 commits)
-  CAM-16   In progress  Camera bench submissions: measurements only …  (2 commits)
-  EDT-19   Done         The filmstrip's context menu: Copy Settings, Paste, Sync …  (3 commits)
-  RM-10    In progress  Opt-in generative fill on Macs …  (2 commits)
-  UX-14    Done         What's New: after an update, the release's highlights …  (10 commits)
+  CAM-14  Done         Camera bench: decode diagnostics …  (10 commits)
+  CAM-15  Done         The Camera Bench window: …  (8 commits)
+  CAM-16  In progress  Camera bench submissions: …  (2 commits)
+  EDT-19  Done         The filmstrip's context menu: …  (3 commits)
+  RM-10   In progress  Opt-in generative fill on Macs …  (2 commits)
+  UX-14   Done         What's New: after an update, …  (10 commits)
   …
 
 What's New for 0.2.4-prealpha on origin/main: Test your camera
@@ -76,8 +76,6 @@ For 0.2.4 there are six items as I write this: say what goes in, switch on the c
 ## What's New
 
 0.2.4 is also the first release with What's New, a window that opens once after an update with the release's highlights, at most four. Sparkle's update window already lists every commit; this is the short version. Its content comes from redlamp.app rather than the app, so a highlight can be corrected after a release.
-
-![What's New in Redlamp 0.2.4, with one highlight, Test your camera](whats-new-highlights.png "What's New in 0.2.4, from the feed on redlamp.app.")
 
 ![The Test your camera page in What's New, with a screenshot of the Camera Bench and a Test Your Camera button](whats-new-test-your-camera.png "Each highlight gets a page, and can carry a button that opens the feature.")
 
