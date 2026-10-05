@@ -213,12 +213,13 @@ Sorting is separate from the query: captured (the default), name, rating, edited
 ## Photo lists and selections (LIB-10)
 
 - A `PhotoList` is a source's photo IDs in order, with diffs (inserted, removed, moved, updated) for the views; cells fetch their rows from the column store when they appear.
-- A selection is a bitset over the column store's rows (125 KB for a million) and an active photo.
+- A selection is a bitset over photo IDs (125 KB for a million) and an active photo; not over the column store's rows, which compaction renumbers.
+- `LibraryLive` keeps the open lists current: it applies the indexer's and change tracking's events to the query engine in batches, one update at a time, and publishes each list's diff. FSEvents doesn't report Redlamp's own writes on this Mac, so the app sends them to `LibraryLive` itself.
 - The open folder becomes one source among the others (folder, folder with subfolders, collection, smart collection, search, All Photographs, Previous Import, Marked, Rejected). `FolderLibrary` keeps its listing and watching for folders the library hasn't indexed, and its `--folders-perf` budgets.
 
 ## Sidecars on this Mac (LIB-11)
 
-`SidecarStore` gets a locator: by default `IMG_1234.ARW.redlamp` beside the photo; for a root that keeps them on this Mac, `LibraryPaths.sidecars/<volume UUID>/<path from the volume's root>.redlamp`. Reading looks in both, beside first. Move Edits and Metadata… moves a root's sidecars through the file-operations journal (LIB-26). The `.xmp` written for other apps (LIB-24) always sits beside the photo.
+`SidecarStore` gets a locator: by default `IMG_1234.ARW.redlamp` beside the photo; for a root that keeps them on this Mac, `LibraryPaths.sidecars/<volume UUID>/<path from the volume's root>.redlamp`. Reading looks in both, beside first, but a newer copy on this Mac wins, so edits made while a volume was read-only aren't hidden by the older sidecar beside the photo. A root is set to keep its sidecars on this Mac on its own when Redlamp can't write beside its photos: local volumes are checked for write access without writing anything, and only network shares get a hidden file, made and then removed. Move Edits and Metadata… moves a root's sidecars both ways, copying, checking and then removing the old copy, never overwriting; its journal in `LibraryPaths.root` lets the next launch finish an interrupted move, until the file-operations journal (LIB-26) takes over. The `.xmp` written for other apps (LIB-24) always sits beside the photo.
 
 ## What the sidecar gains
 
@@ -315,6 +316,22 @@ On the 20,000-photo fixture (`redlamp library bench … --scenario search`), all
 
 - **The first 256 KiB are enough** for ARW, CR2, DNG, ORF, PEF, RW2, 3FR and the Z 8's NEF, passed to ImageIO padded with zeros to the file's length (ImageIO reports a raw's size only when the data looks as long as the file). CR3, RAF, the Z 6's NEF, FFF, IIQ and SRW need ImageIO to read the file itself, which touches 16 to 740 KB of it.
 - **Reads a second:** 46 to 277 on one core, depending on the format, and 432 to 2,429 across all cores; content keys at 35,000 a second on one core. At a thousand photos a second, a million take about 17 minutes on an SSD, metadata only; searching works over what's indexed so far.
+
+### Photo lists and selections (LIB-10)
+
+The `lists` scenario at a million photos in memory, Release, load average about 80, two runs agreeing:
+
+| | Measured | Budget |
+| --- | --- | --- |
+| Building All Photographs | 5.2 ms | under 50 ms, off the main thread |
+| Building a folder with its subfolders | 8.7 ms | under 50 ms |
+| Building a query's list | 2.9 ms | under 50 ms |
+| Select all | 0.8 µs | under 2 ms, on the main thread |
+| Invert | 16 µs | under 2 ms |
+| Extend across 500,000 photos | 433 µs | under 2 ms |
+| The diff after 1,000 photos change | 7.2 ms, after the column store's own update of 23 ms | under 50 ms |
+
+On the 20,000-photo fixture, every list's count equals the manifest's. The diff is worked out from the changed photos alone when they account for the change, and from the whole list otherwise.
 
 ### The store (LIB-09)
 
