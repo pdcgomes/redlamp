@@ -15,6 +15,7 @@ final class ToolStripView: LayerDrawnView, HeightProviding, NSViewToolTipOwner {
     init(model: EditorModel) {
         self.model = model
         super.init(frame: .zero)
+        setAccessibilityIdentifier("toolstrip")
     }
 
     @available(*, unavailable)
@@ -88,8 +89,45 @@ final class ToolStripView: LayerDrawnView, HeightProviding, NSViewToolTipOwner {
     override func mouseDown(with event: NSEvent) {
         let location = convert(event.locationInWindow, from: nil)
         guard let index = Self.tools.indices.first(where: { cell($0).contains(location) }) else { return }
-        let tool = Self.tools[index]
+        choose(Self.tools[index])
+    }
+
+    private func choose(_ tool: EditTool) {
         model.activeTool = model.activeTool == tool && tool != .edit ? .edit : tool
+    }
+
+    // MARK: - Accessibility
+
+    /// One button per tool, at its cell, since the strip draws them all itself.
+    override func accessibilityChildren() -> [Any]? {
+        Self.tools.enumerated().map { index, tool in
+            let element = ToolElement(tool: tool, selected: tool == active) { [weak self] in self?.choose(tool) }
+            element.setAccessibilityParent(self)
+            element.setAccessibilityFrameInParentSpace(cell(index))
+            return element
+        }
+    }
+
+    override func isAccessibilityElement() -> Bool {
+        false
+    }
+
+    private final class ToolElement: NSAccessibilityElement {
+        private let press: () -> Void
+
+        init(tool: EditTool, selected: Bool, press: @escaping () -> Void) {
+            self.press = press
+            super.init()
+            setAccessibilityRole(.button)
+            setAccessibilityLabel(tool.title)
+            setAccessibilityIdentifier("tool.\(tool.rawValue)")
+            setAccessibilityValue(selected)
+        }
+
+        override func accessibilityPerformPress() -> Bool {
+            press()
+            return true
+        }
     }
 
     func view(

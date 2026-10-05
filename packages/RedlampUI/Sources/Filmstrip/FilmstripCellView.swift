@@ -105,6 +105,7 @@ final class FilmstripCellView: NSView {
         toolTip = item.name
         layer?.opacity = item.metadata.flag == .reject ? 0.45 : 1
         setAccessibilityLabel(item.name)
+        setAccessibilityIdentifier("filmstrip.\(item.url.lastPathComponent)")
     }
 
     func setImage(_ image: CGImage?) {

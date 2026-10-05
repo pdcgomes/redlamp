@@ -53,6 +53,27 @@ final class HistogramGraphView: LayerDrawnView, NSViewToolTipOwner {
     init(model: EditorModel) {
         self.model = model
         super.init(frame: .zero)
+        setAccessibilityIdentifier("histogram")
+    }
+
+    /// One adjustable region per slider the graph drags, at its span of the graph.
+    override func accessibilityChildren() -> [Any]? {
+        Region.allCases.map { region in
+            let spec = region.parameter.spec
+            let element = NSAccessibilityElement()
+            element.setAccessibilityParent(self)
+            element.setAccessibilityRole(.slider)
+            element.setAccessibilityLabel(spec.label)
+            element.setAccessibilityIdentifier("histogram.\(region.parameter.rawValue)")
+            element.setAccessibilityValue(spec.formatted(model.value(region.parameter)))
+            let width = bounds.width
+            let graph = CGRect(
+                x: width * region.span.lowerBound, y: isFlipped ? 0 : bounds.height - Self.graphHeight,
+                width: width * (region.span.upperBound - region.span.lowerBound), height: Self.graphHeight,
+            )
+            element.setAccessibilityFrameInParentSpace(graph)
+            return element
+        }
     }
 
     @available(*, unavailable)

@@ -69,6 +69,13 @@ public final class PanelSectionView: NSView, HeightProviding {
         fatalError("init(coder:) is not supported")
     }
 
+    /// Names the section and its header for VoiceOver and the regression suite, such as
+    /// `panel.basic` and `panel.basic.header`.
+    public func identify(as identifier: String) {
+        setAccessibilityIdentifier(identifier)
+        header.setAccessibilityIdentifier("\(identifier).header")
+    }
+
     override public var isFlipped: Bool {
         true
     }

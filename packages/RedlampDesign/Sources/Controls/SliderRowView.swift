@@ -54,6 +54,11 @@ public final class SliderRowView: NSView {
             addSubview(view)
         }
         focusMarker.isHidden = true
+        // Named from the parameter's key, for VoiceOver and the regression suite.
+        setAccessibilityIdentifier("slider.\(parameter.rawValue)")
+        labelView.setAccessibilityIdentifier("slider.\(parameter.rawValue).label")
+        trackView.setAccessibilityIdentifier("slider.\(parameter.rawValue).track")
+        valueView.setAccessibilityIdentifier("slider.\(parameter.rawValue).value")
         toolTip = spec.availability.isLive
             ? "Double-click to reset. Shift-drag for fine control. ⌘-scroll to adjust."
             : "\(spec.label) is laid out for reference and renders in \(Self.phase(spec))."

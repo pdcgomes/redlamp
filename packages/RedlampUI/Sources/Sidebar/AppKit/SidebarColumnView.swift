@@ -61,6 +61,7 @@ extension PanelSectionView {
                 reset: {},
             ),
         )
+        identify(as: "sidebar.\(section.rawValue)")
         headerMenu = {
             let menu = NSMenu()
             menu.addItem(NSMenuItem(title: "Expand All Panels") {

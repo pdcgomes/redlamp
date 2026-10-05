@@ -99,6 +99,7 @@ public final class CanvasMetalView: NSView {
         metalLayer = layer
         renderer = device.flatMap { CanvasRenderer(device: $0, layer: layer) }
         super.init(frame: .zero)
+        setAccessibilityIdentifier("canvas")
         wantsLayer = true
     }
 

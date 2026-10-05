@@ -20,6 +20,7 @@ extension PanelSectionView {
                 reset: { model.resetParameters(panel.parameters, name: "Reset \(panel.title)") },
             ),
         )
+        identify(as: "panel.\(panel.rawValue)")
         headerMenu = {
             let menu = NSMenu()
             menu.addItem(NSMenuItem(title: "Reset \(panel.title)") {
