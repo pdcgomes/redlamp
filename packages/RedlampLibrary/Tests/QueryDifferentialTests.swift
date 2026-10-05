@@ -1,0 +1,153 @@
+import Foundation
+import RedlampDocument
+import Testing
+@testable import RedlampLibrary
+
+/// The column engine and SQL alone must find the same photos in the same order (the design's
+/// differential checks), for random queries over a fixture's own values.
+struct QueryDifferentialTests {
+    /// Queries from the grammar, with values the fixture's photos have or nearly have.
+    struct Generator {
+        var random: SeededRandom
+        let words: [String]
+        let names: QueryNames
+
+        mutating func query(depth: Int = 3) -> LibraryQuery {
+            guard depth > 0, random.chance(0.6) else { return term() }
+            let parts = (0 ..< random.int(in: 2 ... 3)).map { _ in query(depth: depth - 1) }
+            switch random.int(below: 3) {
+            case 0: return .and(parts)
+            case 1: return .or(parts)
+            default: return .not(parts[0])
+            }
+        }
+
+        private mutating func term() -> LibraryQuery {
+            if random.chance(0.15) {
+                return .text(random.pick(words))
+            }
+            let field = random.pick(LibraryQuery.Field.allCases)
+            var comparison = random.chance(0.2) ? LibraryQuery.Comparison.notEqual : .equal
+            if field.isOrdered, random.chance(0.4) {
+                comparison = random.pick([.less, .lessOrEqual, .greater, .greaterOrEqual])
+            }
+            let count = comparison.isOrdering || random.chance(0.75) ? 1 : 2
+            let values = (0 ..< count).map { _ in value(for: field, ranges: !comparison.isOrdering) }
+            return .filter(LibraryQuery.Filter(field, comparison, values))
+        }
+
+        private mutating func value(for field: LibraryQuery.Field, ranges: Bool) -> LibraryQuery.Value {
+            switch field {
+            case .rating: number([0, 1, 2, 3, 4, 5], ranges: ranges)
+            case .iso: number([64, 100, 200, 250, 800, 1600, 3200, 6400, 12800], ranges: ranges)
+            case .aperture: number([1.2, 1.4, 1.6, 1.7, 1.78, 2, 2.8, 4, 5.6, 8, 16], ranges: ranges)
+            case .focal: number([5.1, 6.765, 18.3, 23, 24, 35, 50, 70, 85, 200, 400], ranges: ranges)
+            case .shutter: number([1.0 / 8000, 1.0 / 1000, 1.0 / 250, 1.0 / 30, 0.25, 1, 2, 30], ranges: ranges)
+            case .date: date(ranges: ranges)
+            case .flag: .flag(random.pick([.pick, .reject, nil]))
+            case .label: random.chance(0.1) ? .text("Client") : .label(random.pick([nil] + ColorLabel.allCases))
+            case .marked, .edited: .bool(random.chance(0.5))
+            case .keyword: .text(random.pick(Array(names.keywords.values) + ["Places", "nothing"]))
+            case .camera: .text(part(of: random.pick(Array(names.cameras.values))))
+            case .lens: .text(part(of: random.pick(Array(names.lenses.values))))
+            case .folder: .text(part(of: random.pick(Array(names.folders.values))))
+            case .collection: .text("Portfolio")
+            case .has: .detail(random.pick(LibraryQuery.Detail.allCases))
+            case .ext:
+                random.pick([.kind(.raw), .kind(.jpeg), .kind(.heic), .kind(.png), .text("jpg"), .text("heic")])
+            case .name, .title, .caption: .text(random.pick(words))
+            }
+        }
+
+        private mutating func number(_ values: [Double], ranges: Bool) -> LibraryQuery.Value {
+            guard ranges, random.chance(0.3) else { return .number(random.pick(values)) }
+            let ends = [random.pick(values), random.pick(values)].sorted()
+            let open = random.int(below: 5)
+            return .numberRange(open == 0 ? nil : ends[0], open == 1 ? nil : ends[1])
+        }
+
+        private mutating func date(ranges: Bool) -> LibraryQuery.Value {
+            func one(_ random: inout SeededRandom, relative: Bool) -> QueryDate {
+                let year = random.int(in: 2005 ... 2026)
+                switch random.int(below: relative ? 5 : 3) {
+                case 0: return .year(year)
+                case 1: return .month(year, random.int(in: 1 ... 12))
+                case 2: return .day(year, random.int(in: 1 ... 12), random.int(in: 1 ... 28))
+                case 3: return random.pick([.today, .yesterday])
+                default: return .last(random.int(in: 1 ... 400), random.pick(QueryDate.Unit.allCases))
+                }
+            }
+            guard ranges, random.chance(0.3) else { return .date(one(&random, relative: true)) }
+            let first = random.int(in: 2005 ... 2025)
+            return .dateRange(.year(first), random.chance(0.2) ? nil : .month(random.int(in: first ... 2026), 6))
+        }
+
+        /// Three to eight characters of `text`.
+        private mutating func part(of text: String) -> String {
+            let characters = Array(text)
+            guard characters.count > 3 else { return text }
+            let length = random.int(in: 3 ... min(8, characters.count))
+            let start = random.int(below: characters.count - length + 1)
+            return String(characters[start ..< start + length])
+        }
+    }
+
+    @Test func `random queries find the same photos in the same order with the column store as with SQL`() async throws {
+        let fixture = try TemporaryFolder()
+        let summary = try LibraryFixture(spec: .init(photos: 800, seed: 21)).write(to: fixture.url)
+        let folder = try TemporaryFolder()
+        let index = try await LibraryIndex.open(at: folder.url.appending(path: "Index.sqlite"))
+        defer { index.closeAndWait() }
+        for await _ in LibraryIndexer(index: index).index([fixture.url]) {}
+        let today = QueryCalendar.days(2025, 12, 31)
+        let engine = QueryEngine(
+            index: index,
+            timeZone: .gmt,
+            now: { Date(timeIntervalSince1970: Double(today) * 86400) },
+        )
+        try await engine.load()
+        #expect(engine.store?.count == summary.manifest.totals.photos)
+
+        let names = try await index.read { try $0.queryNames() }
+        let words = FixtureCatalog.captions.flatMap { $0.split(separator: " ").map(String.init) }
+            .filter { $0.count >= 3 }
+            + FixtureCatalog.keywords + [
+                "DSCF",
+                "IMG_",
+                "DSC0",
+                "Card Dump",
+                "Level 1",
+                "Clients",
+                "Café-0",
+                "東京-00",
+                "ab",
+            ]
+        var generator = Generator(random: SeededRandom(seed: 22), words: words, names: names)
+        var nonEmpty = 0
+        for round in 0 ..< 400 {
+            let query = try LibraryQuery(parsing: generator.query().description)
+            #expect(try LibraryQuery(parsing: query.description) == query)
+            let sort = QuerySort(QuerySort.Key.allCases[round % 4], ascending: round % 3 != 0)
+            let columns = try await engine.ids(query.description, sort: sort)
+            let sql = try await index.read { reader in
+                var ids: [Int64] = []
+                try reader
+                    .run(QuerySQL(query.searchable, sort: sort, today: today), cancellation: QueryCancellation()) {
+                        ids.append($0)
+                    }
+                return ids
+            }
+            #expect(
+                columns == sql,
+                "\(query) by \(sort): \(columns.count) with the column store, \(sql.count) with SQL",
+            )
+            nonEmpty += columns.isEmpty ? 0 : 1
+        }
+        #expect(nonEmpty > 100, "most random queries find photos")
+
+        for query in summary.manifest.queries {
+            let results = try await engine.results(LibraryQuery(parsing: query.query))
+            #expect(results.last?.count == query.count, "\(query.query)")
+        }
+    }
+}
