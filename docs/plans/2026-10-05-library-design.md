@@ -88,7 +88,7 @@ flowchart LR
 | Thumbnail and preview store | `Store/` | LIB-09 |
 | Photo lists and selections | `Lists/` | LIB-10 |
 | Sidecar location | `Sidecars/` | LIB-11 |
-| Naming templates and file operations | `Files/` | LIB-25, LIB-26 |
+| Naming templates and file operations | `Naming/`, and `Files/` for the operations | LIB-25, LIB-26 |
 
 ## Photo identity
 
@@ -288,17 +288,6 @@ Modifiers: `upper`, `lower` and `title` (each word's first letter in capitals); 
 - **Presets** (`NamingPreset`: a name, a template and its options, as JSON) include Lightroom Classic's nine file naming templates under their own names (Custom Name - Sequence, Date - Filename, Shoot Name - Original File Number and the others), and three of Redlamp's: the capture time to the millisecond, a shoot name with a counter, and a sequence in each folder.
 - **`redlamp library names <template> --index <path> [<query>]`** prints each photo's path and its new name, the numbers and empty tokens beside it, and a summary, with `--json` and `--limit` as `search` has them and `--text` for the job's texts. It never renames.
 
-Measured with `NamingBenchTests` (`REDLAMP_NAMING_BENCH=1`) and `redlamp library bench … --scenario naming`, on synthetic photos (a fifth of them a raw beside its JPEG, times to the millisecond, each folder's listing) on the M1 Ultra with other builds running (load average 31 to 72), three runs:
-
-| | Measured | Budget |
-| --- | --- | --- |
-| 10,000 files named as five templates are typed, 194 keystrokes | p50 3.1 to 3.9 ms, p95 5.2 to 6.2 ms | p95 under 16 ms |
-| 1,000,000 files: the job made (pairs, sequences, listings) | 545 to 578 ms | |
-| 1,000,000 files: named, collisions resolved | 159 to 221 ms | |
-| 1,000,000 files: made and named, off the main thread | 723 to 798 ms | under 2 s |
-
-What it changed: the first version took 3.7 s for the million, keeping 13 to 16 cores busy at a thirtieth of their speed, because threads counting references to the same template's arrays, and to the job's, waited on each other. Each chunk of 2,048 photos now compiles its own template and reads the job through pointers, collisions are resolved folder by folder in parallel, and listings are checked against each folder's own photos. Making the job is now the larger part, grouping the photos by folder and name on one thread; spreading that over the folders would bring a million under half a second.
-
 ## The stress harness (LIB-03, LIB-04)
 
 - **Fixtures** (`redlamp library fixture <folder> --photos <n> --seed <s>`) in `/Volumes/SSD/redlamp-tmp/library-fixtures/` on the owner's Mac (not backed up):
@@ -402,6 +391,19 @@ What it changed:
 - **Quality 0.5 for the grid and 0.6 for previews,** the owner's choice from crops of the busiest parts of the previews: a thumbnail looks as it does at 0.75, and a preview keeps the texture 0.4 and 0.5 soften. The grid tier for a million photos takes about 22 GB.
 - **Decoding as a thumbnail.** ImageIO decodes whole images (`CGImageSourceCreateImageAtIndex`) one at a time across the process, about 1,800 a second, which today's `ThumbnailPacks.decode` does; asking for a thumbnail no larger than the image decodes on every thread at once, so the grid (LIB-14) decodes as `StoreImageEncoder.decode` does.
 - **For the app:** 256 shard files open at once need a higher file-descriptor limit; the store is closed at quit so its index files are written; the thumbnail maker should take LibRaw's embedded previews, since ImageIO takes about 200 ms a raw to make one.
+
+### Naming templates (LIB-25)
+
+Measured with `NamingBenchTests` (`REDLAMP_NAMING_BENCH=1`) and `redlamp library bench … --scenario naming`, on synthetic photos (a fifth of them a raw beside its JPEG, times to the millisecond, each folder's listing) on the M1 Ultra with other builds running (load average 31 to 72), three runs:
+
+| | Measured | Budget |
+| --- | --- | --- |
+| 10,000 files named as five templates are typed, 194 keystrokes | p50 3.1 to 3.9 ms, p95 5.2 to 6.2 ms | p95 under 16 ms |
+| 1,000,000 files: the job made (pairs, sequences, listings) | 545 to 578 ms | |
+| 1,000,000 files: named, collisions resolved | 159 to 221 ms | |
+| 1,000,000 files: made and named, off the main thread | 723 to 798 ms | under 2 s |
+
+What it changed: the first version took 3.7 s for the million, keeping 13 to 16 cores busy at a thirtieth of their speed, because threads counting references to the same template's arrays, and to the job's, waited on each other. Each chunk of 2,048 photos now compiles its own template and reads the job through pointers, collisions are resolved folder by folder in parallel, and listings are checked against each folder's own photos. Making the job is now the larger part, grouping the photos by folder and name on one thread; spreading that over the folders would bring a million under half a second.
 
 ### The harness (LIB-03)
 

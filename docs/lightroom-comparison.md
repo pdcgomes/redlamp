@@ -177,7 +177,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Sync and Auto Sync | Yes | Done | | | EDT-17, EDT-18, EDT-20 | Undo with Auto Sync on gives each photo its own edit back, as in Lightroom |
 | Ratings, flags and colour labels | Yes | Done | | | | Saved with the photo's edit, shown on the filmstrip |
 | Batch export | Yes | Planned | | P4 | EDT-16 | |
-| Batch rename | Yes | Planned | | P4 | LIB-25, LIB-26 | Naming templates shared with importing, batch export and capture sessions, with a preview and Undo |
+| Batch rename | Yes | In progress | | P4 | LIB-25, LIB-26 | Naming templates shared with importing, batch export and capture sessions, with a preview and Undo |
 | Open photos edited in Lightroom | Yes | Planned | | P4 | EDT-12 | Converts Lightroom's XMP sidecars once, and never writes them |
 | Bring a Lightroom Classic catalog across | Yes (Lightroom's migration from Classic) | Undecided | | | EDT-23 | Each photo's develop settings, rating, flag and label, read without changing the catalog |
 | Match Total Exposures | Yes (Classic) | Undecided | | | EDT-21 | |
