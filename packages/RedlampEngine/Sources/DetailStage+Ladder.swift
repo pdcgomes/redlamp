@@ -132,6 +132,13 @@ final class LadderCache {
         store(Entry(key: key, owner: owner, denoised: denoised))
     }
 
+    /// Before process 11: keeps `denoised` as its area's only noise-reduced source, dropping those
+    /// of other photos, so the stage holds one per area of the photo being edited.
+    func keep(denoised: any MTLTexture, key: LadderKey, owner: ImageSession) {
+        entries.removeAll { $0.ladder == nil && ($0.key.session != key.session || $0.key.work == key.work) }
+        store(denoised: denoised, key: key, owner: owner)
+    }
+
     private func store(_ entry: Entry) {
         entry.textures.forEach { residency.wake($0) }
         entries.append(entry)

@@ -341,6 +341,8 @@ final class DetailStage {
     private(set) var allocated = (count: 0, bytes: 0)
     /// The tiles the last render was processed in.
     private(set) var tileCount = 0
+    /// Noise reductions encoded so far, a tiled one once per tile; sharpening's separator isn't one.
+    private(set) var noiseReductions = 0
 
     private struct PhotoKey: Equatable {
         var url: URL
@@ -468,6 +470,16 @@ final class DetailStage {
         if keepsDenoised, ladder?.ladder == nil, let ladderKey {
             ladder?.denoised = ladderCache.denoised(ladderKey)
         }
+        // Before process 11, an area the ladder's size keeps its noise-reduced source as process 11's
+        // larger areas do, outside the scratch budget as a ladder is.
+        let sourceKey = cache && !passes.decomposes && key.denoise != nil && (key.sharpen != nil || key.contrast != nil)
+            && work.size.x * work.size.y <= ladderCacheTexels
+            ? LadderKey(session: key.session, work: work, denoise: key.denoise, local: key.local) : nil
+        var kept = sourceKey.map { KeptSource(given: ladderCache.denoised($0)) }
+        if kept != nil, kept?.given == nil {
+            kept?.target = try makeWorkTexture(.rgba16Float, work)
+        }
+        let denoised = kept?.given != nil
         var measures = key.sharpen.map { _ in
             cachedSharpenMeasures(session, work: work, sigma: sigma, ladder: ladderKey)
         }
@@ -482,12 +494,12 @@ final class DetailStage {
         // stage holds no more than it would without it.
         let keeping = keepsDenoised && ladder?.ladder == nil && ladder?.denoised == nil
         scratchLimit = tileLimit(
-            passes, measures: measures, ladder: ladder,
+            passes, measures: measures, ladder: ladder, denoised: denoised,
             reserved: keeping ? Self.allocatedTexels(work.size) * 8 : 0,
         )
         let tiles = appliesOnly ? [Tile(whole: work)] : tileLayout(
             work,
-            halo: passes.halo(level: work.level, measures: measures, ladder: ladder),
+            halo: passes.halo(level: work.level, measures: measures, ladder: ladder, denoised: denoised),
             limit: scratchLimit,
         )
         tileCount = tiles.count
@@ -512,8 +524,15 @@ final class DetailStage {
             }
             guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
             encoder.label = "Detail"
-            try encode(passes, work: work, into: texture, measures: measures, ladder: ladder, encoder: encoder)
+            let reduced = try encode(
+                passes, work: work, into: texture, measures: measures, ladder: ladder, kept: kept, encoder: encoder,
+            )
             encoder.endEncoding()
+            if let target = kept?.target, let reduced {
+                guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
+                blit.copy(from: reduced, origin: .zero, size: work.size, to: target, at: .zero)
+                blit.endEncoding()
+            }
         } else {
             if cache, measures != nil, measures?.analysis == nil {
                 measures?.analysisTarget = try makeWorkTexture(.rgba16Float, work)
@@ -528,11 +547,16 @@ final class DetailStage {
                 ladder?.denoisedTarget = try makeWorkTexture(.rgba16Float, work)
             }
             try encodeTiles(
-                tiles, passes, work: work, into: texture, measures: measures, ladder: ladder, commands: commands,
+                tiles, passes, work: work, into: texture, measures: measures, ladder: ladder, kept: kept,
+                commands: commands,
             )
         }
         if cache, let measures {
             storeSharpenMeasures(measures, session, work: work, sigma: sigma, ladder: ladderKey)
+        }
+        if let sourceKey, let target = kept?.target {
+            ladderCache.keep(denoised: target, key: sourceKey, owner: session)
+            encoding?.cached.insert(ObjectIdentifier(target))
         }
         if cachesLadder, let ladderKey, ladder?.ladder == nil, let target = ladder?.target {
             ladderCache.store(target, key: ladderKey, owner: session)
@@ -622,12 +646,17 @@ final class DetailStage {
         /// How far around a texel, in work texels, the passes read: tiles overlapping by this much
         /// render exactly what one pass over the work area does. Masks' amounts, Texture and
         /// Clarity read their source at the texel itself. What `measures` already holds, each tile
-        /// copies rather than computes.
-        func halo(level: Int, measures: SharpenMeasures?, ladder: LadderMeasures? = nil) -> Int {
+        /// copies rather than computes, and a `denoised` source given it reads in place.
+        func halo(
+            level: Int,
+            measures: SharpenMeasures?,
+            ladder: LadderMeasures? = nil,
+            denoised: Bool = false,
+        ) -> Int {
             if decomposes {
                 return decomposedHalo(level: level, measures: measures, ladder: ladder)
             }
-            var reach = denoise?.reach(level: level) ?? 0
+            var reach = denoised ? 0 : denoise?.reach(level: level) ?? 0
             if let sigma = sharpen?.sigma(atLevel: level) {
                 let blur = SharpenSettings.blurRadius(sigma: sigma)
                 // The analysis: the separator's denoising, then two blurs per Richardson-Lucy
@@ -655,8 +684,11 @@ final class DetailStage {
             return reach
         }
 
-        /// The scratch textures the passes use when tiled, given what `measures` and `ladder` hold.
-        func scratchSlots(measures: SharpenMeasures?, ladder: LadderMeasures? = nil) -> Set<ScratchSlot> {
+        /// The scratch textures the passes use when tiled, given what `measures` and `ladder` hold
+        /// and whether the `denoised` source is given.
+        func scratchSlots(
+            measures: SharpenMeasures?, ladder: LadderMeasures? = nil, denoised: Bool = false,
+        ) -> Set<ScratchSlot> {
             func rgba(_ indices: Int...) -> [ScratchSlot] {
                 indices.map { ScratchSlot(format: .rgba16Float, index: $0) }
             }
@@ -687,13 +719,14 @@ final class DetailStage {
                 return slots
             }
             var slots = Set(rgba(9))
-            let count = [denoise != nil, sharpen != nil, contrast != nil].count(where: \.self)
+            let reduces = denoise != nil && !denoised
+            let count = [reduces, sharpen != nil, contrast != nil].count(where: \.self)
             slots.formUnion(rgba(4, 5).prefix(max(count - 1, 0)))
             if !local.isEmpty {
                 slots.formUnion(rgba(6))
             }
             let separates = sharpen != nil && measures?.analysis == nil && measures?.separation == nil
-            if denoise != nil || separates {
+            if reduces || separates {
                 slots.formUnion(rgba(0, 1, 2, 3, 8))
             }
             guard sharpen != nil else { return slots }
@@ -738,9 +771,10 @@ final class DetailStage {
     /// The most texels a tile of `passes` may cover, extent included, so the scratch textures
     /// they use, at that size, those held for other passes and `reserved` bytes fit the budget.
     func tileLimit(
-        _ passes: Passes, measures: SharpenMeasures?, ladder: LadderMeasures? = nil, reserved: Int = 0,
+        _ passes: Passes, measures: SharpenMeasures?, ladder: LadderMeasures? = nil, denoised: Bool = false,
+        reserved: Int = 0,
     ) -> Int {
-        let slots = passes.scratchSlots(measures: measures, ladder: ladder)
+        let slots = passes.scratchSlots(measures: measures, ladder: ladder, denoised: denoised)
         let others = scratch.flatMap { format, textures in
             textures.filter { !slots.contains(ScratchSlot(format: format, index: $0.key)) }.values
         }
@@ -748,18 +782,29 @@ final class DetailStage {
         return max(available, 0) / slots.reduce(0) { $0 + $1.bytesPerTexel }
     }
 
-    /// Encodes `passes` over `work`, the last writing `output`.
+    /// Before process 11: the noise-reduced source a work area keeps, read at `origin` when given;
+    /// otherwise noise is reduced and copied into `target`.
+    struct KeptSource {
+        var given: (any MTLTexture)?
+        var origin: SIMD2<Int> = .zero
+        var target: (any MTLTexture)?
+    }
+
+    /// Encodes `passes` over `work`, the last writing `output`. Returns the noise reduction's
+    /// result, when it ran before process 11.
+    @discardableResult
     private func encode(
         _ passes: Passes,
         work: WorkArea,
         into output: any MTLTexture,
         measures: SharpenMeasures?,
         ladder: LadderMeasures?,
+        kept: KeptSource? = nil,
         encoder: any MTLComputeCommandEncoder,
-    ) throws {
+    ) throws -> (any MTLTexture)? {
         if let ladder {
             try encodeDecomposed(passes, work: work, into: output, measures: measures, ladder: ladder, encoder: encoder)
-            return
+            return nil
         }
         let session = passes.session
         let amounts = passes.local.isEmpty ? nil : try encodeLocal(
@@ -779,12 +824,17 @@ final class DetailStage {
             let first = try scratchTexture(.rgba16Float, 4, work)
             return first === source.texture ? try scratchTexture(.rgba16Float, 5, work) : first
         }
-        if let denoise = passes.denoise {
+        var reduced: (any MTLTexture)?
+        if let given = kept?.given, let origin = kept?.origin {
+            remaining -= 1
+            source = Source(texture: given, origin: origin, level: 0)
+        } else if let denoise = passes.denoise {
             let output = try target()
             try encodeDenoise(
                 session: session, settings: denoise, work: work, local: amounts, into: output, encoder: encoder,
             )
             source = Source(texture: output, origin: .zero, level: 0)
+            reduced = output
         }
         if let sharpen = passes.sharpen {
             guard let measures else { throw EngineError.renderFailed("sharpening without its measures") }
@@ -801,6 +851,7 @@ final class DetailStage {
                 encoder: encoder,
             )
         }
+        return reduced
     }
 
     /// What sharpening has cached of `work`: its analysis, or failing that its separation.
@@ -910,7 +961,7 @@ final class DetailStage {
     }
 
     /// Encodes `passes` tile by tile, copying each tile's interior into `output`, and into the
-    /// sharpening measures' targets when there are any.
+    /// sharpening measures' and kept source's targets when there are any.
     private func encodeTiles(
         _ tiles: [Tile],
         _ passes: Passes,
@@ -918,6 +969,7 @@ final class DetailStage {
         into output: any MTLTexture,
         measures whole: SharpenMeasures?,
         ladder wholeLadder: LadderMeasures?,
+        kept wholeKept: KeptSource?,
         commands: any MTLCommandBuffer,
     ) throws {
         scratchFloor = tiles.map(\.extent.size).reduce(.zero, simd_max)
@@ -969,12 +1021,18 @@ final class DetailStage {
             }
             guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
             encoder.label = "Detail tile"
-            try encode(passes, work: area, into: rendered, measures: measures, ladder: ladder, encoder: encoder)
+            let reduced = try encode(
+                passes, work: area, into: rendered, measures: measures, ladder: ladder,
+                kept: wholeKept?.given.map { KeptSource(given: $0, origin: tile.extent.origin) }, encoder: encoder,
+            )
             encoder.endEncoding()
 
             guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
             let inside = tile.interior.origin &- tile.extent.origin
             blit.copy(from: rendered, origin: inside, size: tile.interior.size, to: output, at: tile.interior.origin)
+            if let whole = wholeKept?.target, let reduced {
+                blit.copy(from: reduced, origin: inside, size: tile.interior.size, to: whole, at: tile.interior.origin)
+            }
             if let whole = wholeLadder?.denoisedTarget, let tileDenoised = ladder?.target?.denoised {
                 blit.copy(
                     from: tileDenoised, origin: inside, size: tile.interior.size, to: whole, at: tile.interior.origin,
@@ -1068,6 +1126,9 @@ final class DetailStage {
         into output: any MTLTexture,
         encoder: any MTLComputeCommandEncoder,
     ) throws {
+        if settings != .separator {
+            noiseReductions += 1
+        }
         // 0-3 here, 4-5 the passes' intermediates, 6 masks' amounts, 7 sharpening's separation,
         // 8 each scale's detail, 9-10 a tile's result and sharpening analysis.
         let textures = try (0 ..< 4).map { try scratchTexture(.rgba16Float, $0, work) }

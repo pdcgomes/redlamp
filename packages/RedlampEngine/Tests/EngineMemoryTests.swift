@@ -448,6 +448,9 @@ struct EngineMemoryTests {
             )
             let tiled = DetailStage(device: helpers.device, kernels: helpers.kernels)
             tiled.scratchBudget = 118 * 200_000
+            // Sharpening's caches alone: the kept noise-reduced source's halo is tested in
+            // `DetailStageTests`.
+            tiled.ladderCacheTexels = 0
             var measures: SharpenMeasures?
             if let before {
                 _ = try helpers.processAndRead(tiled, session, before)

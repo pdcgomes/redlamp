@@ -329,6 +329,87 @@ struct DetailStageTests {
 
     // MARK: - Caches
 
+    /// Process 10: noise reduction, sharpening, Texture and Clarity, before they shared a ladder.
+    static let everyPassBeforeLadder: EditRecipe = {
+        var recipe = untouched
+        recipe.processVersion = 10
+        recipe[.noiseLuminance] = 40
+        recipe[.noiseColor] = 30
+        recipe[.sharpenAmount] = 60
+        recipe[.texture] = 30
+        recipe[.clarity] = 25
+        return recipe
+    }()
+
+    /// Before process 11, dragging sharpening, Texture or Clarity reads the noise-reduced source
+    /// the last render kept, as process 11's ladder does, so noise is reduced only when its own
+    /// settings or a mask's Noise change; each drag renders what a fresh stage renders, whole and
+    /// in tiles.
+    @Test(arguments: [false, true])
+    func `drags before process 11 keep the noise-reduced source`(tiled: Bool) throws {
+        let session = try makeSession(.bayer, width: 1024, height: 768) { x, y in
+            Float(0.2 + 0.1 * sin(Double(x) / 3) * cos(Double(y) / 5))
+        }
+        let stage = DetailStage(device: device, kernels: kernels)
+        if tiled {
+            stage.scratchBudget = 118 * 300_000
+        }
+        var recipe = Self.everyPassBeforeLadder
+        recipe.masks = [leftHalf(.localClarity, 40)]
+        _ = try processAndRead(stage, session, recipe)
+        let drags: [(ParameterID, Double, keepsSource: Bool)] = [
+            (.texture, 60, true), (.clarity, -30, true), (.sharpenAmount, 120, true), (.sharpenDetail, 80, true),
+            (.sharpenMasking, 40, true), (.sharpenRadius, 2, true), (.noiseLuminance, 55, false),
+            (.texture, -40, true), (.noiseColor, 10, false),
+        ]
+        for (parameter, value, keepsSource) in drags {
+            recipe[parameter] = value
+            let before = stage.noiseReductions
+            let cached = try processAndRead(stage, session, recipe).texels
+            if tiled {
+                #expect(stage.tileCount >= 2, "\(parameter): \(stage.tileCount) tile")
+            }
+            let fresh = try processAndRead(DetailStage(device: device, kernels: kernels), session, recipe).texels
+            let differing = EngineMemoryTests.differing(cached, fresh)
+            #expect(differing == 0, "\(parameter): \(differing) texels differ")
+            let reductions = stage.noiseReductions - before
+            #expect(keepsSource ? reductions == 0 : reductions > 0, "\(parameter): \(reductions) noise reductions")
+        }
+        #expect(stage.ladderCache.heldTextures.count == 1)
+        recipe.masks[0][.localNoise] = 50
+        let before = stage.noiseReductions
+        let cached = try processAndRead(stage, session, recipe).texels
+        let fresh = try processAndRead(DetailStage(device: device, kernels: kernels), session, recipe).texels
+        #expect(EngineMemoryTests.differing(cached, fresh) == 0, "a mask's Noise")
+        #expect(stage.noiseReductions > before, "a mask's Noise")
+    }
+
+    /// With the noise-reduced source kept, tiles overlap by only what sharpening and local contrast
+    /// read of it, and a halo short of that shows.
+    @Test func `a halo short of the kept source's reach shows`() throws {
+        let session = try makeSession(.bayer, width: 641, height: 479) { x, y in
+            (x / 7 + y / 5).isMultiple(of: 2) ? 0.04 : 0.7
+        }
+        var newRadius = Self.everyPassBeforeLadder
+        newRadius[.sharpenRadius] = 1.5
+        let whole = try processAndRead(DetailStage(device: device, kernels: kernels), session, newRadius)
+        let tiled = DetailStage(device: device, kernels: kernels)
+        tiled.scratchBudget = 118 * 200_000
+        _ = try processAndRead(tiled, session, Self.everyPassBeforeLadder)
+        let work = DetailStage.WorkArea(level: 0, origin: .zero, size: SIMD2(641, 479))
+        let measures = SharpenMeasures(separation: tiled.sharpenCache.separation(session, work))
+        #expect(measures.separation != nil)
+        let passes = try #require(DetailStage.passes(newRadius, session: session, level: 0, masks: .none))
+        let halo = passes.halo(level: 0, measures: measures, denoised: true)
+        #expect(halo < passes.halo(level: 0, measures: measures))
+        // Half the deconvolution's reach falls below half-float precision; less than one blur's doesn't.
+        tiled.haloShortfall = halo - 4
+        let before = tiled.noiseReductions
+        let tiles = try processAndRead(tiled, session, newRadius)
+        #expect(tiled.noiseReductions == before && tiled.tileCount > 1)
+        #expect(EngineMemoryTests.differing(whole.texels, tiles.texels) > 0, "halo \(halo)")
+    }
+
     /// At Luminance 0, masks bound for Texture, Clarity or Sharpness change how noise reduction
     /// runs, so what the stage kept from a render without them isn't read once one is added.
     @Test(arguments: [10, EditRecipe.currentProcessVersion])
