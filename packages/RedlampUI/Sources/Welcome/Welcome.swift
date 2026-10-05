@@ -7,8 +7,10 @@ public enum Welcome {
     /// Raised when the welcome changes enough to show again to everyone who has seen it.
     static let version = 1
     static let shownKey = "welcome.shown"
-    /// The flags of `DebugSnapshot`, `DebugPerformance` and `DebugDecodeCheck`.
+    /// The flags of `DebugSnapshot`, `DebugPerformance`, `DebugDecodeCheck` and the regression
+    /// suite's driver.
     static let toolingArguments: Set<String> = [
+        "--e2e",
         "--script",
         "--snapshot",
         "--sweep",

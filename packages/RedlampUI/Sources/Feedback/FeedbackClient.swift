@@ -68,10 +68,10 @@ public struct FeedbackRelay: FeedbackSending {
         UserDefaults.standard.string(forKey: "FeedbackEndpoint").flatMap(URL.init(string:)) ?? defaultEndpoint
     }
 
-    /// Debug builds send dry runs, so working on Redlamp files no issues, unless
+    /// Debug and profiling builds send dry runs, so working on Redlamp files no issues, unless
     /// `defaults write app.redlamp.mac FeedbackSendsLive -bool YES`.
     public static var sendsLive: Bool {
-        #if DEBUG
+        #if DEBUG || REDLAMP_PROFILING
             UserDefaults.standard.bool(forKey: "FeedbackSendsLive")
         #else
             true

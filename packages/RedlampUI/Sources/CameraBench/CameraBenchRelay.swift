@@ -52,10 +52,10 @@ public struct CameraBenchRelay: CameraBenchSending {
         UserDefaults.standard.string(forKey: "CameraBenchEndpoint").flatMap(URL.init(string:)) ?? defaultEndpoint
     }
 
-    /// Debug builds send dry runs, so working on Redlamp keeps nothing, unless
+    /// Debug and profiling builds send dry runs, so working on Redlamp keeps nothing, unless
     /// `defaults write app.redlamp.mac CameraBenchSendsLive -bool YES`.
     public static var sendsLive: Bool {
-        #if DEBUG
+        #if DEBUG || REDLAMP_PROFILING
             UserDefaults.standard.bool(forKey: "CameraBenchSendsLive")
         #else
             true

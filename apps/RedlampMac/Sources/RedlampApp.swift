@@ -1,5 +1,8 @@
 import AppKit
 import OSLog
+#if DEBUG || REDLAMP_PROFILING
+    import RedlampAutomation
+#endif
 import RedlampEngine
 import RedlampEngineAPI
 import RedlampGenerative
@@ -18,6 +21,7 @@ struct RedlampApp: App {
     init() {
         #if DEBUG || REDLAMP_PROFILING
             DebugDecodeCheck.runIfRequested()
+            Automation.listIfRequested(arguments: LaunchArguments.all)
             DevelopPanels.usesSwiftUI = LaunchArguments.all.contains("--swiftui-panels")
         #endif
         LensProfileIssues.current = { LCPProfileLibrary.user.issues }
@@ -39,7 +43,7 @@ struct RedlampApp: App {
             UserDefaults.standard.set(layout.rawValue, forKey: "compareLayout")
         }
         model.onToggleFullScreen = { NSApp.keyWindow?.toggleFullScreen(nil) }
-        model.onToggleToolbar = { NSApp.keyWindow?.toggleToolbarShown(nil) }
+        model.onToggleToolbar = { EditorWindowController.frontWindow?.toggleToolbarShown(nil) }
         model.onTestCamera = { AppDelegate.showCameraBench?() }
         model.onSendFeedback = { prefill in FeedbackActions.present(model: model, prefill: prefill) }
         AppDelegate.isEditorBusy = { model.isModalDialogOpen }
@@ -78,6 +82,7 @@ struct RedlampApp: App {
             #if DEBUG || REDLAMP_PROFILING
                 DebugSnapshot.scheduleIfRequested(model: model)
                 DebugPerformance.scheduleIfRequested(model: model)
+                Automation.startIfRequested(model: model, arguments: LaunchArguments.all)
             #endif
             return editor
         }
@@ -303,12 +308,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 /// The command line, plus (in development builds) one line of arguments left in
 /// `/tmp/redlamp-launch-args`, consumed on launch. Tooling launches through `open`, since a
 /// process started straight from a non-GUI shell may never get a window, and `open` can
-/// silently drop `--args` and `--env`.
+/// silently drop `--args` and `--env`. A copy under another bundle ID (the regression suite's
+/// `app.redlamp.mac.e2e`) reads `/tmp/<bundle ID>-launch-args` instead, so it never takes
+/// arguments left for the app.
 enum LaunchArguments {
     static let all: [String] = {
         var arguments = CommandLine.arguments
         #if DEBUG || REDLAMP_PROFILING
-            let path = "/tmp/redlamp-launch-args"
+            let bundle = Bundle.main.bundleIdentifier ?? "app.redlamp.mac"
+            let path = bundle == "app.redlamp.mac" ? "/tmp/redlamp-launch-args" : "/tmp/\(bundle)-launch-args"
             if let line = try? String(contentsOfFile: path, encoding: .utf8) {
                 try? FileManager.default.removeItem(atPath: path)
                 arguments += line.split(whereSeparator: \.isWhitespace).map(String.init)
