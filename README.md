@@ -112,7 +112,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] AI masks are computed from the photo without its edit and kept as bitmaps in the edit, so they never move when you edit and render the same everywhere. **Update AI Masks** recomputes them with today's models, pasted settings recompute them for the new photo, **Refine Edges** snaps them harder to the photo, and the **Refine Edge Brush** solves an edge again, hair by hair, wherever you paint over it (kept with the mask, so Update AI Masks applies it again).
 - [x] **Mask presets:** Blue Sky, Brighten Subject, Darken Background, Smooth Skin, Whiten Teeth and Pop Eyes compute their masks for each photo; save your own from any mask.
 - [x] **Beyond Lightroom:** a mask's **Detail** keeps only its textured (or only its flat) areas, and any mask can be reused as a component of another (**Existing Mask** in Add, Subtract and Intersect).
-- [x] **Local adjustments:** Temp, Tint, Exposure, Contrast, Highlights, Shadows, Whites, Blacks, Texture, Clarity, Dehaze, Hue, Saturation, Sharpness, Noise, and a Color swatch that tints what the mask covers, plus the mask's Amount (0–200%).
+- [x] **Local adjustments:** Temp, Tint, Exposure, Contrast, Highlights, Shadows, Whites, Blacks, Texture, Clarity, Dehaze, Hue, Saturation, Sharpness, Noise, a Color swatch that tints what the mask covers, and Curves (RGB, red, green and blue), plus the mask's Amount (0–200%).
 - [x] **Mask management:** a mask overlay (`O`) in Lightroom's modes (Color Overlay, on B&W, Image on Black or White, B&W, Image on B&W), colors and opacity, and a mask list where you can show and hide, rename, duplicate, "duplicate and invert", reset, delete, and drag to reorder masks and their components.
 - [x] **Fast by design:** gradients and ranges are evaluated per pixel inside the same fused GPU kernel, and brush and AI masks are read from GPU textures. Up to 16 masks cost well under a millisecond extra at Fit.
 - [x] **Models on demand:** Settings › Models lists the downloadable models with their size, and removes them. Every model runs on the Mac; photos are never uploaded. Each shows its licence, which comes with the download. Models still under licence review are offered only when you turn on evaluation models.
@@ -895,7 +895,8 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [ ] Landscape and body-part masks on a model trained on data we have rights to <!-- tracker: MSK-13 -->
 - [ ] AI mask edges refined at full resolution, with Feather and Edge sliders <!-- tracker: MSK-07, MSK-18 -->
 - [x] Objects selected by rectangle or brush <!-- tracker: MSK-19 -->
-- [ ] Curves inside masks, and Snow and adaptive Landscape presets <!-- tracker: MSK-20, MSK-22 -->
+- [x] Curves inside masks <!-- tracker: MSK-20 -->
+- [ ] Snow and adaptive Landscape presets <!-- tracker: MSK-22 -->
 - [ ] **AI Denoise:** an on-device model working on raw data, matching or beating the best commercial denoisers, with a fast 1:1 preview and non-destructive results <!-- tracker: DN-06, DN-07, DN-08 -->
 - [ ] Focus stacking: lens corrections before alignment, halo handling, vendors' focus-bracketing tags, and baking a stack to DNG <!-- tracker: FS-01, FS-02, FS-03 -->
 - [ ] Manufacturer lens corrections embedded in Panasonic and OM System raw files <!-- tracker: LNS-02 -->

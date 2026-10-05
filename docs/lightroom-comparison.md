@@ -124,7 +124,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Local adjustments in masks | Yes | Done | Behind | | MSK-03 | Local Whites and Blacks are approximated with tonal-region gains |
 | Local Whites and Blacks as true end points | Yes | Planned | | P2 | MSK-24 | |
 | Color swatch inside masks | Yes | Done | | | MSK-23 | |
-| Curves inside masks | Yes | Planned | | P3 | MSK-20 | |
+| Curves inside masks | Yes | Done | | | MSK-20 | |
 | Point Color inside masks | Yes | Planned | | P2 | TON-29 | With an Even Skin Tone preset on Face Skin and Body Skin |
 | Update AI masks across photos | Yes | Done | | | EDT-17 | Pasted and synced settings recompute their AI masks for each photo |
 | Reuse a mask inside another, and keep only its textured areas | Partly | Done | Beyond | | MSK-04, MSK-06 | Lightroom can start a new mask from an existing one; Redlamp also adds, subtracts or intersects one inside another, and a mask's Detail keeps only its textured or flat areas |
