@@ -73,4 +73,40 @@ struct DuplicateFixtureTests {
             #expect(photo.content == copied.index)
         }
     }
+
+    @Test(.enabled(if: !FixtureTests.sources.isEmpty))
+    func `a fixture's duplicates are byte-for-byte copies, confirmed exactly as its manifest counts them`(
+    ) async throws {
+        let sandbox = try await IndexerSandbox.make(.init(photos: 400, seed: 8, duplicateShare: 0.05), raws: true)
+        defer { sandbox.remove() }
+        let copies = try #require(sandbox.manifest.totals.duplicates)
+        let photos = (0 ..< 400).map(sandbox.fixture.photo(at:))
+        #expect(copies == photos.count { $0.original != nil } && copies >= 10)
+        #expect(photos.contains { $0.original != nil && $0.kind == .raw })
+        for photo in photos {
+            guard let original = photo.original else { continue }
+            let file = try Data(contentsOf: sandbox.url(photo), options: .mappedIfSafe)
+            #expect(
+                try file == Data(contentsOf: sandbox.url(photos[original]), options: .mappedIfSafe),
+                "\(photo.path)",
+            )
+        }
+        let run = await IndexerRun.collect(
+            LibraryIndexer(index: sandbox.index, configuration: .testing()).index([sandbox.root]),
+        )
+        #expect(run.failures.isEmpty && run.summary?.photosInserted == 400)
+        let rows = try await LibraryIndexerTests.rows(sandbox)
+        #expect(rows.values.count { $0.kind == .raw } == sandbox.manifest.count(of: "type:raw"))
+        #expect(rows.values.count { $0.rating >= 3 } == sandbox.manifest.count(of: "rating>=3"))
+
+        let finder = DuplicateFinder(index: sandbox.index)
+        let confirmation = try await finder.confirm(finder.candidates())
+        #expect(confirmation.duplicates.reduce(0) { $0 + $1.photos.count - 1 } == copies)
+        #expect(confirmation.different.isEmpty && confirmation.unconfirmed.isEmpty)
+        let paths = Dictionary(uniqueKeysWithValues: rows.map { ($1.id, $0) })
+        let found = Set(confirmation.duplicates.map { Set($0.photos.compactMap { paths[$0] }) })
+        let made = Set(Dictionary(grouping: photos) { $0.content }.values.filter { $0.count > 1 }
+            .map { Set($0.map { sandbox.path($0.path) }) })
+        #expect(found == made)
+    }
 }
