@@ -242,6 +242,7 @@ public extension EditorModel {
         case .brushMask: return photo && canCreateMask(.brush)
         case .colorRangeMask: return photo && canCreateMask(.colorRange)
         case .luminanceRangeMask: return photo && canCreateMask(.luminanceRange)
+        case .depthRangeMask: return photo && canCreateMask(.depthRange)
         case .maskOverlay, .maskOverlayColor: return masking || activeTool == .crop
         case .maskPins: return masking
         case .deleteMask: return (masking && selectedMaskID != nil) || (activeTool == .heal && selectedSpotID != nil)
