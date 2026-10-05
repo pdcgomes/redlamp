@@ -7,19 +7,23 @@ import Testing
 
 /// Decodes in-process, recording each file, and fails the ones it is told to.
 private final class RecordingDecoder: ImageDecoding {
-    let failing: Set<String>
+    let failing: Mutex<Set<String>>
     let isAvailable: Bool
     let decoded = Mutex<[String]>([])
 
     init(failing: Set<String> = [], isAvailable: Bool = true) {
-        self.failing = failing
+        self.failing = Mutex(failing)
         self.isAvailable = isAvailable
+    }
+
+    func decodes(of name: String) -> Int {
+        decoded.withLock { $0.count { $0 == name } }
     }
 
     func decode(_ url: URL) throws -> DecodedImage {
         decoded.withLock { $0.append(url.lastPathComponent) }
         guard isAvailable else { throw EngineError.decoderUnavailable }
-        guard !failing.contains(url.lastPathComponent) else {
+        guard !failing.withLock({ $0.contains(url.lastPathComponent) }) else {
             throw EngineError.decodeFailed("\(url.lastPathComponent) is damaged")
         }
         return try InProcessDecoder().decode(url)
@@ -87,8 +91,9 @@ extension FocusStackTests {
         #expect(stack.alignment.reference == stack.report.reference)
         #expect(stack.alignment.transforms.count == 4 && stack.alignment.transforms[1] == .identity)
         #expect(stack.depth.allSatisfy { $0 >= 0 && $0 <= 3 })
-        let cached = (try? FileManager.default.contentsOfDirectory(atPath: cache.path)) ?? []
-        #expect(cached.isEmpty, "a merge missing a frame is tried again next time")
+        let cached = try FileManager.default.contentsOfDirectory(at: cache, includingPropertiesForKeys: nil)
+            .filter { !$0.lastPathComponent.hasPrefix(".") }
+        #expect(cached.count == 1, "kept, with the frame it's missing")
     }
 
     @Test func `a merge missing frames is indexed by the stack's frames`() {
@@ -161,6 +166,49 @@ extension FocusStackTests {
             decoder.decoded.withLock(\.count) <= FocusStackCache.decodesAhead + 1,
             "one merge's decodes ahead, not a merge for each frame",
         )
+    }
+
+    @Test func `frames that don't decode are each tried once, and the merge restarts once`() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (documentURL, _) = try stackDocument(frames: 6, in: folder)
+        let decoder = RecordingDecoder(failing: ["frame1.png", "frame4.png"])
+        let engine = try RedlampEngine(
+            stillTile: 2048, stackCache: folder.appendingPathComponent("cache"), decoder: decoder,
+        )
+
+        let stack = try engine.stacks.stack(at: documentURL)
+        #expect(stack.report.failedFrames?.map(\.index) == [1, 4])
+        #expect(decoder.decodes(of: "frame1.png") == 1 && decoder.decodes(of: "frame4.png") == 1)
+        #expect(decoder.decodes(of: "frame0.png") == 3, "once before the first failure, twice in the merge")
+    }
+
+    @Test func `a stack missing a frame is merged once until the frame decodes`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (documentURL, _) = try stackDocument(frames: 4, in: folder)
+        let decoder = RecordingDecoder(failing: ["frame1.png"])
+        let engine = try RedlampEngine(
+            stillTile: 2048, stackCache: folder.appendingPathComponent("cache"), decoder: decoder,
+        )
+
+        _ = try await engine.open(documentURL)
+        let opened = decoder.decodes(of: "frame0.png")
+        var document = try FocusStackDocument.read(documentURL)
+        for x in [0.25, 0.5, 0.75] {
+            document.retouch = (document.retouch ?? []) + [
+                FocusStackStroke(source: .frame("frame2.png"), radius: 0.1, hardness: 1, points: [SIMD2(x, 0.5)]),
+            ]
+            try document.write(to: documentURL)
+            let stack = try engine.stacks.stack(at: documentURL)
+            #expect(stack.report.failedFrames?.map(\.index) == [1])
+        }
+        #expect(decoder.decodes(of: "frame0.png") == opened, "merged only for the open, not for its three strokes")
+
+        decoder.failing.withLock { $0 = [] }
+        let stack = try engine.stacks.stack(at: documentURL)
+        #expect(stack.report.failedFrames == nil)
+        #expect(decoder.decodes(of: "frame0.png") == opened + 2, "merged again once the frame decodes")
     }
 
     @Test func `a stack with fewer than two frames that decode fails`() async throws {

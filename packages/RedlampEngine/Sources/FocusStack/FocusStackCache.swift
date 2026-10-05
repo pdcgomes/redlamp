@@ -101,16 +101,14 @@ final class FocusStackCache: Sendable {
             strategy: document.strategy,
             retouch: strokes,
         ))
-        if let cached = try? load(folder, documentURL: url) {
+        if let cached = try? load(folder, documentURL: url), stillMissing(cached, frames: frames) {
             progress(1)
             return cached
         }
         let merged = try merged(frames, strategy: document.strategy, documentURL: url, progress: progress)
         guard !strokes.isEmpty else { return merged }
         let retouched = try retouch(merged, with: strokes, document: document, at: url)
-        if retouched.report.failedFrames == nil {
-            try? save(retouched, to: folder, document: url)
-        }
+        try? save(retouched, to: folder, document: retouched.report.failedFrames == nil ? url : nil)
         return retouched
     }
 
@@ -119,14 +117,12 @@ final class FocusStackCache: Sendable {
         _ frames: [URL], strategy: FocusStackStrategy, documentURL: URL, progress: (Double) -> Void = { _ in },
     ) throws -> MergedStack {
         let folder = try root.appendingPathComponent(Self.key(frames: frames, strategy: strategy))
-        if let cached = try? load(folder, documentURL: documentURL) {
+        if let cached = try? load(folder, documentURL: documentURL), stillMissing(cached, frames: frames) {
             progress(1)
             return cached
         }
         let merged = try merge(frames, strategy: strategy, documentURL: documentURL, progress: progress)
-        if merged.report.failedFrames == nil {
-            try? save(merged, to: folder)
-        }
+        try? save(merged, to: folder)
         return merged
     }
 
@@ -162,9 +158,8 @@ final class FocusStackCache: Sendable {
     // MARK: - Merging
 
     /// Decodes, aligns and fuses `urls` (in focus order). A frame that doesn't decode is left out
-    /// and reported, as long as two others do; a merge missing frames isn't cached, so the next
-    /// open tries them again. A decoder that isn't available fails the merge at once, since no
-    /// frame would decode.
+    /// and reported, as long as two others do. A decoder that isn't available fails the merge at
+    /// once, since no frame would decode.
     func merge(
         _ urls: [URL], strategy: FocusStackStrategy, documentURL: URL?, progress: (Double) -> Void,
     ) throws -> MergedStack {
@@ -177,10 +172,12 @@ final class FocusStackCache: Sendable {
                 )
                 return failed.isEmpty ? merged : merged.spread(over: included, of: urls.count, failed: failed)
             } catch let failure as FrameDecodeFailure {
-                failed.append(FocusStackReport.FailedFrame(
-                    index: included[failure.index], reason: failure.error.localizedDescription,
-                ))
-                included.remove(at: failure.index)
+                for (index, error) in failure.all.sorted(by: { $0.index > $1.index }) {
+                    failed.append(FocusStackReport.FailedFrame(
+                        index: included[index], reason: error.localizedDescription,
+                    ))
+                    included.remove(at: index)
+                }
                 guard included.count >= 2 else { throw failure.error }
             }
         }
@@ -219,7 +216,15 @@ final class FocusStackCache: Sendable {
                         return decoded
                     }
                 }
-                let decoded = try pending.removeValue(forKey: position)!.value()
+                let decoded: DecodedImage
+                do {
+                    decoded = try pending.removeValue(forKey: position)!.value()
+                } catch var failure as FrameDecodeFailure where position < urls.count {
+                    failure.others = try Self.undecodable(
+                        after: position, of: urls, pending: pending, decoder: decoder, on: decodes,
+                    )
+                    throw failure
+                }
                 position += 1
                 let frame = try builder.demosaic(decoded)
                 metadata[index] = frame.decoded.calibration(noise: frame.noise)
@@ -315,7 +320,8 @@ final class FocusStackCache: Sendable {
 
     /// Writes `stack` to a hidden folder beside `folder` and renames it into place, so an
     /// interrupted save leaves no half-written merge; then trims the cache. `document` marks a
-    /// retouched merge, whose earlier retouches are then of no use.
+    /// retouched merge, whose earlier retouches are then of no use; one missing frames goes
+    /// unmarked, so it doesn't replace a complete one.
     func save(_ stack: MergedStack, to folder: URL, document: URL? = nil) throws {
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: root, withIntermediateDirectories: true)

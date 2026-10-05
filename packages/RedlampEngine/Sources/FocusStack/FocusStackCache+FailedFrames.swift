@@ -6,11 +6,58 @@ import RedlampServices
 struct FrameDecodeFailure: Error {
     let index: Int
     let error: any Error
+    /// The merge's other frames found not to decode before it stopped, by index.
+    var others: [(index: Int, error: any Error)] = []
+
+    var all: [(index: Int, error: any Error)] {
+        [(index, error)] + others
+    }
 
     /// `error` from decoding frame `index`; a decoder that isn't available fails every frame, so
     /// its error stays as it is and fails the merge.
     static func wrapping(_ error: any Error, frame index: Int) -> any Error {
         error as? EngineError == .decoderUnavailable ? error : FrameDecodeFailure(index: index, error: error)
+    }
+}
+
+extension FocusStackCache {
+    /// Whether every frame a cached merge left out still doesn't decode, so the merge stands; once
+    /// one does, the stack merges again.
+    func stillMissing(_ stack: MergedStack, frames: [URL]) -> Bool {
+        (stack.report.failedFrames ?? []).allSatisfy { failed in
+            frames.indices.contains(failed.index) && (try? decoder.decode(frames[failed.index])) == nil
+        }
+    }
+
+    /// The frames after `position` in a merge's first pass that don't decode: those already
+    /// decoding ahead, then the rest a few at a time, so the merge restarts once without them all.
+    static func undecodable(
+        after position: Int, of urls: [URL], pending: [Int: Prefetch<DecodedImage>],
+        decoder: any ImageDecoding, on queue: DispatchQueue,
+    ) throws -> [(index: Int, error: any Error)] {
+        var failures: [(index: Int, error: any Error)] = []
+        var frames = Array(position + 1 ..< urls.count)
+        while !frames.isEmpty {
+            let batch = Array(frames.prefix(decodesAhead + 1))
+            frames.removeFirst(batch.count)
+            let decodes = batch.map { frame in
+                pending[frame] ?? Prefetch(on: queue) { [url = urls[frame]] in
+                    do {
+                        return try decoder.decode(url)
+                    } catch {
+                        throw FrameDecodeFailure.wrapping(error, frame: frame)
+                    }
+                }
+            }
+            for (frame, decode) in zip(batch, decodes) {
+                do {
+                    _ = try decode.value()
+                } catch let failure as FrameDecodeFailure {
+                    failures.append((frame, failure.error))
+                }
+            }
+        }
+        return failures
     }
 }
 
