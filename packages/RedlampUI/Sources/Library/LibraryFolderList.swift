@@ -140,16 +140,14 @@ final class LibraryFolderList: Sendable {
             let (path, includesSubfolders) = (path, includesSubfolders)
             let read = try await index.read { reader -> ([PhotoRecord], [Int64: String])? in
                 guard let top = try reader.folder(path: path) else { return nil }
-                var folders = [top.id: top.path]
-                var next = [top.id]
-                while includesSubfolders, let id = next.popLast() {
-                    for subfolder in try reader.subfolders(of: id) {
-                        folders[subfolder.id] = subfolder.path
-                        next.append(subfolder.id)
-                    }
+                guard includesSubfolders else { return try (reader.photos(inFolder: top.id), [top.id: top.path]) }
+                let below = path == "/" ? "/" : path + "/"
+                var folders: [Int64: String] = [:]
+                for folder in try reader.folders(inRoot: top.root)
+                    where folder.path == path || folder.path.hasPrefix(below) {
+                    folders[folder.id] = folder.path
                 }
-                let rows = try includesSubfolders ? reader.photos(inSubtreeOf: top.id) : reader.photos(inFolder: top.id)
-                return (rows, folders)
+                return try (reader.photos(inSubtreeOf: top.id), folders)
             }
             guard let (rows, folders) = read ?? nil else { return Change(all: ([], [:])) }
             self.folders = folders

@@ -24,6 +24,8 @@ struct FromLibrary {
     var settling = false
     /// The content keys of the photos shown from the library, for their thumbnails.
     var keys: [URL: ContentKey] = [:]
+    /// The opening whose list didn't deliver within `libraryPatience`: it stays listed here.
+    var gaveUp: Int?
 }
 
 /// Folders shown from the library (LIB-10). A folder it has indexed is shown from its photo list:
@@ -59,7 +61,7 @@ public extension FolderLibrary {
 
 extension FolderLibrary {
     /// How long the first photos from the library may take before the folder is listed instead.
-    static let libraryPatience = Duration.seconds(3)
+    static let libraryPatience = Duration.seconds(10)
 
     /// Starts showing `folder` from the library if it can be; false when it's to be listed.
     func openFromLibrary(
@@ -91,17 +93,16 @@ extension FolderLibrary {
             guard let self, self.generation == generation, fromLibrary.awaitingFirst else { return }
             let opened = fromLibrary.opened
             closeLibraryList()
+            fromLibrary.gaveUp = generation
             if let opened {
                 list(folder, generation: generation, opened: opened)
-            } else {
-                awaitLibrary(generation)
             }
         }
     }
 
     func closeLibraryList() {
         fromLibrary.list?.close()
-        fromLibrary = FromLibrary()
+        fromLibrary = FromLibrary(gaveUp: fromLibrary.gaveUp)
     }
 
     private func received(_ change: LibraryFolderList.Change, generation: Int) {
@@ -202,6 +203,11 @@ extension FolderLibrary {
            abs(date.timeIntervalSince(listed)) < 1e-3 {
             kept.sidecarModified = listed
         }
+        // The index has no field a newer Redlamp wrote; the badges are what it has.
+        if new.metadata.rating == current.metadata.rating, new.metadata.flag == current.metadata.flag,
+           new.metadata.label == current.metadata.label {
+            kept.metadata = current.metadata
+        }
         kept.isSettling = current.isSettling
         return kept
     }
@@ -274,7 +280,9 @@ extension FolderLibrary {
 
     /// The open folder, listed here, is shown from the library once the library can show it.
     func awaitLibrary(_ generation: Int) {
-        guard let service, generation == self.generation, fromLibrary.list == nil, openFolder != nil else { return }
+        guard let service, generation == self.generation, fromLibrary.list == nil, openFolder != nil,
+              fromLibrary.gaveUp != generation
+        else { return }
         fromLibrary.waiting = true
         if fromLibrary.observation == nil {
             fromLibrary.observation = service.observe { [weak self] in self?.retryLibrary(generation) }

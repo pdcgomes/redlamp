@@ -348,13 +348,9 @@ public final class LibraryService {
         let listed = listed.map { Set($0.map { Self.path(URL(fileURLWithPath: $0, isDirectory: true)) }) }
         let folders = try? await core.index.read { reader -> [FolderRecord]? in
             guard let top = try reader.folder(path: path) else { return nil }
-            var folders = [top]
-            var next = 0
-            while includingSubfolders, next < folders.count {
-                folders += try reader.subfolders(of: folders[next].id)
-                next += 1
-            }
-            return folders
+            guard includingSubfolders else { return [top] }
+            let below = path == "/" ? "/" : path + "/"
+            return try reader.folders(inRoot: top.root).filter { $0.path == path || $0.path.hasPrefix(below) }
         }
         guard let folders = folders ?? nil, folders.allSatisfy(\.isIndexed) else { return false }
         if let listed, listed != Set(folders.map(\.path)) {
