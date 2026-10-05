@@ -17,6 +17,9 @@ struct DevelopInputs {
     var lookTable: (any MTLTexture)?
     /// The lens profile's table (`kLensTableSize` entries), identity when there is none.
     var lensTable: [SIMD4<Float>] = LensTable.identity
+    /// The masks' Curves tables, four of `DevelopParameters.maskCurveSize` entries for each mask that
+    /// has Curves; a zeroed table when none does, since Metal needs a bound buffer.
+    var maskCurves: [Float] = .init(repeating: 0, count: DevelopParameters.maskCurveSize)
 }
 
 /// The photo's lens profile resampled to the develop kernel's table: evenly spaced radii, each
@@ -273,7 +276,7 @@ enum DevelopParameters {
         p.region = SIMD4(Float(region.x), Float(region.y), Float(region.width), Float(region.height))
         p.haze = SIMD4(session.airlight, Float(recipe[.dehaze] / 100))
 
-        let (layers, components, overlayIndex) = maskBuffers(
+        let (layers, components, overlayIndex, curves) = maskBuffers(
             recipe.masks, aspect: full.aspectRatio, overlay: maskOverlay, masks: masks,
             detailLevel: detailLevel(session),
         )
@@ -300,6 +303,7 @@ enum DevelopParameters {
             components: components.isEmpty ? [.empty] : components,
             lookTable: baseLook.table,
             lensTable: lensTable,
+            maskCurves: curves.isEmpty ? [Float](repeating: 0, count: maskCurveSize) : curves,
         )
     }
 
@@ -311,9 +315,10 @@ enum DevelopParameters {
         overlay: UUID?,
         masks: MaskBindings,
         detailLevel: Int,
-    ) -> (layers: [MaskLayerGPU], components: [MaskComponentGPU], overlayIndex: Int?) {
+    ) -> (layers: [MaskLayerGPU], components: [MaskComponentGPU], overlayIndex: Int?, curves: [Float]) {
         var layers: [MaskLayerGPU] = []
         var overlayIndex: Int?
+        var curves: [Float] = []
         var encoder = MaskComponentEncoder(aspect: aspect, masks: masks, layers: layerList)
 
         for mask in layerList where mask.isVisible {
@@ -329,6 +334,11 @@ enum DevelopParameters {
             }
             if mask.id == overlay {
                 overlayIndex = layers.count
+            }
+            var table: Float = 0
+            if let maskCurves = mask.curves {
+                table = Float(curves.count / (4 * maskCurveSize) + 1)
+                curves += curveTables(maskCurves)
             }
             layers.append(MaskLayerGPU(
                 color: SIMD4(
@@ -346,10 +356,26 @@ enum DevelopParameters {
                 tone2: SIMD4(value(.localWhites), value(.localBlacks), Float(first), Float(count)),
                 detail: SIMD4(value(.localDehaze), Float(mask.detail / 100), Float(detailLevel), 0),
                 glow: SIMD4(value(.localHalation), value(.localBloom), value(.localDefringe), value(.localMoire)),
-                swatch: SIMD4(lowHalf: swatch(of: mask, scale: scale), highHalf: .zero),
+                display: SIMD4(lowHalf: swatch(of: mask, scale: scale), highHalf: SIMD2(table, Float(scale))),
             ))
         }
-        return (layers, encoder.finished(), overlayIndex)
+        return (layers, encoder.finished(), overlayIndex, curves)
+    }
+
+    /// Entries in each of a mask's Curves tables (`kMaskCurveSize` in the kernels).
+    static let maskCurveSize = 256
+
+    /// A mask's four Curves tables (RGB, red, green, blue), each its point curve sampled evenly over
+    /// 0...1 and kept rising, as the global Tone Curve's table is.
+    static func curveTables(_ curves: MaskCurves) -> [Float] {
+        MaskCurves.Channel.allCases.flatMap { channel in
+            let curve = ToneCurveMath.pointCurve(curves[channel])
+            var previous = 0.0
+            return (0 ..< maskCurveSize).map { index -> Float in
+                previous = max(previous, min(max(curve(Double(index) / Double(maskCurveSize - 1)), 0), 1))
+                return Float(previous)
+            }
+        }
     }
 
     /// The OKLab (a, b) a mask's Color swatch tints by: its hue's direction on a color wheel, as

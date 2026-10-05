@@ -815,6 +815,15 @@ public struct MaskLayer: Sendable, Hashable, Identifiable {
     /// -100...100: above 0 keeps only textured areas of the mask, below 0 only flat ones.
     public var detail: Double = 0
     public private(set) var adjustments: [ParameterID: Double]
+    /// The mask's Curves; nil while every curve is straight.
+    public var curves: MaskCurves? {
+        didSet {
+            if curves?.isIdentity == true {
+                curves = nil
+            }
+        }
+    }
+
     /// Adjustments this build doesn't apply to masks, written by a newer Redlamp: written back
     /// unchanged until the mask's adjustments are reset.
     public private(set) var unknownAdjustments: [String: Double] = [:]
@@ -852,6 +861,7 @@ public struct MaskLayer: Sendable, Hashable, Identifiable {
     public mutating func resetAdjustments() {
         adjustments = [:]
         unknownAdjustments = [:]
+        curves = nil
         amount = 100
         detail = 0
     }
@@ -870,7 +880,7 @@ public struct MaskLayer: Sendable, Hashable, Identifiable {
 
 extension MaskLayer: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case id, name, isVisible, components, amount, detail, adjustments
+        case id, name, isVisible, components, amount, detail, adjustments, curves
     }
 
     public init(from decoder: Decoder) throws {
@@ -881,6 +891,8 @@ extension MaskLayer: Codable {
         components = try container.decodeIfPresent([MaskComponent].self, forKey: .components) ?? []
         amount = try container.decodeIfPresent(Double.self, forKey: .amount) ?? 100
         detail = try container.decodeIfPresent(Double.self, forKey: .detail) ?? 0
+        let curves = try container.decodeIfPresent(MaskCurves.self, forKey: .curves)
+        self.curves = curves?.isIdentity == true ? nil : curves
         adjustments = [:]
         let raw = try container.decodeIfPresent([String: Double].self, forKey: .adjustments) ?? [:]
         for (key, value) in raw {
@@ -910,5 +922,81 @@ extension MaskLayer: Codable {
             unknownAdjustments.merging(adjustments.map { ($0.key.rawValue, $0.value) }) { $1 },
             forKey: .adjustments,
         )
+        try container.encodeIfPresent(curves, forKey: .curves)
+    }
+}
+
+/// A mask's Curves, as Lightroom's masks have: a point curve for all three channels, then one for
+/// each, on the display-referred values the global Tone Curve works on.
+public struct MaskCurves: Sendable, Hashable {
+    public enum Channel: String, CaseIterable, Sendable {
+        case rgb, red, green, blue
+
+        public var name: String {
+            switch self {
+            case .rgb: "RGB"
+            case .red: "Red"
+            case .green: "Green"
+            case .blue: "Blue"
+            }
+        }
+    }
+
+    public var rgb = EditRecipe.linearPointCurve
+    public var red = EditRecipe.linearPointCurve
+    public var green = EditRecipe.linearPointCurve
+    public var blue = EditRecipe.linearPointCurve
+    /// Fields written by a newer Redlamp, written back unchanged.
+    public var unknownFields: [String: JSONValue] = [:]
+
+    public init() {}
+
+    public subscript(channel: Channel) -> [CurvePoint] {
+        get {
+            switch channel {
+            case .rgb: rgb
+            case .red: red
+            case .green: green
+            case .blue: blue
+            }
+        }
+        set {
+            switch channel {
+            case .rgb: rgb = newValue
+            case .red: red = newValue
+            case .green: green = newValue
+            case .blue: blue = newValue
+            }
+        }
+    }
+
+    /// Every curve straight, and nothing a newer build wrote to keep.
+    public var isIdentity: Bool {
+        unknownFields.isEmpty && Channel.allCases.allSatisfy { self[$0] == EditRecipe.linearPointCurve }
+    }
+}
+
+extension MaskCurves: Codable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case rgb, red, green, blue
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        rgb = try container.decodeIfPresent([CurvePoint].self, forKey: .rgb) ?? EditRecipe.linearPointCurve
+        red = try container.decodeIfPresent([CurvePoint].self, forKey: .red) ?? EditRecipe.linearPointCurve
+        green = try container.decodeIfPresent([CurvePoint].self, forKey: .green) ?? EditRecipe.linearPointCurve
+        blue = try container.decodeIfPresent([CurvePoint].self, forKey: .blue) ?? EditRecipe.linearPointCurve
+        unknownFields = try decoder.container(keyedBy: DynamicCodingKey.self)
+            .unknownFields(excluding: Set(CodingKeys.allCases.map(\.stringValue)))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var unknown = encoder.container(keyedBy: DynamicCodingKey.self)
+        try unknown.encode(unknownFields)
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        for channel in Channel.allCases where self[channel] != EditRecipe.linearPointCurve {
+            try container.encode(self[channel], forKey: CodingKeys(rawValue: channel.rawValue)!)
+        }
     }
 }

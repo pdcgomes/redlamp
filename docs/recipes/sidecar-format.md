@@ -204,6 +204,7 @@ A mask is a local adjustment: coverage built from components, and its own adjust
 | `amount` | number | 100 | Scales every adjustment of the mask, in percent, 0 to 200. |
 | `detail` | number | 0 | −100 to 100: above 0 keeps only the textured areas of the mask, below 0 only the flat ones. Written only when it isn't 0. |
 | `adjustments` | {key: number} | `{}` | The local parameters below, each written only when it isn't 0. Always written, even empty. |
+| `curves` | object? | | The mask's Curves: `{"rgb", "red", "green", "blue"}`, each a point curve like the edit's `pointCurve`, written only when it isn't straight. The RGB curve applies to every channel, then each channel's own, on the display-referred values the global point curve works on, as far as the mask covers and scaled by its amount. Missing when every curve is straight. |
 
 Redlamp renders at most 16 visible masks and 64 components across them, and the editor makes no more than 16 masks.
 

@@ -47,6 +47,13 @@
                 try app.set(parameter, parameter.spec.clamp(parameter.spec.defaultValue + 10))
                 app.covered(.parameter(parameter), via: .model)
             }
+            // The selected mask's Curves, an RGB and a channel curve (MSK-20).
+            let curved = try app.main { model in
+                model.setMaskCurve(.rgb, [CurvePoint(x: 0, y: 0), CurvePoint(x: 0.5, y: 0.4), CurvePoint(x: 1, y: 1)])
+                model.setMaskCurve(.blue, [CurvePoint(x: 0, y: 0.1), CurvePoint(x: 1, y: 0.9)])
+                return model.selectedMask?.curves != nil
+            }
+            try app.expect(curved, "The selected mask has no Curves")
             try app.main { $0.deleteAllMasks() }
             app.covered(
                 [.feature("masking.linear"), .feature("masking.radial"), .feature("masking.local-adjustments")],

@@ -177,7 +177,8 @@ struct MaskLayerGPU {
     float4 detail;            // x Dehaze (slider / 100), y Detail refinement (-1...1), z pyramid level it measures texture at
     float4 glow;              // x halation, y bloom, z defringe, w moiré (slider / 100, scaled by the mask's Amount);
                               // halation, bloom and defringe add to the global amounts
-    float4 swatch;            // xy the Color swatch's OKLab (a, b) tint, scaled by the mask's Amount
+    float4 display;           // xy the Color swatch's OKLab (a, b) tint, scaled by the mask's Amount; z the mask's
+                              // Curves table plus one (0 for none); w how strongly its Curves apply (Amount / 100)
 };
 
 #endif

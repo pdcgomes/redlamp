@@ -215,6 +215,60 @@ struct MaskColorSwatch: View {
     }
 }
 
+/// The selected mask's Curves: a point curve for every channel, or for red, green or blue, as
+/// Lightroom's masks have.
+struct MaskCurvesEditor: View {
+    @Environment(EditorModel.self) private var model
+    @State private var channel = MaskCurves.Channel.rgb
+
+    var body: some View {
+        let name = model.selectedMask?.name ?? "Mask"
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text("Curve")
+                    .font(Theme.labelFont)
+                    .foregroundStyle(Theme.label)
+                Spacer()
+                Picker("Channel", selection: $channel) {
+                    ForEach(MaskCurves.Channel.allCases, id: \.self) { channel in
+                        Text(channel.name).tag(channel)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.mini)
+                .fixedSize()
+                Button {
+                    model.resetMaskCurves()
+                } label: {
+                    Image(systemName: "arrow.counterclockwise")
+                }
+                .buttonStyle(.borderless)
+                .disabled(model.selectedMask?.curves == nil)
+                .help("Reset the mask's Curves")
+            }
+            PointCurveGraph(
+                points: model.maskCurve(channel), tint: channel.tint,
+                begin: { model.beginEdit() },
+                change: { model.setMaskCurve(channel, $0) },
+                end: { model.endEdit(.mask(nil), "\(name) Curve") },
+            )
+            .frame(height: 210)
+        }
+    }
+}
+
+private extension MaskCurves.Channel {
+    var tint: Color {
+        switch self {
+        case .rgb: Color(white: 0.9)
+        case .red: Color(red: 0.95, green: 0.35, blue: 0.35)
+        case .green: Color(red: 0.4, green: 0.85, blue: 0.4)
+        case .blue: Color(red: 0.4, green: 0.6, blue: 1)
+        }
+    }
+}
+
 struct MaskActionsBar: View {
     @Environment(EditorModel.self) private var model
 
@@ -704,6 +758,8 @@ private struct SelectedMaskEditor: View {
                 }
             }
             MaskColorSwatch()
+            MaskCurvesEditor()
+                .padding(.top, 6)
         }
         .padding(.horizontal, Theme.panelPadding)
         .padding(.bottom, 14)

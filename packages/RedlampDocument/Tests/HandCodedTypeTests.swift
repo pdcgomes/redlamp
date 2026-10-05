@@ -48,7 +48,17 @@ struct HandCodedTypeTests {
 
     @Test func `mask layers, components and AI masks`() throws {
         let masks = everything.recipe.masks
-        try check(masks[0])
+        try check(masks[0], notWritten: ["curves"])
+        var curved = masks[0]
+        var curves = MaskCurves()
+        for (index, channel) in MaskCurves.Channel.allCases.enumerated() {
+            curves[channel] = [
+                CurvePoint(x: 0, y: 0), CurvePoint(x: 0.5, y: 0.25 + 0.125 * Double(index)), CurvePoint(x: 1, y: 1),
+            ]
+        }
+        curved.curves = curves
+        try check(curved)
+        try check(curves)
         for component in masks.flatMap(\.components) {
             try check(component)
         }

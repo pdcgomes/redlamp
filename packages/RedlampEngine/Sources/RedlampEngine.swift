@@ -380,6 +380,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             &inputs.lensTable, length: inputs.lensTable.count * MemoryLayout<SIMD4<Float>>.stride, index: 5,
         )
         try encoder.setArray(inputs.components, index: 4, device: device)
+        try encoder.setArray(inputs.maskCurves, index: 6, device: device)
         encoder.dispatchGrid(width: size.width, height: size.height, pipeline: kernels.develop)
         encoder.endEncoding()
     }

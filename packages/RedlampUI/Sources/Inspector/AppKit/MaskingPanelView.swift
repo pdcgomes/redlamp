@@ -144,6 +144,7 @@ final class MaskingPanelView: ColumnView {
             }
         }
         views.append(rows.native(MaskColorSwatch()))
+        views.append(rows.native(MaskCurvesEditor().padding(.top, 6)))
         return ColumnView(
             spacing: Metrics.panelRowSpacing,
             insets: NSEdgeInsets(

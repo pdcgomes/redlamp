@@ -495,13 +495,15 @@ public struct MaskLayerGPU: Sendable {
     public var tone2: SIMD4<Float>
     public var detail: SIMD4<Float>
     public var glow: SIMD4<Float>
-    public var swatch: SIMD4<Float>
+    /// The display-referred adjustments: the Color swatch's OKLab (a, b), the mask's Curves table
+    /// plus one (0 for none), and how strongly its Curves apply (its Amount).
+    public var display: SIMD4<Float>
 
     public init(
         color: SIMD4<Float>, tone: SIMD4<Float>, tone2: SIMD4<Float>, detail: SIMD4<Float> = .zero,
-        glow: SIMD4<Float> = .zero, swatch: SIMD4<Float> = .zero,
+        glow: SIMD4<Float> = .zero, display: SIMD4<Float> = .zero,
     ) {
-        self.swatch = swatch
+        self.display = display
         self.color = color
         self.tone = tone
         self.tone2 = tone2

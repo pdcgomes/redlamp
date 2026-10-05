@@ -65,7 +65,8 @@ struct MaskManagementTests {
         let (model, cleanup) = try await openEditor()
         defer { cleanup() }
         let mask = try radialMask(model, at: 0.5)
-        #expect(ParameterID.swatchParameters.allSatisfy(\.isMaskScoped))
+        let scoped = ParameterID.swatchParameters.allSatisfy(\.isMaskScoped)
+        #expect(scoped)
         model.beginEdit()
         model.setSliderValue(.localColorHue, 220)
         model.setSliderValue(.localColorSaturation, 40)
@@ -73,6 +74,24 @@ struct MaskManagementTests {
         #expect(model.recipe.mask(mask)?[.localColorHue] == 220 && model.recipe
             .mask(mask)?[.localColorSaturation] == 40)
         #expect(model.sliderValue(.localColorSaturation) == 40 && model.history.last?.name == "Radial 1 Color")
+    }
+
+    @Test func `a mask's Curves are set channel by channel, and reset together`() async throws {
+        let (model, cleanup) = try await openEditor()
+        defer { cleanup() }
+        let mask = try radialMask(model, at: 0.5)
+        let name = try #require(model.recipe.mask(mask)?.name)
+        let lifted = [CurvePoint(x: 0, y: 0), CurvePoint(x: 0.5, y: 0.65), CurvePoint(x: 1, y: 1)]
+        model.setMaskCurve(.green, lifted)
+        #expect(model.recipe.mask(mask)?.curves?.green == lifted && model.maskCurve(.green) == lifted)
+        #expect(model.maskCurve(.rgb) == EditRecipe.linearPointCurve && model.history.last?.name == "\(name) Curve")
+        model.setMaskCurve(.green, EditRecipe.linearPointCurve)
+        #expect(model.recipe.mask(mask)?.curves == nil, "straight again: no Curves")
+
+        model.setMaskCurve(.rgb, lifted)
+        model.setMaskCurve(.blue, lifted)
+        model.resetMaskCurves()
+        #expect(model.recipe.mask(mask)?.curves == nil && model.history.last?.name == "Reset \(name) Curves")
     }
 
     @Test func `the overlay's opacity and Image on B&W reach the render`() async throws {

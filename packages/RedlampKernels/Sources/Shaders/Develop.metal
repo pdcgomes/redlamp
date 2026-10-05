@@ -592,6 +592,7 @@ kernel void rl_develop(
     texture2d<float, access::sample> toneBase [[texture(12)]],
     texture2d<float, access::sample> refinedHaze [[texture(13)]],
     constant float4 *lensTable [[buffer(5)]],
+    constant float *maskCurves [[buffer(6)]],
     uint2 gid [[thread_position_in_grid]])
 {
     uint width = uint(p.outputSize.x);
@@ -670,7 +671,7 @@ kernel void rl_develop(
         localDehaze += coverage[i] * layers[i].detail.x;
         localGlow += coverage[i] * layers[i].glow.xy;
         localFringe += coverage[i] * layers[i].glow.zw;
-        localSwatch += coverage[i] * layers[i].swatch.xy;
+        localSwatch += coverage[i] * layers[i].display.xy;
     }
 
     // Scene-referred: white balance (global and local), camera matrix, exposure.
@@ -871,6 +872,21 @@ kernel void rl_develop(
 
     if (p.tone2.z > 0.5f) {
         encoded = float3(sampleLUT(toneLUT, encoded.r), sampleLUT(toneLUT, encoded.g), sampleLUT(toneLUT, encoded.b));
+    }
+
+    // The masks' Curves, in mask order, each as far as its mask covers: the RGB curve on every
+    // channel, then each channel's own.
+    for (int i = 0; i < layerCount; i++) {
+        int table = int(layers[i].display.z) - 1;
+        float weight = coverage[i] * layers[i].display.w;
+        if (table < 0 || weight == 0.0f) continue;
+        constant float *curves = maskCurves + table * 4 * kMaskCurveSize;
+        float3 curved = float3(
+            sampleMaskCurve(curves, encoded.r), sampleMaskCurve(curves, encoded.g), sampleMaskCurve(curves, encoded.b));
+        curved = float3(
+            sampleMaskCurve(curves + kMaskCurveSize, curved.r), sampleMaskCurve(curves + 2 * kMaskCurveSize, curved.g),
+            sampleMaskCurve(curves + 3 * kMaskCurveSize, curved.b));
+        encoded = mix(encoded, curved, weight);
     }
 
     // Post-crop vignette.

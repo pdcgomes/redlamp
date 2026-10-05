@@ -206,6 +206,37 @@ struct MaskRenderTests {
         #expect(half.z - half.x < tinted[centre].z - tinted[centre].x, "Amount scales the tint")
     }
 
+    @Test func `a mask's Curves change what it covers, channel by channel`() throws {
+        let session = try makeSession(width: 200, height: 100) { _, _ in SIMD3(repeating: 0.18) }
+        var mask = MaskLayer(name: "Centre", components: [MaskComponent(shape: .radial(RadialMask(
+            center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.3, radiusY: 0.3, feather: 0,
+        )))])
+        let (centre, corner) = (50 * 200 + 100, 5 * 200 + 5)
+        let plain = try render(EditRecipe(), session: session)
+        var recipe = EditRecipe()
+
+        var curves = MaskCurves()
+        curves.rgb = [CurvePoint(x: 0, y: 0), CurvePoint(x: 0.5, y: 0.3), CurvePoint(x: 1, y: 1)]
+        mask.curves = curves
+        recipe.masks = [mask]
+        let darker = try render(recipe, session: session)
+        #expect(darker[centre].x < plain[centre].x * 0.8 && darker[centre].z < plain[centre].z * 0.8)
+        #expect(simd_abs(darker[corner] - plain[corner]).max() < 1e-4, "nothing outside the mask")
+
+        curves = MaskCurves()
+        curves.red = [CurvePoint(x: 0, y: 0), CurvePoint(x: 0.5, y: 0.7), CurvePoint(x: 1, y: 1)]
+        mask.curves = curves
+        recipe.masks = [mask]
+        let redder = try render(recipe, session: session)[centre]
+        let lift = redder - plain[centre]
+        #expect(lift.x > 0.02, "red lifted: \(redder)")
+        // The curve lifts red in the working space; the output's primaries mix a little of that in.
+        #expect(abs(lift.y) < 0.2 * lift.x && abs(lift.z) < 0.2 * lift.x, "mostly red: \(lift)")
+
+        mask.curves = MaskCurves()
+        #expect(mask.curves == nil, "straight curves are no Curves")
+    }
+
     @Test func `Image on B&W shows the mask in colour and the rest in grey`() throws {
         let session = try makeSession(width: 200, height: 100) { _, _ in SIMD3(0.4, 0.2, 0.1) }
         let mask = MaskLayer(name: "Centre", components: [MaskComponent(shape: .radial(RadialMask(

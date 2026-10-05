@@ -248,6 +248,28 @@ public extension EditorModel {
         commit(next, .mask(nil), "Delete All Masks")
     }
 
+    // MARK: - Mask Curves
+
+    /// The selected mask's curve for `channel`.
+    func maskCurve(_ channel: MaskCurves.Channel) -> [CurvePoint] {
+        selectedMask?.curves?[channel] ?? EditRecipe.linearPointCurve
+    }
+
+    /// Sets the selected mask's curve for `channel`: live during a drag, otherwise as a step.
+    func setMaskCurve(_ channel: MaskCurves.Channel, _ points: [CurvePoint]) {
+        guard let mask = selectedMask else { return }
+        mutateMask(mask.id, name: "\(mask.name) Curve") { layer in
+            var curves = layer.curves ?? MaskCurves()
+            curves[channel] = points
+            layer.curves = curves
+        }
+    }
+
+    func resetMaskCurves() {
+        guard let mask = selectedMask, mask.curves != nil else { return }
+        mutateMask(mask.id, name: "Reset \(mask.name) Curves") { $0.curves = nil }
+    }
+
     // MARK: - Mask sliders
 
     /// Values for mask-scoped sliders (local adjustments, Amount, Feather).

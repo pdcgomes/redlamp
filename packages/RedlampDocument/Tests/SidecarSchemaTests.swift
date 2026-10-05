@@ -567,11 +567,19 @@ enum RichSidecar {
             MaskComponent(shape: .ai(aiMask(.subject, "subject")), operation: .subtract),
             MaskComponent(shape: .ai(aiMask(.background, "background")), operation: .intersect),
         ]
+        var every = layer("Every adjustment", reused, farEnds(of: ParameterID.localParameters))
+        var curves = MaskCurves()
+        for (index, channel) in MaskCurves.Channel.allCases.enumerated() {
+            curves[channel] = [
+                CurvePoint(x: 0, y: 0.05), CurvePoint(x: 0.4, y: 0.3 + 0.05 * Double(index)), CurvePoint(x: 1, y: 0.95),
+            ]
+        }
+        every.curves = curves
         return [
             layer("Background", [MaskComponent(shape: .depthRange(depth))], [.localSharpness: -60]),
             layer("Faces", faces, [.localTexture: -20]),
             layer("Trees", [MaskComponent(shape: .ai(trees))], [.localSaturation: 10]),
-            layer("Every adjustment", reused, farEnds(of: ParameterID.localParameters)),
+            every,
         ]
     }
 

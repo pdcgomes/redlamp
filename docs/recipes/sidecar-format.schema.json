@@ -328,7 +328,18 @@
         },
         "amount": { "type": "number", "minimum": 0, "maximum": 200, "default": 100, "description": "Scales every adjustment of the mask, in percent." },
         "detail": { "type": "number", "minimum": -100, "maximum": 100, "default": 0, "description": "Above 0 keeps only textured areas of the mask, below 0 only flat ones. Written only when it isn't 0." },
-        "adjustments": { "$ref": "#/$defs/localAdjustments" }
+        "adjustments": { "$ref": "#/$defs/localAdjustments" },
+        "curves": {
+          "description": "The mask's Curves: point curves on the display-referred values the global point curve works on, the RGB curve on every channel and then each channel's own, applied as far as the mask covers and scaled by its amount. Each is written only when it isn't straight, and curves isn't written when none is.",
+          "type": "object",
+          "properties": {
+            "rgb": { "type": "array", "items": { "$ref": "#/$defs/curvePoint" }, "minItems": 2 },
+            "red": { "type": "array", "items": { "$ref": "#/$defs/curvePoint" }, "minItems": 2 },
+            "green": { "type": "array", "items": { "$ref": "#/$defs/curvePoint" }, "minItems": 2 },
+            "blue": { "type": "array", "items": { "$ref": "#/$defs/curvePoint" }, "minItems": 2 }
+          },
+          "additionalProperties": { "description": "A curve a newer Redlamp added: kept and written back unchanged." }
+        }
       },
       "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
     },

@@ -5,6 +5,16 @@
 #include "RedlampShaderTypes.h"
 
 constant int kMaxMaskLayers = 16;
+// Entries in each of a mask's four Curves tables (DevelopParameters.maskCurveSize).
+constant int kMaskCurveSize = 256;
+
+// A mask's Curves table, kMaskCurveSize entries over 0...1.
+static inline float sampleMaskCurve(constant float *table, float x) {
+    float position = clamp(x, 0.0f, 1.0f) * float(kMaskCurveSize - 1);
+    uint i = uint(position);
+    uint j = min(i + 1, uint(kMaskCurveSize - 1));
+    return mix(table[i], table[j], position - float(i));
+}
 constant int kMaxColorSamples = 5;
 
 // Component kinds, as written by DevelopParameters.gpuComponent.
