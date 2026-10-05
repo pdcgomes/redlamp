@@ -96,7 +96,7 @@ def append(options, metrics):
         bench = json.loads(pathlib.Path(options.bench).read_text())
         for metric_id, entry in bench["metrics"].items():
             entries[metric_id] = {key: round(entry[key], 4) for key in ("value", "low", "high", "spread")}
-    for path in (options.sweep, options.folders):
+    for path in (options.sweep, options.folders, options.e2e):
         if path and pathlib.Path(path).exists():
             for metric_id, value in json.loads(pathlib.Path(path).read_text()).items():
                 entries[metric_id] = {"value": round(value, 4)}
@@ -111,7 +111,7 @@ def append(options, metrics):
         "commit": git("rev-parse", "--short", "HEAD"),
         "subject": git("log", "-1", "--format=%s"),
         "dirty": dirty,
-        "source": "harness",
+        "source": options.source,
         "machine": {
             "chip": sysctl("machdep.cpu.brand_string"),
             "memoryGB": int(sysctl("hw.memsize") or 0) // 2**30,
@@ -136,6 +136,8 @@ def main():
     add.add_argument("--bench")
     add.add_argument("--sweep")
     add.add_argument("--folders")
+    add.add_argument("--e2e", help="the regression suite's metrics.json")
+    add.add_argument("--source", default="harness", help="what measured the run: harness, or e2e for the suite")
     add.add_argument("--load-before", type=float, required=True)
     add.add_argument("--load-after", type=float, required=True)
     commands.add_parser("report", help="what changed in each metric's latest run")

@@ -419,6 +419,83 @@
         "row": "Slowest 1% of iterations",
         "columns": true
       }
+    },
+    {
+      "id": "e2e-launch",
+      "label": "Launch to the first photo on screen",
+      "detail": "From the app starting to the folder's first photo rendered, measured by the regression suite",
+      "unit": "ms",
+      "group": "Opening",
+      "better": "lower",
+      "measuredBy": [
+        "e2e"
+      ]
+    },
+    {
+      "id": "e2e-open",
+      "label": "Open a raw from the filmstrip",
+      "detail": "From choosing it to its first frame, the median over the sample raws, measured by the regression suite",
+      "unit": "ms",
+      "group": "Opening",
+      "better": "lower",
+      "measuredBy": [
+        "e2e"
+      ]
+    },
+    {
+      "id": "e2e-drag-p99",
+      "label": "Slowest 1% of iterations while the suite drags Exposure",
+      "detail": "The 99th percentile of the main thread's run-loop iterations, every panel open",
+      "unit": "ms",
+      "group": "Responsiveness",
+      "better": "lower",
+      "measuredBy": [
+        "e2e"
+      ]
+    },
+    {
+      "id": "e2e-drag-fps",
+      "label": "Frames while the suite drags Exposure",
+      "detail": "Frames delivered a second during a 3-second drag at 120 changes a second",
+      "unit": "fps",
+      "group": "Editing",
+      "better": "higher",
+      "measuredBy": [
+        "e2e"
+      ]
+    },
+    {
+      "id": "e2e-export",
+      "label": "Export a full-size JPEG from the app",
+      "detail": "Render and write, through the editor's own export",
+      "unit": "ms",
+      "group": "Export",
+      "better": "lower",
+      "measuredBy": [
+        "e2e"
+      ]
+    },
+    {
+      "id": "e2e-palette",
+      "label": "Open the command palette",
+      "detail": "From ⌘K to the palette up, the median of five",
+      "unit": "ms",
+      "group": "Responsiveness",
+      "better": "lower",
+      "measuredBy": [
+        "e2e"
+      ]
+    },
+    {
+      "id": "e2e-footprint",
+      "label": "Memory after opening every sample raw",
+      "detail": "What macOS charges the app for (phys_footprint), measured by the regression suite",
+      "unit": "MB",
+      "group": "Memory",
+      "better": "lower",
+      "measuredBy": [
+        "e2e"
+      ]
     }
   ]
 }

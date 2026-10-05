@@ -1,0 +1,27 @@
+{
+  "format": "app.redlamp.e2e-budgets",
+  "description": "Ceilings a quiet run of the performance tier must stay under (floors for metrics where higher is better). They're about twice what an M1 Ultra measures, to catch regressions rather than noise; the history in docs/performance/history.jsonl shows the trend.",
+  "budgets": {
+    "e2e-launch": {
+      "max": 8000
+    },
+    "e2e-open": {
+      "max": 2500
+    },
+    "e2e-drag-p99": {
+      "max": 50
+    },
+    "e2e-drag-fps": {
+      "min": 30
+    },
+    "e2e-export": {
+      "max": 8000
+    },
+    "e2e-palette": {
+      "max": 400
+    },
+    "e2e-footprint": {
+      "max": 8000
+    }
+  }
+}
