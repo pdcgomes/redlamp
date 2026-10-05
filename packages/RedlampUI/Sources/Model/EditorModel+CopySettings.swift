@@ -15,6 +15,8 @@ public struct SettingsChooser: Identifiable {
     /// The edit whose settings are chosen from: its masks are listed by name.
     public let source: EditRecipe
     public var selection: SettingsSelection
+    /// The photo `source` is from, when it isn't the open one (the filmstrip's menu).
+    public var sourceURL: URL?
 }
 
 /// Copy Settings, Paste and Previous, by Lightroom's checklist (`SettingsSelection`): the choice is
@@ -35,7 +37,11 @@ public extension EditorModel {
         copySelection = chosen.remembered
         switch chooser.purpose {
         case .copy:
-            clipboard = CopiedSettings(source: chooser.source, selection: chosen, sourceURL: selection)
+            clipboard = CopiedSettings(
+                source: chooser.source,
+                selection: chosen,
+                sourceURL: chooser.sourceURL ?? selection,
+            )
             hasClipboard = true
         case .sync:
             sync(chooser.source, chosen, title: "Sync Settings")
@@ -68,6 +74,55 @@ public extension EditorModel {
         if isMultiSelecting {
             sync(sidecar.recipe, copySelection, title: "Paste from Previous")
         }
+    }
+
+    // MARK: - A photo in the filmstrip
+
+    /// The checklist for `photo`'s settings: the open photo's, or another's read from its sidecar
+    /// without opening it.
+    func chooseSettingsToCopy(from photo: URL) async {
+        guard photo != selection else { return chooseSettingsToCopy() }
+        guard !isModalDialogOpen, let edit = await edit(of: photo), !isModalDialogOpen else { return }
+        settingsChooser = SettingsChooser(
+            purpose: .copy, source: edit, selection: copySelection.remembered, sourceURL: photo,
+        )
+    }
+
+    /// `photo`'s settings with the last choice, without the checklist.
+    func copySettings(from photo: URL) async {
+        guard photo != selection else { return copySettings() }
+        guard !isModalDialogOpen, let edit = await edit(of: photo) else { return }
+        clipboard = CopiedSettings(source: edit, selection: copySelection, sourceURL: photo)
+        hasClipboard = true
+        activity.record(.action, "Copied settings from \(activity.alias(for: photo))")
+    }
+
+    /// What was copied, onto `photo`: with the selection when it is in it, otherwise onto it
+    /// alone, in the background, leaving the open photo as it is.
+    func pasteSettings(onto photo: URL) {
+        guard !isModalDialogOpen else { return }
+        guard !selectedPhotos.contains(photo) else { return pasteSettings() }
+        guard let clipboard else { return }
+        settingsSync.run(
+            .paste(clipboard.source, clipboard.selection),
+            on: [photo],
+            title: "Paste Settings",
+            done: written,
+        )
+        activity.record(.action, "Pasted settings onto \(activity.alias(for: photo))")
+    }
+
+    /// A photo's edit as saved: the default edit if it has none, nil if it can't be read.
+    private func edit(of photo: URL) async -> EditRecipe? {
+        await saves.wait(for: photo)
+        let read = try? await library.scheduler.run(.onScreen) { () -> EditRecipe? in
+            let store = SidecarStore()
+            if let sidecar = store.load(for: photo) {
+                return sidecar.recipe
+            }
+            return store.protection(for: photo) == .unreadable ? nil : EditRecipe()
+        }
+        return read ?? nil
     }
 
     /// Pastes onto the open photo as one step, then recomputes the AI masks it brought for this

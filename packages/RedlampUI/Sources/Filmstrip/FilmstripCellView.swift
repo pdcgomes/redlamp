@@ -29,6 +29,8 @@ final class FilmstripCellView: NSView {
     private(set) var item: LibraryItem?
     /// A click, with the modifier keys held (⌘ and ⇧ select several photos).
     var onClick: ((NSEvent.ModifierFlags) -> Void)?
+    /// The photo's context menu (`FilmstripMenu`).
+    var onMenu: (() -> NSMenu?)?
     private let background = CALayer()
     private let thumbnail = CALayer()
     private let badges = FilmstripBadgesView()
@@ -45,6 +47,14 @@ final class FilmstripCellView: NSView {
     var isInSelection = false {
         didSet {
             guard isInSelection != oldValue else { return }
+            updateBackground()
+        }
+    }
+
+    /// Ringed while its context menu is open: the photo the menu acts on.
+    private(set) var isMenuTarget = false {
+        didSet {
+            guard isMenuTarget != oldValue else { return }
             updateBackground()
         }
     }
@@ -87,6 +97,9 @@ final class FilmstripCellView: NSView {
         if changedPhoto || image != nil {
             setImage(image)
         }
+        if changedPhoto {
+            isMenuTarget = false
+        }
         badges.item = item
         badges.hasImage = thumbnail.contents != nil
         toolTip = item.name
@@ -105,8 +118,13 @@ final class FilmstripCellView: NSView {
 
     private func updateBackground() {
         background.backgroundColor = NSColor(white: isSelected ? 0.22 : isInSelection ? 0.19 : 0.14, alpha: 1).cgColor
-        background.borderWidth = isSelected ? 1.5 : isInSelection ? 1 : 0
-        background.borderColor = NSColor(white: 1, alpha: isSelected ? 0.85 : 0.4).cgColor
+        if isMenuTarget {
+            background.borderWidth = 2
+            background.borderColor = Palette.accent.cgColor
+        } else {
+            background.borderWidth = isSelected ? 1.5 : isInSelection ? 1 : 0
+            background.borderColor = NSColor(white: 1, alpha: isSelected ? 0.85 : 0.4).cgColor
+        }
     }
 
     override func layout() {
@@ -121,11 +139,37 @@ final class FilmstripCellView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        // Control-click is a right-click, not a click with a modifier.
+        if event.modifierFlags.contains(.control), let menu = menu(for: event) {
+            NSMenu.popUpContextMenu(menu, with: event, for: self)
+            return
+        }
         onClick?(event.modifierFlags)
+    }
+
+    override func menu(for _: NSEvent) -> NSMenu? {
+        onMenu?()
+    }
+
+    override func willOpenMenu(_: NSMenu, with _: NSEvent) {
+        isMenuTarget = true
+    }
+
+    override func didCloseMenu(_: NSMenu, with _: NSEvent?) {
+        isMenuTarget = false
     }
 
     override func isAccessibilityElement() -> Bool {
         true
+    }
+
+    /// VoiceOver's Show Menu: the same menu, under the photo.
+    override func accessibilityPerformShowMenu() -> Bool {
+        guard let menu = onMenu?() else { return false }
+        isMenuTarget = true
+        menu.popUp(positioning: nil, at: CGPoint(x: 0, y: bounds.height), in: self)
+        isMenuTarget = false
+        return true
     }
 
     override func accessibilityRole() -> NSAccessibility.Role? {

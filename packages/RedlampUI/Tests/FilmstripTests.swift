@@ -2,6 +2,7 @@ import AppKit
 import CoreGraphics
 import Foundation
 import RedlampDocument
+import RedlampEngineAPI
 import Testing
 @testable import RedlampUI
 
@@ -95,6 +96,102 @@ struct FilmstripTests {
         try await eventually { cell(strip, 4)?.isSelected == true }
         #expect(cell(strip, 4)?.isSelected == true)
         #expect(cell(strip, 0)?.isSelected == false)
+    }
+
+    private func titles(_ menu: NSMenu?) -> [String] {
+        menu?.items.filter { !$0.isSeparatorItem }.map(\.title) ?? []
+    }
+
+    @Test func `the menu on a selected photo is the Photo menu's`() async throws {
+        defer { cleanUp() }
+        let (model, _, window) = try await showStrip(count: 4)
+        defer { window.contentView = nil }
+        try await eventually { model.info != nil }
+        model.copySelection = .default
+        let open = try #require(model.selection)
+        #expect(titles(FilmstripMenu.menu(for: open, model: model)) == [
+            "Copy Settings…", "Copy Settings with Last Choice",
+        ])
+        model.copySettings()
+        model.selectAllPhotos()
+        let menu = FilmstripMenu.menu(for: model.items[2].url, model: model)
+        #expect(titles(menu) == [
+            "Copy Settings…", "Copy Settings with Last Choice", "Paste Settings", "Sync Settings…",
+            "Sync Settings with Last Choice", "Auto Sync",
+        ])
+        #expect(menu?.items.first?.keyEquivalent == "c")
+        #expect(menu?.items.first { $0.title == "Auto Sync" }?.state == .off)
+        model.toggleAutoSync()
+        defer { model.toggleAutoSync() }
+        #expect(FilmstripMenu.menu(for: open, model: model)?.items.first { $0.title == "Auto Sync" }?.state == .on)
+    }
+
+    /// A photo outside the selection is pasted onto in the background; the open one stays as it is.
+    @Test func `the menu on another photo pastes onto it alone, without opening it`() async throws {
+        defer { cleanUp() }
+        let (model, _, window) = try await showStrip(count: 4)
+        defer { window.contentView = nil }
+        try await eventually { model.info != nil }
+        model.copySelection = .default
+        let open = try #require(model.selection)
+        model.setValue(.exposure, 1)
+        model.copySettings()
+        model.setValue(.exposure, 0.5)
+        let other = model.items[3].url
+        let menu = try #require(FilmstripMenu.menu(for: other, model: model))
+        #expect(titles(menu) == ["Copy Settings…", "Copy Settings with Last Choice", "Paste Settings"])
+        let keys = menu.items.map(\.keyEquivalent).filter { !$0.isEmpty }
+        #expect(keys.isEmpty, "the keys act on the open photo")
+        let paste = try #require(menu.items.firstIndex { $0.title == "Paste Settings" })
+        menu.performActionForItem(at: paste)
+        await model.settingsSync.idle()
+        #expect(SidecarStore().load(for: other)?.recipe[.exposure] == 1)
+        #expect(model.selection == open && model.selectedPhotos == [open])
+        #expect(model.recipe[.exposure] == 0.5)
+        #expect(titles(FilmstripMenu.menu(for: other, model: model)).last == "Undo Sync Settings")
+    }
+
+    /// Copying from a photo that isn't open reads its sidecar.
+    @Test func `copying from another photo reads its edit`() async throws {
+        defer { cleanUp() }
+        let (model, _, window) = try await showStrip(count: 4)
+        defer { window.contentView = nil }
+        try await eventually { model.info != nil }
+        model.copySelection = .default
+        let other = model.items[2].url
+        var edited = EditRecipe()
+        edited[.contrast] = 30
+        try SidecarStore().save(Sidecar(recipe: edited), for: other)
+
+        await model.chooseSettingsToCopy(from: other)
+        let chooser = try #require(model.settingsChooser)
+        #expect(chooser.source[.contrast] == 30 && chooser.sourceURL == other)
+        model.confirmSettingsChoice(chooser.selection)
+        model.pasteSettings()
+        #expect(model.recipe[.contrast] == 30)
+
+        await model.copySettings(from: model.items[1].url)
+        model.pasteSettings()
+        #expect(model.recipe[.contrast] == 0, "a photo without an edit copies the default edit")
+    }
+
+    /// Right-click on a cell: its photo's menu, and a ring while it's open.
+    @Test func `a cell's right-click opens its photo's menu`() async throws {
+        defer { cleanUp() }
+        let (model, strip, window) = try await showStrip(count: 4)
+        defer { window.contentView = nil }
+        try await eventually { model.info != nil && cell(strip, 2) != nil }
+        let target = try #require(cell(strip, 2))
+        let event = try #require(NSEvent.mouseEvent(
+            with: .rightMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1,
+        ))
+        let menu = try #require(target.menu(for: event))
+        #expect(titles(menu).first == "Copy Settings…")
+        target.willOpenMenu(menu, with: event)
+        #expect(target.isMenuTarget)
+        target.didCloseMenu(menu, with: event)
+        #expect(!target.isMenuTarget)
     }
 
     @Test func `a photo added to the folder slides in without a reload`() async throws {

@@ -23,6 +23,9 @@ struct CopySettingsSheet: View {
             if chooser.purpose == .sync {
                 Text("From this photo onto the \(model.otherSelectedPhotos.count) other selected photos.")
                     .foregroundStyle(.secondary)
+            } else if let source = chooser.sourceURL, source != model.selection {
+                Text("From \(source.lastPathComponent).")
+                    .foregroundStyle(.secondary)
             }
             ScrollView {
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {

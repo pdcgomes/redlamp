@@ -105,6 +105,9 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
                 photo.url, toggling: modifiers.contains(.command), extending: modifiers.contains(.shift),
             )
         }
+        item.cell.onMenu = { [weak self] in
+            self.flatMap { FilmstripMenu.menu(for: photo.url, model: $0.model) }
+        }
         return item
     }
 
