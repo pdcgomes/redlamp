@@ -9,6 +9,8 @@ enum LibraryCommand {
     usage: redlamp library fixture <folder> --photos <n> [--seed <s>] [--raw-sources <folder>]
            redlamp library bench <fixture> [--profile <profile>] [--scenario <name>…] [--json <path>]
            redlamp library index <folder>… --index <path> [--profile <profile>]
+           redlamp library search <query> --index <path> [--sort captured|name|rating|edited] [--descending]
+                                  [--json] [--limit <n>]
       fixture  makes a synthetic library in <folder>: a fifth of the photos APFS clones of the raws in
                --raw-sources (tests/fixtures/raw) with their capture dates rewritten, the rest small JPEGs
                and HEICs with varied EXIF, GPS and IPTC; sidecars on 15% and other apps' .xmp on 5%; folders
@@ -21,6 +23,10 @@ enum LibraryCommand {
                folder listed, and each photo that's new or changed since it was indexed read once. Prints its
                progress and a summary; exits 1 when a photo couldn't be read or a volume stopped answering.
                --profile reads through a simulated volume, as bench does.
+      search   runs <query>, in the library's query language (rating>=3 label:red,blue -flag:reject
+               camera:"X-T5" date:2024-06..2024-08 sunset), over the index at <path> and prints the photos'
+               paths in order (when they were taken, unless --sort says otherwise), then how many photos it
+               found and how long it took. --limit prints only the first <n>; --json prints JSON.
     """
 
     private static var scenarioNames: String {
@@ -29,6 +35,7 @@ enum LibraryCommand {
 
     static func run(_ arguments: [String]) async throws {
         BenchScenarios.registerIndexing()
+        BenchScenarios.registerQueries()
         guard let command = arguments.first, !arguments.contains("--help") else {
             print(usage)
             return
@@ -37,6 +44,7 @@ enum LibraryCommand {
         case "fixture": try fixture(Array(arguments.dropFirst()))
         case "bench": try await bench(Array(arguments.dropFirst()))
         case "index": try await index(Array(arguments.dropFirst()))
+        case "search": try await search(Array(arguments.dropFirst()))
         default: throw CLIError(description: "unknown library command \(command)\n\n\(usage)")
         }
     }
