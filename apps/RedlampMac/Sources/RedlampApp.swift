@@ -34,7 +34,19 @@ struct RedlampApp: App {
         } catch {
             fatalError("Redlamp needs a Metal GPU: \(error.localizedDescription)")
         }
-        let model = EditorModel(engine: engine, library: FolderLibrary(defaults: .standard))
+        let library = FolderLibrary(defaults: .standard)
+        // The library opens off the main thread; until it has, and wherever it hasn't indexed a
+        // folder, Folders lists folders itself, as it does with the library off.
+        var service: LibraryService?
+        if LibraryService.isEnabled(.standard), !Self.isMeasuringFolders {
+            let opened = LibraryService(sidecars: library.sidecars, defaults: .standard) { [engine] url, size in
+                engine.decodeThumbnail(for: url, maxPixelSize: size)
+            }
+            library.attach(opened)
+            service = opened
+        }
+        AppDelegate.closeLibrary = { [service] in service?.close() }
+        let model = EditorModel(engine: engine, library: library)
         // Sync and Paste onto a selection open the other photos in an engine of their own.
         model.makeWorkerEngine = { try? RedlampEngine(decoder: DecodeServiceClient(), lensProfiles: .user) }
         if let layout = UserDefaults.standard.string(forKey: "compareLayout").flatMap(CompareLayout.init) {
@@ -133,12 +145,10 @@ struct RedlampApp: App {
     /// working set and the folder from the previous session.
     private static func openInitialFolder(model: EditorModel) {
         let arguments = LaunchArguments.all.dropFirst().prefix { !$0.hasPrefix("-") }
-        #if DEBUG || REDLAMP_PROFILING
-            // The measurement opens its own folder; the working set would compete with it.
-            if LaunchArguments.all.contains("--folders-perf") {
-                return
-            }
-        #endif
+        // The measurement opens its own folder; the working set would compete with it.
+        if isMeasuringFolders {
+            return
+        }
         guard !arguments.isEmpty else {
             model.restoreLibrary()
             return
@@ -147,6 +157,16 @@ struct RedlampApp: App {
         if !urls.isEmpty {
             model.open(urls)
         }
+    }
+
+    /// `--folders-perf` and `--library-perf` measure folders and a library of their own: the working
+    /// set, and the library over it, would compete with them.
+    private static var isMeasuringFolders: Bool {
+        #if DEBUG || REDLAMP_PROFILING
+            LaunchArguments.all.contains("--folders-perf") || LaunchArguments.all.contains("--library-perf")
+        #else
+            false
+        #endif
     }
 
     /// File › Open (⌘O): folders join the working set; photos add their folder and open.
@@ -170,6 +190,8 @@ struct RedlampApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static var launch: (@MainActor () -> EditorWindowController)?
     static var saveBeforeQuitting: (@MainActor () -> QuitSaving)?
+    /// Writes the library's store index files as the app quits.
+    static var closeLibrary: (@MainActor () -> Void)?
     static var showCameraBench: (@MainActor () -> Void)?
     static var openCameraBenchIfRequested: (@MainActor () -> Void)?
     static var isEditorBusy: (@MainActor () -> Bool)?
@@ -302,6 +324,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !RedlampEngine.stopModels(waitingAtMost: 10) {
             Logger(subsystem: "app.redlamp.mac", category: "models").error("Quit with an AI model still running")
         }
+        Self.closeLibrary?()
     }
 
     private static func quitsWithout(_ photos: [URL]) -> Bool {
