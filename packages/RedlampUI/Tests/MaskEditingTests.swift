@@ -164,6 +164,13 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         }
     }
 
+    /// What `withShadowAndReflection` gives in place of a mask; nil gives the mask itself.
+    var withShadow: AIMask?
+
+    func withShadowAndReflection(_ mask: AIMask) async -> AIMask {
+        withShadow ?? mask
+    }
+
     var availableKinds: Set<MaskKind> = [.subject, .background, .people, .sky, .objects]
 
     func availableMaskKinds() -> Set<MaskKind> {

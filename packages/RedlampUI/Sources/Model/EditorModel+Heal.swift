@@ -100,10 +100,12 @@ public extension EditorModel {
             )
             guard currentVisit == visit else { return }
             let chosen = pick == .person ? Self.mask(at: point, in: found) : found.first
-            guard let mask = chosen else {
+            guard let picked = chosen else {
                 pickMessage = pick == .person ? "No one is there." : "Nothing was found there."
                 return
             }
+            let mask = removesShadows ? await engine.withShadowAndReflection(picked) : picked
+            guard currentVisit == visit else { return }
             let spot = RetouchSpot(
                 mode: .remove, center: mask.center, source: mask.center, region: mask, radius: Self.regionGrowth,
                 feather: spotSettings.feather, opacity: spotSettings.opacity,
@@ -215,9 +217,11 @@ public extension EditorModel {
         isPickingRegion = true
         defer { isPickingRegion = false }
         do {
-            guard let mask = try await engine.computeMasks(MaskRequest(kind: .objects, box: found.box)).first,
+            guard let thing = try await engine.computeMasks(MaskRequest(kind: .objects, box: found.box)).first,
                   currentVisit == visit
             else { return nil }
+            let mask = removesShadows ? await engine.withShadowAndReflection(thing) : thing
+            guard currentVisit == visit else { return nil }
             return RetouchSpot(
                 mode: .remove, center: mask.center, source: mask.center, region: mask, radius: Self.regionGrowth,
                 feather: spotSettings.feather, opacity: spotSettings.opacity,

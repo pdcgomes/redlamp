@@ -522,6 +522,20 @@ extension RedlampEngine {
         return try segmenter.mask(embedding, included: request.prompts, excluded: request.excluded, size: size).bitmap()
     }
 
+    public func withShadowAndReflection(_ mask: AIMask) async -> AIMask {
+        guard let session = currentSession(), let png = mask.bitmap.png, let gray = GrayMask.decode(png),
+              let analysis = try? await analysisImage(for: session)
+        else { return mask }
+        let image = analysis.image
+        let extended = await Task.detached(priority: .userInitiated) {
+            RemovalRegion.extended(gray, image: image)
+        }.value
+        guard extended.shadow || extended.reflection, let bitmap = extended.mask.bitmap() else { return mask }
+        var result = mask
+        result.bitmap = bitmap
+        return result
+    }
+
     public func refineMaskEdges(_ bitmap: MaskBitmap) async throws -> MaskBitmap {
         guard let session = currentSession() else { throw EngineError.noImageOpen }
         guard let png = bitmap.png,

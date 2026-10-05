@@ -299,6 +299,12 @@ public final class EditorModel {
     public var selectedSpotID: UUID?
     /// What the next spot does, and its settings (what the sliders show with no spot selected).
     public var spotMode: RetouchSpot.Mode = .heal
+    /// A picked or found person or object takes its shadow and reflection with it (RM-13). Kept
+    /// across launches.
+    public var removesShadows = UserDefaults.standard.object(forKey: "app.redlamp.removeShadows") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(removesShadows, forKey: "app.redlamp.removeShadows") }
+    }
+
     /// Generative Remove (RM-10): new Remove spots are filled by the generative model, as Lightroom's
     /// Generative AI switch does. Kept across launches.
     public var fillsGeneratively = UserDefaults.standard.bool(forKey: "app.redlamp.generativeRemove") {

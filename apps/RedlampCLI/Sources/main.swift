@@ -37,8 +37,9 @@ options:
   --heal-brush <x>,<y>,…,<radius>  the same along a brush stroke through the points; --clone-brush
   --remove <x>,<y>,<radius>  fill a spot from the photo around it (content-aware); --remove-brush
   --remove-dust <0…100>    heal the sensor dust found at this sensitivity (50 is the app's)
-  --remove-found <things>  remove what's found by name, e.g. car or "trash,sign" (OWLv2 and Segment
-                           Anything, from Settings › Models)
+  --remove-found <things>  remove what's found by name, e.g. car or "trash,sign", with its shadow and
+                           reflection (OWLv2 and Segment Anything, from Settings › Models);
+                           --keep-shadows before it leaves those
   --generative [<seed>]    fill every Remove spot so far with generative fill (FLUX.2 [klein] 4B, from
                            Settings › Models, or REDLAMP_GENERATIVE_MODEL); --fill-prompt <name>
                            picks the prompt (empty, background or remove), --fill-reference what
@@ -92,6 +93,7 @@ func run(_ arguments: [String]) async throws {
     var recipe = EditRecipe()
     var output: URL?
     var fillOptions = GenerativeFillOptions()
+    var keepsShadows = false
     var request = StillRequest(recipe: recipe, purpose: .export)
     var index = 2
     func value() throws -> String {
@@ -249,7 +251,7 @@ func run(_ arguments: [String]) async throws {
                 do {
                     guard let first = try await engine.computeMasks(MaskRequest(kind: .objects, box: thing.box)).first
                     else { continue }
-                    mask = first
+                    mask = keepsShadows ? first : await engine.withShadowAndReflection(first)
                 } catch MaskComputationError.nothingFound {
                     print(String(format: "skipped %@ %.2f: no shape found in its box", thing.thing, thing.score))
                     continue
@@ -265,6 +267,8 @@ func run(_ arguments: [String]) async throws {
                     thing.box.x, thing.box.y, thing.box.width, thing.box.height,
                 ))
             }
+        case "--keep-shadows":
+            keepsShadows = true
         case "--fill-prompt":
             fillOptions.prompt = try value()
         case "--fill-reference":

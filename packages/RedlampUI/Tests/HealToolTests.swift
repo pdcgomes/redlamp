@@ -115,6 +115,24 @@ struct HealToolTests {
         #expect(model.pickMessage == "Nothing was found there." && model.recipe.spots.count == 1)
     }
 
+    @Test func `a picked object takes its shadow and reflection with it, unless that's turned off`() async throws {
+        let engine = StubEngine()
+        engine.computed = try [half(true)]
+        engine.withShadow = try half(false)
+        let (model, cleanup) = try await openEditor(engine)
+        defer { cleanup() }
+        let kept = model.removesShadows
+        defer { model.removesShadows = kept }
+        model.activeTool = .heal
+        model.spotPick = .object
+        model.removesShadows = true
+        await model.pickRegion(at: ImagePoint(x: 0.3, y: 0.4))
+        #expect(model.recipe.spots.last?.region?.center == ImagePoint(x: 0.75, y: 0.5))
+        model.removesShadows = false
+        await model.pickRegion(at: ImagePoint(x: 0.3, y: 0.4))
+        #expect(model.recipe.spots.count == 2 && model.recipe.spots.last?.region?.center == ImagePoint(x: 0.25, y: 0.5))
+    }
+
     private static let car = FoundThing(
         thing: "car",
         score: 0.6,

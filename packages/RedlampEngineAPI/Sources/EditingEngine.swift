@@ -54,6 +54,10 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// An AI mask's bitmap with its edges snapped harder to the current photo's.
     func refineMaskEdges(_ bitmap: MaskBitmap) async throws -> MaskBitmap
 
+    /// A person's or object's mask, about to be removed, with the shadow it casts and its
+    /// reflection in the current photo (RM-13); the mask itself when it has neither.
+    func withShadowAndReflection(_ mask: AIMask) async -> AIMask
+
     /// An AI mask's bitmap with coverage under `strokes` (the Refine Edge brush) solved again per
     /// pixel from the current photo, and kept as it was everywhere else.
     func refineMaskEdges(_ bitmap: MaskBitmap, along strokes: [BrushStroke]) async throws -> MaskBitmap
@@ -198,6 +202,10 @@ public extension EditingEngine {
 
     func generativeFillAvailability() async -> GenerativeFillAvailability {
         .unavailable("This build has no generative model.")
+    }
+
+    func withShadowAndReflection(_ mask: AIMask) async -> AIMask {
+        mask
     }
 
     func generateFills(

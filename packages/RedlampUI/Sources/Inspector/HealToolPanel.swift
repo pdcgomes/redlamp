@@ -61,6 +61,10 @@ struct HealToolPanel: View {
                     ProgressView().controlSize(.small)
                 }
             }
+            Toggle("Shadows and reflections", isOn: $model.removesShadows)
+                .toggleStyle(.checkbox)
+                .font(Theme.labelFont)
+                .help("A person or object you pick, or remove from Find, takes its shadow and its reflection with it")
             if let message = model.pickMessage {
                 Text(message)
                     .font(Theme.labelFont)

@@ -583,7 +583,7 @@
         }
 
         static let dustAndFind = Scenario(
-            "healing.dust-and-find", "Remove Dust, Visualize Spots, person and object picks, and Find",
+            "healing.dust-and-find", "Remove Dust, Visualize Spots, picks with and without their shadows, and Find",
             claims: [
                 .feature("healing.dust"),
                 .feature("healing.visualize"),
@@ -601,8 +601,17 @@
                 [.feature("healing.dust"), .feature("healing.visualize"), .parameter(.spotVisualize)],
                 via: .model,
             )
-            try app.main { $0.spotPick = .object }
+            let removesShadows = try app.main { model in
+                model.spotPick = .object
+                return model.removesShadows
+            }
+            try app.main { $0.removesShadows = true }
             try app.run("an object pick", timeout: 240) { await $0.pickRegion(at: ImagePoint(x: 0.5, y: 0.55)) }
+            try app.main { $0.removesShadows = false }
+            try app.run("an object pick, leaving its shadow", timeout: 240) {
+                await $0.pickRegion(at: ImagePoint(x: 0.5, y: 0.55))
+            }
+            try app.main { $0.removesShadows = removesShadows }
             app.covered(.feature("healing.picks"), via: .model)
             try app.run("the things to find", timeout: 60) { await $0.loadThingsToFind() }
             let things = try app.main { $0.thingsToFind }
