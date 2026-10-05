@@ -2,7 +2,7 @@
 
 Lightroom's Point Color, with Capture One's uniformity: pick a colour on the photo, shift it and the colours near it, and pull those colours together, so blotchy skin evens out to one tone. It works on the whole photo and inside masks, and an Even Skin Tone mask preset does it for skin in one step. Tracker: TON-29 (#181); it waits on TON-31 (#190), where the colour controls sit, and TON-30 (#182), the spatial version, follows it. The research, sources and a prototype's measurements are in [the note](../research/notes/TON-29-colour-uniformity.md).
 
-**Status (2026-10-05):** approved; building on the `point-color/build` branch. Steps 1 (`model`), 2 (`kernel`), 3's eyedropper (`probe`) and 4 (`panel`) done; the mask's own colour moved to step 5, with masks' swatches, and the command palette and the Delete key to step 7.
+**Status (2026-10-06):** approved; building on the `point-color/build` branch. Steps 1 (`model`) to 5 (`masks`) done, with the mask's own colour in step 5; the command palette and the Delete key moved to step 7. Next: tuning (step 6).
 
 ## Decisions (the owner)
 
@@ -37,13 +37,13 @@ In the develop kernel, right after the Color Mixer: after the tone curve and the
 ## The swatch's colour
 
 - **Picking.** The eyedropper works like Color Range's (a click, or a drag for a larger disc). It reads the colour that Point Color receives there, averaged over the disc. That needs its own sample: the edit guide holds the edit's final colours, Point Color's own effect included. A one-off render of Point Color's input, with the edit's masks, at the guide's size (2048 px), is read as `sampleEditGuide` reads the edit guide (`RedlampEngine.pointColorInput(sampledAt:radius:recipe:)`).
-- **The mask's own colour,** for a swatch on a mask: the median of Point Color's input under the mask. It comes from a small render of Point Color's input with the edit's masks (512 px, about a quarter of a megapixel), made again when anything before Point Color, the mask or the photo changes, and handed to the develop pass in a small buffer. It follows the photo's white balance, and works on every photo the mask is pasted to: AI masks are recomputed for each photo, and so is their colour.
+- **The mask's own colour,** for a swatch on a mask: the median of Point Color's input under the mask. It comes from a small render of Point Color's input with the edit's masks (512 px, about a quarter of a megapixel, of the frame uncropped), with the mask's coverage in alpha; a histogram kernel counts OKLab lightness, a and b under the mask, weighted by its coverage, and a one-thread kernel writes their medians into a small buffer the develop pass reads. All of it is in the render's own command buffer, so nothing waits on the CPU and nothing needs a cache: it's measured again for every render that has such a swatch. It follows the photo's white balance and every edit before Point Color, and works on every photo the mask is pasted to: AI masks are recomputed for each photo, and so is their colour.
 - **Visualize Range,** as in Lightroom: the develop kernel shows the selected swatch's selection, colour where it selects and grey elsewhere, as Visualize Spots draws its own view.
 
 ## The panel
 
 - **The Color Mixer panel** gains Point Color beside HSL and Color in its picker, as Lightroom's Color Mixer has Point Color. It shows the swatches (the eyedropper adds one, up to eight, and with eight picks the selected swatch's colour again; click selects; the bin deletes the selected one), then Shift, Uniformity and Range for the selected swatch, dimmed until there is one, and Visualize Range. Leaving the mode ends the eyedropper and Visualize Range; the white balance eyedropper and Point Color's are never on together.
-- **The mask panel** gets the same section, with the mask's own colour as a choice for a swatch's colour.
+- **The mask panel** gets the same section, with the mask's own colour as a choice for a swatch's colour. While the Masking tool is open, the eyedropper, the swatches and the sliders act on the selected mask's swatches (a click, or a disc dragged out to average, as the Color Range eyedropper does), and leaving the tool ends the eyedropper and Visualize Range.
 - **The command palette** finds Point Color and its sliders, which act on the selected swatch, and the Delete key deletes it (step 7: the palette's sliders need a swatch to act on).
 - **The component harness** gets a Point Color specimen beside the Color Mixer's: the Point Color parity scene, with two swatches.
 - **Report a Bug** lists Point Color as a feature of Develop (`develop.point-color`), and its sliders report it.
@@ -51,8 +51,8 @@ In the develop kernel, right after the Color Mixer: after the tone curve and the
 ## The Even Skin Tone preset
 
 - **Components:** People's Face Skin, plus Body Skin when SAM 3 is installed (Face Skin alone otherwise).
-- **One swatch** with the mask's own colour; range: hue fully within 20° and none past 45°, all but near-greys, deep shadows and speculars; uniformity: Hue 50, Saturation 35, Luminance 0. Luminance stays at 0: in the prototype, uniformity on lightness took a third of the face's shading and 42% of its pore-scale texture. These are starting values, to tune in step 6.
-- `MaskPreset` gains swatches.
+- **One swatch** with the mask's own colour; range: hue fully within 20° and none past 45°, all but near-greys, deep shadows and speculars (Hue Range 47, Saturation Range 64, Luminance Range 37, Smoothness 50); uniformity: Hue 50, Saturation 35, Luminance 0. Luminance stays at 0: in the prototype, uniformity on lightness took a third of the face's shading and 42% of its pore-scale texture. These are starting values, to tune in step 6.
+- `MaskPreset` gains swatches (each applied mask gets swatches of its own) and optional parts: Body Skin is left out when it can't be computed, as before SAM 3 is installed, rather than failing the preset.
 
 ## Format and interoperability
 
@@ -76,7 +76,7 @@ In the develop kernel, right after the Color Mixer: after the tone curve and the
 - **Renders:** on a synthetic chart with skin-like patches, colours in the range move towards the swatch and colours outside it don't; a mask's swatch acts only under the mask; golden renders for Point Color edits.
 - **Stability:** edits without Point Color render exactly as before (`ProcessStabilityTests`).
 - **Format:** round trips, unknown keys inside a swatch kept, and the schema.
-- **The app:** the end-to-end suite's contract (ARC-07, ARC-08) claims Point Color's sliders and eyedropper in a scenario (`develop.point-color`: a click on the canvas adds the swatch), and the feedback catalogue lists Point Color as a feature of Develop.
+- **The app:** the end-to-end suite's contract (ARC-07, ARC-08) claims Point Color's sliders and eyedropper in a scenario (`develop.point-color`: a click on the canvas adds the swatch), and Point Color in masks in another (`masking.point-color`); `masking.presets` applies Even Skin Tone with the other built-in presets. The feedback catalogue lists Point Color as a feature of Develop and of Masking.
 
 ## Gates
 

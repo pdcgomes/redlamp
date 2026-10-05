@@ -764,6 +764,7 @@ private struct SelectedMaskEditor: View {
             MaskColorSwatch()
             MaskCurvesEditor()
                 .padding(.top, 6)
+            MaskPointColor(mask: mask)
         }
         .padding(.horizontal, Theme.panelPadding)
         .padding(.bottom, 14)

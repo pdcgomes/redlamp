@@ -21,10 +21,16 @@ public struct MaskPreset: Codable, Sendable, Hashable, Identifiable {
     /// before there was one (and read as Vegetation). Beside `components` rather than in them, so
     /// builds without it still read the preset.
     public var landscapeClasses: [LandscapeClass?]?
+    /// The mask's Point Color swatches, each given a new identity when the preset is applied.
+    public var pointColor: [PointColorSwatch]?
+    /// People parts the preset does without when they can't be computed, such as Body Skin before
+    /// SAM 3 is installed.
+    public var optionalParts: [PersonPart]?
 
     public init(
         id: String = UUID().uuidString, name: String, components: [Component], amount: Double = 100, detail: Double = 0,
         adjustments: [ParameterID: Double], landscapeClasses: [LandscapeClass?]? = nil,
+        pointColor: [PointColorSwatch]? = nil, optionalParts: [PersonPart]? = nil,
     ) {
         self.id = id
         self.name = name
@@ -33,6 +39,8 @@ public struct MaskPreset: Codable, Sendable, Hashable, Identifiable {
         self.detail = detail
         self.adjustments = Dictionary(uniqueKeysWithValues: adjustments.map { ($0.key.rawValue, $0.value) })
         self.landscapeClasses = landscapeClasses
+        self.pointColor = pointColor
+        self.optionalParts = optionalParts
     }
 
     /// The Landscape class the component at `index` computes.
@@ -69,7 +77,13 @@ public struct MaskPreset: Codable, Sendable, Hashable, Identifiable {
         self.init(
             name: name, components: components, amount: mask.amount, detail: mask.detail,
             adjustments: mask.adjustments, landscapeClasses: classes.contains { $0 != nil } ? classes : nil,
+            pointColor: mask.pointColor.isEmpty ? nil : mask.pointColor,
         )
+    }
+
+    /// The swatches the preset's mask gets, each with an identity of its own.
+    public var newSwatches: [PointColorSwatch] {
+        (pointColor ?? []).map { PointColorSwatch(color: $0.color, values: $0.values) }
     }
 
     public var localAdjustments: [ParameterID: Double] {
@@ -110,6 +124,23 @@ public struct MaskPreset: Codable, Sendable, Hashable, Identifiable {
             id: "redlamp.smoothSkin", name: "Smooth Skin",
             components: [.ai(kind: .people, part: .faceSkin, .add, inverted: false)],
             adjustments: [.localTexture: -35, .localClarity: -10],
+        ),
+        // Capture One's skin tone uniformity (TON-29): the skin's colours pulled part of the way to
+        // its own median, hue more than saturation; lightness is left alone, which keeps the face's
+        // shading and texture. The range takes hues fully within about 20° and none past 45°, and
+        // leaves out near-greys, deep shadows and speculars. Starting values, to tune on more faces.
+        MaskPreset(
+            id: "redlamp.evenSkinTone", name: "Even Skin Tone",
+            components: [
+                .ai(kind: .people, part: .faceSkin, .add, inverted: false),
+                .ai(kind: .people, part: .bodySkin, .add, inverted: false),
+            ],
+            adjustments: [:],
+            pointColor: [PointColorSwatch(color: .mask, values: [
+                .pointColorHueUniformity: 50, .pointColorSaturationUniformity: 35,
+                .pointColorHueRange: 47, .pointColorSaturationRange: 64, .pointColorLuminanceRange: 37,
+            ])],
+            optionalParts: [.bodySkin],
         ),
         MaskPreset(
             id: "redlamp.whitenTeeth", name: "Whiten Teeth",

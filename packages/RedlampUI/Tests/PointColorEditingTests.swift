@@ -163,6 +163,88 @@ struct PointColorEditingTests {
         #expect(!model.visualizePointColorRange)
     }
 
+    // MARK: - Masks
+
+    private func openWithMask() async throws -> (EditorModel, UUID) {
+        let model = try await openModel()
+        model.activeTool = .masking
+        model.startDrawing(.radial)
+        model.beginDrawing(.radial(RadialMask(center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.2)))
+        model.finishDrawing()
+        return try (model, #require(model.selectedMaskID))
+    }
+
+    @Test func `in the Masking tool, Point Color edits the selected mask's swatches`() async throws {
+        let (model, mask) = try await openWithMask()
+        #expect(model.pointColorTarget == .mask(mask))
+        model.addPointColorSwatch(skin)
+        model.setSliderValue(.pointColorHueUniformity, 60)
+
+        let swatches = try #require(model.recipe.mask(mask)?.pointColor)
+        #expect(swatches.count == 1 && swatches[0][.pointColorHueUniformity] == 60)
+        #expect(model.recipe.pointColor.isEmpty, "the edit's own swatches are untouched")
+        let name = try #require(model.recipe.mask(mask)?.name)
+        #expect(model.history.last?.name == "\(name) Point Color Hue Uniformity: 0 → +60")
+
+        model.activeTool = .edit
+        #expect(model.pointColorTarget == .edit && model.selectedPointColorSwatch == nil)
+        #expect(model.sliderValue(.pointColorHueUniformity) == 0)
+    }
+
+    @Test func `a mask's own colour is a swatch only a mask can have`() async throws {
+        let (model, mask) = try await openWithMask()
+        model.addMaskColorSwatch()
+        #expect(model.recipe.mask(mask)?.pointColor.map(\.color) == [.mask])
+        #expect(model.history.last?.name == "Add Point Color Swatch")
+
+        model.activeTool = .edit
+        model.addMaskColorSwatch()
+        #expect(model.recipe.pointColor.isEmpty)
+    }
+
+    @Test func `leaving the Masking tool ends Point Color's eyedropper and Visualize Range`() async throws {
+        let (model, _) = try await openWithMask()
+        model.addPointColorSwatch(skin)
+        model.visualizePointColorRange = true
+        model.pointColorEyedropperActive = true
+        model.activeTool = .edit
+        #expect(!model.visualizePointColorRange && !model.pointColorEyedropperActive)
+    }
+
+    @Test func `the Even Skin Tone preset masks the skin, with a swatch of its own colour`() async throws {
+        engine.computed = [AIMask(
+            kind: .people, provider: "stub", revision: 1, analysisHash: "h", center: ImagePoint(x: 0.5, y: 0.4),
+            bitmap: MaskBitmap(sha256: "s", width: 4, height: 4),
+        )]
+        let model = try await openModel()
+        let preset = try #require(MaskPreset.builtIn.first { $0.id == "redlamp.evenSkinTone" })
+        #expect(model.canApply(preset))
+        await model.applyMaskPreset(preset)
+        let mask = try #require(model.masks.last)
+        #expect(mask.name == "Even Skin Tone" && mask.components.count == 2, "Face Skin and Body Skin")
+        let swatch = try #require(mask.pointColor.first)
+        #expect(swatch.color == .mask && swatch[.pointColorHueUniformity] == 50)
+        #expect(swatch.id != preset.pointColor?.first?.id, "a swatch of its own")
+
+        engine.missingParts = [.bodySkin]
+        await model.applyMaskPreset(preset)
+        #expect(model.masks.count == 2 && model.masks.last?.components.count == 1, "Face Skin alone without SAM 3")
+        #expect(model.maskMessage == nil)
+    }
+
+    @Test func `a mask preset keeps the mask's swatches`() async throws {
+        let (model, mask) = try await openWithMask()
+        model.addPointColorSwatch(skin)
+        model.setSliderValue(.pointColorSaturationUniformity, 25)
+        let saved = try MaskPreset(#require(model.recipe.mask(mask)), name: "Mine")
+        let decoded = try JSONDecoder().decode(MaskPreset.self, from: JSONEncoder().encode(saved))
+        #expect(decoded.pointColor?.first?[.pointColorSaturationUniformity] == 25)
+        let old = try JSONDecoder().decode(MaskPreset.self, from: Data(#"""
+        {"id": "x", "name": "Old", "components": [], "amount": 100, "detail": 0, "adjustments": {}}
+        """#.utf8))
+        #expect(old.pointColor == nil && old.newSwatches.isEmpty, "presets saved before Point Color still read")
+    }
+
     @Test func `each of Point Color's sliders belongs to its own feedback feature`() {
         for parameter in ParameterID.pointColorParameters {
             #expect(FeedbackArea.featureID(for: parameter) == "develop.point-color")

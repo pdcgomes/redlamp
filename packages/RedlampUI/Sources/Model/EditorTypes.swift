@@ -351,6 +351,8 @@ public struct MaskOutline: Hashable, Identifiable, Sendable {
     public let name: String
     public let isVisible: Bool
     public let components: [Component]
+    /// Whether the mask has Point Color swatches, which its editor shows sliders for.
+    public let hasPointColor: Bool
 
     init(_ mask: MaskLayer) {
         id = mask.id
@@ -359,5 +361,6 @@ public struct MaskOutline: Hashable, Identifiable, Sendable {
         components = mask.components.map {
             Component(id: $0.id, kind: $0.shape.kind, operation: $0.operation, inverted: $0.inverted)
         }
+        hasPointColor = !mask.pointColor.isEmpty
     }
 }

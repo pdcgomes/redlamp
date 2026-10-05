@@ -66,6 +66,9 @@ public extension EditorModel {
                     }
                 } catch {
                     guard currentVisit == visit else { return }
+                    if preset.optionalParts?.contains(part) == true {
+                        continue
+                    }
                     maskMessage = "\(preset.name): \((error as? MaskComputationError)?.description ?? "\(error)")"
                     return
                 }
@@ -76,6 +79,7 @@ public extension EditorModel {
             name: preset.name, components: components, amount: preset.amount, adjustments: preset.localAdjustments,
         )
         mask.detail = preset.detail
+        mask.pointColor = preset.newSwatches
         var next = recipe
         next.masks.append(mask)
         selectedMaskID = mask.id

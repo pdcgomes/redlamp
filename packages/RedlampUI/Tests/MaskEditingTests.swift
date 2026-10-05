@@ -163,9 +163,15 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
     /// Every AI mask asked for, in order.
     var requests: [MaskRequest] = []
 
+    /// People parts `computeMasks` can't compute, as without SAM 3.
+    var missingParts: Set<PersonPart> = []
+
     func computeMasks(_ request: MaskRequest) async throws -> [AIMask] {
         lastRequest = request
         requests.append(request)
+        if request.kind == .people, missingParts.contains(request.part) {
+            throw MaskComputationError.needsSAM3(request.part)
+        }
         return computed.map { mask in
             var mask = mask
             mask.kind = request.kind

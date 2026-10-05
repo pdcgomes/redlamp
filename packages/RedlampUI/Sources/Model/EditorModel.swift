@@ -307,6 +307,10 @@ public final class EditorModel {
                 drawingKind = nil
                 edgeBrushTarget = nil
             }
+            // Point Color's controls move between the edit's swatches and the mask's.
+            if (activeTool == .masking) != (oldValue == .masking) {
+                leavePointColor()
+            }
             if activeTool != .heal {
                 dustMessage = nil
                 pickMessage = nil

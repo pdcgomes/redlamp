@@ -17,7 +17,8 @@ struct MaskOverlayView: View {
             ZStack {
                 if model.isBrushing || model.isRefiningEdges {
                     BrushCanvas(frame: frame)
-                } else if model.drawingKind == .colorRange || model.drawingKind == .luminanceRange {
+                } else if model.pointColorEyedropperActive || model.drawingKind == .colorRange
+                    || model.drawingKind == .luminanceRange {
                     RangeSampler(frame: frame)
                 } else if model.drawingKind == .objects {
                     ObjectPicker(frame: frame)
@@ -234,8 +235,8 @@ private struct BrushCanvas: View {
     }
 }
 
-/// The Color and Luminance Range eyedroppers: click a spot, or drag out a disc to average.
-/// Shift adds a colour sample instead of replacing the samples.
+/// The Color and Luminance Range eyedroppers, and Point Color's in a mask: click a spot, or drag out
+/// a disc to average. Shift adds a colour sample instead of replacing the samples.
 private struct RangeSampler: View {
     let frame: ImageFrame
     @Environment(EditorModel.self) private var model
@@ -275,7 +276,9 @@ private struct RangeSampler: View {
                 let start = frame.image(gesture.startLocation)
                 let distance = hypot(gesture.translation.width, gesture.translation.height)
                 let radius = distance < 4 ? 0 : distance / frame.heightScale
-                if model.drawingKind == .colorRange {
+                if model.pointColorEyedropperActive {
+                    model.samplePointColor(atImage: start, radius: radius)
+                } else if model.drawingKind == .colorRange {
                     model.sampleColorRange(at: start, radius: radius, adding: NSEvent.modifierFlags.contains(.shift))
                 } else {
                     Task { await model.sampleLuminanceRange(at: start) }

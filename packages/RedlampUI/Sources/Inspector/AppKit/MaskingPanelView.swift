@@ -106,7 +106,8 @@ final class MaskingPanelView: ColumnView {
         }
         // Showing or hiding the mask changes nothing in its editor.
         if let editor = editors[mask.id], editor.mask.name == mask.name,
-           editor.mask.components == mask.components, editor.tools == structure.tools {
+           editor.mask.components == mask.components, editor.mask.hasPointColor == mask.hasPointColor,
+           editor.tools == structure.tools {
             return editor.view
         }
         let view = editorColumn(mask, tools: structure.tools, rows: panelRows)
@@ -148,6 +149,7 @@ final class MaskingPanelView: ColumnView {
         }
         views.append(rows.native(MaskColorSwatch()))
         views.append(rows.native(MaskCurvesEditor().padding(.top, 6)))
+        views += pointColorRows(mask, rows: rows)
         return ColumnView(
             spacing: Metrics.panelRowSpacing,
             insets: NSEdgeInsets(
@@ -158,6 +160,23 @@ final class MaskingPanelView: ColumnView {
             ),
             views: views,
         )
+    }
+}
+
+extension MaskingPanelView {
+    /// The mask's Point Color: its swatches, and once it has one, the selected swatch's sliders.
+    private func pointColorRows(_ mask: MaskOutline, rows: PanelRows) -> [NSView] {
+        var views: [NSView] = [
+            rows.header("Point Color", ParameterID.pointColorParameters),
+            rows.native(PointColorSwatches(ownColor: true).padding(.bottom, 2)),
+        ]
+        guard mask.hasPointColor else { return views }
+        for group in PointColorGroup.all {
+            views += group.parameters.map { rows.slider($0) }
+            views.append(rows.gap())
+        }
+        views.append(rows.native(PointColorVisualizeToggle()))
+        return views
     }
 }
 

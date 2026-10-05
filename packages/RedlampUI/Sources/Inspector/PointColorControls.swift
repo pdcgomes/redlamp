@@ -39,14 +39,16 @@ struct PointColorGroup: Identifiable {
     }
 }
 
-/// Point Color's eyedropper, its swatches (up to eight, the selected one ringed) and the button
-/// that deletes the selected one.
+/// Point Color's eyedropper, the target's swatches (up to eight, the selected one ringed) and the
+/// button that deletes the selected one; in a mask, a button that adds a swatch of its own colour.
 struct PointColorSwatches: View {
+    var ownColor = false
     @Environment(EditorModel.self) private var model
 
     var body: some View {
+        let swatches = model.pointColorSwatches
         let selected = model.selectedPointColorSwatch?.id
-        let full = model.recipe.pointColor.count >= PointColorSwatch.maximumSwatches
+        let full = swatches.count >= PointColorSwatch.maximumSwatches
         HStack(spacing: 4) {
             Button {
                 model.pointColorEyedropperActive.toggle()
@@ -64,7 +66,22 @@ struct PointColorSwatches: View {
                 ? "Point Color Selector: click the photo to pick the selected swatch's colour again"
                 : "Point Color Selector: click a colour on the photo to add a swatch")
 
-            ForEach(model.recipe.pointColor) { swatch in
+            if ownColor {
+                Button {
+                    model.addMaskColorSwatch()
+                } label: {
+                    Image(systemName: "person.crop.circle.badge.plus")
+                        .font(.system(size: 12))
+                        .frame(width: 22, height: 20)
+                        .foregroundStyle(Theme.label)
+                }
+                .buttonStyle(.plain)
+                .disabled(full)
+                .accessibilityIdentifier("pointColor.maskColor")
+                .help("Add a swatch of the mask's own colour: the median of the colours under it, for each photo")
+            }
+
+            ForEach(swatches) { swatch in
                 Button {
                     model.selectedPointColorSwatchID = swatch.id
                 } label: {
@@ -103,6 +120,27 @@ struct PointColorSwatches: View {
     }
 }
 
+/// A mask's Point Color section in the SwiftUI Masking panel: its swatches, and once it has one,
+/// the selected swatch's sliders.
+struct MaskPointColor: View {
+    let mask: MaskOutline
+
+    var body: some View {
+        SubsectionHeader(title: "Point Color", parameters: ParameterID.pointColorParameters)
+        PointColorSwatches(ownColor: true)
+            .padding(.bottom, 2)
+        if mask.hasPointColor {
+            ForEach(PointColorGroup.all) { group in
+                ForEach(group.parameters, id: \.self) { parameter in
+                    ParameterSlider(parameter: parameter)
+                }
+                Spacer().frame(height: 4)
+            }
+            PointColorVisualizeToggle()
+        }
+    }
+}
+
 /// Visualize Range: what the selected swatch selects shows in colour, and the rest in grey.
 struct PointColorVisualizeToggle: View {
     @Environment(EditorModel.self) private var model
@@ -118,7 +156,7 @@ struct PointColorVisualizeToggle: View {
 }
 
 extension PointColorSwatch {
-    /// The swatch's colour on screen; a mask's own colour shows as grey until it's measured.
+    /// The swatch's colour on screen; a mask's own colour, measured for each render, shows as grey.
     var displayColor: SwiftUI.Color {
         if case let .oklch(value) = color {
             return value.displayColor

@@ -143,6 +143,10 @@ public extension FeedbackArea {
                     ["show overlay", "overlay color", "rename", "duplicate", "delete mask", "pins"],
                 ),
                 FeedbackFeature("local-adjustments", "Local Adjustments", ["mask sliders", "amount", "local exposure"]),
+                FeedbackFeature(
+                    "point-color", "Point Color in Masks",
+                    ["mask swatch", "mask's own colour", "even skin tone", "skin uniformity"],
+                ),
                 FeedbackFeature("presets", "Mask Presets", ["preset", "saved mask"]),
                 FeedbackFeature("update-ai", "Update AI Masks", ["recompute", "update masks", "refresh"]),
                 FeedbackFeature(

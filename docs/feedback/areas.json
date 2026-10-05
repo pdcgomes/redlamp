@@ -154,6 +154,10 @@
           "title" : "Local Adjustments"
         },
         {
+          "id" : "masking.point-color",
+          "title" : "Point Color in Masks"
+        },
+        {
           "id" : "masking.presets",
           "title" : "Mask Presets"
         },
