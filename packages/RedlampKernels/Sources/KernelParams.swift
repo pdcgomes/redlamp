@@ -517,13 +517,15 @@ public struct MaskLayerGPU: Sendable {
 
 /// One Point Color swatch, as `rl_develop` reads it (`PointColorGPU` in RedlampShaderTypes.h).
 public struct PointColorGPU: Sendable, Equatable {
-    /// OKLab lightness, chroma and hue (degrees).
+    /// OKLab lightness, chroma and hue (degrees), and the mask layer the swatch belongs to plus one
+    /// (0 for the edit's).
     public var color: SIMD4<Float>
     /// Half-widths (hue in degrees, chroma in stops, lightness), and the fade over their last part.
     public var range: SIMD4<Float>
     /// At full selection: hue (degrees), the chroma factor minus one, lightness.
     public var shift: SIMD4<Float>
-    /// Per axis, distances from the swatch's colour scale by `1 - uniformity * weight`.
+    /// Per axis, distances from the swatch's colour scale by `1 - uniformity * weight`; `w` is 1 when
+    /// the colour is the mask's own, measured for the render.
     public var uniformity: SIMD4<Float>
 
     public init(color: SIMD4<Float>, range: SIMD4<Float>, shift: SIMD4<Float>, uniformity: SIMD4<Float>) {

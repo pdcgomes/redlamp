@@ -338,6 +338,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         detail: Bool = true,
         visualizeSpots: Double? = nil,
         visualizePointColor: UUID? = nil,
+        pointColorCoverage: Int? = nil,
         retouchMaps: RetouchStage.Maps = .current,
     ) throws {
         let photo = session
@@ -350,14 +351,17 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             recipe, session: session, region: region, outputSize: size, commands: commands, cache: cacheDetail,
             masks: maskBindings,
         ) : nil
-        guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
         var inputs = DevelopParameters.make(
             recipe: recipe, session: session, baseLook: baseLooks.resolve(recipe.baseLook), outputSize: size,
             region: region, encoding: encoding,
             showClipping: showClipping, maskOverlay: maskOverlay, maskOverlayColor: maskOverlayColor,
             maskOverlayStyle: maskOverlayStyle, maskOverlayOpacity: maskOverlayOpacity, masks: maskBindings,
-            visualizePointColor: visualizePointColor,
+            visualizePointColor: visualizePointColor, pointColorCoverage: pointColorCoverage,
         )
+        let maskPointColors = encoding == .pointColorInput ? nil : try encodeMaskPointColors(
+            inputs.pointColorMeasured, recipe: recipe, session: photo, commands: commands, retouchMaps: retouchMaps,
+        )
+        guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
         inputs.params.denoised = processed?.area ?? .zero
         if let visualizeSpots {
             let sensitivity = Float(min(max(visualizeSpots, 0), 100) / 100)
@@ -389,6 +393,12 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         try encoder.setArray(inputs.components, index: 4, device: device)
         try encoder.setArray(inputs.maskCurves, index: 6, device: device)
         try encoder.setArray(inputs.pointColor, index: 7, device: device)
+        if let maskPointColors {
+            encoder.setBuffer(maskPointColors, offset: 0, index: 8)
+        } else {
+            var none = SIMD4<Float>.zero
+            encoder.setBytes(&none, length: MemoryLayout<SIMD4<Float>>.stride, index: 8)
+        }
         encoder.dispatchGrid(width: size.width, height: size.height, pipeline: kernels.develop)
         encoder.endEncoding()
     }

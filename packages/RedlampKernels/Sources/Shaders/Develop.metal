@@ -314,7 +314,8 @@ static inline float hueBump(float hue, float centre, float width) {
     return d >= 1.0f ? 0.0f : 0.5f + 0.5f * cos(d * M_PI_F);
 }
 
-constant int kMaxPointColorSwatches = 8;
+// Eight on the edit and eight on each of up to 16 masks.
+constant int kMaxPointColorSwatches = 136;
 
 // How fully a Point Color swatch selects a colour: a trapezoid on each axis around its own colour
 // (hue on the circle, chroma in stops, lightness), times the colourfulness the Color Mixer uses, since
@@ -610,6 +611,7 @@ kernel void rl_develop(
     constant float *maskCurves [[buffer(6)]],
     texture2d_array<float, access::sample> maskEdges [[texture(14)]],
     constant PointColorGPU *pointColor [[buffer(7)]],
+    constant float4 *maskPointColors [[buffer(8)]],
     uint2 gid [[thread_position_in_grid]])
 {
     uint width = uint(p.outputSize.x);
@@ -867,14 +869,18 @@ kernel void rl_develop(
     }
 
     // Point Color: each swatch pulls the colours it selects towards its own, or pushes them apart,
-    // then shifts them. Every swatch reads the same colour, and their changes add up; chroma's goes
-    // through the gamut-relative boost below with the other saturation changes.
+    // then shifts them; a mask's swatches only as far as the mask covers. Every swatch reads the same
+    // colour, and their changes add up; chroma's goes through the gamut-relative boost below with the
+    // other saturation changes.
     float visualizedWeight = 1.0f;
     float selectedChroma = chroma * max(saturation, 0.0f);
-    // Output encoding 5: what Point Color receives, for the eyedropper.
+    // Output encoding 5: what Point Color receives, for the eyedropper and a mask's own colour, with
+    // that mask's coverage.
     if (int(p.geometry.z) == 5) {
         float radians = hue * (M_PI_F / 180.0f);
-        out.write(float4(lab.x, selectedChroma * cos(radians), selectedChroma * sin(radians), 1.0f), gid);
+        int measured = int(p.pointColor.z) - 1;
+        float alpha = measured >= 0 ? (measured < layerCount ? coverage[measured] : 0.0f) : 1.0f;
+        out.write(float4(lab.x, selectedChroma * cos(radians), selectedChroma * sin(radians), alpha), gid);
         return;
     }
     int swatches = min(int(p.pointColor.x), kMaxPointColorSwatches);
@@ -882,7 +888,14 @@ kernel void rl_develop(
         float hueChange = 0.0f, chromaStops = 0.0f, lightnessChange = 0.0f;
         for (int i = 0; i < swatches; i++) {
             PointColorGPU s = pointColor[i];
-            float w = pointColorWeight(s, lab.x, selectedChroma, hue);
+            int layer = int(s.color.w) - 1;
+            float covered = layer < 0 ? 1.0f : (layer < layerCount ? coverage[layer] : 0.0f);
+            if (layer >= 0 && s.uniformity.w > 0.5f) {
+                float4 own = maskPointColors[layer];
+                s.color.xyz = own.xyz;
+                if (own.w <= 0.0f) covered = 0.0f;
+            }
+            float w = covered > 0.0f ? pointColorWeight(s, lab.x, selectedChroma, hue) * covered : 0.0f;
             if (int(p.pointColor.y) == i + 1) visualizedWeight = w;
             if (w <= 0.0f) continue;
             float3 scale = -s.uniformity.xyz * w;

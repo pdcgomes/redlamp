@@ -18,6 +18,63 @@ public extension RedlampEngine {
 }
 
 extension RedlampEngine {
+    /// The long edge of the render a mask's own colour is measured on.
+    static let maskPointColorLongEdge = 512
+
+    /// The masks' own colours (TON-29): for each mask layer in `layers` (its place in the develop
+    /// kernel's list), the weighted median of what Point Color receives under the mask. Measured on
+    /// a render of the whole frame, uncropped so cropping doesn't change it, into a buffer of one
+    /// OKLCh per layer that the develop pass reads later in the same command buffer.
+    func encodeMaskPointColors(
+        _ layers: [Int], recipe: EditRecipe, session: ImageSession, commands: any MTLCommandBuffer,
+        retouchMaps: RetouchStage.Maps,
+    ) throws -> (any MTLBuffer)? {
+        guard !layers.isEmpty else { return nil }
+        var measured = recipe
+        measured.crop = .full
+        let edge = Self.maskPointColorLongEdge
+        let size = measured.developedSize(imageSize: session.orientedSize)
+            .fitted(within: PixelSize(width: edge, height: edge))
+        let histogram = 3 * 1024 * MemoryLayout<UInt32>.stride
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba16Float, width: size.width, height: size.height, mipmapped: false,
+        )
+        descriptor.usage = [.shaderRead, .shaderWrite]
+        descriptor.storageMode = .private
+        guard let colors = device.makeBuffer(
+            length: MaskLayer.maximumLayers * MemoryLayout<SIMD4<Float>>.stride, options: .storageModePrivate,
+        ),
+            let bins = device.makeBuffer(length: histogram * layers.count, options: .storageModePrivate),
+            let input = device.makeTexture(descriptor: descriptor),
+            let blit = commands.makeBlitCommandEncoder()
+        else { throw EngineError.gpuUnavailable }
+        blit.fill(buffer: colors, range: 0 ..< colors.length, value: 0)
+        blit.fill(buffer: bins, range: 0 ..< bins.length, value: 0)
+        blit.endEncoding()
+        for (index, layer) in layers.enumerated() {
+            try encodeDevelop(
+                measured, session: session, into: input, size: size, encoding: .pointColorInput, showClipping: false,
+                commands: commands, cacheDetail: false, detail: false, pointColorCoverage: layer,
+                retouchMaps: retouchMaps,
+            )
+            guard let counting = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
+            counting.setComputePipelineState(kernels.pointColorHistogram)
+            counting.setTexture(input, index: 0)
+            counting.setBuffer(bins, offset: index * histogram, index: 0)
+            counting.dispatchGrid(width: size.width, height: size.height, pipeline: kernels.pointColorHistogram)
+            counting.endEncoding()
+            guard let median = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
+            var slot = UInt32(layer)
+            median.setComputePipelineState(kernels.pointColorMedian)
+            median.setBuffer(bins, offset: index * histogram, index: 0)
+            median.setBuffer(colors, offset: 0, index: 1)
+            median.setBytes(&slot, length: MemoryLayout<UInt32>.stride, index: 2)
+            median.dispatchGrid(width: 1, height: 1, pipeline: kernels.pointColorMedian)
+            median.endEncoding()
+        }
+        return colors
+    }
+
     /// What Point Color receives at `point`, averaged over a disc of `radius` (a fraction of the image
     /// height; 0 for a click): the edit, its masks included, rendered at the guide's size in the
     /// `pointColorInput` encoding, and read a level down, further for a wider disc.

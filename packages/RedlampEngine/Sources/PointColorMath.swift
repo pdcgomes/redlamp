@@ -35,47 +35,73 @@ enum PointColorMath {
         return steepest > 0 ? min((1 - floor) / steepest, cap) : cap
     }
 
-    /// The swatch as the kernel reads it; nil for a mask's own colour, which only a mask has.
-    static func gpu(_ swatch: PointColorSwatch) -> PointColorGPU? {
-        guard case let .oklch(color) = swatch.color else { return nil }
+    /// The swatch as the kernel reads it: the edit's, or one of the mask at `layer` (in the kernel's
+    /// list of masks), its changes scaled by the mask's Amount. Nil for a mask's own colour on the edit.
+    static func gpu(_ swatch: PointColorSwatch, layer: Int? = nil, amount: Double = 1) -> PointColorGPU? {
+        let color: OKLCh
+        switch swatch.color {
+        case let .oklch(value):
+            color = value
+        case .mask:
+            guard layer != nil else { return nil }
+            color = OKLCh(lightness: 0, chroma: 0, hue: 0)
+        }
         let widths = halfWidths(swatch)
         let fade = fade(swatch)
         let limit = pushLimit(fade: fade)
+        let scale = Float(amount)
         func spread(_ parameter: ParameterID) -> Float {
             let amount = swatch[parameter] / 100
-            return Float(amount >= 0 ? amount : amount * limit)
+            return Float(amount >= 0 ? amount : amount * limit) * scale
         }
         return PointColorGPU(
-            color: SIMD4(Float(color.lightness), Float(color.chroma), Float(color.hue), 0),
+            color: SIMD4(Float(color.lightness), Float(color.chroma), Float(color.hue), Float((layer ?? -1) + 1)),
             range: SIMD4(Float(widths.x), Float(widths.y), Float(widths.z), Float(fade)),
             // As the Color Mixer's sliders: ±30° of hue, chroma by up to twice, ±0.15 lightness.
             shift: SIMD4(
-                Float(swatch[.pointColorHueShift] / 100 * 30), Float(swatch[.pointColorSaturationShift] / 100),
-                Float(swatch[.pointColorLuminanceShift] / 100 * 0.15), 0,
+                Float(swatch[.pointColorHueShift] / 100 * 30) * scale,
+                Float(swatch[.pointColorSaturationShift] / 100) * scale,
+                Float(swatch[.pointColorLuminanceShift] / 100 * 0.15) * scale, 0,
             ),
             uniformity: SIMD4(
                 spread(.pointColorHueUniformity), spread(.pointColorSaturationUniformity),
-                spread(.pointColorLuminanceUniformity), 0,
+                spread(.pointColorLuminanceUniformity), swatch.color == .mask ? 1 : 0,
             ),
         )
     }
 
+    /// What the develop kernel reads of an edit's swatches.
+    struct Buffers {
+        /// The edit's and then each visible mask's, in the kernel's order of masks.
+        var swatches: [PointColorGPU] = []
+        /// The position of the swatch Visualize Range shows, plus one (0 for none).
+        var visualized = 0
+        /// The masks, by their place in that order, whose own colour a swatch takes.
+        var measured: [Int] = []
+    }
+
     /// The swatches the kernel runs: those that change something, and the one Visualize Range shows
-    /// even when it doesn't; with that one's position plus one (0 for none).
-    static func buffers(
-        _ swatches: [PointColorSwatch],
-        visualized: UUID?,
-    ) -> (swatches: [PointColorGPU], visualized: Int) {
-        var out: [PointColorGPU] = []
-        var shown = 0
-        for swatch in swatches.prefix(PointColorSwatch.maximumSwatches)
-            where !swatch.isNeutral || swatch.id == visualized {
-            guard let gpu = gpu(swatch) else { continue }
-            out.append(gpu)
-            if swatch.id == visualized {
-                shown = out.count
+    /// even when it doesn't.
+    static func buffers(_ recipe: EditRecipe, visualized: UUID?) -> Buffers {
+        var buffers = Buffers()
+        func add(_ swatches: [PointColorSwatch], layer: Int?, amount: Double) {
+            for swatch in swatches.prefix(PointColorSwatch.maximumSwatches)
+                where !swatch.isNeutral || swatch.id == visualized {
+                guard let gpu = gpu(swatch, layer: layer, amount: amount) else { continue }
+                buffers.swatches.append(gpu)
+                if swatch.id == visualized {
+                    buffers.visualized = buffers.swatches.count
+                }
+                if let layer, swatch.color == .mask, !buffers.measured.contains(layer) {
+                    buffers.measured.append(layer)
+                }
             }
         }
-        return (out, shown)
+        add(recipe.pointColor, layer: nil, amount: 1)
+        let layers = recipe.masks.filter(\.isVisible).prefix(MaskLayer.maximumLayers)
+        for (layer, mask) in layers.enumerated() {
+            add(mask.pointColor, layer: layer, amount: mask.amount / 100)
+        }
+        return buffers
     }
 }

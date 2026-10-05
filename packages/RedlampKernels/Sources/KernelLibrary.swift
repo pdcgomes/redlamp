@@ -61,6 +61,8 @@ public final class KernelLibrary: @unchecked Sendable {
     public let fillCosts: any MTLComputePipelineState
     public let fillRender: any MTLComputePipelineState
     public let fillStored: any MTLComputePipelineState
+    public let pointColorHistogram: any MTLComputePipelineState
+    public let pointColorMedian: any MTLComputePipelineState
 
     public init(device: any MTLDevice) throws {
         self.device = device
@@ -128,6 +130,8 @@ public final class KernelLibrary: @unchecked Sendable {
         fillCosts = try pipeline("rl_fill_costs")
         fillRender = try pipeline("rl_fill_render")
         fillStored = try pipeline("rl_fill_stored")
+        pointColorHistogram = try pipeline("rl_point_color_histogram")
+        pointColorMedian = try pipeline("rl_point_color_median")
     }
 }
 
