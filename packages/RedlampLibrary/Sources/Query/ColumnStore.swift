@@ -1,0 +1,579 @@
+import Foundation
+
+/// The library's hot columns in memory (LIB-06): an array for each field the query language filters
+/// and sorts on, indexed by a dense row number, and the sort orders as permutations of the rows.
+/// It's built from the index's hot-column scan, in the background at launch, and changed as the
+/// writer commits (`apply`).
+///
+/// A value: copies share their arrays until one of them changes, so a query reads a snapshot while
+/// changes go to another. Rows are never renumbered by a change: a removed photo's row is dead
+/// until enough rows are, when the store is compacted.
+///
+/// Numbers are kept as the language compares them (`ColumnEncoding`), and the SQL a query falls
+/// back to computes the same encodings, so both answer alike.
+public struct ColumnStore: Sendable {
+    /// What the store keeps of a photo: its hot columns and the few more the language filters and
+    /// sorts on.
+    public struct Row: Sendable, Hashable {
+        public var hot: HotColumns
+        /// Seconds.
+        public var shutter: Double?
+        public var details: Details
+        /// When its sidecar was last saved, in seconds since 1970: the edited sort's key, for a
+        /// photo with an edit.
+        public var sidecarModified: Double?
+
+        public init(_ hot: HotColumns, shutter: Double? = nil, details: Details = [], sidecarModified: Double? = nil) {
+            self.hot = hot
+            self.shutter = shutter
+            self.details = details
+            self.sidecarModified = sidecarModified
+        }
+    }
+
+    /// What `has` asks about.
+    public struct Details: OptionSet, Sendable, Hashable {
+        public let rawValue: UInt16
+
+        public init(rawValue: UInt16) {
+            self.rawValue = rawValue
+        }
+
+        public static let location = Details(rawValue: 1 << 0)
+        public static let keywords = Details(rawValue: 1 << 1)
+        public static let title = Details(rawValue: 1 << 2)
+        public static let caption = Details(rawValue: 1 << 3)
+        /// Another app's `.xmp` beside it.
+        public static let xmp = Details(rawValue: 1 << 4)
+    }
+
+    /// The photo in each row; 0 in a dead row.
+    public private(set) var ids: ContiguousArray<Int64> = []
+    private(set) var folders: ContiguousArray<Int32> = []
+    /// Milliseconds (`ColumnEncoding.captured`).
+    private(set) var captured: ContiguousArray<Int64> = []
+    /// Codes into `cameraIDs` and `lensIDs`; 0 for none.
+    private(set) var cameras: ContiguousArray<UInt16> = []
+    private(set) var lenses: ContiguousArray<UInt16> = []
+    /// Rating, flag, label, marked, edited and details (`Packed`).
+    private(set) var packed: ContiguousArray<UInt16> = []
+    private(set) var iso: ContiguousArray<UInt16> = []
+    private(set) var aperture: ContiguousArray<UInt16> = []
+    private(set) var focal: ContiguousArray<UInt16> = []
+    private(set) var shutter: ContiguousArray<UInt32> = []
+    private(set) var kinds: ContiguousArray<UInt8> = []
+    /// Each row's place in the name order.
+    private(set) var nameRanks: ContiguousArray<Int32> = []
+    private(set) var editedAt: ContiguousArray<Int32> = []
+    /// The rows holding a photo.
+    private(set) var live = RowBits(rows: 0)
+
+    /// The camera and lens IDs by code, code 0 being none.
+    private(set) var cameraIDs: ContiguousArray<Int64> = [0]
+    private(set) var lensIDs: ContiguousArray<Int64> = [0]
+    private var cameraCodes: [Int64: UInt16] = [:]
+    private var lensCodes: [Int64: UInt16] = [:]
+
+    /// The row of each photo ID, -1 for none: 4 bytes for every ID up to the largest.
+    private var rowOfID: ContiguousArray<Int32> = []
+
+    /// The live rows in each sort's order, ascending.
+    private(set) var byCaptured: ContiguousArray<Int32> = []
+    private(set) var byName: ContiguousArray<Int32> = []
+    private(set) var byRating: ContiguousArray<Int32> = []
+    private(set) var byEdited: ContiguousArray<Int32> = []
+
+    /// Photos in the store.
+    public private(set) var count = 0
+
+    public init() {}
+
+    /// The store of `rows`, in any order; a photo given twice keeps its last row. The index's row IDs
+    /// are never negative, and a row with one is left out.
+    public init(rows: some Sequence<Row>) {
+        var builder = Builder(capacity: rows.underestimatedCount)
+        for row in rows {
+            builder.add(row)
+        }
+        self = builder.finish()
+    }
+
+    /// A store built a row at a time, its orders sorted once at the end.
+    struct Builder {
+        private var store = ColumnStore()
+        private var names = ContiguousArray<String>()
+
+        /// Room for `capacity` photos with IDs up to it, so the columns take no more than they need.
+        init(capacity: Int = 0) {
+            store.reserveCapacity(capacity)
+            names.reserveCapacity(capacity)
+        }
+
+        mutating func add(_ row: Row) {
+            guard row.hot.id >= 0 else { return }
+            if let existing = store.row(of: row.hot.id) {
+                store.set(row, at: existing)
+                names[existing] = row.hot.name
+            } else {
+                store.append(row)
+                names.append(row.hot.name)
+            }
+        }
+
+        mutating func finish() -> ColumnStore {
+            store.sortOrders(names: names)
+            names = []
+            return store
+        }
+    }
+
+    /// Sorts every order from scratch, the rows' names being `names`.
+    private mutating func sortOrders(names: ContiguousArray<String>) {
+        let keys = NameKeys(names)
+        var byName = ContiguousArray(Int32(0) ..< Int32(ids.count))
+        ids.withUnsafeBufferPointer { ids in
+            byName.sort { keys.compare(Int($0), Int($1)) ?? (ids[Int($0)] < ids[Int($1)]) }
+        }
+        self.byName = byName
+        renumberNames()
+        for key in [QuerySort.Key.captured, .rating, .edited] {
+            var order = ContiguousArray(Int32(0) ..< Int32(ids.count))
+            sort(&order, by: key)
+            setOrder(order, for: key)
+        }
+    }
+
+    // MARK: - Reading
+
+    /// Rows, live and dead: one more than the largest row number.
+    var rowCount: Int {
+        ids.count
+    }
+
+    public func row(of id: Int64) -> Int? {
+        guard id >= 0, id < rowOfID.count else { return nil }
+        let row = rowOfID[Int(id)]
+        return row < 0 ? nil : Int(row)
+    }
+
+    public func contains(_ id: Int64) -> Bool {
+        row(of: id) != nil
+    }
+
+    /// The live rows in `key`'s ascending order.
+    func order(_ key: QuerySort.Key) -> ContiguousArray<Int32> {
+        switch key {
+        case .captured: byCaptured
+        case .name: byName
+        case .rating: byRating
+        case .edited: byEdited
+        }
+    }
+
+    /// Every photo's ID in `sort`'s order.
+    public func ids(sortedBy sort: QuerySort) -> ContiguousArray<Int64> {
+        let order = order(sort.key)
+        var result = ContiguousArray<Int64>()
+        result.reserveCapacity(order.count)
+        if sort.ascending {
+            result.append(contentsOf: order.lazy.map { ids[Int($0)] })
+        } else {
+            result.append(contentsOf: order.reversed().lazy.map { ids[Int($0)] })
+        }
+        return result
+    }
+
+    func cameraCode(for id: Int64) -> UInt16? {
+        cameraCodes[id]
+    }
+
+    func lensCode(for id: Int64) -> UInt16? {
+        lensCodes[id]
+    }
+
+    /// Bytes its arrays hold, as allocated.
+    public var memoryFootprint: Int {
+        func bytes<T>(_ array: ContiguousArray<T>) -> Int {
+            array.capacity * MemoryLayout<T>.stride
+        }
+        let columns = bytes(ids) + bytes(folders) + bytes(captured) + bytes(cameras) + bytes(lenses) + bytes(packed)
+            + bytes(iso) + bytes(aperture) + bytes(focal) + bytes(shutter) + bytes(kinds) + bytes(nameRanks)
+            + bytes(editedAt) + bytes(live.words)
+        let orders = bytes(byCaptured) + bytes(byName) + bytes(byRating) + bytes(byEdited)
+        let codes = bytes(cameraIDs) + bytes(lensIDs) + (cameraCodes.capacity + lensCodes.capacity) * 16
+        return columns + orders + bytes(rowOfID) + codes
+    }
+
+    // MARK: - Rows
+
+    private mutating func reserveCapacity(_ count: Int) {
+        ids.reserveCapacity(count)
+        folders.reserveCapacity(count)
+        captured.reserveCapacity(count)
+        cameras.reserveCapacity(count)
+        lenses.reserveCapacity(count)
+        packed.reserveCapacity(count)
+        iso.reserveCapacity(count)
+        aperture.reserveCapacity(count)
+        focal.reserveCapacity(count)
+        shutter.reserveCapacity(count)
+        kinds.reserveCapacity(count)
+        nameRanks.reserveCapacity(count)
+        editedAt.reserveCapacity(count)
+        rowOfID.reserveCapacity(count + 1)
+    }
+
+    /// Adds a row for a photo the store doesn't hold.
+    mutating func append(_ row: Row) {
+        let index = ids.count
+        ids.append(row.hot.id)
+        folders.append(0)
+        captured.append(0)
+        cameras.append(0)
+        lenses.append(0)
+        packed.append(0)
+        iso.append(0)
+        aperture.append(0)
+        focal.append(0)
+        shutter.append(0)
+        kinds.append(0)
+        nameRanks.append(0)
+        editedAt.append(0)
+        live.grow(to: index + 1)
+        live.insert(index)
+        let id = Int(row.hot.id)
+        if id >= rowOfID.count {
+            rowOfID.append(contentsOf: repeatElement(-1, count: id + 1 - rowOfID.count))
+        }
+        rowOfID[id] = Int32(index)
+        count += 1
+        set(row, at: index)
+    }
+
+    /// Writes `row`'s columns at `index`, which keeps its place in every order.
+    mutating func set(_ row: Row, at index: Int) {
+        let hot = row.hot
+        folders[index] = Int32(clamping: hot.folder)
+        captured[index] = ColumnEncoding.captured(hot.captured)
+        cameras[index] = hot.camera.map { code(for: $0, in: &cameraIDs, &cameraCodes) } ?? 0
+        lenses[index] = hot.lens.map { code(for: $0, in: &lensIDs, &lensCodes) } ?? 0
+        packed[index] = Packed.pack(row)
+        iso[index] = ColumnEncoding.iso(hot.iso)
+        aperture[index] = ColumnEncoding.aperture(hot.aperture)
+        focal[index] = ColumnEncoding.focal(hot.focal)
+        shutter[index] = ColumnEncoding.shutter(row.shutter)
+        kinds[index] = UInt8(clamping: hot.kind)
+        editedAt[index] = ColumnEncoding.editedAt(edited: hot.edited, sidecarModified: row.sidecarModified)
+    }
+
+    /// Takes a row out: its photo is gone from the store, and from every order once `removeFromOrders`
+    /// runs.
+    mutating func kill(_ index: Int) {
+        let id = Int(ids[index])
+        if id < rowOfID.count {
+            rowOfID[id] = -1
+        }
+        ids[index] = 0
+        live.remove(index)
+        count -= 1
+    }
+
+    /// The code of camera or lens `id`, given one the first time it's seen. Past 65,535 of them,
+    /// the rest share the last code.
+    private func code(
+        for id: Int64, in ids: inout ContiguousArray<Int64>, _ codes: inout [Int64: UInt16],
+    ) -> UInt16 {
+        if let code = codes[id] {
+            return code
+        }
+        guard ids.count <= Int(UInt16.max) else { return UInt16.max }
+        let code = UInt16(ids.count)
+        ids.append(id)
+        codes[id] = code
+        return code
+    }
+
+    // MARK: - Orders
+
+    /// Whether row `lhs` comes before row `rhs` in `key`'s ascending order. Ties in capture time
+    /// go by ID, as the SQL the language falls back to orders them.
+    func precedes(_ lhs: Int, _ rhs: Int, by key: QuerySort.Key) -> Bool {
+        switch key {
+        case .captured:
+            (captured[lhs], ids[lhs]) < (captured[rhs], ids[rhs])
+        case .name:
+            nameRanks[lhs] < nameRanks[rhs]
+        case .rating:
+            (Packed.rating(packed[lhs]), captured[lhs], ids[lhs]) < (
+                Packed.rating(packed[rhs]),
+                captured[rhs],
+                ids[rhs],
+            )
+        case .edited:
+            (editedAt[lhs], captured[lhs], ids[lhs]) < (editedAt[rhs], captured[rhs], ids[rhs])
+        }
+    }
+
+    func sort(_ order: inout ContiguousArray<Int32>, by key: QuerySort.Key) {
+        captured.withUnsafeBufferPointer { captured in
+            ids.withUnsafeBufferPointer { ids in
+                switch key {
+                case .captured:
+                    order.sort { (captured[Int($0)], ids[Int($0)]) < (captured[Int($1)], ids[Int($1)]) }
+                case .name:
+                    nameRanks.withUnsafeBufferPointer { ranks in order.sort { ranks[Int($0)] < ranks[Int($1)] } }
+                case .rating:
+                    packed.withUnsafeBufferPointer { packed in
+                        order.sort {
+                            (Packed.rating(packed[Int($0)]), captured[Int($0)], ids[Int($0)])
+                                < (Packed.rating(packed[Int($1)]), captured[Int($1)], ids[Int($1)])
+                        }
+                    }
+                case .edited:
+                    editedAt.withUnsafeBufferPointer { edited in
+                        order.sort {
+                            (edited[Int($0)], captured[Int($0)], ids[Int($0)])
+                                < (edited[Int($1)], captured[Int($1)], ids[Int($1)])
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    mutating func setOrder(_ order: ContiguousArray<Int32>, for key: QuerySort.Key) {
+        switch key {
+        case .captured: byCaptured = order
+        case .name: byName = order
+        case .rating: byRating = order
+        case .edited: byEdited = order
+        }
+    }
+
+    /// Drops the dead rows, numbering the rest again in the same order.
+    mutating func compact() {
+        var renumbered = ContiguousArray<Int32>(repeating: -1, count: rowCount)
+        var next: Int32 = 0
+        live.forEach { row in
+            renumbered[row] = next
+            next += 1
+            return true
+        }
+        let live = live
+        let count = count
+        func kept<T>(_ column: ContiguousArray<T>) -> ContiguousArray<T> {
+            var result = ContiguousArray<T>()
+            result.reserveCapacity(count)
+            live.forEach { row in
+                result.append(column[row])
+                return true
+            }
+            return result
+        }
+        ids = kept(ids)
+        folders = kept(folders)
+        captured = kept(captured)
+        cameras = kept(cameras)
+        lenses = kept(lenses)
+        packed = kept(packed)
+        iso = kept(iso)
+        aperture = kept(aperture)
+        focal = kept(focal)
+        shutter = kept(shutter)
+        kinds = kept(kinds)
+        nameRanks = kept(nameRanks)
+        editedAt = kept(editedAt)
+        self.live = RowBits(rows: ids.count, filled: true)
+        rowOfID.withUnsafeMutableBufferPointer { $0.update(repeating: -1) }
+        for (row, id) in ids.enumerated() {
+            rowOfID[Int(id)] = Int32(row)
+        }
+        for key in QuerySort.Key.allCases {
+            setOrder(ContiguousArray(order(key).map { renumbered[Int($0)] }), for: key)
+        }
+    }
+
+    /// Each row's rank is its place in the name order.
+    mutating func renumberNames() {
+        byName.withUnsafeBufferPointer { order in
+            nameRanks.withUnsafeMutableBufferPointer { ranks in
+                for (place, row) in order.enumerated() {
+                    ranks[Int(row)] = Int32(place)
+                }
+            }
+        }
+    }
+}
+
+/// The packed `UInt16` of each row: rating (3 bits), flag (2), label (3), marked, edited, and the
+/// details `has` asks about.
+enum Packed {
+    static let flagShift: UInt16 = 3
+    static let labelShift: UInt16 = 5
+    static let marked: UInt16 = 1 << 8
+    static let edited: UInt16 = 1 << 9
+    /// `Details` from here up.
+    static let detailsShift: UInt16 = 10
+
+    static func pack(_ row: ColumnStore.Row) -> UInt16 {
+        let hot = row.hot
+        var packed = UInt16(clamping: max(0, min(7, hot.rating)))
+        packed |= UInt16(clamping: max(0, min(3, hot.flag))) << flagShift
+        packed |= UInt16(clamping: max(0, min(7, hot.label))) << labelShift
+        packed |= hot.marked ? marked : 0
+        packed |= hot.edited ? edited : 0
+        return packed | (row.details.rawValue & 0x1F) << detailsShift
+    }
+
+    @inline(__always)
+    static func rating(_ packed: UInt16) -> UInt16 {
+        packed & 0x7
+    }
+
+    @inline(__always)
+    static func flag(_ packed: UInt16) -> UInt16 {
+        packed >> flagShift & 0x3
+    }
+
+    @inline(__always)
+    static func label(_ packed: UInt16) -> UInt16 {
+        packed >> labelShift & 0x7
+    }
+
+    static func details(_ details: ColumnStore.Details) -> UInt16 {
+        (details.rawValue & 0x1F) << detailsShift
+    }
+}
+
+/// How numbers are kept in the store, and the SQL that computes the same from the index's columns
+/// (`p` being `photos`). Each is whole: a comparison with a value of the language encodes the value
+/// alike, so `f:2.8` matches an aperture of 2.8 however the file rounded it. 0 is none, except
+/// where noted.
+enum ColumnEncoding {
+    /// Milliseconds, truncated as SQLite's `CAST` truncates; `Int64.min` for none.
+    static func captured(_ seconds: Double?) -> Int64 {
+        guard let seconds, !seconds.isNaN else { return .min }
+        return saturated(seconds * 1000)
+    }
+
+    static let capturedSQL = """
+    (CASE WHEN p.captured IS NULL THEN -9223372036854775807 - 1 ELSE CAST(p.captured * 1000 AS INTEGER) END)
+    """
+
+    /// Whole ISO, 1 to 65,535.
+    static func iso(_ iso: Double?) -> UInt16 {
+        UInt16(scaled(iso, by: 1, limit: Double(UInt16.max)))
+    }
+
+    static let isoSQL = scaledSQL("p.iso", by: "1", limit: "65535")
+
+    /// Hundredths of an f-number, 1 to 65,535.
+    static func aperture(_ aperture: Double?) -> UInt16 {
+        UInt16(scaled(aperture, by: 100, limit: Double(UInt16.max)))
+    }
+
+    static let apertureSQL = scaledSQL("p.aperture", by: "100", limit: "65535")
+
+    /// Tenths of a millimetre, 1 to 65,535.
+    static func focal(_ focal: Double?) -> UInt16 {
+        UInt16(scaled(focal, by: 10, limit: Double(UInt16.max)))
+    }
+
+    static let focalSQL = scaledSQL("p.focal", by: "10", limit: "65535")
+
+    /// Microseconds, 1 to 4,294,967,295 (71 minutes).
+    static func shutter(_ shutter: Double?) -> UInt32 {
+        UInt32(scaled(shutter, by: 1_000_000, limit: Double(UInt32.max)))
+    }
+
+    static let shutterSQL = scaledSQL("p.shutter", by: "1000000", limit: "4294967295")
+
+    /// Seconds since 2001, for a photo with an edit; `Int32.min` without.
+    static func editedAt(edited: Bool, sidecarModified: Double?) -> Int32 {
+        guard edited, let modified = sidecarModified, !modified.isNaN else { return .min }
+        let seconds = modified - 978_307_200
+        if seconds >= 2_147_483_647 {
+            return .max
+        }
+        return seconds <= -2_147_483_647 ? -2_147_483_647 : Int32(seconds)
+    }
+
+    static let editedAtSQL = """
+    (CASE WHEN p.edited != 0 AND p.sidecar_modified IS NOT NULL \
+    THEN max(-2147483647, min(2147483647, CAST(p.sidecar_modified - 978307200 AS INTEGER))) ELSE -2147483648 END)
+    """
+
+    static let ratingSQL = "max(0, min(7, p.rating))"
+    static let flagSQL = "max(0, min(3, p.flag))"
+    static let labelSQL = "max(0, min(7, p.label))"
+    static let kindSQL = "max(0, min(255, p.kind))"
+
+    /// The details `has` asks about, as the extra columns' scan reads them.
+    static let locationSQL = "(p.latitude IS NOT NULL AND p.longitude IS NOT NULL)"
+    static let titleSQL = "(coalesce(p.title, '') != '')"
+    static let captionSQL = "(coalesce(p.caption, '') != '')"
+    static let xmpSQL = "(p.xmp_modified IS NOT NULL)"
+    static let keywordsSQL = "EXISTS (SELECT 1 FROM photo_keywords k WHERE k.photo = p.id)"
+
+    /// `value` times `scale`, rounded half up and truncated as SQLite's `CAST` does, between 1 and
+    /// `limit`; 0 for none.
+    static func scaled(_ value: Double?, by scale: Double, limit: Double) -> UInt64 {
+        guard let value, !value.isNaN else { return 0 }
+        let scaled = value * scale + 0.5
+        if scaled >= limit {
+            return UInt64(limit)
+        }
+        return scaled < 1 ? 1 : UInt64(scaled)
+    }
+
+    private static func scaledSQL(_ column: String, by scale: String, limit: String) -> String {
+        "(CASE WHEN \(column) IS NULL THEN 0 ELSE max(1, min(\(limit), CAST(\(column) * \(scale) + 0.5 AS INTEGER))) END)"
+    }
+
+    /// `value` truncated to a whole number, saturating at `Int64`'s ends as SQLite's `CAST` does.
+    static func saturated(_ value: Double) -> Int64 {
+        if value >= 9_223_372_036_854_775_808.0 {
+            return .max
+        }
+        return value <= -9_223_372_036_854_775_808.0 ? .min : Int64(value)
+    }
+}
+
+/// The names' Finder keys side by side, so a million of them sort without an array each.
+struct NameKeys {
+    private var bytes = ContiguousArray<UInt8>()
+    private var offsets: ContiguousArray<Int32> = [0]
+    /// Each key's first eight bytes, big-endian, which decide most comparisons.
+    private var prefixes = ContiguousArray<UInt64>()
+
+    init(_ names: some Sequence<String>) {
+        for name in names {
+            append(FinderOrder.key(name))
+        }
+    }
+
+    mutating func append(_ key: [UInt8]) {
+        bytes.append(contentsOf: key)
+        offsets.append(Int32(clamping: bytes.count))
+        var prefix: UInt64 = 0
+        for index in 0 ..< 8 {
+            prefix = prefix << 8 | UInt64(index < key.count ? key[index] : 0)
+        }
+        prefixes.append(prefix)
+    }
+
+    /// How key `lhs` orders against key `rhs`: true before, false after, nil the same.
+    func compare(_ lhs: Int, _ rhs: Int) -> Bool? {
+        if prefixes[lhs] != prefixes[rhs] {
+            return prefixes[lhs] < prefixes[rhs]
+        }
+        return bytes.withUnsafeBufferPointer { bytes in
+            let left = UnsafeBufferPointer(rebasing: bytes[Int(offsets[lhs]) ..< Int(offsets[lhs + 1])])
+            let right = UnsafeBufferPointer(rebasing: bytes[Int(offsets[rhs]) ..< Int(offsets[rhs + 1])])
+            if left.elementsEqual(right) {
+                return nil
+            }
+            return left.lexicographicallyPrecedes(right)
+        }
+    }
+}
