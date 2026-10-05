@@ -164,11 +164,21 @@ public struct SettingsSelection: Codable, Sendable, Hashable {
     public var masks: Bool
     /// Masks of the source left out, when `masks` is on. Specific to one source: not remembered.
     public var excludedMasks: Set<UUID>
+    /// Masks to take away from the target, if the source no longer has them: those an Auto Sync
+    /// step deleted. Never saved.
+    public var removedMasks: Set<UUID> = []
 
-    public init(items: Set<String>, masks: Bool = true, excludedMasks: Set<UUID> = []) {
+    private enum CodingKeys: String, CodingKey {
+        case items, masks, excludedMasks
+    }
+
+    public init(
+        items: Set<String>, masks: Bool = true, excludedMasks: Set<UUID> = [], removedMasks: Set<UUID> = [],
+    ) {
         self.items = items
         self.masks = masks
         self.excludedMasks = excludedMasks
+        self.removedMasks = removedMasks
     }
 
     /// The first time: everything but a photo's own framing, white balance included.
@@ -192,12 +202,11 @@ public struct SettingsSelection: Codable, Sendable, Hashable {
     }
 
     public var isEmpty: Bool {
-        items.isEmpty && !masks
+        items.isEmpty && !masks && removedMasks.isEmpty
     }
 
     /// What changed from `old` to `new` (one history step, for Auto Sync): the items with a
-    /// parameter or field that differs, and the masks added or changed. Masks taken away aren't:
-    /// a paste only adds and replaces.
+    /// parameter or field that differs, the masks added or changed, and the masks taken away.
     public static func changes(from old: EditRecipe, to new: EditRecipe) -> SettingsSelection {
         let items = SettingsGroup.allItems.filter { item in
             item.parameters.contains { old[$0] != new[$0] } || item.fields.contains { !old.matches(new, in: $0) }
@@ -206,6 +215,7 @@ public struct SettingsSelection: Codable, Sendable, Hashable {
         return SettingsSelection(
             items: Set(items.map(\.id)), masks: !changed.isEmpty,
             excludedMasks: changed.isEmpty ? [] : Set(new.masks.map(\.id)).subtracting(changed),
+            removedMasks: Set(old.masks.map(\.id)).subtracting(new.masks.map(\.id)),
         )
     }
 
@@ -218,7 +228,10 @@ public struct SettingsSelection: Codable, Sendable, Hashable {
         case (false, true): other.excludedMasks
         case (false, false): Set<UUID>()
         }
-        return SettingsSelection(items: items.union(other.items), masks: masks, excludedMasks: excluded)
+        return SettingsSelection(
+            items: items.union(other.items), masks: masks, excludedMasks: excluded,
+            removedMasks: removedMasks.union(other.removedMasks),
+        )
     }
 }
 
@@ -241,9 +254,10 @@ public extension EditRecipe {
     /// values, defaults included, so a slider the source left alone resets this edit's. Masks merge
     /// by identity: a pasted mask replaces this edit's mask with the same id (pasted before from the
     /// same source) and is otherwise added, up to the layer limit, so pasting twice changes
-    /// nothing. Everything else stays as it was, values written by a newer Redlamp included.
+    /// nothing. Masks the selection removes go, unless the source has them again. Everything
+    /// else stays as it was, values written by a newer Redlamp included.
     func pasting(_ source: EditRecipe, _ selection: SettingsSelection) -> EditRecipe {
-        var result = self
+        var result = removingMasks(selection.removedMasks.filter { source.mask($0) == nil })
         for item in SettingsGroup.allItems where selection.includes(item) {
             for parameter in item.parameters {
                 result[parameter] = source[parameter]
@@ -265,6 +279,53 @@ public extension EditRecipe {
     /// The masks a paste of `selection` from `source` brings.
     static func pastedMasks(from source: EditRecipe, _ selection: SettingsSelection) -> Set<UUID> {
         Set(source.masks.map(\.id).filter(selection.includes(mask:)))
+    }
+
+    /// This edit without the masks `ids`: masks that reused one lose that component, and go if
+    /// nothing is left of them.
+    func removingMasks(_ ids: Set<UUID>) -> EditRecipe {
+        guard !ids.isEmpty else { return self }
+        var result = self
+        result.masks.removeAll { ids.contains($0.id) }
+        for index in result.masks.indices {
+            result.masks[index].components.removeAll { component in
+                if case let .maskReference(reference) = component.shape {
+                    ids.contains(reference.maskID)
+                } else {
+                    false
+                }
+            }
+        }
+        result.masks.removeAll { $0.components.isEmpty }
+        return result
+    }
+
+    /// After a paste of `masks` onto this photo, whose edit was `own` before it: each pasted AI
+    /// component that asks for what `own`'s already answers for this photo gets `own`'s result
+    /// back, rather than the other photo's. Returns the edit and the masks still to compute.
+    func reusingAIMasks(from own: EditRecipe, in masks: Set<UUID>) -> (recipe: EditRecipe, recompute: Set<UUID>) {
+        var result = self
+        var recompute = Set<UUID>()
+        for layer in result.masks.indices where masks.contains(result.masks[layer].id) {
+            let id = result.masks[layer].id
+            for index in result.masks[layer].components.indices {
+                let component = result.masks[layer].components[index]
+                let previous = own.mask(id)?.components.first { $0.id == component.id }?.shape
+                switch (component.shape, previous) {
+                case let (.ai(pasted), .ai(computed)?) where computed.answers(pasted):
+                    result.masks[layer].components[index].shape = .ai(computed)
+                case let (.depthRange(pasted), .depthRange(computed)?) where computed.depth.answers(pasted.depth):
+                    var range = pasted
+                    range.depth = computed.depth
+                    result.masks[layer].components[index].shape = .depthRange(range)
+                case (.ai, _), (.depthRange, _):
+                    recompute.insert(id)
+                default:
+                    break
+                }
+            }
+        }
+        return (result, recompute)
     }
 
     /// Whether `field` is the same in both edits.
@@ -294,5 +355,15 @@ public extension EditRecipe {
         case .processVersion: processVersion = source.processVersion
         case .spots: spots = source.spots
         }
+    }
+}
+
+private extension AIMask {
+    /// Whether this mask, computed for its photo, is what `pasted` asks of the same model: then
+    /// it needn't be computed again. One with `pasted`'s analysis is the other photo's result.
+    func answers(_ pasted: AIMask) -> Bool {
+        MaskRequest(updating: self) == MaskRequest(updating: pasted) && instance == pasted.instance
+            && (refinements ?? []) == (pasted.refinements ?? []) && provider == pasted.provider
+            && revision == pasted.revision && osBuild == pasted.osBuild && analysisHash != pasted.analysisHash
     }
 }

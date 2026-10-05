@@ -176,6 +176,47 @@ struct SettingsSyncTests {
         #expect(SidecarStore().load(for: photos[0])?.recipe[.exposure] == 2, "A, in the background")
     }
 
+    /// A slider on an AI mask keeps the mask B computed for itself; deleting the mask deletes B's.
+    @Test func `auto sync keeps each photo's AI mask and carries its deletion`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let photos = ["A", "B"].map { folder.appending(path: "\($0).ARW") }
+        func subject(_ hash: String) -> AIMask {
+            AIMask(
+                kind: .subject, provider: "stub", revision: 1, analysisHash: hash,
+                center: ImagePoint(x: 0.5, y: 0.5), bitmap: MaskBitmap(sha256: hash, width: 4, height: 4),
+            )
+        }
+        let engine = StubEngine()
+        engine.computed = [subject("a")]
+        let worker = StubEngine()
+        worker.computed = [subject("b")]
+        let model = EditorModel(engine: engine)
+        model.makeWorkerEngine = { worker }
+        photos.forEach { model.library.insert(LibraryItem(url: $0)) }
+        try await open(model, photos[0])
+        model.selectAllPhotos()
+        model.toggleAutoSync()
+        defer { model.toggleAutoSync() }
+
+        await model.createAIMask(.subject)
+        await model.settingsSync.idle()
+        #expect(worker.requests.count == 1)
+        let mask = try #require(model.recipe.masks.first)
+        model.setMaskValue(.maskAmount, 50)
+        await model.settingsSync.idle()
+        let synced = try #require(SidecarStore().load(for: photos[1])?.recipe.mask(mask.id))
+        #expect(synced.amount == 50)
+        #expect(worker.requests.count == 1, "B's own subject is kept")
+        guard case let .ai(own) = synced.components.first?.shape else { throw CancellationError() }
+        #expect(own.analysisHash == "b")
+
+        model.deleteMask(mask.id)
+        await model.settingsSync.idle()
+        #expect(SidecarStore().load(for: photos[1])?.recipe.masks.isEmpty == true)
+    }
+
     /// With Auto Sync on, each step carries only what it changed: B keeps its own clarity.
     @Test func `auto sync repeats each change on the rest of the selection`() async throws {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)

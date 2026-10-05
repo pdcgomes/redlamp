@@ -129,7 +129,9 @@ public extension EditorModel {
     /// photo. White balance As Shot reads this photo's own; Auto is measured again for it.
     internal func paste(_ source: EditRecipe, _ selection: SettingsSelection, name: String) {
         guard info != nil else { return }
-        var next = recipe.pasting(source, selection)
+        let pasted = recipe.pasting(source, selection)
+            .reusingAIMasks(from: recipe, in: EditRecipe.pastedMasks(from: source, selection))
+        var next = pasted.recipe
         let pastesWhiteBalance = selection.items.contains("whiteBalance")
         if pastesWhiteBalance, next.whiteBalanceMode == .asShot, let wb = info?.asShotWhiteBalance {
             next[.temperature] = wb.temperature
@@ -139,7 +141,7 @@ public extension EditorModel {
         if pastesWhiteBalance, next.whiteBalanceMode == .auto {
             setWhiteBalanceMode(.auto)
         }
-        updatePastedAIMasks(EditRecipe.pastedMasks(from: source, selection))
+        updatePastedAIMasks(pasted.recompute)
     }
 }
 

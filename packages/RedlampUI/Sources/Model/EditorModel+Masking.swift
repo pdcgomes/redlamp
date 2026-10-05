@@ -171,19 +171,7 @@ public extension EditorModel {
 
     func deleteMask(_ id: UUID) {
         guard let mask = recipe.mask(id) else { return }
-        var next = recipe
-        next.masks.removeAll { $0.id == id }
-        // Masks that reused it lose that component.
-        for index in next.masks.indices {
-            next.masks[index].components.removeAll { component in
-                if case let .maskReference(reference) = component.shape {
-                    reference.maskID == id
-                } else {
-                    false
-                }
-            }
-        }
-        next.masks.removeAll { $0.components.isEmpty }
+        let next = recipe.removingMasks([id])
         if selectedMaskID == id {
             selectedMaskID = next.masks.last?.id
             selectedComponentID = nil

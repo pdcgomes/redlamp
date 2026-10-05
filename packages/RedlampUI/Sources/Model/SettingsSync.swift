@@ -176,8 +176,10 @@ public final class SettingsSync {
             var autoWhiteBalance = false
             switch change {
             case let .paste(source, selection):
-                next = original.pasting(source, selection)
-                masks = EditRecipe.pastedMasks(from: source, selection)
+                let pasted = original.pasting(source, selection)
+                    .reusingAIMasks(from: original, in: EditRecipe.pastedMasks(from: source, selection))
+                next = pasted.recipe
+                masks = pasted.recompute
                 if selection.items.contains("whiteBalance") {
                     // As Shot is the photo's own, read when it opens; Auto is measured for it.
                     if next.whiteBalanceMode == .asShot {

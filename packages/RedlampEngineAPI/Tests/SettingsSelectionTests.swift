@@ -106,6 +106,66 @@ struct SettingsSelectionTests {
         #expect(both.items == ["basic.exposure", "toneCurve.point"] && both.includes(mask: added.id))
     }
 
+    /// A step that deletes a mask takes it from the target too, with what reused it; the target's
+    /// own masks stay, and a mask the source has again isn't taken away.
+    @Test func `a deleted mask is taken away from the target`() {
+        let gradient = MaskComponent(shape: .linear(LinearMask(
+            start: ImagePoint(x: 0, y: 0), end: ImagePoint(x: 1, y: 1),
+        )))
+        let sky = MaskLayer(name: "Sky", components: [gradient])
+        let reuse = MaskLayer(name: "Reuse", components: [MaskComponent(shape: .maskReference(MaskReference(
+            maskID: sky.id,
+        )))])
+        var old = EditRecipe()
+        old.masks = [sky, reuse]
+        let new = old.removingMasks([sky.id])
+        #expect(new.masks.isEmpty, "a mask left with nothing goes too")
+        let changes = SettingsSelection.changes(from: old, to: new)
+        #expect(changes.removedMasks == [sky.id, reuse.id] && !changes.isEmpty)
+
+        var target = EditRecipe()
+        let own = MaskLayer(name: "Own", components: [gradient])
+        target.masks = [own, sky, reuse]
+        #expect(target.pasting(new, changes).masks.map(\.name) == ["Own"])
+        let both = changes.union(SettingsSelection.changes(from: new, to: old))
+        #expect(target.pasting(old, both).masks.map(\.name) == ["Own", "Sky", "Reuse"], "the source has them again")
+        let saved = try? JSONDecoder().decode(SettingsSelection.self, from: JSONEncoder().encode(changes))
+        #expect(saved?.removedMasks.isEmpty == true, "never saved")
+    }
+
+    /// A pasted AI mask asking for what the photo's own copy answers keeps the photo's result.
+    @Test func `a pasted AI mask keeps the photo's own result when it asks the same`() {
+        func subject(_ hash: String, sha: String) -> AIMask {
+            AIMask(
+                kind: .subject, provider: "vision", revision: 1, analysisHash: hash,
+                center: ImagePoint(x: 0.5, y: 0.5), bitmap: MaskBitmap(sha256: sha, width: 4, height: 4),
+            )
+        }
+        let component = MaskComponent(shape: .ai(subject("a", sha: "a-bitmap")))
+        var source = EditRecipe()
+        source.masks = [MaskLayer(name: "Subject", components: [component])]
+        source.masks[0].amount = 50
+        var own = EditRecipe()
+        var ownComponent = component
+        ownComponent.shape = .ai(subject("b", sha: "b-bitmap"))
+        own.masks = [MaskLayer(id: source.masks[0].id, name: "Subject", components: [ownComponent])]
+        let ids: Set = [source.masks[0].id]
+
+        let kept = own.pasting(source, .default).reusingAIMasks(from: own, in: ids)
+        #expect(kept.recompute.isEmpty && kept.recipe.masks[0].amount == 50)
+        #expect(kept.recipe.masks[0].components[0].shape == ownComponent.shape)
+
+        let fresh = EditRecipe().pasting(source, .default).reusingAIMasks(from: EditRecipe(), in: ids)
+        #expect(fresh.recompute == ids, "a photo without it computes it")
+        let copied = source.pasting(source, .default).reusingAIMasks(from: source, in: ids)
+        #expect(copied.recompute == ids, "the other photo's result, never computed here")
+        var newer = subject("a", sha: "a-bitmap")
+        newer.revision = 2
+        var revised = source
+        revised.masks[0].components[0].shape = .ai(newer)
+        #expect(own.pasting(revised, .default).reusingAIMasks(from: own, in: ids).recompute == ids)
+    }
+
     @Test func `the remembered choice forgets which masks were left out`() throws {
         var selection = SettingsSelection.default
         selection.excludedMasks = [UUID()]
