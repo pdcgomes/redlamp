@@ -52,6 +52,7 @@ AREAS = {
     "EXT": "extensibility", "DN": "ai-denoise", "FS": "focus-stacking", "RM": "removal-healing",
     "SR": "super-resolution", "SHP": "sharpening", "AUT": "auto", "OTH": "other-ai",
     "INF": "ai-infrastructure", "DEC": "decisions", "SKIP": "skipped", "AUD": "audit", "TET": "tethering",
+    "LIB": "library",
 }
 COLOURS = {"tracker": "5319e7", "area": "0e8a16", "size": "c5def5", "kind": "bfd4f2", "decision": "fbca04",
            "status": "d93f0b"}
