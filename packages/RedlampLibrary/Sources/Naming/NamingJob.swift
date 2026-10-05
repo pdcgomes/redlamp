@@ -57,8 +57,7 @@ public struct NamingJob: Sendable {
         var destination: Int32
         /// The name without its extension, folded for comparing.
         var foldedBase: String
-        var members: Range<Int32>
-        /// The most an extension adds to a name: its dot and its bytes.
+        /// The most an extension of its photos adds to a name: its dot and its bytes.
         var extensionBytes: Int
         var sequence: (job: Int, folder: Int, ext: Int)
     }
@@ -70,8 +69,6 @@ public struct NamingJob: Sendable {
 
     let prepared: [Prepared]
     let groups: [Group]
-    /// Photos by group, each group's together.
-    let members: [Int32]
     /// Groups by the folder they go to, each folder's in the order they were taken: by capture time,
     /// then by name.
     let byFolder: [Int32]
@@ -123,7 +120,6 @@ public struct NamingJob: Sendable {
         var groups: [Group] = []
         var groupIDs: [CollisionKey: Int32] = [:]
         groupIDs.reserveCapacity(photos.count)
-        var memberCounts: [Int32] = []
         var last: (path: String, id: Int32)?
         for (index, photo) in photos.enumerated() {
             let source: Int32
@@ -134,55 +130,36 @@ public struct NamingJob: Sendable {
                 last = (photo.fields.folder, source)
             }
             let key = CollisionKey(folder: source, base: foldedBases[index])
+            let ext = prepared[index].ext
+            let extensionBytes = ext.isEmpty ? 0 : 1 + ext.utf8.count
             if let group = groupIDs[key] {
                 prepared[index].group = group
-                memberCounts[Int(group)] += 1
-                if !Self.isRaw(prepared[Int(groups[Int(group)].primary)].ext), Self.isRaw(prepared[index].ext) {
+                groups[Int(group)].extensionBytes = max(groups[Int(group)].extensionBytes, extensionBytes)
+                if !Self.isRaw(prepared[Int(groups[Int(group)].primary)].ext), Self.isRaw(ext) {
                     groups[Int(group)].primary = Int32(index)
                 }
             } else {
                 let group = Int32(groups.count)
                 prepared[index].group = group
                 groupIDs[key] = group
-                memberCounts.append(1)
                 groups.append(Group(
                     primary: Int32(index), source: source,
-                    destination: photo.destination.map(folder) ?? source, foldedBase: key.base, members: 0 ..< 0,
-                    extensionBytes: 0, sequence: (0, 0, 0),
+                    destination: photo.destination.map(folder) ?? source, foldedBase: key.base,
+                    extensionBytes: extensionBytes, sequence: (0, 0, 0),
                 ))
             }
         }
         foldedBases.deinitialize()
         foldedBases.deallocate()
 
-        var starts: [Int32] = []
-        starts.reserveCapacity(groups.count)
-        var total: Int32 = 0
-        for count in memberCounts {
-            starts.append(total)
-            total += count
-        }
-        var members = [Int32](repeating: 0, count: photos.count)
-        var filled = starts
-        for (index, photo) in prepared.enumerated() {
-            members[Int(filled[Int(photo.group)])] = Int32(index)
-            filled[Int(photo.group)] += 1
-        }
-
         var inFolder = [Int](repeating: 0, count: paths.count)
         var withExtension: [String: Int] = [:]
         for index in groups.indices {
-            var group = groups[index]
-            group.members = starts[index] ..< starts[index] + memberCounts[index]
-            for member in members[Int(group.members.lowerBound) ..< Int(group.members.upperBound)] {
-                let ext = prepared[Int(member)].ext
-                group.extensionBytes = max(group.extensionBytes, ext.isEmpty ? 0 : 1 + ext.utf8.count)
-            }
-            let ext = Self.fold(prepared[Int(group.primary)].ext)
-            group.sequence = (index, inFolder[Int(group.destination)], withExtension[ext, default: 0])
-            inFolder[Int(group.destination)] += 1
+            let destination = Int(groups[index].destination)
+            let ext = Self.fold(prepared[Int(groups[index].primary)].ext)
+            groups[index].sequence = (index, inFolder[destination], withExtension[ext, default: 0])
+            inFolder[destination] += 1
             withExtension[ext, default: 0] += 1
-            groups[index] = group
         }
 
         var next = [Int](repeating: 0, count: inFolder.count)
@@ -281,7 +258,6 @@ public struct NamingJob: Sendable {
 
         self.prepared = prepared
         self.groups = groups
-        self.members = members
         self.byFolder = byFolder
         folderSpans = spans
         self.existing = taken
