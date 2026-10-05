@@ -110,7 +110,7 @@ Shooting Lossless compressed works on every body, though the Z5 II's and Z50 II'
 1. Accept the route: LibRaw's snapshot when it's public, and no stopgap decoder before it.
 2. Ask counsel about patents. intoPIX asserts patents on TicoRAW and JPEG XS; LibRaw's decoder, like every open one, is unlicensed.
 3. Optionally install Adobe DNG Converter, for the exact references.
-4. Decide how to triage the Send Feedback requests for HE support: each one duplicates [#168](https://github.com/pdcgomes/redlamp/issues/168).
+4. ~~Decide how to triage the Send Feedback requests for HE support~~: decided on 5 October 2026, they stay open, labelled `follows:CAM-12`, and are answered and closed when CAM-12 is done (`.cursor/rules/tracker-issues.mdc`).
 
 ## Not verified
 

@@ -14,7 +14,9 @@ phase ("P2–P3" is Phase 2). Rows with no phase have no milestone.
 
 Issues filed by other people come into the tracker by hand: give the item a tracker ID, then put
 the ID at the start of the issue's title ("MSK-18: …") and the next sync adopts it, keeping the
-reporter's text above the block. Open issues without an ID are listed as untriaged.
+reporter's text above the block. Open issues without an ID are listed as untriaged, except reports
+labelled `follows:<ID>`: requests for something a row already tracks, kept open for the people
+who asked, and listed to answer and close once that row is done.
 
     scripts/tracker-issues.py                 # dry run: what would change
     scripts/tracker-issues.py --apply         # make the changes
@@ -55,6 +57,8 @@ COLOURS = {"tracker": "5319e7", "area": "0e8a16", "size": "c5def5", "kind": "bfd
            "status": "d93f0b"}
 # `phase:` labels were how phases were shown before milestones: removed where found.
 MANAGED = ("tracker", "area:", "phase:", "size:", "kind:", "decision:", "status:")
+# A report kept open for the people who asked, until the row it follows lands. Set by hand.
+FOLLOWS = "follows:"
 # Every row by ID, for rows that take another's phase.
 ROWS = {}
 
@@ -204,18 +208,24 @@ def gh(*args, input=None):
 
 
 def issues():
+    """Issues by tracker ID, open issues no row has taken, and open reports that follow a row
+    (labelled `follows:<ID>`) until it lands."""
     found = json.loads(gh("issue", "list", "--state", "all", "--limit", "2000",
                           "--json", "number,title,body,state,labels,milestone"))
-    by_id, untriaged = {}, []
+    by_id, untriaged, following = {}, [], []
     for issue in found:
         marker = re.search(r"<!-- tracker-id: (\S+) -->", issue["body"] or "")
         titled = re.match(r"^\[?((?:[A-Z]{2,4}|P1)-\d+)\]?[:\s]", issue["title"])
         tracker_id = marker.group(1) if marker else titled.group(1) if titled else None
+        names = [label["name"] for label in issue["labels"]]
+        follows = next((name.split(":", 1)[1] for name in names if name.startswith(FOLLOWS)), None)
         if tracker_id:
             by_id[tracker_id] = issue
-        elif issue["state"] == "OPEN" and not any(label["name"] == "tracker" for label in issue["labels"]):
+        elif issue["state"] == "OPEN" and follows:
+            following.append((issue, follows))
+        elif issue["state"] == "OPEN" and "tracker" not in names:
             untriaged.append(issue)
-    return by_id, untriaged
+    return by_id, untriaged, following
 
 
 def merged_body(existing, mirrored):
@@ -269,7 +279,7 @@ def main():
               if (only is None or row["id"] in only)
               and (options.include_decisions or not row["id"].startswith("DEC-"))
               and (options.include_skips or not row["id"].startswith("SKIP-"))]
-    existing, untriaged = issues()
+    existing, untriaged, following = issues()
     roadmap = phases()
     present = milestones()
     milestone_changes = [(number, title_, done) for number, (title_, done) in sorted(roadmap.items())
@@ -312,6 +322,11 @@ def main():
         print("\nUntriaged open issues (give them a tracker ID, or close them):")
         for issue in untriaged:
             print(f"  #{issue['number']} {issue['title']}")
+    landed = [(issue, row_id) for issue, row_id in following if row_id in ROWS and closed(ROWS[row_id])]
+    if following:
+        print(f"\n{len(following)} open report(s) follow a tracker row ({FOLLOWS}<ID>), {len(landed)} of them landed")
+    for issue, row_id in landed:
+        print(f"  #{issue['number']} follows {row_id}, now {status_of(ROWS[row_id])}: reply to the reporter, then close it")
     if not options.apply:
         print("\nDry run: nothing changed. Run with --apply to sync.")
         return

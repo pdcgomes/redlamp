@@ -35,5 +35,6 @@ The sync lists open issues without a tracker ID as untriaged. For each:
 
 - **Bug:** fix it and close it as usual. Bugs don't need a tracker row unless fixing one is a piece of planned work.
 - **Feature request or idea:** if it belongs on the roadmap, add a tracker row (Decision `Proposed`, Source linking the issue), then start the issue's title with the new ID (`MSK-18: …`). The next sync adopts it and keeps the reporter's text above the mirrored block. Only the owner moves a row to `Accepted`.
-- **Already tracked:** close it as a duplicate of the tracker item's issue.
+- **A request for a format or camera that's already tracked,** such as one sent from Send Feedback… beside a photo that isn't supported yet: keep it open for the person who asked. Comment that it's tracked as the row's ID (link its issue) and that the reply will come there when it lands, and label it `follows:<ID>` (`gh label create follows:CAM-12 --color ededed` the first time, then `gh issue edit <n> --add-label follows:CAM-12`). The sync leaves such reports out of the untriaged list and lists them once their row is done: reply that it's supported, in which version, then close it as completed.
+- **Anything else already tracked:** close it as a duplicate of the tracker item's issue.
 - **Declined:** close it with the reason; add a `SKIP-` row when the reason is worth keeping.
