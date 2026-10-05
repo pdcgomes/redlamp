@@ -132,7 +132,7 @@ grep -q 'usage: redlamp' <<<"$("$APP/Contents/Helpers/redlamp" 2>&1 || true)" \
 # the same worktree unless one was made earlier (mise run e2e -- --tier "$E2E_TIER"), then the
 # signed app as a black box. SKIP_E2E="<why>" skips it, and the reason goes in the log;
 # E2E_NO_UPDATE=1 leaves out the Sparkle update check.
-E2E_TIER="${E2E_TIER:-smoke}"
+E2E_TIER="${E2E_TIER:-release}"
 if [ -n "${SKIP_E2E:-}" ]; then
     echo "==> Regression suite skipped: $SKIP_E2E"
 else

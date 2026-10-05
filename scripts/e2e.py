@@ -299,6 +299,7 @@ def launch(app: Path, run_dir: Path, group: str, scenarios: list[str], args) -> 
     already = len(read_events(events_path))
     env = dict(os.environ)
     env["CFFIXED_USER_HOME"] = str(run_dir / "home")
+    env["REDLAMP_E2E_SOAK_SECONDS"] = str(args.soak_seconds)
     if args.validation:
         env["MTL_DEBUG_LAYER"] = "1"
     command = [str(app / "Contents/MacOS/Redlamp")]
@@ -625,6 +626,8 @@ def main() -> int:
     parser.add_argument("--quiet-wait", type=float, default=900, help="seconds to wait for a quiet Mac before measuring")
     parser.add_argument("--accept-busy", action="store_true", help="accept performance measured on a busy Mac, unjudged")
     parser.add_argument("--record", action="store_true", help="append the performance run to docs/performance/history.jsonl")
+    parser.add_argument("--soak-seconds", type=float, default=300, help="how long the soak tier walks")
+    parser.add_argument("--replay", type=Path, help="a soak run's soak-steps.jsonl to walk again, step for step")
     parser.add_argument("--no-update", dest="update", action="store_false", help="with --blackbox: skip the Sparkle update")
     parser.add_argument("--passing-report", nargs="+", metavar="COMMIT",
                         help="print a passing report for one of these commits at --tier, if there is one, and exit 0")
@@ -654,6 +657,8 @@ def main() -> int:
 
     home = run_dir / "home"
     home.mkdir()
+    if args.replay:
+        shutil.copy(args.replay, run_dir / "soak-replay.jsonl")
     seed_models(home)
     photos = prepare_photos(run_dir / "photos")
     relay = Relay(run_dir / "relay")
@@ -781,6 +786,10 @@ def main() -> int:
                           "seconds": result.get("seconds", 0), "message": result.get("message"),
                           "snapshot": result.get("snapshot"), "mainP99ms": result.get("mainP99ms"),
                           "footprintMB": result.get("footprintMB"), "attempts": attempts.get(scenario_id, 0)})
+    for item in scenarios:
+        if item["id"].startswith("soak.") and item["status"] == "failed":
+            item["message"] = (f"{item.get('message') or ''} (seed {args.seed}; replay with "
+                               f"--replay {run_dir / 'soak-steps.jsonl'})")
     failed = [s for s in scenarios if s["status"] == "failed"]
     flaky = [s for s in scenarios if s["status"] == "flaky"]
     skipped = [s for s in scenarios if s["status"] == "skipped"]

@@ -102,7 +102,16 @@
                 }
                 covered(.mask(kind), via: .model)
             }
-            try wait("the \(kind) gradient to be drawn") { $0.masks.flatMap(\.components).count > before }
+            do {
+                try wait("the \(kind) gradient to be drawn") { $0.masks.flatMap(\.components).count > before }
+            } catch {
+                let state = try main { model in
+                    "tool \(model.activeTool), armed \(String(describing: model.drawingKind)), \(model.masks.count) masks, "
+                        + "\(model.selection?.lastPathComponent ?? "no photo"), read-only \(model.isReadOnly), "
+                        + "first responder \(Views.editorWindow?.firstResponder.map { String(describing: Swift.type(of: $0)) } ?? "none")"
+                }
+                throw ScenarioFailure("\(error) (\(state))")
+            }
         }
 
         /// The file `url` holds: its type, size, bits per component and colour space name.
