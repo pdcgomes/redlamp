@@ -88,8 +88,17 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         )
     }
 
-    func openIfReady(_: URL) -> ImageInfo? {
-        nil
+    /// Photos `openIfReady` opens at once, as if decoded ahead.
+    var ready: Set<URL> = []
+
+    func openIfReady(_ url: URL) -> ImageInfo? {
+        guard ready.contains(url) else { return nil }
+        return ImageInfo(
+            url: url,
+            pixelSize: PixelSize(width: 600, height: 400),
+            isRaw: true,
+            sensorDescription: "stub",
+        )
     }
 
     func prefetch(_: [URL]) {}

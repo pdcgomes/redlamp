@@ -60,9 +60,15 @@ public final class EditorModel {
     /// after a switch to another photo, nor after switching back.
     @ObservationIgnored private var visits = 0
     /// The open photo, in this visit of it. Taken before an analysis starts, and compared after.
+    /// None while another photo is opening: the engine already has that one.
     var currentVisit: PhotoVisit? {
-        info.map { PhotoVisit(url: $0.url, number: visits) }
+        guard opening == nil else { return nil }
+        return info.map { PhotoVisit(url: $0.url, number: visits) }
     }
+
+    /// A decoded photo the editor changes to once its sidecar is read. Until then the open photo
+    /// stays, and edits are its own; the engine already has the new one, so nothing renders.
+    @ObservationIgnored private var opening: URL?
 
     public private(set) var isLoading = false
     public internal(set) var errorMessage: String?
@@ -550,47 +556,19 @@ public final class EditorModel {
 
     /// Opens `url`. Unless `keepingSelection`, it becomes the only photo selected.
     public func select(_ url: URL, keepingSelection: Bool = false) {
-        if !keepingSelection {
-            selectedPhotos = [url]
+        guard url != opening ?? selection else {
+            if !keepingSelection {
+                selectedPhotos = [url]
+            }
+            return
         }
-        guard url != selection else { return }
-        saveNow()
-        if let selection {
-            saves.enqueue(.forget, for: selection)
-        }
+        openTask?.cancel()
+        opening = nil
+        openStarted = .now
         // Made again before the photo is read, over the base its saves were tracking, so what
         // another writer saved meanwhile is merged, and the read shows the result.
         retry(url)
         engine.prefetch(workingSet(around: url, comingFrom: selection))
-        if let selection {
-            previousSelection = selection
-        }
-        selection = url
-        visits += 1
-        openStarted = .now
-        selectionIndex = library.index(of: url)
-        library.remember(url)
-        // Cleared first so the resets below don't render the outgoing photo; a ready photo
-        // sets it again before the UI updates.
-        info = nil
-        errorMessage = nil
-        formatNotSupportedYet = false
-        readOnlyReason = nil
-        hasUnmergedEdits = false
-        photoMetadata = library.item(for: url)?.metadata ?? PhotoMetadata()
-        metadataChangesWhileOpening = []
-        eyedropperActive = false
-        previewingRecipe = nil
-        previewingEdit = nil
-        recipeApplication = nil
-        autoWhiteBalance = nil
-        selectedMaskID = nil
-        selectedComponentID = nil
-        drawingKind = nil
-        edgeBrushTarget = nil
-        edgeBrushStrokes = []
-        pendingModel = nil
-        openTask?.cancel()
         // The sidecar is read off the main thread even for a photo already decoded: it is
         // coordinated, and iCloud Drive may have to download it first. It waits for the
         // photo's saves still on their way, so a photo opened again reads what was left.
@@ -605,15 +583,20 @@ public final class EditorModel {
             }
         }
         if let opened = engine.openIfReady(url) {
-            selectionThumbnailRequest.map(thumbnailLoader.cancel)
-            selectionThumbnail = nil
+            // The editor changes over in one turn once the sidecar is read, never showing no photo.
+            opening = url
             openTask = Task {
                 let read = await readSidecar()
-                guard selection == url, !Task.isCancelled else { return }
+                guard opening == url, !Task.isCancelled else { return }
+                leave(for: url, keepingSelection: keepingSelection, ready: true)
+                selectionThumbnailRequest.map(thumbnailLoader.cancel)
+                selectionThumbnail = nil
+                opening = nil
                 didOpen(opened, read ?? OpenedSidecar())
             }
             return
         }
+        leave(for: url, keepingSelection: keepingSelection, ready: false)
         showFrame(nil)
         pendingCanvas = nil
         latestFrame = nil
@@ -637,6 +620,49 @@ public final class EditorModel {
                 formatNotSupportedYet = (error as? EngineError)?.notSupportedYetTracker != nil
             }
         }
+    }
+
+    /// Saves the open photo and moves the selection to `url`, putting away what belonged to the
+    /// photo left. Unless `url` is `ready` to show now, no photo is open until it is.
+    private func leave(for url: URL, keepingSelection: Bool, ready: Bool) {
+        if !keepingSelection {
+            selectedPhotos = [url]
+        }
+        saveNow()
+        if let selection {
+            saves.enqueue(.forget, for: selection)
+            if selection != url {
+                previousSelection = selection
+            }
+        }
+        selection = url
+        visits += 1
+        selectionIndex = library.index(of: url)
+        library.remember(url)
+        // Cleared first so the resets below don't render the outgoing photo.
+        if !ready {
+            info = nil
+        }
+        errorMessage = nil
+        formatNotSupportedYet = false
+        readOnlyReason = nil
+        hasUnmergedEdits = false
+        photoMetadata = library.item(for: url)?.metadata ?? PhotoMetadata()
+        metadataChangesWhileOpening = []
+        eyedropperActive = false
+        previewingRecipe = nil
+        previewingEdit = nil
+        // A tuple: assigning nil notifies even when it is nil already.
+        if recipeApplication != nil {
+            recipeApplication = nil
+        }
+        autoWhiteBalance = nil
+        selectedMaskID = nil
+        selectedComponentID = nil
+        drawingKind = nil
+        edgeBrushTarget = nil
+        edgeBrushStrokes = []
+        pendingModel = nil
     }
 
     /// Shows the photo's thumbnail on the canvas until its first frame arrives.
@@ -784,7 +810,7 @@ public final class EditorModel {
     }
 
     public func requestRender() {
-        guard let info else { return }
+        guard let info, opening == nil else { return }
         var displayed = isShowingOriginal
             ? beforeRecipe.withGeometry(of: recipe)
             : (previewingEdit ?? previewingRecipe.map { previewEdit(for: $0) } ?? recipe)
