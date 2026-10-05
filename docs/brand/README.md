@@ -89,6 +89,10 @@ Calm, plain and precise, like someone who knows the darkroom and doesn't need to
 
 Say what the app does and what it protects. Avoid exclamation marks and superlatives.
 
+## Motion
+
+The brand's light moves in one place so far: the star nudge on the website's home page ([star-nudge.md](star-nudge.md)). Light gathers behind the lamp while it trembles, shoots in an arc to the GitHub button, and a sign drops on a rope. It keeps the rules above: the light has a source and moves rather than multiplies, and the lens is never given a bright centre.
+
 ## Where the brand appears
 
 | Place | What it uses |
