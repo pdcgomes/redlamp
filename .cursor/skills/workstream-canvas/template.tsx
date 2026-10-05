@@ -45,7 +45,10 @@ interface Workstream {
   ready: { title: string; detail: string }[];
   /** Work that waits, each naming what it waits on. */
   blocked: { title: string; detail: string; blockedBy: string }[];
-  /** The plan's steps, in order. `ref`: a tracker ID, an issue (#n) or a commit. */
+  /**
+   * The plan's steps, in order: with a plan, one per todo, with the todo's ID (SKILL.md, "A plan's
+   * todos are its steps"). `ref`: a tracker ID, an issue (#n) or a commit.
+   */
   plan: { id: string; step: string; detail: string; doneWhen: string; status: StepStatus; ref?: string; note?: string }[];
   /** Newest first. Each entry says what happened, what was found and what's queued next. `at`: ISO with the time zone. */
   log: { at: string; text: string }[];
