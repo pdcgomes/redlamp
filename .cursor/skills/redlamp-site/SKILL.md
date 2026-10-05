@@ -10,7 +10,7 @@ The website presents the README. Much of it is read from the repository when it 
 ## Stack and commands
 
 - Next.js 16 (App Router), React 19, Tailwind CSS 4 and TypeScript, with `marked` for the blog and Vercel Web Analytics. Add no dependencies: the npm registry is unreachable from the sandbox, so only `npm install --offline` works.
-- Server components by default. `"use client"` only where there's interaction: `MobileMenu`, `Lightbox`, `HeroShots`, `Gallery`, `YouTubeFilm`, `Comparison`, `CameraList`, `FilmTable`.
+- Server components by default. `"use client"` only where there's interaction: `MobileMenu`, `Lightbox`, `HeroShots`, `Gallery`, `YouTubeFilm`, `Comparison`, `CameraList`, `FilmTable`, `StarNudge`.
 - `mise run site` serves it on http://localhost:3000 (running `npm ci` first if `node_modules` is missing); `mise run site -- build` builds it.
 - Before every `dev` and `build`, `scripts/sync-assets.mjs` copies `docs/images`, `docs/images/film` and `docs/brand`, and the blog posts' images, into `public/synced/` (gitignored).
 - Check with `cd web && npm test && npm run typecheck && npm run build`. Tests are `lib/*.test.ts` under `node --test`. Add `scripts/roadmap-sync.py --check` and `scripts/camera-list.py --check` when the README, tracker, comparison or cameras change.
@@ -37,7 +37,7 @@ Components are in `components/sections/`. Content without a file named is an exp
 
 | Section | Anchor | Component | Content |
 | --- | --- | --- | --- |
-| Hero: status pill, buttons, badges, shots | | `Hero.tsx`, `HeroShots.tsx` | `heroShots`; the release from `lib/github.ts` |
+| Hero: status pill, buttons, badges, shots, and the star nudge | | `Hero.tsx`, `HeroShots.tsx`, `site/StarNudge.tsx` | `heroShots`; the release from `lib/github.ts` |
 | Why Redlamp | `#why` | `Story.tsx` (`Story`) | Written in the component |
 | Principles | `#principles` | `Story.tsx` (`Principles`) | `principles` |
 | Command palette | `#command-palette` | `CommandPalette.tsx` | `commandPalette`, `paletteSteps` |
@@ -58,7 +58,8 @@ The header (`components/site/SiteHeader.tsx`) shows its `links` from the `sm` br
 - `lib/site.ts`: every external string and link (`site.github`, `readme`, `license`, `film`, `productHunt`, `homebrew`, `buildFromSource`), and `repoLink`, which turns a README-relative link into a GitHub one.
 - `lib/repo.ts`: reads repository files from `..` at build time. Each path is spelled out so the build traces it, so a new file needs its own `RepoFile` case. `sourceCommit()` gives the commit for the "Read at commit …" lines.
 - `lib/readme.ts`, `tracker.ts`, `comparison.ts`, `cameras.ts`, `performance.ts` and `blog.ts` parse those files, each with tests. Files the tests load use relative imports only.
-- `lib/github.ts`: the star count, the latest release and the tracker's issues, refreshed hourly. Each falls back (no count, the releases page, no issue links) when GitHub doesn't answer, so builds work offline.
+- `lib/github.ts`: the star count, the latest release and the tracker's issues, refreshed hourly. Each falls back (no count, the releases page, no issue links) when GitHub doesn't answer, so builds work offline. In the agent sandbox, build with `NODE_USE_ENV_PROXY=1` for the build to reach GitHub through the proxy.
+- `components/site/StarNudge.tsx`: once per browser tab, and never with Reduce Motion, energy gathers behind the hero's lamp while it trembles, shoots in an arc into the header's GitHub button, and a sign drops from under the button on a rope. The elements it moves carry `data-star-nudge` in `Hero.tsx` and `SiteHeader.tsx`; the sign's physics is `lib/hanging-sign.ts`. Open the home page in a new tab to see it again.
 - `components/ui/`: `SectionHeading` (eyebrow, `h2` and intro), `LinkButton` (one `primary` per page, the rest `secondary`), `Badge`, the glyphs in `Buttons.tsx`, `Inline`, `Lightbox`, `StatusMark`, `YouTubeFilm` and `ProductHuntCard`.
 - `Inline` renders the README's inline Markdown: bold, italics, code and links. Links go through `repoLink`, so `docs/x.md` becomes a GitHub link and a site path such as `/compare` breaks; write those in JSX.
 - `components/brand/Logo.tsx`: `Lockup`, `Mark` and `AppIcon`.

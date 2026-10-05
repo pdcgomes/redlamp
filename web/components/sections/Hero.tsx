@@ -1,5 +1,6 @@
 import { AppIcon } from "@/components/brand/Logo";
 import { HeroShots } from "@/components/sections/HeroShots";
+import { StarNudge } from "@/components/site/StarNudge";
 import { Badge } from "@/components/ui/Badge";
 import { DownloadGlyph, GitHubGlyph, LinkButton, PlayGlyph } from "@/components/ui/Buttons";
 import { heroShots } from "@/content/features";
@@ -14,8 +15,12 @@ export async function Hero() {
   return (
     <section className="px-6 pt-16 pb-10 sm:pt-24">
       <div className="mx-auto flex max-w-5xl flex-col items-center text-center">
-        <div className="animate-rise relative">
-          <div aria-hidden className="animate-breathe absolute -inset-10 rounded-full bg-safelight/25 blur-3xl" />
+        <div data-star-nudge="lamp" className="animate-rise relative">
+          <div
+            aria-hidden
+            data-star-nudge="glow"
+            className="animate-breathe absolute -inset-10 rounded-full bg-safelight/25 blur-3xl"
+          />
           <AppIcon size={112} className="relative" />
         </div>
         <p className="animate-rise mt-8 inline-flex items-center gap-2 rounded-pill border border-hairline bg-paper/5 px-3 py-1 text-[12px] font-medium text-mute [animation-delay:120ms]">
@@ -61,6 +66,7 @@ export async function Hero() {
         </div>
       </div>
       <HeroShots shots={heroShots} />
+      <StarNudge />
     </section>
   );
 }

@@ -39,12 +39,16 @@ export async function SiteHeader() {
           ))}
           <a
             href={site.github}
+            data-star-nudge="button"
             className="button-secondary ml-1 inline-flex items-center gap-2 rounded-pill px-3 py-1.5 font-semibold"
           >
             <GitHubGlyph />
             GitHub
             {stars !== null ? (
-              <span className="inline-flex items-center gap-1 border-l border-hairline-strong pl-2 font-medium text-mute">
+              <span
+                data-star-nudge="star"
+                className="inline-flex items-center gap-1 border-l border-hairline-strong pl-2 font-medium text-mute"
+              >
                 <StarGlyph />
                 {formatCount(stars)}
               </span>
