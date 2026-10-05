@@ -840,7 +840,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [x] GitHub Actions CI: purity gate, SwiftFormat lint, build, and tests, with cached LibRaw and fixtures
 - [x] A benchmark harness and a recorded performance history, drawn at [redlamp.app/performance](https://redlamp.app/performance) <!-- internal -->
 - [ ] Performance lab: a CI runner on Apple Silicon with regression gates that block merges (iPhone and iPad tiers come with Phase 5) <!-- internal; tracker: ARC-06 -->
-- [ ] An end-to-end regression suite that works the app through every feature by its keys, menus, clicks and drags, checks for crashes, hangs and slowdowns, and gates every release <!-- internal; tracker: ARC-07, ARC-08 -->
+- [x] An end-to-end regression suite that works the app through every feature by its keys, menus, clicks and drags, checks for crashes, hangs and slowdowns, and gates every release <!-- internal; tracker: ARC-07, ARC-08 -->
 - [x] Golden-image color regression tests (ΔE2000) for camera files, and a golden render for every bundled recipe version
 - [ ] Written clean-room policy and a license-audit gate in CI <!-- internal -->
 
