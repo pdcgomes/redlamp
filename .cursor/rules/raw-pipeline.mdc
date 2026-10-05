@@ -1,0 +1,13 @@
+---
+description: Read and keep current docs/raw-pipeline.md when changing how raw files are decoded or developed before the develop kernel
+globs: packages/RedlampServices/Sources/**,packages/RedlampEngine/Sources/SessionBuilder*.swift,packages/RedlampEngine/Sources/SessionCache.swift,packages/RedlampEngine/Sources/ImageSession.swift,packages/RedlampEngine/Sources/DNGColor.swift,packages/RedlampEngine/Sources/DetailStage*.swift,packages/RedlampKernels/Sources/Shaders/Demosaic*.metal,packages/RedlampEngineAPI/Sources/SupportedFormats.swift,packages/RedlampRecipes/Sources/Bench/**,scripts/vendor-libraw.sh,config/vendored-libs.json,vendor/shims/**,tests/decode/**
+alwaysApply: false
+---
+
+# The raw pipeline paper
+
+[`docs/raw-pipeline.md`](../../docs/raw-pipeline.md) describes how Redlamp handles raw files: the decode service, what LibRaw does and doesn't do, side decoders and refusals, what a decode carries, the raw stages on the GPU and their order, the noise model, colour, process versions and verification.
+
+- **Before changing this code,** read the sections it touches, and its "Constraints that are easy to break". The procedures there cover supporting a new camera, updating LibRaw, adding a side decoder or a refusal, and changing a raw stage.
+- **In the same change,** update the paper where the code no longer matches it: a stage added, moved or removed, a threshold, a file or symbol renamed, a gap closed (and its tracker row).
+- Keep it as it is written: plain, complete sentences, files and symbols rather than line numbers, and only what the code does.

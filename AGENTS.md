@@ -41,6 +41,7 @@ Redlamp is a macOS raw editor in Swift and Metal (`README.md`). These rules appl
 - Tests sit with their package (`packages/<Package>/Tests`) and use Swift Testing (`@Test`, `#expect`, backticked names that read as sentences).
 - Docs are plain and precise, in complete sentences, with no superlatives.
 - Licences: implement from published specifications and papers. Never copy code from GPL projects, and never ship or convert Adobe's files.
+- Raw files: [`docs/raw-pipeline.md`](docs/raw-pipeline.md) describes how Redlamp decodes and develops them, from LibRaw to the demosaic and camera colour, and how to add a camera, update LibRaw or add a decoder. Read it before changing that code, and update it in the same change.
 
 ## Reporting during a wave
 
