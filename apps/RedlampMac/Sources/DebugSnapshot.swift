@@ -22,7 +22,8 @@
     ///   from the Window menu by its title in kebab case, such as `window=film-looks`;
     ///   `welcome=<step>` opens the welcome window playing its film (`film`) or on a page
     ///   (`about`, `help`). `feedback=form` opens Report a Bug or Send Feedback
-    ///   (`feedback=note` at its note), and `feedback=reports` Your Reports. `whats-new=<step>`
+    ///   (`feedback=note` at its note, `feedback=error` filled in as the button beside a photo's
+    ///   open error fills it), and `feedback=reports` Your Reports. `whats-new=<step>`
     ///   opens What's New from the Help menu playing its film (`film`), on its highlights
     ///   (`highlights`) or on a page (`page1`, `page2`, …). `filmstrip=shown` keeps the filmstrip
     ///   up with a photo selected, `extend=<n>` selects from the open photo to the nth, as ⇧-click
@@ -75,8 +76,8 @@
             }
             Task { @MainActor in
                 for (key, value) in commands {
-                    // Edits only stick once the image has finished opening.
-                    while model.info == nil || model.isLoading {
+                    // Edits only stick once the image has finished opening, or failed to.
+                    while (model.info == nil && model.errorMessage == nil) || model.isLoading {
                         try? await Task.sleep(for: .milliseconds(100))
                     }
                     if await runAppCommand(key, value, model: model) {
@@ -119,7 +120,7 @@
                     ["feedback.noteAccepted": value == "note" ? 0 : 1, "feedback.draft": Data()],
                     forName: UserDefaults.argumentDomain,
                 )
-                model.sendFeedback()
+                model.sendFeedback(value == "error" ? model.openErrorReport : nil)
             case "palette":
                 await drivePalette(value, model: model)
             case "quit":

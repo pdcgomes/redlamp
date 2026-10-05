@@ -154,11 +154,13 @@ struct CanvasArea: View {
             if let message = model.errorMessage {
                 HStack(spacing: 10) {
                     Label(message, systemImage: "exclamationmark.triangle")
-                    Button("Report…") {
-                        model.sendFeedback(FeedbackPrefill(featureID: "raw.wont-open", message: message))
+                    Button(model.formatNotSupportedYet ? "Send Feedback…" : "Report…") {
+                        model.sendFeedback(model.openErrorReport)
                     }
                     .buttonStyle(.borderless)
-                    .help("Report a Bug about this photo not opening")
+                    .help(model.formatNotSupportedYet
+                        ? "Ask for these files to be supported. You can follow the reply in Your Reports."
+                        : "Report a Bug about this photo not opening")
                 }
                 .font(.callout)
                 .padding(.horizontal, 14)

@@ -133,7 +133,7 @@ public extension FeedbackContext {
             return "saving.not-saved"
         }
         if model.errorMessage != nil {
-            return "raw.wont-open"
+            return model.formatNotSupportedYet ? "raw.unsupported" : "raw.wont-open"
         }
         if model.stackWorkspace != nil {
             return "focus-stacking.workspace"

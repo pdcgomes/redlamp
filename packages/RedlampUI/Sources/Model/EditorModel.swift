@@ -66,6 +66,9 @@ public final class EditorModel {
 
     public private(set) var isLoading = false
     public internal(set) var errorMessage: String?
+    /// The photo is in a format Redlamp doesn't read yet (`EngineError.notSupportedYet`), so its
+    /// message asks for the format rather than offering a bug report.
+    public internal(set) var formatNotSupportedYet = false
     /// The photo's sidecar was written by a newer Redlamp, or can't be read. What can be read
     /// of its edit is shown, but changes aren't saved: this version would lose what it doesn't
     /// understand.
@@ -537,6 +540,7 @@ public final class EditorModel {
         // sets it again before the UI updates.
         info = nil
         errorMessage = nil
+        formatNotSupportedYet = false
         readOnlyReason = nil
         hasUnmergedEdits = false
         photoMetadata = library.item(for: url)?.metadata ?? PhotoMetadata()
@@ -596,6 +600,7 @@ public final class EditorModel {
                 isLoading = false
                 activity.record(.photo, "\(activity.alias(for: url)) (\(url.pathExtension.uppercased())) didn't open")
                 errorMessage = error.localizedDescription
+                formatNotSupportedYet = (error as? EngineError)?.notSupportedYetTracker != nil
             }
         }
     }

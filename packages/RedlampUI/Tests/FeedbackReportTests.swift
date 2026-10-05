@@ -255,8 +255,43 @@ struct FeedbackReportTests {
         #expect(FeedbackContext.suggestion(model) == "masking.other")
         model.errorMessage = "The file couldn't be read"
         #expect(FeedbackContext.suggestion(model) == "raw.wont-open")
+        model.formatNotSupportedYet = true
+        #expect(FeedbackContext.suggestion(model) == "raw.unsupported")
         model.saveError = SaveError(url: URL(fileURLWithPath: "/tmp/x.ARW"), message: "Disk full", canRetry: true)
         #expect(FeedbackContext.suggestion(model) == "saving.not-saved")
+    }
+
+    @Test func `a format that isn't supported yet asks for it, and any other open error reports a bug`() async throws {
+        let engine = StubEngine()
+        let model = EditorModel(engine: engine)
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        engine.openError = EngineError.notSupportedYet(
+            "Nikon's High Efficiency raw files (HE and HE*)",
+            tracker: "CAM-12",
+        )
+        model.select(folder.appending(path: "DSC_0001.NEF"))
+        for _ in 0 ..< 400 where model.errorMessage == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let refusal = "Nikon's High Efficiency raw files (HE and HE*) aren't supported yet."
+        #expect(model.errorMessage == refusal)
+        #expect(model.formatNotSupportedYet)
+        #expect(model.openErrorReport == FeedbackPrefill(kind: .idea, featureID: "raw.unsupported", message: refusal))
+        #expect(FeedbackContext.suggestion(model) == "raw.unsupported")
+
+        engine.openError = EngineError.decodeFailed("the file is truncated")
+        model.select(folder.appending(path: "DSC_0002.NEF"))
+        for _ in 0 ..< 400 where model.errorMessage == nil || model.errorMessage == refusal {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let failure = "The image could not be decoded: the file is truncated"
+        #expect(model.errorMessage == failure)
+        #expect(!model.formatNotSupportedYet)
+        #expect(model.openErrorReport == FeedbackPrefill(featureID: "raw.wont-open", message: failure))
+        #expect(FeedbackContext.suggestion(model) == "raw.wont-open")
     }
 }
 

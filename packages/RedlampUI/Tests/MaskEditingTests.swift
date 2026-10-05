@@ -40,8 +40,19 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         return shootDust
     }
 
+    /// What `open` throws instead of opening the photo.
+    var openError: (any Error)?
+
     func open(_ url: URL) async throws -> ImageInfo {
-        ImageInfo(url: url, pixelSize: PixelSize(width: 600, height: 400), isRaw: true, sensorDescription: "stub")
+        if let openError {
+            throw openError
+        }
+        return ImageInfo(
+            url: url,
+            pixelSize: PixelSize(width: 600, height: 400),
+            isRaw: true,
+            sensorDescription: "stub",
+        )
     }
 
     func openIfReady(_: URL) -> ImageInfo? {

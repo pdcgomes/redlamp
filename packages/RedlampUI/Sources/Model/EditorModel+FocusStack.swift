@@ -11,6 +11,7 @@ public extension EditorModel {
             try suggestion.save(to: url)
         } catch {
             errorMessage = error.localizedDescription
+            formatNotSupportedYet = false
             return
         }
         stackSuggestions.removeAll { $0 == suggestion }

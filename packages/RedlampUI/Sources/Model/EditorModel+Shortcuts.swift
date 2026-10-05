@@ -22,6 +22,15 @@ public extension EditorModel {
         onSendFeedback(prefill)
     }
 
+    /// What the button beside a photo's open error fills in: a request for a format Redlamp
+    /// doesn't read yet, or a bug about the photo not opening.
+    var openErrorReport: FeedbackPrefill? {
+        guard let errorMessage else { return nil }
+        return formatNotSupportedYet
+            ? FeedbackPrefill(kind: .idea, featureID: "raw.unsupported", message: errorMessage)
+            : FeedbackPrefill(featureID: "raw.wont-open", message: errorMessage)
+    }
+
     private func runShortcut(_ action: ShortcutAction, shifted: Bool) -> Bool {
         guard !isModalDialogOpen else { return false }
         guard action.isAvailable else { return false }
