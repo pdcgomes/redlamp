@@ -76,9 +76,10 @@ Measured from Capture One's list (5 October 2026) and each maker's published cam
 1. **One Swift PTP stack, written from published specifications,** in a platform-neutral `RedlampCapture` package, over two transports:
    - ImageCaptureCore for USB (`requestSendPTPCommand`, `ptpEventHandler`, downloads), which works with macOS's camera service instead of fighting it and is what sandboxed apps use today;
    - PTP/IP over Network.framework for Wi-Fi and Ethernet, which needs the Local Network permission and `NSLocalNetworkUsageDescription`.
-2. **Each maker's extension implemented in that stack** only once DEC-29 says how Redlamp may learn and publish it: maker documentation under a licence that allows an open implementation, explicit permission from the maker, or another route counsel accepts.
-3. **Makers' binary SDKs only as a fallback,** each in its own XPC helper outside the MPL-2.0 sources, built where the SDK is present. Fujifilm's public EULA is the clearest case. Sony's and Fujifilm's warranty-consent duties (DEC-31) and `ptpcamerad` on USB weigh against this route.
-4. **The hot folder for everything else.**
+2. **Each maker's extension implemented in that stack** only once counsel says how Redlamp may learn and publish it (DEC-29): maker documentation under a licence that allows an open implementation, explicit permission from the maker, or another route counsel accepts.
+3. **The hot folder for everything else.**
+
+**Decided (2026-10-05):** the owner chose PTP only, with no maker SDK, for now (DEC-29). Makers' binary SDKs, which this study had kept as a fallback in separate XPC helpers, are a recorded skip (SKIP-16), so no warranty notice is needed (DEC-31, rejected).
 
 **Excluded:**
 - libgphoto2 (LGPL-2.1, and its maker tables are reverse-engineered data the clean-room policy excludes).
@@ -105,7 +106,7 @@ Still to measure on the camera:
 - **Legal.**
   - How to implement makers' extensions in open source (DEC-29, counsel).
   - Whether the project needs a legal entity for makers' programmes (DEC-30).
-  - The warranty consent that Sony's and Fujifilm's SDKs require (DEC-31).
+  - No warranty notice: it was required only by Sony's and Fujifilm's SDKs, which Redlamp won't use (DEC-31, rejected).
   - Capture One's patent-pending wireless design (DEC-34).
 - **Distribution.** The recommended route works in the sandboxed Mac App Store build, with `com.apple.security.device.usb`, network client access and the Local Network prompt. Whether Apple's Photos Library entitlement is also needed is untested. Makers' SDKs over USB probably don't work in the sandbox (`ptpcamerad`; the developers' workarounds need what the sandbox forbids).
 - **Support.**
@@ -127,7 +128,7 @@ Sizes are this study's estimates (S ≤ 1 engineer-week, M 1 to 3, L 3 to 6), be
 
 ## 7. Risks
 
-- **Licences block Stage 2.** If no maker lets Redlamp publish its extension, full control stays limited to makers that do, or moves into closed helpers. Mitigation: ask the makers early; Stage 1 doesn't depend on it.
+- **Licences block Stage 2.** If no maker lets Redlamp publish its extension, full control stays limited to makers that do, since Redlamp uses no maker SDK (DEC-29); the others get standard PTP and the hot folder. Mitigation: ask the makers early; Stage 1 doesn't depend on it.
 - **ImageCaptureCore falls short for a maker.** Live View or the maker's handshake may not pass through cleanly. Cascable's App Store app suggests it does for Canon, Nikon and Sony over USB, but that is our inference, not Cascable's statement. The probe and Stage 1 find out before Stage 2 starts.
 - **Upkeep.** Firmware and macOS updates have broken tethering for Lightroom (macOS 10.15.2, 14.2.0) and Capture One alike. Mitigation: recorded sessions in CI, a hardware check before releases, and reports from photographers.
 - **Maker churn.** Sony warns that some commands "may become unusable on some models from 2027".
@@ -136,21 +137,20 @@ Sizes are this study's estimates (S ≤ 1 engineer-week, M 1 to 3, L 3 to 6), be
 
 ## 8. Decisions needed
 
-All are tracker rows, Proposed until the owner decides:
+All are tracker rows:
 
-- **DEC-29** *(counsel)*: how Redlamp may implement each maker's PTP extension in open source, and whether to approach the makers.
+- **DEC-29** *(counsel)*: accepted on 5 October 2026 as PTP only, with no maker SDK. Still open for counsel: how Redlamp may implement each maker's PTP extension in open source, and whether to approach the makers.
 - **DEC-30**: a legal entity for makers' developer programmes.
-- **DEC-31**: the warranty consent Sony's and Fujifilm's SDKs require.
+- **DEC-31**: rejected on 5 October 2026; no maker SDK ships, so there is no warranty notice to show.
 - **DEC-32**: where tethering sits on the roadmap, and test cameras.
 - **DEC-33**: capture sessions writing new files into the chosen folder.
 - **DEC-34** *(counsel)*: Capture One's patent-pending wireless design.
 
-Recorded skips: libgphoto2 (SKIP-14), and a cloud review service like Capture One Live (SKIP-15).
+Recorded skips: libgphoto2 (SKIP-14), a cloud review service like Capture One Live (SKIP-15), and makers' camera SDKs (SKIP-16).
 
 ## 9. Still open
 
 - The probe on the α7R V (TET-05): DeviceInfo, both USB modes, timings.
 - Whether ImageCaptureCore connects to PTP/IP cameras over Bonjour, or a PTP/IP stack of Redlamp's own is needed for every wireless camera.
 - Whether a sandboxed build needs the Photos Library entitlement, and which prompts appear.
-- Native Apple Silicon builds of Nikon's and Fujifilm's macOS libraries, if the fallback route is ever used.
 - Capture One's shutter-to-screen time on the same α7R V over USB: the benchmark to beat (the owner, with a trial).
