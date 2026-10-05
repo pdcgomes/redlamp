@@ -36,8 +36,34 @@ public final class Flux2VAE {
             self.padding = padding ?? weight.dim(1) / 2
         }
 
+        /// MLX unfolds a convolution's input, a copy for each tap of the kernel: 9 GB for a 3 × 3
+        /// convolution over 1024 × 1024 pixels of 256 channels. Larger inputs are convolved in bands of
+        /// rows, each with the rows its kernel reaches beyond it, so the copy stays under this.
+        static let unfoldedBytes = 1 << 30
+
         func callAsFunction(_ x: MLXArray) -> MLXArray {
-            conv2d(x, weight, stride: .init(stride), padding: .init(padding)) + bias
+            let (kernelHeight, kernelWidth) = (weight.dim(1), weight.dim(2))
+            let outputHeight = (x.dim(1) + 2 * padding - kernelHeight) / stride + 1
+            let outputWidth = (x.dim(2) + 2 * padding - kernelWidth) / stride + 1
+            let rowBytes = outputWidth * kernelHeight * kernelWidth * x.dim(3) * 4
+            let rows = max(Self.unfoldedBytes / rowBytes, 1)
+            guard outputHeight > rows else {
+                return conv2d(x, weight, stride: .init(stride), padding: .init(padding)) + bias
+            }
+            let height = x.dim(1)
+            var bands: [MLXArray] = []
+            for start in Swift.stride(from: 0, to: outputHeight, by: rows) {
+                let end = min(start + rows, outputHeight)
+                let top = start * stride - padding, bottom = (end - 1) * stride + kernelHeight - padding
+                let band = padded(
+                    x[0..., max(top, 0) ..< min(bottom, height)],
+                    widths: [0, .init((max(-top, 0), max(bottom - height, 0))), .init(padding), 0],
+                )
+                let convolved = conv2d(band, weight, stride: .init(stride)) + bias
+                eval(convolved)
+                bands.append(convolved)
+            }
+            return concatenated(bands, axis: 1)
         }
     }
 
@@ -52,13 +78,24 @@ public final class Flux2VAE {
             self.groups = groups
         }
 
-        /// Over `[1, h, w, c]`, as PyTorch's `GroupNorm` (eps 1e-6, diffusers' VAE).
-        func callAsFunction(_ x: MLXArray) -> MLXArray {
+        /// Over `[1, h, w, c]`, as PyTorch's `GroupNorm` (eps 1e-6, diffusers' VAE), then SiLU when
+        /// `activated`: in one kernel, so a full-size image makes no copies on the way.
+        func callAsFunction(_ x: MLXArray, activated: Bool = false) -> MLXArray {
             let shape = x.shape
             let grouped = x.reshaped([1, -1, groups, shape[3] / groups])
             let mean = grouped.mean(axes: [1, 3], keepDims: true)
-            let variance = grouped.variance(axes: [1, 3], keepDims: true)
-            return ((grouped - mean) * rsqrt(variance + 1e-6)).reshaped(shape) * weight + bias
+            let scale = rsqrt(grouped.variance(axes: [1, 3], keepDims: true) + 1e-6)
+            let affine = [weight, bias].map { $0.reshaped([1, 1, groups, shape[3] / groups]) }
+            let normalised = (activated ? Self.normalisedSiLU : Self.normalised)([grouped, mean, scale] + affine)[0]
+            return normalised.reshaped(shape)
+        }
+
+        private static let normalised = compile { (inputs: [MLXArray]) in
+            [(inputs[0] - inputs[1]) * inputs[2] * inputs[3] + inputs[4]]
+        }
+
+        private static let normalisedSiLU = compile { (inputs: [MLXArray]) in
+            [silu((inputs[0] - inputs[1]) * inputs[2] * inputs[3] + inputs[4])]
         }
     }
 
@@ -77,7 +114,7 @@ public final class Flux2VAE {
         }
 
         func callAsFunction(_ x: MLXArray) -> MLXArray {
-            let h = conv2(silu(norm2(conv1(silu(norm1(x))))))
+            let h = conv2(norm2(conv1(norm1(x, activated: true)), activated: true))
             return (shortcut.map { $0(x) } ?? x) + h
         }
     }
@@ -185,13 +222,15 @@ public final class Flux2VAE {
         for block in encoderBlocks {
             for resnet in block.resnets {
                 x = resnet(x)
+                eval(x)
             }
             if let downsample = block.downsample {
                 // diffusers pads one row and column at the far edges before a stride-2 convolution.
                 x = downsample(padded(x, widths: [0, [0, 1], [0, 1], 0]))
+                eval(x)
             }
         }
-        x = encoderOut(silu(encoderNorm(encoderMiddle(x))))
+        x = encoderOut(encoderNorm(encoderMiddle(x), activated: true))
         let moments = quantConvolution(x)
         let mean = moments[0..., 0..., 0..., ..<configuration.latentChannels]
         let latents = (Self.patched(mean[0]) - latentMean) / latentDeviation
@@ -208,12 +247,14 @@ public final class Flux2VAE {
         for block in decoderBlocks {
             for resnet in block.resnets {
                 x = resnet(x)
+                eval(x)
             }
             if let upsample = block.upsample {
                 x = upsample(Self.nearest2x(x))
+                eval(x)
             }
         }
-        let image = decoderOut(silu(decoderNorm(x)))[0]
+        let image = decoderOut(decoderNorm(x, activated: true))[0]
         eval(image)
         return image
     }

@@ -35,8 +35,27 @@ A fill is a field on a Remove spot (`RetouchSpot.fill`, a `GeneratedFill`), not 
 - **Where it goes** is a box in the photo's full-size pixels before orientation, with the photo's size: a fill made for a photo decoded at another size is left out, and the spot filled from the photo.
 - **Rendered** by `RetouchStage` where content-aware fill renders: `rl_fill_stored` samples the bitmap over its box, adds noise from the photo's own noise model (seeded by the fill, so every render is the same), and keeps the photo outside the box; then Heal's rim blending matches its edge to the photo. Frames, stills and exports go the same way, and no edit renders differently from before, so no process version is needed.
 
+## In the Healing tool
+
+Remove's Fill is Content-Aware or Generative, and Generative is shown only where the model is offered: downloaded, or published and the Mac has the memory. The first use offers the download, with its size, its licence and that its fills are labelled as generated. With Generative chosen, a new Remove spot, whether clicked, brushed, picked or found, gets three fills from three seeds, the first in the edit as soon as it is made; Find's Remove All gets one per spot, one after another. Arrows go through a spot's fills, More makes three more, and Content-Aware fills it from the photo again; each is a step in History. A spot moved or resized loses its fill, which no longer fits, and is filled again. Closing the tool unloads the model.
+
+## What a fill costs
+
+Measured on the M1 Ultra with `FluxFillCostMeasurements` (`REDLAMP_FLUX_MEASURE`), with Metal's validation layer off; the GPU's work is the same in Debug and Release. The model loads in about 3 seconds from the SSD; then, with the reference the fill uses:
+
+| Crop | Fill | Peak memory |
+|---|---|---|
+| 512 × 512 | 11 s | 4.2 GB |
+| 768 × 768 | 24 s | 5.2 GB |
+| 1024 × 1024 | 46 s | 6.6 GB |
+
+The reference doubles the transformer's tokens, and so its time; without one a 1024-pixel fill takes 24 seconds. Removing the D7500's car with a Release build of the CLI, model load included, takes 40 seconds.
+
+At first a 1024-pixel fill peaked at 13.1 GB, nearly all of it the VAE's: MLX unfolds a convolution's input into a copy for each tap of its kernel, 9 GB for a 3 × 3 convolution over 1024 × 1024 pixels of 256 channels. The VAE now convolves large inputs in bands of rows, each with the rows its kernel reaches beyond it, and normalises and applies SiLU in one kernel, which gives the same latents and fills as diffusers. MLX's cache of freed memory is capped at 1 GB while filling, which costs about 7% of the time; uncapped, it doubled what the app held.
+
+The model is offered on Macs with 16 GB of memory or more: at 6.6 GB for the fill and the app's own couple of gigabytes, an 8 GB Mac would swap.
+
 ## Limits
 
 - Large holes are filled at a coarser pyramid level: the car's fill is 508 × 234 pixels over 2032 × 936, so it is softer than the photo, with the photo's noise added.
-- A fill at 1024 pixels takes 40 to 77 seconds on an M1 Ultra (the reference doubles the tokens); at 512, about 10.
 - What lies outside the spot stays: the car's shadow beside it (RM-13).

@@ -247,3 +247,99 @@ struct FluxPrecisionMeasurements {
         }
     }
 }
+
+/// What a fill costs as Generative Remove runs it (RM-10 step 6), when `REDLAMP_FLUX_MEASURE` is
+/// set: `FluxFiller` on the download in `REDLAMP_FLUX_CONVERTED`, shown the filled photo as its
+/// reference, at the crop sizes the engine uses (512 to 1024 pixels on a side). Time and memory don't
+/// depend on what the pixels show, so the photo is noise.
+@Suite(
+    .enabled(if: FluxSample.folder("REDLAMP_FLUX_CONVERTED") != nil
+        && ProcessInfo.processInfo.environment["REDLAMP_FLUX_MEASURE"] != nil),
+    .serialized,
+)
+struct FluxFillCostMeasurements {
+    @Test func `time and memory of a fill by crop size`() throws {
+        guard ProcessInfo.processInfo.environment["REDLAMP_FLUX_MEASURE"] != "phases" else { return }
+        let filler = try FluxFiller(model: #require(FluxSample.folder("REDLAMP_FLUX_CONVERTED")))
+        let started = Date()
+        _ = try fill(filler, width: 64, height: 64, reference: false)
+        print(String(
+            format: "fill cost: load and a 64 px fill %.1f s, footprint %.2f GB",
+            Date()
+                .timeIntervalSince(started),
+            Self.footprint(),
+        ))
+        for (width, height) in [(512, 512), (768, 768), (1024, 576), (1024, 1024)] {
+            for reference in [true, false] {
+                Memory.peakMemory = 0
+                let begun = Date()
+                _ = try fill(filler, width: width, height: height, reference: reference)
+                print(String(
+                    format: "fill cost: %d x %d, %@: %.1f s, peak MLX memory %.2f GB, footprint %.2f GB",
+                    width, height, reference ? "with the reference" : "without one", Date().timeIntervalSince(begun),
+                    Double(Memory.peakMemory) / 1e9, Self.footprint(),
+                ))
+            }
+        }
+    }
+
+    @Test func `peak memory of each phase at 1024 pixels`() throws {
+        let inpainter = try FluxInpainter(model: #require(FluxSample.folder("REDLAMP_FLUX_CONVERTED")))
+        let image = MLXRandom.uniform(low: -1, high: 1, [1024, 1024, 3])
+        eval(image)
+        func measure(_ phase: String, _ work: () -> MLXArray) {
+            Memory.clearCache()
+            let resident = Memory.activeMemory
+            Memory.peakMemory = 0
+            let begun = Date()
+            eval(work())
+            print(String(
+                format: "fill cost: %@ at 1024 x 1024: %.1f s, %.2f GB above the %.2f GB resident", phase,
+                Date().timeIntervalSince(begun), Double(Memory.peakMemory - resident) / 1e9, Double(resident) / 1e9,
+            ))
+        }
+        measure("VAE encode") { inpainter.vae.encode(image) }
+        let latents = inpainter.vae.encode(image)
+        measure("VAE decode") { inpainter.vae.decode(latents) }
+        let tokens = latents.reshaped([-1, 128])
+        let embeddings = try #require(inpainter.prompts["remove"])
+        let ids = concatenated([
+            FluxInpainter.gridIDs(rows: 64, columns: 64, time: 0), FluxInpainter.gridIDs(
+                rows: 64,
+                columns: 64,
+                time: 10,
+            ),
+        ], axis: 0)
+        measure("a transformer step with the reference") {
+            inpainter.transformer.velocity(
+                image: concatenated([tokens, tokens], axis: 0), context: embeddings, imageIDs: ids,
+                textIDs: FluxInpainter.textIDs(count: embeddings.dim(0)), timestep: 1, outputs: 4096,
+            )
+        }
+    }
+
+    private func fill(_ filler: FluxFiller, width: Int, height: Int, reference: Bool) throws -> [Float] {
+        var generator = SystemRandomNumberGenerator()
+        let image = (0 ..< width * height * 3).map { _ in Float.random(in: 0 ... 1, using: &generator) }
+        let mask = (0 ..< width * height).map { index -> Float in
+            let x = Double(index % width) / Double(width) - 0.5, y = Double(index / width) / Double(height) - 0.5
+            return x * x + y * y < 0.04 ? 1 : 0
+        }
+        return try filler.fill(
+            image: image, reference: reference ? image : nil, mask: mask, width: width, height: height, seed: 1,
+            prompt: "remove",
+        ) { _ in }
+    }
+
+    /// The process's memory as Activity Monitor counts it, in GB.
+    private static func footprint() -> Double {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        return result == KERN_SUCCESS ? Double(info.phys_footprint) / 1e9 : 0
+    }
+}

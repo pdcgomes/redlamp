@@ -18,6 +18,9 @@ public final class FluxFiller: GenerativeFiller, @unchecked Sendable {
 
     /// Steps a fill takes: the distilled model's own.
     public static let steps = 4
+    /// What MLX may keep of the memory a fill frees, to reuse in the next step. Uncapped, it keeps
+    /// all of it, and the app holds twice the 6.6 GB a 1024-pixel fill needs at its peak.
+    static let cacheLimit = 1 << 30
 
     private let directory: URL
     private let lock = NSLock()
@@ -33,6 +36,7 @@ public final class FluxFiller: GenerativeFiller, @unchecked Sendable {
         progress: @escaping @Sendable (Double) -> Void,
     ) throws -> [Float] {
         try lock.withLock {
+            Memory.cacheLimit = Self.cacheLimit
             let inpainter = try inpainter ?? FluxInpainter(model: directory)
             self.inpainter = inpainter
             guard let embeddings = inpainter.prompts[prompt] else { throw FillerError.missingPrompt(prompt) }
