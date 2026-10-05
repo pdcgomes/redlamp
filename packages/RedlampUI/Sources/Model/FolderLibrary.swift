@@ -42,6 +42,8 @@ public struct FolderNode: Sendable, Equatable {
 /// - Opening a folder lists it without reading sidecars; with Show Photos in Subfolders, every
 ///   folder beneath it is listed in parallel and streamed in in order. The badges of photos with a
 ///   sidecar follow from light probes of their `edit.json`, visible photos first.
+/// - With the library on, a folder it has indexed is shown from its photo list instead, and one it
+///   hasn't switches over once it has (see `FolderLibrary+Library`).
 /// - `items` isn't observed (a badge mustn't re-render SwiftUI views); views observe `count`,
 ///   `revision` or `openFolder`, and the filmstrip applies `LibraryDiff`s row by row.
 @MainActor
@@ -63,7 +65,7 @@ public final class FolderLibrary {
     @ObservationIgnored var listingTree: Set<String> = []
     @ObservationIgnored var treeObservers: [UUID: @MainActor (Set<String>) -> Void] = [:]
     /// The open folder (and with subfolders, its tree) is still being listed.
-    public private(set) var isListing = false
+    public internal(set) var isListing = false
     /// The open folder can't be listed (its volume went away).
     public internal(set) var isOpenFolderUnavailable = false
     /// The number of photos shown.
@@ -78,7 +80,11 @@ public final class FolderLibrary {
     /// scenes', each test's): a job with another's key would replace it, or be cancelled with it.
     @ObservationIgnored let keyPrefix = "library \(UUID().uuidString) "
     @ObservationIgnored let defaults: UserDefaults?
-    @ObservationIgnored private let store = SidecarStore()
+    /// Where each photo's sidecar is read and written: beside it, or where the library keeps it.
+    @ObservationIgnored public let sidecars = SidecarPlacement()
+    /// The library, when it's on (`attach`).
+    @ObservationIgnored public internal(set) var service: LibraryService?
+    @ObservationIgnored var fromLibrary = FromLibrary()
     @ObservationIgnored var generation = 0
     @ObservationIgnored private var observers: [UUID: @MainActor (LibraryDiff) -> Void] = [:]
     /// The first rows of probe batches still waiting, for `prioritize`.
@@ -115,6 +121,7 @@ public final class FolderLibrary {
     }
 
     isolated deinit {
+        fromLibrary.list?.close()
         watching.watcher?.stop()
         watching.poll?.invalidate()
         for observer in watching.mountObservers {
@@ -148,6 +155,7 @@ public final class FolderLibrary {
         generation += 1
         let generation = generation
         scheduler.cancel(prefix: probeKeyPrefix(generation - 1))
+        closeLibraryList()
         openFolder = folder
         isOpenFolderUnavailable = false
         listedDirectories = []
@@ -155,6 +163,19 @@ public final class FolderLibrary {
         saveSettings()
         isListing = folder != nil
         guard let folder else { return }
+        guard let service else { return list(folder, generation: generation, opened: opened) }
+        service.show([folder])
+        Task {
+            guard await !openFromLibrary(folder, generation: generation, opened: opened),
+                  self.generation == generation
+            else { return }
+            list(folder, generation: generation, opened: opened)
+        }
+    }
+
+    /// Lists `folder`, and with Show Photos in Subfolders every folder beneath it, then has the
+    /// library show it once it can.
+    func list(_ folder: URL, generation: Int, opened: @escaping @MainActor ([LibraryItem]) -> Void) {
         let includesSubfolders = includesSubfolders
         Task {
             if includesSubfolders {
@@ -177,6 +198,7 @@ public final class FolderLibrary {
                     opened(items)
                 }
                 refreshStacks()
+                awaitLibrary(generation)
                 let directories = listedDirectories
                 _ = try? await scheduler.run(.background) {
                     for directory in directories {
@@ -197,6 +219,7 @@ public final class FolderLibrary {
                 probeSidecars(in: 0 ..< items.count, generation: generation)
                 opened(items)
                 refreshStacks()
+                awaitLibrary(generation)
                 _ = try? await scheduler.run(.background) { SidecarStore.removeLeftovers(in: folder) }
             }
         }
@@ -215,8 +238,13 @@ public final class FolderLibrary {
     }
 
     func replace(with items: [LibraryItem]) {
+        replace(with: items, positions: Dictionary(items.enumerated().map { ($1.url, $0) }) { first, _ in first })
+    }
+
+    /// `positions` being each item's index, as made off the main thread.
+    func replace(with items: [LibraryItem], positions: [URL: Int]) {
         self.items = items
-        positions = Dictionary(items.enumerated().map { ($1.url, $0) }) { first, _ in first }
+        self.positions = positions
         publish(LibraryDiff(reset: true))
     }
 
@@ -276,7 +304,7 @@ public final class FolderLibrary {
     /// Reads the badges of the photos in `rows` with a local sidecar, a batch per job, in order.
     /// A batch is keyed by its first row, so `prioritize` can find the visible ones.
     func probeSidecars(in rows: Range<Int>, generation: Int) {
-        let store = store
+        let sidecars = sidecars
         if generation != probedGeneration {
             probedGeneration = generation
             probeStarts = []
@@ -286,7 +314,7 @@ public final class FolderLibrary {
             guard !urls.isEmpty else { continue }
             probeStarts.insert(start)
             scheduler.submit(.lookAhead, key: probeKeyPrefix(generation) + "\(start)") {
-                let summaries = urls.map { ($0, store.summary(for: $0)) }
+                let summaries = urls.map { ($0, sidecars.store(for: $0).summary(for: $0)) }
                 Task { @MainActor [weak self] in
                     guard let self, self.generation == generation else { return }
                     probeStarts.remove(start)

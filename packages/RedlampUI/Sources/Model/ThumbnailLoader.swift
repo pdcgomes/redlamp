@@ -2,16 +2,19 @@ import CoreGraphics
 import Dispatch
 import Foundation
 import RedlampDocument
+import RedlampLibrary
 import Synchronization
 
 /// Filmstrip thumbnails: decoded in parallel by priority, kept in memory within a byte budget,
-/// and cached on disk in per-folder packs.
+/// and cached on disk in per-folder packs, or for the library's photos in its store.
 ///
-/// A request is answered from memory, else from the folder's pack, else by decoding the photo's
-/// embedded preview at the cell's pixel size, which then goes into the pack. Requests for one photo
-/// share a decode. A request can be promoted (its cell scrolled into view) or cancelled (it
-/// scrolled away), and photos iCloud Drive hasn't downloaded are never read. Warming decodes a
-/// folder's thumbnails into its pack on the background lane, without keeping them in memory.
+/// A request is answered from memory; for a photo the library shows, from the store's grid tier
+/// (made there first when the indexer hasn't yet); else from the folder's pack, else by decoding
+/// the photo's embedded preview at the cell's pixel size, which then goes into the pack. Requests
+/// for one photo share a decode. A request can be promoted (its cell scrolled into view) or
+/// cancelled (it scrolled away), and photos iCloud Drive hasn't downloaded are never read. Warming
+/// decodes a folder's thumbnails into its pack on the background lane, without keeping them in
+/// memory; the library's photos are left to the indexer.
 @MainActor
 public final class ThumbnailLoader {
     /// The long edge thumbnails are decoded at: a filmstrip cell's image at 2x.
@@ -24,6 +27,8 @@ public final class ThumbnailLoader {
     public let budget: Int
     /// The photos on screen, which trimming keeps.
     public var protected: Set<URL> = []
+    /// The store and content key of a photo the library shows; nil for any other.
+    public var library: (@MainActor (LibraryItem) -> (StoreThumbnails, ContentKey)?)?
 
     private let scheduler: WorkScheduler
     /// Starts every key this loader gives `scheduler`, which other loaders share (the harness's
@@ -119,9 +124,9 @@ public final class ThumbnailLoader {
         }
         waiting[item.url] = [id: completion]
         lanes[item.url] = lane
-        let (packs, decode) = (packs, decode)
+        let (packs, decode, store) = (packs, decode, library?(item))
         scheduler.submit(lane, key: key(item.url)) {
-            let image = Self.load(item, packs: packs, decode: decode)
+            let image = Self.load(item, store: store, packs: packs, decode: decode)
             Task { @MainActor [weak self] in self?.finish(item, image) }
         }
         return id
@@ -189,13 +194,20 @@ public final class ThumbnailLoader {
         }
     }
 
-    /// From the pack, else decoded from the photo and added to the pack. A thumbnail to keep is
-    /// always one decoded from its pack JPEG: ImageIO holds those pixels in purgeable memory, which
-    /// the system can take back (ImageIO decodes them again when drawn) and doesn't count against
-    /// the app, so a thumbnail costs about 33 KB of footprint rather than its 96 KB bitmap.
+    /// From the library's store, else from the pack, else decoded from the photo and added to the
+    /// pack. A thumbnail to keep is always one decoded from a JPEG, the store's or the pack's: ImageIO
+    /// holds those pixels in purgeable memory, which the system can take back (ImageIO decodes them
+    /// again when drawn) and doesn't count against the app, so a thumbnail costs about 33 KB of
+    /// footprint rather than its 96 KB bitmap.
     nonisolated static func load(
-        _ item: LibraryItem, packs: ThumbnailPacks, decode: (URL, Int) -> CGImage?, keep: Bool = true,
+        _ item: LibraryItem, store: (StoreThumbnails, ContentKey)? = nil, packs: ThumbnailPacks,
+        decode: (URL, Int) -> CGImage?, keep: Bool = true,
     ) -> CGImage? {
+        if let (thumbnails, key) = store, let image = thumbnails.image(
+            for: item.url, key: key, size: item.size, modified: item.modified, pixelSize: pixelSize,
+        ) {
+            return image
+        }
         if let jpeg = packs.jpeg(for: item.url, size: item.size, modified: item.modified),
            let image = ThumbnailPacks.decode(jpeg) {
             return image
@@ -245,7 +257,7 @@ public final class ThumbnailLoader {
     public func warm(_ items: [LibraryItem]) {
         warmGeneration += 1
         scheduler.cancel(prefix: keyPrefix + "warm:")
-        warmQueue = items.filter(\.isLocal)
+        warmQueue = items.filter { $0.isLocal && library?($0) == nil }
         warmHead = 0
         warming = 0
         pumpWarming()

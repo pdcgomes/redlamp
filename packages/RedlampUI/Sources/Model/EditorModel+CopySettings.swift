@@ -74,8 +74,9 @@ public extension EditorModel {
     /// Nothing when `previous` has no sidecar or it can't be read, or another photo has opened since.
     private func pasteFromPrevious(_ previous: URL, during visit: PhotoVisit) async {
         await saves.wait(for: previous)
+        let store = library.sidecars.store(for: previous)
         let read = try? await library.scheduler.run(.onScreen) { () -> EditRecipe? in
-            (try? SidecarStore().loadThrowing(for: previous))?.recipe
+            (try? store.loadThrowing(for: previous))?.recipe
         }
         guard let source = read ?? nil, currentVisit == visit else { return }
         let step = paste(source, copySelection, name: "Paste from Previous")
@@ -123,8 +124,9 @@ public extension EditorModel {
     /// A photo's edit as saved: the default edit if it has none, nil if it can't be read.
     private func edit(of photo: URL) async -> EditRecipe? {
         await saves.wait(for: photo)
+        let store = library.sidecars.store(for: photo)
         let read = try? await library.scheduler.run(.onScreen) { () -> EditRecipe? in
-            try? SidecarStore().loadThrowing(for: photo).map(\.recipe) ?? EditRecipe()
+            try? store.loadThrowing(for: photo).map(\.recipe) ?? EditRecipe()
         }
         return read ?? nil
     }

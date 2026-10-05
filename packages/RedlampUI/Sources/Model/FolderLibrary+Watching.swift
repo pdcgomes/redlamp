@@ -32,15 +32,17 @@ struct Watching {
 
 /// Following the disk: the roots are watched with FSEvents; a changed directory that's shown is
 /// listed again and diffed into the photos (inserts, removals, rewritten files, never a reload),
-/// and a changed directory in the tree updates its row. Mounting and unmounting volumes finds and
-/// loses roots. Network volumes are polled.
+/// unless the library shows the open folder and follows it itself, and a changed directory in the
+/// tree updates its row. Mounting and unmounting volumes finds and loses roots. Network volumes are
+/// polled.
 extension FolderLibrary {
-    static let settleDelay: TimeInterval = 2
+    nonisolated static let settleDelay: TimeInterval = 2
     static let pollInterval: TimeInterval = 15
 
     /// Watches the roots that can be found; called whenever they change.
     func watchRoots() {
         observeMounts()
+        service?.follow(roots.map(\.url))
         let paths = roots.filter { !missing.contains($0.id) }.map(\.path)
         guard paths != watching.paths else { return }
         watching.watcher?.stop()
@@ -102,6 +104,7 @@ extension FolderLibrary {
             guard let open = openFolder, let root = root(containing: open) else { return }
             if missing.contains(root.id) {
                 guard !isOpenFolderUnavailable else { return }
+                closeLibraryList()
                 isOpenFolderUnavailable = true
                 listedDirectories = []
                 replace(with: [])
@@ -135,6 +138,7 @@ extension FolderLibrary {
     }
 
     private func relist(_ directory: String) {
+        guard !isShownFromLibrary else { return }
         let generation = generation
         let url = URL(fileURLWithPath: directory, isDirectory: true)
         scheduler.submit(.onScreen, key: keyPrefix + "relist:\(generation):\(directory)") {
@@ -148,6 +152,7 @@ extension FolderLibrary {
 
     /// Diffs a directory's new listing into the photos (nil: it's gone, with everything beneath).
     func merge(_ listing: FolderListing?, at directory: String) {
+        guard !isShownFromLibrary else { return }
         let now = Date()
         var incoming: [URL: LibraryItem] = [:]
         for var item in listing.map(LibraryItem.items) ?? [] {
@@ -197,7 +202,9 @@ extension FolderLibrary {
         refreshStacks()
     }
 
-    private func apply(removed: IndexSet, inserting: [LibraryItem], updated: [URL]) {
+    /// Publishes photos removed (by their indexes now), inserted in order, and changed in place
+    /// (already in `items`). `probing` reads the badges of those with a sidecar.
+    func apply(removed: IndexSet, inserting: [LibraryItem], updated: [URL], probing: Bool = true) {
         if !removed.isEmpty {
             items = items.enumerated().filter { !removed.contains($0.offset) }.map(\.element)
         }
@@ -214,11 +221,13 @@ extension FolderLibrary {
             }
             items.insert(item, at: low)
         }
-        positions = Dictionary(items.enumerated().map { ($1.url, $0) }) { first, _ in first }
+        if !removed.isEmpty || !inserting.isEmpty {
+            positions = Dictionary(items.enumerated().map { ($1.url, $0) }) { first, _ in first }
+        }
         let inserted = IndexSet(inserting.compactMap { positions[$0.url] })
         let changed = IndexSet(updated.compactMap { positions[$0] })
         publish(LibraryDiff(removed: removed, inserted: inserted, updated: changed))
-        for row in inserted.union(changed) where items[row].needsSummary {
+        for row in inserted.union(changed) where probing && items[row].needsSummary {
             probeSidecars(in: row ..< row + 1, generation: generation)
         }
     }

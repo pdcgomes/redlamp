@@ -18,8 +18,8 @@ public final class EditorModel {
     public let activity = ActivityLog()
     @ObservationIgnored private var activityRecorder: ActivityRecorder?
     @ObservationIgnored private var openStarted: ContinuousClock.Instant?
-    @ObservationIgnored private let sidecars = SidecarStore()
-    @ObservationIgnored let saves = SaveQueue(store: SidecarStore())
+    /// Each photo's sidecar is read and written where `library.sidecars` places it.
+    @ObservationIgnored let saves: SaveQueue
 
     // MARK: Library
 
@@ -751,8 +751,11 @@ public final class EditorModel {
             ThumbnailLoader(scheduler: self.library.scheduler) { [engine] url, size in
                 engine.decodeThumbnail(for: url, maxPixelSize: size)
             }
+        saves = SaveQueue(sidecars: self.library.sidecars)
+        self.thumbnailLoader.library = { [weak library = self.library] in library?.storeThumbnail(for: $0) }
         canvas.onRenderSizeChange = { [weak self] _ in self?.requestRender() }
         settingsSync.makeEngine = { [weak self] in self?.makeWorkerEngine?() }
+        settingsSync.sidecars = self.library.sidecars
         settingsSync.photoAnchor = { [weak self] url in await self?.anchor(forPhotoAt: url) }
         settingsSync.saves = saves
         settingsSync.editor = self
@@ -812,7 +815,14 @@ public final class EditorModel {
         // coordinated, and iCloud Drive may have to download it first. It waits for the
         // photo's saves still on their way, so a photo opened again reads what was left, and for
         // a Settings Sync save of it.
-        let readSidecar = { [sidecars, saves, settingsSync, scheduler = library.scheduler, beforeReadingSidecar] in
+        let readSidecar = {
+            [
+                sidecars = library.sidecars.store(for: url),
+                saves,
+                settingsSync,
+                scheduler = library.scheduler,
+                beforeReadingSidecar,
+            ] in
             await beforeReadingSidecar(url)
             await saves.wait(for: url)
             await settingsSync.wait(for: url)
@@ -1005,7 +1015,7 @@ public final class EditorModel {
     /// the next photo is being read or during a drag: it tries again after `delay`.
     private func readSidecarAgain(_ url: URL, after delay: Duration) {
         sidecarReadRetry?.cancel()
-        sidecarReadRetry = Task { [sidecars, scheduler = library.scheduler] in
+        sidecarReadRetry = Task { [sidecars = library.sidecars.store(for: url), scheduler = library.scheduler] in
             try? await Task.sleep(for: delay)
             guard !Task.isCancelled else { return }
             let read = try? await scheduler.run(.onScreen) { OpenedSidecar(url, in: sidecars) }
@@ -1033,7 +1043,7 @@ public final class EditorModel {
     public func startOver() {
         guard canStartOver, let url = selection else { return }
         let visit = visits
-        Task { [sidecars, scheduler = library.scheduler] in
+        Task { [sidecars = library.sidecars.store(for: url), scheduler = library.scheduler] in
             let result: Result<(URL?, OpenedSidecar), any Error>
             do {
                 result = try await .success(scheduler.run(.onScreen) {
@@ -1669,7 +1679,8 @@ public final class EditorModel {
         earlierSessions = []
         historyTask?.cancel()
         guard hasSidecar else { return }
-        historyTask = Task { [sidecars] in
+        let sidecars = library.sidecars.store(for: url)
+        historyTask = Task {
             let sessions = await Task.detached(priority: .utility) { sidecars.loadHistory(for: url) }.value
             guard selection == url, !Task.isCancelled else { return }
             earlierSessions = sessions.filter { $0.id != session.id }

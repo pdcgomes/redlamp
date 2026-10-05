@@ -48,7 +48,8 @@ final class SaveQueue: @unchecked Sendable {
 
     static let label = "app.redlamp.saves"
 
-    let store: SidecarStore
+    /// Where each photo's sidecar is written: beside it, or where the library keeps it.
+    let sidecars: SidecarPlacement
     private let queue = DispatchQueue(label: SaveQueue.label, qos: .utility)
     private let lock = NSLock()
     /// Writes not started yet, per photo, oldest first.
@@ -79,8 +80,17 @@ final class SaveQueue: @unchecked Sendable {
     /// Only the queue uses it.
     private var tracking: [URL: Tracked] = [:]
 
-    init(store: SidecarStore) {
-        self.store = store
+    init(sidecars: SidecarPlacement) {
+        self.sidecars = sidecars
+    }
+
+    /// Every sidecar written through `store`'s locator.
+    convenience init(store: SidecarStore) {
+        self.init(sidecars: SidecarPlacement(locator: store.locator))
+    }
+
+    func store(for url: URL) -> SidecarStore {
+        sidecars.store(for: url)
     }
 
     /// Tells `report`, on the main actor and in order, how each save went.
@@ -197,6 +207,7 @@ final class SaveQueue: @unchecked Sendable {
 
     /// Nil for what isn't a save.
     private func perform(_ write: Write, for url: URL) throws -> Outcome? {
+        let store = sidecars.store(for: url)
         switch write {
         case let .sidecar(sidecar):
             guard let tracked = tracking[url] else {
@@ -229,6 +240,7 @@ final class SaveQueue: @unchecked Sendable {
     }
 
     private func save(_ asked: Sidecar, over tracked: Tracked, for url: URL) throws -> Outcome {
+        let store = sidecars.store(for: url)
         var sidecar = asked
         if let merged = tracked.merged {
             sidecar = SidecarStore.merge(asked, merged, base: tracked.opened, opened: tracked.opened)

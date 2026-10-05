@@ -128,7 +128,13 @@ public final class SettingsSync {
     /// The exposure anchor a photo's edit gets under Redlamp Reproduction (nil when it isn't raw),
     /// set by the editor; without it, the typical anchor.
     @ObservationIgnored var photoAnchor: (@MainActor (URL) async -> ExposureAnchor?)?
-    @ObservationIgnored let store: SidecarStore
+    /// Where each photo's sidecar is read and written: the editor's, set by it.
+    @ObservationIgnored var sidecars: SidecarPlacement
+    /// The library's locator for photos in its folders; any other photo's sidecar is beside it.
+    var store: SidecarStore {
+        SidecarStore(locator: sidecars.locator)
+    }
+
     /// The editor's saves: a photo just left may still be on its way to disk. The batch's own
     /// saves go through their queue too, after those asked for before them.
     @ObservationIgnored var saves: SaveQueue?
@@ -207,8 +213,8 @@ public final class SettingsSync {
         case full
     }
 
-    init(store: SidecarStore = SidecarStore(), makeEngine: @escaping () -> (any EditingEngine)?) {
-        self.store = store
+    init(sidecars: SidecarPlacement = SidecarPlacement(), makeEngine: @escaping () -> (any EditingEngine)?) {
+        self.sidecars = sidecars
         self.makeEngine = makeEngine
     }
 

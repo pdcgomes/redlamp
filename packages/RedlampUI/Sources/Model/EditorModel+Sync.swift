@@ -88,6 +88,7 @@ public extension EditorModel {
 
     internal func written(_ url: URL, _ recipe: EditRecipe) {
         library.update(url) { $0.hasEdits = !recipe.isPristine }
+        library.sidecarSaved(url)
     }
 }
 

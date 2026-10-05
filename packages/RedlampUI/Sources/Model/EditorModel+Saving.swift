@@ -97,6 +97,7 @@ extension EditorModel {
         }
         guard !superseded else { return }
         succeeded(url)
+        library.sidecarSaved(url)
         switch outcome {
         case .saved:
             if case let .sidecar(sidecar) = write {
@@ -170,7 +171,7 @@ extension EditorModel {
     /// The filmstrip item as its sidecar is now.
     private func showOnDisk(_ url: URL) {
         Task { [saves, library] in
-            let store = saves.store
+            let store = saves.store(for: url)
             let summary = await saves.read { store.summary(for: url) ?? SidecarSummary() }
             guard !saves.isPending(url) else { return }
             library.update(url) { item in
