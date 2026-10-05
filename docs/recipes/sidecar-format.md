@@ -266,7 +266,7 @@ An AI mask was computed by a model from the photo without any edit, and is kept 
 | `revision` | integer | **Required.** The provider's request or model revision. |
 | `osBuild` | string? | The macOS build, for system models that change with the OS. |
 | `instance` | integer? | Which person or object, when the provider found several. Missing for one mask covering everyone. |
-| `part` | string? | For People, the part of the person: `entirePerson`, `faceSkin`, `bodySkin`, `eyebrows`, `eyeSclera`, `iris`, `lips`, `teeth`, `hair`, `facialHair` or `clothes`. For Landscape, the class: `water`, `vegetation`, `mountains`, `architecture`, `naturalGround` or `artificialGround`. |
+| `part` | string? | For People, the part of the person: `entirePerson`, `faceSkin`, `bodySkin`, `eyebrows`, `eyeSclera`, `iris`, `lips`, `teeth`, `hair`, `facialHair` or `clothes`. For Landscape, the class: `water`, `vegetation`, `mountains`, `architecture`, `naturalGround`, `artificialGround` or `snow`. |
 | `prompts` | [point] | **Required.** Points the user clicked to guide the model; often empty. |
 | `excludedPrompts` | [point]? | Points the user clicked to leave out. |
 | `box` | object? | For Objects, the box dragged around the thing, or the one Find found it in: `{"left", "top", "right", "bottom"}` in the oriented frame, 0…1. Updating the mask asks the model with it again. |

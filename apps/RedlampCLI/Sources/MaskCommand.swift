@@ -12,7 +12,7 @@ enum MaskCommand {
                   landscape:<class>
                   (parts: faceSkin, bodySkin, eyebrows, eyeSclera, iris, lips, teeth, hair,
                   facialHair, clothes; classes: water, vegetation, mountains, architecture,
-                  naturalGround, artificialGround)
+                  naturalGround, artificialGround, snow)
       --point     for objects: a point to select (0…1, from the top left); repeat to add
       --exclude   for objects: a point to leave out
       --refine    a Refine Edge brush stroke through these points, solved again per pixel; repeat

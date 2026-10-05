@@ -40,6 +40,33 @@ struct GrayMaskTests {
         #expect(classes[.mountains] == nil)
     }
 
+    /// Snow lying on grass or a mountain is snow (MSK-22); every class has its place.
+    @Test func `snow comes before what it lies on, and every class has a place`() {
+        let classes = SAM3Concepts.exclusive([
+            .snow: [1, 1, 0, 0], .vegetation: [1, 0, 1, 0], .mountains: [0, 1, 0, 1],
+        ], order: SAM3Concepts.precedence, size: 2)
+        #expect(classes[.snow]?.pixels == [255, 255, 0, 0])
+        #expect(classes[.vegetation]?.pixels == [0, 0, 255, 0] && classes[.mountains]?.pixels == [0, 0, 0, 255])
+        #expect(Set(SAM3Concepts.precedence) == Set(LandscapeClass.allCases))
+        #expect(SAM3Concepts.precedence.count == LandscapeClass.allCases.count)
+    }
+
+    /// Snow's prompts ship in the app, so the SAM 3 download made before it needs no update.
+    @Test func `the app carries the text features of the classes the download lacks`() throws {
+        let app = try #require(SAM3Concepts.appPrompts)
+        struct Entry: Decodable {
+            let `class`: String
+            let offset: Int
+            let features: [Int]
+            let mask: [Int]
+        }
+        let entries = try JSONDecoder().decode([String: Entry].self, from: Data(contentsOf: app.index))
+        #expect(Set(entries.values.map(\.class)) == ["snow"])
+        let bytes = try Data(contentsOf: app.blob).count
+        let expected = entries.values.reduce(0) { $0 + 2 * ($1.features.reduce(1, *) + $1.mask.reduce(1, *)) }
+        #expect(bytes == expected, "float16 features and mask for each prompt")
+    }
+
     /// A beard is facial hair, not hair, and a sleeve clothes, not skin.
     @Test func `people parts are exclusive by precedence`() {
         let parts = SAM3Concepts.exclusive([

@@ -17,10 +17,14 @@ public struct MaskPreset: Codable, Sendable, Hashable, Identifiable {
     public var amount: Double
     public var detail: Double
     public var adjustments: [String: Double]
+    /// Each component's Landscape class, for its Landscape AI masks; missing in presets saved
+    /// before there was one (and read as Vegetation). Beside `components` rather than in them, so
+    /// builds without it still read the preset.
+    public var landscapeClasses: [LandscapeClass?]?
 
     public init(
         id: String = UUID().uuidString, name: String, components: [Component], amount: Double = 100, detail: Double = 0,
-        adjustments: [ParameterID: Double],
+        adjustments: [ParameterID: Double], landscapeClasses: [LandscapeClass?]? = nil,
     ) {
         self.id = id
         self.name = name
@@ -28,6 +32,12 @@ public struct MaskPreset: Codable, Sendable, Hashable, Identifiable {
         self.amount = amount
         self.detail = detail
         self.adjustments = Dictionary(uniqueKeysWithValues: adjustments.map { ($0.key.rawValue, $0.value) })
+        self.landscapeClasses = landscapeClasses
+    }
+
+    /// The Landscape class the component at `index` computes.
+    public func landscapeClass(at index: Int) -> LandscapeClass {
+        landscapeClasses.flatMap { index < $0.count ? $0[index] : nil } ?? .vegetation
     }
 
     /// A preset of `mask`: AI components become requests, everything but brush strokes (which
@@ -48,9 +58,17 @@ public struct MaskPreset: Codable, Sendable, Hashable, Identifiable {
                 .shape(component.shape, component.operation, inverted: component.inverted)
             }
         }
+        let classes: [LandscapeClass?] = mask.components.compactMap { component in
+            switch component.shape {
+            case let .ai(ai): .some(ai.kind == .landscape ? ai.part.flatMap(LandscapeClass.init(rawValue:)) : nil)
+            case .depthRange: .some(nil)
+            case .brush, .maskReference, .unknown: nil
+            default: .some(nil)
+            }
+        }
         self.init(
             name: name, components: components, amount: mask.amount, detail: mask.detail,
-            adjustments: mask.adjustments,
+            adjustments: mask.adjustments, landscapeClasses: classes.contains { $0 != nil } ? classes : nil,
         )
     }
 
@@ -102,6 +120,18 @@ public struct MaskPreset: Codable, Sendable, Hashable, Identifiable {
             id: "redlamp.popEyes", name: "Pop Eyes",
             components: [.ai(kind: .people, part: .iris, .add, inverted: false)],
             adjustments: [.localExposure: 0.3, .localClarity: 20, .localSaturation: 15],
+        ),
+        MaskPreset(
+            id: "redlamp.brightenSnow", name: "Brighten Snow",
+            components: [.ai(kind: .landscape, part: .entirePerson, .add, inverted: false)],
+            adjustments: [.localExposure: 0.35, .localWhites: 15, .localTemperature: -4, .localClarity: 5],
+            landscapeClasses: [.snow],
+        ),
+        MaskPreset(
+            id: "redlamp.enhanceVegetation", name: "Enhance Vegetation",
+            components: [.ai(kind: .landscape, part: .entirePerson, .add, inverted: false)],
+            adjustments: [.localSaturation: 12, .localTexture: 10, .localShadows: 10],
+            landscapeClasses: [.vegetation],
         ),
     ]
 }

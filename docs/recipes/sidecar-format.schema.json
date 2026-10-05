@@ -596,7 +596,7 @@
           "enum": [
             "entirePerson", "faceSkin", "bodySkin", "eyebrows", "eyeSclera", "iris", "lips", "teeth", "hair",
             "facialHair", "clothes", "water", "vegetation", "mountains", "architecture", "naturalGround",
-            "artificialGround"
+            "artificialGround", "snow"
           ],
           "description": "A part of a person (People) or a Landscape class."
         },

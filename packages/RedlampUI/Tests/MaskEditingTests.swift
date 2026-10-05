@@ -577,6 +577,37 @@ struct MaskEditingTests {
         #expect(decoded == preset)
     }
 
+    @Test func `Landscape presets ask for their class, and a saved Landscape mask keeps it`() async throws {
+        let engine = StubEngine()
+        engine.computed = [AIMask(
+            kind: .landscape, provider: "stub", revision: 1, part: LandscapeClass.snow.rawValue, analysisHash: "h",
+            center: ImagePoint(x: 0.5, y: 0.8), bitmap: MaskBitmap(sha256: "s", width: 4, height: 4),
+        )]
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let model = EditorModel(engine: engine)
+        model.select(folder.appending(path: "IMG_0004.ARW"))
+        for _ in 0 ..< 200 where model.info == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let snow = try #require(MaskPreset.builtIn.first { $0.name == "Brighten Snow" })
+        await model.applyMaskPreset(snow)
+        #expect(engine.lastRequest?.kind == .landscape && engine.lastRequest?.landscape == .snow)
+        let mask = try #require(model.recipe.masks.first)
+        #expect(mask.name == "Brighten Snow" && mask[.localWhites] == 15)
+
+        let saved = MaskPreset(mask, name: "My Snow")
+        #expect(saved.landscapeClasses == [.snow] && saved.landscapeClass(at: 0) == .snow)
+        let decoded = try JSONDecoder().decode(MaskPreset.self, from: JSONEncoder().encode(saved))
+        #expect(decoded == saved)
+        // A preset saved before Landscape presets kept their class reads as Vegetation.
+        var old = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(saved)) as? [String: Any])
+        old["landscapeClasses"] = nil
+        let earlier = try JSONDecoder().decode(MaskPreset.self, from: JSONSerialization.data(withJSONObject: old))
+        #expect(earlier.landscapeClasses == nil && earlier.landscapeClass(at: 0) == .vegetation)
+    }
+
     @Test func `ranges add to an existing mask with the chosen operation`() async throws {
         let (model, cleanup) = try await openEditor()
         defer { cleanup() }

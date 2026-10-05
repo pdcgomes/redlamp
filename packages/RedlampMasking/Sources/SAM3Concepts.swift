@@ -6,7 +6,9 @@ import RedlampEngineAPI
 /// Landscape masks and people parts from SAM 3 (Meta), converted by
 /// `research/prototypes/masking/convert_sam3.py`: an image encoder (once per photo) and a
 /// text-prompted decoder (once per prompt), with the text features of each class's prompts
-/// computed offline (`Sam3Prompts.bin`), so no text encoder ships.
+/// computed offline (`Sam3Prompts.bin`), so no text encoder ships. Classes added since the
+/// download was made (Snow) have theirs in the app (`Sam3AppPrompts.bin`), so they need no new
+/// download.
 ///
 /// Each class is its prompts' maps maxed, as the mean of two: the instances SAM 3 scores over
 /// 0.4, merged, and its dense semantic map times the presence score. The classes of a group are
@@ -19,8 +21,9 @@ public final class SAM3Concepts: @unchecked Sendable {
     public static let outputSize = 288
     /// Where several classes claim a pixel, the first here wins: grass is vegetation, not
     /// ground; a road is artificial ground even where "ground" also fires.
+    /// Snow comes before vegetation and the ground and mountains it lies on.
     public static let precedence: [LandscapeClass] = [
-        .water, .vegetation, .architecture, .mountains, .artificialGround, .naturalGround,
+        .water, .snow, .vegetation, .architecture, .mountains, .artificialGround, .naturalGround,
     ]
     /// The people parts SAM 3 gives, by precedence: a beard is facial hair, not hair; a sleeve
     /// is clothes, not skin. Body skin is also less the face (Face Skin is a part of its own).
@@ -191,18 +194,44 @@ public final class SAM3Concepts: @unchecked Sendable {
         }
     }
 
-    /// The prompts' text features (float16, each followed by its mask), by class.
+    /// The prompts' text features (float16, each followed by its mask), by class: the download's,
+    /// and the app's for classes the download doesn't have.
     static func prompts(in directory: URL, decoder: MLModel) throws -> [String: [Prompt]] {
+        var prompts = try prompts(
+            index: directory.appending(path: "Sam3Prompts.json"), blob: directory.appending(path: "Sam3Prompts.bin"),
+            decoder: decoder,
+        )
+        if let app = appPrompts {
+            for (name, added) in try Self.prompts(index: app.index, blob: app.blob, decoder: decoder)
+                where prompts[name] == nil {
+                prompts[name] = added
+            }
+        }
+        return prompts
+    }
+
+    /// The text features of the classes added since the download was made.
+    static var appPrompts: (index: URL, blob: URL)? {
+        let bundle = Bundle(for: SAM3Concepts.self)
+        // Xcode may flatten the SAM3 folder into the bundle's root.
+        for subdirectory in ["SAM3", nil] {
+            if let index = bundle.url(forResource: "Sam3AppPrompts", withExtension: "json", subdirectory: subdirectory),
+               let blob = bundle.url(forResource: "Sam3AppPrompts", withExtension: "bin", subdirectory: subdirectory) {
+                return (index, blob)
+            }
+        }
+        return nil
+    }
+
+    private static func prompts(index url: URL, blob blobURL: URL, decoder: MLModel) throws -> [String: [Prompt]] {
         struct Entry: Decodable {
             let `class`: String
             let offset: Int
             let features: [Int]
             let mask: [Int]
         }
-        let index = try JSONDecoder().decode(
-            [String: Entry].self, from: Data(contentsOf: directory.appending(path: "Sam3Prompts.json")),
-        )
-        let blob = try Data(contentsOf: directory.appending(path: "Sam3Prompts.bin"))
+        let index = try JSONDecoder().decode([String: Entry].self, from: Data(contentsOf: url))
+        let blob = try Data(contentsOf: blobURL)
         let inputs = decoder.modelDescription.inputDescriptionsByName
         func array(_ values: [Float16], shape: [Int], name: String) throws -> MLMultiArray {
             let type = inputs[name]?.multiArrayConstraint?.dataType ?? .float32

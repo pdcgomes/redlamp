@@ -49,13 +49,15 @@ public extension EditorModel {
         maskMessage = nil
         defer { aiMaskProgress = nil }
         var components: [MaskComponent] = []
-        for component in preset.components {
+        for (index, component) in preset.components.enumerated() {
             switch component {
             case let .shape(shape, operation, inverted):
                 components.append(MaskComponent(shape: shape, operation: operation, inverted: inverted))
             case let .ai(kind, part, operation, inverted):
                 do {
-                    let masks = try await engine.computeMasks(MaskRequest(kind: kind, part: part, combined: true))
+                    let masks = try await engine.computeMasks(MaskRequest(
+                        kind: kind, part: part, combined: true, landscape: preset.landscapeClass(at: index),
+                    ))
                     for (index, mask) in masks.enumerated() {
                         components.append(MaskComponent(
                             shape: kind == .depthRange ? .depthRange(DepthRangeMask(depth: mask)) : .ai(mask),

@@ -452,6 +452,8 @@ public enum PersonPart: String, Codable, Sendable, Hashable, CaseIterable {
 /// Lightroom's Landscape classes (Sky is a mask kind of its own). Each pixel belongs to one.
 public enum LandscapeClass: String, Codable, Sendable, Hashable, CaseIterable {
     case water, vegetation, mountains, architecture, naturalGround, artificialGround
+    /// Lightroom Classic 15's.
+    case snow
 
     public var name: String {
         switch self {
@@ -461,6 +463,7 @@ public enum LandscapeClass: String, Codable, Sendable, Hashable, CaseIterable {
         case .architecture: "Architecture"
         case .naturalGround: "Natural Ground"
         case .artificialGround: "Artificial Ground"
+        case .snow: "Snow"
         }
     }
 

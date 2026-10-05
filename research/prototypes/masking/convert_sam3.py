@@ -14,6 +14,9 @@ Writes to build/models/:
   * Sam3Prompts.bin + Sam3Prompts.json: each prompt's text features and mask (float16), and
     its class (a Landscape class or a people part).
 
+`app` writes the same for the classes added since the download was made (APP_PROMPTS) into the
+app's own resources, packages/RedlampMasking/Resources/SAM3/, so they need no new download.
+
 Each wrapper is checked against Transformers' own pipeline before conversion, and the Core ML
 model against PyTorch after.
 """
@@ -75,6 +78,13 @@ PROMPTS = {
     "clothes": ["clothing", "shirt", "jacket", "dress", "trousers"],
     "face": ["face"],
 }
+# Classes added after the download shipped, whose features ship in the app (MSK-22). On CC0 snow
+# photos (sam3_snow.py) "snowy ground", "ice" and "snowfield" find nothing "snow" doesn't, and
+# "snow-covered mountain" takes the whole mountain.
+APP_PROMPTS = {
+    "snow": ["snow"],
+}
+APP_RESOURCES = ROOT / "packages/RedlampMasking/Resources/SAM3"
 
 
 class TextFeatures:
@@ -226,20 +236,20 @@ def decoder(model, processor):
         print(f"Core ML vs PyTorch, {name}: agreement at 0.5 {agree:.4f}, max diff {np.abs(a - b).max():.4f}")
 
 
-def text(model, processor):
-    MODELS.mkdir(parents=True, exist_ok=True)
+def text(model, processor, classes=PROMPTS, folder=MODELS, name="Sam3Prompts"):
+    folder.mkdir(parents=True, exist_ok=True)
     index = {}
     blobs = []
     offset = 0
-    for cls, prompts in PROMPTS.items():
+    for cls, prompts in classes.items():
         for prompt in prompts:
             features, mask = text_features(model, processor, prompt)
             blob = np.concatenate([features.numpy().astype(np.float16).ravel(), mask.numpy().astype(np.float16).ravel()])
             index[prompt] = {"class": cls, "offset": offset, "features": list(features.shape), "mask": list(mask.shape)}
             offset += blob.nbytes
             blobs.append(blob.tobytes())
-    (MODELS / "Sam3Prompts.bin").write_bytes(b"".join(blobs))
-    (MODELS / "Sam3Prompts.json").write_text(json.dumps(index, indent=2) + "\n")
+    (folder / f"{name}.bin").write_bytes(b"".join(blobs))
+    (folder / f"{name}.json").write_text(json.dumps(index, indent=2) + "\n")
     print(f"{len(index)} prompts, {offset} bytes")
 
 
@@ -249,6 +259,8 @@ if __name__ == "__main__":
     import transformers.models.sam3.modeling_sam3 as m  # noqa: F401
     if what in ("text", "all"):
         text(model, processor)
+    if what == "app":
+        text(model, processor, classes=APP_PROMPTS, folder=APP_RESOURCES, name="Sam3AppPrompts")
     if what in ("decoder", "all"):
         decoder(model, processor)
     if what in ("encoder", "all"):
