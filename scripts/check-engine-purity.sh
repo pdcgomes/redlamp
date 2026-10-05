@@ -21,6 +21,7 @@ ENGINE_PACKAGES=(
     RedlampColor
     RedlampServices
     RedlampDocument
+    RedlampLibrary
     RedlampRecipes
     RedlampMasking
     RedlampEngine

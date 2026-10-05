@@ -50,6 +50,7 @@ let project = Project(
                 Module.engine.dependency,
                 Module.services.dependency,
                 Module.document.dependency,
+                Module.library.dependency,
                 Module.recipes.dependency,
                 Module.canvas.dependency,
                 Module.design.dependency,

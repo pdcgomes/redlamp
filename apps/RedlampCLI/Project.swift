@@ -18,6 +18,7 @@ let project = Project(
                 Module.recipes.dependency,
                 Module.document.dependency,
                 Module.generative.dependency,
+                Module.library.dependency,
                 Module.bench.dependency,
             ],
             settings: .settings(base: redlampBaseSettings.merging([

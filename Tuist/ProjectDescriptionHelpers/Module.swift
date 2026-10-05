@@ -12,6 +12,7 @@ public enum Module: String, CaseIterable {
     case color = "RedlampColor"
     case services = "RedlampServices"
     case document = "RedlampDocument"
+    case library = "RedlampLibrary"
     case recipes = "RedlampRecipes"
     case masking = "RedlampMasking"
     case generative = "RedlampGenerative"
@@ -44,7 +45,8 @@ public enum Module: String, CaseIterable {
     /// Whether the module belongs to the platform-neutral engine side of the boundary.
     public var isEngineLayer: Bool {
         switch self {
-        case .engineAPI, .kernels, .color, .services, .document, .recipes, .masking, .generative, .bench, .engine: true
+        case .engineAPI, .kernels, .color, .services, .document, .library, .recipes, .masking, .generative,
+             .bench, .engine: true
         case .canvas, .design, .ui, .lab, .automation: false
         }
     }
@@ -73,6 +75,9 @@ public enum Module: String, CaseIterable {
         case .color: [.engineAPI]
         case .services: [.engineAPI]
         case .document: [.engineAPI]
+        // The library's index, search and file operations, over the document layer's folders and
+        // sidecars: shared by the app and the CLI, so it never reaches the engine or any UI layer.
+        case .library: [.engineAPI, .document]
         // Recipes are pure values plus analysis: shared by the apps, the CLI and a future
         // companion app, so they may never reach the engine or any UI layer.
         case .recipes: [.engineAPI, .color]
@@ -85,7 +90,7 @@ public enum Module: String, CaseIterable {
         case .engine: [.engineAPI, .kernels, .color, .services, .masking]
         case .canvas: [.engineAPI]
         case .design: [.engineAPI]
-        case .ui: [.engineAPI, .canvas, .design, .document, .recipes]
+        case .ui: [.engineAPI, .canvas, .design, .document, .library, .recipes]
         case .lab: [.engineAPI, .design, .recipes, .ui, .bench]
         case .automation: [.engineAPI, .canvas, .design, .document, .recipes, .ui]
         }
@@ -107,6 +112,11 @@ public let redlampBaseSettings: SettingsDictionary = [
     "ARCHS": "arm64",
     "SWIFT_TREAT_WARNINGS_AS_ERRORS": true,
     "GCC_TREAT_WARNINGS_AS_ERRORS": true,
+]
+
+/// The library's index is macOS's and iOS's own SQLite (FTS5, R-Tree), not a package.
+public let sqliteDependencies: [TargetDependency] = [
+    .sdk(name: "sqlite3", type: .library),
 ]
 
 /// LibRaw is vendored as a static XCFramework built by `mise run vendor`.
