@@ -47,51 +47,74 @@ public final class SettingsSync {
     @ObservationIgnored private var before: [URL: EditRecipe?] = [:]
     @ObservationIgnored private var written: [URL: Sidecar] = [:]
     @ObservationIgnored private var title = ""
-    /// Auto Sync's steps that came while a batch ran: gathered, and run after it.
-    @ObservationIgnored private var pending: (
-        source: EditRecipe, selection: SettingsSelection, photos: [URL], done: (URL, EditRecipe) -> Void,
-    )?
+    /// Batches that came while one ran, in order; Auto Sync's steps are gathered into one.
+    @ObservationIgnored private var queue: [Job] = []
+
+    private struct Job {
+        var change: Change
+        var photos: [URL]
+        var title: String
+        var isAutoSync = false
+        var inEditor: (URL) async -> Bool
+        var done: (URL, EditRecipe) -> Void
+    }
 
     init(store: SidecarStore = SidecarStore(), makeEngine: @escaping () -> (any EditingEngine)?) {
         self.store = store
         self.makeEngine = makeEngine
     }
 
-    /// Starts `change` on `photos`, recorded in each one's history as `title`; `done` is told of
-    /// each photo written. `inEditor` is asked about each photo as the batch reaches it: true
-    /// when it is open in the editor, which made the change itself, so the batch leaves it.
+    /// Starts `change` on `photos`, recorded in each one's history as `title`, or queues it after
+    /// the batch running; `done` is told of each photo written. `inEditor` is asked about each
+    /// photo as the batch reaches it: true when it is open in the editor, which made the change
+    /// itself, so the batch leaves it.
     func run(
         _ change: Change, on photos: [URL], title: String,
         inEditor: @escaping (URL) async -> Bool = { _ in false },
         done: @escaping (URL, EditRecipe) -> Void,
     ) {
-        guard progress == nil, !photos.isEmpty else { return }
-        progress = Progress(title: title, done: 0, total: photos.count)
-        self.title = title
-        report = nil
-        before = [:]
-        written = [:]
-        task = Task { [weak self] in
-            await self?.process(change, photos, title: title, inEditor: inEditor, done: done)
-        }
+        enqueue(Job(change: change, photos: photos, title: title, inEditor: inEditor, done: done))
     }
 
     public func cancel() {
-        pending = nil
+        queue = []
         task?.cancel()
     }
 
     /// One Auto Sync step: what it changed of `source`, onto `photos`; gathered with the steps
-    /// before it while a batch runs.
+    /// queued just before it.
     func autoSync(
         _ source: EditRecipe, _ changes: SettingsSelection, on photos: [URL], done: @escaping (URL, EditRecipe) -> Void,
     ) {
         guard !changes.isEmpty, !photos.isEmpty else { return }
+        if progress != nil, let last = queue.last, last.isAutoSync, case let .paste(_, gathered) = last.change {
+            queue[queue.count - 1].change = .paste(source, gathered.union(changes))
+            queue[queue.count - 1].photos = photos
+            return
+        }
+        enqueue(Job(
+            change: .paste(source, changes), photos: photos, title: "Auto Sync", isAutoSync: true,
+            inEditor: { _ in false }, done: done,
+        ))
+    }
+
+    private func enqueue(_ job: Job) {
+        guard !job.photos.isEmpty else { return }
         if progress == nil {
-            run(.paste(source, changes), on: photos, title: "Auto Sync", done: done)
+            start(job)
         } else {
-            let gathered = pending.map { $0.selection.union(changes) } ?? changes
-            pending = (source, gathered, photos, done)
+            queue.append(job)
+        }
+    }
+
+    private func start(_ job: Job) {
+        progress = Progress(title: job.title, done: 0, total: job.photos.count)
+        title = job.title
+        report = nil
+        before = [:]
+        written = [:]
+        task = Task { [weak self] in
+            await self?.process(job.change, job.photos, title: job.title, inEditor: job.inEditor, done: job.done)
         }
     }
 
@@ -214,9 +237,8 @@ public final class SettingsSync {
         }
         report = Self.report(skipped: skipped, failedMasks: failedMasks, cancelled: Task.isCancelled)
         progress = nil
-        if let next = pending {
-            pending = nil
-            run(.paste(next.source, next.selection), on: next.photos, title: "Auto Sync", done: next.done)
+        if !queue.isEmpty {
+            start(queue.removeFirst())
             await task?.value
         }
     }

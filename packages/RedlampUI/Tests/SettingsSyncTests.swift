@@ -122,6 +122,60 @@ struct SettingsSyncTests {
         #expect(SidecarStore().load(for: photos[1])?.recipe[.exposure] == 2, "B, in the background")
     }
 
+    /// A paste while a sync is still running waits its turn instead of being dropped.
+    @Test func `a batch that arrives while another runs waits its turn`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let photos = ["A", "B", "C"].map { folder.appending(path: "\($0).ARW") }
+        let model = EditorModel(engine: StubEngine())
+        photos.forEach { model.library.insert(LibraryItem(url: $0)) }
+        model.copySelection = .default
+        try await open(model, photos[0])
+        model.setValue(.exposure, 1)
+        model.selectAllPhotos()
+        model.syncSettings()
+        #expect(model.settingsSync.progress != nil)
+        model.setValue(.contrast, 20)
+        model.copySettings()
+        model.pasteSettings()
+        await model.settingsSync.idle()
+        for url in photos.dropFirst() {
+            let recipe = SidecarStore().load(for: url)?.recipe
+            #expect(recipe?[.exposure] == 1 && recipe?[.contrast] == 20, "\(url.lastPathComponent)")
+        }
+        let titles = SidecarStore().loadHistory(for: photos[1]).flatMap(\.steps).map(\.title)
+        #expect(titles.contains("Sync Settings") && titles.contains("Paste Settings"))
+    }
+
+    /// Paste from Previous reaches every selected photo, as Paste does.
+    @Test func `paste from previous reaches the whole selection`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let photos = ["A", "B", "C"].map { folder.appending(path: "\($0).ARW") }
+        var edited = EditRecipe()
+        edited[.exposure] = 2
+        try SidecarStore().save(Sidecar(recipe: edited), for: photos[1])
+        let model = EditorModel(engine: StubEngine())
+        photos.forEach { model.library.insert(LibraryItem(url: $0)) }
+        model.copySelection = .default
+        try await open(model, photos[0])
+        model.click(photos[1], toggling: true)
+        for _ in 0 ..< 200 where model.info?.url != photos[1] {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        model.click(photos[2], toggling: true)
+        for _ in 0 ..< 200 where model.info?.url != photos[2] {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(model.previousSelection == photos[1] && model.selectedPhotos == photos)
+        model.pasteFromPrevious()
+        await model.settingsSync.idle()
+        #expect(model.recipe[.exposure] == 2, "C, the open photo")
+        #expect(SidecarStore().load(for: photos[0])?.recipe[.exposure] == 2, "A, in the background")
+    }
+
     /// With Auto Sync on, each step carries only what it changed: B keeps its own clarity.
     @Test func `auto sync repeats each change on the rest of the selection`() async throws {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)

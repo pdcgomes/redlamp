@@ -53,17 +53,21 @@ public extension EditorModel {
     func pasteSettings() {
         guard let clipboard else { return }
         paste(clipboard.source, clipboard.selection, name: "Paste Settings")
-        if isMultiSelecting, settingsSync.progress == nil {
+        if isMultiSelecting {
             sync(clipboard.source, clipboard.selection, title: "Paste Settings")
         }
     }
 
-    /// ⌥⌘V: the previously viewed photo's settings, with the last choice (Lightroom's "Previous").
+    /// ⌥⌘V: the previously viewed photo's settings, with the last choice (Lightroom's "Previous"),
+    /// onto the open photo and the rest of the selection.
     func pasteFromPrevious() {
         guard let previous = previousSelection, info != nil,
               let sidecar = SidecarStore().load(for: previous)
         else { return }
         paste(sidecar.recipe, copySelection, name: "Paste from Previous")
+        if isMultiSelecting {
+            sync(sidecar.recipe, copySelection, title: "Paste from Previous")
+        }
     }
 
     /// Pastes onto the open photo as one step, then recomputes the AI masks it brought for this
