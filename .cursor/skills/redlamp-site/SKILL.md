@@ -27,6 +27,7 @@ The website presents the README. Much of it is read from the repository when it 
 | `/performance` | `docs/performance/metrics.json` and `history.jsonl` through `lib/performance.ts`, drawn by `components/charts/` |
 | `/blog`, `/blog/<slug>`, `/blog/feed.xml` | `content/blog/<slug>/index.md` through `lib/blog.ts`; `web/README.md` has the front matter |
 | `/api/…` | The relays the app posts to, such as `/api/feedback` (`lib/feedback.ts`, `lib/github-app.ts`), described in `web/README.md` |
+| `/api/whats-new` | The app's What's New feed, linked from no page: `content/whats-new/<id>/index.md` through `lib/whats-new.ts`; `web/README.md` has the front matter |
 
 Each page exports `metadata` (title, description, canonical, Open Graph and Twitter; `cameras/page.tsx` is a compact example), and most have an `opengraph-image.tsx` drawn with `next/og` (see `compare/`). `layout.tsx` holds the header, the footer, the lamp glow, Inter with its optical-size axis and the default metadata (`en-GB`). `sitemap.ts` lists the pages; `next.config.ts` has the security headers and the `/appcast.xml` redirect.
 
