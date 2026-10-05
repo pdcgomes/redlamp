@@ -90,7 +90,7 @@ const room: Room = {
   stats: [],
   needsYou: [
     {
-      id: "approve",
+      id: "approve-0.2.4",
       title: "Approve the release",
       detail: "Once every check has passed or been waived and every problem decided, approve it here or in the chat.",
       unblocks: "Running the release",
@@ -271,7 +271,7 @@ function NeedsYouRow({ item, mark, onMark }: { item: NeedsYouItem; mark?: Mark; 
         {!closed ? (
           <Row gap={6} style={{ paddingTop: 4 }}>
             <Button variant="secondary" onClick={() => onMark("done")}>
-              {item.id === "approve" ? "Approve" : "Done"}
+              {item.id.startsWith("approve") ? "Approve" : "Done"}
             </Button>
             <Button variant="ghost" onClick={() => onMark("skipped")}>
               Skip

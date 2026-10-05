@@ -41,7 +41,7 @@ The stages are preparing, awaiting approval, approved, releasing and released. W
 5. **Problems.** Each failing check, each partly shipped row, each open bug or in-app report that touches the release, and any risk (unpushed work, a relay that isn't switched on, a feature that depends on something outside the app). Each takes the owner's decision: ship as is, fix first, leave out or later. The README's Known limitations go in as one row, with what's new among them.
 6. **Docs.** The README (What works today, In progress, Known limitations), the tracker's statuses, `scripts/roadmap-sync.py` and the landing page's by-hand items (`.cursor/rules/landing-page.mdc`) say what the release brings.
 
-Needs you holds only what the owner does or decides: the scope, each problem, What's New's copy, trying the candidate, and, always last and blocking, **Approve the release**. Move the stage to awaiting approval when everything else is settled.
+Needs you holds only what the owner does or decides: the scope, each problem, What's New's copy, trying the candidate, and, always last and blocking, **Approve the release**. Move the stage to awaiting approval when everything else is settled. The owner's marks are kept by item ID, so each release's items carry its version in their IDs (`scope-0.3.0`, `approve-0.3.0`; the Approve button shows on any ID starting with `approve`), and a mark on one release never settles the next.
 
 ## The approval gate
 
@@ -57,7 +57,7 @@ Once approved, set the stage to releasing and work through `steps`, recording ea
 4. `mise run release`. It needs this Mac's keychain (the Developer ID certificate, the notarytool profile and the Sparkle key) and reaches Apple, GitHub and redlamp.app. If the agent's sandbox can't, the owner runs it in their own terminal; give them the line.
 5. Verify: the GitHub release is Latest, `https://redlamp.app/appcast.xml` offers the build, the Update cask workflow has pointed `Casks/redlamp.rb` at it, and the site's download button follows.
 6. The owner updates an installed copy of the previous release with Check for Updates…, and What's New opens.
-7. Records: tracker rows the release finishes become Done (naming their commits), `scripts/roadmap-sync.py` then `scripts/tracker-issues.py --apply`, the README, and in this room a `history` entry. Then open the next release: `latest` becomes this one, `upcoming` the next, and the lists start again from `scripts/release-status.py`.
+7. Records: tracker rows the release finishes become Done (naming their commits), `scripts/roadmap-sync.py` then `scripts/tracker-issues.py --apply`, the README, and in this room a `history` entry. Then open the next release: `latest` becomes this one, `upcoming` the next, and the lists start again from `scripts/release-status.py`. Problems still open carry over; the log and decisions keep their history. A minor or major release needs `MARKETING_VERSION` set by hand in `Version.xcconfig` (the task bumps only the patch), so it starts as a Needs you item and the first step of the plan.
 
 ## Writing
 
