@@ -20,6 +20,8 @@ struct DevelopInputs {
     /// The masks' Curves tables, four of `DevelopParameters.maskCurveSize` entries for each mask that
     /// has Curves; a zeroed table when none does, since Metal needs a bound buffer.
     var maskCurves: [Float] = .init(repeating: 0, count: DevelopParameters.maskCurveSize)
+    /// The edit's Point Color swatches that change something; never empty, as for `layers`.
+    var pointColor: [PointColorGPU] = [.empty]
 }
 
 /// The photo's lens profile resampled to the develop kernel's table: evenly spaced radii, each
@@ -81,6 +83,7 @@ enum DevelopParameters {
         maskOverlayStyle: MaskOverlayStyle = .colorOverlay,
         maskOverlayOpacity: Double = MaskOverlayStyle.defaultOpacity,
         masks: MaskBindings = .none,
+        visualizePointColor: UUID? = nil,
     ) -> DevelopInputs {
         var p = DevelopParams()
         let baseLook = resolved ?? BaseLookRegistry.Resolved(
@@ -297,6 +300,9 @@ enum DevelopParameters {
             ),
         )
 
+        let pointColor = PointColorMath.buffers(recipe.pointColor, visualized: visualizePointColor)
+        p.pointColor = SIMD4(Float(pointColor.swatches.count), Float(pointColor.visualized), 0, 0)
+
         let lut = ToneCurveMath.isIdentity(recipe) ? [Float](repeating: 0, count: 4) : ToneCurveMath.lut(for: recipe)
         return DevelopInputs(
             params: p,
@@ -307,6 +313,7 @@ enum DevelopParameters {
             lookTable: baseLook.table,
             lensTable: lensTable,
             maskCurves: curves.isEmpty ? [Float](repeating: 0, count: maskCurveSize) : curves,
+            pointColor: pointColor.swatches.isEmpty ? [.empty] : pointColor.swatches,
         )
     }
 

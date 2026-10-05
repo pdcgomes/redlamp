@@ -258,10 +258,11 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
                 encoding: .linear, showClipping: request.showClipping, maskOverlay: request.maskOverlay,
                 maskOverlayColor: request.maskOverlayColor, maskOverlayStyle: request.maskOverlayStyle,
                 maskOverlayOpacity: request.maskOverlayOpacity,
-                commands: commands, visualizeSpots: request.visualizeSpots, retouchMaps: .refreshLater,
+                commands: commands, visualizeSpots: request.visualizeSpots,
+                visualizePointColor: request.visualizePointColor, retouchMaps: .refreshLater,
             )
-            // Visualize Spots replaces the photo in the frame, not in the histogram.
-            if request.region == nil, request.visualizeSpots == nil {
+            // Visualize Spots and Visualize Range replace the photo in the frame, not in the histogram.
+            if request.region == nil, request.visualizeSpots == nil, request.visualizePointColor == nil {
                 try encodeHistogram(texture: target.texture, size: size, linear: true, commands: commands)
             } else {
                 overviewSize = developed.fitted(within: PixelSize(width: 1024, height: 1024))
@@ -336,6 +337,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         cacheDetail: Bool = true,
         detail: Bool = true,
         visualizeSpots: Double? = nil,
+        visualizePointColor: UUID? = nil,
         retouchMaps: RetouchStage.Maps = .current,
     ) throws {
         let photo = session
@@ -354,6 +356,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             region: region, encoding: encoding,
             showClipping: showClipping, maskOverlay: maskOverlay, maskOverlayColor: maskOverlayColor,
             maskOverlayStyle: maskOverlayStyle, maskOverlayOpacity: maskOverlayOpacity, masks: maskBindings,
+            visualizePointColor: visualizePointColor,
         )
         inputs.params.denoised = processed?.area ?? .zero
         if let visualizeSpots {
@@ -385,6 +388,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         )
         try encoder.setArray(inputs.components, index: 4, device: device)
         try encoder.setArray(inputs.maskCurves, index: 6, device: device)
+        try encoder.setArray(inputs.pointColor, index: 7, device: device)
         encoder.dispatchGrid(width: size.width, height: size.height, pipeline: kernels.develop)
         encoder.endEncoding()
     }

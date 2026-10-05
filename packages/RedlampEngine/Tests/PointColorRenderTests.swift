@@ -1,0 +1,254 @@
+import Foundation
+import IOSurface
+import Metal
+import RedlampColor
+import RedlampEngineAPI
+import RedlampKernels
+import RedlampServices
+import simd
+import Testing
+@testable import RedlampEngine
+
+/// Point Color in the develop kernel (TON-29): what a swatch selects, how uniformity pulls and pushes
+/// the colours it selects, its shifts, and Visualize Range.
+@Suite(.enabled(if: EngineSmokeTests.canRender))
+struct PointColorRenderTests {
+    let device: any MTLDevice
+    let queue: any MTLCommandQueue
+    let kernels: KernelLibrary
+
+    init() throws {
+        device = try #require(MTLCreateSystemDefaultDevice())
+        queue = try #require(device.makeCommandQueue())
+        kernels = try KernelLibrary(device: device)
+    }
+
+    /// A warm, skin-like colour on the left and a blue on the right, far apart in hue.
+    private static let skin = SIMD3<Float>(0.45, 0.25, 0.15)
+    private static let blue = SIMD3<Float>(0.08, 0.12, 0.4)
+    private let left = 20 * 160 + 40
+    private let right = 20 * 160 + 120
+
+    private func halves() throws -> ImageSession {
+        try makeSession(width: 160, height: 40) { x, _ in x < 80 ? Self.skin : Self.blue }
+    }
+
+    private func swatch(_ color: SIMD3<Double>, _ values: [ParameterID: Double] = [:]) -> PointColorSwatch {
+        PointColorSwatch(color: .oklch(OKLCh(lightness: color.x, chroma: color.y, hue: color.z)), values: values)
+    }
+
+    @Test func `a swatch that changes nothing, or a mask's own colour on the edit, leaves the render alone`() throws {
+        let session = try halves()
+        let plain = try render(EditRecipe(), session: session)
+        let shown = lch(plain[left])
+        var recipe = EditRecipe()
+        recipe.pointColor = [
+            swatch(shown, [.pointColorHueRange: 90, .pointColorSmoothness: 10]),
+            PointColorSwatch(color: .mask, values: [.pointColorHueUniformity: 100]),
+        ]
+        #expect(try render(recipe, session: session) == plain)
+    }
+
+    @Test func `hue uniformity pulls the colours a swatch selects to its hue, and leaves the others`() throws {
+        let session = try halves()
+        let plain = try render(EditRecipe(), session: session)
+        let shown = lch(plain[left])
+        let target = SIMD3(shown.x, shown.y, shown.z + 12)
+        var recipe = EditRecipe()
+        recipe.pointColor = [swatch(target, [.pointColorHueUniformity: 100])]
+        let pulled = try render(recipe, session: session)
+        #expect(abs(hueDifference(lch(pulled[left]).z, target.z)) < 0.5, "all the way: \(lch(pulled[left]))")
+        #expect(simd_abs(pulled[right] - plain[right]).max() < 1e-3, "the blue isn't selected")
+
+        recipe.pointColor = [swatch(target, [.pointColorHueUniformity: 50])]
+        let half = try lch(render(recipe, session: session)[left]).z
+        #expect(abs(hueDifference(half, shown.z + 6)) < 0.5, "half way: \(half)")
+    }
+
+    @Test func `saturation and luminance uniformity pull chroma and lightness too`() throws {
+        let session = try halves()
+        let shown = try lch(render(EditRecipe(), session: session)[left])
+        // Less chroma than the photo's: more would be slowed by the gamut-relative boost (TON-07).
+        let target = SIMD3(shown.x + 0.05, shown.y * 0.75, shown.z)
+        var recipe = EditRecipe()
+        recipe.pointColor = [
+            swatch(target, [.pointColorSaturationUniformity: 100, .pointColorLuminanceUniformity: 100]),
+        ]
+        let pulled = try lch(render(recipe, session: session)[left])
+        #expect(abs(pulled.y - target.y) < 0.01 * target.y, "chroma: \(pulled.y) against \(target.y)")
+        #expect(abs(pulled.x - target.x) < 0.005, "lightness: \(pulled.x) against \(target.x)")
+    }
+
+    @Test func `pushing colours apart keeps them in order across the range's edge`() throws {
+        // Hues 60° either side of the middle column's, so the ramp crosses the range's fading edge.
+        let columns = 96
+        let session = try makeSession(width: columns, height: 8) { x, _ in
+            let hue = (40 + 120 * Double(x) / Double(columns - 1)) * .pi / 180
+            let lab = SIMD3(0.6, 0.09 * cos(hue), 0.09 * sin(hue))
+            return SIMD3<Float>(simd_max(Self.linearSRGB(oklab: lab), .zero) * 0.6)
+        }
+        let row = 4 * columns
+        let plain = try render(EditRecipe(), session: session)
+        let plainHues = (0 ..< columns).map { lch(plain[row + $0]).z }
+        #expect(zip(plainHues, plainHues.dropFirst()).allSatisfy { $0 < $1 }, "the ramp's own hues rise")
+        for smoothness in [0.0, 50, 100] {
+            var recipe = EditRecipe()
+            recipe.pointColor = [swatch(lch(plain[row + columns / 2]), [
+                .pointColorHueUniformity: -100, .pointColorSmoothness: smoothness,
+            ])]
+            let pushed = try render(recipe, session: session)
+            let hues = (0 ..< columns).map { lch(pushed[row + $0]).z }
+            #expect(
+                zip(hues, hues.dropFirst()).allSatisfy { $0 < $1 },
+                "Smoothness \(smoothness): colours keep their order",
+            )
+            #expect(hues[columns / 2 + 8] - hues[columns / 2 - 8] > plainHues[columns / 2 + 8] -
+                plainHues[columns / 2 - 8])
+        }
+    }
+
+    @Test func `a shift turns the colours a swatch selects`() throws {
+        let session = try halves()
+        let plain = try render(EditRecipe(), session: session)
+        let shown = lch(plain[left])
+        var recipe = EditRecipe()
+        recipe.pointColor = [swatch(shown, [.pointColorHueShift: 50])]
+        let shifted = try render(recipe, session: session)
+        #expect(abs(hueDifference(lch(shifted[left]).z, shown.z + 15)) < 0.5, "+15°: \(lch(shifted[left]))")
+        #expect(simd_abs(shifted[right] - plain[right]).max() < 1e-3)
+    }
+
+    @Test func `visualizing the range shows what a swatch selects in colour and the rest in grey`() throws {
+        let session = try halves()
+        let plain = try render(EditRecipe(), session: session)
+        var recipe = EditRecipe()
+        let shown = swatch(lch(plain[left]))
+        recipe.pointColor = [shown]
+        let visualized = try render(recipe, session: session, visualize: shown.id)
+        #expect(simd_abs(visualized[left] - plain[left]).max() < 1e-3, "selected: as it was")
+        #expect(lch(visualized[right]).y < 0.005, "not selected: grey, \(lch(visualized[right]))")
+        #expect(try render(recipe, session: session) == plain, "without Visualize Range, a neutral swatch is no swatch")
+    }
+
+    // MARK: - Helpers
+
+    /// OKLab lightness, chroma and hue (degrees) of a linear Display P3 output pixel.
+    private func lch(_ pixel: SIMD3<Float>) -> SIMD3<Double> {
+        let srgb = RGBPrimaries.displayP3.conversion(to: .sRGB) * SIMD3<Double>(pixel)
+        let lab = OKLab.fromLinearSRGB(srgb)
+        let hue = atan2(lab.z, lab.y) * 180 / .pi
+        return SIMD3(lab.x, hypot(lab.y, lab.z), hue < 0 ? hue + 360 : hue)
+    }
+
+    private func hueDifference(_ a: Double, _ b: Double) -> Double {
+        (a - b + 540).truncatingRemainder(dividingBy: 360) - 180
+    }
+
+    /// Ottosson's OKLab to linear sRGB.
+    private static func linearSRGB(oklab lab: SIMD3<Double>) -> SIMD3<Double> {
+        let l = pow(lab.x + 0.3963377774 * lab.y + 0.2158037573 * lab.z, 3)
+        let m = pow(lab.x - 0.1055613458 * lab.y - 0.0638541728 * lab.z, 3)
+        let s = pow(lab.x - 0.0894841775 * lab.y - 1.2914855480 * lab.z, 3)
+        return SIMD3(
+            4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+            -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+            -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+        )
+    }
+
+    /// The whole photo at full size, as linear output.
+    private func render(_ recipe: EditRecipe, session: ImageSession, visualize: UUID? = nil) throws -> [SIMD3<Float>] {
+        let engine = try RedlampEngine()
+        let size = session.orientedSize
+        var request = RenderRequest(recipe: recipe, targetSize: size, generation: 0)
+        request.visualizePointColor = visualize
+        let frame = try engine.renderFrame(request, session: session)
+        let surface = frame.surface
+        IOSurfaceLock(surface, .readOnly, nil)
+        defer { IOSurfaceUnlock(surface, .readOnly, nil) }
+        let rowBytes = IOSurfaceGetBytesPerRow(surface)
+        let base = IOSurfaceGetBaseAddress(surface)
+        var pixels: [SIMD3<Float>] = []
+        pixels.reserveCapacity(size.width * size.height)
+        for y in 0 ..< size.height {
+            let row = (base + y * rowBytes).assumingMemoryBound(to: Float16.self)
+            for x in 0 ..< size.width {
+                pixels.append(SIMD3(Float(row[x * 4]), Float(row[x * 4 + 1]), Float(row[x * 4 + 2])))
+            }
+        }
+        return pixels
+    }
+
+    /// A noiseless linear raw of `color(x, y)` in camera RGB (identity matrix: linear sRGB).
+    private func makeSession(width: Int, height: Int, color: (Int, Int) -> SIMD3<Float>) throws -> ImageSession {
+        let black: Float = 512
+        let white: Float = 16383
+        var samples = [UInt16](repeating: 0, count: width * height * 3)
+        for y in 0 ..< height {
+            for x in 0 ..< width {
+                let value = color(x, y)
+                for channel in 0 ..< 3 {
+                    samples[(y * width + x) * 3 + channel] = UInt16((black + value[channel] * (white - black))
+                        .rounded())
+                }
+            }
+        }
+        var decoded = DecodedImage(
+            width: width, height: height, layout: .linearRGB, samples: samples,
+            blackLevels: [black, black, black], whiteLevel: white,
+            asShotMultipliers: SIMD3(1, 1, 1), cameraToSRGB: [1, 0, 0, 0, 1, 0, 0, 0, 1], xyzToCamera: nil,
+            orientation: 0, baselineExposure: 0,
+            info: ImageInfo(
+                url: URL(fileURLWithPath: "/synthetic-point-color.dng"),
+                pixelSize: PixelSize(width: width, height: height), isRaw: true, sensorDescription: "synthetic",
+            ),
+        )
+        decoded.noiseProfile = DetailStageTests.noise
+        return try SessionBuilder(device: device, queue: queue, kernels: kernels).build(decoded)
+    }
+}
+
+/// Point Color's sliders in the kernel's units.
+struct PointColorMathTests {
+    private let skin = OKLCh(lightness: 0.6, chroma: 0.08, hue: 50)
+
+    @Test func `at the defaults a swatch selects hue within 47.5°, fully within about 21°`() {
+        let swatch = PointColorSwatch(color: .oklch(skin))
+        let widths = PointColorMath.halfWidths(swatch)
+        #expect(abs(widths.x - 47.5) < 1e-9)
+        #expect(abs(widths.x * (1 - PointColorMath.fade(swatch)) - 21.4) < 0.1)
+    }
+
+    @Test func `the push limit keeps the mapping's slope above its floor at every Smoothness`() throws {
+        for smoothness in stride(from: 0.0, through: 100, by: 10) {
+            let swatch = PointColorSwatch(color: .oklch(skin), values: [.pointColorSmoothness: smoothness])
+            let fade = PointColorMath.fade(swatch)
+            let limit = PointColorMath.pushLimit(fade: fade)
+            func weight(_ x: Double) -> Double {
+                let t = min(max((x - (1 - fade)) / fade, 0), 1)
+                return 1 - t * t * (3 - 2 * t)
+            }
+            let mapped = (0 ... 1200).map { step -> Double in
+                let x = Double(step) / 1000
+                return x * (1 + limit * weight(x))
+            }
+            let slopes = zip(mapped, mapped.dropFirst()).map { ($1 - $0) * 1000 }
+            #expect(try #require(slopes.min()) >= 0.249, "Smoothness \(smoothness): slope \(slopes.min()!)")
+        }
+        #expect(PointColorMath.pushLimit(fade: 0.1) < PointColorMath.pushLimit(fade: 1), "smoother edges push further")
+    }
+
+    @Test func `the kernel runs swatches that change something, and the one Visualize Range shows`() {
+        let neutral = PointColorSwatch(color: .oklch(skin))
+        let pulling = PointColorSwatch(color: .oklch(skin), values: [.pointColorHueUniformity: 40])
+        let typical = PointColorSwatch(color: .mask, values: [.pointColorHueUniformity: 40])
+        let none = PointColorMath.buffers([neutral, typical], visualized: nil)
+        #expect(none.swatches.isEmpty && none.visualized == 0)
+        let shown = PointColorMath.buffers([pulling, neutral, typical], visualized: neutral.id)
+        #expect(shown.swatches.count == 2 && shown.visualized == 2)
+        #expect(shown.swatches[0].uniformity.x == 0.4)
+        let pushing = PointColorSwatch(color: .oklch(skin), values: [.pointColorHueUniformity: -100])
+        let limit = PointColorMath.pushLimit(fade: PointColorMath.fade(pushing))
+        #expect(PointColorMath.gpu(pushing)?.uniformity.x == Float(-limit))
+    }
+}

@@ -314,6 +314,21 @@ static inline float hueBump(float hue, float centre, float width) {
     return d >= 1.0f ? 0.0f : 0.5f + 0.5f * cos(d * M_PI_F);
 }
 
+constant int kMaxPointColorSwatches = 8;
+
+// How fully a Point Color swatch selects a colour: a trapezoid on each axis around its own colour
+// (hue on the circle, chroma in stops, lightness), times the colourfulness the Color Mixer uses, since
+// hue means little near grey.
+static inline float pointColorWeight(PointColorGPU s, float lightness, float chroma, float hue) {
+    float3 distance = float3(
+        hueDistance(hue, s.color.z),
+        abs(log2(max(chroma, 1e-4f) / max(s.color.y, 0.02f))),
+        abs(lightness - s.color.x));
+    float3 width = s.range.xyz;
+    float3 weight = 1.0f - smoothstep(width * (1.0f - s.range.w), width, distance);
+    return weight.x * weight.y * weight.z * smoothstep(0.0f, 0.04f, chroma);
+}
+
 static inline float sampleLUT(constant float *lut, float x) {
     float position = clamp(x, 0.0f, 1.0f) * 1023.0f;
     uint i = uint(position);
@@ -594,6 +609,7 @@ kernel void rl_develop(
     constant float4 *lensTable [[buffer(5)]],
     constant float *maskCurves [[buffer(6)]],
     texture2d_array<float, access::sample> maskEdges [[texture(14)]],
+    constant PointColorGPU *pointColor [[buffer(7)]],
     uint2 gid [[thread_position_in_grid]])
 {
     uint width = uint(p.outputSize.x);
@@ -850,6 +866,30 @@ kernel void rl_develop(
         lab.x += bandLuminance * 0.15f * colorfulness * smoothstep(0.0f, 0.1f, chroma);
     }
 
+    // Point Color: each swatch pulls the colours it selects towards its own, or pushes them apart,
+    // then shifts them. Every swatch reads the same colour, and their changes add up; chroma's goes
+    // through the gamut-relative boost below with the other saturation changes.
+    float visualizedWeight = 1.0f;
+    int swatches = min(int(p.pointColor.x), kMaxPointColorSwatches);
+    if (swatches > 0) {
+        float selectedChroma = chroma * max(saturation, 0.0f);
+        float hueChange = 0.0f, chromaStops = 0.0f, lightnessChange = 0.0f;
+        for (int i = 0; i < swatches; i++) {
+            PointColorGPU s = pointColor[i];
+            float w = pointColorWeight(s, lab.x, selectedChroma, hue);
+            if (int(p.pointColor.y) == i + 1) visualizedWeight = w;
+            if (w <= 0.0f) continue;
+            float3 scale = -s.uniformity.xyz * w;
+            hueChange += (fmod(hue - s.color.z + 540.0f, 360.0f) - 180.0f) * scale.x + s.shift.x * w;
+            chromaStops += log2(max(selectedChroma, 1e-4f) / max(s.color.y, 0.02f)) * scale.y
+                + log2(max(1.0f + s.shift.y * w, 1e-3f));
+            lightnessChange += (lab.x - s.color.x) * scale.z + s.shift.z * w;
+        }
+        hue += hueChange;
+        saturation *= exp2(chromaStops);
+        lab.x += lightnessChange;
+    }
+
     saturation *= 1.0f + localColor.w;
     hue += localColor.z * smoothstep(0.0f, 0.04f, chroma);
     chroma = boostChroma(chroma, chroma * max(saturation, 0.0f), lab.x, hue * (M_PI_F / 180.0f), p);
@@ -1021,6 +1061,11 @@ kernel void rl_develop(
         case 6: encoded = mix(float3(grey), encoded, cover); break;
         default: encoded = mix(encoded, tint, cover * opacity); break;
         }
+    }
+
+    // Point Color's Visualize Range: the swatch's selection in colour, the rest grey, as Image on B&W.
+    if (p.pointColor.y > 0.5f) {
+        encoded = mix(float3(dot(encoded, float3(0.2126f, 0.7152f, 0.0722f))), encoded, visualizedWeight);
     }
 
     // Visualize Spots (RM-02): log luminance against a blur 8 times wider (three levels up the

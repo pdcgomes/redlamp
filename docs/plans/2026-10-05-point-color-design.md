@@ -2,7 +2,7 @@
 
 Lightroom's Point Color, with Capture One's uniformity: pick a colour on the photo, shift it and the colours near it, and pull those colours together, so blotchy skin evens out to one tone. It works on the whole photo and inside masks, and an Even Skin Tone mask preset does it for skin in one step. Tracker: TON-29 (#181); it waits on TON-31 (#190), where the colour controls sit, and TON-30 (#182), the spatial version, follows it. The research, sources and a prototype's measurements are in [the note](../research/notes/TON-29-colour-uniformity.md).
 
-**Status (2026-10-05):** approved; building on the `point-color/build` branch. Step 1 (`model`) done.
+**Status (2026-10-05):** approved; building on the `point-color/build` branch. Steps 1 (`model`) and 2 (`kernel`) done.
 
 ## Decisions (the owner)
 

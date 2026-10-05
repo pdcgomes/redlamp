@@ -78,6 +78,17 @@ struct DevelopParams {
     float4 calibration;       // x Calibration's Shadows Tint (-1 green ... 1 magenta)
     float4 vignette2;         // x Post-Crop Vignetting's Highlights (0...1)
     float4 spots;             // x 1 = Visualize Spots, y its threshold (log luminance)
+    float4 pointColor;        // x Point Color's swatch count; y the swatch Visualize Range shows, plus one (0 none)
+};
+
+// One Point Color swatch (TON-29): its colour, the range of colours around it that it selects, and
+// what it does there. Each half-width is where the selection ends; it fades out over its last `fade`.
+struct PointColorGPU {
+    float4 color;             // x OKLab lightness, y chroma, z hue (degrees)
+    float4 range;             // half-widths: x hue (degrees), y chroma (stops), z lightness; w fade (0.1...1)
+    float4 shift;             // at full selection: x hue (degrees), y chroma factor minus 1, z lightness
+    float4 uniformity;        // per axis (hue, chroma, lightness): distances from the swatch's colour scale by
+                              // 1 - u · weight, so above 0 pulls, below 0 pushes (never past the swatch's limit)
 };
 
 // Noise reduction over one work area of the pyramid.

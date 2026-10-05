@@ -45,6 +45,9 @@ public struct RenderRequest: Sendable, Hashable {
     /// blur of itself, so dust and specks stand out, at this sensitivity (0...100). The overview
     /// and the histogram still show the photo.
     public var visualizeSpots: Double?
+    /// Shows this Point Color swatch's selection as Lightroom's Visualize Range does: the colours it
+    /// selects as they are, the rest grey. The overview and the histogram still show the photo.
+    public var visualizePointColor: UUID?
     /// Also renders this recipe at the same size and region (the "before" of a before/after
     /// view). It is re-rendered only when it, the geometry or clipping change, so edits to
     /// `recipe` cost no more than without it.
