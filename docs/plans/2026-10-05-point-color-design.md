@@ -2,7 +2,7 @@
 
 Lightroom's Point Color, with Capture One's uniformity: pick a colour on the photo, shift it and the colours near it, and pull those colours together, so blotchy skin evens out to one tone. It works on the whole photo and inside masks, and an Even Skin Tone mask preset does it for skin in one step. Tracker: TON-29 (#181); it waits on TON-31 (#190), where the colour controls sit, and TON-30 (#182), the spatial version, follows it. The research, sources and a prototype's measurements are in [the note](../research/notes/TON-29-colour-uniformity.md).
 
-**Status (2026-10-06):** approved; building on the `point-color/build` branch. Steps 1 (`model`) to 5 (`masks`) done, with the mask's own colour in step 5; the command palette and the Delete key moved to step 7. Next: tuning (step 6).
+**Status (2026-10-06):** approved; built on the `point-color/build` branch, for review. Steps 1 (`model`) to 6 (`tune`) done, with the mask's own colour in step 5 and the performance run waiting for the merge; step 7 (`docs`) follows the merge, with the command palette and the Delete key.
 
 ## Decisions (the owner)
 
@@ -80,7 +80,7 @@ In the develop kernel, right after the Color Mixer: after the tone curve and the
 
 ## Gates
 
-- Performance-sensitive: the develop kernel's per-pixel work and the two renders of Point Color's input; recorded after merging.
+- Performance-sensitive, recorded after merging: the develop kernel's per-pixel work, a loop over the swatches that change something (none for edits without Point Color); the mask's own colour, measured on every render that has such a swatch (a 512 px develop pass, a histogram with atomic adds and a one-thread median, per mask); and the eyedropper's render at the guide's size, once per click.
 
 ## Open questions
 
