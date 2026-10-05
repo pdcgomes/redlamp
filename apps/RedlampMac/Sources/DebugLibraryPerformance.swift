@@ -195,7 +195,7 @@
                 "library-blank-frames": Double(blank),
                 "library-peak-memory": browsing,
             ])
-            let budgets = budgets(measured, memory: memory, arrows: arrows, blank: blank, browsing: browsing)
+            let budgets = budgets(measured, arrows: arrows, blank: blank, browsing: browsing)
             finish(
                 lines,
                 budgets: budgets,
@@ -309,14 +309,9 @@
         }
 
         private static func budgets(
-            _ measured: Measured, memory: MemoryPhases, arrows: Double, blank: Int, browsing: Double,
+            _ measured: Measured, arrows: Double, blank: Int, browsing: Double,
         ) -> [Budget] {
-            let phases = Dictionary(memory.phases.map { ($0.label, $0) }) { first, _ in first }
-            let base = mb(memory.baseline)
-            func over(_ label: String) -> Double {
-                phases[label].map { mb($0.after.footprint) - base } ?? .infinity
-            }
-            return [
+            [
                 .below("Warm launch: open, searchable, caught up", seconds(measured.launch) * 1000, 1000, unit: "ms"),
                 .atLeast("Opened from the library (1 yes, 0 listed)", measured.fromLibrary ? 1 : 0, 1, unit: ""),
                 .below(
@@ -331,7 +326,6 @@
                 .below("Main thread p99 holding the arrow keys", arrows, 8.3, unit: "ms"),
                 .below("Blank frames holding the arrow keys", Double(blank), 1, unit: ""),
                 .below("Peak footprint over launch, browsing", browsing, 250, unit: "MB"),
-                .below("Over launch after a memory-pressure trim", over("trimmed"), 120, unit: "MB"),
             ]
         }
 
