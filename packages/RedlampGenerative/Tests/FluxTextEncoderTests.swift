@@ -6,8 +6,7 @@ import Testing
 /// FLUX.2 [klein] 4B's diffusers folder (`REDLAMP_FLUX_MODEL`) and the reference prompt embeddings
 /// made from it with transformers (`REDLAMP_FLUX_REFERENCE`, by
 /// `research/prototypes/generative/reference_text_encoder.py`). Through xcodebuild, each is set as
-/// `TEST_RUNNER_` and its name; the test runner xcodebuild starts may not be allowed to read an
-/// external drive, where `xctest` run from a terminal is.
+/// `TEST_RUNNER_` and its name.
 enum FluxSample {
     struct Prompt {
         let prompt: String
