@@ -128,8 +128,8 @@ CREATE TABLE collections (id INTEGER PRIMARY KEY, parent INTEGER, name TEXT NOT 
   query TEXT);                                               -- kind: 0 set, 1 collection, 2 smart collection
 CREATE TABLE collection_photos (collection INTEGER NOT NULL, photo INTEGER NOT NULL, position INTEGER,
   PRIMARY KEY (collection, photo)) WITHOUT ROWID;
-CREATE VIRTUAL TABLE photo_text USING fts5(name, folder, keywords, title, caption, camera, lens,
-  content='', contentless_delete=1, tokenize='trigram');     -- rowid is photos.id
+CREATE VIRTUAL TABLE photo_text USING fts5(name, keywords, title, caption,
+  content='', contentless_delete=1, tokenize='trigram');     -- rowid is photos.id; written by the writer (Results)
 CREATE TABLE settings (key TEXT PRIMARY KEY, value) WITHOUT ROWID;
 ```
 
@@ -270,7 +270,44 @@ Renames, moves, new folders and moves to the Trash go through a journal in `Libr
 
 ## Results
 
-Measured by the harness as the rows land; nothing here is estimated.
+Measured by the harness as the rows land; nothing here is estimated. The first runs were on an M1 Ultra (16 performance and 4 efficiency cores) with other builds running (load average 35 to 80), so they are conservative.
+
+### The index at a million photos (LIB-05)
+
+`IndexBenchmarkTests` with `REDLAMP_INDEX_BENCH=1`, two runs:
+
+| | Measured |
+| --- | --- |
+| Inserting, in batches of 1,000 | 11,500 to 12,700 photos a second |
+| A full scan of the hot columns | 363 ms (2.7 million rows a second) |
+| A photo by path | 7.6 to 7.9 µs |
+| A trigram search for 4 characters of names | 0.22 ms (300 matches) |
+| `count(*)` of rating ≥ 3 and one camera | 57 to 63 ms |
+| Rating 10,000 photos | 26 ms when they're consecutive rows, 568 ms spread across the library |
+| `quick_check` | 4.3 s |
+| A snapshot (`VACUUM INTO`) | 2.8 s, 589 MB |
+| The index file | 598 MB, 383 MB of it the text index |
+
+What it changed:
+
+- **SQLite alone misses the search budget.** A count over two predicates takes 60 ms at a million photos, four times the 16 ms budget, so the column store is needed; building it from the hot-column scan takes about 0.4 s at launch, in the background.
+- **The text index covers name, keywords, title and caption.** Indexing all seven text columns ran inserts at 12,100 a second; these four, at 17,700. Folder paths, cameras and lenses are matched in their own small tables (thousands of rows, not millions) and become folder, camera and lens IDs for the column pass.
+- **No index on the content key.** It alone took a C replica of the inserts from 104,000 to 20,000 rows a second. Lookups by content key (importing skips photos already in the library) load the keys into a set once instead.
+- **The text index is written by the writer, not by triggers.** FTS5 flushes its pending terms at every statement savepoint, which a trigger opens, halving insert speed.
+- **The integrity check runs in the background,** weekly: 4.3 s is too long for launch.
+
+### Metadata (LIB-07)
+
+`PhotoMetadataReaderTests` with `REDLAMP_METADATA_BENCH=1`, on the 26 CC0 raws, under load:
+
+- **The first 256 KiB are enough** for ARW, CR2, DNG, ORF, PEF, RW2, 3FR and the Z 8's NEF, passed to ImageIO padded with zeros to the file's length (ImageIO reports a raw's size only when the data looks as long as the file). CR3, RAF, the Z 6's NEF, FFF, IIQ and SRW need ImageIO to read the file itself, which touches 16 to 740 KB of it.
+- **Reads a second:** 46 to 277 on one core, depending on the format, and 432 to 2,429 across all cores; content keys at 35,000 a second on one core. At a thousand photos a second, a million take about 17 minutes on an SSD, metadata only; searching works over what's indexed so far.
+
+### The harness (LIB-03)
+
+- **Fixtures** generate at about 1,300 photos a second: each file creation costs about 0.4 ms of kernel time on this Mac (with endpoint security inspecting every file event). ImageIO writes metadata under a process-wide lock, so photos are written from 16 encoded templates with their EXIF, GPS and IPTC patched in.
+- **Listing a 20,000-photo fixture:** 100 to 128 ms on the SSD profile against its 120 ms budget (300 ms for 50,000), 115 to 124 ms on the NAS profile.
+- **Cold-cache runs** need `hdiutil attach`, which Cursor's sandbox denies; they run from the owner's terminal (`COLD=1 scripts/library-perf.sh`).
 
 ## Open points
 
