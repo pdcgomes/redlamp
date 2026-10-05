@@ -57,12 +57,14 @@ struct ProcessStabilityTests {
     /// Between them, every process's change shows: grain at 1:1 (2), a bitmap, and halation that
     /// skips large clipped areas (3), the Pixel's HueSatMap (4), ProRAW's gain table map with its
     /// embedded look and Sony's lens correction (5), Fujifilm's lens correction (6), and edge-aware
-    /// Highlights and Shadows (7), Dehaze (8) and Clarity (9) in all of them. The JPEG is the Nikon
-    /// sample developed by macOS, kept beside the references so it never changes.
+    /// Highlights and Shadows (7), Dehaze (8) and Clarity (9) in all of them. The bitmap is the
+    /// Nikon sample developed by macOS, kept beside the references so it never changes. It's a PNG
+    /// because JPEG decoders differ between Macs (a GitHub runner decoded the JPEG it replaced up to
+    /// 3 levels apart in 8% of its pixels), while a PNG decodes to the same pixels everywhere.
     static let fixtures: [URL] = {
         let raws = ["_DSC0009.ARW", "AFXT2720.RAF", "IMG_1361.DNG", "PXL_20201121_100251397.dng"]
         return EngineSmokeTests.fixtures.filter { raws.contains($0.lastPathComponent) }
-            + [folder.appending(path: "DSC_0750.jpg")]
+            + [folder.appending(path: "DSC_0750.png")]
     }()
 
     enum Edit: String, CaseIterable, Sendable {
