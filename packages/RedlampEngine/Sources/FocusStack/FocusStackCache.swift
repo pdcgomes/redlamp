@@ -52,9 +52,13 @@ struct PixelRect: Codable, Hashable, Sendable {
 /// Merges focus stacks and keeps the results in `root/<key>/`: the fused pixels (`fused.half`,
 /// float16 RGBA), `stack.json` (calibration, report, crop) and `depth.f32`. The key hashes the
 /// frames' paths, sizes and modification dates and the strategy, so changing any of them merges
-/// again; the cache can be deleted at any time.
+/// again; the cache can be deleted at any time. A merge is about 12 bytes a pixel (540 MB for
+/// 45 megapixels), so the cache keeps to `budget`, least recently used first.
 final class FocusStackCache: Sendable {
     static let formatVersion = 2
+    static let defaultBudget = 4 << 30
+    /// Older than this, a hidden staging folder belongs to a save that never finished.
+    static let leftoverAge: TimeInterval = 60 * 60
     /// Frames decoding ahead of the one being merged (each holds its raw data, about 2 bytes a pixel).
     static let decodesAhead = 3
 
@@ -64,13 +68,18 @@ final class FocusStackCache: Sendable {
     }
 
     let root: URL
+    let budget: Int
     let device: any MTLDevice
     let kernels: KernelLibrary
 
-    init(device: any MTLDevice, kernels: KernelLibrary, root: URL = FocusStackCache.defaultRoot) {
+    init(
+        device: any MTLDevice, kernels: KernelLibrary, root: URL = FocusStackCache.defaultRoot,
+        budget: Int = FocusStackCache.defaultBudget,
+    ) {
         self.device = device
         self.kernels = kernels
         self.root = root
+        self.budget = budget
     }
 
     /// Any supported file: a stack document through the cache, anything else from disk.
@@ -95,7 +104,7 @@ final class FocusStackCache: Sendable {
         let merged = try merged(frames, strategy: document.strategy, documentURL: url, progress: progress)
         guard !strokes.isEmpty else { return merged }
         let retouched = try retouch(merged, with: strokes, document: document, at: url)
-        try? save(retouched, to: folder)
+        try? save(retouched, to: folder, document: url)
         return retouched
     }
 
@@ -267,13 +276,70 @@ final class FocusStackCache: Sendable {
 
     // MARK: - Storage
 
-    func save(_ stack: MergedStack, to folder: URL) throws {
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        try stack.decoded.samples
-            .withUnsafeBytes { try Data($0).write(to: folder.appendingPathComponent("fused.half")) }
-        try stack.depth.withUnsafeBytes { try Data($0).write(to: folder.appendingPathComponent("depth.f32")) }
-        let metadata = StackMetadata(stack)
-        try JSONEncoder().encode(metadata).write(to: folder.appendingPathComponent("stack.json"), options: .atomic)
+    /// Writes `stack` to a hidden folder beside `folder` and renames it into place, so an
+    /// interrupted save leaves no half-written merge; then trims the cache. `document` marks a
+    /// retouched merge, whose earlier retouches are then of no use.
+    func save(_ stack: MergedStack, to folder: URL, document: URL? = nil) throws {
+        let fileManager = FileManager.default
+        try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
+        let staging = root.appendingPathComponent(
+            ".\(folder.lastPathComponent)-\(UUID().uuidString)",
+            isDirectory: true,
+        )
+        try fileManager.createDirectory(at: staging, withIntermediateDirectories: false)
+        do {
+            try stack.decoded.samples
+                .withUnsafeBytes { try Data($0).write(to: staging.appendingPathComponent("fused.half")) }
+            try stack.depth.withUnsafeBytes { try Data($0).write(to: staging.appendingPathComponent("depth.f32")) }
+            try JSONEncoder().encode(StackMetadata(stack)).write(to: staging.appendingPathComponent("stack.json"))
+            if let document {
+                try Data(document.standardizedFileURL.path.utf8).write(to: staging.appendingPathComponent("document"))
+            }
+            try? fileManager.removeItem(at: folder)
+            try fileManager.moveItem(at: staging, to: folder)
+        } catch {
+            try? fileManager.removeItem(at: staging)
+            throw error
+        }
+        Self.trim(root, budget: budget, keeping: folder, document: document)
+    }
+
+    /// Removes merges until `root` fits `budget`, least recently used first, never `kept`; also
+    /// `document`'s other retouched merges and staging an interrupted save left.
+    static func trim(_ root: URL, budget: Int, keeping kept: URL, document: URL? = nil, now: Date = Date()) {
+        let fileManager = FileManager.default
+        guard let items = try? fileManager.contentsOfDirectory(
+            at: root, includingPropertiesForKeys: [.contentModificationDateKey],
+        ) else { return }
+        let path = document?.standardizedFileURL.path
+        var entries: [(url: URL, size: Int, date: Date)] = []
+        for item in items where item.lastPathComponent != kept.lastPathComponent {
+            let date = (try? item.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+                ?? .distantPast
+            if item.lastPathComponent.hasPrefix(".") {
+                if now.timeIntervalSince(date) > leftoverAge {
+                    try? fileManager.removeItem(at: item)
+                }
+            } else if let path,
+                      let marked = try? Data(contentsOf: item.appendingPathComponent("document")),
+                      String(decoding: marked, as: UTF8.self) == path {
+                try? fileManager.removeItem(at: item)
+            } else {
+                entries.append((item, size(of: item), date))
+            }
+        }
+        var total = entries.reduce(size(of: kept)) { $0 + $1.size }
+        for entry in entries.sorted(by: { $0.date < $1.date }) where total > budget {
+            try? fileManager.removeItem(at: entry.url)
+            total -= entry.size
+        }
+    }
+
+    private static func size(of folder: URL) -> Int {
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: folder, includingPropertiesForKeys: [.fileSizeKey],
+        )) ?? []
+        return files.reduce(0) { $0 + ((try? $1.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0) }
     }
 
     func load(_ folder: URL, documentURL: URL) throws -> MergedStack {
@@ -287,6 +353,7 @@ final class FocusStackCache: Sendable {
         else {
             throw CocoaError(.fileReadCorruptFile)
         }
+        try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: folder.path)
         return MergedStack(
             decoded: metadata.decoded(samples: samples, url: documentURL), report: metadata.report, depth: depth,
             depthWidth: metadata.depthWidth, depthHeight: metadata.depthHeight, crop: metadata.crop,
