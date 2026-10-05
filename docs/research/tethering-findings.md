@@ -61,7 +61,7 @@ Measured from Capture One's list (5 October 2026) and each maker's published cam
 | --- | --- | --- |
 | 0. Any camera | The maker's own app writes into a folder Redlamp watches | Everything, including OM System (OM Capture), Panasonic (LUMIX Tether), Pentax and Ricoh (IMAGE Transmitter 2), Hasselblad (Phocus) and Phase One (Capture One) |
 | 1. Any PTP camera on USB | Frames downloaded as they are shot; the Mac's shutter and standard properties where the camera accepts them (to be measured per body: TET-05) | Through ImageCaptureCore, no maker licence |
-| 2. Full control | Exposure, autofocus, Live View, card copy, wireless | Canon (63 tethered in Capture One), Nikon (54), Sony (50), Fujifilm (21), then Leica (15) and Panasonic (3), each once DEC-29 settles how |
+| 2. Full control | Exposure, autofocus, Live View, card copy, wireless | Canon (63 tethered in Capture One), Nikon (54), Sony (50), Fujifilm (21), then Leica (15) and Panasonic (3); how each maker's extension may be published is a risk to verify before release (TET-19) |
 | Out of reach | | Phase One and Phase One Industrial (53): no macOS SDK, distribution needs Phase One's written consent. Older Mamiya and Leaf backs (7) |
 
 - Tier 2 for the four big makers plus Leica and Panasonic covers 206 of Capture One's 271 tethered models (76%).
@@ -76,7 +76,7 @@ Measured from Capture One's list (5 October 2026) and each maker's published cam
 1. **One Swift PTP stack, written from published specifications,** in a platform-neutral `RedlampCapture` package, over two transports:
    - ImageCaptureCore for USB (`requestSendPTPCommand`, `ptpEventHandler`, downloads), which works with macOS's camera service instead of fighting it and is what sandboxed apps use today;
    - PTP/IP over Network.framework for Wi-Fi and Ethernet, which needs the Local Network permission and `NSLocalNetworkUsageDescription`.
-2. **Each maker's extension implemented in that stack** only once counsel says how Redlamp may learn and publish it (DEC-29): maker documentation under a licence that allows an open implementation, explicit permission from the maker, or another route counsel accepts.
+2. **Each maker's extension implemented in that stack,** with how Redlamp learnt it recorded beside each driver. Whether it may be published is a risk to verify before tethering ships (TET-19), not a blocker, by the owner's decision of 5 October 2026. Counsel's options: maker documentation under a licence that allows an open implementation, explicit permission from the maker, or another route counsel accepts.
 3. **The hot folder for everything else.**
 
 **Decided (2026-10-05):** the owner chose no maker SDK, for now (DEC-29): only Redlamp's own code, on Apple's frameworks (ImageCaptureCore, Network.framework) and open protocols (PTP, PTP/IP), plus the hot folder. Makers' protocol documentation (Sony's Camera Remote Command, Canon's CCAPI) is not an SDK, but using it waits on DEC-29's counsel question. Makers' binary SDKs, which this study had kept as a fallback in separate XPC helpers, are a recorded skip (SKIP-16), so no warranty notice is needed (DEC-31, rejected).
@@ -104,8 +104,7 @@ Still to measure on the camera:
   - A PTP simulator and recorded sessions are needed, since CI has no camera.
   - Two code changes surface early. The folder watcher holds files under 2 s old as settling, so capture sessions must announce frames themselves. The decoder needs a bytes entry point on the app side; the service already takes bytes.
 - **Legal.**
-  - How to implement makers' extensions in open source (DEC-29, counsel).
-  - Whether the project needs a legal entity for makers' programmes (DEC-30).
+  - How to implement makers' extensions in open source (DEC-29, counsel), and whether the project needs a legal entity for makers' programmes (DEC-30): a risk to verify before tethering ships (TET-19), not a blocker.
   - No warranty notice: it was required only by Sony's and Fujifilm's SDKs, which Redlamp won't use (DEC-31, rejected).
   - Capture One's patent-pending wireless design (DEC-34).
 - **Distribution.** The recommended route works in the sandboxed Mac App Store build, with `com.apple.security.device.usb`, network client access and the Local Network prompt. Whether Apple's Photos Library entitlement is also needed is untested. Makers' SDKs over USB probably don't work in the sandbox (`ptpcamerad`; the developers' workarounds need what the sandbox forbids).
@@ -123,12 +122,12 @@ Sizes are this study's estimates (S ≤ 1 engineer-week, M 1 to 3, L 3 to 6), be
 | Stage | Rows | What it delivers | Size |
 | --- | --- | --- | --- |
 | 1. Sessions and standard tethering | TET-01, TET-02, TET-03, TET-04, TET-05, TET-12, TET-15, TET-18 | Capture sessions with next-capture settings, a hot folder for any camera, frames downloaded from any PTP camera on USB, safe ingest and recovery, tether reports and support tiers, setup guides | about 14 ew |
-| 2. Full control of the big four | TET-06 to TET-09, TET-11 | Settings, autofocus and Live View for Sony, Canon, Nikon and Fujifilm, wired | about 22 ew, after DEC-29 |
+| 2. Full control of the big four | TET-06 to TET-09, TET-11 | Settings, autofocus and Live View for Sony, Canon, Nikon and Fujifilm, wired | about 22 ew |
 | 3. Wireless and beyond | TET-10, TET-13, TET-14, TET-16, TET-17 | Leica and Panasonic, Wi-Fi and Ethernet, focus brackets into stacks, client views, iPad | about 14 ew |
 
 ## 7. Risks
 
-- **Licences block Stage 2.** If no maker lets Redlamp publish its extension, full control stays limited to makers that do, since Redlamp uses no maker SDK (DEC-29); the others get standard PTP and the hot folder. Mitigation: ask the makers early; Stage 1 doesn't depend on it.
+- **Licences (TET-19, to verify before tethering ships).** The owner unblocked Stage 2 on 5 October 2026 and made this a risk to check before release. If counsel finds Redlamp may not publish a maker's extension and the maker doesn't give permission, that maker's driver comes out before release, work already done on it included, and full control stays limited to makers that allow it, since Redlamp uses no maker SDK (DEC-29); the others get standard PTP and the hot folder. Mitigation: ask the makers early; Stage 1 doesn't depend on it.
 - **ImageCaptureCore falls short for a maker.** Live View or the maker's handshake may not pass through cleanly. Cascable's App Store app suggests it does for Canon, Nikon and Sony over USB, but that is our inference, not Cascable's statement. The probe and Stage 1 find out before Stage 2 starts.
 - **Upkeep.** Firmware and macOS updates have broken tethering for Lightroom (macOS 10.15.2, 14.2.0) and Capture One alike. Mitigation: recorded sessions in CI, a hardware check before releases, and reports from photographers.
 - **Maker churn.** Sony warns that some commands "may become unusable on some models from 2027".
@@ -139,8 +138,8 @@ Sizes are this study's estimates (S ≤ 1 engineer-week, M 1 to 3, L 3 to 6), be
 
 All are tracker rows:
 
-- **DEC-29** *(counsel)*: accepted on 5 October 2026 as no maker SDK: Apple's frameworks, open protocols and the hot folder. Still open for counsel: how Redlamp may implement each maker's PTP extension in open source, and whether to approach the makers.
-- **DEC-30**: a legal entity for makers' developer programmes.
+- **DEC-29** *(counsel)*: accepted on 5 October 2026 as no maker SDK: Apple's frameworks, open protocols and the hot folder. Still open for counsel, as a risk to verify before tethering ships rather than a blocker (TET-19): how Redlamp may implement each maker's PTP extension in open source, and whether to approach the makers.
+- **DEC-30**: a legal entity for makers' developer programmes; deferred on 5 October 2026 with DEC-29's licensing question.
 - **DEC-31**: rejected on 5 October 2026; no maker SDK ships, so there is no warranty notice to show.
 - **DEC-32**: where tethering sits on the roadmap, and test cameras.
 - **DEC-33**: capture sessions writing new files into the chosen folder.
