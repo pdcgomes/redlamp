@@ -405,6 +405,8 @@
             let names = try app.photoNames().filter { raws.contains(($0 as NSString).pathExtension.lowercased()) }
             let name = names[min(2, names.count - 1)]
             try app.open(name)
+            try app.main { $0.expandedPanels.insert(.basic) }
+            app.pause(0.3)
             try app.click(.sliderValue(.exposure))
             try app.wait("the value field to take typing") { _ in Views.editorWindow?.firstResponder is NSTextView }
             try app.type("0.77")

@@ -135,8 +135,8 @@
             let growth = end - startFootprint
             let after = settled.map { (end - $0.footprint) / Double(max(steps - $0.steps, 1)) } ?? 0
             app.recorder.write("note", ["soakSteps": steps, "footprintGrowthMB": growth, "growthPerStepMB": after])
-            // After the caches fill, a session grows by about 1.8 MB a step today (ARC-08's finding of
-            // 5 October 2026, for the owner); 3 MB or more is a regression.
+            // After the caches fill, a Debug build grows by about 1.8 MB a step and the optimised one
+            // by under 0.1 MB (5 October 2026); 3 MB or more is a regression.
             try app.expect(
                 after < 3,
                 String(

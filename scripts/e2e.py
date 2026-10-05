@@ -42,6 +42,8 @@ GROUPS = ["main", "relaunch"]
 SCENARIO_TIMEOUT = 300
 QUIET_LOAD = 8.0
 HOME = Path.home()
+# Whether another Redlamp (the owner's, or another session's) ran while the suite did.
+OTHER_REDLAMP_SEEN = False
 
 
 def log(message: str) -> None:
@@ -313,8 +315,11 @@ def launch(app: Path, run_dir: Path, group: str, scenarios: list[str], args) -> 
     deadline = started + 120
     current = None
     timed_out = None
+    global OTHER_REDLAMP_SEEN
     while process.poll() is None:
         time.sleep(0.5)
+        if not OTHER_REDLAMP_SEEN and owner_app_running():
+            OTHER_REDLAMP_SEEN = True
         events = read_events(events_path)[already:]
         for event in events:
             # Any event is progress; a walk gets its own length on top.
@@ -773,12 +778,12 @@ def main() -> int:
     changed = sorted(k for k in set(owner_before) | set(owner_after) if owner_before.get(k) != owner_after.get(k))
     if not changed:
         state_summary = "The owner's Redlamp files, caches and preferences are as they were before the run."
-    elif owner_running or owner_app_running():
-        state_summary = (f"{len(changed)} of the owner's Redlamp files or preferences changed, but the owner's own Redlamp "
-                         "was running, so the change may be its own: " + ", ".join(changed[:5]))
+    elif owner_running or OTHER_REDLAMP_SEEN or owner_app_running():
+        state_summary = (f"{len(changed)} of the owner's Redlamp files or preferences changed, but another Redlamp "
+                         "ran during the run, so the change may be its own: " + ", ".join(changed[:5]))
     else:
         state_summary = f"The run changed {len(changed)} of the owner's Redlamp files or preferences: " + ", ".join(changed[:10])
-    isolation_failed = bool(changed) and not (owner_running or owner_app_running())
+    isolation_failed = bool(changed) and not (owner_running or OTHER_REDLAMP_SEEN or owner_app_running())
 
     cover = coverage(run_dir, catalogue, {s["id"] for s in chosen})
     coverage_required = tier in ("full", "release") and not args.scenario
