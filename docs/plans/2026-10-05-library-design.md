@@ -206,7 +206,7 @@ Sorting is separate from the query: captured (the default), name, rating, edited
 ## The store (LIB-09)
 
 - **Keyed by content key**, in 256 shard files by the key's first byte, each an append-only pack with its own index (the `ThumbnailPacks` format, version 2, with 16-byte keys instead of names).
-- **Two tiers:** grid thumbnails (384 px on the long edge, HEIC or JPEG, about 15 KB), kept for every indexed photo; previews at screen size (2048 px, about 200 KB), kept for recent, rated and picked photos within a budget (10 GB by default). Edited thumbnails and previews are keyed by the content key and the edit's digest (LIB-17).
+- **Two tiers:** grid thumbnails (384 px on the long edge, JPEG at quality 0.5, about 22 KB), kept for every indexed photo; previews at screen size (2048 px, JPEG at 0.6, about 560 KB), kept for recent, rated and picked photos within a budget (10 GB by default, about 18,000 previews). Edited thumbnails and previews are keyed by the content key and the edit's digest (LIB-17).
 - **Budgets and location:** Settings shows the store's size and where it is; it can move to another disk; the grid tier is never evicted while its photo is indexed unless the user lowers the budget.
 - **Memory:** decoded thumbnails in an LRU (the filmstrip's 128 MB budget), from pack JPEGs held in ImageIO's purgeable memory, as today.
 
@@ -315,6 +315,32 @@ On the 20,000-photo fixture (`redlamp library bench … --scenario search`), all
 
 - **The first 256 KiB are enough** for ARW, CR2, DNG, ORF, PEF, RW2, 3FR and the Z 8's NEF, passed to ImageIO padded with zeros to the file's length (ImageIO reports a raw's size only when the data looks as long as the file). CR3, RAF, the Z 6's NEF, FFF, IIQ and SRW need ImageIO to read the file itself, which touches 16 to 740 KB of it.
 - **Reads a second:** 46 to 277 on one core, depending on the format, and 432 to 2,429 across all cores; content keys at 35,000 a second on one core. At a thousand photos a second, a million take about 17 minutes on an SSD, metadata only; searching works over what's indexed so far.
+
+### The store (LIB-09)
+
+`StoreImageEncoderTests` with `REDLAMP_STORE_CODEC_BENCH=1` on the CC0 raws' previews, and `PhotoStoreBenchTests` with `REDLAMP_STORE_BENCH=1`, warm, with the store on the SSD, each measured at least twice:
+
+| Mean size | 0.4 | 0.5 | 0.6 | 0.75 |
+| --- | --- | --- | --- | --- |
+| Grid thumbnail, JPEG | 16.5 KB | 21.7 KB | 27.5 KB | 38.0 KB |
+| Preview, JPEG | 333 KB | 438 KB | 561 KB | 796 KB |
+
+| | 100,000 thumbnails of 38 KB | 1,000,000 records of 1 KB |
+| --- | --- | --- |
+| Writing, 16 writers | 14,000 to 15,800 a second | 136,000 to 141,000 a second |
+| Random reads, one at a time | 115,000 to 120,000 a second, p99 11 to 13 µs | 383,000 to 451,000 a second, p99 4.2 to 4.7 µs |
+| Random reads, 16 readers | about 400,000 a second | 3.7 to 6.7 million a second |
+| Tables in memory | 34.8 bytes a record | 33.6 bytes a record |
+| On disk | 3.9 GB of packs | 1.09 GB of packs and 32 MB of index files, reopened in 55 to 170 ms |
+
+On the 20,000-photo fixture (`redlamp library bench … --scenario store --photos 20000`), 28,000 writes and 123,000 reads a second, p99 12 µs.
+
+What it changed:
+
+- **JPEG, not HEIC.** A grid thumbnail decodes in 0.8 ms to HEIC's 5, and 16 threads decode 10,000 to 12,000 a second to HEIC's 650; a preview, in 16 ms to HEIC's 43 to 58, which held arrow keys at the key-repeat rate couldn't wait for. HEIC is a third smaller at the same quality.
+- **Quality 0.5 for the grid and 0.6 for previews,** the owner's choice from crops of the busiest parts of the previews: a thumbnail looks as it does at 0.75, and a preview keeps the texture 0.4 and 0.5 soften. The grid tier for a million photos takes about 22 GB.
+- **Decoding as a thumbnail.** ImageIO decodes whole images (`CGImageSourceCreateImageAtIndex`) one at a time across the process, about 1,800 a second, which today's `ThumbnailPacks.decode` does; asking for a thumbnail no larger than the image decodes on every thread at once, so the grid (LIB-14) decodes as `StoreImageEncoder.decode` does.
+- **For the app:** 256 shard files open at once need a higher file-descriptor limit; the store is closed at quit so its index files are written; the thumbnail maker should take LibRaw's embedded previews, since ImageIO takes about 200 ms a raw to make one.
 
 ### The harness (LIB-03)
 

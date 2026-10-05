@@ -8,7 +8,8 @@ import Testing
 
 /// The store's images are each tier's size, upright, in JPEG or HEIC. With
 /// `REDLAMP_STORE_CODEC_BENCH=1` (from `TEST_RUNNER_REDLAMP_STORE_CODEC_BENCH=1`), both codecs are
-/// measured on the CC0 raws' previews.
+/// measured on the CC0 raws' previews, at each tier's default quality or at each of
+/// `REDLAMP_STORE_CODEC_QUALITIES` (comma-separated, 0 to 1).
 struct StoreImageEncoderTests {
     /// A dark `width` by `height` image with a white quarter-size block in its top left corner.
     static func marked(_ width: Int, _ height: Int) -> CGImage {
@@ -72,6 +73,19 @@ struct StoreImageEncoderTests {
         }
     }
 
+    @Test func `each tier has its own quality unless one is given`() throws {
+        #expect(StoreImageEncoder.defaultQuality(for: .grid) == 0.5)
+        #expect(StoreImageEncoder.defaultQuality(for: .preview) == 0.6)
+        let image = Self.marked(3000, 2000)
+        for tier in PhotoStore.Tier.allCases {
+            let byDefault = try #require(StoreImageEncoder().encode(image, for: tier))
+            let given = StoreImageEncoder(quality: StoreImageEncoder.defaultQuality(for: tier))
+            let other = StoreImageEncoder(quality: 0.9)
+            #expect(byDefault == given.encode(image, for: tier), "\(tier)")
+            #expect(byDefault != other.encode(image, for: tier), "\(tier)")
+        }
+    }
+
     // MARK: - Measuring the codecs
 
     private struct Measurement {
@@ -96,6 +110,9 @@ struct StoreImageEncoderTests {
     func `JPEG and HEIC at both tiers, on the CC0 raws' previews`() throws {
         let raws = PhotoMetadataReaderTests.raws
         try #require(!raws.isEmpty)
+        let qualities: [Double?] = ProcessInfo.processInfo.environment["REDLAMP_STORE_CODEC_QUALITIES"]
+            .map { $0.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) } }
+            ?? [nil]
         for tier in PhotoStore.Tier.allCases {
             var sources: [CGImage] = []
             var thumbnails: [Double] = []
@@ -114,43 +131,53 @@ struct StoreImageEncoderTests {
                 "\(tier)", sources.count, Self.median(thumbnails), thumbnails.max() ?? 0,
             ))
             for codec in StoreImageEncoder.Codec.allCases {
-                let encoder = StoreImageEncoder(codec: codec)
-                var measured = Measurement()
-                var payloads: [Data] = []
-                for source in sources {
-                    var data: Data?
-                    measured.encode.append(Self.median((0 ..< 3).map { _ in
-                        Self.milliseconds { data = encoder.encode(source, for: tier) }
-                    }))
-                    let payload = try #require(data)
-                    payloads.append(payload)
-                    measured.bytes.append(payload.count)
-                    measured.decode.append(Self.median((0 ..< 5).map { _ in
-                        Self.milliseconds { _ = StoreImageEncoder.decode(payload) }
-                    }))
+                for quality in qualities {
+                    try measure(
+                        StoreImageEncoder(codec: codec, quality: quality), tier: tier, sources: sources,
+                        label: quality.map { "\(codec.rawValue) at \($0)" } ?? codec.rawValue,
+                    )
                 }
-                let decodes = Atomic(0)
-                let rounds = tier == .grid ? 40 : 4
-                let encoded = payloads
-                let parallel = Self.milliseconds {
-                    DispatchQueue.concurrentPerform(iterations: CoreCounts.performance) { worker in
-                        for round in 0 ..< rounds {
-                            _ = StoreImageEncoder.decode(encoded[(worker + round) % encoded.count])
-                            decodes.add(1, ordering: .relaxed)
-                        }
-                    }
-                }
-                let bytes = measured.bytes.sorted()
-                print(String(
-                    format: "STORE-CODEC %@ %@: encode median %.2f ms (max %.2f), decode median %.2f ms (max %.2f), "
-                        + "%.0f decodes/s on %ld cores, size median %.1f KB (mean %.1f, max %.1f)",
-                    "\(tier)", codec.rawValue, Self.median(measured.encode), measured.encode.max() ?? 0,
-                    Self.median(measured.decode), measured.decode.max() ?? 0,
-                    Double(decodes.load(ordering: .relaxed)) / (parallel / 1000), CoreCounts.performance,
-                    Double(bytes[bytes.count / 2]) / 1024,
-                    Double(bytes.reduce(0, +)) / Double(bytes.count) / 1024, Double(bytes.last ?? 0) / 1024,
-                ))
             }
         }
+    }
+
+    private func measure(
+        _ encoder: StoreImageEncoder, tier: PhotoStore.Tier, sources: [CGImage], label: String,
+    ) throws {
+        var measured = Measurement()
+        var payloads: [Data] = []
+        for source in sources {
+            var data: Data?
+            measured.encode.append(Self.median((0 ..< 3).map { _ in
+                Self.milliseconds { data = encoder.encode(source, for: tier) }
+            }))
+            let payload = try #require(data)
+            payloads.append(payload)
+            measured.bytes.append(payload.count)
+            measured.decode.append(Self.median((0 ..< 5).map { _ in
+                Self.milliseconds { _ = StoreImageEncoder.decode(payload) }
+            }))
+        }
+        let decodes = Atomic(0)
+        let rounds = tier == .grid ? 40 : 4
+        let encoded = payloads
+        let parallel = Self.milliseconds {
+            DispatchQueue.concurrentPerform(iterations: CoreCounts.performance) { worker in
+                for round in 0 ..< rounds {
+                    _ = StoreImageEncoder.decode(encoded[(worker + round) % encoded.count])
+                    decodes.add(1, ordering: .relaxed)
+                }
+            }
+        }
+        let bytes = measured.bytes.sorted()
+        print(String(
+            format: "STORE-CODEC %@ %@: encode median %.2f ms (max %.2f), decode median %.2f ms (max %.2f), "
+                + "%.0f decodes/s on %ld cores, size median %.1f KB (mean %.1f, max %.1f)",
+            "\(tier)", label, Self.median(measured.encode), measured.encode.max() ?? 0,
+            Self.median(measured.decode), measured.decode.max() ?? 0,
+            Double(decodes.load(ordering: .relaxed)) / (parallel / 1000), CoreCounts.performance,
+            Double(bytes[bytes.count / 2]) / 1024,
+            Double(bytes.reduce(0, +)) / Double(bytes.count) / 1024, Double(bytes.last ?? 0) / 1024,
+        ))
     }
 }

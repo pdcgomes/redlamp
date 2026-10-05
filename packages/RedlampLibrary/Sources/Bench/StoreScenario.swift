@@ -23,7 +23,7 @@ public extension BenchScenarios {
 public struct StoreScenario: BenchScenario {
     public static let defaultPhotos = 100_000
     /// A JPEG grid thumbnail's mean size, on the CC0 raws' previews.
-    public static let defaultPayloadBytes = 38 * 1024
+    public static let defaultPayloadBytes = 22 * 1024
     /// Reads timed one at a time, at most.
     static let reads = 100_000
 
