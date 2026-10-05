@@ -5,9 +5,11 @@ extension LibraryIndex {
     typealias Migration = @Sendable (SQLiteDatabase) throws -> Void
 
     /// The schema's steps in order: the first makes version 1 from an empty database.
-    static let migrations: [Migration] = [
-        { try $0.execute(schemaVersion1) },
-    ]
+    static let migrations: [Migration] = [createVersion1]
+
+    static func createVersion1(_ database: SQLiteDatabase) throws {
+        try database.execute(schemaVersion1)
+    }
 
     /// Brings `database` up to the last version `migrations` knows, one step per transaction.
     static func migrate(_ database: SQLiteDatabase, with migrations: [Migration]) throws {

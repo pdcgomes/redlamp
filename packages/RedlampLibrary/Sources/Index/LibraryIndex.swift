@@ -28,6 +28,7 @@ public final class LibraryIndex: Sendable {
 
     /// Opens the index, blocking: only ever off the main thread.
     init(url: URL, readers: Int, migrations: [Migration]) throws {
+        dispatchPrecondition(condition: .notOnQueue(.main))
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let database = try SQLiteDatabase(path: url.path)
         try Self.configure(database, writing: true)
@@ -104,6 +105,7 @@ public final class LibraryIndex: Sendable {
 
     /// `close`, blocking: only ever off the main thread.
     func closeAndWait() {
+        dispatchPrecondition(condition: .notOnQueue(.main))
         for reader in readers {
             reader.closeAndWait()
         }
@@ -113,7 +115,8 @@ public final class LibraryIndex: Sendable {
     /// Runs `body` on the write connection outside any transaction, blocking: only ever off the
     /// main thread.
     func onWriterAndWait<T>(_ body: (SQLiteDatabase) throws -> T) throws -> T {
-        try writer.runAndWait(body)
+        dispatchPrecondition(condition: .notOnQueue(.main))
+        return try writer.runAndWait(body)
     }
 
     /// Runs `body` on a global queue: opening, checking and restoring the index read the disk.
