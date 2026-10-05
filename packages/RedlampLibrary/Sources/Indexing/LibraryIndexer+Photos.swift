@@ -13,6 +13,7 @@ extension LibraryIndexer.Run {
         let first = indexer.prioritised.contains(job.folder)
         let priority: VolumeIO.Priority = first ? .high : .normal
         let lane: WorkScheduler.Lane = first ? .onScreen : .background
+        guard let job = await placed(job) else { return }
         switch job.kind {
         case .new:
             if let move = try await move(job, on: volume, priority: priority, lane: lane) {
@@ -28,17 +29,17 @@ extension LibraryIndexer.Run {
             await batcher.add([.photo(photo)])
         case .sidecar:
             guard var record = job.existing,
-                  let summary = try await sidecar(of: job, on: volume, priority: priority, lane: lane)
+                  let sidecar = try await sidecar(of: job, on: volume, priority: priority, lane: lane)
             else {
                 let photo = try await read(job, on: volume, priority: priority, lane: lane)
                 count(photo, in: job.folder)
                 return await batcher.add([.photo(photo)])
             }
-            record.rating = summary.metadata.rating
-            record.flag = summary.metadata.flag
-            record.label = summary.metadata.label
-            record.edited = summary.hasEdits
-            record.sidecarModified = job.sidecar?.modified
+            record.rating = sidecar.summary.metadata.rating
+            record.flag = sidecar.summary.metadata.flag
+            record.label = sidecar.summary.metadata.label
+            record.edited = sidecar.summary.hasEdits
+            record.sidecarModified = sidecar.modified
             record.state = []
             record.fileID = job.entry.fileIdentifier
             let photo = LibraryIndexer.PendingPhoto(folder: job.folder, record: record, isNew: false)
@@ -94,16 +95,16 @@ extension LibraryIndexer.Run {
             }
             parsed.metadata = try await indexer.scheduler.run(lane) { PhotoMetadataReader.read(url: url) }
         }
-        var summary: SidecarSummary?
-        if job.sidecar != nil {
-            summary = try await sidecar(of: job, on: volume, priority: priority, lane: lane)
-        }
+        let sidecar = try await sidecar(of: job, on: volume, priority: priority, lane: lane)
         var record = Self.record(
-            job, key: parsed.key, metadata: parsed.metadata, sidecar: summary, xmp: parsed.xmp,
+            job, key: parsed.key, metadata: parsed.metadata, sidecar: sidecar?.summary, xmp: parsed.xmp,
         )
+        if let sidecar {
+            record.sidecarModified = sidecar.modified
+        }
         record.marked = job.existing?.marked ?? false
         let metadata = parsed.metadata
-        let keywords = Self.organising(metadata, sidecar: summary, xmp: parsed.xmp).keywords
+        let keywords = Self.organising(metadata, sidecar: sidecar?.summary, xmp: parsed.xmp).keywords
         return LibraryIndexer.PendingPhoto(
             folder: job.folder, record: record,
             camera: metadata?.cameraName.map {
@@ -118,19 +119,78 @@ extension LibraryIndexer.Run {
         )
     }
 
-    /// The organising fields of the photo's `.redlamp` sidecar; nil when it can't be read.
+    /// What the photo's `.redlamp` sidecar says and when it was saved, read where the root's locator
+    /// finds it: beside the photo, as the listing found it, or on this Mac. Nil when there's none or
+    /// it can't be read.
     func sidecar(
         of job: LibraryIndexer.PhotoJob, on volume: LibraryIndexer.VolumeWork, priority: VolumeIO.Priority,
         lane: WorkScheduler.Lane,
-    ) async throws -> SidecarSummary? {
-        guard let entry = job.sidecar else { return nil }
+    ) async throws -> ReadSidecar? {
         let photo = URL(fileURLWithPath: job.folder + "/" + job.entry.name, isDirectory: false)
-        let package = URL(fileURLWithPath: job.folder + "/" + entry.name, isDirectory: entry.isDirectory)
-        let edit = entry.isDirectory ? package.appending(path: SidecarStore.editFile) : package
-        _ = try await Self.ignoringMissing {
-            try await volume.io.read(edit, range: 0 ..< Self.chargedFileRead, priority: priority)
+        let locator = await sidecarLocator()
+        let mac = locator.onThisMac(photo)
+        guard job.sidecar != nil || mac != nil else { return nil }
+        if let entry = job.sidecar {
+            let package = URL(fileURLWithPath: job.folder + "/" + entry.name, isDirectory: entry.isDirectory)
+            let edit = entry.isDirectory ? package.appending(path: SidecarStore.editFile) : package
+            _ = try await Self.ignoringMissing {
+                try await volume.io.read(edit, range: 0 ..< Self.chargedFileRead, priority: priority)
+            }
         }
-        return try await indexer.scheduler.run(lane) { SidecarStore().summary(for: photo) }
+        let beside = job.sidecar?.modified
+        return try await indexer.scheduler.run(lane) {
+            let saved = mac.flatMap(Self.modified)
+            let read: (url: URL, modified: Date?)
+            if let mac, let saved {
+                let url = beside == nil ? mac : locator.readURL(for: photo)
+                read = url == mac ? (mac, saved) : (url, beside)
+            } else if beside != nil {
+                read = (SidecarLocator.besidePhoto(photo), beside)
+            } else {
+                return nil
+            }
+            return SidecarStore.summary(atSidecar: read.url).map { ReadSidecar(summary: $0, modified: read.modified) }
+        }
+    }
+
+    /// A photo's sidecar as read: what it says, and when it was saved.
+    struct ReadSidecar: Sendable {
+        let summary: SidecarSummary
+        let modified: Date?
+    }
+
+    /// The locator this run reads sidecars through.
+    func sidecarLocator() async -> SidecarLocator {
+        await IndexerSidecars.locator(for: self, index: indexer.index)
+    }
+
+    /// The job as comparing the folder's listing with its rows would have made it had the listing
+    /// held the photo's sidecar on this Mac: a photo whose sidecar is missing from beside it only
+    /// because it's on this Mac isn't read again. Nil when that leaves nothing to do.
+    private func placed(_ job: LibraryIndexer.PhotoJob) async -> LibraryIndexer.PhotoJob? {
+        guard job.kind == .changed, job.sidecar == nil, let row = job.existing, let recorded = row.sidecarModified,
+              row.size == job.entry.size, Self.same(row.modified, job.entry.modified), row.indexed != 0,
+              Self.same(row.xmpModified, job.xmp?.modified)
+        else { return job }
+        let photo = URL(fileURLWithPath: job.folder + "/" + job.entry.name, isDirectory: false)
+        guard let mac = await sidecarLocator().onThisMac(photo), let saved = Self.modified(mac) else { return job }
+        let kind: LibraryIndexer.PhotoJob.Kind
+        if !Self.same(recorded, saved) {
+            kind = .sidecar
+        } else if !row.state.isEmpty || row.fileID != job.entry.fileIdentifier {
+            kind = .refresh
+        } else {
+            return nil
+        }
+        return LibraryIndexer.PhotoJob(
+            kind: kind, folder: job.folder, entry: job.entry, existing: row, sidecar: nil, xmp: job.xmp,
+        )
+    }
+
+    /// When the sidecar at `url` on this Mac was last saved; nil when there's none.
+    static func modified(_ url: URL) -> Date? {
+        try? URL(fileURLWithPath: url.path).resourceValues(forKeys: [.contentModificationDateKey])
+            .contentModificationDate
     }
 
     struct ParsedHead: Sendable {
