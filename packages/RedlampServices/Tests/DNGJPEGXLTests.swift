@@ -32,7 +32,8 @@ struct DNGJPEGXLTests {
 
     @Test func `names JPEG XL mosaics as unsupported`() throws {
         let url = try Self.writeDNG(photometric: 32803)
-        #expect(throws: EngineError.self) { try DNGJPEGXL.decode(url, rawSize: Self.rawSize) }
+        let error = #expect(throws: EngineError.self) { try DNGJPEGXL.decode(url, rawSize: Self.rawSize) }
+        #expect(error?.notSupportedYetTracker == "CAM-10")
     }
 
     @Test func `ignores DNGs that aren't JPEG XL`() throws {

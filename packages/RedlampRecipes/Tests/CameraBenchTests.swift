@@ -202,11 +202,24 @@ struct CameraBenchTests {
         ).verdict == .fail)
     }
 
-    @Test func `a refused High Efficiency NEF names its tracker row`() {
-        let identity = RawFileIdentity(make: "Nikon", model: "Z 8", format: "NEF", refusal: "Unsupported file format")
-        let check = CameraBenchChecks.refused(identity, error: EngineError.unsupportedFile("DSC_0001.NEF"))
+    @Test(arguments: ["Z 8", "Z5_2", "Z50_2"])
+    func `a refused High Efficiency NEF names its tracker row`(model: String) {
+        let identity = RawFileIdentity(make: "Nikon", model: model, format: "NEF")
+        let error = EngineError.notSupportedYet("Nikon's High Efficiency raw files (HE and HE*)", tracker: "CAM-12")
+        let check = CameraBenchChecks.refused(identity, error: error)
         #expect(check.verdict == .fail)
         #expect(check.tracker == "CAM-12")
+    }
+
+    @Test func `a refused JPEG XL mosaic DNG names its tracker row`() {
+        let identity = RawFileIdentity(make: "Samsung", model: "Galaxy S25 Ultra", format: "DNG")
+        let error = EngineError.notSupportedYet("JPEG XL-compressed mosaic DNGs", tracker: "CAM-10")
+        #expect(CameraBenchChecks.refused(identity, error: error).tracker == "CAM-10")
+    }
+
+    @Test func `a Nikon that won't open for another reason names no tracker row`() {
+        let identity = RawFileIdentity(make: "Nikon", model: "Z 8", format: "NEF", refusal: "Unsupported file format")
+        #expect(CameraBenchChecks.refused(identity, error: EngineError.unsupportedFile("DSC_0001.NEF")).tracker == nil)
     }
 
     // MARK: - Modes and choosing photos

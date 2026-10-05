@@ -70,7 +70,7 @@ enum DNGJPEGXL {
 
         let photometric = values(tags, Tag.photometric).first
         if photometric == Photometric.colorFilterArray {
-            throw EngineError.decodeFailed("JPEG XL-compressed mosaic DNGs aren't supported yet")
+            throw EngineError.notSupportedYet("JPEG XL-compressed mosaic DNGs", tracker: "CAM-10")
         }
         guard photometric == Photometric.linearRaw, values(tags, Tag.samplesPerPixel).first == 3 else {
             throw EngineError.decodeFailed("unsupported JPEG XL DNG layout")

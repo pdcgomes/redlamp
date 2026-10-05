@@ -48,7 +48,10 @@ struct CameraBenchReportTests {
         let refused = CameraBenchPhoto(
             fileHash: String(repeating: "cd", count: 32), mode: CameraMode(identity: refusedIdentity),
             identity: refusedIdentity, measurements: nil, asShotTemperature: nil,
-            checks: [CameraBenchChecks.refused(refusedIdentity, error: EngineError.unsupportedFile("DSC_0001.NEF"))],
+            checks: [CameraBenchChecks.refused(
+                refusedIdentity,
+                error: EngineError.notSupportedYet("Nikon's High Efficiency raw files (HE and HE*)", tracker: "CAM-12"),
+            )],
             conditions: [], decodeSeconds: nil, renderSeconds: nil,
         )
         return CameraBenchReport(

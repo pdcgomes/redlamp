@@ -21,7 +21,15 @@ extension RawDecoder {
         guard let raw = libraw_init(0) else { return nil }
         defer { libraw_close(raw) }
         let status = url.withUnsafeFileSystemRepresentation { libraw_open_file(raw, $0) }
-        guard status != 0 else { return identity(raw, url: url) }
+        guard status != 0 else {
+            var identity = identity(raw, url: url)
+            // LibRaw names another decoder for the HE data of bodies it doesn't check; a camera
+            // mode must keep that data apart from the same body's lossless files.
+            if NikonHighEfficiency.isHighEfficiency(raw, data: nil, url: url) {
+                identity.decoder = NikonHighEfficiency.libRawDecoder
+            }
+            return identity
+        }
         var stated = exifIdentity(url) ?? RawFileIdentity(format: url.pathExtension.uppercased())
         stated.refusal = String(cString: libraw_strerror(status))
         return stated

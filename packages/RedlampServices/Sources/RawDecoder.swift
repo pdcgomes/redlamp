@@ -180,7 +180,8 @@ enum RawDecoder {
     // MARK: - Helpers
 
     /// Unpacks the sensor data into LibRaw, or returns the JPEG XL raw image LibRaw can't read.
-    /// A failed unpack clears everything LibRaw read, so JPEG XL is caught before unpacking.
+    /// A failed unpack clears everything LibRaw read, so JPEG XL is caught before unpacking, and
+    /// Nikon's High Efficiency data before LibRaw decodes it into noise.
     private static func unpack(
         _ raw: UnsafeMutablePointer<libraw_data_t>,
         url: URL,
@@ -191,6 +192,9 @@ enum RawDecoder {
            let image = try data.map({ try DNGJPEGXL.decode($0, rawSize: rawSize) })
            ?? DNGJPEGXL.decode(url, rawSize: rawSize) {
             return image
+        }
+        if NikonHighEfficiency.libRawCantDecode(raw, data: data, url: url) {
+            throw NikonHighEfficiency.refusal
         }
         try check(libraw_unpack(raw), url: url)
         return nil

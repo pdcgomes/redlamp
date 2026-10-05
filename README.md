@@ -234,7 +234,7 @@ With both side panels in AppKit, most of what remains is Core Animation committi
 - Local Whites and Blacks are approximated with tonal-region gains.
 - The app is not sandboxed yet (required later for the Mac App Store), but photos decode in a sandboxed service with no file access (`RedlampDecoder.xpc`, sent each file's bytes), so a damaged file can't crash the editor. Focus-stack frames and filmstrip thumbnails still decode in the app. iPad and iPhone come in Phase 5.
 - Sidecars are read and written under file coordination, so iCloud Drive syncs them safely and conflicting copies merge (the newest edit wins, the others become snapshots). A photo that is open doesn't reload yet when another Mac changes its edit.
-- Nikon's High Efficiency NEFs (HE and HE\*, from the Z 8, Z 9, Z 6III and Z f) don't open: LibRaw 0.22 can't read them (CAM-12). Bodies LibRaw 0.22.2 doesn't list need a LibRaw update: the Sony A7 V doesn't open, and the A1 II opens with a black strip along the bottom (CAM-13).
+- Nikon's High Efficiency NEFs (HE and HE\*, from the Z 8, Z 9, Z 6III, Z f, Z5 II and Z50 II) don't open yet: LibRaw 0.22 can't read them (CAM-12). Bodies LibRaw 0.22.2 doesn't list need a LibRaw update: the Sony A7 V doesn't open, the A1 II opens with a black strip along the bottom (CAM-13), and the Z5 II's and Z50 II's lossless NEFs open without a colour matrix (CAM-21).
 
 **Fixed in iteration 2:**
 - Phase One IIQ files develop with the back's black levels subtracted and its calibration applied; they had a magenta cast.

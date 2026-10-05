@@ -40,26 +40,30 @@ public enum CameraBenchChecks {
 
     public static func refused(_ identity: RawFileIdentity, error: any Error) -> BenchCheck {
         let reason = identity.refusal ?? String(describing: error)
-        let known = knownLimitation(identity, reason: reason)
+        let known = knownLimitation(identity, error: error)
         return BenchCheck(
             id: "decode.opens", version: 1, verdict: .fail,
             summary: known?.summary ?? "Redlamp couldn't open the file: \(reason).", tracker: known?.tracker,
         )
     }
 
-    /// Refusals a tracker row already covers.
-    static func knownLimitation(_ identity: RawFileIdentity, reason: String) -> (tracker: String, summary: String)? {
+    /// Refusals a tracker row already covers: the formats Redlamp refuses itself name their row.
+    static func knownLimitation(_ identity: RawFileIdentity, error: any Error) -> (tracker: String, summary: String)? {
+        switch (error as? EngineError)?.notSupportedYetTracker {
+        case "CAM-12":
+            return ("CAM-12", "Nikon's High Efficiency NEFs (HE and HE*) don't open yet: LibRaw 0.22 can't read them.")
+        case "CAM-10":
+            return ("CAM-10", "JPEG XL mosaic DNGs don't open yet.")
+        case let tracker?:
+            return (tracker, error.localizedDescription)
+        case nil:
+            break
+        }
         let make = (identity.normalizedMake ?? identity.make ?? "").lowercased()
         let model = (identity.normalizedModel ?? identity.model ?? "").uppercased().replacingOccurrences(
             of: " ",
             with: "",
         )
-        if make.contains("nikon"), ["Z8", "Z9", "Z6_3", "Z6III", "ZF"].contains(where: { model.hasSuffix($0) }) {
-            return ("CAM-12", "Nikon's High Efficiency NEFs (HE and HE*) don't open yet: LibRaw 0.22 can't read them.")
-        }
-        if identity.format == "DNG", reason.localizedCaseInsensitiveContains("JPEG XL") {
-            return ("CAM-10", "JPEG XL mosaic DNGs don't open yet.")
-        }
         if make.contains("sony"), ["ILCE-7M5", "ILCE-1M2"].contains(where: { model.hasSuffix($0) }) {
             return ("CAM-13", "This body needs a newer LibRaw than 0.22.2.")
         }

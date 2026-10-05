@@ -244,6 +244,9 @@ public enum EngineError: Error, LocalizedError, Codable, Sendable {
     case noImageOpen
     case unsupportedFile(String)
     case decodeFailed(String)
+    /// A format Redlamp knows and plans to read, named in the plural ("JPEG XL mosaic DNGs"), with
+    /// the tracker row that will add it.
+    case notSupportedYet(String, tracker: String)
     case gpuUnavailable
     case renderFailed(String)
     case imageChanged
@@ -254,8 +257,18 @@ public enum EngineError: Error, LocalizedError, Codable, Sendable {
         case .imageChanged: "Another photo was opened before this one could be rendered."
         case let .unsupportedFile(name): "\(name) is not a supported image."
         case let .decodeFailed(reason): "The image could not be decoded: \(reason)"
+        case let .notSupportedYet(formats, _): "\(formats) aren't supported yet."
         case .gpuUnavailable: "No Metal GPU is available."
         case let .renderFailed(reason): "Rendering failed: \(reason)"
+        }
+    }
+
+    /// The tracker row that will add the format, for a format that isn't supported yet.
+    public var notSupportedYetTracker: String? {
+        if case let .notSupportedYet(_, tracker) = self {
+            tracker
+        } else {
+            nil
         }
     }
 }
