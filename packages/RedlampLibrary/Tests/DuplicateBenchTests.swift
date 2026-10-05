@@ -10,7 +10,7 @@ struct DuplicateBenchTests {
         #expect(BenchScenarios.named("duplicates") is DuplicateScenario)
     }
 
-    @Test func `grouping finds every copy among many photos in one pass, in about 40 bytes a photo`() {
+    @Test func `grouping finds every copy among many photos in one pass, in 32 bytes a photo and a table`() {
         let photos = 100_000
         let library = SyntheticDuplicates(photos: photos, share: 0.01, seed: 7)
         let candidates = library.grouper().candidates()
@@ -21,7 +21,9 @@ struct DuplicateBenchTests {
         #expect((800 ... 1200).contains(library.copies))
         #expect(candidates.photosGrouped == photos)
         let perPhoto = Double(candidates.memoryFootprint) / Double(photos)
-        #expect(perPhoto > 32 && perPhoto < 48, "\(perPhoto) bytes a photo")
+        // The allocator rounds the arrays up, by more at times than the table's 10 bytes a photo.
+        #expect(MemoryLayout<DuplicateGrouper.Entry>.stride == 32)
+        #expect(perPhoto > 42 && perPhoto < 64, "\(perPhoto) bytes a photo")
     }
 
     @Test func `it groups a synthetic library and confirms the fixture's copies, reading none of them twice`(
