@@ -30,6 +30,7 @@ When the work has a plan (plan mode's `~/.cursor/plans/<name>.plan.md`, or one i
 ## What it shows
 
 - **Overview:** progress through the plan; **Needs you**, open items first (blocking ones on top, with a command to copy) and done items folded underneath with what came of them; the Ready and Blocked lanes; the latest log entries.
+- **The owner answers Needs you on the canvas:** each open item has **Done**, **Skip** and **Ask the agent**. Done and Skip fold the item away at once (with Undo). Ask the agent opens a new chat with the canvas attached and a prompt naming the item, and marks it "With an agent".
 - **Plan:** each step with what it involves, its "done when" criterion, its reference (tracker ID, issue or commit) and its status.
 - **Decisions**, the full **Log**, and **Measurements** when there are any.
 

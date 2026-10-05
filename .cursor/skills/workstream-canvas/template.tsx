@@ -1,5 +1,6 @@
 import {
   BarChart,
+  Button,
   CollapsibleSection,
   Divider,
   Grid,
@@ -13,12 +14,13 @@ import {
   Stat,
   Table,
   Text,
+  useCanvasAction,
   useCanvasState,
   useEffect,
   useHostTheme,
   useState,
 } from "cursor/canvas";
-import type { ChartSeries, StatTone } from "cursor/canvas";
+import type { ChartSeries, SetCanvasState, StatTone } from "cursor/canvas";
 
 // A workstream's canvas (.cursor/skills/workstream-canvas/SKILL.md). Edit only `workstream` below:
 // replace every example value, and leave a list empty to hide its section or tab.
@@ -147,6 +149,20 @@ const STEP_LABEL: Record<StepStatus, string> = {
 
 type DotState = StepStatus | "waiting" | "blocking";
 
+/**
+ * The owner's answers to Needs you, by item ID, kept in the canvas's `.canvas.data.json` under
+ * `needsYou`; the agent folds them into `workstream` at its next update (SKILL.md).
+ */
+type Mark = { state: "done" | "skipped" | "asked"; at: string };
+type Marks = Record<string, Mark>;
+type SetMarks = SetCanvasState<Marks>;
+
+/** Done or skipped, by the agent's record or the owner's mark. */
+function settled(item: Workstream["needsYou"][number], marks: Marks): boolean {
+  const state = marks[item.id]?.state;
+  return item.done || state === "done" || state === "skipped";
+}
+
 function useNow(intervalMs = 30000): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -207,7 +223,27 @@ function CommandBlock({ command }: { command: string }) {
   );
 }
 
-function NeedsYouItem({ item }: { item: Workstream["needsYou"][number] }) {
+function NeedsYouItem({
+  item,
+  mark,
+  onMark,
+}: {
+  item: Workstream["needsYou"][number];
+  mark?: Mark;
+  onMark: (state: Mark["state"] | null) => void;
+}) {
+  const dispatch = useCanvasAction();
+  const closed = item.done || mark?.state === "done" || mark?.state === "skipped";
+  const ask = () => {
+    onMark("asked");
+    dispatch({
+      type: "newComposerChat",
+      userPrompt:
+        `From this workstream canvas's Needs you list, please take on "${item.title}" (item ${item.id}): ${item.detail}` +
+        `${item.command ? ` The command: ${item.command}` : ""} ` +
+        "Then update the canvas as .cursor/skills/workstream-canvas/SKILL.md says, with what came of it.",
+    });
+  };
   return (
     <div
       style={{
@@ -215,18 +251,19 @@ function NeedsYouItem({ item }: { item: Workstream["needsYou"][number] }) {
         gridTemplateColumns: "14px minmax(0, 1fr)",
         gap: 8,
         alignItems: "start",
-        opacity: item.done ? 0.6 : 1,
+        opacity: closed ? 0.6 : 1,
       }}
     >
       <div style={{ paddingTop: 6 }}>
-        <Dot state={item.done ? "done" : item.blocking ? "blocking" : "waiting"} />
+        <Dot state={closed ? "done" : item.blocking ? "blocking" : "waiting"} />
       </div>
       <Stack gap={3}>
         <Row gap={8} align="center">
           <Text size="small" weight="semibold">
             {item.title}
           </Text>
-          {item.blocking && !item.done ? <Pill size="sm">Blocks work</Pill> : null}
+          {item.blocking && !closed ? <Pill size="sm">Blocks work</Pill> : null}
+          {mark?.state === "asked" && !closed ? <Pill size="sm">With an agent</Pill> : null}
         </Row>
         <Text size="small" tone="secondary">
           {item.detail}
@@ -234,15 +271,45 @@ function NeedsYouItem({ item }: { item: Workstream["needsYou"][number] }) {
         <Text size="small" tone="tertiary">
           {`Unblocks: ${item.unblocks}`}
         </Text>
-        {item.command && !item.done ? <CommandBlock command={item.command} /> : null}
+        {item.command && !closed ? <CommandBlock command={item.command} /> : null}
+        {!item.done && mark && mark.state !== "asked" ? (
+          <Row gap={8} align="center">
+            <Text size="small" tone="tertiary">
+              {`${mark.state === "done" ? "Marked done by you" : "Skipped"}, ${when(mark.at)}; the agent picks it up at its next update.`}
+            </Text>
+            <Button variant="ghost" onClick={() => onMark(null)}>
+              Undo
+            </Button>
+          </Row>
+        ) : null}
+        {!closed ? (
+          <Row gap={6} style={{ paddingTop: 4 }}>
+            <Button variant="secondary" onClick={() => onMark("done")}>
+              Done
+            </Button>
+            <Button variant="ghost" onClick={() => onMark("skipped")}>
+              Skip
+            </Button>
+            <Button variant="ghost" onClick={ask}>
+              Ask the agent
+            </Button>
+          </Row>
+        ) : null}
       </Stack>
     </div>
   );
 }
 
-function NeedsYou({ items }: { items: Workstream["needsYou"] }) {
-  const open = items.filter((item) => !item.done).sort((a, b) => Number(b.blocking) - Number(a.blocking));
-  const done = items.filter((item) => item.done);
+function NeedsYou({ items, marks, setMarks }: { items: Workstream["needsYou"]; marks: Marks; setMarks: SetMarks }) {
+  const markItem = (id: string) => (state: Mark["state"] | null) =>
+    setMarks((previous) => {
+      const next = { ...previous };
+      if (state) next[id] = { state, at: new Date().toISOString() };
+      else delete next[id];
+      return next;
+    });
+  const open = items.filter((item) => !settled(item, marks)).sort((a, b) => Number(b.blocking) - Number(a.blocking));
+  const done = items.filter((item) => settled(item, marks));
   return (
     <Stack gap={12}>
       <Row gap={8} align="center">
@@ -254,7 +321,7 @@ function NeedsYou({ items }: { items: Workstream["needsYou"] }) {
       </Row>
       {open.map((item) => (
         <div key={item.id}>
-          <NeedsYouItem item={item} />
+          <NeedsYouItem item={item} mark={marks[item.id]} onMark={markItem(item.id)} />
         </div>
       ))}
       {done.length > 0 && (
@@ -262,7 +329,7 @@ function NeedsYou({ items }: { items: Workstream["needsYou"] }) {
           <Stack gap={10}>
             {done.map((item) => (
               <div key={item.id}>
-                <NeedsYouItem item={item} />
+                <NeedsYouItem item={item} mark={marks[item.id]} onMark={markItem(item.id)} />
               </div>
             ))}
           </Stack>
@@ -359,7 +426,7 @@ function Links({ links }: { links: Workstream["links"] }) {
   );
 }
 
-function OverviewTab({ now }: { now: number }) {
+function OverviewTab({ now, marks, setMarks }: { now: number; marks: Marks; setMarks: SetMarks }) {
   const w = workstream;
   const lanes = [
     { title: "Ready", items: w.ready },
@@ -391,7 +458,7 @@ function OverviewTab({ now }: { now: number }) {
       </Stack>
       {side && (
         <Stack gap={20}>
-          {w.needsYou.length > 0 && <NeedsYou items={w.needsYou} />}
+          {w.needsYou.length > 0 && <NeedsYou items={w.needsYou} marks={marks} setMarks={setMarks} />}
           {w.needsYou.length > 0 && w.log.length > 0 && <Divider />}
           {w.log.length > 0 && (
             <Stack gap={10}>
@@ -482,10 +549,11 @@ export default function WorkstreamCanvas() {
   };
   const tabs = TABS.filter((tab) => shown[tab]);
   const [selected, setSelected] = useCanvasState<Tab>("tab", "Overview");
+  const [marks, setMarks] = useCanvasState<Marks>("needsYou", {});
   const tab: Tab = shown[selected] ? selected : "Overview";
   const live = w.plan.filter((step) => step.status !== "dropped");
   const done = live.filter((step) => step.status === "done").length;
-  const open = w.needsYou.filter((item) => !item.done);
+  const open = w.needsYou.filter((item) => !settled(item, marks));
   const blocking = open.filter((item) => item.blocking).length;
   return (
     <Stack gap={18} style={{ padding: 4 }}>
@@ -529,7 +597,7 @@ export default function WorkstreamCanvas() {
       )}
       <Divider />
 
-      {tab === "Overview" && <OverviewTab now={now} />}
+      {tab === "Overview" && <OverviewTab now={now} marks={marks} setMarks={setMarks} />}
       {tab === "Plan" && <PlanTab />}
       {tab === "Decisions" && (
         <Table
