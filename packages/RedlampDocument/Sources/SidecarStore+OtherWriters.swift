@@ -85,6 +85,7 @@ public extension SidecarStore {
         let destination = url(for: image)
         let options: NSFileCoordinator.WritingOptions = Self.isPackage(destination) ? [] : .forReplacing
         return try Self.writing(destination, options: options) { destination in
+            try makeFolder(for: destination, of: image)
             guard try Self.digest(at: destination) == base.digest else {
                 return try Self.saveOverOtherWriter(sidecar, at: destination, base: base, opened: opened)
             }

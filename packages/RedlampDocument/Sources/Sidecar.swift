@@ -160,11 +160,23 @@ public struct SidecarStore: Sendable {
     /// The history sessions a photo keeps; the oldest go as new ones are written.
     public static let keptSessions = 20
 
-    public init() {}
+    /// Where its sidecars are written and read from.
+    public let locator: SidecarLocator
+
+    /// Keeps every sidecar beside its photo.
+    public init() {
+        locator = .besidePhotos
+    }
+
+    /// Writes each sidecar where `locator` says; `load` and `summary` read it from where
+    /// `SidecarLocator.readURL(for:)` finds it.
+    public init(locator: SidecarLocator) {
+        self.locator = locator
+    }
 
     /// The sidecar: a package, or a single file written before packages.
     public func url(for image: URL) -> URL {
-        image.appendingPathExtension("redlamp")
+        locator.url(for: image)
     }
 
     /// The edit's JSON: `edit.json` in a package, or the single-file sidecar itself.
@@ -177,7 +189,7 @@ public struct SidecarStore: Sendable {
     }
 
     public func load(for image: URL) -> Sidecar? {
-        let sidecar = url(for: image)
+        let sidecar = locator.readURL(for: image)
         guard let loaded = (try? Self.reading(sidecar) { Self.decode(sidecar: $0) }) ?? nil else { return nil }
         return resolveConflicts(loaded, for: image) ?? loaded
     }
@@ -205,6 +217,7 @@ public struct SidecarStore: Sendable {
         let destination = url(for: image)
         let options: NSFileCoordinator.WritingOptions = Self.isPackage(destination) ? [] : .forReplacing
         try Self.writing(destination, options: options) { destination in
+            try makeFolder(for: destination, of: image)
             try Self.write(sidecar, to: destination)
         }
     }
@@ -217,12 +230,22 @@ public struct SidecarStore: Sendable {
         let options: NSFileCoordinator.WritingOptions = Self.isPackage(destination) ? [] : .forReplacing
         try Self.writing(destination, options: options) { destination in
             guard try Self.leavesNothing(sidecar, at: destination) else {
+                try makeFolder(for: destination, of: image)
                 return try Self.write(sidecar, to: destination)
             }
             if FileManager.default.fileExists(atPath: destination.path) {
                 try Self.remove(destination)
             }
         }
+    }
+
+    /// Makes the folders a sidecar kept on this Mac goes in. Beside the photo there's nothing to
+    /// make: the photo's folder is there, or the save fails.
+    func makeFolder(for destination: URL, of image: URL) throws {
+        guard destination.path != SidecarLocator.besidePhoto(image).path else { return }
+        try FileManager.default.createDirectory(
+            at: destination.deletingLastPathComponent(), withIntermediateDirectories: true,
+        )
     }
 
     /// Removes the sidecar, history included, unless it is protected (see `protection(for:)`).

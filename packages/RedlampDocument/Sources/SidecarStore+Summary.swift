@@ -20,8 +20,13 @@ public extension SidecarStore {
     /// there is no sidecar or it can't be read. Don't call it for a sidecar iCloud Drive hasn't
     /// downloaded: reading it would wait for the download.
     func summary(for image: URL) -> SidecarSummary? {
-        let sidecar = url(for: image)
-        guard let data = (try? Data(contentsOf: sidecar.appending(path: Self.editFile)))
+        Self.summary(atSidecar: locator.readURL(for: image))
+    }
+
+    /// The summary of the sidecar at `sidecar`, a package or a single file, as `summary(for:)`
+    /// reads it.
+    static func summary(atSidecar sidecar: URL) -> SidecarSummary? {
+        guard let data = (try? Data(contentsOf: sidecar.appending(path: editFile)))
             ?? (try? Data(contentsOf: sidecar))
         else { return nil }
         struct Probe: Decodable {
