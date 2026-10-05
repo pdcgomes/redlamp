@@ -296,6 +296,19 @@ What it changed:
 - **The text index is written by the writer, not by triggers.** FTS5 flushes its pending terms at every statement savepoint, which a trigger opens, halving insert speed.
 - **The integrity check runs in the background,** weekly: 4.3 s is too long for launch.
 
+### Queries at a million photos (LIB-06)
+
+The column store and engine on 1,000,000 synthetic rows in memory, every query of the fixture's corpus typed a character at a time (load average about 20):
+
+| | Measured | Budget |
+| --- | --- | --- |
+| First page and count | p50 0.09 ms, p95 2.1 ms | p95 under 16 ms |
+| The same, with every photo in order | p95 4.6 ms | |
+| Facet counts | p95 11 ms | p95 under 100 ms |
+| Column store | 70 bytes a photo | |
+
+On the 20,000-photo fixture (`redlamp library bench … --scenario search`), all 43 counts equal the manifest's, with the first page and count in p95 0.12 ms and facets in p95 0.3 ms; the store builds in 26 ms. What helped: matching folder names as lowercased bytes instead of Foundation's case-insensitive search (p95 27 ms to 2.1 ms), keeping each term's matches per store, and sorting folders by key rather than with `localizedStandardCompare` for facets (29 ms to 11 ms).
+
 ### Metadata (LIB-07)
 
 `PhotoMetadataReaderTests` with `REDLAMP_METADATA_BENCH=1`, on the 26 CC0 raws, under load:
