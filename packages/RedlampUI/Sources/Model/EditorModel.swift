@@ -372,6 +372,11 @@ public final class EditorModel {
     public var leftPanelVisible = true
     public var rightPanelVisible = true
     public var filmstripVisible = true
+    #if DEBUG || REDLAMP_PROFILING
+        /// `filmstrip=shown` in a capture script: the floating filmstrip stays up with a photo
+        /// selected, as it does while the pointer is over it.
+        var keepsFilmstripShown = false
+    #endif
 
     // MARK: Shortcut-driven view state
 
@@ -1171,6 +1176,8 @@ public final class EditorModel {
         /// Scripted state changes for development snapshots (`--snapshot-script`).
         public func applyDebugCommand(_ key: String, _ value: String) {
             switch key {
+            case "filmstrip":
+                keepsFilmstripShown = value == "shown"
             case "panel":
                 expandedPanels = value == "all" ? Set(PanelID.allCases) :
                     Set(value.split(separator: "+").compactMap { PanelID(rawValue: String($0)) })
@@ -1179,6 +1186,10 @@ public final class EditorModel {
             case "select":
                 if let index = Int(value), items.indices.contains(index) {
                     select(items[index].url)
+                }
+            case "extend":
+                if let index = Int(value), items.indices.contains(index) {
+                    click(items[index].url, extending: true)
                 }
             case "zoom":
                 canvas.zoom = value == "1:1" ? .oneToOne : value == "fill" ? .fill : .fit
