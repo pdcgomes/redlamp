@@ -284,11 +284,15 @@ public final class SettingsSync {
             defer { progress?.done += 1 }
             guard await !job.inEditor(url) else { continue }
             await saves?.wait(for: url)
-            guard store.protection(for: url) == nil else {
+            // Sidecars are read and written off the main thread: on a busy disk one write can take seconds.
+            let store = store
+            let (protected, existing) = await Task
+                .detached { (store.protection(for: url) != nil, store.load(for: url)) }
+                .value
+            guard !protected else {
                 skipped += 1
                 continue
             }
-            let existing = store.load(for: url)
             let original = existing?.recipe ?? EditRecipe()
             // The run goes on for a photo it last left as it is; otherwise it starts over from here.
             let member = inRun ? run?.photos[url].flatMap { $0.last == original ? $0 : nil } : nil
@@ -326,11 +330,14 @@ public final class SettingsSync {
             sidecar.recipe = next
             sidecar.modified = Date()
             sidecar.session = session
-            guard (try? store.save(sidecar, for: url)) != nil else { continue }
+            let toSave = sidecar
+            // As read back, so Undo can tell the photo hasn't been edited since (dates round).
+            guard let saved = await Task.detached(operation: { () -> Sidecar? in
+                guard (try? store.save(toSave, for: url)) != nil else { return nil }
+                return store.load(for: url) ?? toSave
+            }).value else { continue }
             // updateValue: a photo without a sidecar keeps its nil (a subscript would drop the key).
             before.updateValue(existing?.recipe, forKey: url)
-            // As read back, so Undo can tell the photo hasn't been edited since (dates round).
-            let saved = store.load(for: url) ?? sidecar
             written[url] = saved
             if inRun {
                 run?.photos[url] = AutoSyncRun.Member(
