@@ -232,6 +232,23 @@ struct PointColorEditingTests {
         #expect(model.maskMessage == nil)
     }
 
+    @Test func `choosing another mask ends Point Color's eyedropper`() async throws {
+        let (model, _) = try await openWithMask()
+        model.pointColorEyedropperActive = true
+        model.selectedMaskID = nil
+        #expect(!model.pointColorEyedropperActive)
+    }
+
+    @Test func `a duplicated mask's swatches are its own`() async throws {
+        let (model, mask) = try await openWithMask()
+        model.addPointColorSwatch(skin)
+        model.duplicateMask(mask)
+        let copy = try #require(model.masks.last)
+        let original = try #require(model.recipe.mask(mask)?.pointColor.first)
+        #expect(copy.id != mask && copy.pointColor.count == 1)
+        #expect(copy.pointColor.first?.id != original.id && copy.pointColor.first?.color == original.color)
+    }
+
     @Test func `a mask preset keeps the mask's swatches`() async throws {
         let (model, mask) = try await openWithMask()
         model.addPointColorSwatch(skin)

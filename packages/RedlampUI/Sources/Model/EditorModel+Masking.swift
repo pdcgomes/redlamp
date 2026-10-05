@@ -204,6 +204,11 @@ public extension EditorModel {
             }
             return duplicate
         }
+        copy.pointColor = original.pointColor.map { swatch in
+            var duplicate = swatch
+            duplicate.id = UUID()
+            return duplicate
+        }
         var next = recipe
         next.masks.append(copy)
         selectedMaskID = copy.id

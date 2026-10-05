@@ -408,7 +408,13 @@ public final class EditorModel {
     // MARK: Masking state
 
     public var selectedMaskID: UUID? {
-        didSet { requestRender() }
+        didSet {
+            // Point Color's eyedropper adds to the mask it was turned on for.
+            if selectedMaskID != oldValue, activeTool == .masking {
+                pointColorEyedropperActive = false
+            }
+            requestRender()
+        }
     }
 
     public var selectedComponentID: UUID?
