@@ -7,4 +7,6 @@ alwaysApply: true
 
 Each workstream (an agent's line of work: a feature, a research thread, a fix spanning sessions) keeps one canvas up to date as it advances, so the owner can see where it stands, and what it needs from them, at a glance. Follow `.cursor/skills/workstream-canvas/SKILL.md`: create it when the workstream starts, update it in the same turn as each step, decision, measurement, blocker or thing that needs the owner, and link it in your summary. Quick one-off questions and single edits don't need one.
 
+Releases are the exception: they are prepared, approved and shipped in the release room (`.cursor/skills/redlamp-release/SKILL.md`), not in a workstream canvas.
+
 When the work has a plan, the canvas is the plan's first todo, written as soon as the plan is approved, and every todo is a step in it with the same ID, changing status in the same turn as the todo.

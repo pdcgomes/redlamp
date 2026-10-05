@@ -36,7 +36,13 @@ When the work has a plan (plan mode's `~/.cursor/plans/<name>.plan.md`, or one i
 
 ## Keep it current
 
-Update in the same turn as the event, by editing only the `workstream` object:
+**First, read the owner's marks.** The canvas keeps them in `ws-<slug>.canvas.data.json`, beside it, under `needsYou`: `{ "<item id>": { "state": "done" | "skipped" | "asked", "at": "<ISO time>" } }`. Never write that file; fold each mark into `workstream` instead:
+
+- `done`: set the item's `done: true` and its `detail` to "Done: …" with what came of it; check it where you can (a merge is in `git log`, a setting in the defaults), and say what you couldn't check.
+- `skipped`: set `done: true` and `detail` to "Skipped: …", with what that leaves undone (a step now blocked or dropped, a `log` entry).
+- `asked`: another agent was given the item in a new chat; leave it open until that agent, or the owner, marks it.
+
+Then update in the same turn as the event, by editing only the `workstream` object:
 
 | Event | Update |
 | --- | --- |
