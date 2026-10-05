@@ -31,6 +31,7 @@ import signal
 import socketserver
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -161,7 +162,8 @@ def seed_models(home: Path) -> None:
     owner = HOME / "Library/Application Support/Redlamp/Models"
     if owner.is_dir():
         (CACHE / "Models").mkdir(parents=True, exist_ok=True)
-        subprocess.run(["rsync", "-a", "--delete", f"{owner}/", str(CACHE / "Models")], capture_output=True)
+        subprocess.run(["rsync", "-a", "--delete", "--exclude", ".*", f"{owner}/", str(CACHE / "Models")],
+                       capture_output=True)
         target = home / "Library/Application Support/Redlamp"
         target.mkdir(parents=True, exist_ok=True)
         subprocess.run(["cp", "-cR", str(CACHE / "Models"), str(target)], capture_output=True)
@@ -179,6 +181,67 @@ def keep_compiled_models(home: Path) -> None:
     for model in compiled.glob("*.mlmodelc"):
         if not (CACHE / "CompiledModels" / model.name).exists():
             subprocess.run(["cp", "-cR", str(model), str(CACHE / "CompiledModels")], capture_output=True)
+
+
+# ---------------------------------------------------------------- storage
+
+# The app's own limits: ThumbnailPacks, EmbeddingCache and FocusStackCache budgets.
+STORAGE_LIMITS = {
+    "Library/Caches/app.redlamp/Thumbnails": 1 << 30,
+    "Library/Caches/app.redlamp/Embeddings": 1 << 30,
+    "Library/Caches/app.redlamp/FocusStacks": 4 << 30,
+}
+# Hidden staging the app removes when a write finishes; any left after a run is a leak.
+STAGING = {
+    "Library/Caches/app.redlamp/FocusStacks": ".*",
+    "Library/Caches/app.redlamp/Thumbnails": ".*.rltp.*",
+    "Library/Application Support/Redlamp/Models": ".*",
+}
+OUTBOX_LIMIT = 20  # FeedbackHistory.outboxLimit
+
+
+def tree_size(path: Path) -> int:
+    if not path.exists():
+        return 0
+    return sum(p.stat().st_size for p in path.rglob("*") if p.is_file() and not p.is_symlink())
+
+
+def temporary_compiles() -> set[str]:
+    return {p.name for p in Path(tempfile.gettempdir()).glob("*.mlmodelc")}
+
+
+def free_bytes(path: Path) -> int:
+    return shutil.disk_usage(path).free
+
+
+def storage_check(home: Path, compiles_before: set[str], free_before: int) -> dict:
+    """What the run left in the test home and the temporary folder, against the app's limits."""
+    problems: list[str] = []
+    sizes = {}
+    for relative, limit in STORAGE_LIMITS.items():
+        sizes[relative] = tree_size(home / relative)
+        if sizes[relative] > limit * 1.1:
+            problems.append(f"{relative} is {sizes[relative] / 2**20:.0f} MB, over its {limit / 2**20:.0f} MB limit")
+    for relative, pattern in STAGING.items():
+        left = sorted(p.name for p in (home / relative).glob(pattern)) if (home / relative).is_dir() else []
+        if left:
+            problems.append(f"staging left in {relative}: {', '.join(left[:5])}")
+    compiles = sorted(temporary_compiles() - compiles_before)
+    if compiles:
+        problems.append(f"compiled models left in the temporary folder: {', '.join(compiles[:5])}")
+    exports = subprocess.run(["defaults", "read", BUNDLE_ID, "export.staging"], capture_output=True, text=True)
+    if exports.returncode == 0 and exports.stdout.strip() not in ("", "{\n}", "{}"):
+        problems.append("an export's staging is still listed: " + " ".join(exports.stdout.split())[:200])
+    outbox = home / "Library/Application Support/Redlamp/Feedback/outbox.json"
+    if outbox.exists():
+        try:
+            queued = len(json.loads(outbox.read_text()))
+        except ValueError:
+            queued = 0
+        if queued > OUTBOX_LIMIT:
+            problems.append(f"the feedback outbox holds {queued} reports, over its {OUTBOX_LIMIT}")
+    return {"problems": problems, "sizes": sizes, "home": tree_size(home),
+            "temporaryFreeChange": free_bytes(Path(tempfile.gettempdir())) - free_before}
 
 
 def prune_runs(keep: int = RUNS_KEPT) -> None:
@@ -504,6 +567,15 @@ def write_report(run_dir: Path, report: dict) -> None:
         lines += ["", "| Metric | Value |", "| --- | --- |"] + [f"| `{k}` | {v:.1f} |" for k, v in sorted(perf["metrics"].items())]
     state = report["ownerState"]
     lines += ["", "## Isolation", "", state["summary"]]
+    storage = report.get("storage")
+    if storage:
+        change = storage["temporaryFreeChange"] / 2**30
+        lines += ["", "## Storage", "",
+                  f"The test home holds {storage['home'] / 2**20:.0f} MB. Free space on the temporary folder's disk "
+                  f"changed by {change:+.2f} GB over the run (other work on the Mac counts too)."]
+        lines += [""] + [f"- `{k}`: {v / 2**20:.0f} MB" for k, v in storage["sizes"].items()]
+        if storage["problems"]:
+            lines += ["", "Problems:", ""] + [f"- {item}" for item in storage["problems"]]
     if report.get("relay"):
         lines += ["", f"The stub relay received {report['relay']} request(s); see `relay/`."]
     (run_dir / "report.md").write_text("\n".join(lines) + "\n")
@@ -704,6 +776,8 @@ def main() -> int:
     relay = Relay(run_dir / "relay")
     threading.Thread(target=relay.serve_forever, daemon=True).start()
     seed_defaults(relay.server_address[1])
+    compiles_before = temporary_compiles()
+    free_before = free_bytes(Path(tempfile.gettempdir()))
     owner_before = owner_state()
     owner_running = owner_app_running()
     load_before = load()
@@ -844,6 +918,9 @@ def main() -> int:
         problems.append(f"{len(cover['missing'])} claim(s) not covered")
     if isolation_failed:
         problems.append("the run changed the owner's state")
+    storage = storage_check(home, compiles_before, free_before)
+    if storage["problems"]:
+        problems.append(f"{len(storage['problems'])} storage problem(s)")
     if performance and performance["judged"] and performance["over"]:
         problems.append(f"{len(performance['over'])} performance budget(s) missed")
     if performance and not performance["judged"] and not performance.get("accepted"):
@@ -859,7 +936,7 @@ def main() -> int:
         "summary": summary, "scenarios": scenarios, "crashes": crashes, "hangs": hangs,
         "coverage": cover, "coverageRequired": coverage_required,
         "ownerState": {"changed": changed, "ownerAppRunning": owner_running, "summary": state_summary},
-        "relay": relay.count, "performance": performance,
+        "relay": relay.count, "performance": performance, "storage": storage,
     }
     write_report(run_dir, report)
     defaults("delete", BUNDLE_ID)
