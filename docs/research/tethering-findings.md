@@ -79,7 +79,7 @@ Measured from Capture One's list (5 October 2026) and each maker's published cam
 2. **Each maker's extension implemented in that stack** only once counsel says how Redlamp may learn and publish it (DEC-29): maker documentation under a licence that allows an open implementation, explicit permission from the maker, or another route counsel accepts.
 3. **The hot folder for everything else.**
 
-**Decided (2026-10-05):** the owner chose PTP only, with no maker SDK, for now (DEC-29). Makers' binary SDKs, which this study had kept as a fallback in separate XPC helpers, are a recorded skip (SKIP-16), so no warranty notice is needed (DEC-31, rejected).
+**Decided (2026-10-05):** the owner chose no maker SDK, for now (DEC-29): only Redlamp's own code, on Apple's frameworks (ImageCaptureCore, Network.framework) and open protocols (PTP, PTP/IP), plus the hot folder. Makers' protocol documentation (Sony's Camera Remote Command, Canon's CCAPI) is not an SDK, but using it waits on DEC-29's counsel question. Makers' binary SDKs, which this study had kept as a fallback in separate XPC helpers, are a recorded skip (SKIP-16), so no warranty notice is needed (DEC-31, rejected).
 
 **Excluded:**
 - libgphoto2 (LGPL-2.1, and its maker tables are reverse-engineered data the clean-room policy excludes).
@@ -139,7 +139,7 @@ Sizes are this study's estimates (S ≤ 1 engineer-week, M 1 to 3, L 3 to 6), be
 
 All are tracker rows:
 
-- **DEC-29** *(counsel)*: accepted on 5 October 2026 as PTP only, with no maker SDK. Still open for counsel: how Redlamp may implement each maker's PTP extension in open source, and whether to approach the makers.
+- **DEC-29** *(counsel)*: accepted on 5 October 2026 as no maker SDK: Apple's frameworks, open protocols and the hot folder. Still open for counsel: how Redlamp may implement each maker's PTP extension in open source, and whether to approach the makers.
 - **DEC-30**: a legal entity for makers' developer programmes.
 - **DEC-31**: rejected on 5 October 2026; no maker SDK ships, so there is no warranty notice to show.
 - **DEC-32**: where tethering sits on the roadmap, and test cameras.
