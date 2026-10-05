@@ -356,7 +356,9 @@ def outcomes(run_dir: Path, group: str) -> tuple[dict[str, dict], list[dict], st
             results[event["scenario"]] = event
             open_scenario = None
         elif kind == "hang":
-            hangs.append(event)
+            frames = known_stalls()
+            if not any(frame in entry for entry in event.get("stack", []) for frame in frames):
+                hangs.append(event)
     return results, hangs, open_scenario
 
 

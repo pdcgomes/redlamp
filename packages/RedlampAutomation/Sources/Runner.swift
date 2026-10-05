@@ -232,6 +232,19 @@
                 }
                 model.activeTool = .edit
                 model.showShortcuts = false
+                // What every scenario starts from: the panels, filmstrip and toolbar showing.
+                if model.isPresenting {
+                    _ = model.perform(.fullScreenPreview)
+                }
+                model.leftPanelVisible = true
+                model.rightPanelVisible = true
+                model.filmstripVisible = true
+                model.lightsOut = 0
+                model.infoOverlay = 0
+                model.showBefore = false
+                if Views.editorWindow?.toolbar?.isVisible == false {
+                    Views.editorWindow?.toggleToolbarShown(nil)
+                }
                 for window in NSApp.windows
                     where window.isVisible && !(window.windowController is EditorWindowController)
                     && window.level == .normal && window.title != "" && !window.isSheet {
