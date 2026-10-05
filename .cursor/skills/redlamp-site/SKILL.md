@@ -71,6 +71,7 @@ The header (`components/site/SiteHeader.tsx`) shows its `links` from the `sm` br
 - Text is `text-paper` for headings and emphasis, `text-mute` for body and `text-dim` for footnotes and sources. Inline links: `text-paper underline decoration-hairline-strong underline-offset-3`.
 - Red is light, once per view (`docs/brand/README.md`): the lamp glow, the mark and the one primary button. Never a flat red fill.
 - Copy is in the brand voice: calm, plain and precise, with no exclamation marks or superlatives, and only claims the README makes. Spelling is British (colour; licence for the noun), but product names such as Color Mixer stay as they are. In JSX text, write `&apos;`.
+- Write for a reader who has none of the context: not the chats, the tracker or the other sessions. Every term (a sidecar, plan mode, the tracker, a DEC row, a branch, another session's feature) is explained where it first appears, or left out.
 
 ## Adding a home-page section
 
