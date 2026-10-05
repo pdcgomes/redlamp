@@ -1,12 +1,13 @@
 # Research Intake Tracker
 
-The single place where every recommendation from Redlamp's research gets a decision, a phase and a status. It covers both studies:
+The single place where every recommendation from Redlamp's research gets a decision, a phase and a status. It covers these studies:
 
 - [AI and computational photography findings](ai-findings.md) (source tag **AI**)
 - [darktable study](darktable-findings.md) (source tag **DT**)
 - [Topaz-style upscaling and sharpening supplement](notes/H-topaz-upscale-sharpen.md) (source tag **H**)
+- [Tethered capture findings](tethering-findings.md) (source tag **TC**)
 
-Where studies recommend the same thing, the row is merged and cites each. *Last updated: 30 September 2026.*
+Where studies recommend the same thing, the row is merged and cites each. *Last updated: 5 October 2026.*
 
 ## How to use this tracker
 
@@ -67,6 +68,12 @@ These block other rows. Most need the project owner; the ones marked *counsel* n
 | DEC-26 | Where converted models are hosted | Release assets on pdcgomes/redlamp, as Depth Anything 3 and SAM 3 are; large models in parts under GitHub's 2 GB a file | RM-08, RM-10 | Accepted (2026-10-03): release assets, asking the owner before each upload | [open-model findings](open-model-findings.md) |
 | DEC-27 | Ship SAM 3 under Meta's SAM License (custom: distribution only under its terms, with a copy of it; trade controls; no military use or reverse engineering) | Ship it with the licence, named before it downloads | MSK-17 | Accepted (2026-10-03): the owner approved it for everyone; each download carries the licence, and Settings › Models and the download prompt name it | [SAM License](https://huggingface.co/facebook/sam3/blob/main/LICENSE) |
 | DEC-28 | What moves a camera mode between the cameras page's tiers on camera bench evidence? Verified stays a CC0 sample in the regression suite; Tested by photographers, Reported working and Problem reported are new | Tested by photographers: on the current LibRaw, 3 contributors and 10 distinct photos covering base ISO, ISO 3200 or more, a portrait frame, clipped highlights and warm light under 4000 K, every check passing on 90% of the photos, and 2 "same" answers with no open "differs". Reported working: one photo opened with no failed check. Problem reported: a failure seen by 2 contributors, or a "differs" answer | CAM-17 | Proposed: the aggregator uses these thresholds until the owner decides | The owner (2026-10-04) |
+| DEC-29 | How may Redlamp implement each camera maker's PTP extension (exposure settings, autofocus, Live View) in MPL-2.0 code? Makers document them only under licences that forbid sharing the materials: Sony's Camera Remote Command is for corporate customers only, and Canon's and Nikon's licences are shown only once access is granted. The alternatives are a maker's explicit permission, or its binary SDK in a separate closed helper *(counsel)* | Ask Sony, Canon, Nikon and Fujifilm for permission to publish an open implementation, and ask counsel what publishing code written from a licensed reference amounts to; binary SDKs only as a fallback | TET-06, TET-07, TET-08, TET-09, TET-10, TET-13 | Proposed | [TC §4](tethering-findings.md#4-the-route) |
+| DEC-30 | Should the project have a legal entity for makers' developer programmes? Sony's Camera Remote Command is "only available for corporate customers", and Canon Singapore accepts only registered entities | Decide with DEC-29 | TET-06, TET-07 | Proposed | [TC routes](notes/TC-routes-and-licences.md#31-sony) |
+| DEC-31 | Accept the warranty notice Sony's and Fujifilm's SDKs require: users told, at first connection, that a camera controlled through Redlamp is "out of … manufacturer-warranty" | Avoid it by implementing from documentation (DEC-29), so no maker SDK ships; accept only where an SDK is the only route | TET-06, TET-09 | Proposed | [TC routes](notes/TC-routes-and-licences.md#4-licence-matrix) |
+| DEC-32 | Where tethering sits on the roadmap, and how bodies get tested: buying or borrowing a body per maker, or photographers' reports through the camera bench | Keep it after 1.0, with Stage 1 (TET-01 to TET-05, TET-12, TET-15, TET-18, about 14 ew) first; start DEC-29's conversations now, as they take months | TET-01 | Proposed | [TC §6](tethering-findings.md#6-plan-and-sizes) |
+| DEC-33 | Let a capture session write new files, the captures only, into the folder the photographer chose: an exception to the Folders working set's read-only rule (UX-08) | Yes, for captures only; existing files are never moved or renamed | TET-01, TET-02 | Proposed | [TC architecture](notes/TC-architecture-and-workflow.md#2-what-exists-and-what-changes) |
+| DEC-34 | Capture One calls its second-generation Canon wireless tethering (the camera sends a smaller raw first; the full raw follows and replaces it, edits kept) "pending patent". Check before Redlamp shows a proxy raw first over Wi-Fi *(counsel)* | Add it to DEC-05's search before TET-13 designs its transfers | TET-13 | Proposed | [TC teardown](notes/TC-capture-one-teardown.md#wireless-and-reliability) |
 
 ---
 
@@ -331,7 +338,34 @@ These block other rows. Most need the project owner; the ones marked *counsel* n
 
 ---
 
-## 12. Recorded skips
+## 12. Tethered capture
+
+From the [tethered capture findings](tethering-findings.md) (5 October 2026). Stage 1 is TET-01 to TET-05, TET-12, TET-15 and TET-18; Stage 2 TET-06 to TET-09 and TET-11; Stage 3 the rest.
+
+| ID | Item | Recommended | Phase | Size | Depends on | Decision | Status | Source |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| TET-01 | Capture sessions on a folder: a capture folder the photographer chooses (a Folders root), a file-name template with a counter, settings for the next captures (the default edit, the previous capture's, a recipe, or a Copy Settings checklist, pasted as `settingsSync` pastes onto unopened photos, AI masks recomputed after the frame is on screen), a backup folder, and rules for when a new frame opens. The session announces each complete frame itself instead of waiting for `FolderLibrary`'s 2 s settle | Adopt | Later | M | DEC-33 | Proposed | Not started | [TC §2](tethering-findings.md#2-parity-checklist) |
+| TET-02 | Hot folder: any camera through its maker's own app (Imaging Edge, EOS Utility, NX Tether, X Acquire, LUMIX Tether, OM Capture, Phocus) writing into a capture session's folder, with next-capture settings and naming | Adopt | Later | S | TET-01, DEC-33 | Proposed | Not started | [TC §3](tethering-findings.md#3-camera-coverage) |
+| TET-03 | `RedlampCapture`, a platform-neutral package: PTP containers and standard operations, events and properties written from USB-IF's MTP 1.1 specification, an ImageCaptureCore transport (`requestSendPTPCommand`, `ptpEventHandler`, downloads), and a PTP simulator replaying recorded sessions for tests | Build | Later | L | — | Proposed | Not started | [TC architecture](notes/TC-architecture-and-workflow.md#3-architecture) |
+| TET-04 | Standard tethering through ImageCaptureCore for any PTP camera on USB: frames downloaded as they are shot (written under a temporary name, then renamed), decoded from memory while they're written, the Mac's shutter and standard properties where the camera accepts them, battery and frames left; the sandboxed build's USB entitlement and prompts | Build | Later | M | TET-03, TET-01 | Proposed | Not started | [TC §4](tethering-findings.md#4-the-route) |
+| TET-05 | Probe the owner's Sony α7R V with standard PTP through ImageCaptureCore: its DeviceInfo, what works in PC Remote and MTP modes, whether frames arrive without Sony's handshake, and shutter-to-file and file-to-developed times | Build | Later | S | — | Proposed | In progress: the probe is written (4bf143b) and runs from Cursor's sandbox; opening a 24 MP Sony raw took 502 ms on a busy M1 Ultra. The run on the camera waits for it to be connected | [TC prototype](../../research/prototypes/tethering/README.md) |
+| TET-06 | Sony control: every property the camera reports, shutter, autofocus, Live View, card copy, over USB, then wired LAN and Wi-Fi (Access Authentication) for the bodies in Sony's references (29 of Capture One's 50 tethered Sony bodies) | Build | Later | L | TET-04, DEC-29, DEC-30 | Proposed | Not started | [TC routes](notes/TC-routes-and-licences.md#31-sony) |
+| TET-07 | Canon control: settings, shutter, autofocus, Live View and card copy over USB, and Wi-Fi where Canon allows it (63 models tethered in Capture One) | Build | Later | L | TET-04, DEC-29 | Proposed | Not started | [TC routes](notes/TC-routes-and-licences.md#32-canon) |
+| TET-08 | Nikon control: settings, shutter, autofocus, Live View and card copy over USB, and its transmitters (54 models tethered in Capture One) | Build | Later | L | TET-04, DEC-29 | Proposed | Not started | [TC routes](notes/TC-routes-and-licences.md#33-nikon) |
+| TET-09 | Fujifilm control: settings, shutter, focus point, drive mode, Live View, the in-camera crop, over USB and Wi-Fi (21 models tethered in Capture One) | Build | Later | L | TET-04, DEC-29, DEC-31 | Proposed | Not started | [TC routes](notes/TC-routes-and-licences.md#34-fujifilm) |
+| TET-10 | Leica and Panasonic, standard PTP first, then each maker's extension with its permission (15 and 3 models tethered in Capture One) | Build | Later | M | TET-04, DEC-29 | Proposed | Not started | [TC §3](tethering-findings.md#3-camera-coverage) |
+| TET-11 | Live View window: zoom and pan, focus by click and by steps, grid, an overlay image for composition, focus peaking (UX-06) and clipping on the camera's frames, the recipe's look as a labelled preview | Build | Later | M | TET-06 | Proposed | Not started | [TC §2](tethering-findings.md#2-parity-checklist) |
+| TET-12 | Never lose a frame: written to disk before anything else, the camera's card copy by default where the camera allows it, frames shot while unplugged imported on reconnection (Capture One's ReTether), transfer progress, and a clear message when another app holds the camera | Adopt | Later | M | TET-04 | Proposed | Not started | [TC teardown](notes/TC-capture-one-teardown.md#wireless-and-reliability) |
+| TET-13 | Wireless and Ethernet tethering: PTP/IP over Network.framework with the Local Network permission, each maker's discovery and pairing, and partial transfers that resume | Build | Later | L | TET-03, DEC-29, DEC-34 | Proposed | Not started | [TC routes](notes/TC-routes-and-licences.md#2-public-standards) |
+| TET-14 | Tethered focus brackets into the Stack workspace: the camera's own focus bracketing, or host-driven focus steps where the maker allows it, offered for merging as the session's run completes | Build | Later | M | TET-06, FS-04 | Proposed | Not started | [TC §2](tethering-findings.md#2-parity-checklist) |
+| TET-15 | Tether reports from the camera bench: connect, read DeviceInfo, set a harmless property and back, take and time three frames, and send only the capabilities and timings (no serial numbers); support tiers on the cameras page as DEC-28's | Build | Later | M | TET-04, CAM-15 | Proposed | Not started | [TC architecture](notes/TC-architecture-and-workflow.md#4-testing) |
+| TET-16 | Client view: a window on a second display that follows the latest capture, fully rendered; an iPad on the local network in Phase 5. No cloud service (SKIP-15) | Build | Later | M | TET-01 | Proposed | Not started | [TC §2](tethering-findings.md#2-parity-checklist) |
+| TET-17 | Tethering on iPad, on the same package (iPadOS has no take-picture call: a PTP command instead) | Build | Later | M | TET-04 | Proposed | Not started | [TC routes](notes/TC-routes-and-licences.md#1-apple-imagecapturecore-on-macos-and-ipados) |
+| TET-18 | Tethering upkeep: per-maker setup guides and a troubleshooting page, re-reading Capture One's camera list (`capture_one_cameras.py`) and makers' SDK and protocol releases for new bodies | Adopt | Later | S | — | Proposed | Not started | [TC architecture](notes/TC-architecture-and-workflow.md#5-support-and-upkeep) |
+
+---
+
+## 13. Recorded skips
 
 Decisions not to do something, kept so they aren't reopened without new evidence.
 
@@ -350,3 +384,5 @@ Decisions not to do something, kept so they aren't reopened without new evidence
 | SKIP-11 | Sky replacement and relighting | Not in Lightroom; conflicts with truthful editing | [AI §8](ai-findings.md#8-f-other-opportunities) |
 | SKIP-12 | Studying vkdt for now | Owner decision, 30 September 2026 | Conversation |
 | SKIP-13 | Face-specific generative restoration (GFPGAN, CodeFormer, RestoreFormer, face diffusion) | Changes identity details (in the bake-off, a dark eye turned blue and stubble appeared); every model is trained on FFHQ (non-commercial) | [H §6.4](notes/H-topaz-upscale-sharpen.md#64-faces) |
+| SKIP-14 | libgphoto2 for tethering (darktable's camera library) | LGPL-2.1, and its maker tables are reverse-engineered data, both excluded by the clean-room policy | [TC routes](notes/TC-routes-and-licences.md) |
+| SKIP-15 | A cloud review service like Capture One Live | Redlamp has no cloud; clients see captures on a second display or an iPad on the local network (TET-16) | [TC teardown](notes/TC-capture-one-teardown.md#review-and-clients) |
