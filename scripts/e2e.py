@@ -412,6 +412,145 @@ def write_report(run_dir: Path, report: dict) -> None:
     (run_dir / "report.md").write_text("\n".join(lines) + "\n")
 
 
+# ---------------------------------------------------------------- the signed app, as a black box
+
+def blackbox(release: Path, run_dir: Path, update: bool) -> int:
+    """Checks the signed app as it ships, with no driver in it: it carries none of the
+    driver's code, a copy of it opens photos and quits cleanly, its CLI renders, and Sparkle
+    updates an older copy to it."""
+    run_dir.mkdir(parents=True, exist_ok=True)
+    checks: list[tuple[str, bool, str]] = []
+
+    def check(name: str, passed: bool, detail: str = "") -> None:
+        checks.append((name, passed, detail))
+        log(f"{'ok  ' if passed else 'FAIL'} {name}{': ' + detail if detail else ''}")
+
+    verify = subprocess.run(["codesign", "--verify", "--deep", "--strict", str(release)], capture_output=True, text=True)
+    check("the signature verifies", verify.returncode == 0, verify.stderr.strip())
+
+    framework = release / "Contents/Frameworks/RedlampAutomation.framework/RedlampAutomation"
+    if framework.exists():
+        symbols = subprocess.run(["nm", "-U", str(framework)], capture_output=True, text=True).stdout
+        leaked = [line for line in symbols.splitlines() if "Scenario" in line or "Catalogue" in line or "RunningApp" in line]
+        check("it carries none of the driver's code", not leaked, f"{len(leaked)} driver symbols" if leaked else "")
+    else:
+        check("it carries none of the driver's code", True, "no RedlampAutomation framework")
+    main_binary = release / "Contents/MacOS/Redlamp"
+    strings = subprocess.run(["strings", str(main_binary)], capture_output=True, text=True).stdout
+    check("the app has no driver entry point", "--e2e-launch" not in strings)
+
+    # A copy under its own bundle ID, so the owner's preferences stay as they are.
+    copy_dir = run_dir / "app"
+    copy_dir.mkdir(exist_ok=True)
+    app = copy_dir / "Redlamp.app"
+    run(["ditto", str(release), str(app)])
+    info_path = app / "Contents/Info.plist"
+    with info_path.open("rb") as handle:
+        info = plistlib.load(handle)
+    bundle = "app.redlamp.mac.e2e-release"
+    info["CFBundleIdentifier"] = bundle
+    info["SUFeedURL"] = ""
+    with info_path.open("wb") as handle:
+        plistlib.dump(info, handle)
+    identity = signing_identity(release)
+    subprocess.run(["codesign", "--force", "--options", "runtime", "--sign", identity,
+                    "--preserve-metadata=entitlements,requirements,flags", "--timestamp=none", str(app)],
+                   capture_output=True)
+    defaults("delete", bundle)
+    defaults("write", bundle, "welcome.shown", "-int", "99")
+    home = run_dir / "home"
+    home.mkdir(exist_ok=True)
+    photos = run_dir / "photos"
+    if not photos.exists():
+        prepare_photos(photos)
+    started = time.time()
+    with (run_dir / "app.log").open("w") as output:
+        process = subprocess.Popen([str(app / "Contents/MacOS/Redlamp"), str(photos)],
+                                   env=dict(os.environ, CFFIXED_USER_HOME=str(home)),
+                                   stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
+    time.sleep(20)
+    alive = process.poll() is None
+    check("it opens the photos and stays up for 20 s", alive, "" if alive else f"exited with {process.returncode}")
+    windows = subprocess.run(["swift", str(ROOT / "scripts/window-id.swift"), str(process.pid)],
+                             capture_output=True, text=True)
+    check("it shows its window", windows.returncode == 0 and windows.stdout.strip() != "", windows.stderr.strip()[:200])
+    if alive:
+        asked = subprocess.run(["osascript", "-l", "JavaScript", "-e",
+                                "ObjC.import('AppKit'); "
+                                f"$.NSRunningApplication.runningApplicationWithProcessIdentifier({process.pid}).terminate"],
+                               capture_output=True, text=True).stdout.strip()
+        how = "a quit Apple event"
+        if asked != "true":
+            # Where Apple events to the app are refused (an agent's sandbox), SIGTERM stands in;
+            # the suite's own launches quit through the app's applicationShouldTerminate.
+            how = "SIGTERM, since Apple events to the app were refused here"
+            os.kill(process.pid, signal.SIGTERM)
+        try:
+            process.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait()
+        clean = process.returncode == 0 or (asked != "true" and process.returncode == -signal.SIGTERM)
+        check("it quits when asked", clean, f"by {how}, exit {process.returncode}")
+    time.sleep(6)
+    crashes = [p for p in crash_reports_for(started, bundle)]
+    check("no crash report", not crashes, ", ".join(p.name for p in crashes))
+    defaults("delete", bundle)
+
+    cli = release / "Contents/Helpers/redlamp"
+    rendered = run_dir / "cli-render.jpg"
+    sample = next(p for p in sorted(photos.iterdir()) if p.suffix.upper() in (".ARW", ".NEF", ".RAF", ".CR3"))
+    render = subprocess.run([str(cli), "render", str(sample), "-o", str(rendered), "--size", "512"],
+                            capture_output=True, text=True, timeout=300)
+    size = subprocess.run(["sips", "-g", "pixelWidth", "-g", "pixelHeight", str(rendered)], capture_output=True, text=True)
+    check("the bundled CLI renders a photo", render.returncode == 0 and "512" in size.stdout,
+          (render.stderr or size.stdout).strip()[:200])
+
+    if update:
+        result = subprocess.run([str(ROOT / "scripts/test-update.sh"), "--auto"], capture_output=True, text=True,
+                                timeout=900)
+        (run_dir / "test-update.log").write_text(result.stdout + result.stderr)
+        check("Sparkle updates an older copy to it", result.returncode == 0,
+              "" if result.returncode == 0 else (result.stdout + result.stderr).strip().splitlines()[-1][:200])
+
+    failed = [name for name, passed, _ in checks if not passed]
+    (run_dir / "blackbox.json").write_text(json.dumps(
+        {"app": str(release), "checks": [{"name": n, "passed": p, "detail": d} for n, p, d in checks]}, indent=2))
+    log(f"Black box: {len(checks) - len(failed)} of {len(checks)} checks passed" + (f"; failed: {', '.join(failed)}" if failed else ""))
+    return 1 if failed else 0
+
+
+def crash_reports_for(since: float, bundle: str) -> list[Path]:
+    folder = HOME / "Library/Logs/DiagnosticReports"
+    found = []
+    try:
+        entries = list(folder.iterdir())
+    except OSError:
+        return found
+    for path in entries:
+        try:
+            if path.name.startswith("Redlamp") and path.stat().st_mtime >= since \
+                    and f'"bundleID":"{bundle}"' in path.read_text(errors="replace")[:2000]:
+                found.append(path)
+        except OSError:
+            continue
+    return found
+
+
+def passing_report(commits: list[str], tier: str) -> Path | None:
+    """A passing report for one of `commits` at `tier` or a tier that includes it."""
+    includes = {"smoke": {"smoke", "full", "release"}, "full": {"full", "release"}, "release": {"release"}}
+    for report in sorted((ROOT / "build/e2e").glob("*/report.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            data = json.loads(report.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        if data.get("verdict") == "Passed" and not data.get("dirty") and data.get("tier") in includes.get(tier, {tier}) \
+                and any(c.startswith(data.get("commit", "-")) or data.get("commit", "-").startswith(c[:7]) for c in commits):
+            return report
+    return None
+
+
 # ---------------------------------------------------------------- main
 
 def main() -> int:
@@ -426,7 +565,22 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=SCENARIO_TIMEOUT, help="seconds a scenario may take")
     parser.add_argument("--no-validation", dest="validation", action="store_false", help="Metal's validation layer off")
     parser.add_argument("--out", type=Path, help="the run directory (default build/e2e/<commit>-<time>)")
+    parser.add_argument("--blackbox", type=Path, metavar="APP", help="check a signed release app as a black box instead")
+    parser.add_argument("--no-update", dest="update", action="store_false", help="with --blackbox: skip the Sparkle update")
+    parser.add_argument("--passing-report", nargs="+", metavar="COMMIT",
+                        help="print a passing report for one of these commits at --tier, if there is one, and exit 0")
     args = parser.parse_args()
+
+    if args.passing_report:
+        report = passing_report(args.passing_report, args.tier)
+        if report:
+            print(report)
+            return 0
+        return 1
+    if args.blackbox:
+        sha, _ = commit()
+        out = args.out or ROOT / "build/e2e" / f"{sha}-blackbox-{dt.datetime.now():%Y%m%d-%H%M%S}"
+        return blackbox(args.blackbox.resolve(), out, args.update)
 
     sha, dirty = commit()
     started = dt.datetime.now().astimezone()

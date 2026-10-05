@@ -39,6 +39,7 @@ Redlamp is a macOS raw editor in Swift and Metal (`README.md`). These rules appl
 
 - Write code that reads like the code around it: its naming, comment density and idiom. Comments state constraints the code can't show; not what the next line does, nor why your change is right.
 - Tests sit with their package (`packages/<Package>/Tests`) and use Swift Testing (`@Test`, `#expect`, backticked names that read as sentences).
+- A feature lands with its regression scenario (`packages/RedlampAutomation/Sources/Scenarios/`), worked through the user's own input path: `RedlampAutomationTests` fail when an action, parameter, panel, tool, mask kind or Report a Bug feature has no scenario or exemption. After UI work, run `mise run e2e` (the smoke tier); it runs in the background in a home of its own.
 - Docs are plain and precise, in complete sentences, with no superlatives.
 - Licences: implement from published specifications and papers. Never copy code from GPL projects, and never ship or convert Adobe's files.
 - Raw files: [`docs/raw-pipeline.md`](docs/raw-pipeline.md) describes how Redlamp decodes and develops them, from LibRaw to the demosaic and camera colour, and how to add a camera, update LibRaw or add a decoder. Read it before changing that code, and update it in the same change.

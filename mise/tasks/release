@@ -128,6 +128,28 @@ codesign --verify --deep --strict "$APP"
 grep -q 'usage: redlamp' <<<"$("$APP/Contents/Helpers/redlamp" 2>&1 || true)" \
     || fail "the bundled CLI does not run (missing frameworks?)"
 
+# The regression suite (ARC-07): a passing run for this commit, made now on a test build of
+# the same worktree unless one was made earlier (mise run e2e -- --tier "$E2E_TIER"), then the
+# signed app as a black box. SKIP_E2E="<why>" skips it, and the reason goes in the log;
+# E2E_NO_UPDATE=1 leaves out the Sparkle update check.
+E2E_TIER="${E2E_TIER:-smoke}"
+if [ -n "${SKIP_E2E:-}" ]; then
+    echo "==> Regression suite skipped: $SKIP_E2E"
+else
+    if REPORT="$(scripts/e2e.py --passing-report "$COMMIT" "$(git -C "$SRC" rev-parse HEAD)" --tier "$E2E_TIER")"; then
+        echo "==> Regression suite: a passing $E2E_TIER run of this commit, $REPORT"
+    else
+        echo "==> Regression suite ($E2E_TIER) on a test build of $(git rev-parse --short "$COMMIT")..."
+        mkdir -p "$SRC/tests/fixtures"
+        cp -cR tests/fixtures/raw "$SRC/tests/fixtures/"
+        "$SRC/scripts/e2e.py" --tier "$E2E_TIER" \
+            --out "$PWD/build/e2e/$(git rev-parse --short=7 "$COMMIT")-release-$(date +%Y%m%d-%H%M%S)" \
+            || fail "the regression suite failed; see the report above"
+    fi
+    echo "==> Checking the signed app as a black box..."
+    scripts/e2e.py --blackbox "$APP" ${E2E_NO_UPDATE:+--no-update} || fail "the signed app failed its black-box checks"
+fi
+
 if [ "$DRY_RUN" = 1 ]; then
     ditto -c -k --keepParent "$APP" "$ZIP"
     echo "==> Dry run: signed but not notarized: $ZIP (mise run notarize -- $APP to notarize it)"
