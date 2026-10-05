@@ -258,7 +258,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Moving files and folders | Yes (Classic) | Planned | | P4 | LIB-26 | With a preview and Undo |
 | Stacks | Yes | Planned | | P4 | LIB-28 | Raw and JPEG pairs, bursts and focus stacks |
 | Bringing a Lightroom Classic catalog | Yes | Planned | | P4 | LIB-29, LIB-30 | Ratings, flags, labels, keywords and collections, from a copy of the catalog, with a report; Capture One and darktable libraries too |
-| Duplicates | Yes | Planned | | P4 | LIB-39 | Exact copies, moved to the Trash only from a list you confirm, with Undo |
+| Duplicates | Yes | In progress | | P4 | LIB-39 | Exact copies, moved to the Trash only from a list you confirm, with Undo |
 | People (face recognition) and Map | Yes | Later | | | LIB-34, LIB-35 | |
 | AI search | Yes | Later | | | LIB-32, LIB-33 | On the Mac |
 | AI-assisted culling | Yes | Later | | | OTH-02 | Lightroom's Assisted Culling judges sharpness, faces and eyes; rating, flagging and labelling work in Redlamp's filmstrip today |

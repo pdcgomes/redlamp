@@ -131,6 +131,9 @@ CREATE TABLE collection_photos (collection INTEGER NOT NULL, photo INTEGER NOT N
 CREATE VIRTUAL TABLE photo_text USING fts5(name, keywords, title, caption,
   content='', contentless_delete=1, tokenize='trigram');     -- rowid is photos.id; written by the writer (Results)
 CREATE TABLE settings (key TEXT PRIMARY KEY, value) WITHOUT ROWID;
+CREATE TABLE photo_hashes (photo INTEGER PRIMARY KEY, size INTEGER NOT NULL, modified REAL NOT NULL,
+  content_key BLOB NOT NULL, sha256 BLOB NOT NULL);          -- version 3 (LIB-39): a full hash, kept while
+                                                              -- the file's size, date and content key hold
 ```
 
 - **Snapshots and integrity.** While the index changes, a snapshot is taken with `VACUUM INTO` at most every 30 minutes, the last three kept (`LibraryPaths.snapshots`). `PRAGMA quick_check` runs in the background lane at launch once a week. A damaged index is replaced by its newest good snapshot and reconciled with the disks (LIB-08); with no snapshot, it's rebuilt.
@@ -391,6 +394,14 @@ What it changed:
 - **Quality 0.5 for the grid and 0.6 for previews,** the owner's choice from crops of the busiest parts of the previews: a thumbnail looks as it does at 0.75, and a preview keeps the texture 0.4 and 0.5 soften. The grid tier for a million photos takes about 22 GB.
 - **Decoding as a thumbnail.** ImageIO decodes whole images (`CGImageSourceCreateImageAtIndex`) one at a time across the process, about 1,800 a second, which today's `ThumbnailPacks.decode` does; asking for a thumbnail no larger than the image decodes on every thread at once, so the grid (LIB-14) decodes as `StoreImageEncoder.decode` does.
 - **For the app:** 256 shard files open at once need a higher file-descriptor limit; the store is closed at quit so its index files are written; the thumbnail maker should take LibRaw's embedded previews, since ImageIO takes about 200 ms a raw to make one.
+
+### Exact duplicates (LIB-39)
+
+`DuplicateBenchTests` and the `duplicates` scenario, load average 25 to 70:
+
+- **Grouping candidates** (content key and size, in one pass): a million synthetic photos with 1% duplicated in 15 to 18 ms, 40.5 bytes a photo, against a budget of 1 s; from a real million-row index, 97 to 122 ms.
+- **Confirming** (full SHA-256 through each volume's readers) on the fixture with duplicates turned on: 31 to 34 MB a second on the simulated spinning disk (its ceiling 160), 45 to 50 on the NAS (110), 18 on Wi-Fi (25) and 4.9 on the VPN (5). With the reads at a high priority, the spinning disk gave 64 and the NAS 107, so most of the gap is threads waiting on this busy Mac. The external SSD read 319 MB a second cold.
+- Volumes read one file at a time get 4 MiB reads, a quarter faster on the simulated spinning disk.
 
 ### Naming templates (LIB-25)
 
