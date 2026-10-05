@@ -81,7 +81,7 @@ A **snapshot** is a named version of the edit, as in Lightroom: `{"id", "name", 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `version` | integer | | The format version, `3`. Always written. Only used to tell that a sidecar is newer; see [Versions and compatibility](#versions-and-compatibility). |
-| `processVersion` | integer | `1` | The rendering behavior the edit was made with, 1 to 11; see [Process versions](#process-versions). Always written. Sidecars from before process versions read as 1. |
+| `processVersion` | integer | `1` | The rendering behavior the edit was made with, from 1 to the latest in [Process versions](#process-versions). Always written. Sidecars from before process versions read as 1. |
 | `treatment` | string | `color` | `color` or `blackAndWhite`. Always written. |
 | `baseLook` | Base Look | Redlamp Color | The look the edit renders with; see [Base Look](#base-look). Always written. |
 | `whiteBalance` | string | `asShot` | The white balance popup: `asShot`, `auto`, `daylight`, `cloudy`, `shade`, `tungsten`, `fluorescent`, `flash` or `custom`. Always written. See [White balance](#white-balance). |
