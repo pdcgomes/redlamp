@@ -211,15 +211,89 @@ Each feature has a roadmap tag:
 - Hardware keyboard shortcuts on iPad [P2]
 - Importing from the Photos library and Files [P1 for Files; P2 for Photos]
 
-## 21. Library and Catalog (Out of Scope for Now, Kept for the Future Catalog Track)
-- Collections and smart collections, folders, and stacks [Later]
-- Keywords, metadata editing, and metadata presets [Later]
-- Flags, ratings, labels, and filtering [Later; basic per-photo data in P2]
-- People (face recognition) and Map/GPS [Later]
-- Grid, Compare, and Survey views, and culling, including AI-assisted culling (verify) [Later]
-- Smart (AI) search [Later]
-- Import presets, rename on import, backup on import, and watched folders [Later]
-- Syncing the cloud library [Skip; CloudKit is on the roadmap's Later list]
+## 21. Library and Catalog
+Lightroom Classic's Library module as of Classic 15.6 (September 2026), from the [Lightroom Classic research note](research/notes/LIB-lightroom-classic.md), which has the sources. What Redlamp should adopt, do better or skip is in the [library findings](research/library-findings.md), and the track is planned in section 13 of the [research tracker](research/research-tracker.md#13-library-and-catalog). Here [P4] is the library that ships in 1.0, and [Later] its AI and the map, after 1.0 (DEC-39).
+
+**Catalog and storage**
+- One catalog database (`.lrcat`, SQLite) as the only complete record, with previews, smart previews and AI pixel data (`.lrcat-data`) stored beside it; the photos stay in folders [P4 as an index on the Mac, rebuilt from the photos and their sidecars; a catalog as the record is skipped (SKIP-17)]
+- Collections, stacks, virtual copies and history kept only in the catalog [P4, saved in each photo's sidecar instead; for stacks, proposed in the findings]
+- Catalog backups on quitting (zipped, catalog only, never pruned), the Backups tab (14.2), repair of a damaged catalog, Optimize Catalog, and a startup check of AI data (15.5) [P4, as snapshots and background integrity checks of the index]
+- Catalog format upgrades in 14.0, 15.0 and 15.4 that keep the old catalog aside [P4, as migrations of an index that can always be rebuilt]
+- Missing photos and folders: thumbnail badges, greyed folders, Find Missing Folder, files renamed outside Lightroom relinked one at a time, and since 14.4 a badge that offers to locate a missing folder [P4, followed by file identity without asking]
+- Synchronize Folder: imports files other apps added, rescans metadata, and can remove missing photos with their edits [P4, as change detection]
+- Photos on a network volume with the catalog on a local disk; several computers by moving the catalog, or the catalog and photos on one external drive [P4: photos on SMB and NFS, an index on each Mac, folders shared through sidecars]
+- Several catalogs, and merging them [Skip, proposed in the findings]
+- **Beyond Lightroom:** renames and moves made in Finder followed by file identity, with missing and offline photos shown [P4]. Classic relinks a renamed file by hand, one at a time.
+
+**Previews**
+- Previews chosen at import (Minimal, Embedded & Sidecar, Standard, 1:1), with 1:1 previews discarded after a day, a week or 30 days [P4, as a grid tier and a screen-size tier]
+- A preview cache size limit (14.0), discarding standard and 1:1 previews (14.1), and previews built on the GPU (14.5) [P4]
+- Smart previews for editing without the originals (see section 1) [Later]
+
+**Views and navigation**
+- Grid (`G`) with cell styles cycled by `J`, and Loupe (`E`) zoomed with `Z` or Space [P4]
+- Compare (`C`): a Select and a Candidate, the arrow keys promoting the next photos [P4]
+- Survey (`N`): several photos side by side, dropping the weaker ones [P4]
+- Secondary display (`Cmd+F11`, then `Shift` with `G`, `E`, `C` or `N`), with a normal, live or locked Loupe [P4]
+- The filmstrip following the current source in every module (verify) [P4]
+- 21 sort orders, and a custom order for folders and collections [P4 for sort orders and collections' own order]
+- The selection remembered in each of the 25 latest sources (14.4) [P4]
+- People view (`O`) [Later]
+
+**Culling and marking**
+- Flags (`P`, `X`, `U`), star ratings (`0` to `5`) and colour labels (`6` to `9`, red to blue; purple has no key), with `Shift` or Caps Lock moving on after marking [P4, on whole selections with Undo]
+- Colour labels as text matched to five colours by a label set, with `xmp:LabelColor` also written since 15.0 [P4, with names and colours the user chooses]
+- Custom colour labels: ten named labels in Lightroom Desktop 9.4, not in Classic [P4]
+- The Quick Collection, or a target collection, with `B` [P4]
+- The Painter: labels, ratings, flags, keywords, metadata or Develop presets, rotation or target collection membership sprayed across thumbnails, with `Option` to erase [P4]
+- Stacks (`Cmd+G`, `S` to collapse) within one folder, and auto-stacking by the gap between capture times [P4; the findings propose stacks across folders that keep brackets together]
+- An activity indicator (15.4) for culling analysis, XMP saving, address lookup, and duplicate and face detection [P4, proposed in the findings]
+
+**Search, filters and collections**
+- The filter bar (`\`): Text, Attribute and Metadata, `Cmd+L` to turn filters on and off, `+` and `!` in text, metadata columns as facets (four by default), stacking in the Attribute filter (15.0), and saved filter presets [P4]
+- Smart collections: rows of rules with nested groups (`Option`-click +), with criteria added over releases for AI edits, Denoise and Super Resolution [P4]
+- Smart-collection rules on likes and comments from web viewers (15.0) [Skip]
+- Collections and collection sets, with their own order, not written to the files [P4]
+- **Beyond Lightroom:** collections and marks saved with each photo in its sidecar, so a rebuilt index or another Mac finds them [P4]. Classic keeps collections only in its catalog.
+- Requested by Classic users: smart collections that show stacks, a missing-photo filter and rule, and sorting by several fields [P4, proposed in the findings]
+- Content (AI) search: only in the cloud apps, with natural-language search in Desktop 9.3 [Later, on the Mac]
+
+**Keywords and metadata**
+- The Keyword List: keywords nested by dragging, each with Include on Export, Export Containing Keywords, Export Synonyms and Person, and synonyms that search finds [P4; person keywords with People, Later]
+- Keyword entry with suggestions, keyword sets of nine (`Option+1` to `Option+9`), and `Cmd+K` to the keyword field [P4; `Cmd+K` is Redlamp's command palette]
+- Hierarchical keywords written to XMP both flat and as a hierarchy, with their parents [P4]
+- Keyword lists exported as tab-indented text, or as a CSV with every option (12.2), and imported [P4]
+- Merging duplicate keywords, by hand in Classic [P4; merging in one step is proposed in the findings]
+- Metadata editing, and metadata presets applied at import and with the Painter [P4]
+
+**Import**
+- Copy, Move, Add (in place) and Copy as DNG [P4 for Copy and Add, as folders indexed in place; Move and Copy as DNG aren't planned]
+- File-name templates, metadata presets and per-camera defaults applied on import; destination folders by capture date; adding to a collection [P4; per-camera defaults are EDT-06, P2]
+- Don't Import Suspected Duplicates, matching capture time and file size since 14.4 [P4]
+- A second copy elsewhere [P4, with copies verified]
+- The Import dialog's embedded previews, improved in 15.1 [P4]
+- Assisted Culling in the Import dialog (15.0) [Later]
+- Requested by Classic users: importing raw files only, and erasing the card afterwards [P4, proposed in the findings]
+
+**XMP and other apps**
+- Automatically write changes into XMP (Catalog Settings › Metadata), which slows work on slow drives [P4, as `.xmp` sidecars written only when turned on (DEC-37)]
+- What XMP carries: Develop settings, ratings, label text and keywords, flags since 13.2, label colour since 15.0, large pixel edits in `.acr` sidecars for proprietary raws since 15.0, and face regions (verify) [P4 for reading]
+- XMP written inside DNG, JPEG and TIFF files [Skip; originals are never written (DEC-37)]
+
+**Modules, panels and keys**
+- Module keys: `G`, `E`, `C`, `N` and `D`; `Cmd+Option+1` to `Cmd+Option+7` for the seven modules; `Cmd+Option+Up` back to the previous module [P4 for Library and Develop; the Map Later; Book, Slideshow, Print and Web Skip, as in section 19]
+- Panel keys: `Cmd+0` to `Cmd+9` for the right-hand panels, `Tab` and `Shift+Tab`, and `F5` to `F8` for one edge at a time [P4]
+- No shortcut editor: `G` and `D` are fixed, users remap menu commands through macOS, and 15.0 renumbered the panel shortcuts [a shortcut editor is proposed in the findings]
+
+**AI, faces and the map**
+- Assisted Culling (early access in 15.0, general in 15.4): subject focus, eye focus and eyes open per face, exposure, documents and misfires, each criterion switchable and three with sliders; where it runs isn't stated (verify) [Later]
+- Stacking by visual similarity, with the best photo on top (15.0) [Later]
+- Duplicate detection (15.4): a pausable background index, and a Duplicates view of exact matches as collapsed stacks [Later; the findings propose exact duplicates for 1.0]
+- Face detection and recognition (since Lightroom 6, 2015) over the catalog or the current source, with names becoming person keywords [Later]
+- The Map module: Google Maps, GPS track logs, and addresses looked up in the background [Later]
+
+**Cloud**
+- Syncing chosen collections to the cloud apps as smart previews, with keywords since 15.4 and smart collections not at all [Skip; CloudKit is on the roadmap's Later list]
 
 ## 22. Added from Lightroom Classic 14.4 to 15.6 (June 2025 to September 2026)
 
