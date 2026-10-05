@@ -51,7 +51,9 @@ struct HandCodedTypeTests {
         try check(colored, renamed: ["whiteBalanceMode": "whiteBalance", "unknownPanelsOff": "panelsOff"])
         try check(#require(everything.recipe.exposureAnchor))
         try check(#require(everything.snapshots.first))
-        try check(#require(everything.metadata))
+        var metadata = try #require(everything.metadata)
+        metadata.originalName = "IMG_0001.ARW"
+        try check(metadata)
     }
 
     /// A swatch picked on the photo, every setting away from its default.

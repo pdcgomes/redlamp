@@ -29,7 +29,7 @@ extension Snapshot: Codable {
 
 extension PhotoMetadata: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case rating, flag, label
+        case rating, flag, label, originalName
     }
 
     public init(from decoder: Decoder) throws {
@@ -37,6 +37,7 @@ extension PhotoMetadata: Codable {
         rating = try container.decode(Int.self, forKey: .rating)
         flag = try container.decodeIfPresent(PhotoFlag.self, forKey: .flag)
         label = try container.decodeIfPresent(ColorLabel.self, forKey: .label)
+        originalName = try container.decodeIfPresent(String.self, forKey: .originalName)
         unknownFields = try decoder.container(keyedBy: DynamicCodingKey.self)
             .unknownFields(excluding: Set(CodingKeys.allCases.map(\.stringValue)))
     }
@@ -48,5 +49,6 @@ extension PhotoMetadata: Codable {
         try container.encode(rating, forKey: .rating)
         try container.encodeIfPresent(flag, forKey: .flag)
         try container.encodeIfPresent(label, forKey: .label)
+        try container.encodeIfPresent(originalName, forKey: .originalName)
     }
 }

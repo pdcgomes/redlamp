@@ -187,7 +187,9 @@ extension PhotoMetadata {
         func pick<Value: Equatable>(_ field: (PhotoMetadata) -> Value) -> Value {
             field(theirs) != field(base) && field(ours) == field(opened) ? field(theirs) : field(ours)
         }
-        var merged = PhotoMetadata(rating: pick(\.rating), flag: pick(\.flag), label: pick(\.label))
+        var merged = PhotoMetadata(
+            rating: pick(\.rating), flag: pick(\.flag), label: pick(\.label), originalName: pick(\.originalName),
+        )
         for key in Set(ours.unknownFields.keys).union(theirs.unknownFields.keys) {
             merged.unknownFields[key] = pick { $0.unknownFields[key] }
         }

@@ -843,13 +843,17 @@
       "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
     },
     "metadata": {
-      "description": "Rating, flag and color label. Written only when one is set.",
+      "description": "Rating, flag, color label and the photo's original name. Written only when one is set.",
       "type": "object",
       "required": ["rating"],
       "properties": {
         "rating": { "type": "integer", "minimum": 0, "maximum": 5, "description": "Stars." },
         "flag": { "enum": ["pick", "reject"] },
-        "label": { "enum": ["red", "yellow", "green", "blue", "purple"] }
+        "label": { "enum": ["red", "yellow", "green", "blue", "purple"] },
+        "originalName": {
+          "type": "string",
+          "description": "The photo's file name before Redlamp first renamed it, as IMG_1234.CR3. Written the first time Redlamp renames the photo, and kept through every rename and move after that."
+        }
       },
       "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
     },
