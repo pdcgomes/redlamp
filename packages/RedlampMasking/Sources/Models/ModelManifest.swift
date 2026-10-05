@@ -40,7 +40,14 @@ public struct ModelManifest: Codable, Sendable, Hashable, Identifiable {
     public var cleared: Bool
     /// `false` while its files are only on the machine that converted them (nil means published).
     public var published: Bool?
+    /// The least memory a Mac needs to run it, in bytes; Macs with less aren't offered it.
+    public var minimumMemory: Int?
     public var notes: String?
+
+    /// Whether a Mac with `memory` bytes runs it (this Mac's by default).
+    public func fits(memory: UInt64 = ProcessInfo.processInfo.physicalMemory) -> Bool {
+        minimumMemory.map { memory >= UInt64($0) } ?? true
+    }
 
     public var isPublished: Bool {
         published ?? true

@@ -64,6 +64,9 @@ struct ModelsSettings: View {
                     Text("Awaiting licence review (\(model.decision ?? "pending")).")
                         .font(.caption).foregroundStyle(.orange)
                 }
+                if let note = model.memoryNote, model.state != .ready {
+                    Text(note).font(.caption).foregroundStyle(.secondary)
+                }
             }
             Spacer()
             if let fraction = progress[model.id] {
@@ -76,6 +79,8 @@ struct ModelsSettings: View {
                     ProgressView().controlSize(.small)
                 case .notDownloaded where !model.isPublished:
                     Text("Not published").foregroundStyle(.secondary)
+                case .notDownloaded where !model.fitsThisMac:
+                    Text("Not for this Mac").foregroundStyle(.secondary)
                 case .notDownloaded:
                     Button("Download \(model.formattedSize)") { Task { await download(model) } }
                 }

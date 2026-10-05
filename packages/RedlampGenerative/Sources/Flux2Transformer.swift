@@ -18,6 +18,18 @@ public final class Flux2Transformer {
         let ropeTheta: Double
         let timestepChannels: Int
         let eps: Float
+        /// Set when the folder's weights are already quantised (Redlamp's download).
+        let quantization: Quantization?
+
+        struct Quantization: Decodable {
+            let bits: Int
+            let groupSize: Int
+
+            enum CodingKeys: String, CodingKey {
+                case bits
+                case groupSize = "group_size"
+            }
+        }
 
         enum CodingKeys: String, CodingKey {
             case headDimension = "attention_head_dim"
@@ -31,6 +43,7 @@ public final class Flux2Transformer {
             case ropeTheta = "rope_theta"
             case timestepChannels = "timestep_guidance_channels"
             case eps
+            case quantization
         }
 
         var width: Int {
@@ -61,12 +74,15 @@ public final class Flux2Transformer {
     private let normOut, projectionOut: Linear
 
     /// From the model's `transformer/` folder, computing in `dtype`, with the blocks' and the
-    /// modulations' weights quantised when `quantization` is given.
+    /// modulations' weights quantised when `quantization` is given or the folder's already are.
     public init(directory: URL, dtype: DType = .bfloat16, quantization: WeightQuantization? = nil) throws {
         configuration = try JSONDecoder().decode(
             Configuration.self, from: Data(contentsOf: directory.appending(path: "config.json")),
         )
         self.dtype = dtype
+        let quantization = quantization ?? configuration.quantization.map {
+            WeightQuantization(bits: $0.bits, groupSize: $0.groupSize)
+        }
         let weights = try Weights(directory: directory)
         func linear(_ name: String, quantized: Bool = true) throws -> Linear {
             try Linear(weights, name, dtype: dtype, quantization: quantized ? quantization : nil)

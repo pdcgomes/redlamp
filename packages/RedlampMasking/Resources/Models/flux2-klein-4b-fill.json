@@ -1,0 +1,65 @@
+{
+  "id": "flux2-klein-4b-fill",
+  "version": 1,
+  "name": "FLUX.2 [klein] 4B",
+  "purpose": "Generative Remove: fills areas too large for content-aware Remove, labelled as generated fill.",
+  "provider": "redlamp.flux2-klein-4b",
+  "assetPack": "models.flux2-klein-4b-fill.v1",
+  "source": "https://github.com/pdcgomes/redlamp/releases/download/models-flux2-klein-4b-fill-v1/",
+  "computeUnits": "cpuAndGPU",
+  "files": [
+    {
+      "path": "LICENSE.txt",
+      "bytes": 9584,
+      "sha256": "ca02bc51900ab07789d1b70283329e7137f5af98f5161c23a1c81fc38a4af1fe"
+    },
+    {
+      "path": "prompts.json",
+      "bytes": 161,
+      "sha256": "3919877a3f5d24a78111ae26d750aca2d363a184312e80331f4fcaa1f7b02522"
+    },
+    {
+      "path": "prompts.safetensors",
+      "bytes": 23593208,
+      "sha256": "b2c4c27ea7222ca2e1f3271ab259367fa02b284cb11e03b9d81c729753f86494"
+    },
+    {
+      "path": "transformer/config.json",
+      "bytes": 601,
+      "sha256": "eac7cf5d062fa98e33a489381aa1f05810732eaba5725fa9a1ac3b564865ae9a"
+    },
+    {
+      "path": "transformer/model-00001-of-00002.safetensors",
+      "bytes": 1792223363,
+      "sha256": "6b9830fea55b3d0e0725192b7c6ff75266041c98c59b0e003e3cd297797d93b6"
+    },
+    {
+      "path": "transformer/model-00002-of-00002.safetensors",
+      "bytes": 430785627,
+      "sha256": "a9fb28ad17264a8d1c8b36c72dbeef1be70b7e58b1f692feb54dc3878058eb84"
+    },
+    {
+      "path": "vae/config.json",
+      "bytes": 821,
+      "sha256": "0d6dfb69ae95a5e2ac9836284bbb63d8b38ce67b25ba2dff380752b2a10ab948"
+    },
+    {
+      "path": "vae/diffusion_pytorch_model.safetensors",
+      "bytes": 168120878,
+      "sha256": "ca70d2202afe6415bdbcb8793ba8cd99fd159cfe6192381504d6c4d3036e0f04"
+    }
+  ],
+  "licenses": {
+    "code": "Apache-2.0",
+    "weights": "Apache-2.0",
+    "data": [
+      "Undisclosed (Black Forest Labs)"
+    ]
+  },
+  "decision": "DEC-23",
+  "evaluationOnly": false,
+  "cleared": false,
+  "published": false,
+  "minimumMemory": 17179869184,
+  "notes": "Converted by research/prototypes/generative/convert_flux.py from black-forest-labs/FLUX.2-klein-4B: the transformer's blocks quantised to 4 bits (2.22 GB, chosen by measurement in RM-10's step 2), the VAE as it is, and the prompts Generative Remove uses encoded, so no text encoder ships. Runs through MLX in RedlampGenerative. Its training data is undisclosed; the owner allowed it as an opt-in download labelled as generated fill (DEC-23). Published as the prerelease models-flux2-klein-4b-fill-v1 once the owner approves the upload (DEC-26), with its licence (LICENSE.txt). The minimum memory is 16 GB until it's measured on smaller Macs."
+}

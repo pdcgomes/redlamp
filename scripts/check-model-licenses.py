@@ -16,6 +16,8 @@ Dataset verdicts follow docs/research/notes/C-masking.md:
                    backbone, an annotator or a fine-tune): allowed by DEC-24, which the manifest
                    must name; data a model was trained on directly from Places2 stays
                    non-commercial
+  undisclosed      the publisher doesn't say what the weights were trained on: allowed as an
+                   opt-in download, labelled as generated, by DEC-23, which the manifest must name
 
 A manifest is `cleared` (offered to everyone) only once its decision is accepted; until then the
 app offers it only with evaluation models turned on. With --release, a model still waiting on its
@@ -67,6 +69,8 @@ DATASETS = {
     "LVIS (COCO images)": "lineage",
     "Objects365, behind the annotator": "lineage",
     "Visual Genome, behind the annotator": "lineage",
+    # FLUX.2 [klein] 4B: the model card only describes its NSFW and CSAM filtering.
+    "Undisclosed (Black Forest Labs)": "undisclosed",
 }
 
 REQUIRED = ["id", "version", "name", "purpose", "provider", "assetPack", "source", "computeUnits", "files", "licenses"]
@@ -121,6 +125,8 @@ def check(path, accepted):
         problems.append("publisher-granted data needs a decision id")
     if "lineage" in verdicts.values() and decision != "DEC-24":
         problems.append("research-only data in the lineage is allowed by DEC-24 only, which it must name")
+    if "undisclosed" in verdicts.values() and decision != "DEC-23":
+        problems.append("undisclosed training data is allowed by DEC-23 only, which it must name")
     cleared = manifest.get("cleared", False)
     if cleared and (evaluation_only or (decision and decision not in accepted)):
         problems.append(f"marked cleared, but {'it is evaluation only' if evaluation_only else decision + ' is not accepted'}")

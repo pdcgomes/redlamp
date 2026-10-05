@@ -31,6 +31,9 @@ jobs:
       - name: Engine purity gate
         run: scripts/check-engine-purity.sh
 
+      - name: Model licence gate
+        run: scripts/check-model-licenses.py
+
       - name: Roadmap and Lightroom comparison in step with the tracker
         run: scripts/roadmap-sync.py --check
 

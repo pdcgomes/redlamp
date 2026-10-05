@@ -106,6 +106,55 @@ struct ModelStoreTests {
         #expect(await store.location(of: model) == nil)
     }
 
+    @Test func `a model that needs more memory than the Mac has isn't downloaded`() async throws {
+        let root = try temporary()
+        let source = try temporary()
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: source)
+        }
+        var model = try manifest(serving: Data(repeating: 7, count: 64), at: source)
+        model.minimumMemory = 16 << 30
+        #expect(model.fits(memory: 16 << 30))
+        #expect(!model.fits(memory: 8 << 30))
+        model.minimumMemory = Int.max
+        await #expect(throws: ModelStoreError.self) { try await ModelStore(root: root).download(model) }
+        #expect(await ModelStore(root: root).location(of: model) == nil)
+    }
+
+    @Test func `a download carries on from the files that arrived whole`() async throws {
+        let root = try temporary()
+        let source = try temporary()
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: source)
+        }
+        let first = Data(repeating: 3, count: 2048)
+        let second = Data(repeating: 5, count: 1 << 20)
+        try first.write(to: source.appending(path: "first.bin"))
+        try second.write(to: source.appending(path: "second.bin"))
+        let json = """
+        {"id":"two-files","version":1,"name":"Two","purpose":"Tests","provider":"test","assetPack":"models.two.v1",
+         "source":"\(source.absoluteString)","computeUnits":"cpuAndGPU","cleared":true,"evaluationOnly":false,
+         "files":[{"path":"first.bin","bytes":\(first.count),"sha256":"\(MaskHash.sha256(first))"},
+                  {"path":"second.bin","bytes":\(second.count),"sha256":"\(MaskHash.sha256(second))"}],
+         "licenses":{"code":"MIT","weights":"MIT","data":[]}}
+        """
+        let model = try JSONDecoder().decode(ModelManifest.self, from: Data(json.utf8))
+        // An earlier attempt got the first file before it stopped; the source has lost it since.
+        let staging = root.appending(path: ".two-files-1")
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        try first.write(to: staging.appending(path: "first.bin"))
+        try FileManager.default.removeItem(at: source.appending(path: "first.bin"))
+
+        let reports = Reports()
+        let directory = try await ModelStore(root: root).download(model) { reports.append($0) }
+        #expect(try Data(contentsOf: directory.appending(path: "second.bin")) == second)
+        #expect(reports.values == reports.values.sorted())
+        #expect(reports.values.last == 1)
+        #expect(!FileManager.default.fileExists(atPath: staging.path))
+    }
+
     @Test func `the embedding cache keeps the most recent within budget`() async throws {
         let root = try temporary()
         defer { try? FileManager.default.removeItem(at: root) }

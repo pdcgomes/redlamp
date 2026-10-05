@@ -8,6 +8,8 @@ public enum ModelStoreError: Error, CustomStringConvertible {
     case notOffered(String)
     case checksumMismatch(String)
     case download(String)
+    /// The model needs more memory than this Mac has (its name, and the bytes it needs).
+    case needsMemory(String, Int)
 
     public var description: String {
         switch self {
@@ -15,6 +17,8 @@ public enum ModelStoreError: Error, CustomStringConvertible {
         case let .notOffered(id): "\(id) is for evaluation only until its licence is cleared."
         case let .checksumMismatch(path): "A downloaded model file was damaged (\(path)). Try again."
         case let .download(reason): "The model couldn't be downloaded: \(reason)"
+        case let .needsMemory(name, bytes):
+            "\(name) needs \(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .memory)) of memory."
         }
     }
 }
@@ -84,6 +88,9 @@ public actor ModelStore {
         guard (manifest.cleared && !manifest.evaluationOnly) || ModelCatalog.allowsEvaluationModels else {
             throw ModelStoreError.notOffered(manifest.id)
         }
+        guard manifest.fits() else {
+            throw ModelStoreError.needsMemory(manifest.name, manifest.minimumMemory ?? 0)
+        }
         if let ready = location(of: manifest) {
             return ready
         }
@@ -105,8 +112,8 @@ public actor ModelStore {
         if Self.packIsLocal(manifest.assetPack) {
             try await AssetPackManager.shared.remove(assetPackWithID: manifest.assetPack)
         }
-        let directory = directory(for: manifest)
-        if FileManager.default.fileExists(atPath: directory.path) {
+        for directory in [directory(for: manifest), staging(for: manifest)]
+            where FileManager.default.fileExists(atPath: directory.path) {
             try FileManager.default.removeItem(at: directory)
         }
     }
@@ -117,31 +124,36 @@ public actor ModelStore {
         root.appending(path: manifest.id).appending(path: "\(manifest.version)")
     }
 
+    /// Where a download collects its files; it stays after a failure, so the next attempt keeps
+    /// the files that arrived whole and resumes the one that didn't.
+    private func staging(for manifest: ModelManifest) -> URL {
+        root.appending(path: ".\(manifest.id)-\(manifest.version)")
+    }
+
     private func downloadDirectly(
         _ manifest: ModelManifest,
         report: @escaping @Sendable (Double) -> Void,
     ) async throws -> URL {
-        let staging = root.appending(path: ".\(manifest.id)-\(manifest.version)-\(UUID().uuidString)")
+        let staging = staging(for: manifest)
         try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: staging) }
+        let total = Double(max(manifest.downloadBytes, 1))
+        let throttled = ProgressThrottle(report)
         var done = 0
-        let total = max(manifest.downloadBytes, 1)
         for file in manifest.files {
-            let (downloaded, response) = try await URLSession.shared.download(from: manifest.remote(file))
-            guard (response as? HTTPURLResponse)?.statusCode ?? 200 < 400 else {
-                throw ModelStoreError.download("\(file.path): HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)")
-            }
-            guard try Self.sha256(of: downloaded) == file.sha256 else {
-                throw ModelStoreError.checksumMismatch(file.path)
-            }
             let destination = staging.appending(path: file.path)
-            try FileManager.default.createDirectory(
-                at: destination.deletingLastPathComponent(), withIntermediateDirectories: true,
-            )
-            try FileManager.default.moveItem(at: downloaded, to: destination)
+            if Self.size(of: destination) != file.bytes || (try? Self.sha256(of: destination)) != file.sha256 {
+                let before = Double(done)
+                try await fetch(file, of: manifest, to: destination) { bytes in
+                    throttled(min(before + Double(bytes), total) / total)
+                }
+                guard try Self.sha256(of: destination) == file.sha256 else {
+                    try? FileManager.default.removeItem(at: destination)
+                    throw ModelStoreError.checksumMismatch(file.path)
+                }
+            }
             done += file.bytes
-            progress[manifest.id] = Double(done) / Double(total)
-            report(Double(done) / Double(total))
+            progress[manifest.id] = Double(done) / total
+            throttled(Double(done) / total)
         }
         let final = directory(for: manifest)
         try FileManager.default.createDirectory(
@@ -153,6 +165,35 @@ public actor ModelStore {
         }
         try FileManager.default.moveItem(at: staging, to: final)
         return final
+    }
+
+    /// One file, tried three times, each attempt resuming where the last stopped.
+    private func fetch(
+        _ file: ModelManifest.File, of manifest: ModelManifest, to destination: URL,
+        received: @escaping @Sendable (Int64) -> Void,
+    ) async throws {
+        var attempt = 0
+        while true {
+            attempt += 1
+            do {
+                let response = try await FileDownload.fetch(manifest.remote(file), to: destination, received: received)
+                if let status = (response as? HTTPURLResponse)?.statusCode, status >= 400 {
+                    try? FileManager.default.removeItem(at: destination)
+                    throw ModelStoreError.download("\(file.path): HTTP \(status)")
+                }
+                return
+            } catch let error as ModelStoreError {
+                throw error
+            } catch {
+                guard attempt < 3, !Task.isCancelled else {
+                    throw ModelStoreError.download("\(file.path): \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private static func size(of url: URL) -> Int? {
+        (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int
     }
 
     static func sha256(of url: URL) throws -> String {

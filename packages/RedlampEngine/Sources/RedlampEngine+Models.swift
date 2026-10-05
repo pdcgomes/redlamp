@@ -58,6 +58,7 @@ public extension RedlampEngine {
             isCleared: manifest.cleared && !manifest.evaluationOnly, isPublished: manifest.isPublished,
             decision: manifest.decision, licence: manifest.licenses.weights,
             licenceURL: manifest.files.first { $0.path == "LICENSE.txt" }.map(manifest.remote),
+            minimumMemory: manifest.minimumMemory, fitsThisMac: manifest.fits(),
         )
     }
 }

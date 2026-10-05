@@ -35,13 +35,18 @@ public struct FlowMatchSchedule: Hashable, Sendable {
 public final class FluxInpainter {
     public let transformer: Flux2Transformer
     public let vae: Flux2VAE
+    /// The prompts' embeddings, by name, `[512, 7680]` each: Redlamp's download carries the few
+    /// Generative Remove uses (`prompts.json`, `prompts.safetensors`) instead of the text encoder.
+    public let prompts: [String: MLXArray]
 
-    /// From the model's diffusers folder (`transformer/`, `vae/`).
+    /// From the model's diffusers folder (`transformer/`, `vae/`), or Redlamp's download of it.
     public init(model directory: URL, dtype: DType = .bfloat16, quantization: WeightQuantization? = nil) throws {
         transformer = try Flux2Transformer(
             directory: directory.appending(path: "transformer"), dtype: dtype, quantization: quantization,
         )
         vae = try Flux2VAE(directory: directory.appending(path: "vae"))
+        let prompts = directory.appending(path: "prompts.safetensors")
+        self.prompts = FileManager.default.fileExists(atPath: prompts.path) ? try loadArrays(url: prompts) : [:]
     }
 
     /// Gaussian noise for a fill `width` × `height` (multiples of 16), `[tokens, 128]`, from `seed`.

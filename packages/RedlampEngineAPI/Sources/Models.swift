@@ -25,12 +25,17 @@ public struct ModelInfo: Sendable, Hashable, Identifiable {
     /// the download.
     public var licence: String?
     public var licenceURL: URL?
+    /// The least memory it runs in, in bytes, and whether this Mac has that much.
+    public var minimumMemory: Int?
+    public var fitsThisMac: Bool
 
     public init(
         id: String, name: String, purpose: String, downloadBytes: Int, state: State, isEvaluationOnly: Bool = false,
         isCleared: Bool = true, isPublished: Bool = true, decision: String? = nil, licence: String? = nil,
-        licenceURL: URL? = nil,
+        licenceURL: URL? = nil, minimumMemory: Int? = nil, fitsThisMac: Bool = true,
     ) {
+        self.minimumMemory = minimumMemory
+        self.fitsThisMac = fitsThisMac
         self.isCleared = isCleared
         self.isPublished = isPublished
         self.id = id
@@ -46,5 +51,15 @@ public struct ModelInfo: Sendable, Hashable, Identifiable {
 
     public var formattedSize: String {
         ByteCountFormatter.string(fromByteCount: Int64(downloadBytes), countStyle: .file)
+    }
+
+    /// "Needs 16 GB of memory; this Mac has 8 GB", when this Mac has too little.
+    public var memoryNote: String? {
+        guard !fitsThisMac, let minimumMemory else { return nil }
+        let needs = ByteCountFormatter.string(fromByteCount: Int64(minimumMemory), countStyle: .memory)
+        let has = ByteCountFormatter.string(
+            fromByteCount: Int64(ProcessInfo.processInfo.physicalMemory), countStyle: .memory,
+        )
+        return "Needs \(needs) of memory; this Mac has \(has)."
     }
 }

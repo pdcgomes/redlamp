@@ -156,6 +156,38 @@ struct FluxInpaintTests {
     }
 }
 
+/// Redlamp's download (`REDLAMP_FLUX_CONVERTED`, by `research/prototypes/generative/convert_flux.py`):
+/// the transformer quantised to 4 bits ahead of time, and the removal prompts encoded.
+@Suite(.enabled(if: FluxSample.model != nil && FluxSample.folder("REDLAMP_FLUX_CONVERTED") != nil), .serialized)
+struct FluxDownloadTests {
+    @Test func `the download fills as the model quantised at load does`() throws {
+        let converted = try FluxInpainter(model: #require(FluxSample.folder("REDLAMP_FLUX_CONVERTED")))
+        let quantised = try FluxInpainter(model: #require(FluxSample.model), quantization: WeightQuantization(bits: 4))
+        let sample = try #require(InpaintSample.cases.first)
+        let tensors = sample.tensors
+        func fill(_ inpainter: FluxInpainter) throws -> MLXArray {
+            try inpainter.inpaint(
+                image: #require(tensors["image"]), mask: #require(tensors["mask"]),
+                embeddings: #require(tensors["embeddings"]), noise: #require(tensors["noise"]), steps: sample.steps,
+            ).image
+        }
+        let psnr = try InpaintSample.psnr(
+            InpaintSample.displayed(fill(converted)),
+            InpaintSample.displayed(fill(quantised)),
+        )
+        #expect(psnr > 80, "\(psnr) dB")
+    }
+
+    @Test func `its prompts are encoded as diffusers encodes them`() throws {
+        let converted = try FluxInpainter(model: #require(FluxSample.folder("REDLAMP_FLUX_CONVERTED")))
+        #expect(Set(converted.prompts.keys) == ["empty", "background", "remove"])
+        let reference = try FluxSample.prompts.first { $0.prompt.isEmpty }.map { try loadArrays(url: $0.file) }
+        if let reference, let empty = converted.prompts["empty"], let embeddings = reference["embeddings"] {
+            #expect(InpaintSample.relativeError(empty, embeddings) < 0.005)
+        }
+    }
+}
+
 /// How bfloat16 and 4- and 8-bit weights compare with float32 (RM-10's precision), when
 /// `REDLAMP_FLUX_MEASURE` is set: time a step, peak memory, and the fill's PSNR against the float32
 /// reference inside and outside the mask.
