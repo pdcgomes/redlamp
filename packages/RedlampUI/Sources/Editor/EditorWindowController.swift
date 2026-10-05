@@ -8,6 +8,13 @@ import SwiftUI
 /// section, which SwiftUI's split views don't offer.
 @MainActor
 public final class EditorWindowController: NSWindowController, NSToolbarDelegate {
+    /// The window sheets attach to: the one in front, or the editor's when Redlamp isn't the
+    /// active app (scripted captures and the regression suite run it in the background).
+    public static var frontWindow: NSWindow? {
+        NSApp.keyWindow ?? NSApp.mainWindow
+            ?? NSApp.windows.first { $0.isVisible && $0.windowController is EditorWindowController }
+    }
+
     private let model: EditorModel
     private let theme: ThemeSettings
     private let onOpen: () -> Void

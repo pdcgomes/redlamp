@@ -38,7 +38,7 @@ public enum RecipeActions {
 
     /// Asks for a name and the settings to include, then saves the edit to My Recipes.
     public static func createRecipe(model: EditorModel) {
-        guard model.info != nil, let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
+        guard model.info != nil, let window = EditorWindowController.frontWindow else { return }
         let sheetWindow = NSWindow(
             contentRect: CGRect(x: 0, y: 0, width: 380, height: 460),
             styleMask: [.titled],
@@ -109,7 +109,7 @@ public enum RecipeActions {
     }
 
     private static func showSummary(_ summary: RecipeImportSummary) {
-        guard let window = NSApp.keyWindow ?? NSApp.mainWindow else {
+        guard let window = EditorWindowController.frontWindow else {
             let alert = NSAlert()
             alert.messageText = summary.headline
             alert.informativeText = ([summary.placement].compactMap(\.self) + summary.failures).joined(separator: "\n")

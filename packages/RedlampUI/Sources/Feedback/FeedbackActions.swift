@@ -75,10 +75,8 @@ public enum FeedbackActions {
         return "Redlamp/\(info?["CFBundleShortVersionString"] as? String ?? "?") (\(info?["CFBundleVersion"] as? String ?? "?"))"
     }
 
-    /// The window in front, or the editor's when the app isn't (as in scripted captures).
     private static var editorWindow: NSWindow? {
-        NSApp.keyWindow ?? NSApp.mainWindow
-            ?? NSApp.windows.first { $0.isVisible && $0.windowController is EditorWindowController }
+        EditorWindowController.frontWindow
     }
 
     private static func show(

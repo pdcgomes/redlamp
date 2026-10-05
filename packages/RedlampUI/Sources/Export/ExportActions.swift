@@ -36,7 +36,7 @@ public enum ExportActions {
     /// other window gets events and every editor action is unavailable. Returns when it closes.
     public static func present(model: EditorModel, store: ExportPresetStore) {
         guard let info = model.info, !model.isModalDialogOpen,
-              let window = NSApp.keyWindow ?? NSApp.mainWindow, window.attachedSheet == nil
+              let window = EditorWindowController.frontWindow, window.attachedSheet == nil
         else { return }
         let sheetWindow = RinglessWindow(
             contentRect: CGRect(origin: .zero, size: ExportSheet.size),
@@ -69,7 +69,7 @@ public enum ExportActions {
     /// Exports the open photo with the last export's settings, or shows the dialog if there
     /// hasn't been one.
     public static func exportWithPrevious(model: EditorModel, store: ExportPresetStore) {
-        let window = NSApp.keyWindow ?? NSApp.mainWindow
+        let window = EditorWindowController.frontWindow
         switch previousExport(model: model, store: store) {
         case .needsDialog:
             present(model: model, store: store)
