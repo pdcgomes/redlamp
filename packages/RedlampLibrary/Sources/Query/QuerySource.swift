@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// What the query engine reads besides its column store: the store itself, the small tables, the
 /// text index, keywords' and collections' photos, and SQL for before the store is ready. The index
@@ -33,6 +34,82 @@ struct QueryNames: Sendable, Hashable {
     /// The IDs whose names `matches`, in order.
     static func ids(_ names: [Int64: String], where matches: (String) -> Bool) -> [Int64] {
         names.compactMap { matches($0.value) ? $0.key : nil }.sorted()
+    }
+}
+
+/// The small tables ready to match terms against, made again whenever they're read, keeping what
+/// each term matched: typing a character at a time asks about the same terms again and again.
+final class QueryVocabulary: Sendable {
+    enum Table: Sendable, Hashable {
+        case folders, cameras, lenses, keywords, collections
+    }
+
+    let names: QueryNames
+    private let folders: NameMatcher
+    private let cameras: NameMatcher
+    private let lenses: NameMatcher
+    private let matched = Mutex<[Match: [Int64]]>([:])
+
+    private struct Match: Hashable {
+        let table: Table
+        let text: String
+    }
+
+    init(_ names: QueryNames = QueryNames()) {
+        self.names = names
+        folders = NameMatcher(names.folders)
+        cameras = NameMatcher(names.cameras)
+        lenses = NameMatcher(names.lenses)
+    }
+
+    /// The IDs in `table` that `text` matches, in order: folders, cameras and lenses whose path or
+    /// name holds it (`QueryText.contains`), keywords and collections it names (`QueryText.levelsMatch`).
+    func ids(in table: Table, matching text: String) -> [Int64] {
+        let match = Match(table: table, text: text)
+        if let ids = matched.withLock({ $0[match] }) {
+            return ids
+        }
+        let ids = switch table {
+        case .folders: folders.ids(containing: text)
+        case .cameras: cameras.ids(containing: text)
+        case .lenses: lenses.ids(containing: text)
+        case .keywords: QueryNames.ids(names.keywords) { QueryText.levelsMatch(path: $0, value: text) }
+        case .collections: QueryNames.ids(names.collections) { QueryText.levelsMatch(path: $0, value: text) }
+        }
+        matched.withLock { matched in
+            if matched.count >= 4096 {
+                matched.removeAll()
+            }
+            matched[match] = ids
+        }
+        return ids
+    }
+}
+
+/// A table's names, with the ASCII ones lowercased once, so `QueryText.contains` runs over thousands
+/// of folders' paths in well under a millisecond.
+private struct NameMatcher: Sendable {
+    private let ids: [Int64]
+    private let names: [String]
+    private let lowercased: [ContiguousArray<UInt8>?]
+
+    init(_ table: [Int64: String]) {
+        let sorted = table.sorted { $0.key < $1.key }
+        ids = sorted.map(\.key)
+        names = sorted.map(\.value)
+        lowercased = names.map(QueryText.asciiLowercased)
+    }
+
+    func ids(containing part: String) -> [Int64] {
+        let needle = QueryText.asciiLowercased(part)
+        return ids.indices.compactMap { index in
+            let found = if let needle, let name = lowercased[index] {
+                QueryText.contains(name, needle)
+            } else {
+                QueryText.contains(names[index], part)
+            }
+            return found ? ids[index] : nil
+        }
     }
 }
 
@@ -103,6 +180,17 @@ struct IndexQuerySource: QuerySource {
             }
             return ids
         }
+    }
+}
+
+public extension IndexQueries {
+    /// The photo's path: its folder's path, a slash and its name.
+    func photoPath(id: Int64) throws -> String? {
+        let statement = try database.cached("""
+        SELECT f.path || '/' || p.name FROM photos p JOIN folders f ON f.id = p.folder WHERE p.id = ?
+        """)
+        try statement.bind(id, at: 1)
+        return try statement.first { $0.string(at: 0) } ?? nil
     }
 }
 

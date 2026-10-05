@@ -49,11 +49,15 @@ public extension QueryEngine {
         let (stream, continuation) = AsyncThrowingStream.makeStream(of: FacetCounts.self)
         let task = Task.detached(priority: .utility) { [self] in
             do {
-                guard let (store, names, generation) = await loadedSnapshot() else { return continuation.finish() }
-                let matches = try await matches(for: query.searchable, in: store, names: names, generation: generation)
+                guard let (store, vocabulary, generation) = await loadedSnapshot() else {
+                    return continuation.finish()
+                }
+                let matches = try await matches(
+                    for: query.searchable, in: store, vocabulary: vocabulary, generation: generation,
+                )
                 for facet in facets {
                     try Task.checkCancellation()
-                    try continuation.yield(store.counts(by: facet, of: matches, names: names))
+                    try continuation.yield(store.counts(by: facet, of: matches, names: vocabulary.names))
                 }
                 continuation.finish()
             } catch {
@@ -116,20 +120,26 @@ extension ColumnStore {
     }
 
     /// How many rows of `matches` have each value of `column`, by `index`, below `size`.
+    @inline(__always)
     private func counts<T: BinaryInteger>(
         _ matches: RowBits, _ column: ContiguousArray<T>, size: Int, index: (T) -> Int = { Int($0) },
     ) throws -> [Int] {
         var counts = [Int](repeating: 0, count: max(size, 1))
-        try forEachRow(of: matches) { row in
-            let value = index(column[row])
-            if value >= 0, value < counts.count {
-                counts[value] += 1
+        try counts.withUnsafeMutableBufferPointer { counts in
+            try column.withUnsafeBufferPointer { column in
+                try forEachRow(of: matches) { row in
+                    let value = index(column[row])
+                    if value >= 0, value < counts.count {
+                        counts[value] += 1
+                    }
+                }
             }
         }
         return counts
     }
 
     /// Calls `body` with each row of `matches`, checking for cancellation as it goes.
+    @inline(__always)
     private func forEachRow(of matches: RowBits, _ body: (Int) -> Void) throws {
         try matches.words.withUnsafeBufferPointer { words in
             for (index, word) in words.enumerated() {
@@ -158,8 +168,11 @@ extension ColumnStore {
                 name: name, count: count, filter: .filter(LibraryQuery.Filter(field, .equal, [.text(name)])),
             ))
         }
-        values.sort { $0.name!.localizedStandardCompare($1.name!) == .orderedAscending }
-        return values + (unnamed > 0 ? [FacetValue(name: nil, count: unnamed, filter: nil)] : [])
+        let sorted = values.map { (key: FinderOrder.key($0.name ?? ""), value: $0) }.sorted { lhs, rhs in
+            lhs.key == rhs.key
+                ? (lhs.value.name ?? "") < (rhs.value.name ?? "") : lhs.key.lexicographicallyPrecedes(rhs.key)
+        }.map(\.value)
+        return sorted + (unnamed > 0 ? [FacetValue(name: nil, count: unnamed, filter: nil)] : [])
     }
 
     /// Counts by code, each code's value writing its name and filter; codes without a value count
@@ -192,26 +205,45 @@ extension ColumnStore {
         }
     }
 
-    /// Counts by the year or the month photos were taken, those without a capture time last.
+    /// Counts by the year or the month photos were taken, those without a capture time last. Months
+    /// from 1800 to 2199 are counted in an array, others in a dictionary.
     private func dates(of matches: RowBits, byMonth: Bool) throws -> FacetCounts {
-        var counts: [Int: Int] = [:]
+        let firstMonth = 1800 * 12
+        var months = [Int](repeating: 0, count: 400 * 12)
+        var others: [Int: Int] = [:]
         var undated = 0
         var lastDay = Int.min
-        var lastKey = 0
+        var lastMonth = 0
         try captured.withUnsafeBufferPointer { captured in
-            try forEachRow(of: matches) { row in
-                let milliseconds = captured[row]
-                guard milliseconds != .min else {
-                    undated += 1
-                    return
+            try months.withUnsafeMutableBufferPointer { months in
+                try forEachRow(of: matches) { row in
+                    let milliseconds = captured[row]
+                    guard milliseconds != .min else {
+                        undated += 1
+                        return
+                    }
+                    let day = QueryCalendar.day(ofMilliseconds: milliseconds)
+                    if day != lastDay {
+                        let (year, month, _) = QueryCalendar.civil(day)
+                        lastDay = day
+                        lastMonth = year * 12 + month - 1
+                    }
+                    let slot = lastMonth - firstMonth
+                    if slot >= 0, slot < months.count {
+                        months[slot] += 1
+                    } else {
+                        others[lastMonth, default: 0] += 1
+                    }
                 }
-                let day = QueryCalendar.day(ofMilliseconds: milliseconds)
-                if day != lastDay {
-                    let (year, month, _) = QueryCalendar.civil(day)
-                    lastDay = day
-                    lastKey = byMonth ? year * 12 + month - 1 : year
-                }
-                counts[lastKey, default: 0] += 1
+            }
+        }
+        var counts = others
+        for (slot, count) in months.enumerated() where count > 0 {
+            counts[slot + firstMonth] = count
+        }
+        if !byMonth {
+            counts = counts.reduce(into: [:]) { years, month in
+                years[month.key >= 0 ? month.key / 12 : (month.key - 11) / 12, default: 0] += month.value
             }
         }
         var values = counts.keys.sorted().map { key in

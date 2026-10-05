@@ -34,9 +34,10 @@ public final class QueryEngine: Sendable {
 
     private struct State {
         var store: ColumnStore?
-        var names = QueryNames()
+        var vocabulary = QueryVocabulary()
         /// Changes with the store, so what was kept for another store isn't used.
         var generation = 0
+        var plans: [PlanKey: QueryPlan] = [:]
         var rowSets: [QueryPlan.RowSet: RowBits] = [:]
         var matches: [QueryPlan: RowBits] = [:]
         var search: Task<Void, Never>?
@@ -45,7 +46,13 @@ public final class QueryEngine: Sendable {
         var changing: Task<Void, any Error>?
     }
 
-    /// Row sets and results kept, at most, before they're dropped.
+    /// A query as it's compiled: the day decides what `today` is.
+    private struct PlanKey: Hashable {
+        let query: LibraryQuery?
+        let today: Int
+    }
+
+    /// Plans, row sets and results kept, at most, before they're dropped.
     private static let kept = 64
 
     /// `timeZone` and `now` decide what `today` and `last:30d` are.
@@ -110,10 +117,12 @@ public final class QueryEngine: Sendable {
             let task = Task { [self] in
                 _ = await previous?.result
                 guard let (store, names) = try await body(self.state.withLock { $0.store }) else { return }
+                let vocabulary = QueryVocabulary(names)
                 self.state.withLock { state in
                     state.store = store
-                    state.names = names
+                    state.vocabulary = vocabulary
                     state.generation += 1
+                    state.plans.removeAll()
                     state.rowSets.removeAll()
                     state.matches.removeAll()
                 }
@@ -154,10 +163,10 @@ public final class QueryEngine: Sendable {
     private func find(
         _ query: LibraryQuery?, sort: QuerySort, pageSize: Int, yield: @escaping @Sendable (QueryResult) -> Void,
     ) async throws {
-        guard let (store, names, generation) = snapshot() else {
+        guard let (store, vocabulary, generation) = snapshot() else {
             return try await searchSQL(query, sort: sort, pageSize: pageSize, yield: yield)
         }
-        let matches = try await matches(for: query, in: store, names: names, generation: generation)
+        let matches = try await matches(for: query, in: store, vocabulary: vocabulary, generation: generation)
         let count = matches.count
         let order = store.order(sort.key)
         var ids = ContiguousArray<Int64>()
@@ -192,13 +201,13 @@ public final class QueryEngine: Sendable {
         yield(QueryResult(ids: ids, count: ids.count, isComplete: true))
     }
 
-    /// The store, the names and their generation, once the store is built.
-    func snapshot() -> (ColumnStore, QueryNames, Int)? {
-        state.withLock { state in state.store.map { ($0, state.names, state.generation) } }
+    /// The store, the small tables and their generation, once the store is built.
+    func snapshot() -> (ColumnStore, QueryVocabulary, Int)? {
+        state.withLock { state in state.store.map { ($0, state.vocabulary, state.generation) } }
     }
 
     /// The store's snapshot once it's loaded, waiting for a load in progress.
-    func loadedSnapshot() async -> (ColumnStore, QueryNames, Int)? {
+    func loadedSnapshot() async -> (ColumnStore, QueryVocabulary, Int)? {
         if let snapshot = snapshot() {
             return snapshot
         }
@@ -212,11 +221,25 @@ public final class QueryEngine: Sendable {
 
     /// The rows `query` finds in `store`, looking up its row sets in the index unless they're kept.
     func matches(
-        for query: LibraryQuery?, in store: ColumnStore, names: QueryNames, generation: Int,
+        for query: LibraryQuery?, in store: ColumnStore, vocabulary: QueryVocabulary, generation: Int,
     ) async throws -> RowBits {
-        let plan = QueryPlan(query, store: store, names: names, today: today)
-        if let kept = state.withLock({ $0.generation == generation ? $0.matches[plan] : nil }) {
-            return kept
+        let key = PlanKey(query: query, today: today)
+        let (kept, keptMatches) = state.withLock { state -> (QueryPlan?, RowBits?) in
+            guard state.generation == generation, let plan = state.plans[key] else { return (nil, nil) }
+            return (plan, state.matches[plan])
+        }
+        if let keptMatches {
+            return keptMatches
+        }
+        let plan = kept ?? QueryPlan(query, store: store, vocabulary: vocabulary, today: key.today)
+        if kept == nil {
+            state.withLock { state in
+                guard state.generation == generation else { return }
+                if state.plans.count >= Self.kept {
+                    state.plans.removeAll()
+                }
+                state.plans[key] = plan
+            }
         }
         var sets: [QueryPlan.RowSet: RowBits] = [:]
         for set in plan.rowSets {

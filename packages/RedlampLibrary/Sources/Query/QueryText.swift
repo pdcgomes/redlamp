@@ -9,9 +9,34 @@ enum QueryText {
         text.unicodeScalars.count >= 3
     }
 
-    /// `part` anywhere in `text`, ignoring case.
+    /// `part` anywhere in `text`, ignoring case: byte by byte when both are ASCII, as most names are,
+    /// and as Foundation compares them otherwise.
     static func contains(_ text: String, _ part: String) -> Bool {
-        text.range(of: part, options: .caseInsensitive) != nil
+        guard let needle = asciiLowercased(part), let haystack = asciiLowercased(text) else {
+            return text.range(of: part, options: .caseInsensitive) != nil
+        }
+        return contains(haystack, needle)
+    }
+
+    /// `text`'s bytes with A to Z lowercased, when it's all ASCII.
+    static func asciiLowercased(_ text: String) -> ContiguousArray<UInt8>? {
+        var bytes = ContiguousArray<UInt8>()
+        bytes.reserveCapacity(text.utf8.count)
+        for byte in text.utf8 {
+            guard byte < 0x80 else { return nil }
+            bytes.append((0x41 ... 0x5A).contains(byte) ? byte | 0x20 : byte)
+        }
+        return bytes
+    }
+
+    /// Whether `needle` is in `haystack`; an empty needle is in nothing, as Foundation has it.
+    static func contains(_ haystack: ContiguousArray<UInt8>, _ needle: ContiguousArray<UInt8>) -> Bool {
+        guard !needle.isEmpty, needle.count <= haystack.count else { return false }
+        return haystack.withUnsafeBytes { haystack in
+            needle.withUnsafeBytes { needle in
+                memmem(haystack.baseAddress, haystack.count, needle.baseAddress, needle.count) != nil
+            }
+        }
     }
 
     /// Whether `value` names the keyword or collection at `path`, or one above it: its levels

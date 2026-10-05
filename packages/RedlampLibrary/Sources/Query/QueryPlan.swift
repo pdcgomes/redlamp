@@ -39,8 +39,8 @@ indirect enum QueryPlan: Sendable, Hashable {
     }
 
     /// `query` against `store`: nil is every photo.
-    init(_ query: LibraryQuery?, store: ColumnStore, names: QueryNames, today: Int) {
-        self = query.map { Self.compile($0, store: store, names: names, today: today) } ?? .all
+    init(_ query: LibraryQuery?, store: ColumnStore, vocabulary: QueryVocabulary, today: Int) {
+        self = query.map { Self.compile($0, store: store, vocabulary: vocabulary, today: today) } ?? .all
     }
 
     /// The row sets it needs looked up.
@@ -56,35 +56,36 @@ indirect enum QueryPlan: Sendable, Hashable {
 
     // MARK: - Compiling
 
-    private static func compile(_ query: LibraryQuery, store: ColumnStore, names: QueryNames, today: Int) -> QueryPlan {
+    private static func compile(
+        _ query: LibraryQuery, store: ColumnStore, vocabulary: QueryVocabulary, today: Int,
+    ) -> QueryPlan {
         switch query {
         case .all:
             return .all
         case let .text(text):
-            let contains = { QueryText.contains($0, text) }
             return any([
                 .leaf(.rows(.match(QueryText.match(text)))),
-                folders(QueryNames.ids(names.folders, where: contains)),
-                cameras(QueryNames.ids(names.cameras, where: contains), store),
-                lenses(QueryNames.ids(names.lenses, where: contains), store),
+                folders(vocabulary.ids(in: .folders, matching: text)),
+                cameras(vocabulary.ids(in: .cameras, matching: text), store),
+                lenses(vocabulary.ids(in: .lenses, matching: text), store),
             ])
         case let .filter(filter):
             let alternatives = filter.values.map { value in
-                compile(filter.field, filter.comparison, value, store: store, names: names, today: today)
+                compile(filter.field, filter.comparison, value, store: store, vocabulary: vocabulary, today: today)
             }
             return filter.comparison == .notEqual ? negated(any(alternatives)) : any(alternatives)
         case let .not(query):
-            return negated(compile(query, store: store, names: names, today: today))
+            return negated(compile(query, store: store, vocabulary: vocabulary, today: today))
         case let .and(queries):
-            return every(queries.map { compile($0, store: store, names: names, today: today) })
+            return every(queries.map { compile($0, store: store, vocabulary: vocabulary, today: today) })
         case let .or(queries):
-            return any(queries.map { compile($0, store: store, names: names, today: today) })
+            return any(queries.map { compile($0, store: store, vocabulary: vocabulary, today: today) })
         }
     }
 
     private static func compile(
         _ field: LibraryQuery.Field, _ comparison: LibraryQuery.Comparison, _ value: LibraryQuery.Value,
-        store: ColumnStore, names: QueryNames, today: Int,
+        store: ColumnStore, vocabulary: QueryVocabulary, today: Int,
     ) -> QueryPlan {
         if let range = QueryRanges.range(field, comparison, value, today: today) {
             guard !range.isEmpty else { return .nothing }
@@ -115,17 +116,17 @@ indirect enum QueryPlan: Sendable, Hashable {
         case let (.edited, .bool(yes)):
             return yes ? .leaf(.bit(Packed.edited)) : .not(.leaf(.bit(Packed.edited)))
         case let (.keyword, .text(text)):
-            let ids = QueryNames.ids(names.keywords) { QueryText.levelsMatch(path: $0, value: text) }
+            let ids = vocabulary.ids(in: .keywords, matching: text)
             return ids.isEmpty ? .nothing : .leaf(.rows(.keywords(ids)))
         case let (.collection, .text(text)):
-            let ids = QueryNames.ids(names.collections) { QueryText.levelsMatch(path: $0, value: text) }
+            let ids = vocabulary.ids(in: .collections, matching: text)
             return ids.isEmpty ? .nothing : .leaf(.rows(.collections(ids)))
         case let (.camera, .text(text)):
-            return cameras(QueryNames.ids(names.cameras) { QueryText.contains($0, text) }, store)
+            return cameras(vocabulary.ids(in: .cameras, matching: text), store)
         case let (.lens, .text(text)):
-            return lenses(QueryNames.ids(names.lenses) { QueryText.contains($0, text) }, store)
+            return lenses(vocabulary.ids(in: .lenses, matching: text), store)
         case let (.folder, .text(text)):
-            return folders(QueryNames.ids(names.folders) { QueryText.contains($0, text) })
+            return folders(vocabulary.ids(in: .folders, matching: text))
         case let (.name, .text(text)):
             return .leaf(.rows(.match(QueryText.match(text, in: .name))))
         case let (.title, .text(text)):
