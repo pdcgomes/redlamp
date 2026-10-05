@@ -54,6 +54,13 @@ struct NamingSafety: Sendable, Hashable {
     /// The finished base name, from clean parts: its ends trimmed, composed, kept clear of device
     /// names and cut to `maximumBytes` of UTF-8.
     func finish(_ base: String, maximumBytes: Int) -> (String, NamingAdjustments) {
+        let utf8 = base.utf8
+        if let first = utf8.first, let last = utf8.last, first != UInt8(ascii: "."), first > 0x20, first < 0x80,
+           last > 0x20, last < 0x80, utf8.count <= maximumBytes,
+           utf8.count > 4 || !Self.reservedNames.contains(base.uppercased()),
+           !utf8.contains(where: { $0 >= 0x80 }) {
+            return (base, [])
+        }
         var adjustments: NamingAdjustments = []
         var name = Substring(base)
         while let first = name.unicodeScalars.first, first == "." || first.properties.isWhitespace {

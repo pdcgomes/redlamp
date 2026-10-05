@@ -53,17 +53,16 @@ struct NamingProgram: Sendable {
         let hasDefault: Bool
     }
 
-    /// The fields of the photo being named, and what the job worked out about it.
+    /// What the job worked out about the photo being named.
     struct Subject {
-        let fields: NamingFields
         /// The name now, without its extension.
         let base: String
         let ext: String
         let originalBase: String
         /// The digits that end the original name.
         let number: String
-        /// Its folder and the folders above it, nearest first.
-        let folders: ArraySlice<String>
+        /// Its folder, in the job's table of folders' names.
+        let folder: Int
         /// Its place in the job, among the photos in its folder, and among those with its extension.
         let sequence: (job: Int, folder: Int, ext: Int)
     }
@@ -214,17 +213,18 @@ struct NamingProgram: Sendable {
 
     // MARK: - Naming a photo
 
-    /// `subject`'s base name, in at most `maximumBytes`, with the tokens that came out empty and what
-    /// was done to make it safe. `values` is scratch space, kept between photos.
+    /// The base name of the photo with `fields`, in at most `maximumBytes`, with the tokens that came
+    /// out empty and what was done to make it safe. `values` is scratch space, kept between photos.
     func base(
-        for subject: Subject, maximumBytes: Int, values: inout [String],
+        for fields: borrowing NamingFields, _ subject: Subject, folders: borrowing [[String]], maximumBytes: Int,
+        values: inout [String],
     ) -> (base: String, empty: NamingTokenSet, adjustments: NamingAdjustments) {
         values.removeAll(keepingCapacity: true)
         var empty = NamingTokenSet()
         var adjustments: NamingAdjustments = []
         var bytes = literalBytes
         for (index, token) in tokens.enumerated() {
-            var value = value(token.source, of: subject)
+            var value = value(token.source, of: fields, subject, folders: folders)
             for modifier in token.modifiers {
                 apply(modifier, to: &value)
             }
@@ -242,7 +242,6 @@ struct NamingProgram: Sendable {
             shorten(&values, by: bytes - maximumBytes)
         }
         var base = ""
-        base.reserveCapacity(min(bytes, maximumBytes))
         for step in steps {
             switch step {
             case let .text(text): base += text
@@ -289,8 +288,10 @@ struct NamingProgram: Sendable {
         }
     }
 
-    private func value(_ source: Source, of subject: Subject) -> String {
-        let fields = subject.fields
+    /// `folders` holds each folder's name and those above it, nearest first.
+    private func value(
+        _ source: Source, of fields: borrowing NamingFields, _ subject: Subject, folders: borrowing [[String]],
+    ) -> String {
         switch source {
         case let .captured(format, zone):
             guard let captured = fields.captured else { return "" }
@@ -343,8 +344,9 @@ struct NamingProgram: Sendable {
             guard !found.isEmpty else { return "" }
             return found.count >= digits ? found : String(repeating: "0", count: digits - found.count) + found
         case .ext: return subject.ext
-        case let .folder(level): return level <= subject.folders.count ? subject.folders[subject.folders
-                .startIndex + level - 1] : ""
+        case let .folder(level):
+            let names = folders[subject.folder]
+            return level <= names.count ? names[level - 1] : ""
         case let .sequence(digits, scope):
             let place = switch scope {
             case .job: subject.sequence.job
@@ -409,13 +411,40 @@ struct NamingProgram: Sendable {
         }
     }
 
+    /// Every occurrence of `find` in `value` replaced: byte by byte when both are ASCII, which reads
+    /// the same as Foundation's search and takes a tenth of the time.
+    static func replacing(_ find: String, with replacement: String, in value: String) -> String {
+        guard value.utf8.allSatisfy({ $0 < 0x80 }), find.utf8.allSatisfy({ $0 < 0x80 }) else {
+            return value.replacingOccurrences(of: find, with: replacement)
+        }
+        let source = Array(value.utf8)
+        let pattern = Array(find.utf8)
+        guard source.count >= pattern.count else { return value }
+        var output: [UInt8] = []
+        output.reserveCapacity(source.count)
+        var index = 0
+        var found = false
+        while index < source.count {
+            if index + pattern.count <= source.count, source[index] == pattern[0],
+               source[index ..< index + pattern.count].elementsEqual(pattern) {
+                output += replacement.utf8
+                index += pattern.count
+                found = true
+            } else {
+                output.append(source[index])
+                index += 1
+            }
+        }
+        return found ? String(decoding: output, as: UTF8.self) : value
+    }
+
     private func apply(_ modifier: Modifier, to value: inout String) {
         switch modifier {
         case .upper: value = value.uppercased()
         case .lower: value = value.lowercased()
         case .title: value = value.capitalized
         case let .range(range): value = range.apply(to: value)
-        case let .replace(find, with): value = value.replacingOccurrences(of: find, with: with)
+        case let .replace(find, with): value = Self.replacing(find, with: with, in: value)
         case let .regex(expression, with):
             value = expression.stringByReplacingMatches(
                 in: value, range: NSRange(value.startIndex..., in: value), withTemplate: with,

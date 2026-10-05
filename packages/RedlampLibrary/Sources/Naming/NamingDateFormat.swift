@@ -28,13 +28,11 @@ struct NamingDateFormat: Sendable, Hashable {
     static let standard = NamingDateFormat(pieces: [.year(4), .month(2), .day(2)])
 
     let pieces: [Piece]
-
-    var needsOffset: Bool {
-        pieces.contains(.offset)
-    }
+    let needsOffset: Bool
 
     private init(pieces: [Piece]) {
         self.pieces = pieces
+        needsOffset = pieces.contains(.offset)
     }
 
     struct Failure: Error {
@@ -119,7 +117,7 @@ struct NamingDateFormat: Sendable, Hashable {
             index = end
         }
         flush()
-        self.pieces = pieces
+        self.init(pieces: pieces)
     }
 
     /// Appends `moment` as the format has it; false, appending nothing, when the format shows an offset
