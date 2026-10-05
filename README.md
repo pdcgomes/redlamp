@@ -872,7 +872,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [x] Lightroom XMP preset import, setting by setting, with a report of what came across
 - [ ] **Best-in-class classical noise reduction** on raw data, profiled per camera and ISO <!-- tracker: DN-01, DN-05, DN-10 -->
 - [ ] Better X-Trans demosaicing (Markesteijn) <!-- tracker: CAM-07 -->
-- [ ] **Camera bench:** test your own camera's raws against the camera's own JPEG on your Mac, and send only the measurements, which build the evidence on the cameras page <!-- tracker: CAM-14, CAM-15, CAM-16, CAM-17 -->
+- [x] **Camera bench:** test your own camera's raws against the camera's own JPEG on your Mac, and send only the measurements, which build the evidence on the cameras page <!-- tracker: CAM-14, CAM-15, CAM-16, CAM-17 -->
 - [ ] ICC input profiles <!-- tracker: TON-10 -->
 - [ ] **Point Color**, globally and inside masks, with Capture One's uniformity for evening out skin tones <!-- tracker: TON-29 -->
 - [ ] Lens corrections from the lensfun database (waits on counsel) <!-- tracker: LNS-03 -->
