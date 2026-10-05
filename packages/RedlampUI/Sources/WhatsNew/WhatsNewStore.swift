@@ -73,10 +73,17 @@ public final class WhatsNewStore {
         return try? JSONDecoder().decode([WhatsNewItem].self, from: data)
     }
 
+    /// Keeps `items` as the feed, and only their screenshots.
     func cache(_ items: [WhatsNewItem]) {
         guard let data = try? JSONEncoder().encode(items) else { return }
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try? data.write(to: feedFile, options: .atomic)
+        let kept = Set(items.map { imageFile(for: $0.image.url).lastPathComponent })
+        let images = directory.appending(path: "images")
+        for name in (try? FileManager.default.contentsOfDirectory(atPath: images.path)) ?? []
+            where !kept.contains(name) {
+            try? FileManager.default.removeItem(at: images.appending(path: name))
+        }
     }
 
     private func imageFile(for url: URL) -> URL {

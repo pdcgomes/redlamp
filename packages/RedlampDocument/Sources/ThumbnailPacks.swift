@@ -120,10 +120,28 @@ public final class ThumbnailPacks: Sendable {
         guard let (pack, measure) = opened else { return nil }
         try? (url as NSURL).setResourceValue(Date(), forKey: .contentModificationDateKey)
         if measure {
+            removeLeftovers()
             let total = packFiles().reduce(Int64(0)) { $0 + $1.size }
             state.withLock { $0.total = $0.total ?? total }
         }
         return pack
+    }
+
+    /// Older than this, a hidden staging file belongs to a write that never finished.
+    static let leftoverAge: TimeInterval = 60 * 60
+
+    /// Removes the staging files (`.<pack>.rltp.<UUID>`) that writes cut short left; they aren't
+    /// packs, so the budget doesn't see them.
+    func removeLeftovers(now: Date = Date()) {
+        let keys: [URLResourceKey] = [.contentModificationDateKey]
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: keys))
+        for file in files ?? []
+            where file.lastPathComponent.hasPrefix(".") && file.lastPathComponent.contains(".rltp.") {
+            let modified = (try? file.resourceValues(forKeys: Set(keys)))?.contentModificationDate ?? .distantPast
+            if now.timeIntervalSince(modified) > Self.leftoverAge {
+                try? FileManager.default.removeItem(at: file)
+            }
+        }
     }
 
     private struct PackFile {

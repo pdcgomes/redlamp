@@ -30,6 +30,21 @@ struct ThumbnailPacksTests {
         #expect(files.count == 1, "one pack for the folder")
     }
 
+    @Test func `staging a write cut short left goes once the packs are first opened`() throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let abandoned = directory.appending(path: ".0123.rltp.\(UUID().uuidString)")
+        let writing = directory.appending(path: ".4567.rltp.\(UUID().uuidString)")
+        try Data(count: 64).write(to: abandoned)
+        try Data(count: 64).write(to: writing)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date().addingTimeInterval(-2 * 3600)], ofItemAtPath: abandoned.path,
+        )
+        ThumbnailPacks(directory: directory).store(Data("one".utf8), for: photo("A.ARW"), size: 10, modified: date)
+        #expect(!FileManager.default.fileExists(atPath: abandoned.path))
+        #expect(FileManager.default.fileExists(atPath: writing.path), "a recent one may be another process's")
+    }
+
     @Test func `a pack mostly stale is compacted, keeping the latest records`() throws {
         defer { try? FileManager.default.removeItem(at: directory) }
         let packs = ThumbnailPacks(directory: directory)

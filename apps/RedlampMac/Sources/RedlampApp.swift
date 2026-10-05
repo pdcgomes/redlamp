@@ -3,6 +3,7 @@ import OSLog
 #if DEBUG || REDLAMP_PROFILING
     import RedlampAutomation
 #endif
+import RedlampDocument
 import RedlampEngine
 import RedlampEngineAPI
 import RedlampGenerative
@@ -186,7 +187,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         lookForNews(firstLaunch: welcomeOpens && !LaunchArguments.all.contains("--welcome"))
         Self.openCameraBenchIfRequested?()
-        Task.detached(priority: .background) { await RedlampEngine.removeOutdatedModels() }
+        Task.detached(priority: .background) {
+            ExportStaging.removeLeftovers()
+            await RedlampEngine.removeOutdatedModels()
+        }
     }
 
     /// Builds from source have every highlight: their version is the last release's until the next.

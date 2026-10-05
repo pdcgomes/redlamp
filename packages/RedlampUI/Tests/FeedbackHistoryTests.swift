@@ -149,6 +149,16 @@ struct FeedbackHistoryTests {
         #expect(history.reports.first?.featureID == "export.dialog")
     }
 
+    @Test func `the outbox keeps the newest reports up to its limit`() {
+        let history = history()
+        let ids = (0 ... FeedbackHistory.outboxLimit).map { _ in UUID() }
+        for id in ids {
+            history.enqueue(submission(id))
+        }
+        #expect(history.queued.map(\.id) == Array(ids.dropFirst()))
+        #expect(self.history().queued.map(\.id) == Array(ids.dropFirst()))
+    }
+
     @Test func `the new-issue page gets as much of the report as fits, and the clipboard all of it`() {
         var long = submission()
         long.body = "![Screenshot 1](attachment:screenshot-1.jpg)\n" + String(

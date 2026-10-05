@@ -180,6 +180,17 @@ struct WhatsNewLaunchTests {
         #expect(store.seen == ["bench", "menu"])
     }
 
+    @Test func `a new feed keeps only its own screenshots`() throws {
+        let store = try store()
+        let dropped = highlight("bench", "0.2.4-prealpha"), kept = highlight("menu", "0.2.5-prealpha")
+        store.cache([dropped, kept])
+        store.cache(image: screenshot, for: dropped.image.url)
+        store.cache(image: screenshot, for: kept.image.url)
+        store.cache([kept])
+        #expect(store.cachedImage(for: dropped.image.url) == nil)
+        #expect(store.cachedImage(for: kept.image.url) == screenshot)
+    }
+
     @Test func `the floor only rises`() throws {
         let store = try store()
         store.raiseFloor(to: appVersion("0.2.4-prealpha"))

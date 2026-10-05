@@ -125,6 +125,8 @@ public final class FeedbackHistory {
         didSet { defaults.set(checksForReplies, forKey: Self.checksKey) }
     }
 
+    /// The most reports the outbox keeps (each holds its screenshots); the oldest go first.
+    public static let outboxLimit = 20
     /// How often, at most, the issues' state is checked without being asked.
     public static let refreshInterval: TimeInterval = 6 * 3600
     static let checksKey = "feedback.checksForReplies"
@@ -204,6 +206,7 @@ public final class FeedbackHistory {
     public func enqueue(_ submission: FeedbackSubmission) {
         queued.removeAll { $0.id == submission.report }
         queued.append(QueuedReport(submission: submission, queued: now()))
+        queued.removeFirst(max(0, queued.count - Self.outboxLimit))
         save()
     }
 
