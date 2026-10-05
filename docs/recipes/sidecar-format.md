@@ -266,6 +266,7 @@ An AI mask was computed by a model from the photo without any edit, and is kept 
 | `part` | string? | For People, the part of the person: `entirePerson`, `faceSkin`, `bodySkin`, `eyebrows`, `eyeSclera`, `iris`, `lips`, `teeth`, `hair`, `facialHair` or `clothes`. For Landscape, the class: `water`, `vegetation`, `mountains`, `architecture`, `naturalGround` or `artificialGround`. |
 | `prompts` | [point] | **Required.** Points the user clicked to guide the model; often empty. |
 | `excludedPrompts` | [point]? | Points the user clicked to leave out. |
+| `box` | object? | For Objects, the box dragged around the thing, or the one Find found it in: `{"left", "top", "right", "bottom"}` in the oriented frame, 0…1. Updating the mask asks the model with it again. |
 | `analysisHash` | string | **Required.** A hash of the render the model saw. |
 | `center` | point | **Required.** Where the mask's pin is drawn. |
 | `bitmap` | object | **Required.** `{"sha256", "width", "height"}`: the mask as an 8-bit grayscale PNG, `masks/<sha256>.png` in the package, covering the photo in its oriented frame, white for full coverage. The refinements are already applied. A bitmap file that is missing covers nothing. |

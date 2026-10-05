@@ -558,6 +558,7 @@ enum RichSidecar {
         var objects = aiMask(.objects, "objects", instance: 0)
         objects.prompts = [point(0.7, 0.5)]
         objects.excludedPrompts = [point(0.72, 0.55)]
+        objects.box = ImageRect(x: 0.6, y: 0.4, width: 0.25, height: 0.2)
         let face = aiMask(.people, "face", part: PersonPart.faceSkin.rawValue, instance: 0)
         let faces = [MaskComponent(shape: .ai(face)), MaskComponent(shape: .ai(objects), operation: .subtract)]
         let trees = aiMask(.landscape, "trees", part: LandscapeClass.vegetation.rawValue)

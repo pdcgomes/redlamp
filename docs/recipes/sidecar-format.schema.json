@@ -597,6 +597,18 @@
           "items": { "$ref": "#/$defs/imagePoint" },
           "description": "Points the user clicked to leave out."
         },
+        "box": {
+          "type": "object",
+          "required": ["left", "top", "right", "bottom"],
+          "properties": {
+            "left": { "type": "number", "minimum": 0, "maximum": 1 },
+            "top": { "type": "number", "minimum": 0, "maximum": 1 },
+            "right": { "type": "number", "minimum": 0, "maximum": 1 },
+            "bottom": { "type": "number", "minimum": 0, "maximum": 1 }
+          },
+          "additionalProperties": false,
+          "description": "For Objects, the box dragged around the thing, or the one Find found it in, in the oriented frame, 0...1. Updating the mask asks the model with it again."
+        },
         "analysisHash": { "type": "string", "description": "A hash of the render the model saw." },
         "center": { "$ref": "#/$defs/imagePoint" },
         "bitmap": { "$ref": "#/$defs/maskBitmap", "description": "The model's mask, with the refinements applied." },

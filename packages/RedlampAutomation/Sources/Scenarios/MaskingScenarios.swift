@@ -198,7 +198,8 @@
         }
 
         static let objectsAndLandscape = Scenario(
-            "masking.objects-and-landscape", "Objects (Segment Anything) by a click, and Landscape (SAM 3)",
+            "masking.objects-and-landscape",
+            "Objects (Segment Anything) by a click, a box and a stroke, and Landscape (SAM 3)",
             claims: [.mask(.objects), .mask(.landscape), .feature("masking.objects"), .feature("masking.landscape")],
         ) { app in
             try app.openWorking()
@@ -213,9 +214,31 @@
                         $0.masks.contains { $0.components.contains { $0.shape.kind == .objects } } || $0
                             .maskMessage != nil
                     }
+                try app.press(KeyCombo(.escape))
+                // A box dragged around a thing, then a stroke brushed over another (MSK-19).
+                try app.main { $0.armObjectSelection() }
+                try app.run("selecting an object by a box", timeout: 240) {
+                    await $0.selectObject(in: ImageRect(x: 0.35, y: 0.4, width: 0.3, height: 0.3))
+                }
+                try app.press(KeyCombo(.escape))
+                try app.main { $0.armObjectSelection() }
+                try app.run("selecting an object by a stroke", timeout: 240) {
+                    await $0.selectObject(along: (0 ... 10).map { ImagePoint(x: 0.3 + 0.02 * Double($0), y: 0.7) })
+                }
+                try app.press(KeyCombo(.escape))
+                let boxed = try app.main { model in
+                    model.recipe.masks.flatMap(\.components).contains { component in
+                        if case let .ai(mask) = component.shape {
+                            mask.box != nil
+                        } else {
+                            false
+                        }
+                    }
+                }
+                let message = try app.main { $0.maskMessage }
+                try app.expect(boxed || message != nil, "No Objects mask kept its box")
                 app.covered([.mask(.objects), .feature("masking.objects")], via: .model)
                 ran = true
-                try app.press(KeyCombo(.escape))
             }
             if available.contains(.landscape) {
                 try app

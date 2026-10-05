@@ -388,6 +388,8 @@ public final class EditorModel {
     /// What a click would select while choosing an object (a low-resolution mask).
     public internal(set) var objectPreview: MaskBitmap?
     @ObservationIgnored var objectHoverTask: Task<Void, Never>?
+    /// What a drag selects with in an Objects mask.
+    public var objectSelection = ObjectSelection.rectangle
     /// Bumped when the user's mask presets change, so menus listing them update.
     var maskPresetsVersion = 0
     public var expandedPanels: Set<PanelID> = [.basic, .toneCurve, .colorMixer]

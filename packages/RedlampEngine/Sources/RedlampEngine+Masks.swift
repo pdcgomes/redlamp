@@ -302,6 +302,7 @@ extension RedlampEngine {
                 kind: .objects, provider: segmenter.manifest.provider + (full == nil ? "" : "+closed-form"),
                 revision: segmenter.manifest.version,
                 prompts: request.prompts, excludedPrompts: request.excluded.isEmpty ? nil : request.excluded,
+                box: request.box,
                 analysisHash: analysis.hash, center: request.prompts.first ?? mask.centroid, bitmap: bitmap,
             )]
         }

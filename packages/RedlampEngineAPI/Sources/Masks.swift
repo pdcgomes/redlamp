@@ -240,6 +240,9 @@ public struct AIMask: Sendable, Hashable {
     public var prompts: [ImagePoint]
     /// Points the user clicked to leave out.
     public var excludedPrompts: [ImagePoint]?
+    /// For Objects: the box dragged around the thing, or the one Find found it in, in the photo's
+    /// oriented frame.
+    public var box: ImageRect?
     /// Hash of the render the model saw.
     public var analysisHash: String
     public var center: ImagePoint
@@ -261,6 +264,7 @@ public struct AIMask: Sendable, Hashable {
         part: String? = nil,
         prompts: [ImagePoint] = [],
         excludedPrompts: [ImagePoint]? = nil,
+        box: ImageRect? = nil,
         analysisHash: String,
         center: ImagePoint,
         bitmap: MaskBitmap,
@@ -269,6 +273,7 @@ public struct AIMask: Sendable, Hashable {
     ) {
         self.refinements = refinements
         self.excludedPrompts = excludedPrompts
+        self.box = box
         self.kind = kind
         self.provider = provider
         self.revision = revision
@@ -285,8 +290,21 @@ public struct AIMask: Sendable, Hashable {
 
 extension AIMask: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case kind, provider, revision, osBuild, instance, part, prompts, excludedPrompts
+        case kind, provider, revision, osBuild, instance, part, prompts, excludedPrompts, box
         case analysisHash, center, bitmap, createdAt, refinements
+    }
+
+    /// A box as the sidecar writes it, by its edges.
+    private struct Edges: Codable {
+        var left, top, right, bottom: Double
+
+        init(_ box: ImageRect) {
+            (left, top, right, bottom) = (box.x, box.y, box.x + box.width, box.y + box.height)
+        }
+
+        var box: ImageRect {
+            ImageRect(x: left, y: top, width: right - left, height: bottom - top)
+        }
     }
 
     public init(from decoder: Decoder) throws {
@@ -299,6 +317,7 @@ extension AIMask: Codable {
         part = try container.decodeIfPresent(String.self, forKey: .part)
         prompts = try container.decode([ImagePoint].self, forKey: .prompts)
         excludedPrompts = try container.decodeIfPresent([ImagePoint].self, forKey: .excludedPrompts)
+        box = try container.decodeIfPresent(Edges.self, forKey: .box)?.box
         analysisHash = try container.decode(String.self, forKey: .analysisHash)
         center = try container.decode(ImagePoint.self, forKey: .center)
         bitmap = try container.decode(MaskBitmap.self, forKey: .bitmap)
@@ -320,6 +339,7 @@ extension AIMask: Codable {
         try container.encodeIfPresent(part, forKey: .part)
         try container.encode(prompts, forKey: .prompts)
         try container.encodeIfPresent(excludedPrompts, forKey: .excludedPrompts)
+        try container.encodeIfPresent(box.map(Edges.init), forKey: .box)
         try container.encode(analysisHash, forKey: .analysisHash)
         try container.encode(center, forKey: .center)
         try container.encode(bitmap, forKey: .bitmap)
@@ -464,8 +484,8 @@ public struct MaskRequest: Sendable, Hashable {
     public var combined: Bool
     /// For Landscape: which class.
     public var landscape: LandscapeClass
-    /// For Objects: a box around the object (a thing found by name), which bounds it as the
-    /// prompts point at it.
+    /// For Objects: a box around the object (dragged, or a thing found by name), which bounds it
+    /// as the prompts point at it.
     public var box: ImageRect?
 
     public init(
@@ -488,7 +508,7 @@ public struct MaskRequest: Sendable, Hashable {
             kind: mask.kind, part: mask.part.flatMap(PersonPart.init(rawValue:)) ?? .entirePerson,
             prompts: mask.prompts, excluded: mask.excludedPrompts ?? [],
             combined: mask.instance == nil && mask.kind == .people,
-            landscape: mask.part.flatMap(LandscapeClass.init(rawValue:)) ?? .vegetation,
+            landscape: mask.part.flatMap(LandscapeClass.init(rawValue:)) ?? .vegetation, box: mask.box,
         )
     }
 }

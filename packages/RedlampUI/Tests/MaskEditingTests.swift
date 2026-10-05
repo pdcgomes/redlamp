@@ -156,6 +156,10 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
             if !request.prompts.isEmpty {
                 mask.prompts = request.prompts
             }
+            if !request.excluded.isEmpty {
+                mask.excludedPrompts = request.excluded
+            }
+            mask.box = request.box ?? mask.box
             return mask
         }
     }

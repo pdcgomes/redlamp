@@ -284,10 +284,13 @@ private struct RangeSampler: View {
     }
 }
 
-/// Objects: hovering tints what a click would select; clicks select and refine.
+/// Objects: hovering tints what a click would select; clicks select and refine, and a drag draws a
+/// box around a thing or brushes over it, as the Masking panel's choice says.
 private struct ObjectPicker: View {
     let frame: ImageFrame
     @Environment(EditorModel.self) private var model
+    /// The drag under way: where it started and the points it has passed.
+    @State private var drag: [CGPoint] = []
 
     var body: some View {
         ZStack {
@@ -299,11 +302,31 @@ private struct ObjectPicker: View {
                     .position(x: frame.rect.midX, y: frame.rect.midY)
                     .allowsHitTesting(false)
             }
+            if let start = drag.first, let end = drag.last, drag.count > 1 {
+                switch model.objectSelection {
+                case .rectangle:
+                    Path(CGRect(
+                        x: min(start.x, end.x), y: min(start.y, end.y), width: abs(end.x - start.x),
+                        height: abs(end.y - start.y),
+                    ))
+                    .stroke(Color.white, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                    .shadow(color: .black.opacity(0.6), radius: 1)
+                    .allowsHitTesting(false)
+                case .brush:
+                    Path { $0.addLines(drag) }
+                        .stroke(
+                            Color.accentColor.opacity(0.5),
+                            style: StrokeStyle(lineWidth: 16, lineCap: .round, lineJoin: .round),
+                        )
+                        .allowsHitTesting(false)
+                }
+            }
             Color.clear
                 .contentShape(Rectangle())
                 .onContinuousHover { phase in
                     switch phase {
-                    case let .active(location): model.hoverObject(at: frame.image(location))
+                    case let .active(location) where drag.isEmpty: model.hoverObject(at: frame.image(location))
+                    case .active: break
                     case .ended: model.hoverObject(at: nil)
                     }
                 }
@@ -311,6 +334,32 @@ private struct ObjectPicker: View {
                     let excluding = NSEvent.modifierFlags.contains(.option)
                     Task { await model.selectObject(at: frame.image(location), excluding: excluding) }
                 }
+                .gesture(
+                    DragGesture(minimumDistance: 4)
+                        .onChanged { gesture in
+                            if drag.isEmpty {
+                                drag = [gesture.startLocation]
+                                model.hoverObject(at: nil)
+                            }
+                            drag.append(gesture.location)
+                        }
+                        .onEnded { gesture in
+                            let stroke = (drag + [gesture.location]).map(frame.image)
+                            drag = []
+                            switch model.objectSelection {
+                            case .rectangle:
+                                let (a, b) = (frame.image(gesture.startLocation), frame.image(gesture.location))
+                                let (left, right) = (min(max(min(a.x, b.x), 0), 1), min(max(max(a.x, b.x), 0), 1))
+                                let (top, bottom) = (min(max(min(a.y, b.y), 0), 1), min(max(max(a.y, b.y), 0), 1))
+                                guard right > left, bottom > top else { return }
+                                let box = ImageRect(x: left, y: top, width: right - left, height: bottom - top)
+                                Task { await model.selectObject(in: box) }
+                            case .brush:
+                                let excluding = NSEvent.modifierFlags.contains(.option)
+                                Task { await model.selectObject(along: stroke, excluding: excluding) }
+                            }
+                        },
+                )
                 .onHover { inside in
                     if inside {
                         NSCursor.crosshair.push()

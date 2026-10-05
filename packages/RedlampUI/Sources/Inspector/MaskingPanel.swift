@@ -331,7 +331,9 @@ struct DrawingHint: View {
         case .brush: "Paint on the photo. Hold Option to erase; [ and ] or ⌘-scroll change the size, with Shift the feather. Hold Space to move the photo."
         case .colorRange: "Click or drag on the photo to sample a color. Shift-click adds a sample (up to 5)."
         case .luminanceRange: "Click on the photo to select tones like the one there."
-        case .objects: "Click an object to select it. Click again to add to it, Option-click to take away."
+        case .objects: model.objectSelection == .rectangle
+            ? "Click an object, or drag a box around it, to select it. Click again to add to it, Option-click to take away."
+            : "Click an object, or brush over it, to select it. Click or brush again to add to it, with Option to take away."
         default: "Drag on the photo from full effect to no effect."
         }
     }
@@ -355,6 +357,17 @@ struct DrawingHint: View {
             }
             if model.isRefiningEdges {
                 EdgeBrushSize()
+            }
+            if model.drawingKind == .objects {
+                @Bindable var model = model
+                Picker("Drag", selection: $model.objectSelection) {
+                    ForEach(ObjectSelection.allCases, id: \.self) { selection in
+                        Text(selection.name).tag(selection)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .controlSize(.small)
+                .help("What a drag on the photo selects with: a box around the object, or a stroke over it")
             }
         }
         .font(Theme.captionFont)
