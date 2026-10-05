@@ -186,6 +186,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         lookForNews(firstLaunch: welcomeOpens && !LaunchArguments.all.contains("--welcome"))
         Self.openCameraBenchIfRequested?()
+        Task.detached(priority: .background) { await RedlampEngine.removeOutdatedModels() }
     }
 
     /// Builds from source have every highlight: their version is the last release's until the next.

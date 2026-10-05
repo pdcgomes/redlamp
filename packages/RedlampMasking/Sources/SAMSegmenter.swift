@@ -217,15 +217,28 @@ public final class SAMSegmenter: @unchecked Sendable {
 /// Core ML compiles into the temporary folder, as large as the model (SAM 3's encoder is
 /// 850 MB), so one compile runs at a time: callers that ask while it runs wait and find it
 /// in Caches, rather than each compiling a copy.
-enum CompiledModels {
+public enum CompiledModels {
     private static let lock = NSLock()
     /// Older than this, a compile left in the temporary folder belongs to a launch that ended
     /// before moving it into Caches.
     static let leftoverAge: TimeInterval = 60 * 60
 
-    static var root: URL {
+    public static var root: URL {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appending(path: "app.redlamp/CompiledModels")
+    }
+
+    /// Removes compiles of model versions `catalog` doesn't list; one is compiled again if needed.
+    static func removeOutdated(catalog: [ModelManifest], in root: URL = root) {
+        let current = catalog.map { "\($0.id)-v\($0.version)-" }
+        guard let items = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
+        else { return }
+        for item in items where item.pathExtension == "mlmodelc" {
+            let name = item.lastPathComponent
+            if !current.contains(where: { name.hasPrefix($0) }) {
+                try? FileManager.default.removeItem(at: item)
+            }
+        }
     }
 
     static func compiled(package: URL, key: String) throws -> URL {

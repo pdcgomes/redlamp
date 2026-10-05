@@ -118,6 +118,41 @@ public actor ModelStore {
         }
     }
 
+    /// Older than this, a staging folder no download here is using belongs to one cut short
+    /// (another process may be downloading, slowly, so not sooner).
+    static let leftoverAge: TimeInterval = 24 * 60 * 60
+
+    /// Removes what this build can't use: older versions of the catalogue's models, their
+    /// compiles and compiles of models it doesn't list, and the staging of downloads cut short.
+    /// A version newer than the catalogue's, or a model it doesn't list, may be a newer
+    /// Redlamp's, so those downloads stay.
+    public func removeOutdated(
+        catalog: [ModelManifest] = ModelCatalog.all, compiled: URL = CompiledModels.root, now: Date = Date(),
+    ) {
+        CompiledModels.removeOutdated(catalog: catalog, in: compiled)
+        let fileManager = FileManager.default
+        guard let items = try? fileManager.contentsOfDirectory(
+            at: root, includingPropertiesForKeys: [.contentModificationDateKey],
+        ) else { return }
+        let current = Dictionary(catalog.map { ($0.id, $0.version) }, uniquingKeysWith: max)
+        for item in items {
+            let name = item.lastPathComponent
+            if name.hasPrefix(".") {
+                let modified = (try? item.resourceValues(forKeys: [.contentModificationDateKey]))?
+                    .contentModificationDate ?? .distantPast
+                let ours = progress.keys.contains { name.hasPrefix(".\($0)-") }
+                if !ours, now.timeIntervalSince(modified) > Self.leftoverAge {
+                    try? fileManager.removeItem(at: item)
+                }
+            } else if let version = current[name],
+                      let versions = try? fileManager.contentsOfDirectory(atPath: item.path) {
+                for old in versions.compactMap(Int.init) where old < version {
+                    try? fileManager.removeItem(at: item.appending(path: "\(old)"))
+                }
+            }
+        }
+    }
+
     // MARK: - Direct download
 
     private func directory(for manifest: ModelManifest) -> URL {

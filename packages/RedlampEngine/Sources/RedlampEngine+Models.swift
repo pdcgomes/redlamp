@@ -41,6 +41,12 @@ public extension RedlampEngine {
         try await ModelStore.shared.download(manifest, progress: progress)
     }
 
+    /// Removes model files this build can't use: older versions, their compiles, and downloads
+    /// cut short (`ModelStore.removeOutdated`). For the app to call once a launch.
+    static func removeOutdatedModels() async {
+        await ModelStore.shared.removeOutdated()
+    }
+
     func removeModel(_ id: String) async throws {
         guard let manifest = ModelCatalog.manifest(id) else { throw ModelStoreError.unknownModel(id) }
         try await ModelStore.shared.remove(manifest)
