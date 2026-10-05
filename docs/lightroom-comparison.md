@@ -113,8 +113,8 @@ A high-level list of the features photographers know from Lightroom, and where R
 | People and their parts | Yes | Done | | | MSK-08, MSK-13 | Face parts from Apple Vision; body skin, clothes and hair from SAM 3, a download under Meta's SAM License |
 | Objects | Yes | Done | | | MSK-10 | Hover to preview, click to select (Segment Anything 2.1, an 80 MB download, an open model trained partly on data Redlamp couldn't use itself) |
 | Objects by rectangle and brush | Yes | Done | | | MSK-19 | |
-| Landscape | Yes | Done | Behind | | MSK-17 | Water, vegetation, mountains, architecture and ground, from SAM 3 (a 988 MB download under Meta's SAM License); Lightroom's also finds snow |
-| Snow in Landscape masks, and adaptive Landscape presets | Yes | Planned | | P3 | MSK-22 | |
+| Landscape | Yes | Done | | | MSK-17, MSK-22 | Water, vegetation, mountains, architecture, ground and snow, from SAM 3 (a 988 MB download under Meta's SAM License) |
+| Snow in Landscape masks, and adaptive Landscape presets | Yes | Done | | | MSK-22 | |
 | Depth Range | Yes | Done | | | MSK-14 | From the photo's own depth map, or estimated by Depth Anything, an open model trained partly on data Redlamp couldn't use itself |
 | Refine AI mask edges | Yes | Done | Different | | MSK-07 | Refine Edges, and a Refine Edge brush that solves an edge again where you paint; Lightroom has Feather and Edge sliders |
 | Feather and Edge sliders for AI masks, with edges refined at full resolution | Yes | Planned | | P3 | MSK-18 | Lightroom Classic 15.5 added the sliders |
