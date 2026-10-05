@@ -106,7 +106,8 @@ public extension IndexQueries {
         return try statement.map(PhotoRecord.init)
     }
 
-    /// The photos showing the same content: copies of one file, on any volume.
+    /// The photos showing the same content: copies of one file, on any volume. It reads every photo,
+    /// since content keys have no index (schema version 2): looking up many, load the keys once.
     func photos(contentKey: Data) throws -> [PhotoRecord] {
         let statement = try database
             .cached("SELECT \(IndexColumns.photo) FROM photos WHERE content_key = ? ORDER BY id")
