@@ -318,7 +318,7 @@ public final class PhotoStore: Sendable {
         if let root {
             StoreFiles.removeLeftovers(in: root)
         }
-        for number in 0 ..< Self.shardCount {
+        DispatchQueue.concurrentPerform(iterations: Self.shardCount) { number in
             withShard(number) { _, _ in }
         }
         state.withLock { $0.measured = true }
@@ -328,8 +328,8 @@ public final class PhotoStore: Sendable {
     /// opens them again as they're used.
     public func close() {
         let now = Self.seconds(clock())
-        for slot in slots {
-            slot.state.withLock { slot in
+        DispatchQueue.concurrentPerform(iterations: Self.shardCount) { number in
+            slots[number].state.withLock { slot in
                 if var shard = slot.shard {
                     if !shard.isIndexCurrent {
                         shard.writeIndex(now: now)
@@ -367,14 +367,19 @@ public final class PhotoStore: Sendable {
         let now = Self.seconds(clock())
         let result = slots[number].state.withLock { slot -> T? in
             guard openShard(&slot, number, creating: creating, now: now) else { return nil }
-            let before = slot.shard!.live
-            let result = body(&slot.shard!, now)
-            add(slot.shard!.live - before)
-            return result
+            return run(body, on: &slot.shard!, now: now)
         }
         if StoreDescriptor.openCount.load(ordering: .relaxed) > descriptorLimit {
             closeDescriptors(sparing: number)
         }
+        return result
+    }
+
+    /// `body` on `shard` in place, not on a copy, which would retain the shard's objects on every call.
+    private func run<T>(_ body: (inout StoreShard, UInt32) -> T, on shard: inout StoreShard, now: UInt32) -> T {
+        let before = shard.live
+        let result = body(&shard, now)
+        add(shard.live - before)
         return result
     }
 

@@ -36,7 +36,9 @@ struct StoreShard {
     static let maxPackLength = Int(UInt32.max) * StoreRecord.alignment
 
     let number: Int
-    private(set) var directory: URL
+    /// The shard's own URL: one URL object shared by every shard would be retained by every read
+    /// on every thread, and reads would stop scaling past a few threads.
+    private(set) var packURL: URL
     private(set) var generation: UInt64
     private(set) var mapping: StoreMapping
     /// The file the pack's path named when this process last wrote or mapped it.
@@ -54,9 +56,9 @@ struct StoreShard {
     private(set) var isWritable = true
     private var appendedSinceIndex = 0
 
-    private init(number: Int, directory: URL, generation: UInt64, mapping: StoreMapping) {
+    private init(number: Int, packURL: URL, generation: UInt64, mapping: StoreMapping) {
         self.number = number
-        self.directory = directory
+        self.packURL = packURL
         self.generation = generation
         self.mapping = mapping
         identity = mapping.identity
@@ -74,8 +76,8 @@ struct StoreShard {
         directory.appending(path: "\(name(number)).\(PhotoStore.indexExtension)")
     }
 
-    var packURL: URL {
-        Self.packURL(number, in: directory)
+    var directory: URL {
+        packURL.deletingLastPathComponent()
     }
 
     var indexURL: URL {
@@ -121,7 +123,7 @@ struct StoreShard {
             generation = mapping.flatMap(Self.generation)
         }
         guard let mapping, let generation else { return nil }
-        var shard = StoreShard(number: number, directory: directory, generation: generation, mapping: mapping)
+        var shard = StoreShard(number: number, packURL: pack, generation: generation, mapping: mapping)
         if let created, created.identity == mapping.identity {
             shard.descriptor = created
         }
@@ -452,7 +454,7 @@ struct StoreShard {
             try? FileManager.default.removeItem(at: index)
             throw PhotoStoreError.unreadable(pack)
         }
-        directory = destination
+        packURL = pack
         descriptor = nil
         mapping = moved
         identity = moved.identity

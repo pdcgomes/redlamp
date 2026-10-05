@@ -146,11 +146,11 @@ public struct StoreScenario: BenchScenario {
             ),
             BenchResult(
                 scenario: name, id: "library-store-read-p50", name: "Random read, p50",
-                value: QueryScenario.percentile(durations, 0.5), unit: "ms",
+                value: QueryScenario.percentile(durations, 0.5) * 1000, unit: "µs",
             ),
             BenchResult(
                 scenario: name, id: "library-store-read-p99", name: "Random read, p99",
-                value: QueryScenario.percentile(durations, 0.99), unit: "ms", budget: .below(1, "ms"),
+                value: QueryScenario.percentile(durations, 0.99) * 1000, unit: "µs", budget: .below(1000, "µs"),
             ),
             BenchResult(
                 scenario: name, id: "library-store-read-failures", name: "Reads that didn't return their record",
