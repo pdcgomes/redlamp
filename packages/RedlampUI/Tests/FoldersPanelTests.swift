@@ -67,6 +67,31 @@ struct FoldersPanelTests {
         #expect(model.library.isExpanded(trip.url))
     }
 
+    @Test func `the highlight moves to the folder that opens, not only its name`() async throws {
+        defer { try? FileManager.default.removeItem(at: root) }
+        try photos(["Trip/a.ARW", "Trip/Day 2/b.ARW"])
+        let model = EditorModel(engine: StubEngine())
+        model.open([root.appending(path: "Trip")])
+        model.library.setExpanded(root.appending(path: "Trip"), true)
+        let (list, window) = showPanel(model)
+        defer { window.contentView = nil }
+        func highlighted() -> [String] {
+            (0 ..< list.folders.numberOfRows).compactMap { index in
+                guard (list.folders.rowView(atRow: index, makeIfNecessary: false) as? SidebarRowView)?.isCurrentStep
+                    == true, let node = list.folders.item(atRow: index) as? SidebarNode,
+                    case let .folder(folder) = node.kind else { return nil }
+                return folder.name
+            }
+        }
+        try await eventually { rows(list.folders).first?.isOpen == true && rows(list.folders).count == 2 }
+        #expect(highlighted() == ["Trip"])
+
+        let day2 = try #require(rows(list.folders).first { $0.name == "Day 2" })
+        list.folders.open(day2)
+        try await eventually { rows(list.folders).first { $0.name == "Day 2" }?.isOpen == true }
+        #expect(highlighted() == ["Day 2"])
+    }
+
     @Test func `a folder with no photos is dimmed and can't be opened, until photos arrive`() async throws {
         defer { try? FileManager.default.removeItem(at: root) }
         try photos(["Trip/a.ARW", "Trip/Day 2/b.ARW"])

@@ -121,6 +121,7 @@ final class FolderOutlineView: SidebarOutlineView {
                 expandRemembered([item])
             }
         }
+        refreshHighlights()
         isReloading = false
         invalidateColumnLayout()
     }
@@ -135,6 +136,7 @@ final class FolderOutlineView: SidebarOutlineView {
                 reloadItem(item)
             }
         }
+        refreshHighlights()
     }
 
     // MARK: - Data source

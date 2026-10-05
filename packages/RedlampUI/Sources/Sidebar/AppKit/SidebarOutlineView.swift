@@ -223,12 +223,25 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
 
     func outlineView(_: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
         let row = SidebarRowView()
-        switch (item as? SidebarNode)?.kind {
-        case let .history(_, _, current, _): row.isCurrentStep = current
-        case let .folder(folder): row.isCurrentStep = folder.isOpen
-        default: break
-        }
+        row.isCurrentStep = Self.isHighlighted(item as? SidebarNode)
         return row
+    }
+
+    /// The current history step and the open folder.
+    static func isHighlighted(_ node: SidebarNode?) -> Bool {
+        switch node?.kind {
+        case let .history(_, _, current, _): current
+        case let .folder(folder): folder.isOpen
+        default: false
+        }
+    }
+
+    /// `reloadItem` makes a row's cell again but keeps its row view, which draws the highlight,
+    /// so a list that reloads rows one at a time sets the highlights afterwards.
+    final func refreshHighlights() {
+        enumerateAvailableRowViews { rowView, row in
+            (rowView as? SidebarRowView)?.isCurrentStep = Self.isHighlighted(item(atRow: row) as? SidebarNode)
+        }
     }
 
     func outlineViewItemDidExpand(_ notification: Notification) {
