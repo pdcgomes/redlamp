@@ -185,7 +185,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | --- | --- | --- | --- | --- | --- | --- |
 | Zoom, Navigator and clipping | Yes | Done | Behind | | | Fit, Fill, 1:1 and 2:1; Lightroom zooms to 11:1 |
 | Histogram you can drag to adjust | Yes | Done | | | | |
-| Lightroom Classic's keyboard shortcuts | Yes | Done | | | | 83 actions on 87 key bindings |
+| Lightroom Classic's keyboard shortcuts | Yes | Done | | | | 97 actions on 96 key bindings |
 | Command palette | No | Done | | | UX-07 | Every action and slider from the keyboard (⌘K) |
 | Sensor clipping and a colour-assessment view | No | Done | | | UX-05 | |
 | Soft proofing | Yes (Classic) | Planned | | P4 | | |

@@ -137,7 +137,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] **Camera-recipe controls** in the Effects panel: Dynamic Range, Color Chrome, Chrome FX Blue, and red and blue white-balance shift.
 - [x] **Viewing:** Fit, Fill, 1:1, and 2:1 zoom, click to zoom, pan, pinch, and a clipping overlay. **Sensor clipping** (`⌥J`) marks the photosites the camera clipped, in the colour of each clipped channel (black where all three did), whatever the edit has done since; the **colour-assessment view** (`⇧L`) puts the photo on middle grey inside a white frame (ISO 12646). **Before/After** (`\`) in three layouts, full frame, side by side and a diagonal split, cycled with `Y` and `⇧Y`; the original is rendered once and cached, so edits don't re-render it.
 - [x] **Themes:** Neutral greys by default, so nothing tints your judgment of color, plus a Redlamp theme and 20 dark and light families with a tint control, from the toolbar's Theme button or **Settings** (⌘,), which also has an About tab. The command palette follows the app's theme or takes one of its own.
-- [x] **Lightroom Classic's keyboard shortcuts**: 83 actions on 87 key bindings, from one registry that also drives the menus and an in-app ⌘/ reference (see [Keyboard shortcuts](#keyboard-shortcuts)).
+- [x] **Lightroom Classic's keyboard shortcuts**: 97 actions on 96 key bindings, from one registry that also drives the menus and an in-app ⌘/ reference (see [Keyboard shortcuts](#keyboard-shortcuts)).
 - [x] **Command palette** (⌘K): every action, with its shortcut shown beside it, every Develop slider, and pickers for white balance, treatment, Base Looks, recipes, Before / After, snapshots and history, all from the keyboard.
   - ↵ on a slider shrinks the palette to a slider bar over the photo: ← → step it (⇧ ×10, ⌥ finer), ↑ ↓ move to the next slider, and you can type a value or `x+0.3`. A run of presses is one history step.
   - Typing a name and a value, such as `exposure 0.7` or `temp 5600k`, sets it straight from the search.
@@ -840,6 +840,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [x] GitHub Actions CI: purity gate, SwiftFormat lint, build, and tests, with cached LibRaw and fixtures
 - [x] A benchmark harness and a recorded performance history, drawn at [redlamp.app/performance](https://redlamp.app/performance) <!-- internal -->
 - [ ] Performance lab: a CI runner on Apple Silicon with regression gates that block merges (iPhone and iPad tiers come with Phase 5) <!-- internal; tracker: ARC-06 -->
+- [ ] An end-to-end regression suite that works the app through every feature by its keys, menus, clicks and drags, checks for crashes, hangs and slowdowns, and gates every release <!-- internal; tracker: ARC-07, ARC-08 -->
 - [x] Golden-image color regression tests (ΔE2000) for camera files, and a golden render for every bundled recipe version
 - [ ] Written clean-room policy and a license-audit gate in CI <!-- internal -->
 
