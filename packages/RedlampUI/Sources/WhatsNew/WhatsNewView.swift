@@ -120,7 +120,7 @@ private struct ItemPage: View {
                             Button(action.title) {
                                 model.perform(action)
                             }
-                            .buttonStyle(.glass)
+                            .buttonStyle(PaperButtonStyle())
                             .padding(.top, 6)
                         }
                     }

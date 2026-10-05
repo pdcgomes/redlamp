@@ -43,7 +43,7 @@ struct Feature: View {
     }
 }
 
-/// Return presses it.
+/// The page's one way on, in the website's primary button. Return presses it.
 struct PageButton: View {
     let title: String
     let action: () -> Void
@@ -57,9 +57,101 @@ struct PageButton: View {
         Button(action: action) {
             Text(title).frame(minWidth: 112)
         }
-        .buttonStyle(.glass)
-        .controlSize(.large)
+        .buttonStyle(SafelightButtonStyle())
         .keyboardShortcut(.defaultAction)
+    }
+}
+
+/// The website's primary button (`.button-primary` in web/app/globals.css): a pill of the
+/// safelight, lit from above, its glow beneath breathing slowly. Only for the welcome and What's
+/// New, once a page; the editor's buttons stay native and neutral.
+struct SafelightButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        SafelightButton(configuration: configuration)
+    }
+}
+
+private struct SafelightButton: View {
+    static let top = Color(red: 232 / 255, green: 81 / 255, blue: 63 / 255)
+    static let bottom = Color(red: 201 / 255, green: 48 / 255, blue: 31 / 255)
+    static let text = Color(red: 1, green: 244 / 255, blue: 238 / 255)
+
+    let configuration: ButtonStyleConfiguration
+    @State private var breathing = false
+    @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isEnabled) private var isEnabled
+
+    /// The site's 0.35, breathing between 0.2 and 0.5; still with Reduce Motion.
+    private var glow: Double {
+        reduceMotion ? 0.35 : breathing ? 0.5 : 0.2
+    }
+
+    var body: some View {
+        configuration.label
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(Self.text)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 11)
+            .background {
+                Capsule().fill(LinearGradient(
+                    stops: [
+                        .init(color: Self.top, location: 0),
+                        .init(color: Brand.safelight.color, location: 0.55),
+                        .init(color: Self.bottom, location: 1),
+                    ],
+                    startPoint: .top, endPoint: .bottom,
+                ))
+            }
+            .overlay {
+                Capsule().strokeBorder(
+                    LinearGradient(
+                        colors: [.white.opacity(0.25), .clear],
+                        startPoint: .top,
+                        endPoint: UnitPoint(x: 0.5, y: 0.25),
+                    ),
+                    lineWidth: 1,
+                )
+            }
+            .brightness(configuration.isPressed ? -0.06 : 0)
+            .shadow(color: Brand.safelight.opacity(glow).color, radius: 14, y: 8)
+            .offset(y: hovering && !reduceMotion ? -1 : 0)
+            .opacity(isEnabled ? 1 : 0.5)
+            .contentShape(Capsule())
+            .onHover { hovering = $0 }
+            .animation(.easeOut(duration: 0.2), value: hovering)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 3.5).repeatForever(autoreverses: true)) {
+                    breathing = true
+                }
+            }
+    }
+}
+
+/// The website's secondary button (`.button-secondary`): a pill of faint paper with a hairline,
+/// for a page's other actions.
+struct PaperButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        PaperButton(configuration: configuration)
+    }
+}
+
+private struct PaperButton: View {
+    let configuration: ButtonStyleConfiguration
+    @State private var hovering = false
+
+    var body: some View {
+        configuration.label
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(Brand.paper.color)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 8)
+            .background(Capsule()
+                .fill(Brand.paper.opacity(configuration.isPressed ? 0.14 : hovering ? 0.1 : 0.06).color))
+            .overlay(Capsule().strokeBorder(Brand.paper.opacity(0.16).color, lineWidth: 1))
+            .contentShape(Capsule())
+            .onHover { hovering = $0 }
     }
 }
 
