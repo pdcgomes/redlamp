@@ -19,6 +19,14 @@ Every workstream keeps one canvas the owner can open beside the chat to see wher
 2. Replace every value in the `workstream` object, and delete the example rows that don't belong. Leave the rendering code alone; an empty list hides its section or tab.
 3. Link the canvas in your reply: `[Workstream title](/absolute/path/ws-slug.canvas.tsx)`.
 
+## Boards: features with milestones
+
+When the work is a feature with milestones, each made of tracker rows (the library, LIB-01 to LIB-35, is one), start from [board-template.tsx](board-template.tsx) instead. It shows overall progress and a bar for each milestone, a Now panel (what's being built, what waits on the owner, what's next), Needs you, every row with its state and issue, the measurements against their budgets, the agents with a button to open each conversation, and the plan's steps, log and decisions folded underneath.
+
+- Fill in `BOARD`, `MILESTONES` (each row with its tracker ID, issue and state), `LATER`, `NOW`, `AGENTS`, `DOCS` and `workstream`; leave the rendering alone.
+- A row's state is `done` (merged where it ships, its done-when met), `built` (merged and tested, with a check at scale or a small part left, which its note names), `doing`, `you` (waiting on the owner) or `todo`. Never call a row done that the tracker doesn't.
+- Everything below applies to boards too: the owner's marks first, one step per todo, updates in the same turn, and only what was verified.
+
 ## A plan's todos are its steps
 
 When the work has a plan (plan mode's `~/.cursor/plans/<name>.plan.md`, or one in `docs/plans/`), the canvas shows every todo:
