@@ -24,6 +24,9 @@ enum DustSamples {
 
     /// Varied scenes, one frame per camera.
     static let scenes = files("raw") + files("shoots/scenes")
+    /// Whether `mise run fixtures-shoots` has run: the bars are set on all thirteen scenes, and on
+    /// `mise run fixtures`'s six alone they would measure another set of photos.
+    static let hasScenes = files("shoots/scenes").count >= 7
     /// One camera on a tripod: the same scene eight times (the last two in smaller crop modes).
     static let series = files("shoots/nikon-z6")
 
@@ -44,7 +47,7 @@ enum DustSamples {
 /// Dust detection measured on real photos with realistic dust added (RM-02): specks of several
 /// sizes and strengths, some of them fibres, darkening every channel alike, at the same sensor
 /// places in every frame. Without the downloaded samples it's skipped.
-@Suite(.enabled(if: MTLCreateSystemDefaultDevice() != nil && DustSamples.scenes.count >= 5))
+@Suite(.enabled(if: MTLCreateSystemDefaultDevice() != nil && DustSamples.hasScenes))
 struct DustEvaluationTests {
     // MARK: - Synthetic dust
 
