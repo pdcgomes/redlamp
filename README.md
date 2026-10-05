@@ -71,7 +71,7 @@ A **red lamp** is the darkroom safelight: the one light you can work by without 
 
 Lightroom defined how millions of photographers edit, but it is a cross-platform application that doesn't feel at home on a Mac, iPad, or iPhone, and it is tied to a subscription and a cloud. Redlamp keeps the workflow photographers already know, including the panel layout, slider names and ranges, and keyboard shortcuts, and rebuilds everything underneath as a native, GPU-first, open-source application.
 
-**Redlamp is an editor, not a catalog.** It keeps a working set of folders, as Lightroom Classic's Folders panel does, and stores edits in small sidecar files next to the photos. Library management is a separate, later track.
+**Redlamp works on your folders.** It keeps a working set of folders, as Lightroom Classic's Folders panel does, and stores edits in small sidecar files next to the photos. A library built the same way is planned for 1.0 ([roadmap](#roadmap)): folders on your disk stay the organisation, ratings, keywords and collections are saved with each photo, and an index on your Mac, there only for speed, is designed for libraries of a million photos.
 
 ## Goals
 
@@ -939,6 +939,14 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [x] The edit embedded in exported files <!-- tracker: EDT-14 -->
 - [ ] **AI-assisted focus stacking:** learned fusion and halo suppression, occlusion and motion handling, and good stacks from fewer or handheld frames <!-- tracker: FS-14 -->
 - [ ] **AI Super Resolution** (2x and 4x) that stays faithful and doesn't invent detail <!-- tracker: SR-01, SR-02 -->
+- [ ] **A library for a million photos:** an index on your Mac of every photo under your folders, kept current as the disks change, with thumbnails and previews that let you browse slow, network and disconnected drives; edits and metadata stay beside each photo, or in Redlamp on this Mac for folders it can't write to <!-- tracker: LIB-05, LIB-07, LIB-08, LIB-09, LIB-10, LIB-11 -->
+- [ ] **Library and Develop in one window:** switch with a key or a click, with your selection, source and filmstrip carried across, and a second window for another screen <!-- tracker: LIB-13, LIB-20 -->
+- [ ] **Search and filters:** results as you type, one query language for the filter bar, the command palette, smart collections and `redlamp library`, and counts for every filter <!-- tracker: LIB-06, LIB-12, LIB-18, LIB-19 -->
+- [ ] **Grid and culling:** a grid and loupe that held arrow keys fly through, Compare and Survey, thumbnails that show your edits, and ratings, flags, colour labels and marks on whole selections, with Undo, by key, by mouse or from the command palette <!-- tracker: LIB-14, LIB-15, LIB-16, LIB-17 -->
+- [ ] **Keywords, metadata and collections:** a keyword list with sets and a painter, IPTC fields and metadata presets, and collections and smart collections, saved with each photo and carried into exports; other apps' XMP read, and written when you turn it on <!-- tracker: LIB-21, LIB-22, LIB-23, LIB-24 -->
+- [ ] **Files on disk:** naming templates, batch rename, moving files and new folders with Undo, importing from cards with a backup copy, and stacks <!-- tracker: LIB-25, LIB-26, LIB-27, LIB-28 -->
+- [ ] **Coming from Lightroom:** a Lightroom Classic catalog's ratings, keywords and collections, and other apps' libraries <!-- tracker: LIB-29, LIB-30 -->
+- [ ] Library research, and a design measured against a stress harness of up to two million photos on simulated spinning and network disks, with budgets that fail on regressions <!-- internal; tracker: LIB-01, LIB-02, LIB-03, LIB-04 -->
 - [ ] Accessibility, usability testing, and the Mac App Store release <!-- internal -->
 
 ### Phase 5: iPad and iPhone
@@ -950,7 +958,8 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 
 ### Later
 - CloudKit sync with lightweight proxy RAW files
-- A library and catalog, and panorama and HDR merge <!-- tracker: OTH-04 -->
+- Panorama and HDR merge <!-- tracker: OTH-04 -->
+- **The library's AI and map:** AI-assisted culling, similar photos and duplicates, suggested keywords and text search, natural-language search, people, and a map <!-- tracker: OTH-02, LIB-31, LIB-32, LIB-33, LIB-34, LIB-35 -->
 - **Tethered shooting:** capture sessions with settings for the next captures and a hot folder for any camera, then camera control and Live View for Canon, Nikon, Sony and Fujifilm, wireless, and focus brackets straight into a stack ([research](docs/research/tethering-findings.md)) <!-- tracker: TET-01, TET-02, TET-04, TET-06, TET-07, TET-08, TET-09, TET-11, TET-13, TET-14 -->
 - Importing your own `.dcp` camera profiles (deferred in October 2026)
 - More AI features, subject to the research below: lens blur, distraction removal, and personalized auto settings <!-- tracker: OTH-03, AUT-03, AUT-04 -->

@@ -177,7 +177,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Sync and Auto Sync | Yes | Done | | | EDT-17, EDT-18, EDT-20 | Undo with Auto Sync on gives each photo its own edit back, as in Lightroom |
 | Ratings, flags and colour labels | Yes | Done | | | | Saved with the photo's edit, shown on the filmstrip |
 | Batch export | Yes | Planned | | P4 | EDT-16 | |
-| Batch rename | Yes | Undecided | | | | |
+| Batch rename | Yes | Planned | | P4 | LIB-25, LIB-26 | Naming templates shared with importing, batch export and capture sessions, with a preview and Undo |
 | Open photos edited in Lightroom | Yes | Planned | | P4 | EDT-12 | Converts Lightroom's XMP sidecars once, and never writes them |
 | Bring a Lightroom Classic catalog across | Yes (Lightroom's migration from Classic) | Undecided | | | EDT-23 | Each photo's develop settings, rating, flag and label, read without changing the catalog |
 | Match Total Exposures | Yes (Classic) | Undecided | | | EDT-21 | |
@@ -212,7 +212,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Command palette | No | Done | | | UX-07 | Every action and slider from the keyboard (⌘K) |
 | Sensor clipping and a colour-assessment view | No | Done | | | UX-05 | |
 | Soft proofing | Yes (Classic) | Planned | | P4 | | |
-| Secondary display | Yes | Planned | | P4 | | |
+| Secondary display | Yes | Planned | | P4 | LIB-20 | The grid, loupe, Compare or Survey on another screen |
 
 ## Merging photos
 
@@ -243,12 +243,23 @@ A high-level list of the features photographers know from Lightroom, and where R
 
 | Feature | Lightroom | Redlamp | vs Lightroom | Phase | Tracker | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| Catalog, collections and smart collections | Yes | Later | | | | Redlamp is an editor; a library is a separate, later track |
-| Keywords and metadata editing | Yes | Later | | | | |
-| People (face recognition) and Map | Yes | Later | | | | |
-| AI search | Yes | Later | | | | |
-| Culling in a grid, and AI-assisted culling | Yes | Later | | | OTH-02 | Lightroom's Assisted Culling judges sharpness, faces and eyes; rating, flagging and labelling work in Redlamp's filmstrip today |
-| Stacking similar photos, and finding duplicates | Yes | Later | | | | |
+| Catalog | Yes | Planned | | P4 | LIB-05, LIB-07, LIB-08, LIB-09, LIB-10, LIB-11 | An index on your Mac of the folders you add, designed for a million photos and rebuilt from the photos and their sidecars at any time; folders on your disk stay the organisation, and edits and metadata stay beside each photo or in Redlamp on this Mac |
+| Library and Develop modules | Yes (Classic) | Planned | | P4 | LIB-13 | One window, switched by a key or a click, with the selection, source and filmstrip carried across |
+| Search and filters | Yes | Planned | | P4 | LIB-06, LIB-12, LIB-18, LIB-19 | Results as you type, with one query language for the filter bar, the command palette, smart collections and the command line |
+| Grid, Loupe, Compare and Survey | Yes | Planned | | P4 | LIB-14, LIB-16, LIB-17 | Held arrow keys move through photos without waiting; thumbnails show the edit |
+| Rating, flagging and labelling many photos at once | Yes | Planned | | P4 | LIB-15 | With Undo, custom label names and colours, and marks; by key, by mouse or from the command palette |
+| Keywords | Yes | Planned | | P4 | LIB-21 | |
+| Metadata editing and presets | Yes | Planned | | P4 | LIB-22 | |
+| Collections and smart collections | Yes | Planned | | P4 | LIB-23 | |
+| Metadata shared with other apps (XMP) | Yes | Planned | | P4 | LIB-24 | Other apps' XMP is read; standard `.xmp` sidecars are written only when you turn it on, and originals are never changed |
+| Import from cards and cameras | Yes | Planned | | P4 | LIB-27 | With a backup copy |
+| Moving files and folders | Yes (Classic) | Planned | | P4 | LIB-26 | With a preview and Undo |
+| Stacks | Yes | Planned | | P4 | LIB-28 | Raw and JPEG pairs, bursts and focus stacks |
+| Bringing a Lightroom Classic catalog | Yes | Planned | | P4 | LIB-29, LIB-30 | Ratings, flags, labels, keywords and collections, from a copy of the catalog, with a report; Capture One and darktable libraries too |
+| People (face recognition) and Map | Yes | Later | | | LIB-34, LIB-35 | |
+| AI search | Yes | Later | | | LIB-32, LIB-33 | On the Mac |
+| AI-assisted culling | Yes | Later | | | OTH-02 | Lightroom's Assisted Culling judges sharpness, faces and eyes; rating, flagging and labelling work in Redlamp's filmstrip today |
+| Similar photos and duplicates | Yes | Later | | | LIB-31 | |
 
 ## Print, book, slideshow and web
 
