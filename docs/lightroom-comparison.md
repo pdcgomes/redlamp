@@ -121,8 +121,8 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Mask presets (Blue Sky, Whiten Teeth and others) | Yes | Done | | | | Save your own from any mask |
 | Add, Subtract, Intersect, invert and duplicate | Yes | Done | | | | |
 | Reorder masks and components, every overlay mode and its opacity | Yes | Done | | | MSK-21 | |
-| Local adjustments in masks | Yes | Done | Behind | | MSK-03 | Local Whites and Blacks are approximated with tonal-region gains |
-| Local Whites and Blacks as true end points | Yes | Planned | | P2 | MSK-24 | |
+| Local adjustments in masks | Yes | Done | | | MSK-03, MSK-24 | Local Whites and Blacks move the end points as the global sliders do, for new edits (process 13) |
+| Local Whites and Blacks as true end points | Yes | Done | | | MSK-24 | |
 | Color swatch inside masks | Yes | Done | | | MSK-23 | |
 | Curves inside masks | Yes | Done | | | MSK-20 | |
 | Point Color inside masks | Yes | Planned | | P2 | TON-29 | With an Even Skin Tone preset on Face Skin and Body Skin |
