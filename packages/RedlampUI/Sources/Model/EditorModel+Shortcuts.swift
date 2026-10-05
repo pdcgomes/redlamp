@@ -141,11 +141,9 @@ public extension EditorModel {
             let stars = [ShortcutAction.rating0, .rating1, .rating2, .rating3, .rating4, .rating5]
                 .firstIndex(of: action) ?? 0
             updateMetadata(advance: shifted) { $0.rating = stars }
-        // While brushing, [ and ] size the brush (Shift: feather), as in Lightroom.
-        case .decreaseRating where isBrushing: nudgeBrush(direction: -1, feather: shifted)
-        case .increaseRating where isBrushing: nudgeBrush(direction: 1, feather: shifted)
-        case .decreaseRating where isRefiningEdges: nudgeEdgeBrush(direction: -1)
-        case .increaseRating where isRefiningEdges: nudgeEdgeBrush(direction: 1)
+        // While a brush's tool is active, [ and ] size it (Shift: feather), as in Lightroom.
+        case .decreaseRating where sizedBrush != nil: nudgeSizedBrush(direction: -1, feather: shifted)
+        case .increaseRating where sizedBrush != nil: nudgeSizedBrush(direction: 1, feather: shifted)
         case .decreaseRating: updateMetadata(advance: shifted) { $0.rating = max($0.rating - 1, 0) }
         case .increaseRating: updateMetadata(advance: shifted) { $0.rating = min($0.rating + 1, 5) }
         case .flagPick: updateMetadata(advance: shifted) { $0.flag = $0.flag == .pick ? nil : .pick }

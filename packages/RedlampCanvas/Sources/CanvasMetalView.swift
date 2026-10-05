@@ -17,9 +17,28 @@ public final class CanvasMetalView: NSView {
     public static let assessmentFrame = 0.04
 
     let controller: CanvasController
-    var clickAction: CanvasView.ClickAction = .zoom
-    var interactive = true
+    var clickAction: CanvasView.ClickAction = .zoom {
+        didSet {
+            if clickAction != oldValue {
+                window?.invalidateCursorRects(for: self)
+            }
+        }
+    }
+
+    var interactive = true {
+        didSet { updateCoveredEventMonitor() }
+    }
+
+    /// Scrolling and pinching over views drawn on the canvas reach it too (CoveredEvents).
+    var forwardsCoveredEvents = false {
+        didSet { updateCoveredEventMonitor() }
+    }
+
+    var coveredEventMonitor: Any?
     var onSample: (CGPoint) -> Void = { _ in }
+    /// ⌘-scroll over the canvas, in notches (positive away from you), with Shift held or not.
+    /// Returns whether it took the event; otherwise it zooms or pans as plain scrolling does.
+    var onCommandScroll: ((Double, Bool) -> Bool)?
     var surround = CanvasMetalView.defaultSurround {
         didSet {
             if surround != oldValue {
@@ -210,6 +229,11 @@ public final class CanvasMetalView: NSView {
     override public func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
         syncGeometry()
+    }
+
+    override public func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        updateCoveredEventMonitor()
     }
 
     private func syncGeometry() {

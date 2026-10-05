@@ -156,25 +156,29 @@ private struct BrushCanvas: View {
                         NSCursor.pop()
                     }
                 }
-            if let pointer {
-                Circle()
-                    .stroke(Color.white.opacity(0.9), lineWidth: 1)
-                    .frame(width: radius * 2, height: radius * 2)
-                    .shadow(color: .black.opacity(0.7), radius: 1)
-                    .position(pointer)
-                    .allowsHitTesting(false)
-                Circle()
-                    .stroke(Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                    .frame(width: core, height: core)
-                    .position(pointer)
-                    .allowsHitTesting(false)
-                if choice == .erase {
-                    Image(systemName: "minus")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.white)
-                        .shadow(color: .black, radius: 1)
-                        .position(pointer)
-                        .allowsHitTesting(false)
+            BrushRingLayer(
+                pointer: pointer,
+                fallback: CGPoint(x: frame.rect.midX, y: frame.rect.midY),
+                watched: refining ? [model.edgeBrushSize] : [settings.size, settings.feather],
+                label: refining
+                    ? "Size \(Int(model.edgeBrushSize.rounded()))"
+                    : "Size \(Int(settings.size.rounded()))  ·  Feather \(Int(settings.feather.rounded()))",
+                radius: radius,
+            ) {
+                ZStack {
+                    Circle()
+                        .stroke(Color.white.opacity(0.9), lineWidth: 1)
+                        .frame(width: radius * 2, height: radius * 2)
+                        .shadow(color: .black.opacity(0.7), radius: 1)
+                    Circle()
+                        .stroke(Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                        .frame(width: core, height: core)
+                    if choice == .erase {
+                        Image(systemName: "minus")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white)
+                            .shadow(color: .black, radius: 1)
+                    }
                 }
             }
         }

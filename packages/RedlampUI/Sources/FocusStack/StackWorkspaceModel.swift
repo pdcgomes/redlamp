@@ -40,6 +40,21 @@ public final class StackWorkspaceModel: Identifiable {
     public var brushHardness = 0.5
     public var brushOpacity = 1.0
 
+    /// `[` and `]` while retouching: the brush's size by about 15%, or with Shift its softness
+    /// (hardness down for `]`, as a feather grows).
+    func nudgeBrush(direction: Double, hardness: Bool) {
+        scrollBrush(by: hardness ? direction * 2 : direction, hardness: hardness)
+    }
+
+    /// ⌘-scroll over the preview: the size by about 15% a notch, or the hardness by 0.05.
+    func scrollBrush(by notches: Double, hardness: Bool) {
+        if hardness {
+            brushHardness = min(max(brushHardness - notches * 0.05, 0), 1)
+        } else {
+            brushRadius = min(max(brushRadius * pow(1.15, notches), 0.005), 0.1)
+        }
+    }
+
     @ObservationIgnored private let engine: any EditingEngine
     /// What `preview` was merged from.
     @ObservationIgnored private var merged: Settings?

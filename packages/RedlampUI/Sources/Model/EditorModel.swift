@@ -395,6 +395,11 @@ public final class EditorModel {
     @ObservationIgnored @_spi(Harness) public var onCommandPaletteEvent: ((PaletteEvent) -> Void)?
     /// Holding Option turns group titles into "Reset …" buttons, as in Lightroom.
     public var optionKeyHeld = false
+    /// Space held while a tool draws over the canvas: a drag pans the photo and a click zooms, as in
+    /// Lightroom's brush tools.
+    public internal(set) var isSpacePanning = false
+    /// The photo was clicked or dragged while Space was held, so letting go doesn't toggle the zoom.
+    var spacePanUsed = false
     public var showMaskPins = true
     public var maskOverlayColor: MaskOverlayColor = .red {
         didSet { requestRender() }

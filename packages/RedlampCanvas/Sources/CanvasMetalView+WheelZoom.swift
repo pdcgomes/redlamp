@@ -10,20 +10,35 @@ struct WheelZoom {
 }
 
 extension CanvasMetalView {
-    /// A mouse wheel zooms around the pointer; trackpad scrolling pans (pinch zooms).
+    /// A mouse wheel zooms around the pointer; trackpad scrolling pans (pinch zooms). With ⌘ held,
+    /// scrolling goes to `onCommandScroll` first (the active brush's size).
     override public func scrollWheel(with event: NSEvent) {
         guard interactive else { return }
+        handleScroll(event)
+    }
+
+    /// How far a scroll event turns, in wheel notches: positive when rolled away from you or
+    /// swiped up, whatever the natural-scrolling setting. A trackpad's ten points make a notch.
+    public static func notches(of event: NSEvent) -> Double {
+        let delta = Double(event.isDirectionInvertedFromDevice ? -event.scrollingDeltaY : event.scrollingDeltaY)
+        return event.hasPreciseScrollingDeltas ? delta / 10 : min(max(delta, -4), 4)
+    }
+
+    func handleScroll(_ event: NSEvent) {
+        if event.modifierFlags.contains(.command), let onCommandScroll,
+           onCommandScroll(Self.notches(of: event), event.modifierFlags.contains(.shift)) {
+            return
+        }
         if event.hasPreciseScrollingDeltas {
             guard controller.isZoomedIn else { return }
             controller.pan(byPoints: CGSize(width: event.scrollingDeltaX, height: event.scrollingDeltaY))
             return
         }
-        // Wheel rolled away from you zooms in, whatever the natural-scrolling setting.
-        let notches = Double(event.isDirectionInvertedFromDevice ? -event.scrollingDeltaY : event.scrollingDeltaY)
+        let notches = Self.notches(of: event)
         guard notches != 0 else { return }
         let from = wheelZoom.target ?? controller.pixelScale
         // Four notches double or halve the zoom.
-        wheelZoom.target = controller.clampedScale(from * pow(2, min(max(notches, -4), 4) / 4))
+        wheelZoom.target = controller.clampedScale(from * pow(2, notches / 4))
         wheelZoom.anchor = convert(event.locationInWindow, from: nil)
         if wheelZoom.link == nil {
             let link = displayLink(target: self, selector: #selector(stepWheelZoom))

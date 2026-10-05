@@ -11,11 +11,29 @@ import AppKit
 final class KeyboardShortcuts {
     private var keyMonitor: Any?
     private var flagsMonitor: Any?
+    private var spaceMonitor: Any?
+    private var resignObserver: Any?
 
     func install(model: EditorModel) {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             Self.handle(event, model: model) ? nil : event
+        }
+        // Space held in a tool pans the photo; letting it go without a click or drag toggles the zoom.
+        spaceMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyUp, .leftMouseDown]) { event in
+            guard model.isSpacePanning else { return event }
+            if event.type == .leftMouseDown {
+                model.noteSpacePanUse()
+                return event
+            }
+            guard event.keyCode == 49 else { return event }
+            model.endSpacePan()
+            return nil
+        }
+        resignObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification, object: nil, queue: .main,
+        ) { _ in
+            MainActor.assumeIsolated { model.cancelSpacePan() }
         }
         // Holding Option shows "Reset …" group titles, as in Lightroom.
         flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
@@ -37,6 +55,13 @@ final class KeyboardShortcuts {
         }
         let flags = event.modifierFlags
         guard !flags.contains(.command), !flags.contains(.control), let key = key(for: event) else { return false }
+        if key == .space, !flags.contains(.shift), !flags.contains(.option),
+           model.isSpacePanning || model.hasToolOverlay {
+            if !event.isARepeat {
+                model.beginSpacePan()
+            }
+            return true
+        }
         let combo = KeyCombo(key, shift: flags.contains(.shift), option: flags.contains(.option))
         guard let (action, shifted) = ShortcutAction.resolve(combo), !action.isMenuShortcut else { return false }
         return model.perform(action, shifted: shifted)

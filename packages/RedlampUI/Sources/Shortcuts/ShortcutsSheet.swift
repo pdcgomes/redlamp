@@ -39,6 +39,7 @@ struct ShortcutsSheet: View {
                         ForEach(ShortcutAction.byCategory, id: \.0) { category, actions in
                             ShortcutGroup(title: category.rawValue, actions: actions)
                         }
+                        ToolGesturesGroup()
                         PaletteKeysGroup()
                     }
                 }
@@ -51,6 +52,38 @@ struct ShortcutsSheet: View {
             .padding(40)
         }
         .transition(.opacity)
+    }
+}
+
+/// Zooming, panning and sizing brushes in the tools that draw over the photo (UX-15).
+private struct ToolGesturesGroup: View {
+    private static let hints: [PaletteHint] = [
+        PaletteHint("Zoom around the pointer, in any tool", ["Scroll"]),
+        PaletteHint("Move the photo while a tool is active", ["Space", "Drag"]),
+        PaletteHint("Brush size, in any brush tool", ["[", "]"]),
+        PaletteHint("Brush feather", ["⇧", "[", "]"]),
+        PaletteHint("Brush size from the pointer", ["⌘", "Scroll"]),
+        PaletteHint("Brush feather from the pointer", ["⌘", "⇧", "Scroll"]),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("ZOOM AND BRUSHES")
+                .font(Theme.sectionFont)
+                .tracking(0.6)
+                .foregroundStyle(Theme.secondaryLabel)
+                .padding(.bottom, 2)
+            ForEach(Self.hints, id: \.self) { hint in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(hint.title)
+                        .font(Theme.labelFont)
+                        .foregroundStyle(Theme.value)
+                    Spacer(minLength: 8)
+                    KeyCaps(hint.keys)
+                }
+            }
+        }
+        .padding(.trailing, 12)
     }
 }
 

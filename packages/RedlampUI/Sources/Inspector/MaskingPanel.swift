@@ -255,11 +255,11 @@ struct DrawingHint: View {
 
     private var hint: String {
         if model.isRefiningEdges {
-            return "Paint over an edge to solve it again from the photo, hair by hair. [ and ] change the size."
+            return "Paint over an edge to solve it again from the photo, hair by hair. [ and ] or ⌘-scroll change the size."
         }
         return switch model.drawingKind {
         case .radial: "Drag on the photo to draw the radial gradient. Shift keeps it circular."
-        case .brush: "Paint on the photo. Hold Option to erase; [ and ] change the size, with Shift the feather."
+        case .brush: "Paint on the photo. Hold Option to erase; [ and ] or ⌘-scroll change the size, with Shift the feather. Hold Space to move the photo."
         case .colorRange: "Click or drag on the photo to sample a color. Shift-click adds a sample (up to 5)."
         case .luminanceRange: "Click on the photo to select tones like the one there."
         case .objects: "Click an object to select it. Click again to add to it, Option-click to take away."

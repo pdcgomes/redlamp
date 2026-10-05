@@ -64,7 +64,10 @@ public struct CanvasView: NSViewRepresentable {
     let surround: Double
     /// A white frame around the photo, as a fraction of its shorter side (0 for none).
     let whiteFrame: Double
+    /// Scrolling and pinching over views drawn on the canvas (a tool's overlay) zoom and pan it.
+    let forwardsCoveredEvents: Bool
     let onSample: (CGPoint) -> Void
+    let onCommandScroll: ((Double, Bool) -> Bool)?
 
     public init(
         feed: FrameFeed,
@@ -73,16 +76,20 @@ public struct CanvasView: NSViewRepresentable {
         interactive: Bool = true,
         surround: Double = CanvasMetalView.defaultSurround,
         whiteFrame: Double = 0,
+        forwardsCoveredEvents: Bool = false,
         onSample: @escaping (CGPoint) -> Void = { _ in },
+        onCommandScroll: ((Double, Bool) -> Bool)? = nil,
     ) {
         self.surround = surround
         self.whiteFrame = whiteFrame
+        self.forwardsCoveredEvents = forwardsCoveredEvents
         self.feed = feed
         self.controller = controller
         revision = controller.revision
         self.clickAction = clickAction
         self.interactive = interactive
         self.onSample = onSample
+        self.onCommandScroll = onCommandScroll
     }
 
     public func makeNSView(context _: Context) -> CanvasMetalView {
@@ -98,7 +105,9 @@ public struct CanvasView: NSViewRepresentable {
         view.interactive = interactive
         view.surround = surround
         view.whiteFrame = whiteFrame
+        view.forwardsCoveredEvents = forwardsCoveredEvents
         view.onSample = onSample
+        view.onCommandScroll = onCommandScroll
         view.setNeedsRedraw()
     }
 }

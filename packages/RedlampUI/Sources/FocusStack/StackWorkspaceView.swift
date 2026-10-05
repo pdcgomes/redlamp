@@ -266,11 +266,18 @@ private struct RetouchCanvas: View {
                     Color.accentColor.opacity(0.4),
                     style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round),
                 )
-                if let hover {
+                BrushRingLayer(
+                    pointer: hover.map { CGPoint(x: $0.x * size.width, y: $0.y * size.height) },
+                    fallback: CGPoint(x: size.width / 2, y: size.height / 2),
+                    watched: [workspace.brushRadius, workspace.brushHardness],
+                    label: "Hardness \(Int((workspace.brushHardness * 100).rounded()))%",
+                    radius: width / 2,
+                ) {
                     Circle()
                         .strokeBorder(Color.white.opacity(0.8), lineWidth: 1)
                         .frame(width: width, height: width)
-                        .position(x: hover.x * size.width, y: hover.y * size.height)
+                }
+                if let hover {
                     if workspace.brushSource == .underCursor, let frame = workspace.frame(at: hover) {
                         Text(frame.deletingPathExtension().lastPathComponent)
                             .font(Theme.captionFont)
@@ -283,6 +290,10 @@ private struct RetouchCanvas: View {
                 }
             }
             .frame(width: size.width, height: size.height)
+            .background(CommandScrollArea { notches, hardness in
+                workspace.scrollBrush(by: notches, hardness: hardness)
+                return true
+            })
             .contentShape(Rectangle())
             .onContinuousHover { phase in
                 if case let .active(location) = phase {

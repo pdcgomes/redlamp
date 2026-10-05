@@ -18,13 +18,16 @@ struct CanvasArea: View {
                 CanvasView(
                     feed: model.frames,
                     controller: model.canvas,
-                    clickAction: [.masking, .crop, .heal].contains(model.activeTool) || model.isPlacingGuides
+                    clickAction: model.isSpacePanning ? .zoom
+                        : [.masking, .crop, .heal].contains(model.activeTool) || model.isPlacingGuides
                         ? .none : (model.eyedropperActive ? .sample : .zoom),
                     surround: model.colorAssessment
                         ? CanvasMetalView.assessmentSurround
                         : [CanvasMetalView.defaultSurround, 0.003, 0][min(model.lightsOut, 2)],
                     whiteFrame: model.colorAssessment ? CanvasMetalView.assessmentFrame : 0,
+                    forwardsCoveredEvents: model.commandPalette == nil,
                     onSample: { model.sampleWhiteBalance(at: $0) },
+                    onCommandScroll: { model.scrollSizedBrush(by: $0, feather: $1) },
                 )
             }
         }
@@ -40,21 +43,25 @@ struct CanvasArea: View {
             // Full canvas: mask geometry uses the same coordinates as the Metal view.
             if model.activeTool == .masking, model.info != nil, !model.isShowingOriginal {
                 MaskOverlayView()
+                    .allowsHitTesting(!model.isSpacePanning)
             }
         }
         .overlay {
             if model.activeTool == .crop, model.info != nil, !model.isShowingOriginal {
                 CropOverlayView()
+                    .allowsHitTesting(!model.isSpacePanning)
             }
         }
         .overlay {
             if model.activeTool == .heal, model.info != nil, !model.isShowingOriginal {
                 HealOverlayView()
+                    .allowsHitTesting(!model.isSpacePanning)
             }
         }
         .overlay {
             if model.isPlacingGuides, model.activeTool == .edit, model.info != nil, !model.isShowingOriginal {
                 GuidesOverlayView()
+                    .allowsHitTesting(!model.isSpacePanning)
             }
         }
         .overlay {

@@ -30,14 +30,18 @@ struct HealOverlayView: View {
                     outline.stroke(Color.white.opacity(0.8), lineWidth: 1).allowsHitTesting(false)
                 }
 
-                if let hover, frame.rect.contains(hover), model.spotPick == .spot {
-                    let diameter = brushDiameter(frame)
+                let diameter = brushDiameter(frame)
+                BrushRingLayer(
+                    pointer: hover.flatMap { frame.rect.contains($0) && model.spotPick == .spot ? $0 : nil },
+                    fallback: CGPoint(x: frame.rect.midX, y: frame.rect.midY),
+                    watched: [model.spotSettings.size, model.spotSettings.feather],
+                    label: "Size \(Int(model.spotSettings.size.rounded()))  ·  Feather \(Int(model.spotSettings.feather.rounded()))",
+                    radius: diameter / 2,
+                ) {
                     Circle()
                         .stroke(Color.white.opacity(0.7), lineWidth: 1)
                         .shadow(color: .black.opacity(0.6), radius: 1)
                         .frame(width: diameter, height: diameter)
-                        .position(hover)
-                        .allowsHitTesting(false)
                 }
 
                 ForEach(model.recipe.spots) { spot in
