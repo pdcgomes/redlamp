@@ -7,7 +7,7 @@ import RedlampEngineAPI
 public extension EditorModel {
     /// Fills a spot gets when it's filled on its own, and each time More is asked for. Spots filled
     /// together (Remove All) get one each.
-    static let fillVariations = 3
+    nonisolated static let fillVariations = 3
 
     /// Whether this Mac is offered generative fill: the model is here, or can be downloaded.
     var offersGenerativeFill: Bool {

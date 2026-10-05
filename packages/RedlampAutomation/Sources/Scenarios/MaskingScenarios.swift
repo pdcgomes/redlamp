@@ -13,6 +13,7 @@
             combining,
             listAndOverlay,
             presets,
+            brushSizes,
         ]
 
         static let localParameters = ParameterID.localParameters
@@ -268,7 +269,8 @@
         }
 
         static let listAndOverlay = Scenario(
-            "masking.list-and-overlay", "The mask list's operations, the overlay in every style, and the pins",
+            "masking.list-and-overlay",
+            "The mask list's operations, reordering masks and components, the overlay in every style and opacity, and the pins",
             claims: [.feature("masking.overlay")],
         ) { app in
             try app.openWorking()
@@ -285,8 +287,31 @@
             }
             let names = try app.main { $0.masks.map(\.name) }
             try app.expect(names.count == 3 && names.contains("Regression"), "Masks: \(names)")
+            // Dragging a mask onto another gives it that place; a component the same within its mask.
+            let order = try app.main { $0.recipe.masks.map(\.id) }
+            try app.main { $0.moveMask(order[0], onto: order[2]) }
+            let moved = try app.main { $0.recipe.masks.map(\.id) }
+            try app.expect(moved == [order[1], order[2], order[0]], "Reordered masks: \(moved)")
+            try app.main { model in
+                model.startDrawing(.linear, operation: .subtract, addingTo: mask)
+                model.beginDrawing(.linear(LinearMask(
+                    start: ImagePoint(x: 0.5, y: 0.2), end: ImagePoint(x: 0.5, y: 0.4),
+                )))
+                model.finishDrawing()
+            }
+            let components = try app.main { $0.recipe.mask(mask)?.components.map(\.id) ?? [] }
+            try app.expect(components.count == 2, "Components: \(components)")
+            try app.main { $0.moveComponent(components[1], in: mask, onto: components[0]) }
+            let reordered = try app.main { $0.recipe.mask(mask)?.components.map(\.id) ?? [] }
+            try app.expect(reordered == components.reversed(), "Reordered components: \(reordered)")
             for style in MaskOverlayStyle.allCases {
                 try app.main { $0.maskOverlayStyle = style }
+                app.pause(0.05)
+            }
+            for opacity in [0.2, 1, MaskOverlayStyle.defaultOpacity] {
+                try app.main { $0.maskOverlayStyle = .colorOverlay
+                    $0.maskOverlayOpacity = opacity
+                }
                 app.pause(0.05)
             }
             try app.press(.maskOverlayColor)
@@ -298,6 +323,55 @@
             try app.wait("a mask deleted") { $0.masks.count == 2 }
             try app.main { $0.deleteAllMasks() }
             app.covered(.feature("masking.overlay"), via: .key)
+        }
+
+        /// `[` and `]` size the active brush, Shift its feather, and never the rating; ⌘-scroll
+        /// sizes it too (UX-15). The wheel reaching the canvas through a tool's overlay is
+        /// `CoveredEventTests`', since the driver can't deliver a wheel through the app.
+        static let brushSizes = Scenario(
+            "masking.brush-sizes", "[ and ] size the Masking and Healing brushes, and never the rating",
+            claims: [.feature("masking.brush"), .feature("healing.remove")],
+            needsFocus: true,
+        ) { app in
+            try app.openWorking()
+            let rating = try app.main { $0.photoMetadata.rating }
+            try app.press(.brushMask)
+            try app.wait("the brush") { $0.isBrushing }
+            let size = try app.main { $0.brushes[$0.activeBrush][.maskBrushSize] }
+            var pressed = try nudge(.increaseRating, app: app)
+            try app.wait("] to grow the mask brush") { $0.brushes[$0.activeBrush][.maskBrushSize] > size }
+            let feather = try app.main { $0.brushes[$0.activeBrush][.maskBrushFeather] }
+            pressed = try nudge(.decreaseRating, shift: true, app: app) && pressed
+            try app.wait("⇧[ to soften less") { $0.brushes[$0.activeBrush][.maskBrushFeather] < feather }
+            let grown = try app.main { model in
+                let before = model.brushes[model.activeBrush][.maskBrushSize]
+                _ = model.scrollSizedBrush(by: 2, feather: false)
+                return model.brushes[model.activeBrush][.maskBrushSize] > before
+            }
+            try app.expect(grown, "⌘-scroll grows the brush")
+            try app.main { $0.cancelDrawing() }
+
+            try app.click(.tool(.heal))
+            try app.wait("the healing tool") { $0.activeTool == .heal }
+            let spot = try app.main { $0.spotSettings[.spotSize] }
+            pressed = try nudge(.decreaseRating, app: app) && pressed
+            try app.wait("[ to shrink the healing brush") { $0.spotSettings[.spotSize] < spot }
+            let after = try app.main { $0.photoMetadata.rating }
+            try app.expect(after == rating, "The rating changed from \(rating) to \(after)")
+            try app.main { $0.activeTool = .edit }
+            app.covered([.feature("masking.brush"), .feature("healing.remove")], via: pressed ? .key : .model)
+        }
+
+        /// Presses `action`'s key, or where the layout has no key that types it by itself (as on
+        /// Portuguese keyboards), performs it as the key would. Whether the key was pressed.
+        private static func nudge(_ action: ShortcutAction, shift: Bool = false, app: RunningApp) throws -> Bool {
+            do {
+                try app.press(action, shift: shift)
+                return true
+            } catch is ScenarioSkip {
+                try app.main { _ = $0.perform(action, shifted: shift) }
+                return false
+            }
         }
 
         static let presets = Scenario(
@@ -373,7 +447,7 @@
     }
 
     enum HealingScenarios {
-        static let all: [Scenario] = [spots, dustAndFind]
+        static let all: [Scenario] = [spots, dustAndFind, generative]
 
         static let spots = Scenario(
             "healing.spots", "Heal, Clone and Remove spots, their settings, a brushed stroke, and Red Eye's phase",
@@ -426,6 +500,40 @@
             app.covered([.tool(.redEye), .feature("healing.red-eye")], via: .mouse)
             try app.main { $0.activeTool = .edit }
             app.covered([.feature("healing.heal"), .feature("healing.clone"), .feature("healing.remove")], via: .model)
+        }
+
+        /// Generative Remove (RM-10), with the model this Mac has downloaded: a Remove spot gets three
+        /// fills, the arrows go through them, and Content-Aware takes it back.
+        static let generative = Scenario(
+            "healing.generative", "Generative Remove: a spot's three fills, the arrows, and back to Content-Aware",
+            claims: [.feature("healing.remove")],
+        ) { app in
+            try app.openWorking()
+            try app.click(.tool(.heal))
+            try app.wait("the healing tool") { $0.activeTool == .heal }
+            try app.run("whether generative fill can run") { await $0.loadGenerativeFill() }
+            guard try app.main({ $0.generativeAvailability == .ready }) else {
+                try app.main { $0.activeTool = .edit }
+                throw ScenarioSkip("The run has no generative model (FLUX.2 [klein] 4B, from Settings › Models)")
+            }
+            try app.main { $0.fillsGeneratively = true }
+            try app.run("Remove") { await $0.setSpotMode(.remove) }
+            try app.run("a Remove spot", timeout: 60) { await $0.addSpot(at: ImagePoint(x: 0.4, y: 0.6)) }
+            try app.wait("three fills", timeout: 600) { $0.generating == nil && $0.selectedSpot?.fill != nil }
+            let fills = try app
+                .main { model in model.selectedSpot.map { model.generatedFills[$0.id]?.count ?? 0 } ?? 0 }
+            try app.expect(fills == EditorModel.fillVariations, "\(fills) fills")
+            let first = try app.main { $0.selectedSpot?.fill }
+            try app.main { $0.showFillVariation(1) }
+            try app.expect(try app.main { $0.selectedSpot?.fill } != first, "The arrow shows the next fill")
+            try app.main { $0.useContentAwareFill() }
+            try app.expect(try app.main { $0.selectedSpot?.fill } == nil, "Content-Aware takes the fill back")
+            try app.main { model in
+                model.fillsGeneratively = false
+                model.deleteAllSpots()
+                model.activeTool = .edit
+            }
+            app.covered(.feature("healing.remove"), via: .model)
         }
 
         static let dustAndFind = Scenario(
