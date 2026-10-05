@@ -1,7 +1,7 @@
 cask "redlamp" do
   # version and sha256 are rewritten by .github/workflows/cask.yml on every release.
-  version "0.2.3-prealpha"
-  sha256 "0538cd49f12dbe86cf7177424cc7a9f98699774406cda1f2e810be7b17086d11"
+  version "0.2.4-prealpha"
+  sha256 "72a68e429266f739cf1e0cf4dd231b8049d5763f00eedbdf848840027ebacc80"
 
   url "https://github.com/pdcgomes/redlamp/releases/download/v#{version}/Redlamp-#{version}.zip"
   name "Redlamp"
