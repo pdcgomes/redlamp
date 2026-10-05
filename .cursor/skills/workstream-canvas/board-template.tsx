@@ -160,7 +160,7 @@ const workstream: Workstream = {
       title: "A measurement against its budget",
       caption: "What was measured, where, when, and how busy the machine was.",
       categories: ["Run 1", "Run 2"],
-      series: [{ name: "Milliseconds", data: [12, 9] }],
+      series: [{ name: "Milliseconds", data: [12, 9], tone: "info" }],
       suffix: " ms",
       budget: { value: 16, label: "Budget 16 ms" },
     },
@@ -261,12 +261,14 @@ function Progress({ rows, label }: { rows: readonly BoardRow[]; label?: string }
       total={rows.length}
       topLeftLabel={label ?? `${percent(rows)}% built`}
       topRightLabel={`${parts.join(" · ")} of ${rows.length}`}
-      segments={[
-        { id: "done", value: count(rows, "done"), color: "green" },
-        { id: "built", value: count(rows, "built"), color: "cyan" },
-        { id: "doing", value: count(rows, "doing"), color: "blue" },
-        { id: "you", value: count(rows, "you"), color: "yellow" },
-      ]}
+      segments={(
+        [
+          { id: "done", value: count(rows, "done"), color: "green" },
+          { id: "built", value: count(rows, "built"), color: "cyan" },
+          { id: "doing", value: count(rows, "doing"), color: "blue" },
+          { id: "you", value: count(rows, "you"), color: "yellow" },
+        ] as { id: string; value: number; color: Color }[]
+      ).filter((segment) => segment.value > 0)}
     />
   );
 }
@@ -281,7 +283,7 @@ function Legend() {
   return (
     <Row gap={16} wrap>
       {keys.map(([color, label, hint]) => (
-        <Row key={label} gap={6} align="center">
+        <div key={label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <Dot color={color} />
           <Text size="small" tone="secondary">
             {label}
@@ -291,7 +293,7 @@ function Legend() {
               {hint}
             </Text>
           ) : null}
-        </Row>
+        </div>
       ))}
       <Text size="small" tone="tertiary">
         Empty: not started
