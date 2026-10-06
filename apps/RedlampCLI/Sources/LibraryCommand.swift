@@ -17,6 +17,13 @@ enum LibraryCommand {
                                  [--text [<name>=]<text>]
            redlamp library duplicates --index <path> [--confirm] [--json]
            redlamp library xmp --index <path> [<query>] [--write] [--dry-run] [--json]
+           redlamp library rename <template> --index <path> [<query>] [--text [<name>=]<text>]… [--limit <n>]
+                                  [--dry-run] [--json]
+           redlamp library move <query> --to <folder> --index <path> [--dry-run] [--json]
+           redlamp library move --folder <folder> --to <path> --index <path> [--dry-run] [--json]
+           redlamp library trash <query> --index <path> [--dry-run] [--json]
+           redlamp library undo --index <path> [--json]
+           redlamp library journal --index <path> [--finish | --roll-back] [--json]
       fixture  makes a synthetic library in <folder>: a fifth of the photos APFS clones of the raws in
                --raw-sources (tests/fixtures/raw) with their capture dates rewritten, the rest small JPEGs
                and HEICs with varied EXIF, GPS and IPTC; sidecars on 15% and other apps' .xmp on 5%; folders
@@ -57,6 +64,14 @@ enum LibraryCommand {
                writes standard .xmp beside the photos, keeping other apps' fields, as the library does once
                writing them is turned on; --dry-run says what would change and writes nothing. Exits 1 when
                a sidecar couldn't be written.
+      rename   renames the photos <query> finds with <template>, as names shows them, each raw with its JPEG,
+               its .redlamp sidecar and other apps' .xmp, recording each photo's original name. move takes
+               photos, or a folder with --folder, to another folder; across volumes each file is copied and
+               checked before the original goes. trash moves photos to the Trash. Each is a batch in a
+               journal written before anything moves: nothing is ever overwritten, a collision stops it
+               before it starts, and --dry-run shows the plan. undo takes the last batch back; journal lists
+               the batches, and finishes (--finish) or rolls back (--roll-back) one a forced quit cut short,
+               which every command does first.
     """
 
     private static var scenarioNames: String {
@@ -71,6 +86,7 @@ enum LibraryCommand {
         BenchScenarios.registerNaming()
         BenchScenarios.registerDuplicates()
         BenchScenarios.registerXMP()
+        BenchScenarios.registerFiles()
         guard let command = arguments.first, !arguments.contains("--help") else {
             print(usage)
             return
@@ -85,6 +101,11 @@ enum LibraryCommand {
         case "names": try await names(Array(arguments.dropFirst()))
         case "duplicates": try await duplicates(Array(arguments.dropFirst()))
         case "xmp": try await xmp(Array(arguments.dropFirst()))
+        case "rename": try await rename(Array(arguments.dropFirst()))
+        case "move": try await move(Array(arguments.dropFirst()))
+        case "trash": try await trash(Array(arguments.dropFirst()))
+        case "undo": try await undo(Array(arguments.dropFirst()))
+        case "journal": try await journal(Array(arguments.dropFirst()))
         default: throw CLIError(description: "unknown library command \(command)\n\n\(usage)")
         }
     }
