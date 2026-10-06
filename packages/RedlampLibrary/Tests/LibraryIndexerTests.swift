@@ -297,7 +297,7 @@ struct LibraryIndexerTests {
             try? FileManager.default.removeItem(at: indexFolder)
         }
         // One reader: while the first photo's read is held, the others wait for it, and are cancelled.
-        let holding = HoldingFileSystem(ListedPhotos(in: folder.url, count: 4))
+        let holding = FirstReadHoldingFileSystem(ListedPhotos(in: folder.url, count: 4))
         let volumes = VolumeIORegistry(fileSystem: holding, configuration: .init(maximumWidth: 1))
         let indexer = LibraryIndexer(index: index, volumes: volumes, configuration: .testing())
         let first = Task { await IndexerRun.collect(indexer.index([folder.url])) }

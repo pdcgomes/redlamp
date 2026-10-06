@@ -197,7 +197,7 @@ final class ListedFolders: LibraryFileSystem {
 }
 
 /// Another file system whose first read waits until it's let go: a run caught with a photo half read.
-final class HoldingFileSystem: LibraryFileSystem {
+final class FirstReadHoldingFileSystem: LibraryFileSystem {
     let base: any LibraryFileSystem
     private let holding = Mutex(true)
     private let started = DispatchSemaphore(value: 0)
