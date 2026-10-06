@@ -101,9 +101,29 @@ public final class ThumbnailLoader {
 
     // MARK: - Requests
 
-    /// The thumbnail if it is in memory, still matches the file, and shows the edit it's to show.
+    /// The thumbnail in memory that shows `item` now: the one of the edit it's to show, else, until
+    /// that's decoded, the one of its embedded preview.
     public func cached(_ item: LibraryItem) -> CGImage? {
-        let key = key(item)
+        cachedThumbnail(item)?.image
+    }
+
+    /// `cached(_:)`'s thumbnail, and the edit it shows (nil for the embedded preview).
+    public func cachedThumbnail(_ item: LibraryItem) -> (image: CGImage, edit: EditDigest?)? {
+        let wanted = key(item)
+        if let image = entry(wanted, item) {
+            return (image, wanted.edit)
+        }
+        guard wanted.edit != nil, let image = entry(Key(url: item.url, edit: nil), item) else { return nil }
+        return (image, nil)
+    }
+
+    /// Whether the thumbnail of the edit `item` is to show is in memory.
+    public func hasThumbnail(_ item: LibraryItem) -> Bool {
+        cache[key(item)].map { $0.size == item.size && $0.modified == item.modified } ?? false
+    }
+
+    /// The thumbnail of `key` if it's in memory and still matches the file.
+    private func entry(_ key: Key, _ item: LibraryItem) -> CGImage? {
         guard var entry = cache[key], entry.size == item.size, entry.modified == item.modified else { return nil }
         tick += 1
         entry.used = tick
@@ -123,7 +143,8 @@ public final class ThumbnailLoader {
     ) -> UInt64 {
         nextID += 1
         let id = nextID
-        if let image = cached(item) {
+        let key = key(item)
+        if let image = entry(key, item) {
             completion(image)
             return id
         }
@@ -131,7 +152,6 @@ public final class ThumbnailLoader {
             completion(nil)
             return id
         }
-        let key = key(item)
         requested[id] = key
         if waiting[key] != nil {
             waiting[key]?[id] = completion
@@ -148,9 +168,10 @@ public final class ThumbnailLoader {
         return id
     }
 
-    /// The thumbnail, waiting for it if needed. Cancelling the calling task cancels the request.
+    /// The thumbnail of the edit it's to show, waiting for it if needed. Cancelling the calling task
+    /// cancels the request.
     public func image(for item: LibraryItem, lane: WorkScheduler.Lane = .onScreen) async -> CGImage? {
-        if let image = cached(item) {
+        if let image = entry(key(item), item) {
             return image
         }
         let ticket = RequestTicket()

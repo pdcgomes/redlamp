@@ -39,10 +39,19 @@ public final class PhotoPreviews {
         self.decode = decode
     }
 
-    /// The photo's preview, if it's one of the last decoded and shows the edit it's to show.
+    /// The photo's preview, if it's one of the last decoded: of the edit it's to show, else, until that's
+    /// decoded, of its embedded preview.
     public func cached(_ url: URL) -> CGImage? {
+        cachedPreview(url)?.image
+    }
+
+    /// `cached(_:)`'s preview, and the edit it shows (nil for the embedded preview).
+    func cachedPreview(_ url: URL) -> (image: CGImage, edit: EditDigest?)? {
         let edit = renders?.shownEdit(at: url)
-        return recent.last { $0.url == url && $0.edit == edit }?.image
+        guard let entry = recent.last(where: { $0.url == url }), entry.edit == edit || entry.edit == nil else {
+            return nil
+        }
+        return (entry.image, entry.edit)
     }
 
     /// Asks for `item`'s preview; `completion` gets it on the main thread, or nil if it can't be made or

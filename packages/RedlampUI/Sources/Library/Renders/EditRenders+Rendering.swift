@@ -8,7 +8,11 @@ import RedlampRecipes
 extension EditRenders {
     /// Starts rendering the next photo that needs it, `focus`'s rows first, unless one is rendering.
     func renderNext(_ focus: [Int]) {
-        guard current == nil, isRunning, makeEngine != nil else { return }
+        guard current == nil else { return }
+        if engineBytes > Self.engineBudget {
+            releaseEngine()
+        }
+        guard isRunning, makeEngine != nil else { return }
         guard let next = nextRender(focus) else {
             releaseEngineWhenIdle()
             return
@@ -49,8 +53,11 @@ extension EditRenders {
         stepRunning = false
         guard !Task.isCancelled else { return }
         guard let info = opened else { return failed(url, digest) }
-        statistics.opening.append(Self.seconds(.now - opening))
-        engineBytes += info.pixelSize.width * info.pixelSize.height * 32 / 3
+        var step = Statistics.Step(
+            pixels: info.pixelSize.width * info.pixelSize.height, opening: Self.seconds(.now - opening), rendering: 0,
+            storing: 0,
+        )
+        engineBytes += step.pixels * 32 / 3
         if !engine.canRender(recipe.baseLook), let look = editor?.recipes.library.definition(for: recipe.baseLook) {
             engine.registerBaseLook(look)
         }
@@ -66,13 +73,9 @@ extension EditRenders {
         stepRunning = true
         let rendered = try? await engine.renderStill(request)
         stepRunning = false
-        if engineBytes > Self.engineBudget {
-            self.engine = nil
-            engineBytes = 0
-        }
         guard !Task.isCancelled else { return }
         guard let image = rendered else { return failed(url, digest) }
-        statistics.rendering.append(Self.seconds(.now - rendering))
+        step.rendering = Self.seconds(.now - rendering)
         let storing = ContinuousClock.now
         let keeping = claims(of: key, except: url).union([digest])
         let (size, modified) = (item.size, item.modified)
@@ -81,7 +84,8 @@ extension EditRenders {
         }
         guard !Task.isCancelled, let stored else { return }
         guard stored else { return failed(url, digest) }
-        statistics.storing.append(Self.seconds(.now - storing))
+        step.storing = Self.seconds(.now - storing)
+        statistics.steps.append(step)
         statistics.rendered += 1
         guard var entry = known[url], entry.digest == digest, entry.state == .unrendered else { return }
         entry.state = .rendered
@@ -152,6 +156,7 @@ extension EditRenders {
         guard let makeEngine else { return nil }
         let made = await Task.detached(priority: .utility) { makeEngine() }.value
         engine = made
+        statistics.engines += made == nil ? 0 : 1
         return made
     }
 
@@ -161,10 +166,18 @@ extension EditRenders {
         idleRelease = Task { [weak self] in
             try? await Task.sleep(for: Self.engineIdle)
             guard let self, !Task.isCancelled, current == nil else { return }
-            engine = nil
-            engineBytes = 0
             idleRelease = nil
+            releaseEngine()
         }
+    }
+
+    /// Lets the engine go, freed off the main thread: freeing its photos' GPU memory takes milliseconds.
+    /// Only once no render holds it, or the render frees it on the main thread when it ends.
+    func releaseEngine() {
+        guard let released = engine else { return }
+        engine = nil
+        engineBytes = 0
+        Task.detached(priority: .utility) { withExtendedLifetime(released) {} }
     }
 
     nonisolated static func seconds(_ duration: Duration) -> Double {

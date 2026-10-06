@@ -86,17 +86,34 @@ final class GridThumbnails {
 
     /// The thumbnail at `edge`, if it's in memory, still matches the file and shows the edit it's to show.
     func cached(_ item: LibraryItem, edge: Int) -> CGImage? {
-        let key = Key(url: item.url, edge: edge, edit: edit(for: item))
+        entry(Key(url: item.url, edge: edge, edit: edit(for: item)), item)
+    }
+
+    /// What's shown while the thumbnail at `edge` decodes, and the edit it shows: the largest in memory
+    /// smaller than `edge`, else, until the edit's render is decoded, the embedded preview's at `edge` or
+    /// smaller.
+    func standIn(_ item: LibraryItem, below edge: Int) -> (image: CGImage, edit: EditDigest?)? {
+        let wanted = edit(for: item)
+        for smaller in Self.edges.reversed() where smaller < edge {
+            if let image = entry(Key(url: item.url, edge: smaller, edit: wanted), item) {
+                return (image, wanted)
+            }
+        }
+        guard wanted != nil else { return nil }
+        for candidate in Self.edges.reversed() where candidate <= edge {
+            if let image = entry(Key(url: item.url, edge: candidate, edit: nil), item) {
+                return (image, nil)
+            }
+        }
+        return nil
+    }
+
+    private func entry(_ key: Key, _ item: LibraryItem) -> CGImage? {
         guard var entry = cache[key], entry.size == item.size, entry.modified == item.modified else { return nil }
         tick += 1
         entry.used = tick
         cache[key] = entry
         return entry.image
-    }
-
-    /// The largest thumbnail in memory smaller than `edge`, shown while that one decodes.
-    func standIn(_ item: LibraryItem, below edge: Int) -> CGImage? {
-        Self.edges.reversed().lazy.filter { $0 < edge }.compactMap { self.cached(item, edge: $0) }.first
     }
 
     /// Asks for `item`'s thumbnail at `edge`; `completion` gets it on the main thread, or nil if it

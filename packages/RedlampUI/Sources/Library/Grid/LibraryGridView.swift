@@ -331,11 +331,12 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         cell.place(gridLayout.frame(forItem: row), geometry: gridLayout.geometry, scale: scale)
         cell.rendersEdit = model.editRenders.renders(item)
         if cell.item?.url != item.url || cell.row != row {
-            let exact = thumbnails.cached(item, edge: edge)
-            cell.configure(
-                item, row: row, image: exact ?? thumbnails.standIn(item, below: edge), edge: exact == nil ? 0 : edge,
-                edit: edit,
-            )
+            if let exact = thumbnails.cached(item, edge: edge) {
+                cell.configure(item, row: row, image: exact, edge: edge, edit: edit)
+            } else {
+                let standIn = thumbnails.standIn(item, below: edge)
+                cell.configure(item, row: row, image: standIn?.image, edge: 0, edit: standIn?.edit)
+            }
         } else if cell.shownEdit != edit, let exact = thumbnails.cached(item, edge: edge) {
             cell.configure(item, row: row, image: exact, edge: edge, edit: edit)
         } else {

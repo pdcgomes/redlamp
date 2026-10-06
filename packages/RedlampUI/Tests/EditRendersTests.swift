@@ -416,9 +416,17 @@ struct EditRendersTests {
         #expect(loupe.image != nil && loupe.showsUneditedPreview, "the loupe marks the embedded preview too")
         #expect(loupe.accessibilityValue() as? String == "Unedited preview")
 
+        let item = try #require(fixture.item("IMG_1.JPG"))
+        try await fixture.eventually { model.thumbnailLoader.cached(item) != nil }
         try await fixture.eventually { fixture.engine.gate.arrived == 1 }
         fixture.engine.gate.release()
         let digest = try EditRenderFixture.digest(exposure: 1)
+        try await fixture.eventually { fixture.renders.shownEdit(for: item) == digest }
+        let meanwhile = model.thumbnailLoader.cachedThumbnail(item)
+        #expect(
+            meanwhile != nil && meanwhile?.edit == nil && !model.thumbnailLoader.hasThumbnail(item),
+            "until the render's thumbnail is decoded, the embedded preview's is shown rather than none",
+        )
         try await fixture.eventually { edited.shownEdit == digest && loupe.shownEdit == digest }
         #expect(edited.shownEdit == digest && !edited.showsUneditedPreview, "the render, unmarked")
         #expect(EditRenderFixture.isRender(edited.image, exposure: 1))

@@ -188,10 +188,9 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         let view = collectionView.makeItem(withIdentifier: FilmstripItem.identifier, for: indexPath)
         guard let item = view as? FilmstripItem, model.items.indices.contains(indexPath.item) else { return view }
         let photo = model.items[indexPath.item]
+        let shown = model.thumbnailLoader.cachedThumbnail(photo)
         item.cell.rendersEdit = model.editRenders.renders(photo)
-        item.cell.configure(
-            photo, image: model.thumbnailLoader.cached(photo), edit: model.editRenders.shownEdit(for: photo),
-        )
+        item.cell.configure(photo, image: shown?.image, edit: shown?.edit)
         item.cell.isSelected = photo.url == selected
         item.cell.isInSelection = photo.url != selected && marked.contains(model.library.photoIDs[indexPath.item])
         item.cell.onClick = { [weak self] modifiers in
@@ -236,9 +235,11 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         let edit = model.editRenders.shownEdit(for: photo)
         guard item.cell.image == nil || item.cell.item?.modified != photo.modified || item.cell.shownEdit != edit
         else { return }
-        if let image = model.thumbnailLoader.cached(photo) {
-            item.cell.setImage(image, edit: edit)
-            return
+        if let shown = model.thumbnailLoader.cachedThumbnail(photo), shown.edit == edit || item.cell.image == nil {
+            item.cell.setImage(shown.image, edit: shown.edit)
+            if shown.edit == edit {
+                return
+            }
         }
         item.request = model.thumbnailLoader.request(photo, lane: .onScreen) { [weak item] image in
             guard let item, item.cell.item?.url == photo.url else { return }
@@ -252,7 +253,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     func collectionView(_: NSCollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
         for indexPath in indexPaths where model.items.indices.contains(indexPath.item) {
             let photo = model.items[indexPath.item]
-            guard prefetching[photo.url] == nil, model.thumbnailLoader.cached(photo) == nil else { continue }
+            guard prefetching[photo.url] == nil, !model.thumbnailLoader.hasThumbnail(photo) else { continue }
             prefetching[photo.url] = model.thumbnailLoader.request(photo, lane: .lookAhead) { [weak self] _ in
                 self?.prefetching.removeValue(forKey: photo.url)
             }

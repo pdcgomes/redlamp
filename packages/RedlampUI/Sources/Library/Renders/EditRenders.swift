@@ -41,19 +41,28 @@ public final class EditRenders {
         public var waited: Duration = .zero
         /// Frames Develop asked for while a render's step ran.
         public var overlaps = 0
-        /// Each render's steps, in seconds: the photo opened, the edit rendered, the tiers stored.
-        public var opening: [Double] = []
-        public var rendering: [Double] = []
-        public var storing: [Double] = []
+        /// Engines made, one again after each was let go.
+        public var engines = 0
+        /// Each render's photo and steps.
+        public var steps: [Step] = []
+
+        public struct Step: Sendable, Equatable {
+            public var pixels: Int
+            /// In seconds: the photo opened, the edit rendered, the tiers stored.
+            public var opening: Double
+            public var rendering: Double
+            public var storing: Double
+        }
     }
 
     /// Names how the library renders edits, in every digest: a change to it makes every render again.
     nonisolated static let renderVersion = "app.redlamp.library.edit-render 1\n"
     /// How long Develop must have asked for no frame before a render goes on.
     static let developQuiet = Duration.milliseconds(1000)
-    /// The GPU memory the engine's opened photos may hold before it's let go (their sessions stay
-    /// cached in it), and how long it's kept with nothing to render.
-    static let engineBudget = 768 << 20
+    /// The GPU memory the pyramids of the engine's opened photos may take before it's let go: their
+    /// sessions stay cached in it, each taking about twice its pyramid. And how long it's kept with
+    /// nothing to render.
+    static let engineBudget = 256 << 20
     static let engineIdle = Duration.seconds(10)
     /// Sidecars read in a job, jobs at once, and photos read but not yet rendered, at most, beyond
     /// those on screen and their neighbours.
@@ -204,8 +213,7 @@ public final class EditRenders {
         current?.task.cancel()
         idleRelease?.cancel()
         idleRelease = nil
-        engine = nil
-        engineBytes = 0
+        releaseEngine()
     }
 
     // MARK: - What's on screen

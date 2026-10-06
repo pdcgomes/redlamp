@@ -144,12 +144,16 @@ final class LibraryLoupeView: NSView {
             showDetails(of: item)
         }
         let edit = model.editRenders.shownEdit(for: item)
-        if let preview = model.previews.cached(url) {
-            setImage(preview, edit: edit)
+        if let preview = model.previews.cachedPreview(url) {
+            setImage(preview.image, edit: preview.edit)
             showsPreview = true
+            if preview.edit != edit {
+                requestPreview(of: item)
+            }
         } else {
-            setImage(model.thumbnailLoader.cached(item), edit: edit)
-            if image == nil {
+            let thumbnail = model.thumbnailLoader.cachedThumbnail(item)
+            setImage(thumbnail?.image, edit: thumbnail?.edit)
+            if thumbnail.map({ $0.edit != edit }) ?? true {
                 model.thumbnailLoader.request(item) { [weak self] image in
                     guard let self, shown == url, !showsPreview, let image else { return }
                     setImage(image, edit: edit)
