@@ -4,11 +4,13 @@ import RedlampDocument
 import Synchronization
 
 /// The readers of one volume. Every file operation the library makes on the volume goes through
-/// them: as many at once as the volume serves best (`VolumeConcurrency`), what's on screen first,
-/// and none waiting on the volume longer than `timeout` from when it's
-/// sent. A volume that fails as gone, or doesn't answer in time, is unreachable: what waits and
-/// what's asked next fails at once, while a probe asks every so often whether it's back. Waiting for
-/// a place in flight doesn't count towards the timeout: a volume that answers slowly is only slow.
+/// them: as many at once as the volume serves best (`VolumeConcurrency`), what's on screen first.
+/// An operation that outlives `timeout` from when it's sent makes the readers ask the volume itself
+/// whether it's there, about its probe: a volume that answers within the timeout is only slow, and
+/// what's in flight goes on for another; one that fails as gone, or doesn't answer in time, is
+/// unreachable: what's in flight and what waits fails, and so does what's asked next, at once,
+/// while the probe asks every so often whether it's back. Waiting for a place in flight doesn't
+/// count towards the timeout either.
 ///
 /// Operations run on GCD's threads, since they block on the volume, which Swift's cooperative pool
 /// must not. A caller that stops waiting (its timeout passed) leaves the thread to finish alone.
@@ -34,6 +36,9 @@ public final class VolumeIO: Sendable {
         public var longestWait: Duration
         /// The longest an operation was in flight before it was answered or given up on.
         public var longestOperation: Duration
+        /// The longest an operation was in flight before it was given up on, the volume not answering.
+        public var longestUnanswered: Duration
+        /// Operations given up on.
         public var timeouts: Int
         public var isReachable: Bool
     }
@@ -95,7 +100,7 @@ public final class VolumeIO: Sendable {
                 width: state.concurrency.width, throughput: state.concurrency.throughput,
                 operationsPerSecond: state.concurrency.last?.operationsPerSecond ?? 0, operations: state.operations,
                 bytes: state.bytes, longestWait: state.longestWait, longestOperation: state.longestOperation,
-                timeouts: state.timeouts, isReachable: state.reachable,
+                longestUnanswered: state.longestUnanswered, timeouts: state.timeouts, isReachable: state.reachable,
             )
         }
     }
@@ -237,12 +242,15 @@ public final class VolumeIO: Sendable {
         var stuck = 0
         var reachable = true
         var probing = false
+        /// The volume is being asked whether it's there, an operation having outlived its timeout.
+        var asking = false
         var watching = false
         var observers: [UInt64: AsyncStream<Bool>.Continuation] = [:]
         var operations = 0
         var bytes = 0
         var longestWait = Duration.zero
         var longestOperation = Duration.zero
+        var longestUnanswered = Duration.zero
         var timeouts = 0
 
         mutating func next() -> (UInt64, Tracked)? {
@@ -377,32 +385,80 @@ public final class VolumeIO: Sendable {
 
     private func checkDeadlines() {
         let now = DispatchTime.now()
-        let clockNow = clock.now
-        let (expired, again) = state.withLock { state -> ([Job], Bool) in
-            var expired: [Job] = []
-            for (id, tracked) in state.tracked {
-                guard !tracked.expired, let deadline = tracked.deadline, deadline <= now else { continue }
-                expired.append(tracked.job)
-                state.tracked[id]?.expired = true
-                state.running -= 1
-                state.stuck += 1
-                state.timeouts += 1
-                state.longestOperation = max(state.longestOperation, clockNow - (tracked.started ?? clockNow))
+        let (overdue, again) = state.withLock { state -> (Bool, Bool) in
+            let overdue = state.tracked.values.contains { tracked in
+                !tracked.expired && tracked.deadline.map { $0 <= now } ?? false
             }
             let again = state.tracked.contains { !$0.value.expired }
             state.watching = again
-            return (expired, again)
+            return (overdue, again)
         }
-        for job in expired {
-            job.fail(LibraryFileSystemError.timedOut(job.url))
-        }
-        if !expired.isEmpty {
-            markUnreachable()
-            pump()
+        if overdue {
+            askVolume()
         }
         if again {
             scheduleCheck()
         }
+    }
+
+    /// Asks the volume whether it's there, unless it's being asked: when it answers, the operations
+    /// in flight past their deadlines get another timeout; when it doesn't, they're given up on and
+    /// the volume is unreachable.
+    private func askVolume() {
+        let asking = state.withLock { state -> Bool in
+            guard state.reachable, !state.asking else { return false }
+            state.asking = true
+            return true
+        }
+        guard asking else { return }
+        DispatchQueue.global(qos: .utility).async { [self] in
+            let answered = answers()
+            let now = DispatchTime.now()
+            let clockNow = clock.now
+            let expired = state.withLock { state -> [Job] in
+                state.asking = false
+                var expired: [Job] = []
+                for (id, tracked) in state.tracked where !tracked.expired {
+                    guard let deadline = tracked.deadline else { continue }
+                    if answered {
+                        if deadline <= now {
+                            state.tracked[id]?.deadline = now + timeout.seconds
+                        }
+                        continue
+                    }
+                    let inFlight = clockNow - (tracked.started ?? clockNow)
+                    expired.append(tracked.job)
+                    state.tracked[id]?.expired = true
+                    state.running -= 1
+                    state.stuck += 1
+                    state.timeouts += 1
+                    state.longestOperation = max(state.longestOperation, inFlight)
+                    state.longestUnanswered = max(state.longestUnanswered, inFlight)
+                }
+                return expired
+            }
+            guard !answered else { return }
+            for job in expired {
+                job.fail(LibraryFileSystemError.timedOut(job.url))
+            }
+            markUnreachable()
+            pump()
+        }
+    }
+
+    /// Whether the volume answers a question about its probe within the timeout. Blocks the caller,
+    /// never the volume's operations, which don't wait for it.
+    private func answers() -> Bool {
+        let answered = DispatchSemaphore(value: 0)
+        let found = Mutex(false)
+        let fileSystem = fileSystem
+        let probe = probe
+        DispatchQueue.global(qos: .utility).async {
+            let reached = (try? fileSystem.attributes(of: probe)) != nil
+            found.withLock { $0 = reached }
+            answered.signal()
+        }
+        return answered.wait(timeout: .now() + timeout.seconds) == .success && found.withLock { $0 }
     }
 
     private func notify() {
@@ -427,16 +483,7 @@ public final class VolumeIO: Sendable {
     }
 
     private func runProbe() {
-        let answered = DispatchSemaphore(value: 0)
-        let found = Mutex(false)
-        let fileSystem = fileSystem
-        let probe = probe
-        DispatchQueue.global(qos: .utility).async {
-            let reached = (try? fileSystem.attributes(of: probe)) != nil
-            found.withLock { $0 = reached }
-            answered.signal()
-        }
-        let back = answered.wait(timeout: .now() + timeout.seconds) == .success && found.withLock { $0 }
+        let back = answers()
         let changed = state.withLock { state -> Bool in
             state.probing = false
             guard back, !state.reachable else { return false }

@@ -2,9 +2,10 @@ import Foundation
 import Synchronization
 
 /// Indexes the fixture through a volume that stops answering partway, its operations hanging, and
-/// then comes back: no operation waits on the volume much beyond the readers' timeout, the photos
-/// indexed before it went are marked offline, and once it's back indexing resumes, reading only the
-/// photos it hadn't written.
+/// then comes back: no operation waits on the gone volume much beyond the readers' timeout and the
+/// question that follows it, whether the volume is there, while operations on it before it went
+/// take as long as they take; the photos indexed before it went are marked offline, and once it's
+/// back indexing resumes, reading only the photos it hadn't written.
 public struct VanishingVolumeScenario: BenchScenario {
     public let name = "vanishing-volume"
     /// The readers' timeout. Operations on the volume once it has gone hang for `hang`, then fail.
@@ -31,6 +32,7 @@ public struct VanishingVolumeScenario: BenchScenario {
         let first = await IndexingScenario.timed(indexer.index([context.fixture]))
         let (written, offline) = try await index.read { try ($0.photoCount(), $0.photoCount(withState: .offline)) }
         let statistics = volumes.all.map(\.statistics)
+        let longestUnanswered = statistics.map(\.longestUnanswered).max() ?? .zero
         let longestOperation = statistics.map(\.longestOperation).max() ?? .zero
         let longestWait = statistics.map(\.longestWait).max() ?? .zero
 
@@ -51,8 +53,13 @@ public struct VanishingVolumeScenario: BenchScenario {
         return [
             BenchResult(
                 scenario: name, id: "library-vanish-wait",
-                name: "Longest an operation waited on the volume, its timeout \(BenchResult.format(timeout, "ms"))",
-                value: longestOperation.seconds * 1000, unit: "ms", budget: .below(timeout * 1.25, "ms"),
+                name: "Longest an operation waited on the gone volume: its timeout, \(BenchResult.format(timeout, "ms")), "
+                    + "then asking it as long",
+                value: longestUnanswered.seconds * 1000, unit: "ms", budget: .below(2 * timeout * 1.25, "ms"),
+            ),
+            BenchResult(
+                scenario: name, id: "library-vanish-operation", name: "Longest an operation was in flight",
+                value: longestOperation.seconds * 1000, unit: "ms",
             ),
             BenchResult(
                 scenario: name, id: "library-vanish-caller", name: "Longest a caller waited, queueing included",

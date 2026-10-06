@@ -425,7 +425,8 @@ struct LibraryIndexerTests {
         #expect(written > 0 && written < 300 && offline == written, "\(offline) of \(written)")
         let io = try #require(volumes.all.first)
         #expect(!io.isReachable)
-        #expect(io.statistics.longestWait < .milliseconds(800), "\(io.statistics.longestWait)")
+        // The timeout, then as long again asking the volume whether it's there.
+        #expect(io.statistics.longestWait < .seconds(1), "\(io.statistics.longestWait)")
 
         volume.switchTo(SimulatedFileSystem(profile: .nas, seed: 2))
         await io.waitUntilReachable()

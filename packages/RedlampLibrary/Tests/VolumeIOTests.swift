@@ -195,16 +195,48 @@ struct VolumeIOTests {
         #expect(statistics.longestOperation < .milliseconds(300), "\(statistics.longestOperation)")
     }
 
-    /// A file system whose reads hang until released, then fail as a network that stopped answering.
+    @Test func `an operation that outlives its timeout on a volume that still answers goes on, and the volume stays`(
+    ) async throws {
+        let fileSystem = SlowFileSystem(delay: .milliseconds(600))
+        let probe = URL(fileURLWithPath: "/Volumes/Slow")
+        let io = try VolumeIO(
+            volume: fileSystem.volume(of: probe), fileSystem: fileSystem, probe: probe, timeout: .milliseconds(100),
+        )
+        let changes = io.reachabilityChanges()
+        let seen = Mutex<[Bool]>([])
+        let watching = Task {
+            for await reachable in changes {
+                seen.withLock { $0.append(reachable) }
+            }
+        }
+        #expect(try await io.read(probe.appending(path: "IMG_0001.JPG"), range: 0 ..< 100).count == 100)
+        watching.cancel()
+        let statistics = io.statistics
+        #expect(statistics.timeouts == 0 && statistics.isReachable && seen.withLock { $0 }.isEmpty)
+        #expect(statistics.longestOperation >= .milliseconds(600), "\(statistics.longestOperation)")
+        #expect(statistics.longestUnanswered == .zero)
+    }
+
+    /// A file system whose reads hang until released, then fail as a network that stopped answering,
+    /// and which doesn't answer the first time it's asked about a folder: a volume that goes and
+    /// comes back while a read hangs.
     final class HangingFileSystem: LibraryFileSystem {
         let gate = IndexGate()
+        private let asked = Mutex(0)
 
         func contentsOfDirectory(at _: URL) throws -> [FileEntry] {
             []
         }
 
         func attributes(of url: URL) throws -> FileEntry {
-            FileEntry(name: url.lastPathComponent, isDirectory: true)
+            let first = asked.withLock { asked in
+                asked += 1
+                return asked == 1
+            }
+            if first {
+                throw LibraryFileSystemError.unreachable(url)
+            }
+            return FileEntry(name: url.lastPathComponent, isDirectory: true)
         }
 
         func read(_ url: URL, range _: Range<Int>) throws -> Data {
