@@ -112,3 +112,26 @@ public extension IndexQueries {
         )
     }
 }
+
+extension LibraryIndex.Writer {
+    /// Removes the health rows and hashes of photos the index no longer has, but for `keeping`'s;
+    /// returns how many photos they were.
+    @discardableResult
+    func removeOrphanedHealth(keeping: Set<Int64>) throws -> Int {
+        let tables = ["photo_health", "photo_hashes"]
+        var orphans = Set<Int64>()
+        for table in tables {
+            try database.cached("SELECT photo FROM \(table) WHERE photo NOT IN (SELECT id FROM photos)")
+                .forEachRow { orphans.insert($0.int64(at: 0)) }
+        }
+        orphans.subtract(keeping)
+        let deletes = try tables.map { try database.cached("DELETE FROM \($0) WHERE photo = ?") }
+        for photo in orphans {
+            for delete in deletes {
+                try delete.bind(photo, at: 1)
+                try delete.run()
+            }
+        }
+        return orphans.count
+    }
+}

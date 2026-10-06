@@ -88,6 +88,56 @@ struct HealthActingTests {
         #expect(sandbox.files().isSuperset(of: ["Cards/Cut.jpg", "Cards/Empty.jpg", "Cards/Rated.jpg"]))
     }
 
+    @Test func `health rows and hashes stay while a batch can bring their photo back, and go once none can`(
+    ) async throws {
+        let sandbox = try await HealthSandbox.make([
+            "Cards/One.jpg": Data(), "Cards/Two.jpg": Data(), "Cards/Gone.jpg": Data(),
+            "Cards/Good.jpg": HealthImages.data(.jpeg),
+        ])
+        defer { sandbox.remove() }
+        await sandbox.index()
+        let rows = try await sandbox.rows()
+        let (one, two, gone) = try (
+            #require(rows["Cards/One.jpg"]?.id), #require(rows["Cards/Two.jpg"]?.id),
+            #require(rows["Cards/Gone.jpg"]?.id),
+        )
+        try await sandbox.index.write { writer in
+            try writer.setPhotoHashes([one, two, gone].map {
+                PhotoHash(photo: $0, size: 0, modified: HealthSandbox.written, contentKey: Data([1]), sha256: Data([2]))
+            })
+        }
+        func kept() async throws -> (health: Set<Int64>, hashes: Set<Int64>) {
+            try await sandbox.index.read { reader in
+                var found: (health: Set<Int64>, hashes: Set<Int64>) = ([], [])
+                try reader.database.prepare("SELECT photo FROM photo_health").forEachRow {
+                    found.health.insert($0.int64(at: 0))
+                }
+                try reader.database.prepare("SELECT photo FROM photo_hashes").forEachRow {
+                    found.hashes.insert($0.int64(at: 0))
+                }
+                return found
+            }
+        }
+        #expect(try await kept() == ([one, two, gone], [one, two, gone]))
+
+        // Gone from its folder: nothing can bring it back.
+        try FileManager.default.removeItem(at: sandbox.url("Cards/Gone.jpg"))
+        await sandbox.index()
+        let health = sandbox.library()
+        try await health.run(health.plan(health.findings(.damaged)))
+        #expect(try await health.operations.removeUnrestorable() == 1)
+        #expect(try await kept() == ([one, two], [one, two]), "the Trash journal can bring One and Two back")
+
+        try await health.operations.undo()
+        try await health.engine.updateNames()
+        #expect(try await Set(health.findings(.damaged).photos) == [one, two], "with their health")
+
+        try await health.run(health.plan(health.findings(.damaged)))
+        try FileManager.default.removeItem(at: sandbox.paths.root.appending(path: "File Operations"))
+        try await health.operations.recover()
+        #expect(try await kept() == ([], []), "no journal is left to bring them back")
+    }
+
     @Test func `one Undo takes back a batch`() async throws {
         let sandbox = try await HealthSandbox.make([
             "Cards/One.jpg": Data(), "Cards/Two.jpg": Data(), "Cards/Good.jpg": HealthImages.data(.jpeg),

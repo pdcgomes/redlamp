@@ -130,9 +130,13 @@ public final class FileOperations: Sendable {
         var batch = batch
         batch.steps = checked.steps
         let written = batch
-        try await LibraryIndex.offCaller {
-            journal.prune(fileSystem: fileSystem)
+        let pruned = try await LibraryIndex.offCaller {
+            let pruned = journal.prune(fileSystem: fileSystem)
             try journal.write(written)
+            return pruned
+        }
+        if pruned {
+            try await removeUnrestorableNow()
         }
         let runner = try FileRunner(
             batch: batch, log: journal.log(batch.id), fileSystem: fileSystem, store: SidecarStore(locator: locator),
@@ -246,8 +250,25 @@ public final class FileOperations: Sendable {
             for entry in try await unfinishedEntries() {
                 try await outcomes.append(recover(entry.id, choice, progress: progress))
             }
+            try await removeUnrestorableNow()
             return outcomes
         }
+    }
+
+    /// Removes the health rows and hashes of photos gone from the index that no batch the journal
+    /// keeps can bring back (LIB-40, LIB-39), as `recover` does at launch and running a batch does once
+    /// the journal lets older batches go; returns how many photos they were. None goes while a batch
+    /// can't be read.
+    @discardableResult
+    public func removeUnrestorable() async throws -> Int {
+        try await serially { [self] in try await removeUnrestorableNow() }
+    }
+
+    @discardableResult
+    private func removeUnrestorableNow() async throws -> Int {
+        let journal = journal
+        guard let kept = try await LibraryIndex.offCaller({ journal.restorable() }) else { return 0 }
+        return try await index.write { try $0.removeOrphanedHealth(keeping: kept) }
     }
 
     private func recover(_ id: UUID, _ choice: FileRecovery, progress: (@Sendable (FileProgress) -> Void)?)
