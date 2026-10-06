@@ -75,6 +75,8 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
 
     /// What `open` throws instead of opening the photo.
     var openError: (any Error)?
+    /// The size of every photo it opens.
+    var pixelSize = PixelSize(width: 600, height: 400)
 
     func open(_ url: URL) async throws -> ImageInfo {
         if let openError {
@@ -82,7 +84,7 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         }
         return ImageInfo(
             url: url,
-            pixelSize: PixelSize(width: 600, height: 400),
+            pixelSize: pixelSize,
             isRaw: true,
             sensorDescription: "stub",
         )
@@ -95,18 +97,22 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         guard ready.contains(url) else { return nil }
         return ImageInfo(
             url: url,
-            pixelSize: PixelSize(width: 600, height: 400),
+            pixelSize: pixelSize,
             isRaw: true,
             sensorDescription: "stub",
         )
     }
 
     func prefetch(_: [URL]) {}
+    /// Every render asked for, most recent last.
+    var renders: [RenderRequest] = []
     /// The last render asked for.
-    var lastRender: RenderRequest?
+    var lastRender: RenderRequest? {
+        renders.last
+    }
 
     func render(_ request: RenderRequest) {
-        lastRender = request
+        renders.append(request)
     }
 
     func frames() -> AsyncStream<RenderedFrame> {

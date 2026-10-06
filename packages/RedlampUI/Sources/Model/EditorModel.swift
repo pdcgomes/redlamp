@@ -582,6 +582,8 @@ public final class EditorModel {
     /// Canvas geometry for a photo whose first frame hasn't arrived yet. Until it does, the
     /// previous photo stays on screen rather than flashing the placeholder in between.
     @ObservationIgnored private var pendingCanvas: (imageSize: PixelSize, firstGeneration: UInt64)?
+    /// The size and part of the photo the last render asked for.
+    @ObservationIgnored private var requestedTarget: CanvasController.RenderTarget?
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored private var saveDeadline: ContinuousClock.Instant?
     @ObservationIgnored private var unsavedSince: ContinuousClock.Instant?
@@ -1056,8 +1058,9 @@ public final class EditorModel {
             pendingCanvas = (frameSize, generation &+ 1)
         }
         let target = pendingCanvas.map { CanvasController.RenderTarget(size: canvas.fitRenderSize(for: $0.imageSize)) }
-            ?? canvas.renderTarget
+            ?? (editStart != nil ? canvas.editRenderTarget() : canvas.renderTarget)
         guard target.size.width > 0 else { return }
+        requestedTarget = target
         generation &+= 1
         let overlay = maskOverlayShown
         var request = RenderRequest(
@@ -1208,8 +1211,11 @@ public final class EditorModel {
         defer {
             editStart = nil
             editParameter = nil
-            // The overlay comes back once the drag ends.
+            // The overlay comes back once the drag ends, and so does the margin around the
+            // visible part, so panning afterwards doesn't render.
             if adjustingMask, activeTool == .masking, showMaskOverlay {
+                requestRender()
+            } else if pendingCanvas == nil, requestedTarget != nil, requestedTarget != canvas.renderTarget {
                 requestRender()
             }
         }

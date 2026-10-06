@@ -372,6 +372,38 @@ extension CanvasController {
         return RenderTarget(size: size, region: region)
     }
 
+    /// Output pixels rendered past each edge of the visible part during a continuous edit.
+    public static let editGuard = 64
+
+    /// While a slider is dragged: only the visible part plus `editGuard` output pixels each
+    /// way, its origin on the output pixel grid, so each frame of the drag costs about what
+    /// the screen shows. The margin target comes back once the edit ends.
+    public func editRenderTarget() -> RenderTarget {
+        let whole = RenderTarget(size: renderSize, region: nil)
+        guard isZoomedIn, imageSize.width > 0 else { return whole }
+        let visible = visibleImageRect
+        let density = min(pixelScale, 1)
+        let columns = Double(imageSize.width) * density
+        let rows = Double(imageSize.height) * density
+        let band = Double(Self.editGuard)
+        func span(_ low: Double, _ high: Double, pixels: Double) -> (start: Double, count: Int) {
+            let start = max((low * pixels).rounded(.down) - band, 0)
+            let end = min((high * pixels).rounded(.up) + band, pixels)
+            return (start, max(1, Int((end - start).rounded(.up))))
+        }
+        let x = span(visible.minX, visible.maxX, pixels: columns)
+        let y = span(visible.minY, visible.maxY, pixels: rows)
+        let size = PixelSize(width: x.count, height: y.count)
+        guard x.start > 0 || y.start > 0 || size != whole.size else { return whole }
+        let region = ImageRect(
+            x: x.start / columns,
+            y: y.start / rows,
+            width: Double(size.width) / columns,
+            height: Double(size.height) / rows,
+        )
+        return RenderTarget(size: size, region: region)
+    }
+
     static func contains(_ region: ImageRect, _ visible: CGRect) -> Bool {
         let slack = 1e-6
         return visible.minX >= region.x - slack && visible.minY >= region.y - slack
