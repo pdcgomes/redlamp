@@ -217,6 +217,34 @@ final class FocusStackCache: Sendable {
         }
     }
 
+    /// The first pass of a complete merge of `urls` by another method, kept in the cache, with its
+    /// report: no merge method changes the frames' alignment or depth map.
+    private func cachedAnalysis(
+        of urls: [URL], besides strategy: FocusStackStrategy,
+    ) -> (analysis: StackAnalysis, report: FocusStackReport)? {
+        for other in FocusStackStrategy.allCases where other != strategy {
+            guard let key = try? Self.key(frames: urls, strategy: other) else { continue }
+            let folder = root.appendingPathComponent(key)
+            guard let data = try? Data(contentsOf: folder.appendingPathComponent("stack.json")),
+                  let metadata = try? JSONDecoder().decode(StackMetadata.self, from: data),
+                  metadata.report.failedFrames == nil, metadata.alignment.transforms.count == urls.count,
+                  let depth: [Float] = try? Self.read(folder.appendingPathComponent("depth.f32")),
+                  depth.count == metadata.depthWidth * metadata.depthHeight
+            else { continue }
+            let map = StackDepthMap(
+                width: metadata.depthWidth, height: metadata.depthHeight, depth: depth, confident: [],
+            )
+            return (
+                StackAnalysis(
+                    alignment: metadata.alignment, depth: map, width: metadata.frameWidth,
+                    height: metadata.frameHeight,
+                ),
+                metadata.report,
+            )
+        }
+        return nil
+    }
+
     private func mergeFrames(
         _ urls: [URL], strategy: FocusStackStrategy, documentURL: URL?, progress: (Double) -> Void,
     ) throws -> MergedStack {
@@ -226,16 +254,18 @@ final class FocusStackCache: Sendable {
         let builder = SessionBuilder(device: device, queue: queue, kernels: kernels)
         let stacker = FocusStacker(device: device, queue: queue, kernels: kernels)
         var metadata: [Int: DecodedImage] = [:]
-        // The merge reads every frame twice, in order; the next few decode on other cores
-        // (with their noise estimates) while the GPU works on the current one.
-        let order = Array(urls.indices) + Array(urls.indices)
+        let analysed = cachedAnalysis(of: urls, besides: strategy)
+        // The merge reads every frame twice, in order, or once when another method's merge has
+        // analysed them; the next few decode on other cores (with their noise estimates) while
+        // the GPU works on the current one.
+        let order = analysed == nil ? Array(urls.indices) + Array(urls.indices) : Array(urls.indices)
         let decodes = DispatchQueue(label: "app.redlamp.stack.decode", qos: .userInitiated, attributes: .concurrent)
         var pending: [Int: Prefetch<DecodedImage>] = [:]
         var position = 0
         let result = try stacker.merge(
-            frameCount: urls.count, settings: StackMergeSettings(strategy: strategy),
+            frameCount: urls.count, settings: StackMergeSettings(strategy: strategy), analysed: analysed?.analysis,
             load: { index in
-                precondition(order[position] == index, "frames must load in stack order, twice")
+                precondition(order[position] == index, "frames must load in stack order")
                 for ahead in position ..< min(position + Self.decodesAhead + 1, order.count)
                     where pending[ahead] == nil {
                     let (frame, url, decoder) = (order[ahead], urls[order[ahead]], decoder)
@@ -276,7 +306,7 @@ final class FocusStackCache: Sendable {
             height: crop.height,
             maximumScaleChange: Double(alignment.transforms.map { abs($0.scale - 1) }.max() ?? 0),
             minimumCorrelation: Double(alignment.correlations.min() ?? 1),
-            confidentDepthFraction: Double(result.depth.confidentFraction),
+            confidentDepthFraction: analysed?.report.confidentDepthFraction ?? Double(result.depth.confidentFraction),
             timings: result.timings,
         )
         let decoded = reference.stacked(

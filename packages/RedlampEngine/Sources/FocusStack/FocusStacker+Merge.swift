@@ -25,13 +25,25 @@ struct StackMergeResult {
     let timings: [String: Double]
 }
 
+/// What a merge's first pass finds, which no merge method changes: where each frame sits, and
+/// which is sharpest where.
+struct StackAnalysis {
+    let alignment: StackAlignment
+    let depth: StackDepthMap
+    /// The frames' size, in pixels.
+    let width: Int
+    let height: Int
+}
+
 extension FocusStacker {
     /// Merges `frameCount` frames in focus order. `load` returns frame `index` as balanced linear
     /// camera RGB; it is called twice per frame (analysis, then fusion) so only one frame is held
-    /// at a time. `progress` receives 0 ... 1.
+    /// at a time, or once, for fusion, when `analysed` holds the frames' first pass. `progress`
+    /// receives 0 ... 1.
     func merge(
         frameCount: Int,
         settings: StackMergeSettings = StackMergeSettings(),
+        analysed: StackAnalysis? = nil,
         load: (Int) throws -> any MTLTexture,
         progress: (Double) -> Void = { _ in },
     ) throws -> StackMergeResult {
@@ -42,8 +54,54 @@ extension FocusStacker {
             timings[phase, default: 0] += Date().timeIntervalSince(clock)
             clock = Date()
         }
+        let analysis = try analysed ?? analyse(frameCount: frameCount, load: load, lap: lap, progress: progress)
+        let alignment = analysis.alignment
+        let depthTexture = try makeDepthTexture(analysis.depth)
+        progress(0.5)
 
-        // Pass 1: an analysis copy of every frame.
+        // Pass 2: warp and fuse, one frame at a time.
+        let pyramid = try FusionPyramid(
+            stacker: self,
+            width: analysis.width,
+            height: analysis.height,
+            strategy: settings.strategy,
+        )
+        var grit: Float = 0
+        for index in 0 ..< frameCount {
+            try autoreleasepool {
+                let frame = try load(index)
+                lap("decode")
+                guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
+                commands.label = "Stack fuse \(index)"
+                try encodeWarp(
+                    frame, transform: alignment.transforms[index], gain: alignment.gains[index],
+                    into: pyramid.warped, commands: commands,
+                )
+                try pyramid.encodeFrame(index, depth: depthTexture, settings: settings, commands: commands)
+                commands.commit()
+                commands.waitUntilCompleted()
+                if let error = commands.error {
+                    throw EngineError.renderFailed(error.localizedDescription)
+                }
+                if index == alignment.reference, settings.strategy == .auto {
+                    grit = try settings.noiseK * pyramid.finestNoiseSigma()
+                }
+                lap("fuse")
+            }
+            progress(0.5 + 0.45 * Double(index + 1) / Double(frameCount))
+        }
+        let fused = try pyramid.finish(frames: frameCount, settings: settings, grit: grit)
+        lap("fuse")
+        progress(1)
+        timings["total"] = timings.values.reduce(0, +)
+        return StackMergeResult(fused: fused, alignment: alignment, depth: analysis.depth, timings: timings)
+    }
+
+    /// Pass 1: an analysis copy of every frame, from which the frames are aligned and the depth
+    /// map solved.
+    private func analyse(
+        frameCount: Int, load: (Int) throws -> any MTLTexture, lap: (String) -> Void, progress: (Double) -> Void,
+    ) throws -> StackAnalysis {
         var analyses: [FrameAnalysis] = []
         var size = (width: 0, height: 0)
         for index in 0 ..< frameCount {
@@ -81,46 +139,8 @@ extension FocusStacker {
             return (StackAligner.warp(focus, by: transform, outside: 0).pixels, StackAligner.warp(luma, by: transform))
         }
         let depth = StackDepthSolver.solve(volume: aligned.map(\.0), lumas: aligned.map(\.1), settings: depthSettings)
-        let depthTexture = try makeDepthTexture(depth)
         lap("depth")
-        progress(0.5)
-
-        // Pass 2: warp and fuse, one frame at a time.
-        let pyramid = try FusionPyramid(
-            stacker: self,
-            width: size.width,
-            height: size.height,
-            strategy: settings.strategy,
-        )
-        var grit: Float = 0
-        for index in 0 ..< frameCount {
-            try autoreleasepool {
-                let frame = try load(index)
-                lap("decode")
-                guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
-                commands.label = "Stack fuse \(index)"
-                try encodeWarp(
-                    frame, transform: alignment.transforms[index], gain: alignment.gains[index],
-                    into: pyramid.warped, commands: commands,
-                )
-                try pyramid.encodeFrame(index, depth: depthTexture, settings: settings, commands: commands)
-                commands.commit()
-                commands.waitUntilCompleted()
-                if let error = commands.error {
-                    throw EngineError.renderFailed(error.localizedDescription)
-                }
-                if index == alignment.reference, settings.strategy == .auto {
-                    grit = try settings.noiseK * pyramid.finestNoiseSigma()
-                }
-                lap("fuse")
-            }
-            progress(0.5 + 0.45 * Double(index + 1) / Double(frameCount))
-        }
-        let fused = try pyramid.finish(frames: frameCount, settings: settings, grit: grit)
-        lap("fuse")
-        progress(1)
-        timings["total"] = timings.values.reduce(0, +)
-        return StackMergeResult(fused: fused, alignment: alignment, depth: depth, timings: timings)
+        return StackAnalysis(alignment: alignment, depth: depth, width: size.width, height: size.height)
     }
 
     /// Balanced green at or above this is treated as clipped (green clips first after white

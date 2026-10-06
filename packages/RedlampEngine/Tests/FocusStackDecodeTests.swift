@@ -294,10 +294,8 @@ extension FocusStackTests {
         _ = try engine.stacks.merged(urls, strategy: .auto, documentURL: documentURL)
         let detail = try engine.stacks.merged(urls, strategy: .detail, documentURL: documentURL)
         let decodes = urls.map { decoder.decodes(of: $0.lastPathComponent) }
-        withKnownIssue("PIPE-10: every merge method aligns and solves depth again") {
-            #expect(decodes.allSatisfy { $0 == 3 }, "decodes per frame \(decodes)")
-            #expect(detail.report.timings["align"] == nil && detail.report.timings["depth"] == nil)
-        }
+        #expect(decodes.allSatisfy { $0 == 3 }, "decodes per frame \(decodes)")
+        #expect(detail.report.timings["align"] == nil && detail.report.timings["depth"] == nil)
 
         let fresh = try RedlampEngine(
             stillTile: 2048, stackCache: folder.appendingPathComponent("fresh"), decoder: RecordingDecoder(),
