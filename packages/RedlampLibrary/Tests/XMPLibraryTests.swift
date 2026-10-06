@@ -310,4 +310,25 @@ struct XMPLibraryTests {
         let id = try await sandbox.id("IMG_0013.ARW")
         #expect(try await sandbox.index.read { try XMPMergeRecord.records([id], in: $0) }.isEmpty)
     }
+
+    @Test func `what's recorded of photos the index no longer has is removed, and the others' kept`() async throws {
+        let sandbox = try await XMPSandbox.make()
+        defer { sandbox.remove() }
+        try sandbox.photo("IMG_0014.ARW")
+        try sandbox.sidecar("IMG_0014.ARW", PhotoMetadata(rating: 2))
+        try await sandbox.indexAll()
+        _ = try await sandbox.sync()
+        let id = try await sandbox.id("IMG_0014.ARW")
+        let gone = Int64(999_999)
+        try await sandbox.index.write { writer in
+            try XMPMergeRecord.save(
+                [gone: XMPMergeRecord(other: XMPFields(), redlampFields: XMPFields())],
+                dropping: [],
+                in: writer,
+            )
+        }
+        #expect(try await sandbox.xmp.removeOrphanedRecords() == 1)
+        let records = try await sandbox.index.read { try XMPMergeRecord.records([id, gone], in: $0) }
+        #expect(Array(records.keys) == [id])
+    }
 }

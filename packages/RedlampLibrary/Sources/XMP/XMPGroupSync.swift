@@ -33,7 +33,6 @@ extension XMPGroup {
         let member: Member
         let photo: URL
         /// Its `.redlamp`'s edit, where the locator reads it.
-        var edit: URL?
         var editStamp: XMPFileStamp?
         /// The `.redlamp`'s fields; nil when it has none, or it can't be read.
         var redlamp: XMPFields?
@@ -245,7 +244,6 @@ extension XMPGroup {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: sidecar.path, isDirectory: &isDirectory) else { return side }
         let edit = isDirectory.boolValue ? sidecar.appending(path: SidecarStore.editFile) : sidecar
-        side.edit = edit
         side.editStamp = XMPFileStamp(at: edit)
         if let record = side.record, XMPFileStamp.same(record.redlamp, side.editStamp) {
             side.redlamp = record.redlampFields
