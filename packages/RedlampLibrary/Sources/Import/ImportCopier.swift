@@ -19,10 +19,11 @@ public struct ImportCopyError: Error, Sendable, Hashable, CustomStringConvertibl
 
 /// Copies a photo's files from its source to the destination and the backup at once (LIB-27). Each
 /// file is read once, through its volume's readers, in chunks hashed with SHA-256 as they're written
-/// under a hidden name beside each target; then put on the disk, read back through the targets' file
-/// system and checked against the source's size and hash; and only then renamed into place, never over
-/// anything. Every copy is a file of its own, block for block, never a clone sharing the source's
-/// blocks. A `.redlamp` package is copied a file at a time, the same way.
+/// under a hidden name beside each target; then passed to the drive (`fsync`), read back through the
+/// targets' file system and checked against the source's size and hash; and only then renamed into
+/// place, never over anything. `flush` empties the drives' caches for every copy made so far. Every
+/// copy is a file of its own, block for block, never a clone sharing the source's blocks. A `.redlamp`
+/// package is copied a file at a time, the same way.
 struct ImportCopier: Sendable {
     /// The targets' file system: what's read back, renamed and removed.
     let fileSystem: any LibraryFileSystem
@@ -62,7 +63,7 @@ struct ImportCopier: Sendable {
     func write(_ copy: ImportPlan.Copy, to targets: [URL], io: VolumeIO) async throws -> Staged {
         let stagings = targets.map(Self.staging(for:))
         let fileSystem = fileSystem
-        try await LibraryIndex.offCaller {
+        let prepare = { @Sendable in
             for (target, staging) in zip(targets, stagings) {
                 try fileSystem.createDirectory(
                     at: target.deletingLastPathComponent(),
@@ -78,12 +79,13 @@ struct ImportCopier: Sendable {
             guard copy.isDirectory else {
                 let digest = try await stream(
                     source, size: Int(copy.size), modified: copy.modified, to: stagings, io: io,
-                    expecting: copy.role == .photo ? copy.contentKey : nil,
+                    expecting: copy.role == .photo ? copy.contentKey : nil, preparing: prepare,
                 )
                 return Staged(copy: copy, targets: targets, stagings: stagings, digests: ["": digest])
             }
             var digests: [String: Data] = [:]
             try await LibraryIndex.offCaller {
+                try prepare()
                 for staging in stagings {
                     try fileSystem.createDirectory(at: staging, withIntermediateDirectories: false)
                 }
@@ -120,37 +122,53 @@ struct ImportCopier: Sendable {
 
     /// Streams the file at `source`, `size` bytes, into new files at `targets`, each given `modified`
     /// and its bytes passed to the drive; returns the SHA-256 of what was read. With `expecting`, the
-    /// file's first bytes must give that content key: it's the file that was browsed.
+    /// file's first bytes must give that content key: it's the file that was browsed. `preparing` runs
+    /// first, where the files are made.
     private func stream(
         _ source: URL, size: Int, modified: Date, to targets: [URL], io: VolumeIO, expecting key: ContentKey? = nil,
+        preparing: @escaping @Sendable () throws -> Void = {},
     ) async throws -> Data {
-        let writers = try await LibraryIndex.offCaller { try targets.map(StagedFile.init(creating:)) }
+        let writers = try await LibraryIndex.offCaller {
+            try preparing()
+            return try targets.map(StagedFile.init(creating:))
+        }
         let hasher = Hasher()
+        let chunk = Self.chunk
+        func reading(from offset: Int) -> Task<Data, any Error>? {
+            guard offset < size else { return nil }
+            return Task { try await io.read(source, range: offset ..< min(offset + chunk, size), priority: .normal) }
+        }
+        // Each chunk is read while the one before it is hashed and written.
+        var next = reading(from: 0)
+        defer { next?.cancel() }
         do {
             var offset = 0
-            while offset < size {
-                let data = try await io.read(
-                    source,
-                    range: offset ..< min(offset + Self.chunk, size),
-                    priority: .normal,
-                )
+            while let pending = next {
+                let data = try await pending.value
                 guard !data.isEmpty else {
                     throw ImportCopyError(path: source.path, message: "it's shorter than when it was listed")
                 }
                 if offset == 0, let key, ContentKey(fileSize: size, head: data.prefix(ContentKey.headLength)) != key {
                     throw ImportCopyError(path: source.path, message: "it changed since it was read")
                 }
+                offset += data.count
+                next = reading(from: offset)
+                let last = next == nil
                 try await LibraryIndex.offCaller {
                     hasher.update(data)
                     for writer in writers {
                         try writer.write(data)
+                        if last {
+                            try writer.finish(modified: modified)
+                        }
                     }
                 }
-                offset += data.count
             }
-            try await LibraryIndex.offCaller {
-                for writer in writers {
-                    try writer.finish(modified: modified)
+            if size == 0 {
+                try await LibraryIndex.offCaller {
+                    for writer in writers {
+                        try writer.finish(modified: modified)
+                    }
                 }
             }
         } catch {
@@ -163,39 +181,32 @@ struct ImportCopier: Sendable {
     }
 
     /// Puts what's been written so far at every target on its drive: one flush a target volume, shared
-    /// with the copies waiting for it.
+    /// with the copies waiting for it, the targets' at once.
     func flush() async throws {
-        for flush in flushes {
-            try await flush.flush()
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for flush in flushes {
+                group.addTask { try await flush.flush() }
+            }
+            try await group.waitForAll()
         }
     }
 
     // MARK: - Checking and placing
 
-    /// Reads `staged` back at each target and checks every file's size and SHA-256 against the source's.
-    func verify(_ staged: Staged) async throws {
+    /// Reads each staged copy back at each target and checks every file's size and SHA-256 against the
+    /// source's, calling `verified` with each that passes; then calls `placing` and renames every copy to
+    /// its target, never over anything. When one can't be placed, those placed are removed again.
+    func settle(
+        _ staged: [Staged], verified: @escaping @Sendable (Staged) throws -> Void,
+        placing: @escaping @Sendable () throws -> Void,
+    ) async throws {
         let fileSystem = fileSystem
         try await LibraryIndex.offCaller {
-            for staging in staged.stagings {
-                for (path, digest) in staged.digests {
-                    let file = path.isEmpty ? staging : staging.appending(path: path)
-                    let size = path.isEmpty ? Int(staged.copy.size) : nil
-                    guard try Self.digest(of: file, size: size, fileSystem: fileSystem) == digest else {
-                        throw ImportCopyError(
-                            path: staged.copy.source,
-                            message: "the copy at \(staging.deletingLastPathComponent().path) isn't the same as the original",
-                        )
-                    }
-                }
+            for copy in staged {
+                try Self.verify(copy, fileSystem: fileSystem)
+                try verified(copy)
             }
-        }
-    }
-
-    /// Renames each staged copy to its target, never over anything; when one can't be, removes those it
-    /// placed and throws.
-    func place(_ staged: [Staged]) async throws {
-        let fileSystem = fileSystem
-        try await LibraryIndex.offCaller {
+            try placing()
             var placed: [URL] = []
             do {
                 for copy in staged {
@@ -209,6 +220,21 @@ struct ImportCopier: Sendable {
                     try? fileSystem.removeItem(at: target)
                 }
                 throw error
+            }
+        }
+    }
+
+    private static func verify(_ staged: Staged, fileSystem: any LibraryFileSystem) throws {
+        for staging in staged.stagings {
+            for (path, digest) in staged.digests {
+                let file = path.isEmpty ? staging : staging.appending(path: path)
+                let size = path.isEmpty ? Int(staged.copy.size) : nil
+                guard try Self.digest(of: file, size: size, fileSystem: fileSystem) == digest else {
+                    throw ImportCopyError(
+                        path: staged.copy.source,
+                        message: "the copy at \(staging.deletingLastPathComponent().path) isn't the same as the original",
+                    )
+                }
             }
         }
     }
@@ -339,7 +365,8 @@ private final class StagedFile: @unchecked Sendable {
 
 /// Empties one volume's drive cache (`F_FULLFSYNC`) for every copy waiting, one flush at a time: copies
 /// that arrive while one runs wait for the next, since their bytes may have reached the drive after
-/// it began. A flush costs about 8 ms on an SSD, against a millisecond for each file's `fsync`.
+/// it began. A flush costs about 8 ms on an SSD, against a millisecond for each file's `fsync`, so the
+/// importer flushes for a batch of photos at once.
 final class ImportFlush: Sendable {
     let root: URL
     private let state = Mutex((running: false, waiting: [CheckedContinuation<Void, any Error>]()))

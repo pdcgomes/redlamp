@@ -98,9 +98,9 @@ struct ImportBrowseTests {
             let isKnown = known.contains(photo.primary.name)
             #expect(photo.state == (isKnown ? .imported : .previewed), "\(photo.primary.name)")
             #expect(sandbox.store.contains(key, tier: .grid) == !isKnown, "\(photo.primary.name)")
-            // A head, and nothing past it, for those the library has.
+            // The bytes its content key covers, and nothing past them, for those the library has.
             let read = sandbox.reads.bytesRead(photo.url)
-            #expect(isKnown ? read == PhotoMetadataReader.headLength : read == Int(photo.primary.size), "\(read)")
+            #expect(isKnown ? read == ContentKey.headLength : read == Int(photo.primary.size), "\(read)")
         }
         let plan = try await session.plan(sandbox.settings())
         #expect(plan.items.count == 4 && plan.left(.imported) == 2)

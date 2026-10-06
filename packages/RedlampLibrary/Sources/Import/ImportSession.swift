@@ -46,6 +46,8 @@ public final class ImportSession: Sendable {
 
     /// Photos kept in memory whole, at most, when one has no embedded preview to take.
     static let wholeFileLimit = 128 << 20
+    /// Photos read whole with their heads, at most, when their previews are made from all of them.
+    static let wholeFileRead = 16 << 20
 
     private struct State {
         var photos: [String: ImportPhoto] = [:]
@@ -287,7 +289,7 @@ public final class ImportSession: Sendable {
         let priority: VolumeIO.Priority = previewing ? .high : .normal
         let read: ReadHead
         do {
-            read = try await readHead(of: photo, io: io, priority: priority)
+            read = try await readHead(of: photo, io: io, priority: priority, keys: keys)
         } catch is CancellationError {
             state.withLock { _ = $0.claimed.remove(id) }
             finish(id) { _ in }
@@ -394,14 +396,46 @@ public final class ImportSession: Sendable {
         var xmp: CaptureMetadata?
         /// Each photo file's content key, by name.
         var keys: [String: ContentKey]
+
+        init(head: Data, metadata: CaptureMetadata? = nil, xmp: CaptureMetadata? = nil, keys: [String: ContentKey]) {
+            self.head = head
+            self.metadata = metadata
+            self.xmp = xmp
+            self.keys = keys
+        }
     }
 
     /// The photo's first photo file's head (its content key and metadata), the content keys of the
-    /// others, and other apps' `.xmp` beside it, each read once through the volume's readers.
-    private func readHead(of photo: ImportPhoto, io: VolumeIO, priority: VolumeIO.Priority) async throws -> ReadHead {
+    /// others, and other apps' `.xmp` beside it, each read once through the volume's readers. Where the
+    /// library has photos of each file's size, the bytes the content keys cover are read first, and
+    /// nothing more when the library has them all.
+    private func readHead(
+        of photo: ImportPhoto, io: VolumeIO, priority: VolumeIO.Priority, keys known: ImportKeys,
+    ) async throws -> ReadHead {
         let url = photo.url
         let size = Int(photo.primary.size)
-        let head = try await io.read(url, range: 0 ..< PhotoMetadataReader.headLength, priority: priority)
+        var keys: [String: ContentKey] = [:]
+        var head = Data()
+        if photo.photoFiles.allSatisfy({ known.contains(size: $0.size) }) {
+            for file in photo.photoFiles {
+                let fileURL = URL(fileURLWithPath: photo.folder + "/" + file.name, isDirectory: false)
+                let fileHead = try await io.read(fileURL, range: 0 ..< ContentKey.headLength, priority: priority)
+                keys[file.name] = ContentKey(fileSize: Int(file.size), head: fileHead)
+                if file.name == photo.primary.name {
+                    head = fileHead
+                }
+            }
+            if keys.values.allSatisfy(known.contains) {
+                return ReadHead(head: head, keys: keys)
+            }
+        }
+        // A preview of a photo that isn't a raw is made from all of it, read at once.
+        let wanted = !photo.primary.isRaw && priority == .high && size <= Self.wholeFileRead
+            ? size : PhotoMetadataReader.headLength
+        if head.count < wanted, head.count < size {
+            try await head.append(io.read(url, range: head.count ..< wanted, priority: priority))
+        }
+        let read = head
         var xmp: Data?
         if let sidecar = photo.files
             .first(where: { $0.role == .otherApp && NamingJob.split($0.name).ext.lowercased() == "xmp" }) {
@@ -411,7 +445,7 @@ public final class ImportSession: Sendable {
         let xmpData = xmp
         let lane: WorkScheduler.Lane = priority == .high ? .onScreen : .lookAhead
         var parsed = try await scheduler.run(lane) {
-            LibraryIndexer.Run.parse(head: head, size: size, url: url, xmp: xmpData)
+            LibraryIndexer.Run.parse(head: read, size: size, url: url, xmp: xmpData)
         }
         if parsed.needsFile {
             let headLength = PhotoMetadataReader.headLength
@@ -422,13 +456,13 @@ public final class ImportSession: Sendable {
             }
             parsed.metadata = try await scheduler.run(lane) { PhotoMetadataReader.read(url: url) }
         }
-        var keys = [photo.primary.name: parsed.key]
-        for file in photo.photoFiles.dropFirst() {
+        keys[photo.primary.name] = parsed.key
+        for file in photo.photoFiles.dropFirst() where keys[file.name] == nil {
             let fileURL = URL(fileURLWithPath: photo.folder + "/" + file.name, isDirectory: false)
             let fileHead = try await io.read(fileURL, range: 0 ..< ContentKey.headLength, priority: priority)
             keys[file.name] = ContentKey(fileSize: Int(file.size), head: fileHead)
         }
-        return ReadHead(head: head, metadata: parsed.metadata, xmp: parsed.xmp, keys: keys)
+        return ReadHead(head: read, metadata: parsed.metadata, xmp: parsed.xmp, keys: keys)
     }
 
     // MARK: - Previews

@@ -38,13 +38,15 @@ public struct ImportLibrary: Sendable {
         guard let index else { return ImportKeys() }
         return try await index.read { reader in
             var halves: [ImportKeys.Key] = []
-            try reader.database.cached("SELECT content_key FROM photos WHERE content_key IS NOT NULL")
+            var sizes: [Int64] = []
+            try reader.database.cached("SELECT content_key, size FROM photos WHERE content_key IS NOT NULL")
                 .forEachRow { row in
                     if let (high, low) = row.contentKeyHalves(at: 0) {
                         halves.append(ImportKeys.Key(high: high, low: low))
+                        sizes.append(row.int64(at: 1))
                     }
                 }
-            return ImportKeys(halves)
+            return ImportKeys(halves, sizes: sizes)
         }
     }
 }
@@ -62,7 +64,7 @@ final class ImportQueue<Element: Sendable>: Sendable {
     }
 }
 
-/// Content keys, sorted, for looking up many: 16 bytes a photo.
+/// Content keys and the photos' sizes, sorted, for looking up many: 24 bytes a photo.
 struct ImportKeys: Sendable {
     struct Key: Sendable, Hashable, Comparable {
         var high: UInt64
@@ -85,9 +87,11 @@ struct ImportKeys: Sendable {
     }
 
     private let keys: ContiguousArray<Key>
+    private let sizes: ContiguousArray<Int64>
 
-    init(_ keys: [Key] = []) {
+    init(_ keys: [Key] = [], sizes: [Int64] = []) {
         self.keys = ContiguousArray(keys.sorted())
+        self.sizes = ContiguousArray(sizes.sorted())
     }
 
     var count: Int {
@@ -95,16 +99,25 @@ struct ImportKeys: Sendable {
     }
 
     func contains(_ key: ContentKey) -> Bool {
-        let wanted = Key(key)
-        var (low, high) = (0, keys.count)
+        Self.contains(Key(key), in: keys)
+    }
+
+    /// Whether a photo of `size` bytes is in the library: a file of another size can't have one of its
+    /// content keys, which cover the size.
+    func contains(size: Int64) -> Bool {
+        Self.contains(size, in: sizes)
+    }
+
+    private static func contains<T: Comparable>(_ wanted: T, in sorted: ContiguousArray<T>) -> Bool {
+        var (low, high) = (0, sorted.count)
         while low < high {
             let middle = (low + high) / 2
-            if keys[middle] < wanted {
+            if sorted[middle] < wanted {
                 low = middle + 1
             } else {
                 high = middle
             }
         }
-        return low < keys.count && keys[low] == wanted
+        return low < sorted.count && sorted[low] == wanted
     }
 }

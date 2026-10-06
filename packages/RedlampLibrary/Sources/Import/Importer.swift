@@ -24,8 +24,9 @@ public struct ImportOutcome: Sendable, Hashable {
         public var photos: Int
         public var verified: Int
         public var failed: Int
-        /// Every photo the plan copies from it is verified at the destination and the backup, and the
-        /// import finished.
+        /// The import finished, every photo the plan copies from it is verified at the destination and
+        /// the backup and on their drives, and every photo chosen on it was read. Photos the user left
+        /// out, or that raw only left, don't count: `ImportPlan.left` names them for the app to warn of.
         public var isSafeToErase: Bool
     }
 
@@ -65,11 +66,13 @@ public struct ImportOutcome: Sendable, Hashable {
 /// Copies an import's plan (LIB-27): the plan is written to the journal and synced before anything is
 /// copied, then each photo's files are copied to the destination and the backup at once, a few photos
 /// at a time from each source volume, through its readers (`ImportCopier`): each file read once, and
-/// verified by its size and SHA-256 at every target before it's renamed into place, never over
-/// anything. A photo that fails leaves nothing at either target; the others go on. Then its `.redlamp`
-/// gets the choices made while browsing and the metadata preset, and the index and live lists hear of
-/// the folders it's in, in batches. A forced quit leaves the journal, which `recover` finishes at the
-/// next launch, keeping every copy already verified. One import runs at a time.
+/// checked by its size and SHA-256 at every target before it's renamed into place, never over
+/// anything. A photo that fails leaves nothing at either target; the others go on. Its `.redlamp` gets
+/// the choices made while browsing and the metadata preset. Photos in place are put on the targets'
+/// drives a batch at a time (`ImportFlush`), and only then logged done and counted verified; the index
+/// and live lists hear of their folders in batches. A forced quit leaves the journal, which `recover`
+/// finishes at the next launch, keeping every copy in place whose hash is the one logged. One import
+/// runs at a time.
 public final class Importer: Sendable {
     public let library: ImportLibrary
     /// The sources' file system.
@@ -81,9 +84,9 @@ public final class Importer: Sendable {
     let interruption = Mutex<Interruption?>(nil)
     private let serial = Mutex<Task<Void, Never>?>(nil)
 
-    /// Photos copied at once from each source volume: its readers' width, waiting on the targets'
-    /// writes and checks in between.
-    static let perVolume = 4
+    /// Photos copied at once from each source volume: more than its readers serve, so the targets'
+    /// writes and checks of some go on while the others read.
+    static let perVolume = 6
     /// Photos placed between the index's updates.
     static let indexBatch = 250
 
@@ -170,7 +173,29 @@ public final class Importer: Sendable {
         var indexed = 0
         var waitingToIndex = Set<String>()
         var placedSinceIndexing = 0
+        /// Photos in place whose bytes may still be in the drives' caches, and since when the first.
+        var unflushed: [Int: Placement] = [:]
+        var unflushedSince: ContinuousClock.Instant?
+        var flushing = false
+
+        /// Photos placed or failed, durable or not.
+        var settled: Int {
+            verified.count + unflushed.count + failed.count
+        }
     }
+
+    /// A photo in place at every target, and what it took.
+    private struct Placement: Sendable {
+        var files: Int
+        var backups: Int
+        var bytes: Int64
+        var sidecars: Int
+        var sidecarFailed: String?
+    }
+
+    /// Photos placed between two flushes of the targets' drives, at most; and how long the first waits.
+    static let flushBatch = 64
+    static let flushInterval = Duration.seconds(1)
 
     /// One run's counts, and the index's updates, one after another.
     private final class Run: Sendable {
@@ -257,13 +282,16 @@ public final class Importer: Sendable {
                                     if quitting.isSet {
                                         throw ForcedQuit()
                                     }
-                                    let folders = try self.record(result, number, plan: plan, run: run, log: log)
-                                    report(run.counts)
-                                    if let folders {
-                                        indexFolders(folders)
+                                    if let batch = try self.record(result, number, run: run, log: log) {
+                                        if let folders = try await self.flush(
+                                            batch, plan: plan, copier: copier, run: run, log: log,
+                                        ) {
+                                            indexFolders(folders)
+                                        }
                                     }
+                                    report(run.counts)
                                     if case let .afterPhotos(count) = self.interruption.withLock({ $0 }),
-                                       run.counts.verified.count + run.counts.failed.count >= count {
+                                       run.counts.settled >= count {
                                         quitting.set()
                                         throw ForcedQuit()
                                     }
@@ -281,6 +309,12 @@ public final class Importer: Sendable {
             await run.indexed()
             throw ForcedQuit()
         }
+        let rest = run.tally.withLock { tally in
+            defer { tally.unflushed = [:] }
+            return tally.unflushed
+        }
+        _ = try await flush(rest, plan: plan, copier: copier, run: run, log: log)
+        report(run.counts)
         indexFolders(run.tally.withLock { state in
             defer { state.waitingToIndex = [] }
             return state.waitingToIndex
@@ -302,8 +336,8 @@ public final class Importer: Sendable {
         case forcedQuit
     }
 
-    /// Copies photo `index` of `plan` to its targets, as the type describes; keeps what's verified and
-    /// in place from a run a forced quit cut short.
+    /// Copies photo `index` of `plan` to its targets, as the type describes, and places it; from a run a
+    /// forced quit cut short, keeps each copy in place that still has the hash the log recorded.
     private func copy(
         _ index: Int, of plan: ImportPlan, logged: ImportJournal.Progress, io: VolumeIO, copier: ImportCopier,
         log: ImportJournal.Log, locator: SidecarLocator,
@@ -311,31 +345,29 @@ public final class Importer: Sendable {
         let item = plan.items[index]
         var staged: [ImportCopier.Staged] = []
         do {
-            if !logged.placed.contains(index) {
-                for (number, copy) in item.copies.enumerated() {
-                    let targets = plan.targets(of: copy)
-                    let missing = try await missingTargets(
-                        copy, targets: targets, logged: logged.verified[index]?[number] ?? [:],
+            let placed = logged.placed.contains(index)
+            for (number, copy) in item.copies.enumerated() {
+                let targets = plan.targets(of: copy)
+                let missing = try await missingTargets(
+                    copy, targets: targets, logged: logged.verified[index]?[number] ?? [:], placed: placed,
+                )
+                guard !missing.isEmpty else { continue }
+                try await staged.append(copier.write(copy, to: missing.map { targets[$0] }, io: io))
+            }
+            try await copier.settle(staged) { written in
+                guard let number = item.copies.firstIndex(of: written.copy) else { return }
+                let targets = plan.targets(of: written.copy)
+                for target in written.targets {
+                    try log.verified(
+                        index, copy: number, target: targets.firstIndex(of: target) ?? 0, sha256: written.fingerprint,
                     )
-                    guard !missing.isEmpty else { continue }
-                    try await staged.append(copier.write(copy, to: missing.map { targets[$0] }, io: io))
                 }
-                try await copier.flush()
-                for written in staged {
-                    try await copier.verify(written)
-                    guard let number = item.copies.firstIndex(of: written.copy) else { continue }
-                    let targets = plan.targets(of: written.copy)
-                    for target in written.targets {
-                        try log.verified(
-                            index, copy: number, target: targets.firstIndex(of: target) ?? 0,
-                            sha256: written.fingerprint,
-                        )
-                    }
-                }
-                if interruption.withLock({ $0 }) == .beforePlacing(index) {
+            } placing: {
+                if self.interruption.withLock({ $0 }) == .beforePlacing(index) {
                     throw ForcedQuit()
                 }
-                try await copier.place(staged)
+            }
+            if !placed || !staged.isEmpty {
                 try log.placed(index)
             }
         } catch is ForcedQuit {
@@ -361,11 +393,9 @@ public final class Importer: Sendable {
         )
     }
 
-    /// Logs what became of photo `index` and counts it; returns its folder at the destination once enough
-    /// photos are placed for the index to be told.
-    private func record(
-        _ result: Result, _ index: Int, plan: ImportPlan, run: Run, log: ImportJournal.Log,
-    ) throws -> Set<String>? {
+    /// Logs a photo that failed, and keeps one placed for the next flush; returns the photos to flush
+    /// now, once enough have waited or the first has waited long enough and no flush is running.
+    private func record(_ result: Result, _ index: Int, run: Run, log: ImportJournal.Log) throws -> [Int: Placement]? {
         switch result {
         case .forcedQuit:
             throw ForcedQuit()
@@ -376,48 +406,82 @@ public final class Importer: Sendable {
             run.tally.withLock { $0.failed[index] = message }
             return nil
         case let .placed(files, backups, bytes, sidecars, problem):
-            try log.done(index)
-            let folder = plan.items[index].copies.first.map { copy in
-                FilePlanner.split(LibraryIndexer.path(plan.settings.destination) + "/" + copy.path).folder
-            }
-            return run.tally.withLock { tally -> Set<String>? in
-                tally.verified.insert(index)
+            let now = ContinuousClock.now
+            return run.tally.withLock { tally -> [Int: Placement]? in
                 tally.failed.removeValue(forKey: index)
-                tally.files += files
-                tally.backups += backups
-                tally.bytes += bytes
-                tally.sidecars += sidecars
-                if let problem {
-                    tally.sidecarsFailed.append(problem)
+                tally.unflushed[index] = Placement(
+                    files: files, backups: backups, bytes: bytes, sidecars: sidecars, sidecarFailed: problem,
+                )
+                let since = tally.unflushedSince ?? now
+                tally.unflushedSince = since
+                guard !tally.flushing, tally.unflushed.count >= Self.flushBatch || now - since >= Self.flushInterval
+                else { return nil }
+                tally.flushing = true
+                defer {
+                    tally.unflushed = [:]
+                    tally.unflushedSince = nil
                 }
-                if let folder {
-                    tally.waitingToIndex.insert(folder)
-                }
-                tally.placedSinceIndexing += 1
-                guard tally.placedSinceIndexing >= Self.indexBatch else { return nil }
-                tally.placedSinceIndexing = 0
-                defer { tally.waitingToIndex = [] }
-                return tally.waitingToIndex
+                return tally.unflushed
             }
         }
     }
 
-    /// The targets `copy` still has to go to: those without a copy in place whose fingerprint the log
-    /// recorded. Something else in the way stops the photo.
-    private func missingTargets(_ copy: ImportPlan.Copy, targets: [URL], logged: [Int: String]) async throws -> [Int] {
+    /// Empties the targets' drive caches, then logs `batch`'s photos done and counts them verified;
+    /// returns the folders at the destination to index once enough photos are done.
+    private func flush(
+        _ batch: [Int: Placement], plan: ImportPlan, copier: ImportCopier, run: Run, log: ImportJournal.Log,
+    ) async throws -> Set<String>? {
+        defer { run.tally.withLock { $0.flushing = false } }
+        guard !batch.isEmpty else { return nil }
+        try await copier.flush()
+        for index in batch.keys.sorted() {
+            try log.done(index)
+        }
+        let destination = LibraryIndexer.path(plan.settings.destination)
+        return run.tally.withLock { tally -> Set<String>? in
+            for (index, placement) in batch {
+                tally.verified.insert(index)
+                tally.files += placement.files
+                tally.backups += placement.backups
+                tally.bytes += placement.bytes
+                tally.sidecars += placement.sidecars
+                if let problem = placement.sidecarFailed {
+                    tally.sidecarsFailed.append(problem)
+                }
+                if let copy = plan.items[index].copies.first {
+                    tally.waitingToIndex.insert(FilePlanner.split(destination + "/" + copy.path).folder)
+                }
+            }
+            tally.placedSinceIndexing += batch.count
+            guard tally.placedSinceIndexing >= Self.indexBatch else { return nil }
+            tally.placedSinceIndexing = 0
+            defer { tally.waitingToIndex = [] }
+            return tally.waitingToIndex
+        }
+    }
+
+    /// The targets `copy` still has to go to: those without a copy in place that has the fingerprint
+    /// the log recorded. A copy the photo `placed` that has another (a power cut took its last bytes) is
+    /// removed, to be copied again; anything else in the way stops the photo.
+    private func missingTargets(
+        _ copy: ImportPlan.Copy, targets: [URL], logged: [Int: String], placed: Bool,
+    ) async throws -> [Int] {
         let fileSystem = destinationFileSystem
         return try await LibraryIndex.offCaller {
             try targets.indices.filter { number in
                 let target = targets[number]
                 guard fileSystem.exists(target) else { return true }
-                if let sha = logged[number],
-                   let found = try? ImportCopier.fingerprint(
-                       of: target,
-                       isDirectory: copy.isDirectory,
-                       fileSystem: fileSystem,
-                   ),
-                   ImportJournal.hex(found) == sha {
-                    return false
+                if let sha = logged[number] {
+                    let found = try? ImportCopier.fingerprint(
+                        of: target, isDirectory: copy.isDirectory, fileSystem: fileSystem,
+                    )
+                    if found.map(ImportJournal.hex) == sha {
+                        return false
+                    }
+                    if placed {
+                        try fileSystem.removeItem(at: target)
+                        return true
+                    }
                 }
                 throw ImportCopyError(path: copy.source, message: "\(target.path) is already there")
             }

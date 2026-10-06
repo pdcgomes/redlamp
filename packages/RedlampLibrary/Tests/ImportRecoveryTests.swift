@@ -21,7 +21,7 @@ struct ImportRecoveryTests {
         importer.interruption.withLock { $0 = .afterPhotos(4) }
         await #expect(throws: Importer.ForcedQuit.self) { try await importer.run(plan) }
         let unfinished = try #require(try await importer.unfinishedEntries().first)
-        #expect(unfinished.id == plan.id && unfinished.done >= 4 && unfinished.done < 12)
+        #expect(unfinished.id == plan.id && unfinished.done < 12)
         let placed = try Self.photos(in: sandbox.destination).keys.map { path in
             try (path, LocalFileSystem().attributes(of: sandbox.destination.appending(path: path)).fileIdentifier)
         }
