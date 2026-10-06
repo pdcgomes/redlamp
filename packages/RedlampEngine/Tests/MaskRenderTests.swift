@@ -450,6 +450,100 @@ struct MaskRenderTests {
         #expect(centre > 250 && corner < 5, "centre \(centre), corner \(corner)")
     }
 
+    // MARK: - Quality gate (MSK-25)
+
+    /// Sky coverage of a frame crossed by twelve dark branches 0.5 to 3 px wide, exact to 1/16.
+    private func branchCoverage(width: Int, height: Int) -> [Float] {
+        let lines: [(SIMD2<Float>, SIMD2<Float>, Float)] = (0 ..< 12).map { i in
+            let t = Float(i) / 12
+            let start = SIMD2<Float>(Float(width) * (0.05 + 0.9 * t), 0)
+            let end = SIMD2<Float>(Float(width) * (0.5 + 0.45 * sin(7 * t)), Float(height))
+            return (start, end, 0.5 + 2.5 * Float(i % 6) / 5)
+        }
+        return (0 ..< width * height).map { index in
+            var branch = 0
+            for sy in 0 ..< 4 {
+                for sx in 0 ..< 4 {
+                    let p = SIMD2<Float>(
+                        Float(index % width) + (Float(sx) + 0.5) / 4,
+                        Float(index / width) + (Float(sy) + 0.5) / 4,
+                    )
+                    let hit = lines.contains { start, end, width in
+                        let axis = end - start
+                        let t = simd_clamp(simd_dot(p - start, axis) / simd_length_squared(axis), 0, 1)
+                        return simd_length(p - (start + t * axis)) < width / 2
+                    }
+                    branch += hit ? 1 : 0
+                }
+            }
+            return 1 - Float(branch) / 16
+        }
+    }
+
+    private func lightness(_ colour: SIMD3<Float>) -> Float {
+        let y = simd_dot(colour, SIMD3(0.2126, 0.7152, 0.0722))
+        return y > 0.008856 ? 116 * cbrt(y) - 16 : 903.3 * y
+    }
+
+    /// How far an exposure edit through a mask of known coverage lands from the scene edited before
+    /// it was composited, in L*: averaged over the pixels mostly outside the mask (signed: positive
+    /// is lighter than it should be) and, unsigned, over the pixels wholly inside it.
+    private func edgeError(
+        coverage: [Float], width: Int, height: Int, kind: MaskKind, exposure: Double,
+        inside: (Int) -> SIMD3<Float>, outside: SIMD3<Float>,
+    ) throws -> (rim: Float, deep: Float) {
+        let gain = Float(pow(2, exposure))
+        let scene = try makeSession(width: width, height: height) { x, y in
+            coverage[y * width + x] * inside(y) + (1 - coverage[y * width + x]) * outside
+        }
+        let ideal = try makeSession(width: width, height: height) { x, y in
+            coverage[y * width + x] * inside(y) * gain + (1 - coverage[y * width + x]) * outside
+        }
+        var mask = try MaskLayer(name: "Gate", components: [MaskComponent(shape: .ai(AIMask(
+            kind: kind, provider: "test", revision: 1, analysisHash: "0", center: ImagePoint(x: 0.5, y: 0.5),
+            bitmap: #require(GrayMask(width: width, height: height, coverage: coverage).bitmap()),
+        )))])
+        mask[.localExposure] = exposure
+        var recipe = EditRecipe()
+        recipe.masks = [mask]
+        let difference = try zip(render(recipe, session: scene), render(EditRecipe(), session: ideal))
+            .map { lightness($0) - lightness($1) }
+        let deep = coverage.indices.filter { coverage[$0] == 1 }
+        let rim = coverage.indices.filter { coverage[$0] > 0.05 && coverage[$0] < 0.5 }
+        return (
+            rim.map { difference[$0] }.reduce(0, +) / Float(rim.count),
+            deep.map { abs(difference[$0]) }.reduce(0, +) / Float(deep.count),
+        )
+    }
+
+    /// Darkening a sky by 1.5 EV through its true coverage should look like the scene with its sky
+    /// darkened before compositing. A pixel part sky and part branch is darkened by too little, so
+    /// branches come out lighter than they should: the gate holds that rim where it is until edits
+    /// are applied to the pure colour behind a mixed pixel (MSK-27).
+    @Test func `a sky darkened through its true coverage keeps the rim along its branches within the gate`() throws {
+        let (width, height) = (512, 256)
+        let error = try edgeError(
+            coverage: branchCoverage(width: width, height: height), width: width, height: height, kind: .sky,
+            exposure: -1.5, inside: { SIMD3(0.45, 0.55, 0.75) * (0.9 + 0.2 * Float($0) / Float(height)) },
+            outside: SIMD3(0.03, 0.025, 0.02),
+        )
+        #expect(error.deep < 0.5, "deep in the sky, the edit misses the ideal by \(error.deep) L*")
+        #expect(error.rim < 14.5, "branches come out \(error.rim) L* lighter than they should")
+    }
+
+    /// Brightening dark strands by 1 EV through their true coverage brightens the light background
+    /// mixed into their edges with them, so a glow follows the strands just outside them (MSK-27).
+    @Test func `strands brightened through their true coverage keep the glow beside them within the gate`() throws {
+        let (width, height) = (512, 256)
+        let error = try edgeError(
+            coverage: branchCoverage(width: width, height: height).map { 1 - $0 }, width: width, height: height,
+            kind: .subject, exposure: 1, inside: { _ in SIMD3(0.06, 0.045, 0.035) },
+            outside: SIMD3(0.55, 0.52, 0.48),
+        )
+        #expect(error.deep < 0.5, "inside the strands, the edit misses the ideal by \(error.deep) L*")
+        #expect(error.rim < 3.5, "the background beside the strands comes out \(error.rim) L* lighter")
+    }
+
     /// A depth map that is near on the left and far on the right: a near range selects the left.
     @Test func `depth range selects by depth`() throws {
         let session = try makeSession(width: 300, height: 200) { _, _ in SIMD3(repeating: 0.18) }
