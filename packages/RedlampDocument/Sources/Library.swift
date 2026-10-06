@@ -9,13 +9,13 @@ public enum Library {
 
     /// Makes `change` to the culling metadata of an image's sidecar as it is on disk, keeping
     /// its edits, history and the rest of its metadata. Throws, changing nothing, if the sidecar
-    /// is protected (see `SidecarStore.protection(for:)`).
+    /// is protected (see `SidecarStore.protection(for:)`) or can't be read now.
     public static func writeMetadata(
         for image: URL,
         store: SidecarStore = SidecarStore(),
         _ change: (inout PhotoMetadata) -> Void,
     ) throws {
-        var sidecar = store.load(for: image) ?? Sidecar(recipe: EditRecipe())
+        var sidecar = try store.loadThrowing(for: image) ?? Sidecar(recipe: EditRecipe())
         var metadata = sidecar.metadata ?? PhotoMetadata()
         change(&metadata)
         sidecar.metadata = metadata

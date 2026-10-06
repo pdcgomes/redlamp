@@ -88,14 +88,24 @@ struct SidecarReadFailureTests {
         NSFileCoordinator.addFilePresenter(presenter)
         defer { NSFileCoordinator.removeFilePresenter(presenter) }
 
-        // The save queue's `.metadata` write; failing, changing nothing, would be right.
-        _ = try? Library.writeMetadata(for: image, store: store) { $0.rating = 3 }
-        #expect(presenter.asked.withLock { $0 } >= 1)
-
-        withKnownIssue("DATA-18: a rating over an edit that couldn't be read writes over it") {
-            let onDisk = try #require(store.load(for: image))
-            #expect(onDisk.recipe[.exposure] == 1)
-            #expect(onDisk.snapshots.map(\.name) == ["Mine"])
+        // The save queue's `.metadata` write.
+        var thrown: (any Error)?
+        do {
+            try Library.writeMetadata(for: image, store: store) { $0.rating = 3 }
+        } catch {
+            thrown = error
         }
+        #expect(presenter.asked.withLock { $0 } >= 1)
+        #expect(thrown != nil, "nothing is written")
+        #expect(!(thrown is SidecarStoreError), "not a protected sidecar's error, so the save queue tries it again")
+        let onDisk = try #require(store.load(for: image))
+        #expect(onDisk.recipe[.exposure] == 1)
+        #expect(onDisk.snapshots.map(\.name) == ["Mine"])
+        #expect(onDisk.metadata?.rating == nil)
+
+        try Library.writeMetadata(for: image, store: store) { $0.rating = 3 }
+        let rated = try #require(store.load(for: image))
+        #expect(rated.metadata?.rating == 3, "tried again once it reads")
+        #expect(rated.recipe[.exposure] == 1 && rated.snapshots.map(\.name) == ["Mine"])
     }
 }

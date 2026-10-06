@@ -286,10 +286,11 @@ public final class SettingsSync {
             await saves?.wait(for: url)
             // Sidecars are read and written off the main thread: on a busy disk one write can take seconds.
             let store = store
-            let (protected, existing) = await Task
-                .detached { (store.protection(for: url) != nil, store.load(for: url)) }
-                .value
-            guard !protected else {
+            // Nil when it's protected; a failure when it's there but can't be read now.
+            let read = await Task.detached { () -> Result<Sidecar?, any Error>? in
+                store.protection(for: url) == nil ? Result { try store.loadThrowing(for: url) } : nil
+            }.value
+            guard case let .success(existing)? = read else {
                 skipped += 1
                 continue
             }

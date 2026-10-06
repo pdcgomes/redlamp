@@ -185,6 +185,16 @@ public struct SidecarStore: Sendable {
         return resolveConflicts(loaded, for: image) ?? loaded
     }
 
+    /// The image's sidecar, or nil only when it has none. Where `load(for:)` takes a sidecar it
+    /// can't read for none, this throws: the coordinated read's error (worth trying again), or
+    /// `SidecarStoreError.unreadable` when the edit can't be opened or doesn't decode. Use it
+    /// wherever what's read is saved back.
+    public func loadThrowing(for image: URL) throws -> Sidecar? {
+        let sidecar = url(for: image)
+        guard let loaded = try Self.reading(sidecar, { try Self.decodeThrowing(sidecar: $0) }) else { return nil }
+        return resolveConflicts(loaded, for: image) ?? loaded
+    }
+
     /// Writes the sidecar unless nothing but `modified` changed, so unchanged edits don't
     /// wake up sync services. Fields a newer Redlamp added to the file on disk are kept.
     public func save(_ sidecar: Sidecar, for image: URL) throws {
@@ -265,11 +275,19 @@ public struct SidecarStore: Sendable {
         sidecar.appending(path: masksDirectory).appending(path: "\(sha256).png")
     }
 
-    /// The sidecar at `sidecar` (a package or a single file), with its mask bitmaps.
+    /// The sidecar at `sidecar` (a package or a single file), with its mask bitmaps; nil when it
+    /// has none or it can't be read.
     static func decode(sidecar: URL) -> Sidecar? {
-        guard let data = try? Data(contentsOf: editURL(inSidecar: sidecar)),
-              var decoded = try? JSONDecoder.sidecar.decode(Sidecar.self, from: data)
-        else { return nil }
+        try? decodeThrowing(sidecar: sidecar)
+    }
+
+    /// The sidecar at `sidecar`, with its mask bitmaps; nil when it has none. Throws
+    /// `SidecarStoreError.unreadable` when its edit is there but can't be read or doesn't decode.
+    static func decodeThrowing(sidecar: URL) throws -> Sidecar? {
+        guard let data = try editData(inSidecar: sidecar) else { return nil }
+        guard var decoded = try? JSONDecoder.sidecar.decode(Sidecar.self, from: data) else {
+            throw SidecarStoreError.unreadable(sidecar)
+        }
         let bitmaps = { (sha: String) in try? Data(contentsOf: bitmapURL(sha, inSidecar: sidecar)) }
         decoded.recipe.loadMaskBitmaps(bitmaps)
         for index in decoded.snapshots.indices {
