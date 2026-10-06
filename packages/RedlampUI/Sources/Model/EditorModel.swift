@@ -744,6 +744,10 @@ public final class EditorModel {
         }
         sidecarReadRetry?.cancel()
         unsavedSessions = []
+        if let error = saveError, failedSaves[error.url] == nil, error.url != url {
+            // A Start Over that failed, which no save tries again.
+            saveError = failedSaves.values.first?.error
+        }
         if let selection {
             saves.enqueue(.forget, for: selection)
             if selection != url {
@@ -851,12 +855,13 @@ public final class EditorModel {
     }
 
     /// Sets the open photo's damaged edit aside in its sidecar (`edit.damaged-<date>.json`, for
-    /// recovery) and opens it again with no edit, in a new visit.
+    /// recovery) and opens it again with no edit, in a new visit; or, when its edit is no longer
+    /// damaged, opens it again as it now is.
     public func startOver() {
         guard canStartOver, let url = selection else { return }
         let visit = visits
         Task { [sidecars, scheduler = library.scheduler] in
-            let result: Result<(URL, OpenedSidecar), any Error>
+            let result: Result<(URL?, OpenedSidecar), any Error>
             do {
                 result = try await .success(scheduler.run(.onScreen) {
                     let copy = try sidecars.setAsideDamagedEdit(for: url)
@@ -868,10 +873,12 @@ public final class EditorModel {
             guard visits == visit, let info, info.url == url, selection == url, opening == nil else { return }
             switch result {
             case let .success((copy, read)):
-                activity.record(
-                    .photo,
-                    "Started over on \(activity.alias(for: url)), its damaged edit kept as \(copy.lastPathComponent)",
-                )
+                if let copy {
+                    activity.record(
+                        .photo,
+                        "Started over on \(activity.alias(for: url)), its damaged edit kept as \(copy.lastPathComponent)",
+                    )
+                }
                 leave(for: url, keepingSelection: true, ready: true)
                 didOpen(info, read, keepingView: true)
             case let .failure(error):

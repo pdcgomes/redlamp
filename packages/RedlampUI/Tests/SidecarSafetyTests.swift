@@ -392,6 +392,44 @@ struct SidecarSafetyTests {
         #expect(try folder.contents() == before)
     }
 
+    @Test func `Start Over on an edit that is no longer damaged opens it as it now is`() async throws {
+        let folder = Folder()
+        try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder.url) }
+        try folder.seed(#require(Self.damaged.first))
+        let model = EditorModel(engine: StubEngine())
+
+        try await open(folder.photo, in: model)
+        try #require(model.canStartOver)
+        let mended = #"{"format":"app.redlamp.edit","recipe":{"version":3,"processVersion":1,"values":{"basic.exposure":0.7}}}"#
+        try Data(mended.utf8).write(to: folder.edit)
+        model.startOver()
+        try await eventually { !model.isReadOnly }
+        #expect(!model.isReadOnly)
+        #expect(model.recipe[.exposure] == 0.7)
+        #expect(model.saveError == nil)
+        #expect(try folder.contents().keys.allSatisfy { !$0.contains("edit.damaged-") })
+    }
+
+    @Test func `a Start Over that fails says so until another photo opens`() async throws {
+        let folder = Folder()
+        try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder.url) }
+        try folder.seed(#require(Self.damaged.first))
+        let package = SidecarStore().url(for: folder.photo)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: package.path) }
+        let model = EditorModel(engine: StubEngine())
+
+        try await open(folder.photo, in: model)
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: package.path)
+        model.startOver()
+        try await eventually { model.saveError != nil }
+        #expect(model.saveError?.message == "IMG_0001 can't start over: permission denied")
+        #expect(model.isReadOnly)
+        try await open(folder.other, in: model)
+        #expect(model.saveError == nil)
+    }
+
     @Test(arguments: unreadable)
     func `sync settings leaves a photo whose edit can't be read alone`(json: String) async throws {
         let folder = Folder()

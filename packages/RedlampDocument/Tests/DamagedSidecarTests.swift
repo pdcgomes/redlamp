@@ -78,7 +78,7 @@ struct DamagedSidecarTests {
             try Data("png".utf8).write(to: masks.appending(path: "\(sha256).png"))
         }
 
-        let copy = try store.setAsideDamagedEdit(for: image, at: date())
+        let copy = try #require(try store.setAsideDamagedEdit(for: image, at: date()))
         #expect(copy == package.appending(path: "edit.damaged-2026-10-06-071500.json"))
         #expect(try Data(contentsOf: copy) == Data(json.utf8))
         #expect(try names(in: package) == ["edit.damaged-2026-10-06-071500.json", "masks"])
@@ -102,7 +102,7 @@ struct DamagedSidecarTests {
         try Data("not JSON".utf8).write(to: sidecar)
         #expect(store.protection(for: image) == .damaged)
 
-        let copy = try store.setAsideDamagedEdit(for: image, at: date())
+        let copy = try #require(try store.setAsideDamagedEdit(for: image, at: date()))
         #expect(copy == sidecar.appending(path: "edit.damaged-2026-10-06-071500.json"))
         #expect(try names(in: sidecar) == ["edit.damaged-2026-10-06-071500.json"])
         #expect(try Data(contentsOf: copy) == Data("not JSON".utf8))
@@ -118,7 +118,7 @@ struct DamagedSidecarTests {
         let package = try seed("one", for: image)
         try store.setAsideDamagedEdit(for: image, at: date())
         try Data("two".utf8).write(to: package.appending(path: SidecarStore.editFile))
-        let second = try store.setAsideDamagedEdit(for: image, at: date())
+        let second = try #require(try store.setAsideDamagedEdit(for: image, at: date()))
         #expect(second.lastPathComponent == "edit.damaged-2026-10-06-071500-2.json")
         #expect(try Data(contentsOf: second) == Data("two".utf8))
         #expect(try names(in: package).count == 2)
@@ -134,7 +134,7 @@ struct DamagedSidecarTests {
         defer { cleanup() }
         let store = SidecarStore()
         let package = try seed(json, for: image)
-        #expect(throws: (any Error).self) { try store.setAsideDamagedEdit(for: image) }
+        #expect(try store.setAsideDamagedEdit(for: image) == nil)
         #expect(try names(in: package) == [SidecarStore.editFile])
         #expect(try Data(contentsOf: store.editURL(for: image)) == Data(json.utf8))
     }
@@ -142,20 +142,25 @@ struct DamagedSidecarTests {
     @Test func `a photo without a sidecar has nothing to set aside`() throws {
         let (image, cleanup) = try temporaryImage()
         defer { cleanup() }
-        #expect(throws: (any Error).self) { try SidecarStore().setAsideDamagedEdit(for: image) }
+        #expect(try SidecarStore().setAsideDamagedEdit(for: image) == nil)
         #expect(!FileManager.default.fileExists(atPath: SidecarStore().url(for: image).path))
     }
 
     @Test(arguments: [true, false])
-    func `removing a sidecar keeps the damaged edits set aside`(deleting: Bool) throws {
+    func `removing a sidecar keeps the damaged edits set aside, and the masks they name`(deleting: Bool) throws {
         let (image, cleanup) = try temporaryImage()
         defer { cleanup() }
         let store = SidecarStore()
-        let package = try seed("not JSON", for: image)
-        let copy = try store.setAsideDamagedEdit(for: image, at: date())
+        let damaged = #"{"recipe":{"masks":[{"bitmap":{"sha256":"\#(named)""#
+        let package = try seed(damaged, for: image)
+        let masks = package.appending(path: SidecarStore.masksDirectory)
+        try FileManager.default.createDirectory(at: masks, withIntermediateDirectories: true)
+        try Data("png".utf8).write(to: masks.appending(path: "\(named).png"))
+        let copy = try #require(try store.setAsideDamagedEdit(for: image, at: date()))
         var recipe = EditRecipe()
         recipe[.exposure] = 0.5
         try store.save(Sidecar(recipe: recipe), for: image)
+        try Data("png".utf8).write(to: masks.appending(path: "\(unnamed).png"))
         #expect(try names(in: package).contains(SidecarStore.editFile))
 
         if deleting {
@@ -163,8 +168,9 @@ struct DamagedSidecarTests {
         } else {
             try store.saveOrRemove(Sidecar(recipe: EditRecipe()), for: image)
         }
-        #expect(try names(in: package) == [copy.lastPathComponent])
-        #expect(try Data(contentsOf: copy) == Data("not JSON".utf8))
+        #expect(try names(in: package) == [copy.lastPathComponent, SidecarStore.masksDirectory])
+        #expect(try names(in: masks) == ["\(named).png"], "only the masks a damaged edit names")
+        #expect(try Data(contentsOf: copy) == Data(damaged.utf8))
         #expect(store.load(for: image) == nil)
         let beside = try FileManager.default.contentsOfDirectory(atPath: package.deletingLastPathComponent().path)
         #expect(beside.allSatisfy { !$0.hasPrefix(".") }, "nothing left beside it")

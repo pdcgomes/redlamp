@@ -5,15 +5,14 @@ import Foundation
 public extension SidecarStore {
     /// Moves the image's damaged edit aside in its sidecar as `edit.damaged-<date>.json`, so the
     /// photo opens with no edit and its next save starts a new one; its history and masks stay.
-    /// A single-file sidecar becomes a package holding it. Throws unless the edit is damaged.
+    /// A single-file sidecar becomes a package holding it. Returns the copy, or nil when there is
+    /// no damaged edit (another app replaced it, say), leaving the sidecar as it is.
     @discardableResult
-    func setAsideDamagedEdit(for image: URL, at date: Date = Date()) throws -> URL {
+    func setAsideDamagedEdit(for image: URL, at date: Date = Date()) throws -> URL? {
         let destination = url(for: image)
         let options: NSFileCoordinator.WritingOptions = Self.isPackage(destination) ? [] : .forReplacing
         return try Self.writing(destination, options: options) { sidecar in
-            guard let data = try Self.editData(inSidecar: sidecar), Self.isDamaged(data) else {
-                throw CocoaError(.fileWriteUnknown)
-            }
+            guard let data = try Self.editData(inSidecar: sidecar), Self.isDamaged(data) else { return nil }
             let fileManager = FileManager.default
             if Self.isPackage(sidecar) {
                 let copy = Self.damagedCopy(in: sidecar, at: date)

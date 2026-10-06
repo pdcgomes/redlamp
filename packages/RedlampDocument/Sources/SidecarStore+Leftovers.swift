@@ -33,20 +33,37 @@ extension SidecarStore {
 
     /// Removes the sidecar at `url` by moving it to a hidden name first, so an interrupted removal
     /// leaves it whole or gone, never a package without its edit. Damaged edits set aside stay,
-    /// for recovery: the rest of the package goes, its edit first.
+    /// for recovery, with the masks they name (all of them while one can't be read): the rest of
+    /// the package goes, its edit first.
     static func remove(_ url: URL) throws {
         let fileManager = FileManager.default
         let hidden = hiddenSibling(of: url)
-        let kept = Set(damagedCopies(in: url).map(\.lastPathComponent))
-        guard !kept.isEmpty else {
+        let copies = damagedCopies(in: url)
+        guard !copies.isEmpty else {
             try fileManager.moveItem(at: url, to: hidden)
             try fileManager.removeItem(at: hidden)
             return
         }
+        let kept = Set(copies.map(\.lastPathComponent) + [masksDirectory])
         let rest = try fileManager.contentsOfDirectory(atPath: url.path).filter { !kept.contains($0) }
+        let masks = url.appending(path: masksDirectory)
+        let written = copies.compactMap { try? Data(contentsOf: $0) }
+        let bitmaps = written.count < copies
+            .count ? [] : (try? fileManager.contentsOfDirectory(atPath: masks.path)) ?? []
+        let unnamed = bitmaps.filter { !$0.hasSuffix(".png") || !isNamed(String($0.dropLast(4)), in: written) }
         try fileManager.createDirectory(at: hidden, withIntermediateDirectories: false)
         for name in rest.filter({ $0 == editFile }) + rest.filter({ $0 != editFile }) {
             try fileManager.moveItem(at: url.appending(path: name), to: hidden.appending(path: name))
+        }
+        if !unnamed.isEmpty {
+            let hiddenMasks = hidden.appending(path: masksDirectory)
+            try fileManager.createDirectory(at: hiddenMasks, withIntermediateDirectories: false)
+            for name in unnamed {
+                try fileManager.moveItem(at: masks.appending(path: name), to: hiddenMasks.appending(path: name))
+            }
+        }
+        if fileManager.fileExists(atPath: masks.path), try fileManager.contentsOfDirectory(atPath: masks.path).isEmpty {
+            try fileManager.removeItem(at: masks)
         }
         try fileManager.removeItem(at: hidden)
     }

@@ -389,6 +389,11 @@ public struct SidecarStore: Sendable {
     /// edit set aside, where fields a newer build added (a mask shape this build doesn't know,
     /// say) may name one. Nothing is
     /// removed while a session file can't be read, since the bitmaps it needs aren't known.
+    /// Whether any of `written` names the bitmap `sha256`, in a field this build may not know.
+    static func isNamed(_ sha256: String, in written: [Data]) -> Bool {
+        written.contains { $0.range(of: Data(sha256.utf8)) != nil }
+    }
+
     private static func removeUnusedBitmaps(of sidecar: Sidecar, in package: URL, json: Data) {
         var used = Set(bitmaps(of: sidecar).map(\.sha256))
         var written = [json] + damagedCopies(in: package).compactMap { try? Data(contentsOf: $0) }
@@ -403,8 +408,7 @@ public struct SidecarStore: Sendable {
         let files = (try? FileManager.default.contentsOfDirectory(atPath: masks.path)) ?? []
         for file in files where file.hasSuffix(".png") {
             let sha256 = String(file.dropLast(4))
-            let named = written.contains { $0.range(of: Data(sha256.utf8)) != nil }
-            if !used.contains(sha256), !named {
+            if !used.contains(sha256), !isNamed(sha256, in: written) {
                 try? FileManager.default.removeItem(at: masks.appending(path: file))
             }
         }
