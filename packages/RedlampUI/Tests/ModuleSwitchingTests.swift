@@ -208,7 +208,7 @@ struct ModuleSwitchingTests {
         #expect(modules.grid.reloads == 1, "the grid loaded once, when first shown")
         model.showModule(.library)
         try await fixture.settle()
-        #expect(modules.window.firstResponder === modules.grid.collectionView, "the grid takes the keyboard")
+        #expect(modules.window.firstResponder === modules.grid.content, "the grid takes the keyboard")
         model.showModule(.develop)
         try await fixture.settle()
         #expect(modules.window.firstResponder === modules.content.view, "Develop gives it back")

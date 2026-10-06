@@ -93,6 +93,14 @@
             // Modules
             case .libraryModule, .developModule, .previousModule, .gridView, .loupeView, .compareView, .surveyView:
                 module(action)
+            // Library
+            case .cycleGridStyle, .largerThumbnails, .smallerThumbnails: grid(action)
+            case .showInFinder:
+                ActionCheck(action: action, setUp: { app in
+                    try app.main { $0.libraryViews.revealInFinder = { Revealed.photos.append(contentsOf: $0) } }
+                }, observe: { _ in "\(Revealed.photos.count)" }, restore: { app in
+                    try app.main { $0.libraryViews.revealInFinder = Revealed.finder }
+                })
             // View
             case .beforeAfter: .toggle(action) { "\($0.showBefore)" }
             case .nextCompareLayout, .previousCompareLayout:

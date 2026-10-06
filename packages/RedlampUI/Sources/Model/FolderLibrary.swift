@@ -3,6 +3,7 @@ import Foundation
 import Observation
 import RedlampDocument
 import RedlampEngineAPI
+import RedlampLibrary
 
 /// How the photos changed, for views that update row by row (the filmstrip): rows removed
 /// (indices before the change), rows inserted and rows whose badges changed (indices after it).
@@ -74,6 +75,11 @@ public final class FolderLibrary {
     public private(set) var revision = 0
 
     @ObservationIgnored public internal(set) var items: [LibraryItem] = []
+    /// Each photo's ID, beside `items`: given as it's listed and kept while it's shown, never reused, so
+    /// a selection over them (`photoList`) outlives any change.
+    @ObservationIgnored public internal(set) var photoIDs: ContiguousArray<Int64> = []
+    @ObservationIgnored var nextPhotoID: Int64 = 0
+    @ObservationIgnored private var madeList: PhotoList?
     @ObservationIgnored var positions: [URL: Int] = [:]
     @ObservationIgnored let scheduler: WorkScheduler
     /// Starts every key this library gives `scheduler`, which other libraries share (the harness's
@@ -139,6 +145,36 @@ public final class FolderLibrary {
 
     public func item(for url: URL) -> LibraryItem? {
         positions[url].map { items[$0] }
+    }
+
+    /// The photos shown, by ID in their order, for selections; made again after photos come or go.
+    public var photoList: PhotoList {
+        if let madeList {
+            return madeList
+        }
+        let source = openFolder.map { PhotoSource.folder($0, includingSubfolders: includesSubfolders) }
+        let list = PhotoList(source: source ?? .allPhotographs, ids: photoIDs)
+        madeList = list
+        return list
+    }
+
+    public func photoID(of url: URL) -> Int64? {
+        positions[url].map { photoIDs[$0] }
+    }
+
+    public func url(ofPhoto id: Int64) -> URL? {
+        photoList.index(of: id).map { items[$0].url }
+    }
+
+    /// IDs for `count` photos just listed.
+    func newPhotoIDs(_ count: Int) -> Range<Int64> {
+        defer { nextPhotoID += Int64(count) }
+        return nextPhotoID ..< nextPhotoID + Int64(count)
+    }
+
+    /// Photos came or went: `photoList` is made again when it's next asked for.
+    func photosMoved() {
+        madeList = nil
     }
 
     /// Calls `handler` after every change, until the returned token is released.
@@ -247,6 +283,8 @@ public final class FolderLibrary {
     func replace(with items: [LibraryItem], positions: [URL: Int]) {
         self.items = items
         self.positions = positions
+        photoIDs = ContiguousArray(newPhotoIDs(items.count))
+        photosMoved()
         publish(LibraryDiff(reset: true))
     }
 
@@ -259,6 +297,8 @@ public final class FolderLibrary {
         guard !new.isEmpty else { return }
         let start = items.count
         items += new
+        photoIDs += newPhotoIDs(new.count)
+        photosMoved()
         reindex(from: start)
         publish(LibraryDiff(inserted: IndexSet(integersIn: start ..< items.count)))
         probeSidecars(in: start ..< items.count, generation: generation)
@@ -269,6 +309,8 @@ public final class FolderLibrary {
         guard positions[item.url] == nil else { return }
         let index = items.firstIndex { FileOrder.precedes(item.name, $0.name) } ?? items.count
         items.insert(item, at: index)
+        photoIDs.insert(newPhotoIDs(1).lowerBound, at: index)
+        photosMoved()
         reindex(from: index)
         publish(LibraryDiff(inserted: [index]))
     }

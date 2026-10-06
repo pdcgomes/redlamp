@@ -135,7 +135,8 @@ struct ModuleWindow {
     var identities: [ObjectIdentifier] {
         [
             content.view, content.developView, content.library, content.library.grid, content.library.loupe,
-            content.library.grid.collectionView, left.develop, left.library, right.develop, right.library,
+            content.library.grid.content, content.library.toolbar, left.develop, left.library, right.develop,
+            right.library,
         ].map(ObjectIdentifier.init)
     }
 }

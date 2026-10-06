@@ -38,10 +38,14 @@ struct PhotoSelectionTests {
 
         model.click(photos[0], toggling: true)
         #expect(model.selectedPhotos == [photos[1], photos[3]])
-        #expect(model.selection == photos[3], "taking away another photo keeps the active one")
+        #expect(
+            model.selection == photos[1],
+            "taking away the active photo makes the nearest selected one after it active",
+        )
         model.click(photos[3], toggling: true)
         #expect(model.selectedPhotos == [photos[1]])
-        #expect(model.selection == photos[1], "taking away the active photo makes another active")
+        #expect(model.selection == photos[1], "taking away another photo keeps the active one")
+        #expect(model.photoSelection.count == 1 && model.photoSelection.active == model.library.photoID(of: photos[1]))
         model.click(photos[1], toggling: true)
         #expect(model.selectedPhotos == [photos[1]], "the last photo stays selected")
 

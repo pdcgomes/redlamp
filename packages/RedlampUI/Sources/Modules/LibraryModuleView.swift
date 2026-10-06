@@ -2,13 +2,14 @@ import AppKit
 import RedlampDesign
 import SwiftUI
 
-/// The Library module's middle: the grid or the loupe between the panels, and the filmstrip docked beneath
-/// them, the same filmstrip Develop floats, with the same photos, selection and place. Built once with the
-/// window and kept; G, E, C and N show the grid or the loupe. While Develop is shown it's transparent and
-/// its parts follow nothing (`isInShownModule`).
+/// The Library module's middle: the grid or the loupe between the panels, the Library toolbar under them,
+/// and the filmstrip docked beneath, the same filmstrip Develop floats, with the same photos, selection and
+/// place. Built once with the window and kept; G, E, C and N show the grid or the loupe. While Develop is
+/// shown it's transparent and its parts follow nothing (`isInShownModule`).
 final class LibraryModuleView: NSView {
     let grid: LibraryGridView
     let loupe: LibraryLoupeView
+    let toolbar: LibraryToolbarView
     private let filmstrip: NSHostingView<LibraryFilmstrip>
     private let model: EditorModel
     private var trackers: [Tracker] = []
@@ -24,6 +25,7 @@ final class LibraryModuleView: NSView {
         self.model = model
         grid = LibraryGridView(model: model)
         loupe = LibraryLoupeView(model: model)
+        toolbar = LibraryToolbarView(model: model)
         filmstrip = NSHostingView(rootView: LibraryFilmstrip(model: model, theme: theme))
         filmstrip.sizingOptions = []
         super.init(frame: CGRect(x: 0, y: 0, width: 1600, height: 1000))
@@ -31,7 +33,7 @@ final class LibraryModuleView: NSView {
         layer?.backgroundColor = NSColor(white: 0.12, alpha: 1).cgColor
         let stage = safeAreaLayoutGuide
         let inset = PanelMetrics.inset
-        for view in [grid, loupe, filmstrip] as [NSView] {
+        for view in [grid, loupe, toolbar, filmstrip] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -40,16 +42,20 @@ final class LibraryModuleView: NSView {
             filmstrip.trailingAnchor.constraint(equalTo: stage.trailingAnchor, constant: -inset),
             filmstrip.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -inset),
             filmstrip.heightAnchor.constraint(equalToConstant: Self.filmstripHeight),
+            toolbar.leadingAnchor.constraint(equalTo: stage.leadingAnchor),
+            toolbar.trailingAnchor.constraint(equalTo: stage.trailingAnchor),
+            toolbar.heightAnchor.constraint(equalToConstant: LibraryToolbarView.height),
         ]
         for view in [grid, loupe] as [NSView] {
             constraints += [
                 view.leadingAnchor.constraint(equalTo: stage.leadingAnchor),
                 view.trailingAnchor.constraint(equalTo: stage.trailingAnchor),
                 view.topAnchor.constraint(equalTo: stage.topAnchor),
+                view.bottomAnchor.constraint(equalTo: toolbar.topAnchor),
             ]
-            withFilmstrip.append(view.bottomAnchor.constraint(equalTo: filmstrip.topAnchor, constant: -inset))
-            withoutFilmstrip.append(view.bottomAnchor.constraint(equalTo: bottomAnchor))
         }
+        withFilmstrip.append(toolbar.bottomAnchor.constraint(equalTo: filmstrip.topAnchor, constant: -inset / 2))
+        withoutFilmstrip.append(toolbar.bottomAnchor.constraint(equalTo: bottomAnchor))
         NSLayoutConstraint.activate(constraints + withFilmstrip)
         updateParts()
     }

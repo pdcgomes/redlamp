@@ -38,7 +38,8 @@ public extension EditorModel {
         guard !isModalDialogOpen else { return false }
         guard action.isAvailable else { return false }
         guard module == .develop || !action.isDevelopOnly else { return false }
-        if let performed = performModuleShortcut(action) {
+        guard module == .library || !action.isLibraryOnly else { return false }
+        if let performed = performModuleShortcut(action) ?? performGridShortcut(action) {
             return performed
         }
         switch action {
@@ -213,7 +214,8 @@ public extension EditorModel {
             return action == .cropTool
         }
         guard module == .develop || !action.isDevelopOnly else { return false }
-        if let available = canPerformModuleShortcut(action) {
+        guard module == .library || !action.isLibraryOnly else { return false }
+        if let available = canPerformModuleShortcut(action) ?? canPerformGridShortcut(action) {
             return available
         }
         let photo = info != nil
@@ -228,7 +230,7 @@ public extension EditorModel {
              .toggleLeftPanel, .toggleRightPanel, .panelBasic, .panelToneCurve, .panelColorMixer, .panelColorGrading,
              .panelDetail, .panelLens, .panelTransform, .panelEffects, .panelCalibration:
             return true
-        case .selectAllPhotos: return selection != nil && selectedPhotos.count < items.count
+        case .selectAllPhotos: return selection != nil && photoSelection.count < items.count
         case .syncSettings, .syncSettingsAgain: return canSync
         case .undoSync: return settingsSync.canUndo
         case .toggleAutoSync: return true

@@ -70,6 +70,8 @@ struct AppCommands: Commands {
             item(.mergeFocusStack)
             item(.editFocusStack)
             Divider()
+            item(.showInFinder)
+            Divider()
             item(.previousPhoto)
             item(.nextPhoto)
             item(.selectAllPhotos)
@@ -92,6 +94,22 @@ struct AppCommands: Commands {
             item(.previousModule)
             Divider()
             ForEach([ShortcutAction.gridView, .loupeView, .compareView, .surveyView]) { mouseItem($0) }
+            Divider()
+            Menu("Grid View Style") {
+                Picker("Grid View Style", selection: Binding(
+                    get: { model.libraryViews.cellStyle },
+                    set: { model.setCellStyle($0) },
+                )) {
+                    ForEach(GridCellStyle.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.inline)
+                .labelsHidden()
+                .disabled(model.module != .library || model.isModalDialogOpen)
+                Divider()
+                mouseItem(.cycleGridStyle)
+            }
+            mouseItem(.largerThumbnails)
+            mouseItem(.smallerThumbnails)
             Divider()
         }
 

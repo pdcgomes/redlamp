@@ -9,6 +9,20 @@
             "\(model.module) \(model.libraryView)"
         }
 
+        /// A grid action, in the Library grid; Develop afterwards, at the grid's standard size and style.
+        static func grid(_ action: ShortcutAction) -> ActionCheck {
+            ActionCheck(action: action, setUp: { app in
+                try app.main { $0.showLibrary(.grid) }
+                try app.settle()
+            }, observe: { "\($0.libraryViews.thumbnailSize) \($0.libraryViews.cellStyle)" }, restore: { app in
+                try app.main { model in
+                    model.setThumbnailSize(GridSize.standard)
+                    model.setCellStyle(.compact)
+                }
+                try app.backToDevelop()
+            })
+        }
+
         /// Shows a module or a Library view from the other module (⌥⌘↑ from Develop, after Library);
         /// Develop afterwards, on the grid.
         static func module(_ action: ShortcutAction) -> ActionCheck {
@@ -23,6 +37,13 @@
                 try app.backToDevelop()
             })
         }
+    }
+
+    /// The photos Show in Finder showed while a scenario counted them, rather than opening Finder.
+    @MainActor
+    enum Revealed {
+        static var photos: [URL] = []
+        static let finder: @MainActor ([URL]) -> Void = { NSWorkspace.shared.activateFileViewerSelecting($0) }
     }
 
     extension RunningApp {
@@ -115,7 +136,7 @@
     }
 
     enum ModuleScenarios {
-        static let all: [Scenario] = [switching, picker, grid, palette]
+        static let all: [Scenario] = [switching, picker, grid, palette] + GridScenarios.all
 
         static let switching = Scenario(
             "modules.switching",
@@ -125,6 +146,7 @@
             claims: [
                 .action(.gridView), .action(.loupeView), .action(.compareView), .action(.surveyView),
                 .action(.libraryModule), .action(.developModule), .action(.previousModule), .action(.editTool),
+                .feature("library.modules"),
             ],
         ) { app in
             try app.openWorking()
@@ -161,6 +183,7 @@
             try app.wait("⌥⌘1: Library") { $0.module == .library }
             try app.choose(.developModule)
             try app.wait("Develop") { $0.module == .develop }
+            app.covered(.feature("library.modules"), via: .key)
             try app.main { $0.deselectOtherPhotos() }
             try app.settle()
         }
@@ -195,7 +218,7 @@
             try app.settle()
             try app.press(.gridView)
             try app.wait("the grid to take the keyboard") { _ in
-                Views.editorWindow?.firstResponder.map { "\(type(of: $0))" } == "LibraryCollectionView"
+                Views.editorWindow?.firstResponder.map { "\(type(of: $0))" } == "LibraryGridContentView"
             }
             try app.wait("the grid's cells") { _ in
                 Views.editorWindow.flatMap { Views.find("grid.\(names[1])", in: $0) } != nil
@@ -238,7 +261,7 @@
             try app.press(.gridView)
             try app.wait("G: the grid") { $0.libraryView == .grid }
             try app.wait("the grid to take the keyboard again") { _ in
-                Views.editorWindow?.firstResponder.map { "\(type(of: $0))" } == "LibraryCollectionView"
+                Views.editorWindow?.firstResponder.map { "\(type(of: $0))" } == "LibraryGridContentView"
             }
             try app.pressGridKey(kVK_Return, characters: "\r")
             try app.wait("Return: the loupe") { $0.libraryView == .loupe }

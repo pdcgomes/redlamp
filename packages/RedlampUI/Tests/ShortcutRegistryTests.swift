@@ -2,14 +2,34 @@ import Testing
 @_spi(Harness) @testable import RedlampUI
 
 struct ShortcutRegistryTests {
-    @Test func `every key combo belongs to exactly one action`() {
-        var owners: [KeyCombo: ShortcutAction] = [:]
-        for action in ShortcutAction.allCases {
-            for combo in action.combos {
-                #expect(owners[combo] == nil, "\(combo.display) is bound to both \(owners[combo]!) and \(action)")
-                owners[combo] = action
+    @Test func `every key combo belongs to exactly one action in each module`() {
+        for module in AppModule.allCases {
+            var owners: [KeyCombo: ShortcutAction] = [:]
+            for action in ShortcutAction.allCases
+                where module == .library ? !action.isDevelopOnly : !action.isLibraryOnly {
+                for combo in action.combos {
+                    #expect(
+                        owners[combo] == nil,
+                        "\(combo.display) is bound to both \(owners[combo].map { "\($0)" } ?? "") and \(action) in \(module)",
+                    )
+                    owners[combo] = action
+                    #expect(
+                        ShortcutAction.resolve(combo, in: module)?.action == action,
+                        "\(combo.display) in \(module)",
+                    )
+                }
             }
         }
+    }
+
+    @Test func `the Library's J, = and - are its grid's, and Develop's are Develop's`() {
+        #expect(ShortcutAction.resolve(.char("j"), in: .library)?.action == .cycleGridStyle)
+        #expect(ShortcutAction.resolve(.char("="), in: .library)?.action == .largerThumbnails)
+        #expect(ShortcutAction.resolve(.char("-"), in: .library)?.action == .smallerThumbnails)
+        #expect(ShortcutAction.resolve(.char("j"), in: .develop)?.action == .clipping)
+        #expect(ShortcutAction.resolve(.char("=", shift: true), in: .develop)?.action == .increaseSetting)
+        #expect(ShortcutAction.resolve(.char("r", command: true), in: .library)?.action == .showInFinder)
+        #expect(ShortcutAction.resolve(.char("z"), in: .library)?.action == .toggleZoom, "Z zooms the loupe")
     }
 
     @Test func `every action has a title`() {

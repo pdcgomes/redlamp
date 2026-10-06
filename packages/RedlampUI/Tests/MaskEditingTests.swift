@@ -357,6 +357,13 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         nil
     }
 
+    /// What `decodeThumbnail` gives, for a photo and the long edge asked for; nil decodes nothing.
+    var decodedThumbnail: (@Sendable (URL, Int) -> CGImage?)?
+
+    func decodeThumbnail(for url: URL, maxPixelSize: Int) -> CGImage? {
+        decodedThumbnail?(url, maxPixelSize)
+    }
+
     /// Every look registered, in order.
     private(set) var registeredLooks: [BaseLookDefinition] = []
 

@@ -4,6 +4,7 @@ import Observation
 import RedlampCanvas
 import RedlampDocument
 import RedlampEngineAPI
+import RedlampLibrary
 import RedlampRecipes
 
 /// All editor state. Views read it; only its methods change it.
@@ -44,9 +45,9 @@ public final class EditorModel {
     /// Stack suggestions the user dismissed; they don't come back when the folder changes.
     @ObservationIgnored var dismissedStacks: Set<StackSuggestion> = []
     public internal(set) var selection: URL?
-    /// The photos selected in the filmstrip, in its order: the open one (`selection`) and any
-    /// others ⌘- or ⇧-clicked with it.
-    public internal(set) var selectedPhotos: [URL] = []
+    /// The photos selected in the grid and the filmstrip, by their IDs in `library.photoList`: the open
+    /// one (`selection`, the active photo) and any others selected with it (`selectedPhotos`).
+    public internal(set) var photoSelection = PhotoSelection()
     /// Where ⇧ extends the selection from: the photo last clicked or moved to without ⇧.
     @ObservationIgnored var selectionAnchor: URL?
     /// Focus stacks found in the folder that have no stack document yet.
@@ -630,6 +631,8 @@ public final class EditorModel {
     public internal(set) var previousModule: AppModule?
     /// Photos' previews, for the Library loupe and for Develop until a photo's render lands.
     @ObservationIgnored public let previews: PhotoPreviews
+    /// The grid's thumbnail size and cell style, the loupe's zoom, and each source's view as last left.
+    @ObservationIgnored public private(set) lazy var libraryViews = LibraryViewState(defaults: library.defaults)
     #if DEBUG || REDLAMP_PROFILING
         /// `filmstrip=shown` in a capture script: the floating filmstrip stays up with a photo
         /// selected, as it does while the pointer is over it.
@@ -805,7 +808,7 @@ public final class EditorModel {
             visits += 1
             metadataChangesWhileOpening = []
             if !keepingSelection {
-                selectedPhotos = [url]
+                selectOnly(url)
                 selectionAnchor = url
             }
             requestRender()
@@ -817,7 +820,7 @@ public final class EditorModel {
         guard url != opening ?? selection else {
             if !keepingSelection {
                 if opening == nil {
-                    selectedPhotos = [url]
+                    selectOnly(url)
                     selectionAnchor = url
                 } else {
                     openingKeepsSelection = false
@@ -970,7 +973,7 @@ public final class EditorModel {
     /// then). Unless `url` is `ready` to show now, no photo is open until it is.
     private func leave(for url: URL, keepingSelection: Bool, ready: Bool) {
         if !keepingSelection {
-            selectedPhotos = [url]
+            selectOnly(url)
             selectionAnchor = url
         }
         sidecarReadRetry?.cancel()

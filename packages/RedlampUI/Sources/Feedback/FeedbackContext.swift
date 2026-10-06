@@ -138,6 +138,9 @@ public extension FeedbackContext {
         if model.stackWorkspace != nil {
             return "focus-stacking.workspace"
         }
+        if model.module == .library {
+            return model.libraryView == .loupe ? "library.loupe" : "library.grid"
+        }
         switch model.activeTool {
         case .masking:
             let component = model.selectedMask?.components.first { $0.id == model.selectedComponentID }

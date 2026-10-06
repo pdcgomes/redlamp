@@ -34,8 +34,8 @@ public final class ThumbnailLoader {
     /// Starts every key this loader gives `scheduler`, which other loaders share (the harness's
     /// scenes', each test's): a job with another's key would replace it, or be cancelled with it.
     private let keyPrefix = "thumbnails \(UUID().uuidString) "
-    private let packs: ThumbnailPacks
-    private let decode: @Sendable (URL, Int) -> CGImage?
+    let packs: ThumbnailPacks
+    let decode: @Sendable (URL, Int) -> CGImage?
     private var cache: [URL: Entry] = [:]
     private var used = 0
     private var tick: UInt64 = 0

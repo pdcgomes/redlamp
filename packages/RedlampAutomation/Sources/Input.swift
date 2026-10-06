@@ -58,7 +58,7 @@
             if view.accessibilityIdentifier() == identifier {
                 return view.convert(view.bounds, to: nil)
             }
-            if ["toolstrip", "histogram"].contains(view.accessibilityIdentifier()) {
+            if ["toolstrip", "histogram", "library.grid"].contains(view.accessibilityIdentifier()) {
                 for case let element as NSAccessibilityElement in view.accessibilityChildren() ?? []
                     where element.accessibilityIdentifier() == identifier {
                     return window.convertFromScreen(element.accessibilityFrame())

@@ -374,6 +374,18 @@
     {
       "features" : [
         {
+          "id" : "library.modules",
+          "title" : "Library and Develop Modules"
+        },
+        {
+          "id" : "library.grid",
+          "title" : "Grid"
+        },
+        {
+          "id" : "library.loupe",
+          "title" : "Loupe"
+        },
+        {
           "id" : "library.folders",
           "title" : "Folders Panel"
         },
@@ -399,15 +411,16 @@
         },
         {
           "id" : "library.other",
-          "title" : "Something else in Folders & Filmstrip"
+          "title" : "Something else in Library"
         }
       ],
       "id" : "library",
       "label" : "component:library",
-      "summary" : "Folders, the filmstrip, thumbnails, ratings and flags.",
-      "title" : "Folders & Filmstrip",
+      "summary" : "The Library module: the grid, the loupe, folders, the filmstrip, thumbnails, ratings and flags.",
+      "title" : "Library",
       "tracker" : [
-        "UX"
+        "UX",
+        "LIB"
       ]
     },
     {

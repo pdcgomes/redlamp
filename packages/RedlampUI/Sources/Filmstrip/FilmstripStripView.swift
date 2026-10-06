@@ -1,6 +1,7 @@
 import AppKit
 import RedlampDesign
 import RedlampDocument
+import RedlampLibrary
 import SwiftUI
 
 /// The filmstrip's photos in AppKit: a horizontal collection view whose cells are reused as it
@@ -27,7 +28,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     /// The selection and marks as last followed. Cells are drawn from these, not from the model,
     /// which can be a turn ahead, so `follow` knows every cell it has to change.
     private var selected: URL?
-    private var marked: Set<URL> = []
+    private var marked = PhotoSelection()
     private var prefetching: [URL: UInt64] = [:]
     /// Shown again: it goes back to the filmstrip's place once laid out.
     private var needsPlace = false
@@ -95,7 +96,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         wasInSight = isInShownModule(model)
         tracker = Tracker { [weak self] in
             guard let self else { return }
-            let (selection, photos) = (model.selection, model.selectedPhotos)
+            let (selection, photos) = (model.selection, model.photoSelection)
             let inSight = isInShownModule(model)
             defer { wasInSight = inSight }
             if inSight, !wasInSight {
@@ -132,7 +133,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
             // A reload counts the photos at the next layout; a change before then would be counted twice.
             collectionView.layoutSubtreeIfNeeded()
         }
-        follow(model.selection, marking: model.selectedPhotos, scrolling: false)
+        follow(model.selection, marking: model.photoSelection, scrolling: false)
         needsPlace = true
         needsLayout = true
     }
@@ -186,7 +187,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         let photo = model.items[indexPath.item]
         item.cell.configure(photo, image: model.thumbnailLoader.cached(photo))
         item.cell.isSelected = photo.url == selected
-        item.cell.isInSelection = marked.contains(photo.url)
+        item.cell.isInSelection = photo.url != selected && marked.contains(model.library.photoIDs[indexPath.item])
         item.cell.onClick = { [weak self] modifiers in
             self?.model.click(
                 photo.url, toggling: modifiers.contains(.command), extending: modifiers.contains(.shift),
@@ -205,6 +206,8 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     ) {
         guard let item = item as? FilmstripItem, model.items.indices.contains(indexPath.item) else { return }
         let photo = model.items[indexPath.item]
+        item.cell.isSelected = photo.url == selected
+        item.cell.isInSelection = photo.url != selected && marked.contains(model.library.photoIDs[indexPath.item])
         if let id = prefetching.removeValue(forKey: photo.url) {
             model.thumbnailLoader.cancel(id)
         }
@@ -279,7 +282,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
             prefetching.values.forEach(model.thumbnailLoader.cancel)
             prefetching = [:]
             collectionView.reloadData()
-            follow(model.selection, marking: model.selectedPhotos, animated: false)
+            follow(model.selection, marking: model.photoSelection, animated: false)
             return
         }
         if !diff.removed.isEmpty || !diff.inserted.isEmpty {
@@ -306,18 +309,17 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
 
     // MARK: - Selection
 
-    private func follow(_ selection: URL?, marking photos: [URL], animated: Bool = true, scrolling: Bool = true) {
-        let marking = Set(photos).subtracting([selection].compactMap(\.self))
-        let changed = marked.symmetricDifference(marking).union([selected, selection].compactMap(\.self))
-        for url in changed {
-            guard let row = model.library.index(of: url),
-                  let item = collectionView.item(at: IndexPath(item: row, section: 0)) as? FilmstripItem else {
-                continue
-            }
+    private func follow(
+        _ selection: URL?, marking photos: PhotoSelection, animated: Bool = true, scrolling: Bool = true,
+    ) {
+        let ids = model.library.photoIDs
+        for case let item as FilmstripItem in collectionView.visibleItems() {
+            guard let row = collectionView.indexPath(for: item)?.item, ids.indices.contains(row),
+                  let url = item.cell.item?.url else { continue }
             item.cell.isSelected = url == selection
-            item.cell.isInSelection = marking.contains(url)
+            item.cell.isInSelection = url != selection && photos.contains(ids[row])
         }
-        marked = marking
+        marked = photos
         let moved = selected != selection
         selected = selection
         // Scrolled to when it changes, and after a reload; not when only the marks do.

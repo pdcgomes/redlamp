@@ -240,10 +240,21 @@ public extension FeedbackArea {
             ],
         ),
         FeedbackArea(
-            "library", "Folders & Filmstrip", symbol: "folder",
-            summary: "Folders, the filmstrip, thumbnails, ratings and flags.",
-            tracker: ["UX"],
+            "library", "Library", symbol: "square.grid.3x3",
+            summary: "The Library module: the grid, the loupe, folders, the filmstrip, thumbnails, ratings and flags.",
+            tracker: ["UX", "LIB"],
             features: [
+                FeedbackFeature(
+                    "modules",
+                    "Library and Develop Modules",
+                    ["module", "library module", "develop module", "switch", "module picker"],
+                ),
+                FeedbackFeature(
+                    "grid",
+                    "Grid",
+                    ["grid", "thumbnail size", "cell style", "expanded cells", "rubber band", "context menu", "j"],
+                ),
+                FeedbackFeature("loupe", "Loupe", ["loupe", "zoom", "1:1", "fit", "large photo"]),
                 FeedbackFeature(
                     "folders",
                     "Folders Panel",

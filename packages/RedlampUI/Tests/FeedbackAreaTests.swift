@@ -106,6 +106,22 @@ struct FeedbackAreaTests {
         #expect(FeedbackArea.search("zzzz").isEmpty)
     }
 
+    @MainActor
+    @Test func `the Library area has the modules, the grid and the loupe, and a report from Library suggests them`() {
+        let library = FeedbackArea.catalog.first { $0.id == "library" }
+        #expect(library?.title == "Library" && library?.tracker.contains("LIB") == true)
+        #expect(FeedbackArea.topic("library.modules")?.path == "Library › Library and Develop Modules")
+        #expect(FeedbackArea.topic("library.grid")?.path == "Library › Grid")
+        #expect(FeedbackArea.topic("library.loupe")?.path == "Library › Loupe")
+        #expect(FeedbackArea.search("thumbnail size").first?.id == "library.grid")
+        let model = EditorModel(engine: StubEngine())
+        #expect(FeedbackContext.suggestion(model) == nil)
+        model.showLibrary(.grid)
+        #expect(FeedbackContext.suggestion(model) == "library.grid")
+        model.showLibrary(.loupe)
+        #expect(FeedbackContext.suggestion(model) == "library.loupe")
+    }
+
     @Test func `a topic reads as its area and feature`() {
         #expect(FeedbackArea.topic("masking.objects")?.path == "Masking › Objects")
         #expect(FeedbackArea.topic("masking.nothing") == nil)

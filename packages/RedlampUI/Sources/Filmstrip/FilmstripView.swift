@@ -20,7 +20,7 @@ struct FilmstripView: View {
                     Button("Cancel") { model.settingsSync.cancel() }
                         .buttonStyle(.link)
                 } else if model.isMultiSelecting {
-                    Text("\(model.selectedPhotos.count) selected")
+                    Text("\(model.photoSelection.count) selected")
                         .help("⌘-click adds or removes a photo, ⇧-click selects a range; ⌥⌘D keeps only this one")
                     Button("Sync…") { model.chooseSettingsToSync() }
                         .buttonStyle(.link)

@@ -11,6 +11,10 @@ extension ShortcutAction {
         .loupeView: ["loupe", "single", "large", "library"],
         .compareView: ["compare", "side by side", "library"],
         .surveyView: ["survey", "several", "library"],
+        .cycleGridStyle: ["grid", "cell style", "view options", "expanded", "compact", "extras", "library"],
+        .largerThumbnails: ["thumbnail size", "bigger", "larger", "zoom", "grid", "library"],
+        .smallerThumbnails: ["thumbnail size", "smaller", "grid", "library"],
+        .showInFinder: ["finder", "reveal", "folder", "file", "library"],
         .beforeAfter: ["compare", "before", "after", "original"],
         .nextCompareLayout: ["compare", "side by side", "split", "layout"],
         .previousCompareLayout: ["compare", "side by side", "split", "layout"],
@@ -116,6 +120,10 @@ extension ShortcutAction {
         case .loupeView: "photo"
         case .compareView: "rectangle.split.2x1"
         case .surveyView: "rectangle.split.3x1"
+        case .cycleGridStyle: "rectangle.grid.1x2"
+        case .largerThumbnails: "plus.square.on.square"
+        case .smallerThumbnails: "minus.square"
+        case .showInFinder: "folder"
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout: "rectangle.2.swap"
         case .toggleZoom: "1.magnifyingglass"
         case .zoomIn: "plus.magnifyingglass"

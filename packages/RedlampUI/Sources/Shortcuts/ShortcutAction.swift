@@ -84,6 +84,7 @@ public struct KeyCombo: Hashable, Sendable {
 
 public enum ShortcutCategory: String, CaseIterable, Sendable {
     case modules = "Modules"
+    case library = "Library"
     case view = "View"
     case panels = "Panels"
     case navigation = "Navigation"
@@ -102,6 +103,9 @@ public enum ShortcutCategory: String, CaseIterable, Sendable {
 public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     /// Modules
     case libraryModule, developModule, previousModule, gridView, loupeView, compareView, surveyView
+
+    /// Library
+    case cycleGridStyle, largerThumbnails, smallerThumbnails, showInFinder
 
     // View
     case beforeAfter, nextCompareLayout, previousCompareLayout
@@ -149,6 +153,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         switch self {
         case .libraryModule, .developModule, .previousModule, .gridView, .loupeView, .compareView, .surveyView:
             .modules
+        case .cycleGridStyle, .largerThumbnails, .smallerThumbnails, .showInFinder:
+            .library
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout,
              .toggleZoom, .zoomIn, .zoomOut, .clipping, .rawClipping, .colorAssessment, .labReadout, .infoOverlay,
              .lightsOut, .fullScreenPreview, .toggleToolbar:
@@ -191,6 +197,10 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .loupeView: "Loupe"
         case .compareView: "Compare (Loupe for Now)"
         case .surveyView: "Survey (Loupe for Now)"
+        case .cycleGridStyle: "Cycle Grid View Style"
+        case .largerThumbnails: "Increase Thumbnail Size"
+        case .smallerThumbnails: "Decrease Thumbnail Size"
+        case .showInFinder: "Show in Finder"
         case .beforeAfter: "Before / After"
         case .nextCompareLayout: "Next Before / After Layout"
         case .previousCompareLayout: "Previous Before / After Layout"
@@ -303,6 +313,11 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .loupeView: [.char("e")]
         case .compareView: [.char("c")]
         case .surveyView: [.char("n")]
+        // The Library's own meanings of Develop's J, = and - (`isLibraryOnly`).
+        case .cycleGridStyle: [.char("j")]
+        case .largerThumbnails: [.char("=")]
+        case .smallerThumbnails: [.char("-")]
+        case .showInFinder: [.char("r", command: true)]
         case .beforeAfter: [.char("\\")]
         case .nextCompareLayout: [.char("y")]
         case .previousCompareLayout: [.char("y", shift: true)]
@@ -441,16 +456,22 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
             (category, allCases.filter { $0.category == category && !$0.combos.isEmpty })
         }
 
-    /// Resolves a key press. Exact matches win; actions that accept Shift also match
+    /// Resolves a key press in Develop. Exact matches win; actions that accept Shift also match
     /// with Shift held (and receive `shifted == true`).
     public static func resolve(_ combo: KeyCombo) -> (action: ShortcutAction, shifted: Bool)? {
-        if let exact = allCases.first(where: { $0.combos.contains(combo) }) {
+        resolve(combo, in: .develop)
+    }
+
+    /// Resolves a key press in `module`, where J, = and - mean what they mean there.
+    public static func resolve(_ combo: KeyCombo, in module: AppModule) -> (action: ShortcutAction, shifted: Bool)? {
+        let actions = allCases.filter { module == .library ? !$0.isDevelopOnly : !$0.isLibraryOnly }
+        if let exact = actions.first(where: { $0.combos.contains(combo) }) {
             return (exact, combo.shift && exact.acceptsShift)
         }
         guard combo.shift else { return nil }
         var unshifted = combo
         unshifted.shift = false
-        if let action = allCases.first(where: { $0.acceptsShift && $0.combos.contains(unshifted) }) {
+        if let action = actions.first(where: { $0.acceptsShift && $0.combos.contains(unshifted) }) {
             return (action, true)
         }
         return nil

@@ -213,6 +213,7 @@ extension FolderLibrary {
     func apply(removed: IndexSet, inserting: [LibraryItem], updated: [URL], probing: Bool = true) {
         if !removed.isEmpty {
             items = items.enumerated().filter { !removed.contains($0.offset) }.map(\.element)
+            photoIDs = ContiguousArray(photoIDs.enumerated().filter { !removed.contains($0.offset) }.map(\.element))
         }
         for item in inserting {
             var low = 0
@@ -226,9 +227,11 @@ extension FolderLibrary {
                 }
             }
             items.insert(item, at: low)
+            photoIDs.insert(newPhotoIDs(1).lowerBound, at: low)
         }
         if !removed.isEmpty || !inserting.isEmpty {
             positions = Dictionary(items.enumerated().map { ($1.url, $0) }) { first, _ in first }
+            photosMoved()
         }
         let inserted = IndexSet(inserting.compactMap { positions[$0.url] })
         let changed = IndexSet(updated.compactMap { positions[$0] })

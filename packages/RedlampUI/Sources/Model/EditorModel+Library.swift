@@ -39,16 +39,20 @@ public extension EditorModel {
     /// Show Photos in Subfolders.
     func setIncludesSubfolders(_ include: Bool) {
         let keep = selection
+        rememberSourceView()
         library.setIncludesSubfolders(include) { [weak self] found in
             self?.didList(found, select: keep)
+            self?.restoreSourceView()
         }
     }
 
     internal func openFolder(_ url: URL, select target: URL?) {
         stackSuggestions = []
         onFolderChange?(url)
+        rememberSourceView()
         library.open(url) { [weak self] found in
             self?.didList(found, select: target ?? self?.library.lastPhoto(in: url))
+            self?.restoreSourceView()
         }
     }
 
@@ -77,8 +81,8 @@ public extension EditorModel {
     }
 
     private func libraryChanged(_ diff: LibraryDiff) {
-        if !diff.removed.isEmpty {
-            selectedPhotos.removeAll { library.index(of: $0) == nil }
+        if diff.reset || !diff.removed.isEmpty || !diff.inserted.isEmpty {
+            keepSelectionShown()
         }
         guard !diff.reset, let selection else { return }
         if let index = library.index(of: selection) {

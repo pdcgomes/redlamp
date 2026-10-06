@@ -63,7 +63,8 @@ final class KeyboardShortcuts {
             return true
         }
         let combo = KeyCombo(key, shift: flags.contains(.shift), option: flags.contains(.option))
-        guard let (action, shifted) = ShortcutAction.resolve(combo), !action.isMenuShortcut else { return false }
+        guard let (action, shifted) = ShortcutAction.resolve(combo, in: model.module), !action.isMenuShortcut
+        else { return false }
         return model.perform(action, shifted: shifted)
     }
 
