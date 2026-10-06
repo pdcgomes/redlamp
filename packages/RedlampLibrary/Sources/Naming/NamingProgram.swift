@@ -327,8 +327,7 @@ struct NamingProgram: Sendable {
         case .country: return fields.location?.country ?? ""
         case .sublocation: return fields.location?.sublocation ?? ""
         case let .keywords(separator):
-            return fields.keywords.map { $0.split(separator: "/").last.map(String.init) ?? $0 }
-                .joined(separator: separator)
+            return fields.keywords.map { KeywordPath($0)?.name ?? $0 }.joined(separator: separator)
         case .rating: return number(fields.rating)
         case .label: return fields.label ?? ""
         case .flag:

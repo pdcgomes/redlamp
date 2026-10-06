@@ -55,6 +55,8 @@ struct NamingEvaluationTests {
     @Test func `each token puts in its field`() throws {
         var renamed = Self.photo
         renamed.originalName = "IMG_1234.NEF"
+        var band = Self.photo
+        band.keywords = ["Music/AC%2FDC"]
         let cases: [(String, NamingFields, String)] = [
             ("{date}", Self.photo, "20261005"),
             ("{camera}", Self.photo, "Nikon Z 6"),
@@ -70,6 +72,7 @@ struct NamingEvaluationTests {
             ("{city} {state} {country} {sublocation}", Self.photo, "Lisbon Lisboa Portugal Alfama"),
             ("{keywords}", Self.photo, "Ana Lisbon wedding"),
             ("{keywords:-}", Self.photo, "Ana-Lisbon-wedding"),
+            ("{keywords}", band, "AC-DC"),
             ("{rating} {label} {flag}", Self.photo, "4 Red Pick"),
             (
                 "{name} {original} {number} {number:6} {number:2} {ext}",
