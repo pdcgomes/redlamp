@@ -286,6 +286,7 @@ public extension EditorModel {
         let field = step.field
         var written = CullingWritten()
         if let service = library.service, service.isReady {
+            await waitForSaves(of: step.photos)
             let (photos, after) = (step.photos, step.after)
             let requests = await Task.detached(priority: .userInitiated) {
                 var groups: [[MetadataField]: [Int]] = [:]
@@ -314,7 +315,7 @@ public extension EditorModel {
                 after.apply(field, to: &metadata)
             })
         })
-        await finish(written, of: step, sequence: sequence)
+        await finish(written, of: step, title: step.title, undoing: false, sequence: sequence)
     }
 
     /// Takes the step back: its batches through the library, and its other photos through their own saves,
@@ -323,6 +324,7 @@ public extension EditorModel {
         let field = step.field
         var written = CullingWritten()
         if !step.batches.isEmpty, let service = library.service, service.isReady {
+            await waitForSaves(of: step.photos)
             written = await service.undoCulling(step.batches, photos: step.ids, sequence: sequence, queue: cullingQueue)
         }
         let held = step.held
@@ -337,7 +339,16 @@ public extension EditorModel {
         step.batches = []
         step.saved = []
         await save(saved)
-        await finish(written, of: step, sequence: sequence)
+        await finish(written, of: step, title: "Undo \(step.title)", undoing: true, sequence: sequence)
+    }
+
+    /// Returns once the saves asked for any of `photos` before the call are on disk, so a batch reads their
+    /// sidecars as those saves leave them.
+    private func waitForSaves(of photos: [URL]) async {
+        let saves = saves
+        for photo in await Task.detached(priority: .userInitiated, operation: { saves.pending(photos) }).value {
+            await saves.wait(for: photo)
+        }
     }
 
     /// Changes each photo's culling metadata through its own save, as the sidecar is on disk then.
@@ -351,30 +362,56 @@ public extension EditorModel {
         }.value
     }
 
-    /// What's left once the library has made its part of a step: photos it couldn't write show what their
-    /// sidecars hold, unless a change asked for after it changes them again, and what failed is logged.
-    private func finish(_ written: CullingWritten, of step: CullingStep, sequence: UInt64) async {
+    /// What's left once the library has made its part of a step (`title`, as Undo names it): the photos it
+    /// couldn't write are reported, and show what the library has of them, from their rows (a sidecar it
+    /// couldn't read can't say), unless a change asked for after it changes them again.
+    private func finish(
+        _ written: CullingWritten, of step: CullingStep, title: String, undoing: Bool, sequence: UInt64,
+    ) async {
         for error in written.errors {
-            activity.record(.error, "\(step.title) wasn't saved to every photo: \(error)")
+            activity.record(.error, "\(title) wasn't saved to every photo: \(error)")
         }
+        report(written.reasons, of: step, title: title, undoing: undoing)
         guard !written.unwritten.isEmpty else { return }
         let later = cullingQueue.changedLater(than: sequence)
         let unwritten = written.unwritten.filter { !later.contains($0) }
         guard !unwritten.isEmpty else { return }
         cullingOverlay.drop(sequence)
+        var badges = await library.service?.badges(of: unwritten) ?? [:]
+        let rest = unwritten.filter { badges[$0] == nil }
         let sidecars = library.sidecars
-        let summaries = await Task.detached(priority: .userInitiated) {
-            unwritten.map { ($0, sidecars.store(for: $0).summary(for: $0)?.metadata ?? PhotoMetadata()) }
-        }.value
+        for (url, metadata) in await Task.detached(priority: .userInitiated, operation: {
+            rest.map { ($0, sidecars.store(for: $0).summary(for: $0)?.metadata ?? PhotoMetadata()) }
+        }).value {
+            badges[url] = metadata
+        }
         let shown = cullingQueue.changedLater(than: sequence)
         var rows: [Int] = []
         var values: [CullingValues] = []
-        for (url, metadata) in summaries where !shown.contains(url) {
-            guard let row = library.index(of: url) else { continue }
+        for url in unwritten where !shown.contains(url) {
+            guard let row = library.index(of: url), let metadata = badges[url] else { continue }
             rows.append(row)
             values.append(CullingValues(metadata))
         }
         show(values, fields: CullingField.allCases, rows: rows)
+    }
+
+    /// Says in the activity log which of the step's photos the library couldn't write, and why: "Undo 3 Stars
+    /// couldn't put back Photo C: its sidecar can't be read".
+    private func report(_ reasons: [URL: String], of step: CullingStep, title: String, undoing: Bool) {
+        let photos = reasons.isEmpty ? [] : step.photos.filter { reasons[$0] != nil }
+        guard !photos.isEmpty else { return }
+        let named = photos.prefix(3).map(activity.alias(for:))
+        let who = switch photos.count {
+        case 1: named[0]
+        case 2, 3: named.dropLast().joined(separator: ", ") + " and " + (named.last ?? "")
+        default: "\(photos.count) photos (\(named.joined(separator: ", ")) and \(photos.count - named.count) more)"
+        }
+        let why = Set(reasons.values).sorted().joined(separator: "; ")
+        activity.record(
+            .error,
+            undoing ? "\(title) couldn't put back \(who): \(why)" : "\(title) wasn't saved to \(who): \(why)",
+        )
     }
 
     // MARK: - Develop

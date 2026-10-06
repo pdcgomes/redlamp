@@ -108,6 +108,11 @@ final class SaveQueue: @unchecked Sendable {
         lock.withLock { unfinished[url] != nil }
     }
 
+    /// Those of `photos` with a save asked for that hasn't finished.
+    func pending(_ photos: [URL]) -> [URL] {
+        lock.withLock { unfinished.isEmpty ? [] : photos.filter { unfinished[$0] != nil } }
+    }
+
     func enqueue(_ write: Write, for url: URL) {
         lock.withLock {
             var writes = waiting[url, default: []]

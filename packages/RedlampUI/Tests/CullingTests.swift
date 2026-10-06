@@ -34,7 +34,8 @@ struct CullingTests {
             LibraryPaths(root: base.appending(path: "Library", directoryHint: .isDirectory))
         }
 
-        func open(count: Int = 6) async throws {
+        /// With `sidecars`, the photos after the second it gives metadata get a sidecar holding it and an edit.
+        func open(count: Int = 6, sidecars: (Int) -> PhotoMetadata? = { _ in nil }) async throws {
             for number in 0 ..< count {
                 let url = root.appending(path: String(format: "IMG_%04d.JPG", number), directoryHint: .notDirectory)
                 try Self.writeJPEG(url, shade: number)
@@ -43,12 +44,17 @@ struct CullingTests {
             var edited = EditRecipe()
             edited[.exposure] = 0.5
             try SidecarStore().save(Sidecar(recipe: edited, metadata: PhotoMetadata(rating: 2)), for: photos[1])
+            for number in 2 ..< max(count, 2) {
+                if let metadata = sidecars(number) {
+                    try SidecarStore().save(Sidecar(recipe: edited, metadata: metadata), for: photos[number])
+                }
+            }
             library.add([root])
             service = LibraryService(paths: paths, sidecars: library.sidecars) { url, size in
                 StoreThumbnailMaker.imageIO(url, nil, size)
             }
             library.attach(service)
-            for _ in 0 ..< 2000 where await !service.canShow(root, includingSubfolders: false) {
+            for _ in 0 ..< max(2000, count * 4) where await !service.canShow(root, includingSubfolders: false) {
                 try await Task.sleep(for: .milliseconds(10))
             }
             model = EditorModel(engine: StubEngine(), library: library)
@@ -85,6 +91,35 @@ struct CullingTests {
 
         func batches() async throws -> Int {
             try await service.metadata?.entries().count ?? 0
+        }
+
+        /// Each photo's sidecar as `--library-perf` compares them (whether it has an edit, and its metadata),
+        /// or none, and its row's culling fields, whether it has an edit and whether the index has a date for
+        /// its sidecar.
+        func state() async throws -> [String] {
+            let photos = photos
+            let sidecars = await Task.detached {
+                photos.map { url in SidecarStore().summary(for: url).map { "\($0.hasEdits) \($0.metadata)" } ?? "none" }
+            }.value
+            let paths = photos.map(LibraryService.path)
+            let rows = try await #require(service.core).index.read { reader in
+                try paths.map { path in
+                    try reader.photo(path: path).map { row in
+                        "\(row.rating) \(String(describing: row.flag)) \(String(describing: row.label)) "
+                            + "\(String(describing: row.customLabel)) \(row.marked) \(row.edited) \(row.sidecarModified != nil)"
+                    } ?? "no row"
+                }
+            }
+            return photos.indices.map { "\(photos[$0].lastPathComponent): sidecar \(sidecars[$0]); row \(rows[$0])" }
+        }
+
+        /// Reads the folder again, as change tracking does when its files change, its photos' lists hearing of
+        /// what it finds.
+        func indexAgain() async throws {
+            let core = try #require(service.core)
+            for await event in core.indexer.update([FolderChange(root, recursive: true)]) {
+                core.live.receive(.indexer(event))
+            }
         }
 
         func eventually(seconds: Double = 10, _ condition: () -> Bool) async throws {
@@ -169,6 +204,52 @@ struct CullingTests {
         #expect(folder.sidecar(0)?.isEmpty ?? true, "the photo Develop has open holds nothing either")
         #expect(folder.sidecar(1) == PhotoMetadata(rating: 2))
         #expect(all.map(folder.shown).map(\.rating) == [0, 2, 0, 0, 0, 0])
+    }
+
+    @Test func `Undo puts thousands of photos back as they were, and reports the one whose sidecar it can't read`(
+    ) async throws {
+        let folder = IndexedFolder()
+        defer { folder.cleanUp() }
+        // Every third photo has a sidecar holding an edit and its own rating, flag or mark; the rest none.
+        try await folder.open(count: 2000) { number in
+            number % 3 != 0 ? nil : PhotoMetadata(
+                rating: number % 6,
+                flag: number % 9 == 0 ? .pick : nil,
+                mark: number % 4 == 0,
+            )
+        }
+        let model = try #require(folder.model)
+        // Another photo active, so Develop has none open, as in `--library-perf`.
+        model.click(folder.photos[2])
+        #expect(model.perform(.selectAllPhotos) && model.info == nil && model.selectedPhotos.count == 2000)
+        let before = try await folder.state()
+
+        #expect(model.perform(.rating3))
+        await folder.written()
+        #expect((0 ..< 2000).allSatisfy { folder.shown($0).rating == 3 })
+        // The indexer reads the sidecars the batch wrote, between it and its Undo, as change tracking does.
+        try await folder.indexAgain()
+        // A sidecar the batch made, for a photo that had none, can't be read while Undo runs.
+        let unreadable = 1000
+        #expect(before[unreadable].contains("sidecar none"))
+        let edit = SidecarStore().editURL(for: folder.photos[unreadable])
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: edit.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: edit.path) }
+
+        #expect(model.perform(.undo))
+        await folder.written()
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: edit.path)
+        let after = try await folder.state()
+        let changed = after.indices.filter { after[$0] != before[$0] }
+        #expect(changed == [unreadable], "\(changed.prefix(5).map { "\(before[$0]) → \(after[$0])" })")
+        #expect(folder.sidecar(unreadable)?.rating == 3, "the sidecar Undo couldn't read is as it was")
+        #expect(folder.shown(unreadable).rating == 3, "the grid shows what it holds")
+        #expect(after[unreadable].contains("row 3 "), "and so does its row: \(after[unreadable])")
+        let alias = model.activity.alias(for: folder.photos[unreadable])
+        #expect(
+            model.activity.events.contains { $0.kind == .error && $0.text.contains(alias) },
+            "it's reported: \(model.activity.events.filter { $0.kind == .error }.map(\.text))",
+        )
     }
 
     @Test func `the photo Develop has open is culled with the rest, and Develop's saves keep the change`() async throws {

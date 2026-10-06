@@ -87,7 +87,10 @@ final class LibraryCore: Sendable {
     func sidecarSaved(at path: String, photo: URL, store: SidecarStore) {
         serially { [index, live] in
             let summary = store.summary(for: photo)
-            let modified = summary == nil ? nil : (try? URL(fileURLWithPath: store.locator.readURL(for: photo).path)
+            let sidecar = store.locator.readURL(for: photo)
+            // A sidecar there that can't be read says nothing of the photo: its row stays as it is.
+            guard summary != nil || !FileManager.default.fileExists(atPath: sidecar.path) else { return }
+            let modified = summary == nil ? nil : (try? URL(fileURLWithPath: sidecar.path)
                 .resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
             let id = try? await index.write { writer -> Int64? in
                 guard var row = try writer.photo(path: path) else { return nil }

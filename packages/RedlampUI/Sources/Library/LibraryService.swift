@@ -487,6 +487,22 @@ public final class LibraryService {
         core?.live.photosChanged(ids)
     }
 
+    /// The badges the library's lists show for the photos at `urls`, from their rows; those it doesn't have
+    /// are left out.
+    func badges(of urls: [URL]) async -> [URL: PhotoMetadata] {
+        guard let core else { return [:] }
+        let ids = await Self.indexIDs(of: urls, in: core.index)
+        return await (try? core.index.read { reader in
+            var found: [URL: PhotoMetadata] = [:]
+            for (url, id) in ids {
+                if let row = try reader.photo(id: id) {
+                    found[url] = LibraryFolderList.Mapping.item(row, url: url).metadata
+                }
+            }
+            return found
+        }) ?? [:]
+    }
+
     /// Runs `plan`, telling the lists of its photos once the index holds it (when its first sidecar is
     /// written, or when it's done if it writes none); a batch that fails has been rolled back.
     private nonisolated static func run(
@@ -503,8 +519,11 @@ public final class LibraryService {
             let outcome = try await metadata.run(plan) { _, _ in tell() }
             tell()
             written.batches.append(outcome.batch)
-            let skipped = Set(outcome.skipped)
-            written.unwritten += plan.photos.filter { skipped.contains($0.path) }.compactMap { written.ids[$0.id] }
+            for photo in plan.photos {
+                guard let reason = outcome.reasons[photo.path], let url = written.ids[photo.id] else { continue }
+                written.unwritten.append(url)
+                written.reasons[url] = reason
+            }
         } catch {
             tell()
             written.failed(photos.compactMap { written.ids[$0] }, error)
@@ -572,9 +591,11 @@ struct CullingWritten: Sendable {
     /// The photos it leaves to their own saves: those it hasn't indexed, and those whose rows show the change
     /// already.
     var unindexed: [URL] = []
-    /// Photos it left as they were: their sidecars can't be written here, or their batch failed and was
-    /// rolled back.
+    /// Photos it left as they were: their sidecars can't be read or written here, or their batch failed and
+    /// was rolled back.
     var unwritten: [URL] = []
+    /// Why each of `unwritten` was left, but for those of a batch that failed, which `errors` says.
+    var reasons: [URL: String] = [:]
     var errors: [String] = []
 
     mutating func failed(_ photos: [URL], _ error: any Error) {
