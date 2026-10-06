@@ -15,6 +15,14 @@ Writes build/mask-bench/sky-errors/<scene>-<stage>.png, the scene darkened with 
 missed, yellow where it is under-covered and blue where foreground is taken as sky, and report.json.
 
     .venv/bin/python sky_errors.py
+
+`eval` makes today's Sky mask, with the redlamp build at mask_bench.CLI, for every photo in the
+evaluation set whose cell tests Sky, beside the one `mask_bench.py eval` made, and writes to
+build/mask-bench/sky-eval/ how much sky each photo gains and loses (over a quarter of coverage)
+and a sheet per cell, each photo where the two differ most: the photo, then the earlier mask
+and today's, over mid-grey.
+
+    .venv/bin/python sky_errors.py eval [cell ...]
 """
 
 import json
@@ -87,5 +95,59 @@ def main():
               f"edge {mean('edge'):.3f}")
 
 
+def evaluation_set(cells=()):
+    out = mb.OUT / "sky-eval"
+    (out / "sheets").mkdir(parents=True, exist_ok=True)
+    report, rows = {}, {}
+    for path, stem, cell, masks in mb.eval_photos():
+        if "sky" not in masks or (cells and cell not in cells):
+            continue
+        target = out / f"{stem}-sky.png"
+        result = subprocess.run([str(mb.CLI), "mask", str(path), "--kind", "sky", "-o", str(target)],
+                                capture_output=True, text=True)
+        if result.returncode != 0 or not target.exists():
+            report[stem] = {"cell": cell, "failed": (result.stderr or result.stdout).strip()[-160:]}
+            continue
+        size = Image.open(target).size
+        today = np.asarray(Image.open(target).convert("L"), np.float32) / 255
+        before = mb.eval_mask(stem, "sky", size)
+        if before is None:
+            report[stem] = {"cell": cell, "failed": "no earlier mask"}
+            continue
+        change = today - before
+        report[stem] = {"cell": cell, "gained": float((change > 0.25).mean()), "lost": float((change < -0.25).mean())}
+        preview = mb.OUT / "eval" / f"{stem}-photo.jpg"
+        photo = np.asarray(Image.open(preview if preview.exists() else path).convert("RGB").resize(size, Image.LANCZOS),
+                           np.float32)
+        height, width = min(400, size[1]), min(600, size[0])
+        summed = ndimage.uniform_filter(np.abs(change), size=(height, width), mode="constant")
+        y, x = np.unravel_index(np.argmax(summed), summed.shape)
+        y0, x0 = int(np.clip(y - height // 2, 0, size[1] - height)), int(np.clip(x - width // 2, 0, size[0] - width))
+        crop = photo[y0:y0 + height, x0:x0 + width]
+
+        def over_grey(matte):
+            a = matte[y0:y0 + height, x0:x0 + width, None]
+            return a * crop + (1 - a) * 128
+
+        rows.setdefault(cell, []).append(np.concatenate(
+            [np.pad(p, ((0, 6), (0, 6), (0, 0)), constant_values=255) for p in (crop, over_grey(before), over_grey(today))],
+            axis=1))
+        print(f"{stem}: gained {report[stem]['gained']:.4f}, lost {report[stem]['lost']:.4f}", flush=True)
+    for cell, cell_rows in rows.items():
+        width = max(r.shape[1] for r in cell_rows)
+        Image.fromarray(np.concatenate(
+            [np.pad(r, ((0, 0), (0, width - r.shape[1]), (0, 0)), constant_values=255) for r in cell_rows], axis=0,
+        ).astype(np.uint8)).save(out / "sheets" / f"{cell}.jpg", quality=88)
+    (out / "report.json").write_text(json.dumps(report, indent=1))
+    made = [r for r in report.values() if "gained" in r]
+    for cell in sorted({r["cell"] for r in made}):
+        cell_rows = [r for r in made if r["cell"] == cell]
+        print(f"  {cell:22s} n={len(cell_rows):2d}  gained {np.mean([r['gained'] for r in cell_rows]):.4f}"
+              f"  lost {np.mean([r['lost'] for r in cell_rows]):.4f}")
+
+
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:2] == ["eval"]:
+        evaluation_set(tuple(sys.argv[2:]))
+    else:
+        main()

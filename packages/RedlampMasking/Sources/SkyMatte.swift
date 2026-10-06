@@ -24,6 +24,13 @@ public enum SkyMatte {
     static let reach: Float = 0.06
     /// Sky and foreground colours closer than this (linear RGB distance) can't be told apart.
     static let tolerance: (low: Float, high: Float) = (0.015, 0.06)
+    /// How far, in pixels, past sky taken back from the foreground its mixed edge reaches.
+    static let edgeReach = 2
+    /// How far off the line from the foreground's colour to the sky's (a share of the distance
+    /// between them) walled-in sky may be.
+    static let walledOffLine: Float = 0.12
+    /// The coarse sky above which the models saw some: half a step of an 8-bit mask.
+    static let walledPrior: Float = 0.5 / 255
 
     /// What each pixel takes part in.
     struct Regions {
@@ -60,7 +67,7 @@ public enum SkyMatte {
             guard let front = ForegroundColour(
                 linear, behind: behind, sky: sky, solid: solid, width: width, height: height,
             ) else { return unchanged }
-            let (refined, confidence) = Self.solve(
+            let (refined, confidence, offLine) = Self.solve(
                 linear, mask: mask, regions: regions, behind: behind, front: front, width: width,
             )
 
@@ -71,9 +78,23 @@ public enum SkyMatte {
                 refined[index] > 0.5 && (regions.near[index] || regions.far[index] || mask[index] > 0.5)
             }
             let connected = Self.connected(likely, seeds: seeds, width: width, height: height)
+            // Sky walled in by dense twigs reaches the sky only through twigs. It is taken back
+            // where it is nearly pure sky of the colour the sky has behind it: sure of the colours,
+            // on the line from the foreground's colour to the sky's (as a blue sign or car beside
+            // the sky rarely is), and where the models saw some sky. They see a little through a
+            // crown, but none in a snow field or the sea under a pale sky, which colour can't tell
+            // from it.
+            var accepted = connected
+            Parallel.fill(&accepted) { index in
+                connected[index] || (regions.far[index] && refined[index] > 0.9 && confidence[index] > 0.9
+                    && offLine[index] < Self.walledOffLine && mask[index] > Self.walledPrior)
+            }
+            // The edge pixels of sky taken back from the foreground are mostly branch, so not
+            // likely themselves, but they touch sky that is: they take their own coverage too.
+            let edged = RemovalRegion.dilated(accepted, width: width, height: height, radius: Self.edgeReach)
             Parallel.fill(&result) { index in
                 let intrusion = regions.inside[index] && refined[index] < 0.75 && confidence[index] > 0.5
-                return regions.near[index] || (regions.far[index] && connected[index]) || intrusion
+                return regions.near[index] || (regions.far[index] && edged[index]) || intrusion
                     ? refined[index] : mask[index]
             }
             // The next pass learns the colours from what this one found.
@@ -127,38 +148,46 @@ public enum SkyMatte {
     }
 
     /// Each solved pixel's coverage, where its colour lies between the sky's and the
-    /// foreground's, blended back to the coarse mask as the two get too close to tell apart.
+    /// foreground's, blended back to the coarse mask as the two get too close to tell apart; how
+    /// sure of the colours; and how far its colour lies off the line between them, as a share of
+    /// the distance between them.
     static func solve(
         _ linear: [SIMD3<Float>], mask: [Float], regions: Regions, behind: SkyColour, front: ForegroundColour,
         width: Int,
-    ) -> (refined: [Float], confidence: [Float]) {
+    ) -> (refined: [Float], confidence: [Float], offLine: [Float]) {
         var refined = mask
         var confidence = [Float](repeating: 0, count: mask.count)
+        var offLine = [Float](repeating: 1, count: mask.count)
         let height = mask.count / width
         refined.withUnsafeMutableBufferPointer { refinedBuffer in
             confidence.withUnsafeMutableBufferPointer { confidenceBuffer in
-                // Each row writes only its own pixels.
-                nonisolated(unsafe) let refinedOut = refinedBuffer
-                nonisolated(unsafe) let confidenceOut = confidenceBuffer
-                DispatchQueue.concurrentPerform(iterations: height) { y in
-                    for index in y * width ..< (y + 1) * width
-                        where regions.near[index] || regions.far[index] || regions.inside[index] {
-                        let f = front.at(index)
-                        let difference = behind.at(index) - f
-                        let span = simd_length_squared(difference)
-                        var alpha = simd_dot(linear[index] - f, difference) / max(span, 1e-8)
-                        alpha = min(max((alpha - 0.04) / 0.92, 0), 1)
-                        let sure = min(
-                            max((span.squareRoot() - tolerance.low) / (tolerance.high - tolerance.low), 0),
-                            1,
-                        )
-                        refinedOut[index] = sure * alpha + (1 - sure) * mask[index]
-                        confidenceOut[index] = sure
+                offLine.withUnsafeMutableBufferPointer { offLineBuffer in
+                    // Each row writes only its own pixels.
+                    nonisolated(unsafe) let refinedOut = refinedBuffer
+                    nonisolated(unsafe) let confidenceOut = confidenceBuffer
+                    nonisolated(unsafe) let offLineOut = offLineBuffer
+                    DispatchQueue.concurrentPerform(iterations: height) { y in
+                        for index in y * width ..< (y + 1) * width
+                            where regions.near[index] || regions.far[index] || regions.inside[index] {
+                            let f = front.at(index)
+                            let difference = behind.at(index) - f
+                            let span = simd_length_squared(difference)
+                            let projected = simd_dot(linear[index] - f, difference) / max(span, 1e-8)
+                            let alpha = min(max((projected - 0.04) / 0.92, 0), 1)
+                            let sure = min(
+                                max((span.squareRoot() - tolerance.low) / (tolerance.high - tolerance.low), 0),
+                                1,
+                            )
+                            refinedOut[index] = sure * alpha + (1 - sure) * mask[index]
+                            confidenceOut[index] = sure
+                            offLineOut[index] = simd_length(linear[index] - f - projected * difference)
+                                / max(span.squareRoot(), 1e-4)
+                        }
                     }
                 }
             }
         }
-        return (refined, confidence)
+        return (refined, confidence, offLine)
     }
 
     // MARK: - Colours
