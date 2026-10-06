@@ -552,7 +552,7 @@
         /// fills, the arrows go through them, and Content-Aware takes it back.
         static let generative = Scenario(
             "healing.generative", "Generative Remove: a spot's three fills, the arrows, and back to Content-Aware",
-            claims: [.feature("healing.remove")],
+            claims: [.feature("healing.remove"), .feature("healing.generative")],
         ) { app in
             try app.openWorking()
             try app.click(.tool(.heal))
@@ -579,7 +579,7 @@
                 model.deleteAllSpots()
                 model.activeTool = .edit
             }
-            app.covered(.feature("healing.remove"), via: .model)
+            app.covered([.feature("healing.remove"), .feature("healing.generative")], via: .model)
         }
 
         static let dustAndFind = Scenario(

@@ -213,6 +213,10 @@
           "title" : "Remove"
         },
         {
+          "id" : "healing.generative",
+          "title" : "Generative Remove"
+        },
+        {
           "id" : "healing.heal",
           "title" : "Heal"
         },

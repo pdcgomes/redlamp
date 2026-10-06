@@ -168,6 +168,10 @@ public extension FeedbackArea {
             tracker: ["RM"],
             features: [
                 FeedbackFeature("remove", "Remove", ["content aware", "content-aware fill", "erase", "remove tool"]),
+                FeedbackFeature(
+                    "generative", "Generative Remove",
+                    ["generative fill", "generative", "ai fill", "generated fill", "flux"],
+                ),
                 FeedbackFeature("heal", "Heal", ["healing brush", "spot heal", "spot"]),
                 FeedbackFeature("clone", "Clone", ["clone stamp"]),
                 FeedbackFeature("picks", "Person and Object Picks", ["click picks", "remove person", "remove object"]),

@@ -81,7 +81,7 @@ struct ModelStoreTests {
     }
 
     @Test func `the models redistributed from a release carry their licence`() throws {
-        for id in ["owlv2-base", "depth-anything-3-mono-large", "sam3"] {
+        for id in ["owlv2-base", "depth-anything-3-mono-large", "sam3", "flux2-klein-4b-fill"] {
             let model = try #require(ModelCatalog.manifest(id))
             #expect(model.cleared && !model.evaluationOnly && model.isPublished, "\(id)")
             #expect(model.files.contains { $0.path == "LICENSE.txt" }, "\(id)")

@@ -58,8 +58,7 @@
   },
   "decision": "DEC-23",
   "evaluationOnly": false,
-  "cleared": false,
-  "published": false,
+  "cleared": true,
   "minimumMemory": 17179869184,
-  "notes": "Converted by research/prototypes/generative/convert_flux.py from black-forest-labs/FLUX.2-klein-4B: the transformer's blocks quantised to 4 bits (2.22 GB, chosen by measurement in RM-10's step 2), the VAE as it is, and the prompts Generative Remove uses encoded, so no text encoder ships. Runs through MLX in RedlampGenerative. Its training data is undisclosed; the owner allowed it as an opt-in download labelled as generated fill (DEC-23). Published as the prerelease models-flux2-klein-4b-fill-v1 once the owner approves the upload (DEC-26), with its licence (LICENSE.txt). The minimum memory is 16 GB until it's measured on smaller Macs."
+  "notes": "Converted by research/prototypes/generative/convert_flux.py from black-forest-labs/FLUX.2-klein-4B: the transformer's blocks quantised to 4 bits (2.22 GB, chosen by measurement in RM-10's step 2), the VAE as it is, and the prompts Generative Remove uses encoded, so no text encoder ships. Runs through MLX in RedlampGenerative. Its training data is undisclosed; the owner allowed it as an opt-in download labelled as generated fill (DEC-23). Published as the prerelease models-flux2-klein-4b-fill-v1 with its licence (LICENSE.txt), once the owner approved the upload (DEC-26, 2026-10-06). The minimum memory is 16 GB: a 1024-pixel fill peaks at 6.6 GB on an M1 Ultra, and smaller Macs are still to try."
 }
