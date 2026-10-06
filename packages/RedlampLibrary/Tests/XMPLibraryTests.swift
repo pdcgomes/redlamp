@@ -128,7 +128,8 @@ struct XMPLibraryTests {
         #expect(try await sandbox.sync().xmpWritten.isEmpty)
 
         var sidecar = try #require(SidecarStore().load(for: photo))
-        sidecar.metadata = PhotoMetadata(rating: 4, label: .blue)
+        sidecar.metadata?.rating = 4
+        sidecar.metadata?.label = .blue
         try SidecarStore().save(sidecar, for: photo)
         let report = try await sandbox.sync()
         #expect(report.photo("IMG_0004.CR3")?.written == [.rating, .label])

@@ -32,10 +32,11 @@ public struct XMPFields: Sendable, Hashable, Codable {
         self.caption = caption
     }
 
-    /// The fields a `.redlamp` sidecar's metadata holds: a rating of 0 is none.
+    /// The fields a `.redlamp` sidecar's metadata holds: a rating of 0 is none, and so are no keywords.
     public init(_ metadata: PhotoMetadata?) {
         self.init(
             rating: metadata.flatMap { $0.rating > 0 ? $0.rating : nil }, flag: metadata?.flag, label: metadata?.label,
+            keywords: KeywordPath.texts(metadata?.keywords ?? []),
         )
     }
 
@@ -93,6 +94,9 @@ public struct XMPFields: Sendable, Hashable, Codable {
         if fields.contains(.label) {
             applied.label = label
         }
+        if fields.contains(.keywords) {
+            applied.keywords = keywords
+        }
         return applied
     }
 }
@@ -101,10 +105,10 @@ public struct XMPFields: Sendable, Hashable, Codable {
 public enum XMPField: String, Sendable, Hashable, Codable, CaseIterable, Comparable {
     case rating, flag, label, keywords, title, caption
 
-    /// The fields `.redlamp` sidecars hold. Keywords join with LIB-21, and titles and captions with
-    /// LIB-22: once `PhotoMetadata` has them, they're added here and to `XMPFields`' conversions to
-    /// and from it, and they merge and are written as these are.
-    public static let held: Set<XMPField> = [.rating, .flag, .label]
+    /// The fields `.redlamp` sidecars hold. Titles and captions join with LIB-22: once `PhotoMetadata`
+    /// has them, they're added here and to `XMPFields`' conversions to and from it, and they merge and
+    /// are written as these are.
+    public static let held: Set<XMPField> = [.rating, .flag, .label, .keywords]
 
     public static func < (lhs: XMPField, rhs: XMPField) -> Bool {
         allCases.firstIndex(of: lhs) ?? 0 < allCases.firstIndex(of: rhs) ?? 0
@@ -254,27 +258,26 @@ public struct XMPSource: Sendable, Hashable, Codable {
         return found.present.isEmpty ? nil : found
     }
 
-    /// Lightroom's paths ("Places|Portugal|Lisbon" as "Places/Portugal/Lisbon"), then each flat
-    /// keyword no path names. darktable keeps its bookkeeping in tags under "darktable", which its
-    /// users never see.
+    /// Lightroom's paths ("Places|Portugal|Lisbon" as "Places/Portugal/Lisbon", a slash in a name as
+    /// `%2F`), then each flat keyword no path names. darktable keeps its bookkeeping in tags under
+    /// "darktable", which its users never see.
     static func keywords(hierarchical: [String], flat: [String]) -> [String] {
         var paths: [String] = []
         var seen = Set<String>()
         var named = Set<String>()
         for entry in hierarchical {
             let parts = entry.split(separator: "|").compactMap { trimmed(String($0)) }
-            guard let top = parts.first, top != "darktable" else { continue }
-            named.formUnion(parts)
-            let path = parts.joined(separator: "/")
-            if seen.insert(path).inserted {
-                paths.append(path)
+            guard let top = parts.first, top != "darktable", let path = KeywordPath(names: parts) else { continue }
+            named.formUnion(path.names)
+            if seen.insert(path.text).inserted {
+                paths.append(path.text)
             }
         }
         for entry in flat {
-            guard let name = trimmed(entry), !name.hasPrefix("darktable|"), !named.contains(name),
-                  seen.insert(name).inserted
+            guard let name = trimmed(entry), !name.hasPrefix("darktable|"), let path = KeywordPath(names: [name]),
+                  !named.contains(path.name), seen.insert(path.text).inserted
             else { continue }
-            paths.append(name)
+            paths.append(path.text)
         }
         return paths
     }
@@ -337,11 +340,11 @@ extension XMPFields {
             if keywords.isEmpty {
                 changes += [XMPNamespace.hierarchicalSubject, XMPNamespace.subject].filter(has).map { ($0, nil) }
             } else {
-                let paths = keywords.map { $0.split(separator: "/").joined(separator: "|") }
+                let keywords = KeywordPath.paths(keywords)
+                let paths = keywords.map { $0.names.joined(separator: "|") }
                 var names: [String] = []
                 var seen = Set<String>()
-                for name in keywords.flatMap({ $0.split(separator: "/").map(String.init) })
-                    where seen.insert(name).inserted {
+                for name in keywords.flatMap(\.names) where seen.insert(name).inserted {
                     names.append(name)
                 }
                 changes.append((XMPNamespace.hierarchicalSubject, .bag(paths)))

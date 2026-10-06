@@ -88,6 +88,7 @@ public struct LibraryXMP: Sendable {
             let records = outcomes.reduce(into: [Int64: XMPMergeRecord]()) { $0.merge($1.records) { _, new in new } }
             let dropped = outcomes.flatMap(\.dropped)
             let organising = outcomes.flatMap(\.organising)
+            let keywords = outcomes.flatMap(\.keywords)
             let xmpModified = outcomes.flatMap(\.xmpModified)
             if !records.isEmpty || !dropped.isEmpty || !organising.isEmpty || !xmpModified.isEmpty {
                 try await index.write { writer in
@@ -96,6 +97,9 @@ public struct LibraryXMP: Sendable {
                         try writer.setOrganising(
                             [.rating(fields.rating ?? 0), .flag(fields.flag), .label(fields.label)], forPhotos: [id],
                         )
+                    }
+                    for (id, paths) in keywords {
+                        try writer.setKeywords(paths, forPhoto: id)
                     }
                     try writer.setXMPModified(xmpModified)
                 }

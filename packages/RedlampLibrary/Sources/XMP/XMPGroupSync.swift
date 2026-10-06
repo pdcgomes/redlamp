@@ -23,6 +23,8 @@ struct XMPGroupOutcome: Sendable {
     var dropped: [Int64] = []
     /// Photos whose `.redlamp` took other apps' fields, with its fields as merged.
     var organising: [(id: Int64, fields: XMPFields)] = []
+    /// Photos whose `.redlamp` took other apps' keywords, with them.
+    var keywords: [(id: Int64, paths: [String])] = []
     /// Photos with a `.redlamp` whose `.xmp` Redlamp wrote, with the `.xmp`'s modification date.
     var xmpModified: [(id: Int64, modified: Date)] = []
 }
@@ -215,6 +217,9 @@ extension XMPGroup {
             guard !side.failed else { continue }
             if !merge.taken.isEmpty {
                 outcome.organising.append((id, merge.fields))
+            }
+            if merge.taken.contains(.keywords) {
+                outcome.keywords.append((id, merge.fields.keywords))
             }
             if let written {
                 outcome.xmpModified.append((id, written.modified))

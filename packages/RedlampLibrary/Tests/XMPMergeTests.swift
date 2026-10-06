@@ -76,10 +76,10 @@ struct XMPMergeTests {
         #expect(ours.fields == XMPFields(rating: 3) && ours.taken.isEmpty && ours.decided == [.label, .rating].sorted())
     }
 
-    @Test func `only the fields asked about merge: keywords, titles and captions wait for the sidecar to hold them`() {
+    @Test func `only the fields asked about merge: titles and captions wait for the sidecar to hold them`() {
         let other = XMPFields(keywords: ["Gulls"], title: "Tagus", caption: "Ferries")
         let held = XMPMerge.merge(redlamp: XMPFields(), other: other, record: nil, otherIsLater: true)
-        #expect(held.fields == XMPFields() && held.taken.isEmpty)
+        #expect(held.fields == XMPFields(keywords: ["Gulls"]) && held.taken == [.keywords])
         let all = XMPMerge.merge(
             redlamp: XMPFields(), other: other, record: nil, fields: Set(XMPField.allCases), otherIsLater: true,
         )
