@@ -2,6 +2,10 @@
 
     .venv/bin/python mask_bench.py run [--sets edge,hair] [--cli <redlamp>]
     .venv/bin/python mask_bench.py score [--sets edge,hair]
+    .venv/bin/python mask_bench.py eval      today's masks for the evaluation set (`mise run maskeval`)
+    .venv/bin/python mask_bench.py sheets    a contact sheet per cell, whole and at 100% where the edge is busiest
+    .venv/bin/python mask_bench.py eval      today's masks for the evaluation set (`mise run maskeval`)
+    .venv/bin/python mask_bench.py sheets    a contact sheet per cell, whole and at 100% where the edge is busiest
 
 Exact-coverage scenes (`edge_bench.py generate`, `hair_bench.py generate`): skies behind bare and
 leafy trees, wires and skylines, and heads with stray strands and beards, each with its true
@@ -32,7 +36,7 @@ import sys
 
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 from scipy import ndimage
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
@@ -169,6 +173,194 @@ def score(names):
     (OUT / "report.json").write_text(json.dumps(report, indent=1))
 
 
+EVAL = ROOT / "research/mask-eval/manifest.json"
+EVAL_KINDS = ("sky", "subject", "people")
+
+
+def eval_photos():
+    """(path, file stem, cell, masks it tests) for the evaluation set and the look-development raws it names."""
+    manifest = json.loads(EVAL.read_text())
+    photos = [(ROOT / "build/mask-eval" / i["file"], pathlib.Path(i["file"]).stem, i["cell"], i["masks"])
+              for i in manifest["images"]]
+    photos += [(ROOT / "build/look-dev" / i["file"], pathlib.Path(i["file"]).stem, "look-dev", i["masks"])
+               for i in manifest["lookDev"]]
+    return [p for p in photos if p[0].exists()]
+
+
+def eval_masks(cli):
+    """Today's masks for each photo of the evaluation set, for the masks its cell tests."""
+    out = OUT / "eval"
+    out.mkdir(parents=True, exist_ok=True)
+    failures = {}
+    for path, stem, cell, masks in eval_photos():
+        for kind in (k for k in EVAL_KINDS if k in masks):
+            target = out / f"{stem}-{kind}.png"
+            if target.exists() or list(out.glob(f"{stem}-{kind}-*.png")):
+                continue
+            try:
+                redlamp(cli, "mask", path, "--kind", kind, "-o", target)
+            except RuntimeError as error:
+                failures[f"{stem} {kind}"] = str(error).splitlines()[-1][-160:]
+        print(f"eval/{stem}: done")
+    (out / "failures.json").write_text(json.dumps(failures, indent=1))
+    print(f"{len(failures)} masks not made: {out / 'failures.json'}")
+
+
+def eval_mask(stem, kind, size):
+    """A photo's mask of `kind` at `size` (several people's combined), or None."""
+    out = OUT / "eval"
+    paths = [out / f"{stem}-{kind}.png"] if (out / f"{stem}-{kind}.png").exists() else sorted(out.glob(f"{stem}-{kind}-*.png"))
+    if not paths:
+        return None
+    masks = [np.asarray(Image.open(p).convert("L").resize(size, Image.BILINEAR), np.float32) / 255 for p in paths]
+    return np.max(masks, axis=0)
+
+
+def eval_sheets():
+    """A sheet per cell: each photo whole with its mask in the app's red overlay, and at 100% where
+    its edge is busiest (the 320 px window with the most partly covered pixels)."""
+    from PIL import ImageOps
+
+    sheets = OUT / "eval" / "sheets"
+    sheets.mkdir(parents=True, exist_ok=True)
+    by_cell = {}
+    for path, stem, cell, masks in eval_photos():
+        by_cell.setdefault(cell, []).append((path, stem, masks))
+    red = np.array([0.95, 0.18, 0.18], np.float32)
+    for cell, photos in by_cell.items():
+        rows = []
+        for path, stem, masks in photos:
+            photo_image = ImageOps.exif_transpose(Image.open(path)).convert("RGB") if path.suffix.lower() in (".jpg", ".jpeg", ".png") else None
+            if photo_image is None:
+                rendered = OUT / "eval" / f"{stem}-photo.jpg"
+                if not rendered.exists():
+                    redlamp(CLI, "render", path, "-o", rendered)
+                photo_image = Image.open(rendered).convert("RGB")
+            photo = np.asarray(photo_image, np.float32) / 255
+            for kind in (k for k in EVAL_KINDS if k in masks):
+                mask = eval_mask(stem, kind, photo_image.size)
+                if mask is None:
+                    continue
+                shown = photo * (1 - 0.55 * mask[..., None]) + red * 0.55 * mask[..., None]
+                partial = ((mask > 0.05) & (mask < 0.95)).astype(np.float32)
+                density = ndimage.uniform_filter(partial, 320)
+                y, x = np.unravel_index(np.argmax(density[160:-160, 160:-160]), density[160:-160, 160:-160].shape)
+                whole = Image.fromarray((np.clip(shown, 0, 1) * 255).astype(np.uint8))
+                whole.thumbnail((480, 480))
+                crop = Image.fromarray((np.clip(shown[y : y + 320, x : x + 320], 0, 1) * 255).astype(np.uint8))
+                plain = Image.fromarray((np.clip(photo[y : y + 320, x : x + 320], 0, 1) * 255).astype(np.uint8))
+                rows.append((f"{stem} · {kind}", whole, plain, crop))
+        if not rows:
+            continue
+        width = 480 + 4 + 320 + 4 + 320
+        height = sum(max(r[1].height, 320) + 20 for r in rows)
+        sheet = Image.new("RGB", (width, height), (22, 22, 22))
+        draw = ImageDraw.Draw(sheet)
+        top = 0
+        for label, whole, plain, crop in rows:
+            draw.text((3, top + 3), f"{label}   (whole, then 100%: the photo and the mask)", fill=(230, 230, 230))
+            sheet.paste(whole, (0, top + 18))
+            sheet.paste(plain, (484, top + 18))
+            sheet.paste(crop, (808, top + 18))
+            top += max(whole.height, 320) + 20
+        sheet.save(sheets / f"{cell}.jpg", quality=88)
+        print(f"sheet: {sheets / (cell + '.jpg')}")
+
+
+EVAL = ROOT / "research/mask-eval/manifest.json"
+EVAL_KINDS = ("sky", "subject", "people")
+
+
+def eval_photos():
+    """(path, file stem, cell, masks it tests) for the evaluation set and the look-development raws it names."""
+    manifest = json.loads(EVAL.read_text())
+    photos = [(ROOT / "build/mask-eval" / i["file"], pathlib.Path(i["file"]).stem, i["cell"], i["masks"])
+              for i in manifest["images"]]
+    photos += [(ROOT / "build/look-dev" / i["file"], pathlib.Path(i["file"]).stem, "look-dev", i["masks"])
+               for i in manifest["lookDev"]]
+    return [p for p in photos if p[0].exists()]
+
+
+def eval_masks(cli):
+    """Today's masks for each photo of the evaluation set, for the masks its cell tests."""
+    out = OUT / "eval"
+    out.mkdir(parents=True, exist_ok=True)
+    failures = {}
+    for path, stem, cell, masks in eval_photos():
+        for kind in (k for k in EVAL_KINDS if k in masks):
+            target = out / f"{stem}-{kind}.png"
+            if target.exists() or list(out.glob(f"{stem}-{kind}-*.png")):
+                continue
+            try:
+                redlamp(cli, "mask", path, "--kind", kind, "-o", target)
+            except RuntimeError as error:
+                failures[f"{stem} {kind}"] = str(error).splitlines()[-1][-160:]
+        print(f"eval/{stem}: done")
+    (out / "failures.json").write_text(json.dumps(failures, indent=1))
+    print(f"{len(failures)} masks not made: {out / 'failures.json'}")
+
+
+def eval_mask(stem, kind, size):
+    """A photo's mask of `kind` at `size` (several people's combined), or None."""
+    out = OUT / "eval"
+    paths = [out / f"{stem}-{kind}.png"] if (out / f"{stem}-{kind}.png").exists() else sorted(out.glob(f"{stem}-{kind}-*.png"))
+    if not paths:
+        return None
+    masks = [np.asarray(Image.open(p).convert("L").resize(size, Image.BILINEAR), np.float32) / 255 for p in paths]
+    return np.max(masks, axis=0)
+
+
+def eval_sheets():
+    """A sheet per cell: each photo whole with its mask in the app's red overlay, and at 100% where
+    its edge is busiest (the 320 px window with the most partly covered pixels)."""
+    from PIL import ImageOps
+
+    sheets = OUT / "eval" / "sheets"
+    sheets.mkdir(parents=True, exist_ok=True)
+    by_cell = {}
+    for path, stem, cell, masks in eval_photos():
+        by_cell.setdefault(cell, []).append((path, stem, masks))
+    red = np.array([0.95, 0.18, 0.18], np.float32)
+    for cell, photos in by_cell.items():
+        rows = []
+        for path, stem, masks in photos:
+            photo_image = ImageOps.exif_transpose(Image.open(path)).convert("RGB") if path.suffix.lower() in (".jpg", ".jpeg", ".png") else None
+            if photo_image is None:
+                rendered = OUT / "eval" / f"{stem}-photo.jpg"
+                if not rendered.exists():
+                    redlamp(CLI, "render", path, "-o", rendered)
+                photo_image = Image.open(rendered).convert("RGB")
+            photo = np.asarray(photo_image, np.float32) / 255
+            for kind in (k for k in EVAL_KINDS if k in masks):
+                mask = eval_mask(stem, kind, photo_image.size)
+                if mask is None:
+                    continue
+                shown = photo * (1 - 0.55 * mask[..., None]) + red * 0.55 * mask[..., None]
+                partial = ((mask > 0.05) & (mask < 0.95)).astype(np.float32)
+                density = ndimage.uniform_filter(partial, 320)
+                y, x = np.unravel_index(np.argmax(density[160:-160, 160:-160]), density[160:-160, 160:-160].shape)
+                whole = Image.fromarray((np.clip(shown, 0, 1) * 255).astype(np.uint8))
+                whole.thumbnail((480, 480))
+                crop = Image.fromarray((np.clip(shown[y : y + 320, x : x + 320], 0, 1) * 255).astype(np.uint8))
+                plain = Image.fromarray((np.clip(photo[y : y + 320, x : x + 320], 0, 1) * 255).astype(np.uint8))
+                rows.append((f"{stem} · {kind}", whole, plain, crop))
+        if not rows:
+            continue
+        width = 480 + 4 + 320 + 4 + 320
+        height = sum(max(r[1].height, 320) + 20 for r in rows)
+        sheet = Image.new("RGB", (width, height), (22, 22, 22))
+        draw = ImageDraw.Draw(sheet)
+        top = 0
+        for label, whole, plain, crop in rows:
+            draw.text((3, top + 3), f"{label}   (whole, then 100%: the photo and the mask)", fill=(230, 230, 230))
+            sheet.paste(whole, (0, top + 18))
+            sheet.paste(plain, (484, top + 18))
+            sheet.paste(crop, (808, top + 18))
+            top += max(whole.height, 320) + 20
+        sheet.save(sheets / f"{cell}.jpg", quality=88)
+        print(f"sheet: {sheets / (cell + '.jpg')}")
+
+
 def pick(row, path):
     for key in path.split("."):
         row = row.get(key) if isinstance(row, dict) else None
@@ -177,14 +369,19 @@ def pick(row, path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["run", "score"])
+    parser.add_argument("command", choices=["run", "score", "eval", "sheets"])
     parser.add_argument("--sets", default="edge,hair")
     parser.add_argument("--cli", default=str(CLI))
     args = parser.parse_args()
     names = args.sets.split(",")
-    if args.command == "run":
-        run(names, pathlib.Path(args.cli))
-    score(names)
+    if args.command == "eval":
+        eval_masks(pathlib.Path(args.cli))
+    elif args.command == "sheets":
+        eval_sheets()
+    else:
+        if args.command == "run":
+            run(names, pathlib.Path(args.cli))
+        score(names)
 
 
 if __name__ == "__main__":
