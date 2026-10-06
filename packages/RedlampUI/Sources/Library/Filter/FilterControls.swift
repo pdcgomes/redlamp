@@ -114,6 +114,8 @@ func filterLabel(_ text: String, secondary: Bool = true) -> NSTextField {
 /// A pop-up of the bar, its menu's items calling back with their tags.
 final class FilterPopUp: NSPopUpButton {
     var onChoose: ((Int) -> Void)?
+    /// The items' titles and tags as last set.
+    private var shown: (titles: [String], tags: [Int]) = ([], [])
 
     init(identifier: String, tip: String) {
         super.init(frame: .zero, pullsDown: false)
@@ -135,6 +137,19 @@ final class FilterPopUp: NSPopUpButton {
 
     /// Sets its items, `(title, tag)`, a nil title for a separator, choosing the one tagged `chosen`.
     func set(_ items: [(title: String?, tag: Int)], chosen: Int?) {
+        let titles = items.map { $0.title ?? "" }
+        let tags = items.map(\.tag)
+        if titles != shown.titles || tags != shown.tags {
+            shown = (titles, tags)
+            fill(items)
+        }
+        if let chosen, let index = menu?.items.firstIndex(where: { $0.tag == chosen && !$0.isSeparatorItem }),
+           index != indexOfSelectedItem {
+            selectItem(at: index)
+        }
+    }
+
+    private func fill(_ items: [(title: String?, tag: Int)]) {
         let menu = NSMenu()
         for item in items {
             guard let title = item.title else {
@@ -145,12 +160,7 @@ final class FilterPopUp: NSPopUpButton {
             entry.tag = item.tag
             menu.addItem(entry)
         }
-        if menu.items.map(\.title) != self.menu?.items.map(\.title) {
-            self.menu = menu
-        }
-        if let chosen, let index = self.menu?.items.firstIndex(where: { $0.tag == chosen && !$0.isSeparatorItem }) {
-            selectItem(at: index)
-        }
+        self.menu = menu
     }
 
     @objc private func chose() {

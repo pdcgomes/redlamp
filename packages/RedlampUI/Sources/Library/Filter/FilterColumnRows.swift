@@ -9,7 +9,7 @@ final class FilterColumnRow: NSObject {
     /// The same for the same value as counts change, so the column keeps what's expanded.
     let key: String
     let title: String
-    let count: Int
+    var count: Int
     /// The value its filter takes; nil for the photos without one.
     let value: LibraryQuery.Value?
     let children: [FilterColumnRow]
@@ -75,7 +75,7 @@ final class FilterColumnRow: NSObject {
             guard parts.count == 3 else { continue }
             years[parts[0], default: [:]][parts[1], default: []].append((parts[2], value.count))
         }
-        let months = DateFormatter().monthSymbols ?? []
+        let months = monthNames
         return years.keys.sorted().map { year in
             let monthRows = (years[year] ?? [:]).keys.sorted().map { month in
                 let days = (years[year]?[month] ?? []).sorted { $0.day < $1.day }
@@ -97,6 +97,8 @@ final class FilterColumnRow: NSObject {
             )
         }
     }
+
+    private static let monthNames = DateFormatter().monthSymbols ?? []
 
     /// Folders, each counting the photos in it, by their paths below the source's folder.
     private static func folders(_ values: [FacetValue], below folder: String?) -> [FilterColumnRow] {

@@ -416,11 +416,10 @@
             window.setContentSize(NSSize(width: 1600, height: 1000))
             window.orderBack(nil)
             defer {
-                filters.setFilter(LibraryFilter())
-                filters.setBarShown(false)
-                model.showModule(.develop)
                 window.orderOut(nil)
+                window.contentViewController = nil
             }
+            let count = model.items.count
             model.showLibrary(.grid)
             filters.setFilter(LibraryFilter(sections: [.text, .metadata]))
             filters.setBarShown(true)
@@ -435,7 +434,9 @@
                 return filters.lastListed?.query == query
             }
             let monitor = MainThreadMonitor()
+            let sampler = LaunchArguments.all.contains("--library-perf-profile") ? MainThreadSampler() : nil
             monitor.start()
+            sampler?.start()
             var onScreen: [Double] = []
             var keys = 0
             var missed = 0
@@ -467,6 +468,22 @@
             }
             let elapsed = CFAbsoluteTimeGetCurrent() - began
             monitor.stop()
+            sampler?.stop()
+            if let sampler {
+                try? await Task.sleep(for: .milliseconds(20))
+                try? sampler.report().write(
+                    toFile: "/tmp/redlamp-profile-typing.txt",
+                    atomically: true,
+                    encoding: .utf8,
+                )
+            }
+            filters.setFilter(LibraryFilter())
+            filters.setBarShown(false)
+            let cleared = CFAbsoluteTimeGetCurrent()
+            while model.items.count != count || model.library.isFiltered, CFAbsoluteTimeGetCurrent() - cleared < 10 {
+                try? await Task.sleep(for: .milliseconds(5))
+            }
+            model.showModule(.develop)
             let report = String(
                 format: "Typing the fixture's %d queries in the filter bar: %d keys, %d changing the photos found, "
                     + "on screen p50 %.2f ms, p95 %.2f ms, max %.2f ms; %d not listed within a second",

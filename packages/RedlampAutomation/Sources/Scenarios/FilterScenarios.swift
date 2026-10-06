@@ -97,13 +97,17 @@
             try app.wait("a label offered") { $0.libraryFilters?.completions.first?.text == "label:red " }
             try app.pressInWindow(KeyCombo(.tab))
             try app.wait("Tab to take it") { $0.libraryFilters?.filter.text == "type:raw label:red " }
-            try app.type("rating>=9")
+            try app.type("rating>=9 a")
             try app.wait("what can't be read said") { $0.libraryFilters?.error != nil }
             try app.expect(
                 try app.main { $0.libraryFilters?.error?.message.contains("rating") == true },
                 "The error names rating",
             )
             app.covered(.feature("library.filter"), via: .key)
+            if try app.main({ $0.libraryFilters?.completions.isEmpty == false }) {
+                try app.pressInWindow(KeyCombo(.escape))
+                try app.wait("Esc to close the completions") { $0.libraryFilters?.completions.isEmpty == true }
+            }
             try app.pressInWindow(KeyCombo(.escape))
             try app.wait("Esc to give the grid the keyboard") { _ in
                 Views.editorWindow?.firstResponder.map { "\(Swift.type(of: $0))" } == "LibraryGridContentView"

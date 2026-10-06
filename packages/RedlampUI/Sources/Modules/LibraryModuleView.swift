@@ -108,9 +108,17 @@ final class LibraryModuleView: NSView {
     /// The filter bar shown above the grid, as tall as its sections, its text taking the keyboard as
     /// it's shown; hidden, the grid takes it back.
     private func showFilterBar(_ shown: Bool) {
-        filterHeight?.constant = shown ? filterBar.intrinsicContentSize.height : 0
-        filterBar.isHidden = !shown
-        filterBar.completions.isHidden = !shown || filterBar.completions.items.isEmpty
+        let height = shown ? filterBar.intrinsicContentSize.height : 0
+        if filterHeight?.constant != height {
+            filterHeight?.constant = height
+        }
+        if filterBar.isHidden == shown {
+            filterBar.isHidden = !shown
+        }
+        let completionsHidden = !shown || filterBar.completions.items.isEmpty
+        if filterBar.completions.isHidden != completionsHidden {
+            filterBar.completions.isHidden = completionsHidden
+        }
         defer { showsFilterBar = shown }
         guard shown != showsFilterBar, isShownModule else { return }
         if shown {

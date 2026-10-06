@@ -370,8 +370,9 @@ private extension LibraryFolderList {
         /// The last change handed over was a filtered or sorted list.
         var isOrdered = false
 
-        /// Changes this small that keep the photos' order are handed over row by row; larger ones reset.
-        static let largestDiff = 256
+        /// Changes this small that keep the photos' order are handed over row by row; larger ones reset,
+        /// which the filmstrip and the grid take faster than as many rows.
+        static let largestDiff = 32
 
         /// The folder's photos in Folders' order, as the changes handed over so far have left them.
         mutating func takeOver(_ mapping: inout Mapping) {

@@ -19,6 +19,14 @@ public extension EditorModel {
         }
     }
 
+    /// A filter that left the active photo out makes another active: one of the photos still selected,
+    /// or the one that took its place.
+    func keepActivePhotoShown() {
+        guard let selection, library.index(of: selection) == nil, !items.isEmpty else { return }
+        let kept = photoSelection.active.flatMap(library.url(ofPhoto:))
+        select(kept ?? items[min(selectionIndex ?? 0, items.count - 1)].url, keepingSelection: kept != nil)
+    }
+
     /// The source shown, in the bar.
     func followSource() {
         libraryFilters?.follow(folder, includingSubfolders: library.includesSubfolders)

@@ -85,10 +85,10 @@ public extension EditorModel {
             keepSelectionShown()
         }
         if library.isFiltered, diff.reset || !diff.removed.isEmpty, let selection, library.index(of: selection) == nil {
-            let kept = photoSelection.active.flatMap(library.url(ofPhoto:))
-            if let next = kept ?? items.first?.url {
-                return select(next, keepingSelection: kept != nil)
+            if libraryFilters?.isTyping != true {
+                keepActivePhotoShown()
             }
+            return
         }
         guard !diff.reset, let selection else { return }
         if let index = library.index(of: selection) {

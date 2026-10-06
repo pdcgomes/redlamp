@@ -201,6 +201,21 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         relayout(force: true)
     }
 
+    /// The same source's photos in another order or another number (a filter, LIB-18): cells on screen
+    /// keep their layers, and those whose row shows another photo now take it.
+    private func refill() {
+        shownCount = model.items.count
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for row in cells.keys where row >= shownCount {
+            if let cell = cells.removeValue(forKey: row) {
+                release(cell)
+            }
+        }
+        CATransaction.commit()
+        relayout(force: true)
+    }
+
     /// Scrolls to where the source's grid was left, once, after its view is restored; false when there's
     /// no such place.
     private func restorePlace() -> Bool {
@@ -484,12 +499,19 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
             }
             return
         }
+        if diff.reset, model.library.isFiltered {
+            refill()
+            follow(model.selection, marking: model.photoSelection)
+            return
+        }
         guard !diff.reset else {
             reload()
             follow(model.selection, marking: model.photoSelection, revealing: !restorePlace())
             return
         }
-        if moves {
+        if moves, model.library.isFiltered {
+            refill()
+        } else if moves {
             shownCount = model.items.count
             recycleAll()
             relayout(force: true)

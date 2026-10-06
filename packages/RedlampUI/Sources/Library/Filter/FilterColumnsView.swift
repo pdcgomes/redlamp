@@ -152,13 +152,20 @@ final class FilterColumnView: NSView, NSOutlineViewDataSource, NSOutlineViewDele
             if kind != self.kind {
                 expanded = []
             }
+            let next = counts.map { FilterColumnRow.rows($0, folder: folder) } ?? []
+            let sameRows = kind == self.kind && (counts == nil) == (self.counts == nil)
+                && Self.keys(next) == Self.keys(rows)
             self.kind = kind
             self.counts = counts
-            rows = counts.map { FilterColumnRow.rows($0, folder: folder) } ?? []
-            outline.reloadData()
-            for key in expanded {
-                if let row = row(for: key) {
-                    outline.expandItem(row)
+            if sameRows {
+                recount(next)
+            } else {
+                rows = next
+                outline.reloadData()
+                for key in expanded {
+                    if let row = row(for: key) {
+                        outline.expandItem(row)
+                    }
                 }
             }
         }
@@ -184,6 +191,36 @@ final class FilterColumnView: NSView, NSOutlineViewDataSource, NSOutlineViewDele
         isSettingSelection = true
         outline.selectRowIndexes(lit, byExtendingSelection: false)
         isSettingSelection = false
+    }
+
+    /// Every row's key, depth first.
+    private static func keys(_ rows: [FilterColumnRow]) -> [String] {
+        rows.flatMap { [$0.key] + keys($0.children) }
+    }
+
+    /// The same rows with new counts: the cells on screen show them, and the rest as they scroll in.
+    private func recount(_ next: [FilterColumnRow]) {
+        var counts: [String: Int] = [:]
+        var pending = next
+        while let row = pending.popLast() {
+            counts[row.key] = row.count
+            pending += row.children
+        }
+        pending = rows
+        while let row = pending.popLast() {
+            row.count = counts[row.key] ?? row.count
+            pending += row.children
+        }
+        for index in 0 ..< outline.numberOfRows {
+            guard let row = outline.item(atRow: index) as? FilterColumnRow,
+                  let cell = outline.view(atColumn: 0, row: index, makeIfNecessary: false) as? FilterColumnCell
+            else { continue }
+            cell.show(
+                row.title,
+                count: row === all ? self.counts?.total ?? 0 : row.count,
+                isUnknown: row.value == nil && row !== all,
+            )
+        }
     }
 
     private func row(for key: String, in rows: [FilterColumnRow]? = nil) -> FilterColumnRow? {

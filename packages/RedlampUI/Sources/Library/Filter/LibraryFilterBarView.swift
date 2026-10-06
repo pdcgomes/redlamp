@@ -38,6 +38,8 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
     /// The completions of the term being typed, shown over the grid below the text.
     let completions = FilterCompletionView()
     private var shownText: String?
+    /// What the bar's layout depends on, as last laid out: its sections and what the text row shows.
+    private var laidOut: [AnyHashable] = []
 
     init(model: EditorModel) {
         self.model = model
@@ -121,8 +123,11 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
             Tracker { [weak self] in self?.update() },
             Tracker { [weak self] in
                 guard let self, let filters = model.libraryFilters else { return }
+                let wasHidden = completions.isHidden
                 completions.show(filters.completions)
-                needsLayout = true
+                if wasHidden != completions.isHidden || !completions.isHidden {
+                    placeCompletions()
+                }
             },
             Tracker { [weak self] in
                 guard let self, let filters = model.libraryFilters else { return }
@@ -146,15 +151,20 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
             field.stringValue = filter.text
         }
         shownText = filter.text
-        error.stringValue = filters.error?.message ?? ""
+        set(error, filters.error?.message ?? "")
         error.toolTip = filters.error?.message
-        clear.isHidden = filter.text.isEmpty
         let total = filters.listed?.total ?? model.library.count
         let shown = model.library.isFiltered ? model.library.count : total
-        count.stringValue = model.folder == nil ? "" : shown == total
-            ? "\(total.formatted()) photos" : "\(shown.formatted()) of \(total.formatted()) photos"
-        note.stringValue = model.folder != nil && !model.library.isShownFromLibrary && !filters.filter.isEmpty
-            ? "Filters apply once the library has indexed this folder" : ""
+        set(
+            count,
+            model.folder == nil ? "" : shown == total
+                ? "\(total.formatted()) photos" : "\(shown.formatted()) of \(total.formatted()) photos",
+        )
+        set(
+            note,
+            model.folder != nil && !model.library.isShownFromLibrary && !filters.filter.isEmpty
+                ? "Filters apply once the library has indexed this folder" : "",
+        )
         sort.set(
             LibrarySortField.allCases.enumerated().map { ($1.title, $0) },
             chosen: LibrarySortField.allCases
@@ -172,15 +182,36 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
         presets.set(items, chosen: current.flatMap { preset in filters.presets.firstIndex(of: preset) } ?? -1)
         lock.isOn = filters.isLocked
         lock.symbol = filters.isLocked ? "lock.fill" : "lock.open"
-        attributes.isHidden = !filter.sections.contains(.attribute)
-        columns.isHidden = !filter.sections.contains(.metadata)
+        for (view, section) in [(attributes, FilterSection.attribute), (columns, .metadata)] as [(
+            NSView,
+            FilterSection,
+        )]
+            where view.isHidden == filter.sections.contains(section) {
+            view.isHidden = !filter.sections.contains(section)
+        }
         let textShown = filter.sections.contains(.text)
-        for view in [field, error, clear, note] as [NSView] {
+        for view in [field, error, note] as [NSView] where view.isHidden == textShown {
             view.isHidden = !textShown
         }
-        clear.isHidden = !textShown || filter.text.isEmpty
-        invalidateIntrinsicContentSize()
-        needsLayout = true
+        let clearHidden = !textShown || filter.text.isEmpty
+        if clear.isHidden != clearHidden {
+            clear.isHidden = clearHidden
+        }
+        let layout: [AnyHashable] = [filter.sections, error.stringValue.isEmpty, note.stringValue]
+        if layout != laidOut {
+            if layout.first != laidOut.first {
+                invalidateIntrinsicContentSize()
+            }
+            laidOut = layout
+            needsLayout = true
+        }
+    }
+
+    /// Sets a label's text, leaving it alone when it's the same.
+    private func set(_ label: NSTextField, _ text: String) {
+        if label.stringValue != text {
+            label.stringValue = text
+        }
     }
 
     override func layout() {
@@ -259,8 +290,14 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
         filters.complete(text, cursor: cursor(in: text))
     }
 
+    func controlTextDidBeginEditing(_: Notification) {
+        model.libraryFilters?.isTyping = true
+    }
+
     func controlTextDidEndEditing(_: Notification) {
         model.libraryFilters?.endCompletion()
+        model.libraryFilters?.isTyping = false
+        model.keepActivePhotoShown()
     }
 
     /// The cursor's place in `text`, in characters.

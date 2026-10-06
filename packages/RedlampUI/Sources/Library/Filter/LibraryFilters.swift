@@ -48,6 +48,13 @@ public final class LibraryFilters {
     @ObservationIgnored private var counting: Task<Void, Never>?
     @ObservationIgnored private var completing: Task<Void, Never>?
     @ObservationIgnored private var countAgain = false
+    @ObservationIgnored private var lastChange = ContinuousClock.now
+    /// The text has the keyboard: the active photo stays as it is until it's given back.
+    @ObservationIgnored public internal(set) var isTyping = false
+
+    /// How long the columns wait after the filter or the photos change, so typing isn't held up by
+    /// counts it would replace a key later.
+    static let columnDelay = Duration.milliseconds(120)
 
     static let keptSources = 25
     private static let stateKey = "library.filters"
@@ -312,12 +319,17 @@ public final class LibraryFilters {
         guard isBarShown, filter.sections.contains(.metadata), let folder, let engine = service?.engine else { return }
         guard counting == nil else {
             countAgain = true
+            lastChange = .now
             return
         }
-        let requests = columnRequests()
         let source = PhotoSource.folder(folder.url, includingSubfolders: folder.subfolders)
         let key = self.source
+        lastChange = .now
         counting = Task { [weak self] in
+            while let self, ContinuousClock.now - lastChange < Self.columnDelay {
+                try? await Task.sleep(for: lastChange + Self.columnDelay - ContinuousClock.now)
+            }
+            guard let requests = self?.columnRequests() else { return }
             do {
                 for try await counts in engine.columns(requests, in: source) {
                     guard let self, self.source == key else { break }
