@@ -434,7 +434,14 @@ enum RichSidecar {
             snapshots: [Snapshot(name: "Every slider", created: date, recipe: everySlider())],
             metadata: PhotoMetadata(
                 rating: 4, flag: .pick, label: .purple, originalName: "DSC_0042.NEF",
-                keywords: ["Places/Portugal/Lisbon", "Music/AC%2FDC"],
+                keywords: ["Places/Portugal/Lisbon", "Music/AC%2FDC"], customLabel: "Second look", mark: true,
+                title: "Tram 28", caption: "The tram climbing to Graça.", creator: "Ana Sousa; Rui Lopes",
+                copyright: "© 2026 Ana Sousa",
+                location: PhotoLocation(
+                    country: "Portugal", state: "Lisboa", city: "Lisbon", sublocation: "Graça", countryCode: "PT",
+                ),
+                collections: ["Clients/Acme/Selects", "Best of 2026"],
+                stack: PhotoStack(id: UUID(uuidString: "6F1C2A4E-8B1D-4C3A-9E57-1B2D3C4E5F60"), top: true),
             ),
             modified: date,
             session: session(ending: edit),

@@ -843,13 +843,18 @@
       "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
     },
     "metadata": {
-      "description": "Rating, flag, color label, the photo's original name and its keywords. Written only when one is set.",
+      "description": "Rating, flag, color label, mark, the photo's original name, its keywords, title, caption, creator, copyright and location, and the collections and stack it's in. Written only when one is set.",
       "type": "object",
       "required": ["rating"],
       "properties": {
         "rating": { "type": "integer", "minimum": 0, "maximum": 5, "description": "Stars." },
         "flag": { "enum": ["pick", "reject"] },
         "label": { "enum": ["red", "yellow", "green", "blue", "purple"] },
+        "customLabel": {
+          "type": "string",
+          "description": "A label named otherwise than the five colors, as Urgent. Never in label, which older builds can't read with another value; where both are there, label is the photo's label."
+        },
+        "mark": { "const": true, "description": "In the quick collection. Written only when true." },
         "originalName": {
           "type": "string",
           "description": "The photo's file name before Redlamp first renamed it, as IMG_1234.CR3. Written the first time Redlamp renames the photo, and kept through every rename and move after that."
@@ -858,6 +863,54 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "The photo's keywords, each its full path from the top of the keyword list with / between levels, as Places/Portugal/Lisbon. A / inside a keyword is written %2F and a % as %25. An empty list means no keywords; without the key, the keywords embedded in the photo and in other apps' .xmp are its keywords."
+        },
+        "title": {
+          "type": "string",
+          "description": "IPTC Core's Title. Empty means none; without the key, the title embedded in the photo or in other apps' .xmp is its title."
+        },
+        "caption": {
+          "type": "string",
+          "description": "IPTC Core's Description. Empty means none; without the key, other apps' stands."
+        },
+        "creator": {
+          "type": "string",
+          "description": "IPTC Core's Creator, several names separated by semicolons. Empty means none; without the key, other apps' stands."
+        },
+        "copyright": {
+          "type": "string",
+          "description": "IPTC Core's Copyright Notice. Empty means none; without the key, other apps' stands."
+        },
+        "location": { "$ref": "#/$defs/location" },
+        "collections": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "The collections the photo is in, each by its path from the top of the collection list, written as keywords' paths are. Written only when there are some."
+        },
+        "stack": { "$ref": "#/$defs/stack" }
+      },
+      "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
+    },
+    "location": {
+      "description": "Where the photo was taken, in IPTC Core's fields, each written only when set. An empty object means nowhere; without the key, other apps' location stands.",
+      "type": "object",
+      "properties": {
+        "sublocation": { "type": "string", "description": "A place within the city: a district, a street, a building." },
+        "city": { "type": "string" },
+        "state": { "type": "string", "description": "A state or province." },
+        "country": { "type": "string" },
+        "countryCode": { "type": "string", "description": "The country's ISO 3166 code, as PT." }
+      },
+      "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
+    },
+    "stack": {
+      "description": "The photo's place in a stack the user made: photos with one id are one stack wherever they are, and a photo whose id no other photo has stands alone, in no burst.",
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "top": {
+          "const": true,
+          "description": "Shown for its stack: the one id names, or without an id the burst it's in. Written only when true."
         }
       },
       "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }

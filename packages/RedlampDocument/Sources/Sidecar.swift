@@ -26,13 +26,66 @@ public enum ColorLabel: String, Codable, Sendable, Hashable, CaseIterable {
     case red, yellow, green, blue, purple
 }
 
-/// Rating, flag and label: the culling metadata Lightroom lets you set while developing; the
-/// photo's name before Redlamp first renamed it; and its keywords.
+/// Where a photo was taken, in IPTC Core's fields (LIB-22).
+public struct PhotoLocation: Sendable, Hashable {
+    public var country: String?
+    /// A state or province.
+    public var state: String?
+    public var city: String?
+    /// A place within the city: a district, a street, a building.
+    public var sublocation: String?
+    /// The country's ISO 3166 code: `PT`.
+    public var countryCode: String?
+    /// Fields written by a newer Redlamp, written back unchanged.
+    public var unknownFields: [String: JSONValue] = [:]
+
+    public init(
+        country: String? = nil, state: String? = nil, city: String? = nil, sublocation: String? = nil,
+        countryCode: String? = nil,
+    ) {
+        self.country = country
+        self.state = state
+        self.city = city
+        self.sublocation = sublocation
+        self.countryCode = countryCode
+    }
+
+    public var isEmpty: Bool {
+        country == nil && state == nil && city == nil && sublocation == nil && countryCode == nil
+            && unknownFields.isEmpty
+    }
+}
+
+/// A photo's place in a stack the user made (LIB-28): photos with one `id` are one stack wherever they
+/// are, and a photo whose `id` no other photo has stands alone, in no burst.
+public struct PhotoStack: Sendable, Hashable {
+    /// The manual stack it's in; nil when it's only shown for the burst it's in.
+    public var id: UUID?
+    /// It's shown for its stack: the manual stack `id` names, or else its burst.
+    public var top: Bool
+    /// Fields written by a newer Redlamp, written back unchanged.
+    public var unknownFields: [String: JSONValue] = [:]
+
+    public init(id: UUID? = nil, top: Bool = false) {
+        self.id = id
+        self.top = top
+    }
+}
+
+/// Rating, flag, label and mark: the culling metadata Lightroom lets you set while developing; the
+/// photo's name before Redlamp first renamed it; its keywords and IPTC Core's descriptions; and the
+/// collections and stack it's in.
 public struct PhotoMetadata: Sendable, Hashable {
     /// 0–5 stars.
     public var rating: Int
     public var flag: PhotoFlag?
     public var label: ColorLabel?
+    /// A label's name outside the five colours, `Urgent` (LIB-15). Never in `label`, whose other values
+    /// make a sidecar unreadable to older builds; Redlamp gives a photo one or the other, and `label`
+    /// is its label where both are there.
+    public var customLabel: String?
+    /// In the quick collection.
+    public var mark: Bool
     /// The photo's file name before Redlamp first renamed it, `IMG_1234.CR3`, kept through every
     /// rename and move after that; nil for a photo Redlamp hasn't renamed (LIB-26).
     public var originalName: String?
@@ -41,22 +94,48 @@ public struct PhotoMetadata: Sendable, Hashable {
     /// sign (LIB-21). Kept as written. Empty: the photo has none; nil: the keywords embedded in it and
     /// in other apps' `.xmp` are its keywords.
     public var keywords: [String]?
-    /// Fields written by a newer Redlamp (a caption, say), written back unchanged.
+    /// IPTC Core's Title, Description, Creator (names separated by semicolons) and Copyright Notice
+    /// (LIB-22). As with `keywords`, an empty one means the photo has none; nil, that what's embedded
+    /// in it and in other apps' `.xmp` stands.
+    public var title: String?
+    public var caption: String?
+    public var creator: String?
+    public var copyright: String?
+    /// Where it was taken; an empty one means nowhere, nil that other apps' stands.
+    public var location: PhotoLocation?
+    /// The collections it's in, each by its path from the top of the collection list as keywords' are
+    /// written: `Clients/Acme/Selects`, `%2F` for a slash inside a name (LIB-23).
+    public var collections: [String]
+    public var stack: PhotoStack?
+    /// Fields written by a newer Redlamp (a headline, say), written back unchanged.
     public var unknownFields: [String: JSONValue] = [:]
 
     public init(
         rating: Int = 0, flag: PhotoFlag? = nil, label: ColorLabel? = nil, originalName: String? = nil,
-        keywords: [String]? = nil,
+        keywords: [String]? = nil, customLabel: String? = nil, mark: Bool = false, title: String? = nil,
+        caption: String? = nil, creator: String? = nil, copyright: String? = nil, location: PhotoLocation? = nil,
+        collections: [String] = [], stack: PhotoStack? = nil,
     ) {
         self.rating = min(max(rating, 0), 5)
         self.flag = flag
         self.label = label
+        self.customLabel = customLabel
+        self.mark = mark
         self.originalName = originalName
         self.keywords = keywords
+        self.title = title
+        self.caption = caption
+        self.creator = creator
+        self.copyright = copyright
+        self.location = location
+        self.collections = collections
+        self.stack = stack
     }
 
     public var isEmpty: Bool {
-        rating == 0 && flag == nil && label == nil && originalName == nil && keywords == nil && unknownFields.isEmpty
+        rating == 0 && flag == nil && label == nil && customLabel == nil && !mark && originalName == nil
+            && keywords == nil && title == nil && caption == nil && creator == nil && copyright == nil
+            && location == nil && collections.isEmpty && stack == nil && unknownFields.isEmpty
     }
 }
 

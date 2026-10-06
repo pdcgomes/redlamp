@@ -70,7 +70,7 @@ struct SidecarRoundTripTests {
         ("/recipe/appliedRecipe/author", .string("Someone")),
         ("/snapshots/0/pinned", .bool(true)),
         ("/snapshots/0/recipe/futureStage", .bool(true)),
-        ("/metadata/caption", .string("Harbour at dawn")),
+        ("/metadata/headline", .string("Harbour at dawn")),
     ]
 
     @Test func `metadata a newer build added keeps an otherwise empty sidecar`() throws {
@@ -78,12 +78,12 @@ struct SidecarRoundTripTests {
         defer { cleanup() }
         let store = SidecarStore()
         let json = #"{"format":"app.redlamp.edit","recipe":{"version":3,"processVersion":1},"#
-            + #""metadata":{"rating":0,"caption":"Harbour at dawn"}}"#
+            + #""metadata":{"rating":0,"headline":"Harbour at dawn"}}"#
         try Data(json.utf8).write(to: store.url(for: image))
         let sidecar = try #require(store.load(for: image))
         #expect(sidecar.metadata?.isEmpty == false)
         try store.saveOrRemove(sidecar, for: image)
-        #expect(store.load(for: image)?.metadata?.unknownFields["caption"] == .string("Harbour at dawn"))
+        #expect(store.load(for: image)?.metadata?.unknownFields["headline"] == .string("Harbour at dawn"))
     }
 
     @Test(arguments: kept)

@@ -37,7 +37,7 @@ To show a photo's badges, Redlamp reads only `recipe` and `metadata` from `edit.
 - `edit.json` is written to a temporary file and moved into place. Mask bitmaps are written before the edit that names them, and a new package is built beside the photo and moved in whole, so a reader never finds an edit that names a missing or partly written file.
 - A sidecar whose content hasn't changed is not rewritten, so saving an unchanged edit doesn't wake sync services. A change to `modified` alone doesn't count.
 - When it saves, Redlamp deletes the bitmaps that no edit, snapshot or history session uses and that no key of `edit.json` or of a history file names, since a key a newer Redlamp added may refer to one. It deletes none while a history file can't be read.
-- Redlamp deletes the whole sidecar when the edit is back to its defaults (whatever `wb.temperature` and `wb.tint` hold) and there are no snapshots, rating, flag, label, original name, keywords (an empty list of them included), unknown fields or history.
+- Redlamp deletes the whole sidecar when the edit is back to its defaults (whatever `wb.temperature` and `wb.tint` hold) and there are no snapshots, rating, flag, label, custom label, mark, original name, keywords (an empty list of them included), title, caption, creator, copyright, location (empty ones included), collections, stack, unknown fields or history.
 - Every read and write goes through `NSFileCoordinator`, so iCloud Drive never syncs a half-written package, and a read waits for a sidecar that iCloud Drive has evicted to download. Other tools on macOS should coordinate their writes the same way.
 
 ### Conflicting copies
@@ -69,14 +69,22 @@ When a photo is edited on two Macs before iCloud Drive syncs them, iCloud keeps 
 | `format` | string | `app.redlamp.edit`. Always written; Redlamp doesn't check it. |
 | `recipe` | object | **Required.** The edit; see [The recipe](#the-recipe). |
 | `snapshots` | [snapshot] | Named versions of the edit, in the order they were made. Default `[]`. |
-| `metadata` | object? | Rating, flag, label, the photo's original name and its keywords. Written only when one is set. |
+| `metadata` | object? | Rating, flag, label, mark, the photo's original name, its keywords, title, caption, creator, copyright and location, and the collections and stack it's in. Written only when one is set. |
 | `modified` | date? | When the edit was last saved. A sidecar without it loses every conflict. |
 
 A **snapshot** is a named version of the edit, as in Lightroom: `{"id", "name", "created", "recipe"}`, all required. `created` is a date and `recipe` a whole recipe. Snapshots are how one sidecar keeps several versions of a photo's edit.
 
-**Metadata** is Lightroom's culling metadata: `rating` (an integer, 0 to 5 stars, required), `flag` (`pick` or `reject`) and `label` (`red`, `yellow`, `green`, `blue` or `purple`). It also holds `originalName`, a string: the photo's file name before Redlamp first renamed it (`IMG_1234.CR3`), which naming templates read as `{original}`. Redlamp writes it the first time it renames the photo, making the sidecar if there's none, and keeps it through every rename and move after that; undoing the first rename takes it out again. Builds from before it keep it as an unknown key.
+**Metadata** is Lightroom's culling metadata: `rating` (an integer, 0 to 5 stars, required), `flag` (`pick` or `reject`), `label` (`red`, `yellow`, `green`, `blue` or `purple`) and `mark`, `true` for a photo in the quick collection, written only then. A label named otherwise (`Urgent`, Capture One's `Orange`) is `customLabel`, a string, and never `label`, since a `label` outside its list makes the sidecar unreadable to the builds before it; Redlamp writes one or the other, and where both are there, `label` is the photo's label. It also holds `originalName`, a string: the photo's file name before Redlamp first renamed it (`IMG_1234.CR3`), which naming templates read as `{original}`. Redlamp writes it the first time it renames the photo, making the sidecar if there's none, and keeps it through every rename and move after that; undoing the first rename takes it out again. Builds from before it keep it as an unknown key.
 
 `keywords` is a list of strings: the photo's keywords, each its full path from the top of the keyword list with `/` between levels, `Places/Portugal/Lisbon`, so a photo describes itself without the library's keyword list. A `/` inside a keyword is written `%2F` and a `%` as `%25`, and nothing else is escaped: the keyword AC/DC under Music is `Music/AC%2FDC`, and 50% off is `50%25 off`. Redlamp writes each keyword's name without spaces at its ends and in Unicode's composed form (NFC), never an empty level, and keeps the list as it was written. When `keywords` is there, it is the photo's keywords, an empty list included: Redlamp writes an empty list when the last keyword is taken off, so keywords embedded in the photo or in another app's `.xmp` don't come back. When it isn't, those are the photo's keywords, and the first change Redlamp makes writes them all here. Builds from before it keep it as an unknown key.
+
+`title`, `caption`, `creator` and `copyright` are strings: IPTC Core's Title, Description, Creator and Copyright Notice, `creator` holding several names separated by semicolons. `location` is where the photo was taken, an object of strings, each written only when it's set: `sublocation` (a place within the city: a district, a street, a building), `city`, `state` (a state or province), `country` and `countryCode` (the country's ISO 3166 code, `PT`). As with `keywords`, each of these that's there is the photo's, an empty string or an empty `location` included: Redlamp writes an empty one when the field is cleared, so the value embedded in the photo or in another app's `.xmp` doesn't come back. One that isn't there takes those, and the first change Redlamp makes to it writes it here.
+
+`collections` is a list of strings: the collections the photo is in, each by its path from the top of the collection list, written as keywords' paths are (`Clients/Acme/Selects`; a `/` inside a name as `%2F` and a `%` as `%25`). It's written only when the photo is in a collection. The library keeps what the photos can't carry (its collection sets, collections without photos and smart collections) in its own definitions, and a sidecar names only the collections that hold the photo, so renaming or moving a collection rewrites the sidecars of its photos.
+
+`stack` is the photo's place in a stack the user made, `{"id": "6F1C2A4E-8B1D-4C3A-9E57-1B2D3C4E5F60", "top": true}`: photos whose `id` is the same are one stack, wherever they are, and a photo whose `id` no other photo has stands alone, in no burst. `top`, written only when it's true, makes the photo the one shown for its stack: the stack `id` names, or, without an `id`, the burst Redlamp finds it in. A raw and its JPEG get the same `stack`.
+
+Builds from before `customLabel`, `mark`, `title`, `caption`, `creator`, `copyright`, `location`, `collections` and `stack` keep them as unknown keys.
 
 ## The recipe
 
@@ -422,7 +430,7 @@ What Redlamp does when it reads a sidecar, which is also what another reader mus
    - top-level keys of `edit.json`;
    - keys of a recipe, in the edit and in snapshots, and of a snapshot;
    - keys in `values`, in a mask's `adjustments` and in a swatch's `values` (they must be numbers, and don't render);
-   - keys of a mask, a component, an AI mask (a depth range's depth map and a spot's region included), a Point Color swatch, a spot, `metadata` and the applied recipe;
+   - keys of a mask, a component, an AI mask (a depth range's depth map and a spot's region included), a Point Color swatch, a spot, `metadata`, its `location` and `stack`, and the applied recipe;
    - component kinds in a mask's `shape` (they render nothing).
 
    Everywhere else in `edit.json` (shape parameters, bitmaps, the Base Look, the crop and orientation) Redlamp has nowhere to keep an unknown key, so a sidecar holding one is read-only. A shape with more than one key is read as one of them (the first in the order of the kinds table in [Masks](#masks), or else the first by name), and the sidecar is read-only. It ignores unknown keys in history files, which it never rewrites. The schema marks the objects without room for unknown keys closed (`additionalProperties: false`) and leaves the others open, so a writer that validates its sidecars puts new keys only where Redlamp keeps them.
