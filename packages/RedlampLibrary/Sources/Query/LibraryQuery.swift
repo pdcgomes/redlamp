@@ -81,6 +81,9 @@ public indirect enum LibraryQuery: Sendable, Hashable {
         case missing
         /// `yes` or `no`: on a volume that isn't connected.
         case offline
+        /// `yes` or `no`: its file can't be read (LIB-40). Lists leave such photos out unless their
+        /// query names this field.
+        case unreadable
         /// Substrings of IPTC Core's creator (the names of who made the photo) and copyright notice.
         case creator
         case copyright
@@ -205,6 +208,23 @@ public indirect enum LibraryQuery: Sendable, Hashable {
         case copyright
         /// Any part of IPTC Core's location.
         case location
+    }
+}
+
+public extension LibraryQuery {
+    /// Whether a filter on `field` is anywhere in it.
+    func mentions(_ field: Field) -> Bool {
+        switch self {
+        case .all, .text: false
+        case let .filter(filter): filter.field == field
+        case let .not(query): query.mentions(field)
+        case let .and(queries), let .or(queries): queries.contains { $0.mentions(field) }
+        }
+    }
+
+    /// Whether its photos include those that can't be read, which lists otherwise leave out (LIB-40).
+    var findsUnreadable: Bool {
+        mentions(.unreadable)
     }
 }
 

@@ -68,6 +68,11 @@ struct RowBits: Sendable, Hashable {
         combine(universe) { ~$0 & $1 }
     }
 
+    /// Takes out the rows of `other`.
+    mutating func subtract(_ other: RowBits) {
+        combine(other) { $0 & ~$1 }
+    }
+
     private mutating func combine(_ other: RowBits, _ operation: (UInt64, UInt64) -> UInt64) {
         let count = min(words.count, other.words.count)
         words.withUnsafeMutableBufferPointer { words in

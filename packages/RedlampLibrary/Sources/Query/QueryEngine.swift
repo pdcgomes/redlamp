@@ -203,7 +203,10 @@ public final class QueryEngine: Sendable {
         guard let (store, vocabulary, generation) = snapshot() else {
             return try await searchSQL(query, sort: sort, pageSize: pageSize, yield: yield)
         }
-        let matches = try await matches(for: query, in: store, vocabulary: vocabulary, generation: generation)
+        var matches = try await matches(for: query, in: store, vocabulary: vocabulary, generation: generation)
+        if query?.findsUnreadable != true {
+            matches = store.readable(matches)
+        }
         let count = matches.count
         let order = store.order(sort.key)
         var ids = ContiguousArray<Int64>()

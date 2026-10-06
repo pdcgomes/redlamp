@@ -16,10 +16,14 @@ struct QuerySQL: Sendable, Hashable {
     var bindings: [Binding]
 
     /// The photos `query` finds, in `sort`'s order; nil finds every photo. `query` has been through
-    /// `LibraryQuery.searchable`. `synonyms` are the keywords' synonyms, by path.
+    /// `LibraryQuery.searchable`. `synonyms` are the keywords' synonyms, by path. Photos that can't
+    /// be read are left out unless the query names `unreadable`, as lists leave them out (LIB-40).
     init(_ query: LibraryQuery?, sort: QuerySort, today: Int, synonyms: [String: [String]] = [:]) {
         var compiler = Compiler(today: today, synonyms: KeywordSynonyms(synonyms))
-        let predicate = query.map { compiler.predicate($0) } ?? "1"
+        var predicate = query.map { compiler.predicate($0) } ?? "1"
+        if query?.findsUnreadable != true {
+            predicate = "(\(predicate)) AND (\(ColumnEncoding.stateSQL) & \(PhotoRecord.State.unreadable.rawValue)) = 0"
+        }
         let direction = sort.ascending ? "" : " DESC"
         let keys: [String] = switch sort.key {
         case .captured: [ColumnEncoding.capturedSQL, "p.id"]
@@ -116,9 +120,9 @@ struct QuerySQL: Sendable, Hashable {
                 return yes ? "(p.marked != 0)" : "(p.marked = 0)"
             case let (.edited, .bool(yes)):
                 return yes ? "(p.edited != 0)" : "(p.edited = 0)"
-            case let (.missing, .bool(yes)), let (.offline, .bool(yes)):
-                let bit = (field == .missing ? PhotoRecord.State.missing : .offline).rawValue
-                return "((\(ColumnEncoding.stateSQL) & \(bit)) \(yes ? "!=" : "=") 0)"
+            case let (.missing, .bool(yes)), let (.offline, .bool(yes)), let (.unreadable, .bool(yes)):
+                let state: PhotoRecord.State = field == .missing ? .missing : field == .offline ? .offline : .unreadable
+                return "((\(ColumnEncoding.stateSQL) & \(state.rawValue)) \(yes ? "!=" : "=") 0)"
             case let (.keyword, .text(text)):
                 var tests = ["redlamp_keyword(k.path, \(bind(text)))"]
                 for owner in synonyms.owners(of: text) {

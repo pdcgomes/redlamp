@@ -18,28 +18,25 @@ extension LibraryIndexer.Run {
         case .new:
             if let move = try await move(job, on: volume, priority: priority, lane: lane) {
                 await batcher.add([.move(move)])
+                volume.ends.add(move.replacement?.endCheck.map { [$0] } ?? [])
                 return
             }
             let photo = try await read(job, on: volume, priority: priority, lane: lane)
-            count(photo, in: job.folder)
-            await batcher.add([.photo(photo)])
+            await written(photo, in: job.folder, on: volume)
         case .changed:
             let photo = try await read(job, on: volume, priority: priority, lane: lane)
-            count(photo, in: job.folder)
-            await batcher.add([.photo(photo)])
+            await written(photo, in: job.folder, on: volume)
         case .sidecar:
             guard var record = job.existing,
                   let sidecar = try await sidecar(of: job, on: volume, priority: priority, lane: lane)
             else {
                 let photo = try await read(job, on: volume, priority: priority, lane: lane)
-                count(photo, in: job.folder)
-                return await batcher.add([.photo(photo)])
+                return await written(photo, in: job.folder, on: volume)
             }
             guard let changed = Self.organising(afterSidecar: sidecar.summary, of: job, row: record) else {
                 var photo = try await read(job, on: volume, priority: priority, lane: lane, sidecar: sidecar)
                 photo.thumbnail = nil
-                count(photo, in: job.folder)
-                return await batcher.add([.photo(photo)])
+                return await written(photo, in: job.folder, on: volume)
             }
             Self.show(changed.organising, in: &record)
             Self.place(sidecar.summary.metadata, in: &record)
@@ -70,13 +67,31 @@ extension LibraryIndexer.Run {
             } else {
                 state.work[folder]?.updated += 1
             }
+            if photo.record.state.contains(.unreadable) {
+                state.summary.photosUnreadable += 1
+            }
+        }
+    }
+
+    /// Hands `photo` to the batcher, then its end to the volume's end reads: its row is written
+    /// before the end's result, which needs it.
+    private func written(
+        _ photo: LibraryIndexer.PendingPhoto, in folder: String, on volume: LibraryIndexer.VolumeWork,
+    ) async {
+        count(photo, in: folder)
+        await batcher.add([.photo(photo)])
+        if let check = photo.endCheck {
+            volume.ends.add([check])
         }
     }
 
     // MARK: - Reading a photo
 
-    /// Reads the photo's head once, for its content key and metadata, other apps' `.xmp` beside it,
-    /// and what its `.redlamp` says (`known`, when it's been read).
+    /// Reads the photo's head once, for its content key, metadata and health (LIB-40), other apps'
+    /// `.xmp` beside it, and what its `.redlamp` says (`known`, when it's been read). An empty file
+    /// isn't read, and one that can't be read for a reason other than its being gone or its volume
+    /// away is written as unreadable, with the reader's reason, rather than failing its folder: only
+    /// such a photo is left out of lists.
     func read(
         _ job: LibraryIndexer.PhotoJob, on volume: LibraryIndexer.VolumeWork, priority: VolumeIO.Priority,
         lane: WorkScheduler.Lane, sidecar known: ReadSidecar? = nil,
@@ -84,8 +99,18 @@ extension LibraryIndexer.Run {
         let io = volume.io
         let url = URL(fileURLWithPath: job.folder + "/" + job.entry.name, isDirectory: false)
         let size = Int(job.entry.size)
-        let head = try await io.read(url, range: 0 ..< PhotoMetadataReader.headLength, priority: priority)
-        state.withLock { $0.summary.headsRead += 1 }
+        var head: Data?
+        var damage: PhotoHealth.Damage?
+        if size == 0 {
+            damage = .empty
+        } else {
+            do {
+                head = try await io.read(url, range: 0 ..< PhotoMetadataReader.headLength, priority: priority)
+                state.withLock { $0.summary.headsRead += 1 }
+            } catch where Self.isDamage(error, on: io) {
+                damage = .unreadable(PhotoHealth.reason(for: error))
+            }
+        }
         func contents(_ xmp: FileEntry?) async throws -> Data? {
             guard let xmp else { return nil }
             let xmpURL = URL(fileURLWithPath: job.folder + "/" + xmp.name, isDirectory: false)
@@ -95,51 +120,135 @@ extension LibraryIndexer.Run {
         }
         let (xmp, darktable) = try await (contents(job.xmp), contents(job.darktable))
         let conventions = state.withLock { $0.conventions }
-        var parsed = try await indexer.scheduler.run(lane) {
-            Self.parse(head: head, size: size, url: url, xmp: xmp, darktable: darktable, conventions: conventions)
-        }
-        if parsed.needsFile {
-            let headLength = PhotoMetadataReader.headLength
-            if size > headLength {
-                _ = try await io.read(url, range: headLength ..< min(size, Self.chargedFileRead), priority: priority)
+        var parsed: ParsedHead?
+        var bytes = FileBytes()
+        if let head {
+            bytes.add(head, at: 0)
+            parsed = try await indexer.scheduler.run(lane) {
+                Self.parse(head: head, size: size, url: url, xmp: xmp, darktable: darktable, conventions: conventions)
             }
-            parsed.metadata = try await indexer.scheduler.run(lane) {
-                PhotoMetadataReader.read(url: url, conventions: conventions)
+        } else {
+            parsed = nil
+        }
+        if parsed?.needsFile == true {
+            let headLength = PhotoMetadataReader.headLength
+            do {
+                if size > headLength {
+                    let more = try await io.read(
+                        url, range: headLength ..< min(size, Self.chargedFileRead), priority: priority,
+                    )
+                    bytes.add(more, at: headLength)
+                }
+                parsed?.metadata = try await indexer.scheduler.run(lane) {
+                    PhotoMetadataReader.read(url: url, conventions: conventions)
+                }
+            } catch where Self.isDamage(error, on: io) {
+                damage = .unreadable(PhotoHealth.reason(for: error))
+            }
+        }
+        var health = PhotoHealth(size: job.entry.size, modified: job.entry.modified, damage: damage)
+        var endCheck: LibraryIndexer.EndCheck?
+        if damage == nil, let head, let parsed {
+            let read = bytes
+            (health, endCheck) = try await indexer.scheduler.run(lane) {
+                Self.health(of: job, head: head, bytes: read, readable: parsed.metadata != nil)
+            }
+        }
+        var others = (parsed?.xmp, parsed?.darktable)
+        if parsed == nil {
+            others = try await indexer.scheduler.run(lane) {
+                (
+                    xmp.flatMap { XMPMetadata.parse($0, conventions: conventions) },
+                    darktable.flatMap { XMPMetadata.parse($0, conventions: conventions) },
+                )
             }
         }
         var sidecar = known
         if sidecar == nil {
             sidecar = try await self.sidecar(of: job, on: volume, priority: priority, lane: lane)
         }
-        let metadata = parsed.metadata
+        let unreadable = if case .unreadable = health.damage {
+            true
+        } else {
+            false
+        }
+        let metadata = unreadable ? nil : parsed?.metadata
         let organising = Self.organising(
-            metadata, sidecar: sidecar?.summary, xmp: parsed.xmp, darktable: parsed.darktable, merged: job.merged,
+            metadata, sidecar: sidecar?.summary, xmp: others.0, darktable: others.1, merged: job.merged,
             otherIsLater: XMPMerge.otherIsLater(
                 job.merged, sidecar: job.xmp.map(XMPFileStamp.init), darktable: job.darktable.map(XMPFileStamp.init),
                 photo: XMPFileStamp(job.entry), redlampSaved: sidecar?.modified,
             ),
         )
+        let key = head == nil ? nil : parsed?.key
         var record = Self.record(
-            job, key: parsed.key, metadata: metadata, organising: organising,
+            job, key: key, metadata: metadata, organising: organising,
             edited: sidecar?.summary.hasEdits ?? false,
         )
         if let sidecar {
             record.sidecarModified = sidecar.modified
         }
+        if unreadable {
+            record.state = [.unreadable]
+        }
         Self.place(sidecar?.summary.metadata ?? PhotoMetadata(), in: &record)
-        return LibraryIndexer.PendingPhoto(
+        var thumbnail: LibraryIndexer.Thumbnail?
+        if indexer.thumbnails != nil, !unreadable, let head, let key {
+            thumbnail = LibraryIndexer.Thumbnail(url: url, key: key, head: head)
+        }
+        var photo = LibraryIndexer.PendingPhoto(
             folder: job.folder, record: record,
             camera: metadata?.cameraName.map {
                 LibraryIndexer.CameraName(name: $0, make: metadata?.make, model: metadata?.model)
             },
             lens: metadata?.lens, keywords: organising.fields.keywords ?? [],
-            collections: sidecar?.summary.metadata.collections ?? [], isNew: job.existing == nil,
-            thumbnail: indexer.thumbnails == nil ? nil : LibraryIndexer.Thumbnail(
-                url: url,
-                key: parsed.key,
-                head: head,
-            ),
+            collections: sidecar?.summary.metadata.collections ?? [], isNew: job.existing == nil, thumbnail: thumbnail,
         )
+        photo.health = health
+        photo.endCheck = endCheck
+        return photo
+    }
+
+    /// Whether a failed read of a photo's file says the file is damaged: not gone, not on a volume
+    /// that's away or stopped answering, and not a read given up on or cancelled.
+    static func isDamage(_ error: any Error, on io: VolumeIO) -> Bool {
+        !(error is CancellationError) && !(error is VolumeOperationTimedOut) && !VolumeIO.isNotFound(error)
+            && !VolumeIO.isVolumeFailure(error) && io.isReachable
+    }
+
+    /// The photo's health from its head and what else has been read of it (`bytes`): the format its
+    /// first bytes hold, the extension it takes when its name's doesn't fit, a start no image has
+    /// when ImageIO read nothing either (`readable`), and how it ends, or the end check that will
+    /// say.
+    static func health(
+        of job: LibraryIndexer.PhotoJob, head: Data, bytes: FileBytes, readable: Bool,
+    ) -> (PhotoHealth, LibraryIndexer.EndCheck?) {
+        let name = job.entry.name
+        let format = PhotoFormat(head: head)
+        var health = PhotoHealth(size: job.entry.size, modified: job.entry.modified, format: format)
+        if format == .unknown {
+            if !readable, PhotoFormat.formats(forExtension: (name as NSString).pathExtension) != nil {
+                health.damage = .unrecognised
+            }
+            return (health, nil)
+        }
+        if !format.fits(name: name) {
+            health.proposedExtension = format.proposedExtension(head: head)
+        }
+        switch FileEnd.judge(format, size: Int(job.entry.size), bytes: bytes) {
+        case .whole:
+            return (health, nil)
+        case let .early(missing):
+            health.damage = .endsEarly(missing: missing)
+            return (health, nil)
+        case let .needs(range):
+            health.endUnread = true
+            let check = LibraryIndexer.EndCheck(
+                folder: job.folder, name: name, size: job.entry.size, modified: job.entry.modified, format: format,
+                boxesFrom: format == .jpeg || format == .png ? 0 : range.lowerBound,
+            )
+            return (health, check)
+        }
     }
 
     /// What the photo's `.redlamp` sidecar says and when it was saved, read where the root's locator
@@ -193,7 +302,7 @@ extension LibraryIndexer.Run {
     private func placed(_ job: LibraryIndexer.PhotoJob) async -> LibraryIndexer.PhotoJob? {
         guard job.kind == .changed, job.sidecar == nil, let row = job.existing, let recorded = row.sidecarModified,
               row.size == job.entry.size, Self.same(row.modified, job.entry.modified), row.indexed != 0,
-              row.xmpSignature == job.xmpSignature
+              row.xmpSignature == job.xmpSignature, !row.state.contains(.unreadable)
         else { return job }
         let photo = URL(fileURLWithPath: job.folder + "/" + job.entry.name, isDirectory: false)
         guard let mac = await sidecarLocator().onThisMac(photo), let saved = Self.modified(mac) else { return job }
@@ -258,12 +367,12 @@ extension LibraryIndexer.Run {
 
     /// The photo's row, from its listing, what was read and its organising fields.
     static func record(
-        _ job: LibraryIndexer.PhotoJob, key: ContentKey, metadata: CaptureMetadata?, organising: Organising,
+        _ job: LibraryIndexer.PhotoJob, key: ContentKey?, metadata: CaptureMetadata?, organising: Organising,
         edited: Bool,
     ) -> PhotoRecord {
         var record = PhotoRecord(
             id: job.existing?.id ?? 0, folder: 0, name: job.entry.name, size: job.entry.size,
-            modified: job.entry.modified, fileID: job.entry.fileIdentifier, contentKey: key.data,
+            modified: job.entry.modified, fileID: job.entry.fileIdentifier, contentKey: key?.data,
             captured: metadata?.captured, capturedOffset: metadata?.capturedOffset, iso: metadata?.iso,
             aperture: metadata?.aperture, shutter: metadata?.shutter, focal: metadata?.focalLength,
             width: metadata?.pixelSize?.width, height: metadata?.pixelSize?.height, orientation: metadata?.orientation,
@@ -415,7 +524,8 @@ extension LibraryIndexer.Run {
     }
 
     /// The row moved to the job's name, and read again when what's beside it there isn't what was
-    /// beside it before (a sidecar left behind).
+    /// beside it before (a sidecar left behind), or its extension changed, which its format may no
+    /// longer fit (LIB-40).
     private func moved(
         _ record: PhotoRecord, to job: LibraryIndexer.PhotoJob, on volume: LibraryIndexer.VolumeWork,
         priority: VolumeIO.Priority, lane: WorkScheduler.Lane,
@@ -423,6 +533,8 @@ extension LibraryIndexer.Run {
         var replacement: LibraryIndexer.PendingPhoto?
         let besideChanged = !Self.same(record.sidecarModified, job.sidecar?.modified)
             || record.xmpSignature != job.xmpSignature
+            || (record.name as NSString).pathExtension.lowercased()
+            != (job.entry.name as NSString).pathExtension.lowercased()
         if besideChanged {
             let id = record.id
             var merged: XMPMergeRecord?
@@ -515,6 +627,10 @@ extension LibraryIndexer {
         var collections: [String]?
         var isNew: Bool
         var thumbnail: Thumbnail?
+        /// What its file's read found (LIB-40); nil keeps what the index has, for a photo not read.
+        var health: PhotoHealth?
+        /// Its end, still to be read once its row is written.
+        var endCheck: EndCheck?
 
         init(
             folder: String, record: PhotoRecord, camera: CameraName? = nil, lens: String? = nil,

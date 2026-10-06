@@ -52,6 +52,10 @@ public struct LibraryIndexerSummary: Sendable, Hashable {
     public var photosRemoved = 0
     /// Photos whose first `PhotoMetadataReader.headLength` bytes were read.
     public var headsRead = 0
+    /// Photos written as unreadable (LIB-40): empty, failing to read, or starting as no image does.
+    public var photosUnreadable = 0
+    /// Photos whose ends were read to see whether they end early.
+    public var endsRead = 0
     public var failures = 0
     /// The volumes that stopped answering, by the index's name for them.
     public var offlineVolumes: [String] = []

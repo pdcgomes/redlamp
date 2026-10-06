@@ -15,11 +15,28 @@ public enum PhotoSource: Sendable, Hashable {
     case allPhotographs
     /// The photos flagged as rejects.
     case rejected
+
+    /// Whether it holds photos that can't be read, which other sources leave out (LIB-40).
+    var findsUnreadable: Bool {
+        switch self {
+        case let .query(query): query.findsUnreadable
+        default: false
+        }
+    }
 }
 
 extension QueryEngine {
-    /// The rows of `store` that `source` holds.
+    /// The rows of `store` that `source` holds: without the photos that can't be read, unless
+    /// `unreadable` asks for them or the source is of them (LIB-40).
     func rows(
+        of source: PhotoSource, in store: ColumnStore, vocabulary: QueryVocabulary, generation: Int,
+        unreadable: Bool = false,
+    ) async throws -> RowBits {
+        let rows = try await allRows(of: source, in: store, vocabulary: vocabulary, generation: generation)
+        return unreadable || source.findsUnreadable ? rows : store.readable(rows)
+    }
+
+    private func allRows(
         of source: PhotoSource, in store: ColumnStore, vocabulary: QueryVocabulary, generation: Int,
     ) async throws -> RowBits {
         switch source {

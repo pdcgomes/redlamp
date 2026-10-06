@@ -163,8 +163,8 @@ indirect enum QueryPlan: Sendable, Hashable {
             return yes ? .leaf(.bit(Packed.marked)) : .not(.leaf(.bit(Packed.marked)))
         case let (.edited, .bool(yes)):
             return yes ? .leaf(.bit(Packed.edited)) : .not(.leaf(.bit(Packed.edited)))
-        case let (.missing, .bool(yes)), let (.offline, .bool(yes)):
-            let state = field == .missing ? PhotoRecord.State.missing : .offline
+        case let (.missing, .bool(yes)), let (.offline, .bool(yes)), let (.unreadable, .bool(yes)):
+            let state: PhotoRecord.State = field == .missing ? .missing : field == .offline ? .offline : .unreadable
             let leaf = QueryPlan.leaf(.state(UInt8(state.rawValue)))
             return yes ? leaf : .not(leaf)
         case let (.keyword, .text(text)):
@@ -288,6 +288,13 @@ extension ColumnStore {
             }
             return rows
         }
+    }
+
+    /// `rows` without the photos that can't be read, which lists leave out (LIB-40).
+    func readable(_ rows: RowBits) -> RowBits {
+        var readable = rows
+        readable.subtract(self.rows(matching: .leaf(.state(UInt8(PhotoRecord.State.unreadable.rawValue))), sets: [:]))
+        return readable
     }
 
     /// The rows of the photos `ids`, leaving out those the store doesn't hold.

@@ -57,9 +57,12 @@ public extension QueryEngine {
                 guard let (store, vocabulary, generation) = await loadedSnapshot() else {
                     return continuation.finish()
                 }
-                let matches = try await matches(
+                var matches = try await matches(
                     for: query.searchable, in: store, vocabulary: vocabulary, generation: generation,
                 )
+                if !query.findsUnreadable {
+                    matches = store.readable(matches)
+                }
                 for facet in facets {
                     try Task.checkCancellation()
                     try continuation.yield(store.counts(by: facet, of: matches, names: vocabulary.names))

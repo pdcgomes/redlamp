@@ -347,7 +347,7 @@ enum LibraryQueryValues {
                 return .label(nil)
             }
             return ColorLabel(rawValue: lowered).map { .label($0) } ?? .text(text)
-        case .marked, .edited, .missing, .offline:
+        case .marked, .edited, .missing, .offline, .unreadable:
             switch lowered {
             case "yes": return .bool(true)
             case "no": return .bool(false)

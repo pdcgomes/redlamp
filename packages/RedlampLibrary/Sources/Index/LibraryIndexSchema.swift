@@ -7,6 +7,7 @@ extension LibraryIndex {
     /// The schema's steps in order: the first makes version 1 from an empty database.
     static let migrations: [Migration] = [
         createVersion1, migrateToVersion2, migrateToVersion3, migrateToVersion4, migrateToVersion5,
+        migrateToVersion6,
     ]
 
     static func createVersion1(_ database: SQLiteDatabase) throws {
@@ -27,6 +28,10 @@ extension LibraryIndex {
 
     static func migrateToVersion5(_ database: SQLiteDatabase) throws {
         try database.execute(schemaVersion5)
+    }
+
+    static func migrateToVersion6(_ database: SQLiteDatabase) throws {
+        try database.execute(schemaVersion6)
     }
 
     /// Brings `database` up to the last version `migrations` knows, one step per transaction.
@@ -167,5 +172,17 @@ extension LibraryIndex {
     static let schemaVersion5 = """
     ALTER TABLE photos ADD COLUMN camera_captured REAL;
     ALTER TABLE photos ADD COLUMN camera_offset INTEGER;
+    """
+
+    /// What indexing found wrong with photos' files (LIB-40), for the photos with something to say: the
+    /// format their first bytes hold where it isn't their extension's, damage, or an end still to read,
+    /// with the size and modification date their files had when they were read, so a row stands for its
+    /// photo while the photo's row has them still. Rows outlive their photos, as hashes do, so a photo
+    /// Undo or Put Back brings back under its ID finds its row again.
+    static let schemaVersion6 = """
+    CREATE TABLE photo_health (photo INTEGER PRIMARY KEY, size INTEGER NOT NULL, modified REAL NOT NULL,
+      format INTEGER NOT NULL DEFAULT 0, damage INTEGER NOT NULL DEFAULT 0, missing INTEGER, reason TEXT,
+      end_unread INTEGER NOT NULL DEFAULT 0, extension TEXT);  -- photo is photos.id; damage: PhotoHealth.Damage
+    CREATE INDEX photo_health_unread ON photo_health (photo) WHERE end_unread != 0;
     """
 }

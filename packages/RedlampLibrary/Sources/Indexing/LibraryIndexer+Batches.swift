@@ -31,10 +31,12 @@ extension LibraryIndexer {
             case deleteFolder(String)
             case complete(FolderCompletion)
             case offline(volume: Int64, key: String)
+            /// How a photo written before ends (LIB-40).
+            case end(EndResult)
 
             var photos: Int {
                 switch self {
-                case .photo, .move: 1
+                case .photo, .move, .end: 1
                 default: 0
                 }
             }
@@ -51,6 +53,8 @@ extension LibraryIndexer {
             var updated: [Int64] = []
             /// Of `updated`, the photos renamed or moved.
             var moved = 0
+            /// Photos whose ends were read, their rows otherwise as they were.
+            var ended: [Int64] = []
             var removed: [Int64] = []
             var completed: [FolderIndexed] = []
             /// The volumes whose photos were marked offline, by key.
@@ -247,8 +251,8 @@ extension LibraryIndexer {
             }
         }
 
-        /// Writes `batch` in one transaction: folders first, in order, then moves, then photos, then
-        /// what's removed, then the folders that are indexed.
+        /// Writes `batch` in one transaction: folders first, in order, then moves, then photos with their
+        /// health, then their ends, then what's removed, then the folders that are indexed.
         static func apply(_ batch: [Item], _ writer: LibraryIndex.Writer) throws -> Outcome {
             var outcome = Outcome()
             var folders: [String: Int64] = [:]
@@ -266,6 +270,7 @@ extension LibraryIndexer {
             var deletedFolders: [String] = []
             var completed: [FolderCompletion] = []
             var offline: [(volume: Int64, key: String)] = []
+            var ends: [EndResult] = []
             for item in batch {
                 switch item {
                 case let .folder(listing):
@@ -284,6 +289,7 @@ extension LibraryIndexer {
                 case let .deleteFolder(path): deletedFolders.append(path)
                 case let .complete(completion): completed.append(completion)
                 case let .offline(volume, key): offline.append((volume, key))
+                case let .end(result): ends.append(result)
                 }
             }
 
@@ -322,11 +328,22 @@ extension LibraryIndexer {
                 if let collections = photo.collections, !(photo.isNew && collections.isEmpty) {
                     try writer.setCollections(collections, forPhoto: id)
                 }
+                if let health = photo.health {
+                    try writer.setHealth(health, forPhoto: id, name: photo.record.name)
+                }
                 if photo.isNew {
                     outcome.inserted.append(id)
                 } else if updated.insert(id).inserted {
                     outcome.updated.append(id)
                 }
+            }
+            for end in ends {
+                let check = end.check
+                guard let id = try writer.setEnd(
+                    end.damage, ofPhotoNamed: check.name, inFolder: check.folder, size: check.size,
+                    modified: check.modified,
+                ), !outcome.inserted.contains(id), updated.insert(id).inserted else { continue }
+                outcome.ended.append(id)
             }
 
             if !deleted.isEmpty {

@@ -130,6 +130,9 @@ public struct PhotoRecord: Sendable, Hashable {
         public static let offline = State(rawValue: 1 << 1)
         /// Still being written (a copy in progress).
         public static let settling = State(rawValue: 1 << 2)
+        /// Its file couldn't be read, for a reason other than its being gone or its volume away
+        /// (LIB-40): left out of lists, the reader's reason in `PhotoHealth`.
+        public static let unreadable = State(rawValue: 1 << 3)
     }
 
     public var id: Int64

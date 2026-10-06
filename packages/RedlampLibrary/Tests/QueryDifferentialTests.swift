@@ -48,7 +48,7 @@ struct QueryDifferentialTests {
             case .label:
                 random.chance(0.3) ? .text(random.pick(Self.customLabels))
                     : .label(random.pick([nil] + ColorLabel.allCases))
-            case .marked, .edited, .missing, .offline: .bool(random.chance(0.5))
+            case .marked, .edited, .missing, .offline, .unreadable: .bool(random.chance(0.5))
             case .keyword: .text(random.pick(Array(names.keywords.values) + ["Places", "nothing"]))
             case .camera: .text(part(of: random.pick(Array(names.cameras.values))))
             case .lens: .text(part(of: random.pick(Array(names.lenses.values))))

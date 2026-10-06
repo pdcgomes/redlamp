@@ -98,7 +98,9 @@ public extension QueryEngine {
         guard let (store, vocabulary, generation) = snapshot() else {
             return PhotoList(source: source, sort: sort, ids: [])
         }
-        var rows = try await rows(of: source, in: store, vocabulary: vocabulary, generation: generation)
+        var rows = try await rows(
+            of: source, in: store, vocabulary: vocabulary, generation: generation, unreadable: query.findsUnreadable,
+        )
         if let searchable = query.searchable {
             let found = try await matches(for: searchable, in: store, vocabulary: vocabulary, generation: generation)
             rows.formIntersection(found)
@@ -122,6 +124,7 @@ public extension QueryEngine {
                 }
                 let today = today
                 let sourceRows = try await rows(of: source, in: store, vocabulary: vocabulary, generation: generation)
+                var withUnreadable: RowBits?
                 for (index, request) in requests.enumerated() {
                     try Task.checkCancellation()
                     let searchable = request.query.searchable
@@ -136,6 +139,14 @@ public extension QueryEngine {
                         continue
                     }
                     var rows = sourceRows
+                    if request.query.findsUnreadable {
+                        if withUnreadable == nil {
+                            withUnreadable = try await self.rows(
+                                of: source, in: store, vocabulary: vocabulary, generation: generation, unreadable: true,
+                            )
+                        }
+                        rows = withUnreadable ?? rows
+                    }
                     if let searchable {
                         let found = try await matches(
                             for: searchable, in: store, vocabulary: vocabulary, generation: generation,

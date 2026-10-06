@@ -48,8 +48,8 @@ extension LibraryIndexer {
         }
     }
 
-    /// One volume's part of a run: its readers, the folders it has yet to list and the photos it
-    /// has yet to read.
+    /// One volume's part of a run: its readers, the folders it has yet to list, the photos it has yet
+    /// to read and the ends it has yet to read (LIB-40).
     struct VolumeWork: Sendable {
         /// The index's name for the volume.
         let key: String
@@ -57,6 +57,9 @@ extension LibraryIndexer {
         let io: VolumeIO
         let walk: WalkQueue
         let photos: PhotoQueue
+        /// Photos read at once, each reader reading ends once it's done with photos.
+        let readers: Int
+        let ends: EndQueue
     }
 
     /// One run: lists folders, compares them with the index, reads what changed and writes it.
@@ -96,6 +99,7 @@ extension LibraryIndexer {
                 for volume in state.withLock({ $0.volumes }) {
                     volume.walk.close()
                     _ = volume.photos.close()
+                    volume.ends.close()
                 }
             }
         }
@@ -114,7 +118,7 @@ extension LibraryIndexer {
                     for _ in 0 ..< Self.walkers {
                         group.addTask { await self.walk(volume) }
                     }
-                    for _ in 0 ..< Self.photoWorkers(volume.io) {
+                    for _ in 0 ..< volume.readers {
                         group.addTask { await self.read(volume) }
                     }
                 }
@@ -201,10 +205,24 @@ extension LibraryIndexer {
             for (entry, record) in zip(entries, records) {
                 guard let io = byVolume[entry.key]?.io else { continue }
                 let prioritised: @Sendable () -> Set<String> = { [indexer] in indexer.prioritised }
+                let readers = Self.photoWorkers(io)
                 let volume = VolumeWork(
                     key: entry.key, id: record.volume, io: io, walk: WalkQueue(prioritised: prioritised),
-                    photos: PhotoQueue(prioritised: prioritised),
+                    photos: PhotoQueue(prioritised: prioritised), readers: readers,
+                    ends: EndQueue(producers: readers),
                 )
+                if case .roots = request {
+                    let roots = record.roots.map(\.id)
+                    let unread = try await indexer.index.read { reader in
+                        try roots.flatMap { try reader.unreadEnds(inRoot: $0) }
+                    }
+                    volume.ends.add(unread.map { found in
+                        EndCheck(
+                            folder: found.folder, name: found.name, size: found.health.size,
+                            modified: found.health.modified, format: found.health.format,
+                        )
+                    })
+                }
                 if io.isReachable, try await indexer.index.read({ try $0.isMarkedOffline(volume: entry.key) }) {
                     try await indexer.index.write { try $0.setOffline(false, onVolume: record.volume, uuid: entry.key) }
                     events.yield(.volumeOnline(entry.key))
@@ -472,9 +490,10 @@ extension LibraryIndexer {
                     jobs.append(job(.new, nil))
                     continue
                 }
+                // A photo that couldn't be read is read again each time its folder is listed.
                 if row.size != entry.size || !Self.same(row.modified, entry.modified) || row.indexed == 0
                     || row.xmpSignature != Self.xmpSignature(xmp, darktable)
-                    || (row.sidecarModified != nil && sidecar == nil) {
+                    || (row.sidecarModified != nil && sidecar == nil) || row.state.contains(.unreadable) {
                     jobs.append(job(.changed, row))
                 } else if !Self.same(row.sidecarModified, sidecar?.modified) {
                     jobs.append(job(.sidecar, row))
@@ -536,6 +555,7 @@ extension LibraryIndexer {
 
         // MARK: - Reading
 
+        /// Reads the volume's photos, then, once every reader is done with them, the ends they left.
         private func read(_ volume: VolumeWork) async {
             while let job = await volume.photos.next() {
                 do {
@@ -552,6 +572,8 @@ extension LibraryIndexer {
                 }
                 await jobFinished(in: job.folder)
             }
+            volume.ends.producerDone()
+            await readEnds(on: volume)
         }
 
         /// One job done: the folder is indexed once its last is, unless rows of its are to be removed
@@ -578,11 +600,12 @@ extension LibraryIndexer {
         }
 
         /// The volume stopped answering: what it had left is dropped, and its photos are marked offline.
-        private func volumeFailed(_ volume: VolumeWork) async {
+        func volumeFailed(_ volume: VolumeWork) async {
             let first = state.withLock { $0.failedVolumes.insert(volume.id).inserted }
             guard first else { return }
             volume.walk.close()
             _ = volume.photos.close()
+            volume.ends.close()
             state.withLock { $0.summary.offlineVolumes.append(volume.key) }
             await batcher.add([.offline(volume: volume.id, key: volume.key)])
         }
@@ -654,8 +677,8 @@ extension LibraryIndexer {
             if !outcome.inserted.isEmpty {
                 events.yield(.photosInserted(outcome.inserted))
             }
-            if !outcome.updated.isEmpty {
-                events.yield(.photosUpdated(outcome.updated))
+            if !outcome.updated.isEmpty || !outcome.ended.isEmpty {
+                events.yield(.photosUpdated(outcome.updated + outcome.ended))
             }
             if !outcome.removed.isEmpty {
                 events.yield(.photosRemoved(outcome.removed))
