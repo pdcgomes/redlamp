@@ -174,7 +174,7 @@ extension EditorModel {
             let store = saves.store(for: url)
             let summary = await saves.read { store.summary(for: url) ?? SidecarSummary() }
             guard !saves.isPending(url) else { return }
-            self?.cullingOverlay.forget(url)
+            self?.forgetCulling(url)
             library.update(url) { item in
                 item.hasEdits = summary.hasEdits
                 item.metadata = summary.metadata
