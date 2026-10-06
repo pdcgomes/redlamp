@@ -23,9 +23,11 @@
     /// keys through it at the key-repeat rate and at 120 Hz (the main thread, and blank frames: the
     /// canvas, or a cell near the active photo, without its thumbnail a frame after each step), and 200
     /// switches between Library and Develop in the editor's own views with a photo open (the main
-    /// thread's work per switch until it's idle, and what the process read from disk meanwhile), and the
+    /// thread's work per switch until it's idle, and what the process read from disk meanwhile), the
     /// edited photos rendered in the background (LIB-17): the grid scrolled as they render, renders a
-    /// second with Develop idle and busy, and Develop's own render times with renders running and paused.
+    /// second with Develop idle and busy, and Develop's own render times with renders running and paused,
+    /// and culling every photo at once (LIB-15): a rating, a flag, a label and the mark, each undone, each
+    /// on screen and in every sidecar, the sidecars checked to read as they did after the last Undo.
     /// The footprint is followed through every phase, then after a memory-pressure trim and a few idle
     /// seconds.
     /// Nothing joins the working set, and the temporary library is removed at the end;
@@ -61,6 +63,13 @@
             /// Typing the fixture's queries in the filter bar: the main thread, and each key's photos on screen.
             var typing: MainThreadMonitor.Summary?
             var typed: [Double] = []
+            /// Culling every photo at once (LIB-15): the main thread, each change's main-thread work until it's
+            /// drawn, each batch's time to reach every sidecar, and the sidecars not as they were after Undo.
+            var culling: MainThreadMonitor.Summary?
+            var culled: [Double] = []
+            var cullWrites: [Double] = []
+            var cullLeft = 0
+            var cullCount = 0
         }
 
         static func scheduleIfRequested(model: EditorModel) {
@@ -223,6 +232,12 @@
             measured.editScrolling = edits.scrolling
             lines += edits.lines
 
+            let culled = await cull(model)
+            (measured.culling, measured.culled, measured.cullWrites) = (culled.summary, culled.onScreen, culled.writes)
+            (measured.cullLeft, measured.cullCount) = (culled.left, culled.count)
+            lines.append(culled.report)
+            await memory.mark("culled")
+
             try? await Task.sleep(for: .seconds(3))
             await memory.mark("settled")
             loader.trim(to: 0)
@@ -251,6 +266,9 @@
                 "library-main-grid-scroll-rendering": measured.editScrolling?.p99 ?? .infinity,
                 "library-main-filter-typing": measured.typing?.p99 ?? .infinity,
                 "library-filter-first-page": percentile(measured.typed, 0.95),
+                "library-main-culling": measured.culling?.p99 ?? .infinity,
+                "library-cull-on-screen": measured.culled.max() ?? .infinity,
+                "library-cull-written": measured.cullWrites.max() ?? .infinity,
             ])
             let budgets: [Budget] = budgets(measured, arrows: arrows, blank: blank, browsing: browsing)
             finish(
@@ -650,6 +668,87 @@
             return (scrolling, lines)
         }
 
+        /// Culling every photo at once (LIB-15), in the editor window's own views with the grid shown: every
+        /// photo selected, then a rating, a flag, a label and the mark, each taken back by Undo, each change
+        /// made in full (every sidecar written) before the next. For each change and Undo, its main-thread work
+        /// from the key until the grid has drawn and committed it; the main thread over the phase; how long each
+        /// batch took to reach every sidecar; and, after the last Undo, the photos whose sidecars don't read as
+        /// they did before the phase.
+        private static func cull(_ model: EditorModel) async -> (
+            summary: MainThreadMonitor.Summary?, onScreen: [Double], writes: [Double], left: Int, count: Int,
+            report: String,
+        ) {
+            DebugPerformance.trace("library-perf: culling every photo")
+            let window = NSWindow(
+                contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000),
+                styleMask: [.titled, .resizable, .fullSizeContentView], backing: .buffered, defer: false,
+            )
+            window.contentViewController = ModuleViews.make(model: model, theme: ThemeSettings())
+            window.orderBack(nil)
+            defer {
+                model.showModule(.develop)
+                window.orderOut(nil)
+                window.contentViewController = nil
+            }
+            model.showLibrary(.grid)
+            // Develop lets go of its photo, so every photo goes through the library's batches.
+            if let first = model.items.first {
+                model.select(first.url)
+            }
+            try? await Task.sleep(for: .milliseconds(500))
+            let items = model.items
+            let sidecars = model.library.sidecars
+            let before = await Task.detached(priority: .userInitiated) {
+                items.map { sidecars.store(for: $0.url).summary(for: $0.url) }
+            }.value
+            model.selectAllPhotos()
+            window.displayIfNeeded()
+            CATransaction.flush()
+            try? await Task.sleep(for: .milliseconds(300))
+            let count = model.selectedPhotos.count
+            var onScreen: [Double] = []
+            var writes: [Double] = []
+            var parts: [String] = []
+            let monitor = MainThreadMonitor()
+            monitor.start()
+            let began = CFAbsoluteTimeGetCurrent()
+            for action in [ShortcutAction.rating3, .flagPick, .labelRed, .toggleMark] {
+                for (title, step) in [(action.title, action), ("Undo", ShortcutAction.undo)] {
+                    let started = CFAbsoluteTimeGetCurrent()
+                    model.perform(step)
+                    window.displayIfNeeded()
+                    CATransaction.flush()
+                    let shown = (CFAbsoluteTimeGetCurrent() - started) * 1000
+                    while model.isWritingCulling, CFAbsoluteTimeGetCurrent() - started < 900 {
+                        try? await Task.sleep(for: .milliseconds(20))
+                    }
+                    let written = CFAbsoluteTimeGetCurrent() - started
+                    onScreen.append(shown)
+                    writes.append(written)
+                    parts.append(String(
+                        format: "%@ on screen in %.2f ms, in every sidecar in %.1f s",
+                        title,
+                        shown,
+                        written,
+                    ))
+                    try? await Task.sleep(for: .milliseconds(300))
+                }
+            }
+            let elapsed = CFAbsoluteTimeGetCurrent() - began
+            monitor.stop()
+            let after = await Task.detached(priority: .userInitiated) {
+                items.map { sidecars.store(for: $0.url).summary(for: $0.url) }
+            }.value
+            let left = zip(before, after).count { $0.0 != $0.1 }
+            model.deselectOtherPhotos()
+            let report = "Culling \(count) photos at once: " + parts.joined(separator: "; ")
+                + "; \(left) sidecars not as they were after Undo"
+            return (
+                monitor.summary(seconds: elapsed), onScreen, writes, left, count,
+                report + "\n" + monitor.report("Main thread culling \(count) photos", seconds: elapsed),
+            )
+        }
+
         /// "`label`: N rendered, N a second", with the renders' waits, the engines made, and the p50 of the
         /// steps of photos of 12 MP or more (the fixture's raws; its JPEGs and HEICs are 64 by 48) and of
         /// the others.
@@ -752,6 +851,15 @@
                     "Main thread p99 scrolling the grid as edits render", measured.editScrolling?.p99 ?? .infinity, 8.3,
                     unit: "ms",
                 ),
+                .below(
+                    "Culling \(measured.cullCount) photos at once on screen, the slowest of 8",
+                    measured.culled.max() ?? .infinity, 8.3, unit: "ms",
+                ),
+                .below(
+                    "Main thread p99 culling \(measured.cullCount) photos", measured.culling?.p99 ?? .infinity, 8.3,
+                    unit: "ms",
+                ),
+                .below("Sidecars not as they were after Undo", Double(measured.cullLeft), 1, unit: ""),
             ]
             return browsing + grid + rest
         }

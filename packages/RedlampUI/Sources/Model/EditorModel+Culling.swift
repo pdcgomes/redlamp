@@ -14,10 +14,10 @@ import Synchronization
 /// - A toggle (P, X, 6 to 9, a custom label, B) sets its value on every photo it reaches, or takes it off
 ///   them all when every one has it already. `[` and `]` step each photo's own rating.
 /// - ⇧ with any of them, or Auto Advance for all of them, then makes the photo after them active.
-/// - Lists hear of a batch once the index holds it, unless a change asked for after it will change the same
-///   photos again: then they hear of both once the later one is in the index, so a list never shows an older
-///   value over a newer one. A batch that fails, and photos whose sidecars this build can't write, show
-///   what their sidecars hold.
+/// - Lists hear of a batch once the index holds it, or, when changes have been asked for since, once the
+///   last of them is in the index too; and what culling shows stays shown until they've caught up
+///   (`CullingOverlay`), so a list's update never shows an older value over a newer one. A batch that fails,
+///   and photos whose sidecars this build can't write, show what their sidecars hold.
 public extension EditorModel {
     static let autoAdvanceKey = "culling.autoAdvance"
     /// Culling changes Undo can take back.

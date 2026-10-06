@@ -46,6 +46,16 @@ enum GridBadges {
         return image
     }
 
+    /// Draws the badges a culling change can show on every cell at once, so the change itself sets layers'
+    /// contents and draws nothing.
+    static func prepare(scale: CGFloat) {
+        let kinds: [Kind] = [.pick, .reject, .mark, .flagSlot, .markSlot]
+            + (0 ... 5).map(Kind.ratingSlots) + (1 ... 5).map(Kind.rating)
+        for kind in kinds {
+            _ = image(kind, scale: scale)
+        }
+    }
+
     private static func draw(_ kind: Kind, scale: CGFloat) -> CGImage? {
         let size = kind.size
         guard let space = CGColorSpace(name: CGColorSpace.sRGB), let context = CGContext(

@@ -157,6 +157,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     @objc private func screenChanged() {
         thumbnails.colorSpace = window?.colorSpace?.cgColorSpace
         texts = [:]
+        GridBadges.prepare(scale: scale)
     }
 
     override func viewDidHide() {

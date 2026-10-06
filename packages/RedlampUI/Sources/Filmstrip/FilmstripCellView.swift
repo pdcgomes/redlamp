@@ -252,17 +252,9 @@ final class FilmstripBadgesView: LayerDrawnView {
             context.addPath(CGPath(roundedRect: bar, cornerWidth: 1.5, cornerHeight: 1.5, transform: nil))
             context.fillPath()
         }
-        if badges.metadata.mark {
-            let circle = CGRect(x: rect.width - 17, y: 1, width: 16, height: 16)
-            context.setFillColor(shade.cgColor)
-            context.fillEllipse(in: circle)
-            Symbol.draw(
-                "circle.fill", pointSize: 7, color: white.opacity(0.9), centeredAt: CGPoint(
-                    x: circle.midX,
-                    y: circle.midY,
-                ),
-                scale: scale,
-            )
+        // The grid's image of it, round, so the flipped context draws it as it is.
+        if badges.metadata.mark, let mark = GridBadges.image(.mark, scale: scale) {
+            context.draw(mark, in: CGRect(x: rect.width - 17, y: 1, width: 16, height: 16))
         }
         switch badges.metadata.flag {
         case .pick:
