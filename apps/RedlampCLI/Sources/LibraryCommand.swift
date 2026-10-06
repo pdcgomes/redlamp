@@ -19,6 +19,11 @@ enum LibraryCommand {
                                  [--text [<name>=]<text>]
            redlamp library duplicates --index <path> [--confirm] [--json]
            redlamp library duplicates --index <path> --trash [--confirm] [--dry-run] [--json]
+           redlamp library health --index <path> [--rule both|raw|jpeg] [--hash] [--limit <n>] [--json]
+           redlamp library health --index <path> --trash duplicates|pairs|damaged | --rename [--rule raw|jpeg]
+                                  [--choose <photo>]… [--confirm] [--dry-run] [--json]
+           redlamp library health --index <path> --keep|--unkeep <check> [--rule raw|jpeg] <photo>…
+           redlamp library health --index <path> --kept [--json]
            redlamp library xmp --index <path> [<query>] [--write] [--dry-run] [--json]
            redlamp library rename <template> --index <path> [<query>] [--text [<name>=]<text>]… [--limit <n>]
                                   [--dry-run] [--json]
@@ -99,6 +104,18 @@ enum LibraryCommand {
                prints JSON. --trash prints every file that moves, then moves all but each group's proposed
                copy to the Trash as one batch undo reverses, only with --confirm, after checking every copy
                again; --dry-run moves nothing. Without --trash it removes nothing.
+      health   lists Library Health's checks of the index at <path>, each with the photos needing a
+               decision, why, what it proposes and how long it took: exact duplicates, from the hashes the
+               index recorded (--hash first reads whole the candidates not compared yet); raw and JPEG pairs
+               under --rule (raw keeps the raws, jpeg the JPEGs, and both, the default, proposes nothing);
+               damaged files, unreadable, empty or ending early; and wrong extensions, files holding another
+               family's format. A check with nothing to decide isn't listed; --json prints JSON. --trash moves
+               a check's proposed photos to the Trash, and --rename gives wrong extensions those their formats
+               take, sidecars and .xmp following, each as one batch undo reverses, only with --confirm; a
+               photo rated, flagged or labelled, or a pair's half with decisions of its own, is listed apart
+               and acted on only when --choose names it. --keep keeps a check's findings for the photos named
+               anyway, in the library's Definitions/Health.json, --unkeep takes them back and --kept lists
+               what's kept.
       xmp      compares each photo <query> finds (every photo without one) with what other apps wrote in its
                .xmp, embedded XMP and IPTC, and merges their changes into its .redlamp sidecar. --write also
                writes standard .xmp beside the photos, keeping other apps' fields, as the library does once
@@ -182,6 +199,7 @@ enum LibraryCommand {
         case "sidecars": try await sidecars(Array(arguments.dropFirst()))
         case "names": try await names(Array(arguments.dropFirst()))
         case "duplicates": try await duplicates(Array(arguments.dropFirst()))
+        case "health": try await health(Array(arguments.dropFirst()))
         case "xmp": try await xmp(Array(arguments.dropFirst()))
         case "rename": try await rename(Array(arguments.dropFirst()))
         case "move": try await move(Array(arguments.dropFirst()))
