@@ -155,6 +155,53 @@ struct XMPOrganisingTests {
         #expect(try await sandbox.shown("IMG_0001.ARW") == XMPIndexTests.Shown(rating: 2))
     }
 
+    @Test func `a change only the sidecar has keeps other apps' fields without reading the photo again`() async throws {
+        let sandbox = try await XMPSandbox.make()
+        defer { sandbox.remove() }
+        let photo = try sandbox.photo("IMG_0001.ARW")
+        try sandbox.write("IMG_0001.xmp", MetadataIndexTests.otherApp, modified: -600)
+        try sandbox.sidecar("IMG_0001.ARW", PhotoMetadata(caption: "Ours"))
+        let files = CountingFileSystem()
+        let indexer = LibraryIndexer(index: sandbox.index, fileSystem: files, configuration: .testing())
+        func index() async {
+            let run = await IndexerRun.collect(indexer.index([sandbox.root]))
+            #expect(run.failures.isEmpty, "\(run.failures)")
+        }
+        await index()
+        var expected = MetadataIndexTests.theirs
+        expected.caption = "Ours"
+        func shown() async throws -> XMPFields {
+            try await LibraryIndexer.Run.fields(of: sandbox.row("IMG_0001.ARW"))
+        }
+        for field in XMPField.allCases where field != .keywords {
+            #expect(try await shown().same(field, as: expected), "\(field)")
+        }
+
+        // A keyword added elsewhere: the .redlamp alone changed, and still leaves the other fields open.
+        var sidecar = try #require(SidecarStore().load(for: photo))
+        sidecar.metadata?.keywords = ["Places/Porto"]
+        sidecar.modified = Date()
+        try SidecarStore().save(sidecar, for: photo)
+        try sandbox.setModified("IMG_0001.ARW.redlamp", 60)
+        await index()
+        #expect(files.counts.reads[LibraryIndexer.path(photo)] == 1)
+        for field in XMPField.allCases where field != .keywords {
+            #expect(try await shown().same(field, as: expected), "\(field) after the sidecar changed")
+        }
+        #expect(try await sandbox.shown("IMG_0001.ARW").keywords == ["Places/Porto"])
+        #expect(try await sandbox.row("IMG_0001.ARW").otherFields == Set(XMPField.allCases).subtracting([
+            .flag, .keywords, .caption,
+        ]))
+
+        // Its own caption cleared: the row's caption was the .redlamp's, so the photo is read again.
+        sidecar.metadata?.caption = nil
+        try SidecarStore().save(sidecar, for: photo)
+        try sandbox.setModified("IMG_0001.ARW.redlamp", 120)
+        await index()
+        #expect(files.counts.reads[LibraryIndexer.path(photo)] == 2)
+        #expect(try await shown().caption == "Boats on the Douro.")
+    }
+
     @Test func `the signature changes whenever either xmp does, even when their dates' sum doesn't`() {
         let now = Date(timeIntervalSince1970: 1_790_000_000)
         func stamp(_ size: Int64, _ offset: TimeInterval) -> XMPFileStamp {

@@ -337,9 +337,10 @@ extension LibraryIndexer.Run {
 
     /// The organising fields of a photo whose `.redlamp` alone changed, from the `.redlamp` and the
     /// photo's row, without reading other apps' files again; their keywords nil where the row's stay.
-    /// Nil when other apps' fields are needed: they changed since `LibraryXMP`'s record, or, without
-    /// one, the `.redlamp` leaves open a field the row has a value for, which may have been the
-    /// `.redlamp`'s own.
+    /// A field the `.redlamp` leaves open keeps the row's value when the row says it's other apps'
+    /// (`otherFields`), whose files haven't changed. Nil when other apps' fields are needed: they changed
+    /// since `LibraryXMP`'s record, or, without one, the `.redlamp` leaves open a field whose value in the
+    /// row was its own.
     static func organising(
         afterSidecar sidecar: SidecarSummary, of job: LibraryIndexer.PhotoJob, row: PhotoRecord,
     ) -> (organising: Organising, keywords: [String]?)? {
@@ -353,10 +354,16 @@ extension LibraryIndexer.Run {
             return (Organising(fields: merged.fields, others: Set(merged.taken)), merged.fields.keywords ?? [])
         }
         let shown = fields(of: row)
-        guard XMPField.allCases.allSatisfy({ $0 == .keywords || redlamp.holds($0) || !shown.holds($0) }) else {
-            return nil
+        var organising = Organising(fields: redlamp, others: [])
+        for field in XMPField.allCases where field != .keywords && !redlamp.holds(field) && shown.holds(field) {
+            guard row.otherFields.contains(field) else { return nil }
+            organising.fields.take(field, from: shown)
+            organising.others.insert(field)
         }
-        return (Organising(fields: redlamp, others: []), sidecar.metadata.keywords.map(KeywordPath.texts))
+        if redlamp.keywords == nil, row.otherFields.contains(.keywords) {
+            organising.others.insert(.keywords)
+        }
+        return (organising, sidecar.metadata.keywords.map(KeywordPath.texts))
     }
 
     // MARK: - Renames and moves

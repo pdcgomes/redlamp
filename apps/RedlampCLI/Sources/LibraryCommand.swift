@@ -121,6 +121,7 @@ enum LibraryCommand {
         BenchScenarios.registerXMP()
         BenchScenarios.registerFiles()
         BenchScenarios.registerKeywords()
+        BenchScenarios.registerMetadata()
         BenchScenarios.registerStacks()
         BenchScenarios.registerImport(rawFolder: Repository.root.appending(path: "tests/fixtures/raw"))
         guard let command = arguments.first, !arguments.contains("--help") else {
