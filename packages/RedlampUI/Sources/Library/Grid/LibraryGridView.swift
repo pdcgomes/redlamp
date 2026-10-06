@@ -101,7 +101,6 @@ final class LibraryGridView: NSView, NSCollectionViewDataSource, NSCollectionVie
     private func show() {
         if isStale {
             reload()
-            collectionView.layoutSubtreeIfNeeded()
         } else if !staleRows.isEmpty {
             update(staleRows)
             staleRows = []
@@ -121,6 +120,8 @@ final class LibraryGridView: NSView, NSCollectionViewDataSource, NSCollectionVie
         prefetching = [:]
         shownCount = model.items.count
         collectionView.reloadData()
+        // A reload counts the photos at the next layout; a change before then would be counted twice.
+        collectionView.layoutSubtreeIfNeeded()
     }
 
     // MARK: - Data source

@@ -31,6 +31,8 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     private var prefetching: [URL: UInt64] = [:]
     /// Shown again: it goes back to the filmstrip's place once laid out.
     private var needsPlace = false
+    /// The photos changed while the strip was hidden (the other module's is): it reloads once shown.
+    private var isStale = false
 
     init(model: EditorModel) {
         self.model = model
@@ -97,6 +99,14 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
 
     override func viewDidUnhide() {
         super.viewDidUnhide()
+        if isStale {
+            isStale = false
+            prefetching.values.forEach(model.thumbnailLoader.cancel)
+            prefetching = [:]
+            collectionView.reloadData()
+            // A reload counts the photos at the next layout; a change before then would be counted twice.
+            collectionView.layoutSubtreeIfNeeded()
+        }
         needsPlace = true
         needsLayout = true
     }
@@ -235,6 +245,10 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     // MARK: - Changes
 
     private func apply(_ diff: LibraryDiff) {
+        guard !isHiddenOrHasHiddenAncestor else {
+            isStale = isStale || !diff.isEmpty
+            return
+        }
         guard !diff.reset else {
             prefetching.values.forEach(model.thumbnailLoader.cancel)
             prefetching = [:]

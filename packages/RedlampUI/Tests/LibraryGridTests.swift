@@ -168,12 +168,18 @@ struct LibraryGridTests {
         model.showModule(.develop)
         try await fixture.settle()
         let reloads = grid.reloads
-        model.library.insert(LibraryItem(url: fixture.folder.appending(path: "IMG_00002b.ARW")))
+        /// On disk too, so the folder's watcher agrees with what's inserted.
+        func add(_ name: String) {
+            let url = fixture.folder.appending(path: name)
+            FileManager.default.createFile(atPath: url.path, contents: Data([1]))
+            model.library.insert(LibraryItem(url: url))
+        }
+        add("IMG_00002b.ARW")
         #expect(grid.collectionView.numberOfItems(inSection: 0) == 5, "the hidden grid waits")
         model.showModule(.library)
         try await fixture.settle()
         #expect(grid.reloads == reloads + 1 && grid.collectionView.numberOfItems(inSection: 0) == 6)
-        model.library.insert(LibraryItem(url: fixture.folder.appending(path: "IMG_00002c.ARW")))
+        add("IMG_00002c.ARW")
         #expect(grid.collectionView.numberOfItems(inSection: 0) == 7, "the shown grid follows at once")
         #expect(grid.reloads == reloads + 1)
     }
