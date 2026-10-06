@@ -114,6 +114,34 @@ for package in RedlampEngine RedlampUI; do
     fi
 done
 
+# Nothing throws while an encoder is open: one released without endEncoding() aborts under
+# Metal's validation layer, so a buffer or texture that fails to allocate would crash a Debug
+# build. Open the encoder with withComputeEncoder, which ends it on every exit, or make
+# everything that can fail first. The guard that makes the encoder may throw.
+OPEN_ENCODER_THROWS='
+/^[[:space:]]*\/\// { next }
+/^[[:space:]]*((public|private|fileprivate|internal|static|override|mutating)[[:space:]]+)*func[[:space:]]/ { open = 0 }
+open && /endEncoding\(\)/ { open = 0 }
+open && skipping { if ($0 ~ /^[[:space:]]*}[[:space:]]*$/) skipping = 0; next }
+open && /^[[:space:]]*else[[:space:]]*\{[[:space:]]*throw[^}]*}[[:space:]]*$/ { next }
+open && /^[[:space:]]*else[[:space:]]*\{[[:space:]]*$/ { skipping = 1; next }
+open && /(^|[^A-Za-z_])(try([^?A-Za-z_]|$)|throw([^A-Za-z_]|$))/ { print FILENAME ":" FNR ": " $0 }
+/make(Compute|Blit|Render)CommandEncoder\(/ && !/endEncoding\(\)/ { open = 1; skipping = 0 }
+'
+for package in "${ENGINE_PACKAGES[@]}"; do
+    dir="$ROOT/packages/$package/Sources"
+    [[ -d "$dir" ]] || continue
+    files=()
+    while IFS= read -r file; do files+=("$file"); done < <(grep -RlE --include='*.swift' 'make(Compute|Blit|Render)CommandEncoder\(' "$dir" || true)
+    [[ ${#files[@]} -gt 0 ]] || continue
+    if matches=$(awk "$OPEN_ENCODER_THROWS" "${files[@]}") && [[ -n "$matches" ]]; then
+        echo "A throw while an encoder is open in $package (use withComputeEncoder):"
+        echo "$matches"
+        echo
+        failed=1
+    fi
+done
+
 if [[ $failed -ne 0 ]]; then
     exit 1
 fi
