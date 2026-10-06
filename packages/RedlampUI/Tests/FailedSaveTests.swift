@@ -1,6 +1,7 @@
 import Foundation
 import RedlampDocument
 import RedlampEngineAPI
+import Synchronization
 import Testing
 @testable import RedlampUI
 
@@ -244,5 +245,116 @@ struct FailedSaveTests {
         #expect(model.recipe == saved.recipe)
         #expect(model.snapshots.map(\.id) == saved.snapshots.map(\.id))
         #expect(model.snapshots.map(\.recipe) == saved.snapshots.map(\.recipe))
+    }
+
+    /// Another app presenting the sidecar: the first writer waits for `held` before it may write and
+    /// the second for `overtaking`; the first read after the first writer runs `afterWrite`.
+    private final class HoldingPresenter: NSObject, NSFilePresenter, @unchecked Sendable {
+        let presentedItemURL: URL?
+        let presentedItemOperationQueue = OperationQueue()
+        let held = DispatchSemaphore(value: 0)
+        let overtaking = DispatchSemaphore(value: 0)
+        let asked = Mutex(0)
+        let afterWrite: Mutex<(@Sendable () -> Void)?>
+
+        init(_ url: URL, afterWrite: @escaping @Sendable () -> Void) {
+            presentedItemURL = url
+            self.afterWrite = Mutex(afterWrite)
+        }
+
+        func relinquishPresentedItem(toWriter writer: @escaping @Sendable ((@Sendable () -> Void)?) -> Void) {
+            let count = asked.withLock { count in
+                count += 1
+                return count
+            }
+            if count == 1 {
+                held.wait()
+            } else if count == 2 {
+                overtaking.wait()
+            }
+            writer(nil)
+        }
+
+        func savePresentedItemChanges(completionHandler: @escaping @Sendable (Error?) -> Void) {
+            if asked.withLock({ $0 }) > 0, let run = afterWrite.withLock({ run in
+                defer { run = nil }
+                return run
+            }) {
+                run()
+            }
+            completionHandler(nil)
+        }
+    }
+
+    @Test func `a failed save a later one has overtaken leaves the editor as it is`() async throws {
+        let folder = try Folder()
+        defer { folder.remove() }
+        let store = SidecarStore()
+        var seeded = EditRecipe()
+        seeded[.exposure] = 0.3
+        try store.save(Sidecar(recipe: seeded), for: folder.photo)
+        let package = store.url(for: folder.photo)
+        let path = package.path
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: path) }
+        let model = EditorModel(engine: StubEngine())
+        try await open(folder.photo, in: model)
+        var recipe = seeded
+        recipe[.vibrance] = 30
+        let theirs = Sidecar(
+            recipe: recipe,
+            metadata: PhotoMetadata(rating: 5),
+            modified: Date(timeIntervalSinceNow: -60),
+        )
+        try store.save(theirs, for: folder.photo)
+        let presenter = HoldingPresenter(package) {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: path)
+        }
+        NSFileCoordinator.addFilePresenter(presenter)
+        defer {
+            presenter.held.signal()
+            presenter.overtaking.signal()
+        }
+
+        model.setValue(.exposure, 0.6)
+        model.saveNow()
+        try await eventually { presenter.asked.withLock { $0 } == 1 }
+        try #require(presenter.asked.withLock { $0 } == 1, "the first save is being written")
+        model.setValue(.contrast, 20)
+        model.saveNow()
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: path)
+        presenter.held.signal()
+        try await eventually { presenter.asked.withLock { $0 } == 2 }
+        try #require(presenter.asked.withLock { $0 } == 2, "the second save is being written")
+        try #require(presenter.afterWrite.withLock { $0 == nil }, "the first save failed and was read over")
+        try await eventually { model.saveError != nil }
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(model.recipe[.contrast] == 20, "the later change stays on screen")
+        #expect(model.recipe[.exposure] == 0.6)
+
+        presenter.overtaking.signal()
+        await model.saves.flush()
+        try await eventually { model.saveError == nil }
+        await Task.detached { NSFileCoordinator.removeFilePresenter(presenter) }.value
+        #expect(model.saveError == nil, "the second save went through")
+        #expect(model.recipe[.contrast] == 20)
+        #expect(model.recipe[.exposure] == 0.6)
+        let saved = try #require(store.load(for: folder.photo))
+        #expect(saved.recipe[.contrast] == 20, "and on disk")
+        #expect(saved.recipe[.exposure] == 0.6)
+        #expect(saved.metadata?.rating == 5)
+    }
+
+    @Test func `the unsaved sessions kept are no more than a sidecar keeps`() {
+        let writes = (0 ..< SidecarStore.keptSessions + 5).map { index in
+            let step = HistoryStep(action: .edit, title: "Exposure", recipe: EditRecipe())
+            let session = HistorySession(
+                id: UUID(), started: Date(timeIntervalSince1970: Double(index)),
+                steps: [HistoryStep(action: .open, title: "Opened", recipe: EditRecipe()), step],
+            )
+            return SaveQueue.Write.sidecar(Sidecar(recipe: EditRecipe(), session: session))
+        }
+        let sessions = EditorModel.sessions(in: writes)
+        #expect(sessions.count == SidecarStore.keptSessions - 1)
+        #expect(sessions.first?.started == Date(timeIntervalSince1970: 6), "the newest")
     }
 }

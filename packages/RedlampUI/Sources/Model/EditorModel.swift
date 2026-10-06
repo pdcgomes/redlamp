@@ -940,7 +940,8 @@ public final class EditorModel {
         return true
     }
 
-    /// The history sessions `writes` would save, each once, as last written.
+    /// The history sessions `writes` would save, each once, as last written; no more than a
+    /// sidecar keeps beside the open session.
     static func sessions(in writes: [SaveQueue.Write]) -> [HistorySession] {
         var sessions: [HistorySession] = []
         for case let .sidecar(sidecar) in writes {
@@ -949,7 +950,7 @@ public final class EditorModel {
                 sessions.append(session)
             }
         }
-        return sessions
+        return Array(sessions.sorted { $0.started < $1.started }.suffix(SidecarStore.keptSessions - 1))
     }
 
     /// `sidecar` as it is once `writes` have been made to it.

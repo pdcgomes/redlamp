@@ -81,7 +81,7 @@ extension EditorModel {
     func saved(_ url: URL, _ write: SaveQueue.Write, _ outcome: SaveQueue.Outcome, superseded: Bool) {
         if case let .failed(error, merged) = outcome {
             failed(url, write, error)
-            if let merged, url == selection, opening == nil {
+            if let merged, !superseded, url == selection, opening == nil {
                 showOtherWriters(merged)
             }
             return
