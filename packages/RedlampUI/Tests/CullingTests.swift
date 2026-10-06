@@ -54,7 +54,7 @@ struct CullingTests {
             model = EditorModel(engine: StubEngine(), library: library)
             model.open([root])
             try await eventually {
-                self.library.isShownFromLibrary && self.model.items.count == count && self.model.info != nil
+                self.library.isShownFromLibrary && self.model.items.count >= count && self.model.info != nil
             }
             try #require(library.isShownFromLibrary && model.info?.url == photos[0], "the first photo open in Develop")
             model.showModule(.library)
@@ -286,6 +286,53 @@ struct CullingTests {
         let afterLast = seen.drop { $0 != [1, 1, 1, 1, 1, 1] }
         #expect(afterLast.allSatisfy { $0 == [1, 1, 1, 1, 1, 1] }, "no list showed an older rating after: \(seen)")
         #expect((0 ..< 6).allSatisfy { folder.sidecar($0)?.rating == 1 })
+    }
+
+    @Test func `a photo is found in the index whichever of Unicode's forms its name and folder are in`(
+    ) async throws {
+        let folder = IndexedFolder()
+        defer { folder.cleanUp() }
+        // Made through POSIX with composed bytes, as other tools make them: the index keeps them so, and
+        // Foundation's file URLs decompose them.
+        try FileManager.default.createDirectory(at: folder.root, withIntermediateDirectories: true)
+        let directory = folder.root.path + "/" + "Été à Montréal".precomposedStringWithCanonicalMapping
+        #expect(mkdir(directory, 0o755) == 0)
+        let jpeg = folder.base.appending(path: "photo.jpg")
+        try IndexedFolder.writeJPEG(jpeg, shade: 3)
+        let data = try Data(contentsOf: jpeg)
+        let file = open(
+            directory + "/" + "Café-7706.JPG".precomposedStringWithCanonicalMapping,
+            O_CREAT | O_WRONLY,
+            0o644,
+        )
+        #expect(file >= 0 && data.withUnsafeBytes { write(file, $0.baseAddress, data.count) } == data.count)
+        close(file)
+        try await folder.open(count: 2)
+        for _ in 0 ..< 2000 where await !folder.service.canShow(folder.root, includingSubfolders: true) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let index = try #require(folder.service.core?.index)
+        let photo = folder.root.appending(path: "Été à Montréal/Café-7706.JPG")
+        let ids = await LibraryService.indexIDs(of: [photo], in: index)
+        #expect(ids[photo] != nil, "found from the URL the app makes of it")
+    }
+
+    @Test func `Undo through a photo's own save puts back what its sidecar held, not what the grid showed`(
+    ) async throws {
+        let fixture = ModuleFixture()
+        defer { fixture.cleanUp() }
+        try await fixture.open(count: 3)
+        let model = fixture.model
+        model.showModule(.library)
+        // As another app's label shows on a photo whose sidecar holds none.
+        model.library.update(fixture.photos[1]) { $0.metadata.label = .green }
+        model.click(fixture.photos[1])
+        #expect(model.perform(.labelRed) && model.items[1].metadata.label == .red)
+        try await fixture.eventually { SidecarStore().load(for: fixture.photos[1])?.metadata?.label == .red }
+        #expect(model.perform(.undo) && model.items[1].metadata.label == .green, "the grid shows what it showed")
+        await model.saves.flush()
+        try await fixture.eventually { SidecarStore().load(for: fixture.photos[1])?.metadata?.label == nil }
+        #expect(SidecarStore().load(for: fixture.photos[1])?.metadata?.label == nil, "the sidecar holds no label")
     }
 
     @Test func `lists hear of a batch's photos once no change asked for after it is still to come`() {

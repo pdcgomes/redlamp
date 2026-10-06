@@ -432,6 +432,10 @@ public final class LibraryService {
                 guard !found.isEmpty else { continue }
                 do {
                     let plan = try await metadata.plan(.set(group.fields, on: found))
+                    // Left out as their rows already show it: the indexer may have read a sidecar a batch
+                    // before this one was writing, so their own saves see to it.
+                    let planned = Set(plan.photos.map(\.id))
+                    written.unindexed += found.filter { !planned.contains($0) }.compactMap { written.ids[$0] }
                     await Self.run(
                         plan,
                         metadata: metadata,
@@ -507,7 +511,8 @@ public final class LibraryService {
         }
     }
 
-    /// The index's IDs of the photos at `urls` it has, a folder's photos read at a time.
+    /// The index's IDs of the photos at `urls` it has, a folder's photos read at a time. Folders and names
+    /// match in either of Unicode's forms (`Café` composed or decomposed), as the file system's do.
     nonisolated static func indexIDs(of urls: [URL], in index: LibraryIndex) async -> [URL: Int64] {
         var byFolder: [String: [URL]] = [:]
         for url in urls {
@@ -517,20 +522,21 @@ public final class LibraryService {
         return await (try? index.read { reader -> [URL: Int64] in
             var found: [URL: Int64] = [:]
             for (path, photos) in folders {
-                guard let folder = try reader.folder(path: path) else { continue }
-                if photos.count < 64 {
-                    for url in photos {
-                        if let row = try reader.photo(folder: folder.id, name: url.lastPathComponent) {
-                            found[url] = row.id
-                        }
-                    }
-                    continue
+                var record: FolderRecord?
+                for form in [
+                    path,
+                    path.precomposedStringWithCanonicalMapping,
+                    path.decomposedStringWithCanonicalMapping,
+                ]
+                    where record == nil {
+                    record = try reader.folder(path: form)
                 }
-                let named = try Dictionary(reader.photos(inFolder: folder.id).map { ($0.name, $0.id) }) { first, _ in
-                    first
-                }
+                guard let folder = record else { continue }
+                let named = try Dictionary(reader.photos(inFolder: folder.id).map {
+                    ($0.name.precomposedStringWithCanonicalMapping, $0.id)
+                }) { first, _ in first }
                 for url in photos {
-                    if let id = named[url.lastPathComponent] {
+                    if let id = named[url.lastPathComponent.precomposedStringWithCanonicalMapping] {
                         found[url] = id
                     }
                 }
@@ -563,7 +569,8 @@ struct CullingWritten: Sendable {
     var batches: [UUID] = []
     /// The photos it has, by index ID.
     var ids: [Int64: URL] = [:]
-    /// The photos it hasn't indexed, which their own saves write.
+    /// The photos it leaves to their own saves: those it hasn't indexed, and those whose rows show the change
+    /// already.
     var unindexed: [URL] = []
     /// Photos it left as they were: their sidecars can't be written here, or their batch failed and was
     /// rolled back.

@@ -520,10 +520,12 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         update(diff.updated)
     }
 
-    /// Redraws the badges of these rows' cells, and their thumbnails if their files changed.
+    /// Redraws the badges of these rows' cells, and their thumbnails if their files changed: for thousands of
+    /// rows (culling a whole selection), only the cells on screen are looked at.
     private func update(_ rows: IndexSet) {
         let items = model.items
-        for row in rows where items.indices.contains(row) {
+        let shown = rows.count > cells.count ? cells.keys.filter(rows.contains).sorted() : Array(rows)
+        for row in shown where items.indices.contains(row) {
             guard let cell = cells[row] else { continue }
             let rewritten = cell.item?.modified != items[row].modified
             if rewritten {

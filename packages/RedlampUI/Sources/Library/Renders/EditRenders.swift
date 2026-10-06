@@ -256,7 +256,11 @@ public final class EditRenders {
         }
         var gone: [URL] = []
         let items = library.items
-        for row in diff.updated where items.indices.contains(row) {
+        // A change to thousands of rows (culling a whole selection) reaches the photos known here alone.
+        let rows = diff.updated.count > known.count
+            ? known.keys.compactMap { library.index(of: $0) }.filter(diff.updated.contains).sorted()
+            : Array(diff.updated)
+        for row in rows where items.indices.contains(row) {
             let item = items[row]
             guard let entry = known[item.url] else { continue }
             if !item.hasEdits {

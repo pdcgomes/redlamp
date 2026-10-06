@@ -219,7 +219,14 @@ public extension EditorModel {
         if open {
             saveNow()
         }
-        show(values, fields: [field], rows: rows)
+        if !rows.isEmpty {
+            cullingOverlay.publishing = true
+            library.setMetadata(rows) { place, metadata in values[place].apply(field, to: &metadata) }
+            cullingOverlay.publishing = false
+            if let active = selection.flatMap(library.index(of:)), let place = rows.firstIndex(of: active) {
+                values[place].apply(field, to: &photoMetadata)
+            }
+        }
         if open, let selection {
             saves.enqueue(.track(nil, opened: sidecarToSave), for: selection)
         }
@@ -279,7 +286,14 @@ public extension EditorModel {
         step.ids = written.ids
         let unindexed = Set(written.unindexed)
         step.saved = step.photos.indices.filter { unindexed.contains(step.photos[$0]) }
-        await save(step.saved.map { (step.photos[$0], step.after[$0].setting(field)) })
+        let held = step.held
+        await save(step.saved.map { place in
+            let (url, after) = (step.photos[place], step.after[place])
+            return (url, { @Sendable (metadata: inout PhotoMetadata) in
+                held.keep(CullingValues(metadata), for: url)
+                after.apply(field, to: &metadata)
+            })
+        })
         await finish(written, of: step, sequence: sequence)
     }
 
@@ -291,11 +305,12 @@ public extension EditorModel {
         if !step.batches.isEmpty, let service = library.service, service.isReady {
             written = await service.undoCulling(step.batches, photos: step.ids, sequence: sequence, queue: cullingQueue)
         }
+        let held = step.held
         let saved = step.saved.map { place in
-            let (before, after) = (step.before[place], step.after[place])
-            return (step.photos[place], { @Sendable (metadata: inout PhotoMetadata) in
+            let (url, before, after) = (step.photos[place], step.before[place], step.after[place])
+            return (url, { @Sendable (metadata: inout PhotoMetadata) in
                 if CullingValues(metadata).matches(after, in: field) {
-                    before.apply(field, to: &metadata)
+                    (held.value(for: url) ?? before).apply(field, to: &metadata)
                 }
             })
         }
@@ -582,6 +597,8 @@ final class CullingStep {
     var ids: [Int64: URL] = [:]
     /// The photos (by place) their own saves wrote: those the library hasn't indexed.
     var saved: [Int] = []
+    /// What their sidecars held before it, which Undo puts back: the grid may have shown other apps' values.
+    let held = CullingHeld()
 
     init(title: String, field: CullingField, photos: [URL], before: [CullingValues], after: [CullingValues]) {
         self.title = title
@@ -589,6 +606,24 @@ final class CullingStep {
         self.photos = photos
         self.before = before
         self.after = after
+    }
+}
+
+/// What photos' sidecars held before a culling change their own saves made, as each save found them.
+final class CullingHeld: Sendable {
+    private let values = Mutex<[URL: CullingValues]>([:])
+
+    /// The first one found: a save tried again, or Redo's, finds the sidecar as the change or Undo left it.
+    func keep(_ held: CullingValues, for url: URL) {
+        values.withLock { values in
+            if values[url] == nil {
+                values[url] = held
+            }
+        }
+    }
+
+    func value(for url: URL) -> CullingValues? {
+        values.withLock { $0[url] }
     }
 }
 
@@ -748,6 +783,15 @@ extension CullingValues {
 }
 
 extension FolderLibrary {
+    /// Changes the badges of the photos in `rows`, in order, as one change, each of which `change` changes:
+    /// a pass over them and nothing more, for a selection of thousands.
+    func setMetadata(_ rows: [Int], _ change: (Int, inout PhotoMetadata) -> Void) {
+        for (place, row) in rows.enumerated() where items.indices.contains(row) {
+            change(place, &items[row].metadata)
+        }
+        publish(LibraryDiff(updated: IndexSet(rows)))
+    }
+
     /// Changes the badges of the photos in `rows` as one change; `change` hears each photo's place in `rows`.
     func updateMetadata(_ rows: [Int], _ change: (Int, inout PhotoMetadata) -> Void) {
         var updated = IndexSet()
