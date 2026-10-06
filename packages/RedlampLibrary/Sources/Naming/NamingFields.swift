@@ -96,7 +96,7 @@ public struct NamingFields: Sendable, Hashable {
     }
 
     /// A photo's fields as the index holds them, in `folder` (its path), with its camera's maker and
-    /// model as the file wrote them.
+    /// model as the file wrote them: its organising fields merged from its `.redlamp` and other apps'.
     public init(
         photo: PhotoRecord, folder: String, camera: String?, cameraMake: String? = nil, cameraModel: String? = nil,
         lens: String?, keywords: [String] = [],
@@ -106,16 +106,27 @@ public struct NamingFields: Sendable, Hashable {
             name: photo.name, folder: folder, captured: photo.captured, capturedOffset: photo.capturedOffset,
             modified: photo.modified, camera: camera, make: make, model: model, lens: lens, iso: photo.iso,
             aperture: photo.aperture, shutter: photo.shutter, focalLength: photo.focal, width: photo.width,
-            height: photo.height, rating: photo.rating, flag: photo.flag, label: photo.label.map(Self.labelName),
-            title: photo.title, caption: photo.caption, keywords: keywords,
+            height: photo.height, rating: photo.rating, flag: photo.flag,
+            label: photo.label.map(Self.labelName) ?? photo.customLabel, title: photo.title, caption: photo.caption,
+            creator: photo.creator, copyright: photo.copyright, location: photo.location, keywords: keywords,
         )
     }
 
-    /// Takes the rating, flag and label a photo's `.redlamp` sidecar holds.
+    /// Takes the rating, flag and label a photo's `.redlamp` sidecar holds, and IPTC Core's fields where
+    /// it holds them, an empty one as none.
     public mutating func apply(_ sidecar: PhotoMetadata) {
         rating = sidecar.rating
         flag = sidecar.flag
-        label = sidecar.label.map(Self.labelName)
+        label = sidecar.label.map(Self.labelName) ?? sidecar.customLabel
+        for (field, value) in [
+            (\NamingFields.title, sidecar.title), (\.caption, sidecar.caption), (\.creator, sidecar.creator),
+            (\.copyright, sidecar.copyright),
+        ] where value != nil {
+            self[keyPath: field] = XMPFields.text(value)
+        }
+        if let location = sidecar.location {
+            self.location = XMPFields.place(location)
+        }
     }
 
     /// "Red", as Lightroom writes a label's text.

@@ -194,12 +194,6 @@ public enum CollectionError: Error, Sendable, Hashable, CustomStringConvertible 
     /// Photos go only in collections, and things only in sets.
     case notACollection(CollectionPath)
     case notASet(CollectionPath)
-    case noSuchBatch(UUID)
-    case damagedJournal(UUID)
-    case newerJournal(UUID)
-    /// A batch a forced quit interrupted waits for `recover`.
-    case unfinished(UUID)
-    case nothingToUndo
 
     public var description: String {
         switch self {
@@ -210,11 +204,6 @@ public enum CollectionError: Error, Sendable, Hashable, CustomStringConvertible 
         case let .insideItself(path): "\(path.text) can't go inside itself"
         case let .notACollection(path): "\(path.text) isn't a collection: photos go only in collections"
         case let .notASet(path): "\(path.text) isn't a set: only sets hold collections"
-        case let .noSuchBatch(id): "no change \(id) in the journal"
-        case let .damagedJournal(id): "the change \(id) in the journal can't be read"
-        case let .newerJournal(id): "the change \(id) was written by a newer Redlamp"
-        case let .unfinished(id): "a change a forced quit interrupted (\(id)) is unfinished"
-        case .nothingToUndo: "no change to undo"
         }
     }
 }

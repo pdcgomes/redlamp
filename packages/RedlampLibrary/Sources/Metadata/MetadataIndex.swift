@@ -1,0 +1,76 @@
+import Foundation
+import RedlampDocument
+import RedlampEngineAPI
+
+extension IndexQueries {
+    /// What the index shows of `keys` for each of `ids`, as the sidecar writes them, and which of the
+    /// fields are other apps'; the photos the index doesn't have are left out.
+    func metadataValues(ofPhotos ids: [Int64], keys: Set<String>) throws
+        -> [Int64: (values: MetadataValues, others: Set<XMPField>)] {
+        var found: [Int64: (values: MetadataValues, others: Set<XMPField>)] = [:]
+        for id in ids {
+            guard let row = try photo(id: id) else { continue }
+            let collections = keys.contains("collections") ? try collections(ofPhoto: id).map(\.text) : []
+            found[id] = (PhotoMetadata(shown: row, collections: collections).values(keys), row.otherFields)
+        }
+        return found
+    }
+}
+
+extension PhotoMetadata {
+    /// A photo's fields as its row shows them, in the sidecar's terms.
+    init(shown row: PhotoRecord, collections: [String] = []) {
+        self.init(
+            rating: row.rating, flag: row.flag, label: row.label, customLabel: row.customLabel, mark: row.marked,
+            title: row.title, caption: row.caption, creator: row.creator, copyright: row.copyright,
+            location: row.location, collections: collections, stack: row.stack,
+        )
+    }
+
+    /// The field of `XMPField` a sidecar key is, for the keys other apps share.
+    static func xmpField(_ key: String) -> XMPField? {
+        switch key {
+        case "rating": .rating
+        case "flag": .flag
+        case "label", "customLabel": .label
+        case "keywords": .keywords
+        case "title": .title
+        case "caption": .caption
+        case "creator": .creator
+        case "copyright": .copyright
+        case "location": .location
+        default: nil
+        }
+    }
+}
+
+extension LibraryIndex.Writer {
+    /// Shows `values` in `photo`'s row: each field's columns, its collections and its stack, with its
+    /// text indexed again; they're the `.redlamp`'s values now, not other apps'.
+    func setMetadata(_ values: MetadataValues, forPhoto photo: Int64) throws {
+        guard let metadata = PhotoMetadata().setting(values), var row = try self.photo(id: photo) else { return }
+        for key in values.keys {
+            switch key {
+            case "rating": row.rating = metadata.rating
+            case "flag": row.flag = metadata.flag
+            case "mark": row.marked = metadata.mark
+            case "title": row.title = XMPFields.text(metadata.title)
+            case "caption": row.caption = XMPFields.text(metadata.caption)
+            case "creator": row.creator = XMPSource.joined(XMPFields.names(metadata.creator))
+            case "copyright": row.copyright = XMPFields.text(metadata.copyright)
+            case "location": row.location = XMPFields.place(metadata.location)
+            case "stack": row.stack = metadata.stack.flatMap { $0.id == nil && !$0.top ? nil : $0 }
+            case "collections": try setCollections(metadata.collections, forPhoto: photo)
+            default: break
+            }
+            if let field = PhotoMetadata.xmpField(key) {
+                row.otherFields.remove(field)
+            }
+        }
+        if values.keys.contains("label") || values.keys.contains("customLabel") {
+            row.label = values.keys.contains("label") ? metadata.label : row.label
+            row.customLabel = row.label == nil ? XMPFields.text(metadata.customLabel) : nil
+        }
+        try upsertPhotos([row])
+    }
+}

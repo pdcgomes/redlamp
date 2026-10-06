@@ -358,4 +358,19 @@ struct NamingEvaluationTests {
         indexed.apply(PhotoMetadata(rating: 5, flag: .reject, label: .blue))
         #expect(indexed.rating == 5 && indexed.flag == .reject && indexed.label == "Blue")
     }
+
+    @Test func `the metadata tokens read the fields the index merged, a custom label's name included`() throws {
+        let record = PhotoRecord(
+            folder: 1, name: "IMG_1.CR3", title: "Tram 28", caption: "Graça", customLabel: "Second Look",
+            creator: "Ana Sousa", copyright: "© 2026 Ana Sousa",
+            location: PhotoLocation(country: "Portugal", state: "Lisboa", city: "Lisbon", sublocation: "Graça"),
+        )
+        var fields = NamingFields(photo: record, folder: "/Photos", camera: nil, lens: nil)
+        let template = "{title}-{caption}-{creator}-{copyright}-{city}-{state}-{country}-{sublocation}-{label}"
+        #expect(try Self.base(template, fields)
+            == "Tram 28-Graça-Ana Sousa-© 2026 Ana Sousa-Lisbon-Lisboa-Portugal-Graça-Second Look")
+        fields.apply(PhotoMetadata(title: "", creator: "Rui Lopes", location: PhotoLocation(city: "Porto")))
+        #expect(try Self.base("{title|default:none}-{creator}-{city}-{country|default:none}", fields)
+            == "none-Rui Lopes-Porto-none")
+    }
 }
