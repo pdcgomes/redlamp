@@ -61,9 +61,10 @@ for package in "${UI_PACKAGES[@]}"; do
 done
 
 # The engine and the UI read files through an ImageDecoding (the Mac app's sandboxed decode
-# service), never with the decoders or thumbnail readers themselves, so a damaged file can't take
-# the app down. Only RedlampServices' InProcessDecoder calls them, for the CLI and tests, and
-# these known exceptions (file, call, reason), which DATA-17 tracks moving into the service:
+# service), not with the decoders or thumbnail readers themselves. Only RedlampServices'
+# InProcessDecoder calls them, for the CLI and tests, and these known exceptions (file, call,
+# reason), each allowing one call. DATA-17 lists them with the rest of the parsing the app
+# still does itself.
 DIRECT_READ='\b(ImageDecoder|RawDecoder|BitmapDecoder|Thumbnails)\.'
 ALLOWED_READS=(
     "RedlampEngine/Sources/RedlampEngine.swift|Thumbnails.thumbnail(|filmstrip thumbnails; the service's lookup missed the first-visit budget"
@@ -72,11 +73,15 @@ ALLOWED_READS=(
     "RedlampEngine/Sources/RedlampEngine+CameraBench.swift|Thumbnails.cameraPreview(|Camera Bench: the camera's own JPEG"
     "RedlampEngine/Sources/RedlampEngine+CameraBench.swift|ImageDecoder.rawDecoderVersion|LibRaw's version string, which reads no file"
 )
+allowed_uses=()
 allowed_read() {
-    local match=$1 entry path call
-    for entry in "${ALLOWED_READS[@]}"; do
-        IFS='|' read -r path call _ <<<"$entry"
-        [[ "${match%%:*}" == */packages/$path && "$match" == *"$call"* ]] && return 0
+    local match=$1 i path call
+    for i in "${!ALLOWED_READS[@]}"; do
+        IFS='|' read -r path call _ <<<"${ALLOWED_READS[$i]}"
+        if [[ "${match%%:*}" == */packages/$path && "$match" == *"$call"* && -z "${allowed_uses[$i]:-}" ]]; then
+            allowed_uses[$i]=1
+            return 0
+        fi
     done
     return 1
 }
