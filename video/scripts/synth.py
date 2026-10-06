@@ -191,12 +191,12 @@ def hat(velocity=1.0, open=False):
     return noise * np.exp(-t / (0.11 if open else 0.014)) * np.clip(t / 0.0006, 0, 1) * velocity
 
 
-def crash(velocity=1.0, length=2.4):
+def crash(velocity=1.0, length=2.4, decay=0.75):
     """Bright noise with a ring of metal in it, stereo."""
     t = times(length)
     out = np.zeros((len(t), 2))
     for c in range(2):
-        noise = highpass(rng.standard_normal(len(t)), 3800, order=2) * np.exp(-t / 0.75)
+        noise = highpass(rng.standard_normal(len(t)), 3800, order=2) * np.exp(-t / decay)
         ring = sum(np.sin(2 * np.pi * f * t + rng.uniform(0, 6.3)) * np.exp(-t / d) for f, d in ((523, 0.9), (797, 0.7), (1143, 0.5), (1672, 0.35)))
         out[:, c] = (noise + 0.04 * ring) * np.clip(t / 0.002, 0, 1)
     return out * velocity * 0.5
@@ -214,7 +214,7 @@ def pluck(note, velocity=1.0, length=0.3, bright=1.0, partials=SAW):
 
 
 def bass(note, velocity=1.0, length=0.24, bright=1.0):
-    """The groove's bass: a saw with a quick filter, over a sine an octave down."""
+    """The groove's bass: a saw with a quick filter, over a sine an octave down (so keep `note` above about D2)."""
     t = times(length)
     cutoff = 180 + 2100 * bright * np.exp(-t / 0.05)
     tone = harmonics(hz(note), len(t), SAW, cutoff=cutoff, order=3) + 0.6 * np.sin(2 * np.pi * phase_of(hz(note - 12), len(t)))
@@ -388,6 +388,175 @@ def crackle(seconds, density, level):
     return highpass(out, 2800)
 
 
+# ---------------------------------------------------------------- cinematic
+
+
+def strings(note, seconds, bright=(0.3, 0.7), attack=0.4, release=1.2, voices=6, vibrato=0.0035):
+    """
+    A bowed section, stereo: detuned players with a vibrato that comes in late, opening up from
+    `bright[0]` to `bright[1]` (0 dark, 1 open) as it plays, through a body's two resonances.
+    """
+    n = int(round((seconds + release) * SR))
+    t = np.arange(n) / SR
+    opening = np.linspace(bright[0], bright[1], n)
+    out = np.zeros((n, 2))
+    for i in range(voices):
+        cents = (i - (voices - 1) / 2) * (26 / max(1, voices - 1))
+        f = hz(note) * 2 ** (cents / 1200)
+        vib = 1 + vibrato * np.sin(2 * np.pi * rng.uniform(4.6, 5.6) * t + rng.uniform(0, 6.3)) * np.clip((t - 0.3) / 0.5, 0, 1)
+        phase = 2 * np.pi * phase_of(f * vib, n)
+        tone = np.zeros(n)
+        for k in range(1, 16):
+            if f * k > 10000:
+                break
+            tone += (1.0 if k <= 2 else opening ** (0.5 * (k - 2))) * np.sin(k * phase) / k
+        out += pan(tone, -0.75 + 1.5 * i / max(1, voices - 1))
+    body = lambda f: 1 + 0.5 * np.exp(-0.5 * (np.log2(f / 420) / 0.6) ** 2) + 0.35 * np.exp(-0.5 * (np.log2(f / 2600) / 0.5) ** 2)
+    return shape(out, body) * envelope(n, attack, 10, 1.0, release, hold=seconds)[:, None] / voices
+
+
+def spiccato(note, velocity=1.0, bright=0.6, length=0.14):
+    """A short, bounced note from a string section, stereo: the bite of the bow, then a quick fall."""
+    n = int(round((length + 0.12) * SR))
+    t = np.arange(n) / SR
+    out = np.zeros((n, 2))
+    cutoff = 450 + 3200 * bright * velocity * np.exp(-t / 0.045)
+    for i, cents in enumerate((-8, 0, 8)):
+        out += pan(harmonics(hz(note) * 2 ** (cents / 1200), n, SAW[:40], cutoff=cutoff), (-0.45, 0.0, 0.45)[i])
+    bow = bandpass(rng.standard_normal(n), 3200, octaves=1.6) * np.exp(-t / 0.01) * 0.25
+    return (out / 3 + pan(bow, 0.0)) * envelope(n, 0.003, 0.06, 0.12, 0.05, hold=length)[:, None] * velocity
+
+
+_pianos = {}
+
+
+def piano(note, velocity=0.6, seconds=4.0):
+    """A felt piano (as scripts/score.py has it): two detuned strings of inharmonic partials, the high ones dying first."""
+    key = (note, round(velocity, 2), seconds)
+    if key not in _pianos:
+        t = times(seconds)
+        out = np.zeros(len(t))
+        for string in (-0.6, 0.6):
+            f = hz(note) * 2 ** (string / 1200)
+            for k in range(1, 13):
+                fk = k * f * np.sqrt(1 + 0.00035 * k * k)
+                if fk > 9000:
+                    break
+                out += velocity ** (1 + 0.15 * k) / k**1.15 * np.sin(2 * np.pi * fk * t + rng.uniform(0, 6.3)) * np.exp(-t / (2.8 / (1 + 0.55 * (k - 1))))
+        hammer = rng.standard_normal(len(t)) * np.exp(-t / 0.006) * 0.04 * velocity
+        out = out + np.convolve(hammer, np.ones(9) / 9, mode="same")
+        _pianos[key] = out * np.clip(t / 0.004, 0, 1) * np.clip((seconds - t) / 0.4, 0, 1) * 0.35
+    return _pianos[key]
+
+
+def taiko(velocity=1.0, pitch=60, length=1.6, decay=0.42):
+    """A big drum: a deep membrane falling to `pitch`, a second mode, and the slap of the stick, saturated."""
+    t = times(length)
+    f = pitch * (1 + 1.3 * np.exp(-t / 0.025))
+    body = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t / decay)
+    ring = 0.3 * np.sin(2 * np.pi * np.cumsum(f * 1.58) / SR) * np.exp(-t / (decay * 0.36))
+    slap = lowpass(rng.standard_normal(len(t)) * np.exp(-t / 0.018), 1600) * 0.6
+    return saturate((body + ring + slap) * np.clip(t / 0.0008, 0, 1) * np.clip((length - t) / 0.05, 0, 1), 1.8) * velocity
+
+
+def deep_kick(velocity=1.0, length=0.8):
+    """A film trailer's kick: deeper and longer than a dance kick, with a thud under its click."""
+    t = times(length)
+    pitch = 46 + 110 * np.exp(-t / 0.04) + 30 * np.exp(-t / 0.005)
+    body = np.sin(2 * np.pi * np.cumsum(pitch) / SR) * np.exp(-t / 0.3)
+    thud = lowpass(rng.standard_normal(len(t)) * np.exp(-t / 0.03), 500) * 0.5
+    snap = highpass(rng.standard_normal(len(t)) * np.exp(-t / 0.002), 2000) * 0.2
+    return saturate(body + thud + snap, 2.0) * np.clip((length - t) / 0.08, 0, 1) * velocity
+
+
+def big_snare(velocity=1.0):
+    """A film snare: a crack with a long, dark tail, made to sit in a big room."""
+    t = times(0.9)
+    out = lowpass(rng.standard_normal(len(t)), 4200) * np.exp(-t / 0.28) * 0.35
+    crack = snare(1.0, tone=210, length=0.3, snap=1.3)
+    out[: len(crack)] += crack
+    return saturate(out, 1.3) * velocity
+
+
+def tock(velocity=1.0, pitch=2300):
+    """A watch's tick: a hard, dry click of wood and metal."""
+    t = times(0.04)
+    modes = sum(a * np.sin(2 * np.pi * pitch * r * t) * np.exp(-t / d) for r, a, d in ((1, 1, 0.006), (1.48, 0.6, 0.004), (2.13, 0.35, 0.0025)))
+    click_ = highpass(rng.standard_normal(len(t)) * np.exp(-t / 0.0008), 3000) * 0.4
+    return (modes + click_) * velocity * 0.5
+
+
+def glass(note, seconds=3.0, velocity=1.0, attack=0.002):
+    """Glass, struck or (with a slow `attack`) bowed: a few inharmonic partials with long, separate decays."""
+    t = times(seconds)
+    out = np.zeros(len(t))
+    for ratio, amp, tau in ((1, 1, 2.4), (2.32, 0.3, 1.4), (4.25, 0.12, 0.8), (6.63, 0.05, 0.45)):
+        out += amp * np.sin(2 * np.pi * hz(note) * ratio * t + rng.uniform(0, 6.3)) * np.exp(-t / tau)
+    return out * np.sin(np.clip(t / max(attack, 1e-4), 0, 1) * np.pi / 2) ** 2 * velocity * 0.3
+
+
+def drone(notes, seconds, cutoff=420, release=1.5, attack=1.5):
+    """A low, dark bed: detuned saws for each note through a closed filter, breathing slowly, stereo."""
+    n = int(round((seconds + release) * SR))
+    t = np.arange(n) / SR
+    out = np.zeros((n, 2))
+    for note in notes:
+        for v, cents in enumerate((-7, 0, 7)):
+            out += pan(blep_saw(hz(note) * 2 ** (cents / 1200), n), (-0.5, 0.0, 0.5)[v])
+    out = lowpass(out, cutoff, order=2) / (3 * len(notes) ** 0.5)
+    breathe = 1 + 0.15 * np.sin(2 * np.pi * 0.11 * t + rng.uniform(0, 6.3))
+    return out * (envelope(n, attack, 10, 1.0, release, hold=seconds) * breathe)[:, None]
+
+
+def braam(notes, seconds=3.2, velocity=1.0):
+    """
+    The low brass of a film trailer's hit: a cluster of detuned saws that blares open and closes again,
+    falling in from a little flat, with a growl in it, over a sub. Stereo.
+    """
+    n = int(round(seconds * SR))
+    t = np.arange(n) / SR
+    fall = 1 - 0.012 * np.exp(-t / 0.07)
+    cutoff = 140 + 2000 * np.clip(t / 0.05, 0, 1) * np.exp(-t / 0.55) + 260 * np.exp(-t / 2.0)
+    out = np.zeros((n, 2))
+    for note in notes:
+        for v, cents in enumerate((-9, -3, 3, 9)):
+            out += pan(harmonics(hz(note) * 2 ** (cents / 1200) * fall, n, SAW[:56], cutoff=cutoff, order=3), (-0.7, -0.25, 0.25, 0.7)[v])
+    growl = 1 + 0.4 * np.exp(-t / 0.45) * np.sin(2 * np.pi * 36 * t)
+    out = saturate(out * growl[:, None] / (2 * len(notes) ** 0.5), 2.2)
+    # The sub sits an octave above the cluster's lowest note when that's under 60 Hz, where phones
+    # play nothing and it only eats headroom.
+    base = notes[0] + 12 if hz(notes[0]) < 60 else notes[0]
+    sub_ = np.sin(2 * np.pi * phase_of(hz(base), n)) * 0.4
+    return (out + pan(sub_, 0.0)) * envelope(n, 0.01, 1.0, 0.0, 0.25)[:, None] * velocity
+
+
+def shepard(rate, level, low=40.0, octaves=7, voices=7):
+    """
+    A Shepard–Risset glissando: tones an octave apart that all climb, fading in at the bottom and out
+    at the top, so the whole seems to rise for ever. `rate` (octaves a second) and `level` are per
+    sample; a faster rate is a tighter screw.
+    """
+    rate = np.asarray(rate, dtype=float)
+    climb = np.cumsum(rate) / SR
+    out = np.zeros(len(rate))
+    for k in range(voices):
+        x = (k * octaves / voices + climb) % octaves
+        phase = 2 * np.pi * np.cumsum(low * 2**x) / SR
+        out += np.sin(np.pi * x / octaves) ** 2 * (np.sin(phase) + 0.18 * np.sin(2 * phase))
+    return out * level / voices
+
+
+def swell_into(signal, seconds, room):
+    """
+    The reverb of `signal`, reversed and `seconds` long, which swells up into the moment `signal`
+    starts: add it `seconds` before. Stereo, at its peak level 1.
+    """
+    stereo = pan(signal, 0.0) if signal.ndim == 1 else signal
+    tail = convolve(stereo, room)[: int(round(seconds * SR))][::-1]
+    tail = tail * (np.linspace(0, 1, len(tail)) ** 2)[:, None]
+    return tail / (np.max(np.abs(tail)) + 1e-9)
+
+
 # ---------------------------------------------------------------- mixing
 
 
@@ -490,18 +659,32 @@ def true_peak(x):
     return 20 * np.log10(np.max(np.abs(up)) + 1e-12)
 
 
-def master(buses, seconds=None, target=-14.0, ceiling=-1.0, room=None, wet=0.8, fade=0.03):
+def master(buses, seconds=None, target=-14.0, ceiling=-1.0, room=None, wet=0.8, fade=0.03, choke=None, through=(), presence=0.0):
     """
-    Sums the buses and their reverb, cleans the lows, adds a little air, levels the mix to `target`
-    LUFS and keeps its true peak under `ceiling` dBFS with a soft knee. Returns the stereo mix,
-    `seconds` long, with a short fade at the very end so a loop doesn't click.
+    Sums the buses and their reverb, takes out what's under 36 Hz, adds a little air, levels the mix
+    to `target` LUFS and keeps its true peak under `ceiling` dBFS with a soft knee. Returns the stereo
+    mix, `seconds` long, with a short fade at the very end so a loop doesn't click.
+
+    `choke` is a gain curve for the whole mix, reverb tails and all, for a cut to silence before a
+    drop; the buses in `through` play on through it. `presence` lifts everything from about 3 kHz by
+    that many dB, for a dark mix that must still carry on a phone's speaker.
     """
-    dry = sum(bus.dry for bus in buses)
-    send = sum(bus.send for bus in buses)
-    n = len(dry) if seconds is None else int(round(seconds * SR))
-    wet_signal = convolve(send, room if room is not None else reverb())[: len(dry)]
-    mix = highpass(dry + wet_signal * wet, 32, order=2)[:n]
+    room = room if room is not None else reverb()
+
+    def summed(group):
+        dry = sum(bus.dry for bus in group)
+        return dry + convolve(sum(bus.send for bus in group), room)[: len(dry)] * wet
+
+    mix = summed(buses)
+    if choke is not None:
+        mix *= choke[: len(mix), None]
+    if through:
+        mix += summed(through)
+    n = len(mix) if seconds is None else int(round(seconds * SR))
+    mix = highpass(mix, 36, order=3)[:n]
     mix = shelf(mix, 7000, 2.0)
+    if presence:
+        mix = shelf(mix, 3000, presence)
     # Limiting takes loudness away, so level, limit and measure again until it settles. Peaks between
     # samples run higher than the samples, so the limit sits under the ceiling by what they overshoot.
     gain = 10 ** ((target - loudness(mix)) / 20)

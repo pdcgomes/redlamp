@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """
-The star promo's score (src/star/StarPromo.tsx): 16 seconds at 120 BPM in D major, written from the
+The star promo's score (src/star/StarPromo.tsx): 16 seconds at 120 BPM in D minor, written from the
 promo's cue sheet, src/star/cues.json, so every sound lands on the frame its picture does.
 
     python3 scripts/star-score.py      # public/star/score.wav, and score.json for the storyboard sheet
 
-The build is the lamp charging: a muffled heartbeat, an arpeggio whose filter opens, a hum that
-rises with the charge, crackles as the motes gather, and a snare roll whose every hit is a knock
-that shakes the lamp (the cue sheet's `knocks`), doubling from eighths to thirty-seconds. A
-half-beat of silence as the lamp squashes, a zap that pans with the shot, and the drop lands on the
-hit: four-on-the-floor, an offbeat bass, a pumping supersaw and a bouncy lead. Then the badge's
-spring, the sign's whistle and knock as it catches, the cursor, the click and the count, the end
-card, and a last chord with the hum rising again into the loop. Needs numpy.
+Dark and cinematic. The lamp charges over a low drone: a heartbeat, a watch ticking, a felt piano
+picking out a few notes, and a Shepard tone that seems to rise for ever, climbing faster as the
+charge grows. From the second bar, low toms take over the roll whose every hit is a knock that shakes
+the lamp (the cue sheet's `knocks`), doubling from eighths to thirty-seconds, under spiccato strings
+that grow from a murmur. Half a beat of silence as the lamp holds its breath; a shot of glass as it
+fires; the hit's own reverb swells up into it, and it lands as a trailer's low brass on the drop.
+Then a half-time groove (the cue sheet's `groove`) under the strings' ostinato, with a line that
+falls a step at a time through the sign, the click and the end card, to a last hit and the piano
+alone. Needs numpy.
 """
 
 import json
@@ -26,21 +28,33 @@ sheet = json.loads((ROOT / "src/star/cues.json").read_text())
 BEAT = 60 / sheet["bpm"]
 BEATS = sheet["bars"] * sheet["beatsPerBar"]
 TOTAL = BEATS * BEAT
-cue = {name: beat for name, beat in sheet["cues"].items()}
+cue = sheet["cues"]
 
 
 def at(beat):
     return beat * BEAT
 
 
-# The chords: the groove's bass root, the pad's voicing (D on top throughout, so the pad moves
-# smoothly), the arpeggio's notes and the lead's riff, a bar of eighths (None rests).
+# Each chord: its root (the bass plays it an octave up, the brass two), the strings' voicing (from
+# the root up, with the colour notes that make it dark: Dm with its ninth against the third, Bb with
+# its major seventh, Gm with its ninth, A with its seventh), and its ostinato, eight sixteenths
+# played twice a bar.
 CHORDS = {
-    "D": (38, [62, 66, 69, 76], [62, 66, 69, 74, 78, 74, 69, 66], [81, None, 78, 81, None, 83, 81, 78]),
-    "A": (45, [61, 64, 69, 73], [57, 61, 64, 69, 73, 69, 64, 61], [76, None, 73, 76, None, 78, 76, 73]),
-    "Bm": (47, [62, 66, 71, 74], [59, 62, 66, 71, 74, 71, 66, 62], [78, None, 74, 78, None, 81, 78, 74]),
-    "G": (43, [62, 67, 71, 74], [55, 59, 62, 67, 71, 67, 62, 59], [74, None, 71, 74, None, 76, 74, 71]),
+    "Dm": (38, [50, 57, 62, 64, 65, 69], [50, 50, 57, 50, 53, 50, 52, 50]),
+    "Bb": (34, [46, 53, 57, 62, 65], [46, 46, 53, 46, 50, 46, 48, 46]),
+    "Gm": (31, [43, 50, 57, 58, 65], [43, 43, 50, 43, 46, 43, 45, 43]),
+    "A": (33, [45, 52, 55, 61, 64], [45, 45, 52, 45, 49, 45, 50, 45]),
 }
+# The hit's low brass: a D minor cluster from D1 up.
+CLUSTER = [26, 38, 45, 50, 53]
+# The line the strings carry through the drop, falling a step at a time to D: [beat, note, beats].
+LINE = [(16, 81, 2), (18, 82, 2), (20, 81, 2), (22, 79, 2), (24, 77, 2), (26, 76, 2), (28, 74, 3.5)]
+# The piano's few notes while the lamp charges, and after the last hit: [beat, note, velocity].
+PIANO = [
+    (0, 62, 0.42), (0, 69, 0.5), (2, 70, 0.4), (3, 69, 0.34),
+    (4, 74, 0.4), (4, 65, 0.3), (6, 72, 0.34), (8, 70, 0.4), (10, 69, 0.42), (10, 73, 0.32),
+    (29, 69, 0.38), (30.5, 74, 0.3),
+]
 
 
 def chord_at(beat):
@@ -53,197 +67,212 @@ def chord_at(beat):
 # The charge, as the composition draws it: it starts 1.4 s before the first frame and is full as
 # the lamp squashes (`chargeLevel` in src/kit/light.ts).
 CHARGE_FROM = -1.4
+GAP, FIRE, HIT, STOP = cue["squash"], cue["fire"], cue["hit"], cue["stop"]
 
 
 def charge(t):
-    return float(np.clip((t - CHARGE_FROM) / (at(cue["squash"]) - CHARGE_FROM), 0, 1))
+    return float(np.clip((t - CHARGE_FROM) / (at(GAP) - CHARGE_FROM), 0, 1))
 
 
-s.reset(7)
-drums, low, music, keys, fx = (s.Bus(TOTAL + 4) for _ in range(5))
+s.reset(11)
+room = s.reverb(3.6, 0.9, 0.03)
+drums, low, bows, keys, fx = (s.Bus(TOTAL + 5) for _ in range(5))
 kicks = []
-
-HIT, DROP_END, GAP, FIRE = cue["hit"], cue["stop"], cue["squash"], cue["fire"]
 
 # ---------------------------------------------------------------- the charge
 
-# The first frame lands with a thump, and the hum starts.
-drums.add(0, s.kick(1.0, 0.5), gain=0.8, wet=0.05)
-fx.add(0, s.boom(1.6, 0.7), gain=0.35, wet=0.2)
-kicks.append(0)
+# The first frame lands as a deep hit; a drone holds D under the whole charge, and stops dead with it.
+fx.add(0, s.boom(2.4, 1.0), gain=0.3, wet=0.35)
+drums.add(0, s.taiko(0.55, 58, 1.6), gain=0.5, wet=0.3)
+low.add(0, s.drone([38, 45, 50], at(GAP), cutoff=420, release=0.05, attack=0.4), gain=0.5, wet=0.3)
 
-# Each knock that shakes the lamp is a beat: the heartbeat kick in the first bar, then the roll.
+for beat, note, velocity in PIANO:
+    keys.add(at(beat), s.piano(note, velocity, 4.5), gain=0.4, pan_to=(note - 68) / 24, wet=0.55)
+
+# Each knock that shakes the lamp is a beat: a heartbeat in the first bar, then a roll of low toms
+# that grows harder and higher as it charges, with a tick of metal on top once it's fast.
 for first, last, step in sheet["knocks"]:
     for beat in np.arange(first, last - 1e-9, step):
         t = at(beat)
-        level = 0.2 + 0.8 * charge(t) ** 1.2
+        p = charge(t)
         if beat < 4:
             if beat > 0:
-                drums.add(t, s.lowpass(s.kick(0.9, 0.4), 260), gain=0.45, wet=0.05)
+                drums.add(t, s.lowpass(s.deep_kick(0.7), 180), gain=0.6, wet=0.15)
+                drums.add(t + 0.17, s.lowpass(s.deep_kick(0.45), 160), gain=0.45, wet=0.15)
                 kicks.append(t)
-        else:
-            # Denser hits play softer, so the roll's loudness climbs steadily rather than in steps.
-            p = charge(t)
-            hit = s.snare(level, tone=170 + 170 * p, snap=0.6 + 0.6 * p)
-            drums.add(t, hit, gain=0.36 * (0.55 + 0.45 * level) * (step / 0.5) ** 0.3, pan_to=0.06 * np.sin(beat * 7), wet=0.18)
+            continue
+        level = 0.2 + 0.8 * p**1.2
+        tom = s.taiko(level, 88 + 40 * p, 0.45, decay=0.14)
+        drums.add(t, tom, gain=0.42 * (step / 0.5) ** 0.3, pan_to=0.18 if int(beat / step) % 2 else -0.18, wet=0.22)
+        if step <= 0.25:
+            drums.add(t, s.tock(level, 2600), gain=0.08, pan_to=0.3, wet=0.15)
 
-# The kick runs straight through the build, and stops for the last bar's thirty-seconds.
-for beat in range(4, 10):
-    drums.add(at(beat), s.kick(0.85), gain=0.42 + 0.06 * (beat - 4), wet=0.05)
-    kicks.append(at(beat))
+# A watch ticks under the charge, louder as it grows.
+for i in range(int(GAP * 2)):
+    fx.add(at(i / 2), s.tock(0.7 if i % 2 == 0 else 0.5, 2300 if i % 2 == 0 else 1900), gain=0.09 + 0.06 * charge(at(i / 2)), pan_to=0.35, wet=0.12)
 
-# The arpeggio, sixteenths, its filter opening and its level rising as the charge grows.
-for i in range(int(GAP * 4)):
-    beat = i / 4
-    t = at(beat)
-    _, _, arp, _ = CHORDS[chord_at(beat)]
-    note = arp[i % len(arp)]
-    accent = 1.0 if i % 4 == 0 else 0.7
-    p = charge(t)
-    music.add(t, s.pluck(note, 0.55 * accent, 0.22, bright=0.12 + 0.88 * p**1.4), gain=0.16 + 0.18 * p, pan_to=(note - 66) / 24, wet=0.22)
-
-# A pad under the build, dark in the first bar and opening into the rush.
-for name, first, length in sheet["chords"]:
-    if first >= GAP:
-        break
-    _, voicing, _, _ = CHORDS[name]
-    seconds = min(length, GAP - first) * BEAT
-    pad = s.supersaw(voicing, seconds, cutoff=500 + 3800 * charge(at(first + length)) ** 2, attack=0.3, release=0.05)
-    music.add(at(first), pad, gain=0.2 if first == 0 else 0.26, wet=0.35)
-
-# The bass comes in with the build, eighths on the root.
-for beat in np.arange(4, 10, 0.5):
-    root, _, _, _ = CHORDS[chord_at(beat)]
-    low.add(at(beat), s.bass(root, 0.75 if beat % 1 == 0 else 0.55, 0.2, bright=0.35 + 0.5 * charge(at(beat))), gain=0.4, wet=0.05)
-
-# The riser climbs from the build to the squash.
-fx.add(at(4), s.riser(at(GAP) - at(4), 280, 9000, curve=2.4), gain=0.12, wet=0.3)
-
-# The lamp's hum follows the charge, and whines up as it squashes; it stops as the shot leaves.
-n = int(at(FIRE) * s.SR)
+# The Shepard tone: it seems to rise for ever, and climbs faster as the lamp charges.
+n = int(at(GAP) * s.SR)
 t = np.arange(n) / s.SR
-level = np.array([charge(x) for x in t[::480]])
-p = np.interp(t, t[::480], level)
-squash = np.clip((t - at(GAP)) / (at(FIRE) - at(GAP)), 0, 1)
-pitch = 47 + 26 * p**1.5 + 7 * squash
-fx.add(0, s.hum(pitch, (0.15 + 0.85 * p**2) * np.clip((at(FIRE) - t) / 0.01, 0, 1)), gain=0.075, wet=0.15)
+p = np.interp(t, t[::480], [charge(x) for x in t[::480]])
+fx.add(0, s.shepard(0.06 + 0.9 * p**2, (0.15 + 0.85 * p**1.5) * np.clip((at(GAP) - t) / 0.04, 0, 1)), gain=0.13, wet=0.35)
 
-# Crackles as the motes gather: denser and louder as it charges.
-fx.add(
-    0,
-    s.crackle(at(GAP), lambda x: 0.35 * (30 + 220 * charge(x) ** 2), lambda x: 0.25 + 0.75 * charge(x)),
-    gain=0.18,
-    wet=0.25,
-)
+# From the second bar, the strings: spiccato sixteenths from a murmur to full, over a section that swells.
+for i in range(16, int(GAP * 4)):
+    beat = i / 4
+    _, _, figure = CHORDS[chord_at(beat)]
+    p = charge(at(beat))
+    accent = 1.0 if i % 4 == 0 else 0.8 if i % 2 == 0 else 0.62
+    bows.add(at(beat), s.spiccato(figure[i % 8], (0.3 + 0.7 * p) * accent, bright=0.25 + 0.7 * p), gain=0.5, wet=0.3)
+for name, first, length in sheet["chords"]:
+    if first < 4 or first >= GAP:
+        continue
+    seconds = (min(first + length, GAP) - first) * BEAT
+    p0, p1 = charge(at(first)), charge(at(first) + seconds)
+    for note in CHORDS[name][1][1:]:
+        bows.add(at(first), s.strings(note, seconds, bright=(0.1 + 0.6 * p0, 0.2 + 0.7 * p1), attack=0.6, release=0.05), gain=0.14, wet=0.45)
 
-# ---------------------------------------------------------------- the squash and the shot
+# Taiko on the build's bar lines, and the bass under the rush, eighths on the root.
+for beat, velocity in ((4, 0.8), (8, 0.95)):
+    drums.add(at(beat), s.taiko(velocity, 60, 1.6), gain=0.6, wet=0.35)
+for beat in np.arange(8, GAP, 0.5):
+    low.add(at(beat), s.bass(CHORDS[chord_at(beat)][0] + 12, 0.85 if beat % 1 == 0 else 0.6, 0.22, bright=0.3), gain=0.45, wet=0.05)
+fx.add(at(8), s.riser(at(GAP) - at(8), 180, 4200, curve=2.2), gain=0.09, wet=0.4)
 
-fx.add(at(FIRE) - 0.24, s.inhale(0.24), gain=0.3, wet=0.1)
-shot = s.zap(at(HIT) - at(FIRE) + 0.12, 2800, 240)
-fx.add(at(FIRE), shot, gain=0.5, pan_to=np.linspace(-0.45, 0.3, len(shot)), wet=0.3)
-fx.add(at(FIRE), s.whoosh(at(HIT) - at(FIRE), 500, 4200), gain=0.25, pan_to=0.0, wet=0.3)
+# ---------------------------------------------------------------- the squash, the shot and the hit
+
+# As the lamp holds its breath, everything stops, reverb and all (the mix's choke, below), but for
+# a breath drawn in; the shot lands a thump as the lamp recoils.
+breath = s.Bus(TOTAL + 5)
+breath.add(at(FIRE) - 0.16, s.inhale(0.16), gain=0.2, wet=0.1)
+drums.add(at(FIRE), s.taiko(0.45, 70, 0.8), gain=0.4, wet=0.25)
+# The shot is light leaving glass: a struck pair high up, and air that crosses with it.
+keys.add(at(FIRE), s.glass(98, 1.6, 0.9), gain=0.12, pan_to=-0.4, wet=0.5)
+keys.add(at(FIRE), s.glass(93, 1.4, 0.7), gain=0.08, pan_to=-0.3, wet=0.5)
+flight = at(HIT) - at(FIRE)
+fx.add(at(FIRE), s.whoosh(flight, 900, 5200), gain=0.16, pan_to=np.linspace(-0.45, 0.3, int(round(flight * s.SR))), wet=0.35)
+# The hit's own reverb, reversed, swells up into it.
+hit = s.braam(CLUSTER, 3.4, 1.0)
+fx.add(at(FIRE), s.swell_into(hit, flight, room), gain=0.22, wet=0.0)
+
+low.add(at(HIT), hit, gain=0.55, wet=0.35)
+drums.add(at(HIT), s.taiko(1.0, 52, 2.0), gain=0.75, wet=0.35)
+drums.add(at(HIT), s.deep_kick(1.0), gain=0.8, wet=0.1)
+fx.add(at(HIT), s.boom(3.0, 1.2), gain=0.3, wet=0.3)
+drums.add(at(HIT), s.lowpass(s.crash(1.0, 4.0, decay=1.6), 7000), gain=0.3, wet=0.4)
+kicks.append(at(HIT))
 
 # ---------------------------------------------------------------- the drop
 
-drums.add(at(HIT), s.kick(1.0, 0.6, punch=1.2), gain=0.95, wet=0.05)
-fx.add(at(HIT), s.boom(2.2, 1.0), gain=0.5, wet=0.25)
-drums.add(at(HIT), s.crash(1.0, 2.6), gain=0.5, wet=0.3)
-music.add(at(HIT), s.stab(CHORDS["D"][1], 1.0, 0.6), gain=0.5, wet=0.3)
-# The star spins: a run of glass up the chord.
-for i, note in enumerate((86, 90, 93, 98)):
-    keys.add(at(HIT) + 0.08 + i * 0.06, s.bell(note, 2.0, 0.7), gain=0.16, pan_to=0.15 + i * 0.1, wet=0.5)
-# The badge swells and springs back.
-fx.add(at(HIT) + 0.1, s.boing(0.9, 290, 7.5, 0.2), gain=0.09, pan_to=0.2, wet=0.25)
-
-for beat in range(int(HIT), int(DROP_END)):
-    t0 = at(beat)
-    if beat > HIT:
-        drums.add(t0, s.kick(0.95), gain=0.85, wet=0.04)
-    kicks.append(t0)
-    if beat % 2 == 1:
-        drums.add(t0 + s.rng.uniform(-0.003, 0.003), s.clap(0.9), gain=0.34, pan_to=0.04, wet=0.25)
-    for q in range(4):
-        accent = (0.55, 0.25, 0.8, 0.3)[q]
-        drums.add(t0 + q * BEAT / 4 + s.rng.uniform(-0.003, 0.003), s.hat(accent), gain=0.13, pan_to=0.25 if q % 2 else -0.15, wet=0.1)
-    drums.add(t0 + BEAT / 2, s.hat(0.7, open=True), gain=0.09, pan_to=-0.2, wet=0.15)
-    root, _, _, _ = CHORDS[chord_at(beat)]
-    # The offbeat bass, with an octave jump at the end of each bar.
-    lift = 12 if beat % 4 == 3 else 0
-    low.add(t0 + BEAT / 2, s.bass(root + lift, 0.9, 0.24), gain=0.48, wet=0.04)
-    if beat % 4 == 0:
-        low.add(t0, s.sub(root - 12, BEAT * 0.9, 0.8), gain=0.35, wet=0.0)
-for beat in (20, 24):
-    drums.add(at(beat), s.crash(0.7, 2.0), gain=0.32, wet=0.3)
-
-# The pumping pad, a bar per chord.
-for name, first, length in sheet["chords"]:
-    if first < HIT or first >= DROP_END:
-        continue
-    _, voicing, _, _ = CHORDS[name]
-    music.add(at(first), s.supersaw(voicing, length * BEAT, cutoff=5200, attack=0.01, release=0.08), gain=0.34, wet=0.3)
-
-# The lead's riff, a bar per chord, from the drop to the stop; the hit itself keeps its first note.
-for bar_start in range(int(HIT), int(DROP_END), 4):
-    _, _, _, riff = CHORDS[chord_at(bar_start)]
-    for i, note in enumerate(riff):
-        if note is None or (bar_start == HIT and i == 0):
+# Half time: a kick on the bar, the snare on its third beat, a lighter kick before the next bar.
+groove = sheet["groove"]
+for bar in range(groove["from"], groove["to"], sheet["beatsPerBar"]):
+    for offset, weight in groove["hits"]:
+        beat = bar + offset
+        if beat == HIT:
             continue
-        t0 = at(bar_start + i / 2)
-        music.add(t0, s.lead(note, BEAT * 0.38, 0.9 if i % 3 == 0 else 0.75), gain=0.3, pan_to=-0.1, wet=0.25)
-        keys.add(t0, s.bell(note + 12, 0.6, 0.25), gain=0.05, pan_to=0.3, wet=0.4)
+        if offset == 2:
+            drums.add(at(beat), s.big_snare(weight), gain=0.5, wet=0.45)
+        else:
+            drums.add(at(beat), s.deep_kick(weight), gain=0.62, wet=0.08)
+            kicks.append(at(beat))
+# Taiko on the story's beats: the sign's catch, the cursor, the end card; and a fill into the last hit.
+for beat, velocity in ((16, 0.8), (20, 0.7), (24, 0.9)):
+    drums.add(at(beat), s.taiko(velocity, 56, 1.8), gain=0.46, wet=0.35)
+for beat, velocity, pitch in ((27, 0.6, 80), (27.25, 0.65, 86), (27.5, 0.75, 92), (27.75, 0.85, 100)):
+    drums.add(at(beat), s.taiko(velocity, pitch, 0.5, decay=0.16), gain=0.45, wet=0.3)
+for beat in np.arange(HIT, STOP, 0.5):
+    fx.add(at(beat), s.tock(0.6 if beat % 1 == 0 else 0.45, 2300 if beat % 1 == 0 else 1900), gain=0.06, pan_to=0.35, wet=0.12)
+
+# The strings and the brass grow through the drop, so the end card arrives at its height.
+def rising(beat):
+    return 0.85 + 0.4 * (beat - HIT) / (STOP - HIT)
+
+
+for i in range(int(HIT * 4), int(STOP * 4)):
+    beat = i / 4
+    _, _, figure = CHORDS[chord_at(beat)]
+    accent = 1.0 if i % 4 == 0 else 0.8 if i % 2 == 0 else 0.62
+    bows.add(at(beat), s.spiccato(figure[i % 8], accent, bright=0.75), gain=0.5 * rising(beat), wet=0.3)
+for beat in np.arange(HIT, STOP, 0.5):
+    low.add(at(beat), s.bass(CHORDS[chord_at(beat)][0] + 12, 0.9 if beat % 1 == 0 else 0.62, 0.22, bright=0.35), gain=0.45, wet=0.05)
+for name, first, length in sheet["chords"]:
+    if first < HIT or first >= STOP:
+        continue
+    root, voicing, _ = CHORDS[name]
+    seconds = length * BEAT
+    for note in voicing[1:]:
+        bows.add(at(first), s.strings(note, seconds, bright=(0.45, 0.7), attack=0.25, release=0.6), gain=0.14 * rising(first), wet=0.45)
+    brass = root + 12
+    low.add(at(first), s.drone([brass, brass + 7, brass + 12], seconds, cutoff=700 if first < 24 else 1100, release=0.4, attack=0.08), gain=0.3 * rising(first), wet=0.3)
+
+# The line, high on the strings, with the piano marking each step.
+for beat, note, beats in LINE:
+    bows.add(at(beat), s.strings(note, beats * BEAT, bright=(0.5, 0.65), attack=0.12, release=0.5, voices=8, vibrato=0.005), gain=0.25, wet=0.5)
+    keys.add(at(beat), s.piano(note - 12, 0.32, 3.0), gain=0.3, pan_to=0.15, wet=0.5)
 
 # ---------------------------------------------------------------- the sign, the cursor and the click
 
 catch = at(cue["catch"])
-fx.add(catch - 0.22, s.slide(0.24, 1700, 760), gain=0.07, pan_to=0.25, wet=0.3)
-fx.add(catch, s.knock(1.0), gain=0.45, pan_to=0.2, wet=0.15)
-fx.add(catch + 0.04, s.creak(0.55, 880), gain=0.07, pan_to=0.2, wet=0.2)
+fx.add(catch - 0.225, s.whoosh(0.26, 1400, 500), gain=0.07, pan_to=0.25, wet=0.25)
+fx.add(catch, s.knock(1.0), gain=0.4, pan_to=0.2, wet=0.15)
+fx.add(catch + 0.03, s.creak(0.55, 760), gain=0.06, pan_to=0.2, wet=0.2)
 
-fx.add(at(cue["cursor"]), s.whoosh(at(cue["hover"]) - at(cue["cursor"]), 700, 2600), gain=0.12, pan_to=np.linspace(0.6, 0.1, int((at(cue["hover"]) - at(cue["cursor"])) * s.SR)), wet=0.2)
+glide = at(cue["hover"]) - at(cue["cursor"])
+fx.add(at(cue["cursor"]), s.whoosh(glide, 700, 2400), gain=0.08, pan_to=np.linspace(0.6, 0.1, int(round(glide * s.SR))), wet=0.2)
 
 press = at(cue["click"])
-fx.add(press - 0.02, s.click(1.0), gain=0.35, pan_to=0.15, wet=0.05)
-for i, note in enumerate((86, 93, 98)):
-    keys.add(press + i * 0.045, s.bell(note, 2.4, 0.9), gain=0.17, pan_to=0.1 + 0.1 * i, wet=0.5)
-fx.add(press + 0.2, s.tick(1.0), gain=0.12, pan_to=0.2, wet=0.1)
-fx.add(press + 0.03, s.boing(0.5, 420, 9, 0.15), gain=0.06, pan_to=0.15, wet=0.2)
-# The sign jumps on its rope.
-fx.add(press + 0.04, s.slide(0.16, 650, 1500), gain=0.05, pan_to=0.25, wet=0.3)
+fx.add(press - 0.02, s.click(1.0), gain=0.32, pan_to=0.15, wet=0.05)
+fx.add(press, s.boom(1.2, 0.5), gain=0.22, wet=0.2)
+keys.add(press, s.glass(98, 3.0, 0.9), gain=0.14, pan_to=0.2, wet=0.55)
+keys.add(press + 0.04, s.glass(105, 2.4, 0.6), gain=0.08, pan_to=0.3, wet=0.55)
+keys.add(press, s.piano(74, 0.45, 4.0), gain=0.3, pan_to=0.1, wet=0.5)
+keys.add(press, s.piano(81, 0.38, 4.0), gain=0.26, pan_to=0.2, wet=0.5)
+fx.add(press + 0.2, s.tick(1.0), gain=0.1, pan_to=0.2, wet=0.1)
+fx.add(press + 0.04, s.whoosh(0.2, 600, 1800), gain=0.05, pan_to=0.25, wet=0.25)
 
 # ---------------------------------------------------------------- the end
 
-fx.add(at(cue["end"]) - 0.1, s.whoosh(0.9, 400, 2000), gain=0.14, wet=0.3)
-stop = at(DROP_END)
-drums.add(stop, s.kick(1.0, 0.6), gain=0.9, wet=0.1)
-kicks.append(stop)
-drums.add(stop, s.crash(0.9, 2.8), gain=0.42, wet=0.35)
-fx.add(stop, s.boom(2.4, 1.0), gain=0.35, wet=0.3)
-music.add(stop, s.stab(CHORDS["D"][1], 1.0, 0.7), gain=0.45, wet=0.35)
-music.add(stop, s.supersaw(CHORDS["D"][1], (BEATS - DROP_END) * BEAT - 0.2, cutoff=2600, attack=0.05, release=0.3), gain=0.24, wet=0.45)
-music.add(stop, s.lead(86, BEAT * 1.5, 0.9), gain=0.26, wet=0.35)
-for i, note in enumerate((81, 86, 90)):
-    keys.add(stop + 0.5 + i * BEAT, s.bell(note, 2.5, 0.7), gain=0.12, pan_to=-0.2 + 0.2 * i, wet=0.55)
+end = at(cue["end"])
+fx.add(end - 0.5, s.swell_into(s.crash(0.8, 3.0, decay=1.2), 0.5, room), gain=0.07, wet=0.0)
+drums.add(end, s.lowpass(s.crash(0.8, 3.0, decay=1.2), 6500), gain=0.25, wet=0.4)
 
-# The hum comes back for the last bar, rising to where it starts, so a loop runs on without a seam.
-start = at(cue["recharge"])
-n = int((TOTAL - start) * s.SR)
+# The last hit is shorter than the first, so the last bar is quiet enough to run into the loop.
+stop = at(STOP)
+low.add(stop, s.braam(CLUSTER, 2.6, 0.9), gain=0.45, wet=0.4)
+drums.add(stop, s.taiko(1.0, 50, 2.2), gain=0.75, wet=0.35)
+drums.add(stop, s.deep_kick(1.0), gain=0.8, wet=0.1)
+kicks.append(stop)
+drums.add(stop, s.lowpass(s.crash(1.0, 4.0, decay=1.8), 7000), gain=0.3, wet=0.45)
+fx.add(stop, s.boom(2.0, 1.0), gain=0.28, wet=0.3)
+for note in CHORDS["Dm"][1][1:]:
+    bows.add(stop, s.strings(note, TOTAL - stop - 0.6, bright=(0.5, 0.15), attack=0.05, release=0.6), gain=0.12, wet=0.5)
+low.add(stop, s.drone([38, 50], TOTAL - stop - 0.4, cutoff=300, release=0.4, attack=0.05), gain=0.4, wet=0.3)
+
+# The last bar runs back into the first frame: the watch and the Shepard tone start again.
+again = at(cue["recharge"])
+for i in range(int((TOTAL - again) * 2)):
+    fx.add(again + i * BEAT / 2, s.tock(0.5, 2300 if i % 2 == 0 else 1900), gain=0.05 + 0.02 * i, pan_to=0.35, wet=0.12)
+n = int((TOTAL - again) * s.SR)
 k = np.linspace(0, 1, n)
 p0 = charge(0)
-fx.add(start, s.hum(40 + (47 + 26 * p0**1.5 - 40) * k, (0.15 + 0.85 * p0**2) * k**1.5), gain=0.075, wet=0.15)
-fx.add(start, s.crackle(TOTAL - start, lambda x: 4 + 30 * (x / (TOTAL - start)) ** 2, lambda x: 0.3), gain=0.12, wet=0.25)
+fx.add(again, s.shepard(0.06 * np.ones(n), (0.15 + 0.85 * p0**1.5) * k**1.5), gain=0.13, wet=0.35)
 
 # ---------------------------------------------------------------- mix
 
-pump = s.sidechain(TOTAL + 4, kicks, depth=0.6, release=0.16)
-music.duck(1 - 0.75 * (1 - pump))
-low.duck(1 - 0.55 * (1 - pump))
-mix = s.master([drums, low, music, keys, fx], seconds=TOTAL, target=-14.0, ceiling=-1.0)
+pump = s.sidechain(TOTAL + 5, kicks, depth=0.5, release=0.22)
+low.duck(1 - 0.5 * (1 - pump))
+bows.duck(1 - 0.3 * (1 - pump))
+# The choke: the mix falls silent 20 ms into the squash and comes back as the shot leaves.
+t = np.arange(int((TOTAL + 5) * s.SR)) / s.SR
+choke = np.interp(t, [at(GAP) + 0.02, at(GAP) + 0.06, at(FIRE) - 0.01, at(FIRE)], [1, 0.02, 0.02, 1])
+mix = s.master([drums, low, bows, keys, fx], seconds=TOTAL, target=-14.0, ceiling=-1.0, room=room, wet=0.75, choke=choke, through=[breath], presence=3.0)
 
 out = ROOT / "public/star"
 out.mkdir(parents=True, exist_ok=True)
 s.write(out / "score.wav", mix)
 
-# Its level at every video frame, and its cues, for the storyboard sheet's waveform.
+# Its level at every video frame, for the storyboard sheet's waveform.
 fps = sheet["fps"]
 per = s.SR // fps
 frames = len(mix) // per
