@@ -107,6 +107,8 @@ public final class PhotoStore: Sendable {
         /// Every shard was opened or found missing, so the totals count all of them.
         var measured = false
         var evicting = false
+        /// Tiers a write found over budget while an eviction ran, which it looks at again before it ends.
+        var evictAgain: Set<Tier> = []
         var leftoversRemoved = false
     }
 
@@ -297,24 +299,46 @@ public final class PhotoStore: Sendable {
     }
 
     /// Once the tier is over `budget`, evicts its least recently used records down to nine tenths
-    /// of it, one eviction at a time.
+    /// of it, one eviction at a time. A write that finds one running leaves it its tier to look at
+    /// again before it ends, so no tier stays over its budget after its last write.
     private func keep(_ tier: Tier, within budget: Int64) {
         if !state.withLock({ $0.measured }) {
             open()
         }
         guard total(tier) > budget, state.withLock({ state in
-            guard !state.evicting else { return false }
+            guard !state.evicting else {
+                state.evictAgain.insert(tier)
+                return false
+            }
             state.evicting = true
             return true
         }) else { return }
-        defer { state.withLock { $0.evicting = false } }
+        var tiers: Set<Tier> = [tier]
+        while !tiers.isEmpty {
+            for tier in tiers {
+                if let budget = budgets[tier], total(tier) > budget {
+                    evictLeastRecentlyUsed(tier, downTo: budget / 10 * 9)
+                }
+            }
+            tiers = state.withLock { state in
+                defer { state.evictAgain = [] }
+                if state.evictAgain.isEmpty {
+                    state.evicting = false
+                }
+                return state.evictAgain
+            }
+        }
+    }
+
+    /// Drops the tier's least recently used records until it takes `target` bytes or fewer.
+    private func evictLeastRecentlyUsed(_ tier: Tier, downTo target: Int64) {
         var candidates: [(entry: StoreEntry, shard: Int)] = []
         for number in 0 ..< Self.shardCount {
             let entries = withShard(number) { shard, _ in shard.table.entries.filter { $0.tier == tier } } ?? []
             candidates += entries.map { ($0, number) }
         }
         candidates.sort { ($0.entry.used, $0.shard, $0.entry.location) < ($1.entry.used, $1.shard, $1.entry.location) }
-        var excess = total(tier) - budget / 10 * 9
+        var excess = total(tier) - target
         var victims = [[StoreEntry]](repeating: [], count: Self.shardCount)
         for candidate in candidates {
             guard excess > 0 else { break }
