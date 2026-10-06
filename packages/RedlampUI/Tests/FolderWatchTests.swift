@@ -101,14 +101,19 @@ struct FolderWatchTests {
         #expect(model.items.filter(\.isSettling).map(\.name) == [])
     }
 
-    @Test func `a photo dated ahead of the clock isn't taken for one being copied in`() async throws {
+    @Test func `a photo dated ahead of the clock isn't taken for one still being written`() async throws {
         defer { try? FileManager.default.removeItem(at: root) }
+        let now = Date()
+        #expect(FolderLibrary.isSettling(now.addingTimeInterval(-1), at: now))
+        #expect(!FolderLibrary.isSettling(now.addingTimeInterval(-FolderLibrary.settleDelay), at: now))
+        #expect(!FolderLibrary.isSettling(now.addingTimeInterval(3600), at: now), "a share's clock ahead of this Mac's")
+
         try write("Trip/A.ARW")
         let (model, _) = try await open("Trip")
-
-        try write("Trip/B.ARW", age: -3600)
+        try write("Trip/B.ARW", bytes: 10, age: -3600)
         try await eventually { model.items.count == 2 }
-        #expect(model.items.last?.isSettling == false)
+        #expect(model.items.map(\.name) == ["A.ARW", "B.ARW"])
+        #expect(model.items.last?.isSettling == false, "its thumbnail doesn't wait an hour")
     }
 
     @Test func `with subfolders, a new subfolder's photos arrive in order`() async throws {

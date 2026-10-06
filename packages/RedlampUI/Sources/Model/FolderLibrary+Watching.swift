@@ -37,6 +37,14 @@ struct Watching {
 /// polled.
 extension FolderLibrary {
     nonisolated static let settleDelay: TimeInterval = 2
+
+    /// A file written in the last `settleDelay` may still be being written. One dated ahead of the
+    /// clock (a share's clock that runs fast, a file copied with its date) isn't.
+    nonisolated static func isSettling(_ modified: Date, at now: Date) -> Bool {
+        let age = now.timeIntervalSince(modified)
+        return age >= 0 && age < settleDelay
+    }
+
     static let pollInterval: TimeInterval = 15
 
     /// Watches the roots that can be found; called whenever they change.
@@ -153,12 +161,10 @@ extension FolderLibrary {
     /// Diffs a directory's new listing into the photos (nil: it's gone, with everything beneath).
     func merge(_ listing: FolderListing?, at directory: String) {
         guard !isShownFromLibrary else { return }
-        let now = Date()
+        let now = clock()
         var incoming: [URL: LibraryItem] = [:]
         for var item in listing.map(LibraryItem.items) ?? [] {
-            // Dated further ahead than that, a photo was copied with its source's date (a camera's
-            // clock set ahead), and has finished.
-            item.isSettling = abs(now.timeIntervalSince(item.modified)) < Self.settleDelay
+            item.isSettling = Self.isSettling(item.modified, at: now)
             incoming[item.url] = item
         }
         var removed = IndexSet()

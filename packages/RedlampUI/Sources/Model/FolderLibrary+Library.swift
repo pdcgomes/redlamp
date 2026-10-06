@@ -221,17 +221,17 @@ extension FolderLibrary {
         var removed = IndexSet(change.removed.compactMap { positions[$0] })
         var updated: [URL] = []
         var inserting: [LibraryItem] = []
-        let now = Date()
+        let now = clock()
         for var item in change.inserted + change.updated {
             guard let index = positions[item.url] else {
-                item.isSettling = now.timeIntervalSince(item.modified) < Self.settleDelay
+                item.isSettling = Self.isSettling(item.modified, at: now)
                 inserting.append(item)
                 continue
             }
             removed.remove(index)
             var kept = Self.keeping(items[index], as: item)
             if kept.size != items[index].size || kept.modified != items[index].modified {
-                kept.isSettling = now.timeIntervalSince(kept.modified) < Self.settleDelay
+                kept.isSettling = Self.isSettling(kept.modified, at: now)
             }
             if kept != items[index] {
                 items[index] = kept
@@ -258,11 +258,11 @@ extension FolderLibrary {
             try? await Task.sleep(for: .seconds(Self.settleDelay))
             guard let self, self.generation == generation, fromLibrary.list != nil else { return }
             fromLibrary.settling = false
-            let now = Date()
+            let now = clock()
             var settled = IndexSet()
             var waiting = false
             for index in items.indices where items[index].isSettling {
-                if now.timeIntervalSince(items[index].modified) >= Self.settleDelay {
+                if !Self.isSettling(items[index].modified, at: now) {
                     items[index].isSettling = false
                     settled.insert(index)
                 } else {

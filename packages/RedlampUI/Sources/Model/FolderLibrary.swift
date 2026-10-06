@@ -85,6 +85,8 @@ public final class FolderLibrary {
     /// The library, when it's on (`attach`).
     @ObservationIgnored public internal(set) var service: LibraryService?
     @ObservationIgnored var fromLibrary = FromLibrary()
+    /// The time the settle rule (`isSettling(_:at:)`) reads.
+    @ObservationIgnored var clock: () -> Date = { Date() }
     @ObservationIgnored var generation = 0
     @ObservationIgnored private var observers: [UUID: @MainActor (LibraryDiff) -> Void] = [:]
     /// The first rows of probe batches still waiting, for `prioritize`.
