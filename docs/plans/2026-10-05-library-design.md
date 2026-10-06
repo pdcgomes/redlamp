@@ -237,6 +237,24 @@ Sorting is separate from the query: captured (the default), name, rating, edited
 | `mark` | the quick-collection mark |
 | `customLabel` | a custom label's name: an unknown `label` value makes a sidecar unreadable to older builds, so custom labels never go in `label` |
 
+## Other apps' metadata (LIB-24)
+
+`LibraryXMP` reads what other apps wrote and, when the library's option is on (off by default), writes standard `.xmp` beside each photo, whatever the root's sidecar placement. The `.redlamp` sidecar stays the source of truth (DEC-37); originals are never written.
+
+| Redlamp | Read | Written |
+| --- | --- | --- |
+| Rating | `xmp:Rating` 1 to 5, IPTC's StarRating | `xmp:Rating` |
+| Reject | `xmp:Rating` −1 | −1; the stars stay in the `.redlamp` |
+| Pick | `xmpDM:good` | `xmpDM:good` |
+| Label | `xmp:LabelColor`; `xmp:Label` in Lightroom's, Bridge's or Review Status names; `photoshop:Urgency` when turned on; darktable's labels | the name in the chosen set, with `xmp:LabelColor`; Urgency when turned on |
+| Keywords (LIB-21) | `lr:hierarchicalSubject`, and flat names from `dc:subject` | both |
+| Title and caption (LIB-22) | `dc:title`, `dc:description`, default language | the default language; other languages kept |
+
+- **Which source wins.** Other apps' value comes from `name.xmp`, then darktable's `name.ext.xmp`, then the embedded XMP, then IPTC, field by field. The first time, the `.redlamp`'s fields win and the others fill gaps; after that, against each photo's record, a field only another app changed is taken, and where both changed, the later file wins.
+- **A raw and its JPEG.** In a `name.xmp` they share, the raw decides, and a JPEG's write never clears a field. darktable's `name.ext.xmp` is read and never written.
+- **Writing** happens only when a field changed, keeps every element and namespace Redlamp doesn't own, and is atomic; change tracking is told the file is Redlamp's own.
+- **Records** of what was merged, per photo, are in the index's settings table for now.
+
 ## Modules and keys (LIB-13)
 
 | Key | Library | Develop |
@@ -419,6 +437,14 @@ The blank frames come from the editor rather than the library: when a photo is a
 - **Confirming** (full SHA-256 through each volume's readers) on the fixture with duplicates turned on: 31 to 34 MB a second on the simulated spinning disk (its ceiling 160), 45 to 50 on the NAS (110), 18 on Wi-Fi (25) and 4.9 on the VPN (5). With the reads at a high priority, the spinning disk gave 64 and the NAS 107, so most of the gap is threads waiting on this busy Mac. The external SSD read 319 MB a second cold.
 - Volumes read one file at a time get 4 MiB reads, a quarter faster on the simulated spinning disk.
 
+### Metadata with other apps (LIB-24)
+
+The `xmp` scenario, two runs, load average about 90:
+
+- Reading and merging the 20,000-photo fixture's `.xmp`: 11.8 to 17.5 s cold, 3.2 to 8.1 s warm.
+- 2,000 photos synced, 1,828 `.xmp` written: 9 to 22 s; the same photos again, unchanged, in 0.15 s.
+- 10,000 single writes: p50 6.4 to 9.9 ms, p95 about 70 ms, about 50 a second.
+
 ### Naming templates (LIB-25)
 
 Measured with `NamingBenchTests` (`REDLAMP_NAMING_BENCH=1`) and `redlamp library bench … --scenario naming`, on synthetic photos (a fifth of them a raw beside its JPEG, times to the millisecond, each folder's listing) on the M1 Ultra with other builds running (load average 31 to 72), three runs:
@@ -442,7 +468,8 @@ What it changed: the first version took 3.7 s for the million, keeping 13 to 16 
 
 - One Undo across both modules, as in Lightroom, or one per module.
 - Collections in sidecars by path (a renamed collection rewrites its photos' sidecars) or by ID (the definitions file is then needed to read them).
-- `.xmp` names for raw and JPEG pairs with the same base name.
+- The XMP merge records: a table of their own rather than one settings row per photo.
+- Photo Mechanic's Urgency numbers for its colour classes (purple 1, red 2, yellow 4, green 5, blue 6), which nothing confirmed yet.
 - The capture-time zone: EXIF's offset tags when present, else the Mac's zone at import, recorded per photo.
 - Whether the map (LIB-35) moves into 1.0.
 - Indexing folders in iCloud Drive without downloading every photo: from what's already downloaded, and the rest as it arrives.
