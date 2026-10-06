@@ -15,7 +15,11 @@ public struct PhotoList: Sendable, RandomAccessCollection {
     /// The photos in it, a bit per ID.
     let members: RowBits
 
-    init(source: PhotoSource, sort: QuerySort, ids: ContiguousArray<Int64>) {
+    /// `source`'s photos as `ids`, in order: a list made from the index, or one a view makes of photos it
+    /// lists itself (a folder the library hasn't indexed), whose IDs are its own. They must be unique and
+    /// at least 0, and they're best dense: the list and its selections take a bit for every ID up to
+    /// the highest, and 4 bytes for every ID between the lowest and the highest.
+    public init(source: PhotoSource, sort: QuerySort = QuerySort(), ids: ContiguousArray<Int64>) {
         self.source = source
         self.sort = sort
         self.ids = ids

@@ -82,6 +82,41 @@ struct PhotoSelectionTests {
         #expect(selection.isEmpty && selection.active == nil)
     }
 
+    @Test func `a range from an anchor replaces the selection, and a rubber band's photos are selected alone or added`() {
+        let list = Self.list
+        var selection = PhotoSelection()
+        selection.select(from: 10, through: 20, in: list)
+        #expect(selection.ids(in: list) == [10, 40, 20] && selection.active == 20)
+        selection.select(from: 10, through: 50, in: list)
+        #expect(selection.ids(in: list) == [50, 10] && selection.active == 50, "going back shrinks the range")
+        selection.select(from: 99, through: 30, in: list)
+        #expect(selection.ids(in: list) == [30] && selection.active == 30, "an anchor not in the list selects one")
+
+        selection.select([60, 40, 99], active: 60, in: list)
+        #expect(selection.ids(in: list) == [40, 60] && selection.count == 2 && selection.active == 60)
+        selection.select([20, 50], active: 60, in: list)
+        #expect(selection.ids(in: list) == [50, 20] && selection.active == 50, "the first in list order is active")
+        selection.select([], active: nil, in: list)
+        #expect(selection.isEmpty && selection.active == nil)
+
+        var band = PhotoSelection()
+        band.select([30, 60], active: nil, in: list)
+        selection.select(10, in: list)
+        selection.formUnion(band, in: list)
+        #expect(selection.ids(in: list) == [10, 30, 60] && selection.count == 3 && selection.active == 10)
+        var empty = PhotoSelection()
+        empty.formUnion(band, in: list)
+        #expect(empty.ids(in: list) == [30, 60] && empty.active == 30)
+        let shorter = PhotoList(source: .allPhotographs, ids: [10, 60])
+        empty.formUnion(selection, in: shorter)
+        #expect(empty.ids(in: shorter) == [10, 60] && empty.count == 2, "only the list's photos stay")
+
+        empty.activate(60)
+        #expect(empty.active == 60 && empty.count == 2)
+        empty.activate(30)
+        #expect(empty.active == 60, "a photo that isn't selected doesn't become active")
+    }
+
     @Test func `selections of the same photos are equal however they were made`() {
         let list = Self.list
         var clicked = PhotoSelection()

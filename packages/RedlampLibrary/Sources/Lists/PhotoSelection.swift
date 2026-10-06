@@ -75,6 +75,68 @@ public struct PhotoSelection: Sendable, Equatable {
         count += added
     }
 
+    /// Makes `id` the active photo, if it's selected: a photo of the selection opened in the loupe.
+    public mutating func activate(_ id: Int64) {
+        if contains(id) {
+            active = id
+        }
+    }
+
+    /// Selects every photo from `anchor` to `id` in `list`'s order, and only those, making `id` active:
+    /// ⇧ with an arrow key or a click, from the photo the selection started at, so going back over the
+    /// range shrinks it. Without `anchor` in `list`, it selects `id` alone.
+    public mutating func select(from anchor: Int64, through id: Int64, in list: PhotoList) {
+        guard list.contains(id) else { return }
+        guard list.contains(anchor) else { return select(id, in: list) }
+        select(anchor, in: list)
+        extend(to: id, in: list)
+        active = id
+    }
+
+    /// Selects these photos of `list`, and only those, making `active` active when it's among them, else
+    /// the first of them in `list`'s order: what a rubber band covers, or a selection remembered.
+    public mutating func select(_ ids: some Sequence<Int64>, active: Int64?, in list: PhotoList) {
+        var words = ContiguousArray<UInt64>(repeating: 0, count: list.members.wordCount)
+        var added = 0
+        words.withUnsafeMutableBufferPointer { words in
+            for id in ids where list.contains(id) {
+                let bit: UInt64 = 1 << UInt64(id & 63)
+                let word = words[Int(id >> 6)]
+                added &+= word & bit == 0 ? 1 : 0
+                words[Int(id >> 6)] = word | bit
+            }
+        }
+        bits = RowBits(words: words)
+        count = added
+        self.active = active.flatMap { contains($0) ? $0 : nil } ?? nearestSelected(to: 0, in: list)
+    }
+
+    /// Adds the photos `other` selects in `list`, keeping this selection's active photo, or taking
+    /// `other`'s when this has none: a rubber band drawn with ⇧ or ⌘ adds to what was selected.
+    public mutating func formUnion(_ other: PhotoSelection, in list: PhotoList) {
+        let theirs = other.bits.words
+        combine(with: list) { member, selected in member & selected }
+        var words = bits.words
+        bits = RowBits(rows: 0)
+        var selected = 0
+        words.withUnsafeMutableBufferPointer { words in
+            list.members.words.withUnsafeBufferPointer { members in
+                theirs.withUnsafeBufferPointer { theirs in
+                    for index in words.indices {
+                        let word = words[index] | (index < theirs.count ? theirs[index] & members[index] : 0)
+                        words[index] = word
+                        selected &+= word.nonzeroBitCount
+                    }
+                }
+            }
+        }
+        bits = RowBits(words: words)
+        count = selected
+        if active.map(contains) != true {
+            active = other.active.flatMap { contains($0) ? $0 : nil } ?? nearestSelected(to: 0, in: list)
+        }
+    }
+
     /// Selects every photo in `list`, keeping the active one, or making the first active.
     public mutating func selectAll(in list: PhotoList) {
         bits = list.members
