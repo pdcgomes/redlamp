@@ -57,7 +57,7 @@ struct CameraBenchReportTests {
         return CameraBenchReport(
             environment: CameraBenchEnvironment(
                 redlamp: "0.2.2-prealpha", commit: "3b6a9de", decoder: "LibRaw 0.22.2-Release",
-                processVersion: EditRecipe.currentProcessVersion, bench: CameraBench.version, system: "macOS 26.5",
+                processVersion: 12, bench: CameraBench.version, system: "macOS 26.5",
                 chip: "Apple M3 Max",
             ),
             photos: [opened, refused],
