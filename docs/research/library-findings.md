@@ -11,6 +11,8 @@ The evidence is in four notes:
 
 Added on 6 October 2026: [Katami](notes/LIB-katami.md), a raw photo browser for the Mac, read against the track, with Library Health, moments and the tracker changes they'd need, for the owner to accept.
 
+Added on 6 October 2026: [Cling](notes/LIB-cling.md), a fuzzy file finder for the Mac, read against the library's index, search and change tracking, with four of its ideas measured (names folded to bytes, a mapped column store, short text with fuzzy matching and typos, busy folders left out of change tracking) and the tracker changes they'd need, for the owner to accept.
+
 Each note keeps its sources and what it couldn't reach or confirm; this document keeps their "(unverified)" marks. Adobe's help site, DPReview and Reddit refused automated requests, so Adobe's own wording is unchecked, and Lightroom Classic's counts are thread titles sorted by keyword patterns, a rough measure of frequency.
 
 ## 1. Summary
