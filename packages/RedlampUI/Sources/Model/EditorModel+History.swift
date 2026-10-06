@@ -26,6 +26,7 @@ public extension EditorModel {
 
     /// Clears every session's history, this one's and the earlier ones saved with the photo.
     func clearHistory() {
+        guard opening == nil else { return }
         history = [HistoryStep(action: .clear, title: "History Cleared", recipe: recipe)]
         historyIndex = 0
         settingsSync.endRun()

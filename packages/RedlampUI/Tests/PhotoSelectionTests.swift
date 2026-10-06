@@ -5,6 +5,19 @@ import Synchronization
 import Testing
 @testable import RedlampUI
 
+/// The photos whose sidecars were read, in order.
+private final class ReadLog: Sendable {
+    private let read = Mutex<[URL]>([])
+
+    func add(_ url: URL) {
+        read.withLock { $0.append(url) }
+    }
+
+    var urls: [URL] {
+        read.withLock { $0 }
+    }
+}
+
 /// Several photos selected in the filmstrip: ⌘ adds or takes away, ⇧ selects a range, a plain
 /// click or the next photo selects one.
 @MainActor
@@ -161,6 +174,65 @@ struct PhotoSelectionTests {
         #expect(SidecarStore().load(for: a)?.recipe[.exposure] == 1)
     }
 
+    @Test func `going back before the next photo is read doesn't read the first one again`() async throws {
+        let photos = try await openDecoded()
+        defer { photos.cleanup() }
+        let (model, a, b, reads) = (photos.model, photos.a, photos.b, photos.reads)
+        let read = ReadLog()
+        model.beforeReadingSidecar = { url in
+            read.add(url)
+            if url == b {
+                await reads.pass()
+            }
+        }
+        model.setValue(.exposure, 1)
+        let steps = model.history.count
+
+        try await startOpening(b, in: photos)
+        model.select(a)
+        reads.release()
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(read.urls == [b], "A isn't read again")
+        #expect(model.info?.url == a && model.selection == a, "B's late read leaves the editor alone")
+        #expect(model.recipe[.exposure] == 1 && model.history.count == steps)
+        #expect(!model.hasUnmergedEdits)
+    }
+
+    @Test func `going back before the next photo is read drops what was started on the first one`() async throws {
+        let photos = try await openDecoded()
+        defer { photos.cleanup() }
+        let (model, engine, a, b) = (photos.model, photos.engine, photos.a, photos.b)
+        engine.gate.hold()
+        model.autoTone()
+        for _ in 0 ..< 400 where engine.gate.arrived == 0 {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try #require(engine.gate.arrived > 0)
+
+        try await startOpening(b, in: photos)
+        model.select(a)
+        photos.reads.release()
+        engine.gate.release()
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(model.info?.url == a)
+        #expect(model.recipe[.exposure] == 0, "Auto Tone may have read B meanwhile")
+    }
+
+    @Test func `snapshots and Clear History wait for the next photo's read`() async throws {
+        let photos = try await openDecoded()
+        defer { photos.cleanup() }
+        let (model, b) = (photos.model, photos.b)
+        model.setValue(.exposure, 1)
+        let steps = model.history.count
+
+        try await startOpening(b, in: photos)
+        model.createSnapshot()
+        model.clearHistory()
+        #expect(model.snapshots.isEmpty && model.history.count == steps)
+        photos.reads.release()
+        try await opened(b, in: model)
+    }
+
     @Test func `rating and moving on while the next photo is read rates that photo`() async throws {
         let photos = try await openDecoded()
         defer { photos.cleanup() }
@@ -199,10 +271,14 @@ struct PhotoSelectionTests {
             try await Task.sleep(for: .milliseconds(5))
         }
         try #require(engine.gate.arrived > 0)
+        model.beginStroke(at: ImagePoint(x: 0.2, y: 0.6))
+        model.continueStroke(to: ImagePoint(x: 0.4, y: 0.6))
+        await model.endEdgeStroke()
 
         try await startOpening(b, in: photos)
         engine.gate.release()
         await solving.value
+        #expect(engine.base.brushRefinements.count == 1, "the queued stroke isn't solved against B")
         guard case let .ai(kept) = model.recipe.masks.first?.components.first?.shape else {
             Issue.record("A lost its AI mask")
             return

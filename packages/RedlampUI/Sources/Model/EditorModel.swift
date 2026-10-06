@@ -72,6 +72,9 @@ public final class EditorModel {
     @ObservationIgnored private(set) var opening: URL?
     @ObservationIgnored private var openingKeepsSelection = false
     @ObservationIgnored private var openingFallback: Task<Void, Never>?
+    /// Another writer's edit of the open photo that arrived while the next one was opening,
+    /// shown if the editor goes back to it.
+    @ObservationIgnored private var adoptionWhileOpening: SidecarBase?
     /// How long the open photo stays while the next one's sidecar is read; after it, the next
     /// one's thumbnail shows until the read is done.
     @ObservationIgnored var openingPatience = Duration.milliseconds(100)
@@ -566,13 +569,19 @@ public final class EditorModel {
     /// Opens `url`. Unless `keepingSelection`, it becomes the only photo selected.
     public func select(_ url: URL, keepingSelection: Bool = false) {
         if url == selection, opening != nil, engine.openIfReady(url) != nil {
-            // Back before the next photo was read: the open one stays as it was.
+            // Back before the next photo was read: the open one stays as it was, in a new visit,
+            // since what was started on it may have read the other photo meanwhile.
+            let adoption = adoptionWhileOpening
             stopOpening()
+            visits += 1
             metadataChangesWhileOpening = []
             if !keepingSelection {
                 selectedPhotos = [url]
             }
             requestRender()
+            if let adoption {
+                adopt(adoption, for: url)
+            }
             return
         }
         guard url != opening ?? selection else {
@@ -654,6 +663,7 @@ public final class EditorModel {
         openTask?.cancel()
         openingFallback?.cancel()
         opening = nil
+        adoptionWhileOpening = nil
     }
 
     /// Ends the wait for `url`'s sidecar: the editor changes to it, or (not `ready`) to its
@@ -661,6 +671,7 @@ public final class EditorModel {
     private func changeOver(to url: URL, ready: Bool) {
         openingFallback?.cancel()
         opening = nil
+        adoptionWhileOpening = nil
         leave(for: url, keepingSelection: openingKeepsSelection, ready: ready)
         if ready {
             selectionThumbnailRequest.map(thumbnailLoader.cancel)
@@ -804,8 +815,13 @@ public final class EditorModel {
     /// Shows the open photo as another writer left it, or as merged with them. Not during a drag
     /// or with a change still to save: that save merges again, and this comes back then.
     func adopt(_ base: SidecarBase, for url: URL) {
-        guard url == selection, let info, opening == nil, !isReadOnly, editStart == nil, !hasUnsavedChange
-        else { return }
+        guard url == selection, opening == nil else {
+            if url == selection {
+                adoptionWhileOpening = base
+            }
+            return
+        }
+        guard let info, !isReadOnly, editStart == nil, !hasUnsavedChange else { return }
         let theirs = base.sidecar ?? Sidecar(recipe: EditRecipe())
         let previous = recipe
         recipe = Self.asShot(theirs.recipe, info)
@@ -1197,6 +1213,7 @@ public final class EditorModel {
     // MARK: - Snapshots
 
     public func createSnapshot() {
+        guard opening == nil else { return }
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
@@ -1209,6 +1226,7 @@ public final class EditorModel {
     }
 
     public func deleteSnapshot(_ snapshot: Snapshot) {
+        guard opening == nil else { return }
         snapshots.removeAll { $0.id == snapshot.id }
         scheduleSave()
     }
