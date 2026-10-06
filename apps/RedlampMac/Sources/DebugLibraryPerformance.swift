@@ -498,11 +498,6 @@
             try? await Task.sleep(for: .seconds(1))
             await memory.mark("edits, engine let go")
             renders.isRunning = true
-            renders.isRunning = false
-            renders.letEngineGo()
-            try? await Task.sleep(for: .seconds(1))
-            await memory.mark("edits, engine let go")
-            renders.isRunning = true
 
             let develop = NSWindow(
                 contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000),
