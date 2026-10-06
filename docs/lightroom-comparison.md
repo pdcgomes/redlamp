@@ -175,7 +175,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Folders | Yes (Classic) | Done | Different | | UX-08 | A working set of folders, not a catalog; nothing on disk is moved |
 | Copy and paste settings | Yes | Done | | | EDT-08, EDT-19 | Lightroom's checklist, remembered; also from a filmstrip photo's context menu |
 | Sync and Auto Sync | Yes | Done | | | EDT-17, EDT-18, EDT-20 | Undo with Auto Sync on gives each photo its own edit back, as in Lightroom |
-| Ratings, flags and colour labels | Yes | Done | | | | Saved with the photo's edit, shown on the filmstrip |
+| Ratings, flags and colour labels | Yes | Done | | | | Saved with the photo's edit, shown in the grid, the loupe and the filmstrip |
 | Batch export | Yes | Planned | | P4 | EDT-16 | |
 | Batch rename | Yes | In progress | | P4 | LIB-25, LIB-26 | Naming templates shared with importing, batch export and capture sessions, with a preview and Undo |
 | Open photos edited in Lightroom | Yes | Planned | | P4 | EDT-12 | Converts Lightroom's XMP sidecars once, and never writes them |
@@ -249,7 +249,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Search and filters | Yes | In progress | | P4 | LIB-06, LIB-12, LIB-18, LIB-19 | Results as you type; a filter bar of text, attributes and metadata columns with counts, sorts and saved filters, in one query language with the command palette, smart collections and the command line; traits such as long exposures; an empty search names the filter in its way |
 | Grid, Loupe, Compare and Survey | Yes | In progress | | P4 | LIB-14, LIB-16, LIB-17 | Held arrow keys move through photos without waiting; thumbnails show the edit |
 | Judging photos while culling | No | Planned | | P4 | LIB-38 | Sensor clipping and a raw histogram in the loupe and Compare, since a raw's embedded JPEG hides clipping, with focus peaking, the camera's focus point and a loupe that follows the pointer |
-| Rating, flagging and labelling many photos at once | Yes | In progress | | P4 | LIB-15 | With Undo, custom label names and colours, and marks; by key, by mouse or from the command palette |
+| Rating, flagging and labelling many photos at once | Yes | In progress | | P4 | LIB-15 | With Undo and Redo, custom labels and marks; by key, by mouse, from menus or the command palette, with Auto Advance; custom labels' colours to come |
 | Keywords | Yes | In progress | | P4 | LIB-21 | Full paths in each photo's sidecar, synonyms and export flags, Lightroom Classic's keyword file both ways, and exports following each keyword's flags |
 | Metadata editing and presets | Yes | In progress | | P4 | LIB-22 | IPTC fields on many photos at once, presets that replace, append or prefix, and capture times shifted or set, each with Undo, carried into exports |
 | Collections and smart collections | Yes | In progress | | P4 | LIB-23 | Saved in each photo's sidecar by path, so moving photos never breaks them; smart collections kept current, with stacks |
@@ -263,7 +263,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Soft frames found in bursts | Partly | Later | | | LIB-42 | The sharpest frame of each burst at the camera's focus point, proposed and never applied to a frame you decided. Lightroom Classic's assisted culling judges sharpness; whether it ranks a burst isn't documented |
 | People (face recognition) and Map | Yes | Later | | | LIB-34, LIB-35 | |
 | AI search | Yes | Later | | | LIB-32, LIB-33 | On the Mac |
-| AI-assisted culling | Yes | Later | | | OTH-02 | Lightroom's Assisted Culling judges sharpness, faces and eyes; rating, flagging and labelling work in Redlamp's filmstrip today |
+| AI-assisted culling | Yes | Later | | | OTH-02 | Lightroom's Assisted Culling judges sharpness, faces and eyes; rating, flagging and labelling work on whole selections in Redlamp's Library today |
 | Similar photos | Yes | Later | | | LIB-31 | |
 
 ## Print, book, slideshow and web
