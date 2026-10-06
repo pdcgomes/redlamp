@@ -64,6 +64,9 @@ public struct Sidecar: Sendable, Hashable {
     public var session: HistorySession?
     /// Saving removes every other session's history (Clear History).
     public var clearsHistory = false
+    /// Earlier sessions of the photo whose saves failed, written to `history/` with this one.
+    /// Never in the edit.
+    public var unsavedSessions: [HistorySession] = []
 
     public init(
         recipe: EditRecipe,
@@ -82,7 +85,7 @@ public struct Sidecar: Sendable, Hashable {
     /// Nothing worth keeping: the file can be deleted, unless earlier sessions' history is in it.
     public var isPristine: Bool {
         recipe.isPristine && snapshots.isEmpty && (metadata?.isEmpty ?? true) && unknownFields.isEmpty
-            && session?.hasEdits != true
+            && session?.hasEdits != true && !unsavedSessions.contains(where: \.hasEdits)
     }
 
     /// Same edit, ratings and snapshots, whenever it was written. Compared as written, since the
@@ -353,8 +356,9 @@ public struct SidecarStore: Sendable {
     }
 
     private static func bitmaps(of sidecar: Sidecar) -> [MaskBitmap] {
-        let session = sidecar.session.flatMap { $0.hasEdits ? $0.maskBitmaps : nil } ?? []
-        return sidecar.recipe.maskBitmaps + sidecar.snapshots.flatMap(\.recipe.maskBitmaps) + session
+        let sessions = ([sidecar.session].compactMap(\.self) + sidecar.unsavedSessions).filter(\.hasEdits)
+        return sidecar.recipe.maskBitmaps + sidecar.snapshots.flatMap(\.recipe.maskBitmaps)
+            + sessions.flatMap(\.maskBitmaps)
     }
 
     private static func hasEveryBitmap(_ sidecar: Sidecar, in package: URL) -> Bool {

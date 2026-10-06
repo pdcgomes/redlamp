@@ -79,13 +79,20 @@ extension EditorModel {
     /// A write's result. A failed one is kept to be made again; otherwise only a photo's last
     /// save counts: one waiting when it finished supersedes it.
     func saved(_ url: URL, _ write: SaveQueue.Write, _ outcome: SaveQueue.Outcome, superseded: Bool) {
-        if case let .failed(error) = outcome {
+        if case let .failed(error, merged) = outcome {
             failed(url, write, error)
+            if let merged, url == selection, opening == nil {
+                showOtherWriters(merged)
+            }
             return
         }
-        if case .sidecar = write {
+        if case let .sidecar(written) = write {
             // It holds every edit made to the photo before it.
             failedSaves[url] = nil
+            if url == selection {
+                let ids = Set(written.unsavedSessions.map(\.id))
+                unsavedSessions.removeAll { ids.contains($0.id) }
+            }
         }
         guard !superseded else { return }
         succeeded(url)
@@ -145,8 +152,11 @@ extension EditorModel {
         )
         self.saveError = saveError
         var writes = failedSaves[url]?.writes ?? []
-        if case .sidecar = write {
-            writes = [write]
+        if case let .sidecar(sidecar) = write {
+            // It holds every edit before it, but not the history of earlier visits' sessions.
+            var carried = sidecar
+            carried.unsavedSessions = Self.sessions(in: writes + [write]).filter { $0.id != sidecar.session?.id }
+            writes = [.sidecar(carried)]
         } else {
             writes.append(write)
         }

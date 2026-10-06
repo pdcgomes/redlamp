@@ -173,4 +173,76 @@ struct FailedSaveTests {
         #expect(model.saveBeforeQuitting() == .saved)
         #expect(SidecarStore().load(for: folder.photo)?.recipe[.exposure] == 0.6)
     }
+
+    @Test func `a session whose save failed again after reopening keeps its history`() async throws {
+        let folder = try Folder()
+        defer { folder.remove() }
+        let model = EditorModel(engine: StubEngine())
+        try await open(folder.photo, in: model)
+
+        try folder.lock()
+        model.setValue(.exposure, 0.6)
+        try await open(folder.other, in: model)
+        await model.saves.flush()
+        try await eventually { model.saveError?.url == folder.photo }
+        try await open(folder.photo, in: model)
+        model.setValue(.contrast, 20)
+        try await open(folder.other, in: model)
+        await model.saves.flush()
+        try await eventually { model.failedSaves[folder.photo] != nil }
+
+        try folder.unlock()
+        model.retrySave()
+        await model.saves.flush()
+        try await eventually { model.saveError == nil }
+        let sessions = SidecarStore().loadHistory(for: folder.photo)
+        #expect(sessions.count == 2, "both visits' history")
+        #expect(sessions.contains { $0.steps.contains { $0.recipe[.exposure] == 0.6 && $0.recipe[.contrast] == 0 } })
+        #expect(sessions.contains { $0.steps.contains { $0.recipe[.contrast] == 20 } })
+        #expect(SidecarStore().load(for: folder.photo)?.recipe[.contrast] == 20)
+    }
+
+    @Test func `while its saves fail, the open photo shows another writer's edit merged`() async throws {
+        let folder = try Folder()
+        defer { folder.remove() }
+        let store = SidecarStore()
+        var seeded = EditRecipe()
+        seeded[.exposure] = 0.3
+        try store.save(Sidecar(recipe: seeded), for: folder.photo)
+        let package = store.url(for: folder.photo)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: package.path) }
+        let model = EditorModel(engine: StubEngine())
+        try await open(folder.photo, in: model)
+
+        var recipe = seeded
+        recipe[.contrast] = 40
+        let theirs = Sidecar(
+            recipe: recipe,
+            metadata: PhotoMetadata(rating: 5),
+            modified: Date(timeIntervalSinceNow: 60),
+        )
+        try store.save(theirs, for: folder.photo)
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: package.path)
+        model.setValue(.exposure, 0.6)
+        let ours = model.recipe
+        model.saveNow()
+        await model.saves.flush()
+        try await eventually { model.saveError != nil && model.photoMetadata.rating == 5 }
+        #expect(model.saveError?.canRetry == true)
+        #expect(model.recipe == theirs.recipe, "theirs is newer")
+        #expect(model.photoMetadata.rating == 5)
+        #expect(model.snapshots.contains { $0.recipe == ours }, "ours kept as a snapshot")
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: package.path)
+        model.retrySave()
+        await model.saves.flush()
+        try await eventually { model.saveError == nil }
+        let saved = try #require(store.load(for: folder.photo))
+        #expect(saved.recipe == theirs.recipe)
+        #expect(saved.metadata?.rating == 5)
+        #expect(saved.snapshots.filter { $0.recipe == ours }.count == 1)
+        #expect(model.recipe == saved.recipe)
+        #expect(model.snapshots.map(\.id) == saved.snapshots.map(\.id))
+        #expect(model.snapshots.map(\.recipe) == saved.snapshots.map(\.recipe))
+    }
 }

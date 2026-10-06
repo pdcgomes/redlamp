@@ -98,6 +98,25 @@ public extension SidecarStore {
             return try .saved(SidecarBase(digest: Self.digest(at: destination), sidecar: sidecar))
         }
     }
+
+    /// The edit `saveOrRemove(_:for:over:opened:)` would leave if another writer has saved
+    /// since `base`, without writing anything: for an editor to show while its saves fail. Nil
+    /// when none has, they removed it, or it is protected or can't be read.
+    func mergedWithOtherWriter(
+        _ sidecar: Sidecar,
+        for image: URL,
+        over base: SidecarBase,
+        opened: Sidecar,
+    ) -> Sidecar? {
+        let merged = try? Self.reading(url(for: image)) { destination -> Sidecar? in
+            guard try Self.digest(at: destination) != base.digest, try Self.existing(at: destination) != nil,
+                  let theirs = Self.decode(sidecar: destination)
+            else { return nil }
+            guard !sidecar.hasSameContent(as: opened) else { return theirs }
+            return Self.merge(sidecar, theirs, base: base.sidecar ?? Sidecar(recipe: EditRecipe()), opened: opened)
+        }
+        return merged ?? nil
+    }
 }
 
 extension SidecarStore {

@@ -43,8 +43,9 @@ extension SidecarStore {
         .sorted { $0.started > $1.started }
     }
 
-    /// Writes the open session's file, or removes it while the session has no edits; with
-    /// `clearsHistory`, removes every other session's. Returns whether anything changed.
+    /// Writes the open session's file, or removes it while the session has no edits, and the
+    /// files of its unsaved sessions; with `clearsHistory`, removes every other session's
+    /// instead. Returns whether anything changed.
     @discardableResult
     static func writeHistory(of sidecar: Sidecar, in package: URL) throws -> Bool {
         let fileManager = FileManager.default
@@ -57,6 +58,11 @@ extension SidecarStore {
                 changed = true
             }
         }
+        if !sidecar.clearsHistory {
+            for earlier in sidecar.unsavedSessions where earlier.hasEdits && earlier.id != sidecar.session?.id {
+                changed = try writeSession(earlier, in: package) || changed
+            }
+        }
         guard let session = sidecar.session, let name else { return changed }
         let file = directory.appending(path: name)
         guard session.hasEdits else {
@@ -64,10 +70,17 @@ extension SidecarStore {
             try fileManager.removeItem(at: file)
             return true
         }
+        return try writeSession(session, in: package) || changed
+    }
+
+    /// Writes `session`'s file unless it holds that already. Returns whether it wrote it.
+    private static func writeSession(_ session: HistorySession, in package: URL) throws -> Bool {
+        let directory = package.appending(path: historyDirectory)
+        let file = directory.appending(path: "\(session.id.uuidString).json")
         let data = try session.encoded()
         let existing = try? Data(contentsOf: file)
-        guard existing != data else { return changed }
-        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        guard existing != data else { return false }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try data.write(to: file, options: .atomic)
         if existing == nil {
             pruneHistory(in: package, keeping: file)

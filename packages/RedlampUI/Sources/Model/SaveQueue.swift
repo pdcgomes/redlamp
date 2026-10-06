@@ -35,7 +35,15 @@ final class SaveQueue: @unchecked Sendable {
         /// for the editor to show. Until it is tracked again, its saves go over the old base, or,
         /// when the edit here won the merge, are merged into what was written.
         case replaced(SidecarBase)
-        case failed(any Error)
+        /// `merged`: another writer saved since the base, and this is the edit the save would
+        /// have left, for the editor to show until a save goes through and merges again.
+        case failed(any Error, merged: Sidecar?)
+    }
+
+    /// A tracked save that failed after another writer had saved.
+    private struct FailedOverOtherWriter: Error {
+        let error: any Error
+        let merged: Sidecar
     }
 
     static let label = "app.redlamp.saves"
@@ -159,15 +167,17 @@ final class SaveQueue: @unchecked Sendable {
         let outcome: Outcome?
         do {
             outcome = try perform(write, for: url)
+        } catch let failure as FailedOverOtherWriter {
+            outcome = .failed(failure.error, merged: failure.merged)
         } catch {
-            outcome = .failed(error)
+            outcome = .failed(error, merged: nil)
         }
         guard write.isSave, let outcome else { return }
         var report: Report?
         var superseded = false
         let done: [CheckedContinuation<Void, Never>] = lock.withLock {
             switch (outcome, write) {
-            case let (.failed(error), .metadata) where error is SidecarStoreError: break
+            case let (.failed(error, _), .metadata) where error is SidecarStoreError: break
             case (.failed, _): failing.insert(url)
             default: failing.remove(url)
             }
@@ -225,7 +235,15 @@ final class SaveQueue: @unchecked Sendable {
             sidecar.clearsHistory = asked.clearsHistory
         }
         let opened = tracked.merged ?? tracked.opened
-        switch try store.saveOrRemove(sidecar, for: url, over: tracked.base, opened: opened) {
+        let saved: SidecarSaveOutcome
+        do {
+            saved = try store.saveOrRemove(sidecar, for: url, over: tracked.base, opened: opened)
+        } catch where !(error is SidecarStoreError) {
+            guard let merged = store.mergedWithOtherWriter(sidecar, for: url, over: tracked.base, opened: opened)
+            else { throw error }
+            throw FailedOverOtherWriter(error: error, merged: merged)
+        }
+        switch saved {
         case let .saved(base):
             guard tracked.merged != nil else {
                 tracking[url] = Tracked(base: base, opened: sidecar)

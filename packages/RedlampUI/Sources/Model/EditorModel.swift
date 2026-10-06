@@ -575,6 +575,8 @@ public final class EditorModel {
     @ObservationIgnored private var session = (id: UUID(), started: Date())
     /// The next save removes the earlier sessions' files (Clear History).
     @ObservationIgnored var clearsSavedHistory = false
+    /// Earlier sessions of the open photo whose saves haven't gone through, in each of its saves.
+    @ObservationIgnored var unsavedSessions: [HistorySession] = []
     @ObservationIgnored var historyTask: Task<Void, Never>?
     @ObservationIgnored private var generation: UInt64 = 0
     /// Canvas geometry for a photo whose first frame hasn't arrived yet. Until it does, the
@@ -741,6 +743,7 @@ public final class EditorModel {
             selectedPhotos = [url]
         }
         sidecarReadRetry?.cancel()
+        unsavedSessions = []
         if let selection {
             saves.enqueue(.forget, for: selection)
             if selection != url {
@@ -853,6 +856,7 @@ public final class EditorModel {
         // were tracking, so the next one still merges what another writer saved.
         let unsaved = read.protection == nil ? failedSaves[opened.url]?.writes ?? [] : []
         let sidecar = Self.applying(unsaved, to: read.sidecar)
+        unsavedSessions = Self.sessions(in: unsaved)
         info = opened
         recordOpening(opened, edited: sidecar != nil)
         availableAIMaskKinds = engine.availableMaskKinds()
@@ -908,8 +912,15 @@ public final class EditorModel {
             }
             return
         }
-        guard let info, !isReadOnly, editStart == nil, !hasUnsavedChange else { return }
-        let theirs = base.sidecar ?? Sidecar(recipe: EditRecipe())
+        guard showOtherWriters(base.sidecar ?? Sidecar(recipe: EditRecipe())) else { return }
+        saves.enqueue(.track(base, opened: sidecarToSave), for: url)
+    }
+
+    /// Shows `theirs`, another writer's edit or the merge with it, in the open photo. Not during
+    /// a drag or with a change still to save: that save merges again, and this comes back then.
+    @discardableResult
+    func showOtherWriters(_ theirs: Sidecar) -> Bool {
+        guard let info, !isReadOnly, editStart == nil, !hasUnsavedChange else { return false }
         let previous = recipe
         recipe = Self.asShot(theirs.recipe, info)
         snapshots = theirs.snapshots
@@ -920,7 +931,19 @@ public final class EditorModel {
             recordHistory(.paste, "Edit from Another Mac", from: previous)
             requestRender()
         }
-        saves.enqueue(.track(base, opened: sidecarToSave), for: url)
+        return true
+    }
+
+    /// The history sessions `writes` would save, each once, as last written.
+    static func sessions(in writes: [SaveQueue.Write]) -> [HistorySession] {
+        var sessions: [HistorySession] = []
+        for case let .sidecar(sidecar) in writes {
+            for session in sidecar.unsavedSessions + [sidecar.session].compactMap(\.self) where session.hasEdits {
+                sessions.removeAll { $0.id == session.id }
+                sessions.append(session)
+            }
+        }
+        return sessions
     }
 
     /// `sidecar` as it is once `writes` have been made to it.
@@ -1520,7 +1543,7 @@ public final class EditorModel {
 
     /// The open photo's edit, metadata and this session's history, as saving writes them.
     var sidecarToSave: Sidecar {
-        Sidecar(
+        var sidecar = Sidecar(
             recipe: recipe, snapshots: snapshots, metadata: photoMetadata.isEmpty ? nil : photoMetadata,
             session: HistorySession(
                 id: session.id,
@@ -1528,6 +1551,8 @@ public final class EditorModel {
                 steps: Array(history.prefix(historyIndex + 1)),
             ),
         )
+        sidecar.unsavedSessions = unsavedSessions
+        return sidecar
     }
 
     /// A change is waiting for its save.

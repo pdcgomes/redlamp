@@ -40,7 +40,7 @@ struct HandCodedTypeTests {
     private let everything = SidecarSamples.everything
 
     @Test func `the sidecar and its edit`() throws {
-        try check(everything, notWritten: ["session", "clearsHistory"])
+        try check(everything, notWritten: ["session", "clearsHistory", "unsavedSessions"])
         try check(everything.recipe, renamed: ["whiteBalanceMode": "whiteBalance"], notWritten: ["pointColor"])
         var colored = everything.recipe
         colored.pointColor = [Self.pickedSwatch]
