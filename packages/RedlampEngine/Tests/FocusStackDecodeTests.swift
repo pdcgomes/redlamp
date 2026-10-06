@@ -280,6 +280,36 @@ extension FocusStackTests {
         #expect(decoder.decodes(of: "frame0.png") == completed)
     }
 
+    /// Another merge method fuses the frames again but takes their alignment and depth from the
+    /// merge before (PIPE-10): each frame decodes once more, not twice, and the merge is the one a
+    /// fresh merge by that method makes.
+    @Test func `another merge method reuses the frames' alignment and depth`() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (documentURL, urls) = try stackDocument(frames: 4, in: folder)
+        let decoder = RecordingDecoder()
+        let engine = try RedlampEngine(
+            stillTile: 2048, stackCache: folder.appendingPathComponent("cache"), decoder: decoder,
+        )
+        _ = try engine.stacks.merged(urls, strategy: .auto, documentURL: documentURL)
+        let detail = try engine.stacks.merged(urls, strategy: .detail, documentURL: documentURL)
+        let decodes = urls.map { decoder.decodes(of: $0.lastPathComponent) }
+        withKnownIssue("PIPE-10: every merge method aligns and solves depth again") {
+            #expect(decodes.allSatisfy { $0 == 3 }, "decodes per frame \(decodes)")
+            #expect(detail.report.timings["align"] == nil && detail.report.timings["depth"] == nil)
+        }
+
+        let fresh = try RedlampEngine(
+            stillTile: 2048, stackCache: folder.appendingPathComponent("fresh"), decoder: RecordingDecoder(),
+        ).stacks.merged(urls, strategy: .detail, documentURL: documentURL)
+        let same = detail.decoded.samples == fresh.decoded.samples && detail.depth == fresh.depth
+            && detail.alignment == fresh.alignment && detail.crop == fresh.crop
+        #expect(same, "the merge differs from a fresh one")
+        var report = detail.report
+        report.timings = fresh.report.timings
+        #expect(report == fresh.report)
+    }
+
     @Test func `a stack with fewer than two frames that decode fails`() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: folder) }
