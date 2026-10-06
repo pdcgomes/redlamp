@@ -175,20 +175,35 @@ public extension DecodedImage {
         public static let serviceName = "app.redlamp.mac.decoder"
 
         let serviceName: String
+        /// A listener in this process standing in for the service, for tests.
+        private let endpoint: NSXPCListenerEndpoint?
 
         public init() {
             serviceName = Self.serviceName
+            endpoint = nil
         }
 
         init(serviceName: String) {
             self.serviceName = serviceName
+            endpoint = nil
+        }
+
+        init(endpoint: NSXPCListenerEndpoint) {
+            serviceName = Self.serviceName
+            self.endpoint = endpoint
+        }
+
+        private func connect() -> NSXPCConnection {
+            let connection = endpoint.map { NSXPCConnection(listenerEndpoint: $0) }
+                ?? NSXPCConnection(serviceName: serviceName)
+            connection.remoteObjectInterface = NSXPCInterface(with: DecodeServiceProtocol.self)
+            connection.resume()
+            return connection
         }
 
         public func decode(_ url: URL) throws -> DecodedImage {
             let file = try Data(contentsOf: url, options: .alwaysMapped)
-            let connection = NSXPCConnection(serviceName: serviceName)
-            connection.remoteObjectInterface = NSXPCInterface(with: DecodeServiceProtocol.self)
-            connection.resume()
+            let connection = connect()
             defer { connection.invalidate() }
 
             let result = Mutex<Result<DecodedImage, any Error>?>(nil)
@@ -219,6 +234,16 @@ public extension DecodedImage {
             case nil:
                 throw EngineError.decoderUnavailable
             }
+        }
+    }
+
+    extension DecodeServiceClient: FileInspecting {
+        public func captures(of urls: [URL], concurrently _: Bool) -> [CaptureSettings?] {
+            urls.map { _ in nil }
+        }
+
+        public func focusThumbnails(of urls: [URL], concurrently _: Bool) -> [GreyThumbnail?] {
+            urls.map { _ in nil }
         }
     }
 #endif
