@@ -107,7 +107,9 @@
                     }
                     try app.waitWritten()
                     try app.waitInSidecar(names[1], "\(action.title) taken back") { !holds($0) }
-                    try app.press(.redo)
+                    // ⇧⌘Z, as the driver reaches a ⌘ key with ⇧: its menu item carrying it.
+                    try app.expectKeyBinding(.redo)
+                    try app.choose(.redo)
                     try app.wait("⇧⌘Z to make \(action.title) again") { model in
                         model.items.filter { holds($0.metadata) }.count == 3
                     }
@@ -237,7 +239,7 @@
             claims: [.feature("library.filter"), .feature("library.ratings")],
         ) { app in
             try app.withCulling { names in
-                try app.press(.selectAllPhotos)
+                try app.choose(.selectAllPhotos)
                 try app.press(.rating3)
                 try app.wait("every photo at three stars") { $0.items.allSatisfy { $0.metadata.rating == 3 } }
                 try app.waitWritten()
