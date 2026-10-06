@@ -546,14 +546,27 @@ final class MaskResources {
         return texture
     }
 
-    /// The global edit the edit guide develops. Masks read the guide at the photo point behind
-    /// each pixel, so from process 14 it covers the whole EXIF-oriented photo: no orientation,
-    /// crop, angle, Transform or distortion, while the profile's vignetting, a matter of tone, stays.
+    /// What the edit guide's render never reads: the detail stage's settings, which it skips, and
+    /// grain, which a guide leaves out (`DevelopParameters`). Left at their defaults, so moving them
+    /// doesn't render the guide again.
+    static let unreadByGuide: [ParameterID] = [
+        .sharpenAmount, .sharpenRadius, .sharpenDetail, .sharpenMasking, .noiseLuminance, .noiseLuminanceDetail,
+        .noiseLuminanceContrast, .noiseColor, .noiseColorDetail, .noiseColorSmoothness, .texture, .clarity,
+        .grainAmount, .grainSize, .grainRoughness, .grainColor,
+    ]
+
+    /// The global edit the edit guide develops, and is kept for. Masks read the guide at the photo
+    /// point behind each pixel, so from process 14 it covers the whole EXIF-oriented photo: no
+    /// orientation, crop, angle, Transform or distortion, while the profile's vignetting, a matter
+    /// of tone, stays.
     static func guideRecipe(for recipe: EditRecipe) -> EditRecipe {
         var global = recipe
         global.masks = []
-        guard recipe.processVersion >= 14 else { return global }
         let unframed = EditRecipe()
+        for parameter in unreadByGuide {
+            global[parameter] = unframed[parameter]
+        }
+        guard recipe.processVersion >= 14 else { return global }
         global.orientation = .identity
         global.crop = .full
         for parameter in EditRecipe.geometryParameters where parameter != .lensProfile {

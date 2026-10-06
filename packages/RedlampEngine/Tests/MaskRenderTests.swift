@@ -252,9 +252,7 @@ struct MaskRenderTests {
             }
         }
         let dragged = engine.masks.editGuideGeneration
-        withKnownIssue("PIPE-07: the guide is keyed on the whole global edit") {
-            #expect(dragged == first, "the guide rendered \(dragged - first) more times")
-        }
+        #expect(dragged == first, "the guide rendered \(dragged - first) more times")
         recipe[.exposure] = 0.5
         _ = try render(recipe, session: session, engine: engine)
         #expect(engine.masks.editGuideGeneration == dragged + 1)
