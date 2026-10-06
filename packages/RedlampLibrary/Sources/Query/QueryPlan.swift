@@ -55,6 +55,21 @@ indirect enum QueryPlan: Sendable, Hashable {
         self = query.map { Self.compile($0, store: store, vocabulary: vocabulary, today: today) } ?? .all
     }
 
+    /// The photos of the collection at `path`, or of every collection inside it, smart collections'
+    /// queries included.
+    init(collection path: CollectionPath, store: ColumnStore, vocabulary: QueryVocabulary, today: Int) {
+        let ids = vocabulary.names.collections.compactMap { id, text in
+            CollectionPath(text)?.isWithin(path) == true ? id : nil
+        }
+        var plans: [QueryPlan] = ids.isEmpty ? [] : [.leaf(.rows(.collections(ids.sorted())))]
+        for smart in vocabulary.smartCollections() where smart.path.isWithin(path) {
+            plans.append(smart.query.map {
+                QueryPlan($0.searchable, store: store, vocabulary: vocabulary, today: today)
+            } ?? .nothing)
+        }
+        self = Self.any(plans)
+    }
+
     /// The row sets it needs looked up.
     var rowSets: Set<RowSet> {
         switch self {

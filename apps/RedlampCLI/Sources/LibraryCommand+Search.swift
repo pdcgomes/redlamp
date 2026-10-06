@@ -2,12 +2,14 @@ import Foundation
 import RedlampLibrary
 
 extension LibraryCommand {
-    /// `redlamp library search`: runs a query over an index (LIB-06) and prints the photos' paths in
-    /// order, then how many photos the query found and how long it took (`LibrarySearch`).
+    /// `redlamp library search`: runs a query over an index (LIB-06), or over the photos of a collection,
+    /// a set or a smart collection with `--collection` (LIB-23), and prints the photos' paths in order,
+    /// then how many photos the query found and how long it took (`LibrarySearch`).
     static func search(_ arguments: [String]) async throws {
-        let options = try Arguments(arguments, valued: ["--index", "--sort", "--limit"])
-        guard !options.positional.isEmpty, let path = options.value("--index") else {
-            throw CLIError(description: "search needs a query and --index\n\n\(usage)")
+        let options = try Arguments(arguments, valued: ["--index", "--sort", "--limit", "--collection"])
+        guard !options.positional.isEmpty || options.value("--collection") != nil, let path = options.value("--index")
+        else {
+            throw CLIError(description: "search needs a query or --collection, and --index\n\n\(usage)")
         }
         let text = options.positional.joined(separator: " ")
         let query: LibraryQuery
@@ -36,7 +38,15 @@ extension LibraryCommand {
         }
 
         let index = try await LibraryIndex.open(at: url)
-        let search = try await LibrarySearch.run(query, sort: sort, limit: limit, index: index)
+        var collection: CollectionPath?
+        if let text = options.value("--collection") {
+            guard let found = try await LibraryMetadata(index: index).collections.list().resolve(text) else {
+                await index.close()
+                throw CLIError(description: "there's no collection or set \(text)")
+            }
+            collection = found
+        }
+        let search = try await LibrarySearch.run(query, in: collection, sort: sort, limit: limit, index: index)
         await index.close()
         if options.has("--json") {
             try print(String(decoding: search.json(), as: UTF8.self))

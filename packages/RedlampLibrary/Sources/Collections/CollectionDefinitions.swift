@@ -1,5 +1,6 @@
 import Foundation
 import RedlampEngineAPI
+import Synchronization
 
 /// A collection's place in the collection list (LIB-23), written as a keyword's is: its names from the
 /// top down, with `/` between them, `%2F` for a slash inside a name and `%25` for a percent sign.
@@ -99,6 +100,34 @@ public struct CollectionDefinitions: Sendable, Hashable {
             return CollectionDefinitions()
         }
         return try CollectionDefinitions(json: JSONDecoder().decode(JSONValue.self, from: data))
+    }
+
+    /// The definitions at `url`, read again only when the file's date or size changed since they
+    /// were last read; empty ones when there's no file or it can't be read.
+    static func cached(at url: URL) -> CollectionDefinitions {
+        let values = try? URL(fileURLWithPath: url.path).resourceValues(forKeys: [
+            .contentModificationDateKey,
+            .fileSizeKey,
+        ])
+        let stamp = values.map { "\($0.contentModificationDate?.timeIntervalSince1970 ?? 0) \($0.fileSize ?? 0)" }
+        guard let stamp else { return CollectionDefinitions() }
+        if let found = cache.withLock({ $0[url.path] }), found.stamp == stamp {
+            return found.definitions
+        }
+        let definitions = (try? load(from: url)) ?? CollectionDefinitions()
+        cache.withLock { $0[url.path] = (stamp, definitions) }
+        return definitions
+    }
+
+    private static let cache = Mutex<[String: (stamp: String, definitions: CollectionDefinitions)]>([:])
+
+    /// The smart collections' queries, by path.
+    var smartQueries: [String: String] {
+        collections.reduce(into: [:]) { queries, entry in
+            if entry.value.kind == .smart {
+                queries[entry.key.text] = entry.value.query ?? ""
+            }
+        }
     }
 
     /// Writes the definitions to `url` whole, replacing what's there in one step.

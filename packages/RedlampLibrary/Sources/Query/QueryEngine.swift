@@ -254,7 +254,7 @@ public final class QueryEngine: Sendable {
         QueryCalendar.today(now: now(), timeZone: timeZone)
     }
 
-    /// The rows `query` finds in `store`, looking up its row sets in the index unless they're kept.
+    /// The rows `query` finds in `store`, compiling it unless its plan is kept.
     func matches(
         for query: LibraryQuery?, in store: ColumnStore, vocabulary: QueryVocabulary, generation: Int,
     ) async throws -> RowBits {
@@ -275,6 +275,14 @@ public final class QueryEngine: Sendable {
                 }
                 state.plans[key] = plan
             }
+        }
+        return try await rows(for: plan, in: store, generation: generation)
+    }
+
+    /// The rows `plan` finds in `store`, looking up its row sets in the index unless they're kept.
+    func rows(for plan: QueryPlan, in store: ColumnStore, generation: Int) async throws -> RowBits {
+        if let kept = state.withLock({ $0.generation == generation ? $0.matches[plan] : nil }) {
+            return kept
         }
         var sets: [QueryPlan.RowSet: RowBits] = [:]
         for set in plan.rowSets {

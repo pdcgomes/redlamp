@@ -1,9 +1,12 @@
 import Foundation
 
-/// A search as `redlamp library search` runs it (LIB-06): a query over an index, the photos it finds in
-/// a sort's order, how many there are, and how long it took, as lines of text or as JSON.
+/// A search as `redlamp library search` runs it (LIB-06): a query over an index, or over a collection's
+/// photos, the photos it finds in a sort's order, how many there are, and how long it took, as lines
+/// of text or as JSON.
 public struct LibrarySearch: Sendable {
     public let query: LibraryQuery
+    /// The collection, set or smart collection searched; nil for the whole library.
+    public let collection: CollectionPath?
     public let sort: QuerySort
     /// How many photos the query found.
     public let count: Int
@@ -14,10 +17,11 @@ public struct LibrarySearch: Sendable {
     /// How long the column store took to build.
     public let loaded: Duration
 
-    /// Runs `query` over `index` in `sort`'s order, keeping the paths of the first `limit` photos, or
-    /// of every photo when it's nil.
+    /// Runs `query` over `index`, or over the photos of `collection`, in `sort`'s order, keeping the
+    /// paths of the first `limit` photos, or of every photo when it's nil.
     public static func run(
-        _ query: LibraryQuery, sort: QuerySort = QuerySort(), limit: Int? = nil, index: LibraryIndex,
+        _ query: LibraryQuery, in collection: CollectionPath? = nil, sort: QuerySort = QuerySort(),
+        limit: Int? = nil, index: LibraryIndex,
     ) async throws -> LibrarySearch {
         let engine = QueryEngine(index: index)
         let clock = ContinuousClock()
@@ -27,16 +31,21 @@ public struct LibrarySearch: Sendable {
         let started = clock.now
         var firstPage: Duration?
         var result = QueryResult(ids: [], count: 0, isComplete: true)
-        for try await found in engine.search(query, sort: sort) {
-            firstPage = firstPage ?? clock.now - started
-            result = found
+        if let collection {
+            let list = try await engine.list(.collection(collection), matching: query, sort: sort)
+            result = QueryResult(ids: list.ids, count: list.count, isComplete: true)
+        } else {
+            for try await found in engine.search(query, sort: sort) {
+                firstPage = firstPage ?? clock.now - started
+                result = found
+            }
         }
         let elapsed = clock.now - started
         let shown = Array(result.ids.prefix(limit ?? result.ids.count))
         let paths = try await index.read { reader in try shown.map { try reader.photoPath(id: $0) ?? "" } }
         return LibrarySearch(
-            query: query, sort: sort, count: result.count ?? result.ids.count, paths: paths, elapsed: elapsed,
-            firstPage: firstPage ?? elapsed, loaded: loaded,
+            query: query, collection: collection, sort: sort, count: result.count ?? result.ids.count,
+            paths: paths, elapsed: elapsed, firstPage: firstPage ?? elapsed, loaded: loaded,
         )
     }
 
@@ -49,6 +58,7 @@ public struct LibrarySearch: Sendable {
     public var summary: String {
         let photos = count == 1 ? "1 photo" : "\(Self.grouped(count)) photos"
         var summary = "\(photos) for \(query.description.isEmpty ? "everything" : query.description)"
+            + (collection.map { " in “\($0.displayName)”" } ?? "")
             + ", sorted by \(sort.key.rawValue)\(sort.ascending ? "" : ", descending"), in "
             + String(
                 format: "%.1f ms (first page in %.1f ms; column store built in %.0f ms)",
@@ -63,6 +73,7 @@ public struct LibrarySearch: Sendable {
     public func json() throws -> Data {
         struct Output: Encodable {
             let query: String
+            let collection: String?
             let sort: String
             let ascending: Bool
             let count: Int
@@ -74,7 +85,8 @@ public struct LibrarySearch: Sendable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         return try encoder.encode(Output(
-            query: query.description, sort: sort.key.rawValue, ascending: sort.ascending, count: count,
+            query: query.description, collection: collection?.text, sort: sort.key.rawValue,
+            ascending: sort.ascending, count: count,
             milliseconds: Self.milliseconds(elapsed), firstPageMilliseconds: Self.milliseconds(firstPage),
             loadMilliseconds: Self.milliseconds(loaded), paths: paths,
         ))

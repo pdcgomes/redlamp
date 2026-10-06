@@ -186,6 +186,12 @@ public final class LibraryLive: Sendable {
         gather { $0.changed.formUnion(ids) }
     }
 
+    /// The collections changed beyond their photos' rows: one made, renamed, moved or deleted, or a
+    /// smart collection's query. Their names and queries are read again, and the lists made again.
+    public func namesChanged() {
+        gather { $0.names = true }
+    }
+
     /// Applies what's been gathered now, and returns once every open list that changed has its
     /// update waiting or taken.
     public func settle() async {

@@ -58,6 +58,8 @@ struct QueryNames: Sendable, Hashable {
     var collections: [Int64: String] = [:]
     /// The synonyms of the keywords that have some, by path, from the library's definitions.
     var keywordSynonyms: [String: [String]] = [:]
+    /// The smart collections' queries, by path, from the library's definitions (LIB-23).
+    var smartCollections: [String: String] = [:]
 }
 
 /// The small tables ready to match terms against, made again whenever they're read, keeping what
@@ -80,6 +82,8 @@ final class QueryVocabulary: Sendable {
     /// Made the first time a column of keywords is counted, or keywords completed (LIB-18).
     let levels = Mutex<KeywordLevels?>(nil)
     let completion = Mutex<KeywordCompletion?>(nil)
+    /// Read the first time a collection's photos are listed.
+    private let smart = Mutex<[(path: CollectionPath, query: LibraryQuery?)]?>(nil)
 
     private struct Match: Hashable {
         let table: Table
@@ -131,6 +135,21 @@ final class QueryVocabulary: Sendable {
             let made = KeywordMatcher(keywords: names.keywords, synonyms: names.keywordSynonyms)
             matcher = made
             return made
+        }
+    }
+
+    /// The smart collections and their queries; nil for a query this build can't read, which finds
+    /// nothing.
+    func smartCollections() -> [(path: CollectionPath, query: LibraryQuery?)] {
+        smart.withLock { smart in
+            if let smart {
+                return smart
+            }
+            let read = names.smartCollections.sorted { $0.key < $1.key }.compactMap { text, query in
+                CollectionPath(text).map { ($0, try? LibraryQuery(parsing: query)) }
+            }
+            smart = read
+            return read
         }
     }
 
@@ -216,12 +235,21 @@ struct IndexQuerySource: QuerySource {
     func names() async throws -> QueryNames {
         var names = try await index.read { try $0.queryNames() }
         names.keywordSynonyms = try await keywordSynonyms()
+        let collections = CollectionDefinitions.url(in: paths)
+        names.smartCollections = try await LibraryIndex.offCaller {
+            CollectionDefinitions.cached(at: collections).smartQueries
+        }
         return names
     }
 
     func keywordSynonyms() async throws -> [String: [String]] {
-        let url = KeywordDefinitions.url(in: LibraryPaths(root: index.url.deletingLastPathComponent()))
+        let url = KeywordDefinitions.url(in: paths)
         return try await LibraryIndex.offCaller { KeywordDefinitions.cached(at: url).synonyms }
+    }
+
+    /// The library whose index it is, at `LibraryPaths.index` in its folder.
+    private var paths: LibraryPaths {
+        LibraryPaths(root: index.url.deletingLastPathComponent())
     }
 
     func photoIDs(matching match: String) async throws -> [Int64] {

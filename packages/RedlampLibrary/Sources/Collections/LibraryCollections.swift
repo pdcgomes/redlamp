@@ -126,10 +126,13 @@ public struct LibraryCollections: Sendable {
         try await index.read { try $0.photoIDs(inCollectionsWithin: [path]) }
     }
 
-    /// Makes `change` as one batch; see `plan` and `LibraryMetadata.run`.
+    /// Makes `change` as one batch; see `plan` and `LibraryMetadata.run`. Open lists hear of it once
+    /// it's done, for the collections whose names or queries it changed.
     @discardableResult
     public func apply(_ change: CollectionChange) async throws -> MetadataOutcome {
-        try await metadata.run(plan(change))
+        let outcome = try await metadata.run(plan(change))
+        metadata.live?.namesChanged()
+        return outcome
     }
 
     /// What `change` would do, worked out from the index and the definitions as they are; nothing is
@@ -243,17 +246,22 @@ public struct LibraryCollections: Sendable {
         return MetadataPlan(batch: batch)
     }
 
-    /// Loads the definitions, changes them with `change` and saves them, off the caller.
+    /// Loads the definitions, changes them with `change` and saves them, off the caller; open lists
+    /// hear of a change, a batch's or its Undo's.
     func updateDefinitions(
         _ change: @escaping @Sendable (CollectionDefinitions) -> CollectionDefinitions,
     ) async throws {
         let url = definitionsURL
-        try await LibraryIndex.offCaller {
+        let saved = try await LibraryIndex.offCaller {
             let current = try CollectionDefinitions.load(from: url)
             let changed = change(current)
             if changed != current {
                 try changed.save(to: url)
             }
+            return changed != current
+        }
+        if saved {
+            metadata.live?.namesChanged()
         }
     }
 }
