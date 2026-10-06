@@ -11,8 +11,10 @@ struct FilmstripView: View {
                 if let folder = model.folder {
                     Label(folder.lastPathComponent, systemImage: "folder")
                 }
-                Text("\(model.library.count) photos\(model.library.includesSubfolders ? ", with subfolders" : "")")
+                Text(photoCount)
                     .foregroundStyle(Theme.tertiaryLabel)
+                    .help(filteredTotal == nil ? "" :
+                        "A filter hides some photos: \\ shows the filter bar in Library, ⌘L turns it off")
                 if let progress = model.settingsSync.progress {
                     ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1)))
                         .frame(width: 80)
@@ -72,6 +74,19 @@ struct FilmstripView: View {
             }
         }
         .frame(height: PanelMetrics.filmstripHeight)
+    }
+
+    private var photoCount: String {
+        let subfolders = model.library.includesSubfolders ? ", with subfolders" : ""
+        guard let total = filteredTotal else { return "\(model.library.count) photos\(subfolders)" }
+        return "\(model.library.count) of \(total) photos\(subfolders)"
+    }
+
+    /// The source's photos while a filter leaves some out.
+    private var filteredTotal: Int? {
+        guard model.library.isFiltered, let listed = model.libraryFilters?.listed, listed.shown < listed.total
+        else { return nil }
+        return listed.total
     }
 }
 

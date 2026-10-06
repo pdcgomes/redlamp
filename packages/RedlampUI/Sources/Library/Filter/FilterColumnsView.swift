@@ -78,7 +78,7 @@ final class FilterColumnView: NSView, NSOutlineViewDataSource, NSOutlineViewDele
     let index: Int
     private let header: FilterPopUp
     private let scroll = NSScrollView()
-    let outline = NSOutlineView()
+    let outline = FilterColumnOutline()
     private let all = FilterColumnRow(key: "\u{0}all", title: "All", count: 0, value: nil)
     private(set) var rows: [FilterColumnRow] = []
     private var kind: FacetColumn?
@@ -296,6 +296,39 @@ final class FilterColumnView: NSView, NSOutlineViewDataSource, NSOutlineViewDele
         let allIsNew = chosen.contains { $0 === all } && !(choice == nil)
         let values = allIsNew ? [] : chosen.filter { $0 !== all }.compactMap(\.value)
         filters.choose(values, inColumn: index)
+    }
+}
+
+/// A column's rows, chosen as the mouse goes down rather than as it's released: a click takes one row,
+/// ⌘-click adds or takes away one, ⇧-click runs from the row clicked last.
+final class FilterColumnOutline: NSOutlineView {
+    private var anchor: Int?
+
+    override func mouseDown(with event: NSEvent) {
+        let clicked = row(at: convert(event.locationInWindow, from: nil))
+        guard clicked >= 0, isSelectable(clicked) else { return }
+        window?.makeFirstResponder(self)
+        var rows = selectedRowIndexes
+        if event.modifierFlags.contains(.command) {
+            if rows.contains(clicked) {
+                rows.remove(clicked)
+            } else {
+                rows.insert(clicked)
+            }
+            anchor = clicked
+        } else if event.modifierFlags.contains(.shift), let anchor, anchor < numberOfRows {
+            rows = IndexSet(integersIn: min(anchor, clicked) ... max(anchor, clicked))
+                .filteredIndexSet(includeInteger: isSelectable)
+        } else {
+            rows = [clicked]
+            anchor = clicked
+        }
+        selectRowIndexes(rows, byExtendingSelection: false)
+    }
+
+    private func isSelectable(_ row: Int) -> Bool {
+        guard let item = item(atRow: row) else { return false }
+        return delegate?.outlineView?(self, shouldSelectItem: item) ?? true
     }
 }
 

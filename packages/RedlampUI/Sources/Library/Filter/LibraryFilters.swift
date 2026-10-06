@@ -309,7 +309,9 @@ public final class LibraryFilters {
         lastListed = LibraryListFilterSummary(
             query: ordered.filter.query, sort: ordered.filter.sort, reversed: ordered.filter.reversed,
         )
-        listed = (ordered.items.count, ordered.total)
+        if listed?.shown != ordered.items.count || listed?.total != ordered.total {
+            listed = (ordered.items.count, ordered.total)
+        }
         countColumns()
     }
 

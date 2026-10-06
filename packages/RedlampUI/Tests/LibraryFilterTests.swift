@@ -489,6 +489,63 @@ extension LibraryFilterTests {
         #expect(bar.isHidden && !filters.isBarShown)
     }
 
+    @Test func `a click on a column's row chooses its photos, ⌘-click adds another, and All takes them out`(
+    ) async throws {
+        defer { cleanUp() }
+        let (model, _) = try await open()
+        let filters = try #require(model.libraryFilters)
+        filters.setFilter(LibraryFilter(sections: [.text, .metadata], columns: [.kind, .camera]))
+        model.showLibrary(.grid)
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000), styleMask: [.titled], backing: .buffered,
+            defer: false,
+        )
+        window.contentViewController = ModuleViews.make(model: model, theme: ThemeSettings())
+        window.setContentSize(NSSize(width: 1600, height: 1000))
+        defer { window.contentViewController = nil }
+        model.perform(.toggleFilterBar)
+        try await eventually(seconds: 5) { filters.columns[0]?.values.contains { $0.name == "png" } == true }
+
+        try click("library.filter.column.0.value.png", in: window)
+        try await listed(model)
+        #expect(filters.filter.text == "ext:png" && names(model) == ["IMG_0004.PNG"])
+        try click("library.filter.column.0.value.jpeg", in: window, modifiers: .command)
+        try await listed(model)
+        #expect(filters.filter.text.contains("jpeg") && filters.filter.text.contains("png"))
+        #expect(model.items.count == 5)
+        try click("library.filter.column.0.all", in: window)
+        try await listed(model)
+        #expect(filters.filter.text.isEmpty && !model.library.isFiltered)
+    }
+
+    /// Presses and releases the mouse on the view under `identifier`'s middle, as the e2e driver does.
+    private func click(_ identifier: String, in window: NSWindow, modifiers: NSEvent.ModifierFlags = []) throws {
+        window.contentView?.layoutSubtreeIfNeeded()
+        let view = try #require(Self.view(identifier, in: window.contentView), "\(identifier) on screen")
+        let location = view.convert(NSPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
+        let hit = try #require(window.contentView?.superview?.hitTest(location))
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            let event = try #require(NSEvent.mouseEvent(
+                with: type, location: location, modifierFlags: modifiers,
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil,
+                eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1,
+            ))
+            if type == .leftMouseDown {
+                hit.mouseDown(with: event)
+            } else {
+                hit.mouseUp(with: event)
+            }
+        }
+    }
+
+    private static func view(_ identifier: String, in view: NSView?) -> NSView? {
+        guard let view else { return nil }
+        if view.accessibilityIdentifier() == identifier {
+            return view
+        }
+        return view.subviews.lazy.compactMap { Self.view(identifier, in: $0) }.first
+    }
+
     private static func find<View: NSView>(_: View.Type, in view: NSView?) -> View? {
         guard let view else { return nil }
         if let found = view as? View {
