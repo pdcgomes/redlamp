@@ -199,7 +199,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
             )
         }
         item.cell.onMenu = { [weak self] in
-            self.flatMap { FilmstripMenu.menu(for: photo.url, model: $0.model) }
+            self.flatMap { FilmstripMenu.menu(for: photo.url, model: $0.model, culling: true) }
         }
         return item
     }
@@ -301,7 +301,12 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
                 collectionView.insertItems(at: Set(diff.inserted.map { IndexPath(item: $0, section: 0) }))
             }
         }
-        for row in diff.updated where model.items.indices.contains(row) {
+        // Asking the strip for each of thousands of rows takes longer than a frame: a change to that many
+        // reaches the cells it holds.
+        let rows = diff.updated.count > 64 ? IndexSet(collectionView.subviews.compactMap { view in
+            (view as? FilmstripCellView)?.item.flatMap { model.library.index(of: $0.url) }
+        }).intersection(diff.updated) : diff.updated
+        for row in rows where model.items.indices.contains(row) {
             guard let item = collectionView.item(at: IndexPath(item: row, section: 0)) as? FilmstripItem else {
                 continue
             }

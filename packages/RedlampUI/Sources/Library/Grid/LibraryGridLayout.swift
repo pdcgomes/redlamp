@@ -112,15 +112,19 @@ struct GridCellGeometry: Equatable {
         CGRect(x: 6, y: 2, width: size - 12, height: 3)
     }
 
-    /// Each badge's centre or corner: the flag top left, a stack top right, the rating bottom left and
-    /// edits bottom right, over the thumbnail's corners in a compact cell and in the footer of an
-    /// expanded one.
+    /// Each badge's centre or corner: the flag top left, the mark top right with a stack beside it, the
+    /// rating bottom left and edits bottom right, over the thumbnail's corners in a compact cell; in an
+    /// expanded one, the mark over the thumbnail's top right corner and the rest in the footer.
     var flag: CGPoint {
         style == .expanded ? CGPoint(x: size - inset - 7, y: footerMidY) : CGPoint(x: 9, y: 9)
     }
 
     var stack: CGPoint {
-        style == .expanded ? CGPoint(x: size - inset - 23, y: footerMidY) : CGPoint(x: size - 9, y: 9)
+        style == .expanded ? CGPoint(x: size - inset - 23, y: footerMidY) : CGPoint(x: size - 25, y: 9)
+    }
+
+    var mark: CGPoint {
+        style == .expanded ? CGPoint(x: image.maxX - 9, y: image.minY + 9) : CGPoint(x: size - 9, y: 9)
     }
 
     /// The rating's left edge and middle.
@@ -132,7 +136,44 @@ struct GridCellGeometry: Equatable {
         style == .expanded ? CGPoint(x: size - inset - 41, y: footerMidY) : CGPoint(x: size - 14, y: size - 14)
     }
 
+    /// An expanded cell's colour label chip, after the stars, where the cell is wide enough to keep it clear
+    /// of the edited badge.
+    var labelChip: CGRect? {
+        guard style == .expanded else { return nil }
+        let chip = CGRect(
+            x: rating.x + GridBadges.Kind.ratingSlots(0).size.width + 4,
+            y: footerMidY - 5,
+            width: 10,
+            height: 10,
+        )
+        return chip.maxX + 2 <= edited.x - 8 ? chip : nil
+    }
+
     private var footerMidY: CGFloat {
         cellSize.height - Self.footerHeight / 2
+    }
+
+    /// What a click at `point` (in the cell) sets in an expanded cell: a star, the flag, the label or the mark.
+    enum Target: Equatable {
+        case star(Int), flag, label, mark
+    }
+
+    func target(at point: CGPoint) -> Target? {
+        guard style == .expanded else { return nil }
+        func near(_ centre: CGPoint, _ reach: CGFloat) -> Bool {
+            abs(point.x - centre.x) <= reach && abs(point.y - centre.y) <= reach
+        }
+        if near(mark, 9) {
+            return .mark
+        }
+        guard point.y >= cellSize.height - Self.footerHeight else { return nil }
+        let stars = GridBadges.Kind.ratingSlots(0).size.width
+        if point.x >= rating.x, point.x < rating.x + stars {
+            return .star(min(max(Int((point.x - rating.x - 4) / 7) + 1, 1), 5))
+        }
+        if let chip = labelChip, chip.insetBy(dx: -3, dy: -5).contains(point) {
+            return .label
+        }
+        return near(flag, 9) ? .flag : nil
     }
 }

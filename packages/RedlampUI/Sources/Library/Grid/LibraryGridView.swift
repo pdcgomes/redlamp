@@ -579,7 +579,11 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
             return
         }
         let url = model.items[row].url
-        if event.clickCount >= 2 {
+        let frame = gridLayout.frame(forItem: row)
+        if event.clickCount == 1, event.modifierFlags.isDisjoint(with: [.command, .shift]),
+           let target = gridLayout.geometry.target(at: CGPoint(x: point.x - frame.minX, y: point.y - frame.minY)) {
+            cull(target, row: row, event: event)
+        } else if event.clickCount >= 2 {
             model.openInLoupe(url)
         } else {
             model.click(
@@ -587,6 +591,23 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
                 toggling: event.modifierFlags.contains(.command),
                 extending: event.modifierFlags.contains(.shift),
             )
+        }
+    }
+
+    /// A click on an expanded cell's stars, flag, mark or label: on the photo, or on the selection when the
+    /// photo is in it. A star the photo's rating already ends at clears it, as does the flag of a pick; the
+    /// label chip offers the labels.
+    private func cull(_ target: GridCellGeometry.Target, row: Int, event: NSEvent) {
+        let item = model.items[row]
+        let metadata = item.metadata
+        switch target {
+        case let .star(stars): model.cull(.rating(metadata.rating == stars ? 0 : stars), from: item.url)
+        case .flag: model.cull(.flag(metadata.flag == .pick ? nil : .pick), from: item.url)
+        case .mark: model.cull(.mark(!metadata.mark), from: item.url)
+        case .label:
+            menuRow = row
+            cells[row]?.isMenuTarget = true
+            NSMenu.popUpContextMenu(LibraryGridMenu.labels(for: item.url, model: model), with: event, for: content)
         }
     }
 
@@ -869,5 +890,26 @@ final class LibraryGridContentView: NSView {
     /// The grid's thumbnails in memory, in bytes.
     @MainActor public static func memoryUsed(_ view: NSView) -> Int {
         (view as? LibraryGridView)?.thumbnails.memoryUsed ?? 0
+    }
+
+    /// What a click sets in an expanded cell.
+    public enum CellPart: Sendable {
+        case star(Int), flag, mark
+    }
+
+    /// Where `part` of an expanded cell `size` points wide is, 0 ... 1 across and down the cell.
+    public static func point(of part: CellPart, size: Double) -> CGPoint {
+        let geometry = GridCellGeometry(size: CGFloat(size), style: .expanded)
+        let cell = geometry.cellSize
+        let point = switch part {
+        case let .star(stars):
+            CGPoint(
+                x: geometry.rating.x + 4 + 7 * CGFloat(stars - 1) + 3.5,
+                y: cell.height - GridCellGeometry.footerHeight / 2,
+            )
+        case .flag: geometry.flag
+        case .mark: geometry.mark
+        }
+        return CGPoint(x: point.x / cell.width, y: point.y / cell.height)
     }
 }

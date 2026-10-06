@@ -301,7 +301,7 @@ struct LibraryGridTests {
         #expect(grid.gridLayout.cellSize.height > compact.height && grid.gridLayout.cellSize.width == compact.width)
         try await fixture.eventually { grid.cells[0]?.textImage != nil }
         #expect(grid.cells[0]?.textImage != nil, "an expanded cell shows the photo's name")
-        #expect((grid.cells[0]?.badgesShown ?? 0) == 3)
+        #expect((grid.cells[0]?.badgesShown ?? 0) == 4, "and its stars, flag, mark and label, to click")
 
         #expect(model.perform(.cycleGridStyle))
         try await fixture.settle()

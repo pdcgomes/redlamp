@@ -194,8 +194,8 @@ final class FilmstripCellView: NSView {
     }
 }
 
-/// The cell's badges: edited, flag or reject, stars, colour label, focus stack, and a cloud for
-/// photos only in iCloud Drive.
+/// The cell's badges: edited, flag or reject, stars, colour or custom label, the mark, focus stack, and a
+/// cloud for photos only in iCloud Drive.
 final class FilmstripBadgesView: LayerDrawnView {
     var item: LibraryItem? {
         didSet {
@@ -246,11 +246,23 @@ final class FilmstripBadgesView: LayerDrawnView {
         let scale = window?.backingScaleFactor ?? 2
         let white = RGBA(white: 1)
         let shade = NSColor(white: 0, alpha: 0.55)
-        if let label = badges.metadata.label {
-            context.setFillColor(label.nsColor.cgColor)
+        if let colour = GridBadges.color(of: badges.metadata) {
+            context.setFillColor(colour.cgColor)
             let bar = CGRect(x: 6, y: 2, width: rect.width - 12, height: 3)
             context.addPath(CGPath(roundedRect: bar, cornerWidth: 1.5, cornerHeight: 1.5, transform: nil))
             context.fillPath()
+        }
+        if badges.metadata.mark {
+            let circle = CGRect(x: rect.width - 17, y: 1, width: 16, height: 16)
+            context.setFillColor(shade.cgColor)
+            context.fillEllipse(in: circle)
+            Symbol.draw(
+                "circle.fill", pointSize: 7, color: white.opacity(0.9), centeredAt: CGPoint(
+                    x: circle.midX,
+                    y: circle.midY,
+                ),
+                scale: scale,
+            )
         }
         switch badges.metadata.flag {
         case .pick:
@@ -265,7 +277,7 @@ final class FilmstripBadgesView: LayerDrawnView {
         if badges.stack {
             Symbol.draw(
                 "square.stack.3d.down.right.fill", pointSize: 8, color: white.opacity(0.85),
-                centeredAt: CGPoint(x: rect.width - 9, y: 9), scale: scale,
+                centeredAt: CGPoint(x: rect.width - 25, y: 9), scale: scale,
             )
         }
         if badges.edited {

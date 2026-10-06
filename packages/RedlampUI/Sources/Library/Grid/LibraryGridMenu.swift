@@ -1,10 +1,12 @@
 import AppKit
 import RedlampDesign
+import RedlampDocument
 
 /// The grid's context menus (LIB-14), each item with its key as the menu bar shows it. On a photo: open
 /// it in the loupe or Develop and show it in Finder, acting on the selection when the photo is in it and
-/// on the photo alone when it isn't, then the filmstrip's copy, paste and sync items; between the
-/// photos: selecting them. Both end with the thumbnail size and the cell style.
+/// on the photo alone when it isn't, its rating, flag, labels and mark (LIB-15), acting the same way, then
+/// the filmstrip's copy, paste and sync items; between the photos: selecting them. Both end with the
+/// thumbnail size and the cell style.
 @MainActor
 enum LibraryGridMenu {
     static func menu(for photo: URL, model: EditorModel) -> NSMenu {
@@ -22,6 +24,7 @@ enum LibraryGridMenu {
                 model.showInFinder(photo)
             },
         ], to: menu)
+        add(culling(for: photo, model: model), to: menu)
         if let photoMenu = FilmstripMenu.menu(for: photo, model: model) {
             menu.addItem(.separator())
             for item in photoMenu.items {
@@ -57,6 +60,79 @@ enum LibraryGridMenu {
         let style = NSMenuItem(title: "Grid View Style", action: nil, keyEquivalent: "")
         style.submenu = styles
         add([style, action(model, .largerThumbnails), action(model, .smallerThumbnails)], to: menu)
+    }
+
+    // MARK: - Culling
+
+    /// Set Rating, Set Flag and Set Color Label, and the mark, for `photo` or the selection it's in, in the
+    /// Library module.
+    static func culling(for photo: URL, model: EditorModel) -> [NSMenuItem] {
+        guard model.module == .library, !model.isModalDialogOpen else { return [] }
+        func submenu(_ title: String, _ items: [NSMenuItem]) -> NSMenuItem {
+            let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            item.submenu = NSMenu(title: title)
+            item.submenu?.autoenablesItems = false
+            items.forEach { item.submenu?.addItem($0) }
+            return item
+        }
+        let ratings: [ShortcutAction] = [
+            .rating0,
+            .rating1,
+            .rating2,
+            .rating3,
+            .rating4,
+            .rating5,
+            .decreaseRating,
+            .increaseRating,
+        ]
+        return [
+            submenu("Set Rating", ratings.map { cull($0, photo, model) }),
+            submenu("Set Flag", [ShortcutAction.flagPick, .flagReject, .unflag].map { cull($0, photo, model) }),
+            submenu("Set Color Label", labels(for: photo, model: model).items.map { item in
+                item.menu?.removeItem(item)
+                return item
+            }),
+            cull(.toggleMark, photo, model),
+        ]
+    }
+
+    /// The colour labels, the custom labels the photos have, and none, for `photo` or the selection it's in;
+    /// the photo's own label ticked.
+    static func labels(for photo: URL, model: EditorModel) -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        let metadata = model.library.item(for: photo)?.metadata ?? PhotoMetadata()
+        for action in [ShortcutAction.labelRed, .labelYellow, .labelGreen, .labelBlue, .labelPurple] {
+            let item = cull(action, photo, model)
+            if case let .toggleLabel(label)? = CullingChange(action) {
+                item.state = metadata.label == label ? .on : .off
+            }
+            menu.addItem(item)
+        }
+        if !model.customLabels.isEmpty {
+            menu.addItem(.separator())
+            for name in model.customLabels {
+                let item = NSMenuItem(title: name, state: metadata.customLabel == name ? .on : .off) {
+                    model.cull(.toggleCustomLabel(name), from: photo)
+                }
+                item.setAccessibilityIdentifier("library.menu.customLabel.\(name)")
+                menu.addItem(item)
+            }
+        }
+        menu.addItem(.separator())
+        menu.addItem(cull(.clearLabel, photo, model))
+        return menu
+    }
+
+    /// `action`'s item, for `photo` or the selection it's in.
+    private static func cull(_ action: ShortcutAction, _ photo: URL, _ model: EditorModel) -> NSMenuItem {
+        let item = item(action.title, key: action.combos.first, enabled: true) {
+            if let change = CullingChange(action) {
+                model.cull(change, from: photo)
+            }
+        }
+        item.setAccessibilityIdentifier("library.menu.\(action.rawValue)")
+        return item
     }
 
     /// An action's item, with its key, enabled as its menu bar item is.

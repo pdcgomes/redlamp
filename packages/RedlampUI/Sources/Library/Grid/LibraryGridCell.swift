@@ -15,10 +15,12 @@ final class LibraryGridCell {
     private let thumbnail = CALayer()
     private var text: CALayer?
     private var label: CALayer?
+    /// An expanded cell's colour label chip, to click.
+    private var chip: CALayer?
     private var badges: [Badge: CALayer] = [:]
 
     private enum Badge: Hashable {
-        case flag, stack, edited, rating, cloud
+        case flag, stack, edited, rating, cloud, mark
     }
 
     /// The row it shows.
@@ -101,7 +103,7 @@ final class LibraryGridCell {
         self.scale = scale
         background.frame = CGRect(origin: .zero, size: frame.size)
         thumbnail.frame = geometry.image
-        for layer in [root, background, thumbnail] + Array(badges.values) + [text, label].compactMap(\.self) {
+        for layer in [root, background, thumbnail] + Array(badges.values) + [text, label, chip].compactMap(\.self) {
             layer.contentsScale = scale
         }
         if let item {
@@ -172,13 +174,15 @@ final class LibraryGridCell {
 
     // MARK: - Badges
 
+    /// An expanded cell shows a place for each badge a click sets, lit or not.
     private func showBadges(of item: LibraryItem?) {
         let shows = geometry.style != .none
+        let slots = geometry.style == .expanded && item != nil
         let metadata = item?.metadata ?? PhotoMetadata()
         let flag: GridBadges.Kind? = switch metadata.flag {
         case .pick: .pick
         case .reject: .reject
-        case nil: nil
+        case nil: slots ? .flagSlot : nil
         }
         set(.flag, shows ? flag : nil, centre: geometry.flag)
         set(
@@ -186,20 +190,35 @@ final class LibraryGridCell {
             shows && item.map { SupportedFormats.isStack($0.url) } == true ? .stack : nil,
             centre: geometry.stack,
         )
+        set(.mark, shows && metadata.mark ? .mark : slots ? .markSlot : nil, centre: geometry.mark)
         let edited: GridBadges.Kind = showsUneditedPreview ? .uneditedPreview : .edited
         set(.edited, shows && item?.hasEdits == true ? edited : nil, centre: geometry.edited)
-        set(.rating, shows && metadata.rating > 0 ? .rating(metadata.rating) : nil, left: geometry.rating)
+        let rating: GridBadges.Kind? = slots ? .ratingSlots(metadata.rating)
+            : shows && metadata.rating > 0 ? .rating(metadata.rating) : nil
+        set(.rating, rating, left: geometry.rating)
         set(.cloud, item?.isLocal == false && thumbnail.contents == nil ? .cloud : nil, centre: CGPoint(
             x: geometry.image.midX, y: geometry.image.midY,
         ))
-        if shows, let colour = metadata.label {
+        let colour = GridBadges.color(of: metadata)
+        if shows, let colour {
             let layer = label ?? makeLayer { label = $0 }
             layer.frame = geometry.label
             layer.cornerRadius = 1.5
-            layer.backgroundColor = colour.nsColor.cgColor
+            layer.backgroundColor = colour.cgColor
             layer.isHidden = false
         } else {
             label?.isHidden = true
+        }
+        if slots, let frame = geometry.labelChip {
+            let layer = chip ?? makeLayer { chip = $0 }
+            layer.frame = frame
+            layer.cornerRadius = 2.5
+            layer.backgroundColor = colour?.cgColor
+            layer.borderWidth = colour == nil ? 1 : 0
+            layer.borderColor = NSColor(white: 1, alpha: 0.3).cgColor
+            layer.isHidden = false
+        } else {
+            chip?.isHidden = true
         }
         text?.isHidden = geometry.style != .expanded || text?.contents == nil
     }

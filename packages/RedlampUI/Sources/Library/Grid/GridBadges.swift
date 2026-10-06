@@ -11,13 +11,20 @@ enum GridBadges {
         /// Edited, shown from its embedded preview until the library has rendered the edit (LIB-17).
         case uneditedPreview
         case rating(Int)
+        /// In the quick collection.
+        case mark
+        /// An expanded cell's places to click: five stars with `stars` of them lit, a flag and a mark.
+        case ratingSlots(Int)
+        case flagSlot, markSlot
 
         /// The badge's size in points.
         var size: CGSize {
             switch self {
-            case .pick, .reject, .stack, .edited, .uneditedPreview: CGSize(width: 16, height: 16)
+            case .pick, .reject, .stack, .edited, .uneditedPreview, .mark, .flagSlot, .markSlot:
+                CGSize(width: 16, height: 16)
             case .cloud: CGSize(width: 24, height: 24)
             case let .rating(stars): CGSize(width: 8 + CGFloat(stars) * 7, height: 11)
+            case .ratingSlots: CGSize(width: 8 + 5 * 7, height: 11)
             }
         }
     }
@@ -102,7 +109,30 @@ enum GridBadges {
                     centeredAt: CGPoint(x: 7.5 + CGFloat(index) * 7, y: size.height / 2), scale: scale,
                 )
             }
+        case .mark:
+            context.setFillColor(shade)
+            context.fillEllipse(in: CGRect(origin: .zero, size: size))
+            Symbol.draw("circle.fill", pointSize: 7, color: white.opacity(0.9), centeredAt: middle, scale: scale)
+        case let .ratingSlots(stars):
+            for index in 0 ..< 5 {
+                Symbol.draw(
+                    index < stars ? "star.fill" : "star", pointSize: 6, color: white.opacity(index < stars ? 0.9 : 0.3),
+                    centeredAt: CGPoint(x: 7.5 + CGFloat(index) * 7, y: size.height / 2), scale: scale,
+                )
+            }
+        case .flagSlot:
+            Symbol.draw("flag", pointSize: 8, color: white.opacity(0.3), centeredAt: middle, scale: scale)
+        case .markSlot:
+            Symbol.draw("circle", pointSize: 8, color: white.opacity(0.3), centeredAt: middle, scale: scale)
         }
         return context.makeImage()
+    }
+
+    /// The colour a label's bar and chip are drawn in: a custom label's is neutral.
+    static func color(of metadata: PhotoMetadata) -> NSColor? {
+        if let label = metadata.label {
+            return label.nsColor
+        }
+        return metadata.customLabel == nil ? nil : NSColor(white: 0.78, alpha: 1)
     }
 }

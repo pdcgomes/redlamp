@@ -4,11 +4,15 @@ import RedlampDesign
 /// A filmstrip photo's context menu (`docs/plans/2026-10-02-copy-paste-sync-design.md`), as in
 /// Lightroom and Finder: on a selected photo, the Photo menu's copy, paste and sync items, acting
 /// on the selection as they do there; on any other photo, copying from it or pasting onto it
-/// alone, without opening it. Items that don't apply are left out.
+/// alone, without opening it. Items that don't apply are left out. In Library, its rating, flag,
+/// labels and mark come first (`LibraryGridMenu.culling`); the grid's menu has its own.
 @MainActor
 enum FilmstripMenu {
-    static func menu(for photo: URL, model: EditorModel) -> NSMenu? {
+    static func menu(for photo: URL, model: EditorModel, culling: Bool = false) -> NSMenu? {
         let menu = NSMenu()
+        if culling {
+            add(LibraryGridMenu.culling(for: photo, model: model), to: menu)
+        }
         if model.selectedPhotos.contains(photo) {
             let groups: [[ShortcutAction]] = [
                 [.copySettings, .copySettingsAgain, .pasteSettings, .pastePrevious],

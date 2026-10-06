@@ -6,11 +6,11 @@ import RedlampLibrary
 
 /// The Library loupe (E): the active photo large, from its thumbnail at once and its screen-size preview
 /// once that's decoded, with its name, date and camera settings above it as an expanded grid cell has
-/// them. Z, Space or a click zoom it to 1:1, where the preview shows at the photo's full size until the
-/// photo itself is decoded off the main thread, and a drag pans it; Z or a click fit it again. An edited
-/// photo shows its edit once the library has rendered it, and until then its embedded preview, marked in
-/// its corner as a grid cell is (LIB-17). It reads nothing while it isn't shown. LIB-16 adds Compare and
-/// Survey.
+/// them, and its rating, flag, label and mark beside them as they change (LIB-15). Z, Space or a click
+/// zoom it to 1:1, where the preview shows at the photo's full size until the photo itself is decoded off
+/// the main thread, and a drag pans it; Z or a click fit it again. An edited photo shows its edit once the
+/// library has rendered it, and until then its embedded preview, marked in its corner as a grid cell is
+/// (LIB-17). It reads nothing while it isn't shown. LIB-16 adds Compare and Survey.
 final class LibraryLoupeView: NSView {
     private static let inset: CGFloat = 20
     private static let captionHeight: CGFloat = 34
@@ -20,9 +20,11 @@ final class LibraryLoupeView: NSView {
     private let mark = CALayer()
     private let name = NSTextField(labelWithString: "")
     private let caption = NSTextField(labelWithString: "")
+    let badges = LoupeBadgesView()
     private let details: PhotoDetailsCache
     private var trackers: [Tracker] = []
     private var editObservation: LibraryObservation?
+    private var libraryObservation: LibraryObservation?
     /// The photo shown, and whether its preview, and at 1:1 the photo itself, are in.
     private var shown: URL?
     private(set) var showsPreview = false
@@ -58,6 +60,7 @@ final class LibraryLoupeView: NSView {
             label.lineBreakMode = .byTruncatingMiddle
             addSubview(label)
         }
+        addSubview(badges)
         setAccessibilityElement(true)
         setAccessibilityRole(.image)
         setAccessibilityIdentifier("library.loupe")
@@ -103,8 +106,10 @@ final class LibraryLoupeView: NSView {
         trackers.forEach { $0.cancel() }
         trackers = []
         editObservation = nil
+        libraryObservation = nil
         guard window != nil else { return }
         editObservation = model.editRenders.observe { [weak self] urls in self?.editsShown(urls) }
+        libraryObservation = model.library.observe { [weak self] diff in self?.libraryChanged(diff) }
         trackers = [
             Tracker { [weak self] in
                 guard let self else { return }
@@ -132,9 +137,11 @@ final class LibraryLoupeView: NSView {
             setImage(nil)
             name.stringValue = ""
             caption.stringValue = ""
+            badges.metadata = nil
             setAccessibilityLabel(nil)
             return
         }
+        badges.metadata = item.metadata
         name.stringValue = item.name
         caption.stringValue = ""
         setAccessibilityLabel(item.name)
@@ -173,6 +180,12 @@ final class LibraryLoupeView: NSView {
             setImage(preview, edit: edit)
             showsPreview = true
         }
+    }
+
+    /// The shown photo's badges, as a culling change or the library leaves them.
+    private func libraryChanged(_ diff: LibraryDiff) {
+        guard let shown, diff.reset || model.library.index(of: shown).map(diff.updated.contains) == true else { return }
+        badges.metadata = model.library.item(for: shown)?.metadata
     }
 
     /// The previews of these photos show another edit: the one shown is asked for again.
@@ -292,7 +305,12 @@ final class LibraryLoupeView: NSView {
 
     override func layout() {
         super.layout()
-        let width = max(bounds.width - Self.inset * 2, 0)
+        let size = LoupeBadgesView.size
+        badges.frame = CGRect(
+            x: bounds.width - Self.inset - size.width, y: (Self.captionHeight - size.height) / 2, width: size.width,
+            height: size.height,
+        )
+        let width = max(bounds.width - Self.inset * 3 - size.width, 0)
         name.frame = CGRect(x: Self.inset, y: 4, width: width, height: name.intrinsicContentSize.height)
         caption.frame = CGRect(x: Self.inset, y: 18, width: width, height: caption.intrinsicContentSize.height)
         layoutPhoto()
@@ -343,5 +361,96 @@ final class LibraryLoupeView: NSView {
         }
         model.toggleLoupeZoom()
         zoomChanged()
+    }
+}
+
+/// The loupe's rating, flag, label and mark, drawn as a grid cell's are, and said to VoiceOver.
+final class LoupeBadgesView: NSView {
+    static let size = CGSize(width: 104, height: 16)
+    private let rating = CALayer()
+    private let flag = CALayer()
+    private let label = CALayer()
+    private let mark = CALayer()
+
+    var metadata: PhotoMetadata? {
+        didSet {
+            if metadata != oldValue {
+                show()
+            }
+        }
+    }
+
+    init() {
+        super.init(frame: CGRect(origin: .zero, size: Self.size))
+        wantsLayer = true
+        layerContentsRedrawPolicy = .never
+        for badge in [rating, flag, label, mark] {
+            badge.actions = LibraryGridCell.noActions
+            badge.isHidden = true
+            layer?.addSublayer(badge)
+        }
+        label.cornerRadius = 2.5
+        setAccessibilityElement(true)
+        setAccessibilityRole(.staticText)
+        setAccessibilityIdentifier("library.loupe.badges")
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    override var isFlipped: Bool {
+        true
+    }
+
+    override var wantsUpdateLayer: Bool {
+        true
+    }
+
+    override func updateLayer() {}
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        show()
+    }
+
+    /// `3 stars, Pick, Red, Marked`, as VoiceOver and the regression suite read it.
+    var summary: String {
+        guard let metadata else { return "" }
+        let flag = metadata.flag.map { $0 == .pick ? "Pick" : "Rejected" }
+        let label = metadata.label.map(\.rawValue.capitalized) ?? metadata.customLabel
+        return [
+            metadata.rating == 1 ? "1 star" : "\(metadata.rating) stars", flag, label, metadata.mark ? "Marked" : nil,
+        ].compactMap(\.self).joined(separator: ", ")
+    }
+
+    /// From the right: the mark, the flag, the label and the stars.
+    private func show() {
+        let scale = window?.backingScaleFactor ?? 2
+        let width = Self.size.width
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        setAccessibilityValue(summary)
+        guard let metadata else {
+            [rating, flag, label, mark].forEach { $0.isHidden = true }
+            return
+        }
+        func place(_ badge: CALayer, _ kind: GridBadges.Kind?, x: CGFloat) {
+            badge.isHidden = kind == nil
+            guard let kind else { return }
+            let size = kind.size
+            badge.contents = GridBadges.image(kind, scale: scale)
+            badge.contentsScale = scale
+            badge.frame = CGRect(x: x, y: (Self.size.height - size.height) / 2, width: size.width, height: size.height)
+        }
+        place(mark, metadata.mark ? .mark : nil, x: width - 16)
+        place(flag, metadata.flag.map { $0 == .pick ? .pick : .reject }, x: width - 34)
+        let colour = GridBadges.color(of: metadata)
+        label.isHidden = colour == nil
+        label.backgroundColor = colour?.cgColor
+        label.frame = CGRect(x: width - 50, y: 3, width: 10, height: 10)
+        place(rating, .ratingSlots(metadata.rating), x: 0)
     }
 }
