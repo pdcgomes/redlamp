@@ -193,16 +193,15 @@ struct LibraryServiceTests {
         defer { cleanUp() }
         let names = ["IMG_1.JPG", "IMG_2.JPG", "IMG_3.JPG", "Sub/IMG_4.JPG"]
         try photos(names)
-        // Dates ahead of the clock keep the photos inside the settle window however long indexing takes.
-        let ahead = Date().addingTimeInterval(3600)
-        for name in names {
-            try FileManager.default.setAttributes([.modificationDate: ahead], ofItemAtPath: photo(name).path)
-        }
+        let written = Date()
         try SidecarStore().save(
             Sidecar(recipe: Self.edited, metadata: PhotoMetadata(rating: 2)),
             for: photo("IMG_2.JPG"),
         )
         let library = FolderLibrary()
+        // Long settled while listed, whenever the disk watcher lists the folder again; written a
+        // moment ago once the library shows it (below).
+        library.clock = { written.addingTimeInterval(3600) }
         library.add([root])
         library.setIncludesSubfolders(true)
         var diffs: [LibraryDiff] = []
@@ -220,6 +219,10 @@ struct LibraryServiceTests {
         #expect(library.items == listed, "the same photos, with the same dates and badges")
 
         // The library rereads the photos, unchanged, then one badge changes after them.
+        library.clock = { written }
+        #expect(names.allSatisfy { name in
+            library.item(for: photo(name)).map { FolderLibrary.isSettling($0.modified, at: written) } == true
+        }, "inside the settle window from now on")
         for name in names where name != "IMG_2.JPG" {
             library.sidecarSaved(photo(name))
         }
