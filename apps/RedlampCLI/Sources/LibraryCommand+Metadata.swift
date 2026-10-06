@@ -5,9 +5,10 @@ import RedlampLibrary
 import Synchronization
 
 /// `redlamp library metadata`: the photos' ratings, flags, labels, marks and IPTC Core's fields (LIB-15,
-/// LIB-22), set on the photos a query finds or from a preset, each change a batch with Undo; the presets;
-/// and manual stacks made and opened (LIB-28), through `redlamp library stacks`. Collections' changes go in
-/// the same journal (`LibraryCommand+Collections`). Every change first finishes one a forced quit left.
+/// LIB-22), set on the photos a query finds or from a preset, and their capture times shifted, set or
+/// given the camera's zone, each change a batch with Undo; the presets; and manual stacks made and opened
+/// (LIB-28), through `redlamp library stacks`. Collections' changes go in the same journal
+/// (`LibraryCommand+Collections`). Every change first finishes one a forced quit left.
 extension LibraryCommand {
     static let metadataUsage = """
     usage: redlamp library metadata --index <path> [<query>] [--limit <n>] [--json]
@@ -16,6 +17,10 @@ extension LibraryCommand {
                                     [--creator <text>] [--copyright <text>] [--sublocation <text>] [--city <text>]
                                     [--state <text>] [--country <text>] [--country-code <text>] [--codes <file>]
                                     [--dry-run] [--json]
+           redlamp library metadata shift --index <path> <query> --by <amount> [--dry-run] [--json]
+           redlamp library metadata shift --index <path> <query> --to <date time> [--photo <name>] [--dry-run]
+                                    [--json]
+           redlamp library metadata zone --index <path> <query> --offset <±hh:mm> | --file [--dry-run] [--json]
            redlamp library metadata preset <name> --index <path> <query> [--codes <file>] [--dry-run] [--json]
            redlamp library metadata presets --index <path> [--json]
            redlamp library metadata presets save <name> --index <path> [--<field> <text>]… [--append <field>]…
@@ -24,6 +29,12 @@ extension LibraryCommand {
            redlamp library metadata undo --index <path> [--dry-run] [--json]
            redlamp library stacks stack <query> --index <path> [--top <name>] [--dry-run] [--json]
            redlamp library stacks unstack|top <query> --index <path> [--dry-run] [--json]
+
+    A capture time is the camera's, by its clock, with the shift its sidecar gives it; the photo's file is
+    never changed. shift --by adds an amount (+1h30m, -90s, 2d, -05:00, or seconds) to each photo's; --to
+    gives the photo named by --photo, or the first the query finds in capture order, that time
+    (2024-06-01 15:30:00) and shifts the rest by as much. zone says which zone the camera's clock was in,
+    or with --file gives the photos back the zones their files record.
     """
 
     /// The texts `set` and `presets save` take, by option.
@@ -37,6 +48,8 @@ extension LibraryCommand {
         let rest = Array(arguments.dropFirst())
         switch arguments.first {
         case "set": try await setMetadata(rest)
+        case "shift": try await shiftCaptureTimes(rest)
+        case "zone": try await setCameraZone(rest)
         case "preset": try await applyPreset(rest)
         case "presets": try await presets(rest)
         case "undo": try await undoMetadata(rest)
@@ -86,6 +99,12 @@ extension LibraryCommand {
                     return object
                 }
                 object["otherApps"] = photo.row.otherFields.map(\.rawValue).sorted()
+                if photo.row.captureShift != 0 {
+                    object["captureShift"] = photo.row.captureShift
+                }
+                if let zone = givenZone(photo.row) {
+                    object["captureOffset"] = zone
+                }
                 return object
             }
             let data = try JSONSerialization.data(withJSONObject: photos, options: [.prettyPrinted, .sortedKeys])
@@ -131,7 +150,19 @@ extension LibraryCommand {
         if let stack = row.stack {
             parts.append(stack.id.map { "stack \($0.uuidString)\(stack.top ? ", its top" : "")" } ?? "its burst's top")
         }
+        if row.captureShift != 0, let captured = row.captured {
+            parts.append("taken \(CaptureTimeChange.describe(time: captured)), shifted "
+                + CaptureTimeChange.describe(shift: row.captureShift))
+        }
+        if let zone = givenZone(row) {
+            parts.append("the camera's zone " + CaptureTimeChange.describe(zone: zone))
+        }
         return parts.isEmpty ? "nothing" : parts.joined(separator: ", ")
+    }
+
+    /// The zone the photo's sidecar gives its camera, where it isn't the one its file records.
+    private static func givenZone(_ row: PhotoRecord) -> Int? {
+        row.cameraCaptured != nil && row.capturedOffset != row.cameraZone ? row.capturedOffset : nil
     }
 
     private static func locationObject(_ location: PhotoLocation) -> [String: String] {
@@ -212,6 +243,184 @@ extension LibraryCommand {
                 metadata.plan(.preset(preset, to: ids, codes: codes)), metadata: metadata, options: options,
             )
         }
+    }
+
+    // MARK: - Capture times
+
+    /// `shift --by` and `shift --to`: the capture times of the photos a query finds, moved by an amount,
+    /// or one photo's set and the rest moved by as much.
+    private static func shiftCaptureTimes(_ arguments: [String]) async throws {
+        let options = try Arguments(arguments, valued: ["--index", "--by", "--to", "--photo"])
+        guard let path = options.value("--index"), !options.positional.isEmpty else {
+            throw CLIError(description: "metadata shift needs a query and --index\n\n\(metadataUsage)")
+        }
+        let query = try metadataQuery(options.positional.joined(separator: " "))
+        try await withMetadata(path) { metadata in
+            let ids = try await queriedPhotoIDs(query, in: metadata.index)
+            let change: CaptureTimeChange
+            switch (options.value("--by"), options.value("--to")) {
+            case let (amount?, nil):
+                guard let seconds = seconds(amount) else {
+                    throw CLIError(description: "--by needs an amount: +1h30m, -90s, 2d, -05:00 or seconds")
+                }
+                change = .shift(ids, by: seconds)
+            case let (nil, text?):
+                guard let time = cameraTime(text) else {
+                    throw CLIError(description: "--to needs a date and time: 2024-06-01 15:30:00")
+                }
+                let name = options.value("--photo")
+                let photo = try await metadata.index.read { reader in
+                    try ids.first { id in
+                        guard let row = try reader.photo(id: id) else { return false }
+                        return name.map { row.name == $0 } ?? (row.captured != nil)
+                    }
+                }
+                guard let photo else {
+                    throw CLIError(description: name.map { "the query finds no photo named \($0)" }
+                        ?? "the query finds no photo with a capture time")
+                }
+                change = .set(photo, to: time, shifting: ids.filter { $0 != photo })
+            case (nil, nil):
+                throw CLIError(description: "metadata shift needs --by or --to\n\n\(metadataUsage)")
+            case (_?, _?):
+                throw CLIError(description: "metadata shift takes --by or --to, not both")
+            }
+            try await plannedCapture(metadata.plan(change), metadata: metadata, options: options)
+        }
+    }
+
+    /// `zone`: the zone the camera's clock was in, for the photos a query finds, or with `--file` the
+    /// zones their files record.
+    private static func setCameraZone(_ arguments: [String]) async throws {
+        let options = try Arguments(arguments, valued: ["--index", "--offset"])
+        guard let path = options.value("--index"), !options.positional.isEmpty else {
+            throw CLIError(description: "metadata zone needs a query and --index\n\n\(metadataUsage)")
+        }
+        let offset: Int?
+        switch (options.value("--offset"), options.has("--file")) {
+        case let (text?, false):
+            guard let seconds = zone(text) else {
+                throw CLIError(description: "--offset needs a zone: +09:00, -05:30 or Z")
+            }
+            offset = seconds
+        case (nil, true):
+            offset = nil
+        default:
+            throw CLIError(description: "metadata zone needs --offset or --file\n\n\(metadataUsage)")
+        }
+        let query = try metadataQuery(options.positional.joined(separator: " "))
+        try await withMetadata(path) { metadata in
+            let ids = try await queriedPhotoIDs(query, in: metadata.index)
+            try await plannedCapture(metadata.plan(.zone(ids, offset: offset)), metadata: metadata, options: options)
+        }
+    }
+
+    /// Runs `plan` as `planned` does; with `--dry-run`, prints each photo's capture time and zone as they
+    /// are and as they'd be, and changes nothing.
+    private static func plannedCapture(_ plan: MetadataPlan, metadata: LibraryMetadata, options: Arguments)
+        async throws {
+        guard options.has("--dry-run") else {
+            return try await planned(plan, metadata: metadata, options: options)
+        }
+        let photos = plan.photos
+        let rows = try await metadata.index.read { reader in try photos.map { try reader.photo(id: $0.id) } }
+        let changes = zip(photos, rows).compactMap { photo, row in
+            row.map { (
+                path: photo.path,
+                before: (time: $0.captured, offset: $0.capturedOffset),
+                after: photo.capture(of: $0),
+            ) }
+        }
+        if options.has("--json") {
+            func moment(_ capture: (time: Date?, offset: Int?)) -> [String: Any] {
+                var object: [String: Any] = [:]
+                object["captured"] = capture.time.map(CaptureTimeChange.describe(time:))
+                object["zone"] = capture.offset.map(CaptureTimeChange.describe(zone:))
+                return object
+            }
+            let objects = changes.map { change -> [String: Any] in
+                ["path": change.path, "before": moment(change.before), "after": moment(change.after)]
+            }
+            let data = try JSONSerialization.data(
+                withJSONObject: ["title": plan.title, "photos": objects], options: [.prettyPrinted, .sortedKeys],
+            )
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+        for change in changes {
+            print(change.path + "\t" + describeCapture(change.before) + " → " + describeCapture(change.after))
+        }
+        print("\(plan.title): \(metadataCount(changes.count)) photos would change. Nothing was written.")
+    }
+
+    /// `2024-06-01 09:30:00 UTC+01:00`, without a zone when the camera recorded none.
+    private static func describeCapture(_ capture: (time: Date?, offset: Int?)) -> String {
+        guard let time = capture.time else { return "no capture time" }
+        return CaptureTimeChange.describe(time: time)
+            + (capture.offset.map { " " + CaptureTimeChange.describe(zone: $0) } ?? "")
+    }
+
+    /// Seconds from `+1h30m`, `-90s`, `2d`, `-05:00`, `+01:30:15` or a number of seconds.
+    static func seconds(_ text: String) -> Int? {
+        var rest = Substring(text.trimmingCharacters(in: .whitespaces))
+        let sign = rest.first == "-" ? -1 : 1
+        if rest.first == "-" || rest.first == "+" {
+            rest = rest.dropFirst()
+        }
+        guard !rest.isEmpty, rest.allSatisfy(\.isASCII) else { return nil }
+        if let plain = Int(rest) {
+            return sign * plain
+        }
+        if rest.contains(":") {
+            let parts = rest.split(separator: ":", omittingEmptySubsequences: false).compactMap { Int($0) }
+            guard parts.count == rest.count(where: { $0 == ":" }) + 1, (2 ... 3).contains(parts.count),
+                  parts.allSatisfy({ $0 >= 0 }), parts.dropFirst().allSatisfy({ $0 < 60 })
+            else { return nil }
+            return sign * (parts[0] * 3600 + parts[1] * 60 + (parts.count == 3 ? parts[2] : 0))
+        }
+        let units: [Character: Int] = ["d": 86400, "h": 3600, "m": 60, "s": 1]
+        var total = 0
+        var digits = ""
+        for character in rest {
+            if character.isNumber {
+                digits.append(character)
+                continue
+            }
+            guard let value = Int(digits), let unit = units[character] else { return nil }
+            total += value * unit
+            digits = ""
+        }
+        return digits.isEmpty ? sign * total : nil
+    }
+
+    /// A zone's seconds east of UTC from `+09:00`, `-0530`, `+9` or `Z`.
+    static func zone(_ text: String) -> Int? {
+        let text = text.trimmingCharacters(in: .whitespaces)
+        if text == "Z" || text.uppercased() == "UTC" {
+            return 0
+        }
+        guard let sign = text.first, sign == "+" || sign == "-" else { return nil }
+        let digits = text.dropFirst().replacingOccurrences(of: ":", with: "")
+        guard [1, 2, 4].contains(digits.count), digits.allSatisfy({ $0.isASCII && $0.isNumber }),
+              let hours = Int(digits.prefix(digits.count == 4 ? 2 : digits.count)),
+              let minutes = digits.count == 4 ? Int(digits.suffix(2)) : 0, minutes < 60
+        else { return nil }
+        return (sign == "-" ? -1 : 1) * (hours * 3600 + minutes * 60)
+    }
+
+    /// `2024-06-01 15:30:00`, with a `T` or to the minute too, as a time by the camera's clock.
+    static func cameraTime(_ text: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        let text = text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "T", with: " ")
+        for format in ["yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm"] {
+            formatter.dateFormat = format
+            if let date = formatter.date(from: text) {
+                return date
+            }
+        }
+        return nil
     }
 
     private static func undoMetadata(_ arguments: [String]) async throws {
@@ -433,6 +642,9 @@ extension LibraryCommand {
         } catch {
             await index.close()
             if let error = error as? MetadataError {
+                throw CLIError(description: error.description)
+            }
+            if let error = error as? CaptureTimeError {
                 throw CLIError(description: error.description)
             }
             throw error
