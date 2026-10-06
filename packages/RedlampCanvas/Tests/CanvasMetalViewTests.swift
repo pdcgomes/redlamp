@@ -42,9 +42,7 @@ struct CanvasMetalViewTests {
         for surface in oneToOne + fit.prefix(2) {
             view.display(frame(surface))
         }
-        withKnownIssue("MEM-06: the canvas keeps up to 16 surfaces") {
-            #expect(Set(view.textures.keys) == Set(fit.prefix(2).map(IOSurfaceGetID)))
-        }
+        #expect(Set(view.textures.keys) == Set(fit.prefix(2).map(IOSurfaceGetID)))
     }
 
     @Test func `a canvas holds the surfaces of two frames at most`() throws {
@@ -57,12 +55,8 @@ struct CanvasMetalViewTests {
                 comparisonOverview: comparisonOverviews[index % 3],
             ))
         }
-        withKnownIssue("MEM-06: the canvas keeps up to 16 surfaces") {
-            #expect(view.textures.count <= 8)
-        }
+        #expect(view.textures.count <= 8)
         view.display(nil)
-        withKnownIssue("MEM-06: the canvas keeps up to 16 surfaces") {
-            #expect(view.textures.isEmpty)
-        }
+        #expect(view.textures.isEmpty)
     }
 }

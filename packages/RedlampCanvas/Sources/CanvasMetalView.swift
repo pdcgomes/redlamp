@@ -79,8 +79,12 @@ public final class CanvasMetalView: NSView {
     /// controller's `comparison`.
     private var comparison: (any MTLTexture)?
     private var comparisonOverview: (any MTLTexture)?
-    /// Textures for the engine's few recycled surfaces, made once each.
+    /// Textures for the surfaces of the frame shown and the one before, which the engine's rings
+    /// bring back. A texture holds its surface, so one kept after the engine rebuilt its ring
+    /// would keep that surface in memory.
     private(set) var textures: [IOSurfaceID: any MTLTexture] = [:]
+    /// The surfaces of the frame shown.
+    private var shownSurfaces: Set<IOSurfaceID> = []
     private var dragOrigin: CGPoint?
     private var didDrag = false
     var wheelZoom = WheelZoom()
@@ -131,8 +135,14 @@ public final class CanvasMetalView: NSView {
             overview = nil
             comparison = nil
             comparisonOverview = nil
+            textures.removeAll()
+            shownSurfaces = []
             return
         }
+        let surfaces = [frame.surface, frame.overview, frame.comparison, frame.comparisonOverview]
+        let shown = Set(surfaces.compactMap { $0.map(IOSurfaceGetID) })
+        textures = textures.filter { shown.contains($0.key) || shownSurfaces.contains($0.key) }
+        shownSurfaces = shown
         texture = makeTexture(frame.surface, size: frame.size)
         region = frame.region
         overview = frame.overview.flatMap { makeTexture($0, size: frame.overviewSize) }
@@ -152,9 +162,6 @@ public final class CanvasMetalView: NSView {
         descriptor.usage = .shaderRead
         descriptor.storageMode = .shared
         let texture = device.makeTexture(descriptor: descriptor, iosurface: surface, plane: 0)
-        if textures.count >= 16 {
-            textures.removeAll()
-        }
         textures[id] = texture
         return texture
     }
