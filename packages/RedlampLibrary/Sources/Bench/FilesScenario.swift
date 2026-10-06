@@ -15,10 +15,10 @@ public extension BenchScenarios {
 /// its capture time and a sequence, moving each with its sidecar and `.xmp`, and writes its
 /// original name in its sidecar, which a photo without one gets; Undo takes the names and the
 /// sidecars it made away again. Each is timed against a second (on the SSD, if its disk allows),
-/// beside what one rename costs the disk on its own. Then a rename is stopped halfway as by a
-/// forced quit, and finished on the next run; and another rolled back. After each, every photo must
-/// be where its row says, with its sidecar and its `.xmp`. Nothing is read from the fixture, so its
-/// volume doesn't matter, and the folder is removed at the end.
+/// beside what one rename costs the disk on its own. Then, unless `recovery` is off, a rename is
+/// stopped halfway as by a forced quit, and finished on the next run; and another rolled back. After
+/// each, every photo must be where its row says, with its sidecar and its `.xmp`. Nothing is read from
+/// the fixture, so its volume doesn't matter, and the folder is removed at the end.
 public struct FilesScenario: BenchScenario {
     public static let defaultPhotos = 10000
     static let budget = 1000.0
@@ -26,9 +26,11 @@ public struct FilesScenario: BenchScenario {
 
     public let name = "files"
     public let photos: Int
+    public let recovery: Bool
 
-    public init(photos: Int = FilesScenario.defaultPhotos) {
+    public init(photos: Int = FilesScenario.defaultPhotos, recovery: Bool = true) {
         self.photos = max(photos, 2)
+        self.recovery = recovery
     }
 
     public func run(_: BenchContext) async throws -> [BenchResult] {
@@ -77,30 +79,49 @@ public struct FilesScenario: BenchScenario {
         try await check()
 
         // Halfway through, as a forced quit would leave it; then partway through one photo's files.
-        let half = batch.steps.count / 2
-        let interrupted = FileOperations(index: index, paths: paths)
-        interrupted.interruption.withLock { $0 = .afterStep(half) }
-        _ = try? await interrupted.run(interrupted.planRename(interrupted.renamePreview(template, photos: ids)))
-        let launch = FileOperations(index: index, paths: paths)
-        started = clock.now
-        let finished = try await launch.recover(.finish)
-        let finishing = clock.now - started
-        try await check()
-        try await launch.undo()
-        try await check()
-        let within = batch.steps.indices.dropFirst(half).first { batch.steps[$0].items.count > 1 } ?? half
-        let stopped = FileOperations(index: index, paths: paths)
-        stopped.interruption.withLock { $0 = .withinStep(within, items: 1) }
-        _ = try? await stopped.run(stopped.planRename(stopped.renamePreview(template, photos: ids)))
-        started = clock.now
-        let rolledBack = try await FileOperations(index: index, paths: paths).recover(.rollBack)
-        let rollingBack = clock.now - started
-        try await check()
-        let settled = finished.first?.state == .finished && rolledBack.first?.state == .rolledBack
-            && renamed.state == .finished
+        var recovered: (finishing: Duration, rollingBack: Duration, settled: Bool)?
+        if recovery {
+            let half = batch.steps.count / 2
+            let interrupted = FileOperations(index: index, paths: paths)
+            interrupted.interruption.withLock { $0 = .afterStep(half) }
+            _ = try? await interrupted.run(interrupted.planRename(interrupted.renamePreview(template, photos: ids)))
+            let launch = FileOperations(index: index, paths: paths)
+            started = clock.now
+            let finished = try await launch.recover(.finish)
+            let finishing = clock.now - started
+            try await check()
+            try await launch.undo()
+            try await check()
+            let within = batch.steps.indices.dropFirst(half).first { batch.steps[$0].items.count > 1 } ?? half
+            let stopped = FileOperations(index: index, paths: paths)
+            stopped.interruption.withLock { $0 = .withinStep(within, items: 1) }
+            _ = try? await stopped.run(stopped.planRename(stopped.renamePreview(template, photos: ids)))
+            started = clock.now
+            let rolledBack = try await FileOperations(index: index, paths: paths).recover(.rollBack)
+            let rollingBack = clock.now - started
+            try await check()
+            recovered = (
+                finishing, rollingBack, finished.first?.state == .finished && rolledBack.first?.state == .rolledBack,
+            )
+        }
+        let settled = renamed.state == .finished && recovered?.settled != false
 
         let label = BenchResult.grouped(shots.count)
         let files = batch.steps.reduce(0) { $0 + $1.items.count }
+        let recoveries = recovered.map { recovered in
+            [
+                BenchResult(
+                    scenario: name, id: "library-files-recover-finish",
+                    name: "A rename a forced quit stopped halfway, finished on the next run",
+                    value: recovered.finishing.seconds * 1000, unit: "ms",
+                ),
+                BenchResult(
+                    scenario: name, id: "library-files-recover-roll-back",
+                    name: "A rename a forced quit stopped halfway, rolled back on the next run",
+                    value: recovered.rollingBack.seconds * 1000, unit: "ms",
+                ),
+            ]
+        } ?? []
         return [
             BenchResult(
                 scenario: name, id: "library-files-rename-plan",
@@ -134,17 +155,7 @@ public struct FilesScenario: BenchScenario {
                 name: "Original names written in sidecars by the rename",
                 value: Double(renamed.originalNamesRecorded), unit: "photos",
             ),
-            BenchResult(
-                scenario: name, id: "library-files-recover-finish",
-                name: "A rename a forced quit stopped halfway, finished on the next run",
-                value: finishing.seconds * 1000,
-                unit: "ms",
-            ),
-            BenchResult(
-                scenario: name, id: "library-files-recover-roll-back",
-                name: "A rename a forced quit stopped halfway, rolled back on the next run",
-                value: rollingBack.seconds * 1000, unit: "ms",
-            ),
+        ] + recoveries + [
             BenchResult(
                 scenario: name, id: "library-files-settled", name: "Batches that ended as asked",
                 value: settled ? 1 : 0, unit: "runs", budget: .exactly(1, "runs"),

@@ -4,7 +4,8 @@ import Testing
 
 /// The files scenario, small enough for every run; and at full size with `REDLAMP_FILES_BENCH=1`
 /// (which xcodebuild hands to the tests from `TEST_RUNNER_REDLAMP_FILES_BENCH=1`), with
-/// `REDLAMP_FILES_BENCH_PHOTOS` photos (10,000 by default).
+/// `REDLAMP_FILES_BENCH_PHOTOS` photos (10,000 by default), and without the forced quits' recoveries
+/// with `REDLAMP_FILES_BENCH_RECOVERY=0`.
 struct FileBenchTests {
     @Test func `the files scenario renames, undoes and recovers without losing a photo or a sidecar`() async throws {
         let results = try await FilesScenario(photos: 240).measure()
@@ -36,6 +37,7 @@ struct FileBenchTests {
         let environment = ProcessInfo.processInfo.environment
         let scenario = FilesScenario(
             photos: environment["REDLAMP_FILES_BENCH_PHOTOS"].flatMap { Int($0) } ?? FilesScenario.defaultPhotos,
+            recovery: environment["REDLAMP_FILES_BENCH_RECOVERY"] != "0",
         )
         let report = try await BenchReport(
             fixture: "synthetic photos", profile: "ssd", photos: scenario.photos, results: scenario.measure(),
