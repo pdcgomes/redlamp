@@ -249,10 +249,10 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Search and filters | Yes | In progress | | P4 | LIB-06, LIB-12, LIB-18, LIB-19 | Results as you type, with one query language for the filter bar, the command palette, smart collections and the command line |
 | Grid, Loupe, Compare and Survey | Yes | In progress | | P4 | LIB-14, LIB-16, LIB-17 | Held arrow keys move through photos without waiting; thumbnails show the edit |
 | Judging photos while culling | No | Planned | | P4 | LIB-38 | Sensor clipping and a raw histogram in the loupe and Compare, since a raw's embedded JPEG hides clipping, with focus peaking, the camera's focus point and a loupe that follows the pointer |
-| Rating, flagging and labelling many photos at once | Yes | Planned | | P4 | LIB-15 | With Undo, custom label names and colours, and marks; by key, by mouse or from the command palette |
+| Rating, flagging and labelling many photos at once | Yes | In progress | | P4 | LIB-15 | With Undo, custom label names and colours, and marks; by key, by mouse or from the command palette |
 | Keywords | Yes | In progress | | P4 | LIB-21 | |
-| Metadata editing and presets | Yes | Planned | | P4 | LIB-22 | |
-| Collections and smart collections | Yes | Planned | | P4 | LIB-23 | |
+| Metadata editing and presets | Yes | In progress | | P4 | LIB-22 | |
+| Collections and smart collections | Yes | In progress | | P4 | LIB-23 | |
 | Metadata shared with other apps (XMP) | Yes | In progress | | P4 | LIB-24 | Other apps' XMP is read; standard `.xmp` sidecars are written only when you turn it on, and originals are never changed |
 | Import from cards and cameras | Yes | In progress | | P4 | LIB-27 | With a backup copy |
 | Moving files and folders | Yes (Classic) | In progress | | P4 | LIB-26 | With a preview and Undo |

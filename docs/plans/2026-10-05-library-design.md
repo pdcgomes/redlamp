@@ -134,6 +134,15 @@ CREATE TABLE settings (key TEXT PRIMARY KEY, value) WITHOUT ROWID;
 CREATE TABLE photo_hashes (photo INTEGER PRIMARY KEY, size INTEGER NOT NULL, modified REAL NOT NULL,
   content_key BLOB NOT NULL, sha256 BLOB NOT NULL);          -- version 3 (LIB-39): a full hash, kept while
                                                               -- the file's size, date and content key hold
+-- version 4 (LIB-15, LIB-22, LIB-23, LIB-28): the rest of the sidecar's organising fields, so a rebuild
+-- from the sidecars loses nothing; manual stacks the settings table held move to their columns
+ALTER TABLE photos ADD COLUMN creator TEXT;  -- and copyright, sublocation, city, province, country,
+                                             -- country_code and custom_label, all TEXT
+ALTER TABLE photos ADD COLUMN stack TEXT;    -- a manual stack's UUID, with stack_top INTEGER
+ALTER TABLE photos ADD COLUMN other_fields INTEGER NOT NULL DEFAULT 0;  -- bits: the fields showing other
+                                                                        -- apps' values, not the .redlamp's
+ALTER TABLE photos ADD COLUMN xmp_signature INTEGER;  -- changes whenever either of the photo's .xmp does
+ALTER TABLE collections ADD COLUMN path TEXT;         -- unique: collections are found by path
 ```
 
 - **Snapshots and integrity.** While the index changes, a snapshot is taken with `VACUUM INTO` at most every 30 minutes, the last three kept (`LibraryPaths.snapshots`). `PRAGMA quick_check` runs in the background lane at launch once a week. A damaged index is replaced by its newest good snapshot and reconciled with the disks (LIB-08); with no snapshot, it's rebuilt.
@@ -231,16 +240,19 @@ As built (LIB-17): an edited photo the library shows is rendered with its edit b
 
 ## What the sidecar gains
 
-`metadata` is an open object, so older builds keep fields they don't know (`sidecar-format.md`, rule 2). It gains:
+`metadata` is an open object, so older builds keep fields they don't know (`sidecar-format.md`, rule 2). It gains these, each written only when set, so sidecars written before them save unchanged:
 
 | Field | Holds |
 | --- | --- |
 | `keywords` | full paths, `Places/Portugal/Lisbon`, so a photo describes itself without the keyword list; a `/` inside a name is written `%2F` and a `%` as `%25` (`Music/AC%2FDC`); an empty list means no keywords, and no list at all lets other apps' XMP supply them (LIB-21) |
-| `title`, `caption`, `creator`, `copyright`, `location` | IPTC Core fields |
-| `collections` | the collections a photo is in, by path |
-| `mark` | the quick-collection mark |
+| `title`, `caption`, `creator`, `copyright` | IPTC Core fields, as strings; an empty string means none and stops other apps' value coming back, as an empty keyword list does (LIB-22) |
+| `location` | IPTC Core's location: `sublocation`, `city`, `state`, `country` and `countryCode`; `{}` means none, as above (LIB-22) |
+| `collections` | the collections a photo is in, by path, written as keywords' paths are (LIB-23) |
+| `mark` | the quick-collection mark, written only when `true` |
 | `customLabel` | a custom label's name: an unknown `label` value makes a sidecar unreadable to older builds, so custom labels never go in `label` |
+| `stack` | a manual stack, `{"id": "<UUID>", "top": true}`, `top` written only when true (LIB-28) |
 | `originalName` | the photo's file name before Redlamp first renamed it (LIB-26), kept by older builds as a field they don't know |
+| `captureShift`, `captureOffset` | proposed for LIB-22's shifting of capture times, not built: seconds added to the camera's time, written when not zero, and the camera's zone; the file itself is never touched, and the indexer reads both into `captured`, so sorting, `date:`, bursts and `{date}` follow |
 
 ## Keywords (LIB-21)
 
@@ -250,6 +262,15 @@ As built (LIB-17): an edited photo the library shows is rendered with its edit b
 - **`kw:`** matches a keyword's path, any part of one, and its synonyms. **Completion** matches a prefix or any word of a keyword or its synonyms, best first.
 - **Lightroom Classic's keyword-list file** imports and exports with everything it holds: levels by tabs, synonyms in braces, keywords not exported in brackets.
 - **Other apps' keywords** come through XMP (LIB-24): `lr:hierarchicalSubject` as paths and `dc:subject` as flat names, both ways.
+
+## Metadata and collections (LIB-15, LIB-22, LIB-23)
+
+- **Changes on many photos** (`LibraryMetadata`, `LibraryCollections`): ratings, flags, labels, custom labels and marks (the library half of culling, LIB-15), IPTC Core's fields, collections and manual stacks, one batch each through `SidecarStore.change`, off the main thread, journaled with keywords' changes (`BatchJournal`) and undoable. A batch remembers which of its fields showed other apps' values, so Undo shows them as theirs again.
+- **Presets** apply only the fields ticked, replacing, appending or prefixing, as Photo Mechanic's templates do, and are kept in `Definitions/`. **Code replacements** come from a tab-separated file of codes and texts, and `\code\` in a field is expanded.
+- **Collections** are in each photo's sidecar by path, as keywords are, and the index's `collections` and `collection_photos` come from them. A rename or move rewrites the sidecars of the photos in it. What photos can't carry (sets, empty collections, smart collections as saved queries in the query language, the target collection) is in `Definitions/Collections.json`, keeping keys a newer build wrote, so the index stays rebuildable (DEC-35).
+- **Naming's metadata tokens** (`{title}`, `{caption}`, `{creator}`, `{copyright}`, `{city}`, `{state}`, `{country}`, `{sublocation}`) read the merged fields.
+- **`redlamp library metadata`, `collections` and `stacks stack|unstack|top`** change the photos a query finds, each with `--dry-run`.
+- **Not yet in searches:** `label:` with a custom label's name, `collection:`, smart collections' queries, and the creator, copyright and location as filters and free text wait for the query engine (LIB-06, LIB-18).
 
 ## Import (LIB-27)
 
@@ -267,7 +288,7 @@ Stacks are found from the index alone, never by reading a file, on every core:
 - **Pairs:** a raw, a JPEG and a HEIC in one folder named alike but for the extension (case and Unicode's forms folded), with the raw on top.
 - **Bursts:** one camera model, one folder and one exposure length, each frame starting at most a second after the last one ended (continuous drive at its slowest is about a frame a second); the first frame on top unless the user chose another.
 - **Focus-stack suggestions:** `StackDetector`'s capture rules over each folder's frames, a pair counted once; the app still confirms them from thumbnails.
-- **Manual stacks,** across folders; a photo in one is in no burst. Each photo's sidecar will hold `"stack": {"id": "<UUID>", "top": true}` in its metadata: the photos sharing an `id` are one stack, and `top` is written only when true. Until that field lands, manual stacks live in the index.
+- **Manual stacks,** across folders; a photo in one is in no burst. Each photo's sidecar holds `"stack": {"id": "<UUID>", "top": true}` in its metadata: the photos sharing an `id` are one stack, and `top` is written only when true. The index's stacks are built from the sidecars, so a rebuilt index keeps them; stack, unstack and choosing the top are journaled batches with Undo.
 
 Every list can show its stacks closed, each one cell with a count, and open them one at a time or all at once, with diffs as they open, close and change. A closed stack's selection is all of its photos, so a pair's change reaches both files and nothing is chosen out of sight. Working out a list's stacks again costs about as much as building the list, so it runs off the main thread.
 
@@ -631,6 +652,21 @@ A single save cost 10 to 29 ms under load (two runs, load average 60 to 110): co
 
 Removing a sidecar still costs 4 to 5 ms even eight at a time, so Undo didn't gain; the rename's remaining 30 to 40 s is its moves. The disk's own floor for the keywords mix is about 7.8 s at load average 47, so 10,000 changes in 5 s isn't reachable on this Mac. Single saves would gain the same if their way of writing changed.
 
+### Metadata, collections and stacks (LIB-22, LIB-23, LIB-28)
+
+`redlamp library bench`, Release, two runs each at load average 25 to 90, on a copy of lib-20k (the `metadata` and `collections` scenarios check each sidecar and put it back):
+
+| | Measured | Before |
+| --- | --- | --- |
+| The 20,000-photo index build, schema version 4 | 20.0 and 20.9 s | 32.5 and 23.4 s |
+| A keyword on 10,000 photos, then indexed again | 15 and 23 s, no photo read again | 49 and 53 s, 3,369 photos read again |
+| A caption on 10,000 photos | 8.5 and 9.7 s | |
+| Its Undo | 11.6 and 12.4 s | |
+| 10,000 photos put in a collection | 10 and 25 s | |
+| Renaming the set that holds it | 20 and 23 s | |
+
+The index build isn't slower with the new fields. A change only the `.redlamp` has now keeps the fields its row shows from other apps and reads the photo again only for a field that was the `.redlamp`'s, which is what the re-reads after a keyword were.
+
 ### Metadata with other apps (LIB-24)
 
 The `xmp` scenario, two runs, load average about 90:
@@ -663,7 +699,7 @@ What it changed: the first version took 3.7 s for the million, keeping 13 to 16 
 
 - One Undo across both modules, as in Lightroom, or one per module (per module for now).
 - The shared selection is on photo URLs for now: `PhotoSelection` needs a public way to build a `PhotoList` from IDs, and IDs for folders the library hasn't indexed.
-- Collections in sidecars by path (a renamed collection rewrites its photos' sidecars) or by ID (the definitions file is then needed to read them).
+- A photo that comes back from the Trash (Undo, and Put Back) gets its index row from the file operations' `IndexedPhoto`, which doesn't carry schema version 4's columns, so its title, caption, creator, copyright, location, custom label and stack show again only once its sidecar is read again.
 - The XMP merge records: a table of their own rather than one settings row per photo.
 - Photo Mechanic's Urgency numbers for its colour classes (purple 1, red 2, yellow 4, green 5, blue 6), which nothing confirmed yet.
 - The capture-time zone: EXIF's offset tags when present, else the Mac's zone at import, recorded per photo.
