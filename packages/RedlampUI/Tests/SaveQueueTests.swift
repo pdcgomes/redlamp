@@ -34,15 +34,14 @@ struct SaveQueueTests {
 
     private func open(_ url: URL, in model: EditorModel) async throws {
         model.select(url)
-        for _ in 0 ..< 400 where model.info?.url != url {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info?.url == url }
         try #require(model.info?.url == url)
     }
 
     /// Waits for `condition`, which the save queue's results make true on the main actor.
     private func eventually(_ condition: () -> Bool) async throws {
-        for _ in 0 ..< 200 where !condition() {
+        let deadline = ContinuousClock.now + .seconds(30)
+        while !condition(), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(5))
         }
     }
