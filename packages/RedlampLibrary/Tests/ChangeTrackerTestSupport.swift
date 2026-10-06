@@ -63,6 +63,44 @@ extension ChangeTracker.Configuration {
     static let testing = Self(latency: .milliseconds(50))
 }
 
+/// The folders FSEvents names below a folder from now on, as a stream of the test's own gets them.
+/// FSEvents takes changes in from the kernel in its own time, so one made just before a stream starts
+/// can reach it after the history it replays, as a live event; once a stream has one, the device's
+/// history holds it.
+final class FSEventsProbe: Sendable {
+    private let seen = Mutex<Set<String>>([])
+    private let subscription = Mutex<(any VolumeEventSubscription)?>(nil)
+
+    init(_ folder: String) {
+        let source = FSEventsSource()
+        guard let location = source.locate(folder) else { return }
+        let stream = source.subscribe(
+            device: location.device, paths: [location.path], since: source.currentEvent, latency: .milliseconds(10),
+        ) { [weak self] events in
+            self?.seen.withLock { $0.formUnion(events.map(\.path)) }
+        }
+        subscription.withLock { $0 = stream }
+    }
+
+    deinit {
+        subscription.withLock { $0 }?.cancel()
+    }
+
+    /// Waits until FSEvents has named each of `folders`, by their paths; false when it hasn't within
+    /// `timeout`.
+    func saw(_ folders: [String], timeout: Duration = .seconds(30)) async -> Bool {
+        let wanted = Set(folders.compactMap(FSEventsSource.pathOnDevice))
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if wanted.isSubset(of: seen.withLock { $0 }) {
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return wanted.isSubset(of: seen.withLock { $0 })
+    }
+}
+
 /// An event history a test writes: every path on one device whose root is `/`.
 final class ScriptedEvents: VolumeEventSource {
     private struct Subscriber {

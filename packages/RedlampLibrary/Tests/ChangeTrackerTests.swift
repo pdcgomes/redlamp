@@ -130,7 +130,9 @@ struct ChangeTrackerTests {
         first.stop()
         #expect((afterLive?.lastEvent ?? 0) > recorded.lastEvent)
 
-        // Changed while no tracker runs: a photo renamed, one removed and one added, in three folders.
+        // Changed while no tracker runs: a photo renamed, one removed and one added, in three folders,
+        // all in the device's history before the next tracker starts.
+        let probe = FSEventsProbe(sandbox.rootPath)
         let before = try await LibraryIndexerTests.rows(sandbox)
         let renamed = try #require(sandbox.fixture.photos(in: picked[1]).first {
             $0.sidecar == nil && $0.xmp == nil
@@ -141,6 +143,7 @@ struct ChangeTrackerTests {
         let removed = try #require(sandbox.fixture.photos(in: picked[2]).first { $0.sidecar == nil })
         try FileManager.default.removeItem(at: sandbox.url(removed))
         try Self.add("Added.JPG", to: folders[3], in: sandbox)
+        #expect(await probe.saw(folders[1 ... 3].map(sandbox.path)))
 
         let counting = CountingFileSystem()
         let second = ChangeTracker(
