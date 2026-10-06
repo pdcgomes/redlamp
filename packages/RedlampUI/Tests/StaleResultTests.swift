@@ -697,4 +697,34 @@ struct StaleResultTests {
         healedInEditor(speck)
         try healedBySync(b, speck)
     }
+
+    /// Started while A was read-only because its sidecar couldn't be read; the read then
+    /// succeeds and A opens again with its edit, in a visit of its own.
+    @Test(arguments: [Analysis.autoTone, .autoWhiteBalance, .aiMask, .maskPreset, .edgeBrush, .spot])
+    func `a result started while its photo was read-only changes nothing once it reads`(
+        _ analysis: Analysis,
+    ) async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let store = SidecarStore()
+        var edit = EditRecipe()
+        edit[.exposure] = 0.5
+        try store.save(Sidecar(recipe: edit), for: a)
+        let presenter = SidecarReadFailureTests.FailingPresenter(store.url(for: a), failures: [true])
+        NSFileCoordinator.addFilePresenter(presenter)
+        defer { NSFileCoordinator.removeFilePresenter(presenter) }
+        model.sidecarReadRetryDelay = .milliseconds(500)
+
+        let run = try await startOnA(analysis)
+        try #require(model.isReadOnly, "started while it was read-only")
+        for _ in 0 ..< 400 where model.isReadOnly {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try #require(!model.isReadOnly && model.recipe[.exposure] == 0.5)
+        let read = EditorState(model)
+        try await release(run)
+        #expect(EditorState(model) == read)
+        model.saveNow()
+        await model.saves.flush()
+        #expect(store.load(for: a)?.recipe == read.recipe)
+    }
 }

@@ -824,18 +824,24 @@ public final class EditorModel {
     }
 
     /// Reads again the sidecar of `url`, open read-only because its read failed, and opens it
-    /// with what it reads, until it reads or another photo opens.
+    /// again with what it reads, in a new visit, until it reads or another photo opens. Not while
+    /// the next photo is being read or during a drag: it tries again after `delay`.
     private func readSidecarAgain(_ url: URL, after delay: Duration) {
         sidecarReadRetry?.cancel()
         sidecarReadRetry = Task { [sidecars, scheduler = library.scheduler] in
             try? await Task.sleep(for: delay)
             guard !Task.isCancelled else { return }
             let read = try? await scheduler.run(.onScreen) { OpenedSidecar(url, in: sidecars) }
-            guard !Task.isCancelled, let read, let info, info.url == url, selection == url, opening == nil else {
-                return
-            }
-            guard !read.failed else { return readSidecarAgain(url, after: min(delay * 2, .seconds(60))) }
+            guard !Task.isCancelled, let info, info.url == url, selection == url else { return }
+            guard let read, !read.failed else { return readSidecarAgain(url, after: min(delay * 2, .seconds(60))) }
+            guard opening == nil, editStart == nil else { return readSidecarAgain(url, after: delay) }
+            sidecarReadRetry = nil
+            // What was started on it while it was read-only is for the visit it was started in.
+            leave(for: url, keepingSelection: true, ready: true)
             didOpen(info, read)
+            if failedSaves[url] != nil {
+                retry(url)
+            }
         }
     }
 
