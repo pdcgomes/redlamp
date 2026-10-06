@@ -47,23 +47,57 @@ open class LayerDrawnView: NSView, @preconcurrency CALayerDelegate {
 
     override open func layout() {
         super.layout()
+        #if DEBUG || REDLAMP_PROFILING
+            let previous = (size: contentLayer.frame.size, scale: contentLayer.contentsScale)
+        #endif
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         contentLayer.frame = bounds
         contentLayer.contentsScale = backingScale
         CATransaction.commit()
+        #if DEBUG || REDLAMP_PROFILING
+            if previous.size != bounds.size || previous.scale != backingScale {
+                Self.drawObserver?(self, .laidOut(size: bounds.size, scale: backingScale))
+            }
+        #endif
     }
 
     override open func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
         contentLayer.contentsScale = backingScale
         contentLayer.setNeedsDisplay()
+        #if DEBUG || REDLAMP_PROFILING
+            Self.drawObserver?(self, .backingChanged(scale: backingScale))
+        #endif
     }
+
+    #if DEBUG || REDLAMP_PROFILING
+        public enum DrawEvent {
+            /// `drawContent` ran, taking this long on the main thread.
+            case drew(milliseconds: Double)
+            /// Layout gave the content layer a new size or scale.
+            case laidOut(size: CGSize, scale: CGFloat)
+            /// The window's backing properties changed (for example, it moved to another screen).
+            case backingChanged(scale: CGFloat)
+        }
+
+        /// Told of every layer-drawn view's draws and size and scale changes, for the profiling
+        /// build's draw counter (`--count-graph-draws`); nil otherwise.
+        public static var drawObserver: ((LayerDrawnView, DrawEvent) -> Void)?
+    #endif
 
     // MARK: - CALayerDelegate
 
     /// Layers of a view display on the main thread.
     public func draw(_ layer: CALayer, in context: CGContext) {
+        #if DEBUG || REDLAMP_PROFILING
+            let started = Self.drawObserver == nil ? nil : CFAbsoluteTimeGetCurrent()
+            defer {
+                if let started {
+                    Self.drawObserver?(self, .drew(milliseconds: (CFAbsoluteTimeGetCurrent() - started) * 1000))
+                }
+            }
+        #endif
         // Draw in the view's flipped coordinates, whichever way the layer is set up.
         if !layer.contentsAreFlipped() {
             context.translateBy(x: 0, y: bounds.height)

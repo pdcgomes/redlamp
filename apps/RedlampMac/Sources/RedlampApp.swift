@@ -70,6 +70,9 @@ struct RedlampApp: App {
                 .openCameraBenchIfRequested = { CameraBenchWindow.openIfRequested(currentFolder: { model.folder }) }
         #endif
         AppDelegate.launch = {
+            #if DEBUG || REDLAMP_PROFILING
+                DebugDrawCounter.startIfRequested()
+            #endif
             let editor = EditorWindowController(
                 model: model, theme: theme,
                 onOpen: { Self.openPanel(model: model) },
