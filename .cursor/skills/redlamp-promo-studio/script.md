@@ -13,7 +13,7 @@ Pick a tempo whose beat is a whole number of frames at 30 fps, so cues land exac
 | 120 | 15 | Energetic: the explainer, the star promo |
 | 150 | 12 | Driving |
 
-A bar is four beats. Lay the promo out in whole bars: 8 bars at 120 BPM is 16 seconds.
+A bar is four beats. Lay the promo out in whole bars: 9 bars at 120 BPM is 18 seconds.
 
 ## The cue sheet
 
@@ -32,16 +32,16 @@ A bar is four beats. Lay the promo out in whole bars: 8 bars at 120 BPM is 16 se
 
 ## Structure for momentum
 
-Energy should climb to the payoff and then make room for the ask. The star promo's eight bars:
+Energy should climb to the payoff and then make room for the ask. The star promo's nine bars:
 
 | Bars | Section | Picture | Sound |
 | --- | --- | --- | --- |
-| 1 | Hook | Already moving; the hook line | Something on the first frame; a pulse |
+| 1 | Hook | At rest, with the hook line; the build starts within a second | Something on the first frame; a pulse |
 | 2 to 3 | Build | Tension rising, the context in words | The roll doubles each bar; a riser |
-| End of 3 | The gap | The breath before it goes | Half a beat of near silence |
+| End of 3 | The breath | The squash before it goes | The rhythm stops; a swell carries on into the drop |
 | 4 | Drop | The release, on the downbeat | The full groove arrives |
 | 5 to 6 | Payoff | The consequence; the ask in the picture | The groove; each event its sound |
-| 7 to 8 | The ask | The ask in words, held | The groove, then a last chord; the loop's run-in |
+| 7 to 9 | The ask | The ask in words, held, then a fade | The groove, then a last hit and a bar for it to die away in |
 
 ## The beat sheet
 

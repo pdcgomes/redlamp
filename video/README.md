@@ -68,7 +68,7 @@ The app opens with the film's opening the first time it runs, and again from Hel
 
 ## Star Redlamp
 
-A 16-second promo for social feeds, in 9:16 and 1:1, that asks people to star Redlamp on GitHub: the website's star nudge ([docs/brand/star-nudge.md](../docs/brand/star-nudge.md)) played as a short film. The lamp charges and trembles to a snare roll, fires its light into the GitHub badge on the drop, a sign drops on its rope and catches on the beat, and a cursor stars the project. Its brief, hooks, script and post copy are in the [design](../docs/plans/2026-10-06-star-promo.md).
+An 18-second promo for social feeds, in 9:16 and 1:1, that asks people to star Redlamp on GitHub: the website's star nudge ([docs/brand/star-nudge.md](../docs/brand/star-nudge.md)) played as a short film. The lamp charges and trembles to a snare roll, fires its light into the GitHub badge on the drop, a sign drops on its rope and catches on the beat, and a cursor stars the project. Its brief, hooks, script and post copy are in the [design](../docs/plans/2026-10-06-star-promo.md).
 
 ```bash
 python3 scripts/star-score.py   # the score (needs numpy)
@@ -80,15 +80,15 @@ Each hook is a value of the compositions' `hook` prop (`charging`, `favour`, `ps
 
 | File | Format |
 | --- | --- |
-| `out/star/star-redlamp-9x16.mp4` | 1080 × 1920, 16 s: TikTok, Reels, Shorts and Stories |
-| `out/star/star-redlamp-1x1.mp4` | 1080 × 1080, 16 s: feeds |
+| `out/star/star-redlamp-9x16.mp4` | 1080 × 1920, 18 s: TikTok, Reels, Shorts and Stories |
+| `out/star/star-redlamp-1x1.mp4` | 1080 × 1080, 18 s: feeds |
 | `out/star/*-poster.jpg` | The sign hanging under the badge, for covers |
 
 ### How it's built
 
 - `src/star/cues.json` holds every timing, in beats on a 120 BPM grid, and `src/star/copy.ts` every word. `StarPromo.tsx` lays one timeline out for each shape, with a camera that creeps in on the lamp as it charges, pulls back for the shot, pushes in on the badge and pulls back for the end card.
 - Its pieces are the promo kit in `src/kit/`: the nudge's light, redrawn frame by frame from a seeded random source (`light.ts`); the lamp, shaken by each knock of the roll (`Lamp.tsx`); the GitHub badge (`GitHubBadge.tsx`); and the website's sign physics, `web/lib/hanging-sign.ts` itself, simulated once per shape and cached (`rope.ts`, `Sign.tsx`). Canvases draw in software, since headless Chrome can capture a frame before a GPU canvas is painted, and on a busy machine it has captured whole frames before painting them, as white: `npm run star`, `review` and `storyboard` check every still and every frame they write (`scripts/blank.mjs`) and render it again.
-- `scripts/star-score.py` writes the score from the same cue sheet with the synth library, `scripts/synth.py`: dark and cinematic, in D minor. A drone, a heartbeat, a watch ticking and a Shepard tone that climbs faster as the lamp charges; low toms for the build's roll, each hit a knock that shakes the lamp, under spiccato strings; the whole mix, reverb and all, choked silent for the squash; a shot of glass, and the hit landing as a trailer's low brass on the drop, into a half-time groove whose drum hits (the cue sheet's `groove`) the badge bumps on. It's mastered to −14 LUFS with true peaks under −1 dBFS; the library's meter reads as ffmpeg's `ebur128` does, and `python3 scripts/score-report.py public/star/score.wav --cues=src/star/cues.json` measures it bar by bar and cue by cue.
+- `scripts/star-score.py` writes the score from the same cue sheet with the synth library, `scripts/synth.py`: dark and cinematic, in D minor. A drone, a heartbeat, a watch ticking and a Shepard tone that climbs faster as the lamp charges; low toms for the build's roll, each hit a knock that shakes the lamp, under spiccato strings; the rhythm stopping for the squash while a swell carries on into the hit; a shot of glass, and the hit landing as a trailer's low brass on the drop, into a half-time groove whose drum hits (the cue sheet's `groove`) the badge bumps on. It's mastered to −14 LUFS with true peaks under −1 dBFS; the library's meter reads as ffmpeg's `ebur128` does, and `python3 scripts/score-report.py public/star/score.wav --cues=src/star/cues.json` measures it bar by bar and cue by cue.
 - `npm run storyboard -- StarPromo9x16 --cues=src/star/cues.json --score=star/score.json` lays a frame out at every cue over the score's level, into `out/`.
 
 ## The promo studio

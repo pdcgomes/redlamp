@@ -2,7 +2,7 @@
   "bpm": 120,
   "fps": 30,
   "beatsPerBar": 4,
-  "bars": 8,
+  "bars": 9,
   "chords": [
     ["Dm", 0, 4],
     ["Bb", 4, 4],
@@ -13,7 +13,7 @@
     ["Gm", 20, 4],
     ["Bb", 24, 2],
     ["A", 26, 2],
-    ["Dm", 28, 4]
+    ["Dm", 28, 8]
   ],
   "knocks": [
     [0, 4, 1],
@@ -32,6 +32,7 @@
   },
   "cues": {
     "hook": 0,
+    "charge": 1.5,
     "hook2": 2,
     "build": 4,
     "build2": 6,
@@ -47,7 +48,7 @@
     "reason": 23,
     "end": 24,
     "stop": 28,
-    "recharge": 30,
-    "loop": 32
+    "fade": 34,
+    "out": 36
   }
 }

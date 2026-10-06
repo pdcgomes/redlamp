@@ -67,7 +67,10 @@ const T = {
   click: at("click"),
   end: at("end"),
   stop: at("stop"),
-  again: at("recharge"),
+  /** The charge starts: the first frames show the lamp at rest, so the light arrives as a surprise. */
+  charge: at("charge"),
+  /** The picture and the sound fade out together over the last bar's second half. */
+  fade: at("fade"),
   /** The badge appears a quarter-beat before the squash, as the camera starts to pull back. */
   show: g.seconds(10.25),
 };
@@ -140,6 +143,7 @@ const layouts: Record<ShapeName, Layout> = {
 /** The website's spring between keyframes, and the star's settle (StarNudge's strike). */
 const spring = Easing.bezier(0.33, 1, 0.68, 1);
 const settle = Easing.bezier(0.22, 1, 0.36, 1);
+const gentle = Easing.bezier(0.45, 0, 0.55, 1);
 const linear = (k: number) => k;
 const HIT = 1.7;
 
@@ -208,8 +212,6 @@ type Scene = {
   layout: Layout;
   unit: number;
   charge: Charge;
-  /** The charge starting over in the last bar, so a loop runs on into the first frame. */
-  again: Charge;
   shot: Shot;
   sparks: Spark[];
   knocks: Knock[];
@@ -228,8 +230,7 @@ function sceneFor(shape: ShapeName, stars: number | null, fps: number): Scene {
   const layout = layouts[shape];
   const { lens, size, badge, badgeHeight, signScale } = layout;
   const unit = size / 112;
-  const charge: Charge = { from: -1.4, full: T.full, fire: T.fire, lens, size, unit, seed: "star" };
-  const again: Charge = { ...charge, from: T.again, full: T.again + (T.full - charge.from), fire: T.again + (T.fire - charge.from), seed: "star:again" };
+  const charge: Charge = { from: T.charge, full: T.full, fire: T.fire, lens, size, unit, seed: "star" };
   // The shot leaves from behind the tile's top edge, on the side nearer the badge.
   const start = { x: lens.x + Math.sign(badge.x - lens.x) * size * 0.12, y: lens.y - size * 0.47 + size * 0.1 };
   const shot: Shot = { path: arc(start, badge), fire: T.fire, hit: T.hit, unit };
@@ -278,7 +279,7 @@ function sceneFor(shape: ShapeName, stars: number | null, fps: number): Scene {
     },
     key,
   );
-  const scene = { layout, unit, charge, again, shot, sparks: list, knocks, badgeWidth: badgeSize(badgeHeight, stars).width, star, anchor, sign };
+  const scene = { layout, unit, charge, shot, sparks: list, knocks, badgeWidth: badgeSize(badgeHeight, stars).width, star, anchor, sign };
   scenes.set(key, scene);
   return scene;
 }
@@ -295,7 +296,7 @@ function cameraAt(layout: Layout, frame: number): Camera {
     [f(15), c.badge],
     [f(23), c.badge],
     [f(25), c.end],
-    [f(32), c.drift, creep],
+    [f(36), c.drift, creep],
   ]);
   const hit = f(12);
   const punch = frame >= hit ? 0.05 * Math.exp(-(frame - hit) / 6) : 0;
@@ -351,10 +352,6 @@ function drawBehind(ctx: CanvasRenderingContext2D, scene: Scene, t: number, badg
   halo(ctx, pillOf(scene, badge), badge.halo, scene.unit);
   backlight(ctx, charge, t);
   motes(ctx, charge, t);
-  if (t >= T.again) {
-    backlight(ctx, scene.again, t);
-    motes(ctx, scene.again, t);
-  }
 }
 
 /** The shot, its sparks and where it lands: drawn over the lamp and the badge. */
@@ -434,6 +431,7 @@ export function StarPromo({ hook, stars, musicSrc, guides }: StarPromoProps) {
 
       <AbsoluteFill style={{ background: "radial-gradient(120% 95% at 50% 45%, transparent 55%, rgba(0,0,0,0.55))", pointerEvents: "none" }} />
       <FilmGrain opacity={0.05} />
+      <AbsoluteFill style={{ background: color.wall, opacity: gentle(clamp01((t - T.fade) / (durationInFrames / fps - T.fade))) }} />
       {guides ? <SafeZones /> : null}
       {music ? (
         <Html5Audio

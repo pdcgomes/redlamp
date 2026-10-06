@@ -12,7 +12,7 @@ What makes it sophisticated rather than loud:
 - **No tune to hum.** An ostinato drives it, and a single line moves by step (the star promo's falls a step a bar from A to D).
 - **Space.** Few instruments at a time in the opening; a lone piano note can carry a bar.
 - **Weight from the drums in half time**: a kick on the bar and the snare on its third beat, at 120 BPM, so it moves at the picture's pace and lands like a trailer.
-- **Silence as an event**: the whole mix choked for the half-beat before the drop.
+- **Tension held, not dropped**: the rhythm stops for the half-beat before the drop while the strings and a swell carry on into it. The owner found a cut to silence there too abrupt.
 
 ## The library
 
@@ -40,10 +40,10 @@ Every random sound draws from `synth.rng`; call `reset(seed)` at the start of a 
 
 - Something on the first frame (a deep hit) so a viewer with sound on is held from the start.
 - Build in steps the ear can count: a roll that doubles (eighths, sixteenths, thirty-seconds), strings from a murmur to full, a Shepard tone that screws tighter, a riser.
-- Cut to silence before the drop: `master(..., choke=…)` takes the whole mix down, reverb tails and all, for the half-beat, with a breath drawn in through it (`through=[…]`).
-- Let the hit swell in (`swell_into`, its own reverb reversed) and land it with the full weight at once: low brass, taiko, deep kick, crash.
-- Keep growing after the drop, so the end card arrives at a height, then a last hit, and a quiet last bar that runs back into the first frame.
-- Measure the climb with `scripts/score-report.py`, bar by bar. The star promo's, in LUFS: −17.2, −15.9, −14.9, the drop at −12.0, then −14.2, −14.1, the end card at −13.4, and −14.2. The drop should be the loudest bar.
+- Hold the tension before the drop rather than dropping it: stop the rhythm for the squash, and let what's sustained swell on through it into the hit: the build's last chord in the strings, the riser, the Shepard tone, and the hit's own reverb reversed (`swell_into`) from the squash. The level should dip a few dB, never fall away. (`master(..., choke=…)` cuts the whole mix to silence, reverb and all, for a brief that wants a hard stop.)
+- Land the hit with the full weight at once: low brass, taiko, deep kick, crash.
+- Keep growing after the drop, so the end card arrives at a height; then a last hit, and a bar for it to die away in: the last chord and a few piano notes ringing out, and the last second or more faded out with the picture (`master(..., fade=1.6)`). The owner heard a run-in to a loop, cut off at the end, as the film being cut off.
+- Measure the climb with `scripts/score-report.py`, bar by bar. The star promo's, in LUFS: −17.0, −16.7, −14.0, the drop at −11.6, then −14.2, −14.2, the end card at −13.5, the last hit's bar at −13.5, and the bar it dies away in at −21.6. The drop should be the loudest bar.
 
 ## Mixing and mastering
 
@@ -52,7 +52,7 @@ Every random sound draws from `synth.rng`; call `reset(seed)` at the start of a 
 - A dark mix still needs `presence` (the star promo uses 3 dB) to carry on a phone.
 - Duck the bass and the strings a little under each kick (`sidechain`), so the drums stay clear.
 - Check with ffmpeg as well: `ffmpeg -i public/<slug>/score.wav -af ebur128=peak=true -f null -`; its integrated loudness and `synth.loudness()` agree.
-- Draw the spectrogram to see the arrangement without listening: `ffmpeg -i score.wav -lavfi showspectrumpic=s=1600x500:legend=1:fscale=log spectrum.png`. The choke shows as a black band.
+- Draw the spectrogram to see the arrangement without listening: `ffmpeg -i score.wav -lavfi showspectrumpic=s=1600x500:legend=1:fscale=log spectrum.png`. A gap shows as a dark band, on the storyboard sheet's waveform too, and the owner will see it there.
 
 ## The report
 

@@ -663,7 +663,8 @@ def master(buses, seconds=None, target=-14.0, ceiling=-1.0, room=None, wet=0.8, 
     """
     Sums the buses and their reverb, takes out what's under 36 Hz, adds a little air, levels the mix
     to `target` LUFS and keeps its true peak under `ceiling` dBFS with a soft knee. Returns the stereo
-    mix, `seconds` long, with a short fade at the very end so a loop doesn't click.
+    mix, `seconds` long, faded out over the last `fade` seconds (at least a few milliseconds, so the
+    end doesn't click; a second or more to end the film).
 
     `choke` is a gain curve for the whole mix, reverb tails and all, for a cut to silence before a
     drop; the buses in `through` play on through it. `presence` lifts everything from about 3 kHz by
@@ -702,7 +703,7 @@ def master(buses, seconds=None, target=-14.0, ceiling=-1.0, room=None, wet=0.8, 
             break
         under += peak - ceiling + 0.05
     ramp = int(fade * SR)
-    out[-ramp:] *= np.linspace(1, 0, ramp)[:, None]
+    out[-ramp:] *= (np.cos(np.linspace(0, np.pi / 2, ramp)) ** 2)[:, None]
     return out
 
 

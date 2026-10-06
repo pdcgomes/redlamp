@@ -4,7 +4,7 @@ The copywriter writes every word the promo shows and the words posted with it. T
 
 ## The hook
 
-The first one or two seconds decide whether anyone sees the rest, and most feeds start a video with the sound off. So the hook is a line on screen over a picture that is already moving, on the very first frame: never a logo, a title card or a fade from black.
+The first one or two seconds decide whether anyone sees the rest, and most feeds start a video with the sound off. So the hook is a line on screen on the very first frame, never a logo, a title card or a fade from black, over a picture that promises something without giving it away: the star promo's lamp sits still under "Hold on." for a moment before its light starts to gather.
 
 Write five, each with a short ID, and make the hook a prop of the composition (`hook: "charging"`), so each can be rendered and posted as its own variant while everything else stays the same. Ways in that suit the brand's voice:
 

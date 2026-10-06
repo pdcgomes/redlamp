@@ -21,7 +21,7 @@ From `video/`:
 
 Picture:
 
-- [ ] The first frame is moving and shows the hook line, rendered on its own and in sequence (`review -- <id> 0` and `1,0`).
+- [ ] The first frame shows the hook line and doesn't give the payoff away; it renders right on its own and in sequence (`review -- <id> 0` and `1,0`).
 - [ ] Every line reads at phone size: at least 60 px tall at 1080 px wide, on screen for about 0.3 s a word plus half a second; the ask for 3 s or more.
 - [ ] No line arrives before the one in its place has gone.
 - [ ] In 9:16, nothing to be read under the safe zones (`guides`).
@@ -41,7 +41,7 @@ Sound and sync:
 
 The loop and the file:
 
-- [ ] The last bar leads back into the first frame, in sound and in picture.
+- [ ] Nothing drops away or stops dead: no gap in the waveform before the drop, and the end dies away and fades out with the picture.
 - [ ] `npx tsc --noEmit` passes.
 
 ## Notes and the owner's review

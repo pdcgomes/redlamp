@@ -32,7 +32,7 @@ function lights(): Lights {
 // ---------------------------------------------------------------- the charge
 
 export type Charge = {
-  /** Seconds: light starts gathering (before the first frame, to open mid-charge), is fully charged (the squash starts), and fires. */
+  /** Seconds: light starts gathering (nothing shows before), is fully charged (the squash starts), and fires. */
   from: number;
   full: number;
   fire: number;
@@ -68,7 +68,9 @@ export function backlight(ctx: CanvasRenderingContext2D, c: Charge, t: number) {
   const squash = squashLevel(c, t);
   const after = clamp01((t - c.fire) / 0.45);
   const flicker = 0.88 + 0.12 * Math.sin(t * 53) * Math.sin(t * 31);
-  const strength = (0.15 + 0.85 * p * p) * (1 + 0.4 * squash) * (1 - after) ** 2 * flicker;
+  // Nothing shows before the charge starts; the glow comes up over its first 0.6 s.
+  const begun = smoothstep(c.from, c.from + 0.6, t);
+  const strength = begun * (0.15 + 0.85 * p * p) * (1 + 0.4 * squash) * (1 - after) ** 2 * flicker;
   const reach = size * (0.72 + 0.6 * p * p - 0.25 * focus - 0.15 * squash + 0.6 * after);
   ctx.save();
   ctx.globalCompositeOperation = "lighter";

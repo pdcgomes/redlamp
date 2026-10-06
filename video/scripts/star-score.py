@@ -9,11 +9,12 @@ Dark and cinematic. The lamp charges over a low drone: a heartbeat, a watch tick
 picking out a few notes, and a Shepard tone that seems to rise for ever, climbing faster as the
 charge grows. From the second bar, low toms take over the roll whose every hit is a knock that shakes
 the lamp (the cue sheet's `knocks`), doubling from eighths to thirty-seconds, under spiccato strings
-that grow from a murmur. Half a beat of silence as the lamp holds its breath; a shot of glass as it
-fires; the hit's own reverb swells up into it, and it lands as a trailer's low brass on the drop.
+that grow from a murmur. As the lamp holds its breath the rhythm stops, but the strings, a riser and
+the Shepard tone swell on through the squash and the shot; a shot of glass as it fires; the hit's
+own reverb swells up into it, and it lands as a trailer's low brass on the drop.
 Then a half-time groove (the cue sheet's `groove`) under the strings' ostinato, with a line that
-falls a step at a time through the sign, the click and the end card, to a last hit and the piano
-alone. Needs numpy.
+falls a step at a time through the sign, the click and the end card, to a last hit, and the piano
+alone as the chord dies away and the film fades out. Needs numpy.
 """
 
 import json
@@ -53,7 +54,7 @@ LINE = [(16, 81, 2), (18, 82, 2), (20, 81, 2), (22, 79, 2), (24, 77, 2), (26, 76
 PIANO = [
     (0, 62, 0.42), (0, 69, 0.5), (2, 70, 0.4), (3, 69, 0.34),
     (4, 74, 0.4), (4, 65, 0.3), (6, 72, 0.34), (8, 70, 0.4), (10, 69, 0.42), (10, 73, 0.32),
-    (29, 69, 0.38), (30.5, 74, 0.3),
+    (29, 69, 0.38), (30.5, 74, 0.3), (32, 62, 0.28),
 ]
 
 
@@ -64,9 +65,9 @@ def chord_at(beat):
     return sheet["chords"][-1][0]
 
 
-# The charge, as the composition draws it: it starts 1.4 s before the first frame and is full as
-# the lamp squashes (`chargeLevel` in src/kit/light.ts).
-CHARGE_FROM = -1.4
+# The charge, as the composition draws it: it starts at its cue, after the first frames show the lamp
+# at rest, and is full as the lamp squashes (`chargeLevel` in src/kit/light.ts).
+CHARGE_FROM = at(cue["charge"])
 GAP, FIRE, HIT, STOP = cue["squash"], cue["fire"], cue["hit"], cue["stop"]
 
 
@@ -84,7 +85,7 @@ kicks = []
 # The first frame lands as a deep hit; a drone holds D under the whole charge, and stops dead with it.
 fx.add(0, s.boom(2.4, 1.0), gain=0.3, wet=0.35)
 drums.add(0, s.taiko(0.55, 58, 1.6), gain=0.5, wet=0.3)
-low.add(0, s.drone([38, 45, 50], at(GAP), cutoff=420, release=0.05, attack=0.4), gain=0.5, wet=0.3)
+low.add(0, s.drone([38, 45, 50], at(HIT) - 0.02, cutoff=420, release=0.05, attack=0.4), gain=0.5, wet=0.3)
 
 for beat, note, velocity in PIANO:
     keys.add(at(beat), s.piano(note, velocity, 4.5), gain=0.4, pan_to=(note - 68) / 24, wet=0.55)
@@ -111,11 +112,14 @@ for first, last, step in sheet["knocks"]:
 for i in range(int(GAP * 2)):
     fx.add(at(i / 2), s.tock(0.7 if i % 2 == 0 else 0.5, 2300 if i % 2 == 0 else 1900), gain=0.09 + 0.06 * charge(at(i / 2)), pan_to=0.35, wet=0.12)
 
-# The Shepard tone: it seems to rise for ever, and climbs faster as the lamp charges.
-n = int(at(GAP) * s.SR)
+# The Shepard tone: it seems to rise for ever. It comes in with the charge, climbs faster as the lamp
+# charges, and faster still through the squash and the shot, into the hit.
+n = int(at(HIT) * s.SR)
 t = np.arange(n) / s.SR
 p = np.interp(t, t[::480], [charge(x) for x in t[::480]])
-fx.add(0, s.shepard(0.06 + 0.9 * p**2, (0.15 + 0.85 * p**1.5) * np.clip((at(GAP) - t) / 0.04, 0, 1)), gain=0.13, wet=0.35)
+screw = np.clip((t - at(GAP)) / (at(HIT) - at(GAP)), 0, 1)
+level = 0.85 * p**1.2 * (1 + 0.6 * screw) * np.clip((at(HIT) - t) / 0.03, 0, 1)
+fx.add(0, s.shepard(0.06 + 0.9 * p**2 + 1.2 * screw**1.5, level), gain=0.13, wet=0.35)
 
 # From the second bar, the strings: spiccato sixteenths from a murmur to full, over a section that swells.
 for i in range(16, int(GAP * 4)):
@@ -127,33 +131,37 @@ for i in range(16, int(GAP * 4)):
 for name, first, length in sheet["chords"]:
     if first < 4 or first >= GAP:
         continue
-    seconds = (min(first + length, GAP) - first) * BEAT
-    p0, p1 = charge(at(first)), charge(at(first) + seconds)
+    # The build's last chord holds on through the squash and the shot, swelling into the hit.
+    last = first + length >= GAP
+    until = HIT if last else first + length
+    seconds = (until - first) * BEAT
+    p0, p1 = charge(at(first)), charge(at(until))
     for note in CHORDS[name][1][1:]:
-        bows.add(at(first), s.strings(note, seconds, bright=(0.1 + 0.6 * p0, 0.2 + 0.7 * p1), attack=0.6, release=0.05), gain=0.14, wet=0.45)
+        tone = s.strings(note, seconds, bright=(0.1 + 0.6 * p0, 0.95 if last else 0.2 + 0.7 * p1), attack=0.6, release=0.05)
+        if last:
+            tone = tone * (np.linspace(1, 2.0, len(tone)) ** 1.5)[:, None]
+        bows.add(at(first), tone, gain=0.14, wet=0.45)
 
 # Taiko on the build's bar lines, and the bass under the rush, eighths on the root.
 for beat, velocity in ((4, 0.8), (8, 0.95)):
     drums.add(at(beat), s.taiko(velocity, 60, 1.6), gain=0.6, wet=0.35)
 for beat in np.arange(8, GAP, 0.5):
     low.add(at(beat), s.bass(CHORDS[chord_at(beat)][0] + 12, 0.85 if beat % 1 == 0 else 0.6, 0.22, bright=0.3), gain=0.45, wet=0.05)
-fx.add(at(8), s.riser(at(GAP) - at(8), 180, 4200, curve=2.2), gain=0.09, wet=0.4)
+fx.add(at(8), s.riser(at(HIT) - at(8), 180, 5200, curve=2.4), gain=0.09, wet=0.4)
 
 # ---------------------------------------------------------------- the squash, the shot and the hit
 
-# As the lamp holds its breath, everything stops, reverb and all (the mix's choke, below), but for
-# a breath drawn in; the shot lands a thump as the lamp recoils.
-breath = s.Bus(TOTAL + 5)
-breath.add(at(FIRE) - 0.16, s.inhale(0.16), gain=0.2, wet=0.1)
+# As the lamp holds its breath the rhythm stops, and the swell above carries on; the shot lands a
+# thump as the lamp recoils.
 drums.add(at(FIRE), s.taiko(0.45, 70, 0.8), gain=0.4, wet=0.25)
 # The shot is light leaving glass: a struck pair high up, and air that crosses with it.
 keys.add(at(FIRE), s.glass(98, 1.6, 0.9), gain=0.12, pan_to=-0.4, wet=0.5)
 keys.add(at(FIRE), s.glass(93, 1.4, 0.7), gain=0.08, pan_to=-0.3, wet=0.5)
 flight = at(HIT) - at(FIRE)
 fx.add(at(FIRE), s.whoosh(flight, 900, 5200), gain=0.16, pan_to=np.linspace(-0.45, 0.3, int(round(flight * s.SR))), wet=0.35)
-# The hit's own reverb, reversed, swells up into it.
+# The hit's own reverb, reversed, swells up into it from the squash.
 hit = s.braam(CLUSTER, 3.4, 1.0)
-fx.add(at(FIRE), s.swell_into(hit, flight, room), gain=0.22, wet=0.0)
+fx.add(at(GAP), s.swell_into(hit, at(HIT) - at(GAP), room), gain=0.3, wet=0.0)
 
 low.add(at(HIT), hit, gain=0.55, wet=0.35)
 drums.add(at(HIT), s.taiko(1.0, 52, 2.0), gain=0.75, wet=0.35)
@@ -246,27 +254,16 @@ kicks.append(stop)
 drums.add(stop, s.lowpass(s.crash(1.0, 4.0, decay=1.8), 7000), gain=0.3, wet=0.45)
 fx.add(stop, s.boom(2.0, 1.0), gain=0.28, wet=0.3)
 for note in CHORDS["Dm"][1][1:]:
-    bows.add(stop, s.strings(note, TOTAL - stop - 0.6, bright=(0.5, 0.15), attack=0.05, release=0.6), gain=0.12, wet=0.5)
-low.add(stop, s.drone([38, 50], TOTAL - stop - 0.4, cutoff=300, release=0.4, attack=0.05), gain=0.4, wet=0.3)
-
-# The last bar runs back into the first frame: the watch and the Shepard tone start again.
-again = at(cue["recharge"])
-for i in range(int((TOTAL - again) * 2)):
-    fx.add(again + i * BEAT / 2, s.tock(0.5, 2300 if i % 2 == 0 else 1900), gain=0.05 + 0.02 * i, pan_to=0.35, wet=0.12)
-n = int((TOTAL - again) * s.SR)
-k = np.linspace(0, 1, n)
-p0 = charge(0)
-fx.add(again, s.shepard(0.06 * np.ones(n), (0.15 + 0.85 * p0**1.5) * k**1.5), gain=0.13, wet=0.35)
+    bows.add(stop, s.strings(note, TOTAL - stop - 1.6, bright=(0.5, 0.12), attack=0.05, release=1.4), gain=0.12, wet=0.5)
+low.add(stop, s.drone([38, 50], TOTAL - stop - 1.6, cutoff=300, release=1.4, attack=0.05), gain=0.4, wet=0.3)
 
 # ---------------------------------------------------------------- mix
 
 pump = s.sidechain(TOTAL + 5, kicks, depth=0.5, release=0.22)
 low.duck(1 - 0.5 * (1 - pump))
 bows.duck(1 - 0.3 * (1 - pump))
-# The choke: the mix falls silent 20 ms into the squash and comes back as the shot leaves.
-t = np.arange(int((TOTAL + 5) * s.SR)) / s.SR
-choke = np.interp(t, [at(GAP) + 0.02, at(GAP) + 0.06, at(FIRE) - 0.01, at(FIRE)], [1, 0.02, 0.02, 1])
-mix = s.master([drums, low, bows, keys, fx], seconds=TOTAL, target=-14.0, ceiling=-1.0, room=room, wet=0.75, choke=choke, through=[breath], presence=3.0)
+# The last 1.6 s fade out with the picture, as the last chord and the piano die away.
+mix = s.master([drums, low, bows, keys, fx], seconds=TOTAL, target=-14.0, ceiling=-1.0, room=room, wet=0.75, presence=3.0, fade=1.6)
 
 out = ROOT / "public/star"
 out.mkdir(parents=True, exist_ok=True)

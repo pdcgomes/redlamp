@@ -29,12 +29,11 @@ One timeline, laid out for each shape. Lay out 9:16 first: it's the most constra
 
 The composition's `guides` prop draws the 9:16 zones in Studio (`SafeZones.tsx`). They're conservative across the apps; check an app's current overlay when a promo is made for one platform.
 
-## The loop
+## The opening, the ending and the loop
 
-Feeds loop short videos, and a replay is a second view. End so the start follows on:
-
-- The last bar's sound leads into the first frame (the star promo's hum rises again to where it starts), and the final 30 ms fade so the loop doesn't click.
-- The first frame is already moving, so the cut back to it reads as a new beat rather than a restart.
+- **Open at rest.** The first frames show the scene before anything happens, with the hook line over it, so the payoff arrives as a surprise. The star promo first opened mid-charge, and the owner found it spoiled the surprise; now the lamp sits still for 0.75 s before light starts to gather.
+- **End, don't stop.** Give the last hit a bar to die away in, then fade the picture to the wall's colour and the sound out together over the last second or so. A film that just stops sounds cut off.
+- **The loop** follows from both: a feed that replays it goes from the fade back to the scene at rest, which reads as starting again rather than as a jump.
 
 ## The first frame and the poster
 
