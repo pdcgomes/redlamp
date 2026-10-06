@@ -95,6 +95,8 @@ public final class SettingsSync {
     @ObservationIgnored let store: SidecarStore
     /// The editor's saves: a photo just left may still be on its way to disk.
     @ObservationIgnored var saves: SaveQueue?
+    /// Waited for before each photo's sidecar is written (tests change the photo here).
+    @ObservationIgnored var beforeWriting: @MainActor (URL) async -> Void = { _ in }
     @ObservationIgnored private var task: Task<Void, Never>?
     /// The last batch: each photo's edit before (nil: it had no sidecar) and after.
     @ObservationIgnored private var before: [URL: EditRecipe?] = [:]
@@ -273,6 +275,7 @@ public final class SettingsSync {
                 continue
             }
             guard let current, current.recipe == after.recipe, let previous = before[url] else { continue }
+            await beforeWriting(url)
             run?.photos[url] = nil
             if let previous {
                 let undone = Self.recording(previous, in: current, from: after.recipe, title: title)
@@ -360,6 +363,7 @@ public final class SettingsSync {
             sidecar.modified = Date()
             sidecar.session = session
             let toSave = sidecar
+            await beforeWriting(url)
             // As read back, so Undo can tell the photo hasn't been edited since (dates round).
             guard let saved = await Task.detached(operation: { () -> Sidecar? in
                 guard (try? store.save(toSave, for: url)) != nil else { return nil }
