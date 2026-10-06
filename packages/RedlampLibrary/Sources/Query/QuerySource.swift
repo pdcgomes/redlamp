@@ -202,30 +202,21 @@ final class QueryVocabulary: Sendable {
     }
 }
 
-/// A table's names, with the ASCII ones lowercased once, so `QueryText.contains` runs over thousands
-/// of folders' paths in well under a millisecond.
+/// A table's names, each folded once (`FoldedText`), so a search runs over thousands of folders'
+/// paths byte by byte, as `QueryText.contains` matches them, whatever their letters.
 private struct NameMatcher: Sendable {
     private let ids: [Int64]
-    private let names: [String]
-    private let lowercased: [ContiguousArray<UInt8>?]
+    private let folded: [FoldedText]
 
     init(_ table: [Int64: String]) {
         let sorted = table.sorted { $0.key < $1.key }
         ids = sorted.map(\.key)
-        names = sorted.map(\.value)
-        lowercased = names.map(QueryText.asciiLowercased)
+        folded = sorted.map { FoldedText($0.value) }
     }
 
     func ids(containing part: String) -> [Int64] {
-        let needle = QueryText.asciiLowercased(part)
-        return ids.indices.compactMap { index in
-            let found = if let needle, let name = lowercased[index] {
-                QueryText.contains(name, needle)
-            } else {
-                QueryText.contains(names[index], part)
-            }
-            return found ? ids[index] : nil
-        }
+        let needle = FoldedText(part)
+        return ids.indices.compactMap { folded[$0].contains(needle) ? ids[$0] : nil }
     }
 }
 

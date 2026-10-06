@@ -11,6 +11,8 @@ struct NameCodes: Sendable {
     private var codes: [String: UInt32] = [:]
     /// Each name with A to Z lowercased, when it's all ASCII, so `QueryText.contains` runs byte by byte.
     private var lowercased: ContiguousArray<ContiguousArray<UInt8>?> = [nil]
+    /// The other names folded (`FoldedText`), by code.
+    private var folded: [Int: FoldedText] = [:]
     let limit: UInt32
 
     init(limit: UInt32) {
@@ -31,7 +33,11 @@ struct NameCodes: Sendable {
         guard names.count <= Int(limit) else { return limit }
         let code = UInt32(names.count)
         names.append(name)
-        lowercased.append(QueryText.asciiLowercased(name))
+        let ascii = QueryText.asciiLowercased(name)
+        lowercased.append(ascii)
+        if ascii == nil {
+            folded[Int(code)] = FoldedText(name)
+        }
         codes[name] = code
         return code
     }
@@ -43,13 +49,13 @@ struct NameCodes: Sendable {
 
     /// The codes whose names hold `part`, ignoring case, as `QueryText.contains` finds it.
     func codes(containing part: String) -> [UInt32] {
-        let needle = QueryText.asciiLowercased(part)
+        let needle = FoldedText(part)
         var found: [UInt32] = []
         for code in 1 ..< names.count {
-            let matches = if let needle, let name = lowercased[code] {
-                QueryText.contains(name, needle)
+            let matches = if let name = lowercased[code] {
+                FoldedText(ascii: name).contains(needle)
             } else {
-                QueryText.contains(names[code], part)
+                folded[code]?.contains(needle) ?? false
             }
             if matches {
                 found.append(UInt32(code))
@@ -78,7 +84,8 @@ struct NameCodes: Sendable {
     /// Bytes its names and tables take, about.
     var memoryFootprint: Int {
         let text = names.reduce(0) { $0 + $1.utf8.count } * 3
-        return text + names.capacity * 16 + lowercased.capacity * 8 + codes.capacity * 24
+        let folding = folded.values.reduce(0) { $0 + $1.bytes.count * 2 } + folded.capacity * 24
+        return text + names.capacity * 16 + lowercased.capacity * 8 + codes.capacity * 24 + folding
     }
 }
 

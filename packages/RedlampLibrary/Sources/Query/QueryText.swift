@@ -9,11 +9,10 @@ enum QueryText {
         text.unicodeScalars.count >= 3
     }
 
-    /// `part` anywhere in `text`, ignoring case: byte by byte when both are ASCII, as most names are,
-    /// and as Foundation compares them otherwise.
+    /// `part` anywhere in `text`, ignoring case as Foundation does, byte by byte (`FoldedText`).
     static func contains(_ text: String, _ part: String) -> Bool {
         guard let needle = asciiLowercased(part), let haystack = asciiLowercased(text) else {
-            return text.range(of: part, options: .caseInsensitive) != nil
+            return FoldedText(text).contains(FoldedText(part))
         }
         return contains(haystack, needle)
     }
@@ -52,6 +51,76 @@ enum QueryText {
     static func match(_ text: String, in column: LibraryIndex.TextColumn? = nil) -> String {
         let phrase = "\"" + text.replacingOccurrences(of: "\"", with: "\"\"") + "\""
         return column.map { "\($0.rawValue) : \(phrase)" } ?? phrase
+    }
+}
+
+/// Text folded once to search for or search in byte by byte, as Foundation finds text ignoring case
+/// (`range(of:options: .caseInsensitive)`): each character case folded and decomposed, so composed
+/// and decomposed accents match, with where each character starts, so a match never starts or ends
+/// inside one (an `e` isn't found in an `é`). ASCII is only lowercased.
+struct FoldedText: Sendable, Hashable {
+    let bytes: ContiguousArray<UInt8>
+    /// Whether a character starts at each byte, and a last true for the end; nil when every byte is
+    /// a character.
+    let starts: ContiguousArray<Bool>?
+
+    init(_ text: String) {
+        if let ascii = QueryText.asciiLowercased(text) {
+            bytes = ascii
+            starts = nil
+            return
+        }
+        var bytes = ContiguousArray<UInt8>()
+        var starts = ContiguousArray<Bool>()
+        bytes.reserveCapacity(text.utf8.count + 8)
+        starts.reserveCapacity(text.utf8.count + 9)
+        for character in text {
+            let count = bytes.count
+            if let ascii = character.asciiValue, character.utf8.count == 1 {
+                bytes.append((0x41 ... 0x5A).contains(ascii) ? ascii | 0x20 : ascii)
+            } else {
+                bytes.append(contentsOf: String(character).folding(options: .caseInsensitive, locale: nil)
+                    .decomposedStringWithCanonicalMapping.utf8)
+            }
+            if bytes.count > count {
+                starts.append(true)
+                starts.append(contentsOf: repeatElement(false, count: bytes.count - count - 1))
+            }
+        }
+        starts.append(true)
+        self.bytes = bytes
+        self.starts = starts
+    }
+
+    /// ASCII already lowercased (`QueryText.asciiLowercased`).
+    init(ascii: ContiguousArray<UInt8>) {
+        bytes = ascii
+        starts = nil
+    }
+
+    /// Whether `needle` is in it, starting and ending where characters do; an empty needle is in
+    /// nothing, as Foundation has it.
+    func contains(_ needle: FoldedText) -> Bool {
+        let length = needle.bytes.count
+        guard length > 0, length <= bytes.count else { return false }
+        return bytes.withUnsafeBytes { haystack in
+            needle.bytes.withUnsafeBytes { needle in
+                guard let base = haystack.baseAddress else { return false }
+                guard let starts else {
+                    return memmem(base, haystack.count, needle.baseAddress, length) != nil
+                }
+                var from = 0
+                while haystack.count - from >= length,
+                      let found = memmem(base + from, haystack.count - from, needle.baseAddress, length) {
+                    let at = base.distance(to: UnsafeRawPointer(found))
+                    if starts[at], starts[at + length] {
+                        return true
+                    }
+                    from = at + 1
+                }
+                return false
+            }
+        }
     }
 }
 
