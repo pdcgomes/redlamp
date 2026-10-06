@@ -5,13 +5,14 @@ import Testing
 @testable import RedlampDocument
 
 /// What saving many small sidecars costs on this Mac (LIB-21, LIB-26, LIB-15): a save one at a time,
-/// broken into its parts beside bare writes of the same size; how many saves in flight help; and
-/// coordinating many sidecars at once; and the batch (`SidecarStore.change`), each of its ideas on its
-/// own. Run with `REDLAMP_SIDECAR_BENCH=1` (which xcodebuild hands to the tests from
-/// `TEST_RUNNER_REDLAMP_SIDECAR_BENCH=1`), or a list of `parts`, `flight`, `batch` and `coordination`,
-/// on `REDLAMP_SIDECAR_BENCH_PHOTOS` photos (10,000 by default) in folders of 500 in the temporary
-/// folder, every other one with a sidecar holding an edit and a rating, as the keywords scenario has
-/// them.
+/// broken into its parts beside bare writes of the same size; how many saves in flight help;
+/// coordinating many sidecars at once; the batch (`SidecarStore.change`), each of its ideas on its
+/// own, beside the disk's own cost for what it does; and sidecars removed. Run with
+/// `REDLAMP_SIDECAR_BENCH=1` (which xcodebuild hands to the tests from
+/// `TEST_RUNNER_REDLAMP_SIDECAR_BENCH=1`), or a list of `parts`, `flight`, `batch`, `placement`,
+/// `floor`, `removal` and `coordination`, on `REDLAMP_SIDECAR_BENCH_PHOTOS` photos (10,000 by
+/// default) in folders of 500 in the temporary folder, every other one with a sidecar holding an edit
+/// and a rating, as the keywords scenario has them.
 @Suite(.serialized)
 struct SidecarBatchBenchTests {
     static let environment = ProcessInfo.processInfo.environment
@@ -125,22 +126,15 @@ struct SidecarBatchBenchTests {
         let count = Self.photos
         let store = SidecarStore()
         BenchFixture.report("\(count) photos, load average \(BenchFixture.loadAverage())")
-        let within: @Sendable (Data, URL) throws -> Void = { data, file in
-            let temporary = file.deletingLastPathComponent().appending(path: ".edit.json.\(UUID().uuidString)")
-            try SidecarStore.create(data, at: temporary)
-            guard rename(temporary.path, file.path) == 0 else { throw POSIXError(.EIO) }
-        }
         let variants: [(String, width: Int, group: Int, edits: EditWriter)] = [
             ("A batch one at a time: one coordination each, the edit read once", 1, 1, .foundation),
             ("Coordinated 64 at a time", 1, 64, .foundation),
             ("Coordinated 64 at a time, 8 groups in flight", 8, 64, .foundation),
-            ("The same, each edit renamed into place from inside its package", 8, 64, EditWriter(
-                replace: within, create: within,
+            ("The same, each edit renamed into place in its package", 8, 64, EditWriter(
+                replace: SidecarStore.writeByRenaming, create: SidecarStore.writeByRenaming,
             )),
-            ("The same, a new package's edit written as it is", 8, 64, EditWriter(
-                replace: within, create: SidecarStore.create,
-            )),
-            ("The same, renamed from beside the package: the batch as it ships", 8, 64, .renaming),
+            ("The same, a new package's edit written as it is: the batch as it ships", 8, 64, .renaming),
+            ("The same, renamed in from beside the package", 8, 64, BenchFixture.beside),
             ("The same, 4 groups in flight", 4, 64, .renaming),
             ("The same, 16 groups in flight", 16, 64, .renaming),
             ("The same, 8 groups of 16 in flight", 8, 16, .renaming),
@@ -171,6 +165,79 @@ struct SidecarBatchBenchTests {
                 fixture.remove()
             }
         }
+    }
+
+    @Test(.enabled(if: enabled("placement")))
+    func `the edit renamed in from beside its package or from inside it, taken in turns`() throws {
+        let count = Self.photos
+        let store = SidecarStore()
+        BenchFixture.report("\(count) photos, load average \(BenchFixture.loadAverage())")
+        for (label, edits) in [
+            ("beside", BenchFixture.beside), ("inside", .renaming), ("beside", BenchFixture.beside), (
+                "inside",
+                .renaming,
+            ),
+        ] {
+            let fixture = try BenchFixture(count)
+            BenchFixture.measure("The batch, each edit renamed in from \(label) its package", count) {
+                store.change(fixture.images, width: 8, group: 64, edits: edits, until: { false }) { _, sidecar in
+                    BenchFixture.keywordAdded(to: sidecar)
+                } done: { _ in }
+            }
+            #expect(BenchFixture.wrong(fixture.images, store: store) == 0)
+            fixture.remove()
+        }
+    }
+
+    @Test(.enabled(if: enabled("removal")))
+    func `sidecars emptied and removed, one at a time and in a batch, beside the disk's own cost`() throws {
+        let count = Self.photos
+        let store = SidecarStore()
+        BenchFixture.report("\(count) photos, load average \(BenchFixture.loadAverage())")
+        let keyworded = try JSONEncoder.sidecar.encode(Sidecar(
+            recipe: EditRecipe(), metadata: PhotoMetadata(keywords: [BenchFixture.keyword]),
+            modified: Date(timeIntervalSince1970: 1_790_000_000),
+        ))
+        var fixture = try BenchFixture(count / 4, every: 1, holding: keyworded)
+        BenchFixture.measure("One at a time: load, the keyword taken off, saveOrRemove removing it", count / 4) {
+            for image in fixture.images {
+                var sidecar = store.load(for: image) ?? Sidecar(recipe: EditRecipe())
+                sidecar.metadata = nil
+                try? store.saveOrRemove(sidecar, for: image)
+            }
+        }
+        fixture.remove()
+        fixture = try BenchFixture(count, every: 1, holding: keyworded)
+        BenchFixture.measure("A batch: the keyword taken off, every sidecar removed", count) {
+            store.change(fixture.images) { _, sidecar in
+                guard var sidecar else { return .keep }
+                sidecar.metadata = nil
+                return .saveOrRemove(sidecar)
+            } done: { _ in }
+        }
+        #expect(fixture.images.allSatisfy { !FileManager.default.fileExists(atPath: store.url(for: $0).path) })
+        fixture.remove()
+        fixture = try BenchFixture(count, every: 1, holding: keyworded)
+        let sidecars = fixture.images.map { store.url(for: $0) }
+        BenchFixture.measure(
+            "Bare, 8 at a time: each renamed to a hidden name, then FileManager.removeItem",
+            count / 2,
+        ) {
+            BenchFixture.inFlight(8, count / 2) { number in
+                let hidden = SidecarStore.hiddenSibling(of: sidecars[number])
+                try? FileManager.default.moveItem(at: sidecars[number], to: hidden)
+                try? FileManager.default.removeItem(at: hidden)
+            }
+        }
+        BenchFixture.measure("Bare, 8 at a time: each renamed to a hidden name, its edit unlinked, rmdir", count / 2) {
+            BenchFixture.inFlight(8, count / 2) { number in
+                let hidden = SidecarStore.hiddenSibling(of: sidecars[count / 2 + number]).path
+                _ = rename(sidecars[count / 2 + number].path, hidden)
+                _ = unlink(hidden + "/" + SidecarStore.editFile)
+                _ = rmdir(hidden)
+            }
+        }
+        fixture.remove()
     }
 
     @Test(.enabled(if: enabled("floor")))
@@ -270,7 +337,8 @@ struct BenchFixture {
     let folder: URL
     let images: [URL]
 
-    init(_ count: Int) throws {
+    /// `count` photos, every `every`-th with a sidecar holding `edit` (an edit and a rating when nil).
+    init(_ count: Int, every: Int = 2, holding edit: Data? = nil) throws {
         folder = FileManager.default.temporaryDirectory
             .appending(path: "redlamp-sidecar-bench-\(UUID().uuidString)", directoryHint: .isDirectory)
         let folder = folder
@@ -282,8 +350,8 @@ struct BenchFixture {
                 at: images[start].deletingLastPathComponent(), withIntermediateDirectories: true,
             )
         }
-        let edit = try Self.edit()
-        for image in stride(from: 0, to: count, by: 2).map({ images[$0] }) {
+        let edit = try edit ?? Self.edit()
+        for image in stride(from: 0, to: count, by: every).map({ images[$0] }) {
             let package = SidecarLocator.besidePhoto(image)
             try FileManager.default.createDirectory(at: package, withIntermediateDirectories: false)
             try edit.write(to: package.appending(path: SidecarStore.editFile))
@@ -305,6 +373,14 @@ struct BenchFixture {
     }
 
     static let keyword = "Clients/Acme/Picked"
+
+    /// Each edit written beside its package, named as an interrupted save's leftovers are, and renamed
+    /// into it.
+    static let beside = EditWriter(replace: { data, file in
+        let temporary = SidecarStore.hiddenSibling(of: file.deletingLastPathComponent())
+        try SidecarStore.create(data, at: temporary)
+        guard rename(temporary.path, file.path) == 0 else { throw POSIXError(.EIO) }
+    }, create: SidecarStore.create)
 
     /// The change the keywords batch makes, saved as it saved it.
     static func save(_ image: URL, store: SidecarStore) throws {

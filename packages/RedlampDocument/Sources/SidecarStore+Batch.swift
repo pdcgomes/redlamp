@@ -42,7 +42,7 @@ public struct SidecarBatchResult: Sendable {
 ///
 /// Sidecars are coordinated a group at a time, in one round trip to the file coordinator; each is
 /// read once, for its change and the checks; several groups are written at once; and each edit is put
-/// in place by a rename from beside its package.
+/// in place by a rename within its package.
 public extension SidecarStore {
     /// Groups written at once: enough to keep the disk busy, few enough not to wait on each other.
     static let batchWidth = 8
@@ -234,10 +234,12 @@ extension SidecarStore {
 
     /// Puts `data` in a package's edit `file` atomically, as `Data.write(options: .atomic)` does,
     /// without the folder Foundation makes and removes for each atomic write: written to a hidden file
-    /// beside the package, named as an interrupted save's leftovers are (`hiddenSibling(of:)`), so the
-    /// same clean-up removes it, then renamed over the edit.
+    /// beside it in the package, then renamed over it. A rename into the package from beside it costs
+    /// this Mac three times as much. A forced quit between the two leaves the hidden file in the
+    /// package, where nothing reads it.
     static func writeByRenaming(_ data: Data, to file: URL) throws {
-        let temporary = hiddenSibling(of: file.deletingLastPathComponent())
+        let temporary = file.deletingLastPathComponent()
+            .appending(path: ".\(file.lastPathComponent).\(UUID().uuidString)")
         try create(data, at: temporary)
         guard rename(temporary.path, file.path) == 0 else {
             let error = POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
@@ -273,8 +275,8 @@ extension SidecarStore {
 }
 
 extension EditWriter {
-    /// As a batch writes it: a hidden file beside the package renamed over the edit, and in a package
-    /// being built, the edit written as it is.
+    /// As a batch writes it: a hidden file in the package renamed over the edit, and in a package being
+    /// built, the edit written as it is.
     static let renaming = EditWriter(replace: SidecarStore.writeByRenaming, create: SidecarStore.create)
 }
 
