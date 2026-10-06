@@ -9,12 +9,12 @@ import Synchronization
 /// modification date and content key, so a file that hasn't changed is never read again. Only
 /// photos whose full hashes agree are duplicates.
 ///
-/// Nothing here moves or removes a file: what's removed is a `DuplicateRemovalPlan` the user
-/// confirms, which file operations carry out (LIB-26).
+/// Nothing is removed but the copies a `DuplicateRemovalPlan` the user confirms names, and only to
+/// the Trash, by `trash`, as one batch of the file operations (LIB-26).
 public struct DuplicateFinder: Sendable {
-    /// How far confirming has got.
+    /// How far confirming, or checking a removal plan's files again, has got.
     public struct Progress: Sendable, Hashable {
-        /// Candidates to compare, and those done.
+        /// Candidates to compare, or a plan's files to check, and those done.
         public var candidates = 0
         public var done = 0
         /// Of those done, the ones whose recorded hash stood.

@@ -138,6 +138,11 @@ public struct DuplicateReview: Sendable, Hashable {
         groups.reduce(0) { $0 + $1.reclaimable }
     }
 
+    /// Every copy but each group's keeper, which `redlamp library duplicates --trash` removes.
+    public var allButProposed: [Int64] {
+        groups.flatMap { group in group.copies.map(\.photo).filter { $0 != group.keeper.photo } }
+    }
+
     /// Modification dates this close count as the same: FAT and exFAT keep them to 2 seconds.
     static let sameAge: TimeInterval = 2
 

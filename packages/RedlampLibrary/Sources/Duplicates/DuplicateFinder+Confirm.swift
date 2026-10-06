@@ -73,16 +73,16 @@ public extension DuplicateFinder {
     }
 }
 
-/// Candidates handed out one at a time to the tasks reading a volume.
-final class DuplicateRowQueue: Sendable {
-    private let rows: Mutex<ArraySlice<DuplicateRow>>
+/// Candidates, or a plan's files, handed out one at a time to the tasks reading a volume.
+final class DuplicateQueue<Element: Sendable>: Sendable {
+    private let elements: Mutex<ArraySlice<Element>>
 
-    init(_ rows: [DuplicateRow]) {
-        self.rows = Mutex(rows[...])
+    init(_ elements: [Element]) {
+        self.elements = Mutex(elements[...])
     }
 
-    func next() -> DuplicateRow? {
-        rows.withLock { $0.popFirst() }
+    func next() -> Element? {
+        elements.withLock { $0.popFirst() }
     }
 }
 
@@ -141,7 +141,7 @@ final class ConfirmationRun: Sendable {
             rows.forEach { done($0, .unconfirmed(.offline)) }
             return
         }
-        let queue = DuplicateRowQueue(rows.sorted { lhs, rhs in
+        let queue = DuplicateQueue(rows.sorted { lhs, rhs in
             lhs.folder != rhs.folder ? lhs.folder < rhs.folder : FileOrder.precedes(lhs.record.name, rhs.record.name)
         })
         await withTaskGroup(of: Void.self) { group in

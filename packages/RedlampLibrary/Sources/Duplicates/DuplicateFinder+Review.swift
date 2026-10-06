@@ -88,7 +88,7 @@ public extension DuplicateFinder {
                 group.addTask {
                     guard let first = rows.first,
                           let io = await io(forVolume: volume, root: first.root) else { return [:] }
-                    let queue = DuplicateRowQueue(rows)
+                    let queue = DuplicateQueue(rows)
                     return await withTaskGroup(of: [Int64: OnDisk].self) { workers in
                         for _ in 0 ..< Self.filesAtOnce(on: io) {
                             workers.addTask {

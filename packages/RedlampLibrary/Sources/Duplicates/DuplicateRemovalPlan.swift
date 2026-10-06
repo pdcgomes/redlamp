@@ -4,9 +4,10 @@ import Foundation
 /// `.redlamp` sidecar, what that holds, and its other app's `.xmp` where that's the photo's alone.
 /// It holds only confirmed copies of a group, never all of them, and only what the user chose.
 ///
-/// Nothing here moves a file. File operations (LIB-26) carry the plan out: to the Trash through
-/// their journal, with Undo, each copy only once they find it and the copy kept in its place as
-/// the plan says (their sizes and modification dates).
+/// Nothing here moves a file. `DuplicateFinder.trash` carries the plan out as one batch of the file
+/// operations (LIB-26): to the Trash through their journal, with Undo, once every copy and the copy
+/// kept for it are found as the plan has them (their sizes, modification dates and full hashes),
+/// and the batch moves nothing but the copies and their own files.
 public struct DuplicateRemovalPlan: Sendable, Hashable, Codable {
     /// A copy that stays: the one its removal leaves.
     public struct Kept: Sendable, Hashable, Codable {
@@ -40,6 +41,60 @@ public struct DuplicateRemovalPlan: Sendable, Hashable, Codable {
         case notADuplicate(photo: Int64)
         /// Every copy of the group with this full SHA-256 was chosen.
         case everyCopy(sha256: Data)
+        /// The files, the index or the batch aren't as the plan has them: nothing was moved.
+        case differs([Difference])
+    }
+
+    /// What stops the plan's batch before anything moves: a file that isn't as the plan has it, a
+    /// copy kept that the plan removes too, or a file the batch would move that the plan doesn't name.
+    public struct Difference: Sendable, Hashable, Codable, CustomStringConvertible {
+        public enum Reason: String, Sendable, Hashable, Codable {
+            /// It isn't there any more.
+            case gone
+            /// Its size, modification date or full SHA-256 isn't the plan's.
+            case changed
+            /// Its volume isn't connected, or doesn't answer.
+            case offline
+            case unreadable
+            /// The index doesn't have the photo there any more.
+            case notInLibrary
+            /// Its `.redlamp` sidecar was made, removed or changed since the review.
+            case sidecarChanged
+            /// The plan keeps it for a copy it removes, and removes it too.
+            case keptRemoved
+            /// The batch would move it or take it out of the index, though it's neither one of the
+            /// plan's copies nor theirs alone.
+            case notInPlan
+            /// The plan moves it, but the batch wouldn't.
+            case notInBatch
+        }
+
+        public var path: String
+        public var reason: Reason
+        /// It's a copy the plan keeps, rather than one it removes or one of their files.
+        public var isKept: Bool
+
+        public init(path: String, reason: Reason, isKept: Bool = false) {
+            self.path = path
+            self.reason = reason
+            self.isKept = isKept
+        }
+
+        /// `/Photos/B/X.JPG has changed since the review`.
+        public var description: String {
+            let file = isKept ? path + ", the copy kept," : path
+            return switch reason {
+            case .gone: "\(file) isn't there any more"
+            case .changed: "\(file) has changed since the review"
+            case .offline: "\(file) can't be checked: its volume isn't connected, or doesn't answer"
+            case .unreadable: "\(file) couldn't be read"
+            case .notInLibrary: "\(file) isn't in the library there any more"
+            case .sidecarChanged: "\(path)'s sidecar has changed since the review"
+            case .keptRemoved: "\(path) is kept for another copy, so it can't be removed too"
+            case .notInPlan: "\(path) would go to the Trash, though the plan doesn't name it"
+            case .notInBatch: "\(path) wouldn't go to the Trash, though the plan names it"
+            }
+        }
     }
 
     public private(set) var removals: [Removal]
