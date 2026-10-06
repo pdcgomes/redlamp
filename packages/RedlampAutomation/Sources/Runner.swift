@@ -231,6 +231,7 @@
                 if model.commandPalette != nil {
                     model.closeCommandPalette()
                 }
+                model.showModule(.develop)
                 if model.drawingKind != nil {
                     model.perform(.cancel)
                 }

@@ -90,6 +90,9 @@
         // swiftlint:disable:next cyclomatic_complexity function_body_length
         static func check(_ action: ShortcutAction) -> ActionCheck {
             switch action {
+            // Modules
+            case .libraryModule, .developModule, .previousModule, .gridView, .loupeView, .compareView, .surveyView:
+                module(action)
             // View
             case .beforeAfter: .toggle(action) { "\($0.showBefore)" }
             case .nextCompareLayout, .previousCompareLayout:
@@ -401,7 +404,11 @@
             }
             switch path {
             case .key where action.combos.first.map { $0.command && ($0.shift || $0.option) } == true:
-                try app.expectKeyBinding(action)
+                if case .character = action.combos.first?.key {
+                    try app.expectKeyBinding(action)
+                } else {
+                    try app.expectArrowKeyBinding(action)
+                }
                 try app.choose(action, expectPerformed: !appRuns)
             case .key: try app.press(action, expectPerformed: !appRuns)
             case .menu: try app.choose(action, expectPerformed: !appRuns)

@@ -9,7 +9,7 @@
             + DevelopScenarios.all + ViewingScenarios.all + WorkspaceScenarios.all + HistoryScenarios.all
             + MaskingScenarios.all + MasksPanelScenarios.all + PointColorScenarios.all + CropScenarios.all
             + HealingScenarios.all
-            + LibraryScenarios.all + SavingScenarios.all + SyncScenarios.all + ExportScenarios.all
+            + LibraryScenarios.all + ModuleScenarios.all + SavingScenarios.all + SyncScenarios.all + ExportScenarios.all
             + RecipeScenarios.all + StackScenarios.all + RawScenarios.all + FeedbackScenarios.all
             + SoakScenarios.all + PerformanceScenarios.all + SmokeScenarios.last
 
