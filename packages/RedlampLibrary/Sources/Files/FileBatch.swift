@@ -317,6 +317,21 @@ public struct IndexedPhoto: Sendable, Hashable, Codable {
     public var caption: String?
     public var state: Int
     public var indexed: Int
+    public var customLabel: String?
+    public var creator: String?
+    public var copyright: String?
+    public var sublocation: String?
+    public var city: String?
+    public var province: String?
+    public var country: String?
+    public var countryCode: String?
+    public var stack: UUID?
+    /// Nil in batches journaled before the index kept stacks, organising fields' sources and `.xmp`
+    /// signatures, as are `stack` and `xmpSignature`.
+    public var stackTop: Bool?
+    /// `PhotoRecord.code(for:)` of the fields that are other apps'.
+    public var otherFields: Int?
+    public var xmpSignature: Int64?
 
     public init(_ photo: PhotoRecord) {
         id = photo.id
@@ -350,6 +365,18 @@ public struct IndexedPhoto: Sendable, Hashable, Codable {
         caption = photo.caption
         state = photo.state.rawValue
         indexed = photo.indexed
+        customLabel = photo.customLabel
+        creator = photo.creator
+        copyright = photo.copyright
+        sublocation = photo.location?.sublocation
+        city = photo.location?.city
+        province = photo.location?.state
+        country = photo.location?.country
+        countryCode = photo.location?.countryCode
+        stack = photo.stack?.id
+        stackTop = photo.stack?.top ?? false
+        otherFields = PhotoRecord.code(for: photo.otherFields)
+        xmpSignature = photo.xmpSignature
     }
 
     /// The row in `folder`.
@@ -363,7 +390,13 @@ public struct IndexedPhoto: Sendable, Hashable, Codable {
             flag: PhotoRecord.flag(code: flag), label: PhotoRecord.label(code: label), marked: marked, edited: edited,
             sidecarModified: sidecarModified.map(Date.init(timeIntervalSince1970:)),
             xmpModified: xmpModified.map(Date.init(timeIntervalSince1970:)), title: title, caption: caption,
-            state: PhotoRecord.State(rawValue: state), indexed: indexed,
+            state: PhotoRecord.State(rawValue: state), indexed: indexed, customLabel: customLabel,
+            creator: creator, copyright: copyright,
+            location: PhotoRecord.storedLocation(
+                sublocation: sublocation, city: city, province: province, country: country, countryCode: countryCode,
+            ),
+            stack: PhotoRecord.storedStack(id: stack?.uuidString, top: stackTop ?? false),
+            otherFields: PhotoRecord.fields(code: otherFields ?? 0), xmpSignature: xmpSignature,
         )
     }
 }

@@ -168,4 +168,134 @@ struct FileTrashTests {
             try await operations.planTrash(folder: sandbox.root)
         }
     }
+
+    /// `row` with a value other than its default in every field the file operations don't check
+    /// against the file.
+    private static func filled(_ row: PhotoRecord) -> PhotoRecord {
+        var row = row
+        row.captured = FileSandbox.date(7)
+        row.capturedOffset = 3600
+        row.camera = row.camera ?? 1
+        row.lens = row.lens ?? 1
+        row.iso = 400
+        row.aperture = 2.8
+        row.shutter = 1 / 250
+        row.focal = 35
+        row.width = 6000
+        row.height = 4000
+        row.orientation = 6
+        row.latitude = 38.7
+        row.longitude = -9.1
+        row.rating = 4
+        row.flag = .pick
+        row.label = .green
+        row.marked = true
+        row.edited = true
+        row.sidecarModified = FileSandbox.date(8)
+        row.xmpModified = FileSandbox.date(9)
+        row.title = "Tram 28"
+        row.caption = "Alfama, before the rain"
+        row.state = [.settling]
+        row.indexed = 3
+        row.customLabel = "Urgent"
+        row.creator = "Ana Sousa"
+        row.copyright = "© Ana Sousa"
+        row.location = PhotoLocation(
+            country: "Portugal", state: "Lisboa", city: "Lisbon", sublocation: "Alfama", countryCode: "PT",
+        )
+        row.stack = PhotoStack(id: UUID(), top: true)
+        row.otherFields = [.creator, .location]
+        row.xmpSignature = 42
+        return row
+    }
+
+    @Test func `every field of a photo's row is carried through the journal and back`() throws {
+        let row = Self.filled(PhotoRecord(
+            id: 9, folder: 3, name: "IMG_0009.ARW", kind: .raw, size: 25_000_000, modified: FileSandbox.date(6),
+            fileID: 77, contentKey: Data(repeating: 5, count: 16),
+        ))
+        let unset = PhotoRecord(folder: 0, name: "")
+        let defaults = Dictionary(uniqueKeysWithValues: Mirror(reflecting: unset).children.map {
+            ($0.label ?? "", String(describing: $0.value))
+        })
+        for field in Mirror(reflecting: row).children {
+            #expect(
+                String(describing: field.value) != defaults[field.label ?? ""],
+                "\(field.label ?? "?") is left at its default: give it a value here, and carry it in IndexedPhoto",
+            )
+        }
+        #expect(IndexedPhoto(row).record(inFolder: row.folder) == row)
+        let journaled = try JSONDecoder().decode(IndexedPhoto.self, from: JSONEncoder().encode(IndexedPhoto(row)))
+        #expect(journaled.record(inFolder: row.folder) == row)
+    }
+
+    @Test func `a photo brought back by Undo or Put Back has its whole row back`() async throws {
+        let (sandbox, _, _) = try await Self.sandbox()
+        defer { sandbox.remove() }
+        let ids = try await sandbox.rows()
+        let id = try #require(ids["Shoot/IMG_0002.ARW"])
+        let row = try await sandbox.index.write { writer in
+            let row = try Self.filled(#require(try writer.photo(id: id)))
+            _ = try writer.upsertPhotos([row])
+            return try writer.photo(id: id)
+        }
+        #expect(row != nil && row?.stack != nil && row?.location != nil)
+        let operations = sandbox.operations()
+
+        let trash = try await operations.planTrash(photos: [id])
+        try await operations.run(trash)
+        #expect(try await operations.undo().isFinished)
+        #expect(try await sandbox.index.read { try $0.photo(id: id) } == row)
+
+        let again = try await operations.planTrash(photos: [id])
+        try await operations.run(again)
+        #expect(try await operations.run(operations.planPutBack(batch: again.id)).isFinished)
+        #expect(try await sandbox.index.read { try $0.photo(id: id) } == row)
+    }
+
+    @Test func `a Trash batch journaled before rows kept stacks and other apps' fields still undoes`() async throws {
+        let (sandbox, _, _) = try await Self.sandbox()
+        defer { sandbox.remove() }
+        let ids = try await sandbox.rows()
+        let id = try #require(ids["Shoot/IMG_0002.ARW"])
+        let trashed = try await sandbox.operations().planTrash(photos: [id])
+        try await sandbox.operations().run(trashed)
+
+        let added = [
+            "customLabel", "creator", "copyright", "sublocation", "city", "province", "country", "countryCode",
+            "stack", "stackTop", "otherFields", "xmpSignature",
+        ]
+        func old(_ value: Any) -> Any {
+            if let array = value as? [Any] {
+                return array.map(old)
+            }
+            guard var object = value as? [String: Any] else { return value }
+            if object["indexed"] != nil, object["state"] != nil {
+                for key in added {
+                    object[key] = nil
+                }
+            }
+            return object.mapValues(old)
+        }
+        let folder = sandbox.operations().journal.folder
+        let file = try #require(try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+            .first { $0.pathExtension == "batch" })
+        let lines = try String(contentsOf: file, encoding: .utf8).split(separator: "\n").map { line in
+            try String(decoding: JSONSerialization.data(
+                withJSONObject: old(JSONSerialization.jsonObject(with: Data(line.utf8))),
+                options: [.sortedKeys, .withoutEscapingSlashes],
+            ), as: UTF8.self)
+        }
+        let rewritten = lines.joined(separator: "\n") + "\n"
+        #expect(added.allSatisfy { !rewritten.contains("\"\($0)\"") }, "\(rewritten)")
+        try Data(rewritten.utf8).write(to: file)
+
+        let launch = sandbox.operations()
+        let removed = try #require(try launch.journal.load(trashed.id).batch.steps.first { $0.kind == .trash }?.removed
+            .first)
+        #expect(removed.photo.stackTop == nil && removed.photo.otherFields == nil && removed.photo.creator == nil)
+        #expect(try await launch.undo().isFinished)
+        let row = try #require(try await sandbox.index.read { try $0.photo(id: id) })
+        #expect(row.name == "IMG_0002.ARW" && row.stack == nil && row.otherFields.isEmpty && row.contentKey != nil)
+    }
 }
