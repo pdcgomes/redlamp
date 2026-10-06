@@ -365,16 +365,10 @@ public extension EditorModel {
         }
         // Whichever photo is open when the batch reaches it is healed in the editor, not behind it.
         var healed: Set<URL> = []
-        settingsSync.run(.healDust(found), on: targets, title: "Remove Dust", inEditor: { [weak self] url in
-            guard let self, await healDustInEditor(found[url] ?? [], on: url) else { return false }
-            if found[url]?.isEmpty == false {
-                healed.insert(url)
-            }
-            return true
-        }, done: { [weak self] url, recipe in
+        settingsSync.run(.healDust(found), on: targets, title: "Remove Dust") { [weak self] url, recipe in
             healed.insert(url)
             self?.written(url, recipe)
-        })
+        }
         dustSearch = nil
         // Still finding dust until the batch is done: it heals the open photo in the editor too.
         await settingsSync.idle()
@@ -385,7 +379,7 @@ public extension EditorModel {
 
     /// Heals `specks` in `url` as a step of its history when it is the photo open; false when it
     /// isn't, or stops being open before its sources are found.
-    private func healDustInEditor(_ specks: [DetectedSpot], on url: URL) async -> Bool {
+    func healDustInEditor(_ specks: [DetectedSpot], on url: URL) async -> Bool {
         guard let visit = currentVisit, visit.url == url else { return false }
         var spots: [RetouchSpot] = []
         for speck in specks {

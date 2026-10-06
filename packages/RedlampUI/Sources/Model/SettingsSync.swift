@@ -3,14 +3,26 @@ import Observation
 import RedlampDocument
 import RedlampEngineAPI
 
+/// The editor, to Settings Sync: a photo open in it is changed there, as a step of its history,
+/// never by writing its sidecar behind it.
+@MainActor
+protocol SyncEditor: AnyObject {
+    /// Whether `url` is open in the editor, or opening there.
+    func isOpen(_ url: URL) -> Bool
+    /// `change` made to `url` in the editor as a step titled `title`, once it has opened.
+    func apply(_ change: SettingsSync.EditorChange, to url: URL, title: String) async -> SettingsSync.EditorOutcome
+}
+
 /// Changes photos that aren't open, one at a time in the background: Sync Settings, Paste onto a
 /// selection, Update AI Masks across it (`docs/plans/2026-10-02-copy-paste-sync-design.md`).
 ///
 /// For each photo it reads the sidecar, pastes, recomputes the AI masks the paste brought (and an
 /// Auto white balance) in an engine of its own, so the open photo is never disturbed, and saves
 /// with a history step. A photo whose sidecar a newer Redlamp wrote, or this version can't read,
-/// is left alone. Batches run one after another. Undo puts back what the last batch changed, on
-/// every photo not edited since.
+/// is left alone, and so is one edited between the read and the save. The photo open in the
+/// editor, or opening there, when the batch reaches it or is about to save it, is changed by the
+/// editor instead (`SyncEditor`). Batches run one after another. Undo puts back what the last
+/// batch changed, on every photo not edited since.
 ///
 /// While Auto Sync is on, the batches that follow the open photo's steps make a run (`AutoSyncRun`):
 /// each photo keeps one history session for it, and Undo, Redo and history clicks on the open
@@ -29,6 +41,24 @@ public final class SettingsSync {
         /// `source` (the open photo's edit at that step) pasted for what the run's steps carried
         /// to it, but for those undone (the open photo's steps after it).
         case follow(EditRecipe, Set<UUID>)
+    }
+
+    /// What a batch asks of the photo open in the editor.
+    enum EditorChange {
+        /// The batch's change, made to the editor's edit.
+        case change(Change)
+        /// `recipe` for the edit, if the editor's is still `over`: Undo, and following the open
+        /// photo's history.
+        case edit(EditRecipe, over: EditRecipe)
+    }
+
+    enum EditorOutcome {
+        /// Made as a step of the photo's history; the edit it left (nil: nothing changed).
+        case applied(EditRecipe?)
+        /// Left as it is: edited since, or read-only.
+        case left
+        /// It isn't open in the editor (any more): the batch saves it.
+        case notOpen
     }
 
     /// One of the open photo's steps reaching the rest of the selection while Auto Sync is on.
@@ -93,11 +123,15 @@ public final class SettingsSync {
     /// An engine for photos that aren't open; nil leaves AI masks and Auto white balance as pasted.
     @ObservationIgnored var makeEngine: () -> (any EditingEngine)?
     @ObservationIgnored let store: SidecarStore
-    /// The editor's saves: a photo just left may still be on its way to disk.
+    /// The editor's saves: a photo just left may still be on its way to disk. The batch's own
+    /// saves go through their queue too, after those asked for before them.
     @ObservationIgnored var saves: SaveQueue?
+    @ObservationIgnored weak var editor: (any SyncEditor)?
     /// Waited for before each photo's sidecar is written (tests change the photo here).
     @ObservationIgnored var beforeWriting: @MainActor (URL) async -> Void = { _ in }
     @ObservationIgnored private var task: Task<Void, Never>?
+    /// The batch's saves on their way, by photo: the editor reads a photo it opens after them.
+    @ObservationIgnored private var writing: [URL: Task<Void, Never>] = [:]
     /// The last batch: each photo's edit before (nil: it had no sidecar) and after.
     @ObservationIgnored private var before: [URL: EditRecipe?] = [:]
     @ObservationIgnored private var written: [URL: Sidecar] = [:]
@@ -118,7 +152,6 @@ public final class SettingsSync {
         /// The run the batch belongs to, and the open photo's steps it carries.
         var session: UUID?
         var steps: [UUID] = []
-        var inEditor: (URL) async -> Bool = { _ in false }
         var done: (URL, EditRecipe) -> Void
 
         var isFollow: Bool {
@@ -130,22 +163,43 @@ public final class SettingsSync {
         }
     }
 
+    /// How a batch's save of one photo went.
+    private enum Saving: Sendable {
+        /// As read back.
+        case saved(Sidecar)
+        case editedSince
+        /// Protected, or it can't be read now.
+        case unreadable
+        case failed
+    }
+
+    /// How Undo's putting back of one photo went.
+    private enum PuttingBack: Sendable {
+        case done(EditRecipe)
+        case editedSince
+        case unreadable
+    }
+
+    /// Where a photo's change landed: saved by the batch, or made by the editor.
+    private enum Landed<T> {
+        case saved(T)
+        case inEditor(EditorOutcome)
+    }
+
     init(store: SidecarStore = SidecarStore(), makeEngine: @escaping () -> (any EditingEngine)?) {
         self.store = store
         self.makeEngine = makeEngine
     }
 
     /// Starts `change` on `photos`, recorded in each one's history as `title`, or queues it after
-    /// the batch running; `done` is told of each photo written. `inEditor` is asked about each
-    /// photo as the batch reaches it: true when it is open in the editor, which made the change
-    /// itself, so the batch leaves it. With `step` (a paste onto the selection) and Auto Sync on,
-    /// the batch joins the run, so the open photo's Undo takes it back too.
+    /// the batch running; `done` is told of each photo changed. With `step` (a paste onto the
+    /// selection) and Auto Sync on, the batch joins the run, so the open photo's Undo takes it
+    /// back too.
     func run(
         _ change: Change, on photos: [URL], title: String, step: RunStep? = nil,
-        inEditor: @escaping (URL) async -> Bool = { _ in false },
         done: @escaping (URL, EditRecipe) -> Void,
     ) {
-        var job = Job(change: change, photos: photos, title: title, stepTitle: title, inEditor: inEditor, done: done)
+        var job = Job(change: change, photos: photos, title: title, stepTitle: title, done: done)
         if let step, isAutoSyncing {
             record(step)
             job.session = step.session
@@ -244,6 +298,38 @@ public final class SettingsSync {
         await task?.value
     }
 
+    /// Returns once the batch's save of `url`, if one is on its way, has landed.
+    func wait(for url: URL) async {
+        await writing[url]?.value
+    }
+
+    /// `save` run on the editor's save queue, unless `url` is open in the editor, which makes
+    /// `change` instead. Between the check and the save being registered there is no suspension,
+    /// so the editor opening it reads it after the save.
+    private func land<T: Sendable>(
+        _ url: URL, _ change: EditorChange, title: String, _ save: @escaping @Sendable (SidecarStore) -> T,
+    ) async -> Landed<T> {
+        while let editor, editor.isOpen(url) {
+            let outcome = await editor.apply(change, to: url, title: title)
+            if case .notOpen = outcome {
+                continue
+            }
+            return .inEditor(outcome)
+        }
+        let (store, saves) = (store, saves)
+        let saving = Task.detached {
+            guard let saves else { return save(store) }
+            return await saves.read { save(store) }
+        }
+        let landing = Task { _ = await saving.value }
+        writing[url] = landing
+        let result = await saving.value
+        if writing[url] == landing {
+            writing[url] = nil
+        }
+        return .saved(result)
+    }
+
     /// Puts back every photo of the last batch not edited since, as a batch of its own: batches
     /// started meanwhile wait for it.
     func undo(done: @escaping (URL, EditRecipe) -> Void) {
@@ -264,31 +350,23 @@ public final class SettingsSync {
         _ written: [URL: Sidecar], before: [URL: EditRecipe?], title: String, done: (URL, EditRecipe) -> Void,
     ) async {
         var unread = 0
-        let store = store
         for (url, after) in written {
             guard !Task.isCancelled else { break }
             defer { progress?.done += 1 }
+            guard let previous = before[url] else { continue }
             await saves?.wait(for: url)
-            let read = await Task.detached { Result { try store.loadThrowing(for: url) } }.value
-            guard case let .success(current) = read else {
-                unread += 1
-                continue
-            }
-            guard let current, current.recipe == after.recipe, let previous = before[url] else { continue }
             await beforeWriting(url)
-            run?.photos[url] = nil
-            if let previous {
-                let undone = Self.recording(previous, in: current, from: after.recipe, title: title)
-                await Task.detached { try? store.save(undone, for: url) }.value
-                done(url, previous)
-            } else if current.hasSameContent(as: after) {
-                await Task.detached { store.delete(for: url) }.value
-                done(url, EditRecipe())
-            } else {
-                // Rated, say, since the sync made it: only the edit goes back.
-                let reverted = Self.recording(EditRecipe(), in: current, from: after.recipe, title: title)
-                await Task.detached { try? store.saveOrRemove(reverted, for: url) }.value
-                done(url, EditRecipe())
+            let landed = await land(url, .edit(previous ?? EditRecipe(), over: after.recipe), title: title) { store in
+                Self.puttingBack(after, to: previous, title: title, for: url, in: store)
+            }
+            switch landed {
+            case let .saved(.done(recipe)), let .inEditor(.applied(recipe?)):
+                run?.photos[url] = nil
+                done(url, recipe)
+            case .saved(.unreadable):
+                unread += 1
+            case .saved(.editedSince), .inEditor:
+                continue
             }
         }
         let photos = "\(unread) photo\(unread == 1 ? "" : "s")"
@@ -304,16 +382,59 @@ public final class SettingsSync {
         }
     }
 
+    /// The photo at `url` given back `previous` (nil: it had no sidecar), if its edit is still
+    /// as the batch left it, `after`. Read and written in one go on the save queue.
+    private nonisolated static func puttingBack(
+        _ after: Sidecar, to previous: EditRecipe?, title: String, for url: URL, in store: SidecarStore,
+    ) -> PuttingBack {
+        guard store.protection(for: url) == nil, case let .success(read) = Result(catching: {
+            try store.loadThrowing(for: url)
+        }) else { return .unreadable }
+        guard let current = read, current.recipe == after.recipe else { return .editedSince }
+        if let previous {
+            try? store.save(recording(previous, in: current, from: after.recipe, title: title), for: url)
+            return .done(previous)
+        }
+        if current.hasSameContent(as: after) {
+            store.delete(for: url)
+        } else {
+            // Rated, say, since the sync made it: only the edit goes back.
+            try? store.saveOrRemove(recording(EditRecipe(), in: current, from: after.recipe, title: title), for: url)
+        }
+        return .done(EditRecipe())
+    }
+
     private func process(_ job: Job) async {
         var engine: (any EditingEngine)?
         var skipped = 0
         var editedSince = 0
+        var changedMeanwhile = 0
         var failedMasks = 0
         let inRun = job.session != nil && run?.session == job.session
         for url in job.photos {
             guard !Task.isCancelled else { break }
             defer { progress?.done += 1 }
-            guard await !job.inEditor(url) else { continue }
+            /// The editor made the change, or left the photo as it is.
+            func madeInEditor(_ outcome: EditorOutcome) {
+                run?.photos[url] = nil
+                switch outcome {
+                case let .applied(recipe?):
+                    job.done(url, recipe)
+                case .left where job.isFollow:
+                    editedSince += 1
+                case .left:
+                    skipped += 1
+                case .applied(nil), .notOpen:
+                    break
+                }
+            }
+            if !job.isFollow, let editor, editor.isOpen(url) {
+                let outcome = await editor.apply(.change(job.change), to: url, title: job.stepTitle)
+                if case .notOpen = outcome {} else {
+                    madeInEditor(outcome)
+                    continue
+                }
+            }
             await saves?.wait(for: url)
             // Sidecars are read and written off the main thread: on a busy disk one write can take seconds.
             let store = store
@@ -358,17 +479,26 @@ public final class SettingsSync {
             if session.steps.count > Self.maximumRunSteps {
                 session.steps.removeFirst(session.steps.count - Self.maximumRunSteps)
             }
-            var sidecar = existing ?? Sidecar(recipe: next)
-            sidecar.recipe = next
-            sidecar.modified = Date()
-            sidecar.session = session
-            let toSave = sidecar
             await beforeWriting(url)
-            // As read back, so Undo can tell the photo hasn't been edited since (dates round).
-            guard let saved = await Task.detached(operation: { () -> Sidecar? in
-                guard (try? store.save(toSave, for: url)) != nil else { return nil }
-                return store.load(for: url) ?? toSave
-            }).value else { continue }
+            let inEditor: EditorChange = job.isFollow ? .edit(next, over: original) : .change(job.change)
+            let saved: Sidecar
+            switch await land(url, inEditor, title: job.stepTitle, { [session] store in
+                Self.saving(next, session: session, over: original, for: url, in: store)
+            }) {
+            case let .saved(.saved(sidecar)):
+                saved = sidecar
+            case .saved(.unreadable):
+                skipped += 1
+                continue
+            case .saved(.editedSince):
+                changedMeanwhile += 1
+                continue
+            case .saved(.failed):
+                continue
+            case let .inEditor(outcome):
+                madeInEditor(outcome)
+                continue
+            }
             // updateValue: a photo without a sidecar keeps its nil (a subscript would drop the key).
             before.updateValue(existing?.recipe, forKey: url)
             written[url] = saved
@@ -383,13 +513,33 @@ public final class SettingsSync {
             job.done(url, next)
         }
         report = Self.report(
-            skipped: skipped, editedSince: editedSince, failedMasks: failedMasks, cancelled: Task.isCancelled,
+            skipped: skipped, editedSince: editedSince, changedMeanwhile: changedMeanwhile, failedMasks: failedMasks,
+            cancelled: Task.isCancelled,
         )
         progress = nil
         if !queue.isEmpty {
             start(queue.removeFirst())
             await task?.value
         }
+    }
+
+    /// `recipe` and `session` saved for the photo at `url` if its edit is still `original`,
+    /// keeping what else changed since (a rating, say). Read and written in one go on the save
+    /// queue, and never over a sidecar that can't be read.
+    private nonisolated static func saving(
+        _ recipe: EditRecipe, session: HistorySession, over original: EditRecipe, for url: URL, in store: SidecarStore,
+    ) -> Saving {
+        guard store.protection(for: url) == nil, case let .success(current) = Result(catching: {
+            try store.loadThrowing(for: url)
+        }) else { return .unreadable }
+        guard (current?.recipe ?? EditRecipe()) == original else { return .editedSince }
+        var sidecar = current ?? Sidecar(recipe: recipe)
+        sidecar.recipe = recipe
+        sidecar.modified = Date()
+        sidecar.session = session
+        guard (try? store.save(sidecar, for: url)) != nil else { return .failed }
+        // As read back, so Undo can tell the photo hasn't been edited since (dates round).
+        return .saved(store.load(for: url) ?? sidecar)
     }
 
     /// `change` made to `start` for the photo at `url`, whose edit is `current`: the AI masks it
@@ -456,7 +606,7 @@ public final class SettingsSync {
 
     /// `sidecar` with its edit changed to `recipe` from `current`, in a history session of its own,
     /// for a change made without opening the photo.
-    private static func recording(
+    private nonisolated static func recording(
         _ recipe: EditRecipe, in sidecar: Sidecar, from current: EditRecipe, title: String,
     ) -> Sidecar {
         var sidecar = sidecar
@@ -469,7 +619,9 @@ public final class SettingsSync {
         return sidecar
     }
 
-    private static func report(skipped: Int, editedSince: Int, failedMasks: Int, cancelled: Bool) -> String? {
+    private static func report(
+        skipped: Int, editedSince: Int, changedMeanwhile: Int, failedMasks: Int, cancelled: Bool,
+    ) -> String? {
         var parts: [String] = []
         if cancelled {
             parts.append("Stopped before the end.")
@@ -481,6 +633,10 @@ public final class SettingsSync {
         if editedSince > 0 {
             let photos = "\(editedSince) photo\(editedSince == 1 ? " was" : "s were")"
             parts.append("\(photos) left alone: edited since Auto Sync changed them.")
+        }
+        if changedMeanwhile > 0 {
+            let photos = "\(changedMeanwhile) photo\(changedMeanwhile == 1 ? " was" : "s were")"
+            parts.append("\(photos) left alone: edited while the batch ran.")
         }
         if failedMasks > 0 {
             parts.append("\(failedMasks) AI mask\(failedMasks == 1 ? "" : "s") couldn't be computed for its photo.")

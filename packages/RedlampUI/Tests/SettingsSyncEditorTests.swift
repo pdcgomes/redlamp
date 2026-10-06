@@ -77,10 +77,8 @@ struct SettingsSyncEditorTests {
         await model.settingsSync.idle()
 
         #expect(model.info?.url == b)
-        withKnownIssue {
-            #expect(model.recipe[.exposure] == 1, "the editor shows the sync")
-            #expect(model.history.last?.name == "Sync Settings")
-        }
+        #expect(model.recipe[.exposure] == 1, "the editor shows the sync")
+        #expect(model.history.last?.name == "Sync Settings")
         #expect(store.load(for: c)?.recipe[.exposure] == 1, "C, in the background")
         model.undo()
         #expect(model.recipe[.exposure] == 0, "the editor's Undo takes it back")
@@ -99,11 +97,32 @@ struct SettingsSyncEditorTests {
         await model.settingsSync.idle()
 
         #expect(model.info?.url == c)
-        withKnownIssue {
-            #expect(model.recipe[.exposure] == 1)
-            #expect(model.history.last?.name == "Sync Settings")
-        }
+        #expect(model.recipe[.exposure] == 1)
+        #expect(model.history.last?.name == "Sync Settings")
         #expect(store.load(for: b)?.recipe[.exposure] == 1)
+    }
+
+    /// The batch's save of B waits on the save queue behind a slow save of C; B opens meanwhile.
+    @Test func `a photo opened while the sync's save of it is on its way is read after the save`() async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try await start()
+        let presenter = SidecarIOOffMainTests.SlowPresenter(store.url(for: c))
+        NSFileCoordinator.addFilePresenter(presenter)
+        model.settingsSync.beforeWriting = { [self] url in
+            guard url == b else { return }
+            model.saves.enqueue(.metadata { $0.rating = 2 }, for: c)
+            Task { model.select(b, keepingSelection: true) }
+        }
+        model.syncSettings()
+        await model.settingsSync.idle()
+        for _ in 0 ..< 2000 where model.info?.url != b || model.isLoading {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        await Task.detached { NSFileCoordinator.removeFilePresenter(presenter) }.value
+
+        #expect(model.info?.url == b)
+        #expect(model.recipe[.exposure] == 1, "the editor read B after the sync saved it")
+        #expect(store.load(for: b)?.recipe == model.recipe)
     }
 
     @Test func `Update AI Masks across the selection updates a photo opened meanwhile in the editor`() async throws {
@@ -125,14 +144,12 @@ struct SettingsSyncEditorTests {
         await model.settingsSync.idle()
 
         #expect(model.info?.url == b)
-        withKnownIssue {
-            #expect(model.history.last?.name == "Update AI Masks")
-            guard case let .ai(mask)? = model.recipe.masks.first?.components.first?.shape else {
-                Issue.record("B has no AI mask")
-                return
-            }
-            #expect(mask.analysisHash == "editor, updated", "computed by the editor for B")
+        #expect(model.history.last?.name == "Update AI Masks")
+        guard case let .ai(mask)? = model.recipe.masks.first?.components.first?.shape else {
+            Issue.record("B has no AI mask")
+            return
         }
+        #expect(mask.analysisHash == "editor, updated", "computed by the editor for B")
     }
 
     @Test func `Undo Sync puts the open photo back as a step of the editor's history`() async throws {
@@ -145,10 +162,8 @@ struct SettingsSyncEditorTests {
 
         model.undoSync()
         await model.settingsSync.idle()
-        withKnownIssue {
-            #expect(model.recipe[.exposure] == 0, "the editor shows B put back")
-            #expect(model.history.last?.name == "Undo Sync Settings")
-        }
+        #expect(model.recipe[.exposure] == 0, "the editor shows B put back")
+        #expect(model.history.last?.name == "Undo Sync Settings")
         #expect(store.load(for: c) == nil, "C, in the background")
     }
 
@@ -165,9 +180,7 @@ struct SettingsSyncEditorTests {
         model.undoSync()
         await model.settingsSync.idle()
 
-        withKnownIssue {
-            #expect(store.load(for: b)?.recipe[.exposure] == 3)
-        }
+        #expect(store.load(for: b)?.recipe[.exposure] == 3)
         #expect(store.load(for: c) == nil)
     }
 
@@ -184,10 +197,8 @@ struct SettingsSyncEditorTests {
         model.syncSettings()
         await model.settingsSync.idle()
 
-        withKnownIssue {
-            #expect(store.load(for: b)?.recipe[.exposure] == 3, "the edit made meanwhile is kept")
-            #expect(model.settingsSync.report?.contains("edited while") == true)
-        }
+        #expect(store.load(for: b)?.recipe[.exposure] == 3, "the edit made meanwhile is kept")
+        #expect(model.settingsSync.report?.contains("edited while") == true)
         #expect(store.load(for: c)?.recipe[.contrast] == 20)
         model.copySelection = .default
     }
@@ -208,18 +219,14 @@ struct SettingsSyncEditorTests {
         model.undoSync()
         await model.settingsSync.idle()
         #expect(try Data(contentsOf: store.editURL(for: b)) == damaged, "Undo Sync")
-        withKnownIssue {
-            #expect(model.settingsSync.report?.contains("can't be read") == true)
-        }
+        #expect(model.settingsSync.report?.contains("can't be read") == true)
 
         try? FileManager.default.removeItem(at: store.url(for: b))
         model.setValue(.exposure, 2)
         model.syncSettings()
         await model.settingsSync.idle()
         #expect(try Data(contentsOf: store.editURL(for: b)) == damaged, "Sync Settings")
-        withKnownIssue {
-            #expect(model.settingsSync.report?.contains("can't be read") == true)
-        }
+        #expect(model.settingsSync.report?.contains("can't be read") == true)
         #expect(store.load(for: c)?.recipe[.exposure] == 2)
     }
 }

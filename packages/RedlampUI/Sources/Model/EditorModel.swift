@@ -607,6 +607,7 @@ public final class EditorModel {
         canvas.onRenderSizeChange = { [weak self] _ in self?.requestRender() }
         settingsSync.makeEngine = { [weak self] in self?.makeWorkerEngine?() }
         settingsSync.saves = saves
+        settingsSync.editor = self
         saves.reportResults { [weak self] url, write, outcome, superseded in
             self?.saved(url, write, outcome, superseded: superseded)
         }
@@ -660,10 +661,12 @@ public final class EditorModel {
         engine.prefetch(workingSet(around: url, comingFrom: selection))
         // The sidecar is read off the main thread even for a photo already decoded: it is
         // coordinated, and iCloud Drive may have to download it first. It waits for the
-        // photo's saves still on their way, so a photo opened again reads what was left.
-        let readSidecar = { [sidecars, saves, scheduler = library.scheduler, beforeReadingSidecar] in
+        // photo's saves still on their way, so a photo opened again reads what was left, and for
+        // a Settings Sync save of it.
+        let readSidecar = { [sidecars, saves, settingsSync, scheduler = library.scheduler, beforeReadingSidecar] in
             await beforeReadingSidecar(url)
             await saves.wait(for: url)
+            await settingsSync.wait(for: url)
             return try? await scheduler.run(.onScreen) { OpenedSidecar(url, in: sidecars) }
         }
         if let opened = engine.openIfReady(url) {
@@ -706,6 +709,20 @@ public final class EditorModel {
                 errorMessage = error.localizedDescription
                 formatNotSupportedYet = (error as? EngineError)?.notSupportedYetTracker != nil
             }
+        }
+    }
+
+    /// Whether `url` is open in the editor, or opening there.
+    func isOpen(_ url: URL) -> Bool {
+        opening == url || selection == url && (info != nil || isLoading)
+    }
+
+    /// Returns once `url`, opening in the editor, has opened or stopped opening.
+    func finishOpening(_ url: URL) async {
+        var waited: Task<Void, Never>?
+        while isOpen(url), currentVisit?.url != url, let task = openTask, task != waited {
+            waited = task
+            await task.value
         }
     }
 

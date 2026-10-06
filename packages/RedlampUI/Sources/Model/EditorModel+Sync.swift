@@ -89,3 +89,28 @@ public extension EditorModel {
         library.update(url) { $0.hasEdits = !recipe.isPristine }
     }
 }
+
+/// A batch reaching the open photo changes it here, as a step of its history its Undo takes back.
+extension EditorModel: SyncEditor {
+    func apply(_ change: SettingsSync.EditorChange, to url: URL, title: String) async -> SettingsSync.EditorOutcome {
+        await finishOpening(url)
+        guard let visit = currentVisit, visit.url == url else { return isOpen(url) ? .left : .notOpen }
+        guard !isReadOnly else { return .left }
+        let before = recipe
+        switch change {
+        case let .edit(next, over):
+            guard recipe == over else { return .left }
+            commit(next, .paste, title)
+        case let .change(.paste(source, selection)):
+            paste(source, selection, name: title)
+        case .change(.updateAIMasks):
+            await updateAIMasks()
+            guard currentVisit == visit else { return isOpen(url) ? .left : .notOpen }
+        case let .change(.healDust(found)):
+            guard await healDustInEditor(found[url] ?? [], on: url) else { return isOpen(url) ? .left : .notOpen }
+        case .change(.follow):
+            return .left
+        }
+        return .applied(recipe == before ? nil : recipe)
+    }
+}
