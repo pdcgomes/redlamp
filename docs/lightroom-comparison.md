@@ -134,10 +134,10 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Feature | Lightroom | Redlamp | vs Lightroom | Phase | Tracker | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | Heal and Clone | Yes | Done | | | RM-01 | Spots and brushed strokes, each finding its own source |
-| Content-aware Remove | Yes | Done | | | RM-07 | A classical fill on the Mac; large areas wait for generative fill |
+| Content-aware Remove | Yes | Done | | | RM-07 | A classical fill on the Mac; large areas are for Generative Remove |
 | Remove people and objects with a click | Yes | Done | | | RM-08, RM-13 | Their cast shadows and their reflections on water go with them |
-| Find and remove things named in words | No | Done | | | RM-08 | Trash, signs, cables and more, found anywhere in the photo; something as large as a car leaves a smeared patch until generative fill arrives |
-| Generative Remove | Yes (cloud, credits) | In progress | | P3 | RM-10 | An opt-in download that runs on the Mac, labelled as generated fill |
+| Find and remove things named in words | No | Done | | | RM-08 | Trash, signs, cables and more, found anywhere in the photo; something as large as a car needs Generative Remove, since content-aware fill leaves a smeared patch |
+| Generative Remove | Yes (cloud, credits) | Done | Different | | RM-10 | Runs on the Mac, without a cloud or credits, from an opt-in 2.4 GB download, on Macs with 16 GB or more; fills are labelled as generated |
 | Dust removal and Visualize Spots | Yes | Done | | | RM-02 | Also across a shoot: specks in the same place on the sensor are healed in every photo |
 | Reflection removal | Yes | Later | | | | |
 | Red Eye and Pet Eye | Yes | Planned | | P3 | OTH-01 | |
