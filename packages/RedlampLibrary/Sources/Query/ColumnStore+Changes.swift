@@ -43,7 +43,7 @@ public extension ColumnStore {
         }
         guard !placing.isEmpty || !leaving.isEmpty else { return }
         leaving.grow(to: rowCount)
-        for key in QuerySort.Key.allCases where !leaving.isEmpty {
+        for key in QuerySort.Key.allCases where !leaving.isEmpty && keepsOrder(key) {
             var order = order(key)
             order.removeAll { leaving.contains(Int($0)) }
             setOrder(order, for: key)
@@ -72,7 +72,7 @@ public extension ColumnStore {
         setOrder(Self.inserting(placed, into: names), for: .name)
         renumberNames()
 
-        for sortKey in [QuerySort.Key.captured, .rating, .edited] {
+        for sortKey in [QuerySort.Key.captured, .rating, .edited, .modified, .size] where keepsOrder(sortKey) {
             let order = order(sortKey)
             var placed = rows.map { row in
                 (place: Self.place(of: row, in: order) { precedes($0, $1, by: sortKey) }, row: row)

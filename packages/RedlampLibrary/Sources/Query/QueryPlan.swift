@@ -17,6 +17,8 @@ indirect enum QueryPlan: Sendable, Hashable {
         case packed(shift: UInt16, mask: UInt16, accepted: UInt32)
         /// The rows with `bit` set in the packed field.
         case bit(UInt16)
+        /// The rows with any of these `PhotoRecord.State` bits.
+        case state(UInt8)
         case iso(Range<Int64>)
         case aperture(Range<Int64>)
         case focal(Range<Int64>)
@@ -117,6 +119,10 @@ indirect enum QueryPlan: Sendable, Hashable {
             return yes ? .leaf(.bit(Packed.marked)) : .not(.leaf(.bit(Packed.marked)))
         case let (.edited, .bool(yes)):
             return yes ? .leaf(.bit(Packed.edited)) : .not(.leaf(.bit(Packed.edited)))
+        case let (.missing, .bool(yes)), let (.offline, .bool(yes)):
+            let state = field == .missing ? PhotoRecord.State.missing : .offline
+            let leaf = QueryPlan.leaf(.state(UInt8(state.rawValue)))
+            return yes ? leaf : .not(leaf)
         case let (.keyword, .text(text)):
             let ids = vocabulary.ids(in: .keywords, matching: text)
             return ids.isEmpty ? .nothing : .leaf(.rows(.keywords(ids)))
@@ -245,6 +251,8 @@ extension ColumnStore {
             Self.fill(&words, packed) { UInt64(accepted >> UInt32($0 >> shift & mask) & 1) }
         case let .bit(bit):
             Self.fill(&words, packed) { $0 & bit == 0 ? 0 : 1 }
+        case let .state(bits):
+            Self.fill(&words, states) { $0 & bits == 0 ? 0 : 1 }
         case let .iso(range):
             Self.fill(&words, iso, within: range)
         case let .aperture(range):

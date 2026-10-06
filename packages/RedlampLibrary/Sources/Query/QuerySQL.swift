@@ -29,6 +29,8 @@ struct QuerySQL: Sendable, Hashable {
         case .name: ["p.name COLLATE redlamp_finder", "p.id"]
         case .rating: [ColumnEncoding.ratingSQL, ColumnEncoding.capturedSQL, "p.id"]
         case .edited: [ColumnEncoding.editedAtSQL, ColumnEncoding.capturedSQL, "p.id"]
+        case .modified: [ColumnEncoding.modifiedAtSQL, ColumnEncoding.capturedSQL, "p.id"]
+        case .size: [ColumnEncoding.fileSizeSQL, ColumnEncoding.capturedSQL, "p.id"]
         }
         sql = "SELECT p.id FROM photos p WHERE \(predicate) ORDER BY "
             + keys.map { $0 + direction }.joined(separator: ", ")
@@ -102,6 +104,9 @@ struct QuerySQL: Sendable, Hashable {
                 return yes ? "(p.marked != 0)" : "(p.marked = 0)"
             case let (.edited, .bool(yes)):
                 return yes ? "(p.edited != 0)" : "(p.edited = 0)"
+            case let (.missing, .bool(yes)), let (.offline, .bool(yes)):
+                let bit = (field == .missing ? PhotoRecord.State.missing : .offline).rawValue
+                return "((\(ColumnEncoding.stateSQL) & \(bit)) \(yes ? "!=" : "=") 0)"
             case let (.keyword, .text(text)):
                 var tests = ["redlamp_keyword(k.path, \(bind(text)))"]
                 for owner in synonyms.owners(of: text) {

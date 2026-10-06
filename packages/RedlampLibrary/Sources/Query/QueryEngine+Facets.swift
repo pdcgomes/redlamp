@@ -4,6 +4,7 @@ import RedlampDocument
 /// What the photos a query finds can be counted by.
 public enum Facet: String, Sendable, Hashable, CaseIterable {
     case camera, lens, rating, flag, label, year, month, folder, kind
+    case day, iso, focal, aperture
 }
 
 /// How many of a query's photos share each value of a facet.
@@ -114,9 +115,32 @@ extension ColumnStore {
             return FacetCounts(facet: facet, values: Self.coded(counts) { code in
                 PhotoRecord.Kind(rawValue: code).flatMap { $0 == .other ? nil : .kind($0) }
             })
-        case .year, .month:
-            return try dates(of: matches, byMonth: facet == .month)
+        case .year, .month, .day:
+            return try dates(of: matches, by: facet)
+        case .iso:
+            return try FacetCounts(facet: facet, values: numbered(counts(matches, iso, size: 1 << 16), .iso, scale: 1))
+        case .focal:
+            return try FacetCounts(
+                facet: facet, values: numbered(counts(matches, focal, size: 1 << 16), .focal, scale: 10),
+            )
+        case .aperture:
+            return try FacetCounts(
+                facet: facet, values: numbered(counts(matches, aperture, size: 1 << 16), .aperture, scale: 100),
+            )
         }
+    }
+
+    /// Counts by a number's code, `scale` codes a unit, in ascending order, the photos without one last.
+    private func numbered(_ counts: [Int], _ field: LibraryQuery.Field, scale: Double) -> [FacetValue] {
+        var values: [FacetValue] = []
+        for (code, count) in counts.enumerated().dropFirst() where count > 0 {
+            let number = Double(code) / scale
+            values.append(FacetValue(
+                name: LibraryQuery.Value.format(number, for: field), count: count,
+                filter: .filter(LibraryQuery.Filter(field, .equal, [.number(number)])),
+            ))
+        }
+        return values + (counts[0] > 0 ? [FacetValue(name: nil, count: counts[0], filter: nil)] : [])
     }
 
     /// How many rows of `matches` have each value of `column`, by `index`, below `size`.
@@ -205,17 +229,15 @@ extension ColumnStore {
         }
     }
 
-    /// Counts by the year or the month photos were taken, those without a capture time last. Months
-    /// from 1800 to 2199 are counted in an array, others in a dictionary.
-    private func dates(of matches: RowBits, byMonth: Bool) throws -> FacetCounts {
-        let firstMonth = 1800 * 12
-        var months = [Int](repeating: 0, count: 400 * 12)
+    /// Counts by the year, the month or the day photos were taken, those without a capture time
+    /// last. Days from 1800 to 2199 are counted in an array, others in a dictionary.
+    private func dates(of matches: RowBits, by facet: Facet) throws -> FacetCounts {
+        let firstDay = QueryCalendar.days(1800, 1, 1)
+        var days = [Int](repeating: 0, count: QueryCalendar.days(2200, 1, 1) - firstDay)
         var others: [Int: Int] = [:]
         var undated = 0
-        var lastDay = Int.min
-        var lastMonth = 0
         try captured.withUnsafeBufferPointer { captured in
-            try months.withUnsafeMutableBufferPointer { months in
+            try days.withUnsafeMutableBufferPointer { days in
                 try forEachRow(of: matches) { row in
                     let milliseconds = captured[row]
                     guard milliseconds != .min else {
@@ -223,39 +245,41 @@ extension ColumnStore {
                         return
                     }
                     let day = QueryCalendar.day(ofMilliseconds: milliseconds)
-                    if day != lastDay {
-                        let (year, month, _) = QueryCalendar.civil(day)
-                        lastDay = day
-                        lastMonth = year * 12 + month - 1
-                    }
-                    let slot = lastMonth - firstMonth
-                    if slot >= 0, slot < months.count {
-                        months[slot] += 1
+                    let slot = day - firstDay
+                    if slot >= 0, slot < days.count {
+                        days[slot] += 1
                     } else {
-                        others[lastMonth, default: 0] += 1
+                        others[day, default: 0] += 1
                     }
                 }
             }
         }
-        var counts = others
-        for (slot, count) in months.enumerated() where count > 0 {
-            counts[slot + firstMonth] = count
-        }
-        if !byMonth {
-            counts = counts.reduce(into: [:]) { years, month in
-                years[month.key >= 0 ? month.key / 12 : (month.key - 11) / 12, default: 0] += month.value
+        var counts: [QueryDate: Int] = [:]
+        func add(_ day: Int, _ count: Int) {
+            let (year, month, date) = QueryCalendar.civil(day)
+            let key: QueryDate = switch facet {
+            case .year: .year(year)
+            case .month: .month(year, month)
+            default: .day(year, month, date)
             }
+            counts[key, default: 0] += count
         }
-        var values = counts.keys.sorted().map { key in
-            let date: QueryDate = byMonth ? .month(key / 12, key % 12 + 1) : .year(key)
-            return FacetValue(
-                name: date.description, count: counts[key] ?? 0,
-                filter: .filter(LibraryQuery.Filter(.date, .equal, [.date(date)])),
-            )
+        for (slot, count) in days.enumerated() where count > 0 {
+            add(slot + firstDay, count)
         }
+        for (day, count) in others {
+            add(day, count)
+        }
+        var values = counts.keys.sorted { $0.interval(today: 0).lowerBound < $1.interval(today: 0).lowerBound }
+            .map { date in
+                FacetValue(
+                    name: date.description, count: counts[date] ?? 0,
+                    filter: .filter(LibraryQuery.Filter(.date, .equal, [.date(date)])),
+                )
+            }
         if undated > 0 {
             values.append(FacetValue(name: nil, count: undated, filter: nil))
         }
-        return FacetCounts(facet: byMonth ? .month : .year, values: values)
+        return FacetCounts(facet: facet, values: values)
     }
 }

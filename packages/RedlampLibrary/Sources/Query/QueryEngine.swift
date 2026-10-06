@@ -44,6 +44,21 @@ public final class QueryEngine: Sendable {
         var facets: Task<Void, Never>?
         /// Loading and updates, one at a time in the order they're asked for.
         var changing: Task<Void, any Error>?
+        /// Each photo's keywords, once a column of keywords is counted, and the photos changed since.
+        var postings: KeywordPostings?
+        var stalePostings = Set<Int64>()
+        var readingPostings = 0
+        /// The columns counted for this store, by what they counted.
+        var columnCounts: [ColumnKey: FacetColumnCounts] = [:]
+    }
+
+    /// A column counted over a source's photos in a store.
+    struct ColumnKey: Hashable {
+        let generation: Int
+        let source: PhotoSource
+        let column: FacetColumn
+        let query: LibraryQuery?
+        let today: Int
     }
 
     /// A query as it's compiled: the day decides what `today` is.
@@ -80,6 +95,7 @@ public final class QueryEngine: Sendable {
 
     /// Builds the column store from the index, with the small tables beside it.
     public func load() async throws {
+        state.withLock { $0.postings = nil }
         try await change { [source] _ in
             async let names = source.names()
             return try await (source.columnStore(), names)
@@ -91,6 +107,11 @@ public final class QueryEngine: Sendable {
     /// nothing to do, since loading reads them.
     public func update(photos ids: [Int64]) async throws {
         guard !ids.isEmpty else { return }
+        state.withLock { state in
+            if state.postings != nil || state.readingPostings > 0 {
+                state.stalePostings.formUnion(ids)
+            }
+        }
         try await change { [source] store in
             guard let store else { return nil }
             async let names = source.names()
@@ -104,6 +125,16 @@ public final class QueryEngine: Sendable {
         try await change { [source] store in
             guard let store else { return nil }
             return try await (store, source.names())
+        }
+    }
+
+    /// Keeps `key`'s order in the store from now on, sorting it once, unless it's kept already.
+    func prepareOrder(_ key: QuerySort.Key) async throws {
+        guard state.withLock({ $0.store.map { !$0.keepsOrder(key) } ?? false }) else { return }
+        try await change { [self] store in
+            guard var store, !store.keepsOrder(key) else { return nil }
+            store.prepareOrder(key)
+            return (store, state.withLock { $0.vocabulary.names })
         }
     }
 
@@ -125,6 +156,7 @@ public final class QueryEngine: Sendable {
                     state.plans.removeAll()
                     state.rowSets.removeAll()
                     state.matches.removeAll()
+                    state.columnCounts.removeAll()
                 }
             }
             state.changing = task
@@ -163,6 +195,9 @@ public final class QueryEngine: Sendable {
     private func find(
         _ query: LibraryQuery?, sort: QuerySort, pageSize: Int, yield: @escaping @Sendable (QueryResult) -> Void,
     ) async throws {
+        if snapshot().map({ !$0.0.keepsOrder(sort.key) }) == true {
+            try await prepareOrder(sort.key)
+        }
         guard let (store, vocabulary, generation) = snapshot() else {
             return try await searchSQL(query, sort: sort, pageSize: pageSize, yield: yield)
         }
@@ -284,5 +319,44 @@ public final class QueryEngine: Sendable {
             state.facets?.cancel()
             state.facets = task
         }
+    }
+
+    // MARK: - Kept for the filter bar's columns
+
+    func countedColumn(_ key: ColumnKey) -> FacetColumnCounts? {
+        state.withLock { $0.generation == key.generation ? $0.columnCounts[key] : nil }
+    }
+
+    func keepColumn(_ counts: FacetColumnCounts, for key: ColumnKey) {
+        state.withLock { state in
+            guard state.generation == key.generation else { return }
+            if state.columnCounts.count >= Self.kept {
+                state.columnCounts.removeAll()
+            }
+            state.columnCounts[key] = counts
+        }
+    }
+
+    /// Each photo's keywords: read from the index the first time, then only those of the photos
+    /// changed since.
+    func keywordPostings() async throws -> KeywordPostings {
+        let (kept, stale) = state.withLock { state in
+            state.readingPostings += 1
+            return (state.postings, state.stalePostings)
+        }
+        defer { state.withLock { $0.readingPostings -= 1 } }
+        var postings = kept ?? KeywordPostings()
+        if kept == nil {
+            postings = try await KeywordPostings(source.photoKeywords(of: nil))
+        } else if !stale.isEmpty {
+            try await postings.replace(photos: stale, with: source.photoKeywords(of: Array(stale)))
+        } else {
+            return postings
+        }
+        state.withLock { state in
+            state.postings = postings
+            state.stalePostings.subtract(stale)
+        }
+        return postings
     }
 }

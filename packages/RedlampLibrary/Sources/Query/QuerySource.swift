@@ -13,6 +13,10 @@ protocol QuerySource: Sendable {
     func photoIDs(inCollections collections: [Int64]) async throws -> [Int64]
     /// The synonyms of the library's keywords, by keyword path (LIB-21).
     func keywordSynonyms() async throws -> [String: [String]]
+    /// The keywords of photos `ids`, or of every photo when nil, in the order of their photos' IDs.
+    func photoKeywords(of ids: [Int64]?) async throws -> [PhotoKeyword]
+    /// The state of every photo that's missing, offline or settling.
+    func photoStates() async throws -> [Int64: PhotoRecord.State]
     /// `store` with photos `ids` as the index has them now: changed, added or gone.
     func applying(_ ids: [Int64], to store: ColumnStore) async throws -> ColumnStore
     /// The IDs `sql` returns, handing the first `pageSize` to `firstPage` as soon as they're read.
@@ -26,6 +30,20 @@ extension QuerySource {
     func keywordSynonyms() async throws -> [String: [String]] {
         [:]
     }
+
+    func photoKeywords(of _: [Int64]?) async throws -> [PhotoKeyword] {
+        []
+    }
+
+    func photoStates() async throws -> [Int64: PhotoRecord.State] {
+        [:]
+    }
+}
+
+/// A photo and one of its keywords, as `photo_keywords` holds them.
+struct PhotoKeyword: Sendable, Hashable {
+    var photo: Int64
+    var keyword: Int64
 }
 
 /// The library's small tables by ID: thousands of rows where photos are millions. Folder, camera,
@@ -63,6 +81,9 @@ final class QueryVocabulary: Sendable {
     /// Made the first time a keyword term needs it.
     private let keywords = Mutex<KeywordMatcher?>(nil)
     private let matched = Mutex<[Match: [Int64]]>([:])
+    /// Made the first time a column of keywords is counted, or keywords completed (LIB-18).
+    let levels = Mutex<KeywordLevels?>(nil)
+    let completion = Mutex<KeywordCompletion?>(nil)
 
     private struct Match: Hashable {
         let table: Table
@@ -210,6 +231,35 @@ struct IndexQuerySource: QuerySource {
 
     func photoIDs(inCollections collections: [Int64]) async throws -> [Int64] {
         try await photoIDs(collections, "SELECT photo FROM collection_photos WHERE collection = ?")
+    }
+
+    func photoKeywords(of ids: [Int64]?) async throws -> [PhotoKeyword] {
+        try await index.read { reader in
+            var found: [PhotoKeyword] = []
+            guard let ids else {
+                try reader.database.cached("SELECT photo, keyword FROM photo_keywords ORDER BY photo, keyword")
+                    .forEachRow { found.append(PhotoKeyword(photo: $0.int64(at: 0), keyword: $0.int64(at: 1))) }
+                return found
+            }
+            let statement = try reader.database.cached(
+                "SELECT keyword FROM photo_keywords WHERE photo = ? ORDER BY keyword",
+            )
+            for id in Set(ids).sorted() {
+                try statement.bind(id, at: 1)
+                try statement.forEachRow { found.append(PhotoKeyword(photo: id, keyword: $0.int64(at: 0))) }
+            }
+            return found
+        }
+    }
+
+    func photoStates() async throws -> [Int64: PhotoRecord.State] {
+        try await index.read { reader in
+            var states: [Int64: PhotoRecord.State] = [:]
+            try reader.database.cached("SELECT id, state FROM photos WHERE state != 0").forEachRow { row in
+                states[row.int64(at: 0)] = PhotoRecord.State(rawValue: row.int(at: 1))
+            }
+            return states
+        }
     }
 
     private func photoIDs(_ owners: [Int64], _ sql: String) async throws -> [Int64] {

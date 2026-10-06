@@ -11,6 +11,10 @@ public struct QuerySort: Sendable, Hashable {
         case rating
         /// When its edit was last saved, then when it was taken; photos without an edit first.
         case edited
+        /// When its file was last modified, then when it was taken.
+        case modified
+        /// Its file's size, then when it was taken.
+        case size
     }
 
     public var key: Key

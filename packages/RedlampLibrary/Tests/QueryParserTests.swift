@@ -76,6 +76,8 @@ struct QueryParserTests {
             ("has:xmp", Self.filter(.has, .equal, .detail(.xmp))),
             ("title:Tram", Self.filter(.title, .equal, .text("Tram"))),
             ("CAPTION:wedding", Self.filter(.caption, .equal, .text("wedding"))),
+            ("missing:yes", Self.filter(.missing, .equal, .bool(true))),
+            ("offline:No", Self.filter(.offline, .equal, .bool(false))),
         ]
         for (text, expected) in cases {
             #expect(try Self.parse(text) == expected, "\(text)")

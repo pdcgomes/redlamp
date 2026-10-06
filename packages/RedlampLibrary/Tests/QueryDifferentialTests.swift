@@ -46,7 +46,7 @@ struct QueryDifferentialTests {
             case .date: date(ranges: ranges)
             case .flag: .flag(random.pick([.pick, .reject, nil]))
             case .label: random.chance(0.1) ? .text("Client") : .label(random.pick([nil] + ColorLabel.allCases))
-            case .marked, .edited: .bool(random.chance(0.5))
+            case .marked, .edited, .missing, .offline: .bool(random.chance(0.5))
             case .keyword: .text(random.pick(Array(names.keywords.values) + ["Places", "nothing"]))
             case .camera: .text(part(of: random.pick(Array(names.cameras.values))))
             case .lens: .text(part(of: random.pick(Array(names.lenses.values))))

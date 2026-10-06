@@ -43,6 +43,9 @@ struct ColumnStoreTests {
                 shutter: random.pick([1.0 / 250, 1, 30]),
                 details: random.chance(0.3) ? [.location, .caption] : [],
                 sidecarModified: edited || random.chance(0.2) ? Double(1_700_000_000 + random.int(below: 1000)) : nil,
+                size: Int64(random.int(below: 40)) * 1_000_000,
+                modified: random.chance(0.1) ? nil : Double(1_600_000_000 + random.int(below: 30) * 60),
+                state: random.chance(0.1) ? .offline : [],
             )
         }
     }
@@ -68,6 +71,14 @@ struct ColumnStoreTests {
                     ColumnEncoding.editedAt(edited: right.edited, sidecarModified: rhs.sidecarModified),
                 )
                 return (leftEdit, captured(lhs), left.id) < (rightEdit, captured(rhs), right.id)
+            case .modified:
+                let (leftDate, rightDate) = (
+                    ColumnEncoding.modifiedAt(lhs.modified),
+                    ColumnEncoding.modifiedAt(rhs.modified),
+                )
+                return (leftDate, captured(lhs), left.id) < (rightDate, captured(rhs), right.id)
+            case .size:
+                return (lhs.size, captured(lhs), left.id) < (rhs.size, captured(rhs), right.id)
             }
         }.map(\.hot.id)
         return sort.ascending ? sorted : sorted.reversed()

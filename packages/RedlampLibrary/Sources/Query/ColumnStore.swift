@@ -22,12 +22,23 @@ public struct ColumnStore: Sendable {
         /// When its sidecar was last saved, in seconds since 1970: the edited sort's key, for a
         /// photo with an edit.
         public var sidecarModified: Double?
+        /// The file's size in bytes, and when it was last modified, in seconds since 1970.
+        public var size: Int64
+        public var modified: Double?
+        /// Whether it's missing or offline.
+        public var state: PhotoRecord.State
 
-        public init(_ hot: HotColumns, shutter: Double? = nil, details: Details = [], sidecarModified: Double? = nil) {
+        public init(
+            _ hot: HotColumns, shutter: Double? = nil, details: Details = [], sidecarModified: Double? = nil,
+            size: Int64 = 0, modified: Double? = nil, state: PhotoRecord.State = [],
+        ) {
             self.hot = hot
             self.shutter = shutter
             self.details = details
             self.sidecarModified = sidecarModified
+            self.size = size
+            self.modified = modified
+            self.state = state
         }
     }
 
@@ -65,6 +76,10 @@ public struct ColumnStore: Sendable {
     /// Each row's place in the name order.
     private(set) var nameRanks: ContiguousArray<Int32> = []
     private(set) var editedAt: ContiguousArray<Int32> = []
+    /// `ColumnEncoding.fileSize`, `ColumnEncoding.modifiedAt` and `PhotoRecord.State`'s bits.
+    private(set) var sizes: ContiguousArray<UInt32> = []
+    private(set) var modifiedAt: ContiguousArray<Int32> = []
+    private(set) var states: ContiguousArray<UInt8> = []
     /// The rows holding a photo.
     private(set) var live = RowBits(rows: 0)
 
@@ -82,6 +97,12 @@ public struct ColumnStore: Sendable {
     private(set) var byName: ContiguousArray<Int32> = []
     private(set) var byRating: ContiguousArray<Int32> = []
     private(set) var byEdited: ContiguousArray<Int32> = []
+    /// Kept once a search sorts by them (`prepareOrder`): until then they're sorted when asked for.
+    private(set) var byModified: ContiguousArray<Int32>?
+    private(set) var bySize: ContiguousArray<Int32>?
+
+    /// The orders sorted as the store is built; the others wait until they're used.
+    static let builtOrders: [QuerySort.Key] = [.captured, .name, .rating, .edited]
 
     /// Photos in the store.
     public private(set) var count = 0
@@ -179,6 +200,9 @@ public struct ColumnStore: Sendable {
             store.shutter.append(contentsOf: columns.shutter)
             store.kinds.append(contentsOf: columns.kinds)
             store.editedAt.append(contentsOf: columns.editedAt)
+            store.sizes.append(contentsOf: columns.sizes)
+            store.modifiedAt.append(contentsOf: columns.modifiedAt)
+            store.states.append(contentsOf: columns.states)
             keys.append(contentsOf: part.keys)
             largest = max(largest, columns.ids.max() ?? -1)
         }
@@ -196,7 +220,7 @@ public struct ColumnStore: Sendable {
 
     /// Sorts every order from scratch, the rows' names' keys being `keys`.
     private mutating func sortOrders(keys: NameKeys) {
-        for key in QuerySort.Key.allCases {
+        for key in Self.builtOrders {
             setOrder(rows(sortedBy: key, keys: keys), for: key)
         }
         renumberNames()
@@ -206,7 +230,7 @@ public struct ColumnStore: Sendable {
     private func sortingOrders(keys: NameKeys) async -> ColumnStore {
         let store = self
         return await withTaskGroup(of: (QuerySort.Key, ContiguousArray<Int32>).self) { group in
-            for key in QuerySort.Key.allCases {
+            for key in Self.builtOrders {
                 group.addTask { (key, store.rows(sortedBy: key, keys: keys)) }
             }
             var sorted = store
@@ -248,14 +272,39 @@ public struct ColumnStore: Sendable {
         row(of: id) != nil
     }
 
-    /// The live rows in `key`'s ascending order.
+    /// The live rows in `key`'s ascending order: sorted now for an order the store doesn't keep yet.
     func order(_ key: QuerySort.Key) -> ContiguousArray<Int32> {
         switch key {
         case .captured: byCaptured
         case .name: byName
         case .rating: byRating
         case .edited: byEdited
+        case .modified: byModified ?? liveRows(sortedBy: key)
+        case .size: bySize ?? liveRows(sortedBy: key)
         }
+    }
+
+    /// Whether `key`'s order is kept, rather than sorted each time it's asked for.
+    public func keepsOrder(_ key: QuerySort.Key) -> Bool {
+        switch key {
+        case .captured, .name, .rating, .edited: true
+        case .modified: byModified != nil
+        case .size: bySize != nil
+        }
+    }
+
+    /// Sorts `key`'s order and keeps it, so changes keep it in order from now on.
+    public mutating func prepareOrder(_ key: QuerySort.Key) {
+        guard !keepsOrder(key) else { return }
+        setOrder(liveRows(sortedBy: key), for: key)
+    }
+
+    /// The live rows in `key`'s order, sorted from the captured order. Not for the name order,
+    /// whose ranks come from it.
+    private func liveRows(sortedBy key: QuerySort.Key) -> ContiguousArray<Int32> {
+        var order = byCaptured
+        sort(&order, by: key)
+        return order
     }
 
     /// Every photo's ID in `sort`'s order.
@@ -286,8 +335,9 @@ public struct ColumnStore: Sendable {
         }
         let columns = bytes(ids) + bytes(folders) + bytes(captured) + bytes(cameras) + bytes(lenses) + bytes(packed)
             + bytes(iso) + bytes(aperture) + bytes(focal) + bytes(shutter) + bytes(kinds) + bytes(nameRanks)
-            + bytes(editedAt) + bytes(live.words)
+            + bytes(editedAt) + bytes(sizes) + bytes(modifiedAt) + bytes(states) + bytes(live.words)
         let orders = bytes(byCaptured) + bytes(byName) + bytes(byRating) + bytes(byEdited)
+            + (byModified.map(bytes) ?? 0) + (bySize.map(bytes) ?? 0)
         let codes = bytes(cameraIDs) + bytes(lensIDs) + (cameraCodes.capacity + lensCodes.capacity) * 16
         return columns + orders + bytes(rowOfID) + codes
     }
@@ -313,6 +363,9 @@ public struct ColumnStore: Sendable {
         shutter.reserveCapacity(count)
         kinds.reserveCapacity(count)
         editedAt.reserveCapacity(count)
+        sizes.reserveCapacity(count)
+        modifiedAt.reserveCapacity(count)
+        states.reserveCapacity(count)
     }
 
     /// Adds a row for a photo the store doesn't hold.
@@ -345,6 +398,9 @@ public struct ColumnStore: Sendable {
         shutter.append(0)
         kinds.append(0)
         editedAt.append(0)
+        sizes.append(0)
+        modifiedAt.append(0)
+        states.append(0)
         set(row, at: ids.count - 1)
     }
 
@@ -362,6 +418,9 @@ public struct ColumnStore: Sendable {
         shutter[index] = ColumnEncoding.shutter(row.shutter)
         kinds[index] = UInt8(clamping: hot.kind)
         editedAt[index] = ColumnEncoding.editedAt(edited: hot.edited, sidecarModified: row.sidecarModified)
+        sizes[index] = ColumnEncoding.fileSize(row.size)
+        modifiedAt[index] = ColumnEncoding.modifiedAt(row.modified)
+        states[index] = UInt8(clamping: row.state.rawValue & 0xFF)
     }
 
     /// Takes a row out: its photo is gone from the store, and from every order once `removeFromOrders`
@@ -409,6 +468,10 @@ public struct ColumnStore: Sendable {
             )
         case .edited:
             (editedAt[lhs], captured[lhs], ids[lhs]) < (editedAt[rhs], captured[rhs], ids[rhs])
+        case .modified:
+            (modifiedAt[lhs], captured[lhs], ids[lhs]) < (modifiedAt[rhs], captured[rhs], ids[rhs])
+        case .size:
+            (sizes[lhs], captured[lhs], ids[lhs]) < (sizes[rhs], captured[rhs], ids[rhs])
         }
     }
 
@@ -434,6 +497,20 @@ public struct ColumnStore: Sendable {
                                 < (edited[Int($1)], captured[Int($1)], ids[Int($1)])
                         }
                     }
+                case .modified:
+                    modifiedAt.withUnsafeBufferPointer { modified in
+                        order.sort {
+                            (modified[Int($0)], captured[Int($0)], ids[Int($0)])
+                                < (modified[Int($1)], captured[Int($1)], ids[Int($1)])
+                        }
+                    }
+                case .size:
+                    sizes.withUnsafeBufferPointer { sizes in
+                        order.sort {
+                            (sizes[Int($0)], captured[Int($0)], ids[Int($0)])
+                                < (sizes[Int($1)], captured[Int($1)], ids[Int($1)])
+                        }
+                    }
                 }
             }
         }
@@ -445,6 +522,8 @@ public struct ColumnStore: Sendable {
         case .name: byName = order
         case .rating: byRating = order
         case .edited: byEdited = order
+        case .modified: byModified = order
+        case .size: bySize = order
         }
     }
 
@@ -481,12 +560,15 @@ public struct ColumnStore: Sendable {
         kinds = kept(kinds)
         nameRanks = kept(nameRanks)
         editedAt = kept(editedAt)
+        sizes = kept(sizes)
+        modifiedAt = kept(modifiedAt)
+        states = kept(states)
         self.live = RowBits(rows: ids.count, filled: true)
         rowOfID.withUnsafeMutableBufferPointer { $0.update(repeating: -1) }
         for (row, id) in ids.enumerated() {
             rowOfID[Int(id)] = Int32(row)
         }
-        for key in QuerySort.Key.allCases {
+        for key in QuerySort.Key.allCases where keepsOrder(key) {
             setOrder(ContiguousArray(order(key).map { renumbered[Int($0)] }), for: key)
         }
     }
@@ -600,6 +682,27 @@ enum ColumnEncoding {
     (CASE WHEN p.edited != 0 AND p.sidecar_modified IS NOT NULL \
     THEN max(-2147483647, min(2147483647, CAST(p.sidecar_modified - 978307200 AS INTEGER))) ELSE -2147483648 END)
     """
+
+    /// Seconds since 2001 as `editedAt` keeps them; `Int32.min` for none.
+    static func modifiedAt(_ modified: Double?) -> Int32 {
+        guard let modified, !modified.isNaN else { return .min }
+        return editedAt(edited: true, sidecarModified: modified)
+    }
+
+    static let modifiedAtSQL = """
+    (CASE WHEN p.modified IS NULL THEN -2147483648 \
+    ELSE max(-2147483647, min(2147483647, CAST(p.modified - 978307200 AS INTEGER))) END)
+    """
+
+    /// Bytes, up to 4 GiB less one: larger files sort together at the end.
+    static func fileSize(_ size: Int64) -> UInt32 {
+        UInt32(clamping: max(size, 0))
+    }
+
+    static let fileSizeSQL = "max(0, min(4294967295, p.size))"
+
+    /// `PhotoRecord.State`'s bits, as the state column of the store keeps them.
+    static let stateSQL = "(p.state & 255)"
 
     static let ratingSQL = "max(0, min(7, p.rating))"
     static let flagSQL = "max(0, min(3, p.flag))"

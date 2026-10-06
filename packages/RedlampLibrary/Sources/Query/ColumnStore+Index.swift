@@ -50,7 +50,7 @@ extension IndexQueries {
             try statement.bind(id, at: 1)
             return try statement.first { row in
                 var columns = Self.columnRow(row)
-                if row.bool(at: 21) {
+                if row.bool(at: 24) {
                     columns.details.insert(.keywords)
                 }
                 return columns
@@ -64,12 +64,12 @@ extension IndexQueries {
         return try statement.first { $0.string(at: 0) } ?? nil
     }
 
-    /// What `columnRow` reads, columns 0 to 20.
+    /// What `columnRow` reads, columns 0 to 23.
     private static var columnRowSQL: String {
         """
         p.id, p.folder, p.captured, p.camera, p.lens, p.rating, p.flag, p.label, p.marked, p.edited, p.iso, \
         p.aperture, p.focal, p.kind, p.name, p.shutter, \(ColumnEncoding.locationSQL), \(ColumnEncoding.titleSQL), \
-        \(ColumnEncoding.captionSQL), \(ColumnEncoding.xmpSQL), p.sidecar_modified
+        \(ColumnEncoding.captionSQL), \(ColumnEncoding.xmpSQL), p.sidecar_modified, p.size, p.modified, p.state
         """
     }
 
@@ -88,6 +88,9 @@ extension IndexQueries {
             columns.details.insert(detail)
         }
         columns.sidecarModified = row.optionalDouble(at: 20)
+        columns.size = row.int64(at: 21)
+        columns.modified = row.optionalDouble(at: 22)
+        columns.state = PhotoRecord.State(rawValue: row.int(at: 23))
         return columns
     }
 }

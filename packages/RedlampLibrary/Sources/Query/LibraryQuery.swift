@@ -75,6 +75,10 @@ public indirect enum LibraryQuery: Sendable, Hashable {
         case has
         case title
         case caption
+        /// `yes` or `no`: gone from its folder.
+        case missing
+        /// `yes` or `no`: on a volume that isn't connected.
+        case offline
 
         /// The other names fields go by.
         public static let aliases: [String: Field] = [
