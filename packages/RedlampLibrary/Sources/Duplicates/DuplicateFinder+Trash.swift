@@ -6,7 +6,8 @@ public extension DuplicateFinder {
     /// The batch that moves `plan`'s copies to the Trash, as `operations` plans one (LIB-26): each copy
     /// at the path the plan has, with its `.redlamp` sidecars and the other apps' sidecars named after
     /// it, taken out of the index, journaled and undoable. Planning it moves nothing: `trash` checks it
-    /// against the plan and the files, and runs it.
+    /// against the plan and the files, and runs it. A copy the index no longer has isn't in it
+    /// (`FileBatch.notInIndex`), which `check` reports.
     func trashBatch(for plan: DuplicateRemovalPlan, operations: FileOperations) async throws -> FileBatch {
         var named = Set<Int64>()
         let photos = plan.removals.filter { named.insert($0.photo).inserted }.map { removal in

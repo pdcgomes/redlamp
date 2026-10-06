@@ -60,6 +60,33 @@ struct DuplicateTrashCheckTests {
         })
     }
 
+    @Test func `a copy the index no longer has is left out of the batch, and the Trash says so, moving nothing`(
+    ) async throws {
+        let sandbox = try await DuplicateSandbox.make()
+        defer { sandbox.remove() }
+        let x = duplicateBytes(100_000, seed: 90)
+        try sandbox.write("A/X.JPG", x, modified: 0)
+        try sandbox.write("B/X.JPG", x, modified: 10)
+        try sandbox.write("C/X.JPG", x, modified: 20)
+        try await sandbox.indexAll()
+        let finder = sandbox.finder(sandbox.fileSystem)
+        let review = try await finder.review(finder.confirm(finder.candidates()))
+        let plan = try DuplicateRemovalPlan(review, removing: review.allButProposed)
+        let (b, c) = try await (sandbox.id("B/X.JPG"), sandbox.id("C/X.JPG"))
+        #expect(plan.removals.map(\.photo) == [b, c])
+        try await sandbox.index.write { try $0.deletePhotos([c]) }
+        let operations = sandbox.operations()
+
+        let batch = try await finder.trashBatch(for: plan, operations: operations)
+        #expect(batch.notInIndex == [c] && batch.steps.flatMap(\.items).map(\.source) == [sandbox.path("B/X.JPG")])
+        let before = sandbox.files()
+        await #expect(throws: Refusal.differs([Difference(path: sandbox.path("C/X.JPG"), reason: .notInLibrary)])) {
+            try await finder.trash(plan, batch, operations: operations)
+        }
+        #expect(sandbox.files() == before && sandbox.trashed().isEmpty && sandbox.fileSystem.writes.isEmpty)
+        #expect(try await operations.entries().isEmpty, "nothing was written to the journal")
+    }
+
     @Test func `every copy of a group stays, even when a plan asks the API to move them all`() async throws {
         let sandbox = try await DuplicateSandbox.make()
         defer { sandbox.remove() }

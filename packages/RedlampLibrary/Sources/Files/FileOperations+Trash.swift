@@ -18,23 +18,30 @@ public struct PhotoFiles: Sendable, Hashable {
 public extension FileOperations {
     /// The batch that moves photos `ids` to the Trash, each with its `.redlamp` sidecars and the other
     /// apps' sidecars named after it, and takes them out of the index. Undo puts them back while
-    /// they're still in the Trash, rows, keywords and collections as they were.
+    /// they're still in the Trash, rows, keywords and collections as they were. Photos the index no
+    /// longer has are left out, in `notInIndex`.
     func planTrash(photos ids: [Int64]) async throws -> FileBatch {
         try await planTrash(ids.map { PhotoFiles(id: $0) })
     }
 
     /// The batch that moves each photo's files to the Trash, as `planTrash(photos:)` does.
     func planTrash(_ photos: [PhotoFiles]) async throws -> FileBatch {
-        let found = try await index.read { reader in
-            try photos.compactMap { request -> (PhotoFiles, RemovedPhoto)? in
+        let (found, notInIndex) = try await index.read { reader in
+            var found: [(PhotoFiles, RemovedPhoto)] = []
+            var notInIndex: [Int64] = []
+            for request in photos {
                 guard let photo = try reader.photo(id: request.id),
                       let folder = try reader.folder(id: photo.folder)?.path
-                else { return nil }
-                return try (request, RemovedPhoto(
+                else {
+                    notInIndex.append(request.id)
+                    continue
+                }
+                try found.append((request, RemovedPhoto(
                     photo: IndexedPhoto(photo), folder: folder, keywords: reader.keywords(forPhoto: photo.id),
                     collections: reader.collectionPlaces(ofPhoto: photo.id),
-                ))
+                )))
             }
+            return (found, notInIndex)
         }
         let locator = try await locator()
         let fileSystem = fileSystem
@@ -64,7 +71,11 @@ public extension FileOperations {
             }
         }
         let count = found.count
-        return FileBatch(kind: .trash, title: "Move \(count) photo\(count == 1 ? "" : "s") to the Trash", steps: steps)
+        var batch = FileBatch(
+            kind: .trash, title: "Move \(count) photo\(count == 1 ? "" : "s") to the Trash", steps: steps,
+        )
+        batch.notInIndex = notInIndex
+        return batch
     }
 
     /// The batch that moves the folder at `url`, with everything in it, to the Trash, and takes its

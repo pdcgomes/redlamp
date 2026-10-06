@@ -103,6 +103,9 @@ public struct FileOutcome: Sendable, Hashable {
     /// What couldn't be undone because it wasn't where the batch put it any more: emptied from the
     /// Trash, say.
     public var gone: [String] = []
+    /// The photos it was asked to move to the Trash that the index no longer had, left out
+    /// (`FileBatch.notInIndex`).
+    public var notInIndex: [Int64]
     /// For a batch that was rolled back: why.
     public var failure: String?
     /// Steps a forced quit had left done, for a batch that was recovered.
@@ -116,5 +119,6 @@ public struct FileOutcome: Sendable, Hashable {
         steps = batch.steps.count
         done = 0
         photos = 0
+        notInIndex = batch.notInIndex
     }
 }

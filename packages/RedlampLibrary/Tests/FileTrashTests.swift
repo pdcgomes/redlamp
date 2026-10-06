@@ -83,6 +83,27 @@ struct FileTrashTests {
         #expect(try await sandbox.rows().count == 2)
     }
 
+    @Test func `photos the index no longer has are left out of the batch, which says which`() async throws {
+        let (sandbox, _, trash) = try await Self.sandbox()
+        defer { sandbox.remove() }
+        let ids = try await sandbox.rows()
+        let operations = sandbox.operations()
+        let (kept, gone) = try (#require(ids["Shoot/IMG_0002.ARW"]), #require(ids["Shoot/Day 2/IMG_0003.ARW"]))
+        try await sandbox.index.write { try $0.deletePhotos([gone]) }
+
+        let batch = try await operations.planTrash(photos: [kept, gone])
+        #expect(batch.notInIndex == [gone] && batch.title == "Move 1 photo to the Trash")
+        let outcome = try await operations.run(batch)
+        #expect(outcome.isFinished && outcome.photos == 1 && outcome.notInIndex == [gone])
+        let trashed = try Set(FileManager.default.contentsOfDirectory(atPath: trash.path))
+        #expect(trashed == ["IMG_0002.ARW", "IMG_0002.ARW.redlamp", "IMG_0002.ARW.xmp"])
+        #expect(FileManager.default.fileExists(atPath: sandbox.url("Shoot/Day 2/IMG_0003.ARW").path))
+
+        let nothing = try await operations.planTrash(photos: [gone])
+        #expect(nothing.steps.isEmpty && nothing.notInIndex == [gone])
+        #expect(try await operations.run(nothing).notInIndex == [gone])
+    }
+
     @Test func `Undo puts back what's still in the Trash and says what isn't`() async throws {
         let (sandbox, _, trash) = try await Self.sandbox()
         defer { sandbox.remove() }

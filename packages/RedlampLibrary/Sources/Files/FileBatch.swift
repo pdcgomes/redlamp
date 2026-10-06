@@ -20,6 +20,9 @@ public struct FileBatch: Sendable, Hashable, Identifiable {
     public var undoes: UUID?
     /// For an Undo, what it leaves out because it isn't where the batch put it any more, by path.
     public var gone: [String] = []
+    /// For a move to the Trash, the photos it was asked to move that the index no longer has, which
+    /// it leaves out: the caller says so, since it moves fewer photos than it was asked to.
+    public var notInIndex: [Int64] = []
 
     public init(
         id: UUID = UUID(), kind: Kind, title: String, created: Date = Date(), steps: [FileStep], undoes: UUID? = nil,
