@@ -58,6 +58,13 @@ public extension RedlampEngine {
         await ModelStore.shared.removeOutdated()
     }
 
+    /// Lets no AI model load or predict again, in any engine, and waits at most `timeout` for those
+    /// running (`Inference`); false if one still runs. For the app to call last before it exits.
+    @discardableResult
+    static func stopModels(waitingAtMost timeout: TimeInterval) -> Bool {
+        Inference.shared.stop(waitingAtMost: timeout)
+    }
+
     func removeModel(_ id: String) async throws {
         guard let manifest = ModelCatalog.manifest(id) else { throw ModelStoreError.unknownModel(id) }
         try await ModelStore.shared.remove(manifest)

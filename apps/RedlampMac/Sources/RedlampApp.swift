@@ -164,7 +164,8 @@ struct RedlampApp: App {
 }
 
 /// Opens the editor window once the app has launched, and again when the Dock icon is
-/// clicked with no window open; quitting waits for the last edits to be saved.
+/// clicked with no window open; quitting waits for the last edits to be saved, and for the
+/// AI models running.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static var launch: (@MainActor () -> EditorWindowController)?
@@ -291,6 +292,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return .terminateNow
         case .saved, nil:
             return .terminateNow
+        }
+    }
+
+    /// Exiting while an AI model runs on the GPU crashes on the way out (`Inference`): the
+    /// predictions running finish first, and no other starts.
+    func applicationWillTerminate(_: Notification) {
+        if !RedlampEngine.stopModels(waitingAtMost: 10) {
+            Logger(subsystem: "app.redlamp.mac", category: "models").error("Quit with an AI model still running")
         }
     }
 
