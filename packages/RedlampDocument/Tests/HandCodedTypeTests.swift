@@ -54,7 +54,20 @@ struct HandCodedTypeTests {
         var metadata = try #require(everything.metadata)
         metadata.originalName = "IMG_0001.ARW"
         metadata.keywords = ["Places/Portugal/Lisbon", "Music/AC%2FDC"]
+        metadata.customLabel = "Second Look"
+        metadata.mark = true
+        metadata.title = "Tram 28"
+        metadata.caption = "The tram climbing to Graça."
+        metadata.creator = "Ana Sousa"
+        metadata.copyright = "© 2026 Ana Sousa"
+        metadata.location = PhotoLocation(
+            country: "Portugal", state: "Lisboa", city: "Lisbon", sublocation: "Graça", countryCode: "PT",
+        )
+        metadata.collections = ["Clients/Acme/Selects"]
+        metadata.stack = PhotoStack(id: UUID(uuidString: "6F1C2A4E-8B1D-4C3A-9E57-1B2D3C4E5F60"), top: true)
         try check(metadata)
+        try check(#require(metadata.location))
+        try check(#require(metadata.stack))
     }
 
     /// A swatch picked on the photo, every setting away from its default.
