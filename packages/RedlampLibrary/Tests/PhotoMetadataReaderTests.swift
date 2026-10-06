@@ -54,11 +54,20 @@ struct PhotoMetadataReaderTests {
 
     // MARK: - Files written here
 
-    @Test func `a JPEG's EXIF, GPS, IPTC and XMP read back exactly`() throws {
+    @Test func `a JPEG's EXIF, GPS, IPTC and XMP read back exactly, its XMP as LibraryXMP reads it from the file`(
+    ) throws {
         let jpeg = try Self.encode(Self.image(), properties: Self.cameraProperties, xmp: Self.organisingXMP())
-        let metadata = PhotoMetadataReader.read(
+        var metadata = try #require(PhotoMetadataReader.read(
             head: jpeg, fileSize: jpeg.count, url: URL(fileURLWithPath: "/never/read/IMG_0001.jpg"),
-        )
+        ))
+        let folder = try TemporaryFolder()
+        try jpeg.write(to: folder.url.appending(path: "IMG_0001.jpg"))
+        #expect(metadata.xmp == XMPSource.embedded(in: folder.url.appending(path: "IMG_0001.jpg")))
+        #expect(metadata.xmp?.fields == XMPFields(
+            rating: 4, label: .green, keywords: ["Places/Portugal/Lisbon", "Animals/Birds/Gulls"], title: "Tram 28",
+            caption: "The tram climbing to Graça.",
+        ))
+        metadata.xmp = nil
         #expect(metadata == CaptureMetadata(
             make: "NIKON CORPORATION", model: "NIKON Z 8", lens: "NIKKOR Z 24-70mm f/2.8 S", iso: 400,
             aperture: 2.8, shutter: 0.004, focalLength: 35, captured: Self.utc("2026-10-01 12:00:00", plus: 0.25),
@@ -68,7 +77,7 @@ struct PhotoMetadataReaderTests {
             copyright: "© 2026 Pedro Gomes",
             location: .init(country: "Portugal", state: "Lisboa", city: "Lisbon", sublocation: "Alfama"),
         ))
-        #expect(metadata?.cameraName == "Nikon Z 8")
+        #expect(metadata.cameraName == "Nikon Z 8")
     }
 
     @Test func `IPTC's fields stand in for XMP a JPEG doesn't have`() throws {

@@ -140,12 +140,12 @@ public struct XMPSource: Sendable, Hashable, Codable {
         return combined
     }
 
-    /// What an `.xmp` holds, by each app's conventions: `xmp:Rating` (-1 for a reject, as Bridge and
-    /// Lightroom write it), Lightroom's pick (`xmpDM:good`), the label's colour (`xmp:LabelColor`),
-    /// its name in any set (`xmp:Label`), Urgency when `conventions` read it, darktable's labels,
-    /// Lightroom's keyword paths with the flat keywords not in them, and the default title and
-    /// caption.
-    init(packet: XMPPacket, conventions: XMPConventions) {
+    /// What an `.xmp`, or a photo's own XMP, holds by each app's conventions: `xmp:Rating` (-1 for a
+    /// reject, as Bridge and Lightroom write it), Lightroom's pick (`xmpDM:good`), the label's colour
+    /// (`xmp:LabelColor`), its name in any set (`xmp:Label`), Urgency when `conventions` read it,
+    /// darktable's labels, Lightroom's keyword paths with the flat keywords not in them, and the
+    /// default title and caption.
+    init(packet: some XMPProperties, conventions: XMPConventions) {
         var fields = XMPFields()
         var present = Set<XMPField>()
         if let text = packet.text(XMPNamespace.rating) {
@@ -222,13 +222,20 @@ public struct XMPSource: Sendable, Hashable, Codable {
               CGImageSourceGetCount(source) > 0
         else { return nil }
         let index = CGImageSourceGetPrimaryImageIndex(source)
-        var found = XMPSource()
-        if let metadata = CGImageSourceCopyMetadataAtIndex(source, index, nil),
-           let data = CGImageMetadataCreateXMPData(metadata, nil) as Data?, let packet = XMPPacket(data) {
-            found = XMPSource(packet: packet, conventions: conventions)
-        }
         let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any]
-        let iptc = properties?[kCGImagePropertyIPTCDictionary] as? [CFString: Any] ?? [:]
+        return embedded(
+            XMPImageProperties(CGImageSourceCopyMetadataAtIndex(source, index, nil)),
+            iptc: properties?[kCGImagePropertyIPTCDictionary] as? [CFString: Any] ?? [:], conventions: conventions,
+        )
+    }
+
+    /// What a photo's own XMP (`xmp`, as ImageIO reads it) holds, and its IPTC (`iptc`) where the XMP
+    /// has nothing; nil when it holds none of the fields. The indexer reads both from the image
+    /// source it reads the rest of the photo's metadata from.
+    static func embedded(
+        _ xmp: XMPImageProperties, iptc: [CFString: Any], conventions: XMPConventions,
+    ) -> XMPSource? {
+        var found = XMPSource(packet: xmp, conventions: conventions)
         if !found.present.contains(.rating),
            let stars = PhotoMetadataReader.number(iptc[kCGImagePropertyIPTCStarRating]) {
             found.present.insert(.rating)

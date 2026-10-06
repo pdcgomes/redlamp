@@ -51,11 +51,12 @@ public struct CaptureMetadata: Sendable, Hashable, Codable {
     public var latitude: Double?
     /// In degrees, east positive.
     public var longitude: Double?
-    /// 0 to 5 stars, or -1 for a photo marked rejected, as Bridge writes it (xmp:Rating).
+    /// 1 to 5 stars, or -1 for a photo marked rejected, as Bridge writes it (xmp:Rating).
     public var rating: Int?
-    /// A colour label's name as the app that set it wrote it: "Red", or a custom label's (xmp:Label).
+    /// A colour label's name, "Red", whichever app's name for it the file has; or a custom label's.
     public var label: String?
-    /// Each keyword as its path from the top of its hierarchy: "Places/Portugal/Lisbon".
+    /// Each keyword as its path from the top of its hierarchy: "Places/Portugal/Lisbon", with a slash
+    /// inside a name as `%2F` (`KeywordPath`).
     public var keywords: [String]
     public var title: String?
     public var caption: String?
@@ -63,6 +64,10 @@ public struct CaptureMetadata: Sendable, Hashable, Codable {
     public var creator: String?
     public var copyright: String?
     public var location: Location?
+    /// The rating, flag, label, keywords, title and caption as `LibraryXMP` reads them, and which of
+    /// them the file has at all (`XMPSource`); nil when it has none. `rating` to `caption` are these,
+    /// for file names.
+    public var xmp: XMPSource?
 
     public init(
         make: String? = nil, model: String? = nil, lens: String? = nil, iso: Double? = nil, aperture: Double? = nil,
@@ -70,6 +75,7 @@ public struct CaptureMetadata: Sendable, Hashable, Codable {
         pixelSize: PixelSize? = nil, orientation: Int? = nil, latitude: Double? = nil, longitude: Double? = nil,
         rating: Int? = nil, label: String? = nil, keywords: [String] = [], title: String? = nil,
         caption: String? = nil, creator: String? = nil, copyright: String? = nil, location: Location? = nil,
+        xmp: XMPSource? = nil,
     ) {
         self.make = make
         self.model = model
@@ -92,6 +98,7 @@ public struct CaptureMetadata: Sendable, Hashable, Codable {
         self.creator = creator
         self.copyright = copyright
         self.location = location
+        self.xmp = xmp
     }
 
     /// The camera's name to show and group by, like `ImageInfo.cameraName` for a decoded raw: the maker

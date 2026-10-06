@@ -137,8 +137,10 @@ struct XMPMetadataTests {
         """.utf8)
     }
 
-    @Test func `a Lightroom sidecar's organising fields read`() throws {
-        let metadata = try #require(XMPMetadata.parse(Data(Self.lightroom.utf8)))
+    @Test func `a Lightroom sidecar's organising fields read, as LibraryXMP reads them`() throws {
+        var metadata = try #require(XMPMetadata.parse(Data(Self.lightroom.utf8)))
+        #expect(metadata.xmp == XMPSource(xmp: Data(Self.lightroom.utf8)))
+        metadata.xmp = nil
         #expect(metadata == CaptureMetadata(
             rating: 3, label: "Red", keywords: ["Places/Portugal/Lisbon", "tram"], title: "Tram 28",
             caption: "The tram climbing to Graça.", creator: "Pedro Gomes", copyright: "© 2026 Pedro Gomes",
@@ -146,9 +148,38 @@ struct XMPMetadataTests {
         ))
     }
 
-    @Test func `a darktable sidecar's organising fields read, without darktable's bookkeeping tags`() throws {
-        let metadata = try #require(XMPMetadata.parse(Data(Self.darktable.utf8)))
-        #expect(metadata == CaptureMetadata(rating: 5, keywords: ["Animals/Birds/Gulls"], title: "Gulls at dawn"))
+    @Test func `a darktable sidecar's organising fields read, its labels and flat keywords too, without its bookkeeping tags`(
+    ) throws {
+        var metadata = try #require(XMPMetadata.parse(Data(Self.darktable.utf8)))
+        #expect(metadata.xmp == XMPSource(xmp: Data(Self.darktable.utf8)))
+        metadata.xmp = nil
+        #expect(metadata == CaptureMetadata(
+            rating: 5, label: "Green", keywords: ["Animals/Birds/Gulls", "gull"], title: "Gulls at dawn",
+        ))
+    }
+
+    @Test func `labels read in every app's names and by Lightroom's colour, as Lightroom names them`() {
+        for (properties, label) in [
+            ("<xmp:Label>Approved</xmp:Label>", "Green"), ("<xmp:Label>To Delete</xmp:Label>", "Red"),
+            ("<xmp:Label>Rot</xmp:Label><xmp:LabelColor>red</xmp:LabelColor>", "Red"),
+            ("<xmp:Label>Urgent</xmp:Label>", "Urgent"),
+        ] {
+            #expect(XMPMetadata.parse(Self.xmp(properties))?.label == label, "\(properties)")
+        }
+        #expect(XMPMetadata.parse(Self.xmp("<xmp:Rating>-1</xmp:Rating>"))?.xmp?.fields.flag == .reject)
+        let picked = Self.xmp(
+            "<xmpDM:good>True</xmpDM:good>", namespaces: #"xmlns:xmpDM="http://ns.adobe.com/xmp/1.0/DynamicMedia/""#,
+        )
+        #expect(XMPMetadata.parse(picked)?.xmp?.fields.flag == .pick)
+    }
+
+    @Test func `a slash inside a Lightroom keyword's name stays in the name, as %2F`() {
+        let paths = Self.xmp(
+            "<lr:hierarchicalSubject><rdf:Bag><rdf:li>Music|AC/DC</rdf:li></rdf:Bag></lr:hierarchicalSubject>",
+            namespaces: #"xmlns:lr="http://ns.adobe.com/lightroom/1.0/""#,
+        )
+        #expect(XMPMetadata.parse(paths)?.keywords == ["Music/AC%2FDC"])
+        #expect(KeywordPath("Music/AC%2FDC")?.names == ["Music", "AC/DC"])
     }
 
     @Test func `a rejected photo's rating reads as -1, as Bridge writes it`() {

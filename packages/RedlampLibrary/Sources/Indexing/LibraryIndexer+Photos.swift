@@ -206,7 +206,7 @@ extension LibraryIndexer.Run {
 
     static func parse(head: Data, size: Int, url: URL, xmp: Data?) -> ParsedHead {
         let key = ContentKey(fileSize: size, head: head)
-        let xmp = xmp.flatMap(XMPMetadata.parse)
+        let xmp = xmp.flatMap { XMPMetadata.parse($0) }
         if head.count >= size {
             return ParsedHead(
                 key: key, metadata: PhotoMetadataReader.read(head: head, fileSize: size, url: url), needsFile: false,

@@ -29,28 +29,36 @@ public enum PhotoMetadataReader {
     static let readsBeyondHead: Set<String> = ["cr3", "iiq", "raf"]
 
     /// `url`'s metadata from `head`, its first `headLength` bytes (all of them, for a smaller file),
-    /// with `fileSize` its length. A file whose fields lie beyond the head is read with `read(url:)`
-    /// instead (`headMetadata` says which). Nil when neither ImageIO nor `rawIdentity` reads anything.
-    public static func read(head: Data, fileSize: Int, url: URL) -> CaptureMetadata? {
+    /// with `fileSize` its length, and other apps' conventions read as `conventions` say. A file whose
+    /// fields lie beyond the head is read with `read(url:)` instead (`headMetadata` says which). Nil
+    /// when neither ImageIO nor `rawIdentity` reads anything.
+    public static func read(
+        head: Data, fileSize: Int, url: URL, conventions: XMPConventions = XMPConventions(),
+    ) -> CaptureMetadata? {
         if head.count >= fileSize {
-            return metadata(of: head, url: url, isWholeFile: true) ?? identity(of: url)
+            return metadata(of: head, url: url, isWholeFile: true, conventions: conventions) ?? identity(of: url)
         }
-        return headMetadata(head, fileSize: fileSize, url: url) ?? read(url: url)
+        return headMetadata(head, fileSize: fileSize, url: url, conventions: conventions)
+            ?? read(url: url, conventions: conventions)
     }
 
     /// `url`'s metadata, with ImageIO reading the file itself (mapping it where it can), which reads only
     /// the parts it needs. Nil when neither ImageIO nor `rawIdentity` reads anything.
-    public static func read(url: URL) -> CaptureMetadata? {
+    public static func read(url: URL, conventions: XMPConventions = XMPConventions()) -> CaptureMetadata? {
         CGImageSourceCreateWithURL(url as CFURL, options(for: url))
-            .flatMap { metadata(in: $0, isWholeFile: true) } ?? identity(of: url)
+            .flatMap { metadata(in: $0, isWholeFile: true, conventions: conventions) } ?? identity(of: url)
     }
 
     /// What `head` gives when it holds everything ImageIO reads from the whole file; nil when the file
     /// has to be read: a CR3, RAF or IIQ, a head ImageIO can't size the image from, or one whose TIFF
     /// directory points past it.
-    static func headMetadata(_ head: Data, fileSize: Int, url: URL) -> CaptureMetadata? {
+    static func headMetadata(
+        _ head: Data, fileSize: Int, url: URL, conventions: XMPConventions = XMPConventions(),
+    ) -> CaptureMetadata? {
         guard !readsBeyondHead.contains(url.pathExtension.lowercased()), !pointsPastItself(head),
-              let found = padded(head, to: fileSize).flatMap({ metadata(of: $0, url: url, isWholeFile: false) }),
+              let found = padded(head, to: fileSize).flatMap({
+                  metadata(of: $0, url: url, isWholeFile: false, conventions: conventions)
+              }),
               found.pixelSize != nil
         else { return nil }
         return found
@@ -113,14 +121,18 @@ public enum PhotoMetadataReader {
         SupportedFormats.isRaw(url) ? rawIdentity?(url) : nil
     }
 
-    private static func metadata(of file: Data, url: URL, isWholeFile: Bool) -> CaptureMetadata? {
+    private static func metadata(
+        of file: Data, url: URL, isWholeFile: Bool, conventions: XMPConventions,
+    ) -> CaptureMetadata? {
         CGImageSourceCreateWithData(file as CFData, options(for: url))
-            .flatMap { metadata(in: $0, isWholeFile: isWholeFile) }
+            .flatMap { metadata(in: $0, isWholeFile: isWholeFile, conventions: conventions) }
     }
 
     /// What ImageIO reads from `source`'s primary image; nil when that's nothing: no camera, capture
     /// date or size.
-    private static func metadata(in source: CGImageSource, isWholeFile: Bool) -> CaptureMetadata? {
+    private static func metadata(
+        in source: CGImageSource, isWholeFile: Bool, conventions: XMPConventions,
+    ) -> CaptureMetadata? {
         let index = CGImageSourceGetPrimaryImageIndex(source)
         guard index < CGImageSourceGetCount(source),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any]
@@ -158,6 +170,7 @@ public enum PhotoMetadataReader {
             xmp: CGImageSourceCopyMetadataAtIndex(source, index, nil),
             iptc: properties[kCGImagePropertyIPTCDictionary] as? [CFString: Any] ?? [:],
             tiff: tiff,
+            conventions: conventions,
         )
         return found
     }
