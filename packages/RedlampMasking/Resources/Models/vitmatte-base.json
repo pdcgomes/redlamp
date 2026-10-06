@@ -1,0 +1,45 @@
+{
+  "id": "vitmatte-base",
+  "version": 1,
+  "name": "ViTMatte (base)",
+  "purpose": "Hair and fine edges of Subject, Background and People masks.",
+  "provider": "redlamp.vitmatte-base",
+  "assetPack": "models.vitmatte-base.v1",
+  "source": "https://github.com/pdcgomes/redlamp/releases/download/models-vitmatte-base-v1/",
+  "computeUnits": "cpuAndGPU",
+  "files": [
+    {
+      "path": "ViTMatteBaseW8.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+      "bytes": 295594,
+      "sha256": "fb16333cdffee8e1e6ca674967753004214ee3d5928caea49b95bde82f9840a1"
+    },
+    {
+      "path": "ViTMatteBaseW8.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+      "bytes": 108542688,
+      "sha256": "6543245b867a185853a0ca65b708d8c2a8e9400a4b135126e256389a5b1f5d06"
+    },
+    {
+      "path": "ViTMatteBaseW8.mlpackage/Manifest.json",
+      "bytes": 617,
+      "sha256": "aca1c9eb82f0a4f4cb0b4fd24670e9d36518b1cd4d8fe7d0c28af829e9ec2766"
+    },
+    {
+      "path": "LICENSE.txt",
+      "bytes": 11901,
+      "sha256": "ce6d5954c22ab2dc12219a4c28cedd8601372595ac3862993db994644287ced5"
+    }
+  ],
+  "licenses": {
+    "code": "MIT",
+    "weights": "Apache-2.0",
+    "data": [
+      "Composition-1k (from Adobe's Deep Image Matting dataset, distributed on request for research)",
+      "Distinctions-646"
+    ]
+  },
+  "decision": "DEC-35",
+  "evaluationOnly": false,
+  "cleared": false,
+  "published": false,
+  "notes": "Converted by research/prototypes/masking/convert_vitmatte.py (ViTMatte-base, fixed 1024x1024 tiles; the backbone's position embeddings frozen for that size) and compress_vitmatte.py (8-bit weights in blocks of 32; within 0.002 of fp16 on average over a portrait tile's unsure pixels). On hair_bench's heads, over a band from 1% of the long side inside the coarse edge to 5% outside, it halves closed-form matting's error along the edge and keeps 43% of the strands against 15% (vitmatte_bench.py). 0.2 s a tile on an M1 Ultra's GPU; the Neural Engine is slower. Its training data allows research use only; the owner accepted it for everyone as an exception (DEC-35). To publish: the files in build/models/upload-models-vitmatte-base-v1 as the prerelease models-vitmatte-base-v1, with the owner's approval (DEC-26); then it is cleared for everyone. Until then it is offered only with evaluation models turned on."
+}

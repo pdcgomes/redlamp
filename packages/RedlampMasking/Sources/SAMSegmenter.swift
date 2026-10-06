@@ -83,9 +83,12 @@ public final class SAMSegmenter: @unchecked Sendable {
     }
 
     /// The `.mlpackage` names the manifest's files belong to.
+    /// The names of the model's Core ML packages; its other files (a licence) aren't models.
     static func packages(in manifest: ModelManifest) -> [String] {
         Array(Set(manifest.files.compactMap { file in
-            file.path.split(separator: "/").first.map { String($0).replacingOccurrences(of: ".mlpackage", with: "") }
+            file.path.split(separator: "/").first.flatMap { component in
+                component.hasSuffix(".mlpackage") ? String(component.dropLast(".mlpackage".count)) : nil
+            }
         })).sorted()
     }
 

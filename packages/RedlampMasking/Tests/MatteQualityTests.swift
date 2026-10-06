@@ -129,6 +129,37 @@ struct MatteQualityTests {
     /// further it is from the head, so most strands stay out until flyaways are found another way
     /// (MSK-29).
     @Test func `the subject matte brings back strands that reach over the wall`() throws {
+        let scene = try strandScene()
+        let result = score(
+            ClosedFormMatte.refine(scene.coarse, image: scene.image),
+            truth: scene.truth,
+            thin: scene.thin,
+        )
+        #expect(result.band < 0.055, "error along the head and strands: \(result.band)")
+        #expect(result.recall > 0.28, "strands brought back: \(result.recall)")
+    }
+
+    /// ViTMatte, where this Mac has it (MSK-32): over its wider band it reaches the strands closed-
+    /// form matting can't.
+    @Test(.enabled(if: MatteQualityTests.vitMatte != nil))
+    func `ViTMatte brings back more of the strands`() throws {
+        let scene = try strandScene()
+        let matte = try #require(Self.vitMatte).refine(scene.coarse, image: scene.image)
+        let result = score(matte, truth: scene.truth, thin: scene.thin)
+        #expect(result.band < 0.045, "error along the head and strands: \(result.band)")
+        #expect(result.recall > 0.6, "strands brought back: \(result.recall)")
+    }
+
+    static let vitMatte: ViTMatte? = {
+        guard let manifest = ModelCatalog.manifest("vitmatte-base") else { return nil }
+        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appending(path: "Redlamp/Models/\(manifest.id)/\(manifest.version)")
+        guard FileManager.default.fileExists(atPath: directory.path) else { return nil }
+        return try? ViTMatte(manifest: manifest, directory: directory)
+    }()
+
+    /// The head and its strands, the coarse mask, the true coverage and the strands' own pixels.
+    private func strandScene() throws -> (image: CGImage, coarse: GrayMask, truth: [Float], thin: [Bool]) {
         let (width, height) = (600, 400)
         let centre = SIMD2<Float>(300, 260)
         let radius: Float = 120
@@ -149,11 +180,6 @@ struct MatteQualityTests {
             let distance = simd_distance(SIMD2(Float(index % width), Float(index / width)), centre)
             return min(max((radius + 4 - distance) / 8, 0), 1)
         })
-        let result = score(
-            ClosedFormMatte.refine(coarse, image: image), truth: truth,
-            thin: truth.indices.map { strandCoverage[$0] > 0.5 && inHead[$0] == 0 },
-        )
-        #expect(result.band < 0.055, "error along the head and strands: \(result.band)")
-        #expect(result.recall > 0.28, "strands brought back: \(result.recall)")
+        return (image, coarse, truth, truth.indices.map { strandCoverage[$0] > 0.5 && inHead[$0] == 0 })
     }
 }

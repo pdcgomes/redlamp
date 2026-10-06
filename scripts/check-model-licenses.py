@@ -43,8 +43,8 @@ PERMISSIVE = {"Apache-2.0", "MIT", "BSD-2-Clause", "BSD-3-Clause"}
 RESTRICTED = {"SAM License"}
 # The owner's exceptions, by decision, and what each covers. DEC-02: Depth Anything V2 Small and 3,
 # whose training data's terms don't allow shipping. DEC-27: SAM 3, under Meta's SAM License, with
-# its unaudited data.
-EXCEPTIONS = {"DEC-02": {"data"}, "DEC-27": {"data", "licence"}}
+# its unaudited data. DEC-35: ViTMatte, trained on Composition-1k and Distinctions-646.
+EXCEPTIONS = {"DEC-02": {"data"}, "DEC-27": {"data", "licence"}, "DEC-35": {"data"}}
 
 DATASETS = {
     "SA-1B": "publisher-grant",
@@ -69,6 +69,10 @@ DATASETS = {
     "LVIS (COCO images)": "lineage",
     "Objects365, behind the annotator": "lineage",
     "Visual Genome, behind the annotator": "lineage",
+    # ViTMatte (hustvl): Composition-1k is built from Adobe's Deep Image Matting set, given out on
+    # request for research; Distinctions-646's authors ask to hear of any use.
+    "Composition-1k (from Adobe's Deep Image Matting dataset, distributed on request for research)": "non-commercial",
+    "Distinctions-646": "non-commercial",
     # FLUX.2 [klein] 4B: the model card only describes its NSFW and CSAM filtering.
     "Undisclosed (Black Forest Labs)": "undisclosed",
 }

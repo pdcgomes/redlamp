@@ -90,6 +90,24 @@ extension RedlampEngine {
 
     static let depthAnything3ID = "depth-anything-3-mono-large"
 
+    /// ViTMatte, when it's on this Mac and offered: Subject, Background and People edges are then
+    /// solved with it rather than by closed-form matting (MSK-32).
+    func vitMatte() async -> ViTMatte? {
+        if let loaded = vitMatteModel.withLock({ $0 }) {
+            return loaded
+        }
+        guard let manifest = ModelCatalog.offered.first(where: { $0.id == Self.vitMatteID }),
+              let directory = await ModelStore.shared.location(of: manifest),
+              let loaded = try? await Task.detached(priority: .userInitiated, operation: {
+                  try ViTMatte(manifest: manifest, directory: directory)
+              }).value
+        else { return nil }
+        vitMatteModel.withLock { $0 = loaded }
+        return loaded
+    }
+
+    static let vitMatteID = "vitmatte-base"
+
     /// SAM 3, when it's on this Mac and offered (it is evaluation only).
     func sam3() async -> SAM3Concepts? {
         if let loaded = sam3Model.withLock({ $0 }) {
@@ -341,18 +359,26 @@ extension RedlampEngine {
             first.instance = nil
             provided = [first]
         }
-        // Stray hairs and beard curls, per pixel at the size masks are stored at. Embedded mattes
-        // (iPhone) are already fine, and face parts are drawn shapes. REDLAMP_EDGE_MATTE=off
-        // keeps Vision's edges, to compare.
-        if ProcessInfo.processInfo.environment["REDLAMP_EDGE_MATTE"] != "off",
+        // Stray hairs and beard curls, per pixel at the size masks are stored at: by ViTMatte once
+        // it's downloaded, else by closed-form matting. Embedded mattes (iPhone) are already fine,
+        // and face parts are drawn shapes. REDLAMP_EDGE_MATTE=off keeps Vision's edges, and
+        // =closed-form skips ViTMatte, to compare.
+        let edgeMatte = ProcessInfo.processInfo.environment["REDLAMP_EDGE_MATTE"]
+        if edgeMatte != "off",
            provided.contains(where: Self.takesClosedFormMatte), let full = try? await matteImage(for: session) {
             let masks = provided
+            let matte = edgeMatte == "closed-form" ? nil : await vitMatte()
             provided = await Task.detached(priority: .userInitiated) {
                 masks.map { mask in
                     guard Self.takesClosedFormMatte(mask) else { return mask }
                     var refined = mask
-                    refined.mask = Self.closedForm(mask, image: full)
-                    refined.provider += "+closed-form"
+                    if let matte, let solved = try? Self.vitMatte(mask, image: full, model: matte) {
+                        refined.mask = solved
+                        refined.provider += "+vitmatte"
+                    } else {
+                        refined.mask = Self.closedForm(mask, image: full)
+                        refined.provider += "+closed-form"
+                    }
                     return refined
                 }
             }.value
@@ -380,6 +406,13 @@ extension RedlampEngine {
         default:
             ClosedFormMatte.refine(mask.mask, image: image)
         }
+    }
+
+    /// Background is solved as the Subject it is the inverse of, as `closedForm` solves it.
+    static func vitMatte(_ mask: ProvidedMask, image: CGImage, model: ViTMatte) throws -> GrayMask {
+        mask.kind == .background
+            ? try model.refine(mask.mask.inverted, image: image).inverted
+            : try model.refine(mask.mask, image: image)
     }
 
     /// Subject, Background and whole people from Vision; not embedded mattes or face parts.
@@ -460,8 +493,12 @@ extension RedlampEngine {
            cached.mattes.count == people.count {
             return cached.mattes
         }
+        let matte = ProcessInfo.processInfo.environment["REDLAMP_EDGE_MATTE"] == "closed-form" ? nil : await vitMatte()
         let mattes = await Task.detached(priority: .userInitiated) {
-            people.map { ClosedFormMatte.refine($0.mask, image: image) }
+            people.map { person in
+                matte.flatMap { try? $0.refine(person.mask, image: image) }
+                    ?? ClosedFormMatte.refine(person.mask, image: image)
+            }
         }.value
         personMatteCache.withLock { $0 = (analysis.hash, mattes) }
         return mattes

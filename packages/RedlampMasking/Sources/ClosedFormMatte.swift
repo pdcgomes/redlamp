@@ -143,7 +143,9 @@ public enum ClosedFormMatte {
 
     /// 1 for sure subject, 0 for sure background, 0.5 for uncertain: the band around the coarse
     /// edge, and wherever the coarse mask is itself unsure (Vision leaves much of a costume grey).
-    static func trimap(_ mask: [Float], width: Int, height: Int, inner: Float = inner) -> [Float] {
+    static func trimap(
+        _ mask: [Float], width: Int, height: Int, inner: Float = inner, outer: Float = outer,
+    ) -> [Float] {
         let long = Float(max(width, height))
         let distance = SkyMatte.distance(from: mask, width: width, height: height, limit: max(outer, inner) * long)
         return mask.indices.map { index in

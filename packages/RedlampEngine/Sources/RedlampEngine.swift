@@ -42,6 +42,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     /// SAM 3 for Landscape and people parts, once loaded; the open photo's encoding, and its
     /// class and part masks.
     let sam3Model = Mutex<SAM3Concepts?>(nil)
+    let vitMatteModel = Mutex<ViTMatte?>(nil)
     let sam3Features = Mutex<(hash: String, features: SAM3Concepts.Features)?>(nil)
     let landscapeCache = Mutex<(hash: String, classes: [LandscapeClass: GrayMask])?>(nil)
     let peoplePartsCache = Mutex<(hash: String, parts: SAM3Concepts.PeopleParts)?>(nil)
