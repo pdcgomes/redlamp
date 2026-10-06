@@ -11,7 +11,8 @@ import RedlampDocument
 ///   ⇧-click do what they do there; the arrow keys move the active photo, ⇧ extending the selection from the
 ///   photo it started at; Home and End go to the ends, Page Up and Page Down a screen; Return, Space or a
 ///   double-click open the loupe.
-/// - Hidden (Develop is shown) it does nothing: changes to the photos wait, and it reloads once shown.
+/// - Out of sight (Develop or the loupe is shown) it does nothing: changes to the photos wait, and it reloads
+///   once shown.
 final class LibraryGridView: NSView, NSCollectionViewDataSource, NSCollectionViewDelegate,
     NSCollectionViewPrefetching {
     let collectionView = LibraryCollectionView()

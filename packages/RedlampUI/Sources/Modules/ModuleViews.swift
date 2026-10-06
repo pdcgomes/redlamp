@@ -5,9 +5,9 @@ import SwiftUI
 /// The window's middle, under the toolbar and between the panels: each module's view, built once with the
 /// window and kept, so a switch builds, loads and reads nothing. The Library module lies over Develop's
 /// canvas, opaque, and a switch changes only its opacity: hiding and showing a view makes AppKit lay it out
-/// and draw it again, more than a switch has. Clicks, scrolls, tooltips, cursors and VoiceOver reach only
-/// the module shown, and the keyboard follows: the Library module takes it, and Develop gives it back to
-/// the window.
+/// and draw it again, more than a switch has. Clicks, scrolls and VoiceOver reach only the module shown,
+/// the Library keeps its own cursor over the canvas, and the keyboard follows: the Library module takes
+/// it, and Develop gives it back to the window.
 final class ModuleContentController: NSViewController {
     private let model: EditorModel
     private let develop: NSViewController
@@ -90,8 +90,8 @@ final class ModuleContainerView: NSView {
 
 /// A side panel's column for each module, both built with the window and kept: the shown module's is
 /// visible. They're switched by opacity rather than hidden, since hiding and showing a column of panels
-/// lays it out and draws it again, more than a switch has; clicks, scrolls, tooltips and VoiceOver reach
-/// only the shown column.
+/// lays it out and draws it again, more than a switch has; clicks, scrolls and VoiceOver reach only the
+/// shown column.
 final class ModuleColumnView: NSView {
     private let model: EditorModel
     let develop: NSView
