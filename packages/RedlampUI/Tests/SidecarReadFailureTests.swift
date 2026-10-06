@@ -163,6 +163,28 @@ struct SidecarReadFailureTests {
         #expect(!model.hasClipboard, "not the default edit in its place")
     }
 
+    @Test func `Paste from Previous pastes nothing from a photo whose sidecar can't be read`() async throws {
+        let (image, _, presenter, cleanup) = try edited(failures: [])
+        defer { cleanup() }
+        let other = image.deletingLastPathComponent().appending(path: "IMG_0002.ARW")
+        let model = EditorModel(engine: StubEngine())
+        [image, other].forEach { model.library.insert(LibraryItem(url: $0)) }
+        model.select(image)
+        try await eventually { model.info?.url == image && !model.isReadOnly }
+        model.select(other)
+        try await eventually { model.info?.url == other && !model.isReadOnly }
+        try #require(model.previousSelection == image)
+
+        let asked = presenter.asked.withLock { $0 }
+        presenter.failures.withLock { $0 = Array(repeating: true, count: 10) }
+        model.pasteFromPrevious()
+        try await eventually { presenter.asked.withLock { $0 } > asked }
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(presenter.asked.withLock { $0 } > asked)
+        #expect(model.recipe[.exposure] == 0, "not the default edit, nor any other, in its place")
+        #expect(model.history.last?.name != "Paste from Previous")
+    }
+
     @Test func `Remove Dust leaves out a photo whose edit can't be read`() async throws {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
