@@ -51,6 +51,11 @@ APP="$WORK/$APP_NAME"
 EXE="$APP/Contents/MacOS/Redlamp"
 CLI="$APP/Contents/Helpers/redlamp"
 BUNDLE_ID="$(plutil -extract CFBundleIdentifier raw "$APP/Contents/Info.plist")"
+# The clean-up at the end deletes under ~/Library by this ID, so only the kit's own will do.
+[[ "$BUNDLE_ID" == app.redlamp.mac.perfkit ]] || {
+    echo "run.sh: the app's bundle ID is '$BUNDLE_ID', not the kit's app.redlamp.mac.perfkit" >&2
+    exit 1
+}
 COMMIT="$(plutil -extract RedlampCommit raw "$APP/Contents/Info.plist")"
 
 # What an installed Redlamp keeps, to check afterwards that nothing in it changed.
