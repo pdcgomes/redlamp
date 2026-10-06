@@ -42,6 +42,9 @@ export function SiteFooter() {
           <a className="text-mute hover:text-paper" href={site.contributing}>
             Contributing
           </a>
+          <a className="text-mute hover:text-paper" href={site.discord}>
+            Discord
+          </a>
           <a className="text-mute hover:text-paper" href={site.support}>
             Support Redlamp
           </a>

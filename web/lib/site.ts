@@ -15,6 +15,7 @@ export const site = {
   githubRepo: "pdcgomes/redlamp",
   readme: `${github}#readme`,
   contributing: `${github}#contributing`,
+  discord: "https://discord.gg/4VZpxpgRCA",
   support: "https://ko-fi.com/pdcgomes",
   /** Redlamp on Product Hunt: the link as Product Hunt's embed gives it, and the tagline the listing shows. */
   productHunt: {
