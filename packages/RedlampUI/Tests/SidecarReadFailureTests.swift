@@ -110,6 +110,7 @@ struct SidecarReadFailureTests {
         defer { NSFileCoordinator.removeFilePresenter(presenter) }
         var undone: [URL] = []
         sync.undo { url, _ in undone.append(url) }
+        await sync.idle()
         #expect(presenter.asked.withLock { $0 } >= 1)
         #expect(undone.isEmpty)
         #expect(sync.report == "1 photo couldn't be put back: the edit can't be read.")

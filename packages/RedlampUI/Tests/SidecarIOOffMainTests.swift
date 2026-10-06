@@ -68,9 +68,7 @@ struct SidecarIOOffMainTests {
         let started = ContinuousClock.now
         model.undoSync()
         let held = ContinuousClock.now - started
-        withKnownIssue("RESP-14: Undo Sync reads and writes on the main actor") {
-            #expect(held < mostHeld)
-        }
+        #expect(held < mostHeld)
         #expect(!model.settingsSync.canUndo)
         await model.settingsSync.idle()
         await stopSlowing()
@@ -95,9 +93,7 @@ struct SidecarIOOffMainTests {
         let started = ContinuousClock.now
         model.pasteFromPrevious()
         let held = ContinuousClock.now - started
-        withKnownIssue("RESP-14: Paste from Previous reads on the main actor") {
-            #expect(held < mostHeld)
-        }
+        #expect(held < mostHeld)
         for _ in 0 ..< 2000 where model.recipe[.exposure] != 2 {
             try await Task.sleep(for: .milliseconds(5))
         }
@@ -129,9 +125,7 @@ struct SidecarIOOffMainTests {
         let started = ContinuousClock.now
         try await Task.sleep(for: .milliseconds(10))
         let held = ContinuousClock.now - started
-        withKnownIssue("RESP-14: Remove Dust reads the selection's edits on the main actor") {
-            #expect(held < mostHeld)
-        }
+        #expect(held < mostHeld)
         await removing.value
         await model.settingsSync.idle()
         await stopSlowing()

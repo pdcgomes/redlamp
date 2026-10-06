@@ -272,6 +272,7 @@ struct HealToolTests {
         #expect(model.settingsSync.store.load(for: photos[2]) == nil, "no dust there, nothing written")
         #expect(model.dustMessage == "Healed 1 speck of dust in 2 photos.")
         model.undoSync()
+        await model.settingsSync.idle()
         #expect(model.settingsSync.store.load(for: photos[1]) == nil)
     }
 

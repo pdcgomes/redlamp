@@ -242,43 +242,63 @@ public final class SettingsSync {
         await task?.value
     }
 
-    /// Puts back every photo of the last batch not edited since.
+    /// Puts back every photo of the last batch not edited since, as a batch of its own: batches
+    /// started meanwhile wait for it.
     func undo(done: @escaping (URL, EditRecipe) -> Void) {
         guard canUndo else { return }
+        let written = written
+        let before = before
+        let title = "Undo \(title)"
+        self.written = [:]
+        self.before = [:]
+        progress = Progress(title: title, done: 0, total: written.count)
+        report = nil
+        task = Task { [weak self] in
+            await self?.putBack(written, before: before, title: title, done: done)
+        }
+    }
+
+    private func putBack(
+        _ written: [URL: Sidecar], before: [URL: EditRecipe?], title: String, done: (URL, EditRecipe) -> Void,
+    ) async {
         var unread = 0
+        let store = store
         for (url, after) in written {
-            let current: Sidecar?
-            do {
-                current = try store.loadThrowing(for: url)
-            } catch {
+            guard !Task.isCancelled else { break }
+            defer { progress?.done += 1 }
+            await saves?.wait(for: url)
+            let read = await Task.detached { Result { try store.loadThrowing(for: url) } }.value
+            guard case let .success(current) = read else {
                 unread += 1
                 continue
             }
             guard let current, current.recipe == after.recipe, let previous = before[url] else { continue }
             run?.photos[url] = nil
             if let previous {
-                record(previous, from: after.recipe, for: url, title: "Undo \(title)", action: .paste)
+                let undone = Self.recording(previous, in: current, from: after.recipe, title: title)
+                await Task.detached { try? store.save(undone, for: url) }.value
                 done(url, previous)
             } else if current.hasSameContent(as: after) {
-                store.delete(for: url)
+                await Task.detached { store.delete(for: url) }.value
                 done(url, EditRecipe())
             } else {
                 // Rated, say, since the sync made it: only the edit goes back.
-                var reverted = current
-                reverted.recipe = EditRecipe()
-                reverted.modified = Date()
-                reverted.session = HistorySession(steps: [
-                    HistoryStep(action: .open, title: "Opened", recipe: after.recipe),
-                    HistoryStep(action: .paste, title: "Undo \(title)", recipe: reverted.recipe),
-                ])
-                try? store.saveOrRemove(reverted, for: url)
+                let reverted = Self.recording(EditRecipe(), in: current, from: after.recipe, title: title)
+                await Task.detached { try? store.saveOrRemove(reverted, for: url) }.value
                 done(url, EditRecipe())
             }
         }
-        written = [:]
-        before = [:]
         let photos = "\(unread) photo\(unread == 1 ? "" : "s")"
-        report = unread > 0 ? "\(photos) couldn't be put back: the edit can't be read." : nil
+        let parts = [
+            Task.isCancelled ? "Stopped before the end." : nil,
+            unread > 0 ? "\(photos) couldn't be put back: the edit can't be read." : nil,
+        ].compactMap(\.self)
+        report = parts.isEmpty ? nil : parts.joined(separator: " ")
+        progress = nil
+        if !queue.isEmpty {
+            start(queue.removeFirst())
+            await task?.value
+        }
     }
 
     private func process(_ job: Job) async {
@@ -430,22 +450,19 @@ public final class SettingsSync {
         return (next, failedMasks)
     }
 
-    /// A history session for a change made without opening the photo.
-    private func record(
-        _ recipe: EditRecipe,
-        from current: EditRecipe,
-        for url: URL,
-        title: String,
-        action: HistoryAction,
-    ) {
-        guard var sidecar = store.load(for: url) else { return }
+    /// `sidecar` with its edit changed to `recipe` from `current`, in a history session of its own,
+    /// for a change made without opening the photo.
+    private static func recording(
+        _ recipe: EditRecipe, in sidecar: Sidecar, from current: EditRecipe, title: String,
+    ) -> Sidecar {
+        var sidecar = sidecar
         sidecar.recipe = recipe
         sidecar.modified = Date()
         sidecar.session = HistorySession(steps: [
             HistoryStep(action: .open, title: "Opened", recipe: current),
-            HistoryStep(action: action, title: title, recipe: recipe),
+            HistoryStep(action: .paste, title: title, recipe: recipe),
         ])
-        try? store.save(sidecar, for: url)
+        return sidecar
     }
 
     private static func report(skipped: Int, editedSince: Int, failedMasks: Int, cancelled: Bool) -> String? {

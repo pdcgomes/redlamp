@@ -67,12 +67,20 @@ public extension EditorModel {
     /// ⌥⌘V: the previously viewed photo's settings, with the last choice (Lightroom's "Previous"),
     /// onto the open photo and the rest of the selection.
     func pasteFromPrevious() {
-        guard let previous = previousSelection, info != nil,
-              let sidecar = try? SidecarStore().loadThrowing(for: previous)
-        else { return }
-        let step = paste(sidecar.recipe, copySelection, name: "Paste from Previous")
+        guard let previous = previousSelection, info != nil, let visit = currentVisit else { return }
+        Task { await pasteFromPrevious(previous, during: visit) }
+    }
+
+    /// Nothing when `previous` has no sidecar or it can't be read, or another photo has opened since.
+    private func pasteFromPrevious(_ previous: URL, during visit: PhotoVisit) async {
+        await saves.wait(for: previous)
+        let read = try? await library.scheduler.run(.onScreen) { () -> EditRecipe? in
+            (try? SidecarStore().loadThrowing(for: previous))?.recipe
+        }
+        guard let source = read ?? nil, currentVisit == visit else { return }
+        let step = paste(source, copySelection, name: "Paste from Previous")
         if isMultiSelecting {
-            sync(sidecar.recipe, copySelection, title: "Paste from Previous", step: step)
+            sync(source, copySelection, title: "Paste from Previous", step: step)
         }
     }
 

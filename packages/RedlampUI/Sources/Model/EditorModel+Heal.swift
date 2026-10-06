@@ -335,12 +335,22 @@ public extension EditorModel {
             isFindingDust = false
             dustSearch = nil
         }
+        let selected = selectedPhotos
+        let openRecipe = recipe
+        let others = selected.filter { $0 != open }
+        dustSearch = SettingsSync.Progress(title: "Finding Dust", done: 0, total: selected.count)
+        for url in others {
+            await saves.wait(for: url)
+        }
+        let store = settingsSync.store
+        let reads = await Task.detached {
+            Dictionary(others.map { url in (url, Result { try store.loadThrowing(for: url) }) }) { first, _ in first }
+        }.value
         // A photo whose edit can't be read is left out: its dust would be looked for in the wrong
         // edit, and the batch leaves it alone anyway.
-        let photos = selectedPhotos.compactMap { url -> (url: URL, recipe: EditRecipe)? in
-            guard url != open else { return (url, recipe) }
-            guard case let .success(sidecar) = Result(catching: { try settingsSync.store.loadThrowing(for: url) })
-            else { return nil }
+        let photos = selected.compactMap { url -> (url: URL, recipe: EditRecipe)? in
+            guard url != open else { return (url, openRecipe) }
+            guard case let .success(sidecar)? = reads[url] else { return nil }
             return (url, sidecar?.recipe ?? EditRecipe())
         }
         dustSearch = SettingsSync.Progress(title: "Finding Dust", done: 0, total: photos.count)

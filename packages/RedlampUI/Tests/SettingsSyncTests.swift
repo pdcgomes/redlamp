@@ -67,6 +67,7 @@ struct SettingsSyncTests {
 
         #expect(model.canPerform(.undoSync))
         model.undoSync()
+        await model.settingsSync.idle()
         #expect(store.load(for: b)?.recipe[.contrast] == 30)
         #expect(store.load(for: b)?.recipe[.exposure] == 0)
         #expect(store.load(for: c) == nil, "a sidecar the sync made is removed")
@@ -91,6 +92,7 @@ struct SettingsSyncTests {
         try Library.writeMetadata(for: b, store: store) { $0.rating = 4 }
 
         model.undoSync()
+        await model.settingsSync.idle()
         let kept = try #require(store.load(for: b), "the rating added since keeps the sidecar")
         #expect(kept.metadata?.rating == 4)
         #expect(kept.recipe[.exposure] == 0)
@@ -171,6 +173,9 @@ struct SettingsSyncTests {
         }
         #expect(model.previousSelection == photos[1] && model.selectedPhotos == photos)
         model.pasteFromPrevious()
+        for _ in 0 ..< 200 where model.recipe[.exposure] != 2 {
+            try await Task.sleep(for: .milliseconds(5))
+        }
         await model.settingsSync.idle()
         #expect(model.recipe[.exposure] == 2, "C, the open photo")
         #expect(SidecarStore().load(for: photos[0])?.recipe[.exposure] == 2, "A, in the background")
