@@ -267,6 +267,26 @@ struct PhotoSelectionTests {
         try await opened(a, in: model)
     }
 
+    @Test func `a rating that fails on a protected photo being opened is left to its banner`() async throws {
+        let photos = try await openDecoded()
+        defer { photos.cleanup() }
+        let (model, b) = (photos.model, photos.b)
+        let package = SidecarStore().url(for: b)
+        try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+        try Data(#"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":1,"values":{"basic.expo"#.utf8)
+            .write(to: package.appending(path: SidecarStore.editFile))
+
+        try await startOpening(b, in: photos)
+        _ = model.perform(.rating3)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(model.saveError == nil, "while B is read")
+        photos.reads.release()
+        try await opened(b, in: model)
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(model.readOnlyReason == .unreadable)
+        #expect(model.saveError == nil, "B's banner says why")
+    }
+
     @Test func `rating and moving on while the next photo is read rates that photo`() async throws {
         let photos = try await openDecoded()
         defer { photos.cleanup() }

@@ -126,7 +126,7 @@ extension EditorModel {
         } else {
             false
         }
-        if protection != nil, isRating, url == selection {
+        if protection != nil, isRating, url == opening ?? selection {
             // A rating made as a protected photo opened: it opens read-only and says why.
             return
         }
