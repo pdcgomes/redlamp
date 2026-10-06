@@ -54,23 +54,6 @@ public struct FontSpec: Sendable, Hashable {
             ? .monospacedDigitSystemFont(ofSize: size, weight: weight.nsWeight)
             : .systemFont(ofSize: size, weight: weight.nsWeight)
     }
-
-    /// Attributes for drawing `text` with AppKit, matching SwiftUI's rendering of the same
-    /// font, color and tracking.
-    public func attributes(color: NSColor, alignment: NSTextAlignment = .natural) -> [NSAttributedString.Key: Any] {
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.alignment = alignment
-        paragraph.lineBreakMode = .byTruncatingTail
-        var attributes: [NSAttributedString.Key: Any] = [
-            .font: nsFont,
-            .foregroundColor: color,
-            .paragraphStyle: paragraph,
-        ]
-        if tracking != 0 {
-            attributes[.kern] = tracking
-        }
-        return attributes
-    }
 }
 
 public enum Typography {
