@@ -83,6 +83,10 @@ public final class FileOperations: Sendable {
         if let unfinished = try await unfinishedEntries().first {
             throw FileOperationError.unfinished(unfinished.id)
         }
+        guard !batch.steps.isEmpty else {
+            // Nothing to do, and nothing for the journal or Undo.
+            return FileOutcome(batch: batch, state: .finished)
+        }
         let locator = try await locator()
         let (fileSystem, journal) = (fileSystem, journal)
         let checked = try await LibraryIndex.offCaller {
@@ -221,7 +225,16 @@ public final class FileOperations: Sendable {
             batch: batch, log: journal.log(id), fileSystem: fileSystem, store: SidecarStore(locator: locator),
             trashed: logged.trashed, outcome: FileOutcome(batch: batch, state: logged.state), interruption: nil,
         )
-        let steps = batch.steps
+        let outcome = try await settle(runner, logged: logged, choice, locator: locator, progress: progress)
+        try await LibraryIndex.offCaller { runner.removeInterruptedSaves(locator: locator) }
+        return outcome
+    }
+
+    private func settle(
+        _ runner: FileRunner, logged: FileJournal.Progress, _ choice: FileRecovery, locator: SidecarLocator,
+        progress: (@Sendable (FileProgress) -> Void)?,
+    ) async throws -> FileOutcome {
+        let steps = runner.batch.steps
         if logged.state == .rollingBack {
             try await rollBack(runner, steps: logged.done.sorted(by: >), locator: locator, progress: progress)
             var outcome = runner.outcome

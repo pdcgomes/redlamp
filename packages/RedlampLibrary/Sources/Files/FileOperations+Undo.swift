@@ -105,6 +105,13 @@ public extension FileOperations {
             let moved = planner.moveSteps(present)
             return (clearing + making + folders + moved + files + removing + back, gone)
         }
+        guard !planned.isEmpty else {
+            // Nothing it did is where it left it: the batch stays as it is, for when it is.
+            if gone.isEmpty {
+                throw FileOperationError.nothingToUndo
+            }
+            throw FileOperationError.conflicts(gone.map { FileConflict(path: $0, reason: .gone) })
+        }
         var undo = FileBatch(kind: .undo, title: "Undo " + batch.title, steps: planned, undoes: id)
         undo.gone = gone
         return undo

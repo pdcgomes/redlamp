@@ -354,6 +354,36 @@ final class FileRunner: @unchecked Sendable {
     /// Sidecars written at once: enough to wait on several, few enough for a spinning disk.
     static let sidecarWriters = 8
 
+    /// Removes what the batch's sidecar writes left when a forced quit cut them short: hidden copies
+    /// of the sidecars it wrote, named as `SidecarStore` names one while it builds or removes it,
+    /// `.IMG_1234.ARW.redlamp.<UUID>`, beside the photos and on this Mac.
+    func removeInterruptedSaves(locator: SidecarLocator) {
+        var names: [String: Set<String>] = [:]
+        for step in batch.steps where Self.writesNames(step) {
+            for photo in step.photos {
+                for path in [photo.from, photo.to] {
+                    let (folder, name) = FilePlanner.split(path)
+                    names[folder, default: []].insert(name)
+                    if let mac = locator.onThisMac(URL(fileURLWithPath: path)) {
+                        names[mac.deletingLastPathComponent().path, default: []].insert(name)
+                    }
+                }
+            }
+        }
+        for (folder, photos) in names {
+            for entry in (try? FileManager.default.contentsOfDirectory(atPath: folder)) ?? []
+                where entry.hasPrefix(".") {
+                let hidden = entry.dropFirst()
+                guard let dot = hidden.lastIndex(of: "."),
+                      UUID(uuidString: String(hidden[hidden.index(after: dot)...])) != nil,
+                      hidden[..<dot].hasSuffix(".redlamp"),
+                      photos.contains(String(hidden[..<dot].dropLast(".redlamp".count)))
+                else { continue }
+                try? FileManager.default.removeItem(atPath: folder + "/" + entry)
+            }
+        }
+    }
+
     /// Changes the original name in the photo's sidecar, making one if there's none and removing it
     /// if nothing else is left in it; a sidecar this build can't write is left as it is.
     private static func changeOriginalName(

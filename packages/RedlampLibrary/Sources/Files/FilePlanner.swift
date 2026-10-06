@@ -23,6 +23,9 @@ final class FilePlanner: @unchecked Sendable {
         /// By folded name.
         var entries: [String: FileEntry] = [:]
         var exists = false
+        /// There, but it can't be listed: the Trash from inside a sandbox, a drop box. What's in it is
+        /// asked for by name.
+        var isClosed = false
         /// The photos' names by their folded names without extensions.
         var photosByStem: [String: [String]] = [:]
     }
@@ -39,7 +42,8 @@ final class FilePlanner: @unchecked Sendable {
             return listing
         }
         var listing = Listing()
-        if let entries = try? fileSystem.contentsOfDirectory(at: URL(fileURLWithPath: folder, isDirectory: true)) {
+        let url = URL(fileURLWithPath: folder, isDirectory: true)
+        if let entries = try? fileSystem.contentsOfDirectory(at: url) {
             listing.exists = true
             for entry in entries {
                 listing.entries[NamingJob.fold(entry.name)] = entry
@@ -48,15 +52,21 @@ final class FilePlanner: @unchecked Sendable {
                         .append(entry.name)
                 }
             }
+        } else if (try? fileSystem.attributes(of: url))?.isDirectory == true {
+            listing.exists = true
+            listing.isClosed = true
         }
         listings[folder] = listing
         return listing
     }
 
-    /// What's at `path` as its folder's listing has it.
+    /// What's at `path` as its folder's listing has it, or as the file system says when the folder
+    /// can't be listed.
     func entry(_ path: String) -> FileEntry? {
         let (folder, name) = Self.split(path)
-        return listing(folder).entries[NamingJob.fold(name)]
+        let listing = listing(folder)
+        guard listing.isClosed else { return listing.entries[NamingJob.fold(name)] }
+        return try? fileSystem.attributes(of: URL(fileURLWithPath: path))
     }
 
     /// Forgets the listings, so the next ones are read again.

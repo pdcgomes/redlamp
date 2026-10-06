@@ -101,6 +101,29 @@ struct FileTrashTests {
         #expect(try await sandbox.rows()["Shoot/IMG_0002.ARW"] == ids["Shoot/IMG_0002.ARW"])
     }
 
+    @Test func `a Trash that can't be listed still gives back what's in it, and an Undo left nothing changes nothing`(
+    ) async throws {
+        let (sandbox, _, trash) = try await Self.sandbox()
+        defer { sandbox.remove() }
+        let ids = try await sandbox.rows()
+        let operations = sandbox.operations()
+        try await operations.run(operations.planTrash(photos: [#require(ids["Shoot/IMG_0002.ARW"])]))
+        try FileManager.default.setAttributes([.posixPermissions: 0o300], ofItemAtPath: trash.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: trash.path) }
+        #expect(throws: (any Error).self) { try FileManager.default.contentsOfDirectory(atPath: trash.path) }
+        #expect(try await operations.undo().isFinished)
+        #expect(try await sandbox.rows()["Shoot/IMG_0002.ARW"] == ids["Shoot/IMG_0002.ARW"])
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: trash.path)
+
+        try await operations.run(operations.planTrash(photos: [#require(ids["Shoot/IMG_0002.ARW"])]))
+        for name in try FileManager.default.contentsOfDirectory(atPath: trash.path) {
+            try FileManager.default.removeItem(at: trash.appending(path: name))
+        }
+        let trashed = try await operations.lastUndoable()
+        await #expect(throws: FileOperationError.self) { try await operations.undo() }
+        #expect(try await operations.lastUndoable()?.id == trashed?.id, "it can be undone once the files are back")
+    }
+
     @Test func `a folder goes to the Trash with its photos' rows, and comes back with them`() async throws {
         let (sandbox, _, trash) = try await Self.sandbox(onThisMac: true)
         defer { sandbox.remove() }

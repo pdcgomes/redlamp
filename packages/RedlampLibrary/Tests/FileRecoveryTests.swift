@@ -77,6 +77,10 @@ struct FileRecoveryTests {
             await #expect(throws: FileOperations.ForcedQuit.self, "\(interruption)") {
                 try await killed.run(Self.plan(killed, sandbox))
             }
+            // What a sidecar's save leaves when it's cut short.
+            try FileManager.default.createDirectory(
+                at: sandbox.url("Card/.Shot-1.NEF.redlamp.\(UUID().uuidString)"), withIntermediateDirectories: false,
+            )
             let launch = sandbox.operations()
             #expect(try await launch.unfinishedEntries().count == 1)
             let outcomes = try await launch.recover(choice)
