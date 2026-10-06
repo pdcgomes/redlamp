@@ -386,6 +386,10 @@
           "title" : "Loupe"
         },
         {
+          "id" : "library.filter",
+          "title" : "Filter Bar and Sorting"
+        },
+        {
           "id" : "library.folders",
           "title" : "Folders Panel"
         },

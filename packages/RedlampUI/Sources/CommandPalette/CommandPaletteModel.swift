@@ -104,6 +104,10 @@ public final class CommandPaletteModel {
         if case let .action(action) = item.kind {
             return editor.canPerform(action)
         }
+        switch item.kind {
+        case .filterPreset, .page(.filterPresets): return PaletteCatalog.isAvailable(.filterPresets, editor: editor)
+        default: break
+        }
         // Sliders, pickers and choices change Develop's photo, which the Library module doesn't show.
         guard editor.module == .develop else { return false }
         return switch item.kind {

@@ -37,8 +37,12 @@ public final class LibraryService {
 
     public let paths: LibraryPaths
     public private(set) var state = State.opening
+    /// The filter bar: each source's filter and sort, applied to the lists the library makes (LIB-18).
+    public let filters: LibraryFilters
     /// Where photos' sidecars are read and written: `FolderLibrary`'s, set as placements change.
     let sidecars: SidecarPlacement
+    /// The list made last, which the filter bar filters.
+    private weak var currentList: LibraryFolderList?
     private let defaults: UserDefaults?
     private let thumbnail: @Sendable (URL, Int) -> CGImage?
     private(set) var core: LibraryCore?
@@ -69,9 +73,11 @@ public final class LibraryService {
         self.sidecars = sidecars
         self.defaults = defaults
         self.thumbnail = thumbnail
+        filters = LibraryFilters(defaults: defaults, presetsURL: paths.root.appending(path: "Filter Presets.json"))
         if let defaults, let saved = SidecarLocator.saved(in: defaults) {
             sidecars.locator = saved
         }
+        filters.service = self
     }
 
     isolated deinit {
@@ -276,8 +282,16 @@ public final class LibraryService {
         _ event: ChangeTracker.Event, core: LibraryCore, report: @Sendable (Progress) async -> Void,
     ) async {
         core.live.receive(event)
-        if case let .indexer(.folderIndexed(folder)) = event {
+        switch event {
+        case let .indexer(.folderIndexed(folder)):
             await report(.indexed(folder.path))
+        case .indexer(.volumeOffline), .indexer(.volumeOnline):
+            // A volume marks all its photos at once, without an event for each.
+            if let changed = try? await core.engine.photosWithChangedState(), !changed.isEmpty {
+                core.live.photosChanged(changed)
+            }
+        default:
+            break
         }
     }
 
@@ -359,14 +373,29 @@ public final class LibraryService {
         return rootIsCurrent || folders.allSatisfy { indexed.contains($0.path) }
     }
 
-    /// `folder`'s photos from the library, delivered to `deliver` as they change, until the list is
-    /// closed.
+    /// `folder`'s photos from the library, filtered and sorted as the filter bar has the folder,
+    /// delivered to `deliver` as they change, until the list is closed.
     func list(
         _ folder: URL, includingSubfolders: Bool,
         deliver: @escaping @MainActor @Sendable (LibraryFolderList.Change) -> Void,
     ) -> LibraryFolderList? {
         guard let core else { return nil }
-        return LibraryFolderList(core: core, folder: folder, includingSubfolders: includingSubfolders, deliver: deliver)
+        filters.follow(folder, includingSubfolders: includingSubfolders)
+        let list = LibraryFolderList(
+            core: core, folder: folder, includingSubfolders: includingSubfolders,
+            filter: filters.request(for: folder, includingSubfolders: includingSubfolders), deliver: deliver,
+        )
+        currentList = list
+        return list
+    }
+
+    /// Filters and sorts the list of `folder` the library is showing, if it is; false when it isn't.
+    @discardableResult
+    func filter(_ folder: URL, includingSubfolders: Bool, by filter: LibraryListFilter) -> Bool {
+        guard let list = currentList, list.folder == folder, list.includesSubfolders == includingSubfolders
+        else { return false }
+        list.setFilter(filter)
+        return true
     }
 
     /// Redlamp wrote `photo`'s sidecar through `store`.

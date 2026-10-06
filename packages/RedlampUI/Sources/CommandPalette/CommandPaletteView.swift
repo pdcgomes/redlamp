@@ -387,6 +387,7 @@ private struct PaletteRowTrailing: View {
         case let .compareLayout(layout?): editor.showBefore && editor.compareLayout == layout
         case .compareLayout(nil): !editor.showBefore
         case let .historyStep(index): index == editor.historyIndex
+        case let .filterPreset(id): editor.libraryFilters?.preset?.id == id
         default: false
         }
     }

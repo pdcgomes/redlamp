@@ -95,6 +95,9 @@
                 module(action)
             // Library
             case .cycleGridStyle, .largerThumbnails, .smallerThumbnails: grid(action)
+            case .toggleFilterBar, .toggleFilters, .lockFilters, .sortByFolder, .sortByCaptureTime, .sortByName,
+                 .sortByRating, .sortByEditTime, .sortByModified, .sortByFileSize, .reverseSort:
+                filter(action)
             case .showInFinder:
                 ActionCheck(action: action, setUp: { app in
                     try app.main { $0.libraryViews.revealInFinder = { Revealed.photos.append(contentsOf: $0) } }

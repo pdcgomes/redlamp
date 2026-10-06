@@ -112,6 +112,26 @@ struct AppCommands: Commands {
             mouseItem(.largerThumbnails)
             mouseItem(.smallerThumbnails)
             Divider()
+            mouseItem(.toggleFilterBar)
+            toggle(.toggleFilters, isOn: model.libraryFilters?.filter.isEnabled == true)
+            toggle(.lockFilters, isOn: model.libraryFilters?.isLocked == true)
+            Menu("Filter Presets") {
+                ForEach(model.libraryFilters?.presets ?? []) { preset in
+                    Toggle(preset.name, isOn: Binding(
+                        get: { model.libraryFilters?.preset == preset },
+                        set: { _ in model.libraryFilters?.choose(preset) },
+                    ))
+                }
+            }
+            .disabled(model.libraryFilters == nil || model.isModalDialogOpen)
+            Menu("Sort") {
+                ForEach(ShortcutAction.allCases.filter { $0.sortField != nil }) { action in
+                    toggle(action, isOn: model.libraryFilters?.sort.field == action.sortField)
+                }
+                Divider()
+                item(.reverseSort)
+            }
+            Divider()
         }
 
         CommandGroup(after: .toolbar) {
@@ -191,6 +211,13 @@ struct AppCommands: Commands {
     /// modifier-free key equivalent would also fire while typing in a text field.
     private func mouseItem(_ action: ShortcutAction) -> some View {
         Button("\(action.title)    \(action.combos.first?.display ?? "")") { model.perform(action) }
+            .disabled(!model.canPerform(action))
+    }
+
+    /// A menu item with a checkmark while `isOn`, and the action's ⌘ shortcut.
+    private func toggle(_ action: ShortcutAction, isOn: Bool) -> some View {
+        Toggle(action.title, isOn: Binding(get: { isOn }, set: { _ in model.perform(action) }))
+            .keyboardShortcut(action.combos.first?.keyboardShortcut)
             .disabled(!model.canPerform(action))
     }
 }

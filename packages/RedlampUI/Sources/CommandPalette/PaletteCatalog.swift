@@ -174,12 +174,13 @@ enum PaletteCatalog {
         switch page {
         case .whiteBalance: editor.info?.supportsWhiteBalance == true
         case .snapshots, .history, .treatment, .baseLook, .recipes, .compare: editor.info != nil
+        case .filterPresets: editor.libraryFilters != nil && editor.folder != nil
         }
     }
 
     /// Choices the top-level search reaches without opening their page.
     private static func deepChoiceItems(editor: EditorModel) -> [PaletteItem] {
-        [PalettePage.whiteBalance, .treatment, .baseLook, .recipes, .compare]
+        [PalettePage.whiteBalance, .treatment, .baseLook, .recipes, .compare, .filterPresets]
             .filter { isAvailable($0, editor: editor) }
             .flatMap { choiceItems($0, editor: editor) }
             .filter(\.kind.isChoice)
@@ -249,6 +250,13 @@ enum PaletteCatalog {
                 PaletteItem(kind: .snapshot(snapshot.id), title: snapshot.name, context: "Snapshot", symbol: "camera")
             }
             return new + snapshots
+        case .filterPresets:
+            return (editor.libraryFilters?.presets ?? []).map { preset in
+                PaletteItem(
+                    kind: .filterPreset(preset.id), title: preset.name, context: "Filter Preset",
+                    symbol: "line.3.horizontal.decrease.circle", keywords: ["filter", "preset", "library"],
+                )
+            }
         case .history:
             return editor.history.indices.reversed().map { index in
                 PaletteItem(

@@ -15,6 +15,17 @@ extension ShortcutAction {
         .largerThumbnails: ["thumbnail size", "bigger", "larger", "zoom", "grid", "library"],
         .smallerThumbnails: ["thumbnail size", "smaller", "grid", "library"],
         .showInFinder: ["finder", "reveal", "folder", "file", "library"],
+        .toggleFilterBar: ["filter", "search", "find", "query", "library filter", "text", "attribute", "metadata"],
+        .toggleFilters: ["filter", "filters off", "turn off", "library"],
+        .lockFilters: ["filter", "lock", "keep", "every folder", "library"],
+        .sortByFolder: ["sort", "order", "folder", "default", "library"],
+        .sortByCaptureTime: ["sort", "order", "date", "taken", "time", "library"],
+        .sortByName: ["sort", "order", "name", "file name", "alphabetical", "library"],
+        .sortByRating: ["sort", "order", "stars", "rating", "library"],
+        .sortByEditTime: ["sort", "order", "edited", "last edit", "library"],
+        .sortByModified: ["sort", "order", "modified", "date", "file", "library"],
+        .sortByFileSize: ["sort", "order", "size", "bytes", "largest", "library"],
+        .reverseSort: ["sort", "reverse", "descending", "ascending", "order", "library"],
         .beforeAfter: ["compare", "before", "after", "original"],
         .nextCompareLayout: ["compare", "side by side", "split", "layout"],
         .previousCompareLayout: ["compare", "side by side", "split", "layout"],
@@ -124,6 +135,12 @@ extension ShortcutAction {
         case .largerThumbnails: "plus.square.on.square"
         case .smallerThumbnails: "minus.square"
         case .showInFinder: "folder"
+        case .toggleFilterBar: "line.3.horizontal.decrease.circle"
+        case .toggleFilters: "line.3.horizontal.decrease"
+        case .lockFilters: "lock"
+        case .sortByFolder, .sortByCaptureTime, .sortByName, .sortByRating, .sortByEditTime, .sortByModified,
+             .sortByFileSize: "arrow.up.arrow.down"
+        case .reverseSort: "arrow.up.and.down.text.horizontal"
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout: "rectangle.2.swap"
         case .toggleZoom: "1.magnifyingglass"
         case .zoomIn: "plus.magnifyingglass"

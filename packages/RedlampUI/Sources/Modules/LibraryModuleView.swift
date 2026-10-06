@@ -10,11 +10,15 @@ final class LibraryModuleView: NSView {
     let grid: LibraryGridView
     let loupe: LibraryLoupeView
     let toolbar: LibraryToolbarView
+    /// The filter bar above the grid (LIB-18), shown by `\`.
+    let filterBar: LibraryFilterBarView
     private let filmstrip: NSHostingView<LibraryFilmstrip>
     private let model: EditorModel
     private var trackers: [Tracker] = []
     private var withFilmstrip: [NSLayoutConstraint] = []
     private var withoutFilmstrip: [NSLayoutConstraint] = []
+    private var filterHeight: NSLayoutConstraint?
+    private var showsFilterBar = false
     /// The Library module is the one shown (`ModuleContentController`).
     private(set) var isShownModule = false
     private var showsFilmstrip = true
@@ -26,6 +30,7 @@ final class LibraryModuleView: NSView {
         grid = LibraryGridView(model: model)
         loupe = LibraryLoupeView(model: model)
         toolbar = LibraryToolbarView(model: model)
+        filterBar = LibraryFilterBarView(model: model)
         filmstrip = NSHostingView(rootView: LibraryFilmstrip(model: model, theme: theme))
         filmstrip.sizingOptions = []
         super.init(frame: CGRect(x: 0, y: 0, width: 1600, height: 1000))
@@ -33,10 +38,14 @@ final class LibraryModuleView: NSView {
         layer?.backgroundColor = NSColor(white: 0.12, alpha: 1).cgColor
         let stage = safeAreaLayoutGuide
         let inset = PanelMetrics.inset
-        for view in [grid, loupe, toolbar, filmstrip] as [NSView] {
+        for view in [grid, loupe, toolbar, filmstrip, filterBar] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
+        addSubview(filterBar.completions)
+        filterBar.isHidden = true
+        let filterHeight = filterBar.heightAnchor.constraint(equalToConstant: 0)
+        self.filterHeight = filterHeight
         var constraints = [
             filmstrip.leadingAnchor.constraint(equalTo: stage.leadingAnchor, constant: inset),
             filmstrip.trailingAnchor.constraint(equalTo: stage.trailingAnchor, constant: -inset),
@@ -45,12 +54,16 @@ final class LibraryModuleView: NSView {
             toolbar.leadingAnchor.constraint(equalTo: stage.leadingAnchor),
             toolbar.trailingAnchor.constraint(equalTo: stage.trailingAnchor),
             toolbar.heightAnchor.constraint(equalToConstant: LibraryToolbarView.height),
+            filterBar.leadingAnchor.constraint(equalTo: stage.leadingAnchor),
+            filterBar.trailingAnchor.constraint(equalTo: stage.trailingAnchor),
+            filterBar.topAnchor.constraint(equalTo: stage.topAnchor),
+            filterHeight,
         ]
         for view in [grid, loupe] as [NSView] {
             constraints += [
                 view.leadingAnchor.constraint(equalTo: stage.leadingAnchor),
                 view.trailingAnchor.constraint(equalTo: stage.trailingAnchor),
-                view.topAnchor.constraint(equalTo: stage.topAnchor),
+                view.topAnchor.constraint(equalTo: view === grid ? filterBar.bottomAnchor : stage.topAnchor),
                 view.bottomAnchor.constraint(equalTo: toolbar.topAnchor),
             ]
         }
@@ -84,11 +97,35 @@ final class LibraryModuleView: NSView {
                 showFilmstrip(model.filmstripVisible && model.lightsOut == 0
                     && (model.library.count > 0 || model.library.isOpenFolderUnavailable))
             },
+            Tracker { [weak self] in
+                guard let self, let filters = model.libraryFilters else { return }
+                _ = filters.filter.sections
+                showFilterBar(filters.isBarShown && model.libraryView == .grid)
+            },
         ]
+    }
+
+    /// The filter bar shown above the grid, as tall as its sections, its text taking the keyboard as
+    /// it's shown; hidden, the grid takes it back.
+    private func showFilterBar(_ shown: Bool) {
+        filterHeight?.constant = shown ? filterBar.intrinsicContentSize.height : 0
+        filterBar.isHidden = !shown
+        filterBar.completions.isHidden = !shown || filterBar.completions.items.isEmpty
+        defer { showsFilterBar = shown }
+        guard shown != showsFilterBar, isShownModule else { return }
+        if shown {
+            layoutSubtreeIfNeeded()
+            filterBar.focusText()
+        } else if let editor = window?.firstResponder as? NSTextView, editor.delegate === filterBar.field {
+            takeFocus()
+        }
     }
 
     func setShown(_ shown: Bool) {
         isShownModule = shown
+        if !shown, let editor = window?.firstResponder as? NSTextView, editor.delegate === filterBar.field {
+            window?.makeFirstResponder(nil)
+        }
     }
 
     private func updateParts() {

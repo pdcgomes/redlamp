@@ -119,7 +119,7 @@ public extension EditorModel {
             // In the grid, Space and Z go on to it: Space opens the loupe, Z the loupe at 1:1.
             guard libraryView == .loupe, selection != nil else { return false }
             toggleLoupeZoom()
-        default: return nil
+        default: return performFilterShortcut(action)
         }
         return true
     }
@@ -132,7 +132,7 @@ public extension EditorModel {
         case .smallerThumbnails: libraryViews.thumbnailSize > GridSize.range.lowerBound
         case .showInFinder: selection != nil
         case .toggleZoom where module == .library: libraryView == .loupe && selection != nil
-        default: nil
+        default: canPerformFilterShortcut(action)
         }
     }
 

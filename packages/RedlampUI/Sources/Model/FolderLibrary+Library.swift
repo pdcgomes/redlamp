@@ -107,6 +107,9 @@ extension FolderLibrary {
 
     private func received(_ change: LibraryFolderList.Change, generation: Int) {
         guard generation == self.generation, fromLibrary.list != nil else { return }
+        if let ordered = change.ordered {
+            return show(ordered)
+        }
         guard let all = change.all else {
             if fromLibrary.adopting {
                 fromLibrary.pending.append(change)

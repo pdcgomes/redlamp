@@ -256,6 +256,11 @@ public extension FeedbackArea {
                 ),
                 FeedbackFeature("loupe", "Loupe", ["loupe", "zoom", "1:1", "fit", "large photo"]),
                 FeedbackFeature(
+                    "filter",
+                    "Filter Bar and Sorting",
+                    ["filter", "search", "find", "sort", "metadata", "attribute", "preset", "lock", "offline"],
+                ),
+                FeedbackFeature(
                     "folders",
                     "Folders Panel",
                     ["add folder", "remove folder", "locate", "missing folder"],

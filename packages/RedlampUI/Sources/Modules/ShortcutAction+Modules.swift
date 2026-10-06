@@ -21,10 +21,11 @@ extension ShortcutAction {
     }
 
     /// The Library grid's, on keys Develop gives other meanings: J cycles the cell style where Develop
-    /// shows clipping, and = and - size the thumbnails where Develop steps the selected setting.
+    /// shows clipping, = and - size the thumbnails where Develop steps the selected setting, and \ shows
+    /// the filter bar where Develop shows Before / After.
     var isLibraryOnly: Bool {
         switch self {
-        case .cycleGridStyle, .largerThumbnails, .smallerThumbnails: true
+        case .cycleGridStyle, .largerThumbnails, .smallerThumbnails, .toggleFilterBar: true
         default: false
         }
     }

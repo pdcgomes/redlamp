@@ -20,10 +20,10 @@ extension CommandPaletteModel {
     }
 
     static func previews(_ kind: PaletteItemKind) -> Bool {
-        if case .compareLayout = kind {
-            return false
+        switch kind {
+        case .compareLayout, .filterPreset: false
+        default: true
         }
-        return true
     }
 
     func preview(_ kind: PaletteItemKind) async {
@@ -96,6 +96,10 @@ extension CommandPaletteModel {
             }
         case let .historyStep(index):
             editor.goToHistory(index)
+        case let .filterPreset(id):
+            if let filters = editor.libraryFilters, let preset = filters.presets.first(where: { $0.id == id }) {
+                filters.choose(preset)
+            }
         default:
             break
         }

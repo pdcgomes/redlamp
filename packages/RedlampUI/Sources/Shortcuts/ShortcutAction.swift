@@ -106,6 +106,9 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
 
     /// Library
     case cycleGridStyle, largerThumbnails, smallerThumbnails, showInFinder
+    case toggleFilterBar, toggleFilters, lockFilters
+    case sortByFolder, sortByCaptureTime, sortByName, sortByRating, sortByEditTime, sortByModified, sortByFileSize
+    case reverseSort
 
     // View
     case beforeAfter, nextCompareLayout, previousCompareLayout
@@ -153,7 +156,9 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         switch self {
         case .libraryModule, .developModule, .previousModule, .gridView, .loupeView, .compareView, .surveyView:
             .modules
-        case .cycleGridStyle, .largerThumbnails, .smallerThumbnails, .showInFinder:
+        case .cycleGridStyle, .largerThumbnails, .smallerThumbnails, .showInFinder,
+             .toggleFilterBar, .toggleFilters, .lockFilters, .sortByFolder, .sortByCaptureTime, .sortByName,
+             .sortByRating, .sortByEditTime, .sortByModified, .sortByFileSize, .reverseSort:
             .library
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout,
              .toggleZoom, .zoomIn, .zoomOut, .clipping, .rawClipping, .colorAssessment, .labReadout, .infoOverlay,
@@ -201,6 +206,17 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .largerThumbnails: "Increase Thumbnail Size"
         case .smallerThumbnails: "Decrease Thumbnail Size"
         case .showInFinder: "Show in Finder"
+        case .toggleFilterBar: "Show / Hide Filter Bar"
+        case .toggleFilters: "Enable Filters"
+        case .lockFilters: "Lock Filters"
+        case .sortByFolder: "Sort by Folder Order"
+        case .sortByCaptureTime: "Sort by Capture Time"
+        case .sortByName: "Sort by File Name"
+        case .sortByRating: "Sort by Rating"
+        case .sortByEditTime: "Sort by Edit Time"
+        case .sortByModified: "Sort by Modified Date"
+        case .sortByFileSize: "Sort by File Size"
+        case .reverseSort: "Reverse Sort Order"
         case .beforeAfter: "Before / After"
         case .nextCompareLayout: "Next Before / After Layout"
         case .previousCompareLayout: "Previous Before / After Layout"
@@ -318,6 +334,11 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .largerThumbnails: [.char("=")]
         case .smallerThumbnails: [.char("-")]
         case .showInFinder: [.char("r", command: true)]
+        // In Library, where Develop's Before / After key shows the filter bar, as in Lightroom Classic.
+        case .toggleFilterBar: [.char("\\")]
+        case .toggleFilters: [.char("l", command: true)]
+        case .lockFilters, .sortByFolder, .sortByCaptureTime, .sortByName, .sortByRating, .sortByEditTime,
+             .sortByModified, .sortByFileSize, .reverseSort: []
         case .beforeAfter: [.char("\\")]
         case .nextCompareLayout: [.char("y")]
         case .previousCompareLayout: [.char("y", shift: true)]

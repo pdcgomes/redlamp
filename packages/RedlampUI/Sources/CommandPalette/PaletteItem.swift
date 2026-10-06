@@ -8,7 +8,7 @@ import RedlampEngineAPI
 
 /// A page of choices the palette opens into.
 @_spi(Harness) public enum PalettePage: String, CaseIterable, Sendable, Hashable {
-    case whiteBalance, treatment, baseLook, recipes, compare, snapshots, history
+    case whiteBalance, treatment, baseLook, recipes, compare, snapshots, history, filterPresets
 
     public var title: String {
         switch self {
@@ -19,6 +19,7 @@ import RedlampEngineAPI
         case .compare: "Before / After"
         case .snapshots: "Snapshots"
         case .history: "History"
+        case .filterPresets: "Filter Presets"
         }
     }
 
@@ -31,6 +32,7 @@ import RedlampEngineAPI
         case .compare: "rectangle.2.swap"
         case .snapshots: "camera"
         case .history: "clock.arrow.circlepath"
+        case .filterPresets: "line.3.horizontal.decrease.circle"
         }
     }
 
@@ -43,12 +45,13 @@ import RedlampEngineAPI
         case .compare: ["compare", "before", "after", "split", "side by side"]
         case .snapshots: ["snapshot", "saved"]
         case .history: ["undo", "steps", "revert"]
+        case .filterPresets: ["filter", "saved filter", "preset", "search", "library"]
         }
     }
 
     /// Whether moving through the page previews each choice on the photo.
     var previews: Bool {
-        self != .compare
+        self != .compare && self != .filterPresets
     }
 }
 
@@ -67,6 +70,8 @@ import RedlampEngineAPI
     case compareLayout(CompareLayout?)
     case snapshot(UUID)
     case historyStep(Int)
+    /// A saved filter of the Library filter bar, by its preset's ID.
+    case filterPreset(String)
 
     /// What ↵ does, for the hint bar.
     var verb: String {
