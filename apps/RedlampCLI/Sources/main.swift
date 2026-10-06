@@ -26,8 +26,12 @@ options:
   --mask <kind>            add an AI mask: subject, background, sky, people, or people:<part>
                            (faceSkin, bodySkin, eyebrows, eyeSclera, iris, lips, teeth, hair,
                            facialHair, clothes)
+  --mask-bitmap <kind>=<png>  add an AI mask of that kind from a mask PNG, as if it had been made
   --mask-set <name>=<v>    set a local adjustment of the last mask, e.g. --mask-set local.exposure=-1
   --mask-invert            invert the last mask's components
+  --coverage               write the last mask's coverage as the renderer draws it (the B&W overlay),
+                           at the size asked for, instead of the photo; use with --16bit
+  --process <n>            render as process version n, as an edit made then would be
   --base-look <name>       color, neutral, vivid, landscape, portrait, monochrome, or embedded (the
                            camera profile's look a DNG carries); --profile works too
   --wb <mode>              asShot, auto, daylight, cloudy, shade, tungsten, fluorescent, flash
@@ -94,6 +98,8 @@ func run(_ arguments: [String]) async throws {
     var output: URL?
     var fillOptions = GenerativeFillOptions()
     var keepsShadows = false
+    var coverage = false
+    var process: Int?
     var request = StillRequest(recipe: recipe, purpose: .export)
     var index = 2
     func value() throws -> String {
@@ -135,6 +141,27 @@ func run(_ arguments: [String]) async throws {
             let masks = try await engine.computeMasks(MaskRequest(kind: kind, part: part))
             let name = kind == .people && part != .entirePerson ? part.name : kind.name
             recipe.masks.append(MaskLayer(name: name, components: masks.map { MaskComponent(shape: .ai($0)) }))
+        case "--mask-bitmap":
+            let pair = try value().split(separator: "=", maxSplits: 1).map(String.init)
+            guard pair.count == 2, let kind = MaskKind(rawValue: pair[0]), kind.isAI else {
+                throw CLIError(description: "bad --mask-bitmap \(arguments[index]) (it takes kind=mask.png)")
+            }
+            let png = try Data(contentsOf: URL(fileURLWithPath: pair[1]))
+            guard let source = CGImageSourceCreateWithData(png as CFData, nil),
+                  let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
+            else { throw CLIError(description: "\(pair[1]) isn't an image") }
+            let mask = AIMask(
+                kind: kind, provider: "file", revision: 1, analysisHash: "", center: ImagePoint(x: 0.5, y: 0.5),
+                bitmap: MaskBitmap(png: png, width: image.width, height: image.height),
+            )
+            recipe.masks.append(MaskLayer(name: kind.name, components: [MaskComponent(shape: .ai(mask))]))
+        case "--coverage":
+            coverage = true
+        case "--process":
+            guard let number = try Int(value()), (1 ... EditRecipe.currentProcessVersion).contains(number) else {
+                throw CLIError(description: "--process takes 1 to \(EditRecipe.currentProcessVersion)")
+            }
+            process = number
         case "--mask-set":
             let pair = try value().split(separator: "=", maxSplits: 1).map(String.init)
             guard pair.count == 2, let id = parameter(named: pair[0]), id.isLocal, let number = Double(pair[1]),
@@ -316,6 +343,14 @@ func run(_ arguments: [String]) async throws {
         index += 1
     }
     guard let output else { throw CLIError(description: "missing -o <output>") }
+    if let process {
+        recipe.processVersion = process
+    }
+    if coverage {
+        guard let last = recipe.masks.last else { throw CLIError(description: "--coverage needs a mask") }
+        request.maskOverlay = last.id
+        request.maskOverlayStyle = .blackAndWhite
+    }
     registerInstalledLook(recipe.baseLook, with: engine)
     request.recipe = recipe
 

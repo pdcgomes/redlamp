@@ -506,11 +506,14 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         descriptor.usage = [.shaderWrite, .shaderRead]
         descriptor.storageMode = .shared
         guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
-        if request.purpose == .export, size != developed {
+        if request.purpose == .export, size != developed, request.maskOverlay == nil {
             try developDownscaled(request, session: session, into: texture, size: size)
         } else {
             let encoding: OutputEncoding = request.colorSpace == .sRGB ? .sRGB : .displayP3
-            try developStill(request.recipe, session: session, into: texture, size: size, encoding: encoding)
+            try developStill(
+                request.recipe, session: session, into: texture, size: size, encoding: encoding,
+                maskOverlay: request.maskOverlay, maskOverlayStyle: request.maskOverlayStyle,
+            )
         }
 
         let bytesPerPixel = sixteenBit ? 8 : 4
@@ -617,14 +620,20 @@ extension RedlampEngine {
         into texture: any MTLTexture,
         size: PixelSize,
         encoding: OutputEncoding,
+        maskOverlay: UUID? = nil,
+        maskOverlayStyle: MaskOverlayStyle = .colorOverlay,
     ) throws {
         if DetailStage.isActive(recipe) {
-            try renderTiles(recipe, session: session, into: texture, size: size, encoding: encoding)
+            try renderTiles(
+                recipe, session: session, into: texture, size: size, encoding: encoding,
+                maskOverlay: maskOverlay, maskOverlayStyle: maskOverlayStyle,
+            )
         } else {
             guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
             try encodeDevelop(
                 recipe, session: session, into: texture, size: size,
-                encoding: encoding, showClipping: false, commands: commands, retouchMaps: .fresh,
+                encoding: encoding, showClipping: false, maskOverlay: maskOverlay, maskOverlayStyle: maskOverlayStyle,
+                commands: commands, retouchMaps: .fresh,
             )
             try finish(commands)
         }
@@ -673,6 +682,8 @@ extension RedlampEngine {
         into texture: any MTLTexture,
         size: PixelSize,
         encoding: OutputEncoding,
+        maskOverlay: UUID? = nil,
+        maskOverlayStyle: MaskOverlayStyle = .colorOverlay,
     ) throws {
         let tile = stillTile
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
@@ -694,8 +705,8 @@ extension RedlampEngine {
                 try self.encoding(commands) {
                     try encodeDevelop(
                         recipe, session: session, into: scratch, size: tileSize, region: region,
-                        encoding: encoding, showClipping: false, commands: commands, cacheDetail: false,
-                        retouchMaps: .fresh,
+                        encoding: encoding, showClipping: false, maskOverlay: maskOverlay,
+                        maskOverlayStyle: maskOverlayStyle, commands: commands, cacheDetail: false, retouchMaps: .fresh,
                     )
                     guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
                     blit.copy(

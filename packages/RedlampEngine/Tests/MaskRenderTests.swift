@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import IOSurface
 import Metal
@@ -390,6 +391,35 @@ struct MaskRenderTests {
         recipe.masks = [mask]
         let missing = try render(recipe, session: session)
         #expect(abs(missing[100 * 300 + 40].y - plain[100 * 300 + 40].y) < 1e-3)
+    }
+
+    /// What `redlamp render --coverage` measures: a still with its mask in the B&W overlay is the
+    /// mask's coverage, drawn at the size asked for rather than downscaled from full size.
+    @Test(.enabled(if: EngineSmokeTests.canRender))
+    func `a still in the B&W overlay is its mask's coverage`() async throws {
+        let engine = try RedlampEngine()
+        let url = try #require(EngineSmokeTests.fixtures.first)
+        _ = try await engine.open(url)
+        let mask = MaskLayer(name: "Centre", components: [MaskComponent(shape: .radial(RadialMask(
+            center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.2, feather: 0,
+        )))])
+        var recipe = EditRecipe()
+        recipe.masks = [mask]
+        var request = StillRequest(recipe: recipe, maxLongEdge: 300, purpose: .export)
+        request.maskOverlay = mask.id
+        request.maskOverlayStyle = .blackAndWhite
+        let image = try await engine.renderStill(request)
+        #expect(max(image.width, image.height) == 300)
+        var bytes = [UInt8](repeating: 0, count: image.width * image.height * 4)
+        let sRGB = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+        let context = try #require(CGContext(
+            data: &bytes, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: image.width * 4,
+            space: sRGB, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue,
+        ))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        let centre = bytes[(image.height / 2 * image.width + image.width / 2) * 4]
+        let corner = bytes[(5 * image.width + 5) * 4]
+        #expect(centre > 250 && corner < 5, "centre \(centre), corner \(corner)")
     }
 
     /// A depth map that is near on the left and far on the right: a near range selects the left.

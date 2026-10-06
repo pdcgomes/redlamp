@@ -159,6 +159,11 @@ public struct StillRequest: Sendable, Hashable {
     /// The image this still is of. When set, the render fails with `imageChanged` if another
     /// image has been opened since, rather than rendering that one.
     public var source: URL?
+    /// Draws this mask as the editor's overlay does, in `maskOverlayStyle`, at the size asked for
+    /// rather than downscaled from full size. In `.blackAndWhite` each pixel is the mask's coverage
+    /// as the renderer draws it.
+    public var maskOverlay: UUID?
+    public var maskOverlayStyle: MaskOverlayStyle = .colorOverlay
 
     public init(
         recipe: EditRecipe,
