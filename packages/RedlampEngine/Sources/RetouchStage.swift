@@ -945,58 +945,60 @@ final class RetouchStage: @unchecked Sendable {
               ),
               let stroke = device.makeBuffer(
                   bytes: placement.points, length: placement.points.count * point, options: .storageModeShared,
-              ),
-              let encoder = commands.makeComputeCommandEncoder()
+              )
         else { throw EngineError.gpuUnavailable }
-        encoder.label = "Retouch"
-        let box = SIMD4<Int32>(
-            Int32(placement.origin.x), Int32(placement.origin.y), Int32(placement.size.x), Int32(placement.size.y),
-        )
-        let featherStart = Float(1 - min(max(spot.feather, 0), 100) / 100)
-        let opacity = Float(min(max(spot.opacity, 0), 100) / 100)
-        var params = RetouchParams(
-            box: box,
-            shape: SIMD4<Float>(placement.radius, featherStart, outline.spacing, placement.radius / 2),
-            source: fill.map { SIMD4<Float>(Float($0.origin.x), Float($0.origin.y), opacity, 1) }
-                ?? SIMD4<Float>(placement.offset.x, placement.offset.y, opacity, heal ? 1 : 0),
-            counts: SIMD4<Int32>(Int32(outline.points.count), Int32(placement.points.count), fill == nil ? 0 : 1, 0),
-        )
-        var alphaTexture: (any MTLTexture)?
-        if let region = placement.region {
-            let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-                pixelFormat: .r32Float, width: region.width, height: region.height, mipmapped: false,
+        try commands.withComputeEncoder { encoder in
+            encoder.label = "Retouch"
+            let box = SIMD4<Int32>(
+                Int32(placement.origin.x), Int32(placement.origin.y), Int32(placement.size.x), Int32(placement.size.y),
             )
-            descriptor.usage = [.shaderRead]
-            descriptor.storageMode = .shared
-            guard let alpha = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
-            region.alphas.withUnsafeBytes { bytes in
-                alpha.replace(
-                    region: MTLRegionMake2D(0, 0, region.width, region.height), mipmapLevel: 0,
-                    withBytes: bytes.baseAddress!, bytesPerRow: region.width * MemoryLayout<Float>.stride,
+            let featherStart = Float(1 - min(max(spot.feather, 0), 100) / 100)
+            let opacity = Float(min(max(spot.opacity, 0), 100) / 100)
+            var params = RetouchParams(
+                box: box,
+                shape: SIMD4<Float>(placement.radius, featherStart, outline.spacing, placement.radius / 2),
+                source: fill.map { SIMD4<Float>(Float($0.origin.x), Float($0.origin.y), opacity, 1) }
+                    ?? SIMD4<Float>(placement.offset.x, placement.offset.y, opacity, heal ? 1 : 0),
+                counts: SIMD4<Int32>(
+                    Int32(outline.points.count), Int32(placement.points.count), fill == nil ? 0 : 1, 0,
+                ),
+            )
+            var alphaTexture: (any MTLTexture)?
+            if let region = placement.region {
+                let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+                    pixelFormat: .r32Float, width: region.width, height: region.height, mipmapped: false,
                 )
+                descriptor.usage = [.shaderRead]
+                descriptor.storageMode = .shared
+                guard let alpha = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
+                region.alphas.withUnsafeBytes { bytes in
+                    alpha.replace(
+                        region: MTLRegionMake2D(0, 0, region.width, region.height), mipmapLevel: 0,
+                        withBytes: bytes.baseAddress!, bytesPerRow: region.width * MemoryLayout<Float>.stride,
+                    )
+                }
+                alphaTexture = alpha
+                params.counts.w = 1
             }
-            alphaTexture = alpha
-            params.counts.w = 1
+            encoder.setTexture(texture, index: 0)
+            encoder.setTexture(fill?.texture ?? texture, index: 2)
+            encoder.setTexture(alphaTexture ?? texture, index: 3)
+            encoder.setBytes(&params, length: MemoryLayout<RetouchParams>.stride, index: 0)
+            encoder.setBuffer(ratios, offset: 0, index: 1)
+            encoder.setBuffer(rim, offset: 0, index: 2)
+            encoder.setBuffer(stroke, offset: 0, index: 3)
+            if heal {
+                encoder.setComputePipelineState(kernels.retouchRim)
+                encoder.dispatchGrid(width: outline.points.count, height: 1, pipeline: kernels.retouchRim)
+                encoder.setBuffer(filtered, offset: 0, index: 4)
+                encoder.setComputePipelineState(kernels.retouchRimMedian)
+                encoder.dispatchGrid(width: outline.points.count, height: 1, pipeline: kernels.retouchRimMedian)
+                encoder.setBuffer(filtered, offset: 0, index: 1)
+            }
+            encoder.setComputePipelineState(kernels.retouchApply)
+            encoder.setTexture(scratch, index: 1)
+            encoder.dispatchGrid(width: placement.size.x, height: placement.size.y, pipeline: kernels.retouchApply)
         }
-        encoder.setTexture(texture, index: 0)
-        encoder.setTexture(fill?.texture ?? texture, index: 2)
-        encoder.setTexture(alphaTexture ?? texture, index: 3)
-        encoder.setBytes(&params, length: MemoryLayout<RetouchParams>.stride, index: 0)
-        encoder.setBuffer(ratios, offset: 0, index: 1)
-        encoder.setBuffer(rim, offset: 0, index: 2)
-        encoder.setBuffer(stroke, offset: 0, index: 3)
-        if heal {
-            encoder.setComputePipelineState(kernels.retouchRim)
-            encoder.dispatchGrid(width: outline.points.count, height: 1, pipeline: kernels.retouchRim)
-            encoder.setBuffer(filtered, offset: 0, index: 4)
-            encoder.setComputePipelineState(kernels.retouchRimMedian)
-            encoder.dispatchGrid(width: outline.points.count, height: 1, pipeline: kernels.retouchRimMedian)
-            encoder.setBuffer(filtered, offset: 0, index: 1)
-        }
-        encoder.setComputePipelineState(kernels.retouchApply)
-        encoder.setTexture(scratch, index: 1)
-        encoder.dispatchGrid(width: placement.size.x, height: placement.size.y, pipeline: kernels.retouchApply)
-        encoder.endEncoding()
         guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
         blit.copy(
             from: scratch, sourceSlice: 0, sourceLevel: 0, sourceOrigin: MTLOrigin(),

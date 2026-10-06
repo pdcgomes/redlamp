@@ -407,47 +407,47 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         let maskPointColors = encoding == .pointColorInput ? nil : try encodeMaskPointColors(
             inputs.pointColorMeasured, recipe: recipe, session: photo, commands: commands, retouchMaps: retouchMaps,
         )
-        guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
-        inputs.params.denoised = processed?.area ?? .zero
-        if let visualizeSpots {
-            let sensitivity = Float(min(max(visualizeSpots, 0), 100) / 100)
-            inputs.params.spots = SIMD4(1, 0.002 + 0.1 * (1 - sensitivity) * (1 - sensitivity), 0, 0)
+        try commands.withComputeEncoder { encoder in
+            inputs.params.denoised = processed?.area ?? .zero
+            if let visualizeSpots {
+                let sensitivity = Float(min(max(visualizeSpots, 0), 100) / 100)
+                inputs.params.spots = SIMD4(1, 0.002 + 0.1 * (1 - sensitivity) * (1 - sensitivity), 0, 0)
+            }
+            encoder.setComputePipelineState(kernels.develop)
+            encoder.setTexture(session.pyramid, index: 0)
+            encoder.setTexture(texture, index: 1)
+            encoder.setTexture(processed?.texture ?? session.pyramid, index: 2)
+            encoder.setTexture(inputs.lookTable ?? baseLooks.identity, index: 3)
+            encoder.setTexture(session.hazeMap, index: 4)
+            encoder.setTexture(session.glowSource, index: 5)
+            encoder.setTexture(session.glowLights, index: 8)
+            encoder.setTexture(maskBindings.rasters ?? masks.emptyRasters, index: 6)
+            encoder.setTexture(maskBindings.guide ?? masks.emptyGuide, index: 7)
+            encoder.setTexture(maskBindings.edges ?? masks.emptyEdges, index: 14)
+            encoder.setTexture(maskBindings.colors ?? masks.emptyEdges, index: 15)
+            encoder.setTexture(session.hueSatMaps?.cool ?? baseLooks.identity, index: 9)
+            encoder.setTexture(session.hueSatMaps?.warm ?? baseLooks.identity, index: 10)
+            encoder.setTexture(session.gainTableMap?.texture ?? baseLooks.identity, index: 11)
+            encoder.setTexture(session.toneBase, index: 12)
+            encoder.setTexture(session.refinedHaze, index: 13)
+            encoder.setBytes(&inputs.params, length: MemoryLayout<DevelopParams>.stride, index: 0)
+            encoder.setBytes(&inputs.toneLUT, length: inputs.toneLUT.count * MemoryLayout<Float>.stride, index: 1)
+            encoder.setBytes(&inputs.mixer, length: inputs.mixer.count * MemoryLayout<Float>.stride, index: 2)
+            encoder.setBytes(&inputs.layers, length: inputs.layers.count * MemoryLayout<MaskLayerGPU>.stride, index: 3)
+            encoder.setBytes(
+                &inputs.lensTable, length: inputs.lensTable.count * MemoryLayout<SIMD4<Float>>.stride, index: 5,
+            )
+            try encoder.setArray(inputs.components, index: 4, device: device)
+            try encoder.setArray(inputs.maskCurves, index: 6, device: device)
+            try encoder.setArray(inputs.pointColor, index: 7, device: device)
+            if let maskPointColors {
+                encoder.setBuffer(maskPointColors, offset: 0, index: 8)
+            } else {
+                var none = SIMD4<Float>.zero
+                encoder.setBytes(&none, length: MemoryLayout<SIMD4<Float>>.stride, index: 8)
+            }
+            encoder.dispatchGrid(width: size.width, height: size.height, pipeline: kernels.develop)
         }
-        encoder.setComputePipelineState(kernels.develop)
-        encoder.setTexture(session.pyramid, index: 0)
-        encoder.setTexture(texture, index: 1)
-        encoder.setTexture(processed?.texture ?? session.pyramid, index: 2)
-        encoder.setTexture(inputs.lookTable ?? baseLooks.identity, index: 3)
-        encoder.setTexture(session.hazeMap, index: 4)
-        encoder.setTexture(session.glowSource, index: 5)
-        encoder.setTexture(session.glowLights, index: 8)
-        encoder.setTexture(maskBindings.rasters ?? masks.emptyRasters, index: 6)
-        encoder.setTexture(maskBindings.guide ?? masks.emptyGuide, index: 7)
-        encoder.setTexture(maskBindings.edges ?? masks.emptyEdges, index: 14)
-        encoder.setTexture(maskBindings.colors ?? masks.emptyEdges, index: 15)
-        encoder.setTexture(session.hueSatMaps?.cool ?? baseLooks.identity, index: 9)
-        encoder.setTexture(session.hueSatMaps?.warm ?? baseLooks.identity, index: 10)
-        encoder.setTexture(session.gainTableMap?.texture ?? baseLooks.identity, index: 11)
-        encoder.setTexture(session.toneBase, index: 12)
-        encoder.setTexture(session.refinedHaze, index: 13)
-        encoder.setBytes(&inputs.params, length: MemoryLayout<DevelopParams>.stride, index: 0)
-        encoder.setBytes(&inputs.toneLUT, length: inputs.toneLUT.count * MemoryLayout<Float>.stride, index: 1)
-        encoder.setBytes(&inputs.mixer, length: inputs.mixer.count * MemoryLayout<Float>.stride, index: 2)
-        encoder.setBytes(&inputs.layers, length: inputs.layers.count * MemoryLayout<MaskLayerGPU>.stride, index: 3)
-        encoder.setBytes(
-            &inputs.lensTable, length: inputs.lensTable.count * MemoryLayout<SIMD4<Float>>.stride, index: 5,
-        )
-        try encoder.setArray(inputs.components, index: 4, device: device)
-        try encoder.setArray(inputs.maskCurves, index: 6, device: device)
-        try encoder.setArray(inputs.pointColor, index: 7, device: device)
-        if let maskPointColors {
-            encoder.setBuffer(maskPointColors, offset: 0, index: 8)
-        } else {
-            var none = SIMD4<Float>.zero
-            encoder.setBytes(&none, length: MemoryLayout<SIMD4<Float>>.stride, index: 8)
-        }
-        encoder.dispatchGrid(width: size.width, height: size.height, pipeline: kernels.develop)
-        encoder.endEncoding()
     }
 
     /// Paints photosites the sensor clipped over a developed frame (see RawClipping.metal).

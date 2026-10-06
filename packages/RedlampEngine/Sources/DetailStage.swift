@@ -557,12 +557,12 @@ final class DetailStage {
                     ladder?.target?.denoised = source
                 }
             }
-            guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
-            encoder.label = "Detail"
-            let reduced = try encode(
-                passes, work: work, into: texture, measures: measures, ladder: ladder, kept: kept, encoder: encoder,
-            )
-            encoder.endEncoding()
+            let reduced = try commands.withComputeEncoder { encoder in
+                encoder.label = "Detail"
+                return try encode(
+                    passes, work: work, into: texture, measures: measures, ladder: ladder, kept: kept, encoder: encoder,
+                )
+            }
             if let target = kept?.target, let reduced {
                 guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
                 blit.copy(from: reduced, origin: .zero, size: work.size, to: target, at: .zero)
@@ -1054,13 +1054,13 @@ final class DetailStage {
                     ladder = LadderMeasures(target: tileLadder)
                 }
             }
-            guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
-            encoder.label = "Detail tile"
-            let reduced = try encode(
-                passes, work: area, into: rendered, measures: measures, ladder: ladder,
-                kept: wholeKept?.given.map { KeptSource(given: $0, origin: tile.extent.origin) }, encoder: encoder,
-            )
-            encoder.endEncoding()
+            let reduced = try commands.withComputeEncoder { encoder in
+                encoder.label = "Detail tile"
+                return try encode(
+                    passes, work: area, into: rendered, measures: measures, ladder: ladder,
+                    kept: wholeKept?.given.map { KeptSource(given: $0, origin: tile.extent.origin) }, encoder: encoder,
+                )
+            }
 
             guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
             let inside = tile.interior.origin &- tile.extent.origin
