@@ -6,8 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# A pull request's new push cancels its older run; each push to main runs to the end, because the
+# status badge reads a cancelled run as failing.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
 
 jobs:
