@@ -26,8 +26,8 @@ public enum ColorLabel: String, Codable, Sendable, Hashable, CaseIterable {
     case red, yellow, green, blue, purple
 }
 
-/// Rating, flag and label: the culling metadata Lightroom lets you set while developing; and the
-/// photo's name before Redlamp first renamed it.
+/// Rating, flag and label: the culling metadata Lightroom lets you set while developing; the
+/// photo's name before Redlamp first renamed it; and its keywords.
 public struct PhotoMetadata: Sendable, Hashable {
     /// 0–5 stars.
     public var rating: Int
@@ -36,18 +36,27 @@ public struct PhotoMetadata: Sendable, Hashable {
     /// The photo's file name before Redlamp first renamed it, `IMG_1234.CR3`, kept through every
     /// rename and move after that; nil for a photo Redlamp hasn't renamed (LIB-26).
     public var originalName: String?
+    /// The photo's keywords, each its full path from the top of the keyword list with `/` between
+    /// levels, `Places/Portugal/Lisbon`, and `%2F` for a slash inside a keyword, `%25` for a percent
+    /// sign (LIB-21). Kept as written. Empty: the photo has none; nil: the keywords embedded in it and
+    /// in other apps' `.xmp` are its keywords.
+    public var keywords: [String]?
     /// Fields written by a newer Redlamp (a caption, say), written back unchanged.
     public var unknownFields: [String: JSONValue] = [:]
 
-    public init(rating: Int = 0, flag: PhotoFlag? = nil, label: ColorLabel? = nil, originalName: String? = nil) {
+    public init(
+        rating: Int = 0, flag: PhotoFlag? = nil, label: ColorLabel? = nil, originalName: String? = nil,
+        keywords: [String]? = nil,
+    ) {
         self.rating = min(max(rating, 0), 5)
         self.flag = flag
         self.label = label
         self.originalName = originalName
+        self.keywords = keywords
     }
 
     public var isEmpty: Bool {
-        rating == 0 && flag == nil && label == nil && originalName == nil && unknownFields.isEmpty
+        rating == 0 && flag == nil && label == nil && originalName == nil && keywords == nil && unknownFields.isEmpty
     }
 }
 

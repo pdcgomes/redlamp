@@ -189,6 +189,7 @@ extension PhotoMetadata {
         }
         var merged = PhotoMetadata(
             rating: pick(\.rating), flag: pick(\.flag), label: pick(\.label), originalName: pick(\.originalName),
+            keywords: pick(\.keywords),
         )
         for key in Set(ours.unknownFields.keys).union(theirs.unknownFields.keys) {
             merged.unknownFields[key] = pick { $0.unknownFields[key] }

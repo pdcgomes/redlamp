@@ -53,6 +53,7 @@ struct HandCodedTypeTests {
         try check(#require(everything.snapshots.first))
         var metadata = try #require(everything.metadata)
         metadata.originalName = "IMG_0001.ARW"
+        metadata.keywords = ["Places/Portugal/Lisbon", "Music/AC%2FDC"]
         try check(metadata)
     }
 

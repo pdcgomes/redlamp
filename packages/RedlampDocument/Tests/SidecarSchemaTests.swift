@@ -432,7 +432,10 @@ enum RichSidecar {
         return Sidecar(
             recipe: edit,
             snapshots: [Snapshot(name: "Every slider", created: date, recipe: everySlider())],
-            metadata: PhotoMetadata(rating: 4, flag: .pick, label: .purple, originalName: "DSC_0042.NEF"),
+            metadata: PhotoMetadata(
+                rating: 4, flag: .pick, label: .purple, originalName: "DSC_0042.NEF",
+                keywords: ["Places/Portugal/Lisbon", "Music/AC%2FDC"],
+            ),
             modified: date,
             session: session(ending: edit),
         )

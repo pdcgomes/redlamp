@@ -1,6 +1,6 @@
 # The `.redlamp` sidecar format
 
-Redlamp never writes into photos. Each edited photo gets a **sidecar** beside it, holding its edit recipe, masks, Remove, Heal and Clone spots, snapshots, rating and label, and editing history. Deleting the sidecar returns the photo to unedited.
+Redlamp never writes into photos. Each edited photo gets a **sidecar** beside it, holding its edit recipe, masks, Remove, Heal and Clone spots, snapshots, rating, label and keywords, and editing history. Deleting the sidecar returns the photo to unedited.
 
 This page is the published format: edit format 3 and history format 1. A machine-readable [JSON Schema](sidecar-format.schema.json) sits next to it. The reference implementation is `packages/RedlampDocument` (`Sidecar`, `SidecarStore`, `HistorySession`), with the edit's types in `packages/RedlampEngineAPI` (`EditRecipe`, `MaskLayer`, `RetouchSpot`). Applying a [`.redrecipe`](recipe-format.md) writes its settings into the edit recipe described here.
 
@@ -23,7 +23,7 @@ The sidecar is a **package**, a folder that Finder shows as one file:
 
 ```
 IMG_1234.CR3.redlamp/
-  edit.json               the edit, snapshots, rating and label
+  edit.json               the edit, snapshots, rating, label and keywords
   masks/<sha256>.png      mask bitmaps, named by the SHA-256 of their bytes
   history/<uuid>.json     one file per editing session
 ```
@@ -37,7 +37,7 @@ To show a photo's badges, Redlamp reads only `recipe` and `metadata` from `edit.
 - `edit.json` is written to a temporary file and moved into place. Mask bitmaps are written before the edit that names them, and a new package is built beside the photo and moved in whole, so a reader never finds an edit that names a missing or partly written file.
 - A sidecar whose content hasn't changed is not rewritten, so saving an unchanged edit doesn't wake sync services. A change to `modified` alone doesn't count.
 - When it saves, Redlamp deletes the bitmaps that no edit, snapshot or history session uses and that no key of `edit.json` or of a history file names, since a key a newer Redlamp added may refer to one. It deletes none while a history file can't be read.
-- Redlamp deletes the whole sidecar when the edit is back to its defaults (whatever `wb.temperature` and `wb.tint` hold) and there are no snapshots, rating, flag, label, original name, unknown fields or history.
+- Redlamp deletes the whole sidecar when the edit is back to its defaults (whatever `wb.temperature` and `wb.tint` hold) and there are no snapshots, rating, flag, label, original name, keywords (an empty list of them included), unknown fields or history.
 - Every read and write goes through `NSFileCoordinator`, so iCloud Drive never syncs a half-written package, and a read waits for a sidecar that iCloud Drive has evicted to download. Other tools on macOS should coordinate their writes the same way.
 
 ### Conflicting copies
@@ -69,12 +69,14 @@ When a photo is edited on two Macs before iCloud Drive syncs them, iCloud keeps 
 | `format` | string | `app.redlamp.edit`. Always written; Redlamp doesn't check it. |
 | `recipe` | object | **Required.** The edit; see [The recipe](#the-recipe). |
 | `snapshots` | [snapshot] | Named versions of the edit, in the order they were made. Default `[]`. |
-| `metadata` | object? | Rating, flag, label and the photo's original name. Written only when one is set. |
+| `metadata` | object? | Rating, flag, label, the photo's original name and its keywords. Written only when one is set. |
 | `modified` | date? | When the edit was last saved. A sidecar without it loses every conflict. |
 
 A **snapshot** is a named version of the edit, as in Lightroom: `{"id", "name", "created", "recipe"}`, all required. `created` is a date and `recipe` a whole recipe. Snapshots are how one sidecar keeps several versions of a photo's edit.
 
 **Metadata** is Lightroom's culling metadata: `rating` (an integer, 0 to 5 stars, required), `flag` (`pick` or `reject`) and `label` (`red`, `yellow`, `green`, `blue` or `purple`). It also holds `originalName`, a string: the photo's file name before Redlamp first renamed it (`IMG_1234.CR3`), which naming templates read as `{original}`. Redlamp writes it the first time it renames the photo, making the sidecar if there's none, and keeps it through every rename and move after that; undoing the first rename takes it out again. Builds from before it keep it as an unknown key.
+
+`keywords` is a list of strings: the photo's keywords, each its full path from the top of the keyword list with `/` between levels, `Places/Portugal/Lisbon`, so a photo describes itself without the library's keyword list. A `/` inside a keyword is written `%2F` and a `%` as `%25`, and nothing else is escaped: the keyword AC/DC under Music is `Music/AC%2FDC`, and 50% off is `50%25 off`. Redlamp writes each keyword's name without spaces at its ends and in Unicode's composed form (NFC), never an empty level, and keeps the list as it was written. When `keywords` is there, it is the photo's keywords, an empty list included: Redlamp writes an empty list when the last keyword is taken off, so keywords embedded in the photo or in another app's `.xmp` don't come back. When it isn't, those are the photo's keywords, and the first change Redlamp makes writes them all here. Builds from before it keep it as an unknown key.
 
 ## The recipe
 

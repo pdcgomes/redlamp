@@ -843,7 +843,7 @@
       "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
     },
     "metadata": {
-      "description": "Rating, flag, color label and the photo's original name. Written only when one is set.",
+      "description": "Rating, flag, color label, the photo's original name and its keywords. Written only when one is set.",
       "type": "object",
       "required": ["rating"],
       "properties": {
@@ -853,6 +853,11 @@
         "originalName": {
           "type": "string",
           "description": "The photo's file name before Redlamp first renamed it, as IMG_1234.CR3. Written the first time Redlamp renames the photo, and kept through every rename and move after that."
+        },
+        "keywords": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "The photo's keywords, each its full path from the top of the keyword list with / between levels, as Places/Portugal/Lisbon. A / inside a keyword is written %2F and a % as %25. An empty list means no keywords; without the key, the keywords embedded in the photo and in other apps' .xmp are its keywords."
         }
       },
       "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }

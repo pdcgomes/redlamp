@@ -26,22 +26,11 @@ public struct DuplicateReview: Sendable, Hashable {
             self.keywords = keywords
         }
 
-        /// What `SidecarStore` reads of it. Keywords are read where a newer Redlamp writes them,
-        /// `metadata.keywords`, which this one keeps among the fields it doesn't know.
+        /// What `SidecarStore` reads of it.
         public init(_ summary: SidecarSummary) {
-            var keywords: [String] = []
-            if case let .array(values) = summary.metadata.unknownFields["keywords"] {
-                keywords = values.compactMap {
-                    if case let .string(keyword) = $0 {
-                        keyword
-                    } else {
-                        nil
-                    }
-                }
-            }
             self.init(
                 hasEdits: summary.hasEdits, rating: summary.metadata.rating, flag: summary.metadata.flag,
-                label: summary.metadata.label, keywords: keywords,
+                label: summary.metadata.label, keywords: summary.metadata.keywords ?? [],
             )
         }
 
