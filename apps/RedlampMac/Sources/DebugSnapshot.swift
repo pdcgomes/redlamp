@@ -17,7 +17,11 @@
     /// - `--snapshot <path.png> [--snapshot-delay <s>] [--snapshot-quit]` writes an image of
     ///   the window without Screen Recording permission (glass materials are approximated;
     ///   `scripts/capture-screenshots.sh` uses real window captures instead). An open sheet is
-    ///   captured instead of the window; `stack=open` in a script opens the Stack workspace on
+    ///   captured instead of the window, or with `--snapshot-window` over the window where it
+    ///   sits, any part hanging past the window's edge included. `export=open` in a script opens
+    ///   the Export dialog from the File menu, and `export=end` opens it and turns a mouse wheel
+    ///   over its settings to their end; the dialog holds the app, so either comes last.
+    ///   `stack=open` in a script opens the Stack workspace on
     ///   the selected stack document (`stack=depth` showing the depth map, `stack=retouch`
     ///   painting one stroke from the frame under the cursor). `window=<name>` opens a window
     ///   from the Window menu by its title in kebab case, such as `window=film-looks`;
@@ -62,12 +66,17 @@
             guard let path = value(after: "--snapshot") else { return }
             let delay = value(after: "--snapshot-delay").flatMap(Double.init) ?? 5
             let quit = arguments.contains("--snapshot-quit")
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                capture(to: URL(fileURLWithPath: path))
-                if quit {
-                    NSApp.terminate(nil)
+            let withWindow = arguments.contains("--snapshot-window")
+            // In the common modes, so it also fires while the Export dialog's modal loop runs.
+            let timer = Timer(timeInterval: delay, repeats: false) { _ in
+                MainActor.assumeIsolated {
+                    capture(to: URL(fileURLWithPath: path), withWindow: withWindow)
+                    if quit {
+                        NSApp.terminate(nil)
+                    }
                 }
             }
+            RunLoop.main.add(timer, forMode: .common)
         }
 
         private static func run(_ script: String, model: EditorModel) {
@@ -121,6 +130,8 @@
                 model.showMaskOverlay = false
             case "overlay":
                 model.maskOverlayStyle = MaskOverlayStyle.allCases.first { value == "\($0)" } ?? model.maskOverlayStyle
+            case "export":
+                openExport(scrolledToEnd: value == "end")
             case "feedback" where value == "reports":
                 FeedbackActions.presentReports(model: model)
             case "feedback":
@@ -320,12 +331,20 @@
             }
         }
 
-        static func capture(to url: URL) {
-            guard let main = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }),
-                  let window = Optional(main.attachedSheet ?? main),
-                  let root = window.contentView?.superview ?? window.contentView,
+        static func capture(to url: URL, withWindow: Bool = false) {
+            guard let main = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }) else { return }
+            let rep = if withWindow, let sheet = main.attachedSheet {
+                composite(sheet, over: main)
+            } else {
+                image(of: main.attachedSheet ?? main)
+            }
+            try? rep?.representation(using: .png, properties: [:])?.write(to: url)
+        }
+
+        static func image(of window: NSWindow) -> NSBitmapImageRep? {
+            guard let root = window.contentView?.superview ?? window.contentView,
                   let rep = root.bitmapImageRepForCachingDisplay(in: root.bounds)
-            else { return }
+            else { return nil }
             root.cacheDisplay(in: root.bounds, to: rep)
 
             if let context = NSGraphicsContext(bitmapImageRep: rep) {
@@ -346,7 +365,7 @@
                 }
                 NSGraphicsContext.restoreGraphicsState()
             }
-            try? rep.representation(using: .png, properties: [:])?.write(to: url)
+            return rep
         }
 
         private static func canvases(in view: NSView) -> [CanvasMetalView] {
