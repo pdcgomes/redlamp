@@ -84,6 +84,53 @@ struct IndexConcurrencyTests {
         #expect(try await index.read { try $0.photoCount() } == 1000)
     }
 
+    /// A race here shows only under Thread Sanitizer (`-enableThreadSanitizer YES`).
+    @Test func `what a read builds reaches its caller whole, read under a lock or in a task group after it`(
+    ) async throws {
+        let sandbox = try await IndexSandbox.make(readers: 4)
+        defer { sandbox.remove() }
+        let folder = try #require(try await sandbox.addFolders(["Burst"])["Burst"])
+        try await sandbox.upsert((0 ..< 40).map { PhotoRecord(folder: folder, name: "IMG_\($0).JPG") })
+        let index = sandbox.index
+        let seen = Count()
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for _ in 0 ..< 32 {
+                group.addTask {
+                    for round in 0 ..< 100 {
+                        let rows = try await index.read { try $0.photos(inFolder: folder).filter { !$0.name.isEmpty } }
+                        seen.add(rows)
+                        let names = await withTaskGroup(of: Int.self) { names in
+                            for row in rows.prefix(round % 4 + 1) {
+                                names.addTask { row.name.utf8.count }
+                            }
+                            return await names.reduce(0, +)
+                        }
+                        #expect(names > 0)
+                    }
+                }
+            }
+            try await group.waitForAll()
+        }
+        #expect(seen.value == 32 * 100 * 40)
+    }
+
+    /// Photos counted under a lock, one at a time.
+    private final class Count: Sendable {
+        private let state = Mutex(0)
+
+        var value: Int {
+            state.withLock { $0 }
+        }
+
+        func add(_ rows: [PhotoRecord]) {
+            state.withLock { count in
+                for row in rows where !row.name.isEmpty {
+                    count += 1
+                }
+            }
+        }
+    }
+
     @Test func `a read cancelled before it starts is dropped`() async throws {
         let sandbox = try await IndexSandbox.make(readers: 1)
         defer { sandbox.remove() }

@@ -194,22 +194,24 @@ private final class Connection: @unchecked Sendable {
     func run<T: Sendable>(
         cancellable: Bool = false, _ body: @escaping @Sendable (SQLiteDatabase) throws -> T,
     ) async throws -> T {
-        let cancelled = Cancelled()
-        return try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
+        let handOff = HandOff<T>()
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                 queue.async { [self] in
-                    continuation.resume(with: Result {
-                        if cancellable, cancelled.value {
+                    handOff.finish(Result {
+                        if cancellable, handOff.isCancelled {
                             throw CancellationError()
                         }
                         guard let database else { throw LibraryIndexError.closed }
                         return try body(database)
                     })
+                    continuation.resume()
                 }
             }
         } onCancel: {
-            cancelled.set()
+            handOff.cancel()
         }
+        return try handOff.result()
     }
 
     func runAndWait<T>(_ body: (SQLiteDatabase) throws -> T) throws -> T {
@@ -233,14 +235,31 @@ private final class Connection: @unchecked Sendable {
     }
 }
 
-private final class Cancelled: Sendable {
-    private let state = Atomic(false)
+/// What a connection's queue hands back to the caller it ran for, and whether that caller was
+/// cancelled. The result goes through a lock as well as through the continuation that resumes the
+/// caller, so Thread Sanitizer sees the queue's writes happen before the caller's reads: it doesn't
+/// always see the continuation order them.
+private final class HandOff<T: Sendable>: Sendable {
+    private let cancelled = Atomic(false)
+    private let outcome = Mutex<Result<T, any Error>?>(nil)
 
-    var value: Bool {
-        state.load(ordering: .acquiring)
+    var isCancelled: Bool {
+        cancelled.load(ordering: .acquiring)
     }
 
-    func set() {
-        state.store(true, ordering: .releasing)
+    func cancel() {
+        cancelled.store(true, ordering: .releasing)
+    }
+
+    func finish(_ result: Result<T, any Error>) {
+        outcome.withLock { $0 = result }
+    }
+
+    /// The result handed over, once the queue has resumed the caller.
+    func result() throws -> T {
+        guard let result = outcome.withLock({ $0.take() }) else {
+            preconditionFailure("a caller resumed before its result was handed over")
+        }
+        return try result.get()
     }
 }
