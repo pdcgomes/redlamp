@@ -1,0 +1,191 @@
+"""The mask benchmark (MSK-25): what Redlamp draws and how an edit through a mask looks, scored.
+
+    .venv/bin/python mask_bench.py run [--sets edge,hair] [--cli <redlamp>]
+    .venv/bin/python mask_bench.py score [--sets edge,hair]
+
+Exact-coverage scenes (`edge_bench.py generate`, `hair_bench.py generate`): skies behind bare and
+leafy trees, wires and skylines, and heads with stray strands and beards, each with its true
+coverage and <scene>-ideal.png, the scene edited before compositing (sky -1.5 EV, person +1 EV).
+
+  * coverage: the mask Redlamp makes today (`redlamp mask`; for the heads, which Vision doesn't
+    take for people, the bench's closed-form matte) and what the renderer draws of it
+    (`redlamp render --coverage`), scored as edge_bench.py does: band error, thin-structure error
+    and recall, leak;
+  * halo: the scene edited through its mask (`--mask-set local.exposure=...`) against the ideal
+    scene, both developed by redlamp: mean CIELAB difference over the edge band, and the signed
+    lightness difference on the side the edit shouldn't reach (a light rim is positive). Edited
+    once through the stored mask and once through the true coverage, so the matte's share of the
+    halo and the way the edit is applied (MSK-27) show apart. Both are developed from linear DNGs
+    of the scenes: Redlamp develops a bitmap as display-referred (it opens looking as it was, and
+    Exposure isn't a gain on its pixels), so a PNG's mix of sky and branch in linear light isn't a
+    mix in Redlamp's scene space, where a raw's is.
+
+Everything is written to build/mask-bench/<set>/, and `score` writes report.json beside them.
+"""
+
+import argparse
+import json
+import pathlib
+import shutil
+import subprocess
+import sys
+
+import cv2
+import numpy as np
+from PIL import Image
+from scipy import ndimage
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+import edge_bench as eb  # noqa: E402
+import hair_bench as hb  # noqa: E402
+
+ROOT = pathlib.Path(__file__).resolve().parents[3]
+OUT = ROOT / "build/mask-bench"
+CLI = ROOT / "build/DerivedData-masking/Build/Products/Release/redlamp"
+SETS = {
+    "edge": {"work": eb.WORK, "kind": "sky", "ev": eb.EDIT_EV, "masked": "sky"},
+    "hair": {"work": hb.WORK, "kind": "subject", "ev": hb.EDIT_EV, "masked": "person"},
+}
+
+
+def linear(path):
+    rgb = cv2.imread(str(path))[..., ::-1].astype(np.float32) / 255
+    return np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
+
+
+def write_dng(path, rgb):
+    """A linear DNG whose camera RGB is linear sRGB, balanced for D65."""
+    import tifffile
+
+    xyz_to_srgb = [3.2406, -1.5372, -0.4986, -0.9689, 1.8758, 0.0415, 0.0557, -0.2040, 1.0570]
+    srational = [v for x in xyz_to_srgb for v in (int(round(x * 10000)), 10000)]
+    tifffile.imwrite(
+        path, np.round(np.clip(rgb, 0, 1) * 65535).astype(np.uint16), photometric=34892, planarconfig="contig",
+        metadata=None, extratags=[
+            (254, 4, 1, 0, True), (271, "s", 0, "Redlamp", True), (272, "s", 0, "Mask bench", True),
+            (50706, 1, 4, (1, 4, 0, 0), True), (50707, 1, 4, (1, 1, 0, 0), True),
+            (50708, "s", 0, "Redlamp Mask bench", True), (50717, 4, 3, (65535, 65535, 65535), True),
+            (50721, 10, 9, srational, True), (50778, 3, 1, 21, True), (50728, 5, 3, (1, 1, 1, 1, 1, 1), True),
+        ],
+    )
+
+
+def redlamp(cli, *args):
+    result = subprocess.run([str(cli), *map(str, args)], capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"redlamp {' '.join(map(str, args))}: {result.stderr.strip() or result.stdout.strip()}")
+
+
+def run(names, cli):
+    for name in names:
+        spec = SETS[name]
+        out = OUT / name
+        out.mkdir(parents=True, exist_ok=True)
+        for scene in json.loads((spec["work"] / "scenes.json").read_text()):
+            image, ideal = spec["work"] / f"{scene}.png", spec["work"] / f"{scene}-ideal.png"
+            stored, oracle = out / f"{scene}-stored.png", out / f"{scene}-oracle.png"
+            if not stored.exists():
+                if name == "edge":
+                    redlamp(cli, "mask", image, "--kind", "sky", "-o", stored)
+                else:
+                    shutil.copy(spec["work"] / f"{scene}-cf.png", stored)
+            truth = np.load(spec["work"] / f"{scene}-truth.npz")["sky"].astype(np.float32)
+            Image.fromarray(np.round(np.clip(truth, 0, 1) * 255).astype(np.uint8)).save(oracle)
+            raw, ideal_raw = out / f"{scene}.dng", out / f"{scene}-ideal.dng"
+            if not raw.exists():
+                write_dng(raw, linear(image))
+                write_dng(ideal_raw, linear(ideal))
+            kind, ev = spec["kind"], f"local.exposure={spec['ev']}"
+            redlamp(cli, "render", image, "--mask-bitmap", f"{kind}={stored}", "--coverage", "-o", out / f"{scene}-drawn.png")
+            redlamp(cli, "render", raw, "--mask-bitmap", f"{kind}={stored}", "--mask-set", ev, "--16bit", "-o", out / f"{scene}-edit.png")
+            redlamp(cli, "render", raw, "--mask-bitmap", f"{kind}={oracle}", "--mask-set", ev, "--16bit", "-o", out / f"{scene}-oracle-edit.png")
+            redlamp(cli, "render", ideal_raw, "--16bit", "-o", out / f"{scene}-ideal-render.png")
+            print(f"{name}/{scene}: done")
+
+
+def lab(path):
+    """CIELAB (D65) of an sRGB PNG, 8 or 16 bits."""
+    bgr = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
+    rgb = bgr[..., :3][..., ::-1].astype(np.float32) / (65535 if bgr.dtype == np.uint16 else 255)
+    linear = np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
+    xyz = linear @ np.array([[0.4124, 0.3576, 0.1805], [0.2126, 0.7152, 0.0722], [0.0193, 0.1192, 0.9505]]).T
+    xyz /= np.array([0.95047, 1.0, 1.08883])
+    f = np.where(xyz > (6 / 29) ** 3, np.cbrt(xyz), xyz / (3 * (6 / 29) ** 2) + 4 / 29)
+    return np.stack([116 * f[..., 1] - 16, 500 * (f[..., 0] - f[..., 1]), 200 * (f[..., 1] - f[..., 2])], axis=-1)
+
+
+def halo(edit, ideal, truth):
+    """Over the edge band (where the truth is mixed, and 16 px around it): the mean CIELAB
+    difference, and the signed lightness difference on the side the edit shouldn't reach; with the
+    difference deep inside the masked area, which should be nought, as a check."""
+    a, b = lab(edit), lab(ideal)
+    mixed = (truth > 0.02) & (truth < 0.98)
+    band = ndimage.binary_dilation(mixed, iterations=16)
+    outside = band & (truth < 0.5)
+    deep = (truth > 0.999) & ~ndimage.binary_dilation(band, iterations=32)
+    difference = np.linalg.norm(a - b, axis=-1)
+    return {
+        "haloDE": float(difference[band].mean()),
+        "rimL": float((a[..., 0] - b[..., 0])[outside].mean()),
+        "deepDE": float(difference[deep].mean()) if deep.any() else None,
+    }
+
+
+def score(names):
+    report = json.loads((OUT / "report.json").read_text()) if (OUT / "report.json").exists() else {}
+    for name in names:
+        spec = SETS[name]
+        out = OUT / name
+        rows = []
+        for scene in json.loads((spec["work"] / "scenes.json").read_text()):
+            if not (out / f"{scene}-ideal-render.png").exists():
+                continue
+            t = np.load(spec["work"] / f"{scene}-truth.npz")
+            truth, thin = t["sky"].astype(np.float32), t["thin"].astype(np.float32)
+            row = {"scene": scene}
+            for what in ("stored", "drawn"):
+                mask = eb.load(out / f"{scene}-{what}.png")
+                if name == "hair":
+                    scores = eb.score_mask(1 - mask, 1 - truth, thin)
+                else:
+                    scores = eb.score_mask(mask, truth, thin)
+                row[what] = {k: scores[k] for k in ("bandMAE", "thinMAE", "thinRecall", "leak")}
+            ideal = out / f"{scene}-ideal-render.png"
+            row["halo"] = halo(out / f"{scene}-edit.png", ideal, truth)
+            row["oracleHalo"] = halo(out / f"{scene}-oracle-edit.png", ideal, truth)
+            rows.append(row)
+        report[name] = rows
+
+        def mean(path):
+            values = [r for r in (pick(row, path) for row in rows) if r is not None]
+            return float(np.mean(values)) if values else float("nan")
+
+        print(f"{name} ({len(rows)} scenes, {spec['masked']} edited by {spec['ev']:+.1f} EV)")
+        print(f"  drawn coverage: band error {mean('drawn.bandMAE'):.3f}, thin error {mean('drawn.thinMAE'):.3f}, "
+              f"thin recall {mean('drawn.thinRecall'):.3f}, leak {mean('drawn.leak'):.4f}")
+        for label, key in (("stored mask", "halo"), ("true coverage", "oracleHalo")):
+            print(f"  halo through the {label}: ΔE {mean(key + '.haloDE'):.2f} over the edge band, "
+                  f"rim ΔL* {mean(key + '.rimL'):+.2f} outside the mask, deep ΔE {mean(key + '.deepDE'):.2f}")
+    (OUT / "report.json").write_text(json.dumps(report, indent=1))
+
+
+def pick(row, path):
+    for key in path.split("."):
+        row = row.get(key) if isinstance(row, dict) else None
+    return row
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("command", choices=["run", "score"])
+    parser.add_argument("--sets", default="edge,hair")
+    parser.add_argument("--cli", default=str(CLI))
+    args = parser.parse_args()
+    names = args.sets.split(",")
+    if args.command == "run":
+        run(names, pathlib.Path(args.cli))
+    score(names)
+
+
+if __name__ == "__main__":
+    main()

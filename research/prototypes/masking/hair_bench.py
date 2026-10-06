@@ -31,6 +31,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 LOOKDEV = ROOT / "build/masking-bakeoff"
 WORK = ROOT / "build/hair-bench"
 WIDTH, HEIGHT, SUPER = eb.WIDTH, eb.HEIGHT, eb.SUPER
+# The standard subject edit: each scene also comes as <scene>-ideal.png, the person brightened by
+# this many stops before compositing, which a Subject mask with Exposure EDIT_EV should look like.
+EDIT_EV = 1.0
 
 
 def backgrounds():
@@ -122,11 +125,18 @@ def generate():
         coverage, thin, body, colour = person(rng, grey=index % 2 == 1)
         image = coverage[..., None] * colour + (1 - coverage[..., None]) * background
         image = ndimage.gaussian_filter(image, sigma=(0.8, 0.8, 0))
+        ideal = coverage[..., None] * colour * 2**EDIT_EV + (1 - coverage[..., None]) * background
+        ideal = ndimage.gaussian_filter(ideal, sigma=(0.8, 0.8, 0))
         truth = ndimage.gaussian_filter(coverage, 0.8)
         thin = ndimage.gaussian_filter(thin, 0.8)
-        noise = rng.standard_normal(image.shape).astype(np.float32) * (0.004 + 0.01 * np.sqrt(np.clip(image, 0, 1)))
+        draw = rng.standard_normal(image.shape).astype(np.float32)
+        noise = draw * (0.004 + 0.01 * np.sqrt(np.clip(image, 0, 1)))
         scene = f"hair-{name}"
         Image.fromarray((eb.linear_to_srgb(image + noise) * 255 + 0.5).astype(np.uint8)).save(WORK / f"{scene}.png")
+        ideal_noise = draw * (0.004 + 0.01 * np.sqrt(np.clip(ideal, 0, 1)))
+        Image.fromarray((eb.linear_to_srgb(ideal + ideal_noise) * 255 + 0.5).astype(np.uint8)).save(
+            WORK / f"{scene}-ideal.png",
+        )
         np.savez_compressed(WORK / f"{scene}-truth.npz", sky=truth.astype(np.float16), thin=thin.astype(np.float16))
         coarse = Image.fromarray((body * 255).astype(np.uint8)).resize((512, 342), Image.BOX)
         coarse = coarse.resize((WIDTH, HEIGHT), Image.BILINEAR)

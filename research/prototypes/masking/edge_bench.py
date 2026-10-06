@@ -42,6 +42,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 BAKEOFF = ROOT / "build/masking-bakeoff"
 WORK = ROOT / "build/edge-bench"
 WIDTH, HEIGHT = 4096, 2731
+# The standard sky edit: each scene also comes as <scene>-ideal.png, its sky darkened by this many
+# stops before compositing, which a Sky mask with Exposure EDIT_EV should look like.
+EDIT_EV = -1.5
 SUPER = 4
 
 
@@ -210,12 +213,19 @@ def generate():
         colour = foreground_colour(rng, kind)
         image = alpha[..., None] * colour + (1 - alpha[..., None]) * sky
         image = ndimage.gaussian_filter(image, sigma=(0.8, 0.8, 0))
+        # The ideal edit: the same scene with its sky darkened by EDIT_EV before compositing.
+        ideal = alpha[..., None] * colour + (1 - alpha[..., None]) * sky * 2**EDIT_EV
+        ideal = ndimage.gaussian_filter(ideal, sigma=(0.8, 0.8, 0))
         truth = ndimage.gaussian_filter(1 - alpha, 0.8)
         thin = ndimage.gaussian_filter(thin, 0.8)
-        noise = rng.standard_normal(image.shape).astype(np.float32) * (0.004 + 0.01 * np.sqrt(np.clip(image, 0, 1)))
+        draw = rng.standard_normal(image.shape).astype(np.float32)
+        noise = draw * (0.004 + 0.01 * np.sqrt(np.clip(image, 0, 1)))
         encoded = linear_to_srgb(image + noise)
         scene = f"{kind}-{name}"
         Image.fromarray((encoded * 255 + 0.5).astype(np.uint8)).save(WORK / f"{scene}.png")
+        ideal_noise = draw * (0.004 + 0.01 * np.sqrt(np.clip(ideal, 0, 1)))
+        ideal_encoded = linear_to_srgb(ideal + ideal_noise)
+        Image.fromarray((ideal_encoded * 255 + 0.5).astype(np.uint8)).save(WORK / f"{scene}-ideal.png")
         np.savez_compressed(WORK / f"{scene}-truth.npz", sky=truth.astype(np.float16), thin=thin.astype(np.float16))
         scenes.append(scene)
         print(f"{scene}: sky {truth.mean():.3f}, thin {(thin > 0.3).mean():.4f}")
