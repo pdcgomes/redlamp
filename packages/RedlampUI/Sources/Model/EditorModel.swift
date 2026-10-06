@@ -68,8 +68,9 @@ public final class EditorModel {
 
     /// A decoded photo the editor changes to once its sidecar is read. Until then the open photo
     /// stays but takes no edits, and nothing renders: the engine already has the new one. Ratings,
-    /// flags, labels and moving on go to the new one.
-    @ObservationIgnored private(set) var opening: URL?
+    /// flags, labels and moving on go to the new one. Observed: the menus and the palette enable
+    /// what `canPerform` allows for it.
+    private(set) var opening: URL?
     @ObservationIgnored private var openingKeepsSelection = false
     @ObservationIgnored private var openingFallback: Task<Void, Never>?
     /// Another writer's edit of the open photo that arrived while the next one was opening,

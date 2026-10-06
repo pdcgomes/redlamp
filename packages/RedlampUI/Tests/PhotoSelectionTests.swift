@@ -247,6 +247,21 @@ struct PhotoSelectionTests {
         try await opened(photos.c, in: model)
     }
 
+    @Test func `the menus are told when a switch starts waiting for its read`() async throws {
+        let photos = try await openDecoded()
+        defer { photos.cleanup() }
+        let model = photos.model
+        let changed = Mutex(false)
+        withObservationTracking { _ = model.canPerform(.previousPhoto) } onChange: {
+            changed.withLock { $0 = true }
+        }
+
+        try await startOpening(photos.b, in: photos)
+        #expect(changed.withLock { $0 }, "before B's read is done")
+        photos.reads.release()
+        try await opened(photos.b, in: model)
+    }
+
     @Test func `the first photo opened can be rated while its edit is read`() async throws {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
