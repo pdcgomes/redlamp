@@ -401,6 +401,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         encoder.setTexture(maskBindings.rasters ?? masks.emptyRasters, index: 6)
         encoder.setTexture(maskBindings.guide ?? masks.emptyGuide, index: 7)
         encoder.setTexture(maskBindings.edges ?? masks.emptyEdges, index: 14)
+        encoder.setTexture(maskBindings.colors ?? masks.emptyEdges, index: 15)
         encoder.setTexture(session.hueSatMaps?.cool ?? baseLooks.identity, index: 9)
         encoder.setTexture(session.hueSatMaps?.warm ?? baseLooks.identity, index: 10)
         encoder.setTexture(session.gainTableMap?.texture ?? baseLooks.identity, index: 11)

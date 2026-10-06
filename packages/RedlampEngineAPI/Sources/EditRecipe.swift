@@ -77,8 +77,12 @@ public struct EditRecipe: Sendable, Hashable {
     /// 12: a Remove spot's fill copies from none of the edit's other Remove spots and none of the
     /// spots after it (`RetouchStage.FillVersion`), so removing several things at once doesn't
     /// copy one into another's hole.
+    /// 13: AI masks coarser than masks are stored at have their edges refined at the size drawn
+    /// (`MaskEdges`), and a mask's Whites and Blacks move the white and black points where it covers.
+    /// 14: a Sky mask's per-pixel adjustments reach only the sky's share of an edge pixel's light
+    /// (`MaskColors`), so twigs and leaves keep their own colour and brightness.
     /// A new version records its references for the process-stability gate (`ProcessStabilityTests`).
-    public static let currentProcessVersion = 13
+    public static let currentProcessVersion = 14
     public static let linearPointCurve = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]
 
     /// Sidecars written before process versions existed are version 1.

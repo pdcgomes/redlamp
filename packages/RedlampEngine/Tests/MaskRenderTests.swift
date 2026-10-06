@@ -490,7 +490,7 @@ struct MaskRenderTests {
     /// is lighter than it should be) and, unsigned, over the pixels wholly inside it.
     private func edgeError(
         coverage: [Float], width: Int, height: Int, kind: MaskKind, exposure: Double,
-        inside: (Int) -> SIMD3<Float>, outside: SIMD3<Float>,
+        inside: (Int) -> SIMD3<Float>, outside: SIMD3<Float>, process: Int = EditRecipe.currentProcessVersion,
     ) throws -> (rim: Float, deep: Float) {
         let gain = Float(pow(2, exposure))
         let scene = try makeSession(width: width, height: height) { x, y in
@@ -505,8 +505,10 @@ struct MaskRenderTests {
         )))])
         mask[.localExposure] = exposure
         var recipe = EditRecipe()
+        recipe.processVersion = process
+        let plain = recipe
         recipe.masks = [mask]
-        let difference = try zip(render(recipe, session: scene), render(EditRecipe(), session: ideal))
+        let difference = try zip(render(recipe, session: scene), render(plain, session: ideal))
             .map { lightness($0) - lightness($1) }
         let deep = coverage.indices.filter { coverage[$0] == 1 }
         let rim = coverage.indices.filter { coverage[$0] > 0.05 && coverage[$0] < 0.5 }
@@ -517,22 +519,29 @@ struct MaskRenderTests {
     }
 
     /// Darkening a sky by 1.5 EV through its true coverage should look like the scene with its sky
-    /// darkened before compositing. A pixel part sky and part branch is darkened by too little, so
-    /// branches come out lighter than they should: the gate holds that rim where it is until edits
-    /// are applied to the pure colour behind a mixed pixel (MSK-27).
-    @Test func `a sky darkened through its true coverage keeps the rim along its branches within the gate`() throws {
+    /// darkened before compositing. Blended by coverage, the edit darkens a pixel that is part sky
+    /// and part branch by too little, and its branch share with it, so branches came out lighter
+    /// than they should; from process 14 a Sky mask's edit reaches only the sky's share (MSK-27).
+    @Test func `a sky darkened through its true coverage leaves its branches as dark as they are`() throws {
         let (width, height) = (512, 256)
-        let error = try edgeError(
-            coverage: branchCoverage(width: width, height: height), width: width, height: height, kind: .sky,
-            exposure: -1.5, inside: { SIMD3(0.45, 0.55, 0.75) * (0.9 + 0.2 * Float($0) / Float(height)) },
-            outside: SIMD3(0.03, 0.025, 0.02),
-        )
-        #expect(error.deep < 0.5, "deep in the sky, the edit misses the ideal by \(error.deep) L*")
-        #expect(error.rim < 14.5, "branches come out \(error.rim) L* lighter than they should")
+        let error = { (process: Int) in
+            try edgeError(
+                coverage: branchCoverage(width: width, height: height), width: width, height: height,
+                kind: .sky, exposure: -1.5,
+                inside: { SIMD3(0.45, 0.55, 0.75) * (0.9 + 0.2 * Float($0) / Float(height)) },
+                outside: SIMD3(0.03, 0.025, 0.02), process: process,
+            )
+        }
+        let split = try error(14)
+        #expect(split.deep < 0.5, "deep in the sky, the edit misses the ideal by \(split.deep) L*")
+        #expect(abs(split.rim) < 1, "branches come out \(split.rim) L* lighter than they should")
+        let blended = try error(13)
+        #expect(blended.rim > 10, "process 13 blends by coverage: \(blended.rim) L*")
     }
 
     /// Brightening dark strands by 1 EV through their true coverage brightens the light background
-    /// mixed into their edges with them, so a glow follows the strands just outside them (MSK-27).
+    /// mixed into their edges with them, so a glow follows the strands just outside them. Subject
+    /// blends by coverage until its mattes measure well enough to split its edges (MSK-27, MSK-32).
     @Test func `strands brightened through their true coverage keep the glow beside them within the gate`() throws {
         let (width, height) = (512, 256)
         let error = try edgeError(
@@ -542,6 +551,39 @@ struct MaskRenderTests {
         )
         #expect(error.deep < 0.5, "inside the strands, the edit misses the ideal by \(error.deep) L*")
         #expect(error.rim < 3.5, "the background beside the strands comes out \(error.rim) L* lighter")
+    }
+
+    /// A Sky mask's edge splits only the difference its own adjustments make: without an edit,
+    /// process 14 draws the photo as process 13 does, and with one, every pixel wholly inside or
+    /// outside the mask too.
+    @Test func `a sky mask changes nothing in process 14 but its edit at its edge`() throws {
+        let (width, height) = (512, 256)
+        let coverage = branchCoverage(width: width, height: height)
+        let session = try makeSession(width: width, height: height) { x, y in
+            let sky = coverage[y * width + x]
+            return sky * SIMD3(0.45, 0.55, 0.75) + (1 - sky) * SIMD3(0.03, 0.025, 0.02)
+        }
+        let mask = try MaskLayer(name: "Sky", components: [MaskComponent(shape: .ai(AIMask(
+            kind: .sky, provider: "test", revision: 1, analysisHash: "0", center: ImagePoint(x: 0.5, y: 0.5),
+            bitmap: #require(GrayMask(width: width, height: height, coverage: coverage).bitmap()),
+        )))])
+        func change(exposure: Double) throws -> [Float] {
+            let renders = try [13, 14].map { process in
+                var layer = mask
+                layer[.localExposure] = exposure
+                var recipe = EditRecipe()
+                recipe.processVersion = process
+                recipe.masks = [layer]
+                return try render(recipe, session: session)
+            }
+            return zip(renders[0], renders[1]).map { simd_reduce_max(abs($0 - $1)) }
+        }
+        #expect(try change(exposure: 0).max() ?? 1 < 1e-4)
+        let edited = try change(exposure: -1.5)
+        let pure = coverage.indices.filter { coverage[$0] == 0 || coverage[$0] == 1 }
+        let mixed = coverage.indices.filter { coverage[$0] > 0.05 && coverage[$0] < 0.5 }
+        #expect(pure.map { edited[$0] }.max() ?? 1 < 1e-4)
+        #expect(mixed.map { edited[$0] }.max() ?? 0 > 0.01)
     }
 
     /// A depth map that is near on the left and far on the right: a near range selects the left.

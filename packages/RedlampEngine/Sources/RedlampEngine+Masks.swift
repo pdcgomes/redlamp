@@ -193,6 +193,13 @@ extension RedlampEngine {
                 bindings.edgeSlices = edges.slices
                 bindings.edgeOffset = edges.offset
             }
+            // Edge-aware application (MSK-27): a mask of several components keeps blending.
+            let single = recipe.masks.compactMap { $0.components.count == 1 ? $0.components[0] : nil }
+            if recipe.processVersion >= 14,
+               let colors = try masks.colors(for: single, session: session, commands: commands) {
+                bindings.colors = colors.texture
+                bindings.colorPairs = colors.pairs
+            }
         }
         return bindings
     }

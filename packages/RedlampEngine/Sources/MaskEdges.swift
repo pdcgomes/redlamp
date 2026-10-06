@@ -43,15 +43,7 @@ enum MaskEdges {
     static func texels(
         for mask: GrayMask, guide: [Float], width: Int, height: Int, orientation: Int,
     ) -> [Float16] {
-        let coverage = mask.coverage
-        var input = [Float](repeating: 0, count: width * height)
-        for y in 0 ..< height {
-            for x in 0 ..< width {
-                let source = SIMD2((Double(x) + 0.5) / Double(width), (Double(y) + 0.5) / Double(height))
-                let oriented = orientedCoordinate(source, orientation: orientation)
-                input[y * width + x] = sample(coverage, width: mask.width, height: mask.height, at: oriented)
-            }
-        }
+        let input = coverage(of: mask, width: width, height: height, orientation: orientation)
         let (a, b) = GuidedFilter.coefficients(
             input, guide: guide, width: width, height: height, radius: radius, epsilon: epsilon,
         )
@@ -71,6 +63,20 @@ enum MaskEdges {
             texels[index * 4 + 2] = Float16(trust[index])
         }
         return texels
+    }
+
+    /// `mask` (in the oriented frame) at each texel of a grid in the sensor's orientation.
+    static func coverage(of mask: GrayMask, width: Int, height: Int, orientation: Int) -> [Float] {
+        let coverage = mask.coverage
+        var grid = [Float](repeating: 0, count: width * height)
+        for y in 0 ..< height {
+            for x in 0 ..< width {
+                let source = SIMD2((Double(x) + 0.5) / Double(width), (Double(y) + 0.5) / Double(height))
+                let oriented = orientedCoordinate(source, orientation: orientation)
+                grid[y * width + x] = sample(coverage, width: mask.width, height: mask.height, at: oriented)
+            }
+        }
+        return grid
     }
 
     /// Bilinear coverage at normalised `point`, as the GPU samples it.

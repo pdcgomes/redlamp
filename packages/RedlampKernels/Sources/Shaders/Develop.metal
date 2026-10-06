@@ -587,6 +587,93 @@ static inline float3 wideGlow(texture2d<float, access::sample> map, float2 uv, f
 
 // MARK: - Develop
 
+// Process 3: a bitmap is already rendered, so it stands in for the tone curve's output: undo the
+// curve and the default edit shows the file as it is (as Lightroom does).
+static inline float3 undoneToneCurve(float3 camera, constant DevelopParams &p) {
+    float3 shown = clamp(mul3(p.camToWork0, p.camToWork1, p.camToWork2, camera), 0.0f, 1.0f);
+    // Undoing the curve saturates bright colours beyond the camera's (sRGB) primaries, so a
+    // channel may go negative here; working space takes it back.
+    return mul3(p.workToCam0, p.workToCam1, p.workToCam2, inverseToneCurve(shown));
+}
+
+// Calibration's Shadows Tint: green or magenta in the shadows, fading out by middle grey, at
+// constant luminance.
+static inline float3 shadowsTint(float3 scene, constant DevelopParams &p) {
+    float y = max(dot(scene, kRec2020Luma), 0.0f);
+    float shadow = 1.0f - smoothstep(0.0f, kMiddleGrey * 1.5f, y);
+    return max(scene + p.calibration.x * 0.12f * shadow * y * float3(1.0f, -0.4749f, 1.0f), 0.0f);
+}
+
+// The tone controls' EV for a pixel at `ev` (its luminance over middle grey, in stops).
+static inline float toneControlsEV(
+    float ev, float toneDetail, float4 localTone, float2 localTone2, constant DevelopParams &p)
+{
+    // Highlights and Shadows weigh the region's brightness (process 7), so its detail moves with it.
+    float baseEV = ev - toneDetail;
+    float highlightWeight = smoothstep(-0.5f, 2.5f, baseEV);
+    float shadowWeight = (1.0f - smoothstep(-4.5f, 0.0f, baseEV)) * smoothstep(-10.0f, -5.5f, baseEV);
+    // From process 13 the masks' Whites and Blacks move this pixel's white and black points, as
+    // the global sliders move the photo's; before, they weighed its brightest and darkest tones.
+    bool maskEndPoints = p.grain2.z > 0.5f;
+    float adjustedEV = ev * (1.0f + p.tone.y + localTone.y * 0.32f)
+        + (p.tone.z + localTone.z) * 1.25f * highlightWeight
+        + (p.tone.w + localTone.w) * 1.6f * shadowWeight;
+    if (!maskEndPoints) {
+        adjustedEV += localTone2.x * 0.9f * smoothstep(0.5f, 3.0f, ev)
+            + localTone2.y * 0.9f * (1.0f - smoothstep(-8.0f, -2.5f, ev));
+    }
+    // Dynamic range: compress highlights above +0.5 EV (monotonic for compression <= 0.5).
+    if (p.recipe.z > 0.0f) {
+        adjustedEV -= p.recipe.z * smoothstep(0.5f, 4.5f, adjustedEV) * (adjustedEV - 0.5f);
+    }
+    return adjustedEV;
+}
+
+// The white and black points (x, y). From process 13 a mask's Whites scale the white point as the
+// global slider does (DevelopParameters), and its Blacks add to the global Blacks before they set
+// the black point.
+static inline float2 endPoints(float2 localTone2, constant DevelopParams &p) {
+    float whitePoint = p.tone2.x;
+    float blackPoint = p.tone2.y;
+    if (p.grain2.z > 0.5f) {
+        whitePoint *= exp2(-0.85f * localTone2.x);
+        float blacks = p.grain2.w + localTone2.y;
+        blackPoint = blacks > 0.0f ? -0.012f * blacks : -0.008f * blacks;
+    }
+    return float2(whitePoint, blackPoint);
+}
+
+// Edge-aware masks one pixel splits at most (MSK-27); any more blend by coverage there.
+constant int kMaxSplits = 2;
+
+// The stages of `rl_develop` the masked colour behind a partly covered pixel goes through for an
+// edge-aware mask (MSK-27, process 14): the pixel's own, from white balance to the end points,
+// without those that read the pixels around it (Defringe, halation and bloom). Returns the tone
+// curve's input.
+static inline float3 sceneOfColor(
+    float3 camera, float toneDetail, float2 localColor, float4 localTone, float2 localTone2, float2 sourceUV,
+    constant DevelopParams &p, texture3d<float, access::read> hueSatCool, texture3d<float, access::read> hueSatWarm,
+    texture3d<float, access::sample> gainTable)
+{
+    camera *= p.wbRatio.xyz;
+    camera *= float3(exp2(localColor.x * 0.6f), exp2(-localColor.y * 0.4f), exp2(-localColor.x * 0.6f));
+    float3 scene = max(mul3(p.camToWork0, p.camToWork1, p.camToWork2, camera), 0.0f);
+    if (p.hueSat.x > 0.5f) {
+        scene = max(applyHueSatMap(scene, hueSatCool, hueSatWarm, p), 0.0f);
+    }
+    if (p.gainTable.x > 0.0f) {
+        scene *= pow(gainTableAt(scene, sourceUV, gainTable, p), p.gainTable.x);
+    }
+    scene *= p.tone.x * exp2(localTone.x);
+    if (p.calibration.x != 0.0f) {
+        scene = shadowsTint(scene, p);
+    }
+    float ev = log2(max(dot(scene, kRec2020Luma), 1e-7f) / kMiddleGrey);
+    scene *= exp2(toneControlsEV(ev, toneDetail, localTone, localTone2, p) - ev);
+    float2 ends = endPoints(localTone2, p);
+    return max((scene - ends.y) / (1.0f - ends.y), 0.0f) / ends.x;
+}
+
 kernel void rl_develop(
     texture2d<float, access::sample> source [[texture(0)]],
     texture2d<float, access::write> out [[texture(1)]],
@@ -610,6 +697,7 @@ kernel void rl_develop(
     constant float4 *lensTable [[buffer(5)]],
     constant float *maskCurves [[buffer(6)]],
     texture2d_array<float, access::sample> maskEdges [[texture(14)]],
+    texture2d_array<float, access::sample> maskColors [[texture(15)]],
     constant PointColorGPU *pointColor [[buffer(7)]],
     constant float4 *maskPointColors [[buffer(8)]],
     uint2 gid [[thread_position_in_grid]])
@@ -646,23 +734,29 @@ kernel void rl_develop(
     // Edge-aware tone's detail (process 7, `ToneBase`): this pixel's log luminance above its
     // region's, in the pyramid's camera RGB as the base was computed, before any correction.
     float toneDetail = 0.0f;
+    float2 toneAB = float2(1.0f, 0.0f);
     if (p.render.z > 0.5f) {
         float toneEV = log2(max(dot(camera, float3(0.25f, 0.5f, 0.25f)), 1e-6f));
-        float2 ab = toneBase.sample(linearSampler, sourceUV).rg;
-        toneDetail = toneEV - (ab.x * toneEV + ab.y);
+        toneAB = toneBase.sample(linearSampler, sourceUV).rg;
+        toneDetail = toneEV - (toneAB.x * toneEV + toneAB.y);
     }
     // The refined haze map's guide (process 8, `Haze.guide`): brightness over the airlight, in the
     // same camera RGB, before any correction.
     float hazeGuide = dot(camera / max(p.haze.xyz, float3(1e-3f)), float3(1.0f / 3.0f));
     // The profile's vignetting, at the radius the light was recorded at.
+    float vignetting = 1.0f;
     if (p.lensProfile.x > 0.5f) {
-        camera *= lensTableAt(lensTable, lensRadius(imageUV, p), p).w;
+        float gain = lensTableAt(lensTable, lensRadius(imageUV, p), p).w;
+        camera *= gain;
+        vignetting *= gain;
     }
     // Lens vignetting, Lightroom's manual Vignetting: positive lightens the corners, by up to a
     // stop, from the midpoint outwards.
     if (p.lens.y != 0.0f) {
         float radius = length((imageUV - 0.5f) * lensScale(p));
-        camera *= exp2(p.lens.y * smoothstep(0.9f * p.lens.z, 1.0f, radius));
+        float gain = exp2(p.lens.y * smoothstep(0.9f * p.lens.z, 1.0f, radius));
+        camera *= gain;
+        vignetting *= gain;
     }
 
     // Mask coverage for every layer, then the summed local adjustments.
@@ -678,17 +772,46 @@ kernel void rl_develop(
     float2 localSwatch = 0.0f;
     MaskImages maskImages = { maskRasters, maskGuide, maskEdges, sourceUV, maskEV };
     float textureMagnitude = -1.0f;
+    // Edge-aware masks (MSK-27, process 14): a layer whose only component is an AI mask with colour
+    // maps splits a partly covered pixel's light. There its per-pixel scene-referred adjustments stay
+    // out of the sums and reach only the masked share of the light (below), from the colours either
+    // side of the edge.
+    int splitCount = 0;
+    int splitLayer[kMaxSplits];
+    float splitAlpha[kMaxSplits];
+    float splitStrength[kMaxSplits];
+    float3 splitInside[kMaxSplits];
+    float3 splitOutside[kMaxSplits];
     for (int i = 0; i < layerCount; i++) {
         coverage[i] = evaluateMaskLayer(layers[i], components, maskPosition, maskImages);
+        float alpha = coverage[i];
         if (layers[i].detail.y != 0.0f) {
             if (textureMagnitude < 0.0f) {
                 textureMagnitude = maskTextureMagnitude(source, sourceUV, uint(layers[i].detail.z));
             }
             coverage[i] *= maskDetailFactor(textureMagnitude, layers[i].detail.y);
         }
-        localColor += coverage[i] * layers[i].color;
-        localTone += coverage[i] * layers[i].tone;
-        localTone2 += coverage[i] * layers[i].tone2.xy;
+        float sceneWeight = coverage[i];
+        if (int(layers[i].tone2.w) == 1 && alpha > 0.002f && alpha < 0.998f && splitCount < kMaxSplits) {
+            MaskComponentGPU c = components[int(layers[i].tone2.z)];
+            if (abs(c.shape.x - 3.0f) < 0.5f && c.rotation.x > 0.5f) {
+                constexpr sampler colorSampler(coord::normalized, filter::linear, address::clamp_to_edge);
+                uint pair = 2 * uint(c.rotation.x - 0.5f);
+                float3 inside = maskColors.sample(colorSampler, sourceUV, pair).rgb * vignetting;
+                float3 outside = maskColors.sample(colorSampler, sourceUV, pair + 1).rgb * vignetting;
+                bool inverted = c.shape.z > 0.5f;
+                splitInside[splitCount] = inverted ? outside : inside;
+                splitOutside[splitCount] = inverted ? inside : outside;
+                splitLayer[splitCount] = i;
+                splitAlpha[splitCount] = alpha;
+                splitStrength[splitCount] = coverage[i] / alpha;
+                splitCount++;
+                sceneWeight = 0.0f;
+            }
+        }
+        localColor += float4(sceneWeight, sceneWeight, coverage[i], coverage[i]) * layers[i].color;
+        localTone += sceneWeight * layers[i].tone;
+        localTone2 += sceneWeight * layers[i].tone2.xy;
         localDehaze += coverage[i] * layers[i].detail.x;
         localGlow += coverage[i] * layers[i].glow.xy;
         localFringe += coverage[i] * layers[i].glow.zw;
@@ -713,21 +836,49 @@ kernel void rl_develop(
             }
             float transmission = max(1.0f - 0.95f * min(dehaze, 1.0f) * dark, 0.2f);
             camera = max((camera - airlight) / transmission + airlight, 0.0f);
+            for (int k = 0; k < splitCount; k++) {
+                splitInside[k] = max((splitInside[k] - airlight) / transmission + airlight, 0.0f);
+                splitOutside[k] = max((splitOutside[k] - airlight) / transmission + airlight, 0.0f);
+            }
         } else {
             float veil = 0.8f * (airlight.r + airlight.g + airlight.b) / 3.0f;
-            camera += (veil - camera) * (0.3f * min(-dehaze, 1.0f));
+            float amount = 0.3f * min(-dehaze, 1.0f);
+            camera += (veil - camera) * amount;
+            for (int k = 0; k < splitCount; k++) {
+                splitInside[k] += (veil - splitInside[k]) * amount;
+                splitOutside[k] += (veil - splitOutside[k]) * amount;
+            }
         }
     }
-    // Process 3: a bitmap is already rendered, so it stands in for the tone curve's output: undo
-    // the curve here and the default edit shows the file as it is (as Lightroom does).
     if (p.render.x > 0.5f) {
-        float3 shown = clamp(mul3(p.camToWork0, p.camToWork1, p.camToWork2, camera), 0.0f, 1.0f);
-        // Undoing the curve saturates bright colours beyond the camera's (sRGB) primaries, so a
-        // channel may go negative here; working space takes it back.
-        camera = mul3(p.workToCam0, p.workToCam1, p.workToCam2, inverseToneCurve(shown));
+        camera = undoneToneCurve(camera, p);
+        for (int k = 0; k < splitCount; k++) {
+            splitInside[k] = undoneToneCurve(splitInside[k], p);
+            splitOutside[k] = undoneToneCurve(splitOutside[k], p);
+        }
     }
     if (localFringe.y > 0.0f) {
         camera = removeMoire(camera, source, sourceUV, localFringe.y, p);
+    }
+    // Each split layer's share of this pixel's light: the colours either side mixed by coverage,
+    // each where its error is smaller (the inside colour's is scaled by alpha, the outside's by
+    // 1 - alpha), within the pixel's own light. The difference the layer's adjustments make to
+    // the masked colour, scaled by alpha, joins the pixel before the tone curve.
+    float3 splitDelta = 0.0f;
+    for (int k = 0; k < splitCount; k++) {
+        float a = splitAlpha[k];
+        float3 share = (1.0f - a) * a * splitInside[k] + a * (camera - (1.0f - a) * splitOutside[k]);
+        float3 masked = clamp(share, float3(0.0f), max(camera, float3(0.0f))) / a;
+        float maskedEV = log2(max(dot(masked / vignetting, float3(0.25f, 0.5f, 0.25f)), 1e-6f));
+        float detail = maskedEV - (toneAB.x * maskedEV + toneAB.y);
+        MaskLayerGPU layer = layers[splitLayer[k]];
+        float s = splitStrength[k];
+        float3 edited = sceneOfColor(
+            masked, detail, localColor.xy + s * layer.color.xy, localTone + s * layer.tone,
+            localTone2 + s * layer.tone2.xy, sourceUV, p, hueSatCool, hueSatWarm, gainTable);
+        float3 plain = sceneOfColor(
+            masked, detail, localColor.xy, localTone, localTone2, sourceUV, p, hueSatCool, hueSatWarm, gainTable);
+        splitDelta += a * (edited - plain);
     }
     camera *= p.wbRatio.xyz;
     camera *= float3(exp2(localColor.x * 0.6f), exp2(-localColor.y * 0.4f), exp2(-localColor.x * 0.6f));
@@ -744,12 +895,8 @@ kernel void rl_develop(
         scene *= pow(gainTableAt(scene, sourceUV, gainTable, p), p.gainTable.x);
     }
     scene *= p.tone.x * exp2(localTone.x);
-    // Calibration's Shadows Tint: green or magenta in the shadows, fading out by middle grey, at
-    // constant luminance.
     if (p.calibration.x != 0.0f) {
-        float y = max(dot(scene, kRec2020Luma), 0.0f);
-        float shadow = 1.0f - smoothstep(0.0f, kMiddleGrey * 1.5f, y);
-        scene = max(scene + p.calibration.x * 0.12f * shadow * y * float3(1.0f, -0.4749f, 1.0f), 0.0f);
+        scene = shadowsTint(scene, p);
     }
     // Halation and bloom: highlight light scattered on its way to the image (see Glow.metal),
     // added in scene light. Halation reflects off the film base behind the emulsion, so it
@@ -788,37 +935,16 @@ kernel void rl_develop(
     // Tone controls in log space around middle grey, applied as a luminance ratio.
     float luma = max(dot(scene, kRec2020Luma), 1e-7f);
     float ev = log2(luma / kMiddleGrey);
-    // Highlights and Shadows weigh the region's brightness (process 7), so its detail moves with it.
-    float baseEV = ev - toneDetail;
-    float highlightWeight = smoothstep(-0.5f, 2.5f, baseEV);
-    float shadowWeight = (1.0f - smoothstep(-4.5f, 0.0f, baseEV)) * smoothstep(-10.0f, -5.5f, baseEV);
-    // From process 13 the masks' Whites and Blacks move this pixel's white and black points, as
-    // the global sliders move the photo's; before, they weighed its brightest and darkest tones.
-    bool maskEndPoints = p.grain2.z > 0.5f;
-    float adjustedEV = ev * (1.0f + p.tone.y + localTone.y * 0.32f)
-        + (p.tone.z + localTone.z) * 1.25f * highlightWeight
-        + (p.tone.w + localTone.w) * 1.6f * shadowWeight;
-    if (!maskEndPoints) {
-        adjustedEV += localTone2.x * 0.9f * smoothstep(0.5f, 3.0f, ev)
-            + localTone2.y * 0.9f * (1.0f - smoothstep(-8.0f, -2.5f, ev));
-    }
-    // Dynamic range: compress highlights above +0.5 EV (monotonic for compression <= 0.5).
-    if (p.recipe.z > 0.0f) {
-        adjustedEV -= p.recipe.z * smoothstep(0.5f, 4.5f, adjustedEV) * (adjustedEV - 0.5f);
-    }
-    scene *= exp2(adjustedEV - ev);
+    scene *= exp2(toneControlsEV(ev, toneDetail, localTone, localTone2, p) - ev);
 
     // Black and white points, then the tone curve to display-referred (still Rec.2020 primaries).
-    // A mask's Whites scale the white point as the global slider does (DevelopParameters), and
-    // its Blacks add to the global Blacks before they set the black point.
-    float whitePoint = p.tone2.x;
-    float blackPoint = p.tone2.y;
-    if (maskEndPoints) {
-        whitePoint *= exp2(-0.85f * localTone2.x);
-        float blacks = p.grain2.w + localTone2.y;
-        blackPoint = blacks > 0.0f ? -0.012f * blacks : -0.008f * blacks;
-    }
+    float2 ends = endPoints(localTone2, p);
+    float whitePoint = ends.x;
+    float blackPoint = ends.y;
     scene = max((scene - blackPoint) / (1.0f - blackPoint), 0.0f);
+    if (splitCount > 0) {
+        scene = max(scene + splitDelta * whitePoint, 0.0f);
+    }
     float3 display = toneCurve(scene / whitePoint);
 
     // A scene-referred Base Look (a film model) takes the place of the tone curve.

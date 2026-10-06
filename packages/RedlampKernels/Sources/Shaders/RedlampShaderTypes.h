@@ -169,7 +169,8 @@ static inline float2 orient(float2 uv, int orientation) {
 struct MaskComponentGPU {
     float4 geometry;          // linear: start.xy, end.xy; radial: center.xy, radius.xy; others: see Masks.h
     float4 shape;             // x kind (1 linear, 2 radial, 3 raster, 4 luminance, 5 color, 6 mask reference, 7 depth), y operation (0 add, 1 subtract, 2 intersect), z inverted, w feather 0...1
-    float4 rotation;          // radial: x cos, y sin of the rotation; luminance: x 1 / aspect, y guide level
+    float4 rotation;          // radial: x cos, y sin of the rotation; luminance: x 1 / aspect, y guide level;
+                              // raster: x its colour maps' pair plus one (process 14, MaskColors), 0 for none
     float4 extra0;            // color range samples: 0 and 1 positions (mask UV)
     float4 extra1;            // samples 2 and 3 positions
     float4 extra2;            // sample 4 position and guide level

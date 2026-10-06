@@ -17,6 +17,10 @@ struct MaskBindings {
     var edges: (any MTLTexture)?
     var edgeSlices: [UUID: Int] = [:]
     var edgeOffset: Float = 0
+    /// Sky masks' colours either side of their edges (process 14, `MaskColors`): each mask's pair
+    /// of slices starts at twice its index here.
+    var colors: (any MTLTexture)?
+    var colorPairs: [UUID: Int] = [:]
     var guideSize = PixelSize.zero
     /// Changes whenever the guide's contents do, for caches of stages that read it.
     var guideGeneration = 0
@@ -95,6 +99,28 @@ final class MaskResources {
     /// The photos rendered most recently, newest last.
     private var edgeMaps: [EdgeMaps] = []
     static let edgeSlicesPerPhoto = 16
+
+    /// A photo's AI mask colours (process 14): an array at its analysis image's size, two slices
+    /// per mask (the colour inside its edge, then outside), keyed as the mask's raster is.
+    private final class ColorMaps {
+        weak var session: ImageSession?
+        let width: Int
+        let height: Int
+        var texture: (any MTLTexture)?
+        var keys: [RasterKey] = []
+        /// Masks nowhere wholly inside or nowhere wholly outside, which have no colours.
+        var without: Set<RasterKey> = []
+
+        init(session: ImageSession) {
+            self.session = session
+            width = session.analysis.width
+            height = session.analysis.height
+        }
+    }
+
+    /// The photos rendered most recently, newest last.
+    private var colorMaps: [ColorMaps] = []
+    static let colorPairsPerPhoto = 8
 
     /// The edit guide, the recipe it's for (without its masks), and the photo it was developed
     /// from: with the recipe's spots in, its maps made again once they are (`RetouchStage.Maps`).
@@ -302,6 +328,81 @@ final class MaskResources {
         }
         guard let texture = photo.texture else { return nil }
         return (texture, slices, photo.offset)
+    }
+
+    /// The colours either side of the edges of `components`' Sky masks for `session` (process 14),
+    /// computing the ones it doesn't have: each mask's pair of slices starts at twice its index.
+    func colors(
+        for components: [MaskComponent], session: ImageSession, commands: any MTLCommandBuffer,
+    ) throws -> (texture: any MTLTexture, pairs: [UUID: Int])? {
+        let masks = components.compactMap { component -> (UUID, AIMask)? in
+            if case let .ai(mask) = component.shape, MaskColors.splits(mask) {
+                (component.id, mask)
+            } else {
+                nil
+            }
+        }
+        guard !masks.isEmpty else { return nil }
+        colorMaps.removeAll { $0.session == nil }
+        let photo = colorMaps.first { $0.session === session } ?? ColorMaps(session: session)
+        colorMaps.removeAll { $0 === photo }
+        colorMaps.append(photo)
+        if colorMaps.count > 2 {
+            colorMaps.removeFirst()
+        }
+        var pairs: [UUID: Int] = [:]
+        for (id, mask) in masks {
+            guard let key = Self.key(for: .ai(mask)), !photo.without.contains(key) else { continue }
+            if let pair = photo.keys.firstIndex(of: key) {
+                pairs[id] = pair
+                continue
+            }
+            guard let png = mask.bitmap.png, let gray = GrayMask.decode(png) else { continue }
+            let shaped = gray.shaped(feather: mask.feather, edge: mask.edge, reach: MaskEdges.reach(gray))
+            guard let texels = MaskColors.texels(
+                for: shaped, analysis: session.analysis, orientation: session.orientation,
+            ) else {
+                photo.without.insert(key)
+                continue
+            }
+            let pair: Int
+            if photo.keys.count < Self.colorPairsPerPhoto {
+                pair = photo.keys.count
+                photo.keys.append(key)
+            } else {
+                let used = Set(pairs.values)
+                guard let free = photo.keys.indices.first(where: { !used.contains($0) }) else { continue }
+                pair = free
+                photo.keys[pair] = key
+            }
+            if (photo.texture?.arrayLength ?? 0) < 2 * pair + 2 {
+                let slices = min(max(4, 4 * (pair + 1)), 2 * Self.colorPairsPerPhoto)
+                guard let grown = device.makeTexture(descriptor: Self.edgesDescriptor(
+                    width: photo.width, height: photo.height, slices: slices,
+                )) else { throw EngineError.gpuUnavailable }
+                if let old = photo.texture {
+                    guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
+                    blit.copy(
+                        from: old, sourceSlice: 0, sourceLevel: 0, to: grown, destinationSlice: 0,
+                        destinationLevel: 0, sliceCount: old.arrayLength, levelCount: 1,
+                    )
+                    blit.endEncoding()
+                }
+                photo.texture = grown
+            }
+            for (offset, side) in [texels.inside, texels.outside].enumerated() {
+                side.withUnsafeBytes { bytes in
+                    photo.texture?.replace(
+                        region: MTLRegionMake2D(0, 0, photo.width, photo.height), mipmapLevel: 0,
+                        slice: 2 * pair + offset, withBytes: bytes.baseAddress!, bytesPerRow: photo.width * 8,
+                        bytesPerImage: photo.width * photo.height * 8,
+                    )
+                }
+            }
+            pairs[id] = pair
+        }
+        guard let texture = photo.texture else { return nil }
+        return (texture, pairs)
     }
 
     /// Switches to `next`'s rasters and guides, keeping the current photo's aside.

@@ -455,12 +455,14 @@ enum DevelopParameters {
             guard let slice = masks.slices[component.id] else {
                 return MaskComponentGPU(geometry: .zero, shape: SIMD4(0, operation, inverted, 0), rotation: .zero)
             }
-            // z: the AI mask's edge coefficients' slice plus one (process 13), w the guide's offset.
+            // z: the AI mask's edge coefficients' slice plus one (process 13), w the guide's offset;
+            // rotation x: its colour maps' pair plus one (process 14).
             let edges = masks.edgeSlices[component.id].map { Float($0 + 1) } ?? 0
+            let colors = masks.colorPairs[component.id].map { Float($0 + 1) } ?? 0
             return MaskComponentGPU(
                 geometry: SIMD4(Float(slice), inverseAspect, edges, masks.edgeOffset),
                 shape: SIMD4(3, operation, inverted, 0),
-                rotation: .zero,
+                rotation: SIMD4(colors, 0, 0, 0),
             )
         case let .luminanceRange(range):
             let r = range.normalized
