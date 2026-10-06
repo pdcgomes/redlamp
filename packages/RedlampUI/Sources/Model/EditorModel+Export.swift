@@ -1,25 +1,33 @@
 import Foundation
 import RedlampDocument
 import RedlampEngineAPI
+import RedlampLibrary
 
 extension EditorModel {
     /// Renders the open photo as `settings` describe and writes it to `url`, replacing any
     /// file there that isn't a photo. The photo and its edit are taken before the first
     /// suspension, and the render fails rather than export another photo opened in the meantime.
+    /// The library's fields for the photo go with it under `settings.metadata`, when the library has it.
     public func export(_ settings: ExportSettings, to url: URL) async throws {
         guard let info else { throw EngineError.noImageOpen }
         let source = info.url
         let request = settings.stillRequest(recipe: unobservedRecipe, source: source, size: info.pixelSize)
+        let core = settings.metadata == .none ? nil : library.service?.core
         let files = engine.files
         setExportStatus("Exporting \(info.fileName)…", clearAfter: nil)
         do {
             let image = try await engine.renderStill(request)
             try await Task.detached(priority: .userInitiated) {
+                var fields: ExportMetadata.Fields?
+                if let core, let id = await LibraryService.indexIDs(of: [source], in: core.index)[source] {
+                    fields = try? await LibraryMetadata(index: core.index, paths: core.paths).exportFields(ofPhoto: id)
+                }
                 let metadata = ExportMetadata.properties(
                     from: source,
                     reading: files,
                     policy: settings.metadata,
                     recipe: request.recipe,
+                    fields: fields,
                 )
                 try ImageExporter.write(
                     image, to: url, settings: settings, metadata: metadata, source: source, reading: files,
