@@ -109,6 +109,37 @@ struct FileRenameTests {
         #expect(Set(sandbox.files().keys).allSatisfy { !$0.contains("Redlamp-renaming-") })
     }
 
+    @Test func `photos given names of their own swap through a temporary name and keep their original names`(
+    ) async throws {
+        let sandbox = try await FileSandbox.make([
+            .init("A/IMG_1.JPG", captured: FileSandbox.date(0), sidecar: true),
+            .init("A/IMG_2.JPG", captured: FileSandbox.date(1), xmp: .stem),
+        ])
+        defer { sandbox.remove() }
+        let operations = sandbox.operations()
+        let ids = try await sandbox.rows()
+        let before = sandbox.photoFiles()
+        func renaming(_ relative: String, to name: String) throws -> PhotoRename {
+            try PhotoRename(id: #require(ids[relative]), path: LibraryIndexer.path(sandbox.url(relative)), name: name)
+        }
+        let batch = try await operations.planRename([
+            renaming("A/IMG_1.JPG", to: "IMG_2.JPG"), renaming("A/IMG_2.JPG", to: "IMG_1.JPG"),
+        ])
+        #expect(batch.kind == .rename && batch.title == "Rename 2 photos")
+        #expect(batch.steps.contains { step in
+            step.items.contains { $0.destination?.contains("Redlamp-renaming-") == true }
+        })
+        #expect(try await operations.run(batch).isFinished)
+        #expect(sandbox.photoFiles()["A/IMG_2.JPG"] == before["A/IMG_1.JPG"])
+        let rows = try await sandbox.rows()
+        #expect(rows["A/IMG_2.JPG"] == ids["A/IMG_1.JPG"] && rows["A/IMG_1.JPG"] == ids["A/IMG_2.JPG"])
+        #expect(try await sandbox.sidecar("A/IMG_2.JPG")?.metadata?.originalName == "IMG_1.JPG")
+        #expect(sandbox.files()["A/IMG_1.xmp"] != nil, "the stem's xmp went with its photo")
+
+        let titled = try await operations.planRename([renaming("A/IMG_1.JPG", to: "Beach.JPG")], title: "Beach")
+        #expect(titled.title == "Beach")
+    }
+
     @Test func `a name taken since the preview, or a photo gone, stops the batch before anything moves`() async throws {
         let sandbox = try await FileSandbox.make([
             .init("A/IMG_0001.ARW", captured: FileSandbox.date(0), sidecar: true),

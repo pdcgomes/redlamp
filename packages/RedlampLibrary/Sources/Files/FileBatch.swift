@@ -226,6 +226,24 @@ public struct PhotoMove: Sendable, Hashable, Codable {
     }
 }
 
+/// A photo taking a new name in its folder: its path as it is, and the name, with its extension, it
+/// takes.
+public struct PhotoRename: Sendable, Hashable {
+    public var id: Int64
+    public var path: String
+    public var name: String
+
+    public init(id: Int64, path: String, name: String) {
+        self.id = id
+        self.path = path
+        self.name = name
+    }
+
+    var move: PhotoMove {
+        PhotoMove(id: id, from: path, to: FilePlanner.split(path).folder + "/" + name)
+    }
+}
+
 /// A folder's row, and those below it, moving from one path to another.
 public struct FolderMove: Sendable, Hashable, Codable {
     public var id: Int64

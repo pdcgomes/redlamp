@@ -67,17 +67,21 @@ public extension FileOperations {
     /// The batch that gives each photo of `preview` its new name, with its sidecars and other apps',
     /// and records the name it had in its sidecar the first time it's renamed.
     func planRename(_ preview: NamingPreview) async throws -> FileBatch {
-        let moves = preview.entries.filter { !$0.result.isUnchanged }.map { entry in
-            PhotoMove(
-                id: entry.id,
-                from: entry.path,
-                to: FilePlanner.split(entry.path).folder + "/" + entry.result.name,
-            )
-        }
+        try await planRename(preview.entries.filter { !$0.result.isUnchanged }.map { entry in
+            PhotoRename(id: entry.id, path: entry.path, name: entry.result.name)
+        })
+    }
+
+    /// The batch that gives each photo of `renames` its new name in its folder, with its sidecars and
+    /// other apps', titled `title` or by how many photos it renames, and records the name a photo had
+    /// in its sidecar the first time it's renamed. Names that swap or go round are moved through
+    /// temporary names; planning moves nothing.
+    func planRename(_ renames: [PhotoRename], title: String? = nil) async throws -> FileBatch {
+        let moves = renames.map(\.move)
         let steps = try await moveSteps(moves)
         let count = Set(moves.map(\.id)).count
         return FileBatch(
-            kind: .rename, title: "Rename \(count) photo\(count == 1 ? "" : "s")",
+            kind: .rename, title: title ?? "Rename \(count) photo\(count == 1 ? "" : "s")",
             steps: Self.recordingOriginalNames(steps, moves: moves),
         )
     }

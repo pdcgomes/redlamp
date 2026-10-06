@@ -33,17 +33,14 @@ public extension LibraryHealth {
             )
         case .extensions:
             let found = try await expected(picked)
-            let moves = picked.compactMap { finding -> PhotoMove? in
+            let renames = picked.compactMap { finding -> PhotoRename? in
                 guard let photo = found[finding.photo], let name = finding.proposal?.renamed else { return nil }
-                let folder = FilePlanner.split(photo.path).folder
-                return PhotoMove(id: finding.photo, from: photo.path, to: folder + "/" + name)
+                return PhotoRename(id: finding.photo, path: photo.path, name: name)
             }
-            let steps = try await operations.moveSteps(moves)
-            let count = moves.count
-            let batch = FileBatch(
-                kind: .rename,
+            let count = renames.count
+            let batch = try await operations.planRename(
+                renames,
                 title: "Rename \(count) photo\(count == 1 ? "" : "s") to \(count == 1 ? "its format's extension" : "their formats' extensions")",
-                steps: FileOperations.recordingOriginalNames(steps, moves: moves),
             )
             return HealthPlan(
                 check: .extensions, batch: batch, findings: picked, leftOut: leftOut, expected: found, chosen: chosen,
