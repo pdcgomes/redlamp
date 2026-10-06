@@ -18,12 +18,15 @@ extension IndexQueries {
 }
 
 extension PhotoMetadata {
-    /// A photo's fields as its row shows them, in the sidecar's terms.
+    /// A photo's fields as its row shows them, in the sidecar's terms: the zone the camera's given is
+    /// none where the row shows its file's.
     init(shown row: PhotoRecord, collections: [String] = []) {
         self.init(
             rating: row.rating, flag: row.flag, label: row.label, customLabel: row.customLabel, mark: row.marked,
             title: row.title, caption: row.caption, creator: row.creator, copyright: row.copyright,
-            location: row.location, collections: collections, stack: row.stack,
+            location: row.location, collections: collections, stack: row.stack, captureShift: row.captureShift,
+            captureOffset: row.cameraCaptured != nil && row.capturedOffset != row.cameraOffset
+                ? row.capturedOffset : nil,
         )
     }
 
@@ -45,9 +48,9 @@ extension PhotoMetadata {
 }
 
 extension LibraryIndex.Writer {
-    /// Shows `values` in `photo`'s row: each field's columns, its collections and its stack, with its
-    /// text indexed again; they're the `.redlamp`'s values now, but for the fields of `others`, which are
-    /// other apps'.
+    /// Shows `values` in `photo`'s row: each field's columns, its collections, its stack and its capture
+    /// time, with its text indexed again; they're the `.redlamp`'s values now, but for the fields of
+    /// `others`, which are other apps'.
     func setMetadata(_ values: MetadataValues, forPhoto photo: Int64, others: Set<XMPField> = []) throws {
         guard let metadata = PhotoMetadata().setting(values), var row = try self.photo(id: photo) else { return }
         for key in values.keys {
@@ -76,6 +79,30 @@ extension LibraryIndex.Writer {
             row.label = values.keys.contains("label") ? metadata.label : row.label
             row.customLabel = row.label == nil ? XMPFields.text(metadata.customLabel) : nil
         }
+        row.showCapture(values)
         try upsertPhotos([row])
+    }
+}
+
+extension PhotoRecord {
+    /// Shows the capture time the sidecar's `captureShift` and `captureOffset` among `values` give it;
+    /// one they don't hold stays as the row shows it.
+    mutating func showCapture(_ values: MetadataValues) {
+        guard values.keys.contains("captureShift") || values.keys.contains("captureOffset") else { return }
+        let given = PhotoMetadata().setting(values) ?? PhotoMetadata()
+        let shown = PhotoMetadata(shown: self)
+        showCapture(
+            shift: values.keys.contains("captureShift") ? given.captureShift : shown.captureShift,
+            offset: values.keys.contains("captureOffset") ? given.captureOffset : shown.captureOffset,
+        )
+    }
+}
+
+public extension MetadataPlan.Photo {
+    /// The capture time and zone the photo shows once the plan has run, from `row`, its row now.
+    func capture(of row: PhotoRecord) -> (time: Date?, offset: Int?) {
+        var changed = row
+        changed.showCapture(after)
+        return (changed.captured, changed.capturedOffset)
     }
 }

@@ -24,14 +24,16 @@ public enum FieldEdit: Sendable, Hashable, Codable {
     case move(from: String, to: String?)
     /// Each item at or within any of the paths comes off.
     case drop([String])
+    /// Seconds added to the number the field holds, none being 0; a total of 0 takes the field out.
+    case shift(Int)
 
     /// Whether it starts from what the field holds, which is what the index shows when the sidecar
-    /// holds none.
+    /// holds none. A shift starts from the sidecar's alone, whose none is 0.
     var derives: Bool {
-        if case .set = self {
-            return false
+        switch self {
+        case .set, .shift: false
+        case .append, .prefix, .add, .remove, .move, .drop: true
         }
-        return true
     }
 
     /// The field's value once edited, from `value` (`.null` for none).
@@ -74,6 +76,14 @@ public enum FieldEdit: Sendable, Hashable, Codable {
             return .array(value.items.filter { item in
                 !(CollectionPath(item).map { path in paths.contains { path.isWithin($0) } } ?? false)
             }.map(JSONValue.string))
+        case let .shift(seconds):
+            let current = if case let .number(number) = value {
+                number
+            } else {
+                0.0
+            }
+            let total = current + Double(seconds)
+            return total == 0 ? .null : .number(total)
         }
     }
 }

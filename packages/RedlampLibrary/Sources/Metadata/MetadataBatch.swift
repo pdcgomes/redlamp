@@ -7,7 +7,7 @@ import RedlampEngineAPI
 /// of those fields before, and what it changes in the collection definitions.
 struct MetadataBatch: JournalBatch, Hashable {
     enum Kind: String, Sendable, Hashable, Codable {
-        case metadata, preset, collections, stacks, undo
+        case metadata, preset, collections, stacks, captureTime, undo
     }
 
     /// A photo of the batch: where it is, and the index's values of the batch's fields before.
