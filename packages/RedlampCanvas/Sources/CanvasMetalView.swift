@@ -80,7 +80,7 @@ public final class CanvasMetalView: NSView {
     private var comparison: (any MTLTexture)?
     private var comparisonOverview: (any MTLTexture)?
     /// Textures for the engine's few recycled surfaces, made once each.
-    private var textures: [IOSurfaceID: any MTLTexture] = [:]
+    private(set) var textures: [IOSurfaceID: any MTLTexture] = [:]
     private var dragOrigin: CGPoint?
     private var didDrag = false
     var wheelZoom = WheelZoom()
