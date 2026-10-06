@@ -53,16 +53,11 @@ struct QueryNames: Sendable, Hashable {
     var cameras: [Int64: String] = [:]
     var lenses: [Int64: String] = [:]
     var keywords: [Int64: String] = [:]
-    /// Each collection's path from the top (`Portfolio/2024`); a collection whose parents don't
-    /// lead to the top has none.
+    /// The paths of the collections photos are in, and of the sets above them (`Portfolio/2024`), as
+    /// a keyword's are written.
     var collections: [Int64: String] = [:]
     /// The synonyms of the keywords that have some, by path, from the library's definitions.
     var keywordSynonyms: [String: [String]] = [:]
-
-    /// The IDs whose names `matches`, in order.
-    static func ids(_ names: [Int64: String], where matches: (String) -> Bool) -> [Int64] {
-        names.compactMap { matches($0.value) ? $0.key : nil }.sorted()
-    }
 }
 
 /// The small tables ready to match terms against, made again whenever they're read, keeping what
@@ -78,8 +73,9 @@ final class QueryVocabulary: Sendable {
     private let folders: NameMatcher
     private let cameras: NameMatcher
     private let lenses: NameMatcher
-    /// Made the first time a keyword term needs it.
+    /// Made the first time a keyword or collection term needs it.
     private let keywords = Mutex<KeywordMatcher?>(nil)
+    private let collections = Mutex<KeywordMatcher?>(nil)
     private let matched = Mutex<[Match: [Int64]]>([:])
     /// Made the first time a column of keywords is counted, or keywords completed (LIB-18).
     let levels = Mutex<KeywordLevels?>(nil)
@@ -99,7 +95,7 @@ final class QueryVocabulary: Sendable {
 
     /// The IDs in `table` that `text` matches, in order: folders, cameras and lenses whose path or
     /// name holds it (`QueryText.contains`), keywords it names or is a synonym of (`KeywordQuery`) and
-    /// those with a synonym holding it, and collections it names (`QueryText.levelsMatch`).
+    /// those with a synonym holding it, and collections it names, as it names keywords.
     func ids(in table: Table, matching text: String) -> [Int64] {
         let match = Match(table: table, text: text)
         if let ids = matched.withLock({ $0[match] }) {
@@ -111,7 +107,7 @@ final class QueryVocabulary: Sendable {
         case .lenses: lenses.ids(containing: text)
         case .keywords: keywordMatcher().ids(matching: text)
         case .keywordSynonyms: keywordMatcher().ids(withSynonymContaining: text)
-        case .collections: QueryNames.ids(names.collections) { QueryText.levelsMatch(path: $0, value: text) }
+        case .collections: collectionMatcher().ids(matching: text)
         }
         matched.withLock { matched in
             if matched.count >= 4096 {
@@ -133,6 +129,17 @@ final class QueryVocabulary: Sendable {
                 return matcher
             }
             let made = KeywordMatcher(keywords: names.keywords, synonyms: names.keywordSynonyms)
+            matcher = made
+            return made
+        }
+    }
+
+    private func collectionMatcher() -> KeywordMatcher {
+        collections.withLock { matcher in
+            if let matcher {
+                return matcher
+            }
+            let made = KeywordMatcher(keywords: names.collections, synonyms: [:])
             matcher = made
             return made
         }
@@ -319,24 +326,13 @@ extension IndexQueries {
     func queryNames() throws -> QueryNames {
         var folders: [Int64: String] = [:]
         try database.cached("SELECT id, path FROM folders").forEachRow { folders[$0.int64(at: 0)] = $0.string(at: 1) }
-        var collections: [Int64: (parent: Int64?, name: String)] = [:]
-        try database.cached("SELECT id, parent, name FROM collections").forEachRow { row in
-            collections[row.int64(at: 0)] = (row.optionalInt64(at: 1), row.string(at: 2) ?? "")
-        }
-        var paths: [Int64: String] = [:]
-        for id in collections.keys {
-            var names: [String] = []
-            var next: Int64? = id
-            while let current = next, let collection = collections[current], names.count < QuerySQL.collectionDepth {
-                names.append(collection.name)
-                next = collection.parent
-            }
-            if next == nil {
-                paths[id] = names.reversed().joined(separator: "/")
-            }
+        var collections: [Int64: String] = [:]
+        try database.cached("SELECT id, path FROM collections WHERE path IS NOT NULL").forEachRow { row in
+            collections[row.int64(at: 0)] = row.string(at: 1)
         }
         return try QueryNames(
-            folders: folders, cameras: cameraNames(), lenses: lensNames(), keywords: keywordPaths(), collections: paths,
+            folders: folders, cameras: cameraNames(), lenses: lensNames(), keywords: keywordPaths(),
+            collections: collections,
         )
     }
 }

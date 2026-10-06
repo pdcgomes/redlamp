@@ -336,7 +336,7 @@ enum LibraryQueryValues {
             }
         case .has:
             guard let detail = LibraryQuery.Detail(rawValue: lowered) else {
-                throw Invalid(message: "has is gps, keywords, caption, title or xmp")
+                throw Invalid(message: "has is gps, keywords, caption, title, xmp, creator, copyright or location")
             }
             return .detail(detail)
         case .ext:
@@ -348,7 +348,8 @@ enum LibraryQueryValues {
                 throw Invalid(message: "ext is raw, jpeg, heic, tiff, png or an extension such as cr3")
             }
             return .text(ext)
-        case .keyword, .camera, .lens, .folder, .name, .collection, .title, .caption:
+        case .keyword, .camera, .lens, .folder, .name, .collection, .title, .caption, .creator, .copyright,
+             .sublocation, .city, .state, .country, .countryCode:
             return .text(text)
         }
     }

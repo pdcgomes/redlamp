@@ -2,7 +2,8 @@ import Foundation
 
 /// A query compiled against a column store: tests of its columns, and sets of rows looked up in the
 /// index for text, keyword and collection terms. Folder, camera and lens terms are matched in the
-/// small tables and become IDs and codes the column pass tests.
+/// small tables, and creator, copyright, location and custom label terms in the store's names, and
+/// become IDs and codes the column pass tests.
 indirect enum QueryPlan: Sendable, Hashable {
     case all
     case nothing
@@ -29,7 +30,16 @@ indirect enum QueryPlan: Sendable, Hashable {
         case cameras([UInt16])
         case lenses([UInt16])
         case folders([Int32])
+        /// The rows whose code in a column of names has its bit in the table (`CodeTable`).
+        case codes(CodeColumn, ContiguousArray<UInt64>)
+        /// The rows with a name in the column.
+        case present(CodeColumn)
         case rows(RowSet)
+    }
+
+    /// The store's columns of codes for names.
+    enum CodeColumn: Sendable, Hashable {
+        case creator, copyright, customLabel, place
     }
 
     /// Photos looked up in the index.
@@ -71,6 +81,8 @@ indirect enum QueryPlan: Sendable, Hashable {
                 folders(vocabulary.ids(in: .folders, matching: text)),
                 cameras(vocabulary.ids(in: .cameras, matching: text), store),
                 lenses(vocabulary.ids(in: .lenses, matching: text), store),
+                codes(.creator, store.creatorNames.codes(containing: text)),
+                codes(.place, store.placeNames.places(where: nil, contains: text)),
                 synonyms.isEmpty ? .nothing : .leaf(.rows(.keywords(synonyms))),
             ])
         case let .filter(filter):
@@ -112,9 +124,20 @@ indirect enum QueryPlan: Sendable, Hashable {
                 accepted: 1 << UInt32(PhotoRecord.code(for: flag)),
             ))
         case let (.label, .label(label)):
-            return .leaf(.packed(
+            let colour = QueryPlan.leaf(.packed(
                 shift: Packed.labelShift, mask: 0x7, accepted: 1 << UInt32(PhotoRecord.code(for: label)),
             ))
+            return label == nil ? every([colour, .not(.leaf(.present(.customLabel)))]) : colour
+        case let (.label, .text(name)):
+            return codes(.customLabel, store.customLabelNames.codes(named: name))
+        case let (.creator, .text(text)):
+            return codes(.creator, store.creatorNames.codes(containing: text))
+        case let (.copyright, .text(text)):
+            return codes(.copyright, store.copyrightNames.codes(containing: text))
+        case let (.sublocation, .text(text)), let (.city, .text(text)), let (.state, .text(text)),
+             let (.country, .text(text)), let (.countryCode, .text(text)):
+            guard let part = PlaceCodes.Part(field) else { return .nothing }
+            return codes(.place, store.placeNames.places(where: part, contains: text))
         case let (.marked, .bool(yes)):
             return yes ? .leaf(.bit(Packed.marked)) : .not(.leaf(.bit(Packed.marked)))
         case let (.edited, .bool(yes)):
@@ -146,17 +169,26 @@ indirect enum QueryPlan: Sendable, Hashable {
         case let (.ext, .text(ext)):
             return .leaf(.rows(.match(QueryText.match("." + ext, in: .name))))
         case let (.has, .detail(detail)):
-            let details: ColumnStore.Details = switch detail {
-            case .gps: .location
-            case .keywords: .keywords
-            case .caption: .caption
-            case .title: .title
-            case .xmp: .xmp
+            let details: ColumnStore.Details
+            switch detail {
+            case .gps: details = .location
+            case .keywords: details = .keywords
+            case .caption: details = .caption
+            case .title: details = .title
+            case .xmp: details = .xmp
+            case .creator: return .leaf(.present(.creator))
+            case .copyright: return .leaf(.present(.copyright))
+            case .location: return .leaf(.present(.place))
             }
             return .leaf(.bit(Packed.details(details)))
         default:
             return .nothing
         }
+    }
+
+    /// The rows with one of `codes` in `column`.
+    private static func codes(_ column: CodeColumn, _ codes: [UInt32]) -> QueryPlan {
+        codes.isEmpty ? .nothing : .leaf(.codes(column, CodeTable.make(codes)))
     }
 
     private static func cameras(_ ids: [Int64], _ store: ColumnStore) -> QueryPlan {
@@ -276,6 +308,20 @@ extension ColumnStore {
         case let .folders(ids):
             let table = Self.table(ids.map(Int.init))
             Self.fill(&words, folders) { Self.lookUp(table, Int($0)) }
+        case let .codes(column, table):
+            switch column {
+            case .creator: Self.fill(&words, creators) { Self.lookUp(table, Int($0)) }
+            case .copyright: Self.fill(&words, copyrights) { Self.lookUp(table, Int($0)) }
+            case .customLabel: Self.fill(&words, customLabels) { Self.lookUp(table, Int($0)) }
+            case .place: Self.fill(&words, places) { Self.lookUp(table, Int($0)) }
+            }
+        case let .present(column):
+            switch column {
+            case .creator: Self.fill(&words, creators) { $0 == 0 ? 0 : 1 }
+            case .copyright: Self.fill(&words, copyrights) { $0 == 0 ? 0 : 1 }
+            case .customLabel: Self.fill(&words, customLabels) { $0 == 0 ? 0 : 1 }
+            case .place: Self.fill(&words, places) { $0 == 0 ? 0 : 1 }
+            }
         case let .rows(set):
             return sets[set] ?? RowBits(rows: rowCount)
         }

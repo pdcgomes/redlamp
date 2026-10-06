@@ -1,4 +1,5 @@
 import Foundation
+import RedlampDocument
 
 /// The library's hot columns in memory (LIB-06): an array for each field the query language filters
 /// and sorts on, indexed by a dense row number, and the sort orders as permutations of the rows.
@@ -27,10 +28,17 @@ public struct ColumnStore: Sendable {
         public var modified: Double?
         /// Whether it's missing or offline.
         public var state: PhotoRecord.State
+        /// IPTC Core's creator, copyright notice and location.
+        public var creator: String?
+        public var copyright: String?
+        public var location: PhotoLocation?
+        /// A label's name outside the five colours.
+        public var customLabel: String?
 
         public init(
             _ hot: HotColumns, shutter: Double? = nil, details: Details = [], sidecarModified: Double? = nil,
-            size: Int64 = 0, modified: Double? = nil, state: PhotoRecord.State = [],
+            size: Int64 = 0, modified: Double? = nil, state: PhotoRecord.State = [], creator: String? = nil,
+            copyright: String? = nil, location: PhotoLocation? = nil, customLabel: String? = nil,
         ) {
             self.hot = hot
             self.shutter = shutter
@@ -39,6 +47,10 @@ public struct ColumnStore: Sendable {
             self.size = size
             self.modified = modified
             self.state = state
+            self.creator = creator
+            self.copyright = copyright
+            self.location = location
+            self.customLabel = customLabel
         }
     }
 
@@ -80,6 +92,12 @@ public struct ColumnStore: Sendable {
     private(set) var sizes: ContiguousArray<UInt32> = []
     private(set) var modifiedAt: ContiguousArray<Int32> = []
     private(set) var states: ContiguousArray<UInt8> = []
+    /// Codes into `creatorNames`, `copyrightNames` and `customLabelNames`, and into `placeNames` for
+    /// IPTC Core's location; 0 for none.
+    private(set) var creators: ContiguousArray<UInt16> = []
+    private(set) var copyrights: ContiguousArray<UInt16> = []
+    private(set) var customLabels: ContiguousArray<UInt8> = []
+    private(set) var places: ContiguousArray<UInt32> = []
     /// The rows holding a photo.
     private(set) var live = RowBits(rows: 0)
 
@@ -88,6 +106,11 @@ public struct ColumnStore: Sendable {
     private(set) var lensIDs: ContiguousArray<Int64> = [0]
     private var cameraCodes: [Int64: UInt16] = [:]
     private var lensCodes: [Int64: UInt16] = [:]
+    /// The names the code columns stand for.
+    private(set) var creatorNames = NameCodes(limit: UInt32(UInt16.max))
+    private(set) var copyrightNames = NameCodes(limit: UInt32(UInt16.max))
+    private(set) var customLabelNames = NameCodes(limit: UInt32(UInt8.max))
+    private(set) var placeNames = PlaceCodes()
 
     /// The row of each photo ID, -1 for none: 4 bytes for every ID up to the largest.
     private var rowOfID: ContiguousArray<Int32> = []
@@ -188,6 +211,12 @@ public struct ColumnStore: Sendable {
             let lenses = columns.lensIDs.indices.map { code in
                 code == 0 ? 0 : store.code(for: columns.lensIDs[code], in: &store.lensIDs, &store.lensCodes)
             }
+            let creators = columns.creatorNames.names.map { UInt16(store.creatorNames.code(for: $0)) }
+            let copyrights = columns.copyrightNames.names.map { UInt16(store.copyrightNames.code(for: $0)) }
+            let customLabels = columns.customLabelNames.names.map { UInt8(store.customLabelNames.code(for: $0)) }
+            let places = (0 ..< columns.placeNames.count).map { place in
+                store.placeNames.code(for: columns.placeNames.location(of: place))
+            }
             store.ids.append(contentsOf: columns.ids)
             store.folders.append(contentsOf: columns.folders)
             store.captured.append(contentsOf: columns.captured)
@@ -203,6 +232,10 @@ public struct ColumnStore: Sendable {
             store.sizes.append(contentsOf: columns.sizes)
             store.modifiedAt.append(contentsOf: columns.modifiedAt)
             store.states.append(contentsOf: columns.states)
+            store.creators.append(contentsOf: columns.creators.lazy.map { creators[Int($0)] })
+            store.copyrights.append(contentsOf: columns.copyrights.lazy.map { copyrights[Int($0)] })
+            store.customLabels.append(contentsOf: columns.customLabels.lazy.map { customLabels[Int($0)] })
+            store.places.append(contentsOf: columns.places.lazy.map { places[Int($0)] })
             keys.append(contentsOf: part.keys)
             largest = max(largest, columns.ids.max() ?? -1)
         }
@@ -336,9 +369,12 @@ public struct ColumnStore: Sendable {
         let columns = bytes(ids) + bytes(folders) + bytes(captured) + bytes(cameras) + bytes(lenses) + bytes(packed)
             + bytes(iso) + bytes(aperture) + bytes(focal) + bytes(shutter) + bytes(kinds) + bytes(nameRanks)
             + bytes(editedAt) + bytes(sizes) + bytes(modifiedAt) + bytes(states) + bytes(live.words)
+            + bytes(creators) + bytes(copyrights) + bytes(customLabels) + bytes(places)
         let orders = bytes(byCaptured) + bytes(byName) + bytes(byRating) + bytes(byEdited)
             + (byModified.map(bytes) ?? 0) + (bySize.map(bytes) ?? 0)
         let codes = bytes(cameraIDs) + bytes(lensIDs) + (cameraCodes.capacity + lensCodes.capacity) * 16
+            + creatorNames.memoryFootprint + copyrightNames.memoryFootprint + customLabelNames.memoryFootprint
+            + placeNames.memoryFootprint
         return columns + orders + bytes(rowOfID) + codes
     }
 
@@ -366,6 +402,10 @@ public struct ColumnStore: Sendable {
         sizes.reserveCapacity(count)
         modifiedAt.reserveCapacity(count)
         states.reserveCapacity(count)
+        creators.reserveCapacity(count)
+        copyrights.reserveCapacity(count)
+        customLabels.reserveCapacity(count)
+        places.reserveCapacity(count)
     }
 
     /// Adds a row for a photo the store doesn't hold.
@@ -401,6 +441,10 @@ public struct ColumnStore: Sendable {
         sizes.append(0)
         modifiedAt.append(0)
         states.append(0)
+        creators.append(0)
+        copyrights.append(0)
+        customLabels.append(0)
+        places.append(0)
         set(row, at: ids.count - 1)
     }
 
@@ -421,6 +465,10 @@ public struct ColumnStore: Sendable {
         sizes[index] = ColumnEncoding.fileSize(row.size)
         modifiedAt[index] = ColumnEncoding.modifiedAt(row.modified)
         states[index] = UInt8(clamping: row.state.rawValue & 0xFF)
+        creators[index] = UInt16(creatorNames.code(for: row.creator))
+        copyrights[index] = UInt16(copyrightNames.code(for: row.copyright))
+        customLabels[index] = UInt8(customLabelNames.code(for: row.customLabel))
+        places[index] = placeNames.code(for: row.location)
     }
 
     /// Takes a row out: its photo is gone from the store, and from every order once `removeFromOrders`
@@ -563,6 +611,10 @@ public struct ColumnStore: Sendable {
         sizes = kept(sizes)
         modifiedAt = kept(modifiedAt)
         states = kept(states)
+        creators = kept(creators)
+        copyrights = kept(copyrights)
+        customLabels = kept(customLabels)
+        places = kept(places)
         self.live = RowBits(rows: ids.count, filled: true)
         rowOfID.withUnsafeMutableBufferPointer { $0.update(repeating: -1) }
         for (row, id) in ids.enumerated() {
@@ -715,6 +767,11 @@ enum ColumnEncoding {
     static let captionSQL = "(coalesce(p.caption, '') != '')"
     static let xmpSQL = "(p.xmp_modified IS NOT NULL)"
     static let keywordsSQL = "EXISTS (SELECT 1 FROM photo_keywords k WHERE k.photo = p.id)"
+
+    /// Whether a text column has a name, as the code columns read it: an empty text is none.
+    static func presentSQL(_ column: String) -> String {
+        "(coalesce(\(column), '') != '')"
+    }
 
     /// `value` times `scale`, rounded half up and truncated as SQLite's `CAST` does, between 1 and
     /// `limit`; 0 for none.

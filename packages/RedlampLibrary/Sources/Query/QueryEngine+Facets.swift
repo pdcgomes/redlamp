@@ -106,10 +106,7 @@ extension ColumnStore {
                 code > 2 ? nil : .flag(PhotoRecord.flag(code: code))
             })
         case .label:
-            let counts = try counts(matches, packed, size: 8) { Int(Packed.label($0)) }
-            return FacetCounts(facet: facet, values: Self.coded(counts) { code in
-                code > ColorLabel.allCases.count ? nil : .label(PhotoRecord.label(code: code))
-            })
+            return try FacetCounts(facet: facet, values: labelCounts(of: matches))
         case .kind:
             let counts = try counts(matches, kinds, size: 256)
             return FacetCounts(facet: facet, values: Self.coded(counts) { code in
@@ -128,6 +125,34 @@ extension ColumnStore {
                 facet: facet, values: numbered(counts(matches, aperture, size: 1 << 16), .aperture, scale: 100),
             )
         }
+    }
+
+    /// Counts by colour label, then the photos without one by their custom label's name: `none` for
+    /// neither, then the colours, then the custom labels by name.
+    private func labelCounts(of matches: RowBits) throws -> [FacetValue] {
+        var colours = [Int](repeating: 0, count: 8)
+        var custom = [Int](repeating: 0, count: customLabelNames.count)
+        try packed.withUnsafeBufferPointer { packed in
+            try customLabels.withUnsafeBufferPointer { labels in
+                try forEachRow(of: matches) { row in
+                    let colour = Int(Packed.label(packed[row]))
+                    if colour == 0, labels[row] != 0 {
+                        custom[Int(labels[row])] += 1
+                    } else {
+                        colours[colour] += 1
+                    }
+                }
+            }
+        }
+        var values = Self.coded(colours) { code in
+            code > ColorLabel.allCases.count ? nil : .label(PhotoRecord.label(code: code))
+        }
+        var unnamed: FacetValue?
+        if let last = values.last, last.name == nil {
+            unnamed = values.removeLast()
+        }
+        values += named(custom) { code in customLabelNames.name(of: code).map { ($0, .label) } }
+        return values + (unnamed.map { [$0] } ?? [])
     }
 
     /// Counts by a number's code, `scale` codes a unit, in ascending order, the photos without one last.

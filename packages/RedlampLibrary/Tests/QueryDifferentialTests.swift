@@ -45,17 +45,61 @@ struct QueryDifferentialTests {
             case .shutter: number([1.0 / 8000, 1.0 / 1000, 1.0 / 250, 1.0 / 30, 0.25, 1, 2, 30], ranges: ranges)
             case .date: date(ranges: ranges)
             case .flag: .flag(random.pick([.pick, .reject, nil]))
-            case .label: random.chance(0.1) ? .text("Client") : .label(random.pick([nil] + ColorLabel.allCases))
+            case .label:
+                random.chance(0.3) ? .text(random.pick(Self.customLabels))
+                    : .label(random.pick([nil] + ColorLabel.allCases))
             case .marked, .edited, .missing, .offline: .bool(random.chance(0.5))
             case .keyword: .text(random.pick(Array(names.keywords.values) + ["Places", "nothing"]))
             case .camera: .text(part(of: random.pick(Array(names.cameras.values))))
             case .lens: .text(part(of: random.pick(Array(names.lenses.values))))
             case .folder: .text(part(of: random.pick(Array(names.folders.values))))
-            case .collection: .text("Portfolio")
+            case .collection: .text(random.pick(Self.collections))
             case .has: .detail(random.pick(LibraryQuery.Detail.allCases))
             case .ext:
                 random.pick([.kind(.raw), .kind(.jpeg), .kind(.heic), .kind(.png), .text("jpg"), .text("heic")])
             case .name, .title, .caption: .text(random.pick(words))
+            case .creator: .text(part(of: random.pick(Self.creators)))
+            case .copyright: .text(random.pick(["©", "2019", "Silva", "Agency"]))
+            case .sublocation, .city, .state, .country, .countryCode:
+                .text(part(of: random.pick(Self.places.flatMap(\.self).filter { !$0.isEmpty } + ["Nowhere"])))
+            }
+        }
+
+        static let creators = ["Ana Silva", "Ana Silva; João Costa", "Élodie Tremblay", "Nobody"]
+        static let customLabels = ["Approved", "second", "Client", "To Do"]
+        static let collections = ["Trips", "Lisbon", "Trips/Lisbon", "Portfolio", "AC/DC", "Selects", "nothing"]
+        /// Sublocations, cities, states, countries and their codes.
+        static let places = [
+            ["Alfama", "Lisboa", "Lisboa", "Portugal", "PT"], ["", "Porto", "", "Portugal", "PT"],
+            ["Plateau", "Montréal", "Québec", "Canada", "CA"], ["", "", "", "Japan", ""],
+        ]
+
+        /// Gives some of the photos in `index` creators, copyrights, places, custom labels and
+        /// collections, as the sidecars' organising fields would.
+        static func organise(_ index: LibraryIndex) async throws {
+            try await index.write { writer in
+                let ids = try writer.database.cached("SELECT id FROM photos ORDER BY id").map { $0.int64(at: 0) }
+                let update = try writer.database.prepare("""
+                UPDATE photos SET creator = ?, copyright = ?, sublocation = ?, city = ?, province = ?, country = ?,
+                  country_code = ?, custom_label = CASE WHEN label = 0 THEN ? END WHERE id = ?
+                """)
+                for (number, id) in ids.enumerated() {
+                    var values: [String?] = []
+                    values.append(number % 4 == 3 ? nil : Self.creators[number % Self.creators.count])
+                    values.append(number % 5 == 0 ? "© \(2010 + number % 12) Ana Silva" : nil)
+                    let place = number % 3 == 0 ? [] : Self.places[number % Self.places.count]
+                    for part in 0 ..< 5 {
+                        values.append(part < place.count && !place[part].isEmpty ? place[part] : nil)
+                    }
+                    values.append(number % 7 < 2 ? Self.customLabels[number % Self.customLabels.count] : nil)
+                    for (offset, value) in values.enumerated() {
+                        try update.bind(value, at: Int32(offset + 1))
+                    }
+                    try update.bind(id, at: 9)
+                    try update.run()
+                    let collections = [number % 6 == 0 ? "Trips/Lisbon" : nil, number % 10 == 1 ? "AC%2FDC" : nil]
+                    try writer.setCollections(collections.compactMap(\.self), forPhoto: id)
+                }
             }
         }
 
@@ -107,7 +151,13 @@ struct QueryDifferentialTests {
         )
         try await engine.load()
         #expect(engine.store?.count == summary.manifest.totals.photos)
+        for query in summary.manifest.queries {
+            let results = try await engine.results(LibraryQuery(parsing: query.query))
+            #expect(results.last?.count == query.count, "\(query.query)")
+        }
 
+        try await Generator.organise(index)
+        try await engine.load()
         let names = try await index.read { try $0.queryNames() }
         let words = FixtureCatalog.captions.flatMap { $0.split(separator: " ").map(String.init) }
             .filter { $0.count >= 3 }
@@ -124,7 +174,7 @@ struct QueryDifferentialTests {
             ]
         var generator = Generator(random: SeededRandom(seed: 22), words: words, names: names)
         var nonEmpty = 0
-        for round in 0 ..< 400 {
+        for round in 0 ..< 600 {
             let query = try LibraryQuery(parsing: generator.query().description)
             #expect(try LibraryQuery(parsing: query.description) == query)
             let sort = QuerySort(QuerySort.Key.allCases[round % 4], ascending: round % 3 != 0)
@@ -144,10 +194,5 @@ struct QueryDifferentialTests {
             nonEmpty += columns.isEmpty ? 0 : 1
         }
         #expect(nonEmpty > 100, "most random queries find photos")
-
-        for query in summary.manifest.queries {
-            let results = try await engine.results(LibraryQuery(parsing: query.query))
-            #expect(results.last?.count == query.count, "\(query.query)")
-        }
     }
 }

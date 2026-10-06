@@ -266,10 +266,10 @@ struct ColumnStoreTests {
         }
     }
 
-    @Test func `a photo takes about 66 bytes, its sort orders included`() {
+    @Test func `a photo takes about 86 bytes, its sort orders included`() {
         let store = ColumnStore(rows: Self.rows(100_000, seed: 9))
         let perPhoto = Double(store.memoryFootprint) / Double(store.count)
         print("Column store: \(store.memoryFootprint) bytes for \(store.count) photos, \(perPhoto) bytes a photo")
-        #expect(perPhoto < 80)
+        #expect(perPhoto < 90)
     }
 }

@@ -5,7 +5,8 @@ import Testing
 @testable import RedlampLibrary
 
 /// Eight photos that differ in every field the query language asks about, numbered 1 to 8 in the
-/// order they're added (their IDs' order).
+/// order they're added (their IDs' order). Photos 1 to 3, 5 and 6 have IPTC locations, 1, 2, 3 and
+/// 6 creators, and 4 and 7 custom labels.
 struct QueryTestLibrary {
     let sandbox: IndexSandbox
     /// Photo IDs, by number from 1.
@@ -44,30 +45,42 @@ struct QueryTestLibrary {
                     folder: lisbon, name: "DSCF0001.RAF", captured: date(2024, 6, 14, 10), camera: xt5, lens: xf35,
                     iso: 200, aperture: 1.4, shutter: 1.0 / 250, focal: 35, latitude: 38.7, longitude: -9.1, rating: 5,
                     flag: .pick, label: .red, edited: true, sidecarModified: date(2025, 1, 2), title: "Tram 28",
-                    caption: "Alfama at dusk",
+                    caption: "Alfama at dusk", creator: "Ana Silva", copyright: "© 2024 Ana Silva",
+                    location: PhotoLocation(
+                        country: "Portugal", state: "Lisboa", city: "Lisboa", sublocation: "Alfama", countryCode: "PT",
+                    ),
                 ),
                 PhotoRecord(
                     folder: lisbon, name: "DSCF0002.RAF", captured: date(2024, 6, 14, 10), camera: xt5, lens: xf35,
                     iso: 6400, aperture: 2.8, shutter: 1.0 / 30, focal: 35, rating: 3, label: .blue, edited: true,
-                    sidecarModified: date(2025, 3, 1), xmpModified: date(2024, 6, 15),
+                    sidecarModified: date(2025, 3, 1), xmpModified: date(2024, 6, 15), creator: "Ana Silva; João Costa",
+                    location: PhotoLocation(country: "Portugal", city: "Lisboa", countryCode: "PT"),
                 ),
                 PhotoRecord(
                     folder: studio, name: "IMG_0010.CR3", captured: date(2024, 7, 1, 9), camera: r5, lens: rf50,
                     iso: 100, aperture: 8, shutter: 2, focal: 50, flag: .reject, caption: "Headshots for Acme",
+                    creator: "Studio Acme", copyright: "Acme Corp",
+                    location: PhotoLocation(country: "Portugal", city: "Porto"),
                 ),
                 PhotoRecord(
                     folder: studio, name: "IMG_0009.HEIC", camera: iphone, iso: 64, aperture: 1.78, shutter: 1.0 / 120,
-                    focal: 6.765, rating: 1, marked: true,
+                    focal: 6.765, rating: 1, marked: true, customLabel: "Approved",
                 ),
                 PhotoRecord(
                     folder: algarve, name: "Sunset.JPG", captured: date(2019, 8, 20, 19, 30), latitude: 37.1,
                     longitude: -8.6, rating: 4, label: .green, caption: "Sunset over the harbour",
+                    location: PhotoLocation(
+                        country: "Portugal", state: "Faro", city: "Lagoa", sublocation: "Praia da Marinha",
+                        countryCode: "PT",
+                    ),
                 ),
                 PhotoRecord(
                     folder: montreal, name: "Café-0001.JPG", captured: date(2014, 7, 4), camera: xt5, lens: xf35,
                     iso: 800, aperture: 4, shutter: 1.0 / 500, focal: 23, rating: 2, label: .purple,
+                    creator: "Élodie Tremblay",
+                    location: PhotoLocation(country: "Canada", state: "Québec", city: "Montréal", countryCode: "CA"),
                 ),
-                PhotoRecord(folder: studio, name: "IMG_0011.PNG"),
+                PhotoRecord(folder: studio, name: "IMG_0011.PNG", customLabel: "Client"),
                 PhotoRecord(
                     folder: algarve,
                     name: "DSC_0100.NEF",
@@ -79,10 +92,11 @@ struct QueryTestLibrary {
             try writer.setKeywords(["Places/Portugal/Lisbon", "Animals/Birds"], forPhoto: ids[0])
             try writer.setKeywords(["sunset"], forPhoto: ids[4])
             try writer.database.execute("""
-            INSERT INTO collections (id, parent, name, kind) VALUES (1, NULL, 'Portfolio', 0), (2, 1, '2024', 1),
-              (3, NULL, 'Clients', 1), (4, 9, 'Orphan', 1);
+            INSERT INTO collections (id, parent, name, kind, path) VALUES (1, NULL, 'Portfolio', 0, 'Portfolio'),
+              (2, 1, '2024', 1, 'Portfolio/2024'), (3, NULL, 'Clients', 1, 'Clients'), (4, 9, 'Orphan', 1, NULL),
+              (5, NULL, 'AC/DC', 1, 'AC%2FDC');
             INSERT INTO collection_photos (collection, photo) VALUES (2, \(ids[0])), (2, \(ids[2])), (3, \(ids[4])),
-              (4, \(ids[6]));
+              (4, \(ids[6])), (5, \(ids[7]));
             """)
             return ids
         }

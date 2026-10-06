@@ -16,7 +16,8 @@ import RedlampDocument
 public indirect enum LibraryQuery: Sendable, Hashable {
     /// Every photo: the empty query.
     case all
-    /// Free text: in a photo's name, folder, keywords, title, caption, camera or lens, ignoring case.
+    /// Free text: in a photo's name, folder, keywords, title, caption, camera, lens, creator or
+    /// location, ignoring case.
     case text(String)
     case filter(Filter)
     case not(LibraryQuery)
@@ -42,7 +43,7 @@ public indirect enum LibraryQuery: Sendable, Hashable {
         case rating
         /// `pick`, `reject` or `none`.
         case flag
-        /// A colour, `none` or a custom label's name.
+        /// A colour, a custom label's name, ignoring case, or `none`: neither.
         case label
         /// `yes` or `no`: in the quick collection.
         case marked
@@ -69,9 +70,9 @@ public indirect enum LibraryQuery: Sendable, Hashable {
         case name
         /// A kind of file (`raw`, `jpeg`, `heic`, `tiff`, `png`) or an extension (`type`).
         case ext
-        /// A collection's name or path; a collection set matches the collections in it.
+        /// A collection's name or path, as a keyword's is; a set matches the collections in it.
         case collection
-        /// `gps`, `keywords`, `caption`, `title` or `xmp`.
+        /// `gps`, `keywords`, `caption`, `title`, `xmp`, `creator`, `copyright` or `location`.
         case has
         case title
         case caption
@@ -79,10 +80,20 @@ public indirect enum LibraryQuery: Sendable, Hashable {
         case missing
         /// `yes` or `no`: on a volume that isn't connected.
         case offline
+        /// Substrings of IPTC Core's creator (the names of who made the photo) and copyright notice.
+        case creator
+        case copyright
+        /// Substrings of the parts of IPTC Core's location: a place within the city, the city, the
+        /// state or province (`province`), the country, and the country's ISO 3166 code.
+        case sublocation
+        case city
+        case state
+        case country
+        case countryCode = "countrycode"
 
         /// The other names fields go by.
         public static let aliases: [String: Field] = [
-            "stars": .rating, "keyword": .keyword, "taken": .date, "in": .folder, "type": .ext,
+            "stars": .rating, "keyword": .keyword, "taken": .date, "in": .folder, "type": .ext, "province": .state,
         ]
 
         /// The field `name` names, ignoring case: its own name or an alias.
@@ -137,13 +148,17 @@ public indirect enum LibraryQuery: Sendable, Hashable {
 
     /// What a photo `has`.
     public enum Detail: String, Sendable, Hashable, CaseIterable {
-        /// A location.
+        /// A GPS position.
         case gps
         case keywords
         case caption
         case title
         /// Another app's `.xmp` beside it.
         case xmp
+        case creator
+        case copyright
+        /// Any part of IPTC Core's location.
+        case location
     }
 }
 

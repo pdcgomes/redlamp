@@ -39,20 +39,13 @@ enum QueryText {
         }
     }
 
-    /// Whether `value` names the keyword or collection at `path`, or one above it: its levels
-    /// (`Places/Portugal`) are a run of the path's levels (`Places/Portugal/Lisbon`), ignoring case.
-    static func levelsMatch(path: String, value: String) -> Bool {
-        let wanted = levels(value)
-        guard !wanted.isEmpty else { return false }
-        let have = levels(path)
-        guard have.count >= wanted.count else { return false }
-        return (0 ... have.count - wanted.count).contains { start in
-            zip(have[start...], wanted).allSatisfy { $0.caseInsensitiveCompare($1) == .orderedSame }
+    /// Whether `text` is `name`, ignoring case: byte by byte when both are ASCII, and as Foundation
+    /// compares them otherwise.
+    static func isSame(_ text: String, _ name: String) -> Bool {
+        guard let left = asciiLowercased(text), let right = asciiLowercased(name) else {
+            return text.caseInsensitiveCompare(name) == .orderedSame
         }
-    }
-
-    private static func levels(_ path: String) -> [Substring] {
-        path.split(separator: "/").map { $0.trimmingCharacters(in: .whitespaces)[...] }.filter { !$0.isEmpty }
+        return left == right
     }
 
     /// An FTS5 query for `text` as one phrase, in every column of `photo_text` or only `column`.

@@ -15,9 +15,6 @@ struct QuerySQL: Sendable, Hashable {
     var sql: String
     var bindings: [Binding]
 
-    /// How deep collections go, as far as their paths are concerned.
-    static let collectionDepth = 64
-
     /// The photos `query` finds, in `sort`'s order; nil finds every photo. `query` has been through
     /// `LibraryQuery.searchable`. `synonyms` are the keywords' synonyms, by path.
     init(_ query: LibraryQuery?, sort: QuerySort, today: Int, synonyms: [String: [String]] = [:]) {
@@ -50,12 +47,16 @@ struct QuerySQL: Sendable, Hashable {
             case let .text(text):
                 let match = bind(QueryText.match(text))
                 let part = [bind(text), bind(text), bind(text)]
+                var names: [String] = []
+                for column in ["creator"] + PlaceCodes.Part.allCases.map(\.column) {
+                    names.append("redlamp_contains(p.\(column), \(bind(text)))")
+                }
                 let owners = synonyms.owners(containing: text)
                 let synonymous = owners.isEmpty ? "" : " OR " + keywords(within: owners)
                 return "(p.id IN (SELECT rowid FROM photo_text WHERE photo_text MATCH \(match))"
                     + " OR p.folder IN (SELECT id FROM folders WHERE redlamp_contains(path, \(part[0])))"
                     + " OR \(Self.named("camera", "cameras", part[1])) OR \(Self.named("lens", "lenses", part[2]))"
-                    + "\(synonymous))"
+                    + " OR " + names.joined(separator: " OR ") + "\(synonymous))"
             case let .filter(filter):
                 var alternatives: [String] = []
                 for value in filter.values {
@@ -97,9 +98,16 @@ struct QuerySQL: Sendable, Hashable {
             case let (.flag, .flag(flag)):
                 return "(\(ColumnEncoding.flagSQL) = \(PhotoRecord.code(for: flag)))"
             case let (.label, .label(label)):
-                return "(\(ColumnEncoding.labelSQL) = \(PhotoRecord.code(for: label)))"
-            case (.label, _):
-                return "0"
+                let colour = "(\(ColumnEncoding.labelSQL) = \(PhotoRecord.code(for: label)))"
+                return label == nil ? "(\(colour) AND NOT \(ColumnEncoding.presentSQL("p.custom_label")))" : colour
+            case let (.label, .text(name)):
+                return "redlamp_named(p.custom_label, \(bind(name)))"
+            case let (.creator, .text(text)), let (.copyright, .text(text)):
+                return "redlamp_contains(p.\(field.rawValue), \(bind(text)))"
+            case let (.sublocation, .text(text)), let (.city, .text(text)), let (.state, .text(text)),
+                 let (.country, .text(text)), let (.countryCode, .text(text)):
+                guard let part = PlaceCodes.Part(field) else { return "0" }
+                return "redlamp_contains(p.\(part.column), \(bind(text)))"
             case let (.marked, .bool(yes)):
                 return yes ? "(p.marked != 0)" : "(p.marked = 0)"
             case let (.edited, .bool(yes)):
@@ -131,11 +139,8 @@ struct QuerySQL: Sendable, Hashable {
             case let (.ext, .text(ext)):
                 return textMatch(QueryText.match("." + ext, in: .name))
             case let (.collection, .text(text)):
-                return "p.id IN (SELECT cp.photo FROM collection_photos cp WHERE cp.collection IN ("
-                    + "WITH RECURSIVE paths(id, path, depth) AS (SELECT id, name, 1 FROM collections WHERE parent IS NULL"
-                    + " UNION ALL SELECT c.id, paths.path || '/' || c.name, paths.depth + 1 FROM collections c"
-                    + " JOIN paths ON c.parent = paths.id WHERE paths.depth < \(QuerySQL.collectionDepth))"
-                    + " SELECT id FROM paths WHERE redlamp_levels(path, \(bind(text)))))"
+                return "p.id IN (SELECT cp.photo FROM collection_photos cp JOIN collections c ON c.id = cp.collection"
+                    + " WHERE c.path IS NOT NULL AND redlamp_keyword(c.path, \(bind(text))))"
             case let (.has, .detail(detail)):
                 return switch detail {
                 case .gps: ColumnEncoding.locationSQL
@@ -143,6 +148,11 @@ struct QuerySQL: Sendable, Hashable {
                 case .caption: ColumnEncoding.captionSQL
                 case .title: ColumnEncoding.titleSQL
                 case .xmp: ColumnEncoding.xmpSQL
+                case .creator: ColumnEncoding.presentSQL("p.creator")
+                case .copyright: ColumnEncoding.presentSQL("p.copyright")
+                case .location:
+                    "(" + PlaceCodes.Part.allCases.map { ColumnEncoding.presentSQL("p." + $0.column) }
+                        .joined(separator: " OR ") + ")"
                 }
             default:
                 return "0"
@@ -290,11 +300,13 @@ extension IndexQueries {
     }
 }
 
-/// The query language's text matching and name order, as SQL functions and a collation.
+/// The query language's text matching and name order, as SQL functions and a collation:
+/// `redlamp_contains` a substring, `redlamp_named` a name, `redlamp_keyword` a keyword's or a
+/// collection's path, `redlamp_within` a keyword inside another.
 enum QueryFunctions {
     /// Registers them on `database`'s connection, once.
     static func register(on database: SQLiteDatabase) throws {
-        let probe = "SELECT redlamp_contains('', ''), redlamp_levels('', ''), redlamp_keyword('', ''),"
+        let probe = "SELECT redlamp_contains('', ''), redlamp_named('', ''), redlamp_keyword('', ''),"
             + " redlamp_within('', ''), '' COLLATE redlamp_finder"
         if (try? database.cached(probe)) != nil {
             return
@@ -312,7 +324,7 @@ enum QueryFunctions {
                 nil,
                 nil,
             ),
-            sqlite3_create_function_v2(database.handle, "redlamp_levels", 2, flags, nil, levelsFunction, nil, nil, nil),
+            sqlite3_create_function_v2(database.handle, "redlamp_named", 2, flags, nil, namedFunction, nil, nil, nil),
             sqlite3_create_function_v2(
                 database.handle,
                 "redlamp_keyword",
@@ -344,11 +356,11 @@ private func containsFunction(_ context: OpaquePointer?, _: Int32, _ values: Uns
     sqlite3_result_int(context, QueryText.contains(text, part) ? 1 : 0)
 }
 
-private func levelsFunction(_ context: OpaquePointer?, _: Int32, _ values: UnsafeMutablePointer<OpaquePointer?>?) {
-    guard let values, let path = string(of: values[0]), let value = string(of: values[1]) else {
+private func namedFunction(_ context: OpaquePointer?, _: Int32, _ values: UnsafeMutablePointer<OpaquePointer?>?) {
+    guard let values, let text = string(of: values[0]), let name = string(of: values[1]) else {
         return sqlite3_result_int(context, 0)
     }
-    sqlite3_result_int(context, QueryText.levelsMatch(path: path, value: value) ? 1 : 0)
+    sqlite3_result_int(context, QueryText.isSame(text, name) ? 1 : 0)
 }
 
 private func keywordFunction(_ context: OpaquePointer?, _: Int32, _ values: UnsafeMutablePointer<OpaquePointer?>?) {

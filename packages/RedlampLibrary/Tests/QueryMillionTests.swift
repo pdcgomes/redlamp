@@ -110,6 +110,34 @@ struct QueryMillionTests {
             ))
             #expect(Self.percentile(firsts, 0.95) < 16)
 
+            var fieldFirsts: [Duration] = []
+            var slowestFields: [(Duration, String)] = []
+            for (number, query) in SyntheticLibrary.fieldQueries.enumerated() {
+                for text in Self.typed(query.text) {
+                    let started = clock.now
+                    var first: Duration?
+                    var last: QueryResult?
+                    for try await result in try engine.search(LibraryQuery(parsing: text, asYouType: true)) {
+                        first = first ?? clock.now - started
+                        last = result
+                    }
+                    fieldFirsts.append(first ?? clock.now - started)
+                    slowestFields.append((first ?? clock.now - started, text))
+                    if text == query.text {
+                        #expect(last?.count == library.fieldCounts[number], "\(text)")
+                    }
+                }
+            }
+            let worstFields = slowestFields.sorted { $0.0 > $1.0 }.prefix(3)
+                .map { String(format: "%@ %.1f ms", $0.1, Self.milliseconds($0.0)) }.joined(separator: ", ")
+            Self.report(String(
+                format: "run %ld, %ld keystrokes of creators, locations and custom labels: first page and the "
+                    + "count p50 %.2f ms, p95 %.2f ms; slowest: %@",
+                run, fieldFirsts.count, Self.percentile(fieldFirsts, 0.5), Self.percentile(fieldFirsts, 0.95),
+                worstFields,
+            ))
+            #expect(Self.percentile(fieldFirsts, 0.95) < 16)
+
             var facets: [Duration] = []
             var slowestFacets: [(Duration, String)] = []
             for query in FixtureQuery.corpus {
@@ -140,13 +168,66 @@ struct QueryMillionTests {
     }
 }
 
-/// A fixture's photos as the index holds them: their rows, the small tables, and their text.
+/// A fixture's photos as the index holds them: their rows, the small tables, and their text; a
+/// creator on a fifth of them, a place on those with GPS, and a custom label on one in fifty.
 struct SyntheticLibrary {
     var names = QueryNames()
     var text = SyntheticText()
+    /// How many photos each of `fieldQueries` finds.
+    private(set) var fieldCounts = [Int](repeating: 0, count: SyntheticLibrary.fieldQueries.count)
     private var folders: [String: Int64] = [:]
     private var cameras: [String: Int64] = [:]
     private var lenses: [String: Int64] = [:]
+
+    static let creators = (0 ..< 60).map { number in
+        ["Ana Silva", "João Costa", "Élodie Tremblay", "Studio Acme", "Kenji Sato", "Maria Rossi"][number % 6]
+            + (number < 6 ? "" : " \(number / 6)")
+    }
+
+    /// 400 places: a sublocation in one of 40 cities in 10 countries.
+    static let places = (0 ..< 400).map { number in
+        let countries = [
+            "Portugal",
+            "Spain",
+            "France",
+            "Canada",
+            "Japan",
+            "Italy",
+            "Brazil",
+            "Kenya",
+            "Norway",
+            "Chile",
+        ]
+        let codes = ["PT", "ES", "FR", "CA", "JP", "IT", "BR", "KE", "NO", "CL"]
+        let cities = ["Lisbon", "Porto", "Madrid", "Paris", "Montréal", "Kyoto", "Rome", "Rio", "Nairobi", "Oslo"]
+        return PhotoLocation(
+            country: countries[number % 10], state: "Region \(number % 20)",
+            city: cities[number % 10] + (number % 40 < 10 ? "" : " \(number % 40 / 10)"),
+            sublocation: "Place \(number)", countryCode: codes[number % 10],
+        )
+    }
+
+    static let customLabels = ["Approved", "Second", "Review"]
+
+    /// Queries on the fields the fixture's manifest doesn't count, and the photos each finds.
+    static let fieldQueries: [(text: String, matches: @Sendable (ColumnStore.Row) -> Bool)] = [
+        ("creator:\"ana silva\"", { includes($0.creator, "ana silva") }),
+        ("creator:acme", { includes($0.creator, "acme") }),
+        ("city:lisbon", { includes($0.location?.city, "lisbon") }),
+        ("country:portugal", { includes($0.location?.country, "portugal") }),
+        ("countrycode:jp", { includes($0.location?.countryCode, "jp") }),
+        ("sublocation:\"place 1\"", { includes($0.location?.sublocation, "place 1") }),
+        ("has:creator", { $0.creator != nil }),
+        ("-has:location", { $0.location == nil }),
+        ("label:approved", { $0.customLabel == "Approved" }),
+        ("rating>=3 city:porto", { $0.hot.rating >= 3 && includes($0.location?.city, "porto") }),
+        ("montréal", { includes($0.location?.city, "montréal") }),
+        ("tremblay", { includes($0.creator, "tremblay") }),
+    ]
+
+    private static func includes(_ text: String?, _ part: String) -> Bool {
+        text?.range(of: part, options: .caseInsensitive) != nil
+    }
 
     init(_ fixture: LibraryFixture) {
         for (index, folder) in fixture.folders.enumerated() {
@@ -182,7 +263,7 @@ struct SyntheticLibrary {
             details.insert(.xmp)
         }
         text.add(photo)
-        return ColumnStore.Row(
+        var row = ColumnStore.Row(
             HotColumns(
                 id: Int64(photo.index + 1), folder: folders[photo.folder] ?? 0,
                 captured: photo.captured.date.timeIntervalSince1970, camera: camera, lens: lens, rating: photo.rating,
@@ -193,6 +274,19 @@ struct SyntheticLibrary {
             shutter: photo.exposureTime, details: details,
             sidecarModified: photo.isEdited ? 1_700_000_000 + Double(photo.index) : nil,
         )
+        if photo.index % 5 == 0 {
+            row.creator = Self.creators[photo.index / 5 % Self.creators.count]
+        }
+        if photo.location != nil {
+            row.location = Self.places[photo.index % Self.places.count]
+        }
+        if photo.label == nil, photo.index % 50 == 7 {
+            row.customLabel = Self.customLabels[photo.index / 50 % Self.customLabels.count]
+        }
+        for (number, query) in Self.fieldQueries.enumerated() where query.matches(row) {
+            fieldCounts[number] += 1
+        }
+        return row
     }
 
     private func id(
