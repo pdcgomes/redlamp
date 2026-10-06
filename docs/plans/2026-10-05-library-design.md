@@ -379,6 +379,27 @@ On the 20,000-photo fixture (`redlamp library bench … --scenario search`), all
 - **The first 256 KiB are enough** for ARW, CR2, DNG, ORF, PEF, RW2, 3FR and the Z 8's NEF, passed to ImageIO padded with zeros to the file's length (ImageIO reports a raw's size only when the data looks as long as the file). CR3, RAF, the Z 6's NEF, FFF, IIQ and SRW need ImageIO to read the file itself, which touches 16 to 740 KB of it.
 - **Reads a second:** 46 to 277 on one core, depending on the format, and 432 to 2,429 across all cores; content keys at 35,000 a second on one core. At a thousand photos a second, a million take about 17 minutes on an SSD, metadata only; searching works over what's indexed so far.
 
+### M1's run at a million photos (LIB-04, LIB-07, LIB-08)
+
+`redlamp library bench` on `lib-1m.noindex` (1,000,000 photos in 5,604 folders, the manifest's 43 queries) through the simulated SSD, a scenario at a time under `/usr/bin/time -l`, with three agents building (load average about 80):
+
+| Scenario | Result | Budget | Peak memory |
+| --- | --- | --- | --- |
+| index-build | all 1,000,000 in 2,153 s, 464 a second, no failures; the first 1,000 searchable in 3.5 s | first 1,000 under 2 s: FAIL | 1.33 GB |
+| warm-launch | 12.0 s; what was listed, read again and changed all as expected | under 1 s: FAIL | 1.32 GB |
+| vanishing-volume | 3 checks failed | | 86 MB |
+| search | all 43 counts equal the manifest's | p95 under 16 ms: PASS | 1.56 GB |
+| facets | p95 17.2 ms | under 100 ms: PASS | 387 MB |
+| lists | every check passed | PASS | 707 MB |
+
+What it changed:
+
+- **A crash only a million photos reach.** The batcher kept its commit callback, a closure, in a `Mutex`, and each read wrapped it in another thunk: 192 bytes of stack more per batch, until a 524 KB cooperative thread's stack ran out about a thousand batches in (5,560 nested frames in the crash report, whose own backtrace showed 27). The batcher now holds its run by a weak reference; a test of 5,000 one-photo batches crashed the test process before the fix.
+- **Photos read while the walk goes on.** Every folder listing went to the volume ahead of every photo read, so nothing was searchable until the walk ended: the first 1,000 photos took 30.7 s. Now only the folders on screen and those above them go first.
+- **A warm launch mustn't list everything again.** Without the event history, the launch path lists all 5,604 folders before it's done, which can't meet 1 s at this size; the index has to be shown at once and reconciled behind it.
+- **The vanishing volume** under this load is the disk itself: real listings stalled for up to 10.2 s, so the 1 s reader timeout took the volume for gone. It passes at 20,000 photos.
+- Reconcile wasn't run at a million: it clones the fixture, a million files, which this Mac's security scanners make expensive. One warm-launch run died with signal 11 at 400,000 photos, with no crash report; the same binary passed when run again.
+
 ### Photo lists and selections (LIB-10)
 
 The `lists` scenario at a million photos in memory, Release, load average about 80, two runs agreeing:
