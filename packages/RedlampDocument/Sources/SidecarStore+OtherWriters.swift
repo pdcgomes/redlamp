@@ -23,7 +23,44 @@ public enum SidecarSaveOutcome: Sendable {
     case merged(SidecarBase)
 }
 
+/// A sidecar as an editor reads it to open a photo: its edit, the base its saves go over, and
+/// why it must be left as it is, all from one coordinated read.
+public struct SidecarRead: Sendable {
+    public var sidecar: Sidecar?
+    public var base: SidecarBase
+    public var protection: SidecarProtection?
+    /// It is there but couldn't be read (no permission, an I/O error, another app's file
+    /// presenter): `protection` is `.unreadable`, and reading it again may work.
+    public var failed: Bool
+}
+
 public extension SidecarStore {
+    /// The image's sidecar to edit. One read, so the base can't come from another file than
+    /// the edit: a save over an edit that wasn't read would write over it.
+    func readForEditing(for image: URL) -> SidecarRead {
+        let sidecar = url(for: image)
+        let read: (data: Data?, protection: SidecarProtection?, decoded: Sidecar?)
+        do {
+            read = try Self.reading(sidecar) { url in
+                guard let data = try Self.editData(inSidecar: url) else { return (nil, nil, nil) }
+                let protection = Self.protection(data)
+                return (data, protection, protection == .unreadable ? nil : Self.decode(data, inSidecar: url))
+            }
+        } catch {
+            let none = SidecarBase(digest: nil, sidecar: nil)
+            guard Self.isPresent(Self.editURL(inSidecar: sidecar)) else {
+                return SidecarRead(sidecar: nil, base: none, protection: nil, failed: false)
+            }
+            return SidecarRead(sidecar: nil, base: none, protection: .unreadable, failed: true)
+        }
+        let loaded = read.decoded.map { resolveConflicts($0, for: image) ?? $0 }
+        let digest = read.data.map { Data(SHA256.hash(data: $0)) }
+        return SidecarRead(
+            sidecar: loaded, base: SidecarBase(digest: digest, sidecar: loaded), protection: read.protection,
+            failed: false,
+        )
+    }
+
     /// The image's sidecar, and its base for `saveOrRemove(_:for:over:opened:)`.
     func loadWithBase(for image: URL) -> (sidecar: Sidecar?, base: SidecarBase) {
         // The digest first: a save landing between the two then looks like another writer's,

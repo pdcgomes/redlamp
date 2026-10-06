@@ -79,6 +79,10 @@ public final class EditorModel {
     /// How long the open photo stays while the next one's sidecar is read; after it, the next
     /// one's thumbnail shows until the read is done.
     @ObservationIgnored var openingPatience = Duration.milliseconds(100)
+    /// How long after a sidecar read that failed it is read again, doubled each time it fails
+    /// again; the photo is read-only until it reads.
+    @ObservationIgnored var sidecarReadRetryDelay = Duration.seconds(2)
+    @ObservationIgnored private var sidecarReadRetry: Task<Void, Never>?
     /// Waited for before each sidecar read (tests hold reads here).
     @ObservationIgnored var beforeReadingSidecar: @Sendable (URL) async -> Void = { _ in }
 
@@ -654,13 +658,7 @@ public final class EditorModel {
         let readSidecar = { [sidecars, saves, scheduler = library.scheduler, beforeReadingSidecar] in
             await beforeReadingSidecar(url)
             await saves.wait(for: url)
-            return try? await scheduler.run(.onScreen) {
-                let (sidecar, base) = sidecars.loadWithBase(for: url)
-                return OpenedSidecar(
-                    sidecar: sidecar, base: base, protection: sidecars.protection(for: url),
-                    hasUnmergedConflicts: sidecars.hasUnmergedConflicts(for: url),
-                )
-            }
+            return try? await scheduler.run(.onScreen) { OpenedSidecar(url, in: sidecars) }
         }
         if let opened = engine.openIfReady(url) {
             // The editor changes over in one turn once the sidecar is read, never showing no
@@ -675,7 +673,7 @@ public final class EditorModel {
                 } else {
                     guard selection == url, info == nil else { return }
                 }
-                didOpen(opened, read ?? OpenedSidecar())
+                didOpen(opened, read ?? .notRead)
             }
             openingFallback = Task { [openingPatience] in
                 try? await Task.sleep(for: openingPatience)
@@ -692,7 +690,7 @@ public final class EditorModel {
                 let opened = try await engine.open(url)
                 let read = await loading.value
                 guard selection == url else { return }
-                didOpen(opened, read ?? OpenedSidecar())
+                didOpen(opened, read ?? .notRead)
             } catch is CancellationError {
                 return
             } catch {
@@ -742,6 +740,7 @@ public final class EditorModel {
         if !keepingSelection {
             selectedPhotos = [url]
         }
+        sidecarReadRetry?.cancel()
         if let selection {
             saves.enqueue(.forget, for: selection)
             if selection != url {
@@ -795,7 +794,46 @@ public final class EditorModel {
         var base: SidecarBase?
         /// Shown, but never saved over.
         var protection: SidecarProtection?
+        /// It couldn't be read, so it is read again (`protection` is `.unreadable`).
+        var failed = false
         var hasUnmergedConflicts = false
+
+        /// Read without an answer: never taken for a photo with no edit.
+        static let notRead = OpenedSidecar(protection: .unreadable, failed: true)
+
+        init(
+            sidecar: Sidecar? = nil,
+            base: SidecarBase? = nil,
+            protection: SidecarProtection? = nil,
+            failed: Bool = false,
+        ) {
+            self.sidecar = sidecar
+            self.base = base
+            self.protection = protection
+            self.failed = failed
+        }
+
+        init(_ url: URL, in sidecars: SidecarStore) {
+            let read = sidecars.readForEditing(for: url)
+            self.init(sidecar: read.sidecar, base: read.base, protection: read.protection, failed: read.failed)
+            hasUnmergedConflicts = sidecars.hasUnmergedConflicts(for: url)
+        }
+    }
+
+    /// Reads again the sidecar of `url`, open read-only because its read failed, and opens it
+    /// with what it reads, until it reads or another photo opens.
+    private func readSidecarAgain(_ url: URL, after delay: Duration) {
+        sidecarReadRetry?.cancel()
+        sidecarReadRetry = Task { [sidecars, scheduler = library.scheduler] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            let read = try? await scheduler.run(.onScreen) { OpenedSidecar(url, in: sidecars) }
+            guard !Task.isCancelled, let read, let info, info.url == url, selection == url, opening == nil else {
+                return
+            }
+            guard !read.failed else { return readSidecarAgain(url, after: min(delay * 2, .seconds(60))) }
+            didOpen(info, read)
+        }
     }
 
     /// "Opened Photo A: CR3, Canon EOS R5, 8192 × 5464, with an edit, in 1.2 s".
@@ -855,6 +893,9 @@ public final class EditorModel {
         }
         if savesMetadata {
             saveNow()
+        }
+        if read.failed {
+            readSidecarAgain(opened.url, after: sidecarReadRetryDelay)
         }
     }
 

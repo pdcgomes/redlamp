@@ -244,6 +244,42 @@ struct SidecarSafetyTests {
         #expect(model.saveError?.canRetry == false)
         try await settle()
         #expect(try folder.contents() == before)
+        #expect(model.saveBeforeQuitting() == .unsaved([folder.photo]), "quitting says it isn't saved")
+        #expect(try folder.contents() == before)
+    }
+
+    nonisolated static let protectedRatings = [
+        (
+            #"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":99}}"#,
+            "a newer version of Redlamp edited it",
+        ),
+        (
+            #"{"format":"app.redlamp.edit","recipe":{"version":3,"processVersion":1,"values":{"basic.exposure":9}}}"#,
+            "it has settings this version doesn't know",
+        ),
+    ]
+
+    @Test(arguments: protectedRatings)
+    func `a rating on a protected photo opened and left says why it can't be saved`(
+        json: String, reason: String,
+    ) async throws {
+        let folder = Folder()
+        try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder.url) }
+        try folder.seed(json)
+        let before = try folder.contents()
+        let model = EditorModel(engine: StubEngine())
+        model.library.insert(LibraryItem(url: folder.photo))
+
+        model.select(folder.photo)
+        _ = model.perform(.rating3)
+        model.select(folder.other)
+        await model.saves.flush()
+        try await eventually { model.saveError != nil }
+        #expect(model.saveError?.message == "Edits to IMG_0001 can't be saved: \(reason)")
+        #expect(model.saveError?.canRetry == false)
+        try await settle()
+        #expect(try folder.contents() == before)
     }
 
     @Test func `an edit made while its folder is away is saved once it is back`() async throws {

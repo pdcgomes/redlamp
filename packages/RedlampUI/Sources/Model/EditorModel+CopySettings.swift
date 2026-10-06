@@ -68,7 +68,7 @@ public extension EditorModel {
     /// onto the open photo and the rest of the selection.
     func pasteFromPrevious() {
         guard let previous = previousSelection, info != nil,
-              let sidecar = SidecarStore().load(for: previous)
+              let sidecar = try? SidecarStore().loadThrowing(for: previous)
         else { return }
         let step = paste(sidecar.recipe, copySelection, name: "Paste from Previous")
         if isMultiSelecting {
@@ -116,11 +116,7 @@ public extension EditorModel {
     private func edit(of photo: URL) async -> EditRecipe? {
         await saves.wait(for: photo)
         let read = try? await library.scheduler.run(.onScreen) { () -> EditRecipe? in
-            let store = SidecarStore()
-            if let sidecar = store.load(for: photo) {
-                return sidecar.recipe
-            }
-            return store.protection(for: photo) == .unreadable ? nil : EditRecipe()
+            try? SidecarStore().loadThrowing(for: photo).map(\.recipe) ?? EditRecipe()
         }
         return read ?? nil
     }

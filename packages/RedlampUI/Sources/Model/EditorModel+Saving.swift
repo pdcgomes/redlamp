@@ -44,12 +44,14 @@ extension EditorModel {
     /// It blocks rather than awaits: `terminate` can be called from inside a main-queue block,
     /// where nothing else on the main actor runs until it returns.
     public func saveBeforeQuitting(within limit: Duration = .seconds(2)) -> QuitSaving {
+        // A rating on a protected photo fails again without counting among the queue's failures.
+        let protected = failedSaves.filter { !$0.value.error.canRetry }.keys
         for url in failedSaves.keys {
             retry(url)
         }
         saveNow()
         let landed = saves.flush(waitingAtMost: limit)
-        let unsaved = saves.failedPhotos
+        let unsaved = saves.failedPhotos.union(protected)
         guard unsaved.isEmpty else { return .unsaved(unsaved.sorted { $0.path < $1.path }) }
         return landed ? .saved : .timedOut
     }

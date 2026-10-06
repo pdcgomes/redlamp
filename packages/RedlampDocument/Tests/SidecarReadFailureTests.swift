@@ -49,34 +49,33 @@ struct SidecarReadFailureTests {
         return edit
     }
 
-    @Test func `an edit whose read fails as the photo opens isn't saved over`() throws {
+    @Test func `an edit whose read fails as the photo opens is read-only, and isn't saved over`() throws {
         let (image, cleanup) = try temporaryImage()
         defer { cleanup() }
         let store = SidecarStore()
         _ = try edited(store, image)
-        // The digest reads; the edit doesn't; its protection reads.
-        let presenter = FailingPresenter(store.url(for: image), failures: [false, true])
+        let presenter = FailingPresenter(store.url(for: image), failures: [true])
         NSFileCoordinator.addFilePresenter(presenter)
         defer { NSFileCoordinator.removeFilePresenter(presenter) }
 
-        // As `EditorModel` opens a photo: its sidecar and base, then its protection.
-        let (sidecar, base) = store.loadWithBase(for: image)
-        let protection = store.protection(for: image)
-        #expect(presenter.asked.withLock { $0 } >= 3)
-        #expect(sidecar == nil, "the read failed")
+        // As `EditorModel` opens a photo.
+        let read = store.readForEditing(for: image)
+        #expect(presenter.asked.withLock { $0 } == 1, "the digest, the edit and its protection in one read")
+        #expect(read.sidecar == nil)
+        #expect(read.failed, "read again")
+        #expect(read.protection == .unreadable, "read-only meanwhile")
 
-        withKnownIssue("DATA-18: a read that fails opens the photo unedited, and its next save writes over the edit") {
-            #expect(protection != nil, "a sidecar that's there but couldn't be read opens read-only")
-            if protection == nil {
-                // Read-write, and unedited: the user's first change is saved over the base it read.
-                var changed = Sidecar(recipe: EditRecipe())
-                changed.recipe[.contrast] = 10
-                _ = try store.saveOrRemove(changed, for: image, over: base, opened: Sidecar(recipe: EditRecipe()))
-            }
-            let onDisk = try #require(store.load(for: image))
-            #expect(onDisk.recipe[.exposure] == 1)
-            #expect(onDisk.snapshots.map(\.name) == ["Mine"])
-        }
+        let again = store.readForEditing(for: image)
+        #expect(!again.failed && again.protection == nil)
+        #expect(again.sidecar?.recipe[.exposure] == 1)
+        #expect(again.sidecar?.snapshots.map(\.name) == ["Mine"])
+    }
+
+    @Test func `a photo with no sidecar reads as unedited, not as one that failed`() throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let read = SidecarStore().readForEditing(for: image)
+        #expect(read.sidecar == nil && read.protection == nil && !read.failed)
     }
 
     @Test func `a rating while the edit can't be read keeps the edit`() throws {

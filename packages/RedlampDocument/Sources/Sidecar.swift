@@ -286,9 +286,15 @@ public struct SidecarStore: Sendable {
     /// decode.
     static func decodeThrowing(sidecar: URL) throws -> Sidecar? {
         guard let data = try editData(inSidecar: sidecar) else { return nil }
-        guard var decoded = try? JSONDecoder.sidecar.decode(Sidecar.self, from: data) else {
+        guard let decoded = decode(data, inSidecar: sidecar) else {
             throw SidecarStoreError.unreadable(sidecar)
         }
+        return decoded
+    }
+
+    /// The edit `data`, read from `sidecar`, with its mask bitmaps; nil when it doesn't decode.
+    static func decode(_ data: Data, inSidecar sidecar: URL) -> Sidecar? {
+        guard var decoded = try? JSONDecoder.sidecar.decode(Sidecar.self, from: data) else { return nil }
         let bitmaps = { (sha: String) in try? Data(contentsOf: bitmapURL(sha, inSidecar: sidecar)) }
         decoded.recipe.loadMaskBitmaps(bitmaps)
         for index in decoded.snapshots.indices {

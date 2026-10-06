@@ -77,7 +77,7 @@ extension SidecarStore {
 
     /// Whether `url` is there, downloaded or not: iCloud Drive leaves a placeholder in place of
     /// a file it evicted.
-    private static func isPresent(_ url: URL) -> Bool {
+    static func isPresent(_ url: URL) -> Bool {
         let placeholder = url.deletingLastPathComponent().appending(path: ".\(url.lastPathComponent).icloud")
         return FileManager.default.fileExists(atPath: url.path) || FileManager.default
             .fileExists(atPath: placeholder.path)
