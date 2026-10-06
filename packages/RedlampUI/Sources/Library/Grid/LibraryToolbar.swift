@@ -205,7 +205,7 @@ final class ToolbarButton: NSView {
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        frame.contains(point) ? self : nil
+        !isHidden && frame.contains(point) ? self : nil
     }
 
     override func acceptsFirstMouse(for _: NSEvent?) -> Bool {
@@ -280,7 +280,7 @@ final class ToolbarSlider: NSView {
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        frame.contains(point) ? self : nil
+        !isHidden && frame.contains(point) ? self : nil
     }
 
     override func acceptsFirstMouse(for _: NSEvent?) -> Bool {

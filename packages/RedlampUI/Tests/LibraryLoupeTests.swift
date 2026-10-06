@@ -46,6 +46,12 @@ struct LibraryLoupeTests {
         #expect(model.libraryViews.loupeZoom == .fit && fitted.width > 0 && fitted.height > 0)
         #expect(abs(fitted.width / fitted.height - 1.5) < 0.01, "the photo keeps its shape")
 
+        let toolbar = modules.content.library.toolbar
+        toolbar.layoutSubtreeIfNeeded()
+        let fit = try #require(toolbar.subviews.first { $0.accessibilityIdentifier() == "library.toolbar.fit" })
+        let middle = toolbar.convert(CGPoint(x: fit.frame.midX, y: fit.frame.midY), to: toolbar.superview)
+        #expect(toolbar.hitTest(middle) === fit, "the grid's buttons, hidden in the loupe, take no clicks")
+
         #expect(model.canPerform(.toggleZoom) && model.perform(.toggleZoom))
         #expect(model.libraryViews.loupeZoom == .actual)
         try await fixture.eventually { loupe.showsFullPhoto }

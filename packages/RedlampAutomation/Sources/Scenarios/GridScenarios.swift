@@ -19,7 +19,17 @@
             try wait("the grid's cells") { _ in
                 Views.editorWindow.flatMap { Views.find("grid.\(names[1])", in: $0) } != nil
             }
+            // Laid out for the size and style the scenario before left.
+            try settle()
             return names
+        }
+
+        /// What a click at `point` (window points) reaches, for a failure's message.
+        func hitView(at point: NSPoint) throws -> String {
+            try main { _ in
+                let view = Views.editorWindow?.contentView?.superview?.hitTest(point)
+                return view.map { "\(Swift.type(of: $0)) \($0.accessibilityIdentifier())" } ?? "nothing"
+            }
         }
 
         /// Drags from `start` to `end` (window points) through the view under `start`, as the mouse does
@@ -154,11 +164,14 @@
             let names = try app.showGrid()
             let first = try app.frame(of: .identifier("grid.\(names[0])"))
             let third = try app.frame(of: .identifier("grid.\(names[2])"))
-            try app.dragView(
-                from: NSPoint(x: first.minX - 3, y: first.maxY + 3), to: NSPoint(x: third.midX, y: third.midY),
-            )
+            let start = NSPoint(x: first.minX - 3, y: first.maxY + 3)
+            try app.dragView(from: start, to: NSPoint(x: third.midX, y: third.midY))
             var state = try app.selectionState()
-            try app.expect(state.photos == Array(names[0 ... 2]) && state.active == names[0], "The band gave \(state)")
+            let reached = try app.hitView(at: start)
+            try app.expect(
+                state.photos == Array(names[0 ... 2]) && state.active == names[0],
+                "The band from \(start) (\(reached), the first cell at \(first)) gave \(state)",
+            )
             let fifth = try app.frame(of: .identifier("grid.\(names[4])"))
             try app.dragView(
                 from: NSPoint(x: fifth.minX - 3, y: fifth.maxY + 3), to: NSPoint(x: fifth.midX, y: fifth.midY),
@@ -216,8 +229,11 @@
             app.covered(.feature("library.loupe"), via: .mouse)
             try app.press(KeyCombo(.space))
             try app.wait("Space: 1:1") { $0.libraryViews.loupeZoom == .actual }
+            let fit = try app.frame(of: .identifier("library.toolbar.fit"))
             try app.clickView("library.toolbar.fit")
-            try app.wait("the toolbar: fit") { $0.libraryViews.loupeZoom == .fit }
+            let reached = try app.hitView(at: NSPoint(x: fit.midX, y: fit.midY))
+            try app
+                .wait("the toolbar's Fit at \(fit), reaching \(reached), to fit") { $0.libraryViews.loupeZoom == .fit }
             try app.expect(
                 try app.main { _ in
                     Views.editorWindow.flatMap { window in
