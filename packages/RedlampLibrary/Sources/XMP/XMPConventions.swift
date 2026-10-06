@@ -85,10 +85,11 @@ enum XMPNamespace {
     static let dynamicMedia = "http://ns.adobe.com/xmp/1.0/DynamicMedia/"
     static let darktable = "http://darktable.sf.net/"
     static let iptcCore = "http://iptc.org/std/Iptc4xmpCore/1.0/xmlns/"
+    static let exif = "http://ns.adobe.com/exif/1.0/"
 
     static let prefixes = [
         xmp: "xmp", dc: "dc", photoshop: "photoshop", lightroom: "lr", dynamicMedia: "xmpDM", darktable: "darktable",
-        iptcCore: "Iptc4xmpCore",
+        iptcCore: "Iptc4xmpCore", exif: "exif",
     ]
 
     static let rating = XMPProperty(xmp, "Rating")
@@ -115,4 +116,8 @@ enum XMPNamespace {
     static let countryCode = XMPProperty(iptcCore, "CountryCode")
     /// darktable's colour labels, a sequence of 0 (red) to 4 (purple).
     static let colorLabels = XMPProperty(darktable, "colorlabels")
+    /// EXIF's capture time, which Lightroom Classic's Edit Capture Time changes.
+    static let dateTimeOriginal = XMPProperty(exif, "DateTimeOriginal")
+    /// IPTC's Date Created: the capture time where an `.xmp` has no `exif:DateTimeOriginal`.
+    static let dateCreated = XMPProperty(photoshop, "DateCreated")
 }

@@ -103,7 +103,7 @@ struct MetadataIndexTests {
                 #expect(shown.same(field, as: synced), "\(photo) \(field) as LibraryXMP has it: \(synced)")
             }
         }
-        #expect(try await sandbox.row("A.NEF").otherFields == Set(XMPField.allCases).subtracting([.keywords, .flag]))
+        #expect(try await sandbox.row("A.NEF").otherFields == XMPField.held.subtracting([.keywords, .flag]))
         #expect(try await sandbox.row("C.NEF").otherFields == [.rating, .caption, .copyright])
     }
 

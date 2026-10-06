@@ -25,6 +25,8 @@ struct XMPGroupOutcome: Sendable {
     var organising: [(id: Int64, fields: XMPFields)] = []
     /// Photos whose `.redlamp` took other apps' keywords, with them.
     var keywords: [(id: Int64, paths: [String])] = []
+    /// Photos whose `.redlamp` took other apps' capture time, with its fields as merged.
+    var captures: [(id: Int64, fields: XMPFields)] = []
     /// Photos with a `.redlamp` whose `.xmp` Redlamp wrote, with what their rows keep of their `.xmp` files
     /// now: the later modification date and the signature.
     var xmpModified: [(id: Int64, modified: Date, signature: Int64?)] = []
@@ -66,10 +68,17 @@ extension XMPGroup {
         let bytes: [UInt8]?
         let packet: XMPPacket?
         let source: XMPSource?
+        /// The capture time it gives.
+        let captured: XMPCaptureTime?
 
         /// Listed, but not XMP Redlamp can read: it's never written over.
         var isUnreadable: Bool {
             stamp != nil && packet == nil
+        }
+
+        /// What it holds for the photo taken at `camera`, its capture time a shift from the camera's.
+        func source(for camera: XMPCaptureTime?) -> XMPSource? {
+            source?.capturing(captured, camera: camera)
         }
     }
 
@@ -79,6 +88,8 @@ extension XMPGroup {
         var decided = Set<XMPField>()
         /// The fields each member decides, by its position.
         var deciders: [Int: Set<XMPField>] = [:]
+        /// The camera's time of the member that decides the capture time, which `wanted` shifts.
+        var camera: XMPCaptureTime?
         /// The fields decided that the `.xmp` doesn't hold.
         var changing = Set<XMPField>()
         /// The `.xmp` with them, once checked.
@@ -181,9 +192,11 @@ extension XMPGroup {
         let file = SharedFile(
             url: sharedURL, stamp: sharedStamp, bytes: bytes, packet: packet,
             source: packet.map { XMPSource(packet: $0, conventions: context.conventions) },
+            captured: packet.flatMap { XMPCaptureTime($0) },
         )
         for index in sides.indices {
-            merge(&sides[index], shared: file.source, sharedStamp: sharedStamp, context: context)
+            let shared = file.source(for: sides[index].member.camera)
+            merge(&sides[index], shared: shared, sharedStamp: sharedStamp, context: context)
         }
         return Pending(group: self, sides: sides, file: file, plan: plan(sides, file, context), unchanged: nil)
     }
@@ -194,11 +207,12 @@ extension XMPGroup {
         var plan = Plan()
         for (position, side) in sides.enumerated() {
             guard let merge = side.merge else { continue }
+            let held = file.source(for: side.member.camera)?.fields
             for field in merge.decided where !plan.decided.contains(field) {
                 let unit = (field == .rating || field == .flag ? [XMPField.rating, .flag] : [field])
                     .filter(context.fields.contains)
                 if position > 0, unit.allSatisfy({ !merge.fields.holds($0) }),
-                   unit.contains(where: { file.source?.fields.holds($0) ?? false }) {
+                   unit.contains(where: { held?.holds($0) ?? false }) {
                     continue
                 }
                 for field in unit {
@@ -206,9 +220,12 @@ extension XMPGroup {
                     plan.decided.insert(field)
                     plan.deciders[position, default: []].insert(field)
                 }
+                if unit.contains(.captureTime) {
+                    plan.camera = side.member.camera
+                }
             }
         }
-        let held = file.source?.fields ?? XMPFields()
+        let held = file.source(for: plan.camera)?.fields ?? XMPFields()
         plan.changing = plan.decided.filter { !plan.wanted.represented($0, in: held) }
         guard !plan.changing.isEmpty else { return plan }
         guard !file.isUnreadable else {
@@ -216,11 +233,11 @@ extension XMPGroup {
             return plan
         }
         let changes = plan.wanted.changes(
-            plan.decided, to: file.packet, conventions: context.conventions, now: context.now,
+            plan.decided, to: file.packet, conventions: context.conventions, now: context.now, camera: plan.camera,
         )
         guard !changes.isEmpty else { return plan }
         plan.bytes = plan.wanted.written(
-            into: file.packet, changes, fields: plan.decided, conventions: context.conventions,
+            into: file.packet, changes, fields: plan.decided, conventions: context.conventions, camera: plan.camera,
         )
         if plan.bytes == nil {
             plan.problem = "\(sharedName) couldn't be written without changing what other apps wrote in it: left as it is"
@@ -234,15 +251,16 @@ extension XMPGroup {
     ) -> XMPGroupOutcome {
         var outcome = XMPGroupOutcome()
         let wrote = plan.bytes != nil && context.writes && (context.dryRun || written != nil)
-        let final = wrote ? plan.bytes.flatMap { XMPPacket(bytes: $0) }.map {
-            XMPSource(packet: $0, conventions: context.conventions)
-        } : file.source
+        let rewritten = wrote ? plan.bytes.flatMap { XMPPacket(bytes: $0) } : nil
+        let source = rewritten.map { XMPSource(packet: $0, conventions: context.conventions) } ?? file.source
+        let captured = rewritten.map { XMPCaptureTime($0) } ?? file.captured
         for (position, side) in sides.enumerated() {
             var side = side
             side.unwritten = wrote ? [] : plan.fields(of: position)
             if side.problem == nil, !plan.fields(of: position).isEmpty {
                 side.problem = plan.problem
             }
+            let final = source?.capturing(captured, camera: side.member.camera)
             var photo = photo(
                 side, other: side.other, merged: side.merge?.fields ?? XMPSource.combining([final, side.darktable]),
                 unchanged: false,
@@ -267,6 +285,9 @@ extension XMPGroup {
             }
             if merge.taken.contains(.keywords) {
                 outcome.keywords.append((id, merge.fields.keywords ?? []))
+            }
+            if merge.taken.contains(.captureTime) {
+                outcome.captures.append((id, merge.fields))
             }
             if let written {
                 let darktable = side.member.darktable.map(XMPFileStamp.init)
@@ -339,11 +360,15 @@ extension XMPGroup {
             && (!context.writes || record.unwritten.isEmpty)
     }
 
-    /// Reads the member's other apps' fields and merges them with its `.redlamp`'s.
+    /// Reads the member's other apps' fields and merges them with its `.redlamp`'s; its capture time
+    /// only when the index has the camera's.
     private func merge(_ side: inout Side, shared: XMPSource?, sharedStamp: XMPFileStamp?, context: XMPSyncContext) {
         let member = side.member
-        side.darktable = member.darktable.flatMap { try? Data(contentsOf: url($0.name)) }
-            .flatMap { XMPSource(xmp: $0, conventions: context.conventions) }
+        side.darktable = member.darktable.flatMap { try? Data(contentsOf: url($0.name)) }.flatMap { XMPPacket($0) }
+            .map { packet in
+                XMPSource(packet: packet, conventions: context.conventions)
+                    .capturing(XMPCaptureTime(packet), camera: member.camera)
+            }
         guard let redlamp = side.redlamp else {
             side.other = XMPSource.combining([shared, side.darktable])
             return
@@ -360,7 +385,8 @@ extension XMPGroup {
             redlampSaved: side.editStamp?.modified,
         )
         side.merge = XMPMerge.merge(
-            redlamp: redlamp, other: side.other, record: side.record, fields: context.fields,
+            redlamp: redlamp, other: side.other, record: side.record,
+            fields: member.camera == nil ? context.fields.subtracting([.captureTime]) : context.fields,
             otherIsLater: otherIsLater,
         )
     }

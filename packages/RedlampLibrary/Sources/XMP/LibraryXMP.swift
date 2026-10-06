@@ -5,11 +5,11 @@ import Synchronization
 
 /// Metadata shared with other apps (LIB-24, DEC-37): the `.redlamp` sidecar is the photo's record;
 /// other apps' ratings, flags, labels, keywords, titles and captions, in `.xmp` sidecars and in the
-/// photos' own XMP and IPTC, are read and their changes taken into it field by field
-/// (`XMPMerge`); standard `.xmp` sidecars are written beside the photos, wherever their root keeps
-/// its `.redlamp` sidecars, only once the library's setting is on and a field changed. An `.xmp`
-/// is rewritten keeping every byte of what Redlamp doesn't own, and a raw and its JPEG share one.
-/// The originals are never written.
+/// photos' own XMP and IPTC, and the capture times their `.xmp` give other than the photos' own, as a
+/// shift, are read and their changes taken into it field by field (`XMPMerge`); standard `.xmp`
+/// sidecars are written beside the photos, wherever their root keeps its `.redlamp` sidecars, only
+/// once the library's setting is on and a field changed. An `.xmp` is rewritten keeping every byte of
+/// what Redlamp doesn't own, and a raw and its JPEG share one. The originals are never written.
 public struct LibraryXMP: Sendable {
     public let index: LibraryIndex
     public let paths: LibraryPaths
@@ -62,7 +62,7 @@ public struct LibraryXMP: Sendable {
         let records = try await index.read { try XMPMergeRecord.records(involved, in: $0) }
         let context = XMPSyncContext(
             locator: locator, conventions: settings.conventions, writes: writes, dryRun: dryRun,
-            fields: XMPField.held, now: Date(), records: records,
+            fields: XMPField.synced, now: Date(), records: records,
         )
         let outcomes = try await LibraryIndex.offCaller {
             let groups = Mutex<[XMPGroup]>([])
@@ -100,6 +100,7 @@ public struct LibraryXMP: Sendable {
             let dropped = outcomes.flatMap(\.dropped)
             let organising = outcomes.flatMap(\.organising)
             let keywords = outcomes.flatMap(\.keywords)
+            let captures = outcomes.flatMap(\.captures)
             let xmpModified = outcomes.flatMap(\.xmpModified)
             let sidecars = outcomes.flatMap(\.sidecars)
             if !records.isEmpty || !dropped.isEmpty || !organising.isEmpty || !xmpModified.isEmpty
@@ -111,6 +112,13 @@ public struct LibraryXMP: Sendable {
                     }
                     for (id, paths) in keywords {
                         try writer.setKeywords(paths, forPhoto: id)
+                    }
+                    for (id, fields) in captures {
+                        let taken = PhotoMetadata(
+                            captureShift: fields.captureShift ?? 0,
+                            captureOffset: fields.captureOffset,
+                        )
+                        try writer.setMetadata(taken.values(["captureShift", "captureOffset"]), forPhoto: id)
                     }
                     try writer.setXMPModified(xmpModified)
                     for (id, modified, taken) in sidecars {

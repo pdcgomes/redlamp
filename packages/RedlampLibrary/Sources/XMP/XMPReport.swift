@@ -67,7 +67,7 @@ public struct XMPReport: Sendable {
         } else {
             let fields = XMPField.allCases.compactMap { field -> String? in
                 let count = merged.count { $0.taken.contains(field) }
-                return count > 0 ? "\(field.rawValue) \(count)" : nil
+                return count > 0 ? "\(field.name) \(count)" : nil
             }
             lines.append(
                 "\(Self.count(merged.count, ".redlamp sidecar")) \(dryRun ? "would take" : "took") other apps' "
@@ -168,12 +168,18 @@ public struct XMPReport: Sendable {
         if fields.location != nil {
             parts.append("a location")
         }
+        if let shift = fields.captureShift {
+            parts.append("its capture time \(CaptureTimeChange.describe(shift: shift))")
+        }
+        if let zone = fields.captureOffset {
+            parts.append("its camera in \(CaptureTimeChange.describe(zone: zone))")
+        }
         return parts.isEmpty ? "nothing" : parts.joined(separator: ", ")
     }
 
     /// `the rating, flag and label`.
     private static func list(_ fields: [XMPField]) -> String {
-        let names = fields.map(\.rawValue)
+        let names = fields.map(\.name)
         guard names.count > 1 else { return "the " + (names.first ?? "") }
         return "the " + names.dropLast().joined(separator: ", ") + " and " + (names.last ?? "")
     }
@@ -208,6 +214,8 @@ public struct XMPReport: Sendable {
                 place["countryCode"] = location.countryCode
                 return place
             }
+            object["captureShift"] = fields.captureShift
+            object["captureOffset"] = fields.captureOffset
             return object
         }
         let photos = photos.map { photo -> [String: Any] in

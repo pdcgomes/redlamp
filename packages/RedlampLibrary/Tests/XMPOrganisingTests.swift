@@ -189,7 +189,7 @@ struct XMPOrganisingTests {
             #expect(try await shown().same(field, as: expected), "\(field) after the sidecar changed")
         }
         #expect(try await sandbox.shown("IMG_0001.ARW").keywords == ["Places/Porto"])
-        #expect(try await sandbox.row("IMG_0001.ARW").otherFields == Set(XMPField.allCases).subtracting([
+        #expect(try await sandbox.row("IMG_0001.ARW").otherFields == XMPField.held.subtracting([
             .flag, .keywords, .caption,
         ]))
 

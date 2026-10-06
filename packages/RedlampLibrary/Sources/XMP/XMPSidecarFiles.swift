@@ -17,6 +17,12 @@ struct XMPGroup: Sendable {
         var name: String {
             entry.name
         }
+
+        /// The time its camera recorded and the zone its file records, as its row keeps them; nil without
+        /// a row or a capture time.
+        var camera: XMPCaptureTime? {
+            record.flatMap { row in row.cameraTime.map { XMPCaptureTime(time: $0, offset: row.cameraZone) } }
+        }
     }
 
     let folder: String

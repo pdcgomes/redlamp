@@ -4,9 +4,9 @@ import RedlampDocument
 import UniformTypeIdentifiers
 
 /// The fields other apps share through XMP, as Redlamp keeps them: a rating, a flag, a colour label or
-/// a custom one, keywords, and IPTC Core's title, caption, creator, copyright and location. Each app's
-/// conventions for them come in through `XMPSource.init(packet:conventions:)` and go out through
-/// `changes(_:to:conventions:now:)`.
+/// a custom one, keywords, IPTC Core's title, caption, creator, copyright and location, and a shifted
+/// capture time. Each app's conventions for them come in through `XMPSource.init(packet:conventions:)`
+/// and go out through `changes(_:to:conventions:now:camera:)`.
 public struct XMPFields: Sendable, Hashable, Codable {
     /// 1 to 5 stars; nil when unrated.
     public var rating: Int?
@@ -26,11 +26,18 @@ public struct XMPFields: Sendable, Hashable, Codable {
     public var creator: String?
     public var copyright: String?
     public var location: PhotoLocation?
+    /// Seconds the capture time is from the camera's (LIB-22): the `.redlamp`'s `captureShift`, or how far
+    /// an `.xmp`'s capture time is from the one the photo's file records (`XMPSource.capturing`); nil for
+    /// none.
+    public var captureShift: Int?
+    /// The zone the camera's clock was in, in seconds east of UTC, where it isn't the one the photo's file
+    /// records: the `.redlamp`'s `captureOffset`, or the zone of an `.xmp`'s capture time.
+    public var captureOffset: Int?
 
     public init(
         rating: Int? = nil, flag: PhotoFlag? = nil, label: ColorLabel? = nil, customLabel: String? = nil,
         keywords: [String]? = nil, title: String? = nil, caption: String? = nil, creator: String? = nil,
-        copyright: String? = nil, location: PhotoLocation? = nil,
+        copyright: String? = nil, location: PhotoLocation? = nil, captureShift: Int? = nil, captureOffset: Int? = nil,
     ) {
         self.rating = rating
         self.flag = flag
@@ -42,16 +49,20 @@ public struct XMPFields: Sendable, Hashable, Codable {
         self.creator = creator
         self.copyright = copyright
         self.location = location
+        self.captureShift = captureShift
+        self.captureOffset = captureOffset
     }
 
-    /// The fields a `.redlamp` sidecar's metadata holds: a rating of 0 is none, and an empty keyword list
-    /// is keywords held, none of them.
+    /// The fields a `.redlamp` sidecar's metadata holds: a rating or a capture shift of 0 is none, and an
+    /// empty keyword list is keywords held, none of them.
     public init(_ metadata: PhotoMetadata?) {
         self.init(
             rating: metadata.flatMap { $0.rating > 0 ? $0.rating : nil }, flag: metadata?.flag, label: metadata?.label,
             customLabel: metadata?.label == nil ? metadata?.customLabel.flatMap(XMPSource.trimmed) : nil,
             keywords: metadata?.keywords.map(KeywordPath.texts), title: metadata?.title, caption: metadata?.caption,
             creator: metadata?.creator, copyright: metadata?.copyright, location: metadata?.location,
+            captureShift: metadata.flatMap { $0.captureShift != 0 ? $0.captureShift : nil },
+            captureOffset: metadata?.captureOffset,
         )
     }
 
@@ -71,12 +82,13 @@ public struct XMPFields: Sendable, Hashable, Codable {
         case .creator: creator != nil
         case .copyright: copyright != nil
         case .location: location != nil
+        case .captureTime: captureShift != nil || captureOffset != nil
         }
     }
 
     /// Whether `other` has the same value for `field`, as XMP can tell: keywords in any order, texts
-    /// without the spaces at their ends, creators name by name, and an empty text, location or keyword
-    /// list as none.
+    /// without the spaces at their ends, creators name by name, an empty text, location or keyword list
+    /// as none, and a capture time by its shift and zone.
     public func same(_ field: XMPField, as other: XMPFields) -> Bool {
         switch field {
         case .rating: rating == other.rating
@@ -88,6 +100,7 @@ public struct XMPFields: Sendable, Hashable, Codable {
         case .creator: Self.names(creator) == Self.names(other.creator)
         case .copyright: Self.text(copyright) == Self.text(other.copyright)
         case .location: Self.place(location) == Self.place(other.location)
+        case .captureTime: captureShift == other.captureShift && captureOffset == other.captureOffset
         }
     }
 
@@ -125,6 +138,9 @@ public struct XMPFields: Sendable, Hashable, Codable {
         case .creator: creator = other.creator
         case .copyright: copyright = other.copyright
         case .location: location = other.location
+        case .captureTime:
+            captureShift = other.captureShift
+            captureOffset = other.captureOffset
         }
     }
 
@@ -159,16 +175,29 @@ public struct XMPFields: Sendable, Hashable, Codable {
         if fields.contains(.location) {
             applied.location = location
         }
+        if fields.contains(.captureTime) {
+            applied.captureShift = captureShift ?? 0
+            applied.captureOffset = captureOffset
+        }
         return applied
     }
 }
 
 /// A field `XMPFields` keeps.
 public enum XMPField: String, Sendable, Hashable, Codable, CaseIterable, Comparable {
-    case rating, flag, label, keywords, title, caption, creator, copyright, location
+    case rating, flag, label, keywords, title, caption, creator, copyright, location, captureTime
 
-    /// The fields `.redlamp` sidecars hold, which merge and are written: all of them.
-    public static let held = Set(allCases)
+    /// The fields the index shows merged from a photo's `.redlamp` and other apps' XMP: all but the capture
+    /// time, which it shows from the `.redlamp` once `LibraryXMP` has merged it there.
+    public static let held = Set(allCases).subtracting([.captureTime])
+    /// The fields `LibraryXMP` merges into `.redlamp` sidecars and writes to `.xmp`: all of them, a capture
+    /// time read and written against the time the photo's file records.
+    public static let synced = Set(allCases)
+
+    /// Its name in a report: `rating`, `capture time`.
+    public var name: String {
+        self == .captureTime ? "capture time" : rawValue
+    }
 
     public static func < (lhs: XMPField, rhs: XMPField) -> Bool {
         allCases.firstIndex(of: lhs) ?? 0 < allCases.firstIndex(of: rhs) ?? 0
@@ -407,6 +436,21 @@ public struct XMPSource: Sendable, Hashable, Codable {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
+
+    /// The source with the capture time an `.xmp` gives (`captured`) read against `camera`, the time the
+    /// photo's file records and its zone: present whenever there's one, it holds the shift and zone that
+    /// differ from the camera's, and none where they're the camera's. Without either, it's as it was.
+    func capturing(_ captured: XMPCaptureTime?, camera: XMPCaptureTime?) -> XMPSource {
+        guard let captured, let camera else { return self }
+        var source = self
+        source.present.insert(.captureTime)
+        let shift = captured.shift(from: camera)
+        source.fields.captureShift = shift == 0 ? nil : shift
+        source.fields.captureOffset = captured.offset.flatMap {
+            $0 != camera.offset && PhotoMetadata.captureOffsets.contains($0) ? $0 : nil
+        }
+        return source
+    }
 }
 
 // MARK: - Writing
@@ -419,11 +463,16 @@ extension XMPFields {
     /// `xmp:LabelColor`, and Urgency when `conventions` write it, and a custom label its name alone;
     /// keywords go to Lightroom's paths and the flat list; a title, caption and copyright to the
     /// default language, other languages kept (an empty default clears one beside them); creators to a
-    /// sequence of names; and a location to IPTC Core's five properties.
+    /// sequence of names; a location to IPTC Core's five properties; and a shifted capture time, from
+    /// `camera`'s (the time the photo's file records), to `exif:DateTimeOriginal` and
+    /// `photoshop:DateCreated` with its zone, or the camera's own time to those of them the packet has.
     func changes(
         _ fields: Set<XMPField>, to packet: XMPPacket?, conventions: XMPConventions, now: Date,
+        camera: XMPCaptureTime? = nil,
     ) -> [(XMPProperty, XMPValue?)] {
-        let current = packet.map { XMPSource(packet: $0, conventions: conventions) }?.fields ?? XMPFields()
+        let current = packet.map {
+            XMPSource(packet: $0, conventions: conventions).capturing(XMPCaptureTime($0), camera: camera)
+        }?.fields ?? XMPFields()
         func has(_ property: XMPProperty) -> Bool {
             packet?.has(property) ?? false
         }
@@ -514,6 +563,15 @@ extension XMPFields {
                 }
             }
         }
+        if fields.contains(.captureTime), let camera, !current.same(.captureTime, as: self) {
+            let time = XMPCaptureTime(camera: camera, shift: captureShift, offset: captureOffset).text
+            for property in [XMPNamespace.dateTimeOriginal, XMPNamespace.dateCreated]
+                where holds(.captureTime) || has(property) {
+                if packet?.text(property) != time {
+                    changes.append((property, .text(time)))
+                }
+            }
+        }
         if !changes.isEmpty {
             changes.append((XMPNamespace.metadataDate, .text(Self.date(now))))
         }
@@ -522,10 +580,10 @@ extension XMPFields {
 
     /// `packet` (a new one when nil) with `changes` made, once it's checked: it parses, as ImageIO
     /// reads it too; every property the changes leave alone is as it was; and it reads back with
-    /// these values for `fields`. Nil when any check fails.
+    /// these values for `fields`, a capture time against `camera`'s. Nil when any check fails.
     func written(
         into packet: XMPPacket?, _ changes: [(XMPProperty, XMPValue?)], fields: Set<XMPField>,
-        conventions: XMPConventions,
+        conventions: XMPConventions, camera: XMPCaptureTime? = nil,
     ) -> [UInt8]? {
         let base = packet ?? XMPPacket.empty(toolkit: "Redlamp")
         guard let bytes = base.editing(changes, prefixes: XMPNamespace.prefixes), let edited = XMPPacket(bytes: bytes)
@@ -535,7 +593,8 @@ extension XMPFields {
             packet.properties().filter { !changed.contains($0.property) }
                 .map { "\($0.property.namespace) \($0.property.name) \($0.written)" }.sorted()
         }
-        let read = XMPSource(packet: edited, conventions: conventions).fields
+        let read = XMPSource(packet: edited, conventions: conventions)
+            .capturing(XMPCaptureTime(edited), camera: camera).fields
         guard untouched(base) == untouched(edited), fields.allSatisfy({ represented($0, in: read) }),
               CGImageMetadataCreateFromXMPData(Data(bytes) as CFData) != nil
         else { return nil }
