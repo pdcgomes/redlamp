@@ -16,7 +16,7 @@ extension LibraryIndexer {
         enum Kind: Sendable {
             /// A name the folder's rows don't have: renamed or moved here, or new.
             case new
-            /// Its file, its other app's `.xmp` or the sidecar it had changed: read again.
+            /// Its file, other apps' `.xmp` or the sidecar it had changed: read again.
             case changed
             /// Only its `.redlamp` sidecar changed.
             case sidecar
@@ -29,7 +29,18 @@ extension LibraryIndexer {
         let entry: FileEntry
         let existing: PhotoRecord?
         let sidecar: FileEntry?
+        /// The `.xmp` the photos of its name share (`IMG_1234.xmp`).
         let xmp: FileEntry?
+        /// darktable's own `.xmp` beside it (`IMG_1234.ARW.xmp`).
+        var darktable: FileEntry?
+        /// What `LibraryXMP` recorded when it last merged the photo's other apps' fields; nil when it
+        /// hasn't.
+        var merged: XMPMergeRecord?
+
+        /// What its row keeps of its `.xmp` files, to see when they change.
+        var xmpModified: Date? {
+            Run.xmpModified(xmp, darktable)
+        }
     }
 
     /// One volume's part of a run: its readers, the folders it has yet to list and the photos it
@@ -121,6 +132,13 @@ extension LibraryIndexer {
         /// loads their folders, clears the offline mark of those that answer again, and queues the
         /// first folders to list.
         private func prepare(_ request: Request) async throws -> [VolumeWork] {
+            let (settings, merged) = try await indexer.index.read { reader in
+                try (XMPSettings(reader), XMPMergeRecord.exist(in: reader))
+            }
+            state.withLock { state in
+                state.conventions = settings.conventions
+                state.hasMergeRecords = merged
+            }
             let roots: [String]
             switch request {
             case let .roots(paths):
@@ -394,27 +412,31 @@ extension LibraryIndexer {
                 path: item.path, root: item.root, parent: item.parent, signature: signature.rawValue, listedAt: Date(),
             ))])
             volume.walk.add(found)
-            let rows: [PhotoRecord]
+            var rows: [PhotoRecord] = []
+            var merged: [Int64: XMPMergeRecord] = [:]
             if let existing {
+                let withRecords = state.withLock { $0.hasMergeRecords }
                 do {
-                    rows = try await indexer.index.read { try $0.photos(inFolder: existing.id) }
+                    (rows, merged) = try await indexer.index.read { reader in
+                        let rows = try reader.photos(inFolder: existing.id)
+                        return try (rows, withRecords ? XMPMergeRecord.records(rows.map(\.id), in: reader) : [:])
+                    }
                 } catch {
                     failed(item.path, error)
                     return
                 }
-            } else {
-                rows = []
             }
-            let jobs = compare(item.path, entries, rows, signature: signature, on: volume)
+            let jobs = compare(item.path, entries, rows, merged: merged, signature: signature, on: volume)
             volume.photos.add(jobs, folder: item.path, modified: item.modified)
             await jobFinished(in: item.path)
         }
 
-        /// The jobs that bring `folder`'s rows in step with its listing; rows whose names are gone
-        /// wait for the end of the run, where those that weren't moved elsewhere are removed.
+        /// The jobs that bring `folder`'s rows in step with its listing, with what `LibraryXMP`
+        /// recorded of their photos (`merged`); rows whose names are gone wait for the end of the run,
+        /// where those that weren't moved elsewhere are removed.
         private func compare(
-            _ folder: String, _ entries: [FileEntry], _ rows: [PhotoRecord], signature: FolderSignature,
-            on volume: VolumeWork,
+            _ folder: String, _ entries: [FileEntry], _ rows: [PhotoRecord], merged: [Int64: XMPMergeRecord],
+            signature: FolderSignature, on volume: VolumeWork,
         ) -> [PhotoJob] {
             var sidecars: [String: FileEntry] = [:]
             var xmps: [String: FileEntry] = [:]
@@ -434,16 +456,20 @@ extension LibraryIndexer {
             var jobs: [PhotoJob] = []
             for entry in photos {
                 let sidecar = sidecars[entry.name]
-                let xmp = Self.xmp(for: entry.name, in: xmps)
+                let (xmp, darktable) = Self.xmps(for: entry.name, in: xmps)
                 func job(_ kind: PhotoJob.Kind, _ existing: PhotoRecord?) -> PhotoJob {
-                    PhotoJob(kind: kind, folder: folder, entry: entry, existing: existing, sidecar: sidecar, xmp: xmp)
+                    PhotoJob(
+                        kind: kind, folder: folder, entry: entry, existing: existing, sidecar: sidecar, xmp: xmp,
+                        darktable: darktable, merged: existing.flatMap { merged[$0.id] },
+                    )
                 }
                 guard let row = byName[entry.name] else {
                     jobs.append(job(.new, nil))
                     continue
                 }
                 if row.size != entry.size || !Self.same(row.modified, entry.modified) || row.indexed == 0
-                    || !Self.same(row.xmpModified, xmp?.modified) || (row.sidecarModified != nil && sidecar == nil) {
+                    || !Self.same(row.xmpModified, Self.xmpModified(xmp, darktable))
+                    || (row.sidecarModified != nil && sidecar == nil) {
                     jobs.append(job(.changed, row))
                 } else if !Self.same(row.sidecarModified, sidecar?.modified) {
                     jobs.append(job(.sidecar, row))
@@ -471,11 +497,28 @@ extension LibraryIndexer {
             return jobs
         }
 
-        /// The other app's `.xmp` of the photo named `name`: `IMG_1234.xmp`, else `IMG_1234.ARW.xmp`.
-        static func xmp(for name: String, in xmps: [String: FileEntry]) -> FileEntry? {
-            guard !xmps.isEmpty else { return nil }
-            let stem = (name as NSString).deletingPathExtension.lowercased()
-            return xmps[stem + ".xmp"] ?? xmps[name.lowercased() + ".xmp"]
+        /// Other apps' `.xmp` of the photo named `name`, by lowercased name in `xmps`: the one the photos
+        /// of its name share, `IMG_1234.xmp`, and darktable's, `IMG_1234.ARW.xmp`.
+        static func xmps(
+            for name: String, in xmps: [String: FileEntry],
+        ) -> (shared: FileEntry?, darktable: FileEntry?) {
+            guard !xmps.isEmpty else { return (nil, nil) }
+            let shared = xmps[(name as NSString).deletingPathExtension.lowercased() + ".xmp"]
+            let darktable = xmps[name.lowercased() + ".xmp"]
+            return (shared, darktable?.name == shared?.name ? nil : darktable)
+        }
+
+        /// What a row keeps of its photo's `.xmp` files (`xmp_modified`), to see when they change: the
+        /// modification date of the one there is; with both, the sum of their dates, which changes
+        /// when either does or goes.
+        static func xmpModified(_ shared: FileEntry?, _ darktable: FileEntry?) -> Date? {
+            switch (shared, darktable) {
+            case let (shared?, darktable?):
+                Date(timeIntervalSince1970: shared.modified.timeIntervalSince1970
+                    + darktable.modified.timeIntervalSince1970)
+            case let (one?, nil), let (nil, one?): one.modified
+            case (nil, nil): nil
+            }
         }
 
         /// Whether two dates from listings and the index are the same, allowing for what storing a
@@ -651,6 +694,10 @@ extension LibraryIndexer {
         var deferred: [String] = []
         var failedVolumes: Set<Int64> = []
         var summary = LibraryIndexerSummary()
+        /// How the library reads other apps' labels (`XMPSettings`).
+        var conventions = XMPConventions()
+        /// The index holds what `LibraryXMP` merged of some photos.
+        var hasMergeRecords = false
     }
 
     struct FolderWork: Sendable {

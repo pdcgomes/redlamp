@@ -56,6 +56,15 @@ extension XMPMergeRecord {
         return records
     }
 
+    /// Whether `reader`'s index holds a record of any photo.
+    static func exist(in reader: some IndexQueries) throws -> Bool {
+        let prefix = key(0).dropLast()
+        let statement = try reader.database.cached("SELECT 1 FROM settings WHERE key > ?1 AND key < ?2 LIMIT 1")
+        try statement.bind(String(prefix), at: 1)
+        try statement.bind(String(prefix.dropLast()) + "/", at: 2)
+        return try statement.first { _ in true } ?? false
+    }
+
     /// Keeps `records` in `writer`'s index in place of the photos' earlier ones, and drops the
     /// records of `dropped`.
     static func save(

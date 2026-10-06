@@ -129,4 +129,19 @@ public enum XMPMerge {
         }
         return outcome
     }
+
+    /// Whether other apps changed the photo after its `.redlamp` was saved, `merge`'s `otherIsLater`:
+    /// the latest of its `.xmp`, darktable's and the photo itself to differ from `record` (all that
+    /// exist, without a record), against when the `.redlamp` was saved.
+    static func otherIsLater(
+        _ record: XMPMergeRecord?, sidecar: XMPFileStamp?, darktable: XMPFileStamp?, photo: XMPFileStamp?,
+        redlampSaved: Date?,
+    ) -> Bool {
+        let changed = [(record?.sidecar, sidecar), (record?.darktable, darktable), (record?.photo, photo)]
+            .compactMap { recorded, now -> Date? in
+                guard let now, record == nil || !XMPFileStamp.same(recorded, now) else { return nil }
+                return now.modified
+            }
+        return changed.max().map { $0 > redlampSaved ?? .distantPast } ?? false
+    }
 }

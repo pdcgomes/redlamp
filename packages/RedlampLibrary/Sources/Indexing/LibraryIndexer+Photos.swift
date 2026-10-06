@@ -35,16 +35,21 @@ extension LibraryIndexer.Run {
                 count(photo, in: job.folder)
                 return await batcher.add([.photo(photo)])
             }
-            record.rating = sidecar.summary.metadata.rating
-            record.flag = sidecar.summary.metadata.flag
-            record.label = sidecar.summary.metadata.label
+            guard let organising = Self.organising(afterSidecar: sidecar.summary, of: job, row: record) else {
+                var photo = try await read(job, on: volume, priority: priority, lane: lane, sidecar: sidecar)
+                photo.thumbnail = nil
+                count(photo, in: job.folder)
+                return await batcher.add([.photo(photo)])
+            }
+            record.rating = organising.fields.rating ?? 0
+            record.flag = organising.fields.flag
+            record.label = organising.fields.label
             record.edited = sidecar.summary.hasEdits
             record.sidecarModified = sidecar.modified
             record.state = []
             record.fileID = job.entry.fileIdentifier
             let photo = LibraryIndexer.PendingPhoto(
-                folder: job.folder, record: record, keywords: sidecar.summary.metadata.keywords.map(KeywordPath.texts),
-                isNew: false,
+                folder: job.folder, record: record, keywords: organising.keywords, isNew: false,
             )
             count(photo, in: job.folder)
             await batcher.add([.photo(photo)])
@@ -70,44 +75,59 @@ extension LibraryIndexer.Run {
 
     // MARK: - Reading a photo
 
-    /// Reads the photo's head once, for its content key and metadata, and what its sidecars say.
+    /// Reads the photo's head once, for its content key and metadata, other apps' `.xmp` beside it,
+    /// and what its `.redlamp` says (`known`, when it's been read).
     func read(
         _ job: LibraryIndexer.PhotoJob, on volume: LibraryIndexer.VolumeWork, priority: VolumeIO.Priority,
-        lane: WorkScheduler.Lane,
+        lane: WorkScheduler.Lane, sidecar known: ReadSidecar? = nil,
     ) async throws -> LibraryIndexer.PendingPhoto {
         let io = volume.io
         let url = URL(fileURLWithPath: job.folder + "/" + job.entry.name, isDirectory: false)
         let size = Int(job.entry.size)
         let head = try await io.read(url, range: 0 ..< PhotoMetadataReader.headLength, priority: priority)
         state.withLock { $0.summary.headsRead += 1 }
-        var xmpData: Data?
-        if let xmp = job.xmp {
+        func contents(_ xmp: FileEntry?) async throws -> Data? {
+            guard let xmp else { return nil }
             let xmpURL = URL(fileURLWithPath: job.folder + "/" + xmp.name, isDirectory: false)
-            xmpData = try await Self.ignoringMissing {
+            return try await Self.ignoringMissing {
                 try await io.read(xmpURL, range: 0 ..< max(Int(xmp.size), 1), priority: priority)
             }
         }
-        let read = xmpData
+        let (xmp, darktable) = try await (contents(job.xmp), contents(job.darktable))
+        let conventions = state.withLock { $0.conventions }
         var parsed = try await indexer.scheduler.run(lane) {
-            Self.parse(head: head, size: size, url: url, xmp: read)
+            Self.parse(head: head, size: size, url: url, xmp: xmp, darktable: darktable, conventions: conventions)
         }
         if parsed.needsFile {
             let headLength = PhotoMetadataReader.headLength
             if size > headLength {
                 _ = try await io.read(url, range: headLength ..< min(size, Self.chargedFileRead), priority: priority)
             }
-            parsed.metadata = try await indexer.scheduler.run(lane) { PhotoMetadataReader.read(url: url) }
+            parsed.metadata = try await indexer.scheduler.run(lane) {
+                PhotoMetadataReader.read(url: url, conventions: conventions)
+            }
         }
-        let sidecar = try await sidecar(of: job, on: volume, priority: priority, lane: lane)
+        var sidecar = known
+        if sidecar == nil {
+            sidecar = try await self.sidecar(of: job, on: volume, priority: priority, lane: lane)
+        }
+        let metadata = parsed.metadata
+        let organising = Self.organising(
+            metadata, sidecar: sidecar?.summary, xmp: parsed.xmp, darktable: parsed.darktable, merged: job.merged,
+            otherIsLater: XMPMerge.otherIsLater(
+                job.merged, sidecar: job.xmp.map(XMPFileStamp.init), darktable: job.darktable.map(XMPFileStamp.init),
+                photo: XMPFileStamp(job.entry), redlampSaved: sidecar?.modified,
+            ),
+        )
         var record = Self.record(
-            job, key: parsed.key, metadata: parsed.metadata, sidecar: sidecar?.summary, xmp: parsed.xmp,
+            job, key: parsed.key, metadata: metadata, organising: organising,
+            edited: sidecar?.summary.hasEdits ?? false,
         )
         if let sidecar {
             record.sidecarModified = sidecar.modified
         }
         record.marked = job.existing?.marked ?? false
-        let metadata = parsed.metadata
-        let keywords = Self.organising(metadata, sidecar: sidecar?.summary, xmp: parsed.xmp).keywords
+        let keywords = organising.keywords
         return LibraryIndexer.PendingPhoto(
             folder: job.folder, record: record,
             camera: metadata?.cameraName.map {
@@ -173,7 +193,7 @@ extension LibraryIndexer.Run {
     private func placed(_ job: LibraryIndexer.PhotoJob) async -> LibraryIndexer.PhotoJob? {
         guard job.kind == .changed, job.sidecar == nil, let row = job.existing, let recorded = row.sidecarModified,
               row.size == job.entry.size, Self.same(row.modified, job.entry.modified), row.indexed != 0,
-              Self.same(row.xmpModified, job.xmp?.modified)
+              Self.same(row.xmpModified, job.xmpModified)
         else { return job }
         let photo = URL(fileURLWithPath: job.folder + "/" + job.entry.name, isDirectory: false)
         guard let mac = await sidecarLocator().onThisMac(photo), let saved = Self.modified(mac) else { return job }
@@ -187,6 +207,7 @@ extension LibraryIndexer.Run {
         }
         return LibraryIndexer.PhotoJob(
             kind: kind, folder: job.folder, entry: job.entry, existing: row, sidecar: nil, xmp: job.xmp,
+            darktable: job.darktable, merged: job.merged,
         )
     }
 
@@ -201,20 +222,27 @@ extension LibraryIndexer.Run {
         var metadata: CaptureMetadata?
         /// The head doesn't hold the file's metadata: ImageIO has to read the file itself.
         var needsFile: Bool
+        /// What the `.xmp` the photos of its name share says (`IMG_1234.xmp`).
         var xmp: CaptureMetadata?
+        /// What darktable's `.xmp` says (`IMG_1234.ARW.xmp`).
+        var darktable: CaptureMetadata?
     }
 
-    static func parse(head: Data, size: Int, url: URL, xmp: Data?) -> ParsedHead {
+    /// The photo's content key and metadata from its head, and what other apps' `.xmp` beside it
+    /// say, read in `conventions`.
+    static func parse(
+        head: Data, size: Int, url: URL, xmp: Data?, darktable: Data? = nil,
+        conventions: XMPConventions = XMPConventions(),
+    ) -> ParsedHead {
         let key = ContentKey(fileSize: size, head: head)
-        let xmp = xmp.flatMap { XMPMetadata.parse($0) }
+        let xmp = xmp.flatMap { XMPMetadata.parse($0, conventions: conventions) }
+        let darktable = darktable.flatMap { XMPMetadata.parse($0, conventions: conventions) }
         if head.count >= size {
-            return ParsedHead(
-                key: key, metadata: PhotoMetadataReader.read(head: head, fileSize: size, url: url), needsFile: false,
-                xmp: xmp,
-            )
+            let metadata = PhotoMetadataReader.read(head: head, fileSize: size, url: url, conventions: conventions)
+            return ParsedHead(key: key, metadata: metadata, needsFile: false, xmp: xmp, darktable: darktable)
         }
-        let found = PhotoMetadataReader.headMetadata(head, fileSize: size, url: url)
-        return ParsedHead(key: key, metadata: found, needsFile: found == nil, xmp: xmp)
+        let found = PhotoMetadataReader.headMetadata(head, fileSize: size, url: url, conventions: conventions)
+        return ParsedHead(key: key, metadata: found, needsFile: found == nil, xmp: xmp, darktable: darktable)
     }
 
     /// `body`'s answer, or nil when the file it reads has gone since it was listed.
@@ -228,24 +256,20 @@ extension LibraryIndexer.Run {
 
     // MARK: - Rows
 
-    /// The photo's row, from its listing and what was read: its rating, flag and label are its
-    /// sidecar's, else its other app's `.xmp`'s, else its own XMP's; its keywords its sidecar's when it
-    /// holds them, else its own and its `.xmp`'s; its title and caption its `.xmp`'s, else its own.
+    /// The photo's row, from its listing, what was read and its organising fields.
     static func record(
-        _ job: LibraryIndexer.PhotoJob, key: ContentKey, metadata: CaptureMetadata?, sidecar: SidecarSummary?,
-        xmp: CaptureMetadata?,
+        _ job: LibraryIndexer.PhotoJob, key: ContentKey, metadata: CaptureMetadata?, organising: Organising,
+        edited: Bool,
     ) -> PhotoRecord {
-        let organising = organising(metadata, sidecar: sidecar, xmp: xmp)
-        return PhotoRecord(
+        PhotoRecord(
             id: job.existing?.id ?? 0, folder: 0, name: job.entry.name, size: job.entry.size,
             modified: job.entry.modified, fileID: job.entry.fileIdentifier, contentKey: key.data,
             captured: metadata?.captured, capturedOffset: metadata?.capturedOffset, iso: metadata?.iso,
             aperture: metadata?.aperture, shutter: metadata?.shutter, focal: metadata?.focalLength,
             width: metadata?.pixelSize?.width, height: metadata?.pixelSize?.height, orientation: metadata?.orientation,
             latitude: metadata?.latitude, longitude: metadata?.longitude, rating: organising.rating,
-            flag: organising.flag, label: organising.label, edited: sidecar?.hasEdits ?? false,
-            sidecarModified: job.sidecar?.modified, xmpModified: job.xmp?.modified, title: organising.title,
-            caption: organising.caption, indexed: 1,
+            flag: organising.flag, label: organising.label, edited: edited, sidecarModified: job.sidecar?.modified,
+            xmpModified: job.xmpModified, title: organising.title, caption: organising.caption, indexed: 1,
         )
     }
 
@@ -258,31 +282,56 @@ extension LibraryIndexer.Run {
         var caption: String?
     }
 
+    /// The photo's organising fields as `LibraryXMP` merges them (`XMPMerge`): other apps' value is
+    /// its `.xmp`'s, then darktable's, then its own XMP's and IPTC's, field by field; its `.redlamp`'s
+    /// rating, flag, label and keywords stand where it holds them, or, once `LibraryXMP` has merged the
+    /// photo (`merged`), where other apps haven't changed them since. Until then, a keyword list the
+    /// `.redlamp` holds is the photo's keywords even when it's empty, as the sidecar format has it. Its
+    /// title and caption are other apps'.
     static func organising(
-        _ embedded: CaptureMetadata?,
-        sidecar: SidecarSummary?,
-        xmp: CaptureMetadata?,
+        _ embedded: CaptureMetadata?, sidecar: SidecarSummary?, xmp: CaptureMetadata?,
+        darktable: CaptureMetadata? = nil, merged: XMPMergeRecord? = nil, otherIsLater: Bool = false,
     ) -> Organising {
-        let other = xmp?.rating ?? embedded?.rating
-        let otherLabel = (xmp?.label ?? embedded?.label).flatMap { name in
-            ColorLabel.allCases.first { $0.rawValue.caseInsensitiveCompare(name) == .orderedSame }
-        }
-        var keywords = sidecar?.metadata.keywords.map(KeywordPath.texts) ?? []
-        var seen = Set<String>()
-        for keyword in sidecar?.metadata.keywords == nil ? (embedded?.keywords ?? []) + (xmp?.keywords ?? []) : []
-            where seen.insert(keyword).inserted {
-            if keyword.split(separator: "/").contains(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) {
-                keywords.append(keyword)
+        var shown = XMPSource.combining([xmp?.xmp, darktable?.xmp, embedded?.xmp])
+        if let sidecar {
+            let merge = XMPMerge.merge(
+                redlamp: XMPFields(sidecar.metadata), other: shown, record: merged, otherIsLater: otherIsLater,
+            )
+            for field in XMPField.held {
+                shown.take(field, from: merge.fields)
+            }
+            if merged == nil, sidecar.metadata.keywords?.isEmpty == true {
+                shown.keywords = []
             }
         }
         return Organising(
-            rating: sidecar?.metadata.rating ?? max(other ?? 0, 0),
-            flag: sidecar.map(\.metadata.flag) ?? (other == -1 ? .reject : nil),
-            label: sidecar.map(\.metadata.label) ?? otherLabel,
-            keywords: keywords,
-            title: xmp?.title ?? embedded?.title,
-            caption: xmp?.caption ?? embedded?.caption,
+            rating: shown.rating ?? 0, flag: shown.flag, label: shown.label, keywords: shown.keywords,
+            title: shown.title, caption: shown.caption,
         )
+    }
+
+    /// The organising fields of a photo whose `.redlamp` alone changed, from the `.redlamp` and the
+    /// photo's row, without reading other apps' files again; their keywords nil where the row's stay.
+    /// Nil when other apps' fields are needed: they changed since `LibraryXMP`'s record, or, without
+    /// one, the `.redlamp` leaves open a field the row has a value for, which may have been the
+    /// `.redlamp`'s own.
+    static func organising(
+        afterSidecar sidecar: SidecarSummary, of job: LibraryIndexer.PhotoJob, row: PhotoRecord,
+    ) -> (fields: XMPFields, keywords: [String]?)? {
+        let redlamp = XMPFields(sidecar.metadata)
+        if let record = job.merged {
+            guard XMPFileStamp.same(record.sidecar, job.xmp.map(XMPFileStamp.init)),
+                  XMPFileStamp.same(record.darktable, job.darktable.map(XMPFileStamp.init)),
+                  XMPFileStamp.same(record.photo, XMPFileStamp(job.entry))
+            else { return nil }
+            let merged = XMPMerge.merge(redlamp: redlamp, other: record.other, record: record, otherIsLater: false)
+            return (merged.fields, merged.fields.keywords)
+        }
+        let shown = XMPFields(rating: row.rating > 0 ? row.rating : nil, flag: row.flag, label: row.label)
+        guard [XMPField.rating, .flag, .label].allSatisfy({ redlamp.holds($0) || !shown.holds($0) }) else {
+            return nil
+        }
+        return (redlamp, sidecar.metadata.keywords.map(KeywordPath.texts))
     }
 
     // MARK: - Renames and moves
@@ -338,13 +387,17 @@ extension LibraryIndexer.Run {
         priority: VolumeIO.Priority, lane: WorkScheduler.Lane,
     ) async throws -> LibraryIndexer.PendingMove {
         var replacement: LibraryIndexer.PendingPhoto?
-        if !Self.same(record.sidecarModified, job.sidecar?.modified) || !Self.same(
-            record.xmpModified,
-            job.xmp?.modified,
-        ) {
+        let besideChanged = !Self.same(record.sidecarModified, job.sidecar?.modified)
+            || !Self.same(record.xmpModified, job.xmpModified)
+        if besideChanged {
+            let id = record.id
+            var merged: XMPMergeRecord?
+            if state.withLock({ $0.hasMergeRecords }) {
+                merged = try await indexer.index.read { try XMPMergeRecord.records([id], in: $0)[id] }
+            }
             let existing = LibraryIndexer.PhotoJob(
                 kind: .changed, folder: job.folder, entry: job.entry, existing: record, sidecar: job.sidecar,
-                xmp: job.xmp,
+                xmp: job.xmp, darktable: job.darktable, merged: merged,
             )
             replacement = try await read(existing, on: volume, priority: priority, lane: lane)
             replacement?.thumbnail = nil
