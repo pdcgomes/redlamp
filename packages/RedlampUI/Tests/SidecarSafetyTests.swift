@@ -138,7 +138,7 @@ struct SidecarSafetyTests {
         defer { try? FileManager.default.removeItem(at: folder.url) }
         try folder.seed(
             #"{"format":"app.redlamp.edit","recipe":{"version":3,"processVersion":1},"#
-                + #""metadata":{"rating":2,"flag":"pick","label":"red","caption":"Harbour"}}"#,
+                + #""metadata":{"rating":2,"flag":"pick","label":"red","caption":"Harbour","futureField":"Kept"}}"#,
             withHistory: false,
         )
         let model = EditorModel(engine: StubEngine())
@@ -148,7 +148,8 @@ struct SidecarSafetyTests {
         _ = model.perform(.rating4)
         try await open(folder.photo, in: model)
         var expected = PhotoMetadata(rating: 4, flag: .pick, label: .red)
-        expected.unknownFields = ["caption": .string("Harbour")]
+        expected.caption = "Harbour"
+        expected.unknownFields = ["futureField": .string("Kept")]
         #expect(model.currentMetadata == expected)
         try await open(folder.other, in: model)
         try await settle()
