@@ -1,0 +1,33 @@
+---
+description: main keeps a linear history. Never make a merge commit on main; bring a diverged main up to date by rebasing onto origin/main, check it, and push without force. Sync issues only from a main that contains origin/main.
+alwaysApply: true
+---
+
+# main: a linear history
+
+GitHub refuses any push to `main` that carries a merge commit (repository rules: linear history, no force-push, no deletion). So never make one on `main`: no `git merge origin/main`, and no `git pull` without `--rebase`.
+
+## When local main and origin/main have diverged
+
+1. `git fetch origin`, then `git rev-list --left-right --count origin/main...main` (behind, ahead).
+2. Rebase local `main`'s own commits onto `origin/main`; resolve each conflict keeping both sides' intent. Other sessions work in this checkout, so rebase in a throwaway worktree, not in the shared one:
+
+   ```bash
+   git branch backup/main-$(date +%Y%m%d-%H%M) main
+   git worktree add --detach build/tmp-rebase main
+   git -C build/tmp-rebase rebase origin/main
+   ```
+
+3. Build and run the tests that cover what conflicted, and what both sides changed. Git can merge cleanly code that doesn't compile: a case one side added to an enum that the other side's new `switch` doesn't handle.
+4. Only if `main` hasn't moved meanwhile, point it at the result and push without force:
+
+   ```bash
+   git reset --keep <rebased head>
+   git push origin main
+   ```
+
+5. A rebase gives every unpushed commit a new hash, other sessions' included. Replace each old hash the tracker, the README and the docs cite (match commits by subject), and tell the owner which commits changed, so canvases and chats citing them can be updated.
+
+## Issue syncs follow origin/main
+
+`scripts/tracker-issues.py --apply` writes GitHub from the local tracker. Run it only when `git merge-base --is-ancestor origin/main main` succeeds. A sync from a `main` behind origin reopens or rewrites issues origin has already settled (on 6 October it reopened #181 twice). When they've diverged, rebase first.
