@@ -12,7 +12,8 @@ import Synchronization
 ///
 /// What the tracker asks of the indexer runs one at a time, in order, and what waits for the same
 /// volume is merged. The indexer's events are passed on as `Event.indexer`. A volume's event database
-/// and last event are recorded in the index once a run has applied them.
+/// and last event are recorded in the index once a run has applied them, and `Event.caughtUp` says
+/// when its first pass is over.
 public final class ChangeTracker: Sendable {
     public struct Configuration: Sendable, Hashable {
         /// How long a volume's events are gathered before they're passed on.
@@ -44,6 +45,11 @@ public final class ChangeTracker: Sendable {
         case reconciled(volume: String, reason: Reason)
         /// A network volume's folders are listed again: those on screen, or all of them.
         case polled(volume: String, shown: Bool)
+        /// The volume's first pass is over, after its run's events: its folders compared or its
+        /// history replayed to the end, since the tracker began following it or since it answered
+        /// again after it stopped. From here its events or polls keep the index current. Once for
+        /// each.
+        case caughtUp(volume: String)
     }
 
     public enum Reason: String, Sendable, Hashable {
@@ -346,6 +352,7 @@ public final class ChangeTracker: Sendable {
                 changed = await run(indexer.index(volume.urls), for: work, events: events)
             }
         case .offline:
+            volume.fellBehind()
             let key = volume.key
             let marked = try? await indexer.index.write { writer -> Bool in
                 guard let record = try writer.volume(uuid: key), try !writer.isMarkedOffline(volume: key) else {
@@ -357,6 +364,9 @@ public final class ChangeTracker: Sendable {
             if marked == true {
                 events.yield(.indexer(.volumeOffline(key)))
             }
+        }
+        if changed != nil, work.kind.catchesUp, !Task.isCancelled, volume.catchUp() {
+            events.yield(.caughtUp(volume: volume.key))
         }
         work.done?(changed)
     }
@@ -431,6 +441,15 @@ extension ChangeTracker.Work.Kind {
             true
         } else {
             false
+        }
+    }
+
+    /// It takes in everything that changed on the volume, so its run leaves the index current: a
+    /// comparison, the history replayed, or a poll of every folder.
+    var catchesUp: Bool {
+        switch self {
+        case .reconcile, .update(_, replayed: true), .poll(shown: false): true
+        case .update, .poll, .offline: false
         }
     }
 }

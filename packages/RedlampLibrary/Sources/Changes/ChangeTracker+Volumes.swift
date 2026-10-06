@@ -295,6 +295,7 @@ extension ChangeTracker {
             var polling: Task<Void, Never>?
             var pollInterval: Duration?
             var tasks: [Task<Void, Never>] = []
+            var caughtUp = false
         }
 
         /// The index's name for the volume.
@@ -418,6 +419,20 @@ extension ChangeTracker {
 
         func add(_ task: Task<Void, Never>) {
             state.withLock { $0.tasks.append(task) }
+        }
+
+        /// A pass that takes in everything that changed on the volume has run to the end; returns
+        /// whether it's the first since the volume was followed or fell behind.
+        func catchUp() -> Bool {
+            state.withLock { state in
+                defer { state.caughtUp = true }
+                return !state.caughtUp
+            }
+        }
+
+        /// The volume stopped answering: what changed meanwhile waits for its next pass.
+        func fellBehind() {
+            state.withLock { $0.caughtUp = false }
         }
 
         /// Stops the event stream and polling, until the volume is followed again.

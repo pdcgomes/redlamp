@@ -87,6 +87,22 @@ struct ChangeTrackerTests {
         }
     }
 
+    /// Where in `events` each `.caughtUp` of `key` came.
+    static func caughtUp(_ key: String, in events: [ChangeTracker.Event]) -> [Int] {
+        events.indices.filter { events[$0] == .caughtUp(volume: key) }
+    }
+
+    /// Where the first run to finish after `start` finished.
+    static func finished(after start: Int, in events: [ChangeTracker.Event]) -> Int? {
+        events[start...].firstIndex {
+            if case .indexer(.finished) = $0 {
+                true
+            } else {
+                false
+            }
+        }
+    }
+
     // MARK: - Event histories
 
     @Test func `FSEvents replays what changed while the tracker was stopped and follows what changes while it runs`(
@@ -177,6 +193,11 @@ struct ChangeTrackerTests {
         #expect(replayed?.photosInserted == 1 && source.since == [1000])
         #expect(Set(counting.counts.listings.keys) == [sandbox.path(folders[0])])
         #expect(try await Self.history(of: key, in: sandbox) { $0?.lastEvent == 1002 }?.lastEvent == 1002)
+        // The replay is the volume's first pass.
+        #expect(await events.wait { $0.contains(.caughtUp(volume: key)) })
+        let start = try #require(events.all.firstIndex(where: Self.isReplayed))
+        let caught = Self.caughtUp(key, in: events.all)
+        #expect(caught.count == 1 && Self.finished(after: start, in: events.all).map { $0 < caught[0] } == true)
 
         counting.reset()
         try FileManager.default.removeItem(at: sandbox.url(sandbox.fixture.photos(in: picked[1])[0]))
@@ -185,6 +206,28 @@ struct ChangeTrackerTests {
         #expect(live?.photosRemoved == 1)
         #expect(Set(counting.counts.listings.keys) == [sandbox.path(folders[1])])
         #expect(try await Self.history(of: key, in: sandbox) { $0?.lastEvent == 1003 }?.lastEvent == 1003)
+        #expect(Self.caughtUp(key, in: events.all).count == 1, "a live event doesn't catch it up again")
+    }
+
+    @Test func `a history that names nothing catches its volume up at once, with nothing listed`() async throws {
+        let sandbox = try await IndexerSandbox.make(.init(photos: 100, seed: 49, shapes: []))
+        defer { sandbox.remove() }
+        _ = await IndexerRun
+            .collect(LibraryIndexer(index: sandbox.index, configuration: .testing()).index([sandbox.root]))
+        let key = try await Self.volumeKey(sandbox)
+        try await sandbox.index.write {
+            try $0.setEventHistory(VolumeEventHistory(eventDatabase: "SCRIPTED", lastEvent: 1000), ofVolume: key)
+        }
+        let counting = CountingFileSystem()
+        let tracker = ChangeTracker(
+            indexer: LibraryIndexer(index: sandbox.index, fileSystem: counting, configuration: .testing()),
+            configuration: .testing, source: ScriptedEvents(),
+        )
+        let events = TrackerEvents(tracker.start([sandbox.root]))
+        defer { tracker.stop() }
+        #expect(await events.wait { $0.contains(.caughtUp(volume: key)) })
+        #expect(events.all == [.replayed(volume: key, folders: 0), .caughtUp(volume: key)], "\(events.all)")
+        #expect(counting.counts.listings.isEmpty)
     }
 
     @Test func `dropped events, or another event database, compare every folder by signature`() async throws {
@@ -374,6 +417,48 @@ struct ChangeTrackerTests {
         #expect(ContinuousClock.now - resumed < .seconds(1))
     }
 
+    @Test func `each simulated volume's first pass is over once, after its run, however often it's polled after`(
+    ) async throws {
+        let sandbox = try await IndexerSandbox.make(.init(photos: 120, seed: 47, shapes: []))
+        defer { sandbox.remove() }
+        let second = try TemporaryFolder()
+        let copied = sandbox.fixture.photos(in: sandbox.fixture.folders[0]).prefix(5)
+        for photo in copied {
+            try FileManager.default.copyItem(at: sandbox.url(photo), to: second.url.appending(path: photo.name))
+        }
+        let simulated = SimulatedFileSystem(profile: .nas, seed: 5)
+        simulated.mount(second.url, uuid: "SECOND-VOLUME")
+        let tracker = ChangeTracker(
+            indexer: LibraryIndexer(index: sandbox.index, fileSystem: simulated, configuration: .testing()),
+            configuration: .init(
+                shownInterval: .milliseconds(100), pollIntervals: .milliseconds(100) ... .milliseconds(200),
+            ),
+            source: ScriptedEvents(),
+        )
+        let events = TrackerEvents(tracker.start([sandbox.root, second.url]))
+        defer { tracker.stop() }
+        let keys = try [
+            VolumeIORegistry.key(for: simulated.volume(of: sandbox.root), probe: sandbox.root),
+            "SECOND-VOLUME",
+        ]
+        #expect(await events.wait { all in
+            keys.allSatisfy { key in all.count(of: { $0 == .polled(volume: key, shown: false) }) >= 2 }
+        }, "every folder of both volumes polled twice after their first passes")
+        tracker.stop()
+
+        let all = events.all
+        for (key, photos) in zip(keys, [120, copied.count]) {
+            let caught = Self.caughtUp(key, in: all)
+            let start = try #require(all.firstIndex(of: .reconciled(volume: key, reason: .network)))
+            let finished = try #require(Self.finished(after: start, in: all))
+            #expect(caught.count == 1 && caught[0] > finished, "\(key): \(all)")
+            guard case let .indexer(.finished(summary)) = all[finished] else { continue }
+            #expect(summary.photosInserted == photos, "\(key)'s first pass indexed all of it")
+            let polled = try #require(all.firstIndex(of: .polled(volume: key, shown: false)))
+            #expect(caught[0] < polled)
+        }
+    }
+
     @Test func `a volume that stops answering is marked offline without hanging, and compared again when it's back`(
     ) async throws {
         let sandbox = try await IndexerSandbox.make(.init(photos: 300, seed: 46, shapes: []))
@@ -398,6 +483,7 @@ struct ChangeTrackerTests {
         let (offline, written) = try await sandbox.index
             .read { try ($0.photoCount(withState: .offline), $0.photoCount()) }
         #expect(written > 0 && written < 300 && offline == written, "\(offline) of \(written)")
+        #expect(Self.caughtUp(key, in: events.all).isEmpty, "a first pass the volume left isn't over")
 
         volume.switchTo(SimulatedFileSystem(profile: .nas, seed: 2))
         let back = await events.summary(after: Self.reconciled(.reconnected))
@@ -406,5 +492,9 @@ struct ChangeTrackerTests {
             try ($0.photoCount(withState: .offline), $0.photoCount())
         }
         #expect(stillOffline == 0 && count == 300)
+        #expect(await events.wait { !Self.caughtUp(key, in: $0).isEmpty })
+        let start = try #require(events.all.firstIndex(where: Self.reconciled(.reconnected)))
+        let caught = Self.caughtUp(key, in: events.all)
+        #expect(caught.count == 1 && Self.finished(after: start, in: events.all).map { $0 < caught[0] } == true)
     }
 }
