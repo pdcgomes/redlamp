@@ -90,7 +90,13 @@ struct QueryFilterBarTests {
         #expect(facets[.focal] == ["6.8": 1, "23": 1, "35": 2, "50": 1, nil: 3])
         #expect(facets[.aperture] == ["1.4": 1, "1.78": 1, "2.8": 1, "4": 1, "8": 1, nil: 3])
 
+        // A search cancels the facets in progress, so they're all counted before any filter is searched.
+        var counted: [FacetCounts] = []
         for try await counts in engine.facets([.focal, .day], for: .all) {
+            counted.append(counts)
+        }
+        #expect(counted.map(\.facet) == [.focal, .day])
+        for counts in counted {
             for value in counts.values {
                 guard let filter = value.filter else { continue }
                 #expect(
