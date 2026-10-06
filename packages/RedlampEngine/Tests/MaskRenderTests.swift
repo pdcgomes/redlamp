@@ -284,6 +284,34 @@ struct MaskRenderTests {
         #expect(same, "the guide's pixels differ")
     }
 
+    /// From process 14 every AI mask of an edit has its edges refined, however many it has; up to
+    /// 13, past 16 a photo the rest are drawn unrefined (PIPE-17). Sixteen or fewer are refined
+    /// alike at both.
+    @Test func `from process 14 every AI mask has its edges refined, past sixteen too`() throws {
+        let session = try makeSession(width: 320, height: 200) { x, _ in SIMD3(repeating: x < 160 ? 0.05 : 0.4) }
+        let components = try (0 ..< 17).map { try MaskInterleavingTests.bitmapComponent(seed: $0) }
+        let engine = try RedlampEngine()
+        func refined(_ count: Int, process: Int) throws -> [UUID: Int] {
+            var recipe = EditRecipe()
+            recipe.processVersion = process
+            recipe.masks = [MaskLayer(name: "Subjects", components: Array(components.prefix(count)))]
+            let commands = try #require(engine.queue.makeCommandBuffer())
+            let bindings = try engine.prepareMasks(recipe, session: session, retouched: session, commands: commands)
+            try engine.finish(commands)
+            return bindings.edgeSlices
+        }
+        let sixteen = try refined(16, process: 13)
+        #expect(sixteen.count == 16)
+        #expect(try refined(16, process: 14) == sixteen)
+        #expect(try refined(17, process: 13).count == 16)
+        let all = try refined(17, process: 14)
+        withKnownIssue("PIPE-17: past 16 slices a photo, AI masks aren't refined") {
+            #expect(all.count == 17)
+            #expect(Set(all.values).count == all.count)
+        }
+        #expect(try refined(17, process: 13).count == 16, "process 13 refines sixteen, as it did")
+    }
+
     /// The selection follows global edits: the guide is re-rendered when they change.
     @Test func `range masks follow the global edit`() throws {
         let session = try makeSession(width: 400, height: 200) { x, _ in SIMD3(repeating: x < 200 ? 0.03 : 0.5) }
