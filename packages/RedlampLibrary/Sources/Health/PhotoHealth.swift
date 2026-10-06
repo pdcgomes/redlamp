@@ -13,6 +13,17 @@ public struct PhotoHealth: Sendable, Hashable {
         case unrecognised
         /// It ends before its data does: by `missing` bytes, or by an amount its format doesn't say.
         case endsEarly(missing: Int64?)
+
+        /// Whether the reader was refused: permission denied, or an operation macOS doesn't permit
+        /// Redlamp. The file may well be whole, so nothing is proposed for it.
+        public var isForbidden: Bool {
+            guard case let .unreadable(reason) = self else { return false }
+            return Self.forbidden.contains(reason)
+        }
+
+        private static let forbidden: Set<String> = [
+            String(cString: strerror(EACCES)), String(cString: strerror(EPERM)),
+        ]
     }
 
     /// The file's size and modification date when it was read: the health stands for its photo while
@@ -104,6 +115,9 @@ extension PhotoHealth {
         }
         if let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError {
             return reason(for: underlying)
+        }
+        if error.domain == NSCocoaErrorDomain, error.code == CocoaError.fileReadNoPermission.rawValue {
+            return String(cString: strerror(EACCES))
         }
         return error.localizedDescription
     }

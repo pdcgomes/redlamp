@@ -3,7 +3,7 @@ import RedlampDocument
 
 extension HealthChecker {
     /// Photos whose health says they're damaged, and those marked unreadable without one, but not
-    /// those still being written.
+    /// those still being written. Those Redlamp may not read are listed with nothing proposed.
     func damaged(store: ColumnStore?) async throws -> HealthFindings {
         let definitions = definitions
         let settled = now().addingTimeInterval(-Self.settling)
@@ -38,7 +38,7 @@ extension HealthChecker {
                 continue
             }
             findings.append(HealthFinding(
-                photo: photo.id, check: .damaged, reason: .damage(damage), proposal: .trash,
+                photo: photo.id, check: .damaged, reason: .damage(damage), proposal: damage.isForbidden ? nil : .trash,
                 apart: Self.isDecided(photo) ? .decided : nil,
             ))
         }

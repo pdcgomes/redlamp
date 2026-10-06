@@ -121,6 +121,8 @@ extension LibraryCommand {
             line += "; \(apart): left out unless chosen"
         } else if let proposal = finding.proposal, proposal != .keep {
             line += "; \(proposal)"
+        } else if case let .damage(damage) = finding.reason, damage.isForbidden {
+            line += "; nothing proposed: Redlamp isn't allowed to read it, so it may be whole"
         }
         return line
     }

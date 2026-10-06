@@ -53,6 +53,39 @@ struct HealthIndexingTests {
         #expect(try await sandbox.health().isEmpty)
     }
 
+    @Test func `a file Redlamp may not read is listed with its reason and proposed for nothing`() async throws {
+        let sandbox = try await HealthSandbox.make([
+            "Shoot/A.jpg": HealthImages.data(.jpeg, seed: 1),
+            "Shoot/B.jpg": HealthImages.data(.jpeg, seed: 2),
+            "Shoot/C.jpg": HealthImages.data(.jpeg, seed: 3),
+            "Shoot/D.jpg": HealthImages.data(.jpeg, seed: 4),
+        ])
+        defer { sandbox.remove() }
+        let denied = FailingReadFileSystem(failing: [sandbox.url("Shoot/B.jpg")], error: .EACCES)
+        let refused = FailingReadFileSystem(denied, failing: [sandbox.url("Shoot/C.jpg")], error: .EPERM)
+        let failing = FailingReadFileSystem(refused, failing: [sandbox.url("Shoot/D.jpg")], error: .EIO)
+        let run = await sandbox.index(fileSystem: failing)
+        #expect(run.failures.isEmpty && run.summary?.photosUnreadable == 3)
+
+        let found = try await sandbox.library().findings(.damaged)
+        let paths = try await sandbox.paths(found.photos)
+            .map { String($0.split(separator: "/").suffix(2).joined(separator: "/")) }
+        let byPath = Dictionary(uniqueKeysWithValues: zip(paths, found.findings))
+        #expect(byPath["Shoot/B.jpg"]?.reason.description == "can't be read: Permission denied")
+        #expect(byPath["Shoot/C.jpg"]?.reason.description == "can't be read: Operation not permitted")
+        #expect(byPath["Shoot/B.jpg"]?.proposal == nil && byPath["Shoot/C.jpg"]?.proposal == nil)
+        #expect(byPath["Shoot/D.jpg"]?.proposal == .trash)
+        #expect(try await sandbox.paths(found.proposed).map { $0.hasSuffix("Shoot/D.jpg") } == [true])
+    }
+
+    @Test func `a read refused without an underlying error is taken for permission denied`() {
+        #expect(PhotoHealth.reason(for: CocoaError(.fileReadNoPermission)) == "Permission denied")
+        #expect(PhotoHealth.Damage.unreadable("Permission denied").isForbidden)
+        #expect(PhotoHealth.Damage.unreadable("Operation not permitted").isForbidden)
+        #expect(!PhotoHealth.Damage.unreadable("Input/output error").isForbidden && !PhotoHealth.Damage.empty
+            .isForbidden)
+    }
+
     @Test func `an empty file and a JPEG without its end marker are found`() async throws {
         let short = HealthImages.data(.jpeg, seed: 5)
         let long = HealthImages.longJPEG
