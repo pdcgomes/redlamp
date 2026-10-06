@@ -6,6 +6,9 @@ cd "$(git rev-parse --show-toplevel)"
 
 # DRY_RUN=1 builds, signs and zips without pushing a version bump, notarizing, tagging or
 # publishing. With it, REF builds another commit, such as unpushed changes to this script.
+# Without it, REF can name an earlier commit of main, to release it without what came after:
+# its version bump is tagged rather than pushed, and main is given the same version so the
+# next release moves on from it.
 DRY_RUN="${DRY_RUN:-0}"
 NOTARY_PROFILE="${REDLAMP_NOTARY_PROFILE:?REDLAMP_NOTARY_PROFILE is not set (run through mise)}"
 TEAM_ID="${REDLAMP_TEAM_ID:?REDLAMP_TEAM_ID is not set (run through mise)}"
@@ -26,6 +29,8 @@ released() {
 # in this checkout can end up in it.
 git fetch --quiet origin
 COMMIT="$(git rev-parse "${REF:-origin/main}^{commit}")"
+SOURCE="$COMMIT"
+MAIN="$(git rev-parse origin/main)"
 VERSION="$(git show "$COMMIT:Version.xcconfig" | sed -nE 's/^MARKETING_VERSION *= *([^ ]+).*/\1/p')"
 # A version that's been released moves on to its next patch, 0.2.0-prealpha to 0.2.1-prealpha,
 # committed to main before the build. Minor and major releases set MARKETING_VERSION by hand.
@@ -49,7 +54,8 @@ IDENTITY="${REDLAMP_SIGN_IDENTITY:-$(security find-identity -v -p codesigning \
 [ -n "$IDENTITY" ] || fail "no Developer ID Application identity for team $TEAM_ID in the keychain"
 
 if [ "$DRY_RUN" != 1 ]; then
-    [ "$COMMIT" = "$(git rev-parse origin/main)" ] || fail "a release builds origin/main; REF is only for dry runs"
+    git merge-base --is-ancestor "$COMMIT" "$MAIN" \
+        || fail "a release builds origin/main or an earlier commit of it; $(git rev-parse --short "$COMMIT") isn't on main"
     # Being only behind origin/main, as after a release pushed its version bump, is fine.
     git diff --quiet "$COMMIT" -- Version.xcconfig \
         || git diff --quiet "$(git merge-base HEAD "$COMMIT")" -- Version.xcconfig \
@@ -73,10 +79,22 @@ if [ "$BUMP" = 1 ]; then
         | sed -E "s/^(MARKETING_VERSION *= *)[^ ]+/\1$VERSION/" >"$SRC/Version.xcconfig"
     git -C "$SRC" commit --quiet -m "Version $VERSION" -- Version.xcconfig
     COMMIT="$(git -C "$SRC" rev-parse HEAD)"
-    if [ "$DRY_RUN" != 1 ]; then
+    if [ "$DRY_RUN" != 1 ] && [ "$SOURCE" = "$MAIN" ]; then
         echo "==> Pushing Version $VERSION to main..."
         git -C "$SRC" push --quiet origin HEAD:refs/heads/main \
             || fail "couldn't push Version $VERSION to main; if main moved on, run the release again"
+    elif [ "$DRY_RUN" != 1 ]; then
+        # The tag keeps the release's own bump; main takes the version on top of what it has.
+        BUMPED="$WORK/main"
+        git worktree add --quiet --detach "$BUMPED" "$MAIN"
+        sed -E "s/^(MARKETING_VERSION *= *)[^ ]+/\1$VERSION/" "$BUMPED/Version.xcconfig" >"$WORK/Version.xcconfig"
+        mv "$WORK/Version.xcconfig" "$BUMPED/Version.xcconfig"
+        if ! git -C "$BUMPED" diff --quiet -- Version.xcconfig; then
+            echo "==> Pushing Version $VERSION to main, which goes on past $(git rev-parse --short "$SOURCE")..."
+            git -C "$BUMPED" commit --quiet -m "Version $VERSION" -- Version.xcconfig
+            git -C "$BUMPED" push --quiet origin HEAD:refs/heads/main \
+                || fail "couldn't push Version $VERSION to main; if main moved on, run the release again"
+        fi
     fi
 fi
 BUILD="$(git rev-list --count "$COMMIT")"
@@ -136,7 +154,7 @@ E2E_TIER="${E2E_TIER:-release}"
 if [ -n "${SKIP_E2E:-}" ]; then
     echo "==> Regression suite skipped: $SKIP_E2E"
 else
-    if REPORT="$(scripts/e2e.py --passing-report "$COMMIT" "$(git -C "$SRC" rev-parse HEAD)" --tier "$E2E_TIER")"; then
+    if REPORT="$(scripts/e2e.py --passing-report "$COMMIT" "$SOURCE" --tier "$E2E_TIER")"; then
         echo "==> Regression suite: a passing $E2E_TIER run of this commit, $REPORT"
     else
         echo "==> Regression suite ($E2E_TIER) on a test build of $(git rev-parse --short "$COMMIT")..."
@@ -171,7 +189,11 @@ ditto -c -k --keepParent "$APP" "$ZIP"
 # GitHub's generated notes are only a changelog link, since nothing lands through pull requests.
 # The release's highlights, chosen in the release room, lead when docs/releases/<version>.md has them.
 NOTES="$OUT/notes.md"
-PREVIOUS="$(git describe --tags --abbrev=0 --match 'v*' "$COMMIT")"
+# A release made from an earlier commit isn't on main, so the previous release is the latest
+# tagged, and the changes are what no release has yet.
+git fetch --quiet --tags origin
+PREVIOUS="$(git for-each-ref --sort=-creatordate --format='%(refname:short)' 'refs/tags/v*' \
+    | awk -v tag="$TAG" '$0 != tag { print; exit }')"
 HIGHLIGHTS="docs/releases/$VERSION.md"
 {
     if git cat-file -e "$COMMIT:$HIGHLIGHTS" 2>/dev/null; then
@@ -180,8 +202,9 @@ HIGHLIGHTS="docs/releases/$VERSION.md"
     fi
     echo "Changes since ${PREVIOUS#v}:"
     echo
-    git log --no-merges --format='- %s' --invert-grep --grep='^Cask: ' --grep="^Version $VERSION\$" \
-        "$PREVIOUS..$COMMIT"
+    # shellcheck disable=SC2046
+    git log --no-merges --format='- %s' --invert-grep --grep='^Cask: ' --grep='^Version [0-9]' \
+        "$COMMIT" --not $(git for-each-ref --format='%(refname)' 'refs/tags/v*' | awk -v tag="refs/tags/$TAG" '$0 != tag')
 } >"$NOTES"
 "$SRC/scripts/appcast.sh" "$APP" "$ZIP" \
     "https://github.com/pdcgomes/redlamp/releases/download/$TAG/$(basename "$ZIP")" "$NOTES" >"$OUT/appcast.xml"
