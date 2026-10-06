@@ -198,6 +198,8 @@ public final class LibraryMetadata: Sendable {
                 case let .written(date):
                     written += 1
                     dates.append((result.photo, date))
+                case .kept:
+                    written += 1
                 case let .skipped(path, values, others):
                     skipped.append(path)
                     restored.append((result.photo, values, others))
@@ -224,8 +226,11 @@ public final class LibraryMetadata: Sendable {
 
     struct SidecarResult: Sendable {
         enum Outcome: Sendable {
-            /// Written, or already as the batch leaves it, and the sidecar's date.
+            /// Written, and the sidecar's date.
             case written(Date?)
+            /// Already as the batch leaves it, so nothing was written and the date the index has for it
+            /// stands.
+            case kept
             /// This build can't write it: the photo's path, and the fields the index shows then, with
             /// those of them that are other apps'.
             case skipped(String, MetadataValues, Set<XMPField>)
@@ -290,7 +295,7 @@ public final class LibraryMetadata: Sendable {
         switch result.outcome {
         case .kept:
             try log.written(place, before: before, after: after)
-            return .written(nil)
+            return .kept
         case .saved:
             try log.written(place, before: before, after: after)
             let date = try? LocalFileSystem().attributes(of: store.locator.readURL(for: result.image)).modified

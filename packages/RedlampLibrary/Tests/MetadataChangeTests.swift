@@ -158,6 +158,27 @@ struct MetadataChangeTests {
         #expect(try await sandbox.row("IMG_0001.ARW").caption == "Boats on the Douro.")
     }
 
+    @Test func `a sidecar a batch leaves as it is keeps the date the index has for it, so indexing again reads nothing`(
+    ) async throws {
+        let (sandbox, paths, ids) = try await Self.library()
+        defer { sandbox.remove() }
+        let metadata = LibraryMetadata(index: sandbox.index, paths: sandbox.paths)
+        try await metadata.apply(.set([.caption("Halfway")], on: Array(ids.prefix(2))))
+        // Put back by hand since, and indexed: the Undo leaves its sidecar as it is.
+        try sandbox.sidecar(paths[0], PhotoMetadata(rating: 2, caption: "Before 0"))
+        try await sandbox.indexAll()
+        let undone = try await metadata.undo()
+        #expect(undone.written == 2 && sandbox.sidecar(paths[1]) == nil)
+        #expect(sandbox.sidecar(paths[0])?.metadata == PhotoMetadata(rating: 2, caption: "Before 0"))
+
+        let files = CountingFileSystem()
+        let indexer = LibraryIndexer(index: sandbox.index, fileSystem: files, configuration: .testing())
+        let run = await IndexerRun.collect(indexer.index([sandbox.root]))
+        #expect(run.failures.isEmpty)
+        #expect(run.summary?.photosUpdated == 0 && run.summary?.headsRead == 0, "\(String(describing: run.summary))")
+        #expect(files.counts.reads.isEmpty, "\(files.counts.reads)")
+    }
+
     @Test func `a batch a forced quit stopped is finished or rolled back at the next launch`() async throws {
         let (sandbox, paths, ids) = try await Self.library()
         defer { sandbox.remove() }
