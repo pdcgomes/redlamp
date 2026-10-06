@@ -6,7 +6,8 @@
 
     /// The decode service's process, for the folders run's DATA-17 figures (`--folders-perf-decoder`):
     /// `start` launches it with a request for nothing, which it refuses without decoding, and
-    /// `footprint` reads what macOS charges it for, from this side.
+    /// `resident` reads its resident memory from this side. Its footprint can't be read: the
+    /// sandbox refuses `proc_pid_rusage` on it.
     final class DecoderProbe: @unchecked Sendable {
         private let connection = NSXPCConnection(serviceName: DecodeServiceClient.serviceName)
 
@@ -34,17 +35,13 @@
             }
         }
 
-        /// The service's footprint in bytes; nil when it isn't running.
-        func footprint() -> UInt64? {
+        /// The service's resident memory in bytes; nil when it isn't running.
+        func resident() -> UInt64? {
             let pid = connection.processIdentifier
             guard pid > 0 else { return nil }
-            var info = rusage_info_v4()
-            let read = withUnsafeMutablePointer(to: &info) { pointer in
-                pointer.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) {
-                    proc_pid_rusage(pid, RUSAGE_INFO_V4, $0)
-                }
-            }
-            return read == 0 ? info.ri_phys_footprint : nil
+            var info = proc_taskinfo()
+            let size = Int32(MemoryLayout<proc_taskinfo>.stride)
+            return proc_pidinfo(pid, PROC_PIDTASKINFO, 0, &info, size) == size ? info.pti_resident_size : nil
         }
     }
 #endif

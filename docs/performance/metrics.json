@@ -318,7 +318,7 @@
     {
       "id": "decoder-memory-launch",
       "label": "Decode service memory at launch",
-      "detail": "Its footprint once started, before any photo",
+      "detail": "Its resident memory once started, before any photo",
       "unit": "MB",
       "group": "Memory",
       "better": "lower",
@@ -329,7 +329,7 @@
     {
       "id": "decoder-memory-thumbs",
       "label": "Decode service memory after a folder's thumbnails",
-      "detail": "Its footprint once 3,000 thumbnails are warmed",
+      "detail": "Its resident memory once 3,000 thumbnails are warmed",
       "unit": "MB",
       "group": "Memory",
       "better": "lower",
@@ -340,7 +340,7 @@
     {
       "id": "decoder-memory-idle",
       "label": "Decode service memory after a minute idle",
-      "detail": "Its footprint a minute after browsing stops",
+      "detail": "Its resident memory a minute after browsing stops",
       "unit": "MB",
       "group": "Memory",
       "better": "lower",

@@ -19,7 +19,7 @@
     /// budget failed. `--folders-perf-memory` also breaks the footprint down at each phase (and near
     /// the peaks) into `PerformanceReport.memory`; the region walks take a core, so measure
     /// performance without it. `--folders-perf-decoder` starts the decode service at launch and
-    /// adds its footprint at launch, after the thumbnails and after `--folders-perf-decoder-idle`
+    /// adds its resident memory at launch, after the thumbnails and after `--folders-perf-decoder-idle`
     /// seconds idle (60), and the visible thumbnails' time with it running (DATA-17).
     /// `scripts/folders-perf.sh` runs it all as a gate.
     @MainActor
@@ -70,10 +70,10 @@
             let monitor = MainThreadMonitor()
             let sampler = arguments.contains("--folders-perf-profile") ? MainThreadSampler() : nil
             let decoder = arguments.contains("--folders-perf-decoder") ? DecoderProbe() : nil
-            var decoderFootprints: [(phase: String, bytes: UInt64?)] = []
+            var decoderMemory: [(phase: String, bytes: UInt64?)] = []
             if let decoder {
                 await decoder.start()
-                decoderFootprints.append(("launch", decoder.footprint()))
+                decoderMemory.append(("launch", decoder.resident()))
             }
             sampler?.start()
             memory.start()
@@ -109,7 +109,7 @@
             lines.append("Visible thumbnails (15, from the files): \(ms(measured.visible))")
             await memory.mark("visible")
             if let decoder {
-                decoderFootprints.append(("visible thumbnails", decoder.footprint()))
+                decoderMemory.append(("visible thumbnails", decoder.resident()))
             }
 
             let warmCount = arguments.firstIndex(of: "--folders-perf-warm")
@@ -133,7 +133,7 @@
             lines.append("  cores while warming: \(cores.report())")
             await memory.mark("warmed")
             if let decoder {
-                decoderFootprints.append(("thumbnails warmed", decoder.footprint()))
+                decoderMemory.append(("thumbnails warmed", decoder.resident()))
             }
 
             DebugPerformance.trace("folders-perf: reading the pack")
@@ -200,8 +200,8 @@
                     .flatMap { Int(arguments[$0 + 1]) } ?? 60
                 DebugPerformance.trace("folders-perf: decode service idle \(idle) s")
                 try? await Task.sleep(for: .seconds(idle))
-                decoderFootprints.append(("after \(idle) s idle", decoder.footprint()))
-                lines.append("Decode service, started at launch: " + decoderFootprints.map { phase, bytes in
+                decoderMemory.append(("after \(idle) s idle", decoder.resident()))
+                lines.append("Decode service resident memory, started at launch: " + decoderMemory.map { phase, bytes in
                     "\(phase) \(bytes.map { String(format: "%.1f MB", mb($0)) } ?? "not running")"
                 }.joined(separator: ", "))
                 metrics["folders-thumbs-decoder-running"] = metrics["folders-thumbs"]
@@ -210,7 +210,7 @@
                     ("decoder-memory-thumbs", 2),
                     ("decoder-memory-idle", 3),
                 ] {
-                    if let bytes = decoderFootprints[index].bytes {
+                    if let bytes = decoderMemory[index].bytes {
                         metrics[key] = mb(bytes)
                     }
                 }

@@ -135,17 +135,21 @@ note_load "done"
 echo "== load average after: $(sysctl -n vm.loadavg)"
 
 CHANGED="$(find "${INSTALLED[@]}" -newer "$WORK/started" 2>/dev/null || true)"
-if [[ -z "$CHANGED" ]]; then
-    echo "An installed Redlamp's preferences, Application Support and caches: unchanged." >"$WORK/reports/isolation.txt"
-else
-    {
-        echo "Changed during the run (by the kit, or by an installed Redlamp running meanwhile):"
+OTHERS="$(pgrep -fl "/Contents/MacOS/Redlamp" | grep -vF "$APP_NAME" || true)"
+{
+    if [[ -z "$CHANGED" ]]; then
+        echo "An installed Redlamp's preferences, Application Support and caches: unchanged."
+    else
+        echo "Changed during the run, $(wc -l <<<"$CHANGED" | tr -d ' ') files (the kit writes only in $WORK/home):"
         echo "$CHANGED"
-    } >"$WORK/reports/isolation.txt"
-fi
-cat "$WORK/reports/isolation.txt"
+    fi
+    [[ -z "$OTHERS" ]] || printf 'Other Redlamps running at the end:\n%s\n' "$OTHERS"
+} >"$WORK/reports/isolation.txt"
+head -3 "$WORK/reports/isolation.txt"
+# Preferences go to the real home whatever CFFIXED_USER_HOME says; they're under the kit's own ID.
 defaults delete "$BUNDLE_ID" >/dev/null 2>&1 || true
-rm -rf "$HOME/Library/Saved Application State/$BUNDLE_ID.savedState" "$HOME/Library/Caches/$BUNDLE_ID"
+rm -rf "$HOME/Library/Preferences/$BUNDLE_ID.plist" "$HOME/Library/Saved Application State/$BUNDLE_ID.savedState" \
+    "$HOME/Library/Caches/$BUNDLE_ID" "$HOME/Library/HTTPStorages/$BUNDLE_ID"
 
 CHIP="$(sysctl -n machdep.cpu.brand_string)"
 MODEL="$(sysctl -n hw.model)"
@@ -163,5 +167,5 @@ echo "== record: $(osascript -l JavaScript "$KIT/tools/record.js" "$WORK/reports
 NAME="redlamp-perf-$MODEL-$(tr -cs 'A-Za-z0-9' '-' <<<"${CHIP#Apple }" | sed 's/-$//')-$STAMP"
 echo "== results: $KIT/results/$NAME.zip"
 mv "$WORK/reports" "$WORK/$NAME"
-ditto -c -k --keepParent "$WORK/$NAME" "$KIT/results/$NAME.zip"
+ditto -c -k --norsrc --noextattr --noqtn --keepParent "$WORK/$NAME" "$KIT/results/$NAME.zip"
 echo "Done. Send back results/$NAME.zip (AirDrop it to the Mac it came from)."
