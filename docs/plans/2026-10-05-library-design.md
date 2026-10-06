@@ -197,6 +197,7 @@ Sorting is separate from the query: captured (the default), name, rating, edited
 - **Order:** the folders on screen first, then the newest folders by modification date, then the rest; the scheduler's on-screen, look-ahead and background lanes, background work paused in Low Power Mode and when the Mac is hot.
 - **Resumable:** a folder is done when its `indexed_signature` matches its listing's `signature`; a restart picks up the folders that don't match.
 - **Batched writes:** rows go to the writer in batches; the column store and open photo lists get diffs, never a reload.
+- **Not in iCloud Drive, for now.** The app doesn't index folders in iCloud Drive: reading each photo's first bytes would download it. They're listed from the disk as before.
 
 ## Change detection (LIB-08)
 
@@ -395,6 +396,21 @@ What it changed:
 - **Decoding as a thumbnail.** ImageIO decodes whole images (`CGImageSourceCreateImageAtIndex`) one at a time across the process, about 1,800 a second, which today's `ThumbnailPacks.decode` does; asking for a thumbnail no larger than the image decodes on every thread at once, so the grid (LIB-14) decodes as `StoreImageEncoder.decode` does.
 - **For the app:** 256 shard files open at once need a higher file-descriptor limit; the store is closed at quit so its index files are written; the thumbnail maker should take LibRaw's embedded previews, since ImageIO takes about 200 ms a raw to make one.
 
+### The library in the app (LIB-04, LIB-09 to LIB-11)
+
+`--library-perf`, Release, two runs, with the external SSD busy with the million-photo benchmarks (load average 70 to 110). The 20,000-photo fixture's setup stalled at about 3,900 photos while the disk was shared, so these are on its 2007 folder (1,398 photos); the full run waits for a quiet disk.
+
+| | Measured | Budget |
+| --- | --- | --- |
+| Warm launch: the library visible and searchable | 112 and 181 ms | under 1 s |
+| Every photo of the folder in the filmstrip | 13 and 29 ms | |
+| The visible thumbnails, from the store | 19 ms | |
+| Main thread while holding the arrow keys | p99 at most 6.2 ms | p99 under 8.3 ms |
+| Blank frames while holding the arrow keys | 52 and 62, nearly all at 120 Hz | none |
+| Memory while browsing | 19 and 49 MB | under 250 MB |
+
+The blank frames come from the editor rather than the library: when a photo is already decoded, opening it clears the canvas's thumbnail before its first frame exists (LIB-16). `--folders-perf` on the 20,000-photo fixture, under the same load, missed 3 of its 13 budgets before the change and 3, then 1, after, different ones each time, so that's load rather than the library.
+
 ### Exact duplicates (LIB-39)
 
 `DuplicateBenchTests` and the `duplicates` scenario, load average 25 to 70:
@@ -429,3 +445,4 @@ What it changed: the first version took 3.7 s for the million, keeping 13 to 16 
 - `.xmp` names for raw and JPEG pairs with the same base name.
 - The capture-time zone: EXIF's offset tags when present, else the Mac's zone at import, recorded per photo.
 - Whether the map (LIB-35) moves into 1.0.
+- Indexing folders in iCloud Drive without downloading every photo: from what's already downloaded, and the rest as it arrives.
