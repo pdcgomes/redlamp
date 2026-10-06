@@ -217,7 +217,7 @@ public extension EditorModel {
         case .toggleAutoSync: return true
         case .deselectOtherPhotos: return isMultiSelecting
         case .previousPhoto, .nextPhoto:
-            guard let selection, let index = library.index(of: selection) else { return false }
+            guard let from = opening ?? selection, let index = library.index(of: from) else { return false }
             return items.indices.contains(index + (action == .nextPhoto ? 1 : -1))
         // A burst of arrow presses in the palette is a step not yet recorded, and ⌘Z undoes it.
         case .undo: return canUndo || commandPalette?.hasOpenStep == true
@@ -248,7 +248,7 @@ public extension EditorModel {
         case .deleteMask: return (masking && selectedMaskID != nil) || (activeTool == .heal && selectedSpotID != nil)
         case .rating0, .rating1, .rating2, .rating3, .rating4, .rating5, .decreaseRating, .increaseRating,
              .flagPick, .flagReject, .unflag, .labelRed, .labelYellow, .labelGreen, .labelBlue:
-            return selection != nil
+            return (opening ?? selection) != nil
         default:
             return false
         }

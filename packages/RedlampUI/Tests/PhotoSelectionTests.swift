@@ -233,6 +233,40 @@ struct PhotoSelectionTests {
         try await opened(b, in: model)
     }
 
+    @Test func `while the next photo is read, Previous and Next are its neighbours'`() async throws {
+        let photos = try await openDecoded()
+        defer { photos.cleanup() }
+        let model = photos.model
+        #expect(!model.canPerform(.previousPhoto), "A is first")
+
+        try await startOpening(photos.b, in: photos)
+        #expect(model.canPerform(.previousPhoto) && model.canPerform(.nextPhoto), "B's are A and C")
+        try await startOpening(photos.c, in: photos)
+        #expect(model.canPerform(.previousPhoto) && !model.canPerform(.nextPhoto), "C is last")
+        photos.reads.release()
+        try await opened(photos.c, in: model)
+    }
+
+    @Test func `the first photo opened can be rated while its edit is read`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let a = folder.appending(path: "A.ARW")
+        let engine = StubEngine()
+        engine.ready = [a]
+        let reads = Gate()
+        let model = EditorModel(engine: engine)
+        model.openingPatience = .seconds(30)
+        model.beforeReadingSidecar = { _ in await reads.pass() }
+        model.library.insert(LibraryItem(url: a))
+
+        reads.hold()
+        model.select(a)
+        #expect(model.selection == nil && model.canPerform(.rating3))
+        reads.release()
+        try await opened(a, in: model)
+    }
+
     @Test func `rating and moving on while the next photo is read rates that photo`() async throws {
         let photos = try await openDecoded()
         defer { photos.cleanup() }
