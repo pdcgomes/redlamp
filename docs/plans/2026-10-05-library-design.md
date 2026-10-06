@@ -215,6 +215,8 @@ Sorting is separate from the query: captured (the default), name, rating, edited
 - **Budgets and location:** Settings shows the store's size and where it is; it can move to another disk; the grid tier is never evicted while its photo is indexed unless the user lowers the budget.
 - **Memory:** decoded thumbnails in an LRU (the filmstrip's 128 MB budget), from pack JPEGs held in ImageIO's purgeable memory, as today.
 
+As built (LIB-17): an edited photo the library shows is rendered with its edit by Redlamp's own engine, in an engine of the library's own, at the store's preview size, and both tiers are stored under its content key and its edit's digest; renders of an edit the photo no longer has leave both tiers unless another copy of the photo shows them. Until its render is in, its embedded preview shows, with ••• in place of the edited badge on grid and filmstrip cells and in the loupe's corner; when an edit changes, the embedded preview shows until the new edit is rendered, never the old edit's render. The photos on screen go first (the grid's, the filmstrip's and the active photo), then those within a screen of them, nearest first, then the rest of the source. A render goes from one step to the next (opening the photo, rendering it, storing its tiers) only while Develop has asked for no frame for a second and isn't opening a photo, no export runs and no dialog is open, no thumbnail on screen waits, and the Mac isn't hot or saving power. One renders at a time; the engine is let go once the photos it opened would take more than 256 MB of the GPU's memory, which is after each raw of about 24 MP or more, and after 10 s with nothing to render. An edit made by a newer Redlamp, or whose Base Look isn't on this Mac, isn't rendered. Develop's placeholder uses the render once it's stored. Not yet: after a relaunch, renders show only once each edited photo's sidecar has been read again.
+
 ## Photo lists and selections (LIB-10)
 
 - A `PhotoList` is a source's photo IDs in order, with diffs (inserted, removed, moved, updated) for the views; cells fetch their rows from the column store when they appear.
@@ -535,6 +537,19 @@ The blank frames come from the editor rather than the library: when a photo is a
 | Blank frames while holding the arrow keys | none, from 52 and 62 before | none |
 
 Hiding and showing the modules' views cost 12 to 15 ms a switch; changing only their opacity brought it under 4. Grid scrolling spent its main thread on NSCollectionView adding each reused cell's view again and on Core Animation converting each thumbnail's colours; cells as layers recycled by row, and thumbnails drawn off the main thread in the window's colour space, took p99 from 13.0 ms to 1.25 (LIB-14, at load average about 90). All 14 of `--library-perf`'s budgets passed twice; one run had a single 182 ms stall, probably load.
+
+### Thumbnails that show the edit (LIB-17)
+
+`--library-perf`, Release, on lib-20k's 2007 folder (111 edited photos, 22 of them raws of 12 to 26 MP), two runs at load average 45 to 55; all 15 of its budgets passed:
+
+| | Run 1 | Run 2 |
+| --- | --- | --- |
+| Renders a second, Develop idle and busy | 4.0 and 1.33 | 3.75 and 1.87 |
+| Grid scrolling while edits render, main thread | p99 0.90 ms | p99 0.93 ms |
+| Develop's renders, p50 and p95, with renders paused and running | 1.6 and 3.0 ms, then 1.6 and 3.5 ms | 1.6 and 3.2 ms, then 1.3 and 4.3 ms |
+| Peak memory above the phase before | 1.43 GB | 1.56 GB |
+
+Develop busy is frames at 60 Hz for one second in every three. A raw takes about 550 ms to open, 150 ms to render and 55 ms to store. The memory peak is mostly the render engine's session for a raw; letting the engine go freed 0.18 and 0.81 GB.
 
 ### Exact duplicates (LIB-39)
 
