@@ -225,9 +225,22 @@ struct LocalDetail: Hashable {
     var referenced: [MaskLayer] = []
     /// The edit guide's version, when a range component reads it.
     var guideGeneration = 0
+    /// From process 13, AI components' edges are refined to the photo's (`MaskEdges`).
+    var refinesEdges = false
 
     var readsEditGuide: Bool {
         (layers.flatMap(\.components) + referenced.flatMap(\.components)).contains { $0.shape.readsEditGuide }
+    }
+
+    /// Whether any component is an AI mask with its bitmap, which process 13 refines.
+    private var hasRefinableEdges: Bool {
+        (layers.flatMap(\.components) + referenced.flatMap(\.components)).contains {
+            if case let .ai(mask) = $0.shape {
+                mask.bitmap.png != nil
+            } else {
+                false
+            }
+        }
     }
 
     init(recipe: EditRecipe) {
@@ -247,6 +260,7 @@ struct LocalDetail: Hashable {
         }
         let ids = Set(layers.flatMap { MaskLayer(name: "", components: $0.components).referencedMasks })
         referenced = recipe.masks.filter { ids.contains($0.id) }
+        refinesEdges = recipe.processVersion >= 13 && hasRefinableEdges
     }
 
     var isEmpty: Bool {
@@ -273,6 +287,7 @@ struct LocalDetail: Hashable {
         if !noise.readsEditGuide {
             noise.guideGeneration = 0
         }
+        noise.refinesEdges = refinesEdges && noise.hasRefinableEdges
         return noise
     }
 }

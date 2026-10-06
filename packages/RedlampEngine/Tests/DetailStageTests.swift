@@ -531,9 +531,7 @@ struct DetailStageTests {
         let cold = try frame(RedlampEngine(), recipe)
         #expect(EngineMemoryTests.differing(twelve, cold) > 0, "process 13 refines the mask")
         let differing = EngineMemoryTests.differing(cached, cold)
-        withKnownIssue("PIPE-16: the stage serves process 12's detail at 13") {
-            #expect(differing == 0, "\(differing) texels differ from a cold render at 13")
-        }
+        #expect(differing == 0, "\(differing) texels differ from a cold render at 13")
     }
 
     /// With the noise-reduced source kept, tiles overlap by only what sharpening and local contrast
