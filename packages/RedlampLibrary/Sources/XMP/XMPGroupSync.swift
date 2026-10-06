@@ -251,12 +251,24 @@ extension XMPGroup {
             side.redlamp = record.redlampFields
             return side
         }
-        guard let summary = SidecarStore.summary(atSidecar: sidecar) else {
+        guard let metadata = Self.metadata(atEdit: edit) else {
             side.problem = "its .redlamp can't be read by this Redlamp: left as it is"
             return side
         }
-        side.redlamp = XMPFields(summary.metadata)
+        side.redlamp = XMPFields(metadata)
         return side
+    }
+
+    /// The metadata of the `.redlamp` whose edit is at `edit`, all a merge reads of it (`.some(nil)`
+    /// for none); nil when the edit can't be read. A sidecar this build can't save over is found
+    /// when its merge is written, and left as it is.
+    private static func metadata(atEdit edit: URL) -> PhotoMetadata?? {
+        struct Probe: Decodable {
+            var metadata: PhotoMetadata?
+        }
+        guard let data = try? Data(contentsOf: edit), let probe = try? JSONDecoder().decode(Probe.self, from: data)
+        else { return nil }
+        return .some(probe.metadata)
     }
 
     /// Whether nothing the member's merge reads has changed since its record, and its record owes the

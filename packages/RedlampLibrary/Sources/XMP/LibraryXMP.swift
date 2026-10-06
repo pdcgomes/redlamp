@@ -64,7 +64,7 @@ public struct LibraryXMP: Sendable {
             fields: XMPField.held, now: Date(), records: records,
         )
         let outcomes = try await LibraryIndex.offCaller {
-            let outcomes = Mutex<[XMPGroupOutcome]>([])
+            let groups = Mutex<[XMPGroup]>([])
             let fileSystem = LocalFileSystem()
             DispatchQueue.concurrentPerform(iterations: folders.count) { index in
                 let folder = folders[index]
@@ -72,9 +72,14 @@ public struct LibraryXMP: Sendable {
                     return
                 }
                 let rows = Dictionary(folder.rows.map { ($0.name, $0) }) { first, _ in first }
-                let synced = XMPGroup.groups(in: folder.path, entries: entries, rows: rows, selected: selected)
-                    .map { $0.sync(context) }
-                outcomes.withLock { $0 += synced }
+                let found = XMPGroup.groups(in: folder.path, entries: entries, rows: rows, selected: selected)
+                groups.withLock { $0 += found }
+            }
+            let all = groups.withLock { $0 }
+            let outcomes = Mutex<[XMPGroupOutcome]>([])
+            DispatchQueue.concurrentPerform(iterations: all.count) { index in
+                let outcome = all[index].sync(context)
+                outcomes.withLock { $0.append(outcome) }
             }
             return outcomes.withLock { $0 }
         }
