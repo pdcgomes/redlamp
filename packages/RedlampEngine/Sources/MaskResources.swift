@@ -533,8 +533,7 @@ final class MaskResources {
         commands: any MTLCommandBuffer,
         render: (EditRecipe, any MTLTexture) throws -> Void,
     ) throws -> any MTLTexture {
-        var global = recipe
-        global.masks = []
+        let global = Self.guideRecipe(for: recipe)
         if let editGuide, editGuide.recipe == global, editGuide.photo === photo {
             return editGuide.texture
         }
@@ -545,6 +544,23 @@ final class MaskResources {
         guideGenerations += 1
         editGuideGeneration = guideGenerations
         return texture
+    }
+
+    /// The global edit the edit guide develops. Masks read the guide at the photo point behind
+    /// each pixel, so from process 14 it covers the whole EXIF-oriented photo: no orientation,
+    /// crop, angle, Transform or distortion, while the profile's vignetting, a matter of tone, stays.
+    static func guideRecipe(for recipe: EditRecipe) -> EditRecipe {
+        var global = recipe
+        global.masks = []
+        guard recipe.processVersion >= 14 else { return global }
+        let unframed = EditRecipe()
+        global.orientation = .identity
+        global.crop = .full
+        for parameter in EditRecipe.geometryParameters where parameter != .lensProfile {
+            global[parameter] = unframed[parameter]
+        }
+        global[.lensProfileDistortion] = 0
+        return global
     }
 
     /// OKLab of the default develop (as-shot white balance, no edits), which never changes with

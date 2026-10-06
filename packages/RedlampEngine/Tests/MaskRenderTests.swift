@@ -125,6 +125,105 @@ struct MaskRenderTests {
         #expect(abs(ranged[orange].x - plain[orange].x) < 2e-3)
     }
 
+    /// Bright and dark stripes, turned, straightened and cropped: from process 14 a range over the
+    /// bright tones selects the bright stripes wherever the frame puts them (PIPE-12); before, the
+    /// guide was the developed frame, read as if it were the whole photo.
+    @Test func `from process 14 a range mask reads the photo behind each pixel of a reframed edit`() throws {
+        let session = try makeSession(width: 400, height: 240) { x, _ in SIMD3(repeating: x % 100 < 50 ? 0.5 : 0.03) }
+        var mask = MaskLayer(name: "Brights", components: [
+            MaskComponent(shape: .luminanceRange(LuminanceRangeMask(lower: 60, upper: 100, lowerFeather: 10))),
+        ])
+        mask[.localExposure] = -1.5
+        var plain = EditRecipe()
+        plain.orientation = ImageOrientation(quarterTurns: 1)
+        plain.crop = CropRect(left: 0.1, top: 0.15, right: 0.8, bottom: 0.7)
+        plain[.cropAngle] = 5
+        let engine = try RedlampEngine()
+        func misread(process: Int) throws -> (bright: Int, dark: Int, measured: Int) {
+            var unmasked = plain
+            unmasked.processVersion = process
+            var ranged = unmasked
+            ranged.masks = [mask]
+            let size = unmasked.developedSize(imageSize: session.orientedSize)
+            let map = GeometryMap(recipe: unmasked, imageSize: session.orientedSize, lens: nil)
+            let before = try render(unmasked, session: session, engine: engine)
+            let after = try render(ranged, session: session, engine: engine)
+            var counts = (bright: 0, dark: 0, measured: 0)
+            for y in 0 ..< size.height {
+                for x in 0 ..< size.width {
+                    let output = SIMD2((Double(x) + 0.5) / Double(size.width), (Double(y) + 0.5) / Double(size.height))
+                    guard let point = map.imagePoint(output) else { continue }
+                    let column = point.x * 400
+                    let stripe = column.truncatingRemainder(dividingBy: 100)
+                    guard column > 8, column < 392, point.y > 0.03, point.y < 0.97,
+                          abs(stripe - 50) > 8, stripe > 8, stripe < 92
+                    else { continue }
+                    let i = y * size.width + x
+                    counts.measured += 1
+                    if stripe < 50, after[i].y > before[i].y * 0.6 {
+                        counts.bright += 1
+                    }
+                    if stripe >= 50, abs(after[i].y - before[i].y) > 2e-3 {
+                        counts.dark += 1
+                    }
+                }
+            }
+            return counts
+        }
+        let current = try misread(process: 14)
+        #expect(current.measured > 5000)
+        #expect(
+            current.bright == 0 && current.dark == 0,
+            "bright stripes left out \(current.bright), dark ones taken \(current.dark)",
+        )
+        let shipped = try misread(process: 13)
+        #expect(shipped.bright + shipped.dark > shipped.measured / 10, "process 13 renders as it did")
+    }
+
+    /// The guide a reframed edit develops from process 14: its look, over the whole photo as the
+    /// camera oriented it, with nothing that moves pixels; up to 13 the edit as it is.
+    @Test func `from process 14 the edit guide keeps the look and drops the framing`() {
+        var recipe = EditRecipe()
+        recipe[.exposure] = 0.7
+        recipe[.lensVignetting] = 30
+        recipe[.lensProfileVignetting] = 60
+        recipe[.lensProfile] = 1
+        recipe.orientation = ImageOrientation(quarterTurns: 3, mirrored: true)
+        recipe.crop = CropRect(left: 0.2, top: 0.1, right: 0.9, bottom: 0.8)
+        recipe[.cropAngle] = -4
+        recipe[.lensDistortion] = 25
+        recipe[.lensProfileDistortion] = 140
+        for parameter in [ParameterID.transformVertical, .transformHorizontal, .transformRotate, .transformAspect] {
+            recipe[parameter] = 12
+        }
+        recipe[.transformScale] = 90
+        recipe[.transformOffsetX] = 5
+        recipe[.transformOffsetY] = -5
+        recipe.masks = [MaskLayer(name: "Lights", components: [
+            MaskComponent(shape: .luminanceRange(LuminanceRangeMask(lower: 60, upper: 100))),
+        ])]
+        let lens = LensCorrection(
+            source: .dng, center: SIMD2(0.5, 0.5), radii: [0, 1], distortion: [SIMD3(1, 1, 1), SIMD3(1.04, 1.05, 1.06)],
+            vignetting: [1, 1.8],
+        )
+        let size = PixelSize(width: 600, height: 400)
+
+        let guide = MaskResources.guideRecipe(for: recipe)
+        let map = GeometryMap(recipe: guide, imageSize: size, lens: lens)
+        #expect(guide.masks.isEmpty)
+        #expect(map.outputSize == size && map.toImage == matrix_identity_double3x3 && map.lensDistortion == 0)
+        #expect(map.lensProfile?.distortion.allSatisfy { $0 == SIMD3(1, 1, 1) } == true)
+        #expect(map.lensProfile?.vignetting == lens.scaled(distortion: 1, vignetting: 0.6).vignetting)
+        for parameter in [ParameterID.exposure, .lensVignetting, .lensProfile, .lensProfileVignetting] {
+            #expect(guide[parameter] == recipe[parameter], "\(parameter)")
+        }
+
+        recipe.processVersion = 13
+        var shipped = recipe
+        shipped.masks = []
+        #expect(MaskResources.guideRecipe(for: recipe) == shipped)
+    }
+
     /// The selection follows global edits: the guide is re-rendered when they change.
     @Test func `range masks follow the global edit`() throws {
         let session = try makeSession(width: 400, height: 200) { x, _ in SIMD3(repeating: x < 200 ? 0.03 : 0.5) }
@@ -701,13 +800,13 @@ struct MaskRenderTests {
         return (0 ..< texture.width * texture.height).map { Float(halves[$0]) }
     }
 
-    /// The whole photo at full size, as linear output.
+    /// The whole developed photo at full size, as linear output.
     private func render(
         _ recipe: EditRecipe, session: ImageSession, engine: RedlampEngine? = nil, overlay: UUID? = nil,
         style: MaskOverlayStyle = .colorOverlay, opacity: Double = MaskOverlayStyle.defaultOpacity,
     ) throws -> [SIMD3<Float>] {
         let engine = try engine ?? RedlampEngine()
-        let size = session.orientedSize
+        let size = recipe.developedSize(imageSize: session.orientedSize)
         var request = RenderRequest(recipe: recipe, targetSize: size, maskOverlay: overlay, generation: 0)
         request.maskOverlayStyle = style
         request.maskOverlayOpacity = opacity
