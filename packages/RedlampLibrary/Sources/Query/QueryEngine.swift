@@ -51,6 +51,8 @@ public final class QueryEngine: Sendable {
         var readingPostings: [PostingKind: Int] = [:]
         /// The columns counted for this store, by what they counted.
         var columnCounts: [ColumnKey: FacetColumnCounts] = [:]
+        /// What Library Health's checks found in this store (LIB-40).
+        var health: [HealthCheck: HealthFindings] = [:]
     }
 
     /// A column counted over a source's photos in a store.
@@ -159,6 +161,7 @@ public final class QueryEngine: Sendable {
                     state.rowSets.removeAll()
                     state.matches.removeAll()
                     state.columnCounts.removeAll()
+                    state.health.removeAll()
                 }
             }
             state.changing = task
@@ -324,6 +327,33 @@ public final class QueryEngine: Sendable {
         case let .keywords(keywords): try await source.photoIDs(withKeywords: keywords)
         case let .collections(collections): try await source.photoIDs(inCollections: collections)
         }
+    }
+
+    // MARK: - Library Health
+
+    /// What Library Health's `check` finds in the store as it is now (LIB-40), worked out once for
+    /// each version of the store, loading it first if it isn't. Off the caller's thread.
+    public func healthFindings(_ check: HealthCheck) async throws -> HealthFindings {
+        if await loadedSnapshot() == nil {
+            try await load()
+        }
+        guard let (store, _, generation) = snapshot() else { return HealthFindings(check: check) }
+        return try await healthFindings(check, in: store, generation: generation)
+    }
+
+    func healthFindings(_ check: HealthCheck, in store: ColumnStore, generation: Int) async throws -> HealthFindings {
+        if let kept = state.withLock({ $0.generation == generation ? $0.health[check] : nil }) {
+            return kept
+        }
+        let found = try await Task.detached(priority: .userInitiated) { [source] in
+            try await source.healthFindings(check, store: store)
+        }.value
+        state.withLock { state in
+            if state.generation == generation {
+                state.health[check] = found
+            }
+        }
+        return found
     }
 
     /// Replaces the facets in progress with `task`, cancelling them.

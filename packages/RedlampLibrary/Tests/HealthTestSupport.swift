@@ -140,6 +140,12 @@ final class HealthSandbox: @unchecked Sendable {
         )
     }
 
+    /// The file operations through the simulated volume, and Library Health over them; `live` keeps
+    /// lists.
+    func library(live: LibraryLive? = nil) -> LibraryHealth {
+        LibraryHealth(operations: FileOperations(index: index, paths: paths, fileSystem: volume, live: live))
+    }
+
     /// The index thrown away and made again from the photos and their sidecars.
     func rebuild() async throws {
         await index.close()

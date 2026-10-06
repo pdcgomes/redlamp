@@ -21,6 +21,8 @@ protocol QuerySource: Sendable {
     func photoStates() async throws -> [Int64: PhotoRecord.State]
     /// `store` with photos `ids` as the index has them now: changed, added or gone.
     func applying(_ ids: [Int64], to store: ColumnStore) async throws -> ColumnStore
+    /// What Library Health's `check` finds among `store`'s photos (LIB-40).
+    func healthFindings(_ check: HealthCheck, store: ColumnStore) async throws -> HealthFindings
     /// The IDs `sql` returns, handing the first `pageSize` to `firstPage` as soon as they're read.
     func run(
         _ sql: QuerySQL, pageSize: Int, cancellation: QueryCancellation,
@@ -43,6 +45,10 @@ extension QuerySource {
 
     func photoStates() async throws -> [Int64: PhotoRecord.State] {
         [:]
+    }
+
+    func healthFindings(_ check: HealthCheck, store _: ColumnStore) async throws -> HealthFindings {
+        HealthFindings(check: check)
     }
 }
 
@@ -354,6 +360,10 @@ struct IndexQuerySource: QuerySource {
             }
             return ids
         }
+    }
+
+    func healthFindings(_ check: HealthCheck, store: ColumnStore) async throws -> HealthFindings {
+        try await HealthChecker(index: index, paths: paths).findings(check, store: store)
     }
 }
 
