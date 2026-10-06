@@ -206,6 +206,15 @@ final class RetouchStage: @unchecked Sendable {
     private lazy var filler = ContentAwareFill(device: device, queue: queue, kernels: kernels)
     /// Fills computed so far (not found in the cache), for tests.
     private(set) var fillsComputed = 0
+    private var mapsMade: UInt64 = 0
+
+    /// Moves whenever a retouched photo's own maps are set, by a still or in the background:
+    /// interactive frames read them from then on.
+    var mapsGeneration: UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return mapsMade
+    }
 
     init(device: any MTLDevice, kernels: KernelLibrary, queue: any MTLCommandQueue) {
         self.device = device
@@ -231,6 +240,7 @@ final class RetouchStage: @unchecked Sendable {
             if maps == .fresh, entry.refreshed == nil {
                 try settle(&entry)
                 entry.refreshed = try withOwnMaps(original, pyramid: entry.retouched.pyramid)
+                mapsMade &+= 1
             }
             entries.append(entry)
             return pick(entry, maps, after: commands)
@@ -259,6 +269,7 @@ final class RetouchStage: @unchecked Sendable {
         )
         if maps == .fresh {
             entry.refreshed = try withOwnMaps(original, pyramid: texture)
+            mapsMade &+= 1
         }
         entries.append(entry)
         return pick(entry, maps, after: commands)
@@ -423,6 +434,7 @@ final class RetouchStage: @unchecked Sendable {
                         entries[index].refreshed = ImageSession(
                             retouching: original, pyramid: made.pyramid, maps: maps,
                         )
+                        mapsMade &+= 1
                     }
                     return true
                 }

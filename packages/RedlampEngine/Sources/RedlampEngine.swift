@@ -82,8 +82,6 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     private var comparison: CachedComparison?
     /// The last region frame's overview and histogram, sent again while only the region moves.
     private var lastOverview: CachedOverview?
-    /// Counts the retouched maps made again in the background, which the overview shows.
-    private let retouchRefreshes = Mutex<UInt64>(0)
     private let detailStage: DetailStage
     let retouch: RetouchStage
     let masks: MaskResources
@@ -149,7 +147,6 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             },
         )
         retouch.onRefresh = { [weak self] in
-            self?.retouchRefreshes.withLock { $0 &+= 1 }
             guard let latest = self?.renderState.withLock({ $0.latest }) else { return }
             self?.render(latest)
         }
@@ -277,7 +274,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
                     showClipping: request.showClipping, maskOverlay: request.maskOverlay,
                     maskOverlayColor: request.maskOverlayColor, maskOverlayStyle: request.maskOverlayStyle,
                     maskOverlayOpacity: request.maskOverlayOpacity,
-                    retouchRefreshes: retouchRefreshes.withLock { $0 },
+                    retouchMaps: retouch.mapsGeneration, looks: baseLooks.generation,
                 )
                 if let lastOverview, lastOverview.key == key {
                     reused = lastOverview
@@ -786,7 +783,8 @@ extension RedlampEngine {
         var maskOverlayColor: MaskOverlayColor
         var maskOverlayStyle: MaskOverlayStyle
         var maskOverlayOpacity: Double
-        var retouchRefreshes: UInt64
+        var retouchMaps: UInt64
+        var looks: UInt64
     }
 
     struct CachedOverview {
@@ -807,6 +805,7 @@ extension RedlampEngine {
         var size: PixelSize
         var region: ImageRect?
         var showClipping: Bool
+        var looks: UInt64
     }
 
     struct CachedComparison {
@@ -835,7 +834,7 @@ extension RedlampEngine {
         }
         let key = ComparisonKey(
             session: ObjectIdentifier(session), recipe: recipe, size: size, region: request.region,
-            showClipping: request.showClipping,
+            showClipping: request.showClipping, looks: baseLooks.generation,
         )
         if let comparison, comparison.key == key {
             return comparison

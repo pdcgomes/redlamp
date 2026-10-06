@@ -32,8 +32,16 @@ final class BaseLookRegistry: @unchecked Sendable {
     private var textures: [String: any MTLTexture] = [:]
     /// Least recently used first.
     private var textureOrder: [String] = []
+    private var registrations: UInt64 = 0
     /// Bound when an edit has no table, because Metal needs a texture in every slot.
     let identity: any MTLTexture
+
+    /// Moves on every registration, so renders kept for reuse can tell a look may have changed.
+    var generation: UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return registrations
+    }
 
     init(device: any MTLDevice) throws {
         self.device = device
@@ -47,6 +55,7 @@ final class BaseLookRegistry: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         definitions[Key(id: look.id, version: look.version)] = look
+        registrations &+= 1
         if let table = look.table {
             _ = texture(for: table)
         }
