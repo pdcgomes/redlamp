@@ -305,6 +305,50 @@
       }
     },
     {
+      "id": "folders-thumbs-decoder-running",
+      "label": "Visible thumbnails with the decode service running",
+      "detail": "The first screenful, with the decode service started at launch",
+      "unit": "ms",
+      "group": "Folders",
+      "better": "lower",
+      "measuredBy": [
+        "folders"
+      ]
+    },
+    {
+      "id": "decoder-memory-launch",
+      "label": "Decode service memory at launch",
+      "detail": "Its footprint once started, before any photo",
+      "unit": "MB",
+      "group": "Memory",
+      "better": "lower",
+      "measuredBy": [
+        "folders"
+      ]
+    },
+    {
+      "id": "decoder-memory-thumbs",
+      "label": "Decode service memory after a folder's thumbnails",
+      "detail": "Its footprint once 3,000 thumbnails are warmed",
+      "unit": "MB",
+      "group": "Memory",
+      "better": "lower",
+      "measuredBy": [
+        "folders"
+      ]
+    },
+    {
+      "id": "decoder-memory-idle",
+      "label": "Decode service memory after a minute idle",
+      "detail": "Its footprint a minute after browsing stops",
+      "unit": "MB",
+      "group": "Memory",
+      "better": "lower",
+      "measuredBy": [
+        "folders"
+      ]
+    },
+    {
       "id": "folders-warm",
       "label": "Thumbnails warmed from the raw files",
       "detail": "In the background, while you're not waiting",

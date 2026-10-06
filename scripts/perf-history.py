@@ -9,6 +9,7 @@ slowest and fastest file and the runs' spread.
 
     scripts/perf-history.py append --bench b.json --sweep s.json --folders f.json --load-before 3.1 --load-after 3.4
     scripts/perf-history.py report     # what changed in the latest run of each metric
+    scripts/perf-history.py import record.json --commit abc1234 [--apply]   # a kit's record (perf-kit.sh)
 
 A metric got faster or slower when it moved by more than 10%, or by more than its runs' own spread
 if that's larger, against the previous record from the same source on the same machine. Noisy
@@ -129,9 +130,54 @@ def append(options, metrics):
           f"{', noisy: load ' + format(max(options.load_before, options.load_after), '.1f') if record['noisy'] else ''}.")
 
 
+def import_record(options, metrics):
+    """A record made elsewhere (scripts/perf-kit.sh's run.sh): checked, compared, appended with --apply."""
+    record = json.loads(pathlib.Path(options.record).read_text())
+    if options.commit and record.get("commit") != options.commit:
+        sys.exit(f"the record names commit {record.get('commit')}, not the kit's {options.commit}")
+    if subprocess.run(["git", "cat-file", "-e", f"{record.get('commit')}^{{commit}}"], cwd=ROOT,
+                      capture_output=True).returncode != 0:
+        sys.exit(f"commit {record.get('commit')} isn't in this repository")
+    unknown = sorted(set(record["metrics"]) - set(metrics))
+    if unknown:
+        sys.exit(f"metrics missing from docs/performance/metrics.json: {', '.join(unknown)}")
+    machine = record["machine"]
+    load = record["load"]
+    print(f"{record['date']} at {record['commit']}: {machine['chip']}, {machine['memoryGB']} GB, macOS {machine['macOS']}; "
+          f"load {load['before']} before, {load['after']} after{' (noisy)' if record.get('noisy') else ''}")
+    history = records()
+    earlier = [other for other in history
+               if other["source"] == record["source"] and other["machine"].get("chip") == machine["chip"]]
+    if not earlier:
+        print(f"The first record from {machine['chip']}:")
+    else:
+        print(f"Against {earlier[-1]['date']} at {earlier[-1]['commit']}{' (noisy)' if earlier[-1].get('noisy') else ''}:")
+    for metric_id, entry in record["metrics"].items():
+        metric = metrics[metric_id]
+        old = earlier[-1]["metrics"].get(metric_id) if earlier else None
+        if not old:
+            print(f"  {metric['label']}: {entry['value']:.4g} {metric['unit']}")
+            continue
+        found = change(metric, old, entry)
+        noisy = record.get("noisy") or earlier[-1].get("noisy")
+        verdict = "noisy" if noisy and found else (found[0] if found else "same")
+        ratio = (entry["value"] - old["value"]) / old["value"] if old["value"] else 0
+        print(f"  {verdict:6s} {metric['label']}: {old['value']:.4g} → {entry['value']:.4g} {metric['unit']} ({ratio:+.0%})")
+    if options.apply:
+        with HISTORY.open("a") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+        print(f"Appended to {HISTORY.relative_to(ROOT)}.")
+    else:
+        print("Dry run: --apply appends it.")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     commands = parser.add_subparsers(dest="command", required=True)
+    imported = commands.add_parser("import", help="check and compare a record made elsewhere; --apply appends it")
+    imported.add_argument("record")
+    imported.add_argument("--commit", help="the commit the record must name")
+    imported.add_argument("--apply", action="store_true")
     add = commands.add_parser("append", help="append one run")
     add.add_argument("--bench")
     add.add_argument("--sweep")
@@ -144,6 +190,8 @@ def main():
     options = parser.parse_args()
 
     metrics = registry()
+    if options.command == "import":
+        return import_record(options, metrics)
     if options.command == "append":
         append(options, metrics)
     lines = report(records(), metrics)

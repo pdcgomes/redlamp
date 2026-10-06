@@ -18,7 +18,10 @@
     /// with each budget's PASS or FAIL; with `--folders-perf-quit` it then quits, with status 1 if a
     /// budget failed. `--folders-perf-memory` also breaks the footprint down at each phase (and near
     /// the peaks) into `PerformanceReport.memory`; the region walks take a core, so measure
-    /// performance without it. `scripts/folders-perf.sh` runs it all as a gate.
+    /// performance without it. `--folders-perf-decoder` starts the decode service at launch and
+    /// adds its footprint at launch, after the thumbnails and after `--folders-perf-decoder-idle`
+    /// seconds idle (60), and the visible thumbnails' time with it running (DATA-17).
+    /// `scripts/folders-perf.sh` runs it all as a gate.
     @MainActor
     enum DebugFoldersPerformance {
         /// What the budgets are checked against.
@@ -66,6 +69,12 @@
             }
             let monitor = MainThreadMonitor()
             let sampler = arguments.contains("--folders-perf-profile") ? MainThreadSampler() : nil
+            let decoder = arguments.contains("--folders-perf-decoder") ? DecoderProbe() : nil
+            var decoderFootprints: [(phase: String, bytes: UInt64?)] = []
+            if let decoder {
+                await decoder.start()
+                decoderFootprints.append(("launch", decoder.footprint()))
+            }
             sampler?.start()
             memory.start()
             await memory.mark("launch")
@@ -99,6 +108,9 @@
             measured.visible = ContinuousClock.now - thumbnailsStarted
             lines.append("Visible thumbnails (15, from the files): \(ms(measured.visible))")
             await memory.mark("visible")
+            if let decoder {
+                decoderFootprints.append(("visible thumbnails", decoder.footprint()))
+            }
 
             let warmCount = arguments.firstIndex(of: "--folders-perf-warm")
                 .flatMap { Int(arguments[$0 + 1]) } ?? 3000
@@ -120,6 +132,9 @@
             loader.stopWarming()
             lines.append("  cores while warming: \(cores.report())")
             await memory.mark("warmed")
+            if let decoder {
+                decoderFootprints.append(("thumbnails warmed", decoder.footprint()))
+            }
 
             DebugPerformance.trace("folders-perf: reading the pack")
             loader.removeAll()
@@ -170,7 +185,7 @@
                 format: "Peak footprint: %.0f MB; thumbnails in memory %d MB once settled",
                 mb(memory.peak), thumbnailsHeld >> 20,
             ))
-            DebugPerformance.writeMetrics([
+            var metrics = [
                 "folders-first": seconds(measured.firstItems) * 1000,
                 "folders-list": seconds(measured.listed) * 1000,
                 "folders-thumbs": seconds(measured.visible) * 1000,
@@ -179,7 +194,28 @@
                 "folders-main-listing": measured.busy?.p99 ?? .infinity,
                 "folders-main-scroll": measured.scrolling?.p99 ?? .infinity,
                 "folders-peak-memory": mb(memory.peak),
-            ])
+            ]
+            if let decoder {
+                let idle = arguments.firstIndex(of: "--folders-perf-decoder-idle")
+                    .flatMap { Int(arguments[$0 + 1]) } ?? 60
+                DebugPerformance.trace("folders-perf: decode service idle \(idle) s")
+                try? await Task.sleep(for: .seconds(idle))
+                decoderFootprints.append(("after \(idle) s idle", decoder.footprint()))
+                lines.append("Decode service, started at launch: " + decoderFootprints.map { phase, bytes in
+                    "\(phase) \(bytes.map { String(format: "%.1f MB", mb($0)) } ?? "not running")"
+                }.joined(separator: ", "))
+                metrics["folders-thumbs-decoder-running"] = metrics["folders-thumbs"]
+                for (key, index) in [
+                    ("decoder-memory-launch", 0),
+                    ("decoder-memory-thumbs", 2),
+                    ("decoder-memory-idle", 3),
+                ] {
+                    if let bytes = decoderFootprints[index].bytes {
+                        metrics[key] = mb(bytes)
+                    }
+                }
+            }
+            DebugPerformance.writeMetrics(metrics)
             let budgets = budgets(measured, memory: memory, thumbnailBudget: loader.budget)
             finish(
                 lines,
