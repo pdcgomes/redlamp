@@ -9,12 +9,13 @@
     @_spi(Harness) import RedlampUI
 
     /// `--library-perf <fixture> [--library-perf-library <folder>] [--library-perf-memory]
-    /// [--library-perf-quit]`: the library in the
+    /// [--library-perf-profile] [--library-perf-quit]`: the library in the
     /// app (docs/plans/2026-10-05-library-design.md, The stress harness), on a fixture made by
     /// `redlamp library fixture`. It indexes the fixture into a temporary library, its thumbnails
     /// included, and closes it as quitting does; then it checks a warm launch (the library open,
     /// searchable and caught up with the disk), opening the fixture with Show Photos in Subfolders in
-    /// the filmstrip, its visible thumbnails, scrolling it and the Library grid end to end, held arrow
+    /// the filmstrip, its visible thumbnails, scrolling it and the Library grid end to end (with compact
+    /// cells at the standard size, expanded cells, and the largest thumbnails), held arrow
     /// keys through it at the key-repeat rate and at 120 Hz (the main thread, and blank frames: the
     /// canvas, or a cell near the active photo, without its thumbnail a frame after each step), and 200
     /// switches between Library and Develop in the editor's own views with a photo open (the main
@@ -28,7 +29,8 @@
     /// Writes /tmp/redlamp-perf.txt, ending with each budget's PASS or FAIL, and the metrics to
     /// /tmp/redlamp-perf.json, as `--folders-perf` does; with `--library-perf-quit` it then quits,
     /// with status 1 if a budget failed. `--library-perf-memory` also breaks the footprint down at
-    /// each phase into /tmp/redlamp-memory.txt.
+    /// each phase into /tmp/redlamp-memory.txt, and `--library-perf-profile` samples the main thread
+    /// while the grid scrolls into /tmp/redlamp-profile.txt.
     @MainActor
     enum DebugLibraryPerformance {
         private struct Measured {
@@ -43,6 +45,8 @@
             var opening: MainThreadMonitor.Summary?
             var scrolling: MainThreadMonitor.Summary?
             var gridScrolling: MainThreadMonitor.Summary?
+            /// The grid scrolled again with other cells: expanded, and the largest.
+            var gridPhases: [(label: String, summary: MainThreadMonitor.Summary?)] = []
             var arrows: [(label: String, summary: MainThreadMonitor.Summary?, steps: Int, blank: Int)] = []
             var switches: [Double] = []
             var switchReads: UInt64 = 0
@@ -172,6 +176,15 @@
             measured.gridScrolling = gridScrolling
             lines.append(gridReport)
             await memory.mark("grid scrolled")
+            for (label, size, style) in [
+                ("expanded cells", GridSize.standard, GridCellStyle.expanded),
+                ("the largest thumbnails, from the preview tier", GridSize.range.upperBound, .compact),
+            ] {
+                let (summary, report) = await scrollGrid(model, size: size, style: style, label: label)
+                measured.gridPhases.append((label, summary))
+                lines.append(report)
+            }
+            await memory.mark("grid phases")
 
             for (label, interval) in [("at the key-repeat rate (30 ms)", 0.030), ("at 120 Hz", 1.0 / 120)] {
                 let held = await holdArrow(model, loader: loader, interval: interval, steps: 300)
@@ -215,7 +228,7 @@
                 "library-switch-reads": Double(measured.switchReads),
                 "library-peak-memory": browsing,
             ])
-            let budgets = budgets(measured, arrows: arrows, blank: blank, browsing: browsing)
+            let budgets: [Budget] = budgets(measured, arrows: arrows, blank: blank, browsing: browsing)
             finish(
                 lines,
                 budgets: budgets,
@@ -320,9 +333,19 @@
             }
         }
 
-        /// Scrolls an offscreen Library grid end to end in 4 s, at 120 Hz, watching the main thread.
-        private static func scrollGrid(_ model: EditorModel) async -> (MainThreadMonitor.Summary?, String) {
-            DebugPerformance.trace("library-perf: scrolling the grid")
+        /// Scrolls an offscreen Library grid end to end in 4 s, at 120 Hz, watching the main thread: at the
+        /// thumbnail size and cell style given, and back to the standard ones after.
+        private static func scrollGrid(
+            _ model: EditorModel, size: Double = GridSize.standard, style: GridCellStyle = .compact,
+            label: String? = nil,
+        ) async -> (MainThreadMonitor.Summary?, String) {
+            DebugPerformance.trace("library-perf: scrolling the grid\(label.map { ", \($0)" } ?? "")")
+            model.setThumbnailSize(size)
+            model.setCellStyle(style)
+            defer {
+                model.setThumbnailSize(GridSize.standard)
+                model.setCellStyle(.compact)
+            }
             let window = NSWindow(
                 contentRect: CGRect(x: 0, y: 0, width: 1100, height: 800), styleMask: [.borderless],
                 backing: .buffered, defer: false,
@@ -333,7 +356,9 @@
             defer { window.orderOut(nil) }
             try? await Task.sleep(for: .milliseconds(300))
             let monitor = MainThreadMonitor()
+            let sampler = LaunchArguments.all.contains("--library-perf-profile") ? MainThreadSampler() : nil
             monitor.start()
+            sampler?.start()
             let duration = 4.0
             let started = CFAbsoluteTimeGetCurrent()
             while CFAbsoluteTimeGetCurrent() - started < duration {
@@ -341,10 +366,13 @@
                 try? await Task.sleep(for: .microseconds(8333))
             }
             monitor.stop()
-            return (
-                monitor.summary(seconds: duration),
-                monitor.report("Main thread scrolling the grid end to end", seconds: duration),
-            )
+            sampler?.stop()
+            if let sampler {
+                try? await Task.sleep(for: .milliseconds(20))
+                try? sampler.report().write(toFile: "/tmp/redlamp-profile.txt", atomically: true, encoding: .utf8)
+            }
+            let title = "Main thread scrolling the grid end to end\(label.map { ", \($0)" } ?? "")"
+            return (monitor.summary(seconds: duration), monitor.report(title, seconds: duration))
         }
 
         /// Switches between Library and Develop `count` times in the editor window's own views, with a
@@ -430,14 +458,22 @@
         /// browsed, before photos were opened in the editor.
         private static func browsingPeak(_ memory: MemoryPhases) -> Double {
             let base = mb(memory.baseline)
-            let browsing: Set = ["launched", "opened", "visible", "scrolled", "grid scrolled"]
+            let browsing: Set = ["launched", "opened", "visible", "scrolled", "grid scrolled", "grid phases"]
             return memory.phases.filter { browsing.contains($0.label) }.map { mb($0.peak) - base }.max() ?? .infinity
         }
 
         private static func budgets(
-            _ measured: Measured, arrows: Double, blank: Int, browsing: Double,
+            _ measured: Measured, arrows: Double, blank: Int, browsing footprint: Double,
         ) -> [Budget] {
-            [
+            let grid = measured.gridPhases.map { phase -> Budget in
+                .below(
+                    "Main thread p99 scrolling the grid, \(phase.label)",
+                    phase.summary?.p99 ?? .infinity,
+                    8.3,
+                    unit: "ms",
+                )
+            }
+            let browsing: [Budget] = [
                 .below("Warm launch: open, searchable, caught up", seconds(measured.launch) * 1000, 1000, unit: "ms"),
                 .atLeast("Opened from the library (1 yes, 0 listed)", measured.fromLibrary ? 1 : 0, 1, unit: ""),
                 .below(
@@ -452,12 +488,15 @@
                 .below(
                     "Main thread p99 scrolling the grid", measured.gridScrolling?.p99 ?? .infinity, 8.3, unit: "ms",
                 ),
+            ]
+            let rest: [Budget] = [
                 .below("Main thread p99 holding the arrow keys", arrows, 8.3, unit: "ms"),
                 .below("Blank frames holding the arrow keys", Double(blank), 1, unit: ""),
                 .below("Main thread p99 switching modules", percentile(measured.switches, 0.99), 8, unit: "ms"),
                 .below("Disk reads switching modules", Double(measured.switchReads), 1, unit: "bytes"),
-                .below("Peak footprint over launch, browsing", browsing, 250, unit: "MB"),
+                .below("Peak footprint over launch, browsing", footprint, 250, unit: "MB"),
             ]
+            return browsing + grid + rest
         }
 
         private static func finish(_ lines: [String], budgets: [Budget], memory: MemoryPhases, title: String) {
