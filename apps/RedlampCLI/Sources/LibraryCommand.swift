@@ -41,6 +41,9 @@ enum LibraryCommand {
            redlamp library metadata --index <path> [<query>] [--limit <n>] [--json]
            redlamp library metadata set --index <path> <query> [--rating <n>] [--flag <flag>] [--label <name>]
                                     [--mark | --unmark] [--<field> <text>]… [--codes <file>] [--dry-run] [--json]
+           redlamp library metadata shift --index <path> <query> --by <amount> | --to <date time> [--photo <name>]
+                                    [--dry-run] [--json]
+           redlamp library metadata zone --index <path> <query> --offset <±hh:mm> | --file [--dry-run] [--json]
            redlamp library metadata preset <name> --index <path> <query> [--codes <file>] [--dry-run] [--json]
            redlamp library metadata presets [save <name> [--<field> <text>]… [--append|--prefix <field>]…
                                     | remove <name>] --index <path> [--json]
@@ -130,8 +133,10 @@ enum LibraryCommand {
                --caption, --creator, --copyright, --sublocation, --city, --state, --country,
                --country-code; an empty text clears one), \\code\\ expanded from a tab-separated --codes
                file; preset applies a preset's fields, each replacing, appending or prefixing; presets lists,
-               saves and removes them. Each change rewrites the photos' .redlamp sidecars as one journaled
-               batch, which undo takes back, with collections' and stacks' changes.
+               saves and removes them; shift moves capture times by an amount, or sets one photo's and moves
+               the rest as much, and zone gives the camera's clock its zone, the photos' files never touched.
+               Each change rewrites the photos' .redlamp sidecars as one journaled batch, which undo takes
+               back, with collections' and stacks' changes.
       collections prints the collection list, makes collections, sets and smart collections, renames,
                moves and deletes them with their photos' sidecars rewritten, puts the photos <query> finds
                in a collection or takes them out, and sets the target collection; --dry-run shows a plan.
