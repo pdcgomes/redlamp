@@ -54,6 +54,8 @@ extension EditRenders {
         if !engine.canRender(recipe.baseLook), let look = editor?.recipes.library.definition(for: recipe.baseLook) {
             engine.registerBaseLook(look)
         }
+        // Without its look the engine renders the edit without it, which would be kept under its digest.
+        guard engine.canRender(recipe.baseLook) else { return failed(url, digest) }
         var request = StillRequest(
             recipe: EditorModel.asShot(recipe, info), maxLongEdge: PhotoStore.Tier.preview.pixelSize,
             colorSpace: .displayP3, purpose: .preview,

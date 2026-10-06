@@ -416,10 +416,12 @@ public final class EditRenders {
         let isStored: Bool
     }
 
+    /// An edit made by a newer Redlamp isn't rendered: a render made here would be kept under its
+    /// digest after an update that renders it as it was made.
     nonisolated static func read(_ photo: ReadPhoto, sidecars: SidecarPlacement) -> ReadEdit {
         let url = photo.item.url
         guard let recipe = recipe(of: url, in: sidecars.store(for: url)), !recipe.isPristine,
-              let digest = EditDigest(rendering: recipe)
+              !recipe.requiresNewerProcess, let digest = EditDigest(rendering: recipe)
         else { return ReadEdit(digest: nil, isStored: false) }
         let stored = PhotoStore.Tier.allCases.allSatisfy { tier in
             photo.store.contains(
