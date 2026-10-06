@@ -51,11 +51,15 @@ public enum LatticeFit {
             for (s, sample) in samples.enumerated() {
                 var value = SIMD3<Float>.zero
                 for k in 0 ..< 4 {
-                    value += weights[s * 4 + k] * r[Int(indices[s * 4 + k])]
+                    let weight: Float = weights[s * 4 + k]
+                    let node = Int(indices[s * 4 + k])
+                    value += weight * r[node]
                 }
                 value *= sample.weight
                 for k in 0 ..< 4 {
-                    out[Int(indices[s * 4 + k])] += weights[s * 4 + k] * value
+                    let weight: Float = weights[s * 4 + k]
+                    let node = Int(indices[s * 4 + k])
+                    out[node] += weight * value
                 }
             }
             for axisStride in [1, n, n * n] {

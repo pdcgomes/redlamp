@@ -229,7 +229,9 @@ public extension ParameterID {
 }
 
 public enum ParameterCatalog {
-    public static let all: [ParameterSpec] = [
+    public static let all: [ParameterSpec] = basic + colorBands + gradingRanges + others
+
+    private static let basic: [ParameterSpec] = [
         ParameterSpec(
             .temperature, "Temp", range: 2000 ... 50000, default: 5500, step: 50,
             format: .kelvin, track: .temperature, scale: .mired,
@@ -265,200 +267,201 @@ public enum ParameterCatalog {
         ParameterSpec(.curveSplitMidtones, "Midtones split", range: 30 ... 70, default: 50, format: .integer),
         ParameterSpec(.curveSplitHighlights, "Highlights split", range: 60 ... 90, default: 75, format: .integer),
     ]
-        + ColorBand.allCases.flatMap { band in
-            [
-                ParameterSpec(band.hueParameter, band.name, track: .hue(band)),
-                ParameterSpec(band.saturationParameter, band.name, track: .saturation(band)),
-                ParameterSpec(band.luminanceParameter, band.name, track: .luminance(band)),
-            ]
-        }
 
-        + GradingRange.allCases.flatMap { range in
-            [
-                ParameterSpec(
-                    range.hueParameter, "Hue", range: 0 ... 360, format: .integer, track: .gradingHue,
-                ),
-                ParameterSpec(range.saturationParameter, "Saturation", range: 0 ... 100, format: .integer),
-                ParameterSpec(range.luminanceParameter, "Luminance", track: .monochrome),
-            ]
-        }
-
-        + [
-            ParameterSpec(.gradeBlending, "Blending", range: 0 ... 100, default: 50, format: .integer),
-            ParameterSpec(.gradeBalance, "Balance"),
-
-            ParameterSpec(
-                .sharpenAmount, "Amount", range: 0 ... 150, default: 40, format: .integer,
-            ),
-            ParameterSpec(
-                .sharpenRadius, "Radius", range: 0.5 ... 3, default: 1, step: 0.1, format: .decimal(1),
-            ),
-            ParameterSpec(
-                .sharpenDetail, "Detail", range: 0 ... 100, default: 25, format: .integer,
-            ),
-            ParameterSpec(.sharpenMasking, "Masking", range: 0 ... 100, format: .integer),
-            ParameterSpec(.noiseLuminance, "Luminance", range: 0 ... 100, format: .integer),
-            ParameterSpec(
-                .noiseLuminanceDetail, "Detail", range: 0 ... 100, default: 50, format: .integer,
-            ),
-            ParameterSpec(
-                .noiseLuminanceContrast, "Contrast", range: 0 ... 100, format: .integer,
-            ),
-            ParameterSpec(
-                .noiseColor, "Color", range: 0 ... 100, default: 25, format: .integer,
-            ),
-            ParameterSpec(
-                .noiseColorDetail, "Detail", range: 0 ... 100, default: 50, format: .integer,
-            ),
-            ParameterSpec(
-                .noiseColorSmoothness, "Smoothness", range: 0 ... 100, default: 50, format: .integer,
-            ),
-
-            ParameterSpec(.lensDistortion, "Distortion"),
-            ParameterSpec(.lensVignetting, "Vignetting"),
-            ParameterSpec(.lensVignettingMidpoint, "Midpoint", range: 0 ... 100, default: 50, format: .integer),
-            ParameterSpec(.lensProfile, "Enable Profile Corrections", range: 0 ... 1, default: 1, format: .integer),
-            ParameterSpec(.lensProfileDistortion, "Distortion", range: 0 ... 200, default: 100, format: .integer),
-            ParameterSpec(.lensProfileVignetting, "Vignetting", range: 0 ... 200, default: 100, format: .integer),
-            ParameterSpec(
-                .lensRemoveChromaticAberration,
-                "Remove Chromatic Aberration",
-                range: 0 ... 1,
-                format: .integer,
-            ),
-            ParameterSpec(.defringePurpleAmount, "Purple Amount", range: 0 ... 20, format: .integer),
-            ParameterSpec(.defringePurpleHueLow, "Purple Hue Low", range: 0 ... 100, default: 30, format: .integer),
-            ParameterSpec(.defringePurpleHueHigh, "Purple Hue High", range: 0 ... 100, default: 70, format: .integer),
-            ParameterSpec(.defringeGreenAmount, "Green Amount", range: 0 ... 20, format: .integer),
-            ParameterSpec(.defringeGreenHueLow, "Green Hue Low", range: 0 ... 100, default: 40, format: .integer),
-            ParameterSpec(.defringeGreenHueHigh, "Green Hue High", range: 0 ... 100, default: 60, format: .integer),
-
-            ParameterSpec(
-                .cropAngle, "Angle", range: -45 ... 45, step: 0.01, format: .signedDecimal(2),
-            ),
-
-            ParameterSpec(.transformVertical, "Vertical"),
-            ParameterSpec(.transformHorizontal, "Horizontal"),
-            ParameterSpec(
-                .transformRotate, "Rotate", range: -10 ... 10, step: 0.1, format: .signedDecimal(1),
-            ),
-            ParameterSpec(.transformAspect, "Aspect"),
-            ParameterSpec(
-                .transformScale, "Scale", range: 50 ... 150, default: 100, format: .integer,
-            ),
-            ParameterSpec(
-                .transformOffsetX, "X Offset", range: -100 ... 100, step: 0.1, format: .signedDecimal(1),
-            ),
-            ParameterSpec(
-                .transformOffsetY, "Y Offset", range: -100 ... 100, step: 0.1, format: .signedDecimal(1),
-            ),
-
-            ParameterSpec(.vignetteAmount, "Amount", track: .monochrome),
-            ParameterSpec(.vignetteMidpoint, "Midpoint", range: 0 ... 100, default: 50, format: .integer),
-            ParameterSpec(.vignetteRoundness, "Roundness"),
-            ParameterSpec(.vignetteFeather, "Feather", range: 0 ... 100, default: 50, format: .integer),
-            ParameterSpec(.vignetteHighlights, "Highlights", range: 0 ... 100, format: .integer),
-            ParameterSpec(.grainAmount, "Amount", range: 0 ... 100, format: .integer),
-            ParameterSpec(.grainSize, "Size", range: 0 ... 100, default: 25, format: .integer),
-            ParameterSpec(.grainRoughness, "Roughness", range: 0 ... 100, default: 50, format: .integer),
-            ParameterSpec(.grainColor, "Color", range: 0 ... 100, format: .integer),
-            ParameterSpec(.halationAmount, "Amount", range: 0 ... 100, format: .integer),
-            ParameterSpec(.halationSize, "Size", range: 0 ... 100, default: 50, format: .integer),
-            ParameterSpec(.bloomAmount, "Amount", range: 0 ... 100, format: .integer),
-            ParameterSpec(.bloomSize, "Size", range: 0 ... 100, default: 50, format: .integer),
-            ParameterSpec(.leakAmount, "Amount", range: 0 ... 100, format: .integer),
-            ParameterSpec(
-                .leakWarmth,
-                "Warmth",
-                range: -100 ... 100,
-                default: 60,
-                format: .integer,
-                track: .temperature,
-            ),
-            ParameterSpec(.leakVariation, "Variation", range: 0 ... 100, format: .integer),
-            ParameterSpec(.dustAmount, "Dust", range: 0 ... 100, format: .integer),
-            ParameterSpec(.scratchAmount, "Scratches", range: 0 ... 100, format: .integer),
-            ParameterSpec(.frameStyle, "Style", range: 0 ... 4, format: .integer),
-            ParameterSpec(.frameSize, "Size", range: 0 ... 100, default: 50, format: .integer),
-            ParameterSpec(.colorChrome, "Color Chrome", range: 0 ... 100, format: .integer),
-            ParameterSpec(.colorChromeBlue, "Chrome FX Blue", range: 0 ... 100, format: .integer),
-
-            ParameterSpec(.calibrationShadowsTint, "Tint", track: .tint),
-            ParameterSpec(.calibrationRedHue, "Hue", track: .hue(.red)),
-            ParameterSpec(.calibrationRedSaturation, "Saturation", track: .saturation(.red)),
-            ParameterSpec(.calibrationGreenHue, "Hue", track: .hue(.green)),
-            ParameterSpec(.calibrationGreenSaturation, "Saturation", track: .saturation(.green)),
-            ParameterSpec(.calibrationBlueHue, "Hue", track: .hue(.blue)),
-            ParameterSpec(.calibrationBlueSaturation, "Saturation", track: .saturation(.blue)),
-
-            ParameterSpec(.localTemperature, "Temp", track: .temperature),
-            ParameterSpec(.localTint, "Tint", track: .tint),
-            ParameterSpec(
-                .localExposure, "Exposure", range: -4 ... 4, step: 0.05, format: .signedDecimal(2),
-                track: .monochrome,
-            ),
-            ParameterSpec(.localContrast, "Contrast"),
-            ParameterSpec(.localHighlights, "Highlights"),
-            ParameterSpec(.localShadows, "Shadows"),
-            ParameterSpec(.localWhites, "Whites"),
-            ParameterSpec(.localBlacks, "Blacks"),
-            ParameterSpec(.localTexture, "Texture"),
-            ParameterSpec(.localClarity, "Clarity"),
-            ParameterSpec(.localDehaze, "Dehaze"),
-            ParameterSpec(
-                .localHue,
-                "Hue",
-                range: -180 ... 180,
-                step: 0.5,
-                format: .signedDecimal(1),
-                track: .gradingHue,
-            ),
-            ParameterSpec(.localSaturation, "Saturation"),
-            ParameterSpec(.localSharpness, "Sharpness"),
-            ParameterSpec(.localNoise, "Noise"),
-            ParameterSpec(.localMoire, "Moiré", range: 0 ... 100, format: .integer),
-            ParameterSpec(.localDefringe, "Defringe", range: -100 ... 100),
-            ParameterSpec(.localHalation, "Halation"),
-            ParameterSpec(.localBloom, "Bloom"),
-            ParameterSpec(.localColorHue, "Color Hue", range: 0 ... 360, format: .integer, track: .gradingHue),
-            ParameterSpec(.localColorSaturation, "Color Saturation", range: 0 ... 100, format: .integer),
-            ParameterSpec(.maskAmount, "Amount", range: 0 ... 200, default: 100, format: .integer),
-            ParameterSpec(.maskFeather, "Feather", range: 0 ... 100, default: 50, format: .integer),
-            ParameterSpec(.maskBrushSize, "Size", range: 1 ... 100, default: 25, format: .integer),
-            ParameterSpec(.maskBrushFeather, "Feather", range: 0 ... 100, default: 50, format: .integer),
-            ParameterSpec(.maskBrushFlow, "Flow", range: 1 ... 100, default: 100, format: .integer),
-            ParameterSpec(.maskBrushDensity, "Density", range: 1 ... 100, default: 100, format: .integer),
-            ParameterSpec(.maskDetail, "Detail", range: -100 ... 100),
-            ParameterSpec(.maskColorRefine, "Refine", range: 0 ... 100, default: 50, format: .integer),
-            ParameterSpec(.maskAIFeather, "Feather", range: 0 ... 100, format: .integer),
-            ParameterSpec(.maskAIEdge, "Edge", range: -100 ... 100, format: .integer),
-            ParameterSpec(.spotSize, "Size", range: 1 ... 100, default: 20, format: .integer),
-            ParameterSpec(.spotFeather, "Feather", range: 0 ... 100, default: 50, format: .integer),
-            ParameterSpec(.spotOpacity, "Opacity", range: 0 ... 100, default: 100, format: .integer),
-            ParameterSpec(.spotVisualize, "Visualize", range: 1 ... 100, default: 50, format: .integer),
-            ParameterSpec(.pointColorHueShift, "Hue Shift"),
-            ParameterSpec(.pointColorSaturationShift, "Saturation Shift"),
-            ParameterSpec(.pointColorLuminanceShift, "Luminance Shift"),
-            ParameterSpec(.pointColorHueUniformity, "Hue Uniformity"),
-            ParameterSpec(.pointColorSaturationUniformity, "Saturation Uniformity"),
-            ParameterSpec(.pointColorLuminanceUniformity, "Luminance Uniformity"),
-            ParameterSpec(.pointColorHueRange, "Hue Range", range: 0 ... 100, default: 50, format: .integer),
-            ParameterSpec(
-                .pointColorSaturationRange,
-                "Saturation Range",
-                range: 0 ... 100,
-                default: 50,
-                format: .integer,
-            ),
-            ParameterSpec(
-                .pointColorLuminanceRange,
-                "Luminance Range",
-                range: 0 ... 100,
-                default: 50,
-                format: .integer,
-            ),
-            ParameterSpec(.pointColorSmoothness, "Smoothness", range: 0 ... 100, default: 50, format: .integer),
+    private static let colorBands: [ParameterSpec] = ColorBand.allCases.flatMap { band in
+        [
+            ParameterSpec(band.hueParameter, band.name, track: .hue(band)),
+            ParameterSpec(band.saturationParameter, band.name, track: .saturation(band)),
+            ParameterSpec(band.luminanceParameter, band.name, track: .luminance(band)),
         ]
+    }
+
+    private static let gradingRanges: [ParameterSpec] = GradingRange.allCases.flatMap { range in
+        [
+            ParameterSpec(
+                range.hueParameter, "Hue", range: 0 ... 360, format: .integer, track: .gradingHue,
+            ),
+            ParameterSpec(range.saturationParameter, "Saturation", range: 0 ... 100, format: .integer),
+            ParameterSpec(range.luminanceParameter, "Luminance", track: .monochrome),
+        ]
+    }
+
+    private static let others: [ParameterSpec] = [
+        ParameterSpec(.gradeBlending, "Blending", range: 0 ... 100, default: 50, format: .integer),
+        ParameterSpec(.gradeBalance, "Balance"),
+
+        ParameterSpec(
+            .sharpenAmount, "Amount", range: 0 ... 150, default: 40, format: .integer,
+        ),
+        ParameterSpec(
+            .sharpenRadius, "Radius", range: 0.5 ... 3, default: 1, step: 0.1, format: .decimal(1),
+        ),
+        ParameterSpec(
+            .sharpenDetail, "Detail", range: 0 ... 100, default: 25, format: .integer,
+        ),
+        ParameterSpec(.sharpenMasking, "Masking", range: 0 ... 100, format: .integer),
+        ParameterSpec(.noiseLuminance, "Luminance", range: 0 ... 100, format: .integer),
+        ParameterSpec(
+            .noiseLuminanceDetail, "Detail", range: 0 ... 100, default: 50, format: .integer,
+        ),
+        ParameterSpec(
+            .noiseLuminanceContrast, "Contrast", range: 0 ... 100, format: .integer,
+        ),
+        ParameterSpec(
+            .noiseColor, "Color", range: 0 ... 100, default: 25, format: .integer,
+        ),
+        ParameterSpec(
+            .noiseColorDetail, "Detail", range: 0 ... 100, default: 50, format: .integer,
+        ),
+        ParameterSpec(
+            .noiseColorSmoothness, "Smoothness", range: 0 ... 100, default: 50, format: .integer,
+        ),
+
+        ParameterSpec(.lensDistortion, "Distortion"),
+        ParameterSpec(.lensVignetting, "Vignetting"),
+        ParameterSpec(.lensVignettingMidpoint, "Midpoint", range: 0 ... 100, default: 50, format: .integer),
+        ParameterSpec(.lensProfile, "Enable Profile Corrections", range: 0 ... 1, default: 1, format: .integer),
+        ParameterSpec(.lensProfileDistortion, "Distortion", range: 0 ... 200, default: 100, format: .integer),
+        ParameterSpec(.lensProfileVignetting, "Vignetting", range: 0 ... 200, default: 100, format: .integer),
+        ParameterSpec(
+            .lensRemoveChromaticAberration,
+            "Remove Chromatic Aberration",
+            range: 0 ... 1,
+            format: .integer,
+        ),
+        ParameterSpec(.defringePurpleAmount, "Purple Amount", range: 0 ... 20, format: .integer),
+        ParameterSpec(.defringePurpleHueLow, "Purple Hue Low", range: 0 ... 100, default: 30, format: .integer),
+        ParameterSpec(.defringePurpleHueHigh, "Purple Hue High", range: 0 ... 100, default: 70, format: .integer),
+        ParameterSpec(.defringeGreenAmount, "Green Amount", range: 0 ... 20, format: .integer),
+        ParameterSpec(.defringeGreenHueLow, "Green Hue Low", range: 0 ... 100, default: 40, format: .integer),
+        ParameterSpec(.defringeGreenHueHigh, "Green Hue High", range: 0 ... 100, default: 60, format: .integer),
+
+        ParameterSpec(
+            .cropAngle, "Angle", range: -45 ... 45, step: 0.01, format: .signedDecimal(2),
+        ),
+
+        ParameterSpec(.transformVertical, "Vertical"),
+        ParameterSpec(.transformHorizontal, "Horizontal"),
+        ParameterSpec(
+            .transformRotate, "Rotate", range: -10 ... 10, step: 0.1, format: .signedDecimal(1),
+        ),
+        ParameterSpec(.transformAspect, "Aspect"),
+        ParameterSpec(
+            .transformScale, "Scale", range: 50 ... 150, default: 100, format: .integer,
+        ),
+        ParameterSpec(
+            .transformOffsetX, "X Offset", range: -100 ... 100, step: 0.1, format: .signedDecimal(1),
+        ),
+        ParameterSpec(
+            .transformOffsetY, "Y Offset", range: -100 ... 100, step: 0.1, format: .signedDecimal(1),
+        ),
+
+        ParameterSpec(.vignetteAmount, "Amount", track: .monochrome),
+        ParameterSpec(.vignetteMidpoint, "Midpoint", range: 0 ... 100, default: 50, format: .integer),
+        ParameterSpec(.vignetteRoundness, "Roundness"),
+        ParameterSpec(.vignetteFeather, "Feather", range: 0 ... 100, default: 50, format: .integer),
+        ParameterSpec(.vignetteHighlights, "Highlights", range: 0 ... 100, format: .integer),
+        ParameterSpec(.grainAmount, "Amount", range: 0 ... 100, format: .integer),
+        ParameterSpec(.grainSize, "Size", range: 0 ... 100, default: 25, format: .integer),
+        ParameterSpec(.grainRoughness, "Roughness", range: 0 ... 100, default: 50, format: .integer),
+        ParameterSpec(.grainColor, "Color", range: 0 ... 100, format: .integer),
+        ParameterSpec(.halationAmount, "Amount", range: 0 ... 100, format: .integer),
+        ParameterSpec(.halationSize, "Size", range: 0 ... 100, default: 50, format: .integer),
+        ParameterSpec(.bloomAmount, "Amount", range: 0 ... 100, format: .integer),
+        ParameterSpec(.bloomSize, "Size", range: 0 ... 100, default: 50, format: .integer),
+        ParameterSpec(.leakAmount, "Amount", range: 0 ... 100, format: .integer),
+        ParameterSpec(
+            .leakWarmth,
+            "Warmth",
+            range: -100 ... 100,
+            default: 60,
+            format: .integer,
+            track: .temperature,
+        ),
+        ParameterSpec(.leakVariation, "Variation", range: 0 ... 100, format: .integer),
+        ParameterSpec(.dustAmount, "Dust", range: 0 ... 100, format: .integer),
+        ParameterSpec(.scratchAmount, "Scratches", range: 0 ... 100, format: .integer),
+        ParameterSpec(.frameStyle, "Style", range: 0 ... 4, format: .integer),
+        ParameterSpec(.frameSize, "Size", range: 0 ... 100, default: 50, format: .integer),
+        ParameterSpec(.colorChrome, "Color Chrome", range: 0 ... 100, format: .integer),
+        ParameterSpec(.colorChromeBlue, "Chrome FX Blue", range: 0 ... 100, format: .integer),
+
+        ParameterSpec(.calibrationShadowsTint, "Tint", track: .tint),
+        ParameterSpec(.calibrationRedHue, "Hue", track: .hue(.red)),
+        ParameterSpec(.calibrationRedSaturation, "Saturation", track: .saturation(.red)),
+        ParameterSpec(.calibrationGreenHue, "Hue", track: .hue(.green)),
+        ParameterSpec(.calibrationGreenSaturation, "Saturation", track: .saturation(.green)),
+        ParameterSpec(.calibrationBlueHue, "Hue", track: .hue(.blue)),
+        ParameterSpec(.calibrationBlueSaturation, "Saturation", track: .saturation(.blue)),
+
+        ParameterSpec(.localTemperature, "Temp", track: .temperature),
+        ParameterSpec(.localTint, "Tint", track: .tint),
+        ParameterSpec(
+            .localExposure, "Exposure", range: -4 ... 4, step: 0.05, format: .signedDecimal(2),
+            track: .monochrome,
+        ),
+        ParameterSpec(.localContrast, "Contrast"),
+        ParameterSpec(.localHighlights, "Highlights"),
+        ParameterSpec(.localShadows, "Shadows"),
+        ParameterSpec(.localWhites, "Whites"),
+        ParameterSpec(.localBlacks, "Blacks"),
+        ParameterSpec(.localTexture, "Texture"),
+        ParameterSpec(.localClarity, "Clarity"),
+        ParameterSpec(.localDehaze, "Dehaze"),
+        ParameterSpec(
+            .localHue,
+            "Hue",
+            range: -180 ... 180,
+            step: 0.5,
+            format: .signedDecimal(1),
+            track: .gradingHue,
+        ),
+        ParameterSpec(.localSaturation, "Saturation"),
+        ParameterSpec(.localSharpness, "Sharpness"),
+        ParameterSpec(.localNoise, "Noise"),
+        ParameterSpec(.localMoire, "Moiré", range: 0 ... 100, format: .integer),
+        ParameterSpec(.localDefringe, "Defringe", range: -100 ... 100),
+        ParameterSpec(.localHalation, "Halation"),
+        ParameterSpec(.localBloom, "Bloom"),
+        ParameterSpec(.localColorHue, "Color Hue", range: 0 ... 360, format: .integer, track: .gradingHue),
+        ParameterSpec(.localColorSaturation, "Color Saturation", range: 0 ... 100, format: .integer),
+        ParameterSpec(.maskAmount, "Amount", range: 0 ... 200, default: 100, format: .integer),
+        ParameterSpec(.maskFeather, "Feather", range: 0 ... 100, default: 50, format: .integer),
+        ParameterSpec(.maskBrushSize, "Size", range: 1 ... 100, default: 25, format: .integer),
+        ParameterSpec(.maskBrushFeather, "Feather", range: 0 ... 100, default: 50, format: .integer),
+        ParameterSpec(.maskBrushFlow, "Flow", range: 1 ... 100, default: 100, format: .integer),
+        ParameterSpec(.maskBrushDensity, "Density", range: 1 ... 100, default: 100, format: .integer),
+        ParameterSpec(.maskDetail, "Detail", range: -100 ... 100),
+        ParameterSpec(.maskColorRefine, "Refine", range: 0 ... 100, default: 50, format: .integer),
+        ParameterSpec(.maskAIFeather, "Feather", range: 0 ... 100, format: .integer),
+        ParameterSpec(.maskAIEdge, "Edge", range: -100 ... 100, format: .integer),
+        ParameterSpec(.spotSize, "Size", range: 1 ... 100, default: 20, format: .integer),
+        ParameterSpec(.spotFeather, "Feather", range: 0 ... 100, default: 50, format: .integer),
+        ParameterSpec(.spotOpacity, "Opacity", range: 0 ... 100, default: 100, format: .integer),
+        ParameterSpec(.spotVisualize, "Visualize", range: 1 ... 100, default: 50, format: .integer),
+        ParameterSpec(.pointColorHueShift, "Hue Shift"),
+        ParameterSpec(.pointColorSaturationShift, "Saturation Shift"),
+        ParameterSpec(.pointColorLuminanceShift, "Luminance Shift"),
+        ParameterSpec(.pointColorHueUniformity, "Hue Uniformity"),
+        ParameterSpec(.pointColorSaturationUniformity, "Saturation Uniformity"),
+        ParameterSpec(.pointColorLuminanceUniformity, "Luminance Uniformity"),
+        ParameterSpec(.pointColorHueRange, "Hue Range", range: 0 ... 100, default: 50, format: .integer),
+        ParameterSpec(
+            .pointColorSaturationRange,
+            "Saturation Range",
+            range: 0 ... 100,
+            default: 50,
+            format: .integer,
+        ),
+        ParameterSpec(
+            .pointColorLuminanceRange,
+            "Luminance Range",
+            range: 0 ... 100,
+            default: 50,
+            format: .integer,
+        ),
+        ParameterSpec(.pointColorSmoothness, "Smoothness", range: 0 ... 100, default: 50, format: .integer),
+    ]
 
     public static let specs: [ParameterID: ParameterSpec] = Dictionary(
         uniqueKeysWithValues: all.map { ($0.id, $0) },

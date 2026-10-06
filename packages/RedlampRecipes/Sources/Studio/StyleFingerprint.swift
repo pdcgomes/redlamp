@@ -197,9 +197,17 @@ public struct StyleFingerprint: Codable, Sendable, Hashable {
 
     /// The fingerprint as one flat vector, for clustering references.
     public var vector: [Double] {
-        lightness.map { $0 / 0.05 } + [localContrast / 0.01, clippedHighlights / 0.05]
-            + (shadowTint + midtoneTint + highlightTint).map { $0 / 0.008 } + [meanChroma / 0.015]
-            + zip(bandChroma, bandShare).map { $0 * min($1 * 8, 1) / 0.02 } + [grain / 0.004, vignette / 0.04]
+        var v: [Double] = lightness.map { $0 / 0.05 }
+        v.append(contentsOf: [localContrast / 0.01, clippedHighlights / 0.05])
+        for tint in [shadowTint, midtoneTint, highlightTint] {
+            v.append(contentsOf: tint.map { $0 / 0.008 })
+        }
+        v.append(meanChroma / 0.015)
+        for (chroma, share) in zip(bandChroma, bandShare) {
+            v.append(chroma * min(share * 8, 1) / 0.02)
+        }
+        v.append(contentsOf: [grain / 0.004, vignette / 0.04])
+        return v
     }
 
     public var summary: String {

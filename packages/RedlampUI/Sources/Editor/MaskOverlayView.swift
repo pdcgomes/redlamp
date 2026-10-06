@@ -477,12 +477,10 @@ private struct ComponentHandles: View {
             if isSelected {
                 ForEach(range.samples.indices, id: \.self) { index in
                     let sample = range.samples[index]
+                    let diameter = max(CGFloat(sample.radius) * frame.heightScale * 2, 10)
                     Circle()
                         .stroke(Color.white, lineWidth: 1.5)
-                        .frame(
-                            width: max(sample.radius * frame.heightScale * 2, 10),
-                            height: max(sample.radius * frame.heightScale * 2, 10),
-                        )
+                        .frame(width: diameter, height: diameter)
                         .shadow(color: .black.opacity(0.6), radius: 1)
                         .position(frame.view(sample.center))
                         .allowsHitTesting(false)
