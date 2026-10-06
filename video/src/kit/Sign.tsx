@@ -44,6 +44,19 @@ export function Sign({ frame, origin, scale, text }: Props) {
         <path d={d} fill="none" stroke="rgba(217,208,203,0.7)" strokeWidth={1.5 * scale} strokeLinecap="round" />
       </svg>
       <div style={{ position: "absolute", left: origin.x + pose.x * scale, top: origin.y + pose.y * scale }}>
+        {/* Its shadow on the wall, a gradient rather than a blurred box-shadow, which is slow to rasterise. */}
+        <div
+          style={{
+            position: "absolute",
+            left: -width * 0.62,
+            top: -height * 0.45,
+            width: width * 1.24,
+            height: height * 1.7,
+            transform: `rotate(${pose.angle}rad) scale(${scale})`,
+            transformOrigin: `${width * 0.62}px ${height * 0.45}px`,
+            background: "radial-gradient(closest-side, rgba(0,0,0,0.5), rgba(0,0,0,0.2) 60%, rgba(0,0,0,0))",
+          }}
+        />
         <div
           style={{
             position: "absolute",
@@ -55,7 +68,6 @@ export function Sign({ frame, origin, scale, text }: Props) {
             transform: `rotate(${pose.angle}rad) scale(${scale})`,
             borderRadius: SIGN.radius,
             background: `linear-gradient(135deg, ${color.paper}, ${color.ring})`,
-            boxShadow: "0 14px 30px rgba(0,0,0,0.45)",
             padding: `${SIGN.padTop}px ${SIGN.padX}px ${SIGN.padBottom}px`,
             display: "flex",
             alignItems: "center",

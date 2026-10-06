@@ -77,7 +77,7 @@ export function Lamp({ lens, size, pose }: Props) {
         height: size,
         transform: `translate(${pose.x}px, ${pose.y}px) rotate(${pose.angle}rad) scale(${pose.scale})`,
         transformOrigin: "50% 47%",
-        filter: `brightness(${pose.bright}) drop-shadow(0 ${size * 0.08}px ${size * 0.12}px rgba(0,0,0,0.55))`,
+        filter: `brightness(${pose.bright})`,
       }}
     >
       <Lens size={size} tile />

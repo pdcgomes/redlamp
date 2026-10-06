@@ -12,6 +12,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { renderUntilPainted } from "./blank.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const out = path.join(root, "out/star");
@@ -66,10 +67,15 @@ for (const job of jobs.filter((j) => only.length === 0 || only.includes(j.id))) 
     const props = JSON.stringify({ hook, stars, musicSrc: "star/score.wav", guides: false });
     const name = `${job.file}${hooks.length > 1 || hook !== "charging" ? `-${hook}` : ""}${draft ? "-draft" : ""}`;
     const scale = draft ? ["--scale=0.5"] : [];
-    // CRF 16, limited-range BT.709 4:2:0, which every site and player reads the same way.
-    remotion("render", job.id, path.join(out, `${name}.mp4`), `--props=${props}`, "--codec=h264", "--crf=16", "--pixel-format=yuv420p", "--color-space=bt709", "--audio-bitrate=320k", "--audio-codec=aac", ...scale);
+    // CRF 16, limited-range BT.709 4:2:0, which every site and player reads the same way. Every
+    // frame is checked for one Chrome captured before painting it, and the cut rendered again if so.
+    const video = path.join(out, `${name}.mp4`);
+    await renderUntilPainted(video, () =>
+      remotion("render", job.id, video, `--props=${props}`, "--codec=h264", "--crf=16", "--pixel-format=yuv420p", "--color-space=bt709", "--audio-bitrate=320k", "--audio-codec=aac", ...scale),
+    );
     if (!draft) {
-      remotion("still", job.id, path.join(out, `${name}-poster.jpg`), `--props=${props}`, `--frame=${POSTER}`, "--image-format=jpeg", "--jpeg-quality=92");
+      const poster = path.join(out, `${name}-poster.jpg`);
+      await renderUntilPainted(poster, () => remotion("still", job.id, poster, `--props=${props}`, `--frame=${POSTER}`, "--image-format=jpeg", "--jpeg-quality=92"));
     }
   }
 }

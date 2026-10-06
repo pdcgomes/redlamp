@@ -9,6 +9,7 @@ import { renderStill, selectComposition } from "@remotion/renderer";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { renderUntilPainted } from "./blank.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -36,7 +37,8 @@ const shots = [];
 for (const [cue, b] of Object.entries(sheet.cues).sort((a, c) => a[1] - c[1])) {
   const frame = Math.min(Math.round(b * beat), composition.durationInFrames - 1);
   const file = `${String(frame).padStart(4, "0")}-${cue}.jpg`;
-  await renderStill({ composition, serveUrl, frame, output: path.join(dir, file), imageFormat: "jpeg", jpegQuality: 85, scale: 0.5, inputProps });
+  const output = path.join(dir, file);
+  await renderUntilPainted(output, () => renderStill({ composition, serveUrl, frame, output, imageFormat: "jpeg", jpegQuality: 85, scale: 0.5, inputProps }));
   shots.push({ src: `review/${id}/${file}`, cue, beat: b, seconds: frame / composition.fps });
   console.log(`${cue} (frame ${frame})`);
 }

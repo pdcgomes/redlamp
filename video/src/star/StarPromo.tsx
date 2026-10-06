@@ -1,6 +1,6 @@
 import { AbsoluteFill, Easing, getStaticFiles, Html5Audio, interpolate, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { Words } from "../components/Kinetic";
-import { Grain } from "../components/Stage";
+import { FilmGrain } from "../kit/FilmGrain";
 import { type Camera, cssTransform, type Framing, framing, shake } from "../kit/camera";
 import { Cursor } from "../kit/Cursor";
 import { badgeParts, badgeSize, GitHubBadge } from "../kit/GitHubBadge";
@@ -16,6 +16,7 @@ import {
   type Charge,
   chargeLevel,
   clamp01,
+  halo,
   keyframes,
   motes,
   type Point,
@@ -35,7 +36,11 @@ import { color } from "../theme";
 import { copy, type Hook, hooks } from "./copy";
 import cueSheet from "./cues.json";
 
-const sheet = cueSheet as unknown as CueSheet & { knocks: [number, number, number][] };
+const sheet = cueSheet as unknown as CueSheet & {
+  knocks: [number, number, number][];
+  /** The drop's drums: from and to (beats), and each bar's hits as [beat in the bar, how hard]. */
+  groove: { from: number; to: number; hits: [number, number][] };
+};
 const g = grid(sheet);
 const at = (name: string) => g.seconds(sheet.cues[name]);
 
@@ -63,6 +68,8 @@ const T = {
   end: at("end"),
   stop: at("stop"),
   again: at("recharge"),
+  /** The badge appears a quarter-beat before the squash, as the camera starts to pull back. */
+  show: g.seconds(10.25),
 };
 
 // ---------------------------------------------------------------- layout
@@ -139,11 +146,12 @@ const HIT = 1.7;
 type BadgeMotion = { scale: number; halo: number; lit: number; star: { rotate: number; scale: number; lit: number }; roll: number };
 
 /**
- * How the badge moves: the website's swell and spring as the shot lands, a bump on every kick of
- * the groove, a pop and a second spin of the star at the click, and the count rolling on.
+ * How the badge moves: the website's swell and spring as the shot lands, a bump on each of the
+ * drop's drum hits, a pop and a second spin of the star at the click, and the count rolling on.
  */
 function badgeMotion(t: number): BadgeMotion {
-  let scale = 1;
+  // It springs up out of nothing as the camera pulls back to show it.
+  let scale = keyframes(t - T.show, [[0, 0], [0.16, 1.08], [0.3, 0.98], [0.42, 1]], spring);
   let halo = 0;
   let lit = 0;
   const star = { rotate: 0, scale: 1, lit: 0 };
@@ -177,12 +185,21 @@ function spin(star: BadgeMotion["star"], since: number, from: number) {
   star.lit = keyframes(p, [[0, 0], [0.35, 1], [0.75, 1], [1, 0]], linear);
 }
 
-/** 1 on each kick of the groove, from the beat after the hit to the stop, dying away in 80 ms. */
+/** The drop's drum hits in seconds, and how hard each lands, from the cue sheet's groove; the hit itself has its own swell. */
+const hits = (() => {
+  const { from, to, hits: pattern } = sheet.groove;
+  const out: { at: number; weight: number }[] = [];
+  for (let bar = from; bar < to; bar += sheet.beatsPerBar) {
+    for (const [offset, weight] of pattern) if (bar + offset > from) out.push({ at: g.seconds(bar + offset), weight });
+  }
+  return out;
+})();
+
+/** A bump on each of the drop's drum hits, as hard as the hit, dying away in 80 ms. */
 function kick(t: number): number {
-  const beat = g.seconds(1);
-  const last = Math.floor(t / beat) * beat;
-  if (last < T.hit + beat - 1e-6 || last >= T.stop - 1e-6) return 0;
-  return Math.exp(-(t - last) / 0.08);
+  let last: { at: number; weight: number } | null = null;
+  for (const hit of hits) if (hit.at <= t) last = hit;
+  return last ? last.weight * Math.exp(-(t - last.at) / 0.08) : 0;
 }
 
 // ---------------------------------------------------------------- the scene, worked out once per shape
@@ -314,8 +331,14 @@ function cursorAt(scene: Scene, t: number): { tip: Point; press: number; opacity
 
 // ---------------------------------------------------------------- drawing
 
-/** The light on the wall and behind the lamp: drawn under everything. */
-function drawBehind(ctx: CanvasRenderingContext2D, scene: Scene, t: number) {
+/** The badge as it's drawn at a moment, swollen or bumped, for the light round it. */
+function pillOf(scene: Scene, badge: BadgeMotion) {
+  const { layout } = scene;
+  return { x: layout.badge.x, y: layout.badge.y, width: scene.badgeWidth * badge.scale, height: layout.badgeHeight * badge.scale };
+}
+
+/** The light on the wall, round the badge and behind the lamp: drawn under everything. */
+function drawBehind(ctx: CanvasRenderingContext2D, scene: Scene, t: number, badge: BadgeMotion) {
   const { layout, charge } = scene;
   const p = chargeLevel(charge, t);
   const spent = clamp01((t - T.fire) / 1.0);
@@ -325,6 +348,7 @@ function drawBehind(ctx: CanvasRenderingContext2D, scene: Scene, t: number) {
     const flare = t >= T.click ? 0.22 * Math.exp(-(t - T.click) / 0.5) : 0;
     pool(ctx, layout.badge, scene.badgeWidth * 1.05, 0.34 * Math.exp(-since / 0.6) + 0.15 * clamp01(since / 0.4) + flare);
   }
+  halo(ctx, pillOf(scene, badge), badge.halo, scene.unit);
   backlight(ctx, charge, t);
   motes(ctx, charge, t);
   if (t >= T.again) {
@@ -335,11 +359,13 @@ function drawBehind(ctx: CanvasRenderingContext2D, scene: Scene, t: number) {
 
 /** The shot, its sparks and where it lands: drawn over the lamp and the badge. */
 function drawFront(ctx: CanvasRenderingContext2D, scene: Scene, t: number, badge: BadgeMotion, tip: Point | null) {
-  const { layout, unit } = scene;
+  const { unit } = scene;
   beam(ctx, scene.shot, t);
   sparks(ctx, scene.sparks, t);
-  const pill = { x: layout.badge.x, y: layout.badge.y, width: scene.badgeWidth * badge.scale, height: layout.badgeHeight * badge.scale };
+  const pill = pillOf(scene, badge);
   strike(ctx, pill, t - T.hit, unit);
+  // A lit star glows, a little light of its own on the badge.
+  pool(ctx, { x: pill.x + (scene.star.x - pill.x) * badge.scale, y: scene.star.y }, 7 * unit * badge.star.scale, 0.55 * badge.star.lit, "filament");
   if (t >= T.click) {
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
@@ -372,13 +398,11 @@ export function StarPromo({ hook, stars, musicSrc, guides }: StarPromoProps) {
   const end = text.endSize;
   return (
     <AbsoluteFill style={{ background: color.wall, overflow: "hidden" }}>
-      <LightCanvas camera={camera} draw={(ctx, time) => drawBehind(ctx, scene, time)} />
+      <LightCanvas camera={camera} draw={(ctx, time) => drawBehind(ctx, scene, time, badge)} />
       <AbsoluteFill style={world}>
         <Sign frame={scene.sign[frame] ?? null} origin={scene.anchor} scale={layout.signScale} text={copy.sign} />
         <Lamp lens={layout.lens} size={layout.size} pose={pose} />
-        <div style={{ opacity: clamp01((frame - g.at(10.25)) / 6) }}>
-          <GitHubBadge centre={layout.badge} height={layout.badgeHeight} count={stars} {...badge} />
-        </div>
+        {badge.scale > 0 ? <GitHubBadge centre={layout.badge} height={layout.badgeHeight} count={stars} {...badge} /> : null}
       </AbsoluteFill>
       <LightCanvas camera={camera} draw={(ctx, time) => drawFront(ctx, scene, time, badge, clickTip)} />
       <AbsoluteFill style={world}>{cursor ? <Cursor tip={cursor.tip} size={layout.badgeHeight * 0.62} press={cursor.press} opacity={cursor.opacity} /> : null}</AbsoluteFill>
@@ -409,7 +433,7 @@ export function StarPromo({ hook, stars, musicSrc, guides }: StarPromoProps) {
       ) : null}
 
       <AbsoluteFill style={{ background: "radial-gradient(120% 95% at 50% 45%, transparent 55%, rgba(0,0,0,0.55))", pointerEvents: "none" }} />
-      <Grain opacity={0.05} />
+      <FilmGrain opacity={0.05} />
       {guides ? <SafeZones /> : null}
       {music ? (
         <Html5Audio

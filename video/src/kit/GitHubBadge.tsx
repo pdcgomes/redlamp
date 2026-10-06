@@ -1,6 +1,7 @@
+import type { ReactNode } from "react";
 import { color } from "../theme";
-import { textWidth } from "./measure";
 import type { Point } from "./light";
+import { textWidth } from "./measure";
 
 /**
  * The website header's GitHub button (web/components/site/SiteHeader.tsx) on its own: the
@@ -57,11 +58,54 @@ export function formatCount(count: number): string {
   return count >= 1000 ? `${(count / 1000).toFixed(count >= 10000 ? 0 : 1)}k` : String(count);
 }
 
-export function GitHubBadge({ centre, height: h, count, roll, scale, lit, halo, star }: BadgeState) {
+/**
+ * The badge in the DOM. Its halo (`halo`) is light, so the scene draws it on a canvas behind the
+ * badge (`halo` in light.ts) rather than as box-shadows: blurred shadows hundreds of pixels wide,
+ * magnified by the camera, are slow to rasterise, and headless Chrome has captured frames before
+ * they were painted, as white. Its shadow on the wall is a gradient for the same reason.
+ */
+export function GitHubBadge({ centre, height: h, count, roll, scale, lit, star }: BadgeState) {
   const { width } = badgeSize(h, count);
   const u = h / 30;
   const border = mix([243, 238, 232, 0.16], [255, 176, 138, 0.95], lit);
   const starColour = mixHex(color.mute, color.filament, star.lit);
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: centre.x - width * 0.6,
+          top: centre.y - h * 0.3,
+          width: width * 1.2,
+          height: h * 1.5,
+          background: "radial-gradient(closest-side, rgba(0,0,0,0.55), rgba(0,0,0,0.25) 55%, rgba(0,0,0,0))",
+          transform: `scale(${scale})`,
+        }}
+      />
+      <Pill centre={centre} width={width} h={h} u={u} border={border} scale={scale}>
+        <GitHubMark size={0.44 * h} />
+        <span style={{ marginLeft: 0.2 * h, fontSize: 0.4 * h, fontWeight: 600, letterSpacing: "-0.01em" }}>{LABEL}</span>
+        <span
+          style={{
+            display: "flex",
+            alignItems: "center",
+            marginLeft: count === null ? 0.24 * h : 0.26 * h,
+            paddingLeft: count === null ? 0 : 0.24 * h,
+            borderLeft: count === null ? "none" : `${0.03 * h}px solid rgba(243,238,232,0.16)`,
+            height: 0.5 * h,
+          }}
+        >
+          <span style={{ display: "inline-flex", transform: `rotate(${star.rotate}deg) scale(${star.scale})`, color: starColour }}>
+            <StarGlyph size={0.38 * h} />
+          </span>
+          {count === null ? null : <Count count={count} roll={roll} h={h} />}
+        </span>
+      </Pill>
+    </>
+  );
+}
+
+function Pill({ centre, width, h, u, border, scale, children }: { centre: Point; width: number; h: number; u: number; border: string; scale: number; children: ReactNode }) {
   return (
     <div
       style={{
@@ -74,13 +118,7 @@ export function GitHubBadge({ centre, height: h, count, roll, scale, lit, halo, 
         borderRadius: h / 2,
         border: `${Math.max(1, 1.2 * u)}px solid ${border}`,
         background: "linear-gradient(160deg, #2c2422 0%, #1c1615 55%, #151010 100%)",
-        boxShadow: [
-          `inset 0 ${u}px 0 rgba(255,255,255,0.07)`,
-          `0 ${10 * u}px ${24 * u}px rgba(0,0,0,0.5)`,
-          `0 0 0 ${u}px rgba(255,176,138,${0.85 * halo})`,
-          `0 0 ${18 * u}px ${3 * u}px rgba(224,64,46,${0.7 * halo})`,
-          `0 0 ${46 * u}px ${12 * u}px rgba(224,64,46,${0.35 * halo})`,
-        ].join(", "),
+        boxShadow: `inset 0 ${u}px 0 rgba(255,255,255,0.07)`,
         transform: `scale(${scale})`,
         display: "flex",
         alignItems: "center",
@@ -90,30 +128,7 @@ export function GitHubBadge({ centre, height: h, count, roll, scale, lit, halo, 
         whiteSpace: "nowrap",
       }}
     >
-      <GitHubMark size={0.44 * h} />
-      <span style={{ marginLeft: 0.2 * h, fontSize: 0.4 * h, fontWeight: 600, letterSpacing: "-0.01em" }}>{LABEL}</span>
-      <span
-        style={{
-          display: "flex",
-          alignItems: "center",
-          marginLeft: count === null ? 0.24 * h : 0.26 * h,
-          paddingLeft: count === null ? 0 : 0.24 * h,
-          borderLeft: count === null ? "none" : `${0.03 * h}px solid rgba(243,238,232,0.16)`,
-          height: 0.5 * h,
-        }}
-      >
-        <span
-          style={{
-            display: "inline-flex",
-            transform: `rotate(${star.rotate}deg) scale(${star.scale})`,
-            color: starColour,
-            filter: star.lit > 0 ? `drop-shadow(0 0 ${6 * u * star.lit}px rgba(255,176,138,${0.9 * star.lit}))` : undefined,
-          }}
-        >
-          <StarGlyph size={0.38 * h} />
-        </span>
-        {count === null ? null : <Count count={count} roll={roll} h={h} />}
-      </span>
+      {children}
     </div>
   );
 }

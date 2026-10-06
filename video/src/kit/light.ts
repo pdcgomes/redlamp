@@ -458,6 +458,31 @@ export function aura(ctx: CanvasRenderingContext2D, pill: Pill, since: number, k
   ctx.globalAlpha = 1;
 }
 
+/**
+ * The red light round a pill that the website gives its button as a box-shadow halo, 18 and 46
+ * website pixels out (StarNudge's strike). Draw it behind the pill, which covers its middle.
+ * `strength` 0 to 1.
+ */
+export function halo(ctx: CanvasRenderingContext2D, pill: Pill, strength: number, unit: number) {
+  if (strength <= 0) return;
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  const r = pill.height / 2;
+  const span = Math.max(0, pill.width - pill.height);
+  const steps = Math.max(1, Math.ceil(span / (r * 0.75)));
+  for (const [pad, alpha] of [
+    [46 * unit, 0.35],
+    [18 * unit, 0.7],
+  ]) {
+    // Stamps along the pill's length overlap; each carries its share of the light.
+    const overlap = Math.min(steps + 1, (2 * (r + pad)) / (span / steps || 1));
+    for (let i = 0; i <= steps; i += 1) {
+      glow(ctx, lights().safelight, { x: pill.x - span / 2 + (span * i) / steps, y: pill.y }, r + pad, (alpha * strength * 1.8) / overlap);
+    }
+  }
+  ctx.restore();
+}
+
 /** A ring of light spreading from a point, as where a click lands. */
 export function ripple(ctx: CanvasRenderingContext2D, at: Point, since: number, radius: number, unit: number) {
   if (since < 0 || since >= 0.6) return;
