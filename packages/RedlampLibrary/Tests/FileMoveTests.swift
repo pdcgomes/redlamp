@@ -1,5 +1,6 @@
 import Foundation
 import RedlampDocument
+import Synchronization
 import Testing
 @testable import RedlampLibrary
 
@@ -149,6 +150,41 @@ struct FileMoveTests {
         #expect(moved["Archive/Lisbon/IMG_0001.JPG"] == ids["Inbox/IMG_0001.JPG"] && moved.count == ids.count)
 
         #expect(try await operations.undo().isFinished)
+        #expect(try await operations.undo().isFinished)
+        #expect(sandbox.files() == before)
+        #expect(try await sandbox.rows() == ids)
+    }
+
+    @Test func `a cancelled move stops after a step, keeping what it did, which Undo takes back`() async throws {
+        let photos = (0 ..< 40).map { FileSandbox.Photo(String(format: "In/IMG_%04d.JPG", $0), sidecar: $0 % 2 == 0) }
+        let sandbox = try await FileSandbox.make(photos, folders: ["Out"])
+        defer { sandbox.remove() }
+        let before = sandbox.files()
+        let ids = try await sandbox.rows()
+        let operations = sandbox.operations()
+        let batch = try await operations.planMove(photos: Array(ids.values), to: sandbox.url("Out"))
+        let running = Mutex<Task<FileOutcome, any Error>?>(nil)
+        let task = Task {
+            try await operations.run(batch) { progress in
+                if progress.done >= 3 {
+                    running.withLock { $0?.cancel() }
+                }
+            }
+        }
+        running.withLock { $0 = task }
+        let outcome = try await task.value
+        #expect(outcome.state == .stopped && outcome.done >= 3 && outcome.done < batch.steps.count)
+        let rows = try await sandbox.rows()
+        let moved = rows.keys.filter { $0.hasPrefix("Out/") }
+        #expect(moved.count == outcome.done && rows.count == ids.count)
+        let files = sandbox.files()
+        for photo in photos {
+            let name = FilePlanner.split(photo.path).name
+            let folder = moved.contains("Out/" + name) ? "Out/" : "In/"
+            #expect(files[folder + name] != nil, "\(name)")
+            #expect(!photo.sidecar || files[folder + name + ".redlamp/edit.json"] != nil, "\(name)'s sidecar")
+        }
+        #expect(try await operations.lastUndoable()?.state == .stopped)
         #expect(try await operations.undo().isFinished)
         #expect(sandbox.files() == before)
         #expect(try await sandbox.rows() == ids)
