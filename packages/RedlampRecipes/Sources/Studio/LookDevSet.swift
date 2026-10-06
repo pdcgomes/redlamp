@@ -39,15 +39,4 @@ public struct LookDevSet: Codable, Sendable {
             .map { ($0, folder.appendingPathComponent($0.file)) }
             .filter { FileManager.default.fileExists(atPath: $0.1.path) }
     }
-
-    /// Every category, most common first.
-    public var categories: [String] {
-        var counts: [String: Int] = [:]
-        for image in images {
-            for category in image.categories {
-                counts[category, default: 0] += 1
-            }
-        }
-        return counts.sorted { ($0.value, $1.key) > ($1.value, $0.key) }.map(\.key)
-    }
 }

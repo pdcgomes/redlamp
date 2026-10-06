@@ -46,8 +46,6 @@ public struct LookDesign: Codable, Sendable, Hashable {
     }
 
     public init() {}
-
-    public static let identity = LookDesign()
 }
 
 public enum LookSynthesizer {

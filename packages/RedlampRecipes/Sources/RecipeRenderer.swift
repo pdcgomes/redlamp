@@ -64,14 +64,6 @@ public final class RecipeRenderer: @unchecked Sendable {
         }
     }
 
-    /// The edit a recipe produces on `image`, with its white balance resolved.
-    public func edit(for recipe: Recipe?, on image: URL, amount: Double = 100) async throws -> EditRecipe {
-        try await exclusive {
-            try await openUnlocked(image)
-            return await editUnlocked(for: recipe, amount: amount)
-        }
-    }
-
     private func editUnlocked(for recipe: Recipe?, amount: Double) async -> EditRecipe {
         var start = EditRecipe()
         if let wb = currentInfo?.asShotWhiteBalance {

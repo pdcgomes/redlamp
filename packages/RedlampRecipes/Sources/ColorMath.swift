@@ -102,12 +102,6 @@ public enum ColorMath {
         return d
     }
 
-    /// A raised-cosine bump around `centre`, 1 at the centre and 0 beyond `width` degrees.
-    public static func hueBump(_ hue: Float, centre: Float, width: Float) -> Float {
-        let d = hueDistance(hue, centre) / width
-        return d >= 1 ? 0 : 0.5 + 0.5 * cos(d * .pi)
-    }
-
     public static func smoothstep(_ edge0: Float, _ edge1: Float, _ x: Float) -> Float {
         let t = min(max((x - edge0) / (edge1 - edge0), 0), 1)
         return t * t * (3 - 2 * t)

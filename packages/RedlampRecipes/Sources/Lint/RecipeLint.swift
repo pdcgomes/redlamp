@@ -35,16 +35,6 @@ public enum RecipeLint {
             case .clipping: (0.03, 0.1)
             }
         }
-
-        public var unit: String {
-            switch self {
-            case .neutralAxis: "OKLab chroma added to greys"
-            case .skinHue: "degrees of hue shift, weighted by chroma"
-            case .monotonicLuminance: "largest lightness drop"
-            case .banding: "abrupt contrast changes in one gradient"
-            case .clipping: "fraction of colors newly clipped to black or white"
-            }
-        }
     }
 
     public enum Status: String, Sendable, Codable, Comparable {

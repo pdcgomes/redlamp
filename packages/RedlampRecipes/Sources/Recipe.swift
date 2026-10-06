@@ -308,13 +308,6 @@ public enum RecipeSource: Sendable, Hashable {
     case cameraCard(CameraRecipeCard, mappingVersion: Int)
     /// A dialect this build doesn't know, kept unchanged.
     case other(dialect: String, payload: [String: JSONValue])
-
-    public var dialect: String {
-        switch self {
-        case .cameraCard: CameraRecipeCard.dialect
-        case let .other(dialect, _): dialect
-        }
-    }
 }
 
 extension RecipeSource: Codable {
