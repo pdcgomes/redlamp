@@ -251,7 +251,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Judging photos while culling | No | Planned | | P4 | LIB-38 | Sensor clipping and a raw histogram in the loupe and Compare, since a raw's embedded JPEG hides clipping, with focus peaking, the camera's focus point and a loupe that follows the pointer |
 | Rating, flagging and labelling many photos at once | Yes | In progress | | P4 | LIB-15 | With Undo, custom label names and colours, and marks; by key, by mouse or from the command palette |
 | Keywords | Yes | In progress | | P4 | LIB-21 | |
-| Metadata editing and presets | Yes | In progress | | P4 | LIB-22 | |
+| Metadata editing and presets | Yes | In progress | | P4 | LIB-22 | IPTC fields on many photos at once, presets that replace, append or prefix, and capture times shifted or set, each with Undo |
 | Collections and smart collections | Yes | In progress | | P4 | LIB-23 | |
 | Metadata shared with other apps (XMP) | Yes | In progress | | P4 | LIB-24 | Other apps' XMP is read; standard `.xmp` sidecars are written only when you turn it on, and originals are never changed |
 | Import from cards and cameras | Yes | In progress | | P4 | LIB-27 | With a backup copy |

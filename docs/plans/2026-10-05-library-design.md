@@ -143,6 +143,10 @@ ALTER TABLE photos ADD COLUMN other_fields INTEGER NOT NULL DEFAULT 0;  -- bits:
                                                                         -- apps' values, not the .redlamp's
 ALTER TABLE photos ADD COLUMN xmp_signature INTEGER;  -- changes whenever either of the photo's .xmp does
 ALTER TABLE collections ADD COLUMN path TEXT;         -- unique: collections are found by path
+-- version 5 (LIB-22): the camera's own capture time and zone, kept only while a sidecar shifts the time
+-- or sets the zone, so the camera's time can always be had again and a changed sidecar needs no read
+ALTER TABLE photos ADD COLUMN camera_captured REAL;
+ALTER TABLE photos ADD COLUMN camera_offset INTEGER;
 ```
 
 - **Snapshots and integrity.** While the index changes, a snapshot is taken with `VACUUM INTO` at most every 30 minutes, the last three kept (`LibraryPaths.snapshots`). `PRAGMA quick_check` runs in the background lane at launch once a week. A damaged index is replaced by its newest good snapshot and reconciled with the disks (LIB-08); with no snapshot, it's rebuilt.
@@ -253,7 +257,9 @@ As built (LIB-17): an edited photo the library shows is rendered with its edit b
 | `customLabel` | a custom label's name: an unknown `label` value makes a sidecar unreadable to older builds, so custom labels never go in `label` |
 | `stack` | a manual stack, `{"id": "<UUID>", "top": true}`, `top` written only when true (LIB-28) |
 | `originalName` | the photo's file name before Redlamp first renamed it (LIB-26), kept by older builds as a field they don't know |
-| `captureShift`, `captureOffset` | proposed for LIB-22's shifting of capture times, not built: seconds added to the camera's time, written when not zero, and the camera's zone; the file itself is never touched, and the indexer reads both into `captured`, so sorting, `date:`, bursts and `{date}` follow |
+| `captureShift`, `captureOffset` | LIB-22's shifting of capture times: whole seconds added to the camera's time, written only when not 0, and the camera's zone in seconds east of UTC (up to ±50,400), written only when set; the photo's file is never touched, and the index reads both into `captured` and `captured_offset`, so sorting, `date:`, bursts and `{date}` follow |
+
+When Develop saves an edit over a sidecar another writer changed since it was read, the save keeps every metadata field that writer changed, these included, as it keeps ratings and keywords.
 
 ## Keywords (LIB-21)
 
@@ -269,8 +275,10 @@ As built (LIB-17): an edited photo the library shows is rendered with its edit b
 - **Changes on many photos** (`LibraryMetadata`, `LibraryCollections`): ratings, flags, labels, custom labels and marks (the library half of culling, LIB-15), IPTC Core's fields, collections and manual stacks, one batch each through `SidecarStore.change`, off the main thread, journaled with keywords' changes (`BatchJournal`) and undoable. A batch remembers which of its fields showed other apps' values, so Undo shows them as theirs again.
 - **Presets** apply only the fields ticked, replacing, appending or prefixing, as Photo Mechanic's templates do, and are kept in `Definitions/`. **Code replacements** come from a tab-separated file of codes and texts, and `\code\` in a field is expanded.
 - **Collections** are in each photo's sidecar by path, as keywords are, and the index's `collections` and `collection_photos` come from them. A rename or move rewrites the sidecars of the photos in it. What photos can't carry (sets, empty collections, smart collections as saved queries in the query language, the target collection) is in `Definitions/Collections.json`, keeping keys a newer build wrote, so the index stays rebuildable (DEC-35).
+- **Capture times** (`CaptureTimeChange`): shifted by an amount, set on one photo with the rest shifted by as much, as Lightroom Classic's Edit Capture Time does, or given the camera's zone, each one batch with Undo; `captured` is the camera's time plus the shift.
 - **Naming's metadata tokens** (`{title}`, `{caption}`, `{creator}`, `{copyright}`, `{city}`, `{state}`, `{country}`, `{sublocation}`) read the merged fields.
-- **`redlamp library metadata`, `collections` and `stacks stack|unstack|top`** change the photos a query finds, each with `--dry-run`.
+- **Sidecars a batch leaves as they are** keep the index's date for them, in keyword and metadata batches alike, and the XMP sync records the dates of the `.redlamp` sidecars it writes, so change tracking reads none of them again.
+- **`redlamp library metadata`, `metadata shift` and `zone`, `collections` and `stacks stack|unstack|top`** change the photos a query finds, each with `--dry-run`.
 - **Not yet in searches:** `label:` with a custom label's name, `collection:`, smart collections' queries, and the creator, copyright and location as filters and free text wait for the query engine (LIB-06, LIB-18).
 
 ## Import (LIB-27)
@@ -681,6 +689,8 @@ Removing a sidecar still costs 4 to 5 ms even eight at a time, so Undo didn't ga
 | Its Undo | 11.6 and 12.4 s | |
 | 10,000 photos put in a collection | 10 and 25 s | |
 | Renaming the set that holds it | 20 and 23 s | |
+| 10,000 photos' capture times shifted (load 30 to 50) | 12.5 and 14.2 s, then indexed again with nothing read | |
+| Its Undo | 21.8 and 22.7 s | |
 
 The index build isn't slower with the new fields. A change only the `.redlamp` has now keeps the fields its row shows from other apps and reads the photo again only for a field that was the `.redlamp`'s, which is what the re-reads after a keyword were.
 
@@ -719,11 +729,11 @@ What it changed: the first version took 3.7 s for the million, keeping 13 to 16 
 - Recently Trashed in the app: a source of its own (trashed photos have no index rows, so `PhotoSource` needs a case for them, with thumbnails by content key), following `trashedUpdates()`. Each refresh reads every kept Trash journal and checks each file, and pruning does the same for the old batches it keeps; neither is measured yet.
 - The XMP merge records: a table of their own rather than one settings row per photo.
 - Photo Mechanic's Urgency numbers for its colour classes (purple 1, red 2, yellow 4, green 5, blue 6), which nothing confirmed yet.
-- The capture-time zone: EXIF's offset tags when present, else the Mac's zone at import, recorded per photo.
+- The capture-time zone of a photo whose sidecar gives none (`captureOffset`) and whose file records none in EXIF's offset tags: the Mac's zone at import, recorded per photo, isn't done.
 - Whether the map (LIB-35) moves into 1.0.
 - Soft frames (LIB-42) in 1.0 or after: first measured on three shoots the owner has culled (an event, travel, portraits). They go into 1.0 if the proposal is the owner's pick in at least 70% of bursts and would set aside an owner's pick in under 10% ([LIB-katami §6](../research/notes/LIB-katami.md#6-before-the-changes-are-accepted)). The same shoots set the moments' defaults (LIB-41), which stand if 45 of 50 boundaries are right in each.
 - Dust followed across shoots (LIB-43) needs each body's serial number in the index.
 - Indexing folders in iCloud Drive without downloading every photo: from what's already downloaded, and the rest as it arrives.
 - Whether FSEvents reports Redlamp's own writes on this Mac. The streams don't ask to leave them out (`kFSEventStreamCreateFlagIgnoreSelf` isn't set), so they should, but the app's saves were seen going unreported, perhaps only inside Cursor's sandbox. The app reports its writes to `LibraryLive` either way.
-- Two writers leave change tracking re-reads it needn't make: keyword batches clear `sidecar_modified` for sidecars they leave unchanged, and the XMP sync doesn't record the dates of the `.redlamp` sidecars it writes.
+- A shifted capture time in the `.xmp` Redlamp writes: Adobe documents Lightroom Classic's Edit Capture Time as changing EXIF's DateTimeOriginal, written into raws only with a catalog setting that's off by default, and Photo Mechanic's as adjusting the camera's timestamp; neither names XMP properties. Redlamp's `.xmp` should carry `exif:DateTimeOriginal` and `photoshop:DateCreated` for a shifted photo, and read them from other apps' as a shift.
 - The app's library service still works out when a volume is current from `.replayed` and `.finished`, which also marked one current after a pass that ended offline; it should use `.caughtUp(volume:)` and `.volumeOffline`.
