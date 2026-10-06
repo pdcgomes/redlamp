@@ -110,6 +110,7 @@ extension ColorMixerPanel.Mixer: MenuChoice {
         switch self {
         case .hsl: "slider.horizontal.3"
         case .color: "swatchpalette"
+        case .pointColor: "eyedropper"
         }
     }
 }
