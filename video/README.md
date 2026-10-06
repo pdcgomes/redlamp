@@ -66,6 +66,35 @@ The app opens with the film's opening the first time it runs, and again from Hel
 - The score is the `welcome` cut in `cuts.json`: the opening, then two bars that hold its last chord. `score.py` draws the opening's sounds as it draws the film's and plays them in the film's reverb at the film's level, so they sound as they do in the film. Levelled to −16 LUFS on its own, the quiet opening would come out far louder.
 - It's HEVC Main10, about 2.5 MB, encoded by VideoToolbox through Remotion's ffmpeg from a ProRes 4444 master. In 8 bits the glow's dark gradient bands on the held frame, and Remotion's own HEVC encoder is 8-bit only.
 
+## Star Redlamp
+
+A 16-second promo for social feeds, in 9:16 and 1:1, that asks people to star Redlamp on GitHub: the website's star nudge ([docs/brand/star-nudge.md](../docs/brand/star-nudge.md)) played as a short film. The lamp charges and trembles to a snare roll, fires its light into the GitHub badge on the drop, a sign drops on its rope and catches on the beat, and a cursor stars the project. Its brief, hooks, script and post copy are in the [design](../docs/plans/2026-10-06-star-promo.md).
+
+```bash
+python3 scripts/star-score.py   # the score (needs numpy)
+npm run studio                  # StarPromo9x16 and StarPromo1x1, under Star
+npm run star                    # both cuts and their posters, into out/star/
+```
+
+Each hook is a value of the compositions' `hook` prop (`charging`, `favour`, `psst`, `wait`, `day`). `npm run star -- --hook=psst` renders another, `--hooks` every one, `--no-count` the badge without its star count, and `--draft` a half-size preview. The badge shows the repository's star count as GitHub reports it when the promo renders, and one more after the click; in the agent sandbox, run it with `NODE_USE_ENV_PROXY=1` so the count can reach GitHub. `mise run video -- star` runs the same script.
+
+| File | Format |
+| --- | --- |
+| `out/star/star-redlamp-9x16.mp4` | 1080 × 1920, 16 s: TikTok, Reels, Shorts and Stories |
+| `out/star/star-redlamp-1x1.mp4` | 1080 × 1080, 16 s: feeds |
+| `out/star/*-poster.jpg` | The sign hanging under the badge, for covers |
+
+### How it's built
+
+- `src/star/cues.json` holds every timing, in beats on a 120 BPM grid, and `src/star/copy.ts` every word. `StarPromo.tsx` lays one timeline out for each shape, with a camera that creeps in on the lamp as it charges, pulls back for the shot, pushes in on the badge and pulls back for the end card.
+- Its pieces are the promo kit in `src/kit/`: the nudge's light, redrawn frame by frame from a seeded random source (`light.ts`); the lamp, shaken by each knock of the roll (`Lamp.tsx`); the GitHub badge (`GitHubBadge.tsx`); and the website's sign physics, `web/lib/hanging-sign.ts` itself, simulated once per shape and cached (`rope.ts`, `Sign.tsx`). Canvases draw in software, since headless Chrome can capture a frame before a GPU canvas is painted.
+- `scripts/star-score.py` writes the score from the same cue sheet with the synth library, `scripts/synth.py`: each hit of the build's snare roll is a knock that shakes the lamp, the hum follows the charge's curve, half a beat of silence holds the squash, the zap pans with the shot, and the drop lands on the hit. It's mastered to −14 LUFS with true peaks under −1 dBFS; the library's meter reads as ffmpeg's `ebur128` does.
+- `npm run storyboard -- StarPromo9x16 --cues=src/star/cues.json --score=star/score.json` lays a frame out at every cue over the score's level, into `out/`.
+
+## The promo studio
+
+New promos follow the project skill [redlamp-promo-studio](../.cursor/skills/redlamp-promo-studio/SKILL.md), which works like a small agency: a brief, hooks and copy, a script on a music grid, scenes from the kit, the edit, a score from `synth.py`, review and delivery, each with a guide, and the owner approving the script, the cut and the render. `npm run review` renders stills at chosen frames or at every cue, and `npm run storyboard` the storyboard sheet.
+
 ## Stills
 
 Nine product-brief images for the Reddit announcement, at 2880 × 1800 (a Mac App Store size), each a headline and a few words over real captures of the app. The [design](../docs/plans/2026-10-01-reddit-screenshots-design.md) has their copy and which posts use them.

@@ -91,7 +91,7 @@ Say what the app does and what it protects. Avoid exclamation marks and superlat
 
 ## Motion
 
-The brand's light moves in one place so far: the star nudge on the website's home page ([star-nudge.md](star-nudge.md)). Light gathers behind the lamp while it trembles, shoots in an arc to the GitHub button, and a sign drops on a rope. It keeps the rules above: the light has a source and moves rather than multiplies, and the lens is never given a bright centre.
+The brand's light moves in two places so far: the star nudge on the website's home page ([star-nudge.md](star-nudge.md)), and the star promo for social feeds, which plays the same nudge as a short film ([its design](../plans/2026-10-06-star-promo.md)). Light gathers behind the lamp while it trembles, shoots in an arc to the GitHub button, and a sign drops on a rope. Both keep the rules above: the light has a source and moves rather than multiplies, and the lens is never given a bright centre. Promos are made with the promo studio (`.cursor/skills/redlamp-promo-studio/`), whose kit draws the light the same way.
 
 ## Where the brand appears
 
@@ -100,4 +100,5 @@ The brand's light moves in one place so far: the star nudge on the website's hom
 | Dock, Finder and App Store | The app icon |
 | About window, onboarding and empty states | The app icon or the mark, `wall` or `bakelite` backgrounds, the voice |
 | Website and README | The lockups, the app icon, `wall` backgrounds lit by one red glow |
+| Films and social promos | The app icon's lamp and its light in motion, the GitHub badge and the paper sign, `wall` backgrounds, the voice |
 | Develop workspace, panels, sliders and canvas | Nothing. They stay neutral grey. |
