@@ -63,11 +63,12 @@ struct DuplicatePlanTests {
         try sandbox.write("B/IMG_0001.JPG", x, modified: 10)
         try sandbox.write("C/IMG_0001.JPG", x, modified: 20)
         try sandbox.sidecar("B/IMG_0001.JPG", PhotoMetadata(rating: 0, flag: .reject))
-        let xmp = Data(FixtureWriter.xmp(.init(rating: 2, label: nil, keywords: ["birds"])).utf8)
+        let unrated = Data(FixtureWriter.xmp(.init(rating: 0, label: nil, keywords: ["birds"])).utf8)
+        let rated = Data(FixtureWriter.xmp(.init(rating: 2, label: nil, keywords: ["birds"])).utf8)
         // B's .xmp is named after the name it shares with its raw; C's after its own.
-        try sandbox.write("B/IMG_0001.xmp", xmp)
+        try sandbox.write("B/IMG_0001.xmp", unrated)
         try sandbox.write("B/IMG_0001.ARW", duplicateBytes(300_000, seed: 33))
-        try sandbox.write("C/IMG_0001.JPG.xmp", xmp)
+        try sandbox.write("C/IMG_0001.JPG.xmp", rated)
         try await sandbox.indexAll()
         let finder = sandbox.finder()
         let review = try await finder.review(finder.confirm(finder.candidates()))
@@ -78,7 +79,7 @@ struct DuplicatePlanTests {
         #expect(group.copies.map(\.photo) == [a, b, c])
         #expect(group.copies.map { $0.otherXMP?.lastPathComponent } == [nil, "IMG_0001.xmp", "IMG_0001.JPG.xmp"])
         #expect(group.copies.map(\.sharesOtherXMP) == [false, true, false])
-        // B's sidecar, with no stars, stands before its .xmp's two; C's .xmp is all it has.
+        // B has no stars in its sidecar or its .xmp; C's .xmp is all it has.
         #expect(group.keeper == .init(photo: c, reason: .onlyEditedOrRated, editedOrRated: 1))
 
         let plan = try DuplicateRemovalPlan(review, removing: [a, b])
