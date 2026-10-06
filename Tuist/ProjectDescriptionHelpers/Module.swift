@@ -19,6 +19,9 @@ public enum Module: String, CaseIterable {
     case canvas = "RedlampCanvas"
     case design = "RedlampDesign"
     case ui = "RedlampUI"
+    /// The Recipe Lab: a development tool only the harness links, so neither it nor
+    /// Charts ships in the app.
+    case lab = "RedlampLab"
     /// The regression suite's driver (ARC-07): scenarios that work the app through its own
     /// input paths. Its sources compile only in Debug and profiling builds.
     case automation = "RedlampAutomation"
@@ -39,7 +42,7 @@ public enum Module: String, CaseIterable {
     public var isEngineLayer: Bool {
         switch self {
         case .engineAPI, .kernels, .color, .services, .document, .recipes, .masking, .generative, .engine: true
-        case .canvas, .design, .ui, .automation: false
+        case .canvas, .design, .ui, .lab, .automation: false
         }
     }
 
@@ -78,6 +81,7 @@ public enum Module: String, CaseIterable {
         case .canvas: [.engineAPI]
         case .design: [.engineAPI]
         case .ui: [.engineAPI, .canvas, .design, .document, .recipes]
+        case .lab: [.engineAPI, .design, .recipes, .ui]
         case .automation: [.engineAPI, .canvas, .design, .document, .recipes, .ui]
         }
     }

@@ -37,6 +37,7 @@ let project = Project(
                 Module.canvas.dependency,
                 Module.design.dependency,
                 Module.ui.dependency,
+                Module.lab.dependency,
             ],
             settings: .settings(
                 base: [
