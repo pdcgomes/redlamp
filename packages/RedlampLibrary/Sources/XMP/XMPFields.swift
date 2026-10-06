@@ -3,25 +3,33 @@ import ImageIO
 import RedlampDocument
 import UniformTypeIdentifiers
 
-/// The fields other apps share through XMP, as Redlamp keeps them: a rating, a flag, a colour label,
-/// keywords, a title and a caption. Each app's conventions for them come in through
-/// `XMPSource.init(packet:conventions:)` and go out through `changes(_:to:conventions:now:)`.
+/// The fields other apps share through XMP, as Redlamp keeps them: a rating, a flag, a colour label or
+/// a custom one, keywords, and IPTC Core's title, caption, creator, copyright and location. Each app's
+/// conventions for them come in through `XMPSource.init(packet:conventions:)` and go out through
+/// `changes(_:to:conventions:now:)`.
 public struct XMPFields: Sendable, Hashable, Codable {
     /// 1 to 5 stars; nil when unrated.
     public var rating: Int?
     public var flag: PhotoFlag?
     public var label: ColorLabel?
-    /// A label none of the sets names ("Urgent", Capture One's "Orange"), as it's written. Read only,
-    /// until the sidecar holds custom labels.
+    /// A label none of the sets names ("Urgent", Capture One's "Orange"), as it's written, when `label`
+    /// is nil.
     public var customLabel: String?
     /// Each keyword's path from the top of its hierarchy: "Places/Portugal/Lisbon".
     public var keywords: [String]
+    /// An empty title, caption, creator, copyright or location is the `.redlamp`'s none, which XMP
+    /// writes as no value.
     public var title: String?
     public var caption: String?
+    /// The creators' names, separated by semicolons.
+    public var creator: String?
+    public var copyright: String?
+    public var location: PhotoLocation?
 
     public init(
         rating: Int? = nil, flag: PhotoFlag? = nil, label: ColorLabel? = nil, customLabel: String? = nil,
-        keywords: [String] = [], title: String? = nil, caption: String? = nil,
+        keywords: [String] = [], title: String? = nil, caption: String? = nil, creator: String? = nil,
+        copyright: String? = nil, location: PhotoLocation? = nil,
     ) {
         self.rating = rating
         self.flag = flag
@@ -30,42 +38,74 @@ public struct XMPFields: Sendable, Hashable, Codable {
         self.keywords = keywords
         self.title = title
         self.caption = caption
+        self.creator = creator
+        self.copyright = copyright
+        self.location = location
     }
 
     /// The fields a `.redlamp` sidecar's metadata holds: a rating of 0 is none, and so are no keywords.
     public init(_ metadata: PhotoMetadata?) {
         self.init(
             rating: metadata.flatMap { $0.rating > 0 ? $0.rating : nil }, flag: metadata?.flag, label: metadata?.label,
-            keywords: KeywordPath.texts(metadata?.keywords ?? []),
+            customLabel: metadata?.label == nil ? metadata?.customLabel.flatMap(XMPSource.trimmed) : nil,
+            keywords: KeywordPath.texts(metadata?.keywords ?? []), title: metadata?.title, caption: metadata?.caption,
+            creator: metadata?.creator, copyright: metadata?.copyright, location: metadata?.location,
         )
     }
 
     public var isEmpty: Bool {
-        XMPField.allCases.allSatisfy { !holds($0) } && customLabel == nil
+        XMPField.allCases.allSatisfy { !holds($0) }
     }
 
-    /// Whether it has a value for `field`.
+    /// Whether it has a value for `field`; an empty text or location is one.
     public func holds(_ field: XMPField) -> Bool {
         switch field {
         case .rating: rating != nil
         case .flag: flag != nil
-        case .label: label != nil
+        case .label: label != nil || customLabel != nil
         case .keywords: !keywords.isEmpty
         case .title: title != nil
         case .caption: caption != nil
+        case .creator: creator != nil
+        case .copyright: copyright != nil
+        case .location: location != nil
         }
     }
 
-    /// Whether `other` has the same value for `field`: keywords in any order.
+    /// Whether `other` has the same value for `field`, as XMP can tell: keywords in any order, texts
+    /// without the spaces at their ends, creators name by name, and an empty text or location as none.
     public func same(_ field: XMPField, as other: XMPFields) -> Bool {
         switch field {
         case .rating: rating == other.rating
         case .flag: flag == other.flag
-        case .label: label == other.label
+        case .label: label == other.label && (label != nil || Self.text(customLabel) == Self.text(other.customLabel))
         case .keywords: Set(keywords) == Set(other.keywords)
-        case .title: title == other.title
-        case .caption: caption == other.caption
+        case .title: Self.text(title) == Self.text(other.title)
+        case .caption: Self.text(caption) == Self.text(other.caption)
+        case .creator: Self.names(creator) == Self.names(other.creator)
+        case .copyright: Self.text(copyright) == Self.text(other.copyright)
+        case .location: Self.place(location) == Self.place(other.location)
         }
+    }
+
+    /// A text as XMP holds it: without the spaces at its ends, nil when that leaves nothing.
+    static func text(_ value: String?) -> String? {
+        value.flatMap(XMPSource.trimmed)
+    }
+
+    /// The names in a creator's text, which separates them with semicolons.
+    static func names(_ creator: String?) -> [String] {
+        creator?.split(separator: ";").compactMap { XMPSource.trimmed(String($0)) } ?? []
+    }
+
+    /// A location as XMP holds it: each field trimmed, nil when none is left.
+    static func place(_ location: PhotoLocation?) -> PhotoLocation? {
+        guard let location else { return nil }
+        let place = PhotoLocation(
+            country: text(location.country), state: text(location.state), city: text(location.city),
+            sublocation: text(location.sublocation), countryCode: text(location.countryCode),
+        )
+        return place.isEmpty ? nil : place
     }
 
     /// Takes `other`'s value for `field`.
@@ -79,6 +119,9 @@ public struct XMPFields: Sendable, Hashable, Codable {
         case .keywords: keywords = other.keywords
         case .title: title = other.title
         case .caption: caption = other.caption
+        case .creator: creator = other.creator
+        case .copyright: copyright = other.copyright
+        case .location: location = other.location
         }
     }
 
@@ -93,9 +136,25 @@ public struct XMPFields: Sendable, Hashable, Codable {
         }
         if fields.contains(.label) {
             applied.label = label
+            applied.customLabel = label == nil ? customLabel : nil
         }
         if fields.contains(.keywords) {
             applied.keywords = keywords
+        }
+        if fields.contains(.title) {
+            applied.title = title
+        }
+        if fields.contains(.caption) {
+            applied.caption = caption
+        }
+        if fields.contains(.creator) {
+            applied.creator = creator
+        }
+        if fields.contains(.copyright) {
+            applied.copyright = copyright
+        }
+        if fields.contains(.location) {
+            applied.location = location
         }
         return applied
     }
@@ -103,12 +162,11 @@ public struct XMPFields: Sendable, Hashable, Codable {
 
 /// A field `XMPFields` keeps.
 public enum XMPField: String, Sendable, Hashable, Codable, CaseIterable, Comparable {
-    case rating, flag, label, keywords, title, caption
+    case rating, flag, label, keywords, title, caption, creator, copyright, location
 
-    /// The fields `.redlamp` sidecars hold. Titles and captions join with LIB-22: once `PhotoMetadata`
-    /// has them, they're added here and to `XMPFields`' conversions to and from it, and they merge and
-    /// are written as these are.
-    public static let held: Set<XMPField> = [.rating, .flag, .label, .keywords]
+    /// The fields `.redlamp` sidecars hold, which merge and are written: every one, since LIB-22 gave
+    /// `PhotoMetadata` the title, caption, creator, copyright and location.
+    public static let held = Set(allCases)
 
     public static func < (lhs: XMPField, rhs: XMPField) -> Bool {
         allCases.firstIndex(of: lhs) ?? 0 < allCases.firstIndex(of: rhs) ?? 0
@@ -204,7 +262,35 @@ public struct XMPSource: Sendable, Hashable, Codable {
             present.insert(.caption)
             fields.caption = packet.alternative(XMPNamespace.description).flatMap(Self.trimmed)
         }
+        if packet.has(XMPNamespace.creator) {
+            present.insert(.creator)
+            fields.creator = Self.joined(packet.items(XMPNamespace.creator))
+        }
+        if packet.has(XMPNamespace.rights) {
+            present.insert(.copyright)
+            fields.copyright = packet.alternative(XMPNamespace.rights).flatMap(Self.trimmed)
+        }
+        if Self.places.contains(where: { packet.has($0) }) {
+            present.insert(.location)
+            fields.location = XMPFields.place(PhotoLocation(
+                country: packet.text(XMPNamespace.country), state: packet.text(XMPNamespace.state),
+                city: packet.text(XMPNamespace.city), sublocation: packet.text(XMPNamespace.sublocation),
+                countryCode: packet.text(XMPNamespace.countryCode),
+            ))
+        }
         self.init(fields: fields, present: present)
+    }
+
+    /// The properties a location is written in.
+    static let places = [
+        XMPNamespace.sublocation, XMPNamespace.city, XMPNamespace.state, XMPNamespace.country,
+        XMPNamespace.countryCode,
+    ]
+
+    /// Names as one text, separated by semicolons; nil when there are none.
+    static func joined(_ names: [String]) -> String? {
+        let names = names.compactMap(trimmed)
+        return names.isEmpty ? nil : names.joined(separator: "; ")
     }
 
     /// What an `.xmp`'s bytes hold; nil when they aren't XMP.
@@ -213,8 +299,9 @@ public struct XMPSource: Sendable, Hashable, Codable {
         self.init(packet: packet, conventions: conventions)
     }
 
-    /// What a photo's own XMP holds, and its IPTC where the XMP has nothing (ImageIO mirrors most of
-    /// each into the other); nil when ImageIO can't read the file or it holds none of the fields.
+    /// What a photo's own XMP holds, and its IPTC and TIFF fields where the XMP has nothing (ImageIO
+    /// mirrors most of each into the other); nil when ImageIO can't read the file or it holds none of
+    /// the fields.
     public static func embedded(in url: URL, conventions: XMPConventions = XMPConventions()) -> XMPSource? {
         var options: [CFString: Any] = [kCGImageSourceShouldCache: false]
         options[kCGImageSourceTypeIdentifierHint] = UTType(filenameExtension: url.pathExtension)?.identifier
@@ -225,15 +312,16 @@ public struct XMPSource: Sendable, Hashable, Codable {
         let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any]
         return embedded(
             XMPImageProperties(CGImageSourceCopyMetadataAtIndex(source, index, nil)),
-            iptc: properties?[kCGImagePropertyIPTCDictionary] as? [CFString: Any] ?? [:], conventions: conventions,
+            iptc: properties?[kCGImagePropertyIPTCDictionary] as? [CFString: Any] ?? [:],
+            tiff: properties?[kCGImagePropertyTIFFDictionary] as? [CFString: Any] ?? [:], conventions: conventions,
         )
     }
 
-    /// What a photo's own XMP (`xmp`, as ImageIO reads it) holds, and its IPTC (`iptc`) where the XMP
-    /// has nothing; nil when it holds none of the fields. The indexer reads both from the image
-    /// source it reads the rest of the photo's metadata from.
+    /// What a photo's own XMP (`xmp`, as ImageIO reads it) holds, and its IPTC (`iptc`) and TIFF
+    /// (`tiff`) fields where the XMP has nothing; nil when it holds none of the fields. The indexer reads
+    /// them from the image source it reads the rest of the photo's metadata from.
     static func embedded(
-        _ xmp: XMPImageProperties, iptc: [CFString: Any], conventions: XMPConventions,
+        _ xmp: XMPImageProperties, iptc: [CFString: Any], tiff: [CFString: Any] = [:], conventions: XMPConventions,
     ) -> XMPSource? {
         var found = XMPSource(packet: xmp, conventions: conventions)
         if !found.present.contains(.rating),
@@ -261,6 +349,29 @@ public struct XMPSource: Sendable, Hashable, Codable {
            let caption = PhotoMetadataReader.text(iptc[kCGImagePropertyIPTCCaptionAbstract]) {
             found.present.insert(.caption)
             found.fields.caption = caption
+        }
+        let byline = (iptc[kCGImagePropertyIPTCByline] as? [String])
+            ?? (iptc[kCGImagePropertyIPTCByline] as? String).map { [$0] } ?? []
+        if !found.present.contains(.creator),
+           let creator = joined(byline) ?? PhotoMetadataReader.text(tiff[kCGImagePropertyTIFFArtist]) {
+            found.present.insert(.creator)
+            found.fields.creator = creator
+        }
+        if !found.present.contains(.copyright),
+           let copyright = PhotoMetadataReader.text(iptc[kCGImagePropertyIPTCCopyrightNotice])
+           ?? PhotoMetadataReader.text(tiff[kCGImagePropertyTIFFCopyright]) {
+            found.present.insert(.copyright)
+            found.fields.copyright = copyright
+        }
+        if !found.present.contains(.location), let location = XMPFields.place(PhotoLocation(
+            country: PhotoMetadataReader.text(iptc[kCGImagePropertyIPTCCountryPrimaryLocationName]),
+            state: PhotoMetadataReader.text(iptc[kCGImagePropertyIPTCProvinceState]),
+            city: PhotoMetadataReader.text(iptc[kCGImagePropertyIPTCCity]),
+            sublocation: PhotoMetadataReader.text(iptc[kCGImagePropertyIPTCSubLocation]),
+            countryCode: PhotoMetadataReader.text(iptc[kCGImagePropertyIPTCCountryPrimaryLocationCode]),
+        )) {
+            found.present.insert(.location)
+            found.fields.location = location
         }
         return found.present.isEmpty ? nil : found
     }
@@ -302,8 +413,10 @@ extension XMPFields {
     /// `conventions`' names, with `xmp:MetadataDate` set to `now` when there are any; none for a
     /// field it holds already. A reject is `xmp:Rating` -1, which takes the place of the stars; a
     /// pick is Lightroom's `xmpDM:good`; a label is its name in the chosen set with its colour in
-    /// `xmp:LabelColor`, and Urgency when `conventions` write it; keywords go to Lightroom's paths and
-    /// the flat list; a title and caption to the default language.
+    /// `xmp:LabelColor`, and Urgency when `conventions` write it, and a custom label its name alone;
+    /// keywords go to Lightroom's paths and the flat list; a title, caption and copyright to the
+    /// default language, other languages kept (an empty default clears one beside them); creators to a
+    /// sequence of names; and a location to IPTC Core's five properties.
     func changes(
         _ fields: Set<XMPField>, to packet: XMPPacket?, conventions: XMPConventions, now: Date,
     ) -> [(XMPProperty, XMPValue?)] {
@@ -328,13 +441,20 @@ extension XMPFields {
                 changes.append((XMPNamespace.good, nil))
             }
         }
-        if fields.contains(.label), current.label != label {
+        if fields.contains(.label), !current.same(.label, as: self) {
             if let label {
                 changes.append((XMPNamespace.label, .text(conventions.labels.name(for: label))))
                 changes.append((XMPNamespace.labelColor, .text(label.rawValue)))
                 if conventions.urgency {
                     changes.append((XMPNamespace.urgency, .text(String(XMPUrgency.value(for: label)))))
                 }
+            } else if let custom = Self.text(customLabel) {
+                changes.append((XMPNamespace.label, .text(custom)))
+                var removed = [XMPNamespace.labelColor]
+                if conventions.urgency {
+                    removed.append(XMPNamespace.urgency)
+                }
+                changes += removed.filter(has).map { ($0, nil) }
             } else {
                 var removed = [XMPNamespace.label, XMPNamespace.labelColor]
                 if conventions.urgency {
@@ -361,12 +481,34 @@ extension XMPFields {
         for (field, property, value) in [
             (XMPField.title, XMPNamespace.title, title),
             (.caption, XMPNamespace.description, caption),
+            (.copyright, XMPNamespace.rights, copyright),
         ]
             where fields.contains(field) && !current.same(field, as: self) {
-            if let value {
+            if let value = Self.text(value) {
                 changes.append((property, .alternative(value)))
             } else if has(property) {
-                changes.append((property, nil))
+                changes.append((property, packet?.hasOtherLanguages(property) == true ? .alternative("") : nil))
+            }
+        }
+        if fields.contains(.creator), !current.same(.creator, as: self) {
+            let names = Self.names(creator)
+            if !names.isEmpty {
+                changes.append((XMPNamespace.creator, .seq(names)))
+            } else if has(XMPNamespace.creator) {
+                changes.append((XMPNamespace.creator, nil))
+            }
+        }
+        if fields.contains(.location), !current.same(.location, as: self) {
+            let place = Self.place(location)
+            let values = [place?.sublocation, place?.city, place?.state, place?.country, place?.countryCode]
+            for (property, value) in zip(XMPSource.places, values) {
+                if let value {
+                    if packet?.text(property).flatMap(XMPSource.trimmed) != value {
+                        changes.append((property, .text(value)))
+                    }
+                } else if has(property) {
+                    changes.append((property, nil))
+                }
             }
         }
         if !changes.isEmpty {

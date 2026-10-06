@@ -65,7 +65,13 @@ struct PhotoMetadataReaderTests {
         #expect(metadata.xmp == XMPSource.embedded(in: folder.url.appending(path: "IMG_0001.jpg")))
         #expect(metadata.xmp?.fields == XMPFields(
             rating: 4, label: .green, keywords: ["Places/Portugal/Lisbon", "Animals/Birds/Gulls"], title: "Tram 28",
-            caption: "The tram climbing to Graça.",
+            caption: "The tram climbing to Graça.", creator: "Pedro Gomes; Ana Silva", copyright: "© 2026 Pedro Gomes",
+            location: CaptureMetadata.Location(
+                country: "Portugal",
+                state: "Lisboa",
+                city: "Lisbon",
+                sublocation: "Alfama",
+            ),
         ))
         metadata.xmp = nil
         #expect(metadata == CaptureMetadata(

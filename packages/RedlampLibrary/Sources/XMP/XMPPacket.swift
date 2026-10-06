@@ -15,11 +15,13 @@ struct XMPProperty: Sendable, Hashable, Comparable {
     }
 }
 
-/// A value Redlamp writes: simple text, an unordered array of text (`rdf:Bag`), or a language
-/// alternative's default (`rdf:Alt` with `xml:lang="x-default"`).
+/// A value Redlamp writes: simple text, an unordered or ordered array of text (`rdf:Bag`, `rdf:Seq`),
+/// or a language alternative's default (`rdf:Alt` with `xml:lang="x-default"`). An array written over
+/// one keeps the kind it had.
 enum XMPValue: Sendable, Hashable {
     case text(String)
     case bag([String])
+    case seq([String])
     case alternative(String)
 }
 
@@ -167,6 +169,16 @@ struct XMPPacket: Sendable {
             return (child, kind, items)
         }
         return nil
+    }
+
+    /// Whether a language alternative has an item in a language other than the default.
+    func hasOtherLanguages(_ property: XMPProperty) -> Bool {
+        guard case let .element(id)? = places(property).first, let array = array(in: id), array.kind == .alt
+        else { return false }
+        return array.items.contains { item in
+            xml.elements[item].attribute(XMLElements.xmlNamespace, "lang").flatMap { xml.decode($0.value) }?
+                .lowercased() != "x-default"
+        }
     }
 
     func defaultItem(of items: [Int]) -> Int? {
@@ -318,8 +330,13 @@ extension XMPPacket {
                 range: element.whole,
                 replacement: "<\(element.qualifiedName)>\(Self.escape(text))</\(element.qualifiedName)>",
             )
-        case let .bag(items):
-            let kind = array(in: id).map(\.kind).flatMap { $0 == .alt ? nil : $0 } ?? .bag
+        case let .bag(items), let .seq(items):
+            let written: ArrayKind = if case .seq = value {
+                .seq
+            } else {
+                .bag
+            }
+            let kind = array(in: id).map(\.kind).flatMap { $0 == .alt ? nil : $0 } ?? written
             return Edit(
                 range: element.whole,
                 replacement: Self.array(
@@ -394,6 +411,8 @@ extension XMPPacket {
             case let .text(text): "<\(name)>\(Self.escape(text))</\(name)>"
             case let .bag(items):
                 Self.array(name, kind: .bag, items: items, indentation: childIndentation, rdf: rdfPrefix)
+            case let .seq(items):
+                Self.array(name, kind: .seq, items: items, indentation: childIndentation, rdf: rdfPrefix)
             case let .alternative(text):
                 Self.alternative(name, text, indentation: childIndentation, rdf: rdfPrefix)
             }

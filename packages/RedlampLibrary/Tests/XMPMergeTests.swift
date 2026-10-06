@@ -76,14 +76,25 @@ struct XMPMergeTests {
         #expect(ours.fields == XMPFields(rating: 3) && ours.taken.isEmpty && ours.decided == [.label, .rating].sorted())
     }
 
-    @Test func `only the fields asked about merge: titles and captions wait for the sidecar to hold them`() {
-        let other = XMPFields(keywords: ["Gulls"], title: "Tagus", caption: "Ferries")
-        let held = XMPMerge.merge(redlamp: XMPFields(), other: other, record: nil, otherIsLater: true)
-        #expect(held.fields == XMPFields(keywords: ["Gulls"]) && held.taken == [.keywords])
-        let all = XMPMerge.merge(
-            redlamp: XMPFields(), other: other, record: nil, fields: Set(XMPField.allCases), otherIsLater: true,
+    @Test func `every field the sidecar holds merges, and only the fields asked about`() {
+        let other = XMPFields(
+            customLabel: "Urgent", keywords: ["Gulls"], title: "Tagus", caption: "Ferries", creator: "Ana Sousa",
+            copyright: "© 2026 Ana Sousa", location: PhotoLocation(city: "Lisbon"),
         )
-        #expect(all.fields == other && all.taken == [.keywords, .title, .caption])
+        let all = XMPMerge.merge(redlamp: XMPFields(), other: other, record: nil, otherIsLater: true)
+        #expect(all.fields == other && all.taken == [
+            .label,
+            .keywords,
+            .title,
+            .caption,
+            .creator,
+            .copyright,
+            .location,
+        ])
+        let some = XMPMerge.merge(
+            redlamp: XMPFields(), other: other, record: nil, fields: [.keywords, .title], otherIsLater: true,
+        )
+        #expect(some.fields == XMPFields(keywords: ["Gulls"], title: "Tagus") && some.taken == [.keywords, .title])
         // Keywords compare as a set.
         let recorded = Self.record(other: XMPFields(keywords: ["A", "B"]), redlamp: XMPFields(keywords: ["A", "B"]))
         let reordered = XMPMerge.merge(

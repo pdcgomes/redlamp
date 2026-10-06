@@ -159,6 +159,15 @@ public struct XMPReport: Sendable {
         if fields.caption != nil {
             parts.append("a caption")
         }
+        if fields.creator != nil {
+            parts.append("a creator")
+        }
+        if fields.copyright != nil {
+            parts.append("a copyright")
+        }
+        if fields.location != nil {
+            parts.append("a location")
+        }
         return parts.isEmpty ? "nothing" : parts.joined(separator: ", ")
     }
 
@@ -188,6 +197,17 @@ public struct XMPReport: Sendable {
             object["customLabel"] = fields.customLabel
             object["title"] = fields.title
             object["caption"] = fields.caption
+            object["creator"] = fields.creator
+            object["copyright"] = fields.copyright
+            object["location"] = fields.location.map { location -> [String: String] in
+                var place: [String: String] = [:]
+                place["sublocation"] = location.sublocation
+                place["city"] = location.city
+                place["state"] = location.state
+                place["country"] = location.country
+                place["countryCode"] = location.countryCode
+                return place
+            }
             return object
         }
         let photos = photos.map { photo -> [String: Any] in

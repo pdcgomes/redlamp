@@ -84,9 +84,11 @@ enum XMPNamespace {
     static let lightroom = "http://ns.adobe.com/lightroom/1.0/"
     static let dynamicMedia = "http://ns.adobe.com/xmp/1.0/DynamicMedia/"
     static let darktable = "http://darktable.sf.net/"
+    static let iptcCore = "http://iptc.org/std/Iptc4xmpCore/1.0/xmlns/"
 
     static let prefixes = [
         xmp: "xmp", dc: "dc", photoshop: "photoshop", lightroom: "lr", dynamicMedia: "xmpDM", darktable: "darktable",
+        iptcCore: "Iptc4xmpCore",
     ]
 
     static let rating = XMPProperty(xmp, "Rating")
@@ -101,6 +103,16 @@ enum XMPNamespace {
     static let hierarchicalSubject = XMPProperty(lightroom, "hierarchicalSubject")
     static let title = XMPProperty(dc, "title")
     static let description = XMPProperty(dc, "description")
+    /// The creators, a sequence of names.
+    static let creator = XMPProperty(dc, "creator")
+    /// The copyright notice, a language alternative.
+    static let rights = XMPProperty(dc, "rights")
+    /// IPTC Core's sublocation: a place within the city.
+    static let sublocation = XMPProperty(iptcCore, "Location")
+    static let city = XMPProperty(photoshop, "City")
+    static let state = XMPProperty(photoshop, "State")
+    static let country = XMPProperty(photoshop, "Country")
+    static let countryCode = XMPProperty(iptcCore, "CountryCode")
     /// darktable's colour labels, a sequence of 0 (red) to 4 (purple).
     static let colorLabels = XMPProperty(darktable, "colorlabels")
 }

@@ -101,14 +101,15 @@ struct XMPFieldMappingTests {
         // Redlamp's label set over the custom one replaces it, colour and all.
         let written = try Self.write(XMPFields(label: .blue), [.label], into: Self.packet("xmp:Label=\"Urgent\""))
         #expect(written.text(XMPNamespace.label) == "Blue" && written.text(XMPNamespace.labelColor) == "blue")
-        // Clearing Redlamp's label leaves a custom label it can't show.
-        #expect(try XMPFields().changes(
-            [.label],
-            to: Self.packet("xmp:Label=\"Urgent\""),
-            conventions: XMPConventions(),
-            now: Self.now,
+        // A custom label of Redlamp's is written by its name alone, and clearing the label clears it.
+        let named = try Self.write(
+            XMPFields(customLabel: "Second Look"), [.label],
+            into: Self.packet("xmp:Label=\"Red\" xmp:LabelColor=\"red\""),
         )
-        .isEmpty)
+        #expect(named.text(XMPNamespace.label) == "Second Look" && !named.has(XMPNamespace.labelColor))
+        #expect(Self.read(named) == XMPFields(customLabel: "Second Look"))
+        let cleared = try Self.write(XMPFields(), [.label], into: Self.packet("xmp:Label=\"Urgent\""))
+        #expect(!cleared.has(XMPNamespace.label))
     }
 
     @Test func `labels read and written as Urgency, numbered as Photo Mechanic's colour classes, only when it's on`(

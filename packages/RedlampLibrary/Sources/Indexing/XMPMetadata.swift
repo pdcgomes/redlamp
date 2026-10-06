@@ -13,7 +13,7 @@ public enum XMPMetadata {
         guard let packet = XMPPacket(data) else { return nil }
         let source = XMPSource(packet: packet, conventions: conventions)
         var found = CaptureMetadata()
-        organise(&found, source.present.isEmpty ? nil : source, packet, iptc: [:], tiff: [:])
+        organise(&found, source.present.isEmpty ? nil : source)
         return found
     }
 
@@ -31,17 +31,12 @@ public enum XMPMetadata {
         _ found: inout CaptureMetadata, xmp: CGImageMetadata?, iptc: [CFString: Any], tiff: [CFString: Any],
         conventions: XMPConventions,
     ) {
-        let properties = XMPImageProperties(xmp)
         organise(
-            &found, XMPSource.embedded(properties, iptc: iptc, conventions: conventions), properties, iptc: iptc,
-            tiff: tiff,
+            &found, XMPSource.embedded(XMPImageProperties(xmp), iptc: iptc, tiff: tiff, conventions: conventions),
         )
     }
 
-    private static func organise(
-        _ found: inout CaptureMetadata, _ source: XMPSource?, _ properties: some XMPProperties,
-        iptc: [CFString: Any], tiff: [CFString: Any],
-    ) {
+    private static func organise(_ found: inout CaptureMetadata, _ source: XMPSource?) {
         found.xmp = source
         let fields = source?.fields ?? XMPFields()
         found.rating = fields.flag == .reject ? -1 : fields.rating
@@ -49,37 +44,8 @@ public enum XMPMetadata {
         found.keywords = fields.keywords
         found.title = fields.title
         found.caption = fields.caption
-        found.creator = joined(properties.items(creator)) ?? joined(texts(iptc[kCGImagePropertyIPTCByline]))
-            ?? text(tiff[kCGImagePropertyTIFFArtist])
-        found.copyright = text(properties.alternative(rights))
-            ?? text(iptc[kCGImagePropertyIPTCCopyrightNotice]) ?? text(tiff[kCGImagePropertyTIFFCopyright])
-        let location = CaptureMetadata.Location(
-            country: text(properties.text(country)) ?? text(iptc[kCGImagePropertyIPTCCountryPrimaryLocationName]),
-            state: text(properties.text(state)) ?? text(iptc[kCGImagePropertyIPTCProvinceState]),
-            city: text(properties.text(city)) ?? text(iptc[kCGImagePropertyIPTCCity]),
-            sublocation: text(properties.text(sublocation)) ?? text(iptc[kCGImagePropertyIPTCSubLocation]),
-        )
-        found.location = location.isEmpty ? nil : location
-    }
-
-    private static let creator = XMPProperty(XMPNamespace.dc, "creator")
-    private static let rights = XMPProperty(XMPNamespace.dc, "rights")
-    private static let country = XMPProperty(XMPNamespace.photoshop, "Country")
-    private static let state = XMPProperty(XMPNamespace.photoshop, "State")
-    private static let city = XMPProperty(XMPNamespace.photoshop, "City")
-    private static let sublocation = XMPProperty("http://iptc.org/std/Iptc4xmpCore/1.0/xmlns/", "Location")
-
-    private static func text(_ value: Any?) -> String? {
-        PhotoMetadataReader.text(value)
-    }
-
-    /// An IIM field ImageIO gives as one string or a list of them.
-    private static func texts(_ value: Any?) -> [String] {
-        (value as? [String]) ?? (value as? String).map { [$0] } ?? []
-    }
-
-    private static func joined(_ names: [String]) -> String? {
-        let names = names.compactMap(text)
-        return names.isEmpty ? nil : names.joined(separator: "; ")
+        found.creator = fields.creator
+        found.copyright = fields.copyright
+        found.location = fields.location
     }
 }

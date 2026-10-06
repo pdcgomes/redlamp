@@ -1,29 +1,13 @@
 import Foundation
+import RedlampDocument
 import RedlampEngineAPI
 
 /// What the library indexes from a photo's file: the camera's capture settings, and what other apps
 /// leave for organising photos (ratings, labels, keywords, titles, captions, creators, copyrights and
 /// places), from its EXIF, GPS, IPTC and XMP or another app's `.xmp` sidecar.
 public struct CaptureMetadata: Sendable, Hashable, Codable {
-    /// Where the photo was taken, in IPTC's fields.
-    public struct Location: Sendable, Hashable, Codable {
-        public var country: String?
-        public var state: String?
-        public var city: String?
-        /// A place within the city: a district, a street, a building.
-        public var sublocation: String?
-
-        public init(country: String? = nil, state: String? = nil, city: String? = nil, sublocation: String? = nil) {
-            self.country = country
-            self.state = state
-            self.city = city
-            self.sublocation = sublocation
-        }
-
-        public var isEmpty: Bool {
-            country == nil && state == nil && city == nil && sublocation == nil
-        }
-    }
+    /// Where the photo was taken, in IPTC's fields, as the sidecar holds it.
+    public typealias Location = PhotoLocation
 
     /// As the file writes them: "NIKON CORPORATION", "NIKON Z 6".
     public var make: String?
