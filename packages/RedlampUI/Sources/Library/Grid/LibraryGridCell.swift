@@ -1,6 +1,7 @@
 import AppKit
 import QuartzCore
 import RedlampDocument
+import RedlampEngineAPI
 
 /// A grid cell: the thumbnail is a layer's contents, composited by Core Animation, and the badges are the
 /// filmstrip's, drawn only when they change. Cells are reused as the grid scrolls; `configure` rebinds one
@@ -85,6 +86,9 @@ final class LibraryGridCellView: NSView {
         if changedPhoto || image != nil {
             setImage(image)
         }
+        // A cell's backing is four times a filmstrip cell's: one with nothing to show isn't drawn at all.
+        badges.isHidden = !item.hasEdits && item.metadata == PhotoMetadata() && item.isLocal
+            && !SupportedFormats.isStack(item.url)
         badges.item = item
         badges.hasImage = thumbnail.contents != nil
         toolTip = item.name

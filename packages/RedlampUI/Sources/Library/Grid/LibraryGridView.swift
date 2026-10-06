@@ -32,6 +32,8 @@ final class LibraryGridView: NSView, NSCollectionViewDataSource, NSCollectionVie
     private var isStale = true
     /// Rows whose badges changed while the grid was hidden.
     private var staleRows = IndexSet()
+    /// The cells on screen when the grid last scrolled.
+    private var visibleRows = 0 ..< 0
     /// Times every cell was reloaded: once the grid has been shown, a module switch reloads nothing.
     private(set) var reloads = 0
 
@@ -232,10 +234,11 @@ final class LibraryGridView: NSView, NSCollectionViewDataSource, NSCollectionVie
     /// What's on screen: kept in memory, and its badges read first.
     @objc private func scrolled() {
         guard isShown else { return }
-        let rows = collectionView.indexPathsForVisibleItems().map(\.item).filter(model.items.indices.contains)
-        guard let first = rows.min(), let last = rows.max() else { return }
+        let rows = layout.items(in: collectionView.visibleRect).clamped(to: model.items.indices)
+        guard rows != visibleRows, !rows.isEmpty else { return }
+        visibleRows = rows
         model.thumbnailLoader.protected = Set(rows.map { model.items[$0].url })
-        model.library.prioritize(first ..< last + 1)
+        model.library.prioritize(rows)
     }
 
     // MARK: - Changes

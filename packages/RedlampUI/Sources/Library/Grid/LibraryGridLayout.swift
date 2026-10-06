@@ -9,6 +9,8 @@ final class LibraryGridLayout: NSCollectionViewLayout {
 
     private var count = 0
     private var preparedWidth: CGFloat = 0
+    /// The cells' attributes as made since the layout last changed: scrolling asks for them every frame.
+    private var made: [Int: NSCollectionViewLayoutAttributes] = [:]
 
     /// The grid's width: its scroll view's.
     private var width: CGFloat {
@@ -35,6 +37,7 @@ final class LibraryGridLayout: NSCollectionViewLayout {
         super.prepare()
         count = collectionView.map { $0.numberOfSections > 0 ? $0.numberOfItems(inSection: 0) : 0 } ?? 0
         preparedWidth = width
+        made = [:]
     }
 
     override var collectionViewContentSize: NSSize {
@@ -75,8 +78,15 @@ final class LibraryGridLayout: NSCollectionViewLayout {
     }
 
     private func attributes(_ index: Int) -> NSCollectionViewLayoutAttributes {
+        if let attributes = made[index] {
+            return attributes
+        }
         let attributes = NSCollectionViewLayoutAttributes(forItemWith: IndexPath(item: index, section: 0))
         attributes.frame = frame(forItem: index)
+        if made.count >= 4096 {
+            made = [:]
+        }
+        made[index] = attributes
         return attributes
     }
 
