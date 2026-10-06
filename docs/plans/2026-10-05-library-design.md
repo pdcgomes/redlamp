@@ -236,6 +236,7 @@ Sorting is separate from the query: captured (the default), name, rating, edited
 | `collections` | the collections a photo is in, by path |
 | `mark` | the quick-collection mark |
 | `customLabel` | a custom label's name: an unknown `label` value makes a sidecar unreadable to older builds, so custom labels never go in `label` |
+| `originalName` | the photo's file name before Redlamp first renamed it (LIB-26), kept by older builds as a field they don't know |
 
 ## Other apps' metadata (LIB-24)
 
@@ -276,6 +277,12 @@ Every one has a menu item and most a mouse gesture: stars, flag and label on a c
 ## File operations (LIB-25, LIB-26)
 
 Renames, moves, new folders and moves to the Trash go through a journal in `LibraryPaths.root` written before anything moves: each step's source and destination, the photo's sidecar and other apps' `.xmp`. A forced quit leaves a journal the next launch finishes or rolls back; Undo replays it backwards. Nothing is ever overwritten; a collision stops the batch before it starts, in the preview.
+
+- **The journal** (`File Operations/`, on the Mac's own disk) is a file of JSON lines per batch, its summary and then a step a line, written to a hidden name, synced (`F_FULLFSYNC`) and renamed into place before anything moves. Its log gets a line as each step is done, written straight to the file, so a forced quit loses none of them; a power cut may lose the last few, and the files themselves say how far the batch got.
+- **Renames** take a raw with its JPEG, its `.redlamp` sidecar (wherever its root keeps it) and other apps' `.xmp`, in an order that goes through temporary names where renames form a cycle, and record each photo's first name in its sidecar's `originalName`.
+- **Moves** within a volume are renames; across volumes each file is copied, synced and checked by size and full hash before its original goes, and a failed copy leaves the source as it was.
+- **The Trash** keeps where each item went, so Undo brings it back while it's still there. Other plans, such as the duplicates' removal plan (LIB-39), go through the same step.
+- **The index and open lists** follow in one write a batch: photos keep their IDs and get their new paths, and `LibraryLive` hears each change.
 
 ### Naming templates
 
@@ -436,6 +443,21 @@ The blank frames come from the editor rather than the library: when a photo is a
 - **Grouping candidates** (content key and size, in one pass): a million synthetic photos with 1% duplicated in 15 to 18 ms, 40.5 bytes a photo, against a budget of 1 s; from a real million-row index, 97 to 122 ms.
 - **Confirming** (full SHA-256 through each volume's readers) on the fixture with duplicates turned on: 31 to 34 MB a second on the simulated spinning disk (its ceiling 160), 45 to 50 on the NAS (110), 18 on Wi-Fi (25) and 4.9 on the VPN (5). With the reads at a high priority, the spinning disk gave 64 and the NAS 107, so most of the gap is threads waiting on this busy Mac. The external SSD read 319 MB a second cold.
 - Volumes read one file at a time get 4 MiB reads, a quarter faster on the simulated spinning disk.
+
+### File operations (LIB-26)
+
+The `files` scenario: 10,000 photos and 16,000 files in a temporary folder on the SSD, load average 80 to 110, three runs that overlapped:
+
+| | Measured | Budget |
+| --- | --- | --- |
+| Planning the batch | 1.3 to 1.9 s | |
+| Renaming | 194 to 369 s | 1 s: FAIL |
+| Undoing it | 312 to 472 s | 1 s: FAIL |
+| Stopped halfway by a forced quit, then finished | 87 to 202 s | |
+| Stopped halfway, then rolled back | 74 to 183 s | |
+| Photos lost, or parted from their sidecar or `.xmp` | 0 | 0 |
+
+A bare `rename` cost 0.54 ms on the internal disk and 1.4 ms on the external SSD under the same load, so the batch spends 19 to 37 ms a photo on more than its two or three renames: the sidecar's `originalName` write is the first suspect. To be measured on a quiet Mac and brought down.
 
 ### Metadata with other apps (LIB-24)
 
