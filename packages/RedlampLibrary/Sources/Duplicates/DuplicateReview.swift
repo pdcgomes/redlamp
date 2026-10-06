@@ -48,7 +48,8 @@ public struct DuplicateReview: Sendable, Hashable {
         public var size: Int64
         public var captured: Date?
         public var modified: Date
-        /// Its rating in the index: its sidecar's, else its other app's `.xmp`'s, else its own.
+        /// Its rating in the index: its sidecar's merged with other apps' as `XMPMerge` merges them, so a
+        /// sidecar without stars doesn't hide another app's rating.
         public var rating: Int
         /// What its `.redlamp` sidecar holds: nil when it has none, its disk couldn't be asked, or it
         /// couldn't be read (`sidecarURL` says where it is then).
