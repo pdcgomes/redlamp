@@ -9,6 +9,7 @@
     import RedlampLibrary
     import RedlampServices
     @_spi(Harness) import RedlampUI
+    import Synchronization
 
     /// `--library-perf <fixture> [--library-perf-library <folder>] [--library-perf-memory]
     /// [--library-perf-profile] [--library-perf-quit]`: the library in the
@@ -38,9 +39,25 @@
     /// /tmp/redlamp-perf.json, as `--folders-perf` does; with `--library-perf-quit` it then quits,
     /// with status 1 if a budget failed. `--library-perf-memory` also breaks the footprint down at
     /// each phase into /tmp/redlamp-memory.txt, and `--library-perf-profile` samples the main thread
-    /// while the grid scrolls into /tmp/redlamp-profile.txt.
+    /// while the grid scrolls into /tmp/redlamp-profile.txt. Every turn of the main thread's run loop
+    /// longer than half a second is sampled (with `--library-perf-turns`, while typing and culling every turn
+    /// longer than 16 ms), and where they went written to /tmp/redlamp-stalls.txt, with what changed in each
+    /// culling step.
     @MainActor
     enum DebugLibraryPerformance {
+        private static var stalls: StallSampler?
+
+        /// Names the phase in the debug log and in the stall report, its turns sampled once they run longer
+        /// than `sampling` (half a second when nil).
+        private static func phase(_ name: String, sampling: Duration? = nil) {
+            DebugPerformance.trace("library-perf: \(name)")
+            stalls?.enter(name, sampling: LaunchArguments.all.contains("--library-perf-turns") ? sampling : nil)
+        }
+
+        /// What the stall report adds about each phase: what changed in it, and which views were left to lay
+        /// out or draw.
+        private static var notes: [String] = []
+
         private struct Measured {
             var indexing: Duration = .zero
             var ready: Duration = .zero
@@ -91,6 +108,9 @@
                 "Load average at the start: \(loadAverage())",
             ]
             var measured = Measured()
+            let stalls = StallSampler()
+            self.stalls = stalls
+            stalls.start()
             let kept = arguments.firstIndex(of: "--library-perf-library").flatMap {
                 $0 + 1 < arguments.count ? URL(fileURLWithPath: arguments[$0 + 1], isDirectory: true) : nil
             }
@@ -105,7 +125,7 @@
                 engine.decodeThumbnail(for: url, maxPixelSize: size)
             }
 
-            DebugPerformance.trace("library-perf: indexing \(fixture.path)")
+            phase("indexing \(fixture.path)")
             let indexingStarted = ContinuousClock.now
             let indexed = await index(fixture, into: paths, thumbnail: thumbnail)
             measured.indexing = ContinuousClock.now - indexingStarted
@@ -134,7 +154,7 @@
             await memory.mark("launch")
             lines.append(String(format: "Footprint before the library opens: %.0f MB", mb(memory.baseline)))
 
-            DebugPerformance.trace("library-perf: warm launch")
+            phase("warm launch")
             library.add([fixture])
             let service = LibraryService(paths: paths, sidecars: library.sidecars, thumbnail: thumbnail)
             let launched = ContinuousClock.now
@@ -157,7 +177,7 @@
             )
             await memory.mark("launched")
 
-            DebugPerformance.trace("library-perf: opening")
+            phase("opening")
             let monitor = MainThreadMonitor()
             monitor.start()
             let openStarted = ContinuousClock.now
@@ -180,6 +200,7 @@
             ))
             await memory.mark("opened")
 
+            phase("the visible thumbnails")
             let visible = Array(model.items.prefix(15))
             let thumbnailsStarted = ContinuousClock.now
             await load(visible, with: loader)
@@ -187,6 +208,7 @@
             lines.append("Visible thumbnails (15, from the store): \(ms(measured.visible))")
             await memory.mark("visible")
 
+            phase("scrolling the filmstrip")
             let (scrolling, scrollReport) = await DebugFoldersPerformance.scroll(model)
             measured.scrolling = scrolling
             lines.append(scrollReport)
@@ -213,6 +235,7 @@
             await memory.mark("typed")
 
             for (label, interval) in [("at the key-repeat rate (30 ms)", 0.030), ("at 120 Hz", 1.0 / 120)] {
+                phase("holding the arrow keys \(label)")
                 let held = await holdArrow(model, loader: loader, interval: interval, steps: 300)
                 measured.arrows.append((label, held.summary, held.steps, held.blank))
                 lines.append(String(
@@ -238,6 +261,7 @@
             lines.append(culled.report)
             await memory.mark("culled")
 
+            phase("settling")
             try? await Task.sleep(for: .seconds(3))
             await memory.mark("settled")
             loader.trim(to: 0)
@@ -248,6 +272,11 @@
             memory.stop()
             service.close()
             lines.append(memory.summary())
+            stalls.stop()
+            self.stalls = nil
+            lines.append((stalls.summary ?? "No main-thread turn over 500 ms") + " (/tmp/redlamp-stalls.txt)")
+            try? ((notes + [stalls.report()]).joined(separator: "\n") + "\n")
+                .write(toFile: "/tmp/redlamp-stalls.txt", atomically: true, encoding: .utf8)
 
             let arrows = measured.arrows.compactMap(\.summary?.p99).max() ?? .infinity
             let blank = measured.arrows.reduce(0) { $0 + $1.blank }
@@ -381,7 +410,7 @@
             _ model: EditorModel, size: Double = GridSize.standard, style: GridCellStyle = .compact,
             label: String? = nil,
         ) async -> (MainThreadMonitor.Summary?, String) {
-            DebugPerformance.trace("library-perf: scrolling the grid\(label.map { ", \($0)" } ?? "")")
+            phase("scrolling the grid\(label.map { ", \($0)" } ?? "")")
             model.setThumbnailSize(size)
             model.setCellStyle(style)
             defer {
@@ -424,7 +453,7 @@
         private static func typeInFilterBar(
             _ model: EditorModel,
         ) async -> (MainThreadMonitor.Summary?, [Double], String) {
-            DebugPerformance.trace("library-perf: typing in the filter bar")
+            phase("typing in the filter bar", sampling: .milliseconds(16))
             guard let filters = model.libraryFilters else { return (nil, [], "Typing in the filter bar: no library") }
             let window = NSWindow(
                 contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000),
@@ -521,7 +550,7 @@
         private static func switchModules(
             _ model: EditorModel, count: Int,
         ) async -> (durations: [Double], reads: UInt64, report: String) {
-            DebugPerformance.trace("library-perf: switching modules")
+            phase("switching modules")
             let window = NSWindow(
                 contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000),
                 styleMask: [.titled, .resizable, .fullSizeContentView], backing: .buffered, defer: false,
@@ -585,7 +614,7 @@
         private static func renderEdits(
             _ model: EditorModel, memory: MemoryPhases,
         ) async -> (scrolling: MainThreadMonitor.Summary?, lines: [String]) {
-            DebugPerformance.trace("library-perf: rendering edits")
+            phase("rendering edits")
             let renders = model.editRenders
             renders.makeEngine = { try? RedlampEngine(decoder: DecodeServiceClient(), lensProfiles: .user) }
             defer {
@@ -678,7 +707,7 @@
             summary: MainThreadMonitor.Summary?, onScreen: [Double], writes: [Double], left: Int, count: Int,
             report: String,
         ) {
-            DebugPerformance.trace("library-perf: culling every photo")
+            phase("culling every photo")
             let window = NSWindow(
                 contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000),
                 styleMask: [.titled, .resizable, .fullSizeContentView], backing: .buffered, defer: false,
@@ -696,11 +725,14 @@
                 model.select(first.url)
             }
             try? await Task.sleep(for: .milliseconds(500))
-            let items = model.items
+            // The URLs alone: holding the photos would have the first change copy them all.
+            let urls = model.items.map(\.url)
             let sidecars = model.library.sidecars
+            phase("culling, reading the sidecars")
             let before = await Task.detached(priority: .userInitiated) {
-                items.map { sidecars.store(for: $0.url).summary(for: $0.url) }
+                urls.map { sidecars.store(for: $0).summary(for: $0) }
             }.value
+            phase("culling, selecting every photo")
             model.selectAllPhotos()
             window.displayIfNeeded()
             CATransaction.flush()
@@ -714,15 +746,20 @@
             let began = CFAbsoluteTimeGetCurrent()
             for action in [ShortcutAction.rating3, .flagPick, .labelRed, .toggleMark] {
                 for (title, step) in [(action.title, action), ("Undo", ShortcutAction.undo)] {
+                    let name = "culling, \(step == .undo ? "Undo " : "")\(action.title)"
+                    phase(name, sampling: .milliseconds(16))
+                    let watch = StepWatch(model.library, looking: LaunchArguments.all.contains("--library-perf-turns"))
                     let started = CFAbsoluteTimeGetCurrent()
                     model.perform(step)
                     window.displayIfNeeded()
                     CATransaction.flush()
                     let shown = (CFAbsoluteTimeGetCurrent() - started) * 1000
                     while model.isWritingCulling, CFAbsoluteTimeGetCurrent() - started < 900 {
+                        watch.look(in: window)
                         try? await Task.sleep(for: .milliseconds(20))
                     }
                     let written = CFAbsoluteTimeGetCurrent() - started
+                    notes.append("\(name): \(watch.summary)")
                     onScreen.append(shown)
                     writes.append(written)
                     parts.append(String(
@@ -736,8 +773,9 @@
             }
             let elapsed = CFAbsoluteTimeGetCurrent() - began
             monitor.stop()
+            phase("culling, reading the sidecars again")
             let after = await Task.detached(priority: .userInitiated) {
-                items.map { sidecars.store(for: $0.url).summary(for: $0.url) }
+                urls.map { sidecars.store(for: $0).summary(for: $0) }
             }.value
             let left = zip(before, after).count { $0.0 != $0.1 }
             model.deselectOtherPhotos()
@@ -899,6 +937,345 @@
 
         private static func ms(_ duration: Duration) -> String {
             String(format: "%.1f ms", seconds(duration) * 1000)
+        }
+    }
+
+    /// What changed while a culling step ran: the library's diffs and their rows, and when `looking`, the
+    /// views most often found waiting to lay out or draw, by class.
+    @MainActor
+    private final class StepWatch {
+        private var diffs = 0
+        private var resets = 0
+        private var rows = 0
+        private var looks = 0
+        private var dirty: [String: Int] = [:]
+        private let looking: Bool
+        private var observation: LibraryObservation?
+
+        init(_ library: FolderLibrary, looking: Bool) {
+            self.looking = looking
+            observation = library.observe { [weak self] diff in
+                guard let self else { return }
+                diffs += 1
+                resets += diff.reset ? 1 : 0
+                rows += diff.removed.count + diff.inserted.count + diff.updated.count
+            }
+        }
+
+        func look(in window: NSWindow) {
+            guard looking, let root = window.contentView else { return }
+            looks += 1
+            var pending = [root]
+            while let view = pending.popLast() {
+                if view.needsLayout || view.needsDisplay {
+                    dirty[String(describing: type(of: view)), default: 0] += 1
+                }
+                pending += view.subviews
+            }
+        }
+
+        var summary: String {
+            let views = dirty.sorted { $0.value > $1.value }.prefix(12).map { "\($0.key) \($0.value)" }
+            return "\(diffs) diffs (\(resets) resets), \(rows) rows"
+                + (looking ? "; views waiting in \(looks) looks: " + views.joined(separator: ", ") : "")
+        }
+    }
+
+    /// Samples the main thread through the turns of its run loop (from waking to waiting again, as
+    /// `MainThreadMonitor` counts them) that run longer than half a second, in any phase, and in the phases
+    /// given a lower threshold (`sample(over:)`), every turn over it: for the turns no phase's numbers
+    /// explain, each one's length, the phase it ran in and where the main thread spent it, and for each
+    /// phase, where its long turns went. Nothing may allocate while the main thread is suspended, so samples
+    /// go into a preallocated buffer, as `MainThreadSampler`'s do.
+    @MainActor
+    final class StallSampler {
+        /// A turn this long is reported on its own, in any phase.
+        nonisolated static let stall: UInt64 = 500_000_000
+        /// The samples a phase may take of its turns shorter than a stall.
+        static let phaseSamples = 8000
+        private let samples = Samples()
+        private let started = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        private var observer: CFRunLoopObserver?
+        private var turn = 0
+        private var began: UInt64 = 0
+        private var phases: [Phase] = [Phase(name: "starting", threshold: stall)]
+        private var stalls: [(turn: Int, start: Double, length: Double, phase: Int)] = []
+
+        private struct Phase {
+            let name: String
+            let threshold: UInt64
+            /// Its turns over its threshold, and their time, in milliseconds.
+            var turns = 0
+            var time = 0.0
+        }
+
+        /// What the sampling thread shares with the main thread.
+        private final class Samples: @unchecked Sendable {
+            static let maxDepth = 96
+            static let maxSamples = 60000
+            static let interval: useconds_t = 4000
+            /// Strips pointer-authentication bits from return addresses signed by arm64e system code.
+            static let addressMask: UInt = 0x0000_0FFF_FFFF_FFFF
+            let mainThread = mach_thread_self()
+            let buffer = UnsafeMutablePointer<UInt>.allocate(capacity: maxDepth * maxSamples)
+            let depths = UnsafeMutablePointer<Int>.allocate(capacity: maxSamples)
+            let turns = UnsafeMutablePointer<Int>.allocate(capacity: maxSamples)
+            let phases = UnsafeMutablePointer<Int>.allocate(capacity: maxSamples)
+            let count = Atomic<Int>(0)
+            let running = Atomic<Bool>(true)
+            /// The main thread's turn and phase, when the turn began in nanoseconds of uptime (0 while the
+            /// main thread waits), and how long a turn runs before it's sampled.
+            let turn = Atomic<Int>(0)
+            let phase = Atomic<Int>(0)
+            let began = Atomic<UInt64>(0)
+            let threshold = Atomic<UInt64>(StallSampler.stall)
+            /// The samples the phase may still take of turns shorter than a stall, which always are.
+            let budget = Atomic<Int>(0)
+
+            /// Runs the calling thread under a real-time policy: on a loaded Mac a sampler preempted while the
+            /// main thread is suspended would freeze it, lengthening the turns it measures.
+            static func runInRealTime() {
+                var timebase = mach_timebase_info_data_t()
+                mach_timebase_info(&timebase)
+                func ticks(_ nanoseconds: Double) -> UInt32 {
+                    UInt32(nanoseconds * Double(timebase.denom) / Double(timebase.numer))
+                }
+                var policy = thread_time_constraint_policy_data_t(
+                    period: ticks(Double(interval) * 1000), computation: ticks(150_000), constraint: ticks(400_000),
+                    preemptible: 0,
+                )
+                let count = mach_msg_type_number_t(
+                    MemoryLayout<thread_time_constraint_policy_data_t>.size / MemoryLayout<integer_t>.size,
+                )
+                _ = withUnsafeMutablePointer(to: &policy) {
+                    $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                        thread_policy_set(
+                            pthread_mach_thread_np(pthread_self()),
+                            thread_policy_flavor_t(THREAD_TIME_CONSTRAINT_POLICY),
+                            $0, count,
+                        )
+                    }
+                }
+            }
+
+            func sample(stalled: Bool) {
+                let index = count.load(ordering: .relaxed)
+                guard index < Self.maxSamples else { return }
+                if !stalled {
+                    guard budget.load(ordering: .relaxed) > 0 else { return }
+                    budget.subtract(1, ordering: .relaxed)
+                }
+                let (turn, phase) = (turn.load(ordering: .relaxed), phase.load(ordering: .relaxed))
+                var state = arm_thread_state64_t()
+                var stateCount = mach_msg_type_number_t(
+                    MemoryLayout<arm_thread_state64_t>.size / MemoryLayout<UInt32>.size,
+                )
+                guard thread_suspend(mainThread) == KERN_SUCCESS else { return }
+                defer { thread_resume(mainThread) }
+                let result = withUnsafeMutablePointer(to: &state) {
+                    $0.withMemoryRebound(to: natural_t.self, capacity: Int(stateCount)) {
+                        thread_get_state(mainThread, ARM_THREAD_STATE64, $0, &stateCount)
+                    }
+                }
+                guard result == KERN_SUCCESS else { return }
+                let frames = buffer + index * Self.maxDepth
+                frames[0] = UInt(state.__pc) & Self.addressMask
+                frames[1] = UInt(state.__lr) & Self.addressMask
+                var depth = 2
+                var fp = UInt(state.__fp)
+                while fp != 0, fp & 7 == 0, depth < Self.maxDepth,
+                      let frame = UnsafePointer<UInt>(bitPattern: fp) {
+                    let next = frame[0]
+                    let returnAddress = frame[1] & Self.addressMask
+                    guard returnAddress != 0 else { break }
+                    frames[depth] = returnAddress
+                    depth += 1
+                    guard next > fp else { break }
+                    fp = next
+                }
+                depths[index] = depth
+                turns[index] = turn
+                phases[index] = phase
+                count.store(index + 1, ordering: .releasing)
+            }
+        }
+
+        /// From now on, turns are reported under `name`, and sampled once they run longer than `threshold`.
+        func enter(_ name: String, sampling threshold: Duration? = nil) {
+            let nanoseconds = threshold.map {
+                UInt64($0.components.seconds) * 1_000_000_000 + UInt64($0.components.attoseconds / 1_000_000_000)
+            } ?? Self.stall
+            phases.append(Phase(name: name, threshold: min(nanoseconds, Self.stall)))
+            samples.phase.store(phases.count - 1, ordering: .relaxed)
+            samples.threshold.store(min(nanoseconds, Self.stall), ordering: .relaxed)
+            samples.budget.store(Self.phaseSamples, ordering: .relaxed)
+        }
+
+        func start() {
+            let observer = CFRunLoopObserverCreateWithHandler(
+                nil, CFRunLoopActivity.afterWaiting.rawValue | CFRunLoopActivity.beforeWaiting.rawValue, true, 0,
+            ) { [weak self] _, activity in
+                MainActor.assumeIsolated { self?.observe(activity) }
+            }
+            CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
+            self.observer = observer
+            let samples = samples
+            let thread = Thread {
+                Samples.runInRealTime()
+                while samples.running.load(ordering: .relaxed) {
+                    let began = samples.began.load(ordering: .acquiring)
+                    let running = clock_gettime_nsec_np(CLOCK_UPTIME_RAW) &- began
+                    if began != 0, running > samples.threshold.load(ordering: .relaxed) {
+                        samples.sample(stalled: running > StallSampler.stall)
+                    }
+                    usleep(Samples.interval)
+                }
+            }
+            thread.qualityOfService = .userInteractive
+            thread.start()
+        }
+
+        func stop() {
+            samples.running.store(false, ordering: .relaxed)
+            if let observer {
+                CFRunLoopRemoveObserver(CFRunLoopGetMain(), observer, .commonModes)
+            }
+            observer = nil
+        }
+
+        private func observe(_ activity: CFRunLoopActivity) {
+            let now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+            if activity == .afterWaiting {
+                turn += 1
+                began = now
+                samples.turn.store(turn, ordering: .relaxed)
+                samples.began.store(now, ordering: .releasing)
+            } else if began != 0 {
+                samples.began.store(0, ordering: .releasing)
+                let length = now - began
+                let phase = phases.count - 1
+                if length > phases[phase].threshold {
+                    phases[phase].turns += 1
+                    phases[phase].time += Double(length) / 1e6
+                }
+                if length > Self.stall {
+                    stalls.append((turn, Double(began - started) / 1e9, Double(length) / 1e6, phase))
+                }
+                began = 0
+            }
+        }
+
+        /// One line for the report, "N turns over 500 ms, the longest L ms in P", or nil for none.
+        var summary: String? {
+            guard let longest = stalls.max(by: { $0.length < $1.length }) else { return nil }
+            return String(
+                format: "Main-thread turns over %.0f ms: %d, the longest %.1f ms in %@, %.1f s after the start",
+                Double(Self.stall) / 1e6, stalls.count, longest.length, phases[longest.phase].name, longest.start,
+            )
+        }
+
+        /// Every turn over half a second, longest first: its phase, when it began and how long it took, and
+        /// for the `detailed` longest, the functions its samples were in (Redlamp's, then all of them) and
+        /// their commonest stack; then each phase sampled below half a second, its turns over its threshold
+        /// and the functions their samples were in. Symbols are mangled.
+        func report(detailed: Int = 6) -> String {
+            let count = samples.count.load(ordering: .acquiring)
+            var byTurn: [Int: [Int]] = [:]
+            var byPhase: [String: [Int]] = [:]
+            for index in 0 ..< count {
+                byTurn[samples.turns[index], default: []].append(index)
+                byPhase[phases[samples.phases[index]].name, default: []].append(index)
+            }
+            var names: [UInt: String] = [:]
+            func name(_ address: UInt) -> String {
+                if let cached = names[address] {
+                    return cached
+                }
+                var info = Dl_info()
+                var resolved = String(format: "0x%lx", address)
+                if dladdr(UnsafeRawPointer(bitPattern: address), &info) != 0 {
+                    let image = info.dli_fname.map { URL(fileURLWithPath: String(cString: $0)).lastPathComponent }
+                    let symbol = info.dli_sname.map { String(cString: $0) } ?? "?"
+                    resolved = "\(symbol)  [\(image ?? "?")]"
+                }
+                names[address] = resolved
+                return resolved
+            }
+            func profile(_ indices: [Int], stack: Bool) -> [String] {
+                var total: [String: Int] = [:]
+                var leaf: [String: Int] = [:]
+                var stacks: [String: Int] = [:]
+                for index in indices {
+                    let frames = samples.buffer + index * Samples.maxDepth
+                    var seen = Set<String>()
+                    var symbols: [String] = []
+                    for level in 0 ..< samples.depths[index] where frames[level] > 1 {
+                        // Return addresses point after the call; step back into the calling instruction.
+                        let symbol = name(level == 0 ? frames[level] : frames[level] - 1)
+                        if seen.insert(symbol).inserted {
+                            total[symbol, default: 0] += 1
+                        }
+                        if level == 0 {
+                            leaf[symbol, default: 0] += 1
+                        }
+                        if stack, symbols.count < 48 {
+                            symbols.append(symbol)
+                        }
+                    }
+                    if stack {
+                        stacks[symbols.joined(separator: "\n      "), default: 0] += 1
+                    }
+                }
+                func table(_ counts: [String: Int], top: Int) -> [String] {
+                    counts.sorted { $0.value > $1.value }.prefix(top).map {
+                        String(
+                            format: "    %5.1f%%  %@",
+                            Double($0.value) / Double(max(indices.count, 1)) * 100,
+                            $0.key,
+                        )
+                    }
+                }
+                var lines = ["  Redlamp's code, inclusive:"] + table(
+                    total.filter { $0.key.contains("[Redlamp") },
+                    top: 30,
+                )
+                lines += ["  Everything, inclusive:"] + table(total, top: 40)
+                lines += ["  On top of the stack:"] + table(leaf, top: 15)
+                if stack, let (common, times) = stacks.max(by: { $0.value < $1.value }) {
+                    lines.append("  The commonest stack (\(times) of \(indices.count) samples):\n      " + common)
+                }
+                return lines
+            }
+            var lines = [summary ?? "No main-thread turn over \(Double(Self.stall) / 1e6) ms"]
+            for (place, stall) in stalls.sorted(by: { $0.length > $1.length }).enumerated() {
+                let indices = byTurn[stall.turn] ?? []
+                lines.append(String(
+                    format: "- %.1f ms in %@, %.1f s after the start: %d samples",
+                    stall.length, phases[stall.phase].name, stall.start, indices.count,
+                ))
+                if place < detailed, !indices.isEmpty {
+                    lines += profile(indices, stack: true)
+                }
+            }
+            var sampled: [String: (threshold: UInt64, turns: Int, time: Double)] = [:]
+            for phase in phases where phase.threshold < Self.stall {
+                let before = sampled[phase.name] ?? (phase.threshold, 0, 0)
+                sampled[phase.name] = (phase.threshold, before.turns + phase.turns, before.time + phase.time)
+            }
+            for (name, phase) in sampled.sorted(by: { $0.value.time > $1.value.time }) {
+                let indices = byPhase[name] ?? []
+                lines.append(String(
+                    format: "Phase %@: %d turns over %.1f ms, %.1f ms in all; %d samples",
+                    name, phase.turns, Double(phase.threshold) / 1e6, phase.time, indices.count,
+                ))
+                if !indices.isEmpty {
+                    lines += profile(indices, stack: false)
+                }
+            }
+            if count == Samples.maxSamples {
+                lines.append("(the sample buffer filled up: later turns have no samples)")
+            }
+            return lines.joined(separator: "\n")
         }
     }
 #endif
