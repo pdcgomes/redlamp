@@ -4,8 +4,8 @@ import RedlampDocument
 import Synchronization
 
 /// The readers of one volume. Every file operation the library makes on the volume goes through
-/// them: as many at once as the volume serves best (`VolumeConcurrency`), the listings and the
-/// photos on screen first, and none waiting on the volume longer than `timeout` from when it's
+/// them: as many at once as the volume serves best (`VolumeConcurrency`), what's on screen first,
+/// and none waiting on the volume longer than `timeout` from when it's
 /// sent. A volume that fails as gone, or doesn't answer in time, is unreachable: what waits and
 /// what's asked next fails at once, while a probe asks every so often whether it's back. Waiting for
 /// a place in flight doesn't count towards the timeout: a volume that answers slowly is only slow.
@@ -14,7 +14,7 @@ import Synchronization
 /// must not. A caller that stops waiting (its timeout passed) leaves the thread to finish alone.
 public final class VolumeIO: Sendable {
     public enum Priority: Int, Sendable, Hashable, CaseIterable, Comparable {
-        /// Listings and the photos of folders on screen.
+        /// What's on screen: the folders shown, and the listings on the way to them.
         case high
         case normal
 

@@ -133,6 +133,69 @@ final class ListedPhotos: LibraryFileSystem {
     }
 }
 
+/// Folders of photos that exist only in their listings, like `ListedPhotos`, under one root that
+/// holds only the folders; it keeps what was asked of it, in order.
+final class ListedFolders: LibraryFileSystem {
+    enum Operation: Equatable {
+        case listing(String)
+        case read(String)
+    }
+
+    let root: String
+    let folders: [String]
+    private let photos: Int
+    private let asked = Mutex<[Operation]>([])
+    private static let modified = Date(timeIntervalSince1970: 1_700_000_000)
+
+    init(in root: URL, folders: Int, photos: Int) {
+        self.root = LibraryIndexer.path(root)
+        self.folders = (1 ... folders).map { "Folder \($0)" }
+        self.photos = photos
+    }
+
+    var operations: [Operation] {
+        asked.withLock { $0 }
+    }
+
+    func contentsOfDirectory(at url: URL) throws -> [FileEntry] {
+        let path = LibraryIndexer.path(url)
+        asked.withLock { $0.append(.listing(path)) }
+        if path == root {
+            return folders.map { FileEntry(name: $0, isDirectory: true, modified: Self.modified) }
+        }
+        guard (path as NSString).deletingLastPathComponent == root,
+              folders.contains(url.lastPathComponent) else { throw CocoaError(.fileReadNoSuchFile) }
+        return (1 ... photos).map { photo in
+            let name = "IMG_\(photo).JPG"
+            return FileEntry(name: name, size: Int64(name.utf8.count), modified: Self.modified)
+        }
+    }
+
+    func attributes(of url: URL) throws -> FileEntry {
+        let path = LibraryIndexer.path(url)
+        let parent = (path as NSString).deletingLastPathComponent
+        if path == root || parent == root {
+            return FileEntry(name: url.lastPathComponent, isDirectory: true, modified: Self.modified)
+        }
+        guard (parent as NSString).deletingLastPathComponent == root else { throw CocoaError(.fileReadNoSuchFile) }
+        return FileEntry(
+            name: url.lastPathComponent,
+            size: Int64(url.lastPathComponent.utf8.count),
+            modified: Self.modified,
+        )
+    }
+
+    func read(_ url: URL, range: Range<Int>) throws -> Data {
+        asked.withLock { $0.append(.read(LibraryIndexer.path(url))) }
+        let bytes = try Data(attributes(of: url).name.utf8)
+        return bytes[min(range.lowerBound, bytes.count) ..< min(range.upperBound, bytes.count)]
+    }
+
+    func volume(of _: URL) throws -> VolumeInfo {
+        VolumeInfo(uuid: "LISTED-FOLDERS", name: "Listed", isLocal: true, isInternal: true)
+    }
+}
+
 /// Another file system whose first read waits until it's let go: a run caught with a photo half read.
 final class HoldingFileSystem: LibraryFileSystem {
     let base: any LibraryFileSystem

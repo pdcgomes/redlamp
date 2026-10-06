@@ -299,9 +299,12 @@ extension LibraryIndexer {
 
         private func list(_ item: WalkQueue.Item, on volume: VolumeWork) async {
             let url = URL(fileURLWithPath: item.path, isDirectory: true)
+            // Only the way to the folders on screen goes ahead of photos: the walk always has another
+            // listing waiting, and photos waiting behind every one wouldn't be read until it ended.
+            let ahead = indexer.prioritised.contains { Self.root(of: $0, among: [item.path]) != nil }
             let entries: [FileEntry]
             do {
-                entries = try await volume.io.contentsOfDirectory(at: url)
+                entries = try await volume.io.contentsOfDirectory(at: url, priority: ahead ? .high : .normal)
             } catch {
                 if VolumeIO.isNotFound(error), item.parent != nil {
                     state.withLock { state in

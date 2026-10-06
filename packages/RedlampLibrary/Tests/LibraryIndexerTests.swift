@@ -317,6 +317,37 @@ struct LibraryIndexerTests {
         #expect(count == 4 && unfinished.isEmpty)
     }
 
+    @Test func `photos are read while the walk is still listing folders`() async throws {
+        let folder = try TemporaryFolder()
+        let indexFolder = FileManager.default.temporaryDirectory
+            .appending(path: "redlamp-indexer-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let index = try await LibraryIndex.open(at: indexFolder.appending(path: "Index.sqlite"), readers: 2)
+        defer {
+            index.closeAndWait()
+            try? FileManager.default.removeItem(at: indexFolder)
+        }
+        // One reader, so listings and reads take turns at it.
+        let tree = ListedFolders(in: folder.url, folders: 200, photos: 5)
+        let volumes = VolumeIORegistry(fileSystem: tree, configuration: .init(maximumWidth: 1))
+        let indexer = LibraryIndexer(index: index, volumes: volumes, configuration: .testing())
+        let run = await IndexerRun.collect(indexer.index([folder.url]))
+        #expect(run.failures.isEmpty, "\(run.failures)")
+        #expect(run.summary?.photosInserted == 1000)
+        let operations = tree.operations
+        let lastListing = try #require(operations.lastIndex {
+            if case .listing = $0 {
+                true
+            } else {
+                false
+            }
+        })
+        let readFirst = Set(operations[..<lastListing].compactMap { operation -> String? in
+            guard case let .read(path) = operation else { return nil }
+            return path
+        })
+        #expect(readFirst.count >= 100, "\(readFirst.count) photos read before the walk's last listing")
+    }
+
     @Test func `the folders asked for are indexed first`() async throws {
         let sandbox = try await IndexerSandbox.make(.init(photos: 900, seed: 28, shapes: []))
         defer { sandbox.remove() }
