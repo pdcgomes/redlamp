@@ -317,7 +317,7 @@ Renames, moves, new folders and moves to the Trash go through a journal in `Libr
 - **The journal** (`File Operations/`, on the Mac's own disk) is a file of JSON lines per batch, its summary and then a step a line, written to a hidden name, synced (`F_FULLFSYNC`) and renamed into place before anything moves. Its log gets a line as each step is done, written straight to the file, so a forced quit loses none of them; a power cut may lose the last few, and the files themselves say how far the batch got.
 - **Renames** take a raw with its JPEG, its `.redlamp` sidecar (wherever its root keeps it) and other apps' `.xmp`, in an order that goes through temporary names where renames form a cycle, and record each photo's first name in its sidecar's `originalName`.
 - **Moves** within a volume are renames; across volumes each file is copied, synced and checked by size and full hash before its original goes, and a failed copy leaves the source as it was.
-- **The Trash** keeps where each item went, so Undo brings it back while it's still there. Other plans, such as the duplicates' removal plan (LIB-39), go through the same step.
+- **The Trash** keeps where each item went, so Undo brings it back while it's still there. Other plans, such as the duplicates' removal plan (LIB-39), go through the same step. The duplicates' batch is checked again just before it runs: no copy being kept is also being removed, the index still has every copy and every kept copy at the plan's path, each matches its size, date and full SHA-256, and only the copies' own files move (their sidecars, and `.xmp` no remaining photo shares). Size, date and sidecars are checked again right after; if anything differs, nothing moves and the report lists each difference.
 - **The index and open lists** follow in one write a batch: photos keep their IDs and get their new paths, and `LibraryLive` hears each change.
 
 ### Naming templates
@@ -600,3 +600,4 @@ What it changed: the first version took 3.7 s for the million, keeping 13 to 16 
 - The capture-time zone: EXIF's offset tags when present, else the Mac's zone at import, recorded per photo.
 - Whether the map (LIB-35) moves into 1.0.
 - Indexing folders in iCloud Drive without downloading every photo: from what's already downloaded, and the rest as it arrives.
+- A batch's own check (the duplicates' one) runs before the file operations' queue, so another batch could move a kept copy in between; `FileOperations` needs a way to run a check inside its queue. `planTrash` also drops photos the index no longer has without saying so.
