@@ -32,6 +32,53 @@ struct HealthBenchTests {
         }.value
     }
 
+    /// The pairs check on `photos` synthetic photos followed through `changes` changes of one photo
+    /// each, every other one a rating and the rest a JPEG renamed away from its raw: how long the
+    /// slowest request after a change took, and the slowest update of the pairs followed.
+    static func followed(
+        photos: Int, changes: Int,
+    ) async throws -> (request: Duration, update: Duration, first: Duration, findings: Int) {
+        let sandbox = try await HealthSandbox.make([:])
+        defer { sandbox.remove() }
+        let checker = HealthChecker(index: sandbox.index, paths: sandbox.paths)
+        let library = SyntheticStackLibrary(photos: photos, seed: 5)
+        var rows = library.rows
+        var store = library.store()
+        let names = library.names()
+        let clock = ContinuousClock()
+        var started = clock.now
+        var pairs = HealthPairs(rows.map(HealthPairFollowingTests.photo))
+        let built = clock.now - started
+        for rule in [PairRule.keepRaw, .keepJPEG] {
+            _ = try await checker.pairs(rule, store: store, following: &pairs)
+        }
+        let first = clock.now - started
+        print("HEALTH-BENCH followed pairs of \(photos) photos: built in \(built), both rules first in \(first)")
+        let jpegs = rows.indices.filter { rows[$0].hot.name.hasSuffix(".JPG") }
+        var random = SeededRandom(seed: 3)
+        var (request, update) = (Duration.zero, Duration.zero)
+        var findings = 0
+        for change in 0 ..< changes {
+            let place = change.isMultiple(of: 2) ? random.int(below: rows.count) : random.pick(jpegs)
+            if change.isMultiple(of: 2) {
+                rows[place].hot.rating = 1 + random.int(below: 5)
+            } else {
+                rows[place].hot.name = "Renamed \(change).JPG"
+            }
+            let row = rows[place]
+            store.apply(ColumnStore.Changes(upserted: [row], removed: [])) { names[$0] }
+            started = clock.now
+            pairs.update([row.hot.id], to: [HealthPairFollowingTests.photo(row)])
+            update = max(update, clock.now - started)
+            for rule in [PairRule.keepRaw, .keepJPEG] {
+                started = clock.now
+                findings = try await checker.pairs(rule, store: store, following: &pairs).findings.count
+                request = max(request, clock.now - started)
+            }
+        }
+        return (request, update, first, findings)
+    }
+
     @Test func `the pairs check proposes one half of each of the synthetic library's pairs`() async {
         let (findings, pairs, _) = await Self.pairs(photos: 20000)
         #expect(pairs > 2000)
@@ -45,5 +92,22 @@ struct HealthBenchTests {
         let (findings, pairs, slowest) = await Self.pairs(photos: photos)
         print("HEALTH-BENCH pairs of \(photos) photos: \(pairs) pairs, \(findings) findings, slowest \(slowest)")
         #expect(slowest < .seconds(1))
+    }
+
+    @Test func `the pairs check after a change of one photo judges only its pair`() async throws {
+        let (_, _, _, findings) = try await Self.followed(photos: 20000, changes: 10)
+        #expect(findings > 2000)
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["REDLAMP_HEALTH_BENCH"] == "1"))
+    func `the pairs check after a change of one photo at full size, within a frame`() async throws {
+        let photos = ProcessInfo.processInfo.environment["REDLAMP_HEALTH_BENCH_PHOTOS"].flatMap { Int($0) }
+            ?? 1_000_000
+        let (request, update, first, findings) = try await Self.followed(photos: photos, changes: 20)
+        print(
+            "HEALTH-BENCH followed pairs of \(photos) photos: \(findings) findings, first \(first),"
+                + " slowest request \(request), slowest update \(update)",
+        )
+        #expect(request < .milliseconds(16))
     }
 }

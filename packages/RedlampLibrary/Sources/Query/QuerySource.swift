@@ -23,6 +23,11 @@ protocol QuerySource: Sendable {
     func applying(_ ids: [Int64], to store: ColumnStore) async throws -> ColumnStore
     /// What Library Health's `check` finds among `store`'s photos (LIB-40).
     func healthFindings(_ check: HealthCheck, store: ColumnStore) async throws -> HealthFindings
+    /// Photos `ids` that can be in a raw and JPEG pair, or every one when nil (LIB-40).
+    func pairPhotos(of ids: [Int64]?) async throws -> [HealthPairs.Photo]
+    /// What the pairs check finds under `rule` among `store`'s photos, judging only what changed in
+    /// `pairs` and recording what it found there.
+    func pairFindings(_ rule: PairRule, store: ColumnStore, pairs: inout HealthPairs) async throws -> HealthFindings
     /// The photos whose findings were kept anyway (LIB-40).
     func keptAnyway() async throws -> [Int64]
     /// The IDs `sql` returns, handing the first `pageSize` to `firstPage` as soon as they're read.
@@ -51,6 +56,18 @@ extension QuerySource {
 
     func healthFindings(_ check: HealthCheck, store _: ColumnStore) async throws -> HealthFindings {
         HealthFindings(check: check)
+    }
+
+    func pairPhotos(of _: [Int64]?) async throws -> [HealthPairs.Photo] {
+        []
+    }
+
+    func pairFindings(
+        _ rule: PairRule,
+        store _: ColumnStore,
+        pairs _: inout HealthPairs,
+    ) async throws -> HealthFindings {
+        HealthFindings(check: .pairs(rule))
     }
 
     func keptAnyway() async throws -> [Int64] {
@@ -370,6 +387,14 @@ struct IndexQuerySource: QuerySource {
 
     func healthFindings(_ check: HealthCheck, store: ColumnStore) async throws -> HealthFindings {
         try await HealthChecker(index: index, paths: paths).findings(check, store: store)
+    }
+
+    func pairPhotos(of ids: [Int64]?) async throws -> [HealthPairs.Photo] {
+        try await index.read { try $0.pairPhotos(of: ids) }
+    }
+
+    func pairFindings(_ rule: PairRule, store: ColumnStore, pairs: inout HealthPairs) async throws -> HealthFindings {
+        try await HealthChecker(index: index, paths: paths).pairs(rule, store: store, following: &pairs)
     }
 
     func keptAnyway() async throws -> [Int64] {

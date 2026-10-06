@@ -54,6 +54,15 @@ public final class QueryEngine: Sendable {
         /// What Library Health's checks found in this store, and the photos kept anyway (LIB-40).
         var health: [HealthCheck: HealthFindings] = [:]
         var keptAnyway: [Int64]?
+        /// The photos that can be in a pair, kept with the store once the pairs check is asked for.
+        var pairs: HealthPairs?
+    }
+
+    /// What a change to the store does to the photos kept for the pairs check.
+    private enum PairsChange {
+        case keep
+        case drop
+        case update([Int64])
     }
 
     /// A column counted over a source's photos in a store.
@@ -100,7 +109,7 @@ public final class QueryEngine: Sendable {
     /// Builds the column store from the index, with the small tables beside it.
     public func load() async throws {
         state.withLock { $0.postings = [:] }
-        try await change { [source] _ in
+        try await change(pairs: .drop) { [source] _ in
             async let names = source.names()
             return try await (source.columnStore(), names)
         }
@@ -117,7 +126,7 @@ public final class QueryEngine: Sendable {
                 state.stalePostings[kind, default: []].formUnion(ids)
             }
         }
-        try await change { [source] store in
+        try await change(pairs: .update(ids)) { [source] store in
             guard let store else { return nil }
             async let names = source.names()
             return try await (source.applying(ids, to: store), names)
@@ -144,32 +153,59 @@ public final class QueryEngine: Sendable {
     }
 
     /// Runs `body` after the changes asked for before, and replaces the store and the names with
-    /// what it returns.
+    /// what it returns, and the photos kept for the pairs check as `pairs` says.
     private func change(
+        pairs change: PairsChange = .keep,
         _ body: @escaping @Sendable (ColumnStore?) async throws -> (ColumnStore, QueryNames)?,
     ) async throws {
-        let task = state.withLock { state in
-            let previous = state.changing
-            let task = Task { [self] in
-                _ = await previous?.result
-                guard let (store, names) = try await body(self.state.withLock { $0.store }) else { return }
-                let vocabulary = QueryVocabulary(names)
-                self.state.withLock { state in
-                    state.store = store
-                    state.vocabulary = vocabulary
-                    state.generation += 1
-                    state.plans.removeAll()
-                    state.rowSets.removeAll()
-                    state.matches.removeAll()
-                    state.columnCounts.removeAll()
-                    state.health.removeAll()
-                    state.keptAnyway = nil
+        try await serially { [self, source] in
+            guard let (store, names) = try await body(state.withLock { $0.store }) else { return }
+            let vocabulary = QueryVocabulary(names)
+            var pairs = state.withLock { $0.pairs.take() }
+            switch change {
+            case .keep:
+                break
+            case .drop:
+                pairs = nil
+            case let .update(ids):
+                if var kept = pairs.take() {
+                    do {
+                        try await kept.update(ids, to: source.pairPhotos(of: ids))
+                    } catch {
+                        state.withLock { $0.pairs = kept }
+                        throw error
+                    }
+                    pairs = kept
                 }
             }
-            state.changing = task
+            state.withLock { [pairs] state in
+                state.pairs = pairs
+                state.store = store
+                state.vocabulary = vocabulary
+                state.generation += 1
+                state.plans.removeAll()
+                state.rowSets.removeAll()
+                state.matches.removeAll()
+                state.columnCounts.removeAll()
+                state.health.removeAll()
+                state.keptAnyway = nil
+            }
+        }
+    }
+
+    /// Runs `body` after the changes asked for before, and before those asked for after: the store
+    /// and the photos kept for the pairs check change only there.
+    private func serially<T: Sendable>(_ body: @escaping @Sendable () async throws -> T) async throws -> T {
+        let task = state.withLock { state in
+            let previous = state.changing
+            let task = Task {
+                _ = await previous?.result
+                return try await body()
+            }
+            state.changing = Task { _ = try await task.value }
             return task
         }
-        try await task.value
+        return try await task.value
     }
 
     // MARK: - Searching
@@ -347,6 +383,9 @@ public final class QueryEngine: Sendable {
         if let kept = state.withLock({ $0.generation == generation ? $0.health[check] : nil }) {
             return kept
         }
+        if case let .pairs(rule) = check, rule != .keepBoth {
+            return try await pairFindings(rule, generation: generation)
+        }
         let found = try await Task.detached(priority: .userInitiated) { [source] in
             try await source.healthFindings(check, store: store)
         }.value
@@ -356,6 +395,34 @@ public final class QueryEngine: Sendable {
             }
         }
         return found
+    }
+
+    /// What the pairs check finds under `rule` in the store as it is once the changes asked for are
+    /// made, judging only the pairs whose photos changed since it was last asked; kept for
+    /// `generation` if that's still the store's.
+    private func pairFindings(_ rule: PairRule, generation: Int) async throws -> HealthFindings {
+        try await serially { [self, source] in
+            guard let store = state.withLock({ $0.store }) else { return HealthFindings(check: .pairs(rule)) }
+            var pairs: HealthPairs = if let kept = state.withLock({ $0.pairs.take() }) {
+                kept
+            } else {
+                try await HealthPairs(source.pairPhotos(of: nil))
+            }
+            let found: HealthFindings
+            do {
+                found = try await source.pairFindings(rule, store: store, pairs: &pairs)
+            } catch {
+                state.withLock { $0.pairs = pairs }
+                throw error
+            }
+            state.withLock { [pairs] state in
+                state.pairs = pairs
+                if state.generation == generation {
+                    state.health[.pairs(rule)] = found
+                }
+            }
+            return found
+        }
     }
 
     func keptAnyway(generation: Int) async throws -> [Int64] {
