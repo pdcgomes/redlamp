@@ -250,7 +250,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Grid, Loupe, Compare and Survey | Yes | Planned | | P4 | LIB-14, LIB-16, LIB-17 | Held arrow keys move through photos without waiting; thumbnails show the edit |
 | Sensor clipping while culling | No | Planned | | P4 | LIB-38 | In the loupe and Compare, with a raw histogram, since a raw's embedded JPEG hides clipping |
 | Rating, flagging and labelling many photos at once | Yes | Planned | | P4 | LIB-15 | With Undo, custom label names and colours, and marks; by key, by mouse or from the command palette |
-| Keywords | Yes | Planned | | P4 | LIB-21 | |
+| Keywords | Yes | In progress | | P4 | LIB-21 | |
 | Metadata editing and presets | Yes | Planned | | P4 | LIB-22 | |
 | Collections and smart collections | Yes | Planned | | P4 | LIB-23 | |
 | Metadata shared with other apps (XMP) | Yes | In progress | | P4 | LIB-24 | Other apps' XMP is read; standard `.xmp` sidecars are written only when you turn it on, and originals are never changed |

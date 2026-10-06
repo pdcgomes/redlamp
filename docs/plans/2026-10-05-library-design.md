@@ -231,12 +231,21 @@ Sorting is separate from the query: captured (the default), name, rating, edited
 
 | Field | Holds |
 | --- | --- |
-| `keywords` | full paths, `Places/Portugal/Lisbon`, so a photo describes itself without the keyword list |
+| `keywords` | full paths, `Places/Portugal/Lisbon`, so a photo describes itself without the keyword list; a `/` inside a name is written `%2F` and a `%` as `%25` (`Music/AC%2FDC`); an empty list means no keywords, and no list at all lets other apps' XMP supply them (LIB-21) |
 | `title`, `caption`, `creator`, `copyright`, `location` | IPTC Core fields |
 | `collections` | the collections a photo is in, by path |
 | `mark` | the quick-collection mark |
 | `customLabel` | a custom label's name: an unknown `label` value makes a sidecar unreadable to older builds, so custom labels never go in `label` |
 | `originalName` | the photo's file name before Redlamp first renamed it (LIB-26), kept by older builds as a field they don't know |
+
+## Keywords (LIB-21)
+
+- **Each photo's keywords** are in its sidecar as full paths (above); the index's `keywords` and `photo_keywords` tables are built from them, so the keyword list, with how many photos have each keyword or one inside it, comes from the index.
+- **What photos can't carry** is in `Definitions/Keywords.json` in `LibraryPaths.root`: keywords no photo has yet, synonyms, the three export flags (include on export, export the keywords containing it, export synonyms), the category, private and person types, and keyword sets. Keys a newer build wrote are kept, and the index stays rebuildable (DEC-35).
+- **Changes** (add and remove on a selection; rename, move, merge, delete) are one batch each, journaled in `Keyword Changes/` and undoable, rewriting the sidecars of the photos they touch off the main thread.
+- **`kw:`** matches a keyword's path, any part of one, and its synonyms. **Completion** matches a prefix or any word of a keyword or its synonyms, best first.
+- **Lightroom Classic's keyword-list file** imports and exports with everything it holds: levels by tabs, synonyms in braces, keywords not exported in brackets.
+- **Other apps' keywords** come through XMP (LIB-24): `lr:hierarchicalSubject` as paths and `dc:subject` as flat names, both ways.
 
 ## Other apps' metadata (LIB-24)
 
@@ -479,6 +488,15 @@ The `files` scenario: 10,000 photos and 16,000 files in a temporary folder on th
 | Photos lost, or parted from their sidecar or `.xmp` | 0 | 0 |
 
 A bare `rename` cost 0.54 ms on the internal disk and 1.4 ms on the external SSD under the same load, so the batch spends 19 to 37 ms a photo on more than its two or three renames: the sidecar's `originalName` write is the first suspect. To be measured on a quiet Mac and brought down.
+
+### Keywords (LIB-21)
+
+The `keywords` scenario, two Debug runs, load average about 65:
+
+- **Completion** over 100,000 keywords: p95 0.9 ms, against 2 ms; building its tables takes about 0.7 s.
+- **A keyword added to 10,000 photos:** 37.5 and 46.1 s, of which the index and lists took 0.44 s, the journal 0.07 s and the sidecars the rest; Undo, 43 to 50 s. A sidecar saved alone costs about 8 ms here: 1.7 ms of file coordination, 2.9 ms for the atomic write, 1.4 ms for the read before it.
+
+Saving sidecars one after another is what every change to many photos waits on: keywords here, and the original names renames record (LIB-26). Ratings on 10,000 photos (LIB-15) will too. The edit is on screen at once from the index; the sidecars follow in the background, but 40 s for 10,000 is too long to leave to a quit.
 
 ### Metadata with other apps (LIB-24)
 
