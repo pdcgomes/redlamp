@@ -92,7 +92,7 @@ public struct GroupScenario: BenchScenario {
             ))
         }
         results.append(BenchResult(
-            scenario: name, id: "library-groups-steps", name: "Moments from the tightest step to the loosest",
+            scenario: name, id: "library-groups-tightest", name: "Moments at the tightest step",
             value: Double(measured.steps.first ?? 0), unit: "moments",
         ))
         results.append(BenchResult(

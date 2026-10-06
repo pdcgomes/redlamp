@@ -17,8 +17,8 @@ struct GroupBenchTests {
         for id in ["moments", "moment-cameras", "days", "unpicked", "pairs", "bursts"] {
             #expect(try #require(results.first { $0.id == "library-groups-\(id)" }).value > 0, "\(id)")
         }
-        let steps = try #require(results.first { $0.id == "library-groups-steps" }).value
-        #expect(try steps > (#require(results.first { $0.id == "library-groups-loosest" }).value))
+        let tightest = try #require(results.first { $0.id == "library-groups-tightest" }).value
+        #expect(try tightest > (#require(results.first { $0.id == "library-groups-loosest" }).value))
     }
 
     @Test func `the synthetic sessions are as the scenario says`() {
