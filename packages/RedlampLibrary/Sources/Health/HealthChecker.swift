@@ -4,7 +4,7 @@ import RedlampDocument
 /// Works out Library Health's checks (LIB-40) from the index and the column store, reading no photo:
 /// duplicates from content keys and the full hashes the index records (LIB-39), pairs from the stacks
 /// found in the store (LIB-28), and damaged files and wrong extensions from what indexing kept of each
-/// photo's read.
+/// photo's read. Findings kept anyway (`HealthDefinitions`) are left out.
 struct HealthChecker: Sendable {
     let index: LibraryIndex
     let paths: LibraryPaths
@@ -18,6 +18,10 @@ struct HealthChecker: Sendable {
         self.index = index
         self.paths = paths
         self.now = now
+    }
+
+    var definitions: HealthDefinitions {
+        HealthDefinitions.cached(at: HealthDefinitions.url(in: paths))
     }
 
     /// `check`'s findings; pairs are found in `store`, and with no store there are none.

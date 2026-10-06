@@ -23,6 +23,8 @@ protocol QuerySource: Sendable {
     func applying(_ ids: [Int64], to store: ColumnStore) async throws -> ColumnStore
     /// What Library Health's `check` finds among `store`'s photos (LIB-40).
     func healthFindings(_ check: HealthCheck, store: ColumnStore) async throws -> HealthFindings
+    /// The photos whose findings were kept anyway (LIB-40).
+    func keptAnyway() async throws -> [Int64]
     /// The IDs `sql` returns, handing the first `pageSize` to `firstPage` as soon as they're read.
     func run(
         _ sql: QuerySQL, pageSize: Int, cancellation: QueryCancellation,
@@ -49,6 +51,10 @@ extension QuerySource {
 
     func healthFindings(_ check: HealthCheck, store _: ColumnStore) async throws -> HealthFindings {
         HealthFindings(check: check)
+    }
+
+    func keptAnyway() async throws -> [Int64] {
+        []
     }
 }
 
@@ -364,6 +370,10 @@ struct IndexQuerySource: QuerySource {
 
     func healthFindings(_ check: HealthCheck, store: ColumnStore) async throws -> HealthFindings {
         try await HealthChecker(index: index, paths: paths).findings(check, store: store)
+    }
+
+    func keptAnyway() async throws -> [Int64] {
+        try await HealthChecker(index: index, paths: paths).keptAnyway().map(\.photo)
     }
 }
 

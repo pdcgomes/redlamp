@@ -5,6 +5,7 @@ extension HealthChecker {
     /// Photos whose health says they're damaged, and those marked unreadable without one, but not
     /// those still being written.
     func damaged(store: ColumnStore?) async throws -> HealthFindings {
+        let definitions = definitions
         let settled = now().addingTimeInterval(-Self.settling)
         let unreadable = store.map { store in
             var ids: [Int64] = []
@@ -26,13 +27,21 @@ extension HealthChecker {
             }
         }
         var findings: [HealthFinding] = []
-        for (photo, _, damage) in found {
+        var kept = 0
+        for (photo, folder, damage) in found {
             guard !photo.state.contains(.settling), photo.modified <= settled else { continue }
+            if definitions.keeps(
+                .damaged, contentKey: photo.contentKey, path: folder + "/" + photo.name, size: photo.size,
+                modified: photo.modified,
+            ) {
+                kept += 1
+                continue
+            }
             findings.append(HealthFinding(
                 photo: photo.id, check: .damaged, reason: .damage(damage), proposal: .trash,
                 apart: Self.isDecided(photo) ? .decided : nil,
             ))
         }
-        return HealthFindings(check: .damaged, findings: Self.byPath(findings, found))
+        return HealthFindings(check: .damaged, findings: Self.byPath(findings, found), keptAnyway: kept)
     }
 }

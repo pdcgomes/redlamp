@@ -51,8 +51,9 @@ public final class QueryEngine: Sendable {
         var readingPostings: [PostingKind: Int] = [:]
         /// The columns counted for this store, by what they counted.
         var columnCounts: [ColumnKey: FacetColumnCounts] = [:]
-        /// What Library Health's checks found in this store (LIB-40).
+        /// What Library Health's checks found in this store, and the photos kept anyway (LIB-40).
         var health: [HealthCheck: HealthFindings] = [:]
+        var keptAnyway: [Int64]?
     }
 
     /// A column counted over a source's photos in a store.
@@ -162,6 +163,7 @@ public final class QueryEngine: Sendable {
                     state.matches.removeAll()
                     state.columnCounts.removeAll()
                     state.health.removeAll()
+                    state.keptAnyway = nil
                 }
             }
             state.changing = task
@@ -351,6 +353,19 @@ public final class QueryEngine: Sendable {
         state.withLock { state in
             if state.generation == generation {
                 state.health[check] = found
+            }
+        }
+        return found
+    }
+
+    func keptAnyway(generation: Int) async throws -> [Int64] {
+        if let kept = state.withLock({ $0.generation == generation ? $0.keptAnyway : nil }) {
+            return kept
+        }
+        let found = try await source.keptAnyway()
+        state.withLock { state in
+            if state.generation == generation {
+                state.keptAnyway = found
             }
         }
         return found

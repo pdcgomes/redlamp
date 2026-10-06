@@ -7,12 +7,18 @@ extension HealthChecker {
     /// rated, flagged or labelled, is listed apart; a pair with a half that can't be read isn't judged.
     func pairs(_ rule: PairRule, store: ColumnStore?) async throws -> HealthFindings {
         guard rule != .keepBoth, let store else { return HealthFindings(check: .pairs(rule)) }
+        let definitions = definitions
         let (names, choices) = try await index.read { reader in try (StackNames(reader), StackChoices(reader)) }
         let drops = await Task.detached(priority: .userInitiated) {
             Self.drops(rule, in: StackFinder.find(in: store, names: names, choices: choices), store: store)
         }.value
         let texts = try await pairTexts(drops, store: store)
-        return Self.findings(rule, drops: drops, store: store, names: names, texts: texts) { _ in false }
+        let keys = definitions.keepsAny(.pairs) ? try await contentKeys(drops.map(\.dropped)) : [:]
+        return Self.findings(rule, drops: drops, store: store, names: names, texts: texts) { dropped in
+            keys[dropped].map { key in
+                definitions.keeps(.pairs, contentKey: key, path: "", size: 0, modified: .distantPast)
+            } ?? false
+        }
     }
 
     /// The halves `rule` drops of `stacks`' pairs that hold a raw and a JPEG or HEIC, each with the

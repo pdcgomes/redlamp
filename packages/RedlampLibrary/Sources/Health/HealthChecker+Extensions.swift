@@ -5,6 +5,7 @@ extension HealthChecker {
     /// Photos whose format doesn't fit their names' extensions, each proposed the name its format's
     /// extension gives it, unless another photo of its folder has that name.
     func extensions() async throws -> HealthFindings {
+        let definitions = definitions
         let found = try await index.read { reader -> [(PhotoRecord, String, PhotoHealth, Set<String>)] in
             let wrong = try reader.photoHealth().filter { !$0.value.health.format.fits(name: $0.value.name) }
             var names: [Int64: Set<String>] = [:]
@@ -17,7 +18,15 @@ extension HealthChecker {
             }
         }
         var findings: [HealthFinding] = []
-        for (photo, _, health, names) in found where !photo.state.contains(.unreadable) {
+        var kept = 0
+        for (photo, folder, health, names) in found where !photo.state.contains(.unreadable) {
+            if definitions.keeps(
+                .extensions, contentKey: photo.contentKey, path: folder + "/" + photo.name, size: photo.size,
+                modified: photo.modified,
+            ) {
+                kept += 1
+                continue
+            }
             let ext = NamingJob.split(photo.name).ext
             let renamed = health.proposedExtension.map { Self.name(photo.name, withExtension: $0) }
             let free = renamed.map { !names.contains(NamingJob.fold($0)) } ?? false
@@ -27,7 +36,9 @@ extension HealthChecker {
                 apart: Self.isDecided(photo) ? .decided : nil,
             ))
         }
-        return HealthFindings(check: .extensions, findings: Self.byPath(findings, found.map { ($0.0, $0.1, ()) }))
+        return HealthFindings(
+            check: .extensions, findings: Self.byPath(findings, found.map { ($0.0, $0.1, ()) }), keptAnyway: kept,
+        )
     }
 
     /// `name` with its extension `ext`, in capitals when the extension it had was.

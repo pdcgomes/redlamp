@@ -18,12 +18,15 @@ public enum PhotoSource: Sendable, Hashable {
     /// The photos a check of Library Health found (LIB-40), each with its reason and proposal in
     /// `QueryEngine.healthFindings`.
     case health(HealthCheck)
+    /// The photos whose findings the user kept anyway, any check's (LIB-40).
+    case keptAnyway
 
     /// Whether it holds photos that can't be read, which other sources leave out (LIB-40).
     var findsUnreadable: Bool {
         switch self {
         case let .query(query): query.findsUnreadable
         case let .health(check): check.findsUnreadable
+        case .keptAnyway: true
         default: false
         }
     }
@@ -56,6 +59,8 @@ extension QueryEngine {
             return try await rows(for: plan, in: store, generation: generation)
         case let .health(check):
             return try await store.rows(withIDs: healthFindings(check, in: store, generation: generation).photos)
+        case .keptAnyway:
+            return try await store.rows(withIDs: keptAnyway(generation: generation))
         case let .folder(url, includingSubfolders):
             let path = LibraryIndexer.path(url)
             let below = path == "/" ? "/" : path + "/"
