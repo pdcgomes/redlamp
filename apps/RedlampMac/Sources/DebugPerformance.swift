@@ -143,8 +143,34 @@
         }
     }
 
+    /// Where a performance run writes its reports. `--perf-report <directory>` gives the run a
+    /// directory of its own (perf.txt, perf.json, memory.txt, profile.txt and debug.log), so runs
+    /// launched at the same time from other checkouts can neither delete nor take its report;
+    /// the launch arguments split on whitespace, so the path can't contain any. Without it, the
+    /// shared files in /tmp (/tmp/redlamp-perf.txt and its siblings).
+    enum PerformanceReport {
+        static let directory: String? = {
+            let arguments = LaunchArguments.all
+            return arguments.firstIndex(of: "--perf-report").flatMap {
+                $0 + 1 < arguments.count ? arguments[$0 + 1] : nil
+            }
+        }()
+
+        static let text = path("perf.txt", shared: "/tmp/redlamp-perf.txt")
+        static let metrics = path("perf.json", shared: "/tmp/redlamp-perf.json")
+        static let memory = path("memory.txt", shared: "/tmp/redlamp-memory.txt")
+        static let profile = path("profile.txt", shared: "/tmp/redlamp-profile.txt")
+        static let log = path("debug.log", shared: "/tmp/redlamp-debug.log")
+
+        private static func path(_ name: String, shared: String) -> String {
+            guard let directory else { return shared }
+            try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+            return (directory as NSString).appendingPathComponent(name)
+        }
+    }
+
     /// `--sweep <parameter> [--sweep-seconds 3]`: drags a slider at 120 Hz (like a trackpad),
-    /// then writes main-thread and frame statistics to /tmp/redlamp-perf.txt.
+    /// then writes main-thread and frame statistics to `PerformanceReport.text`.
     @MainActor
     enum DebugPerformance {
         static func scheduleIfRequested(model: EditorModel) {
@@ -194,18 +220,18 @@
         static func writeMetrics(_ metrics: [String: Double]) {
             let finite = metrics.filter(\.value.isFinite)
             if let data = try? JSONSerialization.data(withJSONObject: finite, options: [.sortedKeys]) {
-                try? data.write(to: URL(fileURLWithPath: "/tmp/redlamp-perf.json"), options: .atomic)
+                try? data.write(to: URL(fileURLWithPath: PerformanceReport.metrics), options: .atomic)
             }
         }
 
         static func trace(_ message: String) {
             let line = "\(Date().formatted(.iso8601.time(includingFractionalSeconds: true))) \(message)\n"
-            if let handle = FileHandle(forWritingAtPath: "/tmp/redlamp-debug.log") {
+            if let handle = FileHandle(forWritingAtPath: PerformanceReport.log) {
                 handle.seekToEndOfFile()
                 handle.write(Data(line.utf8))
                 try? handle.close()
             } else {
-                try? line.write(toFile: "/tmp/redlamp-debug.log", atomically: true, encoding: .utf8)
+                try? line.write(toFile: PerformanceReport.log, atomically: true, encoding: .utf8)
             }
         }
 
@@ -272,16 +298,22 @@
                     $0 + 1 < arguments.count ? arguments[$0 + 1] : nil
                 }
                 try? sampler.report(focus: focus).write(
-                    toFile: "/tmp/redlamp-profile.txt",
+                    toFile: PerformanceReport.profile,
                     atomically: true,
                     encoding: .utf8,
                 )
             }
 
             let frames = model.debugFrameCount - framesBefore
-            let renders = model.debugRenderDurations.suffix(frames)
-                .map { Double($0.components.attoseconds) / 1e15 + Double($0.components.seconds) * 1000 }
-                .sorted()
+            func milliseconds(_ durations: some Collection<Duration>) -> [Double] {
+                durations.map { Double($0.components.attoseconds) / 1e15 + Double($0.components.seconds) * 1000 }
+                    .sorted()
+            }
+            func percentile(_ sorted: [Double], _ percent: Int) -> Double {
+                sorted.isEmpty ? 0 : sorted[min(sorted.count - 1, sorted.count * percent / 100)]
+            }
+            let renders = milliseconds(model.debugRenderDurations.suffix(frames))
+            let latencies = milliseconds(model.debugFrameLatencies.suffix(frames))
             let report = [
                 monitor.report("main thread during \(label)", seconds: seconds),
                 String(
@@ -293,12 +325,16 @@
                 ),
                 String(
                     format: "engine render: p50 %.1f ms, p95 %.1f ms",
-                    renders.isEmpty ? 0 : renders[renders.count / 2],
-                    renders.isEmpty ? 0 : renders[min(renders.count - 1, renders.count * 95 / 100)],
+                    percentile(renders, 50), percentile(renders, 95),
+                ),
+                String(
+                    format: "request to frame received: p50 %.1f ms, p95 %.1f ms, p99 %.1f ms, max %.1f ms",
+                    percentile(latencies, 50), percentile(latencies, 95), percentile(latencies, 99),
+                    latencies.last ?? 0,
                 ),
             ].joined(separator: "\n")
             print(report)
-            try? (report + "\n").write(toFile: "/tmp/redlamp-perf.txt", atomically: true, encoding: .utf8)
+            try? (report + "\n").write(toFile: PerformanceReport.text, atomically: true, encoding: .utf8)
             if let summary = monitor.summary(seconds: seconds) {
                 writeMetrics([
                     "drag-busy": summary.busy * 100,
@@ -312,16 +348,50 @@
             }
         }
 
-        /// `--browse [--browse-dwell 0.5]`: steps forward through every photo, then back, pausing
-        /// `dwell` seconds on each like someone pressing the arrow keys. For each step, records
-        /// the time from selection to the new photo's first frame and whether the placeholder
-        /// (thumbnail and spinner) was shown.
+        /// The next frame shown and when it landed, or nil once `timeout` passes without one.
+        private static func nextFrame(
+            of model: EditorModel, within timeout: Duration,
+        ) async -> (frame: RenderedFrame, arrived: CFAbsoluteTime)? {
+            @MainActor final class Once {
+                var done = false
+            }
+            let once = Once()
+            return await withCheckedContinuation { continuation in
+                Task { @MainActor in
+                    let frame = await model.frames.nextFrame()
+                    let arrived = CFAbsoluteTimeGetCurrent()
+                    guard !once.done else { return }
+                    once.done = true
+                    continuation.resume(returning: (frame, arrived))
+                }
+                Task { @MainActor in
+                    try? await Task.sleep(for: timeout)
+                    guard !once.done else { return }
+                    once.done = true
+                    continuation.resume(returning: nil)
+                }
+            }
+        }
+
+        /// `--browse [--browse-dwell 0.5]`: from the first photo, steps forward through every
+        /// photo, then back, pausing `dwell` seconds on each like someone pressing the arrow keys.
+        /// For each step, records the time from selection to the new photo's first frame and
+        /// whether the placeholder (thumbnail and spinner) was shown; a step with no frame within
+        /// two seconds is reported as such.
         private static func browse(dwell: Double, model: EditorModel) async {
             var lines: [String] = []
             let count = model.items.count
+            if let first = model.items.first?.url, model.info?.url != first {
+                model.select(first)
+                for _ in 0 ..< 200 where model.info?.url != first || model.isLoading || !model.hasFrame {
+                    try? await Task.sleep(for: .milliseconds(50))
+                }
+                try? await Task.sleep(for: .seconds(dwell))
+            }
             for (label, offset) in [("forward, first visit", 1), ("back, revisit", -1)] {
                 var latencies: [Double] = []
                 var placeholders = 0
+                var timeouts = 0
                 for _ in 1 ..< count {
                     let framesBefore = model.debugFrameCount
                     let started = CFAbsoluteTimeGetCurrent()
@@ -334,9 +404,20 @@
                     // Timestamped as the frame lands; sleeping to poll is too coarse.
                     var arrived = started
                     var frame = model.frames.current
+                    var timedOut = false
                     while model.debugFrameCount == framesBefore {
-                        frame = await model.frames.nextFrame()
-                        arrived = CFAbsoluteTimeGetCurrent()
+                        guard let next = await nextFrame(of: model, within: .seconds(2)) else {
+                            timedOut = true
+                            break
+                        }
+                        frame = next.frame
+                        arrived = next.arrived
+                    }
+                    if timedOut {
+                        timeouts += 1
+                        lines.append("  \(model.info?.fileName ?? "?"): no frame within 2 s")
+                        try? await Task.sleep(for: .seconds(dwell))
+                        continue
                     }
                     let latency = (arrived - started) * 1000
                     latencies.append(latency)
@@ -351,13 +432,14 @@
                 }
                 let sorted = latencies.sorted()
                 lines.append(String(
-                    format: "%@: %d switches, median %.1f ms, max %.1f ms, placeholder shown %d times",
+                    format: "%@: %d switches, median %.1f ms, max %.1f ms, placeholder shown %d times, no frame %d times",
                     label, sorted.count, sorted.isEmpty ? 0 : sorted[sorted.count / 2], sorted.last ?? 0, placeholders,
+                    timeouts,
                 ))
             }
             let report = lines.joined(separator: "\n")
             print(report)
-            try? (report + "\n").write(toFile: "/tmp/redlamp-perf.txt", atomically: true, encoding: .utf8)
+            try? (report + "\n").write(toFile: PerformanceReport.text, atomically: true, encoding: .utf8)
             if LaunchArguments.all.contains("--browse-quit") {
                 NSApp.terminate(nil)
             }

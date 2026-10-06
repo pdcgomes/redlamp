@@ -1062,6 +1062,10 @@ public final class EditorModel {
         guard target.size.width > 0 else { return }
         requestedTarget = target
         generation &+= 1
+        debugRequestTimes.append((generation, .now))
+        if debugRequestTimes.count > 64 {
+            debugRequestTimes.removeFirst(32)
+        }
         let overlay = maskOverlayShown
         var request = RenderRequest(
             recipe: displayed,
@@ -1081,10 +1085,12 @@ public final class EditorModel {
         engine.render(request)
     }
 
-    /// Frames received from the engine, and the latest ones' render times (for performance
-    /// diagnostics).
+    /// Frames received from the engine, the latest ones' render times, and the time from each
+    /// one's request to its arrival here (for performance diagnostics).
     @ObservationIgnored public private(set) var debugFrameCount = 0
     @ObservationIgnored public private(set) var debugRenderDurations: [Duration] = []
+    @ObservationIgnored public private(set) var debugFrameLatencies: [Duration] = []
+    @ObservationIgnored private var debugRequestTimes: [(generation: UInt64, at: ContinuousClock.Instant)] = []
 
     private func receive(_ frame: RenderedFrame) {
         guard info != nil else { return }
@@ -1097,6 +1103,13 @@ public final class EditorModel {
         debugRenderDurations.append(frame.renderDuration)
         if debugRenderDurations.count > 4000 {
             debugRenderDurations.removeFirst(2000)
+        }
+        if let index = debugRequestTimes.firstIndex(where: { $0.generation == frame.generation }) {
+            debugFrameLatencies.append(.now - debugRequestTimes[index].at)
+            debugRequestTimes.removeFirst(index + 1)
+            if debugFrameLatencies.count > 4000 {
+                debugFrameLatencies.removeFirst(2000)
+            }
         }
         showFrame(frame)
         latestFrame = frame

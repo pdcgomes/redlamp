@@ -14,10 +14,10 @@
     /// docs/plans/2026-10-02-folders-design.md: time to first photos and to the whole tree, visible
     /// thumbnails, warming from the files and from the pack, the main thread while the filmstrip
     /// scrolls end to end, how busy the cores were, and the footprint through every phase, then
-    /// after a memory-pressure trim and a few idle seconds. Writes /tmp/redlamp-perf.txt, ending
+    /// after a memory-pressure trim and a few idle seconds. Writes `PerformanceReport.text`, ending
     /// with each budget's PASS or FAIL; with `--folders-perf-quit` it then quits, with status 1 if a
     /// budget failed. `--folders-perf-memory` also breaks the footprint down at each phase (and near
-    /// the peaks) into /tmp/redlamp-memory.txt; the region walks take a core, so measure
+    /// the peaks) into `PerformanceReport.memory`; the region walks take a core, so measure
     /// performance without it. `scripts/folders-perf.sh` runs it all as a gate.
     @MainActor
     enum DebugFoldersPerformance {
@@ -148,7 +148,7 @@
             sampler?.stop()
             if let sampler {
                 try? await Task.sleep(for: .milliseconds(20))
-                try? sampler.report().write(toFile: "/tmp/redlamp-profile.txt", atomically: true, encoding: .utf8)
+                try? sampler.report().write(toFile: PerformanceReport.profile, atomically: true, encoding: .utf8)
             }
             await memory.mark("scrolled")
             // Browsing paused: what the app holds without memory pressure.
@@ -271,9 +271,9 @@
                     ),
                     "Load average at the end: \(loadAverage())",
                 ])
-                try? (table + "\n").write(toFile: "/tmp/redlamp-memory.txt", atomically: true, encoding: .utf8)
+                try? (table + "\n").write(toFile: PerformanceReport.memory, atomically: true, encoding: .utf8)
             }
-            try? (report + "\n").write(toFile: "/tmp/redlamp-perf.txt", atomically: true, encoding: .utf8)
+            try? (report + "\n").write(toFile: PerformanceReport.text, atomically: true, encoding: .utf8)
             if LaunchArguments.all.contains("--folders-perf-quit") {
                 if failed.isEmpty {
                     NSApp.terminate(nil)

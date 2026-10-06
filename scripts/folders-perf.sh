@@ -9,7 +9,10 @@
 #
 # SKIP_BUILD=1 reuses the last build; DERIVED_DATA picks the build directory (build/DerivedData);
 # WARM sets how many thumbnails are warmed (3000); APP_ENV="NAME=value ..." sets environment
-# variables in the app (through `open --env`).
+# variables in the app (through `open --env`). REPORT_DIR names the directory the run's reports
+# go to (perf.txt, perf.json for scripts/perf-record.sh, memory.txt, debug.log); without it each
+# run makes its own under /tmp and keeps it, so runs from other checkouts at the same time never
+# take or delete each other's report. It can't contain whitespace.
 
 set -euo pipefail
 
@@ -31,7 +34,13 @@ if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
         SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) REDLAMP_PROFILING' -quiet
 fi
 
-rm -f /tmp/redlamp-perf.txt /tmp/redlamp-perf.json /tmp/redlamp-memory.txt
+if [[ -n "${REPORT_DIR:-}" ]]; then
+    REPORT="$REPORT_DIR"
+    mkdir -p "$REPORT"
+    rm -f "$REPORT/perf.txt" "$REPORT/perf.json" "$REPORT/memory.txt"
+else
+    REPORT="$(mktemp -d /tmp/redlamp-folders-perf.XXXXXX)"
+fi
 ENV_FLAGS=()
 for assignment in ${APP_ENV:-}; do
     ENV_FLAGS+=(--env "$assignment")
@@ -40,25 +49,26 @@ done
 # Launched through LaunchServices (in the background, without taking focus): a process started
 # straight from a non-GUI shell may never get a window.
 BEFORE="$(pgrep -f "$EXECUTABLE" || true)"
-echo "--folders-perf $FOLDER --folders-perf-warm ${WARM:-3000} --folders-perf-quit $*" >/tmp/redlamp-launch-args
+echo "--perf-report $REPORT --folders-perf $FOLDER --folders-perf-warm ${WARM:-3000} --folders-perf-quit $*" >/tmp/redlamp-launch-args
 echo "== load average before: $(sysctl -n vm.loadavg)"
 open -n -g ${ENV_FLAGS[@]+"${ENV_FLAGS[@]}"} "$BUNDLE"
 PID=""
 for _ in $(seq 1 360); do
     sleep 0.5
     [[ -z "$PID" ]] && PID="$(pgrep -f "$EXECUTABLE" | grep -vxF "${BEFORE:-none}" | head -1 || true)"
-    [[ -f /tmp/redlamp-perf.txt ]] && break
+    [[ -f "$REPORT/perf.txt" ]] && break
 done
 sleep 1
 [[ -n "$PID" ]] && kill "$PID" 2>/dev/null || true
 
-if [[ ! -f /tmp/redlamp-perf.txt ]]; then
-    echo "(no report: the app did not finish; see /tmp/redlamp-debug.log)" >&2
+if [[ ! -f "$REPORT/perf.txt" ]]; then
+    echo "(no report: the app did not finish; see $REPORT/debug.log)" >&2
     exit 2
 fi
-cat /tmp/redlamp-perf.txt
-if [[ -f /tmp/redlamp-memory.txt ]]; then
+cat "$REPORT/perf.txt"
+if [[ -f "$REPORT/memory.txt" ]]; then
     echo
-    cat /tmp/redlamp-memory.txt
+    cat "$REPORT/memory.txt"
 fi
-grep -q "^Budgets: all" /tmp/redlamp-perf.txt
+echo "reports: $REPORT"
+grep -q "^Budgets: all" "$REPORT/perf.txt"

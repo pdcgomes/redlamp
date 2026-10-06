@@ -40,18 +40,18 @@ echo "== redlamp bench"
 ARGS=(--bench "$WORK/bench.json")
 if [[ "${SKIP_SWEEP:-0}" != "1" ]]; then
     echo "== slider sweep"
-    if scripts/perf-sweep.sh Release exposure "select=3,panel=all" && [[ -f /tmp/redlamp-perf.json ]]; then
-        cp /tmp/redlamp-perf.json "$WORK/sweep.json"
-        ARGS+=(--sweep "$WORK/sweep.json")
+    if REPORT_DIR="$WORK/sweep" scripts/perf-sweep.sh Release exposure "select=3,panel=all" \
+        && [[ -f "$WORK/sweep/perf.json" ]]; then
+        ARGS+=(--sweep "$WORK/sweep/perf.json")
     else
         echo "   (the sweep didn't finish; left out)"
     fi
 fi
 if [[ "${SKIP_FOLDERS:-0}" != "1" && -d "$FOLDERS" ]]; then
     echo "== folders run"
-    if SKIP_BUILD="${SKIP_BUILD:-0}" scripts/folders-perf.sh "$FOLDERS" && [[ -f /tmp/redlamp-perf.json ]]; then
-        cp /tmp/redlamp-perf.json "$WORK/folders.json"
-        ARGS+=(--folders "$WORK/folders.json")
+    if REPORT_DIR="$WORK/folders" SKIP_BUILD="${SKIP_BUILD:-0}" scripts/folders-perf.sh "$FOLDERS" \
+        && [[ -f "$WORK/folders/perf.json" ]]; then
+        ARGS+=(--folders "$WORK/folders/perf.json")
     else
         echo "   (the folders run didn't finish or missed a budget; left out)"
     fi
