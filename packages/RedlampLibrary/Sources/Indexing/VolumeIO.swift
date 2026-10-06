@@ -7,10 +7,10 @@ import Synchronization
 /// them: as many at once as the volume serves best (`VolumeConcurrency`), what's on screen first.
 /// An operation that outlives `timeout` from when it's sent makes the readers ask the volume itself
 /// whether it's there, about its probe: a volume that answers within the timeout is only slow, and
-/// what's in flight goes on for another; one that fails as gone, or doesn't answer in time, is
-/// unreachable: what's in flight and what waits fails, and so does what's asked next, at once,
-/// while the probe asks every so often whether it's back. Waiting for a place in flight doesn't
-/// count towards the timeout either.
+/// what's in flight goes on for another, up to `operationLimit`, after which an operation fails
+/// alone; one that fails as gone, or doesn't answer in time, is unreachable: what's in flight and
+/// what waits fails, and so does what's asked next, at once, while the probe asks every so often
+/// whether it's back. Waiting for a place in flight doesn't count towards the timeout either.
 ///
 /// Operations run on GCD's threads, since they block on the volume, which Swift's cooperative pool
 /// must not. A caller that stops waiting (its timeout passed) leaves the thread to finish alone.
@@ -401,9 +401,15 @@ public final class VolumeIO: Sendable {
         }
     }
 
+    /// How long an operation goes on while its volume answers before it's given up on alone, its
+    /// file failing and the volume staying: a read that hangs on a share, or a file being downloaded.
+    var operationLimit: Duration {
+        timeout * 30
+    }
+
     /// Asks the volume whether it's there, unless it's being asked: when it answers, the operations
-    /// in flight past their deadlines get another timeout; when it doesn't, they're given up on and
-    /// the volume is unreachable.
+    /// in flight past their deadlines get another timeout, but for those past `operationLimit`; when
+    /// it doesn't, they're all given up on and the volume is unreachable.
     private func askVolume() {
         let asking = state.withLock { state -> Bool in
             guard state.reachable, !state.asking else { return false }
@@ -420,24 +426,31 @@ public final class VolumeIO: Sendable {
                 var expired: [Job] = []
                 for (id, tracked) in state.tracked where !tracked.expired {
                     guard let deadline = tracked.deadline else { continue }
-                    if answered {
-                        if deadline <= now {
-                            state.tracked[id]?.deadline = now + timeout.seconds
-                        }
-                        continue
-                    }
                     let inFlight = clockNow - (tracked.started ?? clockNow)
+                    if answered {
+                        guard deadline <= now else { continue }
+                        guard inFlight >= operationLimit else {
+                            state.tracked[id]?.deadline = now + timeout.seconds
+                            continue
+                        }
+                    } else {
+                        state.longestUnanswered = max(state.longestUnanswered, inFlight)
+                    }
                     expired.append(tracked.job)
                     state.tracked[id]?.expired = true
                     state.running -= 1
                     state.stuck += 1
                     state.timeouts += 1
                     state.longestOperation = max(state.longestOperation, inFlight)
-                    state.longestUnanswered = max(state.longestUnanswered, inFlight)
                 }
                 return expired
             }
-            guard !answered else { return }
+            guard !answered else {
+                for job in expired {
+                    job.fail(VolumeOperationTimedOut(url: job.url))
+                }
+                return pump()
+            }
             for job in expired {
                 job.fail(LibraryFileSystemError.timedOut(job.url))
             }
@@ -533,6 +546,12 @@ public final class VolumeIO: Sendable {
         }
         return (error.userInfo[NSUnderlyingErrorKey] as? NSError).flatMap(posixCode)
     }
+}
+
+/// An operation given up on after `VolumeIO.operationLimit`, its volume still answering: the file
+/// failed, not the volume.
+public struct VolumeOperationTimedOut: Error, Sendable, Hashable {
+    public let url: URL
 }
 
 /// One caller's wait: resumed once, by the operation's end, its timeout or its cancellation,

@@ -217,6 +217,25 @@ struct VolumeIOTests {
         #expect(statistics.longestUnanswered == .zero)
     }
 
+    @Test func `an operation still going after thirty timeouts on a volume that answers fails alone`() async throws {
+        let fileSystem = SlowFileSystem(delay: .milliseconds(1500))
+        let probe = URL(fileURLWithPath: "/Volumes/Slow")
+        let io = try VolumeIO(
+            volume: fileSystem.volume(of: probe), fileSystem: fileSystem, probe: probe, timeout: .milliseconds(30),
+        )
+        let file = probe.appending(path: "IMG_0001.JPG")
+        let clock = ContinuousClock()
+        let started = clock.now
+        await #expect(throws: VolumeOperationTimedOut(url: file)) {
+            try await io.read(file, range: 0 ..< 100)
+        }
+        let waited = clock.now - started
+        #expect(waited >= io.operationLimit && waited < .milliseconds(1400), "\(waited)")
+        let statistics = io.statistics
+        #expect(statistics.isReachable && statistics.timeouts == 1 && statistics.longestUnanswered == .zero)
+        #expect(try await io.attributes(of: file).name == "IMG_0001.JPG")
+    }
+
     /// A file system whose reads hang until released, then fail as a network that stopped answering,
     /// and which doesn't answer the first time it's asked about a folder: a volume that goes and
     /// comes back while a read hangs.

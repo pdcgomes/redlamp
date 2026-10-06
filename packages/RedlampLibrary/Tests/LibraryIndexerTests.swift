@@ -402,6 +402,23 @@ struct LibraryIndexerTests {
         #expect(place < (listed.firstIndex(of: above) ?? 0), "\(listed.prefix(12))")
     }
 
+    @Test func `a photo whose read hangs on a volume that answers fails alone, its folder left to the next run`(
+    ) async throws {
+        let sandbox = try await IndexerSandbox.make(.init(photos: 200, seed: 31, shapes: []))
+        defer { sandbox.remove() }
+        let photo = try #require((0 ..< 200).map(sandbox.fixture.photo(at:))
+            .first { $0.sidecar == nil && $0.xmp == nil })
+        let hanging = SlowReadFileSystem(slow: sandbox.url(photo), delay: .seconds(6))
+        let volumes = VolumeIORegistry(fileSystem: hanging, configuration: .init(timeout: .milliseconds(100)))
+        let indexer = LibraryIndexer(index: sandbox.index, volumes: volumes, configuration: .testing())
+        let run = await IndexerRun.collect(indexer.index([sandbox.root]))
+        let summary = try #require(run.summary)
+        #expect(run.failures.count == 1 && run.failures.first?.hasPrefix(sandbox.path(photo.path)) == true)
+        #expect(summary.offlineVolumes.isEmpty && volumes.all.allSatisfy(\.isReachable))
+        let (count, unfinished) = try await sandbox.index.read { try ($0.photoCount(), $0.foldersToIndex()) }
+        #expect(count == 199 && unfinished.map(\.path) == [sandbox.path(photo.folder)])
+    }
+
     @Test func `a volume that disconnects partway marks its photos offline without hanging, and resumes when back`(
     ) async throws {
         let sandbox = try await IndexerSandbox.make(.init(photos: 300, seed: 29, shapes: []))
