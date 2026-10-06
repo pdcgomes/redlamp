@@ -113,6 +113,12 @@ private let releaseSettings: SettingsDictionary = [
     "EAGER_LINKING": "YES",
 ]
 
+/// A function body or expression this slow to type-check fails the Debug build. The two
+/// diagnostics have no warning group, so warnings-as-errors makes them errors.
+private let typeCheckGuard: SettingsDictionary = [
+    "OTHER_SWIFT_FLAGS": "$(inherited) -Xfrontend -warn-long-function-bodies=1500 -Xfrontend -warn-long-expression-type-checking=1000",
+]
+
 // MARK: - Target factories
 
 public extension Target {
@@ -135,7 +141,11 @@ public extension Target {
                 configurations: [
                     // Engine hot loops (raw copies, analysis) are 20-40x slower at -Onone,
                     // which makes Debug builds unusable for opening images.
-                    .debug(name: .debug, settings: module.isEngineLayer ? ["SWIFT_OPTIMIZATION_LEVEL": "-O"] : [:]),
+                    .debug(
+                        name: .debug,
+                        settings: typeCheckGuard
+                            .merging(module.isEngineLayer ? ["SWIFT_OPTIMIZATION_LEVEL": "-O"] : [:]) { $1 },
+                    ),
                     .release(name: .release, settings: releaseSettings),
                 ],
             ),
