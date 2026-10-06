@@ -1,37 +1,53 @@
 import RedlampEngineAPI
-import RedlampUI
 import Testing
+@_spi(Harness) @testable import RedlampUI
 
-/// ⌘F adjustment search (UX-03).
+/// ⌘F adjustment search (UX-03): the palette's slider rows, ranked as its sliders scope ranks them.
+@MainActor
 struct AdjustmentSearchTests {
-    private func first(_ query: String) -> ParameterID? {
-        AdjustmentSearch.results(for: query).first?.parameter
+    private func results(_ query: String) -> [ParameterID] {
+        PaletteCatalog.rank(PaletteCatalog.sliderItems, query: query, words: SearchMatcher.words(query))
+            .compactMap { item in
+                if case let .slider(parameter) = item.kind {
+                    return parameter
+                }
+                return nil
+            }
     }
 
-    @Test func `finds sliders by name, by prefix and by the words people use`() {
+    private func first(_ query: String) -> ParameterID? {
+        results(query).first
+    }
+
+    @Test func `finds sliders by name, by prefix and by the words people use`() throws {
         #expect(first("dehaze") == .dehaze)
         #expect(first("haze") == .dehaze)
         #expect(first("shad") == .shadows)
         #expect(first("fill light") == .shadows)
         #expect(first("kelvin") == .temperature)
-        #expect(Set(AdjustmentSearch.results(for: "white balance").prefix(2).map(\.parameter)) == [.temperature, .tint])
+        #expect(Set(results("white balance").prefix(2)) == [.temperature, .tint])
         #expect(first("sharpen") == .sharpenAmount)
         #expect(first("nr") == .noiseLuminance)
         #expect(first("colour noise") == .noiseColor)
-        #expect(AdjustmentSearch.results(for: "split toning").first?.panel == .colorGrading)
+        let toning = try #require(first("split toning"))
+        #expect(PanelID.colorGrading.parameters.contains(toning))
     }
 
     @Test func `several words narrow the results`() {
-        let results = AdjustmentSearch.results(for: "orange saturation")
-        #expect(results.first?.parameter == ColorBand.orange.saturationParameter)
+        #expect(first("orange saturation") == ColorBand.orange.saturationParameter)
     }
 
     @Test func `only live sliders are offered, and nonsense finds nothing`() {
-        #expect(AdjustmentSearch.results(for: "defringe").first?.parameter == .defringePurpleAmount)
-        #expect(AdjustmentSearch.results(for: "fisheye").isEmpty)
-        let distortion = Set(AdjustmentSearch.results(for: "distortion").prefix(2).map(\.parameter))
-        #expect(distortion == [.lensProfileDistortion, .lensDistortion])
-        #expect(AdjustmentSearch.results(for: "zzzz").isEmpty)
-        #expect(AdjustmentSearch.results(for: "  ").isEmpty)
+        #expect(first("defringe") == .defringePurpleAmount)
+        #expect(results("fisheye").isEmpty)
+        #expect(Set(results("distortion").prefix(2)) == [.lensProfileDistortion, .lensDistortion])
+        #expect(results("zzzz").isEmpty)
+        #expect(SearchMatcher.words("  ").isEmpty, "a blank query browses the panels instead")
+        #expect(PaletteCatalog.sliderItems.allSatisfy { item in
+            if case let .slider(parameter) = item.kind {
+                return parameter.spec.availability.isLive
+            }
+            return false
+        })
     }
 }

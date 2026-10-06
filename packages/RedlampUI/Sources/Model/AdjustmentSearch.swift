@@ -11,11 +11,6 @@ public enum AdjustmentSearch {
             parameter
         }
 
-        /// "Dehaze", "Orange Saturation", "Grain Size".
-        public var title: String {
-            parameter.displayName
-        }
-
         /// Where the slider lives, for the second line.
         public var context: String {
             if let band = ColorBand.allCases.first(where: {
@@ -35,27 +30,10 @@ public enum AdjustmentSearch {
         }
     }
 
-    /// The best matches for `query`, most relevant first.
-    public static func results(for query: String, limit: Int = 8) -> [Result] {
-        let words = SearchMatcher.words(query)
-        guard !words.isEmpty else { return [] }
-        let scored = searchable.compactMap { result -> (Result, Int)? in
-            SearchMatcher.score(words, terms: searchTerms(result)).map { (result, $0) }
-        }
-        return scored
-            .sorted { $0.1 != $1.1 ? $0.1 > $1.1 : order[$0.0.parameter]! < order[$1.0.parameter]! }
-            .prefix(limit)
-            .map(\.0)
-    }
-
     /// Live sliders in the Develop panels, in panel order.
     static let searchable: [Result] = PanelID.allCases.flatMap { panel in
         panel.parameters.filter(\.spec.availability.isLive).map { Result(parameter: $0, panel: panel) }
     }
-
-    private static let order: [ParameterID: Int] = Dictionary(
-        uniqueKeysWithValues: searchable.enumerated().map { ($0.element.parameter, $0.offset) },
-    )
 
     static func searchTerms(_ result: Result) -> [String] {
         [result.parameter.spec.label, result.parameter.displayName, result.context]
