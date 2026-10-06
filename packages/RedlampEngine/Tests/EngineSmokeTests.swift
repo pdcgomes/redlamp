@@ -182,6 +182,61 @@ struct EngineSmokeTests {
         #expect(try #require(await iterator.next()).comparison == nil)
     }
 
+    /// Panning only moves the region: the frame keeps the previous overview of the whole photo
+    /// and the histogram made from it, the same as a fresh render's, until the overview changes.
+    @Test(.enabled(if: canRender))
+    func `a pan reuses the overview and its histogram`() async throws {
+        let engine = try RedlampEngine()
+        _ = try await engine.open(Self.fixtures[0])
+        var frames = engine.frames().makeAsyncIterator()
+        var recipe = EditRecipe()
+        recipe[.exposure] = 0.5
+        func request(
+            at x: Double,
+            _ recipe: EditRecipe,
+            clipping: Bool = false,
+            _ generation: UInt64,
+        ) -> RenderRequest {
+            RenderRequest(
+                recipe: recipe, targetSize: PixelSize(width: 320, height: 240),
+                region: ImageRect(x: x, y: 0.3, width: 0.2, height: 0.2), showClipping: clipping,
+                generation: generation,
+            )
+        }
+
+        engine.render(request(at: 0.1, recipe, 1))
+        let first = try #require(await frames.next())
+        let overview = try #require(first.overview)
+        engine.render(request(at: 0.4, recipe, 2))
+        let panned = try #require(await frames.next())
+        let reused = try #require(panned.overview)
+        #expect(IOSurfaceGetID(reused) == IOSurfaceGetID(overview))
+        #expect(panned.overviewSize == first.overviewSize)
+        #expect(panned.histogram == first.histogram)
+
+        let fresh = try RedlampEngine()
+        _ = try await fresh.open(Self.fixtures[0])
+        var freshFrames = fresh.frames().makeAsyncIterator()
+        fresh.render(request(at: 0.4, recipe, 1))
+        let reference = try #require(await freshFrames.next())
+        let referenceOverview = try #require(reference.overview)
+        #expect(pixels(of: reused, size: panned.overviewSize) == pixels(
+            of: referenceOverview, size: reference.overviewSize,
+        ))
+        #expect(panned.histogram == reference.histogram)
+
+        var edited = recipe
+        edited[.exposure] = 1
+        engine.render(request(at: 0.4, edited, 3))
+        let changed = try #require(await frames.next())
+        let changedOverview = try #require(changed.overview)
+        #expect(IOSurfaceGetID(changedOverview) != IOSurfaceGetID(overview))
+        #expect(changed.histogram != first.histogram)
+        engine.render(request(at: 0.4, edited, clipping: true, 4))
+        let clipped = try #require(await frames.next())
+        #expect(try IOSurfaceGetID(#require(clipped.overview)) != IOSurfaceGetID(changedOverview))
+    }
+
     /// RGBA float16 surface contents, row-major and tightly packed.
     private func pixels(of frame: RenderedFrame) -> [Float] {
         pixels(of: frame.surface, size: frame.size)

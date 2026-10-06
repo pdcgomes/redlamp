@@ -80,6 +80,10 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     private let comparisons: SurfacePool
     private let comparisonOverviews: SurfacePool
     private var comparison: CachedComparison?
+    /// The last region frame's overview and histogram, sent again while only the region moves.
+    private var lastOverview: CachedOverview?
+    /// Counts the retouched maps made again in the background, which the overview shows.
+    private let retouchRefreshes = Mutex<UInt64>(0)
     private let detailStage: DetailStage
     let retouch: RetouchStage
     let masks: MaskResources
@@ -145,6 +149,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             },
         )
         retouch.onRefresh = { [weak self] in
+            self?.retouchRefreshes.withLock { $0 &+= 1 }
             guard let latest = self?.renderState.withLock({ $0.latest }) else { return }
             self?.render(latest)
         }
@@ -250,7 +255,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
 
         guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
         commands.label = "Interactive render"
-        var overview: SurfacePool.Target?
+        var overview: (key: OverviewKey, target: SurfacePool.Target)?
+        var reused: CachedOverview?
         var overviewSize = PixelSize.zero
         let compared = try encoding(commands) {
             try encodeDevelop(
@@ -266,16 +272,27 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
                 try encodeHistogram(texture: target.texture, size: size, linear: true, commands: commands)
             } else {
                 overviewSize = developed.fitted(within: PixelSize(width: 1024, height: 1024))
-                let whole = try overviews.next(size: overviewSize)
-                try encodeDevelop(
-                    request.recipe, session: session, into: whole.texture, size: overviewSize,
-                    encoding: .linear, showClipping: request.showClipping, maskOverlay: request.maskOverlay,
+                let key = OverviewKey(
+                    session: ObjectIdentifier(session), recipe: request.recipe, size: overviewSize,
+                    showClipping: request.showClipping, maskOverlay: request.maskOverlay,
                     maskOverlayColor: request.maskOverlayColor, maskOverlayStyle: request.maskOverlayStyle,
                     maskOverlayOpacity: request.maskOverlayOpacity,
-                    commands: commands, retouchMaps: .refreshLater,
+                    retouchRefreshes: retouchRefreshes.withLock { $0 },
                 )
-                try encodeHistogram(texture: whole.texture, size: overviewSize, linear: true, commands: commands)
-                overview = whole
+                if let lastOverview, lastOverview.key == key {
+                    reused = lastOverview
+                } else {
+                    let whole = try overviews.next(size: overviewSize)
+                    try encodeDevelop(
+                        request.recipe, session: session, into: whole.texture, size: overviewSize,
+                        encoding: .linear, showClipping: request.showClipping, maskOverlay: request.maskOverlay,
+                        maskOverlayColor: request.maskOverlayColor, maskOverlayStyle: request.maskOverlayStyle,
+                        maskOverlayOpacity: request.maskOverlayOpacity,
+                        commands: commands, retouchMaps: .refreshLater,
+                    )
+                    try encodeHistogram(texture: whole.texture, size: overviewSize, linear: true, commands: commands)
+                    overview = (key, whole)
+                }
             }
             // After the histogram, which describes the photo rather than the overlay.
             if request.showRawClipping {
@@ -292,20 +309,29 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         commands.waitUntilCompleted()
         if let error = commands.error {
             comparison = nil
+            lastOverview = nil
             detailStage.forget(commands)
             throw EngineError.renderFailed(error.localizedDescription)
         }
         comparison = compared
+        let histogram = reused?.histogram ?? readHistogram()
+        if let overview {
+            lastOverview = CachedOverview(
+                key: overview.key, session: session, surface: overview.target.surface, histogram: histogram,
+            )
+        } else if reused == nil {
+            lastOverview = nil
+        }
 
         return RenderedFrame(
             surface: target.surface,
             size: size,
             region: region,
-            overview: overview?.surface,
+            overview: overview?.target.surface ?? reused?.surface,
             overviewSize: overviewSize,
             comparison: compared?.surface,
             comparisonOverview: compared?.overview,
-            histogram: readHistogram(),
+            histogram: histogram,
             generation: request.generation,
             renderDuration: clock.now - started,
         )
@@ -744,6 +770,31 @@ extension RedlampEngine {
             detailStage.forget(commands)
             throw EngineError.renderFailed(error.localizedDescription)
         }
+    }
+}
+
+// MARK: - Overviews
+
+extension RedlampEngine {
+    /// Everything a region frame's overview is rendered from.
+    fileprivate struct OverviewKey: Equatable {
+        var session: ObjectIdentifier
+        var recipe: EditRecipe
+        var size: PixelSize
+        var showClipping: Bool
+        var maskOverlay: UUID?
+        var maskOverlayColor: MaskOverlayColor
+        var maskOverlayStyle: MaskOverlayStyle
+        var maskOverlayOpacity: Double
+        var retouchRefreshes: UInt64
+    }
+
+    struct CachedOverview {
+        fileprivate var key: OverviewKey
+        /// Keeps the session alive so its identifier can't be reused while cached.
+        var session: ImageSession
+        var surface: IOSurfaceRef
+        var histogram: Histogram
     }
 }
 
