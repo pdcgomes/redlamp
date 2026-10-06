@@ -274,8 +274,11 @@ public extension FeedbackArea {
                 FeedbackFeature("thumbnails", "Thumbnails", ["thumbnail", "preview", "blank thumbnail"]),
                 FeedbackFeature(
                     "ratings",
-                    "Ratings, Flags and Color Labels",
-                    ["stars", "rating", "pick", "reject", "flag", "label", "culling"],
+                    "Ratings, Flags, Labels and Marks",
+                    [
+                        "stars", "rating", "pick", "reject", "flag", "label", "culling", "mark", "quick collection",
+                        "custom label", "auto advance", "undo rating",
+                    ],
                 ),
                 FeedbackFeature(
                     "disk-changes",
