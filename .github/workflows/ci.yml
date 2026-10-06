@@ -93,6 +93,17 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             -quiet
 
+      - name: Build harness (Release)
+        run: |
+          xcodebuild build \
+            -workspace Redlamp.xcworkspace \
+            -scheme RedlampHarness \
+            -configuration Release \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            -quiet
+
       - name: Upload test log
         if: failure()
         uses: actions/upload-artifact@v4
