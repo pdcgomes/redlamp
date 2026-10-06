@@ -2,10 +2,16 @@ import Foundation
 
 // What `redlamp library duplicates` prints of a review: the groups, what removing every copy but
 // the proposed ones would free, the proposals and why, and the candidates that turned out
-// different or couldn't be compared. It removes nothing.
+// different or couldn't be compared. It removes nothing; with `--trash`, what the plan's batch
+// moves follows (`DuplicateRemovalPlan+Report.swift`).
 
 public extension DuplicateReview {
     var lines: [String] {
+        findings + ["", "Nothing was removed."]
+    }
+
+    /// `lines` without saying nothing was removed, for `--trash` to say what it moves.
+    var findings: [String] {
         let copies = groups.reduce(0) { $0 + $1.copies.count }
         var lines = [
             groups.isEmpty ? "No duplicates" : "\(Self.count(groups.count, "group")) of duplicates, "
@@ -48,8 +54,6 @@ public extension DuplicateReview {
                 "  \(copy.url.path)  (\(Self.reason(copy.status)))"
             }
         }
-        lines.append("")
-        lines.append("Nothing was removed.")
         return lines
     }
 
@@ -59,6 +63,21 @@ public extension DuplicateReview {
 
     /// The review as JSON: each group with its copies, the keeper and why, and the space freed.
     func json() throws -> Data {
+        try json(trash: nil, removed: 0)
+    }
+
+    /// The review as JSON with `plan`'s batch, as `--trash` prints it: every file the batch moves to
+    /// the Trash, and what became of it.
+    func json(_ plan: DuplicateRemovalPlan, batch: FileBatch, outcome: DuplicateRemovalPlan.Outcome) throws -> Data {
+        let removed = if case let .moved(outcome, _) = outcome {
+            outcome.photos
+        } else {
+            0
+        }
+        return try json(trash: plan.json(batch, outcome: outcome), removed: removed)
+    }
+
+    private func json(trash: DuplicateTrashJSON?, removed: Int) throws -> Data {
         struct Copy: Encodable {
             let photo: Int64
             let path: String
@@ -94,7 +113,9 @@ public extension DuplicateReview {
             let groups: [Group]
             let different: [Copy]
             let unconfirmed: [Copy]
-            let removed = 0
+            /// Photos moved to the Trash.
+            let removed: Int
+            let trash: DuplicateTrashJSON?
         }
         func copy(_ copy: DuplicateReview.Copy) -> Copy {
             Copy(
@@ -116,7 +137,7 @@ public extension DuplicateReview {
                     sidecarsDiffer: group.sidecarsDiffer, copies: group.copies.map(copy),
                 )
             },
-            different: different.map(copy), unconfirmed: unconfirmed.map(copy),
+            different: different.map(copy), unconfirmed: unconfirmed.map(copy), removed: removed, trash: trash,
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]

@@ -1,4 +1,5 @@
 import Foundation
+import RedlampDocument
 import Testing
 @testable import RedlampLibrary
 
@@ -51,5 +52,60 @@ struct DuplicateReportTests {
         let recorded = try await finder.review(finder.confirm(candidates, readingFiles: false))
         #expect(recorded.groups.map(\.sha256) == review.groups.map(\.sha256) && !recorded.checkedFiles)
         #expect(try FixtureTests.files(in: sandbox.root) == files)
+    }
+
+    @Test func `with --trash it lists every file that moves, each copy with what goes with it, then what became of it`(
+    ) async throws {
+        let sandbox = try await DuplicateSandbox.make()
+        defer { sandbox.remove() }
+        let x = duplicateBytes(150_000, seed: 90)
+        try sandbox.write("A/X.JPG", x, modified: 0)
+        try sandbox.write("B/X.JPG", x, modified: 10)
+        try sandbox.write("B/X.JPG.xmp", otherAppXMP)
+        try sandbox.sidecar("B/X.JPG", PhotoMetadata(flag: .reject))
+        try await sandbox.indexAll()
+        let finder = sandbox.finder(sandbox.fileSystem)
+        let review = try await finder.review(finder.confirm(finder.candidates()))
+        #expect(review.lines == review.findings + ["", "Nothing was removed."])
+        let plan = try DuplicateRemovalPlan(review, removing: review.allButProposed)
+        let operations = sandbox.operations()
+        let batch = try await finder.trashBatch(for: plan, operations: operations)
+        #expect(plan.lines(batch) == [
+            "Move 1 duplicate to the Trash, 3 files, 150 KB:",
+            "  " + sandbox.path("B/X.JPG"),
+            "    " + sandbox.path("B/X.JPG.redlamp"),
+            "    " + sandbox.path("B/X.JPG.xmp"),
+        ])
+        #expect(DuplicateRemovalPlan.lines(.shown(dryRun: false, stopping: [])) == [
+            "Nothing was moved: --confirm moves them to the Trash, and redlamp library undo puts them back.",
+        ])
+        #expect(DuplicateRemovalPlan.lines(.shown(dryRun: true, stopping: [])) == ["Nothing was moved: a dry run."])
+        let gone = DuplicateRemovalPlan.Difference(path: sandbox.path("A/X.JPG"), reason: .gone, isKept: true)
+        #expect(DuplicateRemovalPlan.lines(.stopped([gone.description])) == [
+            "Nothing was moved, since:", "  \(sandbox.path("A/X.JPG")), the copy kept, isn't there any more",
+        ])
+
+        let stopped = try #require(try JSONSerialization.jsonObject(
+            with: review.json(plan, batch: batch, outcome: .stopped([gone.description])),
+        ) as? [String: Any])
+        let notMoved = try #require(stopped["trash"] as? [String: Any])
+        #expect(stopped["removed"] as? Int == 0 && notMoved["moved"] as? Bool == false)
+        #expect(notMoved["stopped"] as? [String] == [gone.description] && notMoved["batch"] == nil)
+        #expect((notMoved["files"] as? [[String: Any]])?.compactMap { $0["role"] as? String } == [
+            "photo", "sidecar", "otherApp",
+        ])
+
+        let outcome = try await finder.trash(plan, batch, operations: operations)
+        let moved = DuplicateRemovalPlan.Outcome.moved(outcome, seconds: 1.5)
+        #expect(DuplicateRemovalPlan.lines(moved) == [
+            "Move 1 duplicate to the Trash: done, 1 photo in 1.5 s. redlamp library undo puts them back.",
+        ])
+        let json = try #require(try JSONSerialization.jsonObject(
+            with: review.json(plan, batch: batch, outcome: moved),
+        ) as? [String: Any])
+        let trash = try #require(json["trash"] as? [String: Any])
+        #expect(json["removed"] as? Int == 1 && trash["moved"] as? Bool == true)
+        #expect(trash["batch"] as? String == outcome.batch.uuidString && trash["state"] as? String == "finished")
+        #expect(trash["title"] as? String == "Move 1 duplicate to the Trash" && trash["bytes"] as? Int64 == 150_000)
     }
 }
