@@ -1,0 +1,2789 @@
+{
+  "version": 1,
+  "description": "The mask evaluation set (MSK-25): 115 CC0 photos from Wikimedia Commons for Sky, Subject, People and face-part masks, picked by eye cell by cell (cells.json) for the conditions masks struggle with: bare and leafy trees, wires, haze, low sun, sunsets, dusk, overcast, sea horizons, reflections, snow and small skies; loose, backlit, curly and pale hair against busy and plain backgrounds, beards, glasses and hats, groups, crowds, whole figures, low-key and high-key light, pets and other subjects; and face close-ups. Each photo's licence is as Commons reports it (CC0), with its file page, author and the masks and conditions it tests. Downloaded by `mise run maskeval` into build/mask-eval/ (never committed); research/prototypes/masking/photoset.py found and fetched them. The look-development photos named under lookDev (build/look-dev/, `mise run lookdev`) count too. CC0 covers copyright, not the people in the photos (9 carry Commons' personality-rights notice): they are for evaluating masks only, never for the app, the site or marketing.",
+  "gaps": [
+    "No close-ups of children's faces: face-ages has two elderly men only (face-eyes and face-glasses each have one child).",
+    "Few raws: every photo here is a JPEG, most of them compressed for the web, so raw-only behaviour (noise, the full tonal range) comes from the look-development raws and your own photos.",
+    "Backlit and rim-lit hair is mostly young women; no backlit man, no front-lit backlit face with dark skin.",
+    "No man with loose hair against a busy background, no African or East Asian man with a full beard, no tight coils on a plain background.",
+    "Groups: no dark-skinned group, no parent with a young child facing the camera.",
+    "Sky: no dark night sky over a lit skyline (dusk and blue hour only), no lake horizon, few featureless overcast skies, and several sky photos come from a few photographers' series.",
+    "No labels yet: trimaps and exact-coverage scenes come with the benchmark (MSK-25's next step)."
+  ],
+  "lookDev": [
+    {
+      "file": "Canon_Canon-PowerShot-S3IS.DNG",
+      "masks": [
+        "sky"
+      ],
+      "conditions": [
+        "foliage",
+        "sky"
+      ]
+    },
+    {
+      "file": "Canon_EOS-7D-Mark-II.dng",
+      "masks": [
+        "subject"
+      ],
+      "conditions": [
+        "animal"
+      ]
+    },
+    {
+      "file": "Canon_EOS-R50.CR3",
+      "masks": [
+        "sky"
+      ],
+      "conditions": [
+        "foliage",
+        "sky"
+      ]
+    },
+    {
+      "file": "Canon_EOS-R8.CR3",
+      "masks": [
+        "subject"
+      ],
+      "conditions": [
+        "animal"
+      ]
+    },
+    {
+      "file": "Fujifilm_FinePix-HS50EXR.RAF",
+      "masks": [
+        "sky"
+      ],
+      "conditions": [
+        "foliage",
+        "sky"
+      ]
+    },
+    {
+      "file": "Fujifilm_FinePix-SL1000.RAF",
+      "masks": [
+        "sky"
+      ],
+      "conditions": [
+        "sky"
+      ]
+    },
+    {
+      "file": "Fujifilm_X-S20.RAF",
+      "masks": [
+        "sky"
+      ],
+      "conditions": [
+        "sky",
+        "foliage"
+      ]
+    },
+    {
+      "file": "Fujifilm_X-T5.RAF",
+      "masks": [
+        "subject"
+      ],
+      "conditions": [
+        "animal"
+      ]
+    },
+    {
+      "file": "Fujifilm_X100VI.RAF",
+      "masks": [
+        "sky"
+      ],
+      "conditions": [
+        "sky"
+      ]
+    },
+    {
+      "file": "Google_Pixel-6-Pro.dng",
+      "masks": [
+        "sky"
+      ],
+      "conditions": [
+        "haze",
+        "sky"
+      ]
+    },
+    {
+      "file": "Leica_D-LUX-6.RWL",
+      "masks": [
+        "sky"
+      ],
+      "conditions": [
+        "sky"
+      ]
+    },
+    {
+      "file": "Nikon_Coolpix-P7700.NRW",
+      "masks": [
+        "sky"
+      ],
+      "conditions": [
+        "snow",
+        "sky"
+      ]
+    },
+    {
+      "file": "Panasonic_DC-TZ200D.RW2",
+      "masks": [
+        "sky"
+      ],
+      "conditions": [
+        "sky"
+      ]
+    },
+    {
+      "file": "Panasonic_DMC-FX150.RW2",
+      "masks": [
+        "sky"
+      ],
+      "conditions": [
+        "sky"
+      ]
+    },
+    {
+      "file": "Panasonic_DMC-FZ28.RW2",
+      "masks": [
+        "sky"
+      ],
+      "conditions": [
+        "sky",
+        "foliage"
+      ]
+    },
+    {
+      "file": "Pentax_K-1-Mark-II.PEF",
+      "masks": [
+        "subject"
+      ],
+      "conditions": [
+        "foliage",
+        "backlit"
+      ]
+    },
+    {
+      "file": "Samsung_Galaxy-S21-Ultra.dng",
+      "masks": [
+        "sky"
+      ],
+      "conditions": [
+        "sky"
+      ]
+    },
+    {
+      "file": "Sony_ILCE-6700.ARW",
+      "masks": [
+        "sky"
+      ],
+      "conditions": [
+        "foliage",
+        "sky"
+      ]
+    },
+    {
+      "file": "Sony_ILME-FX30.ARW",
+      "masks": [
+        "subject"
+      ],
+      "conditions": [
+        "animal",
+        "backlit"
+      ]
+    }
+  ],
+  "images": [
+    {
+      "file": "sky-bare-trees-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/d/d5/Sun_in_a_tree_in_Brastad_2.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Sun_in_a_tree_in_Brastad_2.jpg",
+      "title": "File:Sun in a tree in Brastad 2.jpg",
+      "sha256": "37c25d2f07e72db47442292ad04b88ce1775a7acbf18e58ca001ee05838fb09c",
+      "width": 3443,
+      "height": 5198,
+      "camera": "Panasonic DMC-FZ1000",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-bare-trees",
+      "conditions": [
+        "bare-branches",
+        "twigs",
+        "low-sun"
+      ],
+      "license": "CC0-1.0",
+      "author": "W.carter",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-bare-trees-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/f/f8/Bare_crowns_of_a_stand_of_trees_in_Quebec_City.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Bare_crowns_of_a_stand_of_trees_in_Quebec_City.jpg",
+      "title": "File:Bare crowns of a stand of trees in Quebec City.jpg",
+      "sha256": "bdce339426965c6af263dcb13fcc2ce5391674ac16789dba792aeb35120d3931",
+      "width": 8256,
+      "height": 5504,
+      "camera": "NIKON CORPORATION NIKON Z 7_2",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-bare-trees",
+      "conditions": [
+        "bare-branches",
+        "twigs",
+        "dense"
+      ],
+      "license": "CC0-1.0",
+      "author": "Wilfredor",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-bare-trees-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/d/d7/Winter_Tree_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Winter_Tree_(Unsplash).jpg",
+      "title": "File:Winter Tree (Unsplash).jpg",
+      "sha256": "baefbafc9130dc94e89f511e67bae794422dc405a725cfe3d61b0b9fc2e63555",
+      "width": 6016,
+      "height": 4016,
+      "camera": "NIKON CORPORATION NIKON D750",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-bare-trees",
+      "conditions": [
+        "snowy-branches",
+        "twigs",
+        "pale-sky"
+      ],
+      "license": "CC0-1.0",
+      "author": "Alice Donovan Rouse alicekat",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-bare-trees-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/6/6d/Winter_Ambiente_-_Frozen_Trees.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Winter_Ambiente_-_Frozen_Trees.jpg",
+      "title": "File:Winter Ambiente - Frozen Trees.jpg",
+      "sha256": "8fdbfe8663f2512957191c5c1f474623ed5cb5a01c9e0d7c4978ec9d6128559d",
+      "width": 5268,
+      "height": 3512,
+      "camera": "Canon Canon EOS 7D Mark II",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-bare-trees",
+      "conditions": [
+        "frost",
+        "fog",
+        "low-contrast"
+      ],
+      "license": "CC0-1.0",
+      "author": "HLI-Photography",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-bare-trees-05.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/8/83/Glowing_sunset_at_Island_in_the_Sky_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Glowing_sunset_at_Island_in_the_Sky_(Unsplash).jpg",
+      "title": "File:Glowing sunset at Island in the Sky (Unsplash).jpg",
+      "sha256": "8bbeaa9fc31ff929221830fc579258d9e990712df1e35919486c6c7307be2818",
+      "width": 5184,
+      "height": 3456,
+      "camera": "Canon Canon EOS 700D",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-bare-trees",
+      "conditions": [
+        "dead-branches",
+        "backlight",
+        "warm-sky"
+      ],
+      "license": "CC0-1.0",
+      "author": "Alexandre Chambon goodspleen",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-leafy-trees-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/4/42/Kew_Gardens_Treetop_walkway_2025-05-14.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Kew_Gardens_Treetop_walkway_2025-05-14.jpg",
+      "title": "File:Kew Gardens Treetop walkway 2025-05-14.jpg",
+      "sha256": "c2c74c206b443140d19ee925c792fe6f70deae4f4ac82a3109e15c053520c74c",
+      "width": 8160,
+      "height": 6144,
+      "camera": "Google Pixel 8 Pro",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-leafy-trees",
+      "conditions": [
+        "leaf-gaps",
+        "blue-sky",
+        "structure"
+      ],
+      "license": "CC0-1.0",
+      "author": "Andy Li",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-leafy-trees-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/5/51/Joshua_Tree_National_Park_-_51758575850.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Joshua_Tree_National_Park_-_51758575850.jpg",
+      "title": "File:Joshua Tree National Park - 51758575850.jpg",
+      "sha256": "b16dad99a62d975d38f0f8e692408d80f8f072e587b26bc82ce9386db3ff5241",
+      "width": 6720,
+      "height": 4480,
+      "camera": "Canon Canon EOS Ra",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-leafy-trees",
+      "conditions": [
+        "spiky-crown",
+        "leaf-gaps",
+        "blue-sky"
+      ],
+      "license": "CC0-1.0",
+      "author": "StephenGA",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-leafy-trees-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/12/Quercus_near_Zirkow_2021-09-12_01.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Quercus_near_Zirkow_2021-09-12_01.jpg",
+      "title": "File:Quercus near Zirkow 2021-09-12 01.jpg",
+      "sha256": "9375e395e4c60a52ad8bd924acbfe325855812be2d1c480295476934c475ba48",
+      "width": 8368,
+      "height": 5584,
+      "camera": "Panasonic DC-S1R",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-leafy-trees",
+      "conditions": [
+        "leaf-gaps",
+        "blue-sky",
+        "dense-crown"
+      ],
+      "license": "CC0-1.0",
+      "author": "Leonhard Lenz",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-leafy-trees-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/ce/Tree_%F0%9F%8C%B3.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Tree_%F0%9F%8C%B3.jpg",
+      "title": "File:Tree 🌳.jpg",
+      "sha256": "ef8e130a7e26de75c28acec82790a91d1654ba7e0ce4b93be2f626fb48cd0778",
+      "width": 4284,
+      "height": 5712,
+      "camera": "Apple iPhone 15",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-leafy-trees",
+      "conditions": [
+        "leaf-gaps",
+        "clouds",
+        "portrait-orientation"
+      ],
+      "license": "CC0-1.0",
+      "author": "E.Prabha",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-leafy-trees-05.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/1a/Tilia_Levenstorf_2021-09-07_02.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Tilia_Levenstorf_2021-09-07_02.jpg",
+      "title": "File:Tilia Levenstorf 2021-09-07 02.jpg",
+      "sha256": "23940603455077343d6c806194d1a3be40ada76b1968c2570ea04fbe5a5cdd9e",
+      "width": 8368,
+      "height": 5584,
+      "camera": "Panasonic DC-S1R",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-leafy-trees",
+      "conditions": [
+        "leafy-crown",
+        "white-sky"
+      ],
+      "license": "CC0-1.0",
+      "author": "Leonhard Lenz",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-wires-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/1f/Electricity_pylon_Oulu_20190701.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Electricity_pylon_Oulu_20190701.jpg",
+      "title": "File:Electricity pylon Oulu 20190701.jpg",
+      "sha256": "80a73a29379c9dab507f1a1ab00d0fff9fe8db3bf3acdc62aeeb5e6c550ff646",
+      "width": 2999,
+      "height": 4500,
+      "camera": "Canon Canon EOS 6D",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-wires",
+      "conditions": [
+        "pylon",
+        "wires",
+        "clouds"
+      ],
+      "license": "CC0-1.0",
+      "author": "Estormiz",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-wires-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/3/39/Risvica_Antenna_Mast.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Risvica_Antenna_Mast.jpg",
+      "title": "File:Risvica Antenna Mast.jpg",
+      "sha256": "f941e56371907d0a6c63060069531aa0c0e1b22b75b95a229ab563a985b052d3",
+      "width": 3648,
+      "height": 5472,
+      "camera": "SONY DSC-RX100M6",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-wires",
+      "conditions": [
+        "mast",
+        "guy-wires",
+        "sun"
+      ],
+      "license": "CC0-1.0",
+      "author": "Janezdrilc",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-wires-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/c7/Antenna_roof_Hemleben.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Antenna_roof_Hemleben.JPG",
+      "title": "File:Antenna roof Hemleben.JPG",
+      "sha256": "44bc22ca00bffdebbe7eb6da58980ea02639cb76fd3c9507543f43abca46822f",
+      "width": 3672,
+      "height": 4896,
+      "camera": "SONY DSC-HX20V",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-wires",
+      "conditions": [
+        "antenna",
+        "overcast"
+      ],
+      "license": "CC0-1.0",
+      "author": "Aschroet",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-wires-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/7/72/Construction_crane_below_night_sky.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Construction_crane_below_night_sky.jpg",
+      "title": "File:Construction crane below night sky.jpg",
+      "sha256": "a5424e0c315b27ba5002d3c4e14e8095a8039b391925235954de8959ce9ade4e",
+      "width": 6000,
+      "height": 4000,
+      "camera": "Canon Canon EOS 80D",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-wires",
+      "conditions": [
+        "crane",
+        "night"
+      ],
+      "license": "CC0-1.0",
+      "author": "Okruz",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-haze-fog-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/19/St_Peter%27s_Church%2C_Brighton_in_fog_2024-12-24.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:St_Peter%27s_Church,_Brighton_in_fog_2024-12-24.jpg",
+      "title": "File:St Peter's Church, Brighton in fog 2024-12-24.jpg",
+      "sha256": "eda3d823ce19c5b66557c86139c76abc7c19a657795c0952d5ebd4356cc53987",
+      "width": 6144,
+      "height": 8160,
+      "camera": "Google Pixel 8 Pro",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-haze-fog",
+      "conditions": [
+        "fog",
+        "buildings",
+        "portrait-orientation"
+      ],
+      "license": "CC0-1.0",
+      "author": "Andy Li",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-haze-fog-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/5/53/Forest_in_Rheinsberg_with_mist_2021-10-30_33.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Forest_in_Rheinsberg_with_mist_2021-10-30_33.jpg",
+      "title": "File:Forest in Rheinsberg with mist 2021-10-30 33.jpg",
+      "sha256": "2435768b1c23e4a4d5202e6aec973279cca71a43d7c1bdb4537784d7e8cd7bdf",
+      "width": 8368,
+      "height": 5584,
+      "camera": "Panasonic DC-S1R",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-haze-fog",
+      "conditions": [
+        "mist",
+        "forest",
+        "backlight"
+      ],
+      "license": "CC0-1.0",
+      "author": "Leonhard Lenz",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-haze-fog-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/d/d4/Janov_20260919_Aussichtsturm_Aussicht_29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Janov_20260919_Aussichtsturm_Aussicht_29.jpg",
+      "title": "File:Janov 20260919 Aussichtsturm Aussicht 29.jpg",
+      "sha256": "02eee8d76c967d38a37d34b58652d3ec184e3ee98857927ebf9ea97d5b818927",
+      "width": 5712,
+      "height": 4284,
+      "camera": "samsung Galaxy S26 Ultra",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-haze-fog",
+      "conditions": [
+        "haze",
+        "mountains",
+        "low-contrast"
+      ],
+      "license": "CC0-1.0",
+      "author": "NutzerAusBerlin",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-haze-fog-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/e/e2/Fog_In_San_Francisco_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Fog_In_San_Francisco_(Unsplash).jpg",
+      "title": "File:Fog In San Francisco (Unsplash).jpg",
+      "sha256": "ce8eb2d68de26cd9fc20abca55e76761e1de122c14b61d2e1a31fb6a8ff5f5e7",
+      "width": 5760,
+      "height": 3840,
+      "camera": "Canon Canon EOS 5D Mark III",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-haze-fog",
+      "conditions": [
+        "sea-fog",
+        "bridge",
+        "low-contrast"
+      ],
+      "license": "CC0-1.0",
+      "author": "Jordan McQueen jordanfmcqueen",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-bright-horizon-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/f/f2/Images_from_Roma_Project_2566_03.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Images_from_Roma_Project_2566_03.jpg",
+      "title": "File:Images from Roma Project 2566 03.jpg",
+      "sha256": "4a8cf2bb6b88f89a6c9f959bdff352d6e4c051d29d6913b51bfe1833a0a3abc4",
+      "width": 7492,
+      "height": 4716,
+      "camera": "NIKON CORPORATION NIKON Z 7_2",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-bright-horizon",
+      "conditions": [
+        "backlight",
+        "bell-gable",
+        "bright-sky"
+      ],
+      "license": "CC0-1.0",
+      "author": "Wilfredor",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-bright-horizon-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/7/7a/Landscape-tree-morning-sun_%2823957218509%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Landscape-tree-morning-sun_(23957218509).jpg",
+      "title": "File:Landscape-tree-morning-sun (23957218509).jpg",
+      "sha256": "239a70e591538265636a31f6f3d6090ac1a43f05b0159f1b5eeb228cf9369dca",
+      "width": 6000,
+      "height": 4000,
+      "camera": "NIKON CORPORATION NIKON D7100",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-bright-horizon",
+      "conditions": [
+        "sun-behind-clouds",
+        "backlit-trees"
+      ],
+      "license": "CC0-1.0",
+      "author": "www.Pixel.la Free Stock Photos",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-bright-horizon-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/8/8d/Sunrise_over_the_hills%2C_Quebec_City.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Sunrise_over_the_hills,_Quebec_City.jpg",
+      "title": "File:Sunrise over the hills, Quebec City.jpg",
+      "sha256": "e11eefa6c1152c1b642e97276aa079be6324c7ae8f840e7c10fe8abc0b723900",
+      "width": 7858,
+      "height": 4922,
+      "camera": "NIKON CORPORATION NIKON Z 7_2",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-bright-horizon",
+      "conditions": [
+        "low-sun",
+        "sunrise",
+        "hills"
+      ],
+      "license": "CC0-1.0",
+      "author": "Wilfredor",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-bright-horizon-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/cd/Pine_tree_at_sunset%2C_Quebec_City.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Pine_tree_at_sunset,_Quebec_City.jpg",
+      "title": "File:Pine tree at sunset, Quebec City.jpg",
+      "sha256": "98717dafbe5a76bf2d0b2194f9bf293f57a4b6f2d634a1cc23f14f8b6e375554",
+      "width": 8257,
+      "height": 5504,
+      "camera": "NIKON CORPORATION NIKON Z 7_2",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-bright-horizon",
+      "conditions": [
+        "silhouette",
+        "pine-needles",
+        "warm-sky"
+      ],
+      "license": "CC0-1.0",
+      "author": "Wilfredor",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-sunset-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/2/2f/Phoenix_canariensis_in_silhouette_at_sunset_Palm_Lakes_Resort_Ballina_NSW_L1030167.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Phoenix_canariensis_in_silhouette_at_sunset_Palm_Lakes_Resort_Ballina_NSW_L1030167.jpg",
+      "title": "File:Phoenix canariensis in silhouette at sunset Palm Lakes Resort Ballina NSW L1030167.jpg",
+      "sha256": "f6877e32cb176ff0d41ce012b6abd5916fc6d928154a88ad019604f2ca5accaa",
+      "width": 5584,
+      "height": 8368,
+      "camera": "LEICA CAMERA AG LEICA Q2",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-sunset",
+      "conditions": [
+        "silhouette",
+        "palm",
+        "portrait-orientation"
+      ],
+      "license": "CC0-1.0",
+      "author": "John Robert McPherson",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-sunset-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/6/6a/Tree_silhouette_sunset._%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Tree_silhouette_sunset._(Unsplash).jpg",
+      "title": "File:Tree silhouette sunset. (Unsplash).jpg",
+      "sha256": "b28d987edd30df8f8f342168f930a4a00e3e79f3133023500d9f00312bd23467",
+      "width": 6000,
+      "height": 4000,
+      "camera": "NIKON CORPORATION NIKON D5200",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-sunset",
+      "conditions": [
+        "silhouette",
+        "sun-disc",
+        "orange-sky"
+      ],
+      "license": "CC0-1.0",
+      "author": "Jagyasini Malakar jagyasini_p",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-sunset-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/0/0a/Sunset_tree_Woodingdean.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Sunset_tree_Woodingdean.jpg",
+      "title": "File:Sunset tree Woodingdean.jpg",
+      "sha256": "b7b62dd3619f7994ac6b3d51f326b2d298b48b6f3b2c2b3dcf4ad5fa419c6fc8",
+      "width": 5067,
+      "height": 3378,
+      "camera": "Canon Canon EOS REBEL T5",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-sunset",
+      "conditions": [
+        "bare-tree",
+        "silhouette",
+        "sun-flare"
+      ],
+      "license": "CC0-1.0",
+      "author": "Jethro Busby",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-sunset-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/6/65/Sunrise_May_Rad%C3%A8s.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Sunrise_May_Rad%C3%A8s.jpg",
+      "title": "File:Sunrise May Radès.jpg",
+      "sha256": "77d78f0b4227f4a49994eb3a5f226f3153ea25d33ac9e45416b9e0f4dc4cf08d",
+      "width": 5942,
+      "height": 3931,
+      "camera": "Canon Canon EOS 800D",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-sunset",
+      "conditions": [
+        "sunrise",
+        "clouds",
+        "reflection"
+      ],
+      "license": "CC0-1.0",
+      "author": "Smailtn",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-night-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/8/8f/Altocumulus_and_Stratocumulus_at_dusk_Lavender_Blvd_Ballina_NSW_L1020554.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Altocumulus_and_Stratocumulus_at_dusk_Lavender_Blvd_Ballina_NSW_L1020554.jpg",
+      "title": "File:Altocumulus and Stratocumulus at dusk Lavender Blvd Ballina NSW L1020554.jpg",
+      "sha256": "447cd0aa047e3172ba5168ef41f72d3fca76d6b353f728d355d49f8ba2430a18",
+      "width": 8368,
+      "height": 5584,
+      "camera": "LEICA CAMERA AG LEICA Q2",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-night",
+      "conditions": [
+        "dusk",
+        "clouds",
+        "houses"
+      ],
+      "license": "CC0-1.0",
+      "author": "John Robert McPherson",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-night-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/5/56/Helsingin_p%C3%A4%C3%A4rautatieasema_at_blue_hour_2022-09-17_01.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Helsingin_p%C3%A4%C3%A4rautatieasema_at_blue_hour_2022-09-17_01.jpg",
+      "title": "File:Helsingin päärautatieasema at blue hour 2022-09-17 01.jpg",
+      "sha256": "37a2432bbbb7f2e711e7900e7c0738e766e3c148621ef461661420398bba0585",
+      "width": 8368,
+      "height": 5584,
+      "camera": "Panasonic DC-S1R",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-night",
+      "conditions": [
+        "blue-hour",
+        "lit-building",
+        "clouds"
+      ],
+      "license": "CC0-1.0",
+      "author": "Leonhard Lenz",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-night-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/3/3e/Lit_bell_tower_at_dusk%2C_Quebec_City.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Lit_bell_tower_at_dusk,_Quebec_City.jpg",
+      "title": "File:Lit bell tower at dusk, Quebec City.jpg",
+      "sha256": "dd6f774312bdb57acde95e27d7c60376f71dd481f14987ab97673f2b5b45a4b8",
+      "width": 5504,
+      "height": 8256,
+      "camera": "NIKON CORPORATION NIKON Z 7_2",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-night",
+      "conditions": [
+        "dusk",
+        "lit-tower",
+        "portrait-orientation"
+      ],
+      "license": "CC0-1.0",
+      "author": "Wilfredor",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-night-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/a/af/Fontaine_de_Tourny_at_dusk_06%2C_Quebec_City.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Fontaine_de_Tourny_at_dusk_06,_Quebec_City.jpg",
+      "title": "File:Fontaine de Tourny at dusk 06, Quebec City.jpg",
+      "sha256": "0347cc3ce1a1cae98f762b47a38063036fc7485e8ccf1f234c513e85a447110a",
+      "width": 8256,
+      "height": 5504,
+      "camera": "NIKON CORPORATION NIKON Z 7_2",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-night",
+      "conditions": [
+        "dusk",
+        "silhouette",
+        "skyline"
+      ],
+      "license": "CC0-1.0",
+      "author": "Wilfredor",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-overcast-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/b/bc/Burg_Mauterndorf_against_a_cloudy_sky%2C_Mauterndorf%2C_2023.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Burg_Mauterndorf_against_a_cloudy_sky,_Mauterndorf,_2023.jpg",
+      "title": "File:Burg Mauterndorf against a cloudy sky, Mauterndorf, 2023.jpg",
+      "sha256": "45823c575bb042cc778538748e506608eb553bd5bb4fd5c5a34838d8ab25662b",
+      "width": 6016,
+      "height": 4000,
+      "camera": "NIKON CORPORATION NIKON D3200",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-overcast",
+      "conditions": [
+        "overcast",
+        "pale-building",
+        "low-contrast"
+      ],
+      "license": "CC0-1.0",
+      "author": "DimiTalen",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-overcast-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/9/98/A_cloudy_evening_at_Madikeri.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:A_cloudy_evening_at_Madikeri.jpg",
+      "title": "File:A cloudy evening at Madikeri.jpg",
+      "sha256": "c19061ee5a61dec49757ba73502b12efb73045d35efca813ea60bdfebe1f1238",
+      "width": 4284,
+      "height": 5712,
+      "camera": "Apple iPhone 16 Pro",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-overcast",
+      "conditions": [
+        "overcast",
+        "wires",
+        "portrait-orientation"
+      ],
+      "license": "CC0-1.0",
+      "author": "Reema Jalihal",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-overcast-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/c7/Cloudy_day_in_Beijing%2C_a_sign_of_heavy_rain.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Cloudy_day_in_Beijing,_a_sign_of_heavy_rain.jpg",
+      "title": "File:Cloudy day in Beijing, a sign of heavy rain.jpg",
+      "sha256": "0cebb41c2bee7f57e006d9fe15b21d17e42bf1428eba3d7da487f2fb72a9acf7",
+      "width": 6016,
+      "height": 3136,
+      "camera": "HUAWEI EML-AL00",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-overcast",
+      "conditions": [
+        "overcast",
+        "pale-buildings",
+        "storm-clouds"
+      ],
+      "license": "CC0-1.0",
+      "author": "Fumikas Sagisavas",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-overcast-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/9/95/Reflection_of_%C3%89glise_Saint-Laurent_in_the_Loue_under_an_overcast_sky%2C_from_Ruelle_des_Tanneries%2C_Ornans%2C_2026.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Reflection_of_%C3%89glise_Saint-Laurent_in_the_Loue_under_an_overcast_sky,_from_Ruelle_des_Tanneries,_Ornans,_2026.jpg",
+      "title": "File:Reflection of Église Saint-Laurent in the Loue under an overcast sky, from Ruelle des Tanneries, Ornans, 2026.jpg",
+      "sha256": "36664e7cab5734c712034eeb56572d269e5ed58df986f081c3122da7aa976709",
+      "width": 3605,
+      "height": 5408,
+      "camera": "NIKON CORPORATION NIKON Z50_2",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-overcast",
+      "conditions": [
+        "overcast",
+        "pale-tower",
+        "water-reflection"
+      ],
+      "license": "CC0-1.0",
+      "author": "DimiTalen",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-sea-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/f/f4/Skyline_by_the_sea_on_a_cloudy_day_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Skyline_by_the_sea_on_a_cloudy_day_(Unsplash).jpg",
+      "title": "File:Skyline by the sea on a cloudy day (Unsplash).jpg",
+      "sha256": "98c46805708e49b982f4fe17a35205fb341ffeffa631efed4cbef00c50a38441",
+      "width": 5248,
+      "height": 3936,
+      "camera": "Sony D6708",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-sea",
+      "conditions": [
+        "sea-horizon",
+        "overcast",
+        "low-contrast"
+      ],
+      "license": "CC0-1.0",
+      "author": "Layton Diament layton",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-sea-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/16/Punta-Tuna-Beach-Ocean-Sky.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Punta-Tuna-Beach-Ocean-Sky.jpg",
+      "title": "File:Punta-Tuna-Beach-Ocean-Sky.jpg",
+      "sha256": "ab904875e91f105b644f4d1c63305ce63e34195dbc89eae888ba74bb52c9ee16",
+      "width": 5472,
+      "height": 3648,
+      "camera": "Canon Canon PowerShot G7 X Mark II",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-sea",
+      "conditions": [
+        "sea-horizon",
+        "clouds",
+        "palms"
+      ],
+      "license": "CC0-1.0",
+      "author": "BrickLightning",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-sea-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/b/b9/Ocean_view_towards_the_pale_yellow_horizon_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Ocean_view_towards_the_pale_yellow_horizon_(Unsplash).jpg",
+      "title": "File:Ocean view towards the pale yellow horizon (Unsplash).jpg",
+      "sha256": "723e34dfbabdda109e65ef451ca228e5cab8e0c97bda25f95bda621e8406330c",
+      "width": 5255,
+      "height": 3503,
+      "camera": "Canon Canon EOS 6D",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-sea",
+      "conditions": [
+        "sea-horizon",
+        "pale-sky",
+        "low-sun"
+      ],
+      "license": "CC0-1.0",
+      "author": "Colin Maynard invent",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-glass-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/1a/Window_reflection_cn_tower_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Window_reflection_cn_tower_(Unsplash).jpg",
+      "title": "File:Window reflection cn tower (Unsplash).jpg",
+      "sha256": "fb2d96acd9c8007b21796c854fafb5450dcbd974224ba0501d40e127364d8b8f",
+      "width": 5184,
+      "height": 3456,
+      "camera": "Canon Canon EOS REBEL T5",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-glass",
+      "conditions": [
+        "glass-reflection",
+        "tower-reflection",
+        "blue-sky"
+      ],
+      "license": "CC0-1.0",
+      "author": "Nadine Shaabana nadineshaabana",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-glass-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/7/7a/Reflecting_glass_architecture_at_the_campus_Roeterseiland%3B_free_photo_Amsterdam%2C_Fons_Heijnsbroek_10-2021.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Reflecting_glass_architecture_at_the_campus_Roeterseiland;_free_photo_Amsterdam,_Fons_Heijnsbroek_10-2021.jpg",
+      "title": "File:Reflecting glass architecture at the campus Roeterseiland; free photo Amsterdam, Fons Heijnsbroek 10-2021.jpg",
+      "sha256": "abf4cc6c7717f3ff288306af7a989cd714029108b5011fe6797014d5d70063d0",
+      "width": 4724,
+      "height": 3543,
+      "camera": "Panasonic DMC-GF3",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-glass",
+      "conditions": [
+        "glass-reflection",
+        "water-reflection",
+        "clouds"
+      ],
+      "license": "CC0-1.0",
+      "author": "Fons Heijnsbroek",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-glass-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/9/9a/Mountain_reflection_in_a_lake_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Mountain_reflection_in_a_lake_(Unsplash).jpg",
+      "title": "File:Mountain reflection in a lake (Unsplash).jpg",
+      "sha256": "bc05d82e577ce9a41b037e396d5868493af5654a69592bdc55edfcc1300190a2",
+      "width": 3264,
+      "height": 4896,
+      "camera": "FUJIFILM X100T",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-glass",
+      "conditions": [
+        "water-reflection",
+        "mist",
+        "portrait-orientation"
+      ],
+      "license": "CC0-1.0",
+      "author": "Gabriel Santiago gabrielssantiago",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-snow-mountains-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/11/Snow_covered_mountains_with_hiker_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Snow_covered_mountains_with_hiker_(Unsplash).jpg",
+      "title": "File:Snow covered mountains with hiker (Unsplash).jpg",
+      "sha256": "f0d24dac196789a5a76c565d1826dc60bd7284a59acf50c0131c38cdf1edf932",
+      "width": 6000,
+      "height": 3376,
+      "camera": "SONY ILCE-7M2",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-snow-mountains",
+      "conditions": [
+        "glacier",
+        "snow",
+        "white-sky"
+      ],
+      "license": "CC0-1.0",
+      "author": "Vashishtha Jogi jogi",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-snow-mountains-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/cb/Winter_landscape_with_church_%2847894020971%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Winter_landscape_with_church_(47894020971).jpg",
+      "title": "File:Winter landscape with church (47894020971).jpg",
+      "sha256": "f081570dcabc87734f64d7bc3b8942534bb91b705f1b04cee31bed281ea59e51",
+      "width": 5416,
+      "height": 3606,
+      "camera": "SONY ILCE-5000",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-snow-mountains",
+      "conditions": [
+        "snow",
+        "pale-sky",
+        "low-contrast"
+      ],
+      "license": "CC0-1.0",
+      "author": "Churrumburru",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-snow-mountains-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/b/be/Landscape_mountains_snow_Phaistos.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Landscape_mountains_snow_Phaistos.jpg",
+      "title": "File:Landscape mountains snow Phaistos.jpg",
+      "sha256": "f9b9c18de7ab4b3958892def5d95a9f09fd86c6cc056e002347d87d7d67b2208",
+      "width": 4592,
+      "height": 3056,
+      "camera": "SONY DSLR-A550",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-snow-mountains",
+      "conditions": [
+        "snow-peaks",
+        "clouds"
+      ],
+      "license": "CC0-1.0",
+      "author": "Jebulon",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-small-patch-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/3/3a/An_alley_in_the_Old_Town_in_Zwickau.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:An_alley_in_the_Old_Town_in_Zwickau.jpg",
+      "title": "File:An alley in the Old Town in Zwickau.jpg",
+      "sha256": "a3ed52e89f886ba7c127edf8d227c079a00c9ef33c86dfa38c88b18108a6978d",
+      "width": 3656,
+      "height": 5470,
+      "camera": "SONY ILCE-3000",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-small-patch",
+      "conditions": [
+        "small-sky",
+        "overcast",
+        "narrow-street"
+      ],
+      "license": "CC0-1.0",
+      "author": "Robert von Oliva (naruciakk)",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-small-patch-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/7/7c/Street_Photography_-_a_narrow_street_in_Visakhapatnam%2C_my_mobile_click.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Street_Photography_-_a_narrow_street_in_Visakhapatnam,_my_mobile_click.jpg",
+      "title": "File:Street Photography - a narrow street in Visakhapatnam, my mobile click.jpg",
+      "sha256": "2cbf2ea794de07e2afc10f1bf9cf523fcbeba2a46fbf688d591e1633ba895479",
+      "width": 3060,
+      "height": 4080,
+      "camera": "samsung SM-M136B",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-small-patch",
+      "conditions": [
+        "small-sky",
+        "wires",
+        "narrow-street"
+      ],
+      "license": "CC0-1.0",
+      "author": "PVRMurty1944",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "sky-small-patch-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/a/a3/Narrow_street_2023-08-04_10.25.29_%2853112241300%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Narrow_street_2023-08-04_10.25.29_(53112241300).jpg",
+      "title": "File:Narrow street 2023-08-04 10.25.29 (53112241300).jpg",
+      "sha256": "105babcd2f2e18227a16a00767f96821491f541c011fc4beb447737c19105205",
+      "width": 3024,
+      "height": 4032,
+      "camera": "Apple iPhone 13",
+      "masks": [
+        "sky"
+      ],
+      "cell": "sky-small-patch",
+      "conditions": [
+        "small-sky",
+        "blue-sky",
+        "narrow-street"
+      ],
+      "license": "CC0-1.0",
+      "author": "dlovins99",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "hair-busy-background-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/10/Portrait_of_a_girl_on_sports_field_01.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Portrait_of_a_girl_on_sports_field_01.jpg",
+      "title": "File:Portrait of a girl on sports field 01.jpg",
+      "sha256": "58737bacf6403c35978efda890fbdf145a21707dff52297cc6330bf6623a2150",
+      "width": 2500,
+      "height": 2636,
+      "camera": "Canon Canon EOS 5D Mark II",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-busy-background",
+      "conditions": [
+        "busy-background",
+        "flyaways"
+      ],
+      "license": "CC0-1.0",
+      "author": "huweijie07170",
+      "source": "Wikimedia Commons",
+      "restrictions": "personality"
+    },
+    {
+      "file": "hair-busy-background-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/9/91/Girl_of_Margarita_Island.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Girl_of_Margarita_Island.jpg",
+      "title": "File:Girl of Margarita Island.jpg",
+      "sha256": "9a154ead9ea22ff29be1ccc1b6a29dc2e5aa088ac7066ccd8a3b201f3a49cc2f",
+      "width": 4288,
+      "height": 2848,
+      "camera": "NIKON CORPORATION NIKON D300",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-busy-background",
+      "conditions": [
+        "flyaways",
+        "curly",
+        "child"
+      ],
+      "license": "CC0-1.0",
+      "author": "Wilfredor",
+      "source": "Wikimedia Commons",
+      "restrictions": "personality"
+    },
+    {
+      "file": "hair-busy-background-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/0/0d/Seated_woman_with_blonde_hair-3177506.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Seated_woman_with_blonde_hair-3177506.jpg",
+      "title": "File:Seated woman with blonde hair-3177506.jpg",
+      "sha256": "ef168e24f7f96c5f4ae296b7674a7137074023a804347513c37f7190b54daf8c",
+      "width": 3891,
+      "height": 3264,
+      "camera": "FUJIFILM X-E1",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-busy-background",
+      "conditions": [
+        "blond",
+        "wavy",
+        "busy-background"
+      ],
+      "license": "CC0-1.0",
+      "author": "ivanovgood",
+      "source": "Wikimedia Commons",
+      "restrictions": "personality"
+    },
+    {
+      "file": "hair-busy-background-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/1b/Girl_Portrait_Kid_Cute_Hair_Sunlight_Arab_Young.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Girl_Portrait_Kid_Cute_Hair_Sunlight_Arab_Young.jpg",
+      "title": "File:Girl Portrait Kid Cute Hair Sunlight Arab Young.jpg",
+      "sha256": "d4f1bc999e6b04f1ea3cf86a395fd57bd479af6ecc6b9b4809e064ef966852b3",
+      "width": 5184,
+      "height": 3456,
+      "camera": "Canon Canon EOS 1200D",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-busy-background",
+      "conditions": [
+        "flyaways",
+        "backlit",
+        "child"
+      ],
+      "license": "CC0-1.0",
+      "author": "Abdulmomn Kadhim",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "hair-busy-background-05.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/5/5b/Old_Indian_woman_with_a_sari.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Old_Indian_woman_with_a_sari.jpg",
+      "title": "File:Old Indian woman with a sari.jpg",
+      "sha256": "509dcd13cd7fde56f33610261d014a41f8ea59afbfe39072aaf2ef5c12343321",
+      "width": 3264,
+      "height": 4928,
+      "camera": "NIKON CORPORATION NIKON D7000",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-busy-background",
+      "conditions": [
+        "flyaways",
+        "grey-hair",
+        "elderly"
+      ],
+      "license": "CC0-1.0",
+      "author": "Yolanda",
+      "source": "Wikimedia Commons",
+      "restrictions": "personality"
+    },
+    {
+      "file": "hair-smooth-background-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/5/51/Heran_Darwin_Headshot.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Heran_Darwin_Headshot.jpg",
+      "title": "File:Heran Darwin Headshot.jpg",
+      "sha256": "d4f032fb917df238a702ccdb444a8a19365c07378c6a97893c1daf9292baf2a2",
+      "width": 3384,
+      "height": 2256,
+      "camera": "Canon Canon EOS 6D",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-smooth-background",
+      "conditions": [
+        "plain-background",
+        "dark-hair"
+      ],
+      "license": "CC0-1.0",
+      "author": "Kramej08",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "hair-smooth-background-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/f/f0/Hugh_Maynard.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Hugh_Maynard.jpg",
+      "title": "File:Hugh Maynard.jpg",
+      "sha256": "1807f7fcaf2edb89fa6d81dd75400077c3032746c1f25d1f083362e0805c7cd5",
+      "width": 2400,
+      "height": 3000,
+      "camera": "Canon Canon EOS 5D Mark III",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-smooth-background",
+      "conditions": [
+        "plain-background",
+        "twists",
+        "dark-skin"
+      ],
+      "license": "CC0-1.0",
+      "author": "HughAM",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "hair-smooth-background-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/4/4e/Giles_Watling_headshot_2019.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Giles_Watling_headshot_2019.jpg",
+      "title": "File:Giles Watling headshot 2019.jpg",
+      "sha256": "90c42b51413126b5ef860ec67c8336ba69ad6ef93f00d1e7ebe1249846d3bd00",
+      "width": 2123,
+      "height": 3184,
+      "camera": "Canon Canon EOS 5D Mark IV",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-smooth-background",
+      "conditions": [
+        "plain-background",
+        "grey-hair"
+      ],
+      "license": "CC0-1.0",
+      "author": "Giles Watling previous official headshot, likely from Parliament.",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "hair-smooth-background-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/2/2f/Headshot_of_Brandon_Holland.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Headshot_of_Brandon_Holland.jpg",
+      "title": "File:Headshot of Brandon Holland.jpg",
+      "sha256": "c1c2114c6b2234e14da49b487b44056264580012540c5b08cf6307bcbab64fb9",
+      "width": 6000,
+      "height": 3376,
+      "camera": "SONY ILCE-6500",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-smooth-background",
+      "conditions": [
+        "bokeh",
+        "tousled"
+      ],
+      "license": "CC0-1.0",
+      "author": "SpiceDigitalCo",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "hair-backlit-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/b/b9/Winter_Fashion_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Winter_Fashion_(Unsplash).jpg",
+      "title": "File:Winter Fashion (Unsplash).jpg",
+      "sha256": "de155416b611eeb3aadbb920d7cabbf2428dfc98305705e9bdeed00607c15c89",
+      "width": 5325,
+      "height": 3550,
+      "camera": "Canon Canon EOS 6D",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-backlit",
+      "conditions": [
+        "backlit",
+        "rim-light",
+        "blond"
+      ],
+      "license": "CC0-1.0",
+      "author": "freestocks.org freestocks",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "hair-backlit-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/2/2d/Golden_sunset_girl_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Golden_sunset_girl_(Unsplash).jpg",
+      "title": "File:Golden sunset girl (Unsplash).jpg",
+      "sha256": "2aaaf9ad92d6818f3ad979bb7e0760e2f07e2308d533da405b0c64150ad0365c",
+      "width": 5184,
+      "height": 3456,
+      "camera": "Canon Canon EOS 60D",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-backlit",
+      "conditions": [
+        "backlit",
+        "hat",
+        "flare"
+      ],
+      "license": "CC0-1.0",
+      "author": "Allef Vinicius seteales",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "hair-backlit-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/c2/Suchawa%2C_Poland_%28Unsplash_u49hkWzTL3w%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Suchawa,_Poland_(Unsplash_u49hkWzTL3w).jpg",
+      "title": "File:Suchawa, Poland (Unsplash u49hkWzTL3w).jpg",
+      "sha256": "7c5c2250c5a36655be2a5bdeae1fd3fe4163f0893a3baa824e3a237b115934c0",
+      "width": 5154,
+      "height": 3436,
+      "camera": "Canon Canon EOS 6D",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-backlit",
+      "conditions": [
+        "backlit",
+        "flyaways",
+        "silhouette"
+      ],
+      "license": "CC0-1.0",
+      "author": "freestocks.org freestocks",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "hair-backlit-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/0/0f/Sunset_field_views_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Sunset_field_views_(Unsplash).jpg",
+      "title": "File:Sunset field views (Unsplash).jpg",
+      "sha256": "0d80ef429dc4426b07c856987daf1ff6a21e0797b13a135d3ed813f53d8e8073",
+      "width": 5184,
+      "height": 3888,
+      "camera": "OLYMPUS CORPORATION PEN-F",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-backlit",
+      "conditions": [
+        "backlit",
+        "rim-light",
+        "from-behind"
+      ],
+      "license": "CC0-1.0",
+      "author": "Edu Grande edgr",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "hair-backlit-05.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/9/98/Fire_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Fire_(Unsplash).jpg",
+      "title": "File:Fire (Unsplash).jpg",
+      "sha256": "3fd70cb8f5ca04bfcb59007543577301732a04d9bd039dd18d1fdf15fa84e454",
+      "width": 5184,
+      "height": 3456,
+      "camera": "Canon Canon EOS 60D",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-backlit",
+      "conditions": [
+        "backlit",
+        "curly",
+        "golden-hour"
+      ],
+      "license": "CC0-1.0",
+      "author": "Ben Loader bennyloader7",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "hair-curly-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/c5/Confident_Eye_Contact_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Confident_Eye_Contact_(Unsplash).jpg",
+      "title": "File:Confident Eye Contact (Unsplash).jpg",
+      "sha256": "7c3c187a91a0b4933e0932d6cc1066de631e56a818162c6412db35edbd6e5b49",
+      "width": 5184,
+      "height": 3456,
+      "camera": "Canon Canon EOS 7D",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-curly",
+      "conditions": [
+        "curly",
+        "dark-skin"
+      ],
+      "license": "CC0-1.0",
+      "author": "Tanja Heffner tanjaheffner",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "hair-curly-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/0/0b/William_Stitt_2017-03-19_%28Unsplash_vfc01uHpOyQ%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:William_Stitt_2017-03-19_(Unsplash_vfc01uHpOyQ).jpg",
+      "title": "File:William Stitt 2017-03-19 (Unsplash vfc01uHpOyQ).jpg",
+      "sha256": "d58eb1dfd96735ed80e778da22ab98c1bdc24b21ff5a5f3c9b02e66eebd77c84",
+      "width": 3456,
+      "height": 5184,
+      "camera": "Canon Canon EOS REBEL T5i",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-curly",
+      "conditions": [
+        "afro",
+        "backlit",
+        "bokeh"
+      ],
+      "license": "CC0-1.0",
+      "author": "William Stitt willpower",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "hair-curly-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/8/81/Happy_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Happy_(Unsplash).jpg",
+      "title": "File:Happy (Unsplash).jpg",
+      "sha256": "f7cf746a0d2c6c9dabb84b73cdd1e4afcda04959da0ab902b437a68f1b658d3b",
+      "width": 5184,
+      "height": 3456,
+      "camera": "Canon Canon EOS 7D",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-curly",
+      "conditions": [
+        "curly",
+        "busy-background"
+      ],
+      "license": "CC0-1.0",
+      "author": "Aziz Acharki acharki95",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "hair-curly-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/4/44/A_young_man_with_a_pacole_hat_Iran_Canon_Photography_Mostafa_Meraji_01.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:A_young_man_with_a_pacole_hat_Iran_Canon_Photography_Mostafa_Meraji_01.jpg",
+      "title": "File:A young man with a pacole hat Iran Canon Photography Mostafa Meraji 01.jpg",
+      "sha256": "5305c4af2da39a27423f05172b5bb5c09e7685a5b90c56e837fa00d48b821d9d",
+      "width": 6960,
+      "height": 4640,
+      "camera": "Canon Canon EOS 90D",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-curly",
+      "conditions": [
+        "curly",
+        "man",
+        "hat"
+      ],
+      "license": "CC0-1.0",
+      "author": "Mostafameraji",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "hair-pale-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/7/7c/Women_with_blonde_hair_standing_in_front_of_red_flowers.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Women_with_blonde_hair_standing_in_front_of_red_flowers.jpg",
+      "title": "File:Women with blonde hair standing in front of red flowers.jpg",
+      "sha256": "cf2f8d50bc78375e6623fab7d6fe8cc65f9b43a4a3d6d28dc4e8f471b5a46533",
+      "width": 4928,
+      "height": 3264,
+      "camera": "NIKON CORPORATION NIKON D7000",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-pale",
+      "conditions": [
+        "blond",
+        "busy-background"
+      ],
+      "license": "CC0-1.0",
+      "author": "Alma Black almab",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "hair-pale-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/0/04/Blonde_273.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Blonde_273.jpg",
+      "title": "File:Blonde 273.jpg",
+      "sha256": "4dbe2d00601bd950f0d60d804046920715e47a59bf0e9ab9f11774f12b0941bc",
+      "width": 3744,
+      "height": 5616,
+      "camera": "Canon Canon EOS 5D Mark II",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-pale",
+      "conditions": [
+        "blond",
+        "feathers",
+        "plain-background"
+      ],
+      "license": "CC0-1.0",
+      "author": "Pat Lemoine",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "hair-pale-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/4/46/Beautiful_blonde_leaning_on_a_wall.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Beautiful_blonde_leaning_on_a_wall.jpg",
+      "title": "File:Beautiful blonde leaning on a wall.jpg",
+      "sha256": "904afbd2706273c3e847f99f1d15a1b179fcab8c8d2d83110859e2ecfe2de9c3",
+      "width": 4928,
+      "height": 3264,
+      "camera": "NIKON CORPORATION NIKON D5100",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-pale",
+      "conditions": [
+        "blond",
+        "pale-background",
+        "full-body"
+      ],
+      "license": "CC0-1.0",
+      "author": "Nicolas Postiglioni",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "hair-pale-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/e/e3/Cindy_Kiro_and_Fiona_Kidman_2024.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Cindy_Kiro_and_Fiona_Kidman_2024.jpg",
+      "title": "File:Cindy Kiro and Fiona Kidman 2024.jpg",
+      "sha256": "50ce8391cfa4c8180b7ea38d68db83645d7867c54989dc84a53183d3df025b64",
+      "width": 7602,
+      "height": 5068,
+      "camera": "NIKON CORPORATION NIKON Z 7_2",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-pale",
+      "conditions": [
+        "white-hair",
+        "elderly",
+        "overlapping"
+      ],
+      "license": "CC0-1.0",
+      "author": "New Zealand Government, Office of the Governor-General",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "hair-pale-05.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/0/05/Fr%C3%A9d%C3%A9rique_Lantieri.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Fr%C3%A9d%C3%A9rique_Lantieri.jpg",
+      "title": "File:Frédérique Lantieri.jpg",
+      "sha256": "b2a444ac60599ba6ea50dfe5f45114077f115a747909b753a6b39cae344c1931",
+      "width": 3056,
+      "height": 4592,
+      "camera": "SONY DSLR-A550",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "cell": "hair-pale",
+      "conditions": [
+        "white-hair",
+        "pale-background",
+        "elderly"
+      ],
+      "license": "CC0-1.0",
+      "author": "Jebulon",
+      "source": "Wikimedia Commons",
+      "restrictions": "personality"
+    },
+    {
+      "file": "beard-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/9/98/The_one_behind_is_not_a_real_lion._Long_hair_and_6_month_old_beard.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:The_one_behind_is_not_a_real_lion._Long_hair_and_6_month_old_beard.jpg",
+      "title": "File:The one behind is not a real lion. Long hair and 6 month old beard.jpg",
+      "sha256": "5d6690f41cd09bebbeb12bb342244afc12c9aad11ac06980f394177840e04630",
+      "width": 3888,
+      "height": 5184,
+      "camera": "samsung SM-A325F",
+      "masks": [
+        "subject",
+        "people",
+        "facialHair"
+      ],
+      "cell": "beard",
+      "conditions": [
+        "beard",
+        "long-hair"
+      ],
+      "license": "CC0-1.0",
+      "author": "Omercinarw",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "beard-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/6/65/Full_beard_natural_20-30cm.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Full_beard_natural_20-30cm.jpg",
+      "title": "File:Full beard natural 20-30cm.jpg",
+      "sha256": "1d487c76a99d5a1623dffb5467ce1ca38e68fc61475f5fca6988687ec42a05ea",
+      "width": 3392,
+      "height": 2544,
+      "camera": "samsung Galaxy S25",
+      "masks": [
+        "subject",
+        "people",
+        "facialHair"
+      ],
+      "cell": "beard",
+      "conditions": [
+        "beard",
+        "frizzy"
+      ],
+      "license": "CC0-1.0",
+      "author": "Tsoukalo",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "beard-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/a/a2/Scott_T._Rupp.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Scott_T._Rupp.jpg",
+      "title": "File:Scott T. Rupp.jpg",
+      "sha256": "814cefc027228344d12960c0b3e87221631f4f79da030fad0ce3357cabbd9120",
+      "width": 2430,
+      "height": 3240,
+      "camera": "Apple iPhone 11",
+      "masks": [
+        "subject",
+        "people",
+        "facialHair"
+      ],
+      "cell": "beard",
+      "conditions": [
+        "beard",
+        "grey-hair",
+        "hat"
+      ],
+      "license": "CC0-1.0",
+      "author": "MisterElection2001",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "beard-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/3/36/Photography-wallpaper-facial-hair-man-beard-chin-moustache-human-elder-portrait-1453095.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Photography-wallpaper-facial-hair-man-beard-chin-moustache-human-elder-portrait-1453095.jpg",
+      "title": "File:Photography-wallpaper-facial-hair-man-beard-chin-moustache-human-elder-portrait-1453095.jpg",
+      "sha256": "8e528c1f80fc747b3ee59a61c57071a2060540559fa1455474e83a901acf41ae",
+      "width": 2400,
+      "height": 3150,
+      "camera": "Canon Canon EOS 70D",
+      "masks": [
+        "subject",
+        "people",
+        "facialHair"
+      ],
+      "cell": "beard",
+      "conditions": [
+        "white-beard",
+        "elderly",
+        "low-key"
+      ],
+      "license": "CC0-1.0",
+      "author": "@nazanin",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "glasses-hats-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/0/05/%E5%A7%AC%E5%AD%90%E8%BF%91%E7%85%A72014%E5%B9%B410%E6%9C%8830%E6%97%A5%E4%BA%8E%E7%BE%8E%E5%9B%BD%E5%B8%83%E7%BD%97%E5%BE%B7%E7%BE%8E%E6%9C%AF%E9%A6%86%E7%95%99%E5%BD%B1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:%E5%A7%AC%E5%AD%90%E8%BF%91%E7%85%A72014%E5%B9%B410%E6%9C%8830%E6%97%A5%E4%BA%8E%E7%BE%8E%E5%9B%BD%E5%B8%83%E7%BD%97%E5%BE%B7%E7%BE%8E%E6%9C%AF%E9%A6%86%E7%95%99%E5%BD%B1.jpg",
+      "title": "File:姬子近照2014年10月30日于美国布罗德美术馆留影.jpg",
+      "sha256": "17b4ed39325251226d857940b40979e2a4debbf46610d38f5c011f90b7f71aba",
+      "width": 5616,
+      "height": 3744,
+      "camera": "Canon Canon EOS 5D Mark II",
+      "masks": [
+        "subject",
+        "people"
+      ],
+      "cell": "glasses-hats",
+      "conditions": [
+        "hat",
+        "glasses",
+        "elderly"
+      ],
+      "license": "CC0-1.0",
+      "author": "TianzhuoZheng1226",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "glasses-hats-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/5/53/Irenio_Dionzio_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Irenio_Dionzio_(Unsplash).jpg",
+      "title": "File:Irenio Dionzio (Unsplash).jpg",
+      "sha256": "b47563f98419e027701e983070288b8796cd64b851879ef312533730cbc6abce",
+      "width": 5184,
+      "height": 3456,
+      "camera": "Canon Canon EOS M",
+      "masks": [
+        "subject",
+        "people"
+      ],
+      "cell": "glasses-hats",
+      "conditions": [
+        "glasses",
+        "dark-skin",
+        "low-key"
+      ],
+      "license": "CC0-1.0",
+      "author": "Jascha Huisman jaschahuisman",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "glasses-hats-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/4/4e/Woman_in_hat_smiling_on_couch_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Woman_in_hat_smiling_on_couch_(Unsplash).jpg",
+      "title": "File:Woman in hat smiling on couch (Unsplash).jpg",
+      "sha256": "aaee4c2ca392b4e0798ce916cd62b4461db8db11bdeda5222d485c6bc2536acc",
+      "width": 5472,
+      "height": 3648,
+      "camera": "Canon Canon EOS 6D",
+      "masks": [
+        "subject",
+        "people"
+      ],
+      "cell": "glasses-hats",
+      "conditions": [
+        "hat",
+        "long-hair",
+        "low-key"
+      ],
+      "license": "CC0-1.0",
+      "author": "Priscilla Du Preez artographybyp",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "groups-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/2/2e/Couple_in_Paradise._%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Couple_in_Paradise._(Unsplash).jpg",
+      "title": "File:Couple in Paradise. (Unsplash).jpg",
+      "sha256": "01609c5bb17b7d4f0b560f1801df75bb2808905e04f79a959dc3abd21c7fe684",
+      "width": 5030,
+      "height": 3208,
+      "camera": "Canon Canon EOS 60D",
+      "masks": [
+        "people"
+      ],
+      "cell": "groups",
+      "conditions": [
+        "two-people",
+        "full-body"
+      ],
+      "license": "CC0-1.0",
+      "author": "Christopher Campbell chrisjoelcampbell",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "groups-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/a/a4/Cheerful_smiling_couple_in_love_hugging_in_nature_on_a_beautiful_flower_background._Bali_island._%2847757527242%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Cheerful_smiling_couple_in_love_hugging_in_nature_on_a_beautiful_flower_background._Bali_island._(47757527242).jpg",
+      "title": "File:Cheerful smiling couple in love hugging in nature on a beautiful flower background. Bali island. (47757527242).jpg",
+      "sha256": "d6f4ec5ce732af38a86da7eecf0c6b3659180e79737f10e281e5779751d25fbe",
+      "width": 6000,
+      "height": 4000,
+      "camera": "Canon Canon EOS 80D",
+      "masks": [
+        "people"
+      ],
+      "cell": "groups",
+      "conditions": [
+        "hugging",
+        "overlapping-hair"
+      ],
+      "license": "CC0-1.0",
+      "author": "Artem Beliaikin from Moscow, Russia",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "groups-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/3/38/Two_woman_with_camera_in_mellat_park_of_Mashhad%2C_winter.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Two_woman_with_camera_in_mellat_park_of_Mashhad,_winter.jpg",
+      "title": "File:Two woman with camera in mellat park of Mashhad, winter.jpg",
+      "sha256": "529c4a1985e2ce568a9a82989ea4b52d45e5d1593c23342fdaa6d1ca506b6f8a",
+      "width": 6000,
+      "height": 4000,
+      "camera": "NIKON CORPORATION NIKON D7100",
+      "masks": [
+        "people"
+      ],
+      "cell": "groups",
+      "conditions": [
+        "two-friends",
+        "hijab"
+      ],
+      "license": "CC0-1.0",
+      "author": "abbas borzou",
+      "source": "Wikimedia Commons",
+      "restrictions": "personality"
+    },
+    {
+      "file": "groups-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/cd/Moscow%2C_mom%2C_daughter_and_telescope%2C_May_2026_01.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Moscow,_mom,_daughter_and_telescope,_May_2026_01.jpg",
+      "title": "File:Moscow, mom, daughter and telescope, May 2026 01.jpg",
+      "sha256": "16dac5c2401c34e8bef65376ad952869f54115f114d52b415f75fd2da85a825f",
+      "width": 3456,
+      "height": 5184,
+      "camera": "Canon Canon EOS REBEL SL1",
+      "masks": [
+        "people"
+      ],
+      "cell": "groups",
+      "conditions": [
+        "parent-child",
+        "overlapping",
+        "long-hair"
+      ],
+      "license": "CC0-1.0",
+      "author": "Retired electrician",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "crowd-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/9/99/A_crowded_scene_in_Esplanade_line_2_metro_station_platform.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:A_crowded_scene_in_Esplanade_line_2_metro_station_platform.jpg",
+      "title": "File:A crowded scene in Esplanade line 2 metro station platform.jpg",
+      "sha256": "5a79d936fe56a8f6b7047fef8ad85a470a21b09609d2f0a664ea9d993956f5f1",
+      "width": 4000,
+      "height": 3000,
+      "camera": "Xiaomi POCO M2 Pro",
+      "masks": [
+        "people"
+      ],
+      "cell": "crowd",
+      "conditions": [
+        "crowd",
+        "overlapping",
+        "indoor"
+      ],
+      "license": "CC0-1.0",
+      "author": "Projjalm",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "crowd-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/4/41/3rd_Global_Climate_Strike_Berlin_FridaysForFuture_demonstration_view_from_stage_50.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:3rd_Global_Climate_Strike_Berlin_FridaysForFuture_demonstration_view_from_stage_50.jpg",
+      "title": "File:3rd Global Climate Strike Berlin FridaysForFuture demonstration view from stage 50.jpg",
+      "sha256": "7388846c88136159e2c21df0fdb02b5d4be8cf88cb70f7e64349aae22d535132",
+      "width": 5184,
+      "height": 3888,
+      "camera": "Panasonic DC-GH5",
+      "masks": [
+        "people"
+      ],
+      "cell": "crowd",
+      "conditions": [
+        "crowd",
+        "dense",
+        "posters"
+      ],
+      "license": "CC0-1.0",
+      "author": "Leonhard Lenz",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "full-figure-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/b/ba/Iranian_Model_-_Fashion_Style_-_Mashhad_City-Iran-Asia-Mostafa_Meraji_07.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Iranian_Model_-_Fashion_Style_-_Mashhad_City-Iran-Asia-Mostafa_Meraji_07.jpg",
+      "title": "File:Iranian Model - Fashion Style - Mashhad City-Iran-Asia-Mostafa Meraji 07.jpg",
+      "sha256": "342194a9a59d6971f52969a35e5b5aaa205d1d0bac2508dc4c2971496c5bc502",
+      "width": 2667,
+      "height": 4000,
+      "camera": "Canon Canon EOS 90D",
+      "masks": [
+        "subject",
+        "people",
+        "bodySkin",
+        "clothes"
+      ],
+      "cell": "full-figure",
+      "conditions": [
+        "full-body",
+        "hands",
+        "seated"
+      ],
+      "license": "CC0-1.0",
+      "author": "Mostafameraji",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "full-figure-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/c8/Woman_walking_down_path_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Woman_walking_down_path_(Unsplash).jpg",
+      "title": "File:Woman walking down path (Unsplash).jpg",
+      "sha256": "07726d043a915363922a385cdd87442a542c330998c55f7e8bf6b6da7c00d2a8",
+      "width": 6016,
+      "height": 4000,
+      "camera": "NIKON CORPORATION NIKON D3200",
+      "masks": [
+        "subject",
+        "people",
+        "bodySkin",
+        "clothes"
+      ],
+      "cell": "full-figure",
+      "conditions": [
+        "full-body",
+        "from-behind",
+        "dappled-light"
+      ],
+      "license": "CC0-1.0",
+      "author": "Biel Morro bielmb",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "full-figure-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/12/Stylish_woman_walking_London_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Stylish_woman_walking_London_(Unsplash).jpg",
+      "title": "File:Stylish woman walking London (Unsplash).jpg",
+      "sha256": "a549a564670ac3a15ccb2a6d5d12ba55f2fd3bb7f497910e0aed26673deec1e6",
+      "width": 4462,
+      "height": 2897,
+      "camera": "Canon Canon EOS 6D",
+      "masks": [
+        "subject",
+        "people",
+        "bodySkin",
+        "clothes"
+      ],
+      "cell": "full-figure",
+      "conditions": [
+        "three-quarter",
+        "from-behind",
+        "busy-background"
+      ],
+      "license": "CC0-1.0",
+      "author": "Alexandre Godreau alexandre_godreau",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "full-figure-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/9/9d/Woman_walking_on_a_sand_beach_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Woman_walking_on_a_sand_beach_(Unsplash).jpg",
+      "title": "File:Woman walking on a sand beach (Unsplash).jpg",
+      "sha256": "f92c2a7a92d23e9c1c1505647b64ad030e8e476b849576bdbaf3f93322ea9b66",
+      "width": 3888,
+      "height": 2592,
+      "camera": "Canon Canon EOS 400D DIGITAL",
+      "masks": [
+        "subject",
+        "people",
+        "bodySkin",
+        "clothes"
+      ],
+      "cell": "full-figure",
+      "conditions": [
+        "full-body",
+        "hands",
+        "beach"
+      ],
+      "license": "CC0-1.0",
+      "author": "Nadia Jamnik vanijah",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "low-high-key-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/e/ef/Quin_Stevenson_2015-04-15_%28Unsplash_QPE5988qVoM%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Quin_Stevenson_2015-04-15_(Unsplash_QPE5988qVoM).jpg",
+      "title": "File:Quin Stevenson 2015-04-15 (Unsplash QPE5988qVoM).jpg",
+      "sha256": "ce9727161db4d1b1c215464224def1cd7c85ceb931f04ff62ee5b4018644224d",
+      "width": 5472,
+      "height": 3648,
+      "camera": "Canon Canon EOS 70D",
+      "masks": [
+        "subject",
+        "people"
+      ],
+      "cell": "low-high-key",
+      "conditions": [
+        "low-key",
+        "beard",
+        "profile"
+      ],
+      "license": "CC0-1.0",
+      "author": "Quin Stevenson qstevenson",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "low-high-key-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/4/47/A_broken_heart._%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:A_broken_heart._(Unsplash).jpg",
+      "title": "File:A broken heart. (Unsplash).jpg",
+      "sha256": "f1a7dfabe632901aa2f524d71a058fd7b0bb895b5cb419b53cd39bac9c7d8756",
+      "width": 6016,
+      "height": 4016,
+      "camera": "NIKON CORPORATION NIKON D750",
+      "masks": [
+        "subject",
+        "people"
+      ],
+      "cell": "low-high-key",
+      "conditions": [
+        "low-key",
+        "afro",
+        "dark-skin"
+      ],
+      "license": "CC0-1.0",
+      "author": "Eric Nopanen rexcuando",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "low-high-key-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/d/d3/Annkathrin_Kammeyer_IMG_3337_edit.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Annkathrin_Kammeyer_IMG_3337_edit.jpg",
+      "title": "File:Annkathrin Kammeyer IMG 3337 edit.jpg",
+      "sha256": "2691f27b801a2ace694983013991b94c3e5bfc91505553bb1132e68b768eb41c",
+      "width": 3544,
+      "height": 5116,
+      "camera": "Canon Canon EOS 5D Mark II",
+      "masks": [
+        "subject",
+        "people"
+      ],
+      "cell": "low-high-key",
+      "conditions": [
+        "high-key",
+        "long-hair"
+      ],
+      "license": "CC0-1.0",
+      "author": "Christoph Braun",
+      "source": "Wikimedia Commons",
+      "restrictions": "personality"
+    },
+    {
+      "file": "low-high-key-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/5/59/Shlomi_Profile.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Shlomi_Profile.jpg",
+      "title": "File:Shlomi Profile.jpg",
+      "sha256": "7b110ef2c57e5232d9bdb31afb492a68e09cc83a420f1edf6328ef783cc87cad",
+      "width": 5200,
+      "height": 3471,
+      "camera": "NIKON CORPORATION NIKON D750",
+      "masks": [
+        "subject",
+        "people"
+      ],
+      "cell": "low-high-key",
+      "conditions": [
+        "high-key",
+        "man"
+      ],
+      "license": "CC0-1.0",
+      "author": "Team OMX",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "pets-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/0/0d/Dog_at_N%C3%B8rre_Vorup%C3%B8r_Strand.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Dog_at_N%C3%B8rre_Vorup%C3%B8r_Strand.jpg",
+      "title": "File:Dog at Nørre Vorupør Strand.jpg",
+      "sha256": "d08f9b67ffc35d60ea1cbf5b3e53ddb382ee4a16c5566e19d58fd6cdabe22c58",
+      "width": 3850,
+      "height": 3283,
+      "camera": "Panasonic DMC-FZ1000",
+      "masks": [
+        "subject"
+      ],
+      "cell": "pets",
+      "conditions": [
+        "dog",
+        "fur",
+        "fluffy"
+      ],
+      "license": "CC0-1.0",
+      "author": "W.carter",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "pets-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/8/8d/Chinese_TianYuan_Dog_Sleeping.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Chinese_TianYuan_Dog_Sleeping.jpg",
+      "title": "File:Chinese TianYuan Dog Sleeping.jpg",
+      "sha256": "e878a6ae3eed27f8ba6663b4e76a359cd5dce6feeab6f4cfec9edb0337899728",
+      "width": 4752,
+      "height": 3168,
+      "camera": "Canon Canon EOS 50D",
+      "masks": [
+        "subject"
+      ],
+      "cell": "pets",
+      "conditions": [
+        "dog",
+        "fur",
+        "busy-background"
+      ],
+      "license": "CC0-1.0",
+      "author": "3dman_eu, dibatian",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "pets-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/f/f9/Police_Dog_at_Toronto_Open_House_06.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Police_Dog_at_Toronto_Open_House_06.jpg",
+      "title": "File:Police Dog at Toronto Open House 06.jpg",
+      "sha256": "e90caf2ae4c6662fe80c8265f74141204035f9c6e67c8393141f7b6b43aff5be",
+      "width": 4608,
+      "height": 3456,
+      "camera": "Canon Canon PowerShot SX170 IS",
+      "masks": [
+        "subject"
+      ],
+      "cell": "pets",
+      "conditions": [
+        "dog",
+        "fur",
+        "overlapping"
+      ],
+      "license": "CC0-1.0",
+      "author": "PvOberstein",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "pets-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/5/58/Cat_lying_down_1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Cat_lying_down_1.jpg",
+      "title": "File:Cat lying down 1.jpg",
+      "sha256": "7a3b2afd67fb5e70a7b5fc8e20d3dd6b08cdb32d95da8d0c5762693d1b3c5ca7",
+      "width": 4080,
+      "height": 3060,
+      "camera": "samsung SM-A135F",
+      "masks": [
+        "subject"
+      ],
+      "cell": "pets",
+      "conditions": [
+        "cat",
+        "fur",
+        "low-contrast"
+      ],
+      "license": "CC0-1.0",
+      "author": "Teojincheng",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "other-subjects-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/d/d2/Eisvogel_kingfisher.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Eisvogel_kingfisher.jpg",
+      "title": "File:Eisvogel kingfisher.jpg",
+      "sha256": "85468a37d5d5f5631f8a9eda8ea62dab2a1628e6fd9fa63908ea4122730f8b6a",
+      "width": 4928,
+      "height": 3264,
+      "camera": "NIKON CORPORATION NIKON D7000",
+      "masks": [
+        "subject"
+      ],
+      "cell": "other-subjects",
+      "conditions": [
+        "bird",
+        "plain-background"
+      ],
+      "license": "CC0-1.0",
+      "author": "Frank-2.0",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "other-subjects-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/a/a0/Flower_full_bloom_2.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Flower_full_bloom_2.jpg",
+      "title": "File:Flower full bloom 2.jpg",
+      "sha256": "4286ba6c4cb7553964b89e72926976eed539d4e296792307b5e3e3433b3a66d6",
+      "width": 3456,
+      "height": 4608,
+      "camera": "OnePlus ONEPLUS A6013",
+      "masks": [
+        "subject"
+      ],
+      "cell": "other-subjects",
+      "conditions": [
+        "flower",
+        "bokeh"
+      ],
+      "license": "CC0-1.0",
+      "author": "Kurt Kaiser",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "other-subjects-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/4/48/Islamic_Cultural_Center%28Amman%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Islamic_Cultural_Center(Amman).jpg",
+      "title": "File:Islamic Cultural Center(Amman).jpg",
+      "sha256": "73770f1caad9151a22dbac167716152648ffc2f1635ade9b89afcc8737a92545",
+      "width": 3468,
+      "height": 4077,
+      "camera": "samsung SM-A525F (a52q)",
+      "masks": [
+        "subject"
+      ],
+      "cell": "other-subjects",
+      "conditions": [
+        "car"
+      ],
+      "license": "CC0-1.0",
+      "author": "Taha Al-Hayali",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "face-teeth-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/7/70/Mother_Nature%2C_Summer_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Mother_Nature,_Summer_(Unsplash).jpg",
+      "title": "File:Mother Nature, Summer (Unsplash).jpg",
+      "sha256": "6754b485dce1780342a332e9af9a374269893abddd019bd9f39427c3e8888783",
+      "width": 5472,
+      "height": 3648,
+      "camera": "Canon Canon EOS 6D",
+      "masks": [
+        "faceParts"
+      ],
+      "cell": "face-teeth",
+      "conditions": [
+        "teeth",
+        "laughing",
+        "dark-skin"
+      ],
+      "license": "CC0-1.0",
+      "author": "Autumn Goodman auttgood",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "face-teeth-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/cd/Smiling_woman_by_a_window_%28Unsplash_NoRsyXmHGpI%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Smiling_woman_by_a_window_(Unsplash_NoRsyXmHGpI).jpg",
+      "title": "File:Smiling woman by a window (Unsplash NoRsyXmHGpI).jpg",
+      "sha256": "76df94a9a94aec4366130a2422926bbbe9d861db3f9d64bbe650d5041efda998",
+      "width": 5309,
+      "height": 3539,
+      "camera": "Canon Canon EOS 6D",
+      "masks": [
+        "faceParts"
+      ],
+      "cell": "face-teeth",
+      "conditions": [
+        "teeth",
+        "laughing",
+        "medium-shot"
+      ],
+      "license": "CC0-1.0",
+      "author": "Brooke Cagle brookecagle",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "face-teeth-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/4/43/Portrait_of_a_31-year_old_woman_dressed_in_a_cyberpunk_industrial_outfit%2C_photographed_in_2013.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Portrait_of_a_31-year_old_woman_dressed_in_a_cyberpunk_industrial_outfit,_photographed_in_2013.jpg",
+      "title": "File:Portrait of a 31-year old woman dressed in a cyberpunk industrial outfit, photographed in 2013.jpg",
+      "sha256": "b68efb32bb1eef0696103f021cd56cbb8bd0b7edaeb3b85de636ff40b7e2a12f",
+      "width": 5150,
+      "height": 4912,
+      "camera": "SONY  NEX-F3",
+      "masks": [
+        "faceParts"
+      ],
+      "cell": "face-teeth",
+      "conditions": [
+        "teeth",
+        "makeup",
+        "medium-shot"
+      ],
+      "license": "CC0-1.0",
+      "author": "Raki Daki",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "face-teeth-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/2/2b/Stockholm_man_with_headphones_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Stockholm_man_with_headphones_(Unsplash).jpg",
+      "title": "File:Stockholm man with headphones (Unsplash).jpg",
+      "sha256": "644bb1082cc57ec95b20067eb9b3f82f0c1f16f9a692dd8a861b5a0b02fa8c00",
+      "width": 5184,
+      "height": 3456,
+      "camera": "Canon Canon EOS 60D",
+      "masks": [
+        "faceParts"
+      ],
+      "cell": "face-teeth",
+      "conditions": [
+        "teeth",
+        "smiling",
+        "dark-skin"
+      ],
+      "license": "CC0-1.0",
+      "author": "Yingchou Han hyingchou",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "face-teeth-05.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/cf/Smiling_woman_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Smiling_woman_(Unsplash).jpg",
+      "title": "File:Smiling woman (Unsplash).jpg",
+      "sha256": "065cbd03689fddff47cbdf8efde977c1705ce238534caf757a5a6aad46313181",
+      "width": 5184,
+      "height": 3456,
+      "camera": "Canon Canon EOS 60D",
+      "masks": [
+        "faceParts"
+      ],
+      "cell": "face-teeth",
+      "conditions": [
+        "teeth",
+        "lipstick",
+        "smiling"
+      ],
+      "license": "CC0-1.0",
+      "author": "Allef Vinicius seteales",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "face-eyes-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/f/f0/Blue_Grey_Eyes.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Blue_Grey_Eyes.JPG",
+      "title": "File:Blue Grey Eyes.JPG",
+      "sha256": "62069f838eea2d3d71d92c455377cd0d5394efecdfd4e701ce4b02e49413034a",
+      "width": 4896,
+      "height": 3672,
+      "camera": "SONY DSC-WX300",
+      "masks": [
+        "faceParts"
+      ],
+      "cell": "face-eyes",
+      "conditions": [
+        "iris",
+        "blue-eyes",
+        "close-up"
+      ],
+      "license": "CC0-1.0",
+      "author": "Miansari66",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "face-eyes-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/7/74/Close_up_of_an_Indian_child_girl.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Close_up_of_an_Indian_child_girl.jpg",
+      "title": "File:Close up of an Indian child girl.jpg",
+      "sha256": "36378004923cf8d6bab021aaddf8e2baa9f31ffb3ba0919919ad859ae753decd",
+      "width": 5184,
+      "height": 3456,
+      "camera": "Canon Canon EOS 60D",
+      "masks": [
+        "faceParts"
+      ],
+      "cell": "face-eyes",
+      "conditions": [
+        "iris",
+        "child",
+        "sclera"
+      ],
+      "license": "CC0-1.0",
+      "author": "Thacreations",
+      "source": "Wikimedia Commons",
+      "restrictions": "personality"
+    },
+    {
+      "file": "face-eyes-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/9/9b/Types_of_shots_photography.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Types_of_shots_photography.jpg",
+      "title": "File:Types of shots photography.jpg",
+      "sha256": "a3086171e66f496071273e3dfbfb1e4f3cb81dee49ab1547ea56392898ba0e3a",
+      "width": 6000,
+      "height": 4000,
+      "camera": "Canon Canon EOS 80D",
+      "masks": [
+        "faceParts"
+      ],
+      "cell": "face-eyes",
+      "conditions": [
+        "downcast",
+        "close-up",
+        "brown-skin"
+      ],
+      "license": "CC0-1.0",
+      "author": "Praveenapraviii",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "face-eyes-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/3/37/1375Poblacion_Bulacan_Baliuag_Proper_17.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:1375Poblacion_Bulacan_Baliuag_Proper_17.jpg",
+      "title": "File:1375Poblacion Bulacan Baliuag Proper 17.jpg",
+      "sha256": "c9843a6dd80225abb3b8c70a5137d906a4e2d7905770cfcc45620cf3506b9399",
+      "width": 4608,
+      "height": 3456,
+      "camera": "NIKON COOLPIX AW100",
+      "masks": [
+        "faceParts"
+      ],
+      "cell": "face-eyes",
+      "conditions": [
+        "teeth",
+        "grimace",
+        "wide-angle"
+      ],
+      "license": "CC0-1.0",
+      "author": "Judgefloro",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "face-lips-brows-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/8/83/Colorful_Lips_and_Hair_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Colorful_Lips_and_Hair_(Unsplash).jpg",
+      "title": "File:Colorful Lips and Hair (Unsplash).jpg",
+      "sha256": "705a621f3ed1a65d496c8cf1d668bd0735b2eb199e1d0b4c88052b4b7dd4829f",
+      "width": 3168,
+      "height": 4752,
+      "camera": "Canon Canon EOS 50D",
+      "masks": [
+        "faceParts"
+      ],
+      "cell": "face-lips-brows",
+      "conditions": [
+        "lips",
+        "makeup",
+        "bangs"
+      ],
+      "license": "CC0-1.0",
+      "author": "Alex Sheldon slavewire",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "face-lips-brows-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/0/04/Face_portrait_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Face_portrait_(Unsplash).jpg",
+      "title": "File:Face portrait (Unsplash).jpg",
+      "sha256": "7356daa8fd4ad53b946ce0036f06b014431dc89b7ae29ecd8ef18fc54edce6b5",
+      "width": 5184,
+      "height": 3456,
+      "camera": "Canon Canon EOS REBEL T5i",
+      "masks": [
+        "faceParts"
+      ],
+      "cell": "face-lips-brows",
+      "conditions": [
+        "lips",
+        "eyebrows",
+        "dark-skin"
+      ],
+      "license": "CC0-1.0",
+      "author": "William Stitt willpower",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "face-lips-brows-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/f/f4/Bearded_man_en_face_%2829948401746%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Bearded_man_en_face_(29948401746).jpg",
+      "title": "File:Bearded man en face (29948401746).jpg",
+      "sha256": "ce246dc43d108e14e4f8829bc4a3bc780b944019541c53b9f161d7d8d49265d4",
+      "width": 5164,
+      "height": 3443,
+      "camera": "Canon Canon EOS 6D",
+      "masks": [
+        "faceParts"
+      ],
+      "cell": "face-lips-brows",
+      "conditions": [
+        "eyebrows",
+        "beard",
+        "blue-eyes"
+      ],
+      "license": "CC0-1.0",
+      "author": "freestocks.org from Olsztyn, Poland",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "face-lips-brows-04.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/1e/Hooded_woman_in_snow_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Hooded_woman_in_snow_(Unsplash).jpg",
+      "title": "File:Hooded woman in snow (Unsplash).jpg",
+      "sha256": "9b9ec393418501882811904f468d12b11b345bf357ca98cc09debc8080d1c047",
+      "width": 6016,
+      "height": 4000,
+      "camera": "NIKON CORPORATION NIKON D3200",
+      "masks": [
+        "faceParts"
+      ],
+      "cell": "face-lips-brows",
+      "conditions": [
+        "lips",
+        "lipstick",
+        "eyebrows"
+      ],
+      "license": "CC0-1.0",
+      "author": "Pete Bellis petebellis",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "face-ages-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/d/dd/Portrait_of_an_old_black_man.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Portrait_of_an_old_black_man.jpg",
+      "title": "File:Portrait of an old black man.jpg",
+      "sha256": "98e4320261ffc463a4c62f0ad3125e1d0ed0e4fa0371d89609b955974d0785ff",
+      "width": 4000,
+      "height": 5000,
+      "camera": "Canon Canon EOS 5D Mark III",
+      "masks": [
+        "faceParts",
+        "people"
+      ],
+      "cell": "face-ages",
+      "conditions": [
+        "elderly",
+        "wrinkles",
+        "dark-skin"
+      ],
+      "license": "CC0-1.0",
+      "author": "Leroy Skalstad",
+      "source": "Wikimedia Commons",
+      "restrictions": "personality"
+    },
+    {
+      "file": "face-ages-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/3/35/Portrait-Person-Old-Man-Man-Head-1615262.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Portrait-Person-Old-Man-Man-Head-1615262.jpg",
+      "title": "File:Portrait-Person-Old-Man-Man-Head-1615262.jpg",
+      "sha256": "18a7afc0fdc528e962a2c7c3c1f0300dd0cdabdaebdeba5aee2b4de50e89bbe3",
+      "width": 4912,
+      "height": 3264,
+      "camera": "SONY SLT-A55V",
+      "masks": [
+        "faceParts",
+        "people"
+      ],
+      "cell": "face-ages",
+      "conditions": [
+        "elderly",
+        "wrinkles",
+        "grey-beard"
+      ],
+      "license": "CC0-1.0",
+      "author": "rottonara at Pixabay",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "face-glasses-01.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/7/7f/Bah_Oury.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Bah_Oury.jpg",
+      "title": "File:Bah Oury.jpg",
+      "sha256": "289f7032fcf5e58c704599c963eb87c7cbda8881640248c285be1e1fe28d9828",
+      "width": 4000,
+      "height": 6000,
+      "camera": "Canon Canon EOS R3",
+      "masks": [
+        "faceParts"
+      ],
+      "cell": "face-glasses",
+      "conditions": [
+        "glasses",
+        "elderly",
+        "dark-skin"
+      ],
+      "license": "CC0-1.0",
+      "author": "GdMrjess",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "face-glasses-02.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/a/a4/WikiConvFr23_en_Cote_d%27Ivoire_soir%C3%A9e_diner_en_ville_06.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:WikiConvFr23_en_Cote_d%27Ivoire_soir%C3%A9e_diner_en_ville_06.jpg",
+      "title": "File:WikiConvFr23 en Cote d'Ivoire soirée diner en ville 06.jpg",
+      "sha256": "7653ca1188a40101946c700a9d0e3ea597c271cd9e6d1d59ad4dc0907c21246b",
+      "width": 6000,
+      "height": 4000,
+      "camera": "NIKON CORPORATION NIKON D5300",
+      "masks": [
+        "faceParts"
+      ],
+      "cell": "face-glasses",
+      "conditions": [
+        "glasses",
+        "dark-skin",
+        "teeth"
+      ],
+      "license": "CC0-1.0",
+      "author": "Adoscam",
+      "source": "Wikimedia Commons"
+    },
+    {
+      "file": "face-glasses-03.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/c8/Pan_xiaozhen_2017_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "page": "https://commons.wikimedia.org/wiki/File:Pan_xiaozhen_2017_(Unsplash).jpg",
+      "title": "File:Pan xiaozhen 2017 (Unsplash).jpg",
+      "sha256": "e93fddfd4d711b26aa3da302e38de7a634d0bdbecccd9d2a9eb75a343195e4bd",
+      "width": 6000,
+      "height": 4000,
+      "camera": "SONY ILCE-7",
+      "masks": [
+        "faceParts"
+      ],
+      "cell": "face-glasses",
+      "conditions": [
+        "glasses",
+        "child",
+        "prop-frames"
+      ],
+      "license": "CC0-1.0",
+      "author": "pan xiaozhen zhenhappy",
+      "source": "Wikimedia Commons"
+    }
+  ]
+}

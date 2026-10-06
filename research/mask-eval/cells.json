@@ -1,0 +1,457 @@
+{
+  "description": "The mask evaluation set's coverage (MSK-25): each cell is a condition Sky, Subject, People or face-part masks are known to struggle with, the masks it tests, how many photos it wants, and the Wikimedia Commons searches its candidates come from (CC0 only). Most CC0 photos on Commons have short descriptions, so the searches are a word or two and the photos are picked by eye. research/prototypes/masking/photoset.py runs them; the photos picked are in manifest.json.",
+  "cells": [
+    {
+      "id": "sky-bare-trees",
+      "masks": [
+        "sky"
+      ],
+      "want": 5,
+      "queries": [
+        "bare tree",
+        "winter tree",
+        "branches sky"
+      ]
+    },
+    {
+      "id": "sky-leafy-trees",
+      "masks": [
+        "sky"
+      ],
+      "want": 5,
+      "queries": [
+        "tree sky",
+        "treetop",
+        "park trees"
+      ],
+      "round2": [
+        "oak tree",
+        "maple tree",
+        "linden tree",
+        "tree leaves sky",
+        "deciduous tree"
+      ]
+    },
+    {
+      "id": "sky-wires",
+      "masks": [
+        "sky"
+      ],
+      "want": 4,
+      "queries": [
+        "power lines",
+        "pylon",
+        "crane construction",
+        "antenna"
+      ]
+    },
+    {
+      "id": "sky-haze-fog",
+      "masks": [
+        "sky"
+      ],
+      "want": 4,
+      "queries": [
+        "fog",
+        "mist",
+        "haze"
+      ],
+      "round2": [
+        "foggy morning",
+        "misty landscape",
+        "fog field",
+        "hazy mountains",
+        "morning mist lake"
+      ]
+    },
+    {
+      "id": "sky-bright-horizon",
+      "masks": [
+        "sky"
+      ],
+      "want": 4,
+      "queries": [
+        "sun trees",
+        "sunbeams",
+        "backlight"
+      ]
+    },
+    {
+      "id": "sky-sunset",
+      "masks": [
+        "sky"
+      ],
+      "want": 4,
+      "queries": [
+        "sunset silhouette",
+        "sunrise",
+        "sunset trees"
+      ]
+    },
+    {
+      "id": "sky-night",
+      "masks": [
+        "sky"
+      ],
+      "want": 4,
+      "queries": [
+        "blue hour",
+        "dusk city",
+        "skyline night"
+      ]
+    },
+    {
+      "id": "sky-overcast",
+      "masks": [
+        "sky"
+      ],
+      "want": 4,
+      "queries": [
+        "overcast",
+        "cloudy street",
+        "grey sky"
+      ]
+    },
+    {
+      "id": "sky-sea",
+      "masks": [
+        "sky"
+      ],
+      "want": 3,
+      "queries": [
+        "sea horizon",
+        "ocean",
+        "beach clouds"
+      ]
+    },
+    {
+      "id": "sky-glass",
+      "masks": [
+        "sky"
+      ],
+      "want": 3,
+      "queries": [
+        "glass facade",
+        "skyscraper reflection",
+        "lake reflection"
+      ]
+    },
+    {
+      "id": "sky-snow-mountains",
+      "masks": [
+        "sky"
+      ],
+      "want": 3,
+      "queries": [
+        "snow mountains",
+        "alps",
+        "winter landscape"
+      ]
+    },
+    {
+      "id": "sky-small-patch",
+      "masks": [
+        "sky"
+      ],
+      "want": 3,
+      "portrait": true,
+      "queries": [
+        "narrow street",
+        "alley",
+        "old town street"
+      ]
+    },
+    {
+      "id": "hair-busy-background",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "want": 5,
+      "queries": [
+        "portrait hair",
+        "woman portrait",
+        "girl portrait"
+      ],
+      "round2": [
+        "african woman portrait",
+        "asian woman portrait",
+        "indian woman portrait",
+        "man portrait street"
+      ]
+    },
+    {
+      "id": "hair-smooth-background",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "want": 4,
+      "queries": [
+        "studio portrait",
+        "headshot",
+        "portrait woman studio"
+      ]
+    },
+    {
+      "id": "hair-backlit",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "want": 5,
+      "queries": [
+        "portrait sun",
+        "woman sunlight",
+        "girl sunset",
+        "backlit"
+      ],
+      "round2": [
+        "golden hour portrait",
+        "sunlight portrait man",
+        "sunset portrait man",
+        "back light"
+      ]
+    },
+    {
+      "id": "hair-curly",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "want": 4,
+      "queries": [
+        "curly hair",
+        "afro",
+        "curls"
+      ],
+      "round2": [
+        "curly woman",
+        "curly hair woman",
+        "afro woman",
+        "afro man",
+        "curly girl",
+        "ringlets"
+      ]
+    },
+    {
+      "id": "hair-pale",
+      "masks": [
+        "subject",
+        "people",
+        "hair"
+      ],
+      "want": 4,
+      "queries": [
+        "blonde",
+        "grey hair",
+        "elderly woman"
+      ]
+    },
+    {
+      "id": "beard",
+      "masks": [
+        "subject",
+        "people",
+        "facialHair"
+      ],
+      "want": 4,
+      "queries": [
+        "beard",
+        "bearded man"
+      ],
+      "round2": [
+        "african man beard",
+        "asian man portrait",
+        "old man beard"
+      ]
+    },
+    {
+      "id": "glasses-hats",
+      "masks": [
+        "subject",
+        "people"
+      ],
+      "want": 3,
+      "queries": [
+        "glasses portrait",
+        "hat woman",
+        "man hat"
+      ]
+    },
+    {
+      "id": "groups",
+      "masks": [
+        "people"
+      ],
+      "want": 4,
+      "queries": [
+        "friends",
+        "family portrait",
+        "couple"
+      ],
+      "round2": [
+        "two friends",
+        "friends laughing",
+        "couple hugging",
+        "mother daughter",
+        "father son",
+        "siblings"
+      ]
+    },
+    {
+      "id": "crowd",
+      "masks": [
+        "people"
+      ],
+      "want": 2,
+      "queries": [
+        "crowd",
+        "pedestrians"
+      ]
+    },
+    {
+      "id": "full-figure",
+      "masks": [
+        "subject",
+        "people",
+        "bodySkin",
+        "clothes"
+      ],
+      "want": 4,
+      "queries": [
+        "fashion",
+        "woman walking",
+        "man standing"
+      ]
+    },
+    {
+      "id": "low-high-key",
+      "masks": [
+        "subject",
+        "people"
+      ],
+      "want": 4,
+      "queries": [
+        "dark portrait",
+        "low key",
+        "high key"
+      ],
+      "round2": [
+        "white background portrait",
+        "portrait white wall",
+        "bright portrait",
+        "high-key portrait woman"
+      ]
+    },
+    {
+      "id": "pets",
+      "masks": [
+        "subject"
+      ],
+      "want": 4,
+      "queries": [
+        "dog",
+        "cat",
+        "puppy"
+      ]
+    },
+    {
+      "id": "other-subjects",
+      "masks": [
+        "subject"
+      ],
+      "want": 3,
+      "queries": [
+        "bird branch",
+        "flower",
+        "classic car"
+      ]
+    },
+    {
+      "id": "face-teeth",
+      "masks": [
+        "faceParts"
+      ],
+      "want": 5,
+      "queries": [
+        "smile",
+        "laughing",
+        "smiling woman"
+      ],
+      "round2": [
+        "smiling man",
+        "laughing man",
+        "big smile",
+        "grin"
+      ]
+    },
+    {
+      "id": "face-eyes",
+      "masks": [
+        "faceParts"
+      ],
+      "want": 4,
+      "queries": [
+        "eyes close-up",
+        "face close-up",
+        "freckles"
+      ]
+    },
+    {
+      "id": "face-lips-brows",
+      "masks": [
+        "faceParts"
+      ],
+      "want": 4,
+      "queries": [
+        "lips",
+        "makeup",
+        "eyebrows"
+      ],
+      "round2": [
+        "woman face",
+        "man face",
+        "face portrait",
+        "lipstick"
+      ]
+    },
+    {
+      "id": "face-ages",
+      "masks": [
+        "faceParts",
+        "people"
+      ],
+      "want": 4,
+      "queries": [
+        "old man",
+        "elderly",
+        "child face"
+      ],
+      "round2": [
+        "grandmother",
+        "grandfather",
+        "old woman portrait",
+        "old man portrait",
+        "boy portrait",
+        "girl face"
+      ]
+    },
+    {
+      "id": "face-glasses",
+      "masks": [
+        "faceParts"
+      ],
+      "want": 3,
+      "queries": [
+        "glasses face",
+        "spectacles",
+        "eyeglasses"
+      ]
+    }
+  ]
+}

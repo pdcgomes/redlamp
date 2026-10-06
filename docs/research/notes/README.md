@@ -30,6 +30,7 @@ Later notes, each behind tracker rows or another findings document:
 | [TON-29-colour-uniformity.md](TON-29-colour-uniformity.md) | Colour uniformity for skin: Capture One's tools, a prototype, and how Redlamp could build it (4 October 2026) |
 | [TC-architecture-and-workflow.md](TC-architecture-and-workflow.md), [TC-capture-one-teardown.md](TC-capture-one-teardown.md), [TC-lightroom-and-other-tools.md](TC-lightroom-and-other-tools.md), [TC-routes-and-licences.md](TC-routes-and-licences.md) | Evidence for the [tethered capture findings](../tethering-findings.md) (5 October 2026) |
 | [CAM-12-nikon-high-efficiency.md](CAM-12-nikon-high-efficiency.md) | Nikon's High Efficiency NEFs: the format, how Redlamp handles them, and the routes to opening them (5 October 2026) |
+| [MSK-25-photoset.md](MSK-25-photoset.md) | The mask evaluation photoset: 115 CC0 photos for Sky, Subject, People and face parts, what they cover and what they lack (6 October 2026) |
 
 Some notes mention scratch scripts under `/tmp/`. Those were one-off measurement harnesses and are not
 kept; the reproducible prototypes are in [research/prototypes](../../../research/prototypes/README.md).

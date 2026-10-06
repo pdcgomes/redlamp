@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+#MISE description="Download the CC0 mask evaluation set (research/mask-eval/manifest.json) into build/mask-eval"
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+mkdir -p build/mask-eval
+
+python3 - <<'EOF'
+import hashlib, json, os, subprocess, sys
+
+agent = "RedlampMaskEval/1.0 (https://github.com/pdcgomes/redlamp; mask evaluation, MSK-25)"
+manifest = json.load(open("research/mask-eval/manifest.json"))
+failed = 0
+for image in manifest["images"]:
+    path = os.path.join("build/mask-eval", image["file"])
+    if os.path.exists(path) and hashlib.sha256(open(path, "rb").read()).hexdigest() == image["sha256"]:
+        print(f"==> {image['file']} (cached)")
+        continue
+    print(f"==> {image['file']}")
+    subprocess.run(["curl", "-sfL", "-A", agent, "-o", path, image["url"]], check=False)
+    if not os.path.exists(path) or hashlib.sha256(open(path, "rb").read()).hexdigest() != image["sha256"]:
+        print(f"    checksum mismatch or download failed: {image['url']}", file=sys.stderr)
+        failed += 1
+print(f"{len(manifest['images']) - failed} of {len(manifest['images'])} photos ready in build/mask-eval")
+print(f"The {len(manifest['lookDev'])} look-development photos it also uses come from `mise run lookdev`.")
+sys.exit(1 if failed else 0)
+EOF
