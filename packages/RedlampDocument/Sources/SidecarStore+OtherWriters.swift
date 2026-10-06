@@ -189,7 +189,10 @@ extension PhotoMetadata {
         }
         var merged = PhotoMetadata(
             rating: pick(\.rating), flag: pick(\.flag), label: pick(\.label), originalName: pick(\.originalName),
-            keywords: pick(\.keywords),
+            keywords: pick(\.keywords), customLabel: pick(\.customLabel), mark: pick(\.mark), title: pick(\.title),
+            caption: pick(\.caption), creator: pick(\.creator), copyright: pick(\.copyright),
+            location: pick(\.location), collections: pick(\.collections), stack: pick(\.stack),
+            captureShift: pick(\.captureShift), captureOffset: pick(\.captureOffset),
         )
         for key in Set(ours.unknownFields.keys).union(theirs.unknownFields.keys) {
             merged.unknownFields[key] = pick { $0.unknownFields[key] }

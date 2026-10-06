@@ -170,6 +170,34 @@ struct SidecarMetadataTests {
         #expect(store.protection(for: image) == .unreadable)
     }
 
+    @Test func `every field another writer changed alone is kept when an edit is saved over theirs`() {
+        let base = Sidecar(recipe: EditRecipe(), metadata: PhotoMetadata(rating: 1))
+        var ours = base
+        ours.recipe[.exposure] = 0.5
+        let everything = PhotoMetadata(
+            rating: 3, flag: .reject, label: .blue, originalName: "DSC_0042.NEF", keywords: ["Places/Porto"],
+            customLabel: "Urgent", mark: true, title: "Tram 28", caption: "Graça", creator: "Ana Sousa",
+            copyright: "© 2026 Ana Sousa", location: PhotoLocation(city: "Lisbon"), collections: ["Clients/Acme"],
+            stack: PhotoStack(id: Self.stackID, top: true), captureShift: 3600, captureOffset: -18000,
+        )
+        let unset = Dictionary(uniqueKeysWithValues: Mirror(reflecting: PhotoMetadata()).children.map {
+            ($0.label ?? "", String(describing: $0.value))
+        })
+        for field in Mirror(reflecting: everything).children where field.label != "unknownFields" {
+            #expect(
+                String(describing: field.value) != unset[field.label ?? ""],
+                "\(field.label ?? "?") is left at its default: give it a value here, and merge it",
+            )
+        }
+        for metadata in Self.fields.map(\.metadata) + [everything] {
+            var theirs = base
+            theirs.metadata = metadata
+            let merged = SidecarStore.merge(ours, theirs, base: base, opened: base)
+            #expect(merged.metadata == metadata)
+            #expect(merged.recipe[.exposure] == 0.5)
+        }
+    }
+
     @Test func `keys a newer build added to a location or a stack are kept`() throws {
         let (image, cleanup) = try temporaryImage()
         defer { cleanup() }
