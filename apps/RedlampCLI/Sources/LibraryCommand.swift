@@ -10,7 +10,8 @@ enum LibraryCommand {
            redlamp library bench <fixture> [--profile <profile>] [--scenario <name>…] [--photos <n>] [--index <folder>]
                                  [--json <path>]
            redlamp library index <folder>… --index <path> [--profile <profile>]
-           redlamp library search <query> --index <path> [--sort captured|name|rating|edited] [--descending]
+           redlamp library search <query> --index <path> [--collection <name or path>]
+                                  [--sort captured|name|rating|edited|modified|size] [--descending]
                                   [--json] [--limit <n>]
            redlamp library stats --index <path> [--json]
            redlamp library sidecars <root> --index <path> [--move beside|mac] [--dry-run] [--json]
@@ -76,7 +77,9 @@ enum LibraryCommand {
       search   runs <query>, in the library's query language (rating>=3 label:red,blue -flag:reject
                camera:"X-T5" date:2024-06..2024-08 sunset), over the index at <path> and prints the photos'
                paths in order (when they were taken, unless --sort says otherwise), then how many photos it
-               found and how long it took. --limit prints only the first <n>; --json prints JSON.
+               found and how long it took. --collection searches a collection, a set or a smart collection
+               instead of the whole library, and <query> may then be left out. --limit prints only the first
+               <n>; --json prints JSON.
       stats    prints what the index at <path> holds: its photos and folders, its roots and where each keeps
                its sidecars, its volumes and which are offline, how many photos are edited, rated, picked,
                rejected and labelled, and the sizes of the index and of the store beside it. --json prints JSON.
