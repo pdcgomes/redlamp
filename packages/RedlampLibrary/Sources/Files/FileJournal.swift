@@ -9,7 +9,8 @@ import Synchronization
 /// and the steps' files say where the batch had got to.
 public struct FileJournal: Sendable {
     public let folder: URL
-    /// Batches kept for Undo; older ones that are over are removed.
+    /// Batches kept for Undo; older ones that are over are removed, but for those with photos still in
+    /// the Trash, kept for Put Back.
     public static let kept = 50
     static let version = 1
 
@@ -253,14 +254,23 @@ public struct FileJournal: Sendable {
         return found
     }
 
-    /// Removes all but the `kept` newest batches that are over, and what interrupted writes left.
-    func prune() {
+    /// Of `entries`, oldest first, the batches Undo reaches: the `kept` newest that are over.
+    static func undoable(_ entries: [Entry]) -> ArraySlice<Entry> {
+        entries.filter { !$0.state.isUnfinished }.suffix(kept)
+    }
+
+    /// Removes the batches that are over but for the `kept` newest, and what interrupted writes left.
+    /// An older batch that moved photos to the Trash stays while any of them is still there, or its
+    /// Trash can't be reached (`TrashSurvey`), for Put Back; one this build can't read stays too.
+    func prune(fileSystem: any LibraryFileSystem) {
         guard let entries = try? entries(), let names = try? fileNames() else { return }
-        let over = entries.filter { !$0.state.isUnfinished }
-        for entry in over.dropLast(Self.kept) {
-            guard let name = names[entry.id] else { continue }
-            unlink(folder.appending(path: name + ".batch").path)
-            unlink(folder.appending(path: name + ".log").path)
+        let older = Array(entries.filter { !$0.state.isUnfinished }.dropLast(Self.kept))
+        if !older.isEmpty, let survey = try? TrashSurvey(journal: self, entries: older, fileSystem: fileSystem) {
+            for entry in older where !survey.holds(entry.id) {
+                guard let name = names[entry.id] else { continue }
+                unlink(folder.appending(path: name + ".batch").path)
+                unlink(folder.appending(path: name + ".log").path)
+            }
         }
         for name in (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
             where name.hasPrefix(".") && name.contains(".batch.") {

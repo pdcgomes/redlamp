@@ -131,7 +131,7 @@ public final class FileOperations: Sendable {
         batch.steps = checked.steps
         let written = batch
         try await LibraryIndex.offCaller {
-            journal.prune()
+            journal.prune(fileSystem: fileSystem)
             try journal.write(written)
         }
         let runner = try FileRunner(
@@ -340,9 +340,11 @@ public final class FileOperations: Sendable {
         try await entries().filter(\.state.isUnfinished)
     }
 
-    /// The batch Undo would undo: the newest that's finished or stopped, its own Undo not run.
+    /// The batch Undo would undo: the newest that's finished or stopped, its own Undo not run, of the
+    /// `FileJournal.kept` newest; older ones kept for Put Back aren't.
     public func lastUndoable() async throws -> FileJournal.Entry? {
-        try await entries().last { $0.kind != .undo && ($0.state == .finished || $0.state == .stopped) }
+        try await FileJournal.undoable(entries())
+            .last { $0.kind != .undo && ($0.state == .finished || $0.state == .stopped) }
     }
 
     // MARK: - Helpers

@@ -193,4 +193,49 @@ struct FilePutBackTests {
         #expect(try await sandbox.rows() == ids)
         #expect(try await sandbox.index.read { try $0.folder(path: path) }?.id == folder?.id)
     }
+
+    @Test func `a journal goes once none of its photos is still in the Trash`() async throws {
+        let simulated = SimulatedFileSystem(profile: .ssd)
+        let sandbox = try await FileSandbox.make(FileTrashedTests.photos, fileSystem: simulated)
+        defer { sandbox.remove() }
+        let trash = sandbox.folder.url.appending(path: "Trash", directoryHint: .isDirectory)
+        let otherTrash = sandbox.folder.url.appending(path: "Other Trash", directoryHint: .isDirectory)
+        let ids = try await sandbox.rows()
+        let operations = sandbox.operations()
+        simulated.useTrash(trash)
+        let emptied = try await operations.planTrash(photos: [#require(ids["Shoot/IMG_0002.ARW"])])
+        #expect(try await operations.run(emptied).isFinished)
+        let putBack = try await operations.planTrash(photos: [#require(ids["Shoot/Day 2/IMG_0003.ARW"])])
+        #expect(try await operations.run(putBack).isFinished)
+        simulated.useTrash(otherTrash)
+        let away = try await operations.planTrash(photos: [#require(ids["Shoot/IMG_0001.JPG"])])
+        #expect(try await operations.run(away).isFinished)
+        simulated.useTrash(trash)
+        for number in 0 ..< FileJournal.kept {
+            try await operations.run(operations.planNewFolder(sandbox.url("Shoot/New \(number)")))
+        }
+        var kept = try await Set(operations.entries().map(\.id))
+        #expect(kept.isSuperset(of: [emptied.id, putBack.id, away.id]), "past Undo's reach, kept for Put Back")
+        #expect(try await FileJournal.undoable(operations.entries()).allSatisfy { $0.kind == .newFolder })
+        #expect(try await operations.lastUndoable()?.kind == .newFolder)
+        #expect(try await operations.trashed().count == 3)
+
+        // Its photo emptied from the Trash, its sidecar and .xmp left there; the other Trash's volume away.
+        try FileManager.default.removeItem(at: trash.appending(path: "IMG_0002.ARW"))
+        let elsewhere = sandbox.folder.url.appending(path: "Elsewhere", directoryHint: .isDirectory)
+        try FileManager.default.moveItem(at: otherTrash, to: elsewhere)
+        #expect(try await operations.trashed().map(\.id.batch) == [putBack.id])
+        try await operations.run(operations.planNewFolder(sandbox.url("Shoot/New A")))
+        kept = try await Set(operations.entries().map(\.id))
+        #expect(!kept.contains(emptied.id) && kept.contains(putBack.id) && kept.contains(away.id))
+
+        try await operations.run(operations.planPutBack(batch: putBack.id))
+        try await operations.run(operations.planNewFolder(sandbox.url("Shoot/New B")))
+        kept = try await Set(operations.entries().map(\.id))
+        #expect(!kept.contains(putBack.id), "its photo put back, nothing of it is in the Trash")
+        #expect(kept.contains(away.id), "its Trash's volume away, its photo may still be there")
+
+        try FileManager.default.moveItem(at: elsewhere, to: otherTrash)
+        #expect(try await operations.trashed().map(\.id.batch) == [away.id], "listed again once its volume is back")
+    }
 }
