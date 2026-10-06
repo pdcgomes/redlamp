@@ -113,7 +113,9 @@ def make_test_copy(built: Path, destination: Path) -> Path:
     with info_path.open("wb") as handle:
         plistlib.dump(info, handle)
     identity = signing_identity(built)
-    run(["codesign", "--force", "--sign", identity, "--preserve-metadata=entitlements,requirements,flags",
+    # Not the build's requirements: they name app.redlamp.mac, so the copy wouldn't meet its own and macOS
+    # would ask again on every run for the file access it was given.
+    run(["codesign", "--force", "--sign", identity, "--preserve-metadata=entitlements,flags",
          "--timestamp=none", str(app)], capture_output=True)
     run(["codesign", "--verify", "--deep", "--strict", str(app)], capture_output=True)
     return app
@@ -625,8 +627,9 @@ def blackbox(release: Path, run_dir: Path, update: bool) -> int:
     with info_path.open("wb") as handle:
         plistlib.dump(info, handle)
     identity = signing_identity(release)
+    # Its own requirements, as in make_test_copy.
     subprocess.run(["codesign", "--force", "--options", "runtime", "--sign", identity,
-                    "--preserve-metadata=entitlements,requirements,flags", "--timestamp=none", str(app)],
+                    "--preserve-metadata=entitlements,flags", "--timestamp=none", str(app)],
                    capture_output=True)
     defaults("delete", bundle)
     defaults("write", bundle, "welcome.shown", "-int", "99")
