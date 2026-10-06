@@ -352,16 +352,20 @@ public extension EditorModel {
         photoMetadata
     }
 
-    /// A read-only photo's metadata doesn't change: it wouldn't be saved.
+    /// A read-only photo's metadata doesn't change: it wouldn't be saved. While another photo
+    /// opens, the change is that photo's.
     private func updateMetadata(advance: Bool, _ change: (inout PhotoMetadata) -> Void) {
-        guard let url = selection else { return }
-        if !isReadOnly {
-            var metadata = photoMetadata
+        guard let url = opening ?? selection else { return }
+        if opening != nil || !isReadOnly {
+            let current = opening == nil ? photoMetadata : library.item(for: url)?.metadata ?? PhotoMetadata()
+            var metadata = current
             change(&metadata)
-            let setting = Self.setting(from: photoMetadata, to: metadata)
-            photoMetadata = metadata
+            let setting = Self.setting(from: current, to: metadata)
+            if opening == nil {
+                photoMetadata = metadata
+            }
             library.update(url) { setting(&$0.metadata) }
-            if info != nil {
+            if info != nil, opening == nil {
                 saveNow()
             } else {
                 // The metadata shown may be the filmstrip's, not yet the file's: only what

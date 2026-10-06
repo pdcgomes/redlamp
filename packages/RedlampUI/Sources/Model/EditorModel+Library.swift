@@ -96,7 +96,7 @@ public extension EditorModel {
     }
 
     private func step(by offset: Int) {
-        guard let selection, let index = library.index(of: selection) else { return }
+        guard let from = opening ?? selection, let index = library.index(of: from) else { return }
         let next = index + offset
         guard items.indices.contains(next) else { return }
         select(items[next].url)

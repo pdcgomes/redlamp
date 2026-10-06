@@ -67,8 +67,16 @@ public final class EditorModel {
     }
 
     /// A decoded photo the editor changes to once its sidecar is read. Until then the open photo
-    /// stays, and edits are its own; the engine already has the new one, so nothing renders.
-    @ObservationIgnored private var opening: URL?
+    /// stays but takes no edits, and nothing renders: the engine already has the new one. Ratings,
+    /// flags, labels and moving on go to the new one.
+    @ObservationIgnored private(set) var opening: URL?
+    @ObservationIgnored private var openingKeepsSelection = false
+    @ObservationIgnored private var openingFallback: Task<Void, Never>?
+    /// How long the open photo stays while the next one's sidecar is read; after it, the next
+    /// one's thumbnail shows until the read is done.
+    @ObservationIgnored var openingPatience = Duration.milliseconds(100)
+    /// Waited for before each sidecar read (tests hold reads here).
+    @ObservationIgnored var beforeReadingSidecar: @Sendable (URL) async -> Void = { _ in }
 
     public private(set) var isLoading = false
     public internal(set) var errorMessage: String?
@@ -105,6 +113,7 @@ public final class EditorModel {
             return storedRecipe
         }
         set {
+            guard opening == nil else { return }
             let old = storedRecipe
             withMutation(keyPath: \.recipe) { storedRecipe = newValue }
             for parameter in newValue.parametersChanged(from: old) {
@@ -556,14 +565,29 @@ public final class EditorModel {
 
     /// Opens `url`. Unless `keepingSelection`, it becomes the only photo selected.
     public func select(_ url: URL, keepingSelection: Bool = false) {
-        guard url != opening ?? selection else {
+        if url == selection, opening != nil, engine.openIfReady(url) != nil {
+            // Back before the next photo was read: the open one stays as it was.
+            stopOpening()
+            metadataChangesWhileOpening = []
             if !keepingSelection {
                 selectedPhotos = [url]
             }
+            requestRender()
             return
         }
-        openTask?.cancel()
-        opening = nil
+        guard url != opening ?? selection else {
+            if !keepingSelection {
+                if opening == nil {
+                    selectedPhotos = [url]
+                } else {
+                    openingKeepsSelection = false
+                }
+            }
+            return
+        }
+        saveNow()
+        stopOpening()
+        metadataChangesWhileOpening = []
         openStarted = .now
         // Made again before the photo is read, over the base its saves were tracking, so what
         // another writer saved meanwhile is merged, and the read shows the result.
@@ -572,7 +596,8 @@ public final class EditorModel {
         // The sidecar is read off the main thread even for a photo already decoded: it is
         // coordinated, and iCloud Drive may have to download it first. It waits for the
         // photo's saves still on their way, so a photo opened again reads what was left.
-        let readSidecar = { [sidecars, saves, scheduler = library.scheduler] in
+        let readSidecar = { [sidecars, saves, scheduler = library.scheduler, beforeReadingSidecar] in
+            await beforeReadingSidecar(url)
             await saves.wait(for: url)
             return try? await scheduler.run(.onScreen) {
                 let (sidecar, base) = sidecars.loadWithBase(for: url)
@@ -583,26 +608,29 @@ public final class EditorModel {
             }
         }
         if let opened = engine.openIfReady(url) {
-            // The editor changes over in one turn once the sidecar is read, never showing no photo.
+            // The editor changes over in one turn once the sidecar is read, never showing no
+            // photo, unless the read takes longer than `openingPatience`.
             opening = url
+            openingKeepsSelection = keepingSelection
             openTask = Task {
                 let read = await readSidecar()
-                guard opening == url, !Task.isCancelled else { return }
-                leave(for: url, keepingSelection: keepingSelection, ready: true)
-                selectionThumbnailRequest.map(thumbnailLoader.cancel)
-                selectionThumbnail = nil
-                opening = nil
+                guard !Task.isCancelled else { return }
+                if opening == url {
+                    changeOver(to: url, ready: true)
+                } else {
+                    guard selection == url, info == nil else { return }
+                }
                 didOpen(opened, read ?? OpenedSidecar())
+            }
+            openingFallback = Task { [openingPatience] in
+                try? await Task.sleep(for: openingPatience)
+                guard opening == url, !Task.isCancelled else { return }
+                changeOver(to: url, ready: false)
             }
             return
         }
         leave(for: url, keepingSelection: keepingSelection, ready: false)
-        showFrame(nil)
-        pendingCanvas = nil
-        latestFrame = nil
-        histogram = .empty
-        isLoading = true
-        showThumbnail(of: url)
+        showPlaceholder(for: url)
         openTask = Task { [engine] in
             let loading = Task { await readSidecar() }
             do {
@@ -622,13 +650,41 @@ public final class EditorModel {
         }
     }
 
-    /// Saves the open photo and moves the selection to `url`, putting away what belonged to the
-    /// photo left. Unless `url` is `ready` to show now, no photo is open until it is.
+    private func stopOpening() {
+        openTask?.cancel()
+        openingFallback?.cancel()
+        opening = nil
+    }
+
+    /// Ends the wait for `url`'s sidecar: the editor changes to it, or (not `ready`) to its
+    /// thumbnail until the read is done.
+    private func changeOver(to url: URL, ready: Bool) {
+        openingFallback?.cancel()
+        opening = nil
+        leave(for: url, keepingSelection: openingKeepsSelection, ready: ready)
+        if ready {
+            selectionThumbnailRequest.map(thumbnailLoader.cancel)
+            selectionThumbnail = nil
+        } else {
+            showPlaceholder(for: url)
+        }
+    }
+
+    private func showPlaceholder(for url: URL) {
+        showFrame(nil)
+        pendingCanvas = nil
+        latestFrame = nil
+        histogram = .empty
+        isLoading = true
+        showThumbnail(of: url)
+    }
+
+    /// Moves the selection to `url`, putting away what belonged to the photo left (saved by
+    /// then). Unless `url` is `ready` to show now, no photo is open until it is.
     private func leave(for url: URL, keepingSelection: Bool, ready: Bool) {
         if !keepingSelection {
             selectedPhotos = [url]
         }
-        saveNow()
         if let selection {
             saves.enqueue(.forget, for: selection)
             if selection != url {
@@ -648,7 +704,6 @@ public final class EditorModel {
         readOnlyReason = nil
         hasUnmergedEdits = false
         photoMetadata = library.item(for: url)?.metadata ?? PhotoMetadata()
-        metadataChangesWhileOpening = []
         eyedropperActive = false
         previewingRecipe = nil
         previewingEdit = nil
@@ -749,7 +804,8 @@ public final class EditorModel {
     /// Shows the open photo as another writer left it, or as merged with them. Not during a drag
     /// or with a change still to save: that save merges again, and this comes back then.
     func adopt(_ base: SidecarBase, for url: URL) {
-        guard url == selection, let info, !isReadOnly, editStart == nil, !hasUnsavedChange else { return }
+        guard url == selection, let info, opening == nil, !isReadOnly, editStart == nil, !hasUnsavedChange
+        else { return }
         let theirs = base.sidecar ?? Sidecar(recipe: EditRecipe())
         let previous = recipe
         recipe = Self.asShot(theirs.recipe, info)
@@ -1160,7 +1216,7 @@ public final class EditorModel {
     // MARK: - History (see EditorModel+History)
 
     public func goToHistory(_ index: Int) {
-        guard history.indices.contains(index) else { return }
+        guard history.indices.contains(index), opening == nil else { return }
         activity.record(.edit, "Went to history step “\(history[index].name)”")
         let back = index < historyIndex
         historyIndex = index
@@ -1344,7 +1400,7 @@ public final class EditorModel {
         saveTask = nil
         saveDeadline = nil
         unsavedSince = nil
-        guard let url = selection, info != nil, !isReadOnly else { return }
+        guard let url = selection, info != nil, opening == nil, !isReadOnly else { return }
         var sidecar = sidecarToSave
         sidecar.clearsHistory = clearsSavedHistory
         clearsSavedHistory = false

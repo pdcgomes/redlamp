@@ -52,6 +52,7 @@ extension EditorModel {
         from previous: EditRecipe? = nil,
         value: ((EditRecipe) -> String)? = nil,
     ) {
+        guard opening == nil else { return }
         let after = value?(recipe)
         let before = previous.flatMap { value?($0) }
         let prior = history.indices.contains(historyIndex) ? history[historyIndex].recipe : previous
