@@ -830,6 +830,35 @@ struct MaskRenderTests {
         print("subject found in \(found) of \(min(4, EngineSmokeTests.fixtures.count)) sample photos")
     }
 
+    /// Background after Subject on the same photo is Subject's matte inverted, bit for bit, taken
+    /// from it rather than solved again (PIPE-09), so it takes a fraction of the solve's seconds.
+    @Test(.enabled(if: EngineSmokeTests.canRender))
+    func `background after subject takes the subject's matte`() async throws {
+        let engine = try RedlampEngine()
+        let clock = ContinuousClock()
+        for url in EngineSmokeTests.fixtures.prefix(4) {
+            _ = try await engine.open(url)
+            let subject: AIMask
+            do {
+                subject = try #require(try await engine.computeMasks(MaskRequest(kind: .subject)).first)
+            } catch let error as MaskComputationError {
+                #expect(error == .nothingFound(.subject))
+                continue
+            }
+            let start = clock.now
+            let background = try #require(try await engine.computeMasks(MaskRequest(kind: .background)).first)
+            let taken = start.duration(to: clock.now)
+            let a = try #require(subject.bitmap.png.flatMap(GrayMask.decode))
+            let b = try #require(background.bitmap.png.flatMap(GrayMask.decode))
+            let complement = a.width == b.width && a.height == b.height && a.inverted.pixels == b.pixels
+            #expect(complement, "\(url.lastPathComponent): Background isn't Subject inverted")
+            #expect(background.provider == subject.provider && background.analysisHash == subject.analysisHash)
+            withKnownIssue("PIPE-09: Background solves the Subject matte again") {
+                #expect(taken < .milliseconds(300), "\(url.lastPathComponent): Background took \(taken)")
+            }
+        }
+    }
+
     /// With Segment Anything on this Mac: a click on the globe in the Nikon sample selects it
     /// (about a tenth of the frame), and the hover preview is quick once the photo is encoded.
     @Test(.enabled(if: EngineSmokeTests.canRender && Self.samIsInstalled))
