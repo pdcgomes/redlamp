@@ -23,7 +23,8 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
     private let sections: [FilterSection: FilterToggle]
     private let none = FilterToggle(title: "None", identifier: "library.filter.none", tip: "No Filter")
     private let count = filterLabel("")
-    /// Takes out the term the filter's removal brings back the most photos for, while it finds none.
+    /// While the filter finds none of the source's photos: takes out the term whose removal brings back
+    /// the most.
     private let removal = FilterToggle(title: "", identifier: "library.filter.removal", tip: "")
     private let sortLabel = filterLabel("Sort:")
     private let sort = FilterPopUp(identifier: "library.filter.sort", tip: "Sort")
