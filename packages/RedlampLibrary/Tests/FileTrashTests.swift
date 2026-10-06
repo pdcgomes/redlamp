@@ -206,6 +206,8 @@ struct FileTrashTests {
         row.stack = PhotoStack(id: UUID(), top: true)
         row.otherFields = [.creator, .location]
         row.xmpSignature = 42
+        row.cameraCaptured = FileSandbox.date(10)
+        row.cameraOffset = -18000
         return row
     }
 

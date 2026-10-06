@@ -332,6 +332,10 @@ public struct IndexedPhoto: Sendable, Hashable, Codable {
     /// `PhotoRecord.code(for:)` of the fields that are other apps'.
     public var otherFields: Int?
     public var xmpSignature: Int64?
+    /// Nil in batches journaled before the index kept the camera's own capture time, as when the
+    /// sidecar doesn't change it.
+    public var cameraCaptured: Double?
+    public var cameraOffset: Int?
 
     public init(_ photo: PhotoRecord) {
         id = photo.id
@@ -377,6 +381,8 @@ public struct IndexedPhoto: Sendable, Hashable, Codable {
         stackTop = photo.stack?.top ?? false
         otherFields = PhotoRecord.code(for: photo.otherFields)
         xmpSignature = photo.xmpSignature
+        cameraCaptured = photo.cameraCaptured?.timeIntervalSince1970
+        cameraOffset = photo.cameraOffset
     }
 
     /// The row in `folder`.
@@ -397,6 +403,7 @@ public struct IndexedPhoto: Sendable, Hashable, Codable {
             ),
             stack: PhotoRecord.storedStack(id: stack?.uuidString, top: stackTop ?? false),
             otherFields: PhotoRecord.fields(code: otherFields ?? 0), xmpSignature: xmpSignature,
+            cameraCaptured: cameraCaptured.map(Date.init(timeIntervalSince1970:)), cameraOffset: cameraOffset,
         )
     }
 }

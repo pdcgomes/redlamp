@@ -142,8 +142,10 @@ public struct PhotoRecord: Sendable, Hashable {
     public var fileID: UInt64?
     /// The first 16 bytes of SHA-256 over the file's size and its first 64 KiB.
     public var contentKey: Data?
+    /// When it was taken, by the camera's clock with the shift its sidecar gives it (LIB-22).
     public var captured: Date?
-    /// The capture time's offset from UTC, in seconds.
+    /// The capture time's offset from UTC, in seconds: the zone its sidecar gives the camera, or the one
+    /// its file records.
     public var capturedOffset: Int?
     public var camera: Int64?
     public var lens: Int64?
@@ -187,6 +189,11 @@ public struct PhotoRecord: Sendable, Hashable {
     public var otherFields: Set<XMPField>
     /// Changes whenever either of the photo's `.xmp` files does (`LibraryIndexer.xmpSignature`).
     public var xmpSignature: Int64?
+    /// The time the camera recorded and the zone its file records, while its sidecar shifts the time or
+    /// gives the camera another zone; nil, with `cameraOffset`, when `captured` and `capturedOffset` are
+    /// the camera's own.
+    public var cameraCaptured: Date?
+    public var cameraOffset: Int?
 
     public init(
         id: Int64 = 0, folder: Int64, name: String, kind: Kind? = nil, size: Int64 = 0,
@@ -199,7 +206,7 @@ public struct PhotoRecord: Sendable, Hashable {
         title: String? = nil, caption: String? = nil, state: State = [], indexed: Int = 0,
         customLabel: String? = nil, creator: String? = nil, copyright: String? = nil,
         location: PhotoLocation? = nil, stack: PhotoStack? = nil, otherFields: Set<XMPField> = [],
-        xmpSignature: Int64? = nil,
+        xmpSignature: Int64? = nil, cameraCaptured: Date? = nil, cameraOffset: Int? = nil,
     ) {
         self.id = id
         self.folder = folder
@@ -240,6 +247,8 @@ public struct PhotoRecord: Sendable, Hashable {
         self.stack = stack
         self.otherFields = otherFields
         self.xmpSignature = xmpSignature
+        self.cameraCaptured = cameraCaptured
+        self.cameraOffset = cameraOffset
     }
 
     /// The `other_fields` column: a bit for each field, in `XMPField`'s order.

@@ -278,7 +278,7 @@ enum IndexColumns {
         "lens", "iso", "aperture", "shutter", "focal", "width", "height", "orientation", "latitude", "longitude",
         "rating", "flag", "label", "marked", "edited", "sidecar_modified", "xmp_modified", "title", "caption", "state",
         "indexed", "custom_label", "creator", "copyright", "sublocation", "city", "province", "country", "country_code",
-        "stack", "stack_top", "other_fields", "xmp_signature",
+        "stack", "stack_top", "other_fields", "xmp_signature", "camera_captured", "camera_offset",
     ]
 
     static func photo(prefix: String) -> String {
@@ -344,6 +344,7 @@ extension PhotoRecord {
             ),
             stack: Self.storedStack(id: row.string(at: 40), top: row.bool(at: 41)),
             otherFields: Self.fields(code: row.int(at: 42)), xmpSignature: row.optionalInt64(at: 43),
+            cameraCaptured: date(44), cameraOffset: row.optionalInt(at: 45),
         )
     }
 

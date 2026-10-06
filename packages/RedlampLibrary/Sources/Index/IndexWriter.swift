@@ -427,6 +427,8 @@ extension LibraryIndex.Writer {
         try statement.bind(photo.stack?.top ?? false, at: 41)
         try statement.bind(PhotoRecord.code(for: photo.otherFields), at: 42)
         try statement.bind(photo.xmpSignature, at: 43)
+        try statement.bind(photo.cameraCaptured?.timeIntervalSince1970, at: 44)
+        try statement.bind(photo.cameraOffset, at: 45)
     }
 
     /// The ID an `INSERT ... RETURNING id` returns. SQLite makes the change at the first step.

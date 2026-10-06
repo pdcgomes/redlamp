@@ -298,10 +298,12 @@ extension LibraryIndexer.Run {
         record.otherFields = organising.others
     }
 
-    /// What only the `.redlamp` holds, in the photo's row: the mark and its stack.
+    /// What only the `.redlamp` holds, in the photo's row: the mark, its stack, and the shift and zone
+    /// of its capture time, from the camera's time the row has.
     static func place(_ metadata: PhotoMetadata, in record: inout PhotoRecord) {
         record.marked = metadata.mark
         record.stack = metadata.stack.flatMap { $0.id == nil && !$0.top ? nil : PhotoStack(id: $0.id, top: $0.top) }
+        record.showCapture(shift: metadata.captureShift, offset: metadata.captureOffset)
     }
 
     /// The fields a photo's row shows, but its keywords.

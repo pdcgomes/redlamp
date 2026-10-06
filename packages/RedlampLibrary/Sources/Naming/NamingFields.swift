@@ -12,7 +12,7 @@ public struct NamingFields: Sendable, Hashable {
     /// hasn't been renamed.
     public var originalName: String?
     /// When the photo was taken by the camera's clock: the time it showed, read as if it were UTC, to
-    /// the microsecond, as `CaptureMetadata.captured` holds it.
+    /// the microsecond, as `CaptureMetadata.captured` holds it, with the shift its sidecar gives it.
     public var captured: Date?
     /// The camera's offset from UTC, in seconds east, when it recorded one or the caller assumes one.
     public var capturedOffset: Int?
@@ -112,9 +112,14 @@ public struct NamingFields: Sendable, Hashable {
         )
     }
 
-    /// Takes the rating, flag and label a photo's `.redlamp` sidecar holds, and IPTC Core's fields where
-    /// it holds them, an empty one as none.
+    /// Takes the rating, flag and label a photo's `.redlamp` sidecar holds, IPTC Core's fields where it
+    /// holds them, an empty one as none, and the shift and zone it gives the capture time the file
+    /// records.
     public mutating func apply(_ sidecar: PhotoMetadata) {
+        if let captured {
+            self.captured = captured.addingTimeInterval(TimeInterval(sidecar.captureShift))
+            capturedOffset = sidecar.captureOffset ?? capturedOffset
+        }
         rating = sidecar.rating
         flag = sidecar.flag
         label = sidecar.label.map(Self.labelName) ?? sidecar.customLabel

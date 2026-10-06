@@ -116,9 +116,9 @@ struct IndexSchemaTests {
     @Test func `an index from a newer Redlamp is refused`() async throws {
         defer { try? FileManager.default.removeItem(at: directory) }
         try await LibraryIndex.open(at: url).close()
-        try SQLiteDatabase(path: url.path).setUserVersion(5)
+        try SQLiteDatabase(path: url.path).setUserVersion(Self.version + 1)
 
-        await #expect(throws: LibraryIndexError.newerVersion(found: 5, supported: Self.version)) {
+        await #expect(throws: LibraryIndexError.newerVersion(found: Self.version + 1, supported: Self.version)) {
             try await LibraryIndex.open(at: url)
         }
     }

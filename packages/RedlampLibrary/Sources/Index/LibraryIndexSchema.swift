@@ -5,7 +5,9 @@ extension LibraryIndex {
     typealias Migration = @Sendable (SQLiteDatabase) throws -> Void
 
     /// The schema's steps in order: the first makes version 1 from an empty database.
-    static let migrations: [Migration] = [createVersion1, migrateToVersion2, migrateToVersion3, migrateToVersion4]
+    static let migrations: [Migration] = [
+        createVersion1, migrateToVersion2, migrateToVersion3, migrateToVersion4, migrateToVersion5,
+    ]
 
     static func createVersion1(_ database: SQLiteDatabase) throws {
         try database.execute(schemaVersion1)
@@ -21,6 +23,10 @@ extension LibraryIndex {
 
     static func migrateToVersion4(_ database: SQLiteDatabase) throws {
         try database.execute(schemaVersion4)
+    }
+
+    static func migrateToVersion5(_ database: SQLiteDatabase) throws {
+        try database.execute(schemaVersion5)
     }
 
     /// Brings `database` up to the last version `migrations` knows, one step per transaction.
@@ -153,5 +159,13 @@ extension LibraryIndex {
       stack_top = coalesce(json_extract(settings.value, '$.top'), 0)
       FROM settings WHERE settings.key = 'library.stack.' || photos.id;
     DELETE FROM settings WHERE key >= 'library.stack.' AND key < 'library.stack/';
+    """
+
+    /// The camera's own capture time and zone, kept while a photo's sidecar shifts the time or gives the
+    /// camera another zone (LIB-22): `captured` and `captured_offset` show the sidecar's, so the camera's
+    /// can always be worked out again, and a sidecar changed since is shown without reading the photo.
+    static let schemaVersion5 = """
+    ALTER TABLE photos ADD COLUMN camera_captured REAL;
+    ALTER TABLE photos ADD COLUMN camera_offset INTEGER;
     """
 }
