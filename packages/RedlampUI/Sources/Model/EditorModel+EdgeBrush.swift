@@ -39,10 +39,6 @@ public extension EditorModel {
         edgeBrushTarget = EdgeBrushTarget(mask: maskID, component: componentID)
     }
 
-    func stopRefiningEdges() {
-        edgeBrushTarget = nil
-    }
-
     func beginEdgeStroke(at point: ImagePoint) {
         guard let target = edgeBrushTarget else { return }
         edgeBrushStrokes.append(EdgeBrushStroke(

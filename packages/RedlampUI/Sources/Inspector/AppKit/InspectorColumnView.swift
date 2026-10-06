@@ -73,21 +73,6 @@ final class InspectorColumnView: NSView {
     }
 }
 
-/// Hosts the AppKit inspector column in the editor window, filling its space.
-struct InspectorColumnHost: NSViewRepresentable {
-    let model: EditorModel
-
-    func makeNSView(context _: Context) -> InspectorColumnView {
-        InspectorColumnView(model: model)
-    }
-
-    func updateNSView(_: InspectorColumnView, context _: Context) {}
-
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView _: InspectorColumnView, context _: Context) -> CGSize? {
-        proposal.replacingUnspecifiedDimensions()
-    }
-}
-
 @_spi(Harness) public enum InspectorColumnViews {
     @MainActor public static func make(model: EditorModel) -> NSView {
         InspectorColumnView(model: model)

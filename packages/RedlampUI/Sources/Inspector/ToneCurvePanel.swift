@@ -9,7 +9,6 @@ import SwiftUI
         case point = "Point"
     }
 
-    @Environment(EditorModel.self) private var model
     @State private var mode: Mode = .parametric
 
     public var body: some View {

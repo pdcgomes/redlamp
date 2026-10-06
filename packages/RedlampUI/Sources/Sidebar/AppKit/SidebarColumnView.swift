@@ -72,18 +72,3 @@ extension PanelSectionView {
         }
     }
 }
-
-/// Hosts the AppKit sidebar column in the editor window, filling its space.
-struct SidebarColumnHost: NSViewRepresentable {
-    let model: EditorModel
-
-    func makeNSView(context _: Context) -> SidebarColumnView {
-        SidebarColumnView(model: model)
-    }
-
-    func updateNSView(_: SidebarColumnView, context _: Context) {}
-
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView _: SidebarColumnView, context _: Context) -> CGSize? {
-        proposal.replacingUnspecifiedDimensions()
-    }
-}

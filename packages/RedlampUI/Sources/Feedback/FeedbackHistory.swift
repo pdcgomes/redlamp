@@ -95,10 +95,6 @@ public struct SentReport: Codable, Sendable, Hashable, Identifiable {
         guard let status else { return false }
         return status.comments > seenComments || status.state != seenState
     }
-
-    public var topic: FeedbackTopic? {
-        featureID.flatMap(FeedbackArea.topic)
-    }
 }
 
 /// A report that couldn't reach redlamp.app, kept until it can be sent.

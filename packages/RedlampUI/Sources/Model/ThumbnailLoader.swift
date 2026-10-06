@@ -248,21 +248,6 @@ public final class ThumbnailLoader {
         pumpWarming()
     }
 
-    /// Adds these folders' photos to the warming queue, listed in the background.
-    public func warm(folders: [URL]) {
-        let generation = warmGeneration
-        for folder in folders {
-            scheduler.submit(.background, key: "warm:list:\(folder.path)") {
-                let items = (try? FolderScanner.list(folder)).map(LibraryItem.items) ?? []
-                Task { @MainActor [weak self] in
-                    guard let self, warmGeneration == generation else { return }
-                    warmQueue += items.filter(\.isLocal)
-                    pumpWarming()
-                }
-            }
-        }
-    }
-
     public func stopWarming() {
         warm([])
     }

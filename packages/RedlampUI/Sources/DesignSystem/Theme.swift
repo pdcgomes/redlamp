@@ -30,36 +30,12 @@ enum Theme {
         Palette.divider.color
     }
 
-    static var track: Color {
-        Palette.track.color
-    }
-
     static var well: Color {
         Palette.well.color
     }
 
     static var selection: Color {
         Palette.selection.color
-    }
-
-    static var panelBackground: Color {
-        Palette.panelBackground.color
-    }
-
-    static var trackFill: Color {
-        Palette.trackFill.color
-    }
-
-    static var thumb: Color {
-        Palette.thumb.color
-    }
-
-    static var thumbStroke: Color {
-        Palette.thumbStroke.color
-    }
-
-    static var thumbShadow: Color {
-        Palette.thumbShadow.color
     }
 
     static var editedDot: Color {

@@ -100,13 +100,6 @@ public final class CameraBenchModel {
         }
     }
 
-    public var isWorking: Bool {
-        switch phase {
-        case .reading, .testing: true
-        case .start, .results: false
-        }
-    }
-
     // MARK: - Testing
 
     /// Tests raws in `urls` (files, or folders searched for raws): up to `perMode` per camera mode.

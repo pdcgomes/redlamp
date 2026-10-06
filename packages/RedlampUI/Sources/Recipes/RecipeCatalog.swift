@@ -124,11 +124,6 @@ public final class RecipeCatalog {
         perform { try library.save(recipe) }
     }
 
-    @discardableResult
-    public func install(contentsOf url: URL, tableSpace: ImportedTableSpace = .sRGB) -> Recipe? {
-        perform { try library.install(contentsOf: url, tableSpace: tableSpace).recipe }
-    }
-
     /// Installs files, and the Lightroom presets in folders, reading the library once; what
     /// came in, with each preset's report, and what didn't, with the reasons.
     @discardableResult
@@ -150,10 +145,6 @@ public final class RecipeCatalog {
 
     public func export(_ recipe: Recipe, to url: URL) {
         perform { try library.export(recipe, to: url) }
-    }
-
-    public func clearError() {
-        lastError = nil
     }
 
     @discardableResult

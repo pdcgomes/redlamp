@@ -51,11 +51,6 @@ public enum CropOverlay: Hashable, Sendable, CaseIterable {
         case .aspectRatios: "Aspect Ratios"
         }
     }
-
-    public var next: CropOverlay {
-        let all = Self.allCases
-        return all[(all.firstIndex(of: self)! + 1) % all.count]
-    }
 }
 
 public extension EditorModel {
