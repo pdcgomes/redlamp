@@ -24,7 +24,8 @@ struct HealthChecker: Sendable {
     func findings(_ check: HealthCheck, store: ColumnStore?) async throws -> HealthFindings {
         switch check {
         case .damaged: try await damaged(store: store)
-        case .duplicates, .pairs, .extensions: HealthFindings(check: check)
+        case .extensions: try await extensions()
+        case .duplicates, .pairs: HealthFindings(check: check)
         }
     }
 
