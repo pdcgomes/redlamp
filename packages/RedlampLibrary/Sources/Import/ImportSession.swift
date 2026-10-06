@@ -499,8 +499,11 @@ public final class ImportSession: Sendable {
                 try await whole.append(io.read(url, range: whole.count ..< size, priority: .high))
             }
             let file = whole
+            let isRaw = primary.isRaw
             payload = try await scheduler.run(.onScreen) {
-                StoreThumbnailMaker.imageIO(url, file, edge).flatMap { StoreImageEncoder().encode($0, for: .grid) }
+                let image = isRaw
+                    ? EmbeddedPreviews.thumbnail(ofRaw: file, edge: edge) : StoreThumbnailMaker.imageIO(url, file, edge)
+                return image.flatMap { StoreImageEncoder().encode($0, for: .grid) }
             }
         }
         guard let payload else { return false }

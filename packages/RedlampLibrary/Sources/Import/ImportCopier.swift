@@ -13,7 +13,13 @@ public struct ImportCopyError: Error, Sendable, Hashable, CustomStringConvertibl
 
     /// What went wrong, as a sentence the report shows.
     static func message(_ error: any Error) -> String {
-        (error as? ImportCopyError)?.message ?? FileRunner.message(error)
+        switch error {
+        case let error as ImportCopyError: error.message
+        case LibraryFileSystemError.unreachable: "its card or volume isn't there"
+        case LibraryFileSystemError.timedOut: "its card or volume stopped answering"
+        case _ where VolumeIO.isNotFound(error): "it isn't there any more"
+        default: FileRunner.message(error)
+        }
     }
 }
 

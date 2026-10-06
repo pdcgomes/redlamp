@@ -280,6 +280,18 @@ enum EmbeddedPreviews {
         return oriented(image, orientation)
     }
 
+    /// A raw's image at most `edge` on its long side, upright, from the preview ImageIO finds in it: a
+    /// raw it would have to develop takes it seconds.
+    static func thumbnail(ofRaw data: Data, edge: Int) -> CGImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
+            kCGImageSourceThumbnailMaxPixelSize: edge,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+    }
+
     /// `image` turned upright from EXIF's `orientation`.
     static func oriented(_ image: CGImage, _ orientation: Int) -> CGImage? {
         let (width, height) = (CGFloat(image.width), CGFloat(image.height))
