@@ -32,6 +32,7 @@ Later notes, each behind tracker rows or another findings document:
 | [CAM-12-nikon-high-efficiency.md](CAM-12-nikon-high-efficiency.md) | Nikon's High Efficiency NEFs: the format, how Redlamp handles them, and the routes to opening them (5 October 2026) |
 | [MSK-25-photoset.md](MSK-25-photoset.md) | The mask evaluation photoset: 115 CC0 photos for Sky, Subject, People and face parts, what they cover and what they lack (6 October 2026) |
 | [MSK-25-mask-review.md](MSK-25-mask-review.md) | Where Sky, Subject and People masks stand, from what Redlamp draws: the halo of an edit at an edge, the render-time edge, hair's glow, and the fixes ranked (6 October 2026) |
+| [UX-17-masks-panel-audit.md](UX-17-masks-panel-audit.md) | The Masks panel, task by task, against Lightroom Classic's published workflow: where Redlamp's way is longer or hidden, and the redesign's findings ranked (7 October 2026) |
 
 Some notes mention scratch scripts under `/tmp/`. Those were one-off measurement harnesses and are not
 kept; the reproducible prototypes are in [research/prototypes](../../../research/prototypes/README.md).
