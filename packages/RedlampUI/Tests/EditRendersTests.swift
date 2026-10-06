@@ -17,6 +17,7 @@ final class RenderEngine: EditingEngine, @unchecked Sendable {
     let base = StubEngine()
     let gate = Gate()
     let opened = Mutex<[URL]>([])
+    let openedAt = Mutex<[ContinuousClock.Instant]>([])
     let rendered = Mutex<[StillRequest]>([])
     /// Renders that found themselves cancelled once through the gate.
     let cancelled = Mutex(0)
@@ -29,6 +30,7 @@ final class RenderEngine: EditingEngine, @unchecked Sendable {
 
     func open(_ url: URL) async throws -> ImageInfo {
         opened.withLock { $0.append(url) }
+        openedAt.withLock { $0.append(.now) }
         return ImageInfo(url: url, pixelSize: Self.size, isRaw: true, sensorDescription: "stub")
     }
 
@@ -473,6 +475,27 @@ struct EditRendersTests {
         #expect(renders.known[fixture.photo(names[5])] == nil, "what's left the source is forgotten")
     }
 
+    @Test func `an open dialog or an export running holds the renders until it's done`() async throws {
+        let fixture = EditRenderFixture()
+        defer { fixture.cleanUp() }
+        try fixture.photos(["IMG_1.JPG", "IMG_2.JPG"])
+        try fixture.edit("IMG_2.JPG", exposure: 1)
+        try await fixture.open(running: false)
+        let model = try #require(fixture.model)
+        try await fixture.eventually { fixture.renders.known.count == 1 }
+        model.isModalDialogOpen = true
+        fixture.renders.isRunning = true
+        try await Task.sleep(for: .milliseconds(600))
+        #expect(fixture.engine.opened.withLock { $0.isEmpty }, "nothing opens while a dialog is open")
+        model.isModalDialogOpen = false
+        model.exportStatus = "Exporting IMG_1.JPG…"
+        try await Task.sleep(for: .milliseconds(600))
+        #expect(fixture.engine.opened.withLock { $0.isEmpty }, "nor while an export runs")
+        model.exportStatus = nil
+        try await fixture.eventually { fixture.renders.statistics.rendered == 1 }
+        #expect(fixture.renders.statistics.rendered == 1 && fixture.renders.statistics.waits == 1)
+    }
+
     @Test func `Develop's renders never wait behind the queue's, which waits for Develop to be quiet between its steps`(
     ) async throws {
         let fixture = EditRenderFixture()
@@ -488,14 +511,17 @@ struct EditRendersTests {
 
         // Develop renders a frame every 50 ms for 1.5 s: the queue opens nothing meanwhile.
         fixture.engine.gate.hold()
+        var asked = ContinuousClock.now
         for _ in 0 ..< 30 {
             model.requestRender()
+            asked = .now
             try await Task.sleep(for: .milliseconds(50))
         }
         #expect(fixture.engine.opened.withLock { $0.isEmpty }, "nothing opened while Develop renders")
         try await fixture.eventually { fixture.engine.gate.arrived == 1 }
         #expect(fixture.engine.opened.withLock { $0.count } == 1, "a photo opened once Develop was quiet")
-        #expect(renders.statistics.waits >= 1 && renders.statistics.waited >= .milliseconds(900))
+        let opened = try #require(fixture.engine.openedAt.withLock { $0.first })
+        #expect(opened - asked >= EditRenders.developQuiet, "a second after Develop's last frame")
 
         // Develop's frames go straight to its own engine while the queue's render runs.
         let requested = renders.statistics.overlaps
@@ -508,11 +534,14 @@ struct EditRendersTests {
         try await fixture.eventually { renders.statistics.rendered == 1 }
         for _ in 0 ..< 16 {
             model.requestRender()
+            asked = .now
             try await Task.sleep(for: .milliseconds(50))
         }
         #expect(fixture.engine.opened.withLock { $0.count } == 1, "the next photo waits while Develop renders")
         try await fixture.eventually { renders.statistics.rendered == 2 }
         #expect(renders.statistics.rendered == 2)
+        let next = try #require(fixture.engine.openedAt.withLock { $0.last })
+        #expect(next - asked >= EditRenders.developQuiet)
         #expect(!fixture.engine.opened.withLock { $0 }.contains(fixture.photo("IMG_1.JPG")))
     }
 }

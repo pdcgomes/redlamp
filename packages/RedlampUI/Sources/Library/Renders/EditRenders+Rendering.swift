@@ -117,10 +117,10 @@ extension EditRenders {
 
     // MARK: - Keeping out of Develop's way
 
-    /// Waits until a render's next step may run: Develop isn't shown, or it has asked for no frame for
-    /// `developQuiet` and isn't opening a photo; no thumbnail on screen waits; the Mac isn't hot or saving
-    /// power; and renders aren't paused. False when the render is to stop instead: it was cancelled, or
-    /// its photo opened in Develop.
+    /// Waits until a render's next step may run: no export runs and no dialog is open; Develop isn't
+    /// shown, or it has asked for no frame for `developQuiet` and isn't opening a photo; no thumbnail on
+    /// screen waits; the Mac isn't hot or saving power; and renders aren't paused. False when the render
+    /// is to stop instead: it was cancelled, or its photo opened in Develop.
     private func mayGoOn(rendering url: URL) async -> Bool {
         let started = ContinuousClock.now
         var waited = false
@@ -142,7 +142,9 @@ extension EditRenders {
     }
 
     private var isDevelopQuiet: Bool {
-        guard let editor, editor.module == .develop else { return true }
+        guard let editor else { return true }
+        guard !editor.isModalDialogOpen, editor.exportStatus == nil else { return false }
+        guard editor.module == .develop else { return true }
         return !editor.isLoading && developActive.map { .now - $0 >= Self.developQuiet } ?? true
     }
 

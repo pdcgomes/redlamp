@@ -18,9 +18,10 @@ import RedlampLibrary
 ///   shows its embedded preview until the new edit is rendered, never the old edit's, whose renders leave
 ///   the store unless another copy of the photo shows them.
 /// - Develop first: a render starts, and goes from one step to the next (opening the photo, rendering
-///   it), only while Develop isn't shown or has asked for no frame for `developQuiet` and isn't opening a
-///   photo, while no thumbnail on screen waits, and while the Mac isn't hot or saving power. The photo
-///   open in Develop waits until it's left. `statistics` counts the waits, and Develop's frames asked for
+///   it), only while no export runs and no dialog is open, Develop isn't shown or has asked for no frame
+///   for `developQuiet` and isn't opening a photo, no thumbnail on screen waits, and the Mac isn't hot or
+///   saving power. The photo open in Develop waits until it's left. `statistics` counts the waits, and Develop's frames
+/// asked for
 ///   while a step ran.
 /// - Bounded: one render at a time, cancelled when its photo leaves the source or its edit changes. The
 ///   engine is let go once the photos it opened would hold more than `engineBudget` on the GPU, and after
