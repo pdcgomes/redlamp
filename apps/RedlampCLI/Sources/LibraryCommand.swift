@@ -34,6 +34,20 @@ enum LibraryCommand {
            redlamp library keywords delete <keyword>… --index <path> [--dry-run]
            redlamp library keywords undo --index <path>
            redlamp library stacks --index <path> [<query>] [--kind pairs|bursts|focus|manual] [--json]
+           redlamp library stacks stack|unstack|top <query> --index <path> [--top <name>] [--dry-run] [--json]
+           redlamp library metadata --index <path> [<query>] [--limit <n>] [--json]
+           redlamp library metadata set --index <path> <query> [--rating <n>] [--flag <flag>] [--label <name>]
+                                    [--mark | --unmark] [--<field> <text>]… [--codes <file>] [--dry-run] [--json]
+           redlamp library metadata preset <name> --index <path> <query> [--codes <file>] [--dry-run] [--json]
+           redlamp library metadata presets [save <name> [--<field> <text>]… [--append|--prefix <field>]…
+                                    | remove <name>] --index <path> [--json]
+           redlamp library metadata undo --index <path> [--dry-run] [--json]
+           redlamp library collections --index <path> [--tree] [--json]
+           redlamp library collections new <path> [--set] | smart <path> <query> --index <path> [--dry-run]
+           redlamp library collections add|remove <collection> --index <path> <query> [--dry-run] [--json]
+           redlamp library collections rename <collection> <path> | delete <collection>… --index <path>
+                                       [--dry-run] [--json]
+           redlamp library collections target <collection>|none --index <path>
            redlamp library import <source> --to <folder> [--backup <folder>] [--folders <template>]
                                   [--names <template>] [--raw-only] [--keywords <k>,…] [--index <path>]
                                   [--dry-run] [--json]
@@ -98,7 +112,20 @@ enum LibraryCommand {
                focus-stack suggestions from capture settings, which the app confirms from thumbnails, and the
                manual stacks the index keeps. Prints each with its photos' paths, the top photo first, then how
                many of each it found and how long that took. <query> keeps the stacks holding a photo it
-               finds; --kind keeps one kind; --json prints JSON.
+               finds; --kind keeps one kind; --json prints JSON. stack, unstack and top make a manual stack
+               of the photos <query> finds (--top names the one shown), take them out of theirs, or show
+               the first for its stack, each photo's .redlamp keeping its place.
+      metadata prints each photo <query> finds with its rating, flag, label, mark, IPTC Core's fields,
+               collections and stack as the index shows them; set gives them ratings, flags, labels (a
+               colour's name in any label set, or a custom label), marks and IPTC Core's fields (--title,
+               --caption, --creator, --copyright, --sublocation, --city, --state, --country,
+               --country-code; an empty text clears one), \\code\\ expanded from a tab-separated --codes
+               file; preset applies a preset's fields, each replacing, appending or prefixing; presets lists,
+               saves and removes them. Each change rewrites the photos' .redlamp sidecars as one journaled
+               batch, which undo takes back, with collections' and stacks' changes.
+      collections prints the collection list, makes collections, sets and smart collections, renames,
+               moves and deletes them with their photos' sidecars rewritten, puts the photos <query> finds
+               in a collection or takes them out, and sets the target collection; --dry-run shows a plan.
       import   copies the photos of a card or folder to <folder> in folders and names from the templates,
                and to --backup as real copies, each read back and checked by size and SHA-256 before the
                card counts as safe to erase; photos the library at --index already has are skipped;
@@ -144,7 +171,11 @@ enum LibraryCommand {
         case "undo": try await undo(Array(arguments.dropFirst()))
         case "journal": try await journal(Array(arguments.dropFirst()))
         case "keywords": try await keywords(Array(arguments.dropFirst()))
+        case "stacks" where stackVerbs.contains(arguments.dropFirst().first ?? ""):
+            try await stackChange(Array(arguments.dropFirst()))
         case "stacks": try await stacks(Array(arguments.dropFirst()))
+        case "metadata": try await metadata(Array(arguments.dropFirst()))
+        case "collections": try await collections(Array(arguments.dropFirst()))
         case "import": try await importing(Array(arguments.dropFirst()))
         default: throw CLIError(description: "unknown library command \(command)\n\n\(usage)")
         }
