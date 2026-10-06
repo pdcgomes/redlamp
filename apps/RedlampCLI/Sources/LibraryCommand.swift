@@ -17,6 +17,7 @@ enum LibraryCommand {
            redlamp library names <template> --index <path> [<query>] [--json] [--limit <n>]
                                  [--text [<name>=]<text>]
            redlamp library duplicates --index <path> [--confirm] [--json]
+           redlamp library duplicates --index <path> --trash [--confirm] [--dry-run] [--json]
            redlamp library xmp --index <path> [<query>] [--write] [--dry-run] [--json]
            redlamp library rename <template> --index <path> [<query>] [--text [<name>=]<text>]… [--limit <n>]
                                   [--dry-run] [--json]
@@ -72,7 +73,9 @@ enum LibraryCommand {
                would free. --confirm reads every candidate whole and compares full SHA-256 hashes, which the
                index keeps, so an unchanged file is never read again; without it only hashes recorded earlier
                count. Lists the candidates that turned out different and those offline or not read; --json
-               prints JSON. It removes nothing.
+               prints JSON. --trash prints every file that moves, then moves all but each group's proposed
+               copy to the Trash as one batch undo reverses, only with --confirm, after checking every copy
+               again; --dry-run moves nothing. Without --trash it removes nothing.
       xmp      compares each photo <query> finds (every photo without one) with what other apps wrote in its
                .xmp, embedded XMP and IPTC, and merges their changes into its .redlamp sidecar. --write also
                writes standard .xmp beside the photos, keeping other apps' fields, as the library does once
