@@ -396,7 +396,7 @@ extension LibraryGrouping {
     /// the field last, and the codes a stack's photos were taken from or given to.
     struct Sorted {
         let codes: [Int64]
-        let layout: Layout
+        let layout: GroupLayout
         let crossed: Set<Int64>
     }
 
@@ -430,14 +430,14 @@ extension LibraryGrouping {
         for (rank, code) in ordered.enumerated() {
             ranks[Int(numbering.number(code))] = Int32(rank)
         }
-        let layout = Layout(list, rows: rows, groups: ordered.count, store: store) { ranks[Int(numbers[$0])] }
+        let layout = GroupLayout(list, rows: rows, groups: ordered.count, store: store) { ranks[Int(numbers[$0])] }
         return Sorted(codes: ordered, layout: layout, crossed: crossed)
     }
 }
 
 /// A list's photos laid out group after group, keeping the list's order in each, with each group's
 /// picks and the capture times it spans.
-struct Layout {
+struct GroupLayout {
     private(set) var photos: ContiguousArray<Int64>
     private(set) var starts: ContiguousArray<Int32>
     private(set) var groupOfPlace: ContiguousArray<Int32>
