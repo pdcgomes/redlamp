@@ -13,6 +13,9 @@ extension LibraryIndexer {
             /// Its subfolders are listed too, not only those the index doesn't have.
             let recursive: Bool
             let modified: Date
+            /// It leads to a folder asked for that the walk hadn't reached when it was added: the photo
+            /// queue holds the other folders' photos until it's listed.
+            var ahead = false
         }
 
         private struct State {
@@ -112,7 +115,9 @@ extension LibraryIndexer {
     }
 
     /// The photos a run has yet to read, folder by folder: the folders asked for first, then the
-    /// newest, each folder's photos in Finder's order.
+    /// newest, each folder's photos in Finder's order. While a listing on the way to a folder asked
+    /// for is waiting or under way, only the folders asked for are read: the others' photos would
+    /// otherwise be read, and their folders finished, before the folders asked for were even listed.
     final class PhotoQueue: Sendable {
         private struct Folder {
             let path: String
@@ -125,8 +130,12 @@ extension LibraryIndexer {
             var folders: [String: Folder] = [:]
             var order = Heap<(path: String, modified: Date)> { $0.modified > $1.modified }
             var adding = true
+            /// Listings on the way to folders asked for, not yet done.
+            var holds = 0
             var waiters: [CheckedContinuation<PhotoJob?, Never>] = []
         }
+
+        private typealias Handed = [(CheckedContinuation<PhotoJob?, Never>, PhotoJob)]
 
         private let prioritised: @Sendable () -> Set<String>
         private let state = Mutex(State())
@@ -137,7 +146,7 @@ extension LibraryIndexer {
 
         func add(_ jobs: [PhotoJob], folder path: String, modified: Date) {
             guard !jobs.isEmpty else { return }
-            let handed = state.withLock { state -> [(CheckedContinuation<PhotoJob?, Never>, PhotoJob)] in
+            let handed = state.withLock { state -> Handed in
                 guard state.adding else { return [] }
                 if state.folders[path] == nil {
                     state.folders[path] = Folder(path: path, modified: modified, jobs: jobs)
@@ -145,12 +154,35 @@ extension LibraryIndexer {
                 } else {
                     state.folders[path]?.jobs += jobs
                 }
-                var handed: [(CheckedContinuation<PhotoJob?, Never>, PhotoJob)] = []
-                while !state.waiters.isEmpty, let job = take(&state) {
-                    handed.append((state.waiters.removeFirst(), job))
-                }
-                return handed
+                return hand(&state)
             }
+            resume(handed)
+        }
+
+        /// Holds the photos of the folders not asked for back until `release` is called as often: a
+        /// listing on the way to a folder asked for is waiting or under way.
+        func hold() {
+            state.withLock { $0.holds += 1 }
+        }
+
+        func release() {
+            let handed = state.withLock { state -> Handed in
+                state.holds = max(state.holds - 1, 0)
+                return state.holds == 0 ? hand(&state) : []
+            }
+            resume(handed)
+        }
+
+        /// What's waiting, handed to the readers waiting for it.
+        private func hand(_ state: inout State) -> Handed {
+            var handed: Handed = []
+            while !state.waiters.isEmpty, let job = take(&state) {
+                handed.append((state.waiters.removeFirst(), job))
+            }
+            return handed
+        }
+
+        private func resume(_ handed: Handed) {
             for (waiter, job) in handed {
                 waiter.resume(returning: job)
             }
@@ -177,11 +209,14 @@ extension LibraryIndexer {
 
         /// No more jobs will be added: the workers stop once the queue is empty.
         func finish() {
-            let waiters = state.withLock { state -> [CheckedContinuation<PhotoJob?, Never>] in
+            let (handed, waiters) = state.withLock { state -> (Handed, [CheckedContinuation<PhotoJob?, Never>]) in
                 state.adding = false
+                state.holds = 0
+                let handed = hand(&state)
                 defer { state.waiters = [] }
-                return state.waiters
+                return (handed, state.waiters)
             }
+            resume(handed)
             for waiter in waiters {
                 waiter.resume(returning: nil)
             }
@@ -211,6 +246,7 @@ extension LibraryIndexer {
                     }
                 }
             }
+            guard state.holds == 0 else { return nil }
             while let top = state.order.first {
                 if let job = takeJob(from: top.path, &state) {
                     return job

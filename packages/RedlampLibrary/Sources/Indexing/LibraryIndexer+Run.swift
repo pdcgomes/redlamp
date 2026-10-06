@@ -186,10 +186,17 @@ extension LibraryIndexer {
                     try await indexer.index.write { try $0.setOffline(false, onVolume: record.volume, uuid: entry.key) }
                     events.yield(.volumeOnline(entry.key))
                 }
-                let seeds = seeds(for: request, roots: record.roots)
+                var seeds = seeds(for: request, roots: record.roots)
+                let wanted = indexer.prioritised
                 state.withLock { state in
                     state.volumes.append(volume)
                     state.queued.formUnion(seeds.map(\.path))
+                    for index in seeds.indices {
+                        seeds[index].ahead = Self.leads(seeds[index].path, to: wanted, queued: state.queued)
+                    }
+                }
+                for seed in seeds where seed.ahead {
+                    volume.photos.hold()
                 }
                 volume.walk.add(seeds)
                 volumes.append(volume)
@@ -197,11 +204,13 @@ extension LibraryIndexer {
             return volumes
         }
 
-        /// The folders a run starts from: its roots, or the folders named, each found from the nearest
-        /// folder above it that the index has.
+        /// The folders a run starts from: its roots and the folders on screen the index has below
+        /// them, which are listed first without waiting for the walk to reach them; or the folders
+        /// named, each found from the nearest folder above it that the index has.
         private func seeds(for request: Request, roots: [RootRecord]) -> [WalkQueue.Item] {
             switch request {
             case .roots:
+                let shown = indexer.prioritised
                 return roots.map { root in
                     WalkQueue.Item(
                         path: root.path,
@@ -210,6 +219,15 @@ extension LibraryIndexer {
                         recursive: true,
                         modified: .distantFuture,
                     )
+                } + state.withLock { state in
+                    shown.sorted().compactMap { path -> WalkQueue.Item? in
+                        guard let folder = state.folders[path], let parent = folder.parent.flatMap({ state.paths[$0] }),
+                              roots.contains(where: { $0.id == folder.root })
+                        else { return nil }
+                        return WalkQueue.Item(
+                            path: path, parent: parent, root: folder.root, recursive: true, modified: .distantFuture,
+                        )
+                    }
                 }
             case let .folders(changes):
                 var chosen: [String: (root: RootRecord, recursive: Bool)] = [:]
@@ -247,6 +265,13 @@ extension LibraryIndexer {
         /// The root of `roots` that `path` is in.
         static func root(of path: String, among roots: [String]) -> String? {
             roots.filter { path == $0 || path.hasPrefix($0 == "/" ? $0 : $0 + "/") }.max { $0.count < $1.count }
+        }
+
+        /// Whether `path` is a folder of `wanted` or leads to one the walk hasn't been handed.
+        static func leads(_ path: String, to wanted: Set<String>, queued: Set<String>) -> Bool {
+            wanted.contains { folder in
+                folder == path || (!queued.contains(folder) && root(of: folder, among: [path]) != nil)
+            }
         }
 
         /// The folder a change at `path` is to: `path`, or the folder holding the sidecar package it's
@@ -292,6 +317,9 @@ extension LibraryIndexer {
         private func walk(_ volume: VolumeWork) async {
             while let item = await volume.walk.next() {
                 await list(item, on: volume)
+                if item.ahead {
+                    volume.photos.release()
+                }
                 volume.walk.done()
             }
             volume.photos.finish()
@@ -328,6 +356,7 @@ extension LibraryIndexer {
         private func listed(_ item: WalkQueue.Item, _ entries: [FileEntry], on volume: VolumeWork) async {
             let signature = FolderSignature(entries)
             let subfolders = entries.filter(FolderWalk.isFolder)
+            let wanted = indexer.prioritised
             let (existing, found) = state.withLock { state -> (FolderRecord?, [WalkQueue.Item]) in
                 state.summary.foldersListed += 1
                 let existing = state.folders[item.path]
@@ -342,12 +371,18 @@ extension LibraryIndexer {
                         path: path, parent: item.path, root: item.root, recursive: true, modified: subfolder.modified,
                     ))
                 }
+                for index in found.indices {
+                    found[index].ahead = Self.leads(found[index].path, to: wanted, queued: state.queued)
+                }
                 if let existing {
                     for child in state.children[existing.id] ?? [] where !paths.contains(child) {
                         state.vanishedFolders[child] = volume.id
                     }
                 }
                 return (existing, found)
+            }
+            for subfolder in found where subfolder.ahead {
+                volume.photos.hold()
             }
             if let existing, existing.signature == signature.rawValue, existing.indexedSignature == signature.rawValue {
                 state.withLock { _ = $0.unchanged.insert(item.path) }

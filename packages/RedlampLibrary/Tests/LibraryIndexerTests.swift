@@ -363,6 +363,45 @@ struct LibraryIndexerTests {
         #expect(indexed.count == sandbox.fixture.folders.count)
     }
 
+    @Test func `the folders asked for are indexed first, however long the way to them takes to list`() async throws {
+        let sandbox = try await IndexerSandbox.make(.init(photos: 900, seed: 28, shapes: []))
+        defer { sandbox.remove() }
+        let wanted = try #require(sandbox.fixture.folders.dropFirst(2).first)
+        // Long enough for the other folders to be listed and read while the way to it is listed.
+        let way: Set = [sandbox.path((wanted.path as NSString).deletingLastPathComponent), sandbox.path(wanted.path)]
+        let indexer = LibraryIndexer(
+            index: sandbox.index, fileSystem: SlowListingFileSystem(slow: way, delay: .milliseconds(300)),
+            configuration: .testing(batchSize: 50),
+        )
+        indexer.prioritise([sandbox.root.appending(path: wanted.path)])
+        let run = await IndexerRun.collect(indexer.index([sandbox.root]))
+        let indexed = run.events.compactMap { event -> String? in
+            guard case let .folderIndexed(folder) = event, folder.inserted > 0 else { return nil }
+            return folder.path
+        }
+        #expect(indexed.first == sandbox.path(wanted.path), "\(indexed)")
+        #expect(indexed.count == sandbox.fixture.folders.count)
+    }
+
+    @Test func `a folder on screen the index has is compared before the walk reaches it`() async throws {
+        let sandbox = try await IndexerSandbox.make(.init(photos: 300, seed: 30, shapes: [.deepTree]))
+        defer { sandbox.remove() }
+        _ = await IndexerRun
+            .collect(LibraryIndexer(index: sandbox.index, configuration: .testing()).index([sandbox.root]))
+        let deepest = try #require(sandbox.fixture.folders.max { $0.path.count < $1.path.count })
+        let shown = sandbox.path(deepest.path)
+        let above = (shown as NSString).deletingLastPathComponent
+        let order = ListingOrderFileSystem()
+        let indexer = LibraryIndexer(index: sandbox.index, fileSystem: order, configuration: .testing())
+        indexer.prioritise([sandbox.root.appending(path: deepest.path)])
+        let run = await IndexerRun.collect(indexer.index([sandbox.root]))
+        #expect(run.summary?.foldersListed == sandbox.manifest.totals.folders + 1 && run.failures.isEmpty)
+        let listed = order.listed
+        #expect(listed.filter { $0 == shown }.count == 1)
+        let place = try #require(listed.firstIndex(of: shown))
+        #expect(place < (listed.firstIndex(of: above) ?? 0), "\(listed.prefix(12))")
+    }
+
     @Test func `a volume that disconnects partway marks its photos offline without hanging, and resumes when back`(
     ) async throws {
         let sandbox = try await IndexerSandbox.make(.init(photos: 300, seed: 29, shapes: []))

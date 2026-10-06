@@ -245,6 +245,69 @@ final class FirstReadHoldingFileSystem: LibraryFileSystem {
     }
 }
 
+/// Another file system that keeps the folders it lists, in the order it's asked to.
+final class ListingOrderFileSystem: LibraryFileSystem {
+    let base: any LibraryFileSystem
+    private let order = Mutex<[String]>([])
+
+    init(_ base: any LibraryFileSystem = LocalFileSystem()) {
+        self.base = base
+    }
+
+    var listed: [String] {
+        order.withLock { $0 }
+    }
+
+    func contentsOfDirectory(at url: URL) throws -> [FileEntry] {
+        order.withLock { $0.append(LibraryIndexer.path(url)) }
+        return try base.contentsOfDirectory(at: url)
+    }
+
+    func attributes(of url: URL) throws -> FileEntry {
+        try base.attributes(of: url)
+    }
+
+    func read(_ url: URL, range: Range<Int>) throws -> Data {
+        try base.read(url, range: range)
+    }
+
+    func volume(of url: URL) throws -> VolumeInfo {
+        try base.volume(of: url)
+    }
+}
+
+/// Another file system whose listings of some folders take `delay` longer.
+final class SlowListingFileSystem: LibraryFileSystem {
+    let base: any LibraryFileSystem
+    private let slow: Set<String>
+    private let delay: Duration
+
+    init(_ base: any LibraryFileSystem = LocalFileSystem(), slow: Set<String>, delay: Duration) {
+        self.base = base
+        self.slow = slow
+        self.delay = delay
+    }
+
+    func contentsOfDirectory(at url: URL) throws -> [FileEntry] {
+        if slow.contains(LibraryIndexer.path(url)) {
+            Thread.sleep(forTimeInterval: delay.seconds)
+        }
+        return try base.contentsOfDirectory(at: url)
+    }
+
+    func attributes(of url: URL) throws -> FileEntry {
+        try base.attributes(of: url)
+    }
+
+    func read(_ url: URL, range: Range<Int>) throws -> Data {
+        try base.read(url, range: range)
+    }
+
+    func volume(of url: URL) throws -> VolumeInfo {
+        try base.volume(of: url)
+    }
+}
+
 /// A fixture in a folder of its own, and an index for it in another.
 struct IndexerSandbox {
     let folder: TemporaryFolder
