@@ -348,6 +348,11 @@ public final class LibraryKeywords: Sendable {
                     if let keywords, found.1[result.photo].map({ Set($0) != Set(keywords) }) ?? false {
                         corrections[result.photo] = keywords
                     }
+                case let .kept(keywords):
+                    written += 1
+                    if let keywords, found.1[result.photo].map({ Set($0) != Set(keywords) }) ?? false {
+                        corrections[result.photo] = keywords
+                    }
                 case let .skipped(path, keywords):
                     skipped.append(path)
                     if found.1[result.photo].map({ Set($0) != Set(keywords) }) ?? false {
@@ -374,9 +379,11 @@ public final class LibraryKeywords: Sendable {
 
     struct SidecarResult: Sendable {
         enum Outcome: Sendable {
-            /// Written, or already as the batch leaves it: the keywords it holds now (nil when it
-            /// holds none) and the sidecar's date.
+            /// Written: the keywords it holds now (nil when it holds none) and the sidecar's date.
             case written([KeywordPath]?, Date?)
+            /// Already as the batch leaves it, so nothing was written and the date the index has for it
+            /// stands: the keywords it holds.
+            case kept([KeywordPath]?)
             /// This build can't write it: the photo's path, and the keywords the index gives it then.
             case skipped(String, [KeywordPath])
             /// The photo isn't in the library any more.
@@ -439,7 +446,7 @@ public final class LibraryKeywords: Sendable {
         switch result.outcome {
         case .kept:
             try log.written(place, before: before, after: after)
-            return .written(after.paths, nil)
+            return .kept(after.paths)
         case .saved:
             try log.written(place, before: before, after: after)
             let date = try? LocalFileSystem().attributes(of: store.locator.readURL(for: result.image)).modified

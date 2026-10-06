@@ -171,6 +171,27 @@ struct KeywordChangeTests {
         await #expect(throws: KeywordError.nothingToUndo) { try await keywords.undo() }
     }
 
+    @Test func `a sidecar a batch leaves as it is keeps the date the index has for it, so indexing again reads nothing`(
+    ) async throws {
+        let sandbox = try await sandbox()
+        defer { sandbox.remove() }
+        let keywords = sandbox.keywords()
+        try await keywords.apply(.add([kw("Birds")], to: sandbox.ids(["A.JPG", "B.JPG"])))
+        // Taken off A by hand since, and indexed: the Undo leaves A's sidecar as it is.
+        try sandbox.sidecar("A.JPG", PhotoMetadata(keywords: ["Places/Portugal/Lisbon"]))
+        try await sandbox.indexAll()
+        let undone = try await keywords.undo()
+        #expect(undone.written == 2 && sandbox.sidecarKeywords("B.JPG") == ["Places/Portugal/Porto", "tram"])
+        #expect(try await sandbox.indexed("A.JPG") == ["Places/Portugal/Lisbon"])
+
+        let files = CountingFileSystem()
+        let indexer = LibraryIndexer(index: sandbox.index, fileSystem: files, configuration: .testing())
+        let run = await IndexerRun.collect(indexer.index([sandbox.root]))
+        #expect(run.failures.isEmpty)
+        #expect(run.summary?.photosUpdated == 0 && run.summary?.headsRead == 0, "\(String(describing: run.summary))")
+        #expect(files.counts.reads.isEmpty, "\(files.counts.reads)")
+    }
+
     @Test func `open lists hear of each change`() async throws {
         let sandbox = try await sandbox()
         defer { sandbox.remove() }
