@@ -191,7 +191,13 @@ struct LibraryServiceTests {
     @Test func `a folder the library hasn't indexed is listed, then shown from the library without a jump`(
     ) async throws {
         defer { cleanUp() }
-        try photos(["IMG_1.JPG", "IMG_2.JPG", "IMG_3.JPG", "Sub/IMG_4.JPG"])
+        let names = ["IMG_1.JPG", "IMG_2.JPG", "IMG_3.JPG", "Sub/IMG_4.JPG"]
+        try photos(names)
+        // Dates ahead of the clock keep the photos inside the settle window however long indexing takes.
+        let ahead = Date().addingTimeInterval(3600)
+        for name in names {
+            try FileManager.default.setAttributes([.modificationDate: ahead], ofItemAtPath: photo(name).path)
+        }
         try SidecarStore().save(
             Sidecar(recipe: Self.edited, metadata: PhotoMetadata(rating: 2)),
             for: photo("IMG_2.JPG"),
@@ -210,10 +216,27 @@ struct LibraryServiceTests {
         let resets = diffs.filter(\.reset).count
 
         try await eventually(seconds: 30) { library.isShownFromLibrary }
-        try await Task.sleep(for: .milliseconds(300))
-        #expect(library.isShownFromLibrary)
         #expect(diffs.filter(\.reset).count == resets, "no reset: the filmstrip keeps its place")
         #expect(library.items == listed, "the same photos, with the same dates and badges")
+
+        // The library rereads the photos, unchanged, then one badge changes after them.
+        for name in names where name != "IMG_2.JPG" {
+            library.sidecarSaved(photo(name))
+        }
+        try SidecarStore().save(
+            Sidecar(recipe: Self.edited, metadata: PhotoMetadata(rating: 4)),
+            for: photo("IMG_2.JPG"),
+        )
+        library.sidecarSaved(photo("IMG_2.JPG"))
+        try await eventually { library.item(for: photo("IMG_2.JPG"))?.metadata.rating == 4 }
+        #expect(
+            library.items.map(\.isSettling) == listed.map(\.isSettling),
+            "an unchanged photo keeps the settle state the filmstrip showed",
+        )
+        #expect(
+            library.items.filter { $0.name != "IMG_2.JPG" } == listed.filter { $0.name != "IMG_2.JPG" },
+            "only the photo whose badge changed changes",
+        )
     }
 
     @Test func `with the library off, or its index unable to open, Folders lists folders as before`() async throws {

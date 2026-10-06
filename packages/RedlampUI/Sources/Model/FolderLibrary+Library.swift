@@ -223,14 +223,16 @@ extension FolderLibrary {
         var inserting: [LibraryItem] = []
         let now = Date()
         for var item in change.inserted + change.updated {
-            item.isSettling = now.timeIntervalSince(item.modified) < Self.settleDelay
             guard let index = positions[item.url] else {
+                item.isSettling = now.timeIntervalSince(item.modified) < Self.settleDelay
                 inserting.append(item)
                 continue
             }
             removed.remove(index)
             var kept = Self.keeping(items[index], as: item)
-            kept.isSettling = item.isSettling
+            if kept.size != items[index].size || kept.modified != items[index].modified {
+                kept.isSettling = now.timeIntervalSince(kept.modified) < Self.settleDelay
+            }
             if kept != items[index] {
                 items[index] = kept
                 updated.append(item.url)
