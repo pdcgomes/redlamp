@@ -88,6 +88,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     let masks: MaskResources
     private let baseLooks: BaseLookRegistry
     let stacks: FocusStackCache
+    /// The stages that undo what they recorded for a command buffer that came to nothing.
+    private let rollbacks: [any CommandBufferRollback]
     /// Output tile edge for stills, in pixels.
     let stillTile: Int
 
@@ -134,6 +136,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         retouch = RetouchStage(device: device, kernels: kernels, queue: queue)
         masks = try MaskResources(device: device, kernels: kernels)
         baseLooks = try BaseLookRegistry(device: device)
+        rollbacks = [detailStage, retouch]
 
         let stacks = FocusStackCache(device: device, kernels: kernels, root: stackCache, decoder: decoder)
         self.stacks = stacks
@@ -314,7 +317,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         if let error = commands.error {
             comparison = nil
             lastOverview = nil
-            detailStage.forget(commands)
+            rollBack(commands, after: .failed)
             throw EngineError.renderFailed(error.localizedDescription)
         }
         comparison = compared
@@ -755,25 +758,33 @@ extension RedlampEngine {
         }
     }
 
-    /// Encodes into `commands`; if that fails they are dropped uncommitted, and the detail stage
-    /// lets go of its textures.
+    /// Encodes into `commands`; if that fails they are dropped uncommitted, and the stages roll
+    /// back what they recorded for them.
     func encoding<T>(_ commands: any MTLCommandBuffer, _ encode: () throws -> T) throws -> T {
         do {
             return try encode()
         } catch {
-            detailStage.abandon(commands)
+            rollBack(commands, after: .abandoned)
             throw error
         }
     }
 
-    /// Commits `commands` and waits; if they fail on the GPU, the detail stage forgets what it
-    /// cached from them.
+    /// Commits `commands` and waits; if they fail on the GPU, the stages roll back what they
+    /// recorded for them.
     func finish(_ commands: any MTLCommandBuffer) throws {
         commands.commit()
         commands.waitUntilCompleted()
         if let error = commands.error {
-            detailStage.forget(commands)
+            rollBack(commands, after: .failed)
             throw EngineError.renderFailed(error.localizedDescription)
+        }
+    }
+
+    /// What every render error path runs for a command buffer that came to nothing: each stage
+    /// undoes what it recorded for it.
+    func rollBack(_ commands: any MTLCommandBuffer, after failure: CommandBufferFailure) {
+        for stage in rollbacks {
+            stage.rollBack(commands, after: failure)
         }
     }
 }

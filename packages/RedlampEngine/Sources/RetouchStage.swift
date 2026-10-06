@@ -286,6 +286,18 @@ final class RetouchStage: @unchecked Sendable {
         return entry.interim
     }
 
+    /// Forgets the retouches whose spots were going into `commands`, which never ran or failed on
+    /// the GPU, so the next render puts them in again.
+    func forget(_ commands: any MTLCommandBuffer) {
+        let forgotten = lock.withLock {
+            let forgotten = entries.filter { $0.baking === commands }
+            entries.removeAll { $0.baking === commands }
+            return forgotten
+        }
+        // Released once unlocked: a buffer dropped uncommitted runs its completed handlers then.
+        withExtendedLifetime(forgotten) {}
+    }
+
     /// Makes sure the entry's spots are in its pyramid before it's read back: waits for the
     /// command buffer putting them in, or, when that isn't committed yet (a render still being
     /// encoded) or failed, puts them in again in one of its own.
@@ -408,10 +420,12 @@ final class RetouchStage: @unchecked Sendable {
         guard refreshing.insert(id).inserted else { return }
         let job = Refresh(pyramid: entry.retouched.pyramid)
         let (original, spots, version) = (entry.original, entry.spots, entry.fills)
-        commands.addCompletedHandler { [self] _ in
+        commands.addCompletedHandler { [self] commands in
+            // A buffer dropped uncommitted or failed on the GPU put no spots in to make maps from.
+            let completed = commands.status == .completed
             DispatchQueue.global(qos: .userInitiated).async { [self] in
                 let latest = lock.withLock {
-                    let latest = entries.last?.retouched.pyramid === job.pyramid
+                    let latest = completed && entries.last?.retouched.pyramid === job.pyramid
                     if !latest {
                         refreshing.remove(id)
                     }

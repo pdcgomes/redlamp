@@ -400,9 +400,26 @@ struct RetouchTests {
             }
         }
         let expected = try render(session, recipe, engine: RedlampEngine())
-        withKnownIssue("MEM-10: the retouch stays cached for the dropped command buffer") {
-            #expect(try render(session, recipe, engine: engine) == expected)
-        }
+        #expect(try render(session, recipe, engine: engine) == expected)
+    }
+
+    /// What a command buffer that failed on the GPU wrote can't be relied on: the retouch whose
+    /// spots went into it is made again rather than reused.
+    @Test func `a command buffer that failed on the GPU leaves no retouch behind`() throws {
+        let engine = try RedlampEngine()
+        let session = try scene(blemished: true)
+        var recipe = EditRecipe()
+        recipe.spots = [spot(.heal)]
+        let failed = try #require(engine.queue.makeCommandBuffer())
+        // `.current` starts no refresh, which would let go of the buffer once it completed.
+        let retouched = try engine.retouched(recipe, session: session, commands: failed, maps: .current)
+        failed.commit()
+        failed.waitUntilCompleted()
+        engine.rollBack(failed, after: .failed)
+        let commands = try #require(engine.queue.makeCommandBuffer())
+        let again = try engine.retouched(recipe, session: session, commands: commands, maps: .current)
+        try engine.finish(commands)
+        #expect(again.pyramid !== retouched.pyramid)
     }
 
     @Test func `Remove continues an edge running through the hole`() throws {
