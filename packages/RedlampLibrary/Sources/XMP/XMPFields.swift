@@ -167,8 +167,7 @@ public struct XMPFields: Sendable, Hashable, Codable {
 public enum XMPField: String, Sendable, Hashable, Codable, CaseIterable, Comparable {
     case rating, flag, label, keywords, title, caption, creator, copyright, location
 
-    /// The fields `.redlamp` sidecars hold, which merge and are written: every one, since LIB-22 gave
-    /// `PhotoMetadata` the title, caption, creator, copyright and location.
+    /// The fields `.redlamp` sidecars hold, which merge and are written: all of them.
     public static let held = Set(allCases)
 
     public static func < (lhs: XMPField, rhs: XMPField) -> Bool {
