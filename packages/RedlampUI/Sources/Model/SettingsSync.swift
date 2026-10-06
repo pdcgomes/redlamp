@@ -245,9 +245,16 @@ public final class SettingsSync {
     /// Puts back every photo of the last batch not edited since.
     func undo(done: @escaping (URL, EditRecipe) -> Void) {
         guard canUndo else { return }
+        var unread = 0
         for (url, after) in written {
-            guard let current = store.load(for: url), current.recipe == after.recipe,
-                  let previous = before[url] else { continue }
+            let current: Sidecar?
+            do {
+                current = try store.loadThrowing(for: url)
+            } catch {
+                unread += 1
+                continue
+            }
+            guard let current, current.recipe == after.recipe, let previous = before[url] else { continue }
             run?.photos[url] = nil
             if let previous {
                 record(previous, from: after.recipe, for: url, title: "Undo \(title)", action: .paste)
@@ -270,7 +277,8 @@ public final class SettingsSync {
         }
         written = [:]
         before = [:]
-        report = nil
+        let photos = "\(unread) photo\(unread == 1 ? "" : "s")"
+        report = unread > 0 ? "\(photos) couldn't be put back: the edit can't be read." : nil
     }
 
     private func process(_ job: Job) async {

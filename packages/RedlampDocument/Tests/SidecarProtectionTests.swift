@@ -67,13 +67,14 @@ struct SidecarProtectionTests {
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: edit.path) }
 
         #expect(store.protection(for: image) == .unreadable)
-        #expect(throws: SidecarStoreError.unreadable(sidecar)) {
+        // The read's own error, which may pass (permission given back), so saves try again.
+        #expect(throws: CocoaError.self) {
             try store.save(Sidecar(recipe: EditRecipe()), for: image)
         }
-        #expect(throws: SidecarStoreError.unreadable(sidecar)) {
+        #expect(throws: CocoaError.self) {
             try store.saveOrRemove(Sidecar(recipe: EditRecipe()), for: image)
         }
-        #expect(throws: SidecarStoreError.unreadable(sidecar)) {
+        #expect(throws: CocoaError.self) {
             try Library.writeMetadata(for: image, store: store) { $0 = PhotoMetadata() }
         }
         store.delete(for: image)

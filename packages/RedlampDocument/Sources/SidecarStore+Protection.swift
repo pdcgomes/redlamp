@@ -30,7 +30,8 @@ public extension SidecarStore {
 }
 
 extension SidecarStore {
-    /// The edit on disk, without its bitmaps; nil if there is none. Throws if it is protected.
+    /// The edit on disk, without its bitmaps; nil if there is none. Throws if it is protected, or
+    /// the read's error if it can't be read now.
     static func existing(at destination: URL) throws -> Sidecar? {
         guard let data = try editData(inSidecar: destination) else { return nil }
         if isNewer(data) {
@@ -56,15 +57,13 @@ extension SidecarStore {
         return sidecar.clearsHistory || historyFiles(in: destination).allSatisfy { $0.lastPathComponent == open }
     }
 
-    /// The edit's bytes; nil when there is none. Throws when it is there but can't be read.
+    /// The edit's bytes; nil when there is none. Throws the read's error when it is there but
+    /// can't be read now (no permission, an I/O error, a download that hasn't happened), which
+    /// saves report and try again; `protection(atSidecar:)` takes it for `.unreadable`.
     static func editData(inSidecar sidecar: URL) throws -> Data? {
         let edit = editURL(inSidecar: sidecar)
         guard isPresent(edit) else { return nil }
-        do {
-            return try Data(contentsOf: edit)
-        } catch {
-            throw SidecarStoreError.unreadable(sidecar)
-        }
+        return try Data(contentsOf: edit)
     }
 
     /// Why the sidecar at `sidecar` must be left as it is; call it under coordination.

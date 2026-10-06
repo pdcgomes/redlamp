@@ -186,9 +186,9 @@ public struct SidecarStore: Sendable {
     }
 
     /// The image's sidecar, or nil only when it has none. Where `load(for:)` takes a sidecar it
-    /// can't read for none, this throws: the coordinated read's error (worth trying again), or
-    /// `SidecarStoreError.unreadable` when the edit can't be opened or doesn't decode. Use it
-    /// wherever what's read is saved back.
+    /// can't read for none, this throws: the coordinated read's or the file's error (worth trying
+    /// again), or `SidecarStoreError.unreadable` when the edit doesn't decode. Use it wherever
+    /// what's read is saved back.
     public func loadThrowing(for image: URL) throws -> Sidecar? {
         let sidecar = url(for: image)
         guard let loaded = try Self.reading(sidecar, { try Self.decodeThrowing(sidecar: $0) }) else { return nil }
@@ -281,8 +281,9 @@ public struct SidecarStore: Sendable {
         try? decodeThrowing(sidecar: sidecar)
     }
 
-    /// The sidecar at `sidecar`, with its mask bitmaps; nil when it has none. Throws
-    /// `SidecarStoreError.unreadable` when its edit is there but can't be read or doesn't decode.
+    /// The sidecar at `sidecar`, with its mask bitmaps; nil when it has none. Throws the read's
+    /// error when its edit can't be read now, and `SidecarStoreError.unreadable` when it doesn't
+    /// decode.
     static func decodeThrowing(sidecar: URL) throws -> Sidecar? {
         guard let data = try editData(inSidecar: sidecar) else { return nil }
         guard var decoded = try? JSONDecoder.sidecar.decode(Sidecar.self, from: data) else {

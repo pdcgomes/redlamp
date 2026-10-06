@@ -194,6 +194,58 @@ struct SidecarSafetyTests {
         #expect(model.library.item(for: folder.photo)?.metadata.rating == 4)
     }
 
+    @Test func `a rating on a photo whose edit can't be read now says why and is saved once it can`() async throws {
+        let folder = Folder()
+        try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder.url) }
+        let json = #"{"format":"app.redlamp.edit","recipe":{"version":3,"processVersion":1,"values":{"basic.exposure":1}}}"#
+        try folder.seed(json)
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: folder.edit.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: folder.edit.path) }
+        let model = EditorModel(engine: StubEngine())
+        model.library.insert(LibraryItem(url: folder.photo))
+
+        model.select(folder.photo)
+        _ = model.perform(.rating3)
+        model.select(folder.other)
+        await model.saves.flush()
+        try await eventually { model.saveError != nil }
+        #expect(model.saveError?.message == "Edits to IMG_0001 can't be saved: permission denied")
+        #expect(model.saveError?.canRetry == true)
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: folder.edit.path)
+        model.retrySave()
+        await model.saves.flush()
+        try await eventually { model.saveError == nil && SidecarStore().load(for: folder.photo)?.metadata?.rating == 3 }
+        #expect(model.saveError == nil)
+        let saved = try #require(SidecarStore().load(for: folder.photo))
+        #expect(saved.metadata?.rating == 3)
+        #expect(saved.recipe[.exposure] == 1)
+    }
+
+    @Test(arguments: unreadable)
+    func `a rating on a photo whose edit doesn't decode says it can't be saved and leaves it`(
+        json: String,
+    ) async throws {
+        let folder = Folder()
+        try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder.url) }
+        try folder.seed(json)
+        let before = try folder.contents()
+        let model = EditorModel(engine: StubEngine())
+        model.library.insert(LibraryItem(url: folder.photo))
+
+        model.select(folder.photo)
+        _ = model.perform(.rating3)
+        model.select(folder.other)
+        await model.saves.flush()
+        try await eventually { model.saveError != nil }
+        #expect(model.saveError?.message == "Edits to IMG_0001 can't be saved: its edit can't be read")
+        #expect(model.saveError?.canRetry == false)
+        try await settle()
+        #expect(try folder.contents() == before)
+    }
+
     @Test func `an edit made while its folder is away is saved once it is back`() async throws {
         let folder = Folder()
         try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)

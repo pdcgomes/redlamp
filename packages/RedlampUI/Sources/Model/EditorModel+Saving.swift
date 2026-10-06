@@ -121,7 +121,12 @@ extension EditorModel {
     private func failed(_ url: URL, _ write: SaveQueue.Write, _ error: any Error) {
         showOnDisk(url)
         let protection = Self.protection(of: error)
-        if protection != nil, case .metadata = write {
+        let isRating = if case .metadata = write {
+            true
+        } else {
+            false
+        }
+        if protection != nil, isRating, url == selection {
             // A rating made as a protected photo opened: it opens read-only and says why.
             return
         }
@@ -129,7 +134,8 @@ extension EditorModel {
             readOnlyReason = protection
         }
         let name = url.deletingPathExtension().lastPathComponent
-        let reason = protection.map(Self.reason) ?? Self.reason(error)
+        let reason = protection.map { isRating ? Self.reason(beforeOpening: $0) : Self.reason($0) }
+            ?? Self.reason(error)
         let saveError = SaveError(
             url: url,
             message: "Edits to \(name) can't be saved: \(reason)",
@@ -187,6 +193,15 @@ extension EditorModel {
         case .writtenByNewerVersion: "a newer version of Redlamp changed it since it opened"
         case .unreadable: "its edit file changed and can't be read"
         case .lossy: "it now has settings this version doesn't know"
+        }
+    }
+
+    /// Found on disk by a rating made as the photo opened, once another one is open.
+    private static func reason(beforeOpening protection: SidecarProtection) -> String {
+        switch protection {
+        case .writtenByNewerVersion: "a newer version of Redlamp edited it"
+        case .unreadable: "its edit can't be read"
+        case .lossy: "it has settings this version doesn't know"
         }
     }
 

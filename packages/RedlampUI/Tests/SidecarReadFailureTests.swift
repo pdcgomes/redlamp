@@ -86,4 +86,31 @@ struct SidecarReadFailureTests {
         #expect(presenter.asked.withLock { $0 } >= 2)
         try expectUnchanged(image, store, sync)
     }
+
+    @Test func `undoing a sync says which photos it couldn't read to put back`() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let image = directory.appending(path: "IMG_0001.ARW")
+        let store = SidecarStore()
+        var recipe = EditRecipe()
+        recipe[.exposure] = 1
+        try store.save(Sidecar(recipe: recipe), for: image)
+        let sync = SettingsSync(store: store, makeEngine: { nil })
+        var source = EditRecipe()
+        source[.contrast] = 40
+        sync.run(.paste(source, .everything), on: [image], title: "Paste Settings") { _, _ in }
+        await sync.idle()
+        try #require(store.load(for: image)?.recipe[.contrast] == 40)
+
+        let presenter = FailingPresenter(store.url(for: image), failures: [true])
+        NSFileCoordinator.addFilePresenter(presenter)
+        defer { NSFileCoordinator.removeFilePresenter(presenter) }
+        var undone: [URL] = []
+        sync.undo { url, _ in undone.append(url) }
+        #expect(presenter.asked.withLock { $0 } >= 1)
+        #expect(undone.isEmpty)
+        #expect(sync.report == "1 photo couldn't be put back: the edit can't be read.")
+        #expect(store.load(for: image)?.recipe[.contrast] == 40)
+    }
 }
