@@ -18,6 +18,8 @@ import Synchronization
 /// - **The index follows** as the steps go, in batches: rows keep their IDs and get their new paths,
 ///   folders are made and moved, and no photo is read; `live` hears of every change. The store
 ///   needs nothing, since it's keyed by the photos' content.
+/// - **Recently Trashed** lists what its batches moved to the Trash that's still there, from the
+///   journal, and Put Back puts it back (`trashed()`, `planPutBack(_:)`).
 ///
 /// One batch runs at a time, with the check a caller gives it (`run(_:checkedBy:progress:)`) just
 /// before it; the file system's work runs off the caller.
@@ -31,17 +33,31 @@ public final class FileOperations: Sendable {
     static let stepsPerWrite = 250
     private let serial = Mutex<Task<Void, Never>?>(nil)
     let interruption = Mutex<Interruption?>(nil)
+    let trashWatch: TrashWatch
 
     /// `paths` defaults to the library whose index is `index`, at `LibraryPaths.index` in its folder.
-    public init(
+    public convenience init(
         index: LibraryIndex, paths: LibraryPaths? = nil, fileSystem: any LibraryFileSystem = LocalFileSystem(),
         live: LibraryLive? = nil,
+    ) {
+        #if os(macOS)
+            self.init(index: index, paths: paths, fileSystem: fileSystem, live: live, trashEvents: FSEventsSource())
+        #else
+            self.init(index: index, paths: paths, fileSystem: fileSystem, live: live, trashEvents: nil)
+        #endif
+    }
+
+    /// With `trashEvents` nil, Recently Trashed follows the Trash only after batches and when asked.
+    init(
+        index: LibraryIndex, paths: LibraryPaths?, fileSystem: any LibraryFileSystem, live: LibraryLive?,
+        trashEvents: (any VolumeEventSource)?,
     ) {
         self.index = index
         self.paths = paths ?? LibraryPaths(root: index.url.deletingLastPathComponent())
         self.fileSystem = fileSystem
         self.live = live
         journal = FileJournal(paths: self.paths)
+        trashWatch = TrashWatch(source: trashEvents)
     }
 
     /// Where a forced quit is simulated, for the tests and the benchmark: the run stops as a killed
@@ -353,12 +369,13 @@ public final class FileOperations: Sendable {
         (0 ..< count).map { trashed?[$0] }
     }
 
-    /// Runs `body` after the batches asked for before it.
+    /// Runs `body` after the batches asked for before it, then has Recently Trashed made again.
     private func serially<T: Sendable>(_ body: @escaping @Sendable () async throws -> T) async throws -> T {
-        let task = serial.withLock { last -> Task<T, any Error> in
+        let task = serial.withLock { [trashWatch] last -> Task<T, any Error> in
             let previous = last
             let task = Task {
                 await previous?.value
+                defer { trashWatch.changed() }
                 return try await body()
             }
             last = Task { _ = try? await task.value }

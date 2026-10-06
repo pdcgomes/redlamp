@@ -302,7 +302,8 @@ final class FilePlanner: @unchecked Sendable {
     /// What would stop `steps`, as the files are now: a file at a place a step would put one, a
     /// photo or folder gone or written since they were planned, or a folder to go in that isn't
     /// there. The steps come back without the sidecars that have gone meanwhile, and with those
-    /// written since as they are now, so they still go with their photos.
+    /// written since as they are now, so they still go with their photos; out of the Trash, one
+    /// that isn't as it was is another file, and stays there.
     func check(_ steps: [FileStep]) -> (steps: [FileStep], conflicts: [FileConflict]) {
         var vacated = Set<String>()
         var placed = Set<String>()
@@ -313,9 +314,9 @@ final class FilePlanner: @unchecked Sendable {
             return placed.contains(key) || !vacated.contains(key) && entry(path) != nil
         }
         /// `item` as its step will find it: as planned, or put there by a step before; a sidecar as
-        /// it is now. Nil when it isn't there, or is a photo, folder or file written since: for those
-        /// the step can't do without, a conflict.
-        func atSource(_ item: FileItem) -> FileItem? {
+        /// it is now, unless `asItWas`. Nil when it isn't there, or is a photo, folder or file written
+        /// since: for those the step can't do without, a conflict.
+        func atSource(_ item: FileItem, asItWas: Bool = false) -> FileItem? {
             let key = NamingJob.fold(item.source)
             if placed.contains(key) {
                 return item
@@ -329,7 +330,7 @@ final class FilePlanner: @unchecked Sendable {
             if FileRunner.matches(entry, item) {
                 return item
             }
-            guard item.isRequired else { return item.found(as: entry) }
+            guard item.isRequired else { return asItWas ? nil : item.found(as: entry) }
             let another = item.fileID.map { $0 != entry.fileIdentifier && entry.fileIdentifier != nil } ?? false
             conflicts.append(FileConflict(
                 path: item.source, reason: another || item.isDirectory != entry.isDirectory ? .gone : .changed,
@@ -344,7 +345,8 @@ final class FilePlanner: @unchecked Sendable {
             case .move, .putBack:
                 var kept: [FileItem] = []
                 for item in step.items {
-                    guard let destination = item.destination, let item = atSource(item) else { continue }
+                    guard let destination = item.destination, let item = atSource(item, asItWas: step.kind == .putBack)
+                    else { continue }
                     let (sourceKey, destinationKey) = (NamingJob.fold(item.source), NamingJob.fold(destination))
                     if sourceKey != destinationKey, isThere(destination) {
                         conflicts.append(FileConflict(path: destination, reason: .taken))

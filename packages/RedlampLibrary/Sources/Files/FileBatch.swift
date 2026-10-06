@@ -2,12 +2,15 @@ import Foundation
 import RedlampDocument
 
 /// One batch of the library's file operations (LIB-26): photos renamed or moved with their sidecars,
-/// folders made, moved or removed, and photos and folders moved to the Trash, as steps that run in
-/// order, each with what it does to the index. `FileOperations` writes it to the journal, and syncs
-/// it, before anything moves; Undo is a batch of the steps' inverses, run backwards.
+/// folders made, moved or removed, photos and folders moved to the Trash, and put back from it, as
+/// steps that run in order, each with what it does to the index. `FileOperations` writes it to the
+/// journal, and syncs it, before anything moves; Undo is a batch of the steps' inverses, run
+/// backwards.
 public struct FileBatch: Sendable, Hashable, Identifiable {
     public enum Kind: String, Sendable, Hashable, Codable {
         case rename, move, newFolder, trash, undo
+        /// Photos from Recently Trashed put back where they were.
+        case putBack
     }
 
     public let id: UUID
@@ -18,7 +21,8 @@ public struct FileBatch: Sendable, Hashable, Identifiable {
     public var steps: [FileStep]
     /// The batch this one undoes.
     public var undoes: UUID?
-    /// For an Undo, what it leaves out because it isn't where the batch put it any more, by path.
+    /// For an Undo or a Put Back, what it leaves out because it isn't where a batch put it any more,
+    /// by path.
     public var gone: [String] = []
     /// For a move to the Trash, the photos it was asked to move that the index no longer has, which
     /// it leaves out: the caller says so, since it moves fewer photos than it was asked to.

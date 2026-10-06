@@ -5,8 +5,9 @@ public extension FileOperations {
     /// Undoes the batch `id`, or the newest that can be undone, by running a batch of its own: the
     /// photos taken from where they are now back where they were, with whatever sidecars they have by
     /// then; the folders it made removed and those it removed made again; what it moved to the
-    /// Trash put back, while it's still there; and the original names it recorded taken out. What
-    /// isn't where the batch left it any more is left out (`FileOutcome.gone`).
+    /// Trash put back, while it's still there (as `TrashSurvey` finds it), and what it put back moved
+    /// to the Trash again; and the original names it recorded taken out. What isn't where the batch
+    /// left it any more is left out (`FileOutcome.gone`).
     @discardableResult
     func undo(_ id: UUID? = nil, progress: (@Sendable (FileProgress) -> Void)? = nil) async throws -> FileOutcome {
         let target: UUID
@@ -36,7 +37,8 @@ public extension FileOperations {
         var folders: [FileStep] = []
         var files: [FileStep] = []
         var removing: [FileStep] = []
-        var puttingBack: [FileStep] = []
+        var trashed: [(step: FileStep, places: [String?])] = []
+        var trashing: [FileStep] = []
         for (index, step) in done {
             switch step.kind {
             case .move:
@@ -60,11 +62,12 @@ public extension FileOperations {
             case .removeFolder:
                 making.insert(step.inverse(trashed: []), at: 0)
             case .trash:
-                let places = Self.places(logged.trashed[index], count: step.items.count)
-                puttingBack.insert(step.inverse(trashed: places), at: 0)
+                trashed.insert((step, Self.places(logged.trashed[index], count: step.items.count)), at: 0)
+            case .putBack:
+                trashing.insert(step.inverse(trashed: []), at: 0)
             case .recordOriginalNames:
                 clearing.insert(step.inverse(trashed: []), at: 0)
-            case .clearOriginalNames, .putBack:
+            case .clearOriginalNames:
                 break
             }
         }
@@ -80,7 +83,8 @@ public extension FileOperations {
             folders,
             files,
             removing,
-            puttingBack,
+            trashed,
+            trashing,
         ] in
             let planner = FilePlanner(fileSystem: fileSystem, locator: locator)
             var gone: [String] = []
@@ -91,11 +95,17 @@ public extension FileOperations {
                 }
                 return true
             }
-            let back = puttingBack.compactMap { step -> FileStep? in
+            let back = trashed.compactMap { step, places in
+                step.puttingBack(
+                    places: places, presence: TrashSurvey.presence(of: step, places: places, fileSystem: fileSystem),
+                    gone: &gone,
+                )
+            }
+            let again = trashing.compactMap { step -> FileStep? in
                 var step = step
                 step.items = step.items.filter { item in
                     guard planner.entry(item.source) != nil else {
-                        gone.append(item.destination ?? item.source)
+                        gone.append(item.source)
                         return false
                     }
                     return true
@@ -103,7 +113,7 @@ public extension FileOperations {
                 return step.items.contains(where: \.isRequired) ? step : nil
             }
             let moved = planner.moveSteps(present)
-            return (clearing + making + folders + moved + files + removing + back, gone)
+            return (clearing + making + folders + moved + files + removing + back + again, gone)
         }
         guard !planned.isEmpty else {
             // Nothing it did is where it left it: the batch stays as it is, for when it is.

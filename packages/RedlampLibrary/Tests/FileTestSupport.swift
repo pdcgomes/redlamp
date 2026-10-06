@@ -135,6 +135,25 @@ final class FileSandbox: @unchecked Sendable {
         FileOperations(index: index, paths: paths, fileSystem: fileSystem, live: live)
     }
 
+    /// Its file operations, with `trashEvents` the Trash folders' events.
+    func operations(trashEvents: (any VolumeEventSource)?) -> FileOperations {
+        FileOperations(index: index, paths: paths, fileSystem: fileSystem, live: nil, trashEvents: trashEvents)
+    }
+
+    /// What's in the folder `trash`, but hidden files, by path below it, with each file's bytes.
+    static func contents(of trash: URL) -> [String: Data] {
+        var found: [String: Data] = [:]
+        for path in FileManager.default.subpaths(atPath: trash.path) ?? [] {
+            guard !path.split(separator: "/").contains(where: { $0.hasPrefix(".") }) else { continue }
+            var isDirectory: ObjCBool = false
+            let url = trash.appending(path: path)
+            guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), !isDirectory.boolValue
+            else { continue }
+            found[path] = try? Data(contentsOf: url)
+        }
+        return found
+    }
+
     /// The sidecar store the library reads and writes through.
     func store() async throws -> SidecarStore {
         try await SidecarStore(locator: operations().locator())
