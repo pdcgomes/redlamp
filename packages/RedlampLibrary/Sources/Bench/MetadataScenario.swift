@@ -13,10 +13,12 @@ public extension BenchScenarios {
 
 /// Metadata changed on many photos (LIB-22, LIB-24), on the fixture itself: it writes the fixture's
 /// sidecars and puts them back as they were, so run it on a copy (`cp -cR`). The fixture is indexed into
-/// a temporary index through the simulated volume, then a keyword is put in the sidecars of its first
-/// `photos` photos behind the index's back, as another Mac's changes arrive, and the fixture is indexed
-/// again: how many photos are read again for a change only their `.redlamp` has, and how long it takes.
-/// The keyword is then taken off, each sidecar left as it was.
+/// a temporary index through the simulated volume, then, on its first `photos` photos:
+/// - a caption set as one batch (`LibraryMetadata`), the journal, the index and the sidecars timed apart,
+///   and taken back with Undo, every sidecar checked after each;
+/// - a keyword put in their sidecars behind the index's back, as another Mac's changes arrive, and the
+///   fixture indexed again: how many photos are read again for a change only their `.redlamp` has, and
+///   how long it takes. The keyword is then taken off, each sidecar left as it was.
 public struct MetadataScenario: BenchScenario {
     public static let defaultPhotos = 10000
 
@@ -41,7 +43,84 @@ public struct MetadataScenario: BenchScenario {
             try reader.scanHotColumns { ids.append($0.id) }
             return Array(ids.prefix(photos))
         }
-        return try await sidecarOnly(context, index: index, ids: ids, failures: built.failures)
+        return try await caption(index: index, paths: paths, ids: ids)
+            + sidecarOnly(context, index: index, ids: ids, failures: built.failures)
+    }
+
+    // MARK: - A caption
+
+    static let caption = "Benchmark caption"
+
+    /// A caption on `ids` and its Undo, each timed, the sidecars checked after each.
+    private func caption(index: LibraryIndex, paths: LibraryPaths, ids: [Int64]) async throws -> [BenchResult] {
+        let found = try await index.read { try $0.photoPaths(ids) }
+        let images = ids.compactMap { found[$0] }.map { URL(fileURLWithPath: $0) }
+        let before = try await LibraryIndex.offCaller { Self.captions(images) }
+        let metadata = LibraryMetadata(index: index, paths: paths)
+        let clock = ContinuousClock()
+        var started = clock.now
+        let plan = try await metadata.plan(.set([.caption(Self.caption)], on: ids))
+        let planning = clock.now - started
+        started = clock.now
+        let set = try await metadata.run(plan)
+        let setting = clock.now - started
+        let afterSetting = try await LibraryIndex.offCaller { Self.captions(images) }
+        started = clock.now
+        let undone = try await metadata.undo()
+        let undoing = clock.now - started
+        let afterUndo = try await LibraryIndex.offCaller { Self.captions(images) }
+        let wrong = afterSetting.count { $0 != .some(Self.caption) } + zip(before, afterUndo).count { $0 != $1 }
+
+        let size = BenchResult.grouped(ids.count)
+        return [
+            BenchResult(
+                scenario: name, id: "library-metadata-caption-plan", name: "A caption for \(size) photos: planned",
+                value: planning.seconds * 1000, unit: "ms",
+            ),
+            BenchResult(
+                scenario: name, id: "library-metadata-caption",
+                name: "A caption set on \(size) photos, sidecars and all",
+                value: setting.seconds * 1000, unit: "ms",
+            ),
+            BenchResult(
+                scenario: name, id: "library-metadata-caption-journal", name: "Of it, the journal written and synced",
+                value: set.journalTime.seconds * 1000, unit: "ms",
+            ),
+            BenchResult(
+                scenario: name, id: "library-metadata-caption-index", name: "Of it, the index and its lists",
+                value: set.indexTime.seconds * 1000, unit: "ms",
+            ),
+            BenchResult(
+                scenario: name, id: "library-metadata-caption-sidecars",
+                name: "Of it, \(BenchResult.grouped(set.written)) sidecars written",
+                value: set.sidecarTime.seconds * 1000, unit: "ms",
+            ),
+            BenchResult(
+                scenario: name, id: "library-metadata-caption-undo", name: "The caption taken back with Undo",
+                value: undoing.seconds * 1000, unit: "ms",
+            ),
+            BenchResult(
+                scenario: name, id: "library-metadata-caption-undo-sidecars",
+                name: "Of it, \(BenchResult.grouped(undone.written)) sidecars written back",
+                value: undone.sidecarTime.seconds * 1000, unit: "ms",
+            ),
+            BenchResult(
+                scenario: name, id: "library-metadata-caption-wrong", name: "Sidecars not as each step leaves them",
+                value: Double(wrong + set.skipped.count + undone.skipped.count), unit: "photos",
+                budget: .exactly(0, "photos"),
+            ),
+        ]
+    }
+
+    /// Each image's caption as its sidecar holds it; nil for none, or no sidecar.
+    private static func captions(_ images: [URL]) -> [String?] {
+        let captions = Mutex([String?](repeating: nil, count: images.count))
+        let store = SidecarStore()
+        DispatchQueue.concurrentPerform(iterations: images.count) { number in
+            let caption = store.load(for: images[number])?.metadata?.caption
+            captions.withLock { $0[number] = caption }
+        }
+        return captions.withLock { $0 }
     }
 
     // MARK: - A change only the sidecars have
