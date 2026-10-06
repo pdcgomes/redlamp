@@ -179,13 +179,16 @@ public extension LibraryIndex.Writer {
         try movePhotos([(photo, folder, name)])
     }
 
-    /// Moves photos to other folders or names (renames or moves Redlamp made), keeping their IDs.
+    /// Moves photos to other folders or names (renames or moves Redlamp made), keeping their IDs; a
+    /// new extension gives a photo the kind it names (LIB-40's renames to the extension a file's
+    /// format takes).
     func movePhotos(_ moves: [(photo: Int64, folder: Int64, name: String)]) throws {
-        let statement = try database.cached("UPDATE photos SET folder = ?, name = ? WHERE id = ?")
+        let statement = try database.cached("UPDATE photos SET folder = ?, name = ?, kind = ? WHERE id = ?")
         for move in moves {
             try statement.bind(move.folder, at: 1)
             try statement.bind(move.name, at: 2)
-            try statement.bind(move.photo, at: 3)
+            try statement.bind(PhotoRecord.Kind(pathExtension: (move.name as NSString).pathExtension).rawValue, at: 3)
+            try statement.bind(move.photo, at: 4)
             try statement.run()
         }
         try writeText(replacing: moves.map(\.photo))
