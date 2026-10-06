@@ -23,10 +23,10 @@ struct HealthChecker: Sendable {
     /// `check`'s findings; pairs are found in `store`, and with no store there are none.
     func findings(_ check: HealthCheck, store: ColumnStore?) async throws -> HealthFindings {
         switch check {
+        case .duplicates: try await duplicates()
         case let .pairs(rule): try await pairs(rule, store: store)
         case .damaged: try await damaged(store: store)
         case .extensions: try await extensions()
-        case .duplicates: HealthFindings(check: check)
         }
     }
 

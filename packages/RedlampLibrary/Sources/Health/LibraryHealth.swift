@@ -58,6 +58,23 @@ public final class LibraryHealth: Sendable {
         return offered
     }
 
+    /// Reads the duplicate candidates no recorded hash confirms whole, as `redlamp library duplicates
+    /// --confirm` does, so the duplicates check finds every group; lists follow.
+    @discardableResult
+    public func confirmDuplicates(
+        progress: (@Sendable (DuplicateFinder.Progress) -> Void)? = nil,
+    ) async throws -> DuplicateConfirmation {
+        let finder = try await finder()
+        let confirmation = try await finder.confirm(finder.candidates(), progress: progress)
+        await changed()
+        return confirmation
+    }
+
+    func finder() async throws -> DuplicateFinder {
+        let sidecars = try await SidecarStore(locator: LibrarySidecars(index: index, paths: paths).locator())
+        return DuplicateFinder(index: index, volumes: volumes, sidecars: sidecars)
+    }
+
     /// Has open lists made again, and the engine's findings worked out again, after something they
     /// depend on changed beyond the photos' rows.
     func changed() async {
