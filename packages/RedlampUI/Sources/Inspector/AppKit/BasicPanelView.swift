@@ -58,21 +58,28 @@ import SwiftUI
 /// does in the original row (a menu takes its ideal width, not its minimum).
 final class HostedControl: NSView, ProposalSizing, HeightProviding {
     private let controller: NSHostingController<AnyView>
-    private var observation: NSKeyValueObservation?
+    private let resized: Resized
+
+    /// Told as the content lays out at a new height (a row appearing inside it), so the columns
+    /// around it are measured again.
+    @MainActor private final class Resized {
+        var action: () -> Void = {}
+    }
 
     init(model: EditorModel, _ view: some View) {
+        let resized = Resized()
         controller = NSHostingController(rootView: AnyView(
             view.environment(model).tint(Theme.nativeTint).focusEffectDisabled()
-                .frame(maxWidth: .infinity, alignment: .leading),
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { _ in resized.action() },
         ))
         controller.sizingOptions = [.preferredContentSize]
+        self.resized = resized
         super.init(frame: .zero)
         addSubview(controller.view)
-        observation = controller.observe(\.preferredContentSize) { [weak self] _, _ in
-            MainActor.assumeIsolated {
-                self?.invalidateIntrinsicContentSize()
-                self?.superview?.needsLayout = true
-            }
+        resized.action = { [weak self] in
+            guard let self, abs(bounds.height - height(forWidth: bounds.width)) > 0.5 else { return }
+            invalidateColumnLayout()
         }
     }
 
