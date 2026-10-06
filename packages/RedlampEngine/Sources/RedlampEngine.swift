@@ -164,8 +164,12 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             stacks.retryUnreadableFrames(of: url)
         }
         let built = try await sessions.session(for: url)
-        guard openGeneration.withLock({ $0 == generation }) else { throw CancellationError() }
-        session.withLock { $0 = built }
+        let installed = openGeneration.withLock { latest in
+            guard !Task.isCancelled, latest == generation else { return false }
+            session.withLock { $0 = built }
+            return true
+        }
+        guard installed else { throw CancellationError() }
         registerEmbeddedLook(built)
         warmIfWanted(built)
         return built.info
@@ -173,8 +177,10 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
 
     public func openIfReady(_ url: URL) -> ImageInfo? {
         guard let ready = sessions.cached(url) else { return nil }
-        openGeneration.withLock { $0 += 1 }
-        session.withLock { $0 = ready }
+        openGeneration.withLock { latest in
+            latest += 1
+            session.withLock { $0 = ready }
+        }
         registerEmbeddedLook(ready)
         warmIfWanted(ready)
         return ready.info
