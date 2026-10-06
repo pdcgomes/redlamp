@@ -384,6 +384,27 @@ struct RetouchTests {
         #expect(old.toneBase === session.toneBase, "an edit from before process 10 keeps the photo's maps")
     }
 
+    /// A render that throws after the spots went into its commands drops them uncommitted: the next
+    /// render puts the spots in again rather than reading a copy they never reached.
+    @Test func `a render that fails after its spots were encoded leaves no retouch behind`() throws {
+        struct Failure: Error {}
+        let engine = try RedlampEngine()
+        let session = try scene(blemished: true)
+        var recipe = EditRecipe()
+        recipe.spots = [spot(.heal)]
+        let commands = try #require(engine.queue.makeCommandBuffer())
+        #expect(throws: Failure.self) {
+            try engine.encoding(commands) {
+                _ = try engine.retouched(recipe, session: session, commands: commands, maps: .refreshLater)
+                throw Failure()
+            }
+        }
+        let expected = try render(session, recipe, engine: RedlampEngine())
+        withKnownIssue("MEM-10: the retouch stays cached for the dropped command buffer") {
+            #expect(try render(session, recipe, engine: engine) == expected)
+        }
+    }
+
     @Test func `Remove continues an edge running through the hole`() throws {
         // Bright above, dark below, with an object sitting on the line between them.
         let (width, height) = (Self.width, Self.height)
