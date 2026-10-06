@@ -16,6 +16,7 @@ enum LibraryCommand {
            redlamp library names <template> --index <path> [<query>] [--json] [--limit <n>]
                                  [--text [<name>=]<text>]
            redlamp library duplicates --index <path> [--confirm] [--json]
+           redlamp library xmp --index <path> [<query>] [--write] [--dry-run] [--json]
       fixture  makes a synthetic library in <folder>: a fifth of the photos APFS clones of the raws in
                --raw-sources (tests/fixtures/raw) with their capture dates rewritten, the rest small JPEGs
                and HEICs with varied EXIF, GPS and IPTC; sidecars on 15% and other apps' .xmp on 5%; folders
@@ -51,6 +52,11 @@ enum LibraryCommand {
                index keeps, so an unchanged file is never read again; without it only hashes recorded earlier
                count. Lists the candidates that turned out different and those offline or not read; --json
                prints JSON. It removes nothing.
+      xmp      compares each photo <query> finds (every photo without one) with what other apps wrote in its
+               .xmp, embedded XMP and IPTC, and merges their changes into its .redlamp sidecar. --write also
+               writes standard .xmp beside the photos, keeping other apps' fields, as the library does once
+               writing them is turned on; --dry-run says what would change and writes nothing. Exits 1 when
+               a sidecar couldn't be written.
     """
 
     private static var scenarioNames: String {
@@ -64,6 +70,7 @@ enum LibraryCommand {
         BenchScenarios.registerLists()
         BenchScenarios.registerNaming()
         BenchScenarios.registerDuplicates()
+        BenchScenarios.registerXMP()
         guard let command = arguments.first, !arguments.contains("--help") else {
             print(usage)
             return
@@ -77,6 +84,7 @@ enum LibraryCommand {
         case "sidecars": try await sidecars(Array(arguments.dropFirst()))
         case "names": try await names(Array(arguments.dropFirst()))
         case "duplicates": try await duplicates(Array(arguments.dropFirst()))
+        case "xmp": try await xmp(Array(arguments.dropFirst()))
         default: throw CLIError(description: "unknown library command \(command)\n\n\(usage)")
         }
     }
