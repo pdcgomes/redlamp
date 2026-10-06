@@ -211,6 +211,7 @@ extension LibraryIndexer {
                     photos: PhotoQueue(prioritised: prioritised), readers: readers,
                     ends: EndQueue(producers: readers),
                 )
+                indexer.follow(volume.photos)
                 if case .roots = request {
                     let roots = record.roots.map(\.id)
                     let unread = try await indexer.index.read { reader in
@@ -571,6 +572,7 @@ extension LibraryIndexer {
                     }
                 }
                 await jobFinished(in: job.folder)
+                volume.photos.done(job)
             }
             volume.ends.producerDone()
             await readEnds(on: volume)

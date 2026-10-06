@@ -1,4 +1,5 @@
 import Foundation
+import RedlampDocument
 import Synchronization
 @testable import RedlampLibrary
 
@@ -384,6 +385,12 @@ struct IndexerSandbox {
     func path(_ relative: String) -> String {
         rootPath + "/" + relative
     }
+
+    /// The photos of the fixture's folder at `relative`, in the order the indexer reads them.
+    func photos(in relative: String) -> [FixturePhoto] {
+        (0 ..< fixture.spec.photos).map(fixture.photo(at:)).filter { $0.folder == relative }
+            .sorted { FileOrder.precedes($0.name, $1.name) }
+    }
 }
 
 /// What a run reported, collected.
@@ -409,6 +416,14 @@ struct IndexerRun {
         events.compactMap { event in
             guard case let .photosInserted(ids) = event else { return nil }
             return ids
+        }
+    }
+
+    /// The folders indexed with photos inserted, in the order they were.
+    var indexedFolders: [String] {
+        events.compactMap { event in
+            guard case let .folderIndexed(folder) = event, folder.inserted > 0 else { return nil }
+            return folder.path
         }
     }
 

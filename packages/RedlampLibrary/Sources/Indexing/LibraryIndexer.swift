@@ -56,6 +56,12 @@ public final class LibraryIndexer: Sendable {
     private struct State {
         var prioritised: Set<String> = []
         var last: Task<Void, Never>?
+        /// The photo queues of the runs going, told when the folders asked for change.
+        var queues: [Followed] = []
+    }
+
+    private struct Followed {
+        weak var queue: PhotoQueue?
     }
 
     public convenience init(
@@ -104,7 +110,22 @@ public final class LibraryIndexer: Sendable {
     /// The folders to index first, replacing those asked for before: the folders on screen.
     public func prioritise(_ folders: [URL]) {
         let paths = Set(folders.map(Self.path))
-        state.withLock { $0.prioritised = paths }
+        let queues = state.withLock { state in
+            state.prioritised = paths
+            state.queues.removeAll { $0.queue == nil }
+            return state.queues.compactMap(\.queue)
+        }
+        for queue in queues {
+            queue.reprioritised()
+        }
+    }
+
+    /// Tells `queue` when the folders asked for change, while it lives.
+    func follow(_ queue: PhotoQueue) {
+        state.withLock { state in
+            state.queues.removeAll { $0.queue == nil }
+            state.queues.append(Followed(queue: queue))
+        }
     }
 
     var prioritised: Set<String> {

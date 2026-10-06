@@ -351,16 +351,57 @@ struct LibraryIndexerTests {
     @Test func `the folders asked for are indexed first`() async throws {
         let sandbox = try await IndexerSandbox.make(.init(photos: 900, seed: 28, shapes: []))
         defer { sandbox.remove() }
-        let indexer = LibraryIndexer(index: sandbox.index, configuration: .testing(batchSize: 50))
         let wanted = try #require(sandbox.fixture.folders.dropFirst(2).first)
+        // Long enough for other folders to be read and finished while it's read, were they let.
+        let last = try #require(sandbox.photos(in: wanted.path).last)
+        let indexer = LibraryIndexer(
+            index: sandbox.index, fileSystem: SlowReadFileSystem(slow: sandbox.url(last), delay: .milliseconds(1500)),
+            configuration: .testing(batchSize: 50),
+        )
         indexer.prioritise([sandbox.root.appending(path: wanted.path)])
         let run = await IndexerRun.collect(indexer.index([sandbox.root]))
-        let indexed = run.events.compactMap { event -> String? in
-            guard case let .folderIndexed(folder) = event, folder.inserted > 0 else { return nil }
-            return folder.path
-        }
+        let indexed = run.indexedFolders
         #expect(indexed.first == sandbox.path(wanted.path), "\(indexed)")
         #expect(indexed.count == sandbox.fixture.folders.count)
+        #expect(run.failures.isEmpty, "\(run.failures)")
+    }
+
+    @Test func `the other folders go on once the folders asked for change while one is read`() async throws {
+        let sandbox = try await IndexerSandbox.make(.init(photos: 900, seed: 28, shapes: []))
+        defer { sandbox.remove() }
+        let wanted = try #require(sandbox.fixture.folders.dropFirst(2).first)
+        let last = try #require(sandbox.photos(in: wanted.path).last)
+        let indexer = LibraryIndexer(
+            index: sandbox.index, fileSystem: SlowReadFileSystem(slow: sandbox.url(last), delay: .seconds(4)),
+            configuration: .testing(batchSize: 50),
+        )
+        indexer.prioritise([sandbox.root.appending(path: wanted.path)])
+        let changing = Task {
+            try await Task.sleep(for: .milliseconds(500))
+            indexer.prioritise([])
+        }
+        let run = await IndexerRun.collect(indexer.index([sandbox.root]))
+        try await changing.value
+        let indexed = run.indexedFolders
+        #expect(indexed.first != sandbox.path(wanted.path), "\(indexed)")
+        #expect(indexed.count == sandbox.fixture.folders.count)
+        #expect(run.failures.isEmpty, "\(run.failures)")
+    }
+
+    @Test func `a photo of a folder asked for that fails holds the other folders back no longer`() async throws {
+        let sandbox = try await IndexerSandbox.make(.init(photos: 300, seed: 28, shapes: []))
+        defer { sandbox.remove() }
+        let wanted = try #require(sandbox.fixture.folders.dropFirst(2).first)
+        let photo = try #require(sandbox.photos(in: wanted.path).first { $0.sidecar == nil && $0.xmp == nil })
+        let hanging = SlowReadFileSystem(slow: sandbox.url(photo), delay: .seconds(4))
+        let volumes = VolumeIORegistry(fileSystem: hanging, configuration: .init(timeout: .milliseconds(100)))
+        let indexer = LibraryIndexer(index: sandbox.index, volumes: volumes, configuration: .testing())
+        indexer.prioritise([sandbox.root.appending(path: wanted.path)])
+        let run = await IndexerRun.collect(indexer.index([sandbox.root]))
+        #expect(run.failures.count == 1 && run.failures.first?.hasPrefix(sandbox.path(photo.path)) == true)
+        let count = try await sandbox.index.read { try $0.photoCount() }
+        #expect(count == 299)
+        #expect(run.indexedFolders.count == sandbox.fixture.folders.count - 1)
     }
 
     @Test func `the folders asked for are indexed first, however long the way to them takes to list`() async throws {
@@ -375,10 +416,7 @@ struct LibraryIndexerTests {
         )
         indexer.prioritise([sandbox.root.appending(path: wanted.path)])
         let run = await IndexerRun.collect(indexer.index([sandbox.root]))
-        let indexed = run.events.compactMap { event -> String? in
-            guard case let .folderIndexed(folder) = event, folder.inserted > 0 else { return nil }
-            return folder.path
-        }
+        let indexed = run.indexedFolders
         #expect(indexed.first == sandbox.path(wanted.path), "\(indexed)")
         #expect(indexed.count == sandbox.fixture.folders.count)
     }
