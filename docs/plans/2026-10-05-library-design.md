@@ -561,7 +561,30 @@ The `keywords` scenario, two Debug runs, load average about 65:
 - **Completion** over 100,000 keywords: p95 0.9 ms, against 2 ms; building its tables takes about 0.7 s.
 - **A keyword added to 10,000 photos:** 37.5 and 46.1 s, of which the index and lists took 0.44 s, the journal 0.07 s and the sidecars the rest; Undo, 43 to 50 s. A sidecar saved alone costs about 8 ms here: 1.7 ms of file coordination, 2.9 ms for the atomic write, 1.4 ms for the read before it.
 
-Saving sidecars one after another is what every change to many photos waits on: keywords here, and the original names renames record (LIB-26). Ratings on 10,000 photos (LIB-15) will too. The edit is on screen at once from the index; the sidecars follow in the background, but 40 s for 10,000 is too long to leave to a quit.
+Saving sidecars one after another is what every change to many photos waits on: keywords here, and the original names renames record (LIB-26). Ratings on 10,000 photos (LIB-15) will too. The edit is on screen at once from the index; the sidecars follow in the background, but 40 s for 10,000 is too long to leave to a quit. Batches now save through `SidecarStore.change` (below): the same keyword on 10,000 photos takes 14 to 17 s.
+
+### Batches of sidecar writes
+
+A single save cost 10 to 29 ms under load (two runs, load average 60 to 110): coordinating the write and the read 3.7 to 4.6 and 3.4 to 4.0 ms, three reads of the edit 0.8 to 1.2 ms each, and `Data.write(options: .atomic)` 4.2 to 8.5 ms where a bare write of the same bytes cost 0.7 to 3.3. `SidecarStore.change` (`SidecarStore+Batch.swift`) reads each sidecar once under coordination, makes the change from what it read and writes the bytes a single save would write, with every single-save rule kept; sidecars with conflicting copies take the single-save path. What each step bought, in ms a sidecar at load average 35 to 55:
+
+| | ms a sidecar |
+| --- | --- |
+| One coordination and one read | from 10.4 to 6.6 to 6.9 |
+| 64 sidecars coordinated at once | 5.3 to 7.7, no reliable gain alone |
+| 8 groups in flight | 1.0 to 1.35 |
+| The edit renamed into place within its package | 0.75 to 0.79 |
+| New packages written directly | 0.57 |
+| An unchanged sidecar, nothing written | 0.25 to 0.28 |
+
+| | Before | After |
+| --- | --- | --- |
+| A keyword on 10,000 photos | 41 and 71 s | 14 and 17 s |
+| Its Undo (5,000 removals) | 33 and 32 s | 42 and 39 s |
+| Renaming 10,000 photos | 93 and 110 s | 55 and 41 s |
+| Of that, their original names | 59 and 62 s | 15 and 11 s |
+| The rename's Undo, names cleared | 86 and 58 s | 35 and 67 s |
+
+Removing a sidecar still costs 4 to 5 ms even eight at a time, so Undo didn't gain; the rename's remaining 30 to 40 s is its moves. The disk's own floor for the keywords mix is about 7.8 s at load average 47, so 10,000 changes in 5 s isn't reachable on this Mac. Single saves would gain the same if their way of writing changed.
 
 ### Metadata with other apps (LIB-24)
 
