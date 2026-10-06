@@ -10,3 +10,8 @@ public/film/
 
 # Copied from docs/ by ../web/scripts/sync-assets.mjs before every studio session and render.
 public/synced/
+
+# The promos' scores (scripts/star-score.py) and the frames their storyboards are laid out from
+# (scripts/storyboard.mjs).
+public/star/
+public/review/

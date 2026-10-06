@@ -16,6 +16,11 @@
     "introducing": "node scripts/introducing.mjs",
     "prewelcome": "npm run sync-assets",
     "welcome": "node scripts/welcome.mjs",
+    "prestar": "npm run sync-assets",
+    "star": "node scripts/star.mjs",
+    "star-score": "python3 scripts/star-score.py",
+    "review": "node scripts/review.mjs",
+    "storyboard": "node scripts/storyboard.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

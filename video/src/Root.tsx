@@ -4,6 +4,8 @@ import { loadManifest } from "./introducing/assets";
 import { durationOf as filmDuration, Introducing, type IntroducingProps } from "./introducing/Introducing";
 import { stories } from "./introducing/Posters";
 import { Welcome } from "./introducing/Welcome";
+import { Storyboard, type StoryboardProps, storyboardSize } from "./kit/Storyboard";
+import { STAR_PROMO_FRAMES, StarPromo, type StarPromoProps } from "./star/StarPromo";
 import { stills } from "./stills";
 import { canvas } from "./stills/canvas";
 import "./theme";
@@ -17,6 +19,7 @@ const withManifest: CalculateMetadataFunction<IntroducingProps> = async ({ props
 export function RemotionRoot() {
   const explainer: ExplainerProps = { cut: "explainer", musicSrc: null };
   const social: ExplainerProps = { cut: "social", musicSrc: null };
+  const star: StarPromoProps = { hook: "charging", stars: 25, musicSrc: "star/score.wav", guides: false };
   return (
     <>
       <Composition
@@ -81,6 +84,36 @@ export function RemotionRoot() {
           <Composition key={id} id={id} component={component} durationInFrames={durationInFrames} fps={FPS} width={1080} height={1920} />
         ))}
         <Composition id="Welcome" component={Welcome} durationInFrames={filmDuration("welcome")} fps={FPS} width={1920} height={1080} />
+      </Folder>
+      <Folder name="Star">
+        <Composition
+          id="StarPromo9x16"
+          component={StarPromo}
+          durationInFrames={STAR_PROMO_FRAMES}
+          fps={FPS}
+          width={1080}
+          height={1920}
+          defaultProps={star}
+        />
+        <Composition
+          id="StarPromo1x1"
+          component={StarPromo}
+          durationInFrames={STAR_PROMO_FRAMES}
+          fps={FPS}
+          width={1080}
+          height={1080}
+          defaultProps={star}
+        />
+      </Folder>
+      <Folder name="Review">
+        <Still
+          id="Storyboard"
+          component={Storyboard}
+          width={2400}
+          height={1600}
+          defaultProps={{ title: "Storyboard", shots: [], aspect: 1, columns: 6, level: [], frames: 1, fps: FPS } satisfies StoryboardProps}
+          calculateMetadata={storyboardSize}
+        />
       </Folder>
       <Folder name="Stills">
         {stills.map(({ id, component }) => (
