@@ -14,10 +14,13 @@
     /// `redlamp library fixture`. It indexes the fixture into a temporary library, its thumbnails
     /// included, and closes it as quitting does; then it checks a warm launch (the library open,
     /// searchable and caught up with the disk), opening the fixture with Show Photos in Subfolders in
-    /// the filmstrip, its visible thumbnails, scrolling it end to end, and held arrow keys through
-    /// it at the key-repeat rate and at 120 Hz: the main thread, and blank frames (the canvas, or a
-    /// cell near the active photo, without its thumbnail a frame after each step). The footprint is
-    /// followed through every phase, then after a memory-pressure trim and a few idle seconds.
+    /// the filmstrip, its visible thumbnails, scrolling it and the Library grid end to end, held arrow
+    /// keys through it at the key-repeat rate and at 120 Hz (the main thread, and blank frames: the
+    /// canvas, or a cell near the active photo, without its thumbnail a frame after each step), and 200
+    /// switches between Library and Develop in the editor's own views with a photo open (the main
+    /// thread's work per switch until it's idle, and what the process read from disk meanwhile). The
+    /// footprint is followed through every phase, then after a memory-pressure trim and a few idle
+    /// seconds.
     /// Nothing joins the working set, and the temporary library is removed at the end;
     /// `--library-perf-library <folder>` keeps it in `<folder>` instead, where the next run finds it
     /// indexed.
@@ -39,7 +42,10 @@
             var visible: Duration = .zero
             var opening: MainThreadMonitor.Summary?
             var scrolling: MainThreadMonitor.Summary?
+            var gridScrolling: MainThreadMonitor.Summary?
             var arrows: [(label: String, summary: MainThreadMonitor.Summary?, steps: Int, blank: Int)] = []
+            var switches: [Double] = []
+            var switchReads: UInt64 = 0
         }
 
         static func scheduleIfRequested(model: EditorModel) {
@@ -162,6 +168,11 @@
             lines.append(scrollReport)
             await memory.mark("scrolled")
 
+            let (gridScrolling, gridReport) = await scrollGrid(model)
+            measured.gridScrolling = gridScrolling
+            lines.append(gridReport)
+            await memory.mark("grid scrolled")
+
             for (label, interval) in [("at the key-repeat rate (30 ms)", 0.030), ("at 120 Hz", 1.0 / 120)] {
                 let held = await holdArrow(model, loader: loader, interval: interval, steps: 300)
                 measured.arrows.append((label, held.summary, held.steps, held.blank))
@@ -171,6 +182,12 @@
                 lines.append(held.report)
             }
             await memory.mark("held arrows")
+
+            let switched = await switchModules(model, count: 200)
+            measured.switches = switched.durations
+            measured.switchReads = switched.reads
+            lines.append(switched.report)
+            await memory.mark("switched")
 
             try? await Task.sleep(for: .seconds(3))
             await memory.mark("settled")
@@ -191,8 +208,11 @@
                 "library-open": seconds(measured.opened) * 1000,
                 "library-thumbs": seconds(measured.visible) * 1000,
                 "library-main-scroll": measured.scrolling?.p99 ?? .infinity,
+                "library-main-grid-scroll": measured.gridScrolling?.p99 ?? .infinity,
                 "library-main-arrows": arrows,
                 "library-blank-frames": Double(blank),
+                "library-main-switch": percentile(measured.switches, 0.99),
+                "library-switch-reads": Double(measured.switchReads),
                 "library-peak-memory": browsing,
             ])
             let budgets = budgets(measured, arrows: arrows, blank: blank, browsing: browsing)
@@ -300,11 +320,111 @@
             }
         }
 
-        /// The highest footprint over launch while the library opened and the filmstrip was browsed,
-        /// before photos were opened in the editor.
+        /// Scrolls an offscreen Library grid end to end in 4 s, at 120 Hz, watching the main thread.
+        private static func scrollGrid(_ model: EditorModel) async -> (MainThreadMonitor.Summary?, String) {
+            DebugPerformance.trace("library-perf: scrolling the grid")
+            let window = NSWindow(
+                contentRect: CGRect(x: 0, y: 0, width: 1100, height: 800), styleMask: [.borderless],
+                backing: .buffered, defer: false,
+            )
+            let grid = LibraryGridViews.make(model: model)
+            window.contentView = grid
+            window.orderBack(nil)
+            defer { window.orderOut(nil) }
+            try? await Task.sleep(for: .milliseconds(300))
+            let monitor = MainThreadMonitor()
+            monitor.start()
+            let duration = 4.0
+            let started = CFAbsoluteTimeGetCurrent()
+            while CFAbsoluteTimeGetCurrent() - started < duration {
+                LibraryGridViews.scroll(grid, to: (CFAbsoluteTimeGetCurrent() - started) / duration)
+                try? await Task.sleep(for: .microseconds(8333))
+            }
+            monitor.stop()
+            return (
+                monitor.summary(seconds: duration),
+                monitor.report("Main thread scrolling the grid end to end", seconds: duration),
+            )
+        }
+
+        /// Switches between Library and Develop `count` times in the editor window's own views, with a
+        /// photo open and rendered in Develop: each switch's main-thread work, from the switch until the
+        /// views that follow it have and the window is drawn and committed, the main thread over the whole
+        /// phase, and the bytes the process read from disk meanwhile.
+        private static func switchModules(
+            _ model: EditorModel, count: Int,
+        ) async -> (durations: [Double], reads: UInt64, report: String) {
+            DebugPerformance.trace("library-perf: switching modules")
+            let window = NSWindow(
+                contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000),
+                styleMask: [.titled, .resizable, .fullSizeContentView], backing: .buffered, defer: false,
+            )
+            window.contentViewController = ModuleViews.make(model: model, theme: ThemeSettings())
+            window.orderBack(nil)
+            defer {
+                model.showModule(.develop)
+                window.orderOut(nil)
+            }
+            if model.selection == nil, let first = model.items.first {
+                model.select(first.url)
+            }
+            let opening = ContinuousClock.now
+            while !model.hasFrame || model.isLoading, ContinuousClock.now - opening < .seconds(30) {
+                try? await Task.sleep(for: .milliseconds(10))
+            }
+            // Library's grid loads its cells and their thumbnails the first time it's shown.
+            model.showModule(.library)
+            try? await Task.sleep(for: .milliseconds(500))
+            model.showModule(.develop)
+            try? await Task.sleep(for: .milliseconds(500))
+            var durations: [Double] = []
+            let monitor = MainThreadMonitor()
+            monitor.start()
+            let reads = diskReads()
+            let began = CFAbsoluteTimeGetCurrent()
+            for index in 0 ..< count {
+                let started = CFAbsoluteTimeGetCurrent()
+                model.showModule(index.isMultiple(of: 2) ? .library : .develop)
+                // The views follow the model in tasks of their own, queued on the main actor before this.
+                await Task.yield()
+                window.displayIfNeeded()
+                CATransaction.flush()
+                durations.append((CFAbsoluteTimeGetCurrent() - started) * 1000)
+                try? await Task.sleep(for: .milliseconds(30))
+            }
+            let read = diskReads() &- reads
+            let elapsed = CFAbsoluteTimeGetCurrent() - began
+            monitor.stop()
+            let report = String(
+                format: "Switching between Library and Develop: %d switches, each p50 %.2f ms, p99 %.2f ms, max %.2f ms; "
+                    + "%llu bytes read from disk",
+                durations.count, percentile(durations, 0.5), percentile(durations, 0.99), durations.max() ?? 0, read,
+            )
+            return (durations, read, report + "\n" + monitor.report("Main thread switching modules", seconds: elapsed))
+        }
+
+        /// The bytes the process has read from disk.
+        private static func diskReads() -> UInt64 {
+            var usage = rusage_info_v4()
+            let result = withUnsafeMutablePointer(to: &usage) { pointer in
+                pointer.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) {
+                    proc_pid_rusage(getpid(), RUSAGE_INFO_V4, $0)
+                }
+            }
+            return result == 0 ? usage.ri_diskio_bytesread : 0
+        }
+
+        private static func percentile(_ values: [Double], _ p: Double) -> Double {
+            let sorted = values.sorted()
+            guard !sorted.isEmpty else { return .infinity }
+            return sorted[min(sorted.count - 1, Int(Double(sorted.count) * p))]
+        }
+
+        /// The highest footprint over launch while the library opened and the filmstrip and grid were
+        /// browsed, before photos were opened in the editor.
         private static func browsingPeak(_ memory: MemoryPhases) -> Double {
             let base = mb(memory.baseline)
-            let browsing: Set = ["launched", "opened", "visible", "scrolled"]
+            let browsing: Set = ["launched", "opened", "visible", "scrolled", "grid scrolled"]
             return memory.phases.filter { browsing.contains($0.label) }.map { mb($0.peak) - base }.max() ?? .infinity
         }
 
@@ -323,8 +443,13 @@
                 .below("Main thread p99 opening them", measured.opening?.p99 ?? .infinity, 8.3, unit: "ms"),
                 .below("Visible thumbnails from the store", seconds(measured.visible) * 1000, 400, unit: "ms"),
                 .below("Main thread p99 while scrolling", measured.scrolling?.p99 ?? .infinity, 8.3, unit: "ms"),
+                .below(
+                    "Main thread p99 scrolling the grid", measured.gridScrolling?.p99 ?? .infinity, 8.3, unit: "ms",
+                ),
                 .below("Main thread p99 holding the arrow keys", arrows, 8.3, unit: "ms"),
                 .below("Blank frames holding the arrow keys", Double(blank), 1, unit: ""),
+                .below("Main thread p99 switching modules", percentile(measured.switches, 0.99), 8, unit: "ms"),
+                .below("Disk reads switching modules", Double(measured.switchReads), 1, unit: "bytes"),
                 .below("Peak footprint over launch, browsing", browsing, 250, unit: "MB"),
             ]
         }
