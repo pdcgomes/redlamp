@@ -224,6 +224,68 @@ struct MaskRenderTests {
         #expect(MaskResources.guideRecipe(for: recipe) == shipped)
     }
 
+    /// Dragging what the edit guide doesn't show, grain, the Detail panel, Texture, Clarity and from
+    /// process 14 the crop, leaves the guide as it is; Exposure renders it once more (PIPE-07).
+    @Test func `the edit guide renders again only for settings it shows`() throws {
+        let session = try makeSession(width: 400, height: 240) { x, y in
+            SIMD3(Float(x) / 400 * 0.5 + 0.02, 0.2, Float(y) / 240 * 0.4 + 0.02)
+        }
+        var recipe = EditRecipe()
+        recipe.processVersion = 14
+        recipe.masks = [MaskLayer(
+            name: "Lights",
+            components: [MaskComponent(shape: .luminanceRange(LuminanceRangeMask(lower: 50, upper: 100)))],
+            adjustments: [.localExposure: -1, .localTexture: 30],
+        )]
+        let engine = try RedlampEngine()
+        _ = try render(recipe, session: session, engine: engine)
+        let first = engine.masks.editGuideGeneration
+        let drags: [(ParameterID, [Double])] = [
+            (.grainAmount, [10, 20, 30]), (.grainSize, [40, 60]), (.sharpenAmount, [60, 90]),
+            (.noiseLuminance, [20, 40]), (.noiseColor, [10, 30]), (.texture, [20, -20]), (.clarity, [15, 30]),
+            (.cropAngle, [1, 2]),
+        ]
+        for (parameter, values) in drags {
+            for value in values {
+                recipe[parameter] = value
+                _ = try render(recipe, session: session, engine: engine)
+            }
+        }
+        let dragged = engine.masks.editGuideGeneration
+        withKnownIssue("PIPE-07: the guide is keyed on the whole global edit") {
+            #expect(dragged == first, "the guide rendered \(dragged - first) more times")
+        }
+        recipe[.exposure] = 0.5
+        _ = try render(recipe, session: session, engine: engine)
+        #expect(engine.masks.editGuideGeneration == dragged + 1)
+    }
+
+    /// What the edit guide leaves out doesn't reach its pixels: the guide of an edit with all of it
+    /// moved matches, bit for bit, the guide `MaskResources.guideRecipe` keys and renders.
+    @Test func `settings the edit guide leaves out don't change its pixels`() throws {
+        let session = try makeSession(width: 400, height: 240) { x, y in
+            let stripe: Float = (x / 7 + y / 5) % 2 == 0 ? 0.12 : 0
+            return SIMD3(Float(x) / 400 * 0.5 + 0.02 + stripe, 0.2, Float(y) / 240 * 0.4 + 0.02)
+        }
+        var recipe = EditRecipe()
+        recipe[.exposure] = 0.4
+        recipe[.contrast] = 20
+        let moved: [ParameterID: Double] = [
+            .grainAmount: 40, .grainSize: 70, .grainRoughness: 80, .grainColor: 50, .sharpenAmount: 120,
+            .sharpenRadius: 2, .sharpenDetail: 60, .sharpenMasking: 30, .noiseLuminance: 50,
+            .noiseLuminanceDetail: 70, .noiseLuminanceContrast: 30, .noiseColor: 60, .noiseColorDetail: 70,
+            .noiseColorSmoothness: 80, .texture: 40, .clarity: 35,
+        ]
+        for (parameter, value) in moved {
+            recipe[parameter] = value
+        }
+        let engine = try RedlampEngine()
+        let edited = try guidePixels(recipe, session: session, engine: engine)
+        let keyed = try guidePixels(MaskResources.guideRecipe(for: recipe), session: session, engine: engine)
+        let same = edited == keyed
+        #expect(same, "the guide's pixels differ")
+    }
+
     /// The selection follows global edits: the guide is re-rendered when they change.
     @Test func `range masks follow the global edit`() throws {
         let session = try makeSession(width: 400, height: 200) { x, _ in SIMD3(repeating: x < 200 ? 0.03 : 0.5) }
@@ -798,6 +860,28 @@ struct MaskRenderTests {
         commands.waitUntilCompleted()
         let halves = buffer.contents().assumingMemoryBound(to: Float16.self)
         return (0 ..< texture.width * texture.height).map { Float(halves[$0]) }
+    }
+
+    /// `recipe` developed as the edit guide is (OKLab, without the detail stage), as raw halves.
+    private func guidePixels(_ recipe: EditRecipe, session: ImageSession, engine: RedlampEngine) throws -> [UInt16] {
+        let size = session.orientedSize
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba16Float, width: size.width, height: size.height, mipmapped: false,
+        )
+        descriptor.usage = [.shaderRead, .shaderWrite]
+        descriptor.storageMode = .shared
+        let texture = try #require(device.makeTexture(descriptor: descriptor))
+        let commands = try #require(engine.queue.makeCommandBuffer())
+        try engine.encodeDevelop(
+            recipe, session: session, into: texture, size: size, encoding: .okLab, showClipping: false,
+            commands: commands, cacheDetail: false, detail: false,
+        )
+        try engine.finish(commands)
+        var halves = [UInt16](repeating: 0, count: size.width * size.height * 4)
+        texture.getBytes(
+            &halves, bytesPerRow: size.width * 8, from: MTLRegionMake2D(0, 0, size.width, size.height), mipmapLevel: 0,
+        )
+        return halves
     }
 
     /// The whole developed photo at full size, as linear output.
