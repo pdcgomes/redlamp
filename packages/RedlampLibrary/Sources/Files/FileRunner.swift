@@ -322,6 +322,8 @@ final class FileRunner: @unchecked Sendable {
     /// it out of the sidecar if it's the name the photo goes back to. The sidecars are written a few
     /// at a time, each on its own.
     private func changeOriginalNames(of photos: [PhotoMove], recording: Bool) {
+        let clock = ContinuousClock()
+        let started = clock.now
         let tally = Mutex((recorded: 0, skipped: [String]()))
         let store = store
         let width = min(Self.sidecarWriters, photos.count)
@@ -345,6 +347,7 @@ final class FileRunner: @unchecked Sendable {
         let (recorded, skipped) = tally.withLock { ($0.recorded, $0.skipped) }
         outcome.originalNamesRecorded += recorded
         outcome.originalNamesSkipped += skipped.sorted()
+        outcome.originalNamesTime += clock.now - started
     }
 
     private enum NameChange {

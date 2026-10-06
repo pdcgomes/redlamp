@@ -92,6 +92,8 @@ public struct FileOutcome: Sendable, Hashable {
     /// Photos whose sidecar this build can't write (`SidecarStore.protection(for:)`), so their original
     /// names weren't recorded or cleared, by path.
     public var originalNamesSkipped: [String] = []
+    /// How long recording and clearing original names in sidecars took.
+    public var originalNamesTime = Duration.zero
     /// Folders left where they were because something was put in them meanwhile.
     public var foldersLeft: [String] = []
     /// What couldn't be undone because it wasn't where the batch put it any more: emptied from the

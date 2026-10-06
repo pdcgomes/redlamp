@@ -167,7 +167,7 @@ public struct KeywordScenario: BenchScenario {
             ),
             BenchResult(
                 scenario: name, id: "library-keywords-add-sidecars",
-                name: "Of it, \(BenchResult.grouped(added.written)) sidecars written, 8 at a time",
+                name: "Of it, \(BenchResult.grouped(added.written)) sidecars written",
                 value: added.sidecarTime.seconds * 1000, unit: "ms",
             ),
             BenchResult(
@@ -186,6 +186,11 @@ public struct KeywordScenario: BenchScenario {
             BenchResult(
                 scenario: name, id: "library-keywords-undo-index", name: "Of it, the index and its lists",
                 value: undone.indexTime.seconds * 1000, unit: "ms",
+            ),
+            BenchResult(
+                scenario: name, id: "library-keywords-undo-sidecars",
+                name: "Of it, \(BenchResult.grouped(undone.written)) sidecars written back",
+                value: undone.sidecarTime.seconds * 1000, unit: "ms",
             ),
             BenchResult(
                 scenario: name, id: "library-keywords-wrong", name: "Sidecars not as each step leaves them",

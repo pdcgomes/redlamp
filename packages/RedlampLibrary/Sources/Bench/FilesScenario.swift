@@ -72,7 +72,7 @@ public struct FilesScenario: BenchScenario {
         let renaming = clock.now - started
         try await check()
         started = clock.now
-        try await operations.undo()
+        let undone = try await operations.undo()
         let undoing = clock.now - started
         try await check()
 
@@ -113,8 +113,16 @@ public struct FilesScenario: BenchScenario {
                 value: renaming.seconds * 1000, unit: "ms", budget: .below(Self.budget, "ms"),
             ),
             BenchResult(
+                scenario: name, id: "library-files-rename-names", name: "Of it, the original names written in sidecars",
+                value: renamed.originalNamesTime.seconds * 1000, unit: "ms",
+            ),
+            BenchResult(
                 scenario: name, id: "library-files-undo", name: "\(label) photos: the rename undone",
                 value: undoing.seconds * 1000, unit: "ms", budget: .below(Self.budget, "ms"),
+            ),
+            BenchResult(
+                scenario: name, id: "library-files-undo-names", name: "Of it, the original names taken out of sidecars",
+                value: undone.originalNamesTime.seconds * 1000, unit: "ms",
             ),
             BenchResult(
                 scenario: name, id: "library-files-rename-cost",
