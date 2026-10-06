@@ -344,17 +344,18 @@ public final class CanvasController {
 }
 
 extension CanvasController {
-    /// When zoomed in, only the visible part plus a margin of half the visible size each way,
-    /// at the density the zoom needs. The region keeps its size while panning (it shifts
+    /// When zoomed in, only the visible part plus a margin of a quarter of the visible size each
+    /// way (2.25 times the pixels on screen), at the density the zoom needs; the whole photo
+    /// only once that covers 90% of it. The region keeps its size while panning (it shifts
     /// rather than shrinks at the edges), and its origin sits on the output pixel grid, so
     /// successive regions line up exactly.
     func plannedRenderTarget() -> RenderTarget {
         let whole = RenderTarget(size: renderSize, region: nil)
         guard isZoomedIn, imageSize.width > 0 else { return whole }
         let visible = visibleImageRect
-        let width = min(visible.width * 2, 1)
-        let height = min(visible.height * 2, 1)
-        guard width * height < 0.6 else { return whole }
+        let width = min(visible.width * 1.5, 1)
+        let height = min(visible.height * 1.5, 1)
+        guard width * height < 0.9 else { return whole }
         let density = min(pixelScale, 1)
         let columns = Double(imageSize.width) * density
         let rows = Double(imageSize.height) * density

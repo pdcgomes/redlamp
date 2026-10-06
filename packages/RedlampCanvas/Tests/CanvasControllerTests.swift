@@ -59,12 +59,10 @@ struct CanvasControllerTests {
         let target = controller.renderTarget
         let visible = controller.visibleImageRect
         let shown = visible.width * Double(image.width) * visible.height * Double(image.height)
-        withKnownIssue("MEM-02: the whole photo renders once twice the view covers 60% of it") {
-            #expect(target.region != nil)
-            // Each side rounds up to whole pixels.
-            #expect(Double(target.size.width * target.size.height) <= 2.25 * shown +
-                Double(target.size.width + target.size.height))
-        }
+        #expect(target.region != nil)
+        // Each side rounds up to whole pixels.
+        let rounding = Double(target.size.width + target.size.height)
+        #expect(Double(target.size.width * target.size.height) <= 2.25 * shown + rounding)
     }
 
     @Test func `panning inside the rendered margin keeps the target`() throws {
