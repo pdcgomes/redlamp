@@ -82,6 +82,11 @@ public final class LibraryIndex: Sendable {
         }
     }
 
+    /// How many reads can run at once.
+    var readerCount: Int {
+        readers.count
+    }
+
     /// Runs `body` on the least busy reader, outside any transaction.
     func onReader<T: Sendable>(_ body: @escaping @Sendable (SQLiteDatabase) throws -> T) async throws -> T {
         let slot = readerLoad.withLock { load in

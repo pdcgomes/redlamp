@@ -69,37 +69,53 @@ enum QueryText {
 enum FinderOrder {
     /// Bytes that sort as the names do.
     static func key(_ name: String) -> [UInt8] {
+        var key = ContiguousArray<UInt8>()
+        appendKey(of: name, to: &key)
+        return Array(key)
+    }
+
+    /// Appends `name`'s key to `key`: a run of digits as a marker, the count of its digits after
+    /// leading zeros and then those digits, or a single zero for a run of zeros.
+    static func appendKey(of name: String, to key: inout ContiguousArray<UInt8>) {
         let folded = name.utf8.allSatisfy { $0 < 0x80 } ? name
             : name.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
-        var key: [UInt8] = []
-        key.reserveCapacity(folded.utf8.count + 4)
-        var digits: [UInt8] = []
-        func flushDigits() {
-            guard !digits.isEmpty else { return }
-            let significant = digits.drop { $0 == UInt8(ascii: "0") }
-            let run = significant.isEmpty ? [UInt8(ascii: "0")] : Array(significant)
-            key.append(digitMarker)
-            key.append(UInt8(min(run.count, 255)))
-            key.append(contentsOf: run)
-            digits.removeAll(keepingCapacity: true)
+        // Where the run of digits being read keeps its count, -1 outside a run.
+        var countAt = -1
+        var digits = 0
+        func endDigits() {
+            guard countAt >= 0 else { return }
+            if digits == 0 {
+                key.append(UInt8(ascii: "0"))
+                digits = 1
+            }
+            key[countAt] = UInt8(min(digits, 255))
+            countAt = -1
         }
         for byte in folded.utf8 {
             switch byte {
             case UInt8(ascii: "0") ... UInt8(ascii: "9"):
-                digits.append(byte)
+                if countAt < 0 {
+                    key.append(digitMarker)
+                    countAt = key.count
+                    key.append(0)
+                    digits = 0
+                }
+                if digits > 0 || byte != UInt8(ascii: "0") {
+                    key.append(byte)
+                    digits += 1
+                }
             case UInt8(ascii: "A") ... UInt8(ascii: "Z"):
-                flushDigits()
+                endDigits()
                 key.append(byte + 0x20)
             case UInt8(ascii: "a") ... UInt8(ascii: "z"), 0x80...:
-                flushDigits()
+                endDigits()
                 key.append(byte)
             default:
-                flushDigits()
+                endDigits()
                 key.append(punctuation[Int(byte)])
             }
         }
-        flushDigits()
-        return key
+        endDigits()
     }
 
     /// Orders two names as `key` does.

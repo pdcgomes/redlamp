@@ -86,6 +86,32 @@ struct ColumnStoreTests {
         #expect(duplicated.count == 300)
     }
 
+    @Test func `a store joined from parts read side by side is the store of all their rows`() async throws {
+        let rows = Self.rows(900, seed: 4, firstID: 5)
+        var parts: [ColumnStore.Part] = []
+        for range in [0 ..< 250, 250 ..< 260, 260 ..< 900] {
+            var part = ColumnStore.Part(capacity: range.count)
+            for row in rows[range] {
+                part.add(row)
+            }
+            parts.append(part)
+        }
+        let joined = await ColumnStore.joining(parts + [ColumnStore.Part()])
+        let whole = ColumnStore(rows: rows)
+        #expect(joined.count == 900 && joined.rowCount == 900 && joined.row(of: 4) == nil)
+        for sort in Self.sorts {
+            #expect(Array(joined.ids(sortedBy: sort)) == Self.expected(rows, sort), "\(sort)")
+        }
+        for row in rows {
+            let index = try #require(joined.row(of: row.hot.id))
+            let other = try #require(whole.row(of: row.hot.id))
+            #expect(joined.cameraIDs[Int(joined.cameras[index])] == row.hot.camera ?? 0)
+            #expect(joined.lensIDs[Int(joined.lenses[index])] == row.hot.lens ?? 0)
+            #expect(joined.packed[index] == whole.packed[other] && joined.editedAt[index] == whole.editedAt[other])
+            #expect(joined.nameRanks[index] == whole.nameRanks[other])
+        }
+    }
+
     @Test func `the columns hold the encodings, the codes and the packed fields`() throws {
         let rows = Self.rows(50, seed: 5)
         let store = ColumnStore(rows: rows)

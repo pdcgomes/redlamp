@@ -121,26 +121,114 @@ public struct ColumnStore: Sendable {
         }
 
         mutating func finish() -> ColumnStore {
-            store.sortOrders(names: names)
+            store.sortOrders(keys: NameKeys(names))
             names = []
             return store
         }
     }
 
-    /// Sorts every order from scratch, the rows' names being `names`.
-    private mutating func sortOrders(names: ContiguousArray<String>) {
-        let keys = NameKeys(names)
-        var byName = ContiguousArray(Int32(0) ..< Int32(ids.count))
-        ids.withUnsafeBufferPointer { ids in
-            byName.sort { keys.compare(Int($0), Int($1)) ?? (ids[Int($0)] < ids[Int($1)]) }
+    /// The rows of a range of photo IDs, for `joining` with the parts beside it: added in increasing
+    /// ID order, each photo once, with their names' keys and codes of their own for cameras and
+    /// lenses. Parts of one store are built side by side.
+    struct Part: Sendable {
+        fileprivate var store = ColumnStore()
+        fileprivate var keys = NameKeys()
+
+        init(capacity: Int = 0) {
+            store.reserveColumns(capacity)
+            keys.reserveCapacity(capacity)
         }
-        self.byName = byName
+
+        var count: Int {
+            store.ids.count
+        }
+
+        mutating func add(_ row: Row) {
+            guard row.hot.id >= 0 else { return }
+            store.appendColumns(row)
+            keys.append(name: row.hot.name)
+        }
+    }
+
+    /// The store of `parts`, given in increasing order of their photo IDs: their columns one after
+    /// another, and every order sorted, the four side by side.
+    static func joining(_ parts: [Part]) async -> ColumnStore {
+        var store = ColumnStore()
+        let total = parts.reduce(0) { $0 + $1.count }
+        store.reserveColumns(total)
+        var keys = NameKeys()
+        keys.reserveCapacity(total)
+        var largest: Int64 = -1
+        for part in parts {
+            let columns = part.store
+            let cameras = columns.cameraIDs.indices.map { code in
+                code == 0 ? 0 : store.code(for: columns.cameraIDs[code], in: &store.cameraIDs, &store.cameraCodes)
+            }
+            let lenses = columns.lensIDs.indices.map { code in
+                code == 0 ? 0 : store.code(for: columns.lensIDs[code], in: &store.lensIDs, &store.lensCodes)
+            }
+            store.ids.append(contentsOf: columns.ids)
+            store.folders.append(contentsOf: columns.folders)
+            store.captured.append(contentsOf: columns.captured)
+            store.cameras.append(contentsOf: columns.cameras.lazy.map { cameras[Int($0)] })
+            store.lenses.append(contentsOf: columns.lenses.lazy.map { lenses[Int($0)] })
+            store.packed.append(contentsOf: columns.packed)
+            store.iso.append(contentsOf: columns.iso)
+            store.aperture.append(contentsOf: columns.aperture)
+            store.focal.append(contentsOf: columns.focal)
+            store.shutter.append(contentsOf: columns.shutter)
+            store.kinds.append(contentsOf: columns.kinds)
+            store.editedAt.append(contentsOf: columns.editedAt)
+            keys.append(contentsOf: part.keys)
+            largest = max(largest, columns.ids.max() ?? -1)
+        }
+        store.count = total
+        store.nameRanks = ContiguousArray(repeating: 0, count: total)
+        store.live = RowBits(rows: total, filled: true)
+        store.rowOfID = ContiguousArray(repeating: -1, count: Int(largest) + 1)
+        store.rowOfID.withUnsafeMutableBufferPointer { rowOfID in
+            for (row, id) in store.ids.enumerated() {
+                rowOfID[Int(id)] = Int32(row)
+            }
+        }
+        return await store.sortingOrders(keys: keys)
+    }
+
+    /// Sorts every order from scratch, the rows' names' keys being `keys`.
+    private mutating func sortOrders(keys: NameKeys) {
+        for key in QuerySort.Key.allCases {
+            setOrder(rows(sortedBy: key, keys: keys), for: key)
+        }
         renumberNames()
-        for key in [QuerySort.Key.captured, .rating, .edited] {
-            var order = ContiguousArray(Int32(0) ..< Int32(ids.count))
-            sort(&order, by: key)
-            setOrder(order, for: key)
+    }
+
+    /// `sortOrders`, each order sorted beside the others.
+    private func sortingOrders(keys: NameKeys) async -> ColumnStore {
+        let store = self
+        return await withTaskGroup(of: (QuerySort.Key, ContiguousArray<Int32>).self) { group in
+            for key in QuerySort.Key.allCases {
+                group.addTask { (key, store.rows(sortedBy: key, keys: keys)) }
+            }
+            var sorted = store
+            for await (key, order) in group {
+                sorted.setOrder(order, for: key)
+            }
+            sorted.renumberNames()
+            return sorted
         }
+    }
+
+    /// Every row in `key`'s ascending order, before the name order's ranks are known.
+    private func rows(sortedBy key: QuerySort.Key, keys: NameKeys) -> ContiguousArray<Int32> {
+        var order = ContiguousArray(Int32(0) ..< Int32(ids.count))
+        if key == .name {
+            ids.withUnsafeBufferPointer { ids in
+                order.sort { keys.compare(Int($0), Int($1)) ?? (ids[Int($0)] < ids[Int($1)]) }
+            }
+        } else {
+            sort(&order, by: key)
+        }
+        return order
     }
 
     // MARK: - Reading
@@ -207,6 +295,12 @@ public struct ColumnStore: Sendable {
     // MARK: - Rows
 
     private mutating func reserveCapacity(_ count: Int) {
+        reserveColumns(count)
+        nameRanks.reserveCapacity(count)
+        rowOfID.reserveCapacity(count + 1)
+    }
+
+    private mutating func reserveColumns(_ count: Int) {
         ids.reserveCapacity(count)
         folders.reserveCapacity(count)
         captured.reserveCapacity(count)
@@ -218,14 +312,27 @@ public struct ColumnStore: Sendable {
         focal.reserveCapacity(count)
         shutter.reserveCapacity(count)
         kinds.reserveCapacity(count)
-        nameRanks.reserveCapacity(count)
         editedAt.reserveCapacity(count)
-        rowOfID.reserveCapacity(count + 1)
     }
 
     /// Adds a row for a photo the store doesn't hold.
     mutating func append(_ row: Row) {
         let index = ids.count
+        appendColumns(row)
+        nameRanks.append(0)
+        live.grow(to: index + 1)
+        live.insert(index)
+        let id = Int(row.hot.id)
+        if id >= rowOfID.count {
+            rowOfID.append(contentsOf: repeatElement(-1, count: id + 1 - rowOfID.count))
+        }
+        rowOfID[id] = Int32(index)
+        count += 1
+    }
+
+    /// Adds `row`'s columns after the others, without its rank in the name order or its place among
+    /// the photos the store holds.
+    private mutating func appendColumns(_ row: Row) {
         ids.append(row.hot.id)
         folders.append(0)
         captured.append(0)
@@ -237,17 +344,8 @@ public struct ColumnStore: Sendable {
         focal.append(0)
         shutter.append(0)
         kinds.append(0)
-        nameRanks.append(0)
         editedAt.append(0)
-        live.grow(to: index + 1)
-        live.insert(index)
-        let id = Int(row.hot.id)
-        if id >= rowOfID.count {
-            rowOfID.append(contentsOf: repeatElement(-1, count: id + 1 - rowOfID.count))
-        }
-        rowOfID[id] = Int32(index)
-        count += 1
-        set(row, at: index)
+        set(row, at: ids.count - 1)
     }
 
     /// Writes `row`'s columns at `index`, which keeps its place in every order.
@@ -546,20 +644,38 @@ struct NameKeys {
     /// Each key's first eight bytes, big-endian, which decide most comparisons.
     private var prefixes = ContiguousArray<UInt64>()
 
+    init() {}
+
     init(_ names: some Sequence<String>) {
         for name in names {
-            append(FinderOrder.key(name))
+            append(name: name)
         }
     }
 
-    mutating func append(_ key: [UInt8]) {
-        bytes.append(contentsOf: key)
+    /// Room for `count` names of about 16 bytes.
+    mutating func reserveCapacity(_ count: Int) {
+        bytes.reserveCapacity(count * 16)
+        offsets.reserveCapacity(count + 1)
+        prefixes.reserveCapacity(count)
+    }
+
+    mutating func append(name: String) {
+        let start = bytes.count
+        FinderOrder.appendKey(of: name, to: &bytes)
         offsets.append(Int32(clamping: bytes.count))
         var prefix: UInt64 = 0
-        for index in 0 ..< 8 {
-            prefix = prefix << 8 | UInt64(index < key.count ? key[index] : 0)
+        for index in start ..< start + 8 {
+            prefix = prefix << 8 | UInt64(index < bytes.count ? bytes[index] : 0)
         }
         prefixes.append(prefix)
+    }
+
+    /// Adds `other`'s keys after these.
+    mutating func append(contentsOf other: NameKeys) {
+        let base = Int32(clamping: bytes.count)
+        bytes.append(contentsOf: other.bytes)
+        offsets.append(contentsOf: other.offsets.dropFirst().lazy.map { $0 + base })
+        prefixes.append(contentsOf: other.prefixes)
     }
 
     /// How key `lhs` orders against key `rhs`: true before, false after, nil the same.

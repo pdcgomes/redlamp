@@ -149,8 +149,39 @@ private struct NameMatcher: Sendable {
 struct IndexQuerySource: QuerySource {
     let index: LibraryIndex
 
+    /// Read in parts, a range of photo IDs on each of the index's readers, the last open-ended, then
+    /// joined. Each part is read in a transaction of its own: what's written while they're read
+    /// reaches the store through the updates that follow the load.
     func columnStore() async throws -> ColumnStore {
-        try await index.read { try $0.columnStore() }
+        guard let (ids, count) = try await index.read({ try $0.photoIDs() }) else { return ColumnStore() }
+        let ranges = Self.ranges(ids, parts: index.readerCount)
+        let capacity = count / ranges.count + 1
+        let parts = try await withThrowingTaskGroup(of: (Int, ColumnStore.Part).self) { [index] group in
+            for (number, range) in ranges.enumerated() {
+                group.addTask {
+                    try await (number, index.read { try $0.columnStorePart(ids: range, capacity: capacity) })
+                }
+            }
+            var parts = [ColumnStore.Part](repeating: ColumnStore.Part(), count: ranges.count)
+            for try await (number, part) in group {
+                parts[number] = part
+            }
+            return parts
+        }
+        return await ColumnStore.joining(parts)
+    }
+
+    /// `ids` cut into at most `parts` ranges of about as many IDs, the last reaching every ID above.
+    static func ranges(_ ids: ClosedRange<Int64>, parts: Int) -> [ClosedRange<Int64>] {
+        let width = max((ids.upperBound - ids.lowerBound) / Int64(max(parts, 1)) + 1, 1)
+        var ranges: [ClosedRange<Int64>] = []
+        var lower = ids.lowerBound
+        while lower <= ids.upperBound {
+            let upper = lower + width - 1
+            ranges.append(lower ... (upper >= ids.upperBound ? .max : upper))
+            lower = upper + 1
+        }
+        return ranges
     }
 
     func names() async throws -> QueryNames {
