@@ -82,7 +82,8 @@
 
         @MainActor static func rating(_ model: EditorModel) -> String {
             let metadata = model.photoMetadata
-            return "\(metadata.rating) \(String(describing: metadata.flag)) \(String(describing: metadata.label))"
+            return "\(metadata.rating) \(String(describing: metadata.flag)) \(String(describing: metadata.label)) "
+                + "\(String(describing: metadata.customLabel)) \(metadata.mark)"
         }
 
         static let all: [ActionCheck] = ShortcutAction.allCases.map(check)
@@ -338,7 +339,12 @@
                 ActionCheck(action: action, setUp: { app in
                     try app.main { _ = $0.perform(.flagPick) }
                 }, observe: rating)
-            case .labelRed, .labelYellow, .labelGreen, .labelBlue: .toggle(action, rating)
+            case .labelRed, .labelYellow, .labelGreen, .labelBlue, .labelPurple, .toggleMark: .toggle(action, rating)
+            case .clearLabel:
+                ActionCheck(action: action, setUp: { app in
+                    try app.main { _ = $0.perform(.labelRed) }
+                }, observe: rating)
+            case .autoAdvance: .toggle(action) { "\($0.autoAdvance)" }
             // File and Edit
             case .openFolder:
                 ActionCheck(action: action, observe: { _ in "\(NSApp.modalWindow is NSOpenPanel)" }, restore: { app in
