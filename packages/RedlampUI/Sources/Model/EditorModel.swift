@@ -838,7 +838,7 @@ public final class EditorModel {
             sidecarReadRetry = nil
             // What was started on it while it was read-only is for the visit it was started in.
             leave(for: url, keepingSelection: true, ready: true)
-            didOpen(info, read)
+            didOpen(info, read, keepingView: true)
             if failedSaves[url] != nil {
                 retry(url)
             }
@@ -857,7 +857,8 @@ public final class EditorModel {
         activity.record(.photo, "Opened \(activity.alias(for: opened.url)): \(parts.joined(separator: ", "))")
     }
 
-    private func didOpen(_ opened: ImageInfo, _ read: OpenedSidecar) {
+    /// `keepingView`: the photo is on screen already, and keeps its zoom unless its frame size changes.
+    private func didOpen(_ opened: ImageInfo, _ read: OpenedSidecar, keepingView: Bool = false) {
         // Writes that failed again as it opened are shown; its saves go on over the base they
         // were tracking, so the next one still merges what another writer saved.
         let unsaved = read.protection == nil ? failedSaves[opened.url]?.writes ?? [] : []
@@ -894,7 +895,7 @@ public final class EditorModel {
         let frameSize = loaded.developedSize(imageSize: opened.pixelSize)
         if !hasFrame {
             showOnCanvas(frameSize)
-        } else {
+        } else if !keepingView || frameSize != canvas.imageSize {
             pendingCanvas = (frameSize, generation &+ 1)
         }
         requestRender()

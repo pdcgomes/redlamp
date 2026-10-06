@@ -57,9 +57,7 @@ struct SidecarSafetyTests {
 
     private func open(_ url: URL, in model: EditorModel) async throws {
         model.select(url)
-        for _ in 0 ..< 400 where model.info?.url != url {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info?.url == url }
         try #require(model.info?.url == url)
     }
 
@@ -155,8 +153,9 @@ struct SidecarSafetyTests {
     }
 
     /// Waits for `condition`, which the save queue's results make true on the main actor.
-    private func eventually(_ condition: () -> Bool, seconds: Double = 1) async throws {
-        for _ in 0 ..< Int(seconds * 200) where !condition() {
+    private func eventually(_ condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now + .seconds(30)
+        while !condition(), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(5))
         }
     }
@@ -301,7 +300,7 @@ struct SidecarSafetyTests {
         #expect(model.saveError?.message == "Edits to IMG_0001 can't be saved: its folder can't be found")
 
         try FileManager.default.moveItem(at: away, to: folder.url)
-        try await eventually({ model.saveError == nil }, seconds: 5)
+        try await eventually { model.saveError == nil }
         #expect(model.saveError == nil)
         #expect(SidecarStore().load(for: folder.photo)?.recipe == model.recipe)
     }

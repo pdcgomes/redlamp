@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import IOSurface
 import RedlampDocument
 import RedlampEngineAPI
 import RedlampRecipes
@@ -156,12 +157,25 @@ final class GatedEngine: EditingEngine, @unchecked Sendable {
         base.prefetch(urls)
     }
 
+    /// Sends a frame for each render from then on, as the engine does.
+    var sendsFrames = false
+    private let rendered = AsyncStream.makeStream(of: RenderedFrame.self)
+
     func render(_ request: RenderRequest) {
         base.render(request)
+        let properties: [CFString: Any] = [
+            kIOSurfaceWidth: request.targetSize.width, kIOSurfaceHeight: request.targetSize.height,
+            kIOSurfaceBytesPerElement: 8, kIOSurfacePixelFormat: 0x5247_6841,
+        ]
+        guard sendsFrames, let surface = IOSurfaceCreate(properties as CFDictionary) else { return }
+        rendered.continuation.yield(RenderedFrame(
+            surface: surface, size: request.targetSize, histogram: .empty,
+            generation: request.generation, renderDuration: .zero,
+        ))
     }
 
     func frames() -> AsyncStream<RenderedFrame> {
-        base.frames()
+        rendered.stream
     }
 
     func renderStill(_ request: StillRequest) async throws -> CGImage {
@@ -450,9 +464,7 @@ struct StaleResultTests {
 
     private func open(_ url: URL, for analysis: Analysis) async throws {
         model.select(url)
-        for _ in 0 ..< 400 where model.info?.url != url {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info?.url == url }
         try #require(model.info?.url == url)
         analysis.rearm(model)
     }
@@ -463,18 +475,26 @@ struct StaleResultTests {
         await analysis.prepare(model, engine)
         engine.gate.hold()
         let run = analysis.start(model)
-        for _ in 0 ..< 400 where engine.gate.arrived == 0 {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { engine.gate.arrived > 0 }
         try #require(engine.gate.arrived > 0, "the analysis reached the engine")
         return run
     }
 
     /// Lets the result through, and gives it time to land.
-    private func release(_ run: Task<Void, Never>, until landed: () -> Bool = { false }) async throws {
+    private func release(_ run: Task<Void, Never>, until landed: (() -> Bool)? = nil) async throws {
         engine.gate.release()
         await run.value
-        for _ in 0 ..< 40 where !landed() {
+        if let landed {
+            try await eventually(landed)
+        } else {
+            try await Task.sleep(for: .milliseconds(200))
+        }
+    }
+
+    /// Waits for `condition`, for as long as a loaded machine may need.
+    private func eventually(_ condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now + .seconds(30)
+        while !condition(), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(5))
         }
     }
@@ -534,9 +554,7 @@ struct StaleResultTests {
         engine.gate.hold()
         engine.failingEdgeSolves = failing ? 1 : 0
         let solvingA = Task { await model.endEdgeStroke() }
-        for _ in 0 ..< 400 where engine.gate.arrived == 0 {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { engine.gate.arrived > 0 }
         try #require(engine.gate.arrived > 0)
         try await paintEdgeStroke(on: b)
         await model.endEdgeStroke()
@@ -573,9 +591,7 @@ struct StaleResultTests {
         #expect(model.pendingModel != nil)
         engine.gate.hold()
         let download = Task { await model.downloadPendingModel() }
-        for _ in 0 ..< 400 where engine.gate.arrived == 0 {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { engine.gate.arrived > 0 }
         try await open(b, for: .autoTone)
         try await release(download)
         #expect(model.drawingKind == nil, "Objects isn't armed on B")
@@ -609,9 +625,7 @@ struct StaleResultTests {
         let held = gate(engine, worker)
         held.hold()
         let task = Task { await model.removeDustInSelection() }
-        for _ in 0 ..< 400 where held.arrived == 0 {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { held.arrived > 0 }
         try #require(held.arrived > 0)
         return (task, c, speck)
     }
@@ -716,9 +730,7 @@ struct StaleResultTests {
 
         let run = try await startOnA(analysis)
         try #require(model.isReadOnly, "started while it was read-only")
-        for _ in 0 ..< 400 where model.isReadOnly {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { !model.isReadOnly }
         try #require(!model.isReadOnly && model.recipe[.exposure] == 0.5)
         let read = EditorState(model)
         try await release(run)

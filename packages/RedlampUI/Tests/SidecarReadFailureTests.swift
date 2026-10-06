@@ -116,8 +116,10 @@ struct SidecarReadFailureTests {
         #expect(store.load(for: image)?.recipe[.contrast] == 40)
     }
 
+    /// Waits for `condition`, for as long as a loaded machine may need.
     private func eventually(_ condition: () -> Bool) async throws {
-        for _ in 0 ..< 400 where !condition() {
+        let deadline = ContinuousClock.now + .seconds(30)
+        while !condition(), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(5))
         }
     }
@@ -219,6 +221,28 @@ struct SidecarReadFailureTests {
         #expect(store.load(for: image)?.metadata?.rating == 3, "saved then, not at the next retry")
         #expect(store.load(for: image)?.recipe[.exposure] == 1)
         #expect(model.photoMetadata.rating == 3)
+    }
+
+    @Test func `reading the sidecar again keeps the zoom and where the photo is panned to`() async throws {
+        let (image, _, _, cleanup) = try edited(failures: [true])
+        defer { cleanup() }
+        let engine = GatedEngine()
+        engine.sendsFrames = true
+        let model = EditorModel(engine: engine)
+        model.canvas.updateView(size: CGSize(width: 300, height: 200), backingScale: 1)
+        model.sidecarReadRetryDelay = .milliseconds(300)
+
+        model.select(image)
+        try await eventually { model.info?.url == image && model.isReadOnly && model.hasFrame }
+        try #require(model.isReadOnly && model.hasFrame)
+        model.canvas.zoom = .scale(1)
+        model.canvas.center = CGPoint(x: 0.3, y: 0.6)
+        let (zoom, center) = (model.canvas.zoom, model.canvas.center)
+        try await eventually { !model.isReadOnly }
+        try #require(!model.isReadOnly && model.recipe[.exposure] == 1)
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(model.canvas.zoom == zoom)
+        #expect(model.canvas.center == center)
     }
 
     /// A open read-only, B decoded ahead, and B's sidecar reads held at `reads` while it is held.
