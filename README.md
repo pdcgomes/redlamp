@@ -12,6 +12,13 @@
 <p align="center"><b>A native, open-source RAW photo editor for Mac, iPad, and iPhone that anyone who knows Lightroom will find familiar.</b></p>
 
 <p align="center">
+  <a href="https://github.com/pdcgomes/redlamp/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://img.shields.io/github/actions/workflow/status/pdcgomes/redlamp/ci.yml?branch=main&style=flat&label=CI&logo=githubactions&logoColor=white&labelColor=57504E" alt="CI status on main"></a>
+  <a href="https://github.com/pdcgomes/redlamp/releases/latest"><img src="https://img.shields.io/github/v/release/pdcgomes/redlamp?style=flat&label=release&color=E0402E&labelColor=57504E" alt="Latest release"></a>
+  <a href="#installation"><img src="https://img.shields.io/badge/macOS-26%2B%20%C2%B7%20Apple%20Silicon-1A1414?style=flat&logo=apple&logoColor=white&labelColor=57504E" alt="macOS 26 or later, on Apple Silicon"></a>
+  <a href="#architecture"><img src="https://img.shields.io/badge/Swift-6.2-1A1414?style=flat&logo=swift&logoColor=white&labelColor=57504E" alt="Swift 6.2"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/pdcgomes/redlamp?style=flat&color=1A1414&labelColor=57504E" alt="License: MPL-2.0"></a>
+  <br>
+  <a href="https://redlamp.app"><img src="https://img.shields.io/badge/website-redlamp.app-1A1414?style=flat&labelColor=57504E" alt="Redlamp's website, redlamp.app"></a>
   <a href="https://ko-fi.com/pdcgomes"><img src="https://img.shields.io/badge/support-Ko--fi-E0402E?style=flat&logo=kofi&logoColor=white&labelColor=57504E" alt="Support Redlamp on Ko-fi"></a>
 </p>
 
@@ -230,7 +237,7 @@ With both side panels in AppKit, most of what remains is Core Animation committi
 - Non-DNG raws use a single-illuminant Adobe-derived matrix (LibRaw's). DNGs interpolate their two calibrations by white balance, and since process 4 apply their embedded profile's HueSatMap, but the Temperature and Tint model still converts with one matrix. The profile's look (LookTable and tone curve) is offered as a Base Look under "In This Photo", Apple ProRAW's look comes with its gain table map, Apple's local tone mapping, so it renders the way the iPhone does. Importing `.dcp` files is deferred.
 - Landscape masks (mountains, water, vegetation, ground, architecture, snow) and people parts beyond the face (body skin, clothes, and hair without an iPhone matte) come from SAM 3, under Meta's SAM License; a model trained on data Redlamp has rights to, which would replace it, doesn't exist yet ([plan](docs/plans/2026-10-01-masking-plan.md#m8-trained-heads-msk-12-msk-13-only-if-m7-says-so)).
 - Objects (Segment Anything 2.1), Depth Range and Sky (Depth Anything V2 Small and 3) use open models trained partly on data Redlamp couldn't use itself, offered to everyone by the owner's decisions (tracker DEC-24, DEC-02). Vision's own tap-to-segment arrives with macOS 27.
-- AI mask edges are snapped to the photo when the mask is made and, for new edits (process version 13), refined again where the photo is drawn, at its resolution (a guided filter, freedom-to-operate pending as DEC-05). Where the photo has no edge for a mask's to follow, the mask keeps its own, which is soft at full size.
+- AI mask edges are solved per pixel when the mask is made, at up to 4096 px on the long side, so on larger photos they're slightly soft at 100%. For new edits (process version 13), masks coarser than that (iPhone mattes, face parts, masks made before edges were solved per pixel) are refined again where the photo is drawn, at its resolution (a guided filter, freedom-to-operate pending as DEC-05); where the photo has no edge for such a mask's to follow, it keeps its own, which is soft at full size.
 - The app is not sandboxed yet (required later for the Mac App Store), but photos and focus-stack frames decode in a sandboxed service with no file access (`RedlampDecoder.xpc`, sent each file's bytes), never in the app, so a damaged file can't crash the editor while it decodes. These reads still parse files in the app itself: filmstrip thumbnails (a raw's embedded preview, through LibRaw, or ImageIO), the Portrait mattes and depth a photo carries, focus-stack detection, the metadata an export copies from its source, an imported HALD look, and the Camera Bench window (Help › Test Your Camera…). iPad and iPhone come in Phase 5.
 - Sidecars are read and written under file coordination, so iCloud Drive syncs them safely and conflicting copies merge (the newest edit wins, the others become snapshots, and the rating, flag and label each come from the newest copy that set them). A photo that is open doesn't reload when another Mac changes its edit, but its next save merges the two edits instead of writing over the other Mac's.
 - Nikon's High Efficiency NEFs (HE and HE\*, from the Z 8, Z 9, Z 6III, Z f, Z5 II and Z50 II) don't open yet: LibRaw 0.22 can't read them (CAM-12). Bodies LibRaw 0.22.2 doesn't list need a LibRaw update: the Sony A7 V doesn't open, the A1 II opens with a black strip along the bottom (CAM-13), and the Z5 II's and Z50 II's lossless NEFs open without a colour matrix (CAM-21).
@@ -892,7 +899,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [x] `redlamp-profiler`: look matching by black-box measurement against cameras' own JPEGs; four measured film looks ship
 - [x] Generative fill on the device, for areas too large for content-aware Remove <!-- tracker: RM-10 -->
 - [ ] Landscape and body-part masks on a model trained on data we have rights to <!-- tracker: MSK-13 -->
-- [x] AI mask edges refined at full resolution, with Feather and Edge sliders <!-- tracker: MSK-07, MSK-18 -->
+- [x] AI mask edges solved per pixel, coarse masks refined at full resolution, with Feather and Edge sliders <!-- tracker: MSK-07, MSK-18, MSK-26 -->
 - [x] Objects selected by rectangle or brush <!-- tracker: MSK-19 -->
 - [x] Curves inside masks <!-- tracker: MSK-20 -->
 - [x] Snow and adaptive Landscape presets <!-- tracker: MSK-22 -->
