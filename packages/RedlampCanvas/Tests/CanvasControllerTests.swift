@@ -44,6 +44,29 @@ struct CanvasControllerTests {
         #expect(abs(region.width * 6000 - Double(target.size.width)) < 1e-6)
     }
 
+    /// At rest (PIPE-01 covers drags), a 24 MP photo on a 2400×1600 px stage and a 60 MP one on a
+    /// 4800×2700 px stage render around the view, at most 2.25 times the pixels on screen, rather
+    /// than the whole photo.
+    @Test(arguments: [
+        (PixelSize(width: 6024, height: 4024), CGSize(width: 1200, height: 800)),
+        (PixelSize(width: 9504, height: 6336), CGSize(width: 2400, height: 1350)),
+    ])
+    func `at 1-to-1 the area rendered around the view at rest is capped`(image: PixelSize, view: CGSize) {
+        let controller = CanvasController()
+        controller.updateView(size: view, backingScale: 2)
+        controller.imageSize = image
+        controller.zoom = .oneToOne
+        let target = controller.renderTarget
+        let visible = controller.visibleImageRect
+        let shown = visible.width * Double(image.width) * visible.height * Double(image.height)
+        withKnownIssue("MEM-02: the whole photo renders once twice the view covers 60% of it") {
+            #expect(target.region != nil)
+            // Each side rounds up to whole pixels.
+            #expect(Double(target.size.width * target.size.height) <= 2.25 * shown +
+                Double(target.size.width + target.size.height))
+        }
+    }
+
     @Test func `panning inside the rendered margin keeps the target`() throws {
         let controller = makeController()
         controller.zoom = .oneToOne
