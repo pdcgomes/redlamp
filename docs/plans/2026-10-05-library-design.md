@@ -285,6 +285,7 @@ Every list can show its stacks closed, each one cell with a count, and open them
 - **A raw and its JPEG.** In a `name.xmp` they share, the raw decides, and a JPEG's write never clears a field. darktable's `name.ext.xmp` is read and never written.
 - **Writing** happens only when a field changed, keeps every element and namespace Redlamp doesn't own, and is atomic; change tracking is told the file is Redlamp's own.
 - **Records** of what was merged, per photo, are in the index's settings table for now.
+- **The index reads them the same way.** The indexer parses other apps' XMP with `LibraryXMP`'s own code: the photo's embedded XMP from the ImageIO source its header is read from, so each photo is still read once, and `name.xmp` and darktable's `name.ext.xmp` beside it. It merges them with the `.redlamp` field by field as `XMPMerge` does, from a photo's record once it has been synced, so the index and `LibraryXMP` agree on every field, and a `.redlamp` without stars doesn't hide another app's rating.
 
 ## Modules and keys (LIB-13)
 
@@ -435,7 +436,7 @@ What it changed:
 - **A warm launch shows the index at once.** It listed all 5,604 folders before it was done, 12 s at this size. Now the index's file is read into memory and the column store loads in four parts across the index's readers (0.42 s, from 1.5 to 1.8), All Photographs and searches answer from it, and change tracking reconciles behind it. While every folder is compared by signature, the folder on screen is compared first, at about 445 ms, and searches typed meanwhile stay at p95 1.7 to 2.6 ms.
 - **The folders on screen first, really.** Other folders' photos were read, and those folders finished, before the folder on screen had even been listed; that was what made "the folders asked for are indexed first" fail about one run in twenty. Their photos now wait while the way to it is listed.
 - **A volume that answers slowly isn't gone.** Real listings stalled for up to 10.2 s under this load, and the 1 s reader timeout took the volume for gone. An overdue operation now asks the volume's root first, and only no answer means offline. One real operation then stalled for 68 minutes, so an operation still going after thirty timeouts fails alone, and its folder waits for the next run.
-- Reconcile wasn't run at a million: it clones the fixture, a million files, which this Mac's security scanners make expensive. One warm-launch run died with signal 11 at 400,000 photos, with no crash report; nine Thread Sanitizer runs, 60,000 one-photo batches and sixteen warm launches didn't reproduce it. Thread Sanitizer flagged two intermittent races of one shape, an array built inside an index read and used after the `await`, which a probe of 6,600 such hand-offs didn't reproduce; they stay open.
+- Reconcile wasn't run at a million: it clones the fixture, a million files, which this Mac's security scanners make expensive. One warm-launch run died with signal 11 at 400,000 photos, with no crash report; nine Thread Sanitizer runs, 60,000 one-photo batches and sixteen warm launches didn't reproduce it. Thread Sanitizer flagged two intermittent races of one shape, an array built inside an index read and used after the `await`, in the indexer's run and in choosing roots' sidecar placements. They aren't races. When a read finishes before its caller awaits it, the Swift runtime orders the hand-off with its acquire and release instructions but doesn't tell Thread Sanitizer, and a probe that forces that order reproduces the report every time. A read's result now also passes through a lock, and Thread Sanitizer runs are clean.
 
 ### Photo lists and selections (LIB-10)
 
@@ -593,6 +594,7 @@ The `xmp` scenario, two runs, load average about 90:
 - Reading and merging the 20,000-photo fixture's `.xmp`: 11.8 to 17.5 s cold, 3.2 to 8.1 s warm.
 - 2,000 photos synced, 1,828 `.xmp` written: 9 to 22 s; the same photos again, unchanged, in 0.15 s.
 - 10,000 single writes: p50 6.4 to 9.9 ms, p95 about 70 ms, about 50 a second.
+- The index reading other apps' metadata through `LibraryXMP`'s code isn't slower. The 20,000-photo index build, Release, at a load average of 63 to 127: 160.4 and 61.6 s, against 171.5 and 110.2 s before; alternating warm runs, 31.5 and 24.4 s against 33.7 and 28.0 s, about 75 s of CPU each.
 
 ### Naming templates (LIB-25)
 
