@@ -31,6 +31,7 @@ enum LibraryCommand {
            redlamp library keywords merge <keyword>… --into <keyword> --index <path> [--dry-run]
            redlamp library keywords delete <keyword>… --index <path> [--dry-run]
            redlamp library keywords undo --index <path>
+           redlamp library stacks --index <path> [<query>] [--kind pairs|bursts|focus|manual] [--json]
       fixture  makes a synthetic library in <folder>: a fifth of the photos APFS clones of the raws in
                --raw-sources (tests/fixtures/raw) with their capture dates rewritten, the rest small JPEGs
                and HEICs with varied EXIF, GPS and IPTC; sidecars on 15% and other apps' .xmp on 5%; folders
@@ -83,6 +84,12 @@ enum LibraryCommand {
                imports and exports Lightroom Classic's keyword-list file; adds or removes a keyword on the
                photos <query> finds; renames, moves, merges and deletes keywords, rewriting their photos'
                sidecars as one journaled batch; and undoes the last batch.
+      stacks   finds the stacks in the index at <path> from it alone: raw and JPEG pairs, bursts (a camera's
+               frames in one folder with one exposure length, each within a second of the last one's end),
+               focus-stack suggestions from capture settings, which the app confirms from thumbnails, and the
+               manual stacks the index keeps. Prints each with its photos' paths, the top photo first, then how
+               many of each it found and how long that took. <query> keeps the stacks holding a photo it
+               finds; --kind keeps one kind; --json prints JSON.
     """
 
     private static var scenarioNames: String {
@@ -99,6 +106,7 @@ enum LibraryCommand {
         BenchScenarios.registerXMP()
         BenchScenarios.registerFiles()
         BenchScenarios.registerKeywords()
+        BenchScenarios.registerStacks()
         guard let command = arguments.first, !arguments.contains("--help") else {
             print(usage)
             return
@@ -119,6 +127,7 @@ enum LibraryCommand {
         case "undo": try await undo(Array(arguments.dropFirst()))
         case "journal": try await journal(Array(arguments.dropFirst()))
         case "keywords": try await keywords(Array(arguments.dropFirst()))
+        case "stacks": try await stacks(Array(arguments.dropFirst()))
         default: throw CLIError(description: "unknown library command \(command)\n\n\(usage)")
         }
     }
