@@ -206,7 +206,9 @@ extension RedlampEngine {
             bindings.slices = try masks.slices(for: rasterComponents, analysisGuide: analysis, commands: commands)
             bindings.rasters = masks.rasters
             if recipe.processVersion >= 13,
-               let edges = try masks.edges(for: rasterComponents, session: session, commands: commands) {
+               let edges = try masks.edges(
+                   for: rasterComponents, session: session, commands: commands, growing: recipe.processVersion >= 14,
+               ) {
                 bindings.edges = edges.texture
                 bindings.edgeSlices = edges.slices
                 bindings.edgeOffset = edges.offset

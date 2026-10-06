@@ -255,9 +255,10 @@ final class MaskResources {
     }
 
     /// The edge coefficients of `components`' AI masks for `session` (process 13), computing the
-    /// ones it doesn't have.
+    /// ones it doesn't have. Up to `edgeSlicesPerPhoto` masks are refined; with `growing`
+    /// (process 14) the slices grow to every mask's.
     func edges(
-        for components: [MaskComponent], session: ImageSession, commands: any MTLCommandBuffer,
+        for components: [MaskComponent], session: ImageSession, commands: any MTLCommandBuffer, growing: Bool = false,
     ) throws -> (texture: any MTLTexture, slices: [UUID: Int], offset: Float)? {
         let stored = session.orientedSize.fitted(
             within: PixelSize(width: Self.rasterLongEdge, height: Self.rasterLongEdge),
@@ -280,6 +281,10 @@ final class MaskResources {
         if edgeMaps.count > 2 {
             edgeMaps.removeFirst()
         }
+        let limit = growing ? max(Self.edgeSlicesPerPhoto, masks.count) : Self.edgeSlicesPerPhoto
+        if photo.keys.count > limit {
+            photo.keys.removeLast(photo.keys.count - limit)
+        }
         var slices: [UUID: Int] = [:]
         for (id, mask) in masks {
             guard let key = Self.key(for: .ai(mask)) else { continue }
@@ -294,7 +299,7 @@ final class MaskResources {
                 orientation: session.orientation,
             )
             let slice: Int
-            if photo.keys.count < Self.edgeSlicesPerPhoto {
+            if photo.keys.count < limit {
                 slice = photo.keys.count
                 photo.keys.append(key)
             } else {
@@ -305,7 +310,7 @@ final class MaskResources {
             }
             if (photo.texture?.arrayLength ?? 0) <= slice {
                 guard let grown = device.makeTexture(descriptor: Self.edgesDescriptor(
-                    width: photo.width, height: photo.height, slices: min(max(4, slice * 2), Self.edgeSlicesPerPhoto),
+                    width: photo.width, height: photo.height, slices: min(max(4, slice * 2), limit),
                 )) else { throw EngineError.gpuUnavailable }
                 if let old = photo.texture {
                     guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }

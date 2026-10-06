@@ -305,10 +305,8 @@ struct MaskRenderTests {
         #expect(try refined(16, process: 14) == sixteen)
         #expect(try refined(17, process: 13).count == 16)
         let all = try refined(17, process: 14)
-        withKnownIssue("PIPE-17: past 16 slices a photo, AI masks aren't refined") {
-            #expect(all.count == 17)
-            #expect(Set(all.values).count == all.count)
-        }
+        #expect(all.count == 17)
+        #expect(Set(all.values).count == all.count)
         #expect(try refined(17, process: 13).count == 16, "process 13 refines sixteen, as it did")
     }
 
