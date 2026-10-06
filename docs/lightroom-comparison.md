@@ -55,7 +55,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Color Mixer: hue, saturation and luminance per colour | Yes | Done | | | | Works in OKLCh |
 | Black and white | Yes | Done | | | | |
 | B&W mix: brightness per colour band | Yes | Planned | | P2 | | Today the Color Mixer's Luminance shapes a black-and-white photo |
-| Point Color | Yes | In progress | | P2 | TON-29 | Lightroom's now has a Variance slider too, which evens out similar colours; Redlamp's adds Capture One's separate hue, saturation and lightness uniformity, for skin |
+| Point Color | Yes | Done | | | TON-29 | Lightroom's now has a Variance slider too, which evens out similar colours; Redlamp's adds Capture One's separate hue, saturation and lightness uniformity, for skin |
 | Color Grading | Yes | Done | | | | Shadows, midtones, highlights and global wheels, with Blending and Balance |
 | Profiles | Yes | Done | Different | | EDT-04 | Profiles are Base Looks inside Recipes: six built-in looks and the film looks, each with an Amount slider (0–200) |
 | Camera-matching looks | Yes | Done | Different | | TON-14 | Four looks measured from Fujifilm cameras' own JPEGs (one provisional), under Redlamp's own names |
@@ -125,7 +125,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Local Whites and Blacks as true end points | Yes | Done | | | MSK-24 | |
 | Color swatch inside masks | Yes | Done | | | MSK-23 | |
 | Curves inside masks | Yes | Done | | | MSK-20 | |
-| Point Color inside masks | Yes | In progress | | P2 | TON-29 | With an Even Skin Tone preset on Face Skin and Body Skin |
+| Point Color inside masks | Yes | Done | | | TON-29 | With an Even Skin Tone preset on Face Skin and Body Skin |
 | Update AI masks across photos | Yes | Done | | | EDT-17 | Pasted and synced settings recompute their AI masks for each photo |
 | Reuse a mask inside another, and keep only its textured areas | Partly | Done | Beyond | | MSK-04, MSK-06 | Lightroom can start a new mask from an existing one; Redlamp also adds, subtracts or intersects one inside another, and a mask's Detail keeps only its textured or flat areas |
 
