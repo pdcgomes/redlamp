@@ -233,8 +233,14 @@ final class MaskResources {
     func edges(
         for components: [MaskComponent], session: ImageSession, commands: any MTLCommandBuffer,
     ) throws -> (texture: any MTLTexture, slices: [UUID: Int], offset: Float)? {
+        let stored = session.orientedSize.fitted(
+            within: PixelSize(width: Self.rasterLongEdge, height: Self.rasterLongEdge),
+        ).longEdge
+        // A mask solved per pixel at the size masks are stored at is drawn as it is: fitted to the
+        // photo's luminance on the coarser analysis grid, twigs, wires and strands would be lost.
         let masks = components.compactMap { component -> (UUID, AIMask)? in
-            if case let .ai(mask) = component.shape, mask.bitmap.png != nil {
+            if case let .ai(mask) = component.shape, mask.bitmap.png != nil,
+               Double(max(mask.bitmap.width, mask.bitmap.height)) < 0.98 * Double(stored) {
                 (component.id, mask)
             } else {
                 nil

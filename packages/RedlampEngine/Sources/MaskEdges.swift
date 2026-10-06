@@ -3,12 +3,14 @@ import Metal
 import RedlampEngineAPI
 import RedlampMasking
 
-/// AI mask edges at full resolution (MSK-07, process 13). An AI mask is a bitmap of a few thousand
-/// pixels at most; drawn at 60 MP, its edge would be its pixels upsampled. Instead the develop
-/// kernel and the detail stage refine it with a guided filter guided by the photo's own log
-/// luminance, as the tone base is (`ToneBase`): the filter's coefficients are computed here on the
-/// analysis image's grid, in the sensor's orientation, and applied to each pixel's log luminance,
-/// so the edge follows the photo at any size (K. He & J. Sun, "Fast guided filter", 2015).
+/// AI mask edges at full resolution (MSK-07, process 13), for masks coarser than the size masks are
+/// stored at: embedded mattes, face parts and masks made before edges were solved per pixel (MSK-26;
+/// masks solved per pixel are drawn as they are). Drawn at 60 MP, a coarse mask's edge would be its
+/// pixels upsampled. Instead the develop kernel and the detail stage refine it with a guided filter
+/// guided by the photo's own log luminance, as the tone base is (`ToneBase`): the filter's
+/// coefficients are computed here on the analysis image's grid, in the sensor's orientation, and
+/// applied to each pixel's log luminance, so the edge follows the photo at any size (K. He &
+/// J. Sun, "Fast guided filter", 2015).
 ///
 /// Where the photo has no edge for the mask's to follow (a person against a wall as bright as
 /// they are), the filter would only blur the mask, so a third coefficient says how far to trust

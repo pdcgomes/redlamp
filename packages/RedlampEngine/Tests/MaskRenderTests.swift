@@ -330,6 +330,34 @@ struct MaskRenderTests {
         #expect(after <= 2, "process 13 steps within \(after) px")
     }
 
+    /// A mask solved per pixel is stored at the photo's size (up to 4096 px), and from process 13 it's
+    /// drawn as it is, as in process 12: fitted to the photo's luminance on the coarser analysis grid,
+    /// its fine structure would be lost (MSK-26). Here its soft edge lies away from the photo's.
+    @Test func `from process 13, a mask at the size masks are stored at is drawn as it is`() throws {
+        let (width, height) = (4096, 128)
+        let session = try makeSession(width: width, height: height) { x, _ in SIMD3(repeating: x < 2048 ? 0.05 : 0.4) }
+        let gray = GrayMask(width: width, height: height, pixels: (0 ..< width * height).map { index in
+            UInt8((min(max(Double(index % width - 1700) / 200, 0), 1) * 255).rounded())
+        })
+        let mask = try MaskLayer(name: "Subject", components: [MaskComponent(shape: .ai(AIMask(
+            kind: .subject, provider: "test", revision: 1, analysisHash: "0", center: ImagePoint(x: 0.75, y: 0.5),
+            bitmap: #require(gray.bitmap()),
+        )))])
+        var recipe = EditRecipe()
+        recipe.masks = [mask]
+        recipe.processVersion = 12
+        let before = try render(recipe, session: session, overlay: mask.id, style: .blackAndWhite)
+        recipe.processVersion = 13
+        let after = try render(recipe, session: session, overlay: mask.id, style: .blackAndWhite)
+        let row = height / 2 * width
+        let worst = (1600 ..< 2200).map { abs(after[row + $0].y - before[row + $0].y) }.max() ?? 1
+        #expect(worst < 1e-3, "process 13 moves the mask by \(worst)")
+        #expect(
+            after[row + 1800].y > 0.15 && after[row + 1800].y < 0.3,
+            "half covered mid-ramp: \(after[row + 1800].y)",
+        )
+    }
+
     /// From process 13 a mask's Whites and Blacks are end points, as the global sliders are: under
     /// full coverage they render as the same global values, and add to them (MSK-24).
     @Test func `from process 13, a mask's Whites and Blacks move the end points as the global sliders do`() throws {
