@@ -58,7 +58,7 @@ public extension LibraryMetadata {
                     ?? [:],
                 undo: MetadataBatch.Undo(
                     sidecarBefore: written?.before ?? [:], sidecarAfter: written?.after ?? [:],
-                    indexBefore: photo.index, indexAfter: indexAfter,
+                    indexBefore: photo.index, indexAfter: indexAfter, othersBefore: photo.others,
                 ),
             )
         }
@@ -127,7 +127,7 @@ public extension LibraryMetadata {
         let existing = try await index.write { writer -> [Int64] in
             var found: [Int64] = []
             for photo in batch.photos where try writer.photo(id: photo.id) != nil {
-                try writer.setMetadata(photo.index, forPhoto: photo.id)
+                try writer.setMetadata(photo.index, forPhoto: photo.id, others: photo.others)
                 found.append(photo.id)
             }
             return found

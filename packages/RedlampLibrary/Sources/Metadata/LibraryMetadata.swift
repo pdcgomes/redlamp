@@ -144,7 +144,7 @@ public final class LibraryMetadata: Sendable {
                     let now = shown.values.filter { batch.keys(of: photo).contains($0.key) }
                     let after = batch.indexAfter(photo, current: PhotoMetadata.canonical(now))
                     if after != PhotoMetadata.canonical(now) || !shown.others.isDisjoint(with: Self.fields(after)) {
-                        try writer.setMetadata(after, forPhoto: photo.id)
+                        try writer.setMetadata(after, forPhoto: photo.id, others: batch.others(photo, after: after))
                         ids.append(photo.id)
                     }
                 }
@@ -192,15 +192,15 @@ public final class LibraryMetadata: Sendable {
                 }
             }
             var dates: [(Int64, Date?)] = []
-            var restored: [(Int64, MetadataValues)] = []
+            var restored: [(Int64, MetadataValues, Set<XMPField>)] = []
             for result in results {
                 switch result.outcome {
                 case let .written(date):
                     written += 1
                     dates.append((result.photo, date))
-                case let .skipped(path, values):
+                case let .skipped(path, values, others):
                     skipped.append(path)
-                    restored.append((result.photo, values))
+                    restored.append((result.photo, values, others))
                 case .gone:
                     break
                 }
@@ -210,8 +210,8 @@ public final class LibraryMetadata: Sendable {
                 for (photo, date) in stamped {
                     try writer.setSidecarModified(date, forPhoto: photo)
                 }
-                for (photo, values) in putBack {
-                    try writer.setMetadata(values, forPhoto: photo)
+                for (photo, values, others) in putBack {
+                    try writer.setMetadata(values, forPhoto: photo, others: others)
                 }
             }
             live?.photosChanged(putBack.map(\.0))
@@ -226,8 +226,9 @@ public final class LibraryMetadata: Sendable {
         enum Outcome: Sendable {
             /// Written, or already as the batch leaves it, and the sidecar's date.
             case written(Date?)
-            /// This build can't write it: the photo's path, and the fields the index shows then.
-            case skipped(String, MetadataValues)
+            /// This build can't write it: the photo's path, and the fields the index shows then, with
+            /// those of them that are other apps'.
+            case skipped(String, MetadataValues, Set<XMPField>)
             /// The photo isn't in the library any more.
             case gone
         }
@@ -296,7 +297,7 @@ public final class LibraryMetadata: Sendable {
             return .written(date)
         case let .failed(error):
             try log.skipped(place, LibraryKeywords.describe(error))
-            return .skipped(path, photo.index)
+            return .skipped(path, photo.index, photo.others)
         }
     }
 
@@ -314,9 +315,9 @@ public final class LibraryMetadata: Sendable {
                 guard let shown = shown[id], let path = paths[id] else { return nil }
                 let current = PhotoMetadata.canonical(shown.values)
                 let after = PhotoMetadata.canonical(edit.applied(to: current, fallback: current))
-                let others = !shown.others.isDisjoint(with: Self.fields(after))
-                guard after != current || others else { return nil }
-                return MetadataBatch.Photo(id: id, path: path, index: current)
+                let others = shown.others.intersection(Self.fields(after))
+                guard after != current || !others.isEmpty else { return nil }
+                return MetadataBatch.Photo(id: id, path: path, index: current, others: others)
             }
         }
     }

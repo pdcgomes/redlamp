@@ -46,8 +46,9 @@ extension PhotoMetadata {
 
 extension LibraryIndex.Writer {
     /// Shows `values` in `photo`'s row: each field's columns, its collections and its stack, with its
-    /// text indexed again; they're the `.redlamp`'s values now, not other apps'.
-    func setMetadata(_ values: MetadataValues, forPhoto photo: Int64) throws {
+    /// text indexed again; they're the `.redlamp`'s values now, but for the fields of `others`, which are
+    /// other apps'.
+    func setMetadata(_ values: MetadataValues, forPhoto photo: Int64, others: Set<XMPField> = []) throws {
         guard let metadata = PhotoMetadata().setting(values), var row = try self.photo(id: photo) else { return }
         for key in values.keys {
             switch key {
@@ -64,7 +65,11 @@ extension LibraryIndex.Writer {
             default: break
             }
             if let field = PhotoMetadata.xmpField(key) {
-                row.otherFields.remove(field)
+                if others.contains(field) {
+                    row.otherFields.insert(field)
+                } else {
+                    row.otherFields.remove(field)
+                }
             }
         }
         if values.keys.contains("label") || values.keys.contains("customLabel") {

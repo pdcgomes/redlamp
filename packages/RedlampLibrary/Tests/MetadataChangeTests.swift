@@ -129,6 +129,35 @@ struct MetadataChangeTests {
         }
     }
 
+    @Test func `Undo shows other apps' values as theirs again, so a change only the sidecar has reads nothing`(
+    ) async throws {
+        let sandbox = try await XMPSandbox.make()
+        defer { sandbox.remove() }
+        let photo = try sandbox.photo("IMG_0001.ARW")
+        try sandbox.write("IMG_0001.xmp", MetadataIndexTests.otherApp, modified: -600)
+        try sandbox.sidecar("IMG_0001.ARW", PhotoMetadata(rating: 1))
+        let files = CountingFileSystem()
+        let indexer = LibraryIndexer(index: sandbox.index, fileSystem: files, configuration: .testing())
+        _ = await IndexerRun.collect(indexer.index([sandbox.root]))
+        let others = try await sandbox.row("IMG_0001.ARW").otherFields
+        #expect(others.contains(.caption) && !others.contains(.rating))
+
+        let metadata = LibraryMetadata(index: sandbox.index)
+        try await metadata.apply(.set([.caption("Ours")], on: [sandbox.id("IMG_0001.ARW")]))
+        #expect(try await !sandbox.row("IMG_0001.ARW").otherFields.contains(.caption))
+        try await metadata.undo()
+        #expect(try await sandbox.row("IMG_0001.ARW").otherFields == others)
+        #expect(try await sandbox.row("IMG_0001.ARW").caption == "Boats on the Douro.")
+
+        var sidecar = try #require(SidecarStore().load(for: photo))
+        sidecar.metadata?.keywords = ["Places/Porto"]
+        try SidecarStore().save(sidecar, for: photo)
+        try sandbox.setModified("IMG_0001.ARW.redlamp", 60)
+        _ = await IndexerRun.collect(indexer.index([sandbox.root]))
+        #expect(files.counts.reads[LibraryIndexer.path(photo)] == 1)
+        #expect(try await sandbox.row("IMG_0001.ARW").caption == "Boats on the Douro.")
+    }
+
     @Test func `a batch a forced quit stopped is finished or rolled back at the next launch`() async throws {
         let (sandbox, paths, ids) = try await Self.library()
         defer { sandbox.remove() }

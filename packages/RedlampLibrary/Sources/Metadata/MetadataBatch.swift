@@ -15,6 +15,9 @@ struct MetadataBatch: JournalBatch, Hashable {
         var id: Int64
         var path: String
         var index: MetadataValues
+        /// Of the batch's fields, those whose values in the index were other apps', so Undo shows them
+        /// as other apps' again.
+        var others: Set<XMPField> = []
         /// What the batch does to this photo in place of `edit`: a stack's photos each get their place.
         var edits: [String: FieldEdit]?
         /// For an undo: the photo's fields before and after the batch it undoes.
@@ -26,6 +29,8 @@ struct MetadataBatch: JournalBatch, Hashable {
         var sidecarAfter: MetadataValues
         var indexBefore: MetadataValues
         var indexAfter: MetadataValues
+        /// The fields whose values were other apps' before the batch it undoes.
+        var othersBefore: Set<XMPField> = []
     }
 
     typealias Values = MetadataValues
@@ -70,6 +75,15 @@ struct MetadataBatch: JournalBatch, Hashable {
             return Set(undo.sidecarAfter.keys).union(undo.indexAfter.keys)
         }
         return (photo.edits ?? edit).touched
+    }
+
+    /// Of the photo's fields in the index once the batch is done (`after`), those whose values are other
+    /// apps': the ones its Undo puts back as they were.
+    func others(_ photo: Photo, after: MetadataValues) -> Set<XMPField> {
+        guard let undo = photo.undo else { return [] }
+        return undo.othersBefore.filter { field in
+            after.keys.allSatisfy { PhotoMetadata.xmpField($0) != field || after[$0] == undo.indexBefore[$0] }
+        }
     }
 
     /// The photo's fields in the index once the batch is done, from those it has now.
