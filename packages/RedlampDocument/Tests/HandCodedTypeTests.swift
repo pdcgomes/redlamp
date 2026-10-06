@@ -65,6 +65,8 @@ struct HandCodedTypeTests {
         )
         metadata.collections = ["Clients/Acme/Selects"]
         metadata.stack = PhotoStack(id: UUID(uuidString: "6F1C2A4E-8B1D-4C3A-9E57-1B2D3C4E5F60"), top: true)
+        metadata.captureShift = -18000
+        metadata.captureOffset = -18000
         try check(metadata)
         try check(#require(metadata.location))
         try check(#require(metadata.stack))

@@ -322,7 +322,9 @@ struct SidecarSchemaTests {
         for (reference, value) in integers {
             #expect(validator.schema(at: reference) == .number(Double(value)), "\(reference)")
         }
+        let zones = PhotoMetadata.captureOffsets
         let ranges: [(String, ClosedRange<Double>)] = [
+            ("#/$defs/metadata/properties/captureOffset", Double(zones.lowerBound) ... Double(zones.upperBound)),
             ("#/$defs/baseLookReference/properties/amount", BaseLookReference.amountRange),
             ("#/$defs/maskLayer/properties/amount", ParameterID.maskAmount.spec.range),
             ("#/$defs/maskLayer/properties/detail", ParameterID.maskDetail.spec.range),
@@ -442,6 +444,7 @@ enum RichSidecar {
                 ),
                 collections: ["Clients/Acme/Selects", "Best of 2026"],
                 stack: PhotoStack(id: UUID(uuidString: "6F1C2A4E-8B1D-4C3A-9E57-1B2D3C4E5F60"), top: true),
+                captureShift: -18000, captureOffset: -18000,
             ),
             modified: date,
             session: session(ending: edit),

@@ -37,7 +37,7 @@ To show a photo's badges, Redlamp reads only `recipe` and `metadata` from `edit.
 - `edit.json` is written to a temporary file and moved into place. Mask bitmaps are written before the edit that names them, and a new package is built beside the photo and moved in whole, so a reader never finds an edit that names a missing or partly written file.
 - A sidecar whose content hasn't changed is not rewritten, so saving an unchanged edit doesn't wake sync services. A change to `modified` alone doesn't count.
 - When it saves, Redlamp deletes the bitmaps that no edit, snapshot or history session uses and that no key of `edit.json` or of a history file names, since a key a newer Redlamp added may refer to one. It deletes none while a history file can't be read.
-- Redlamp deletes the whole sidecar when the edit is back to its defaults (whatever `wb.temperature` and `wb.tint` hold) and there are no snapshots, rating, flag, label, custom label, mark, original name, keywords (an empty list of them included), title, caption, creator, copyright, location (empty ones included), collections, stack, unknown fields or history.
+- Redlamp deletes the whole sidecar when the edit is back to its defaults (whatever `wb.temperature` and `wb.tint` hold) and there are no snapshots, rating, flag, label, custom label, mark, original name, keywords (an empty list of them included), title, caption, creator, copyright, location (empty ones included), collections, stack, capture shift or zone, unknown fields or history.
 - Every read and write goes through `NSFileCoordinator`, so iCloud Drive never syncs a half-written package, and a read waits for a sidecar that iCloud Drive has evicted to download. Other tools on macOS should coordinate their writes the same way.
 
 ### Conflicting copies
@@ -69,7 +69,7 @@ When a photo is edited on two Macs before iCloud Drive syncs them, iCloud keeps 
 | `format` | string | `app.redlamp.edit`. Always written; Redlamp doesn't check it. |
 | `recipe` | object | **Required.** The edit; see [The recipe](#the-recipe). |
 | `snapshots` | [snapshot] | Named versions of the edit, in the order they were made. Default `[]`. |
-| `metadata` | object? | Rating, flag, label, mark, the photo's original name, its keywords, title, caption, creator, copyright and location, and the collections and stack it's in. Written only when one is set. |
+| `metadata` | object? | Rating, flag, label, mark, the photo's original name, its keywords, title, caption, creator, copyright and location, the collections and stack it's in, and its capture time's shift and zone. Written only when one is set. |
 | `modified` | date? | When the edit was last saved. A sidecar without it loses every conflict. |
 
 A **snapshot** is a named version of the edit, as in Lightroom: `{"id", "name", "created", "recipe"}`, all required. `created` is a date and `recipe` a whole recipe. Snapshots are how one sidecar keeps several versions of a photo's edit.
@@ -84,7 +84,9 @@ A **snapshot** is a named version of the edit, as in Lightroom: `{"id", "name", 
 
 `stack` is the photo's place in a stack the user made, `{"id": "6F1C2A4E-8B1D-4C3A-9E57-1B2D3C4E5F60", "top": true}`: photos whose `id` is the same are one stack, wherever they are, and a photo whose `id` no other photo has stands alone, in no burst. `top`, written only when it's true, makes the photo the one shown for its stack: the stack `id` names, or, without an `id`, the burst Redlamp finds it in. A raw and its JPEG get the same `stack`.
 
-Builds from before `customLabel`, `mark`, `title`, `caption`, `creator`, `copyright`, `location`, `collections` and `stack` keep them as unknown keys.
+`captureShift` and `captureOffset` correct when the photo was taken without changing its file, as Lightroom Classic's Edit Capture Time does. `captureShift` is an integer: the seconds added to the time the camera recorded (EXIF's DateTimeOriginal, with its fraction of a second), negative for earlier, written only when it isn't 0. `captureOffset` is the zone the camera's clock was in, an integer of seconds east of UTC from −50400 to 50400 (`3600` is UTC+01:00, `-18000` UTC−05:00), in place of the zone the file records (EXIF's OffsetTimeOriginal) or for a file that records none, written only when it's set. Redlamp sorts, finds, groups into bursts and names the photo by the recorded time with `captureShift` added, in the zone `captureOffset` gives, so the camera's own time is always that time less `captureShift`. A camera left on Lisbon's winter time in New York, showing 18:00 for a photo taken at 13:00 there, gets `"captureShift": -18000, "captureOffset": -18000`.
+
+Builds from before `customLabel`, `mark`, `title`, `caption`, `creator`, `copyright`, `location`, `collections`, `stack`, `captureShift` and `captureOffset` keep them as unknown keys.
 
 ## The recipe
 

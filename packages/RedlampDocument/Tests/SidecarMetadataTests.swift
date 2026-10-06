@@ -47,6 +47,8 @@ struct SidecarMetadataTests {
             "stack", PhotoMetadata(stack: PhotoStack(id: stackID, top: true)),
             .object(["id": .string(stackID.uuidString), "top": .bool(true)]),
         ),
+        ("captureShift", PhotoMetadata(captureShift: -18000), .number(-18000)),
+        ("captureOffset", PhotoMetadata(captureOffset: 19800), .number(19800)),
     ]
 
     @Test(arguments: fields)
@@ -69,7 +71,7 @@ struct SidecarMetadataTests {
         let store = SidecarStore()
         let metadata = PhotoMetadata(
             rating: 2, mark: false, location: PhotoLocation(city: "Lisbon"), collections: [],
-            stack: PhotoStack(id: Self.stackID, top: false),
+            stack: PhotoStack(id: Self.stackID, top: false), captureShift: 0, captureOffset: nil,
         )
         try store.save(Sidecar(recipe: EditRecipe(), metadata: metadata), for: image)
         #expect(try written(store, for: image) == [
@@ -125,6 +127,49 @@ struct SidecarMetadataTests {
         #expect(try written(store, for: image) == metadata)
     }
 
+    @Test func `a sidecar written before the capture time's shift and zone saves byte for byte as it was`() throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        let metadata: [String: JSONValue] = [
+            "rating": .number(4), "flag": .string("pick"), "customLabel": .string("Urgent"), "mark": .bool(true),
+            "title": .string("Tram 28"), "location": .object(["city": .string("Lisbon")]),
+            "collections": .array([.string("Clients/Acme")]),
+            "stack": .object(["id": .string(Self.stackID.uuidString)]),
+            "originalName": .string("DSC_0042.NEF"),
+        ]
+        let old: JSONValue = try .object([
+            "format": .string("app.redlamp.edit"), "modified": .string("2026-10-05T09:00:00Z"),
+            "snapshots": .array([]), "metadata": .object(metadata),
+            "recipe": JSONDecoder().decode(JSONValue.self, from: JSONEncoder.sidecar.encode(EditRecipe())),
+        ])
+        let bytes = try JSONEncoder.sidecar.encode(old)
+        try store.save(Sidecar(recipe: EditRecipe()), for: image)
+        try bytes.write(to: store.editURL(for: image))
+
+        let loaded = try #require(store.load(for: image))
+        #expect(loaded.metadata?.captureShift == 0 && loaded.metadata?.captureOffset == nil)
+        #expect(store.protection(for: image) == nil)
+        #expect(try JSONEncoder.sidecar.encode(loaded) == bytes)
+        try store.save(loaded, for: image)
+        #expect(try Data(contentsOf: store.editURL(for: image)) == bytes)
+        var edited = loaded
+        edited.recipe[.exposure] = 0.4
+        try store.save(edited, for: image)
+        #expect(try written(store, for: image) == metadata)
+    }
+
+    @Test func `a capture shift that isn't a whole number of seconds can't be read`() throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        let json = #"{"format":"app.redlamp.edit","recipe":{"version":3,"processVersion":1},"#
+            + #""metadata":{"rating":0,"captureShift":1.5}}"#
+        try Data(json.utf8).write(to: store.url(for: image))
+        #expect(store.load(for: image) == nil)
+        #expect(store.protection(for: image) == .unreadable)
+    }
+
     @Test func `keys a newer build added to a location or a stack are kept`() throws {
         let (image, cleanup) = try temporaryImage()
         defer { cleanup() }
@@ -142,12 +187,13 @@ struct SidecarMetadataTests {
         #expect(metadata["stack"] == .object(["id": .string(Self.stackID.uuidString), "order": .number(2)]))
     }
 
-    @Test func `a false mark or top another writer left reads as none and is dropped on saving`() throws {
+    @Test func `a false mark or top, or a shift of 0, another writer left reads as none and is dropped on saving`(
+    ) throws {
         let (image, cleanup) = try temporaryImage()
         defer { cleanup() }
         let store = SidecarStore()
         let json = #"{"format":"app.redlamp.edit","recipe":{"version":3,"processVersion":1},"metadata":{"rating":1,"#
-            + #""mark":false,"collections":[],"stack":{"top":false}}}"#
+            + #""mark":false,"collections":[],"stack":{"top":false},"captureShift":0}}"#
         try Data(json.utf8).write(to: store.url(for: image))
         #expect(store.protection(for: image) == nil)
         let sidecar = try #require(store.load(for: image))

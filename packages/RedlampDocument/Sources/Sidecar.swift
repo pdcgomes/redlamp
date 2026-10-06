@@ -73,9 +73,12 @@ public struct PhotoStack: Sendable, Hashable {
 }
 
 /// Rating, flag, label and mark: the culling metadata Lightroom lets you set while developing; the
-/// photo's name before Redlamp first renamed it; its keywords and IPTC Core's descriptions; and the
-/// collections and stack it's in.
+/// photo's name before Redlamp first renamed it; its keywords and IPTC Core's descriptions; the
+/// collections and stack it's in; and what's done to its capture time.
 public struct PhotoMetadata: Sendable, Hashable {
+    /// The zones Redlamp gives `captureOffset`, in seconds east of UTC: −14:00 to +14:00.
+    public static let captureOffsets = -14 * 3600 ... 14 * 3600
+
     /// 0–5 stars.
     public var rating: Int
     public var flag: PhotoFlag?
@@ -107,6 +110,12 @@ public struct PhotoMetadata: Sendable, Hashable {
     /// written: `Clients/Acme/Selects`, `%2F` for a slash inside a name (LIB-23).
     public var collections: [String]
     public var stack: PhotoStack?
+    /// Seconds added to the time the camera recorded, which the photo's file keeps (LIB-22): the library
+    /// sorts, finds, groups and names the photo by that time with them added. 0 for none.
+    public var captureShift: Int
+    /// The zone the camera's clock was in, in seconds east of UTC, in place of the one the file records
+    /// or for a file that records none (LIB-22).
+    public var captureOffset: Int?
     /// Fields written by a newer Redlamp (a headline, say), written back unchanged.
     public var unknownFields: [String: JSONValue] = [:]
 
@@ -114,7 +123,7 @@ public struct PhotoMetadata: Sendable, Hashable {
         rating: Int = 0, flag: PhotoFlag? = nil, label: ColorLabel? = nil, originalName: String? = nil,
         keywords: [String]? = nil, customLabel: String? = nil, mark: Bool = false, title: String? = nil,
         caption: String? = nil, creator: String? = nil, copyright: String? = nil, location: PhotoLocation? = nil,
-        collections: [String] = [], stack: PhotoStack? = nil,
+        collections: [String] = [], stack: PhotoStack? = nil, captureShift: Int = 0, captureOffset: Int? = nil,
     ) {
         self.rating = min(max(rating, 0), 5)
         self.flag = flag
@@ -130,12 +139,15 @@ public struct PhotoMetadata: Sendable, Hashable {
         self.location = location
         self.collections = collections
         self.stack = stack
+        self.captureShift = captureShift
+        self.captureOffset = captureOffset
     }
 
     public var isEmpty: Bool {
         rating == 0 && flag == nil && label == nil && customLabel == nil && !mark && originalName == nil
             && keywords == nil && title == nil && caption == nil && creator == nil && copyright == nil
-            && location == nil && collections.isEmpty && stack == nil && unknownFields.isEmpty
+            && location == nil && collections.isEmpty && stack == nil && captureShift == 0 && captureOffset == nil
+            && unknownFields.isEmpty
     }
 }
 

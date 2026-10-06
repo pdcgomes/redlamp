@@ -30,7 +30,7 @@ extension Snapshot: Codable {
 extension PhotoMetadata: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case rating, flag, label, customLabel, mark, originalName, keywords, title, caption, creator, copyright
-        case location, collections, stack
+        case location, collections, stack, captureShift, captureOffset
     }
 
     public init(from decoder: Decoder) throws {
@@ -49,12 +49,15 @@ extension PhotoMetadata: Codable {
         location = try container.decodeIfPresent(PhotoLocation.self, forKey: .location)
         collections = try container.decodeIfPresent([String].self, forKey: .collections) ?? []
         stack = try container.decodeIfPresent(PhotoStack.self, forKey: .stack)
+        captureShift = try container.decodeIfPresent(Int.self, forKey: .captureShift) ?? 0
+        captureOffset = try container.decodeIfPresent(Int.self, forKey: .captureOffset)
         unknownFields = try decoder.container(keyedBy: DynamicCodingKey.self)
             .unknownFields(excluding: Set(CodingKeys.allCases.map(\.stringValue)))
     }
 
-    /// Writes each field only when it's set: `mark` only when true and `collections` only when there
-    /// are some, so metadata older builds wrote is written back as it was.
+    /// Writes each field only when it's set: `mark` only when true, `collections` only when there are
+    /// some and `captureShift` only when it isn't 0, so metadata older builds wrote is written back as
+    /// it was.
     public func encode(to encoder: Encoder) throws {
         var unknown = encoder.container(keyedBy: DynamicCodingKey.self)
         try unknown.encode(unknownFields)
@@ -77,6 +80,10 @@ extension PhotoMetadata: Codable {
             try container.encode(collections, forKey: .collections)
         }
         try container.encodeIfPresent(stack, forKey: .stack)
+        if captureShift != 0 {
+            try container.encode(captureShift, forKey: .captureShift)
+        }
+        try container.encodeIfPresent(captureOffset, forKey: .captureOffset)
     }
 }
 

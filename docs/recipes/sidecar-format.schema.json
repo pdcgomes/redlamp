@@ -843,7 +843,7 @@
       "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
     },
     "metadata": {
-      "description": "Rating, flag, color label, mark, the photo's original name, its keywords, title, caption, creator, copyright and location, and the collections and stack it's in. Written only when one is set.",
+      "description": "Rating, flag, color label, mark, the photo's original name, its keywords, title, caption, creator, copyright and location, the collections and stack it's in, and its capture time's shift and zone. Written only when one is set.",
       "type": "object",
       "required": ["rating"],
       "properties": {
@@ -887,7 +887,17 @@
           "items": { "type": "string" },
           "description": "The collections the photo is in, each by its path from the top of the collection list, written as keywords' paths are. Written only when there are some."
         },
-        "stack": { "$ref": "#/$defs/stack" }
+        "stack": { "$ref": "#/$defs/stack" },
+        "captureShift": {
+          "type": "integer",
+          "description": "Seconds added to the time the camera recorded, negative for earlier; the photo's file is never changed. Written only when it isn't 0."
+        },
+        "captureOffset": {
+          "type": "integer",
+          "minimum": -50400,
+          "maximum": 50400,
+          "description": "The zone the camera's clock was in, in seconds east of UTC, in place of the zone the file records or for a file that records none. Written only when set."
+        }
       },
       "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
     },
