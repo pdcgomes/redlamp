@@ -392,7 +392,7 @@ extension LibraryIndexer.Run {
     }
 
     /// Shows `organising` in the photo's row: empty texts and locations as none, a creator's names
-    /// separated as XMP reads them.
+    /// separated as XMP reads them, and the capture time shifted from the camera's time the row has.
     static func show(_ organising: Organising, in record: inout PhotoRecord) {
         let fields = organising.fields
         record.rating = fields.rating ?? 0
@@ -404,28 +404,34 @@ extension LibraryIndexer.Run {
         record.creator = XMPSource.joined(XMPFields.names(fields.creator))
         record.copyright = XMPFields.text(fields.copyright)
         record.location = XMPFields.place(fields.location)
+        record.showCapture(shift: fields.captureShift ?? 0, offset: fields.captureOffset)
         record.otherFields = organising.others
     }
 
-    /// What only the `.redlamp` holds, in the photo's row: the mark, its stack, and the shift and zone
-    /// of its capture time, from the camera's time the row has.
+    /// What only the `.redlamp` holds, in the photo's row: the mark and its stack.
     static func place(_ metadata: PhotoMetadata, in record: inout PhotoRecord) {
         record.marked = metadata.mark
         record.stack = metadata.stack.flatMap { $0.id == nil && !$0.top ? nil : PhotoStack(id: $0.id, top: $0.top) }
-        record.showCapture(shift: metadata.captureShift, offset: metadata.captureOffset)
     }
 
     /// The fields a photo's row shows, but its keywords.
     static func fields(of row: PhotoRecord) -> XMPFields {
-        XMPFields(
+        let shown = PhotoMetadata(shown: row)
+        return XMPFields(
             rating: row.rating > 0 ? row.rating : nil, flag: row.flag, label: row.label, customLabel: row.customLabel,
             title: row.title, caption: row.caption, creator: row.creator, copyright: row.copyright,
-            location: row.location,
+            location: row.location, captureShift: shown.captureShift != 0 ? shown.captureShift : nil,
+            captureOffset: shown.captureOffset,
         )
     }
 
+    /// The fields the indexer shows from other apps and the `.redlamp`: those `LibraryXMP` merges, and
+    /// the capture time.
+    static let shownFields = XMPField.held.union([.captureTime])
+
     /// The photo's organising fields as `LibraryXMP` merges them (`XMPMerge`): other apps' value is
-    /// its `.xmp`'s, then darktable's, then its own XMP's and IPTC's, field by field; its `.redlamp`'s
+    /// its `.xmp`'s, then darktable's, then its own XMP's and IPTC's, field by field, a capture time
+    /// being a shift from the one the photo's file records (`embedded`); its `.redlamp`'s
     /// stand where it holds them, an empty keyword list, title or location included, as the sidecar
     /// format has it, or, once `LibraryXMP` has merged the photo (`merged`), where other apps haven't
     /// changed them since.
@@ -433,14 +439,20 @@ extension LibraryIndexer.Run {
         _ embedded: CaptureMetadata?, sidecar: SidecarSummary?, xmp: CaptureMetadata?,
         darktable: CaptureMetadata? = nil, merged: XMPMergeRecord? = nil, otherIsLater: Bool = false,
     ) -> Organising {
-        var shown = XMPSource.combining([xmp?.xmp, darktable?.xmp, embedded?.xmp])
+        let camera = embedded?.captured.map { XMPCaptureTime(time: $0, offset: embedded?.capturedOffset) }
+        func capturing(_ other: CaptureMetadata?) -> XMPSource? {
+            let captured = other?.captured.map { XMPCaptureTime(time: $0, offset: other?.capturedOffset) }
+            return other?.xmp?.capturing(captured, camera: camera)
+        }
+        var shown = XMPSource.combining([capturing(xmp), capturing(darktable), embedded?.xmp])
         guard let sidecar else {
             return Organising(fields: shown, others: Set(XMPField.allCases.filter(shown.holds)))
         }
         let merge = XMPMerge.merge(
-            redlamp: XMPFields(sidecar.metadata), other: shown, record: merged, otherIsLater: otherIsLater,
+            redlamp: XMPFields(sidecar.metadata), other: shown, record: merged, fields: shownFields,
+            otherIsLater: otherIsLater,
         )
-        for field in XMPField.held {
+        for field in shownFields {
             shown.take(field, from: merge.fields)
         }
         return Organising(fields: shown, others: Set(merge.taken))
@@ -449,9 +461,10 @@ extension LibraryIndexer.Run {
     /// The organising fields of a photo whose `.redlamp` alone changed, from the `.redlamp` and the
     /// photo's row, without reading other apps' files again; their keywords nil where the row's stay.
     /// A field the `.redlamp` leaves open keeps the row's value when the row says it's other apps'
-    /// (`otherFields`), whose files haven't changed. Nil when other apps' fields are needed: they changed
-    /// since `LibraryXMP`'s record, or, without one, the `.redlamp` leaves open a field whose value in the
-    /// row was its own.
+    /// (`otherFields`), whose files haven't changed, and a capture time it leaves open is the camera's
+    /// when no other app's `.xmp` is beside the photo. Nil when other apps' fields are needed: they
+    /// changed since `LibraryXMP`'s record, or, without one, the `.redlamp` leaves open a field whose value
+    /// in the row was its own.
     static func organising(
         afterSidecar sidecar: SidecarSummary, of job: LibraryIndexer.PhotoJob, row: PhotoRecord,
     ) -> (organising: Organising, keywords: [String]?)? {
@@ -461,12 +474,17 @@ extension LibraryIndexer.Run {
                   XMPFileStamp.same(record.darktable, job.darktable.map(XMPFileStamp.init)),
                   XMPFileStamp.same(record.photo, XMPFileStamp(job.entry))
             else { return nil }
-            let merged = XMPMerge.merge(redlamp: redlamp, other: record.other, record: record, otherIsLater: false)
+            let merged = XMPMerge.merge(
+                redlamp: redlamp, other: record.other, record: record, fields: shownFields, otherIsLater: false,
+            )
             return (Organising(fields: merged.fields, others: Set(merged.taken)), merged.fields.keywords ?? [])
         }
         let shown = fields(of: row)
         var organising = Organising(fields: redlamp, others: [])
         for field in XMPField.allCases where field != .keywords && !redlamp.holds(field) && shown.holds(field) {
+            if field == .captureTime, job.xmp == nil, job.darktable == nil {
+                continue
+            }
             guard row.otherFields.contains(field) else { return nil }
             organising.fields.take(field, from: shown)
             organising.others.insert(field)

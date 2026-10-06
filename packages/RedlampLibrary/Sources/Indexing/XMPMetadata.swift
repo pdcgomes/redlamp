@@ -7,13 +7,16 @@ import ImageIO
 /// with other apps are read as `LibraryXMP` reads them (`XMPSource`), so the index shows what it
 /// would take.
 public enum XMPMetadata {
-    /// The organising fields of an `.xmp` sidecar, the rest of the metadata left empty; nil when
-    /// `data` isn't XMP.
+    /// The organising fields of an `.xmp` sidecar and the capture time it gives, the rest of the
+    /// metadata left empty; nil when `data` isn't XMP.
     public static func parse(_ data: Data, conventions: XMPConventions = XMPConventions()) -> CaptureMetadata? {
         guard let packet = XMPPacket(data) else { return nil }
         let source = XMPSource(packet: packet, conventions: conventions)
+        let captured = XMPCaptureTime(packet)
         var found = CaptureMetadata()
-        organise(&found, source.present.isEmpty ? nil : source)
+        organise(&found, source.present.isEmpty && captured == nil ? nil : source)
+        found.captured = captured?.time
+        found.capturedOffset = captured?.offset
         return found
     }
 

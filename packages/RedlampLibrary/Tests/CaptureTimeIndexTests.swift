@@ -71,6 +71,60 @@ struct CaptureTimeIndexTests {
         #expect(try await sandbox.named("A.JPG", "{date:yyyyMMdd-HHmm}-{date:HHmm:utc}") == "20240602-0030-0530")
     }
 
+    @Test func `another app's shifted capture time is shown until the sidecar holds one, and date: and {date} follow it`(
+    ) async throws {
+        let sandbox = try await KeywordSandbox.make()
+        defer { sandbox.remove() }
+        try sandbox.shot("A.JPG", at: "2024:06:01 23:30:00", offset: "+01:00")
+        try XMPCaptureTimeTests.write(
+            XMPCaptureTimeTests.xmp(dateTimeOriginal: "2024-06-02T00:30:00+01:00"), at: "A.xmp", in: sandbox,
+            modified: -60,
+        )
+        try sandbox.shot("B.JPG", at: "2024:06:02 00:10:00", offset: "+01:00")
+        try sandbox.shot("C.JPG", at: "2024:06:02 00:20:00", offset: "+01:00")
+        try XMPCaptureTimeTests.write(
+            XMPCaptureTimeTests.xmp(dateTimeOriginal: "2024:06:01 23:40:00.000"), at: "C.JPG.xmp", in: sandbox,
+            modified: -60,
+        )
+        try await sandbox.indexAll()
+
+        let shifted = try await sandbox.row("A.JPG")
+        #expect(shifted.captured == cameraClock("2024-06-02 00:30:00") && shifted.capturedOffset == 3600)
+        #expect(shifted.cameraTime == cameraClock("2024-06-01 23:30:00") && shifted.cameraZone == 3600)
+        #expect(shifted.otherFields.contains(.captureTime))
+        #expect(try await sandbox.row("C.JPG").captured == cameraClock("2024-06-01 23:40:00"), "darktable's")
+        #expect(try await sandbox.inCaptureOrder() == ["C.JPG", "B.JPG", "A.JPG"])
+        #expect(try await sandbox.search("date:2024-06-02") == ["A.JPG", "B.JPG"])
+        #expect(try await sandbox.named("A.JPG", "{date:yyyyMMdd-HHmm}") == "20240602-0030")
+
+        try sandbox.sidecar("A.JPG", PhotoMetadata(captureShift: -600))
+        try await sandbox.indexAll()
+        let own = try await sandbox.row("A.JPG")
+        #expect(own.captured == cameraClock("2024-06-01 23:20:00") && !own.otherFields.contains(.captureTime))
+        #expect(try await sandbox.inCaptureOrder() == ["A.JPG", "C.JPG", "B.JPG"])
+        #expect(try await sandbox.search("date:2024-06-01") == ["A.JPG", "C.JPG"])
+
+        try sandbox.sidecar("A.JPG", PhotoMetadata(rating: 2))
+        try await sandbox.indexAll()
+        let again = try await sandbox.row("A.JPG")
+        #expect(again.captured == cameraClock("2024-06-02 00:30:00") && again.otherFields.contains(.captureTime))
+        #expect(again.cameraTime == cameraClock("2024-06-01 23:30:00") && again.rating == 2)
+    }
+
+    @Test func `another app's capture time that is the camera's shifts nothing`() async throws {
+        let sandbox = try await KeywordSandbox.make()
+        defer { sandbox.remove() }
+        try sandbox.shot("A.JPG", at: "2024:06:01 23:30:00", offset: "+01:00")
+        try XMPCaptureTimeTests.write(
+            XMPCaptureTimeTests.xmp(dateTimeOriginal: "2024-06-01T23:30:00+01:00", rating: 3), at: "A.xmp",
+            in: sandbox, modified: -60,
+        )
+        try await sandbox.indexAll()
+        let row = try await sandbox.row("A.JPG")
+        #expect(row.captured == cameraClock("2024-06-01 23:30:00") && row.cameraCaptured == nil)
+        #expect(row.rating == 3 && !row.otherFields.contains(.captureTime))
+    }
+
     @Test func `naming fields read from a photo's file take its sidecar's shift and zone`() {
         let metadata = CaptureMetadata(captured: cameraClock("2024-06-01 23:30:00", plus: 0.25), capturedOffset: 3600)
         var fields = NamingFields(name: "A.JPG", folder: "/Photos", metadata: metadata)

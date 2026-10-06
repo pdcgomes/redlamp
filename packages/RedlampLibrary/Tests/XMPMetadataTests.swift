@@ -154,7 +154,10 @@ struct XMPMetadataTests {
         #expect(metadata.xmp == XMPSource(xmp: Data(Self.darktable.utf8)))
         metadata.xmp = nil
         #expect(metadata == CaptureMetadata(
-            rating: 5, label: "Green", keywords: ["Animals/Birds/Gulls", "gull"], title: "Gulls at dawn",
+            captured: cameraClock("2024-06-01 08:30:00"), rating: 5, label: "Green", keywords: [
+                "Animals/Birds/Gulls",
+                "gull",
+            ], title: "Gulls at dawn",
         ))
     }
 
