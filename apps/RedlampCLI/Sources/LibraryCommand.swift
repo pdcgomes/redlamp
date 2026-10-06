@@ -26,6 +26,9 @@ enum LibraryCommand {
            redlamp library trash <query> --index <path> [--dry-run] [--json]
            redlamp library undo --index <path> [--json]
            redlamp library journal --index <path> [--finish | --roll-back] [--json]
+           redlamp library trashed --index <path> [--json]
+           redlamp library put-back <photo>… --index <path> [--dry-run] [--json]
+           redlamp library put-back --batch <id> --index <path> [--dry-run] [--json]
            redlamp library keywords --index <path> [--tree] [--json]
            redlamp library keywords import|export <file> --index <path>
            redlamp library keywords add|remove <keyword> --index <path> <query> [--dry-run] [--json]
@@ -103,6 +106,12 @@ enum LibraryCommand {
                before it starts, and --dry-run shows the plan. undo takes the last batch back; journal lists
                the batches, and finishes (--finish) or rolls back (--roll-back) one a forced quit cut short,
                which every command does first.
+      trashed  lists what the batches moved to the Trash that's still there, newest first, from the
+               journal: each photo where it was and where it is in the Trash, its batch, and the sidecars,
+               other apps' .xmp and pair that went with it; --json prints JSON. put-back puts photos back
+               where they were, named by either path, or every photo of a batch with --batch, each with its
+               pair, sidecars and .xmp, as a batch undo reverses; a name taken where a photo was stops it
+               before anything moves, and --dry-run shows the plan.
       keywords prints the keyword list with how many photos have each, indented by level with --tree;
                imports and exports Lightroom Classic's keyword-list file; adds or removes a keyword on the
                photos <query> finds; renames, moves, merges and deletes keywords, rewriting their photos'
@@ -171,6 +180,8 @@ enum LibraryCommand {
         case "trash": try await trash(Array(arguments.dropFirst()))
         case "undo": try await undo(Array(arguments.dropFirst()))
         case "journal": try await journal(Array(arguments.dropFirst()))
+        case "trashed": try await trashed(Array(arguments.dropFirst()))
+        case "put-back": try await putBack(Array(arguments.dropFirst()))
         case "keywords": try await keywords(Array(arguments.dropFirst()))
         case "stacks" where stackVerbs.contains(arguments.dropFirst().first ?? ""):
             try await stackChange(Array(arguments.dropFirst()))

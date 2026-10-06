@@ -155,7 +155,7 @@ extension LibraryCommand {
     // MARK: - Running
 
     /// A batch run, or with `--dry-run` described; conflicts printed and exit 1.
-    private static func planned(_ batch: FileBatch, operations: FileOperations, options: Arguments) async throws {
+    static func planned(_ batch: FileBatch, operations: FileOperations, options: Arguments) async throws {
         guard options.has("--dry-run") else {
             return try await run(batch, operations: operations, json: options.has("--json"))
         }
@@ -170,12 +170,14 @@ extension LibraryCommand {
                 let title: String
                 let moves: [Move]
                 let conflicts: [String]
+                let gone: [String]
+                let notInIndex: [Int64]
             }
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
             try print(String(decoding: encoder.encode(Output(
                 title: batch.title, moves: moves.map { Move(from: $0.source, to: $0.destination) },
-                conflicts: conflicts.map(\.description),
+                conflicts: conflicts.map(\.description), gone: batch.gone, notInIndex: batch.notInIndex,
             )), as: UTF8.self))
         } else {
             for move in moves {
@@ -185,16 +187,35 @@ extension LibraryCommand {
             print("\(batch.title): \(count(batch.steps.count)) steps, \(files) files. "
                 + (conflicts.isEmpty ? "Nothing was moved." : "It can't start:"))
             conflicts.prefix(50).forEach { print("  \($0)") }
+            leftOut(gone: batch.gone, notInIndex: batch.notInIndex).forEach { print($0) }
         }
         if !conflicts.isEmpty {
             throw ExitCode(1)
         }
     }
 
+    /// What a batch leaves out: what isn't where a batch left it any more, and the photos it was asked
+    /// to move to the Trash that the index no longer has.
+    private static func leftOut(gone: [String], notInIndex: [Int64]) -> [String] {
+        var lines: [String] = []
+        if !gone.isEmpty {
+            lines.append("  \(count(gone.count)) left out, no longer where the batch left them:")
+            lines += gone.prefix(20).map { "    \($0)" }
+        }
+        if !notInIndex.isEmpty {
+            lines.append(
+                "  \(count(notInIndex.count)) photo\(notInIndex.count == 1 ? "" : "s") left out, no longer in the "
+                    + "index: " + notInIndex.map { "photo \($0)" }.joined(separator: ", "),
+            )
+        }
+        return lines
+    }
+
     /// Runs `batch`, printing its progress on stderr, then what it did.
-    private static func run(_ batch: FileBatch, operations: FileOperations, json: Bool) async throws {
+    static func run(_ batch: FileBatch, operations: FileOperations, json: Bool) async throws {
         guard !batch.steps.isEmpty else {
             print("\(batch.title): nothing to do")
+            leftOut(gone: batch.gone, notInIndex: batch.notInIndex).forEach { print($0) }
             return
         }
         let reported = Mutex(ContinuousClock.now)
@@ -236,6 +257,7 @@ extension LibraryCommand {
                 let originalNamesSkipped: [String]
                 let foldersLeft: [String]
                 let gone: [String]
+                let notInIndex: [Int64]
                 let seconds: Double
             }
             let encoder = JSONEncoder()
@@ -245,13 +267,13 @@ extension LibraryCommand {
                 steps: outcome.steps, done: outcome.done, photos: outcome.photos,
                 originalNamesRecorded: outcome.originalNamesRecorded,
                 originalNamesSkipped: outcome.originalNamesSkipped,
-                foldersLeft: outcome.foldersLeft, gone: outcome.gone, seconds: seconds,
+                foldersLeft: outcome.foldersLeft, gone: outcome.gone, notInIndex: outcome.notInIndex, seconds: seconds,
             )), as: UTF8.self))
             return
         }
         var lines = [String(
-            format: "%@: %@, %@ photos in %.1f s", outcome.title, describe(outcome.state), count(outcome.photos),
-            seconds,
+            format: "%@: %@, %@ photo%@ in %.1f s", outcome.title, describe(outcome.state), count(outcome.photos),
+            outcome.photos == 1 ? "" : "s", seconds,
         )]
         if outcome.originalNamesRecorded > 0 {
             lines.append("  \(count(outcome.originalNamesRecorded)) original names recorded in their sidecars")
@@ -262,10 +284,7 @@ extension LibraryCommand {
                     "  \(count(outcome.originalNamesSkipped.count)) sidecars this build can't write kept as they were",
                 )
         }
-        if !outcome.gone.isEmpty {
-            lines.append("  \(count(outcome.gone.count)) left out, no longer where the batch left them:")
-            lines += outcome.gone.prefix(20).map { "    \($0)" }
-        }
+        lines += leftOut(gone: outcome.gone, notInIndex: outcome.notInIndex)
         if !outcome.foldersLeft.isEmpty {
             lines
                 .append("  folders kept, something having been put in them: " + outcome.foldersLeft
@@ -275,7 +294,7 @@ extension LibraryCommand {
     }
 
     /// Opens the index, finishes a batch a forced quit left, then runs `body`.
-    private static func withOperations(_ path: String, _ body: (FileOperations) async throws -> Void) async throws {
+    static func withOperations(_ path: String, _ body: (FileOperations) async throws -> Void) async throws {
         let index = try await openIndex(path)
         let operations = FileOperations(index: index)
         do {
