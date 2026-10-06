@@ -31,7 +31,7 @@ struct XMPGroupOutcome: Sendable {
 
 extension XMPGroup {
     /// One member's side of the sync.
-    private struct Side {
+    fileprivate struct Side {
         let member: Member
         let photo: URL
         /// Its `.redlamp`'s edit, where the locator reads it.
@@ -54,7 +54,7 @@ extension XMPGroup {
     }
 
     /// The shared `.xmp` as it was read.
-    private struct SharedFile {
+    fileprivate struct SharedFile {
         let url: URL
         let stamp: XMPFileStamp?
         let bytes: [UInt8]?
@@ -68,7 +68,7 @@ extension XMPGroup {
     }
 
     /// What the shared `.xmp` gets.
-    private struct Plan {
+    fileprivate struct Plan {
         var wanted = XMPFields()
         var decided = Set<XMPField>()
         /// The fields each member decides, by its position.
@@ -84,10 +84,78 @@ extension XMPGroup {
         }
     }
 
-    /// Merges the group's photos' other apps' fields into their `.redlamp` sidecars and, when
-    /// `context` writes them, their fields into the `.xmp` they share; as `XMPMerge` and
-    /// `XMPSidecarWriter` describe.
-    func sync(_ context: XMPSyncContext) -> XMPGroupOutcome {
+    /// A group's sync worked out up to its writes: each member's merge, and the `.xmp` they share
+    /// planned; or, when nothing it reads changed since its records, its outcome.
+    struct Pending: Sendable {
+        let group: XMPGroup
+        private var sides: [Side]
+        private let file: SharedFile?
+        private var plan: Plan
+        private let unchanged: XMPGroupOutcome?
+
+        fileprivate init(group: XMPGroup, sides: [Side], file: SharedFile?, plan: Plan, unchanged: XMPGroupOutcome?) {
+            self.group = group
+            self.sides = sides
+            self.file = file
+            self.plan = plan
+            self.unchanged = unchanged
+        }
+
+        /// The members whose `.redlamp` takes other apps' fields, by their places in the group.
+        var takers: [Int] {
+            sides.indices.filter { !(sides[$0].merge?.taken.isEmpty ?? true) }
+        }
+
+        func photo(_ taker: Int) -> URL {
+            sides[taker].photo
+        }
+
+        /// The member's `.redlamp` with what it took from other apps, keeping everything else in it;
+        /// nothing when it can't be read.
+        func taking(_ taker: Int, into sidecar: Sidecar?, context: XMPSyncContext) -> SidecarChange {
+            guard let merge = sides[taker].merge, var sidecar else { return .keep }
+            sidecar.metadata = merge.fields.applied(to: sidecar.metadata, fields: Set(merge.taken))
+            sidecar.modified = context.now
+            return .save(sidecar)
+        }
+
+        /// Notes what became of the member's `.redlamp`.
+        mutating func took(_ taker: Int, _ result: SidecarBatchResult?, store: SidecarStore) {
+            let problem: String
+            switch result?.outcome {
+            case .saved?:
+                sides[taker].editStamp = XMPGroup.editURL(store, sides[taker].photo).flatMap(XMPFileStamp.init(at:))
+                return
+            case let .failed(error)?:
+                problem = XMPGroup.describe(error)
+            case .kept?, nil:
+                problem = XMPSyncProblem.unreadableSidecar.description
+            }
+            sides[taker].failed = true
+            sides[taker].problem = "its .redlamp couldn't take other apps' changes: \(problem)"
+        }
+
+        /// Writes the `.xmp`, once the `.redlamp` sidecars are written, when `context` writes it; the
+        /// group's outcome.
+        func finish(_ context: XMPSyncContext) -> XMPGroupOutcome {
+            guard let file else { return unchanged ?? XMPGroupOutcome() }
+            var plan = plan
+            var written: XMPFileStamp?
+            if let planned = plan.bytes, context.writes, !context.dryRun {
+                do {
+                    written = try XMPSidecarWriter.write(planned, to: file.url, replacing: file.bytes)
+                } catch {
+                    plan.problem = XMPGroup.describe(error)
+                }
+            }
+            return group.outcome(sides, file: file, plan: plan, written: written, context: context)
+        }
+    }
+
+    /// Merges the group's photos' other apps' fields with their `.redlamp` sidecars' and plans the
+    /// `.xmp` they share, as `XMPMerge` and `XMPSidecarWriter` describe; nothing is written. The
+    /// `.redlamp` sidecars are written next (`Pending.taking`), then the `.xmp` (`Pending.finish`).
+    func prepare(_ context: XMPSyncContext) -> Pending {
         var sides = members.map { member in side(member, context) }
         let sharedStamp = shared.map(XMPFileStamp.init)
         if sides.allSatisfy({ isUnchanged($0, sharedStamp: sharedStamp, context: context) }) {
@@ -96,7 +164,7 @@ extension XMPGroup {
                 guard let record = side.record, side.redlamp != nil else { continue }
                 outcome.photos.append(photo(side, other: record.other, merged: record.redlampFields, unchanged: true))
             }
-            return outcome
+            return Pending(group: self, sides: [], file: nil, plan: Plan(), unchanged: outcome)
         }
 
         let sharedURL = url(sharedName)
@@ -109,24 +177,7 @@ extension XMPGroup {
         for index in sides.indices {
             merge(&sides[index], shared: file.source, sharedStamp: sharedStamp, context: context)
         }
-        var plan = plan(sides, file, context)
-
-        // The `.redlamp` sidecars first, then the `.xmp`.
-        if !context.dryRun {
-            let store = SidecarStore(locator: context.locator)
-            for index in sides.indices {
-                take(&sides[index], store: store, context: context)
-            }
-        }
-        var written: XMPFileStamp?
-        if let planned = plan.bytes, context.writes, !context.dryRun {
-            do {
-                written = try XMPSidecarWriter.write(planned, to: file.url, replacing: file.bytes)
-            } catch {
-                plan.problem = Self.describe(error)
-            }
-        }
-        return outcome(sides, file: file, plan: plan, written: written, context: context)
+        return Pending(group: self, sides: sides, file: file, plan: plan(sides, file, context), unchanged: nil)
     }
 
     /// What the `.xmp` gets: each field from the first photo that decides it, the raw's first. A
@@ -167,21 +218,6 @@ extension XMPGroup {
             plan.problem = "\(sharedName) couldn't be written without changing what other apps wrote in it: left as it is"
         }
         return plan
-    }
-
-    /// Writes what the member's `.redlamp` took from other apps, keeping everything else in it.
-    private func take(_ side: inout Side, store: SidecarStore, context: XMPSyncContext) {
-        guard let merge = side.merge, !merge.taken.isEmpty else { return }
-        do {
-            guard var sidecar = store.load(for: side.photo) else { throw XMPSyncProblem.unreadableSidecar }
-            sidecar.metadata = merge.fields.applied(to: sidecar.metadata, fields: Set(merge.taken))
-            sidecar.modified = context.now
-            try store.save(sidecar, for: side.photo)
-            side.editStamp = Self.editURL(store, side.photo).flatMap(XMPFileStamp.init(at:))
-        } catch {
-            side.failed = true
-            side.problem = "its .redlamp couldn't take other apps' changes: \(Self.describe(error))"
-        }
     }
 
     /// Each photo's outcome, and the records and rows to keep once the sidecars are written.
@@ -328,14 +364,14 @@ extension XMPGroup {
         )
     }
 
-    private static func editURL(_ store: SidecarStore, _ photo: URL) -> URL? {
+    fileprivate static func editURL(_ store: SidecarStore, _ photo: URL) -> URL? {
         let sidecar = store.locator.readURL(for: photo)
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: sidecar.path, isDirectory: &isDirectory) else { return nil }
         return isDirectory.boolValue ? sidecar.appending(path: SidecarStore.editFile) : sidecar
     }
 
-    private static func describe(_ error: any Error) -> String {
+    fileprivate static func describe(_ error: any Error) -> String {
         switch error {
         case let error as XMPSidecarWriter.Failure: error.description
         case let error as XMPSyncProblem: error.description

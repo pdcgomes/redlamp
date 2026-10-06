@@ -319,28 +319,28 @@ final class FileRunner: @unchecked Sendable {
     // MARK: - Original names
 
     /// Records each photo's name before the batch as its original name, unless it has one; or takes
-    /// it out of the sidecar if it's the name the photo goes back to. The sidecars are written a few
-    /// at a time, each on its own.
+    /// it out of the sidecar if it's the name the photo goes back to. The sidecars are written as one
+    /// batch (`SidecarStore.change`), making one where there's none and removing one with nothing
+    /// else left in it; a sidecar this build can't write is left as it is.
     private func changeOriginalNames(of photos: [PhotoMove], recording: Bool) {
         let clock = ContinuousClock()
         let started = clock.now
         let tally = Mutex((recorded: 0, skipped: [String]()))
-        let store = store
-        let width = min(Self.sidecarWriters, photos.count)
-        DispatchQueue.concurrentPerform(iterations: width) { worker in
-            for photo in stride(from: worker, to: photos.count, by: width).map({ photos[$0] }) {
-                let original = (photo.from as NSString).lastPathComponent
-                let result = Self.changeOriginalName(of: photo, in: store) { name in
-                    guard recording ? name == nil : name == original else { return false }
-                    name = recording ? original : nil
-                    return true
-                }
-                tally.withLock { tally in
-                    switch result {
-                    case .changed where recording: tally.recorded += 1
-                    case .skipped: tally.skipped.append(photo.to)
-                    case .changed, .unchanged: break
-                    }
+        store.change(photos.map { URL(fileURLWithPath: $0.to) }) { number, sidecar in
+            let original = (photos[number].from as NSString).lastPathComponent
+            var sidecar = sidecar ?? Sidecar(recipe: EditRecipe())
+            var metadata = sidecar.metadata ?? PhotoMetadata()
+            guard recording ? metadata.originalName == nil : metadata.originalName == original else { return .keep }
+            metadata.originalName = recording ? original : nil
+            sidecar.metadata = metadata.isEmpty ? nil : metadata
+            sidecar.modified = Date()
+            return .saveOrRemove(sidecar)
+        } done: { result in
+            tally.withLock { tally in
+                switch result.outcome {
+                case .saved where recording: tally.recorded += 1
+                case .failed: tally.skipped.append(photos[result.index].to)
+                case .saved, .kept: break
                 }
             }
         }
@@ -350,16 +350,9 @@ final class FileRunner: @unchecked Sendable {
         outcome.originalNamesTime += clock.now - started
     }
 
-    private enum NameChange {
-        case changed, unchanged, skipped
-    }
-
-    /// Sidecars written at once: enough to wait on several, few enough for a spinning disk.
-    static let sidecarWriters = 8
-
     /// Removes what the batch's sidecar writes left when a forced quit cut them short: hidden copies
-    /// of the sidecars it wrote, named as `SidecarStore` names one while it builds or removes it,
-    /// `.IMG_1234.ARW.redlamp.<UUID>`, beside the photos and on this Mac.
+    /// of the sidecars it wrote, named as `SidecarStore` names one while it builds, writes or removes
+    /// it, `.IMG_1234.ARW.redlamp.<UUID>`, beside the photos and on this Mac.
     func removeInterruptedSaves(locator: SidecarLocator) {
         var names: [String: Set<String>] = [:]
         for step in batch.steps where Self.writesNames(step) {
@@ -384,25 +377,6 @@ final class FileRunner: @unchecked Sendable {
                 else { continue }
                 try? FileManager.default.removeItem(atPath: folder + "/" + entry)
             }
-        }
-    }
-
-    /// Changes the original name in the photo's sidecar, making one if there's none and removing it
-    /// if nothing else is left in it; a sidecar this build can't write is left as it is.
-    private static func changeOriginalName(
-        of photo: PhotoMove, in store: SidecarStore, _ change: (inout String?) -> Bool,
-    ) -> NameChange {
-        let image = URL(fileURLWithPath: photo.to)
-        var sidecar = store.load(for: image) ?? Sidecar(recipe: EditRecipe())
-        var metadata = sidecar.metadata ?? PhotoMetadata()
-        guard change(&metadata.originalName) else { return .unchanged }
-        sidecar.metadata = metadata.isEmpty ? nil : metadata
-        sidecar.modified = Date()
-        do {
-            try store.saveOrRemove(sidecar, for: image)
-            return .changed
-        } catch {
-            return .skipped
         }
     }
 

@@ -1,6 +1,7 @@
 import Foundation
 import RedlampDocument
 import RedlampEngineAPI
+import Synchronization
 import Testing
 @testable import RedlampLibrary
 
@@ -202,6 +203,41 @@ struct KeywordChangeTests {
         #expect(try await sandbox.indexed("A.JPG") == ["New", "Places/Portugal/Lisbon"])
     }
 
+    @Test func `hundreds of photos' sidecars are written in batches, one this build can't write left alone, and undone`(
+    ) async throws {
+        let sandbox = try await KeywordSandbox.make()
+        defer { sandbox.remove() }
+        let names = (0 ..< 300).map { String(format: "P%03d.JPG", $0) }
+        for (number, name) in names.enumerated() {
+            try sandbox.photo(name, keywords: number.isMultiple(of: 3) ? ["Shoot"] : nil)
+        }
+        let store = SidecarStore()
+        let newer = #"{"format":"app.redlamp.edit","recipe":{"version":99,"processVersion":1},"#
+            + #""metadata":{"rating":1,"keywords":["Old"]}}"#
+        try FileManager.default.removeItem(at: store.url(for: sandbox.url("P150.JPG")))
+        try Data(newer.utf8).write(to: store.url(for: sandbox.url("P150.JPG")))
+        try await sandbox.indexAll()
+        let keywords = sandbox.keywords()
+        let reported = Reported()
+        let plan = try await keywords.plan(.add([kw("Picked")], to: sandbox.ids(names)))
+        let outcome = try await keywords.run(plan) { done, _ in reported.counts.withLock { $0.append(done) } }
+        #expect(outcome.written == 299 && outcome.skipped == [sandbox.url("P150.JPG").path])
+        #expect(reported.counts.withLock { $0.sorted() } == Array(1 ... 300), "progress hears of each sidecar once")
+        for (number, name) in names.enumerated() where name != "P150.JPG" {
+            #expect(sandbox.sidecarKeywords(name) == (number.isMultiple(of: 3) ? ["Shoot", "Picked"] : ["Picked"]))
+        }
+        #expect(try Data(contentsOf: store.url(for: sandbox.url("P150.JPG"))) == Data(newer.utf8))
+        #expect(try await sandbox.indexed("P150.JPG") == ["Old"])
+
+        let undone = try await keywords.undo()
+        #expect(undone.state == .finished && undone.written == 299)
+        for (number, name) in names.enumerated() where name != "P150.JPG" {
+            #expect(sandbox.sidecarKeywords(name) == (number.isMultiple(of: 3) ? ["Shoot"] : nil))
+            #expect(sandbox.sidecar(name) == nil || number.isMultiple(of: 3), "the sidecars the batch made are gone")
+        }
+        #expect(try Data(contentsOf: store.url(for: sandbox.url("P150.JPG"))) == Data(newer.utf8))
+    }
+
     @Test func `a batch a forced quit stopped is finished at the next launch, or rolled back`() async throws {
         let sandbox = try await KeywordSandbox.make()
         defer { sandbox.remove() }
@@ -251,4 +287,9 @@ struct KeywordChangeTests {
         #expect(sandbox.sidecarKeywords("A.JPG") == ["Places/Portugal/Lisbon"])
         #expect(try await keywords.entries().isEmpty)
     }
+}
+
+/// The counts a batch's progress reported, from any thread.
+private final class Reported: Sendable {
+    let counts = Mutex<[Int]>([])
 }

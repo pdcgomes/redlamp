@@ -1,5 +1,6 @@
 import Foundation
 import RedlampDocument
+import Synchronization
 
 public extension LibraryKeywords {
     // MARK: - The journal
@@ -96,35 +97,32 @@ public extension LibraryKeywords {
         let store = try await SidecarStore(locator: LibrarySidecars(index: index, paths: paths).locator())
         let ids = batch.photos.map(\.id)
         let paths = try await index.read { try $0.photoPaths(ids) }
-        let written = logged.written
+        let places = logged.written.sorted { $0.key < $1.key }.compactMap { place, change in
+            change.before == change.after ? nil : paths[batch.photos[place].id].map { (place, change, path: $0) }
+        }
         let restored = try await LibraryIndex.offCaller {
-            var restored: [Int64: [KeywordPath]] = [:]
-            for (place, change) in written.sorted(by: { $0.key < $1.key }) where change.before != change.after {
-                let photo = batch.photos[place]
-                guard let path = paths[photo.id] else { continue }
-                let image = URL(fileURLWithPath: path)
-                guard var sidecar = store.load(for: image) else { continue }
+            let restored = Mutex<[Int64: [KeywordPath]]>([:])
+            store.change(places.map { URL(fileURLWithPath: $0.path) }) { number, sidecar in
+                guard var sidecar else { return .keep }
+                let (place, change, _) = places[number]
                 var metadata = sidecar.metadata ?? PhotoMetadata()
                 let current = SidecarKeywords(keywords: metadata.keywords)
-                let target: SidecarKeywords = if current == change.after {
-                    change.before
-                } else {
-                    SidecarKeywords(keywords: undone(
-                        current.paths ?? photo.index, before: change.before.paths ?? photo.index,
-                        after: change.after.paths ?? photo.index,
-                    ).map(\.text))
-                }
-                if target != current {
-                    metadata.keywords = target.keywords
-                    sidecar.metadata = metadata.isEmpty ? nil : metadata
-                    sidecar.modified = Date()
-                    try? store.saveOrRemove(sidecar, for: image)
-                }
-                if let keywords = target.paths {
-                    restored[photo.id] = keywords
+                let target = Self.rolledBack(current, batch.photos[place], change)
+                guard target != current else { return .keep }
+                metadata.keywords = target.keywords
+                sidecar.metadata = metadata.isEmpty ? nil : metadata
+                sidecar.modified = Date()
+                return .saveOrRemove(sidecar)
+            } done: { result in
+                guard let sidecar = result.sidecar else { return }
+                let (place, change, _) = places[result.index]
+                let photo = batch.photos[place]
+                if let keywords = Self.rolledBack(SidecarKeywords(keywords: sidecar.metadata?.keywords), photo, change)
+                    .paths {
+                    restored.withLock { $0[photo.id] = keywords }
                 }
             }
-            return restored
+            return restored.withLock { $0 }
         }
         let keywords = Dictionary(batch.photos.map { ($0.id, restored[$0.id] ?? $0.index) }) { first, _ in first }
         let existing = try await index.write { writer -> [Int64] in
@@ -134,6 +132,20 @@ public extension LibraryKeywords {
         }
         live?.photosChanged(existing)
         try await LibraryIndex.offCaller { try log.state(.rolledBack) }
+    }
+
+    /// What a sidecar holding `current` holds once `change`, the batch's to the photo, is put back:
+    /// what it held before, or, when it changed since, that with what the batch added off and what it
+    /// took off on.
+    private static func rolledBack(
+        _ current: SidecarKeywords, _ photo: KeywordBatch.Photo,
+        _ change: (before: SidecarKeywords, after: SidecarKeywords),
+    ) -> SidecarKeywords {
+        guard current != change.after else { return change.before }
+        return SidecarKeywords(keywords: undone(
+            current.paths ?? photo.index, before: change.before.paths ?? photo.index,
+            after: change.after.paths ?? photo.index,
+        ).map(\.text))
     }
 }
 

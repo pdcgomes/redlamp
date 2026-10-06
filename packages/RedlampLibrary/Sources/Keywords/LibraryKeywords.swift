@@ -52,8 +52,9 @@ public struct KeywordOutcome: Sendable, Hashable {
 /// (`KeywordDefinitions`), and every change to them made as a batch with Undo.
 ///
 /// - **Each photo's keywords are in its sidecar** as full paths. A change writes the definitions
-///   first, then the index and open lists (`live` hears of each write), then the sidecars, a few at
-///   a time off the caller, so the photos show their keywords before their files are written.
+///   first, then the index and open lists (`live` hears of each write), then the sidecars, in
+///   batches off the caller (`SidecarStore.change`), so the photos show their keywords before their
+///   files are written.
 /// - **The journal** (`KeywordJournal`) holds each batch, written and synced before anything changes,
 ///   and logs each sidecar as it's written: a forced quit leaves a batch `recover` finishes or rolls
 ///   back at the next launch, and Undo takes back what was written, keeping what changed since.
@@ -70,8 +71,6 @@ public final class LibraryKeywords: Sendable {
     static let recentKey = "keywords.recent"
     /// Photos a transaction of the index changes.
     static let photosPerWrite = 1000
-    /// Sidecars written at once: enough to wait on several, few enough for a spinning disk.
-    static let sidecarWriters = 8
     private let serial = Mutex<Task<Void, Never>?>(nil)
     /// Sidecars written before the run stops as a killed process would, for the tests and the benchmark.
     let interruption = Mutex<Int?>(nil)
@@ -316,9 +315,9 @@ public final class LibraryKeywords: Sendable {
         return changed
     }
 
-    /// Writes the sidecars of photos `pending` (places in `batch`), a few at a time off the caller,
-    /// logging each; then records their dates in the index, so the indexer doesn't read them again,
-    /// and puts back the index's keywords of photos whose sidecars held others or couldn't be written.
+    /// Writes the sidecars of photos `pending` (places in `batch`) in batches off the caller, logging
+    /// each; then records their dates in the index, so the indexer doesn't read them again, and puts
+    /// back the index's keywords of photos whose sidecars held others or couldn't be written.
     private func writeSidecars(
         _ batch: KeywordBatch, _ pending: [Int], log: KeywordJournal.Log, report: (@Sendable (Int, Int) -> Void)?,
     ) async throws -> (written: Int, skipped: [String]) {
@@ -388,32 +387,39 @@ public final class LibraryKeywords: Sendable {
         let outcome: Outcome
     }
 
-    /// Writes the sidecars of `places`, `sidecarWriters` at a time, each logged once it's written.
+    /// Writes the sidecars of `places` as a batch (`SidecarStore.change`), each logged once it's
+    /// written; a sidecar this build can't write is left as it is. Throws only when the log can't be
+    /// written, once the sidecars under way are done.
     private static func write(
         _ places: [Int], of batch: KeywordBatch, store: SidecarStore, paths: [Int64: String],
         log: KeywordJournal.Log, stop: Int?, done: SidecarCounter, report: @Sendable (Int) -> Void,
     ) throws -> [SidecarResult] {
-        let results = Mutex<[SidecarResult]>([])
+        let gone = places.filter { paths[batch.photos[$0].id] == nil }
+        let results = Mutex(gone.map { SidecarResult(photo: batch.photos[$0].id, outcome: .gone) })
         let failure = Mutex<(any Error)?>(nil)
-        let width = min(sidecarWriters, places.count)
-        DispatchQueue.concurrentPerform(iterations: width) { worker in
-            for place in stride(from: worker, to: places.count, by: width).map({ places[$0] }) {
-                if let stop, done.value >= stop {
-                    return
-                }
-                let photo = batch.photos[place]
-                guard let path = paths[photo.id] else {
-                    results.withLock { $0.append(SidecarResult(photo: photo.id, outcome: .gone)) }
-                    continue
-                }
-                do {
-                    let outcome = try writeSidecar(photo, place: place, of: batch, at: path, store: store, log: log)
-                    results.withLock { $0.append(SidecarResult(photo: photo.id, outcome: outcome)) }
-                    report(done.add())
-                } catch {
-                    failure.withLock { $0 = error }
-                    return
-                }
+        let present = places.compactMap { place in paths[batch.photos[place].id].map { (place: place, path: $0) } }
+        store.change(present.map { URL(fileURLWithPath: $0.path) }, until: {
+            failure.withLock { $0 != nil } || stop.map { done.value >= $0 } ?? false
+        }) { number, sidecar in
+            let photo = batch.photos[present[number].place]
+            var sidecar = sidecar ?? Sidecar(recipe: EditRecipe())
+            var metadata = sidecar.metadata ?? PhotoMetadata()
+            let before = SidecarKeywords(keywords: metadata.keywords)
+            let after = batch.sidecarAfter(photo, current: before, fallback: photo.index)
+            guard after != before else { return .keep }
+            metadata.keywords = after.keywords
+            sidecar.metadata = metadata.isEmpty ? nil : metadata
+            sidecar.modified = Date()
+            return .saveOrRemove(sidecar)
+        } done: { result in
+            let (place, path) = present[result.index]
+            let photo = batch.photos[place]
+            do {
+                let outcome = try logged(result, photo, place: place, of: batch, at: path, store: store, log: log)
+                results.withLock { $0.append(SidecarResult(photo: photo.id, outcome: outcome)) }
+                report(done.add())
+            } catch {
+                failure.withLock { $0 = $0 ?? error }
             }
         }
         if let error = failure.withLock({ $0 }) {
@@ -422,34 +428,26 @@ public final class LibraryKeywords: Sendable {
         return results.withLock { $0 }
     }
 
-    /// Writes one photo's sidecar as the batch leaves it, keeping everything else in it; a sidecar this
-    /// build can't write is left as it is. Throws only when the log can't be written.
-    private static func writeSidecar(
-        _ photo: KeywordBatch.Photo, place: Int, of batch: KeywordBatch, at path: String, store: SidecarStore,
-        log: KeywordJournal.Log,
+    /// Logs what the batch did with one photo's sidecar: written as the batch leaves it, keeping
+    /// everything else in it, or left as it is.
+    private static func logged(
+        _ result: SidecarBatchResult, _ photo: KeywordBatch.Photo, place: Int, of batch: KeywordBatch,
+        at path: String, store: SidecarStore, log: KeywordJournal.Log,
     ) throws -> SidecarResult.Outcome {
-        let image = URL(fileURLWithPath: path)
-        let loaded = store.load(for: image)
-        var sidecar = loaded ?? Sidecar(recipe: EditRecipe())
-        var metadata = sidecar.metadata ?? PhotoMetadata()
-        let before = SidecarKeywords(keywords: metadata.keywords)
+        let before = SidecarKeywords(keywords: result.sidecar?.metadata?.keywords)
         let after = batch.sidecarAfter(photo, current: before, fallback: photo.index)
-        guard after != before else {
+        switch result.outcome {
+        case .kept:
             try log.written(place, before: before, after: after)
             return .written(after.paths, nil)
-        }
-        metadata.keywords = after.keywords
-        sidecar.metadata = metadata.isEmpty ? nil : metadata
-        sidecar.modified = Date()
-        do {
-            try store.saveOrRemove(sidecar, for: image)
-        } catch {
+        case .saved:
+            try log.written(place, before: before, after: after)
+            let date = try? LocalFileSystem().attributes(of: store.locator.readURL(for: result.image)).modified
+            return .written(after.paths, date)
+        case let .failed(error):
             try log.skipped(place, Self.describe(error))
             return .skipped(path, before.paths ?? photo.undo?.indexBefore ?? photo.index)
         }
-        try log.written(place, before: before, after: after)
-        let date = try? LocalFileSystem().attributes(of: store.locator.readURL(for: image)).modified
-        return .written(after.paths, date)
     }
 
     static func describe(_ error: any Error) -> String {

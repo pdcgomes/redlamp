@@ -1,5 +1,6 @@
 import Foundation
 import RedlampDocument
+import Synchronization
 import Testing
 @testable import RedlampLibrary
 
@@ -173,6 +174,58 @@ struct FileRenameTests {
         )
         await #expect(throws: FileOperationError.nothingToUndo) { try await operations.undo() }
         #expect(try await operations.entries().map(\.state) == [.undone, .undone, .finished, .finished])
+    }
+
+    @Test func `a rename of hundreds of photos cancelled partway records the names it renamed, which Undo takes out`(
+    ) async throws {
+        let photos = (0 ..< 300).map { number in
+            FileSandbox.Photo(
+                String(format: "IMG_%04d.JPG", number), captured: FileSandbox.date(Double(number)),
+                sidecar: number.isMultiple(of: 2),
+            )
+        }
+        let sandbox = try await FileSandbox.make(photos)
+        defer { sandbox.remove() }
+        let before = Set(sandbox.files().keys)
+        let operations = sandbox.operations()
+        let rows = try await sandbox.rows()
+        let preview = try await operations.renamePreview(
+            NamingTemplate(parsing: "Shoot-{sequence:4}"), photos: photos.compactMap { rows[$0.path] },
+        )
+        let batch = try await operations.planRename(preview)
+        let running = Mutex<Task<FileOutcome, any Error>?>(nil)
+        let task = Task {
+            try await operations.run(batch) { progress in
+                if progress.done >= 100 {
+                    running.withLock { $0?.cancel() }
+                }
+            }
+        }
+        running.withLock { $0 = task }
+        let outcome = try await task.value
+        #expect(outcome.state == .stopped && outcome.done < batch.steps.count)
+
+        var renamed = 0
+        let files = Set(sandbox.photoFiles().keys)
+        for (number, photo) in photos.enumerated() {
+            let name = String(format: "Shoot-%04d.JPG", number + 1)
+            if files.contains(name) {
+                renamed += 1
+                #expect(try await sandbox.sidecar(name)?.metadata?.originalName == photo.path, "\(name)")
+            } else {
+                let sidecar = try await sandbox.sidecar(photo.path)
+                #expect(photo.sidecar ? sidecar?.metadata?.originalName == nil : sidecar == nil, "\(photo.path)")
+            }
+        }
+        #expect(renamed == outcome.originalNamesRecorded && renamed == FileOperations.namesPerStep, "a step's names")
+        #expect(sandbox.leftovers().isEmpty)
+
+        #expect(try await operations.undo().isFinished)
+        #expect(Set(sandbox.files().keys) == before, "the sidecars made for the names are gone")
+        #expect(sandbox.leftovers().isEmpty)
+        for photo in photos where photo.sidecar {
+            #expect(try await sandbox.sidecar(photo.path)?.metadata?.originalName == nil, "\(photo.path)")
+        }
     }
 
     @Test func `the index, its lists and the store follow, and no photo is read again`() async throws {

@@ -46,7 +46,8 @@ public struct SidecarBatchResult: Sendable {
 public extension SidecarStore {
     /// Groups written at once: enough to keep the disk busy, few enough not to wait on each other.
     static let batchWidth = 8
-    /// Sidecars coordinated together, and held while each is written.
+    /// Sidecars coordinated together, and held while each is written; fewer when a batch has too few
+    /// for `width` groups.
     static let batchGroup = 64
 
     /// Changes the sidecars of `images`, `make` deciding each one's change from the sidecar as it is
@@ -61,7 +62,8 @@ public extension SidecarStore {
         _ make: @Sendable (_ index: Int, _ sidecar: Sidecar?) -> SidecarChange,
         done: @Sendable (SidecarBatchResult) -> Void,
     ) {
-        change(images, width: width, group: Self.batchGroup, edits: .renaming, until: stopped, make, done: done)
+        let group = min(Self.batchGroup, (images.count + max(width, 1) - 1) / max(width, 1))
+        change(images, width: width, group: group, edits: .renaming, until: stopped, make, done: done)
     }
 }
 

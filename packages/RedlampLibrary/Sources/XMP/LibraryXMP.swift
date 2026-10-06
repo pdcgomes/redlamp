@@ -76,9 +76,19 @@ public struct LibraryXMP: Sendable {
                 groups.withLock { $0 += found }
             }
             let all = groups.withLock { $0 }
-            let outcomes = Mutex<[XMPGroupOutcome]>([])
+            let prepared = Mutex([XMPGroup.Pending?](repeating: nil, count: all.count))
             DispatchQueue.concurrentPerform(iterations: all.count) { index in
-                let outcome = all[index].sync(context)
+                let pending = all[index].prepare(context)
+                prepared.withLock { $0[index] = pending }
+            }
+            var pending = prepared.withLock { $0.compactMap(\.self) }
+            if !dryRun {
+                Self.take(&pending, context: context)
+            }
+            let finishing = pending
+            let outcomes = Mutex<[XMPGroupOutcome]>([])
+            DispatchQueue.concurrentPerform(iterations: finishing.count) { index in
+                let outcome = finishing[index].finish(context)
                 outcomes.withLock { $0.append(outcome) }
             }
             return outcomes.withLock { $0 }
@@ -109,6 +119,24 @@ public struct LibraryXMP: Sendable {
         return XMPReport(
             photos: photos, considered: selected.count, writing: writes, dryRun: dryRun, elapsed: clock.now - started,
         )
+    }
+
+    /// Writes what the groups' members' `.redlamp` sidecars take from other apps as one batch
+    /// (`SidecarStore.change`), before any of the `.xmp` they share is written.
+    private static func take(_ pending: inout [XMPGroup.Pending], context: XMPSyncContext) {
+        let groups = pending
+        let takers = groups.indices.flatMap { group in groups[group].takers.map { (group: group, taker: $0) } }
+        let store = SidecarStore(locator: context.locator)
+        let results = Mutex<[Int: SidecarBatchResult]>([:])
+        store.change(takers.map { groups[$0.group].photo($0.taker) }) { number, sidecar in
+            groups[takers[number].group].taking(takers[number].taker, into: sidecar, context: context)
+        } done: { result in
+            results.withLock { $0[result.index] = result }
+        }
+        let taken = results.withLock { $0 }
+        for (number, taker) in takers.enumerated() {
+            pending[taker.group].took(taker.taker, taken[number], store: store)
+        }
     }
 
     /// The photos whose `.redlamp` sidecars changed in `report`: the rows to hand `LibraryLive`.
