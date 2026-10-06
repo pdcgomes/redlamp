@@ -40,17 +40,22 @@ public struct IndexLaunchScenario: BenchScenario {
     /// Puts at `url` the index the launches start from: a copy of the one kept in `indexFolder`,
     /// built there unless it holds the fixture's photos, or else one built for this run.
     private func prepare(_ url: URL, for context: BenchContext) async throws {
-        guard let indexFolder else {
-            return try await IndexingScenario.build([context.fixture], at: url)
-        }
-        let kept = indexFolder.appending(path: "Index.sqlite")
-        if try await !Self.holds(context, kept) {
-            for suffix in ["", "-wal", "-shm"] {
-                try? FileManager.default.removeItem(at: URL(fileURLWithPath: kept.path + suffix))
+        if let indexFolder {
+            let kept = indexFolder.appending(path: "Index.sqlite")
+            if try await !Self.holds(context, kept) {
+                for suffix in ["", "-wal", "-shm"] {
+                    try? FileManager.default.removeItem(at: URL(fileURLWithPath: kept.path + suffix))
+                }
+                try await IndexingScenario.build([context.fixture], at: kept)
             }
-            try await IndexingScenario.build([context.fixture], at: kept)
+            try FileManager.default.copyItem(at: kept, to: url)
+        } else {
+            try await IndexingScenario.build([context.fixture], at: url)
         }
-        try FileManager.default.copyItem(at: kept, to: url)
+        // Written back before the launch, as an index already on the Mac's disk is.
+        let written = try FileHandle(forUpdating: url)
+        try written.synchronize()
+        try written.close()
     }
 
     /// Whether the index at `url` is of the fixture alone, with every photo of its manifest.
@@ -116,12 +121,15 @@ public struct IndexLaunchScenario: BenchScenario {
         let tracker = ChangeTracker(indexer: LibraryIndexer(index: index, fileSystem: watch))
         tracker.show(shown.map { [$0] } ?? [])
         let typing = Task { await type(into: engine) }
-        let reconciled = await reconcile(tracker.start([context.fixture]))
+        let events = tracker.start([context.fixture])
+        let reconciled = await reconcile(events)
         launch.reconciled = clock.now - started
         if !reconciled.replayed, context.profile.isLocal != false {
             await recorded(in: index)
         }
         tracker.stop()
+        // The stream ending stops the tracker, which then wouldn't record the history.
+        withExtendedLifetime(events) {}
         typing.cancel()
         launch.searches = await typing.value
         launch.shownCompared = watch.listed.map { $0 - started }
