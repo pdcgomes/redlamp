@@ -1,4 +1,5 @@
 import Foundation
+import RedlampDocument
 
 /// The index's queries, on a read connection inside `LibraryIndex.read` or on the write
 /// connection inside `LibraryIndex.write` (where they see the transaction's own changes).
@@ -276,7 +277,8 @@ enum IndexColumns {
         "folder", "name", "kind", "size", "modified", "file_id", "content_key", "captured", "captured_offset", "camera",
         "lens", "iso", "aperture", "shutter", "focal", "width", "height", "orientation", "latitude", "longitude",
         "rating", "flag", "label", "marked", "edited", "sidecar_modified", "xmp_modified", "title", "caption", "state",
-        "indexed",
+        "indexed", "custom_label", "creator", "copyright", "sublocation", "city", "province", "country", "country_code",
+        "stack", "stack_top", "other_fields", "xmp_signature",
     ]
 
     static func photo(prefix: String) -> String {
@@ -331,7 +333,33 @@ extension PhotoRecord {
             longitude: row.optionalDouble(at: 20), rating: row.int(at: 21), flag: Self.flag(code: row.int(at: 22)),
             label: Self.label(code: row.int(at: 23)), marked: row.bool(at: 24), edited: row.bool(at: 25),
             sidecarModified: date(26), xmpModified: date(27), title: row.string(at: 28), caption: row.string(at: 29),
-            state: State(rawValue: row.int(at: 30)), indexed: row.int(at: 31),
+            state: State(rawValue: row.int(at: 30)), indexed: row.int(at: 31), customLabel: row.string(at: 32),
+            creator: row.string(at: 33), copyright: row.string(at: 34),
+            location: Self.storedLocation(
+                sublocation: row.string(at: 35),
+                city: row.string(at: 36),
+                province: row.string(at: 37),
+                country: row.string(at: 38),
+                countryCode: row.string(at: 39),
+            ),
+            stack: Self.storedStack(id: row.string(at: 40), top: row.bool(at: 41)),
+            otherFields: Self.fields(code: row.int(at: 42)), xmpSignature: row.optionalInt64(at: 43),
         )
+    }
+
+    /// The location of its columns; nil when they're all empty.
+    static func storedLocation(
+        sublocation: String?, city: String?, province: String?, country: String?, countryCode: String?,
+    ) -> PhotoLocation? {
+        let location = PhotoLocation(
+            country: country, state: province, city: city, sublocation: sublocation, countryCode: countryCode,
+        )
+        return location.isEmpty ? nil : location
+    }
+
+    /// The stack of its columns; nil when the photo is in none and isn't shown for its burst.
+    static func storedStack(id: String?, top: Bool) -> PhotoStack? {
+        let id = id.flatMap(UUID.init(uuidString:))
+        return id == nil && !top ? nil : PhotoStack(id: id, top: top)
     }
 }

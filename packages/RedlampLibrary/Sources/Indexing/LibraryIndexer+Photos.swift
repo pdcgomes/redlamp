@@ -35,21 +35,21 @@ extension LibraryIndexer.Run {
                 count(photo, in: job.folder)
                 return await batcher.add([.photo(photo)])
             }
-            guard let organising = Self.organising(afterSidecar: sidecar.summary, of: job, row: record) else {
+            guard let changed = Self.organising(afterSidecar: sidecar.summary, of: job, row: record) else {
                 var photo = try await read(job, on: volume, priority: priority, lane: lane, sidecar: sidecar)
                 photo.thumbnail = nil
                 count(photo, in: job.folder)
                 return await batcher.add([.photo(photo)])
             }
-            record.rating = organising.fields.rating ?? 0
-            record.flag = organising.fields.flag
-            record.label = organising.fields.label
+            Self.show(changed.organising, in: &record)
+            Self.place(sidecar.summary.metadata, in: &record)
             record.edited = sidecar.summary.hasEdits
             record.sidecarModified = sidecar.modified
             record.state = []
             record.fileID = job.entry.fileIdentifier
             let photo = LibraryIndexer.PendingPhoto(
-                folder: job.folder, record: record, keywords: organising.keywords, isNew: false,
+                folder: job.folder, record: record, keywords: changed.keywords,
+                collections: sidecar.summary.metadata.collections, isNew: false,
             )
             count(photo, in: job.folder)
             await batcher.add([.photo(photo)])
@@ -126,14 +126,14 @@ extension LibraryIndexer.Run {
         if let sidecar {
             record.sidecarModified = sidecar.modified
         }
-        record.marked = job.existing?.marked ?? false
-        let keywords = organising.keywords
+        Self.place(sidecar?.summary.metadata ?? PhotoMetadata(), in: &record)
         return LibraryIndexer.PendingPhoto(
             folder: job.folder, record: record,
             camera: metadata?.cameraName.map {
                 LibraryIndexer.CameraName(name: $0, make: metadata?.make, model: metadata?.model)
             },
-            lens: metadata?.lens, keywords: keywords, isNew: job.existing == nil,
+            lens: metadata?.lens, keywords: organising.fields.keywords,
+            collections: sidecar?.summary.metadata.collections ?? [], isNew: job.existing == nil,
             thumbnail: indexer.thumbnails == nil ? nil : LibraryIndexer.Thumbnail(
                 url: url,
                 key: parsed.key,
@@ -261,53 +261,82 @@ extension LibraryIndexer.Run {
         _ job: LibraryIndexer.PhotoJob, key: ContentKey, metadata: CaptureMetadata?, organising: Organising,
         edited: Bool,
     ) -> PhotoRecord {
-        PhotoRecord(
+        var record = PhotoRecord(
             id: job.existing?.id ?? 0, folder: 0, name: job.entry.name, size: job.entry.size,
             modified: job.entry.modified, fileID: job.entry.fileIdentifier, contentKey: key.data,
             captured: metadata?.captured, capturedOffset: metadata?.capturedOffset, iso: metadata?.iso,
             aperture: metadata?.aperture, shutter: metadata?.shutter, focal: metadata?.focalLength,
             width: metadata?.pixelSize?.width, height: metadata?.pixelSize?.height, orientation: metadata?.orientation,
-            latitude: metadata?.latitude, longitude: metadata?.longitude, rating: organising.rating,
-            flag: organising.flag, label: organising.label, edited: edited, sidecarModified: job.sidecar?.modified,
-            xmpModified: job.xmpModified, title: organising.title, caption: organising.caption, indexed: 1,
+            latitude: metadata?.latitude, longitude: metadata?.longitude, edited: edited,
+            sidecarModified: job.sidecar?.modified, xmpModified: job.xmpModified, indexed: 1,
         )
+        show(organising, in: &record)
+        return record
     }
 
+    /// The fields a photo shows, merged from other apps' and its `.redlamp`'s, and which of them are
+    /// other apps'.
     struct Organising {
-        var rating: Int
-        var flag: PhotoFlag?
-        var label: ColorLabel?
-        var keywords: [String]
-        var title: String?
-        var caption: String?
+        var fields: XMPFields
+        var others: Set<XMPField>
+    }
+
+    /// Shows `organising` in the photo's row: empty texts and locations as none, a creator's names
+    /// separated as XMP reads them.
+    static func show(_ organising: Organising, in record: inout PhotoRecord) {
+        let fields = organising.fields
+        record.rating = fields.rating ?? 0
+        record.flag = fields.flag
+        record.label = fields.label
+        record.customLabel = fields.label == nil ? XMPFields.text(fields.customLabel) : nil
+        record.title = XMPFields.text(fields.title)
+        record.caption = XMPFields.text(fields.caption)
+        record.creator = XMPSource.joined(XMPFields.names(fields.creator))
+        record.copyright = XMPFields.text(fields.copyright)
+        record.location = XMPFields.place(fields.location)
+        record.otherFields = organising.others
+    }
+
+    /// What only the `.redlamp` holds, in the photo's row: the mark and its stack.
+    static func place(_ metadata: PhotoMetadata, in record: inout PhotoRecord) {
+        record.marked = metadata.mark
+        record.stack = metadata.stack.flatMap { $0.id == nil && !$0.top ? nil : PhotoStack(id: $0.id, top: $0.top) }
+    }
+
+    /// The fields a photo's row shows, but its keywords.
+    static func fields(of row: PhotoRecord) -> XMPFields {
+        XMPFields(
+            rating: row.rating > 0 ? row.rating : nil, flag: row.flag, label: row.label, customLabel: row.customLabel,
+            title: row.title, caption: row.caption, creator: row.creator, copyright: row.copyright,
+            location: row.location,
+        )
     }
 
     /// The photo's organising fields as `LibraryXMP` merges them (`XMPMerge`): other apps' value is
     /// its `.xmp`'s, then darktable's, then its own XMP's and IPTC's, field by field; its `.redlamp`'s
-    /// rating, flag, label and keywords stand where it holds them, or, once `LibraryXMP` has merged the
-    /// photo (`merged`), where other apps haven't changed them since. Until then, a keyword list the
-    /// `.redlamp` holds is the photo's keywords even when it's empty, as the sidecar format has it. Its
-    /// title and caption are other apps'.
+    /// stand where it holds them, an empty title or location included, or, once `LibraryXMP` has merged
+    /// the photo (`merged`), where other apps haven't changed them since. Until then, a keyword list the
+    /// `.redlamp` holds is the photo's keywords even when it's empty, as the sidecar format has it.
     static func organising(
         _ embedded: CaptureMetadata?, sidecar: SidecarSummary?, xmp: CaptureMetadata?,
         darktable: CaptureMetadata? = nil, merged: XMPMergeRecord? = nil, otherIsLater: Bool = false,
     ) -> Organising {
         var shown = XMPSource.combining([xmp?.xmp, darktable?.xmp, embedded?.xmp])
-        if let sidecar {
-            let merge = XMPMerge.merge(
-                redlamp: XMPFields(sidecar.metadata), other: shown, record: merged, otherIsLater: otherIsLater,
-            )
-            for field in XMPField.held {
-                shown.take(field, from: merge.fields)
-            }
-            if merged == nil, sidecar.metadata.keywords?.isEmpty == true {
-                shown.keywords = []
-            }
+        guard let sidecar else {
+            return Organising(fields: shown, others: Set(XMPField.allCases.filter(shown.holds)))
         }
-        return Organising(
-            rating: shown.rating ?? 0, flag: shown.flag, label: shown.label, keywords: shown.keywords,
-            title: shown.title, caption: shown.caption,
+        let merge = XMPMerge.merge(
+            redlamp: XMPFields(sidecar.metadata), other: shown, record: merged, otherIsLater: otherIsLater,
         )
+        for field in XMPField.held {
+            shown.take(field, from: merge.fields)
+        }
+        var others = Set(merge.taken)
+        if merged == nil, sidecar.metadata.keywords?.isEmpty == true {
+            shown.keywords = []
+            others.remove(.keywords)
+        }
+        return Organising(fields: shown, others: others)
     }
 
     /// The organising fields of a photo whose `.redlamp` alone changed, from the `.redlamp` and the
@@ -317,7 +346,7 @@ extension LibraryIndexer.Run {
     /// `.redlamp`'s own.
     static func organising(
         afterSidecar sidecar: SidecarSummary, of job: LibraryIndexer.PhotoJob, row: PhotoRecord,
-    ) -> (fields: XMPFields, keywords: [String]?)? {
+    ) -> (organising: Organising, keywords: [String]?)? {
         let redlamp = XMPFields(sidecar.metadata)
         if let record = job.merged {
             guard XMPFileStamp.same(record.sidecar, job.xmp.map(XMPFileStamp.init)),
@@ -325,13 +354,13 @@ extension LibraryIndexer.Run {
                   XMPFileStamp.same(record.photo, XMPFileStamp(job.entry))
             else { return nil }
             let merged = XMPMerge.merge(redlamp: redlamp, other: record.other, record: record, otherIsLater: false)
-            return (merged.fields, merged.fields.keywords)
+            return (Organising(fields: merged.fields, others: Set(merged.taken)), merged.fields.keywords)
         }
-        let shown = XMPFields(rating: row.rating > 0 ? row.rating : nil, flag: row.flag, label: row.label)
-        guard [XMPField.rating, .flag, .label].allSatisfy({ redlamp.holds($0) || !shown.holds($0) }) else {
+        let shown = fields(of: row)
+        guard XMPField.allCases.allSatisfy({ $0 == .keywords || redlamp.holds($0) || !shown.holds($0) }) else {
             return nil
         }
-        return (redlamp, sidecar.metadata.keywords.map(KeywordPath.texts))
+        return (Organising(fields: redlamp, others: []), sidecar.metadata.keywords.map(KeywordPath.texts))
     }
 
     // MARK: - Renames and moves
@@ -477,18 +506,21 @@ extension LibraryIndexer {
         var lens: String?
         /// The photo's keywords; nil keeps the row's.
         var keywords: [String]?
+        /// The collections it's in, by path; nil keeps the row's.
+        var collections: [String]?
         var isNew: Bool
         var thumbnail: Thumbnail?
 
         init(
             folder: String, record: PhotoRecord, camera: CameraName? = nil, lens: String? = nil,
-            keywords: [String]? = nil, isNew: Bool, thumbnail: Thumbnail? = nil,
+            keywords: [String]? = nil, collections: [String]? = nil, isNew: Bool, thumbnail: Thumbnail? = nil,
         ) {
             self.folder = folder
             self.record = record
             self.camera = camera
             self.lens = lens
             self.keywords = keywords
+            self.collections = collections
             self.isNew = isNew
             self.thumbnail = thumbnail
         }

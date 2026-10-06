@@ -5,7 +5,7 @@ extension LibraryIndex {
     typealias Migration = @Sendable (SQLiteDatabase) throws -> Void
 
     /// The schema's steps in order: the first makes version 1 from an empty database.
-    static let migrations: [Migration] = [createVersion1, migrateToVersion2, migrateToVersion3]
+    static let migrations: [Migration] = [createVersion1, migrateToVersion2, migrateToVersion3, migrateToVersion4]
 
     static func createVersion1(_ database: SQLiteDatabase) throws {
         try database.execute(schemaVersion1)
@@ -17,6 +17,10 @@ extension LibraryIndex {
 
     static func migrateToVersion3(_ database: SQLiteDatabase) throws {
         try database.execute(schemaVersion3)
+    }
+
+    static func migrateToVersion4(_ database: SQLiteDatabase) throws {
+        try database.execute(schemaVersion4)
     }
 
     /// Brings `database` up to the last version `migrations` knows, one step per transaction.
@@ -120,5 +124,34 @@ extension LibraryIndex {
     static let schemaVersion3 = """
     CREATE TABLE photo_hashes (photo INTEGER PRIMARY KEY, size INTEGER NOT NULL, modified REAL NOT NULL,
       content_key BLOB NOT NULL, sha256 BLOB NOT NULL);          -- photo is photos.id
+    """
+
+    /// The rest of the organising fields the sidecar holds (LIB-15, LIB-22, LIB-23, LIB-28), so the index
+    /// is rebuilt from the sidecars with nothing lost (DEC-35): IPTC Core's creator, copyright and
+    /// location beside the title and caption, a custom label's name, the manual stack, which fields
+    /// show other apps' values rather than the `.redlamp`'s, a signature of the photo's `.xmp` files,
+    /// and collections found by path. Manual stacks the settings kept move to their columns.
+    static let schemaVersion4 = """
+    ALTER TABLE photos ADD COLUMN creator TEXT;
+    ALTER TABLE photos ADD COLUMN copyright TEXT;
+    ALTER TABLE photos ADD COLUMN sublocation TEXT;
+    ALTER TABLE photos ADD COLUMN city TEXT;
+    ALTER TABLE photos ADD COLUMN province TEXT;                  -- a state or province
+    ALTER TABLE photos ADD COLUMN country TEXT;
+    ALTER TABLE photos ADD COLUMN country_code TEXT;
+    ALTER TABLE photos ADD COLUMN custom_label TEXT;
+    ALTER TABLE photos ADD COLUMN stack TEXT;                     -- a manual stack's UUID
+    ALTER TABLE photos ADD COLUMN stack_top INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE photos ADD COLUMN other_fields INTEGER NOT NULL DEFAULT 0; -- bits: XMPField's order
+    ALTER TABLE photos ADD COLUMN xmp_signature INTEGER;
+    ALTER TABLE collections ADD COLUMN path TEXT;
+
+    CREATE UNIQUE INDEX collections_path ON collections (path);
+    CREATE INDEX photos_stack ON photos (stack) WHERE stack IS NOT NULL;
+
+    UPDATE photos SET stack = json_extract(settings.value, '$.id'),
+      stack_top = coalesce(json_extract(settings.value, '$.top'), 0)
+      FROM settings WHERE settings.key = 'library.stack.' || photos.id;
+    DELETE FROM settings WHERE key >= 'library.stack.' AND key < 'library.stack/';
     """
 }

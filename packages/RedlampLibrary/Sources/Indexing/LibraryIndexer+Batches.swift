@@ -319,6 +319,9 @@ extension LibraryIndexer {
                 if let keywords = photo.keywords, !(photo.isNew && keywords.isEmpty) {
                     try writer.setKeywords(keywords, forPhoto: id)
                 }
+                if let collections = photo.collections, !(photo.isNew && collections.isEmpty) {
+                    try writer.setCollections(collections, forPhoto: id)
+                }
                 if photo.isNew {
                     outcome.inserted.append(id)
                 } else if updated.insert(id).inserted {

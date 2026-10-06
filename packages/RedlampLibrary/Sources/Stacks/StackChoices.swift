@@ -1,45 +1,19 @@
 import Foundation
+import RedlampDocument
 
 /// What the user decided about stacks (LIB-28): photos stacked by hand from any folders, photos
-/// taken out of stacks, and the photo shown for a stack. Each photo's choice is what its sidecar is
-/// to keep as `metadata.stack`; until the sidecar format has that field, the index's settings keep
-/// them (`init(_:)` and `save(_:in:)`).
+/// taken out of stacks, and the photo shown for a stack. Each photo's choice is its sidecar's
+/// `metadata.stack`, which the index keeps in its `stack` and `stack_top` columns as the photo is
+/// indexed (`init(_:)` reads them, `save(_:in:)` writes them), so a rebuilt index has them all.
 ///
 /// A raw and its JPEG are one photo: each choice is made for both, and a pair whose photos disagree
 /// takes the choice of its first photo with one, the raw first.
 public struct StackChoices: Sendable, Hashable {
-    /// One photo's choice, as its sidecar's `metadata.stack` is to hold it: `{"id": "…", "top": true}`.
-    public struct Choice: Sendable, Hashable, Codable {
-        /// The manual stack it's in: photos with one ID are one stack wherever they are, and a photo
-        /// whose ID no other photo has stands alone. Either way it's in no burst.
-        public var id: UUID?
-        /// It's shown for its stack: the manual stack `id` names, or else the burst it's in.
-        public var top: Bool
-
-        public init(id: UUID? = nil, top: Bool = false) {
-            self.id = id
-            self.top = top
-        }
-
-        private enum CodingKeys: String, CodingKey {
-            case id, top
-        }
-
-        public init(from decoder: any Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            id = try container.decodeIfPresent(UUID.self, forKey: .id)
-            top = try container.decodeIfPresent(Bool.self, forKey: .top) ?? false
-        }
-
-        /// Leaves out `top` when it's false, as the sidecar leaves out defaults.
-        public func encode(to encoder: any Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encodeIfPresent(id, forKey: .id)
-            if top {
-                try container.encode(true, forKey: .top)
-            }
-        }
-    }
+    /// One photo's choice, as its sidecar's `metadata.stack` holds it: `{"id": "…", "top": true}`. A
+    /// photo with an `id` is in the manual stack of that ID, wherever its other photos are, and one whose
+    /// ID no other photo has stands alone; either way it's in no burst. `top` shows it for its stack:
+    /// the manual stack `id` names, or else the burst it's in.
+    public typealias Choice = PhotoStack
 
     /// By photo ID.
     public private(set) var choices: [Int64: Choice]
@@ -127,32 +101,26 @@ public struct StackChoices: Sendable, Hashable {
 }
 
 public extension StackChoices {
-    /// The settings key of photo `photo`'s choice: `library.stack.<photo>`.
-    internal static let keyPrefix = "library.stack."
-
     /// The choices `reader`'s index keeps.
     init(_ reader: some IndexQueries) throws {
-        let statement = try reader.database.cached("SELECT key, value FROM settings WHERE key >= ? AND key < ?")
-        try statement.bind(Self.keyPrefix, at: 1)
-        try statement.bind(String(Self.keyPrefix.dropLast()) + "/", at: 2)
-        let decoder = JSONDecoder()
         var choices: [Int64: Choice] = [:]
-        try statement.forEachRow { row in
-            guard let key = row.string(at: 0), let photo = Int64(key.dropFirst(Self.keyPrefix.count)),
-                  let value = row.string(at: 1), let choice = try? decoder.decode(Choice.self, from: Data(value.utf8))
-            else { return }
-            choices[photo] = choice
-        }
+        try reader.database.cached("SELECT id, stack, stack_top FROM photos WHERE stack IS NOT NULL OR stack_top != 0")
+            .forEachRow { row in
+                if let choice = PhotoRecord.storedStack(id: row.string(at: 1), top: row.bool(at: 2)) {
+                    choices[row.int64(at: 0)] = choice
+                }
+            }
         self.init(choices)
     }
 
-    /// Keeps `photos`' choices in `writer`'s index, dropping those of photos without one.
+    /// Keeps `photos`' choices in `writer`'s index, clearing those of photos without one.
     func save(_ photos: some Sequence<Int64>, in writer: LibraryIndex.Writer) throws {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .sortedKeys
+        let statement = try writer.database.cached("UPDATE photos SET stack = ?, stack_top = ? WHERE id = ?")
         for photo in photos {
-            let value = try choices[photo].map { try String(decoding: encoder.encode($0), as: UTF8.self) }
-            try writer.setSetting(value, for: Self.keyPrefix + String(photo))
+            try statement.bind(choices[photo]?.id?.uuidString, at: 1)
+            try statement.bind(choices[photo]?.top ?? false, at: 2)
+            try statement.bind(photo, at: 3)
+            try statement.run()
         }
     }
 }

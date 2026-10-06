@@ -244,6 +244,32 @@ public extension LibraryIndex.Writer {
         return updated
     }
 
+    /// Shows `fields` in `photo`'s row: its rating, flag, label or custom label, and IPTC Core's fields,
+    /// empty texts and locations as none, with its text indexed again. Keywords are set apart.
+    func setFields(_ fields: XMPFields, forPhoto photo: Int64) throws {
+        let statement = try database.cached("""
+        UPDATE photos SET rating = ?, flag = ?, label = ?, custom_label = ?, title = ?, caption = ?, creator = ?,
+          copyright = ?, sublocation = ?, city = ?, province = ?, country = ?, country_code = ? WHERE id = ?
+        """)
+        let location = XMPFields.place(fields.location)
+        try statement.bind(fields.rating ?? 0, at: 1)
+        try statement.bind(PhotoRecord.code(for: fields.flag), at: 2)
+        try statement.bind(PhotoRecord.code(for: fields.label), at: 3)
+        try statement.bind(fields.label == nil ? XMPFields.text(fields.customLabel) : nil, at: 4)
+        try statement.bind(XMPFields.text(fields.title), at: 5)
+        try statement.bind(XMPFields.text(fields.caption), at: 6)
+        try statement.bind(XMPSource.joined(XMPFields.names(fields.creator)), at: 7)
+        try statement.bind(XMPFields.text(fields.copyright), at: 8)
+        try statement.bind(location?.sublocation, at: 9)
+        try statement.bind(location?.city, at: 10)
+        try statement.bind(location?.state, at: 11)
+        try statement.bind(location?.country, at: 12)
+        try statement.bind(location?.countryCode, at: 13)
+        try statement.bind(photo, at: 14)
+        try statement.run()
+        try writeText(replacing: [photo])
+    }
+
     // MARK: - Cameras, lenses and keywords
 
     /// The ID of the camera named `name`, added the first time it's seen.
@@ -345,7 +371,7 @@ public extension LibraryIndex.Writer {
     }
 }
 
-private extension LibraryIndex.Writer {
+extension LibraryIndex.Writer {
     static let upsertPhoto: String = {
         let fields = IndexColumns.photoFields
         let parameters = fields.indices.map { "?\($0 + 1)" }.joined(separator: ", ")
@@ -389,6 +415,18 @@ private extension LibraryIndex.Writer {
         try statement.bind(photo.caption, at: 29)
         try statement.bind(photo.state.rawValue, at: 30)
         try statement.bind(photo.indexed, at: 31)
+        try statement.bind(photo.customLabel, at: 32)
+        try statement.bind(photo.creator, at: 33)
+        try statement.bind(photo.copyright, at: 34)
+        try statement.bind(photo.location?.sublocation, at: 35)
+        try statement.bind(photo.location?.city, at: 36)
+        try statement.bind(photo.location?.state, at: 37)
+        try statement.bind(photo.location?.country, at: 38)
+        try statement.bind(photo.location?.countryCode, at: 39)
+        try statement.bind(photo.stack?.id?.uuidString, at: 40)
+        try statement.bind(photo.stack?.top ?? false, at: 41)
+        try statement.bind(PhotoRecord.code(for: photo.otherFields), at: 42)
+        try statement.bind(photo.xmpSignature, at: 43)
     }
 
     /// The ID an `INSERT ... RETURNING id` returns. SQLite makes the change at the first step.

@@ -192,31 +192,64 @@ struct StackFinderTests {
 
     // MARK: - The index
 
-    @Test func `choices are kept in the index's settings as the sidecar's stack field is to hold them`() async throws {
+    @Test func `choices are kept in the index's columns as the sidecar's stack field holds them`() async throws {
         let sandbox = try await IndexSandbox.make()
         defer { sandbox.remove() }
+        let folder = try #require(try await sandbox.addFolders(["Shoot"])["Shoot"])
+        let ids = try await sandbox.upsert((7 ... 10).map { PhotoRecord(folder: folder, name: "IMG_\($0).JPG") })
         let id = UUID()
-        let choices = StackChoices([7: .init(id: id, top: true), 8: .init(id: id), 9: .init(top: true)])
-        try await sandbox.index.write { writer in
-            try writer.setSetting("1", for: "library.stacks")
-            try choices.save([7, 8, 9, 10], in: writer)
-        }
+        let choices = StackChoices([ids[0]: .init(id: id, top: true), ids[1]: .init(id: id), ids[2]: .init(top: true)])
+        try await sandbox.index.write { try choices.save(ids, in: $0) }
         #expect(try await sandbox.index.read { try StackChoices($0) } == choices)
-        let texts = try await sandbox.index.read { reader in
-            try [7, 8, 9].map { try reader.setting("library.stack.\($0)") }
-        }
-        #expect(texts == [
-            "{\"id\":\"\(id.uuidString)\",\"top\":true}", "{\"id\":\"\(id.uuidString)\"}", "{\"top\":true}",
-        ])
-        try await sandbox.index.write { try StackChoices().save([7, 9], in: $0) }
-        #expect(try await sandbox.index.read { try StackChoices($0) } == StackChoices([8: .init(id: id)]))
+        let row = try await sandbox.index.read { try $0.photo(id: ids[1]) }
+        #expect(row?.stack == PhotoStack(id: id))
+        try await sandbox.index.write { try StackChoices().save([ids[0], ids[2]], in: $0) }
+        #expect(try await sandbox.index.read { try StackChoices($0) } == StackChoices([ids[1]: .init(id: id)]))
         let decoded = try JSONDecoder().decode(
             StackChoices.Choice.self, from: Data("{\"id\":\"\(id.uuidString.lowercased())\"}".utf8),
         )
         #expect(decoded == .init(id: id))
     }
 
-    @Test func `stacks are found from an index, with the choices its settings keep`() async throws {
+    @Test func `an index whose settings kept the choices moves them to its columns`() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "redlamp-stacks-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appending(path: "Index.sqlite")
+        let id = UUID()
+        let older = try await LibraryIndex.open(at: url, migrations: Array(LibraryIndex.migrations.prefix(3)))
+        let ids = try await older.write { writer in
+            let volume = try writer.upsertVolume(VolumeRecord(uuid: "STACKS", kind: .ssd))
+            let root = try writer.upsertRoot(RootRecord(volume: volume, path: "/Volumes/Test/Photos"))
+            let folder = try writer.upsertFolder(FolderRecord(root: root, path: "/Volumes/Test/Photos/Shoot"))
+            let statement = try writer.database
+                .prepare("INSERT INTO photos (folder, name, kind, size, modified) VALUES (?, ?, 2, 0, 0) RETURNING id")
+            var ids: [Int64] = []
+            for name in ["A.JPG", "B.JPG", "C.JPG"] {
+                try statement.bind(folder, at: 1)
+                try statement.bind(name, at: 2)
+                try ids.append(#require(try statement.first { $0.int64(at: 0) }))
+            }
+            try writer.setSetting("{\"id\":\"\(id.uuidString)\",\"top\":true}", for: "library.stack.\(ids[0])")
+            try writer.setSetting("{\"id\":\"\(id.uuidString)\"}", for: "library.stack.\(ids[1])")
+            try writer.setSetting("{\"top\":true}", for: "library.stack.\(ids[2])")
+            try writer.setSetting("1", for: "library.stacks")
+            return ids
+        }
+        await older.close()
+
+        let index = try await LibraryIndex.open(at: url)
+        defer { index.closeAndWait() }
+        #expect(try await index.read { try StackChoices($0) } == StackChoices([
+            ids[0]: .init(id: id, top: true), ids[1]: .init(id: id), ids[2]: .init(top: true),
+        ]))
+        let settings = try await index.read { reader in
+            try ids.map { try reader.setting("library.stack.\($0)") } + [reader.setting("library.stacks")]
+        }
+        #expect(settings == [nil, nil, nil, "1"])
+    }
+
+    @Test func `stacks are found from an index, with the choices it keeps`() async throws {
         let sandbox = try await IndexSandbox.make()
         defer { sandbox.remove() }
         let folders = try await sandbox.addFolders(["Shoot", "Phone"])

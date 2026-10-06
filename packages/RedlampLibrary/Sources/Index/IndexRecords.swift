@@ -167,12 +167,26 @@ public struct PhotoRecord: Sendable, Hashable {
     public var marked: Bool
     public var edited: Bool
     public var sidecarModified: Date?
+    /// The modification date of the photo's `.xmp`, or the later of its two (`IMG_1234.xmp` and
+    /// darktable's `IMG_1234.ARW.xmp`).
     public var xmpModified: Date?
     public var title: String?
     public var caption: String?
     public var state: State
     /// How far indexing has got with the photo, in the indexer's terms.
     public var indexed: Int
+    /// A label's name outside the five colours, when `label` is nil.
+    public var customLabel: String?
+    public var creator: String?
+    public var copyright: String?
+    public var location: PhotoLocation?
+    /// Its manual stack, or its being shown for its burst (LIB-28), as its sidecar holds it.
+    public var stack: PhotoStack?
+    /// The organising fields whose values are other apps' rather than the `.redlamp`'s: kept when only
+    /// the `.redlamp` changes, without reading other apps' files again.
+    public var otherFields: Set<XMPField>
+    /// Changes whenever either of the photo's `.xmp` files does (`LibraryIndexer.xmpSignature`).
+    public var xmpSignature: Int64?
 
     public init(
         id: Int64 = 0, folder: Int64, name: String, kind: Kind? = nil, size: Int64 = 0,
@@ -183,6 +197,9 @@ public struct PhotoRecord: Sendable, Hashable {
         longitude: Double? = nil, rating: Int = 0, flag: PhotoFlag? = nil, label: ColorLabel? = nil,
         marked: Bool = false, edited: Bool = false, sidecarModified: Date? = nil, xmpModified: Date? = nil,
         title: String? = nil, caption: String? = nil, state: State = [], indexed: Int = 0,
+        customLabel: String? = nil, creator: String? = nil, copyright: String? = nil,
+        location: PhotoLocation? = nil, stack: PhotoStack? = nil, otherFields: Set<XMPField> = [],
+        xmpSignature: Int64? = nil,
     ) {
         self.id = id
         self.folder = folder
@@ -216,6 +233,24 @@ public struct PhotoRecord: Sendable, Hashable {
         self.caption = caption
         self.state = state
         self.indexed = indexed
+        self.customLabel = customLabel
+        self.creator = creator
+        self.copyright = copyright
+        self.location = location
+        self.stack = stack
+        self.otherFields = otherFields
+        self.xmpSignature = xmpSignature
+    }
+
+    /// The `other_fields` column: a bit for each field, in `XMPField`'s order.
+    public static func code(for fields: Set<XMPField>) -> Int {
+        XMPField.allCases.enumerated().reduce(0) { code, field in
+            fields.contains(field.element) ? code | 1 << field.offset : code
+        }
+    }
+
+    public static func fields(code: Int) -> Set<XMPField> {
+        Set(XMPField.allCases.enumerated().filter { code & 1 << $0.offset != 0 }.map(\.element))
     }
 
     /// The `flag` column: 0 for none, 1 pick, 2 reject.

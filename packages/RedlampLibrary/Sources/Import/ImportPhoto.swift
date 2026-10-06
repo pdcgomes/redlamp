@@ -179,8 +179,8 @@ public struct ImportPhoto: Sendable, Hashable, Identifiable {
     /// The rating, flag and label its own files give it: a `.redlamp`'s copied from elsewhere aren't
     /// read here, its other apps' `.xmp` first, then its embedded XMP.
     var ownChoices: ImportChoices {
-        let organising = LibraryIndexer.Run.organising(metadata, sidecar: nil, xmp: xmp)
-        return ImportChoices(rating: organising.rating, flag: organising.flag, label: organising.label)
+        let organising = LibraryIndexer.Run.organising(metadata, sidecar: nil, xmp: xmp).fields
+        return ImportChoices(rating: organising.rating ?? 0, flag: organising.flag, label: organising.label)
     }
 
     /// The photos a folder's `entries` hold, `source`'s, each a photo file with the others of its name but

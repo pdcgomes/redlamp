@@ -104,9 +104,7 @@ public struct LibraryXMP: Sendable {
                 try await index.write { writer in
                     try XMPMergeRecord.save(records, dropping: dropped, in: writer)
                     for (id, fields) in organising {
-                        try writer.setOrganising(
-                            [.rating(fields.rating ?? 0), .flag(fields.flag), .label(fields.label)], forPhotos: [id],
-                        )
+                        try writer.setFields(fields, forPhoto: id)
                     }
                     for (id, paths) in keywords {
                         try writer.setKeywords(paths, forPhoto: id)

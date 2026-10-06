@@ -21,11 +21,15 @@ struct QueryIndexMigrationTests {
             let volume = try writer.upsertVolume(VolumeRecord(uuid: "MIGRATION", kind: .ssd))
             let root = try writer.upsertRoot(RootRecord(volume: volume, path: "/Volumes/Test/Photos"))
             let folder = try writer.upsertFolder(FolderRecord(root: root, path: "/Volumes/Test/Photos/Lisbon Trip"))
-            let id = try writer.upsertPhotos([PhotoRecord(
-                folder: folder, name: "DSCF4821.RAF", contentKey: Self.key,
-                camera: writer.cameraID(for: "Fujifilm X-T5"),
-                lens: writer.lensID(for: "XF35mmF1.4 R"), title: "Tram 28", caption: "Alfama at dusk",
-            )])[0]
+            let insert = try writer.database.prepare("""
+            INSERT INTO photos (folder, name, kind, size, modified, content_key, camera, lens, title, caption)
+            VALUES (?, 'DSCF4821.RAF', 1, 0, 0, ?, ?, ?, 'Tram 28', 'Alfama at dusk') RETURNING id
+            """)
+            try insert.bind(folder, at: 1)
+            try insert.bind(Self.key, at: 2)
+            try insert.bind(writer.cameraID(for: "Fujifilm X-T5"), at: 3)
+            try insert.bind(writer.lensID(for: "XF35mmF1.4 R"), at: 4)
+            let id = try #require(try insert.first { $0.int64(at: 0) })
             try writer.setKeywords(["Places/Portugal"], forPhoto: id)
             try writer.database.execute("""
             DELETE FROM photo_text;
@@ -55,7 +59,7 @@ struct QueryIndexMigrationTests {
                 reader.photo(id: id)?.contentKey,
             )
         }
-        #expect(version == 3 && LibraryIndex.migrations.count == 3)
+        #expect(version == 4 && LibraryIndex.migrations.count == 4)
         #expect(columns == ["name", "keywords", "title", "caption"])
         #expect(keyIndexes == 0 && key == Self.key)
 
