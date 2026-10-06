@@ -76,15 +76,6 @@ public final class ThumbnailPacks: Sendable {
         state.withLock { $0.open.count }
     }
 
-    /// Forgets the open packs (tests, and after the directory is cleared).
-    public func close() {
-        state.withLock { state in
-            state.open = [:]
-            state.lastUse = [:]
-            state.total = nil
-        }
-    }
-
     // MARK: - Packs
 
     private func pack(for folder: URL, creating: Bool = false) -> Pack? {

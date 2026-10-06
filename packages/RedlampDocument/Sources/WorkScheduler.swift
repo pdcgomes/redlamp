@@ -291,10 +291,6 @@ private struct Queue {
     private var items: [UInt64] = []
     private var head = 0
 
-    var isEmpty: Bool {
-        head == items.count
-    }
-
     mutating func append(_ id: UInt64) {
         items.append(id)
     }

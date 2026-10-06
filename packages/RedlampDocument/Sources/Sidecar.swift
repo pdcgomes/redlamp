@@ -176,14 +176,6 @@ public struct SidecarStore: Sendable {
         Self.bitmapURL(sha256, inSidecar: url(for: image))
     }
 
-    /// Whether reading the sidecar can't block on a download: it is missing, local, or
-    /// already downloaded from iCloud Drive.
-    public func isAvailableLocally(for image: URL) -> Bool {
-        let status = try? url(for: image).resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey])
-            .ubiquitousItemDownloadingStatus
-        return status == nil || status == .current || status == .downloaded
-    }
-
     public func load(for image: URL) -> Sidecar? {
         let sidecar = url(for: image)
         guard let loaded = (try? Self.reading(sidecar) { Self.decode(sidecar: $0) }) ?? nil else { return nil }
