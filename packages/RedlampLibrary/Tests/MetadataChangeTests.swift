@@ -179,6 +179,60 @@ struct MetadataChangeTests {
         #expect(files.counts.reads.isEmpty, "\(files.counts.reads)")
     }
 
+    /// The photos' culling fields in their rows, and what their sidecars hold of them.
+    static func culling(_ sandbox: KeywordSandbox, _ paths: [String]) async throws -> [String] {
+        var shown: [String] = []
+        for path in paths {
+            let id = try await sandbox.id(path)
+            let row = try #require(try await sandbox.index.read { try $0.photo(id: id) })
+            let sidecar = sandbox.sidecar(path)
+            shown.append(
+                "\(path): row \(row.rating) \(String(describing: row.flag)) \(row.marked) \(row.sidecarModified != nil), "
+                    + "sidecar \(sidecar.map { "\($0.metadata ?? PhotoMetadata())" } ?? "none")",
+            )
+        }
+        return shown
+    }
+
+    @Test func `an Undo that can't read a sidecar leaves it, reports it and shows what it holds`() async throws {
+        let (sandbox, paths, ids) = try await Self.library()
+        defer { sandbox.remove() }
+        let before = try await Self.culling(sandbox, paths)
+        let metadata = LibraryMetadata(index: sandbox.index, paths: sandbox.paths)
+        try await metadata.apply(.set([.rating(3)], on: ids))
+        // The indexer reads the sidecars the batch wrote, as change tracking does.
+        try await sandbox.indexAll()
+        // A sidecar the batch made, for a photo that had none, can't be read while Undo runs.
+        let locked = SidecarStore().editURL(for: sandbox.url(paths[1]))
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: locked.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: locked.path) }
+
+        let undone = try await metadata.undo()
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: locked.path)
+        #expect(undone.skipped == [LibraryIndexer.path(sandbox.url(paths[1]))], "reported, not taken for none")
+        #expect(undone.reasons.values.first == "its sidecar can't be read")
+        #expect(sandbox.sidecar(paths[1])?.metadata?.rating == 3)
+        let row = try await sandbox.index.read { [id = ids[1]] in try $0.photo(id: id) }
+        #expect(row?.rating == 3, "its row shows what its sidecar holds")
+        var after = try await Self.culling(sandbox, paths)
+        after[1] = before[1]
+        #expect(after == before, "every other sidecar and row as before")
+    }
+
+    @Test func `a change that would leave a sidecar it can't read as it is fails, and its row shows what it holds`(
+    ) async throws {
+        let (sandbox, paths, ids) = try await Self.library()
+        defer { sandbox.remove() }
+        let locked = SidecarStore().editURL(for: sandbox.url(paths[0]))
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: locked.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: locked.path) }
+        let metadata = LibraryMetadata(index: sandbox.index, paths: sandbox.paths)
+        let outcome = try await metadata.apply(.set([.rating(0)], on: Array(ids.prefix(4))))
+        #expect(outcome.skipped == [LibraryIndexer.path(sandbox.url(paths[0]))])
+        let rows = try await sandbox.index.read { reader in try ids.prefix(4).map { try reader.photo(id: $0)?.rating } }
+        #expect(rows == [2, 0, 0, 0], "the photo whose sidecar holds 2 stars still shows them")
+    }
+
     @Test func `a batch a forced quit stopped is finished or rolled back at the next launch`() async throws {
         let (sandbox, paths, ids) = try await Self.library()
         defer { sandbox.remove() }

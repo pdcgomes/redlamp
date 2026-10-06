@@ -116,7 +116,8 @@ public final class LibraryMetadata: Sendable {
         let pending = batch.photos.indices.filter { logged.written[$0] == nil && logged.skipped[$0] == nil }
         let written = try await writeSidecars(batch, pending, log: log, report: report)
         outcome.written = written.written
-        outcome.skipped = written.skipped
+        outcome.skipped = written.skipped.keys.sorted()
+        outcome.reasons = written.skipped
         outcome.sidecarTime = clock.now - started
         try await LibraryIndex.offCaller { try log.state(.finished) }
         if let original = batch.undoes {
@@ -172,16 +173,17 @@ public final class LibraryMetadata: Sendable {
 
     /// Writes the sidecars of photos `pending` (places in `batch`) in batches off the caller, logging
     /// each; then records their dates in the index, so the indexer doesn't read them again, and puts
-    /// back the index's fields of photos whose sidecars couldn't be written.
+    /// back the index's fields of photos whose sidecars couldn't be written. Returns how many it wrote,
+    /// and why it couldn't write the others, by path.
     private func writeSidecars(
         _ batch: MetadataBatch, _ pending: [Int], log: MetadataJournal.Log, report: (@Sendable (Int, Int) -> Void)?,
-    ) async throws -> (written: Int, skipped: [String]) {
-        guard !pending.isEmpty else { return (0, []) }
+    ) async throws -> (written: Int, skipped: [String: String]) {
+        guard !pending.isEmpty else { return (0, [:]) }
         let store = try await SidecarStore(locator: LibrarySidecars(index: index, paths: paths).locator())
         let stop = interruption.withLock { $0 }
         let done = SidecarCounter()
         var written = 0
-        var skipped: [String] = []
+        var skipped: [String: String] = [:]
         for start in stride(from: 0, to: pending.count, by: Self.photosPerWrite) {
             let places = Array(pending[start ..< min(start + Self.photosPerWrite, pending.count)])
             let ids = places.map { batch.photos[$0].id }
@@ -200,8 +202,8 @@ public final class LibraryMetadata: Sendable {
                     dates.append((result.photo, date))
                 case .kept:
                     written += 1
-                case let .skipped(path, values, others):
-                    skipped.append(path)
+                case let .skipped(path, reason, values, others):
+                    skipped[path] = reason
                     restored.append((result.photo, values, others))
                 case .gone:
                     break
@@ -221,7 +223,7 @@ public final class LibraryMetadata: Sendable {
                 throw ForcedQuit()
             }
         }
-        return (written, skipped.sorted())
+        return (written, skipped)
     }
 
     struct SidecarResult: Sendable {
@@ -231,9 +233,9 @@ public final class LibraryMetadata: Sendable {
             /// Already as the batch leaves it, so nothing was written and the date the index has for it
             /// stands.
             case kept
-            /// This build can't write it: the photo's path, and the fields the index shows then, with
+            /// This build can't write it: the photo's path, why, and the fields the index shows then, with
             /// those of them that are other apps'.
-            case skipped(String, MetadataValues, Set<XMPField>)
+            case skipped(String, String, MetadataValues, Set<XMPField>)
             /// The photo isn't in the library any more.
             case gone
         }
@@ -301,8 +303,9 @@ public final class LibraryMetadata: Sendable {
             let date = try? LocalFileSystem().attributes(of: store.locator.readURL(for: result.image)).modified
             return .written(date)
         case let .failed(error):
-            try log.skipped(place, LibraryKeywords.describe(error))
-            return .skipped(path, photo.index, photo.others)
+            let reason = LibraryKeywords.describe(error)
+            try log.skipped(place, reason)
+            return .skipped(path, reason, photo.index, photo.others)
         }
     }
 

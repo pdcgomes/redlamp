@@ -234,6 +234,8 @@ public struct MetadataOutcome: Sendable, Hashable {
     public var written = 0
     /// Photos whose sidecars this build can't write, left as they were, by path.
     public var skipped: [String] = []
+    /// Why each of them couldn't be written, by path.
+    public var reasons: [String: String] = [:]
     /// How long the journal, the definitions and index, and the sidecars took.
     public var journalTime = Duration.zero
     public var indexTime = Duration.zero
