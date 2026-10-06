@@ -43,7 +43,8 @@ public indirect enum LibraryQuery: Sendable, Hashable {
         case rating
         /// `pick`, `reject` or `none`.
         case flag
-        /// A colour, a custom label's name, ignoring case, or `none`: neither.
+        /// A colour, a custom label's name, ignoring case, or `none`: neither. A name one of the label
+        /// sets gives a colour (`XMPLabelNames`, Bridge's Approved for green) also finds that colour.
         case label
         /// `yes` or `no`: in the quick collection.
         case marked

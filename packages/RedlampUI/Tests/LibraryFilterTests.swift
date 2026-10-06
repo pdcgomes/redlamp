@@ -64,7 +64,7 @@ struct LibraryFilterTests {
             date: "2023:01:02 09:00:00",
             flag: .reject,
         ),
-        Photo(path: "IMG_0004.PNG", rating: 1, metadata: PhotoMetadata(customLabel: "Approved")),
+        Photo(path: "IMG_0004.PNG", rating: 1, metadata: PhotoMetadata(customLabel: "Hero")),
         Photo(
             path: "DSC_0005.JPG",
             make: "Canon",
@@ -302,7 +302,7 @@ struct LibraryFilterTests {
         #expect(counts(1) == ["Lisboa": 1, "Porto": 1, nil: 3])
         #expect(counts(2) == ["Portugal": 2, nil: 3])
         #expect(counts(3) == ["Trips": 2, "Trips/Lisbon": 2, nil: 3])
-        #expect(counts(4) == ["Approved": 1, nil: 4])
+        #expect(counts(4) == ["Hero": 1, nil: 4])
         let sets = try FilterColumnRow.rows(#require(filters.columns[3]), folder: nil)
         #expect(sets.map(\.title) == ["Trips", "No Collection"] && sets[0].children.map(\.title) == ["Lisbon"])
         #expect(FacetColumn.allCases.suffix(5).map(\.title) == [
@@ -326,15 +326,15 @@ struct LibraryFilterTests {
         try await listed(model)
         #expect(model.items.isEmpty && filters.filter.text.hasSuffix(" city:Porto"))
         filters.clear()
-        filters.choose([.text("Approved")], inColumn: 4)
+        filters.choose([.text("Hero")], inColumn: 4)
         try await listed(model)
-        #expect(filters.filter.text == "label:Approved" && names(model) == ["IMG_0004.PNG"])
+        #expect(filters.filter.text == "label:Hero" && names(model) == ["IMG_0004.PNG"])
         try await eventually { filters.columns[4]?.total == 5 }
         let rows = try FilterColumnRow.rows(#require(filters.columns[4]), folder: nil)
         let rules = filters.filter.rules
         #expect(rows
             .filter { $0.isChosen(by: FilterColumnRow.choice(in: rules, column: .customLabel), in: .customLabel) }
-            .map(\.title) == ["Approved"])
+            .map(\.title) == ["Hero"])
     }
 
     @Test func `Tab completes collections, custom labels and traits, a trait with the photos it finds`() async throws {
@@ -346,10 +346,10 @@ struct LibraryFilterTests {
         #expect(filters.completions.map(\.text) == ["collection:Trips ", "collection:Trips/Lisbon "])
         #expect(filters.completions.map(\.title) == ["Trips", "Trips › Lisbon"])
         #expect(filters.completions.first?.kind == "Collection" && filters.completionRange == 0 ..< 14)
-        filters.complete("rating>=1 -label:appr", cursor: 21)
+        filters.complete("rating>=1 -label:her", cursor: 20)
         try await eventually { filters.completions.first?.kind == "Custom Label" }
-        #expect(filters.completions.map(\.text) == ["-label:Approved "] && filters.completions.first?
-            .title == "Approved")
+        #expect(filters.completions.map(\.text) == ["-label:Hero "] && filters.completions.first?
+            .title == "Hero")
         filters.complete("lis", cursor: 3)
         try await eventually { filters.completions.contains { $0.kind == "Collection" } }
         #expect(filters.completions.contains { $0.text == "collection:Trips/Lisbon " })

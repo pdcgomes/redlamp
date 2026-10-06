@@ -15,7 +15,8 @@ struct LibrarySearchTests {
         let cases: [(String, [String])] = [
             ("creator:ana city:lisboa", ["2024/Lisbon Trip/DSCF0001.RAF", "2024/Lisbon Trip/DSCF0002.RAF"]),
             ("country:canada", ["Voyages/Été à Montréal 2014/Café-0001.JPG"]),
-            ("label:approved", ["2024/Studio/IMG_0009.HEIC"]),
+            ("label:hero", ["2024/Studio/IMG_0009.HEIC"]),
+            ("label:approved", ["2019/Algarve/Sunset.JPG"]),
             ("collection:\"AC/DC\"", ["2019/Algarve/DSC_0100.NEF"]),
             ("has:copyright -has:gps", ["2024/Studio/IMG_0010.CR3"]),
             ("marinha", ["2019/Algarve/Sunset.JPG"]),

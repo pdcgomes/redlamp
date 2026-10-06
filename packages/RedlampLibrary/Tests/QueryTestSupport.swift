@@ -66,7 +66,7 @@ struct QueryTestLibrary {
                 ),
                 PhotoRecord(
                     folder: studio, name: "IMG_0009.HEIC", camera: iphone, iso: 64, aperture: 1.78, shutter: 1.0 / 120,
-                    focal: 6.765, width: 3024, height: 4032, rating: 1, marked: true, customLabel: "Approved",
+                    focal: 6.765, width: 3024, height: 4032, rating: 1, marked: true, customLabel: "Hero",
                 ),
                 PhotoRecord(
                     folder: algarve, name: "Sunset.JPG", captured: date(2019, 8, 20, 19, 30), width: 12000,

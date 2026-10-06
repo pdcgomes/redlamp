@@ -103,7 +103,9 @@ struct QuerySQL: Sendable, Hashable {
                 let colour = "(\(ColumnEncoding.labelSQL) = \(PhotoRecord.code(for: label)))"
                 return label == nil ? "(\(colour) AND NOT \(ColumnEncoding.presentSQL("p.custom_label")))" : colour
             case let (.label, .text(name)):
-                return "redlamp_named(p.custom_label, \(bind(name)))"
+                let custom = "redlamp_named(p.custom_label, \(bind(name)))"
+                guard let colour = XMPLabelNames.label(named: name) else { return custom }
+                return "((\(ColumnEncoding.labelSQL) = \(PhotoRecord.code(for: colour))) OR \(custom))"
             case let (.creator, .text(text)), let (.copyright, .text(text)):
                 return "redlamp_contains(p.\(field.rawValue), \(bind(text)))"
             case let (.sublocation, .text(text)), let (.city, .text(text)), let (.state, .text(text)),

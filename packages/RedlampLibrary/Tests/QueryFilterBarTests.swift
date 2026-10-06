@@ -150,11 +150,11 @@ struct QueryFilterBarTests {
         #expect(Self.counts(columns[.collection]) == [
             "Portfolio": 2, "Portfolio/2024": 2, "Clients": 1, "AC%2FDC": 1, nil: 3,
         ])
-        #expect(Self.counts(columns[.customLabel]) == ["Approved": 1, "Client": 1, nil: 6])
+        #expect(Self.counts(columns[.customLabel]) == ["Hero": 1, "Client": 1, nil: 6])
         #expect(Self.counts(columns[.label]) == [
-            "none": 1, "red": 1, "yellow": 1, "green": 1, "blue": 1, "purple": 1, "Approved": 1, "Client": 1,
+            "none": 1, "red": 1, "yellow": 1, "green": 1, "blue": 1, "purple": 1, "Hero": 1, "Client": 1,
         ])
-        #expect(columns[.label]?.values.suffix(2).compactMap(\.name) == ["Approved", "Client"], "after the colours")
+        #expect(columns[.label]?.values.suffix(2).compactMap(\.name) == ["Client", "Hero"], "after the colours")
         for (column, counts) in columns {
             for value in counts.values {
                 guard let filter = value.filter else { continue }
@@ -179,7 +179,7 @@ struct QueryFilterBarTests {
         let collections = await engine.completions("port", field: .collection)
         #expect(collections.map(\.term) == ["collection:Portfolio", "collection:Portfolio/2024"])
         #expect(await engine.completions("ac/", field: .collection).map(\.value) == ["AC%2FDC"])
-        #expect(await engine.completions("appr", field: .label).map(\.term) == ["label:Approved"])
+        #expect(await engine.completions("her", field: .label).map(\.term) == ["label:Hero"])
         let clients = await engine.completions("cli", field: nil)
         #expect(clients.map(\.term).starts(with: ["label:Client", "collection:Clients"]))
     }

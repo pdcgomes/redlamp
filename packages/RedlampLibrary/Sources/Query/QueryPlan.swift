@@ -1,4 +1,5 @@
 import Foundation
+import RedlampDocument
 
 /// A query compiled against a column store: tests of its columns, and sets of rows looked up in the
 /// index for text, keyword and collection terms. Folder, camera and lens terms are matched in the
@@ -145,12 +146,11 @@ indirect enum QueryPlan: Sendable, Hashable {
                 accepted: 1 << UInt32(PhotoRecord.code(for: flag)),
             ))
         case let (.label, .label(label)):
-            let colour = QueryPlan.leaf(.packed(
-                shift: Packed.labelShift, mask: 0x7, accepted: 1 << UInt32(PhotoRecord.code(for: label)),
-            ))
+            let colour = labelled(label)
             return label == nil ? every([colour, .not(.leaf(.present(.customLabel)))]) : colour
         case let (.label, .text(name)):
-            return codes(.customLabel, store.customLabelNames.codes(named: name))
+            let custom = codes(.customLabel, store.customLabelNames.codes(named: name))
+            return XMPLabelNames.label(named: name).map { any([labelled($0), custom]) } ?? custom
         case let (.creator, .text(text)):
             return codes(.creator, store.creatorNames.codes(containing: text))
         case let (.copyright, .text(text)):
@@ -210,6 +210,11 @@ indirect enum QueryPlan: Sendable, Hashable {
     /// The rows with one of `codes` in `column`.
     private static func codes(_ column: CodeColumn, _ codes: [UInt32]) -> QueryPlan {
         codes.isEmpty ? .nothing : .leaf(.codes(column, CodeTable.make(codes)))
+    }
+
+    /// The rows with colour `label`, or with none.
+    private static func labelled(_ label: ColorLabel?) -> QueryPlan {
+        .leaf(.packed(shift: Packed.labelShift, mask: 0x7, accepted: 1 << UInt32(PhotoRecord.code(for: label))))
     }
 
     private static func cameras(_ ids: [Int64], _ store: ColumnStore) -> QueryPlan {

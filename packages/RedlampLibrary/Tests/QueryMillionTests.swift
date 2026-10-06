@@ -67,9 +67,9 @@ struct QueryMillionTests {
         let source = SyntheticSource(store: store, names: library.names, text: library.text)
         let warm = QueryEngine(source: source, timeZone: .gmt)
         try await warm.load()
-        for query in FixtureQuery.corpus {
-            for text in Self.typed(query.text) {
-                _ = try await warm.results(LibraryQuery(parsing: text, asYouType: true))
+        for text in FixtureQuery.corpus.map(\.text) + SyntheticLibrary.fieldQueries.map(\.text) {
+            for typed in Self.typed(text) {
+                _ = try await warm.results(LibraryQuery(parsing: typed, asYouType: true))
             }
         }
 
@@ -183,7 +183,8 @@ struct QueryMillionTests {
 }
 
 /// A fixture's photos as the index holds them: their rows, the small tables, and their text; a
-/// creator on a fifth of them, a place on those with GPS, and a custom label on one in fifty.
+/// creator on a fifth of them, a place on those with GPS, a custom label on a fifth of those with a
+/// colour label, and pixel sizes, a panorama's on one in 97.
 struct SyntheticLibrary {
     var names = QueryNames()
     var text = SyntheticText()
@@ -221,7 +222,7 @@ struct SyntheticLibrary {
         )
     }
 
-    static let customLabels = ["Approved", "Second", "Review"]
+    static let customLabels = ["Hero", "Client", "Archive"]
 
     /// Queries on the fields the fixture's manifest doesn't count, and the photos each finds.
     static let fieldQueries: [(text: String, matches: @Sendable (ColumnStore.Row) -> Bool)] = [
@@ -233,10 +234,10 @@ struct SyntheticLibrary {
         ("sublocation:\"place 1\"", { includes($0.location?.sublocation, "place 1") }),
         ("has:creator", { $0.creator != nil }),
         ("-has:location", { $0.location == nil }),
-        ("label:approved", { $0.customLabel == "Approved" }),
+        ("label:hero", { $0.customLabel == "Hero" }),
         ("rating>=3 city:porto", { $0.hot.rating >= 3 && includes($0.location?.city, "porto") }),
-        ("montréal", { includes($0.location?.city, "montréal") }),
-        ("tremblay", { includes($0.creator, "tremblay") }),
+        ("nairobi", { includes($0.location?.city, "nairobi") }),
+        ("élodie", { includes($0.creator, "élodie") }),
         ("is:long-exposure", { ColumnEncoding.shutter($0.shutter) >= 1_000_000 }),
         ("is:panorama", { ColumnEncoding.aspect(width: $0.width, height: $0.height) >= 200 }),
         ("is:high-resolution", { ColumnEncoding.megapixels(width: $0.width, height: $0.height) >= 400 }),
@@ -303,8 +304,10 @@ struct SyntheticLibrary {
         if photo.location != nil {
             row.location = Self.places[photo.index % Self.places.count]
         }
-        if photo.label == nil, photo.index % 50 == 7 {
-            row.customLabel = Self.customLabels[photo.index / 50 % Self.customLabels.count]
+        // On photos with a colour label as well, which the index never gives a custom one, so the
+        // manifest's counts of `label:none` hold.
+        if photo.label != nil, photo.index % 5 == 2 {
+            row.customLabel = Self.customLabels[photo.index / 5 % Self.customLabels.count]
         }
         (row.width, row.height) = photo.index % 97 == 0 ? (12000, 4000) : photo.index % 13 == 0 ? (5504, 8256) : (
             6000,
