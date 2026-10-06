@@ -4,6 +4,7 @@ import Metal
 import RedlampEngineAPI
 import RedlampKernels
 import RedlampServices
+import Synchronization
 
 /// A merged focus stack, ready to develop.
 struct MergedStack: Sendable {
@@ -24,14 +25,14 @@ struct MergedStack: Sendable {
     /// Where each frame sits in the reference, for retouching from a frame.
     let alignment: StackAlignment
 
-    /// The same stack with other pixels.
-    func with(samples: [UInt16]) -> MergedStack {
+    /// The same stack with other pixels, or other info.
+    func with(samples: [UInt16], info: ImageInfo? = nil) -> MergedStack {
         var image = DecodedImage(
             width: decoded.width, height: decoded.height, layout: decoded.layout, samples: samples,
             blackLevels: decoded.blackLevels, whiteLevel: decoded.whiteLevel,
             asShotMultipliers: decoded.asShotMultipliers,
             cameraToSRGB: decoded.cameraToSRGB, xyzToCamera: decoded.xyzToCamera, orientation: decoded.orientation,
-            baselineExposure: decoded.baselineExposure, info: decoded.info,
+            baselineExposure: decoded.baselineExposure, info: info ?? decoded.info,
         )
         image.noiseProfile = decoded.noiseProfile
         return MergedStack(
@@ -73,6 +74,11 @@ final class FocusStackCache: Sendable {
     let kernels: KernelLibrary
     /// The engine's decoder, so frames decode where its photos do (the Mac app's decode service).
     let decoder: any ImageDecoding
+    /// When frames, by `identity(of:)`, last failed to decode. Each decode of a damaged file can
+    /// cost a service launch, so they're tried again only after `unreadableRetry`, or once the
+    /// editor opens their stack.
+    let unreadable = Mutex<[String: Date]>([:])
+    static let unreadableRetry: TimeInterval = 60
 
     init(
         device: any MTLDevice, kernels: KernelLibrary, root: URL = FocusStackCache.defaultRoot,
@@ -108,7 +114,7 @@ final class FocusStackCache: Sendable {
         let merged = try merged(frames, strategy: document.strategy, documentURL: url, progress: progress)
         guard !strokes.isEmpty else { return merged }
         let retouched = try retouch(merged, with: strokes, document: document, at: url)
-        try? save(retouched, to: folder, document: retouched.report.failedFrames == nil ? url : nil)
+        try? save(retouched, to: folder, document: url)
         return retouched
     }
 
@@ -148,11 +154,16 @@ final class FocusStackCache: Sendable {
             try description += " " + (String(bytes: encoder.encode(retouch), encoding: .utf8) ?? "")
         }
         for frame in frames {
-            let values = try frame.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
-            let modified = values.contentModificationDate?.timeIntervalSince1970 ?? 0
-            description += "\n\(frame.standardizedFileURL.path) \(values.fileSize ?? 0) \(modified)"
+            try description += "\n" + identity(of: frame)
         }
         return SHA256.hash(data: Data(description.utf8)).prefix(16).map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// A frame's path, size and modification date, which change when it does.
+    static func identity(of frame: URL) throws -> String {
+        let values = try frame.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+        let modified = values.contentModificationDate?.timeIntervalSince1970 ?? 0
+        return "\(frame.standardizedFileURL.path) \(values.fileSize ?? 0) \(modified)"
     }
 
     // MARK: - Merging
@@ -172,6 +183,7 @@ final class FocusStackCache: Sendable {
                 )
                 return failed.isEmpty ? merged : merged.spread(over: included, of: urls.count, failed: failed)
             } catch let failure as FrameDecodeFailure {
+                noteUnreadable(failure.all.map { urls[included[$0.index]] })
                 for (index, error) in failure.all.sorted(by: { $0.index > $1.index }) {
                     failed.append(FocusStackReport.FailedFrame(
                         index: included[index], reason: error.localizedDescription,
@@ -320,9 +332,10 @@ final class FocusStackCache: Sendable {
 
     /// Writes `stack` to a hidden folder beside `folder` and renames it into place, so an
     /// interrupted save leaves no half-written merge; then trims the cache. `document` marks a
-    /// retouched merge, whose earlier retouches are then of no use; one missing frames goes
-    /// unmarked, so it doesn't replace a complete one.
+    /// retouched merge, whose earlier retouches are then of no use; one missing frames has a
+    /// marker of its own, so it replaces only earlier ones missing frames, never a complete one.
     func save(_ stack: MergedStack, to folder: URL, document: URL? = nil) throws {
+        let incomplete = stack.report.failedFrames != nil
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
         let staging = root.appendingPathComponent(
@@ -336,7 +349,8 @@ final class FocusStackCache: Sendable {
             try stack.depth.withUnsafeBytes { try Data($0).write(to: staging.appendingPathComponent("depth.f32")) }
             try JSONEncoder().encode(StackMetadata(stack)).write(to: staging.appendingPathComponent("stack.json"))
             if let document {
-                try Data(document.standardizedFileURL.path.utf8).write(to: staging.appendingPathComponent("document"))
+                try Data(document.standardizedFileURL.path.utf8)
+                    .write(to: staging.appendingPathComponent(Self.marker(incomplete: incomplete)))
             }
             try? fileManager.removeItem(at: folder)
             try fileManager.moveItem(at: staging, to: folder)
@@ -344,17 +358,33 @@ final class FocusStackCache: Sendable {
             try? fileManager.removeItem(at: staging)
             throw error
         }
-        Self.trim(root, budget: budget, keeping: folder, document: document)
+        Self.trim(root, budget: budget, keeping: folder, document: document, incomplete: incomplete)
+    }
+
+    /// The file naming the document a retouched merge belongs to.
+    static func marker(incomplete: Bool) -> String {
+        incomplete ? "document-incomplete" : "document"
     }
 
     /// Removes merges until `root` fits `budget`, least recently used first, never `kept`; also
-    /// `document`'s other retouched merges and staging an interrupted save left.
-    static func trim(_ root: URL, budget: Int, keeping kept: URL, document: URL? = nil, now: Date = Date()) {
+    /// staging an interrupted save left and `document`'s other retouched merges (when `kept` is
+    /// `incomplete`, only those missing frames).
+    static func trim(
+        _ root: URL, budget: Int, keeping kept: URL, document: URL? = nil, incomplete: Bool = false,
+        now: Date = Date(),
+    ) {
         let fileManager = FileManager.default
         guard let items = try? fileManager.contentsOfDirectory(
             at: root, includingPropertiesForKeys: [.contentModificationDateKey],
         ) else { return }
         let path = document?.standardizedFileURL.path
+        let replaced = incomplete ? [marker(incomplete: true)] : [marker(incomplete: true), marker(incomplete: false)]
+        func retouches(_ item: URL) -> Bool {
+            replaced.contains { name in
+                (try? Data(contentsOf: item.appendingPathComponent(name))).map { String(decoding: $0, as: UTF8.self) }
+                    == path
+            }
+        }
         var entries: [(url: URL, size: Int, date: Date)] = []
         for item in items where item.lastPathComponent != kept.lastPathComponent {
             let date = (try? item.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
@@ -363,9 +393,7 @@ final class FocusStackCache: Sendable {
                 if now.timeIntervalSince(date) > leftoverAge {
                     try? fileManager.removeItem(at: item)
                 }
-            } else if let path,
-                      let marked = try? Data(contentsOf: item.appendingPathComponent("document")),
-                      String(decoding: marked, as: UTF8.self) == path {
+            } else if path != nil, retouches(item) {
                 try? fileManager.removeItem(at: item)
             } else {
                 entries.append((item, size(of: item), date))

@@ -157,6 +157,9 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             value += 1
             return value
         }
+        if SupportedFormats.isStack(url) {
+            stacks.retryUnreadableFrames(of: url)
+        }
         let built = try await sessions.session(for: url)
         guard openGeneration.withLock({ $0 == generation }) else { throw CancellationError() }
         session.withLock { $0 = built }

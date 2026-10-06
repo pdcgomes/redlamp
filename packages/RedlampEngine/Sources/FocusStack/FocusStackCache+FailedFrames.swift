@@ -22,10 +22,39 @@ struct FrameDecodeFailure: Error {
 
 extension FocusStackCache {
     /// Whether every frame a cached merge left out still doesn't decode, so the merge stands; once
-    /// one does, the stack merges again.
-    func stillMissing(_ stack: MergedStack, frames: [URL]) -> Bool {
+    /// one does, the stack merges again. A frame that failed within `unreadableRetry` isn't tried.
+    func stillMissing(_ stack: MergedStack, frames: [URL], now: Date = Date()) -> Bool {
         (stack.report.failedFrames ?? []).allSatisfy { failed in
-            frames.indices.contains(failed.index) && (try? decoder.decode(frames[failed.index])) == nil
+            guard frames.indices.contains(failed.index) else { return false }
+            let frame = frames[failed.index]
+            if let identity = try? Self.identity(of: frame),
+               let failedAt = unreadable.withLock({ $0[identity] }),
+               now.timeIntervalSince(failedAt) < Self.unreadableRetry {
+                return true
+            }
+            guard (try? decoder.decode(frame)) == nil else { return false }
+            noteUnreadable([frame], at: now)
+            return true
+        }
+    }
+
+    func noteUnreadable(_ frames: [URL], at now: Date = Date()) {
+        let identities = frames.compactMap { try? Self.identity(of: $0) }
+        unreadable.withLock { known in
+            for identity in identities {
+                known[identity] = now
+            }
+        }
+    }
+
+    /// Lets the next merge or load of the stack at `url` try its unreadable frames again.
+    func retryUnreadableFrames(of url: URL) {
+        guard let document = try? FocusStackDocument.read(url) else { return }
+        let identities = document.frameURLs(at: url).compactMap { try? Self.identity(of: $0) }
+        unreadable.withLock { known in
+            for identity in identities {
+                known[identity] = nil
+            }
         }
     }
 
@@ -64,8 +93,13 @@ extension FocusStackCache {
 extension MergedStack {
     /// A merge of the frames `included` (indices into the stack's `count` frames) as a merge of
     /// all of them: the reference, alignment and depth map indexed by stack frame, with `failed`
-    /// in the report. Left-out frames keep the identity alignment.
+    /// in the report and its info saying how many couldn't be read. Left-out frames keep the
+    /// identity alignment.
     func spread(over included: [Int], of count: Int, failed: [FocusStackReport.FailedFrame]) -> MergedStack {
+        var info = decoded.info
+        info.sensorDescription += failed.count == 1
+            ? ", 1 frame couldn't be read" : ", \(failed.count) frames couldn't be read"
+        let decoded = with(samples: decoded.samples, info: info).decoded
         var report = report
         report.frames = count
         report.reference = included[report.reference]

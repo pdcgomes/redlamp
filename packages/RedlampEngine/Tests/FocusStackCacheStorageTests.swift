@@ -8,13 +8,15 @@ struct FocusStackCacheStorageTests {
     /// A merge of `bytes` in `root/<name>`, last used `age` seconds ago.
     @discardableResult
     private func entry(
-        _ name: String, bytes: Int, age: TimeInterval = 0, document: URL? = nil, now: Date,
+        _ name: String, bytes: Int, age: TimeInterval = 0, document: URL? = nil, incomplete: Bool = false,
+        now: Date,
     ) throws -> URL {
         let folder = root.appending(path: name)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try Data(count: bytes).write(to: folder.appending(path: "fused.half"))
         if let document {
-            try Data(document.standardizedFileURL.path.utf8).write(to: folder.appending(path: "document"))
+            try Data(document.standardizedFileURL.path.utf8)
+                .write(to: folder.appending(path: FocusStackCache.marker(incomplete: incomplete)))
         }
         try FileManager.default.setAttributes(
             [.modificationDate: now.addingTimeInterval(-age)],
@@ -57,6 +59,23 @@ struct FocusStackCacheStorageTests {
         let kept = try entry("retouch", bytes: 10, document: document, now: now)
         FocusStackCache.trim(root, budget: 1 << 30, keeping: kept, document: document, now: now)
         #expect(try names() == ["other-stack", "unretouched", "retouch"])
+    }
+
+    @Test func `a retouch missing frames replaces only others missing frames, a complete one both`() throws {
+        defer { try? FileManager.default.removeItem(at: root) }
+        let now = Date()
+        let document = URL(fileURLWithPath: "/Photos/Bracket.redstack")
+        try entry("complete", bytes: 10, age: 20, document: document, now: now)
+        try entry("incomplete", bytes: 10, age: 10, document: document, incomplete: true, now: now)
+        let other = URL(fileURLWithPath: "/Photos/Other.redstack")
+        try entry("other", bytes: 10, age: 10, document: other, incomplete: true, now: now)
+        let later = try entry("later", bytes: 10, age: 5, document: document, incomplete: true, now: now)
+        FocusStackCache.trim(root, budget: 1 << 30, keeping: later, document: document, incomplete: true, now: now)
+        #expect(try names() == ["complete", "other", "later"])
+
+        let kept = try entry("retouch", bytes: 10, document: document, now: now)
+        FocusStackCache.trim(root, budget: 1 << 30, keeping: kept, document: document, now: now)
+        #expect(try names() == ["other", "retouch"])
     }
 
     @Test func `staging an interrupted save left goes once it is old`() throws {

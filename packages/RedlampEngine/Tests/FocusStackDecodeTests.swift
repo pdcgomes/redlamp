@@ -192,8 +192,9 @@ extension FocusStackTests {
             stillTile: 2048, stackCache: folder.appendingPathComponent("cache"), decoder: decoder,
         )
 
-        _ = try await engine.open(documentURL)
-        let opened = decoder.decodes(of: "frame0.png")
+        let info = try await engine.open(documentURL)
+        #expect(info.sensorDescription.hasSuffix(", 1 frame couldn't be read"))
+        let opened = (merged: decoder.decodes(of: "frame0.png"), tried: decoder.decodes(of: "frame1.png"))
         var document = try FocusStackDocument.read(documentURL)
         for x in [0.25, 0.5, 0.75] {
             document.retouch = (document.retouch ?? []) + [
@@ -203,12 +204,34 @@ extension FocusStackTests {
             let stack = try engine.stacks.stack(at: documentURL)
             #expect(stack.report.failedFrames?.map(\.index) == [1])
         }
-        #expect(decoder.decodes(of: "frame0.png") == opened, "merged only for the open, not for its three strokes")
+        #expect(decoder.decodes(of: "frame0.png") == opened.merged, "merged only for the open, not for its strokes")
+        #expect(decoder.decodes(of: "frame1.png") == opened.tried, "nor is the unreadable frame tried for each")
 
         decoder.failing.withLock { $0 = [] }
+        _ = try await engine.open(documentURL)
         let stack = try engine.stacks.stack(at: documentURL)
         #expect(stack.report.failedFrames == nil)
-        #expect(decoder.decodes(of: "frame0.png") == opened + 2, "merged again once the frame decodes")
+        #expect(!stack.decoded.info.sensorDescription.contains("couldn't be read"))
+        #expect(decoder.decodes(of: "frame0.png") == opened.merged + 2, "merged again once it opens with the frame")
+    }
+
+    @Test func `strokes on a stack missing a frame leave one retouch in the cache`() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (documentURL, _) = try stackDocument(frames: 4, in: folder)
+        let decoder = RecordingDecoder(failing: ["frame1.png"])
+        let cache = folder.appendingPathComponent("cache")
+        let engine = try RedlampEngine(stillTile: 2048, stackCache: cache, decoder: decoder)
+        var document = try FocusStackDocument.read(documentURL)
+        for x in [0.25, 0.5, 0.75] {
+            document.retouch = (document.retouch ?? []) + [
+                FocusStackStroke(source: .frame("frame2.png"), radius: 0.1, hardness: 1, points: [SIMD2(x, 0.5)]),
+            ]
+            try document.write(to: documentURL)
+            _ = try engine.stacks.stack(at: documentURL)
+        }
+        let merges = try FileManager.default.contentsOfDirectory(atPath: cache.path).filter { !$0.hasPrefix(".") }
+        #expect(merges.count == 2, "the merge and its latest retouch")
     }
 
     @Test func `a stack with fewer than two frames that decode fails`() async throws {
