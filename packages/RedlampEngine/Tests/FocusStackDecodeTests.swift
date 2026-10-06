@@ -234,6 +234,52 @@ extension FocusStackTests {
         #expect(merges.count == 2, "the merge and its latest retouch")
     }
 
+    @Test func `a stack missing a frame is cached apart, where earlier versions don't look`() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (documentURL, _) = try stackDocument(frames: 4, in: folder)
+        let decoder = RecordingDecoder(failing: ["frame1.png"])
+        let cache = folder.appendingPathComponent("cache")
+        let engine = try RedlampEngine(stillTile: 2048, stackCache: cache, decoder: decoder)
+        var document = try FocusStackDocument.read(documentURL)
+        document.retouch = [
+            FocusStackStroke(source: .frame("frame2.png"), radius: 0.1, hardness: 1, points: [SIMD2(0.5, 0.5)]),
+        ]
+        try document.write(to: documentURL)
+        let frames = document.frameURLs(at: documentURL)
+        let merge = try cache.appendingPathComponent(FocusStackCache.key(frames: frames, strategy: document.strategy))
+        let retouch = try cache.appendingPathComponent(
+            FocusStackCache.key(frames: frames, strategy: document.strategy, retouch: document.retouch ?? []),
+        )
+        func exists(_ url: URL) -> Bool {
+            FileManager.default.fileExists(atPath: url.path)
+        }
+
+        _ = try engine.stacks.stack(at: documentURL)
+        #expect(!exists(merge) && !exists(retouch), "nothing where an earlier version would take it for complete")
+        #expect(exists(FocusStackCache.incomplete(merge)) && exists(FocusStackCache.incomplete(retouch)))
+        let merged = decoder.decodes(of: "frame0.png")
+        #expect(try engine.stacks.stack(at: documentURL).report.failedFrames?.map(\.index) == [1])
+        #expect(decoder.decodes(of: "frame0.png") == merged, "reused within the retry window")
+
+        let stale = folder.appendingPathComponent("stale")
+        try FileManager.default.copyItem(at: FocusStackCache.incomplete(retouch), to: stale)
+        decoder.failing.withLock { $0 = [] }
+        engine.stacks.retryUnreadableFrames(of: documentURL)
+        #expect(try engine.stacks.stack(at: documentURL).report.failedFrames == nil)
+        #expect(exists(merge) && exists(retouch))
+        #expect(
+            !exists(FocusStackCache.incomplete(merge)) && !exists(FocusStackCache.incomplete(retouch)),
+            "a complete save removes the incomplete one",
+        )
+
+        try FileManager.default.moveItem(at: stale, to: FocusStackCache.incomplete(retouch))
+        decoder.failing.withLock { $0 = ["frame1.png"] }
+        let completed = decoder.decodes(of: "frame0.png")
+        #expect(try engine.stacks.stack(at: documentURL).report.failedFrames == nil, "the complete merge comes first")
+        #expect(decoder.decodes(of: "frame0.png") == completed)
+    }
+
     @Test func `a stack with fewer than two frames that decode fails`() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: folder) }

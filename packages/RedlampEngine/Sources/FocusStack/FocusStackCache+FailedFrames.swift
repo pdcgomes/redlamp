@@ -41,6 +41,7 @@ extension FocusStackCache {
     func noteUnreadable(_ frames: [URL], at now: Date = Date()) {
         let identities = frames.compactMap { try? Self.identity(of: $0) }
         unreadable.withLock { known in
+            known = known.filter { now.timeIntervalSince($0.value) < Self.unreadableRetry }
             for identity in identities {
                 known[identity] = now
             }

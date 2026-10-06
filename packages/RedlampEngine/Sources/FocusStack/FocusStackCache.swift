@@ -107,7 +107,7 @@ final class FocusStackCache: Sendable {
             strategy: document.strategy,
             retouch: strokes,
         ))
-        if let cached = try? load(folder, documentURL: url), stillMissing(cached, frames: frames) {
+        if let cached = cached(folder, frames: frames, documentURL: url) {
             progress(1)
             return cached
         }
@@ -123,7 +123,7 @@ final class FocusStackCache: Sendable {
         _ frames: [URL], strategy: FocusStackStrategy, documentURL: URL, progress: (Double) -> Void = { _ in },
     ) throws -> MergedStack {
         let folder = try root.appendingPathComponent(Self.key(frames: frames, strategy: strategy))
-        if let cached = try? load(folder, documentURL: documentURL), stillMissing(cached, frames: frames) {
+        if let cached = cached(folder, frames: frames, documentURL: documentURL) {
             progress(1)
             return cached
         }
@@ -137,13 +137,35 @@ final class FocusStackCache: Sendable {
     func thumbnailFrame(for url: URL) -> URL? {
         guard let document = try? FocusStackDocument.read(url) else { return nil }
         let frames = document.frameURLs(at: url)
-        if let key = try? Self.key(frames: frames, strategy: document.strategy),
-           let data = try? Data(contentsOf: root.appendingPathComponent(key).appendingPathComponent("stack.json")),
-           let metadata = try? JSONDecoder().decode(StackMetadata.self, from: data),
-           frames.indices.contains(metadata.report.reference) {
-            return frames[metadata.report.reference]
+        if let key = try? Self.key(frames: frames, strategy: document.strategy) {
+            let folder = root.appendingPathComponent(key)
+            for candidate in [folder, Self.incomplete(folder)] {
+                if let data = try? Data(contentsOf: candidate.appendingPathComponent("stack.json")),
+                   let metadata = try? JSONDecoder().decode(StackMetadata.self, from: data),
+                   frames.indices.contains(metadata.report.reference) {
+                    return frames[metadata.report.reference]
+                }
+            }
         }
         return frames.isEmpty ? nil : frames[frames.count / 2]
+    }
+
+    /// The merge cached in `folder`, else the one missing frames beside it while they still don't
+    /// decode.
+    func cached(_ folder: URL, frames: [URL], documentURL: URL) -> MergedStack? {
+        if let complete = try? load(folder, documentURL: documentURL), stillMissing(complete, frames: frames) {
+            return complete
+        }
+        guard let incomplete = try? load(Self.incomplete(folder), documentURL: documentURL),
+              stillMissing(incomplete, frames: frames)
+        else { return nil }
+        return incomplete
+    }
+
+    /// Where a merge missing frames is kept instead of `folder`: a folder earlier versions of the
+    /// cache never look up, since they'd take what's in it for a complete merge.
+    static func incomplete(_ folder: URL) -> URL {
+        folder.deletingLastPathComponent().appendingPathComponent(folder.lastPathComponent + "-incomplete")
     }
 
     static func key(frames: [URL], strategy: FocusStackStrategy, retouch: [FocusStackStroke] = []) throws -> String {
@@ -330,12 +352,15 @@ final class FocusStackCache: Sendable {
 
     // MARK: - Storage
 
-    /// Writes `stack` to a hidden folder beside `folder` and renames it into place, so an
-    /// interrupted save leaves no half-written merge; then trims the cache. `document` marks a
-    /// retouched merge, whose earlier retouches are then of no use; one missing frames has a
-    /// marker of its own, so it replaces only earlier ones missing frames, never a complete one.
-    func save(_ stack: MergedStack, to folder: URL, document: URL? = nil) throws {
+    /// Writes `stack` to a hidden folder and renames it into place as `key`, or `incomplete(key)`
+    /// when it's missing frames, so an interrupted save leaves no half-written merge; then trims
+    /// the cache. A complete save removes the incomplete one.
+    /// `document` marks a retouched merge, whose earlier retouches are then of no use; one missing
+    /// frames has a marker of its own, so it replaces only earlier ones missing frames, never a
+    /// complete one.
+    func save(_ stack: MergedStack, to key: URL, document: URL? = nil) throws {
         let incomplete = stack.report.failedFrames != nil
+        let folder = incomplete ? Self.incomplete(key) : key
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
         let staging = root.appendingPathComponent(
@@ -357,6 +382,9 @@ final class FocusStackCache: Sendable {
         } catch {
             try? fileManager.removeItem(at: staging)
             throw error
+        }
+        if !incomplete {
+            try? fileManager.removeItem(at: Self.incomplete(key))
         }
         Self.trim(root, budget: budget, keeping: folder, document: document, incomplete: incomplete)
     }
