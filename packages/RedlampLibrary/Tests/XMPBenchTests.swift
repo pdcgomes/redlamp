@@ -2,7 +2,31 @@ import Foundation
 import Testing
 @testable import RedlampLibrary
 
+/// The xmp scenario, small enough for every run; and on a fixture with `REDLAMP_XMP_BENCH=1` (which
+/// xcodebuild hands to the tests from `TEST_RUNNER_REDLAMP_XMP_BENCH=1`), the one at
+/// `REDLAMP_XMP_BENCH_FIXTURE` (the 20,000-photo fixture by default), writing
+/// `REDLAMP_XMP_BENCH_WRITES` `.xmp` (10,000) and syncing `REDLAMP_XMP_BENCH_PHOTOS` photos (2,000).
 struct XMPBenchTests {
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["REDLAMP_XMP_BENCH"] == "1"))
+    func `xmp on the fixture`() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        let fixture = URL(
+            fileURLWithPath: environment["REDLAMP_XMP_BENCH_FIXTURE"]
+                ?? "/Volumes/SSD/redlamp-tmp/library-fixtures/lib-20k",
+            isDirectory: true,
+        )
+        let context = try BenchContext(fixture: fixture, manifest: FixtureManifest.load(from: fixture), profile: .ssd)
+        let scenario = XMPScenario(
+            writes: environment["REDLAMP_XMP_BENCH_WRITES"].flatMap { Int($0) } ?? XMPScenario.defaultWrites,
+            photos: environment["REDLAMP_XMP_BENCH_PHOTOS"].flatMap { Int($0) } ?? XMPScenario.defaultPhotos,
+        )
+        let report = try await BenchReport.run([scenario], in: context)
+        for line in report.text.split(separator: "\n") {
+            print("XMP-BENCH \(line)")
+        }
+        #expect(report.failed.isEmpty)
+    }
+
     @Test func `the xmp scenario is added after the others, and found by name`() {
         BenchScenarios.registerXMP()
         BenchScenarios.registerXMP()
