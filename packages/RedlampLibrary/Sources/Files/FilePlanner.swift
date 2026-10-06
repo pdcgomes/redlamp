@@ -300,20 +300,41 @@ final class FilePlanner: @unchecked Sendable {
     // MARK: - Checking
 
     /// What would stop `steps`, as the files are now: a file at a place a step would put one, a
-    /// photo or folder gone since they were planned, or a folder to go in that isn't there. The
-    /// steps come back without the sidecars that have gone meanwhile.
+    /// photo or folder gone or written since they were planned, or a folder to go in that isn't
+    /// there. The steps come back without the sidecars that have gone meanwhile, and with those
+    /// written since as they are now, so they still go with their photos.
     func check(_ steps: [FileStep]) -> (steps: [FileStep], conflicts: [FileConflict]) {
         var vacated = Set<String>()
         var placed = Set<String>()
         var conflicts: [FileConflict] = []
         var checked = steps
-        func isThere(_ path: String, as item: FileItem?) -> Bool {
+        func isThere(_ path: String) -> Bool {
             let key = NamingJob.fold(path)
+            return placed.contains(key) || !vacated.contains(key) && entry(path) != nil
+        }
+        /// `item` as its step will find it: as planned, or put there by a step before; a sidecar as
+        /// it is now. Nil when it isn't there, or is a photo, folder or file written since: for those
+        /// the step can't do without, a conflict.
+        func atSource(_ item: FileItem) -> FileItem? {
+            let key = NamingJob.fold(item.source)
             if placed.contains(key) {
-                return true
+                return item
             }
-            guard !vacated.contains(key), let entry = entry(path) else { return false }
-            return item.map { FileRunner.matches(entry, $0) } ?? true
+            guard !vacated.contains(key), let entry = entry(item.source) else {
+                if item.isRequired {
+                    conflicts.append(FileConflict(path: item.source, reason: .gone))
+                }
+                return nil
+            }
+            if FileRunner.matches(entry, item) {
+                return item
+            }
+            guard item.isRequired else { return item.found(as: entry) }
+            let another = item.fileID.map { $0 != entry.fileIdentifier && entry.fileIdentifier != nil } ?? false
+            conflicts.append(FileConflict(
+                path: item.source, reason: another || item.isDirectory != entry.isDirectory ? .gone : .changed,
+            ))
+            return nil
         }
         func folderIsThere(_ path: String) -> Bool {
             placed.contains(NamingJob.fold(path)) || listing(path).exists
@@ -323,15 +344,9 @@ final class FilePlanner: @unchecked Sendable {
             case .move, .putBack:
                 var kept: [FileItem] = []
                 for item in step.items {
-                    guard let destination = item.destination else { continue }
-                    guard isThere(item.source, as: item) else {
-                        if item.isRequired {
-                            conflicts.append(FileConflict(path: item.source, reason: .gone))
-                        }
-                        continue
-                    }
+                    guard let destination = item.destination, let item = atSource(item) else { continue }
                     let (sourceKey, destinationKey) = (NamingJob.fold(item.source), NamingJob.fold(destination))
-                    if sourceKey != destinationKey, isThere(destination, as: nil) {
+                    if sourceKey != destinationKey, isThere(destination) {
                         conflicts.append(FileConflict(path: destination, reason: .taken))
                     }
                     let folder = Self.split(destination).folder
@@ -348,19 +363,14 @@ final class FilePlanner: @unchecked Sendable {
             case .trash:
                 var kept: [FileItem] = []
                 for item in step.items {
-                    guard isThere(item.source, as: item) else {
-                        if item.isRequired {
-                            conflicts.append(FileConflict(path: item.source, reason: .gone))
-                        }
-                        continue
-                    }
+                    guard let item = atSource(item) else { continue }
                     vacated.insert(NamingJob.fold(item.source))
                     kept.append(item)
                 }
                 checked[number].items = kept
             case .createFolder:
                 guard let folder = step.folder else { continue }
-                if isThere(folder, as: nil) {
+                if isThere(folder) {
                     conflicts.append(FileConflict(path: folder, reason: .taken))
                 } else if !folderIsThere(Self.split(folder).folder) {
                     conflicts.append(FileConflict(path: folder, reason: .noFolder))
@@ -377,5 +387,17 @@ final class FilePlanner: @unchecked Sendable {
             }
         }
         return (checked, conflicts)
+    }
+}
+
+extension FileItem {
+    /// The item as `entry`, at its source, is now.
+    func found(as entry: FileEntry) -> FileItem {
+        var item = self
+        item.fileID = entry.fileIdentifier
+        item.isDirectory = entry.isDirectory
+        item.size = entry.isDirectory ? nil : entry.size
+        item.modified = entry.isDirectory ? nil : entry.modified
+        return item
     }
 }

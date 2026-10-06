@@ -1,8 +1,8 @@
 import Foundation
 
 public enum FileOperationError: Error, Sendable, Hashable {
-    /// Nothing moved: something is where a step would put a file, or a file a step moves has gone
-    /// since the batch was planned.
+    /// Nothing moved: something is where a step would put a file, or a file a step moves has gone or
+    /// been written since the batch was planned.
     case conflicts([FileConflict])
     /// A batch a forced quit interrupted waits to be finished or rolled back (`recover`).
     case unfinished(UUID)
@@ -33,6 +33,9 @@ public struct FileConflict: Sendable, Hashable, CustomStringConvertible {
         case taken
         /// The file isn't where the batch found it.
         case gone
+        /// The file is there, but written since the batch was planned: another size or modification
+        /// date.
+        case changed
         /// The folder a file would go in isn't there.
         case noFolder
     }
@@ -49,6 +52,7 @@ public struct FileConflict: Sendable, Hashable, CustomStringConvertible {
         switch reason {
         case .taken: "\(path) is already there"
         case .gone: "\(path) isn't there any more"
+        case .changed: "\(path) has changed since the batch was planned"
         case .noFolder: "\(path) has no folder to go in"
         }
     }

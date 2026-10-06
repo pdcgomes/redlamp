@@ -8,8 +8,9 @@ import Synchronization
 ///
 /// - **Together:** a photo moves with its raw or JPEG pair, its `.redlamp` sidecars beside it and on
 ///   this Mac, and other apps' sidecars named after it.
-/// - **Nothing is ever overwritten:** a file where a step would put one, or a photo gone since the
-///   batch was planned, stops the batch before it starts; a step that still meets one undoes itself.
+/// - **Nothing is ever overwritten:** a file where a step would put one, or a photo gone or written
+///   since the batch was planned, stops the batch before it starts; a step that still meets one
+///   undoes itself.
 /// - **Across volumes** a file is copied, checked by size and SHA-256, and only then removed.
 /// - **A forced quit** leaves the journal, which `recover` finishes or rolls back at the next launch.
 ///   A failed step rolls the batch back. Cancelling stops it after a safe step, keeping what's done.

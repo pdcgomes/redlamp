@@ -399,7 +399,7 @@ final class FileRunner: @unchecked Sendable {
             switch step.kind {
             case .trash:
                 if let source = try? fileSystem.attributes(of: URL(fileURLWithPath: item.source)),
-                   Self.matches(source, item) {
+                   Self.isSameFile(source, item) {
                     return .atSource
                 }
                 if trashed[index]?[number] != nil {
@@ -486,8 +486,8 @@ final class FileRunner: @unchecked Sendable {
             }
             return names.contains(from.lastPathComponent) ? .atSource : .neither
         }
-        let atSource = (try? fileSystem.attributes(of: from)).map { Self.matches($0, item) } ?? false
-        let atDestination = (try? fileSystem.attributes(of: to)).map { Self.matches($0, item) } ?? false
+        let atSource = (try? fileSystem.attributes(of: from)).map { Self.isSameFile($0, item) } ?? false
+        let atDestination = (try? fileSystem.attributes(of: to)).map { Self.isSameFile($0, item) } ?? false
         switch (atSource, atDestination) {
         case (true, false): return .atSource
         case (false, true): return .atDestination
@@ -496,10 +496,16 @@ final class FileRunner: @unchecked Sendable {
         }
     }
 
-    /// Whether `entry` is the file `item` was when the batch was planned: the same file on its
-    /// volume, or, copied to another or on a volume without file identifiers, of the same size and
-    /// date.
+    /// Whether `entry` is the file `item` was when the batch was planned, as it was then: the same
+    /// file, and of the size and modification date it had, not written in place since.
     static func matches(_ entry: FileEntry, _ item: FileItem) -> Bool {
+        isSameFile(entry, item) && isUnchanged(entry, item)
+    }
+
+    /// Whether `entry` is the file `item` was when the batch was planned, though it may have been
+    /// written since: the same file on its volume, or, copied to another or on a volume without file
+    /// identifiers, of the same size and date.
+    static func isSameFile(_ entry: FileEntry, _ item: FileItem) -> Bool {
         if let recorded = item.fileID, let found = entry.fileIdentifier {
             if recorded == found {
                 return true
@@ -508,6 +514,11 @@ final class FileRunner: @unchecked Sendable {
                 return false
             }
         }
+        return isUnchanged(entry, item)
+    }
+
+    /// Whether `entry` has the size and modification date `item` recorded; a folder's aren't kept.
+    private static func isUnchanged(_ entry: FileEntry, _ item: FileItem) -> Bool {
         if item.isDirectory || entry.isDirectory {
             return item.isDirectory == entry.isDirectory
         }
