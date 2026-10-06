@@ -39,7 +39,8 @@ public extension EditorModel {
         guard action.isAvailable else { return false }
         guard module == .develop || !action.isDevelopOnly else { return false }
         guard module == .library || !action.isLibraryOnly else { return false }
-        if let performed = performModuleShortcut(action) ?? performGridShortcut(action) {
+        if let performed = performModuleShortcut(action) ?? performGridShortcut(action)
+            ?? performCullingShortcut(action, shifted: shifted) {
             return performed
         }
         switch action {
@@ -158,25 +159,12 @@ public extension EditorModel {
             guard activeTool == .masking, let mask = selectedMaskID else { return false }
             deleteMask(mask)
         case .cancel: return cancelCurrentMode()
-        // Rating & flags
-        case .rating0, .rating1, .rating2, .rating3, .rating4, .rating5:
-            let stars = [ShortcutAction.rating0, .rating1, .rating2, .rating3, .rating4, .rating5]
-                .firstIndex(of: action) ?? 0
-            updateMetadata(advance: shifted) { $0.rating = stars }
+        // Rating & flags are culling's (`EditorModel+Culling`), but for these.
         // While a brush's tool is active, [ and ] size it (Shift: feather), as in Lightroom.
         case .decreaseRating where sizedBrush != nil: nudgeSizedBrush(direction: -1, feather: shifted)
         case .increaseRating where sizedBrush != nil: nudgeSizedBrush(direction: 1, feather: shifted)
-        case .decreaseRating: updateMetadata(advance: shifted) { $0.rating = max($0.rating - 1, 0) }
-        case .increaseRating: updateMetadata(advance: shifted) { $0.rating = min($0.rating + 1, 5) }
-        case .flagPick: updateMetadata(advance: shifted) { $0.flag = $0.flag == .pick ? nil : .pick }
         // In the Crop tool, X swaps the crop's orientation rather than rejecting the photo.
         case .flagReject where module == .develop && activeTool == .crop: swapCropOrientation()
-        case .flagReject: updateMetadata(advance: shifted) { $0.flag = $0.flag == .reject ? nil : .reject }
-        case .unflag: updateMetadata(advance: shifted) { $0.flag = nil }
-        case .labelRed: updateMetadata(advance: shifted) { $0.label = $0.label == .red ? nil : .red }
-        case .labelYellow: updateMetadata(advance: shifted) { $0.label = $0.label == .yellow ? nil : .yellow }
-        case .labelGreen: updateMetadata(advance: shifted) { $0.label = $0.label == .green ? nil : .green }
-        case .labelBlue: updateMetadata(advance: shifted) { $0.label = $0.label == .blue ? nil : .blue }
         // File & Edit (open and export are handled by the app, which owns the panels)
         case .showShortcuts: showShortcuts.toggle()
         case .commandPalette: toggleCommandPalette()
@@ -215,7 +203,8 @@ public extension EditorModel {
         }
         guard module == .develop || !action.isDevelopOnly else { return false }
         guard module == .library || !action.isLibraryOnly else { return false }
-        if let available = canPerformModuleShortcut(action) ?? canPerformGridShortcut(action) {
+        if let available = canPerformModuleShortcut(action) ?? canPerformGridShortcut(action)
+            ?? canPerformCullingShortcut(action) {
             return available
         }
         let photo = info != nil
@@ -267,9 +256,6 @@ public extension EditorModel {
         case .maskOverlay, .maskOverlayColor: return masking || activeTool == .crop
         case .maskPins: return masking || activeTool == .heal
         case .deleteMask: return (masking && selectedMaskID != nil) || (activeTool == .heal && selectedSpotID != nil)
-        case .rating0, .rating1, .rating2, .rating3, .rating4, .rating5, .decreaseRating, .increaseRating,
-             .flagPick, .flagReject, .unflag, .labelRed, .labelYellow, .labelGreen, .labelBlue:
-            return (opening ?? selection) != nil
         default:
             return false
         }
@@ -415,54 +401,6 @@ public extension EditorModel {
 
     var currentMetadata: PhotoMetadata {
         photoMetadata
-    }
-
-    /// A read-only photo's metadata doesn't change: it wouldn't be saved. While another photo
-    /// opens, the change is that photo's.
-    private func updateMetadata(advance: Bool, _ change: (inout PhotoMetadata) -> Void) {
-        guard let url = opening ?? selection else { return }
-        if opening != nil || !isReadOnly {
-            let current = opening == nil ? photoMetadata : library.item(for: url)?.metadata ?? PhotoMetadata()
-            var metadata = current
-            change(&metadata)
-            let setting = Self.setting(from: current, to: metadata)
-            if opening == nil {
-                photoMetadata = metadata
-            }
-            library.update(url) { setting(&$0.metadata) }
-            if info != nil, opening == nil {
-                saveNow()
-            } else {
-                // The metadata shown may be the filmstrip's, not yet the file's: only what
-                // `change` set goes to the file, and again onto the file's when it opens.
-                metadataChangesWhileOpening.append(setting)
-                saves.enqueue(.metadata(setting), for: url)
-            }
-        }
-        if advance {
-            selectNext()
-        }
-    }
-
-    /// Sets the fields that differ between `old` and `new` to `new`'s values, so applying it
-    /// twice is the same as once.
-    private static func setting(
-        from old: PhotoMetadata,
-        to new: PhotoMetadata,
-    ) -> @Sendable (inout PhotoMetadata) -> Void {
-        let (rating, flag, label) = (new.rating, new.flag, new.label)
-        let changes = (rating: rating != old.rating, flag: flag != old.flag, label: label != old.label)
-        return { metadata in
-            if changes.rating {
-                metadata.rating = rating
-            }
-            if changes.flag {
-                metadata.flag = flag
-            }
-            if changes.label {
-                metadata.label = label
-            }
-        }
     }
 }
 

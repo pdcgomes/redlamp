@@ -208,7 +208,8 @@ extension FolderLibrary {
         }
         // The index has no field a newer Redlamp wrote; the badges are what it has.
         if new.metadata.rating == current.metadata.rating, new.metadata.flag == current.metadata.flag,
-           new.metadata.label == current.metadata.label {
+           new.metadata.label == current.metadata.label, new.metadata.customLabel == current.metadata.customLabel,
+           new.metadata.mark == current.metadata.mark {
             kept.metadata = current.metadata
         }
         kept.isSettling = current.isSettling

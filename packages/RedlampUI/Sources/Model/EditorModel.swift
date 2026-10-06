@@ -629,6 +629,22 @@ public final class EditorModel {
     public internal(set) var libraryView = LibraryView.grid
     /// The module shown before this one, which ⌥⌘↑ goes back to.
     public internal(set) var previousModule: AppModule?
+
+    // MARK: Culling (EditorModel+Culling)
+
+    /// Every rating, flag, label and mark moves on to the next photo, as ⇧ does (Lightroom Classic's Auto
+    /// Advance).
+    public internal(set) var autoAdvance = false
+    /// The Library's culling changes, newest last, for Undo; and those Undo took back, for Redo.
+    var cullingUndo: [CullingStep] = []
+    var cullingRedo: [CullingStep] = []
+    /// The custom labels the photos shown and the culling of this session have, for the menus and the palette.
+    public internal(set) var customLabels: [String] = []
+    /// The culling changes being made in the background, one after another.
+    @ObservationIgnored let cullingQueue = CullingQueue()
+    @ObservationIgnored var cullingTail: Task<Void, Never>?
+    /// What culling shows that the library's lists may not hold yet.
+    @ObservationIgnored var cullingOverlay = CullingOverlay()
     /// Photos' previews, for the Library loupe and for Develop until a photo's render lands.
     @ObservationIgnored public let previews: PhotoPreviews
     /// Edited photos' thumbnails and previews, rendered with their edits in the background (LIB-17).
@@ -791,6 +807,7 @@ public final class EditorModel {
             self?.saved(url, write, outcome, superseded: superseded)
         }
         followLibrary()
+        autoAdvance = self.library.defaults?.bool(forKey: Self.autoAdvanceKey) ?? false
         let frames = engine.frames()
         framesTask = Task { [weak self] in
             for await frame in frames {

@@ -141,7 +141,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case rating0, rating1, rating2, rating3, rating4, rating5
     case decreaseRating, increaseRating
     case flagPick, flagReject, unflag
-    case labelRed, labelYellow, labelGreen, labelBlue
+    case labelRed, labelYellow, labelGreen, labelBlue, labelPurple, clearLabel
+    case toggleMark, autoAdvance
 
     /// File & Edit
     case openFolder, export, exportWithPrevious, mergeFocusStack, editFocusStack, showShortcuts, filmLooks
@@ -183,7 +184,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .maskOverlay, .maskOverlayColor, .maskPins, .deleteMask, .cancel:
             .masking
         case .rating0, .rating1, .rating2, .rating3, .rating4, .rating5, .decreaseRating, .increaseRating,
-             .flagPick, .flagReject, .unflag, .labelRed, .labelYellow, .labelGreen, .labelBlue:
+             .flagPick, .flagReject, .unflag, .labelRed, .labelYellow, .labelGreen, .labelBlue, .labelPurple,
+             .clearLabel, .toggleMark, .autoAdvance:
             .rating
         case .openFolder, .export, .exportWithPrevious, .mergeFocusStack, .editFocusStack, .showShortcuts,
              .filmLooks, .commandPalette, .sendFeedback:
@@ -305,6 +307,10 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .labelYellow: "Yellow Label"
         case .labelGreen: "Green Label"
         case .labelBlue: "Blue Label"
+        case .labelPurple: "Purple Label"
+        case .clearLabel: "No Label"
+        case .toggleMark: "Mark / Unmark"
+        case .autoAdvance: "Auto Advance"
         case .openFolder: "Open Folder…"
         case .export: "Export…"
         case .exportWithPrevious: "Export with Previous"
@@ -428,6 +434,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .labelYellow: [.char("7")]
         case .labelGreen: [.char("8")]
         case .labelBlue: [.char("9")]
+        case .labelPurple, .clearLabel, .autoAdvance: []
+        case .toggleMark: [.char("b")]
         case .openFolder: [.char("o", command: true)]
         case .export: [.char("e", shift: true, command: true)]
         case .exportWithPrevious: [.char("e", shift: true, option: true, command: true)]
@@ -445,7 +453,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     public var acceptsShift: Bool {
         switch self {
         case .rating0, .rating1, .rating2, .rating3, .rating4, .rating5, .decreaseRating, .increaseRating,
-             .flagPick, .flagReject, .unflag, .labelRed, .labelYellow, .labelGreen, .labelBlue,
+             .flagPick, .flagReject, .unflag, .labelRed, .labelYellow, .labelGreen, .labelBlue, .toggleMark,
              .increaseSetting, .decreaseSetting:
             true
         default:

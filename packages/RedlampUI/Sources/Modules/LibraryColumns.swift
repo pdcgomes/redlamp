@@ -32,7 +32,7 @@ final class LibraryInfoColumn: PanelColumnScrollView {
     private var tracker: Tracker?
 
     private enum Field: CaseIterable {
-        case name, folder, size, modified, rating, flag, label, edited
+        case name, folder, size, modified, rating, flag, label, marked, edited
 
         var title: String {
             switch self {
@@ -43,6 +43,7 @@ final class LibraryInfoColumn: PanelColumnScrollView {
             case .rating: "Rating"
             case .flag: "Flag"
             case .label: "Label"
+            case .marked: "Marked"
             case .edited: "Edited"
             }
         }
@@ -95,7 +96,8 @@ final class LibraryInfoColumn: PanelColumnScrollView {
         case .modified: return item.modified.formatted(date: .abbreviated, time: .shortened)
         case .rating: return metadata.rating > 0 ? String(repeating: "★", count: metadata.rating) : "None"
         case .flag: return metadata.flag.map { $0 == .pick ? "Pick" : "Rejected" } ?? "None"
-        case .label: return metadata.label.map(\.rawValue.capitalized) ?? "None"
+        case .label: return metadata.label.map(\.rawValue.capitalized) ?? metadata.customLabel ?? "None"
+        case .marked: return metadata.mark ? "Yes" : "No"
         case .edited: return item.hasEdits ? "Yes" : "No"
         }
     }

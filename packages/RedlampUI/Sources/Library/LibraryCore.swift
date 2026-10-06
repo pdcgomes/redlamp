@@ -94,6 +94,8 @@ final class LibraryCore: Sendable {
                 row.rating = summary?.metadata.rating ?? 0
                 row.flag = summary?.metadata.flag
                 row.label = summary?.metadata.label
+                row.customLabel = row.label == nil ? summary?.metadata.customLabel : nil
+                row.marked = summary?.metadata.mark ?? false
                 row.edited = summary?.hasEdits ?? false
                 row.sidecarModified = summary == nil ? nil : modified ?? Date()
                 try writer.upsertPhotos([row])

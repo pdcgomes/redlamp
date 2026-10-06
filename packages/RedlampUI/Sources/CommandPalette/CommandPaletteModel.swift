@@ -106,6 +106,7 @@ public final class CommandPaletteModel {
         }
         switch item.kind {
         case .filterPreset, .page(.filterPresets): return PaletteCatalog.isAvailable(.filterPresets, editor: editor)
+        case .customLabel: return editor.selection != nil && !editor.isModalDialogOpen
         default: break
         }
         // Sliders, pickers and choices change Develop's photo, which the Library module doesn't show.

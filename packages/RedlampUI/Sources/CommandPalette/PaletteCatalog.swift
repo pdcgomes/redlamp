@@ -72,11 +72,14 @@ enum PaletteCatalog {
         }
         guard scope == .all else { return sliders }
         let actions = ShortcutCategory.allCases.compactMap { category -> PaletteSection? in
-            let items = actionItems.filter { item in
+            var items = actionItems.filter { item in
                 if case let .action(action) = item.kind {
                     return action.category == category
                 }
                 return false
+            }
+            if category == .rating {
+                items += customLabelItems(editor: editor)
             }
             return items.isEmpty ? nil : PaletteSection(title: category.rawValue, items: items)
         }
@@ -86,7 +89,18 @@ enum PaletteCatalog {
 
     /// Everything the top-level search reaches.
     private static func searchableItems(editor: EditorModel) -> [PaletteItem] {
-        pageItems(editor: editor) + sliderItems + actionItems + deepChoiceItems(editor: editor)
+        pageItems(editor: editor) + sliderItems + actionItems + customLabelItems(editor: editor)
+            + deepChoiceItems(editor: editor)
+    }
+
+    /// The custom labels the photos have, beside the colour labels' actions.
+    static func customLabelItems(editor: EditorModel) -> [PaletteItem] {
+        editor.customLabels.map { name in
+            PaletteItem(
+                kind: .customLabel(name), title: "Label “\(name)”", context: ShortcutCategory.rating.rawValue,
+                symbol: "tag", keywords: ["label", "custom label", name],
+            )
+        }
     }
 
     // MARK: - Sliders

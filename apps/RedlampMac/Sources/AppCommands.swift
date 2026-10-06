@@ -78,15 +78,35 @@ struct AppCommands: Commands {
             item(.selectAllPhotos)
             item(.deselectOtherPhotos)
             Divider()
+            // In Library on the whole selection, in Develop on the active photo (LIB-15).
             Menu("Set Rating") {
                 ForEach([ShortcutAction.rating0, .rating1, .rating2, .rating3, .rating4, .rating5]) { mouseItem($0) }
+                Divider()
+                mouseItem(.decreaseRating)
+                mouseItem(.increaseRating)
             }
             Menu("Set Flag") {
                 ForEach([ShortcutAction.flagPick, .flagReject, .unflag]) { mouseItem($0) }
             }
             Menu("Set Color Label") {
                 ForEach([ShortcutAction.labelRed, .labelYellow, .labelGreen, .labelBlue]) { mouseItem($0) }
+                item(.labelPurple)
+                if !model.customLabels.isEmpty {
+                    Divider()
+                    ForEach(model.customLabels, id: \.self) { name in
+                        Button(name) { model.setCustomLabel(name) }
+                            .disabled(!model.canPerform(.clearLabel))
+                    }
+                }
+                Divider()
+                item(.clearLabel)
             }
+            mouseItem(.toggleMark)
+            Toggle(ShortcutAction.autoAdvance.title, isOn: Binding(
+                get: { model.autoAdvance },
+                set: { _ in model.perform(.autoAdvance) },
+            ))
+            .disabled(!model.canPerform(.autoAdvance))
         }
 
         CommandGroup(before: .toolbar) {

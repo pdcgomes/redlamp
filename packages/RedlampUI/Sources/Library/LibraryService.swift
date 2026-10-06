@@ -4,6 +4,7 @@ import Foundation
 import OSLog
 import RedlampDocument
 import RedlampLibrary
+import Synchronization
 
 /// The library in the app (LIB-10, LIB-11, LIB-09): its index, search, thumbnail store, indexer and
 /// change tracking, over the folders in Folders.
@@ -46,6 +47,11 @@ public final class LibraryService {
     private let defaults: UserDefaults?
     private let thumbnail: @Sendable (URL, Int) -> CGImage?
     private(set) var core: LibraryCore?
+    /// Culling's batches (LIB-15), once the library is open. Lists hear of them from culling, which knows
+    /// whether a change asked for since will change the same photos again (`CullingQueue`).
+    private(set) var metadata: LibraryMetadata?
+    /// Finishing the batches a forced quit interrupted, which every batch after them waits for.
+    private var recovering: Task<Void, Never>?
     /// The roots followed, as the index keeps their paths.
     private(set) var roots: [String] = []
     private var opening: Task<Void, Never>?
@@ -137,6 +143,11 @@ public final class LibraryService {
             )
         case let .success(core):
             self.core = core
+            let metadata = LibraryMetadata(index: core.index, paths: core.paths)
+            self.metadata = metadata
+            recovering = Task.detached(priority: .userInitiated) {
+                _ = try? await metadata.recover()
+            }
             defaults?.removeObject(forKey: Self.damagedKey)
             placed(core.locator)
             state = .ready
@@ -403,6 +414,131 @@ public final class LibraryService {
         core?.sidecarSaved(at: Self.path(photo), photo: photo, store: store)
     }
 
+    // MARK: - Culling (LIB-15)
+
+    /// Gives each group's photos its fields, a batch a group, off the main thread and after the batches a
+    /// forced quit left unfinished. Lists hear of a batch's photos once the index holds it, as `queue`
+    /// allows for change `sequence`; the photos the index doesn't have are left for their own saves.
+    func cull(_ groups: [CullingGroup], sequence: UInt64, queue: CullingQueue) async -> CullingWritten {
+        guard let core, let metadata else { return CullingWritten(unindexed: groups.flatMap(\.photos)) }
+        let recovering = recovering
+        return await Task.detached(priority: .userInitiated) {
+            await recovering?.value
+            let ids = await Self.indexIDs(of: groups.flatMap(\.photos), in: core.index)
+            var written = CullingWritten(ids: Dictionary(ids.map { ($1, $0) }) { first, _ in first })
+            for group in groups {
+                let found = group.photos.compactMap { ids[$0] }
+                written.unindexed += group.photos.filter { ids[$0] == nil }
+                guard !found.isEmpty else { continue }
+                do {
+                    let plan = try await metadata.plan(.set(group.fields, on: found))
+                    await Self.run(
+                        plan,
+                        metadata: metadata,
+                        core: core,
+                        sequence: sequence,
+                        queue: queue,
+                        into: &written,
+                    )
+                } catch {
+                    written.failed(found.compactMap { written.ids[$0] }, error)
+                }
+            }
+            core.live.photosChanged(queue.indexed([], by: sequence))
+            return written
+        }.value
+    }
+
+    /// Takes back `batches`, newest first, as `cull` makes them; `photos` are their photos by index ID.
+    func undoCulling(
+        _ batches: [UUID], photos: [Int64: URL], sequence: UInt64, queue: CullingQueue,
+    ) async -> CullingWritten {
+        guard let core, let metadata else { return CullingWritten() }
+        let recovering = recovering
+        return await Task.detached(priority: .userInitiated) {
+            await recovering?.value
+            var written = CullingWritten(ids: photos)
+            for batch in batches.reversed() {
+                do {
+                    let plan = try await metadata.planUndo(batch)
+                    await Self.run(
+                        plan,
+                        metadata: metadata,
+                        core: core,
+                        sequence: sequence,
+                        queue: queue,
+                        into: &written,
+                    )
+                } catch {
+                    written.errors.append(String(describing: error))
+                }
+            }
+            core.live.photosChanged(queue.indexed([], by: sequence))
+            return written
+        }.value
+    }
+
+    /// Redlamp changed these photos' rows itself: the open lists read them again.
+    func photosChanged(_ ids: [Int64]) {
+        core?.live.photosChanged(ids)
+    }
+
+    /// Runs `plan`, telling the lists of its photos once the index holds it (when its first sidecar is
+    /// written, or when it's done if it writes none); a batch that fails has been rolled back.
+    private nonisolated static func run(
+        _ plan: MetadataPlan, metadata: LibraryMetadata, core: LibraryCore, sequence: UInt64, queue: CullingQueue,
+        into written: inout CullingWritten,
+    ) async {
+        let photos = plan.photos.map(\.id)
+        let told = CullingOnce()
+        let tell: @Sendable () -> Void = {
+            guard told.first() else { return }
+            core.live.photosChanged(queue.indexed(photos, by: sequence))
+        }
+        do {
+            let outcome = try await metadata.run(plan) { _, _ in tell() }
+            tell()
+            written.batches.append(outcome.batch)
+            let skipped = Set(outcome.skipped)
+            written.unwritten += plan.photos.filter { skipped.contains($0.path) }.compactMap { written.ids[$0.id] }
+        } catch {
+            tell()
+            written.failed(photos.compactMap { written.ids[$0] }, error)
+        }
+    }
+
+    /// The index's IDs of the photos at `urls` it has, a folder's photos read at a time.
+    nonisolated static func indexIDs(of urls: [URL], in index: LibraryIndex) async -> [URL: Int64] {
+        var byFolder: [String: [URL]] = [:]
+        for url in urls {
+            byFolder[path(url.deletingLastPathComponent()), default: []].append(url)
+        }
+        let folders = byFolder
+        return await (try? index.read { reader -> [URL: Int64] in
+            var found: [URL: Int64] = [:]
+            for (path, photos) in folders {
+                guard let folder = try reader.folder(path: path) else { continue }
+                if photos.count < 64 {
+                    for url in photos {
+                        if let row = try reader.photo(folder: folder.id, name: url.lastPathComponent) {
+                            found[url] = row.id
+                        }
+                    }
+                    continue
+                }
+                let named = try Dictionary(reader.photos(inFolder: folder.id).map { ($0.name, $0.id) }) { first, _ in
+                    first
+                }
+                for url in photos {
+                    if let id = named[url.lastPathComponent] {
+                        found[url] = id
+                    }
+                }
+            }
+            return found
+        }) ?? [:]
+    }
+
     /// The path the index keeps for `url`: standardised, without a trailing slash.
     nonisolated static func path(_ url: URL) -> String {
         let path = url.standardizedFileURL.path
@@ -412,5 +548,43 @@ public final class LibraryService {
     private nonisolated static func paths(_ urls: [URL]) -> [String] {
         var seen = Set<String>()
         return urls.map(path).filter { seen.insert($0).inserted }
+    }
+}
+
+/// Photos culling gives the same fields, as one batch.
+struct CullingGroup: Sendable {
+    var fields: [MetadataField]
+    var photos: [URL]
+}
+
+/// What the library made of a culling change.
+struct CullingWritten: Sendable {
+    /// The batches it ran, for their Undo.
+    var batches: [UUID] = []
+    /// The photos it has, by index ID.
+    var ids: [Int64: URL] = [:]
+    /// The photos it hasn't indexed, which their own saves write.
+    var unindexed: [URL] = []
+    /// Photos it left as they were: their sidecars can't be written here, or their batch failed and was
+    /// rolled back.
+    var unwritten: [URL] = []
+    var errors: [String] = []
+
+    mutating func failed(_ photos: [URL], _ error: any Error) {
+        unwritten += photos
+        errors.append(String(describing: error))
+    }
+}
+
+/// Whether something has happened yet, from any thread.
+final class CullingOnce: Sendable {
+    private let done = Mutex(false)
+
+    /// True the first time only.
+    func first() -> Bool {
+        done.withLock { done in
+            defer { done = true }
+            return !done
+        }
     }
 }

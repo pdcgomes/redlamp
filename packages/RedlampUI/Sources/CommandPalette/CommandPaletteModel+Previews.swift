@@ -21,7 +21,7 @@ extension CommandPaletteModel {
 
     static func previews(_ kind: PaletteItemKind) -> Bool {
         switch kind {
-        case .compareLayout, .filterPreset: false
+        case .compareLayout, .filterPreset, .customLabel: false
         default: true
         }
     }
@@ -100,6 +100,8 @@ extension CommandPaletteModel {
             if let filters = editor.libraryFilters, let preset = filters.presets.first(where: { $0.id == id }) {
                 filters.choose(preset)
             }
+        case let .customLabel(name):
+            editor.setCustomLabel(name)
         default:
             break
         }

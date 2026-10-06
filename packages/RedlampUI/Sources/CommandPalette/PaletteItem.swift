@@ -72,6 +72,8 @@ import RedlampEngineAPI
     case historyStep(Int)
     /// A saved filter of the Library filter bar, by its preset's ID.
     case filterPreset(String)
+    /// A custom label, by its name, on the photos a label's key reaches (LIB-15).
+    case customLabel(String)
 
     /// What ↵ does, for the hint bar.
     var verb: String {

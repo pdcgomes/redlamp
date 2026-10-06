@@ -66,6 +66,7 @@ public extension EditorModel {
             }
         }
         thumbnailLoader.warm(found)
+        noteCustomLabels(in: found)
     }
 
     /// Keeps the editor in step with the folder as it changes on disk: when the selected photo is
@@ -81,6 +82,7 @@ public extension EditorModel {
     }
 
     private func libraryChanged(_ diff: LibraryDiff) {
+        keepCullingShown(diff)
         if diff.reset || !diff.removed.isEmpty || !diff.inserted.isEmpty {
             keepSelectionShown()
         }

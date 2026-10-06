@@ -321,7 +321,8 @@ final class LibraryFolderList: Sendable {
             return Self.item(row, url: folder.appending(path: relative, directoryHint: .notDirectory))
         }
 
-        /// `row` as an item at `url`: its badges only when it has a sidecar.
+        /// `row` as an item at `url`: its badges are its sidecar's, or, before it has one, those Redlamp gave
+        /// it ahead of writing one (a culling batch's), never other apps'.
         static func item(_ row: PhotoRecord, url: URL) -> LibraryItem {
             let hasSidecar = row.sidecarModified != nil
             var item = LibraryItem(
@@ -333,8 +334,13 @@ final class LibraryFolderList: Sendable {
             )
             if hasSidecar {
                 item.hasEdits = row.edited
-                item.metadata = PhotoMetadata(rating: row.rating, flag: row.flag, label: row.label)
             }
+            let theirs = hasSidecar ? [] : row.otherFields
+            item.metadata = PhotoMetadata(
+                rating: theirs.contains(.rating) ? 0 : row.rating, flag: theirs.contains(.flag) ? nil : row.flag,
+                label: theirs.contains(.label) ? nil : row.label,
+                customLabel: theirs.contains(.label) ? nil : row.customLabel, mark: row.marked,
+            )
             return item
         }
 

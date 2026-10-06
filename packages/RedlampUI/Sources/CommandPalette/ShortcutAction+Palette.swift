@@ -100,6 +100,10 @@ extension ShortcutAction {
         .labelYellow: ["label", "color label"],
         .labelGreen: ["label", "color label"],
         .labelBlue: ["label", "color label"],
+        .labelPurple: ["label", "color label", "violet"],
+        .clearLabel: ["label", "color label", "none", "remove label", "unlabel"],
+        .toggleMark: ["mark", "quick collection", "target", "collect", "unmark"],
+        .autoAdvance: ["advance", "next photo", "caps lock", "culling", "move on"],
         .openFolder: ["import", "open", "folder", "photos"],
         .export: ["save", "jpeg", "heic", "avif", "png", "tiff", "export"],
         .exportWithPrevious: ["save", "again", "repeat", "last", "export"],
@@ -208,7 +212,10 @@ extension ShortcutAction {
         case .flagPick: "flag"
         case .flagReject: "xmark.circle"
         case .unflag: "flag.slash"
-        case .labelRed, .labelYellow, .labelGreen, .labelBlue: "circle.fill"
+        case .labelRed, .labelYellow, .labelGreen, .labelBlue, .labelPurple: "circle.fill"
+        case .clearLabel: "circle.slash"
+        case .toggleMark: "circle.inset.filled"
+        case .autoAdvance: "arrow.right.to.line"
         case .openFolder: "folder"
         case .export: "square.and.arrow.up"
         case .exportWithPrevious: "square.and.arrow.up.on.square"
