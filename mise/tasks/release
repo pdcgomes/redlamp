@@ -187,7 +187,8 @@ mise run notarize -- "$APP"
 ditto -c -k --keepParent "$APP" "$ZIP"
 
 # GitHub's generated notes are only a changelog link, since nothing lands through pull requests.
-# The release's highlights, chosen in the release room, lead when docs/releases/<version>.md has them.
+# The release's highlights, chosen in the release room, lead when docs/releases/<version>.md has them,
+# as main has it: a release from an earlier commit is often chosen after its highlights were.
 NOTES="$OUT/notes.md"
 # A release made from an earlier commit isn't on main, so the previous release is the latest
 # tagged, and the changes are what no release has yet.
@@ -196,7 +197,10 @@ PREVIOUS="$(git for-each-ref --sort=-creatordate --format='%(refname:short)' 're
     | awk -v tag="$TAG" '$0 != tag { print; exit }')"
 HIGHLIGHTS="docs/releases/$VERSION.md"
 {
-    if git cat-file -e "$COMMIT:$HIGHLIGHTS" 2>/dev/null; then
+    if git cat-file -e "$MAIN:$HIGHLIGHTS" 2>/dev/null; then
+        git show "$MAIN:$HIGHLIGHTS"
+        echo
+    elif git cat-file -e "$COMMIT:$HIGHLIGHTS" 2>/dev/null; then
         git show "$COMMIT:$HIGHLIGHTS"
         echo
     fi
