@@ -57,11 +57,6 @@ public struct ModelManifest: Codable, Sendable, Hashable, Identifiable {
         files.reduce(0) { $0 + $1.bytes }
     }
 
-    /// The directory a package of the model sits in (`<name>.mlpackage`).
-    public func package(named name: String, in root: URL) -> URL {
-        root.appending(path: "\(name).mlpackage")
-    }
-
     /// Where `file` is fetched from: by its path under the source, except from a GitHub release,
     /// whose assets can't hold folders, so each `/` of the path is `__` in the asset's name.
     public func remote(_ file: File) -> URL {
