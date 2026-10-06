@@ -248,7 +248,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Library and Develop modules | Yes (Classic) | In progress | | P4 | LIB-13 | One window, switched by a key or a click, with the selection, source and filmstrip carried across |
 | Search and filters | Yes | In progress | | P4 | LIB-06, LIB-12, LIB-18, LIB-19 | Results as you type, with one query language for the filter bar, the command palette, smart collections and the command line |
 | Grid, Loupe, Compare and Survey | Yes | In progress | | P4 | LIB-14, LIB-16, LIB-17 | Held arrow keys move through photos without waiting; thumbnails show the edit |
-| Sensor clipping while culling | No | Planned | | P4 | LIB-38 | In the loupe and Compare, with a raw histogram, since a raw's embedded JPEG hides clipping |
+| Judging photos while culling | No | Planned | | P4 | LIB-38 | Sensor clipping and a raw histogram in the loupe and Compare, since a raw's embedded JPEG hides clipping, with focus peaking, the camera's focus point and a loupe that follows the pointer |
 | Rating, flagging and labelling many photos at once | Yes | Planned | | P4 | LIB-15 | With Undo, custom label names and colours, and marks; by key, by mouse or from the command palette |
 | Keywords | Yes | In progress | | P4 | LIB-21 | |
 | Metadata editing and presets | Yes | Planned | | P4 | LIB-22 | |
@@ -258,7 +258,9 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Moving files and folders | Yes (Classic) | In progress | | P4 | LIB-26 | With a preview and Undo |
 | Stacks | Yes | In progress | | P4 | LIB-28 | Raw and JPEG pairs, bursts and focus stacks |
 | Bringing a Lightroom Classic catalog | Yes | Planned | | P4 | LIB-29, LIB-30 | Ratings, flags, labels, keywords and collections, from a copy of the catalog, with a report; Capture One and darktable libraries too |
-| Duplicates | Yes | In progress | | P4 | LIB-39 | Exact copies, moved to the Trash only from a list you confirm, with Undo |
+| Library Health | Partly | In progress | | P4 | LIB-39, LIB-40 | Exact duplicates, damaged and misnamed files, and a rule for raw and JPEG pairs, each shown only while it has findings and moved to the Trash only from a list you confirm, with Undo |
+| Photos grouped into moments | No | Planned | | P4 | LIB-41 | By pauses in shooting, with one Tighter–Looser control, or by day, folder, camera, lens or orientation, with the moments that have no pick |
+| Soft frames found in bursts | Partly | Later | | | LIB-42 | The sharpest frame of each burst at the camera's focus point, proposed and never applied to a frame you decided. Lightroom Classic's assisted culling judges sharpness; whether it ranks a burst isn't documented |
 | People (face recognition) and Map | Yes | Later | | | LIB-34, LIB-35 | |
 | AI search | Yes | Later | | | LIB-32, LIB-33 | On the Mac |
 | AI-assisted culling | Yes | Later | | | OTH-02 | Lightroom's Assisted Culling judges sharpness, faces and eyes; rating, flagging and labelling work in Redlamp's filmstrip today |

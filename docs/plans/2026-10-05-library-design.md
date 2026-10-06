@@ -268,6 +268,19 @@ Stacks are found from the index alone, never by reading a file, on every core:
 
 Every list can show its stacks closed, each one cell with a count, and open them one at a time or all at once, with diffs as they open, close and change. A closed stack's selection is all of its photos, so a pair's change reaches both files and nothing is chosen out of sight. Working out a list's stacks again costs about as much as building the list, so it runs off the main thread.
 
+## Moments and grouping (LIB-41)
+
+Any source (a folder, a collection, a search, a selection, or a card browsed for import) can be shown in the grid grouped, and walked in the loupe: no new module, and nothing new in sidecars ([LIB-katami §4](../research/notes/LIB-katami.md#4-moments-and-sessions)).
+
+- **Moments** come from the column store: the list's photos in capture order, with a new moment where the gap to the previous frame is longer than both a floor and a multiple of the typical gap around it, starting from 60 s and four times the median of the 20 gaps around (the measurement in the open points sets the defaults). One Tighter–Looser control on the list moves both. Runs inside a moment are LIB-28's bursts.
+- **Deterministic:** the same photos and setting always give the same moments, ties broken by capture time and then name, so a rebuilt index gives them back. Two bodies are one moment when their clocks agree; grouping by moment and camera splits them.
+- **Group By** on any list: none, moment, day, folder, camera, lens or orientation, each group with a header, its count and its picks, opened and closed as stacks are. The moments without a pick are a count that filters to them.
+- **A source's summary:** the days, bodies and lenses it spans, its ISO, shutter and aperture ranges, and its pairs and stacks, from the column store.
+- **Stored:** the grouping and its setting are part of the source's view, which LIB-14 keeps for each source; moments are worked out for the list.
+- **Budgets:** LIB-28's: one pass over sorted times, off the main thread, under 1 s for a million photos, a moment opened or closed in under 2 ms and all of them in under 50 ms, with diffs.
+
+Soft frames (LIB-42) would propose a pick for each moment: the sharpest frame of each burst at the camera's focus point, measured on the largest embedded preview and judged only within its burst, kept in the index by content key, drawn dashed until accepted, never touching a frame the user decided, with Changed by You as a filter.
+
 ## Other apps' metadata (LIB-24)
 
 `LibraryXMP` reads what other apps wrote and, when the library's option is on (off by default), writes standard `.xmp` beside each photo, whatever the root's sidecar placement. The `.redlamp` sidecar stays the source of truth (DEC-37); originals are never written.
@@ -353,6 +366,19 @@ Modifiers: `upper`, `lower` and `title` (each word's first letter in capitals); 
 - **Batches** (`NamingJob`, made once for a preview and named again at each keystroke). A raw and its JPEG (one folder, one name but for the extension) share a name made from the raw's fields and count once in sequences, and sequences follow the order the photos are given. No two photos get one name in a folder, ignoring case and Unicode's forms as APFS does, and none takes the name of a file already in the folder the photos go to, given as its listing. A name is taken by a file of that name with any extension, or by its sidecars, so a new name never pairs photos that aren't a raw and its JPEG. A photo that keeps its name keeps it; the others get theirs in capture order, and those after the first are numbered from 2 (`Wedding-2`), also in capture order. The job's own photos and their sidecars leave their names free, and the file operations order the renames, through temporary names where they form a cycle. Each photo's result says what was decided: the number it took and who has the name without it, the tokens that came out empty, and what was changed to make the name safe. A template that makes nothing leaves the photo its name.
 - **Presets** (`NamingPreset`: a name, a template and its options, as JSON) include Lightroom Classic's nine file naming templates under their own names (Custom Name - Sequence, Date - Filename, Shoot Name - Original File Number and the others), and three of Redlamp's: the capture time to the millisecond, a shoot name with a counter, and a sequence in each folder.
 - **`redlamp library names <template> --index <path> [<query>]`** prints each photo's path and its new name, the numbers and empty tokens beside it, and a summary, with `--json` and `--limit` as `search` has them and `--text` for the job's texts. It never renames.
+
+## Library Health (LIB-40)
+
+Checks that each list the photos needing a decision, from the index, the store and the indexer's one read per file ([LIB-katami §3](../research/notes/LIB-katami.md#3-library-health)). Exact duplicates (LIB-39) are the first.
+
+- **Raw and JPEG pairs:** LIB-28's pairs, under a rule the user picks: keep both (the default), keep the raw or keep the JPEG. A half with anything of its own (an edit, keywords, a title or caption, or a rating, flag or label that differs from the other half's) is listed apart and left out unless chosen. A dropped half goes to the Trash with its own `.redlamp` and `.xmp`; a `name.xmp` the pair shares stays with the raw.
+- **Damaged files:** a new index state, `unreadable`, set when the indexer's read fails for any reason but a missing file or an offline volume (today `LibraryIndexerEvent.failed` is reported and nothing is kept); empty files, from the listing; and files that end early, checked only where it takes a small read: a JPEG's end-of-image marker, a TIFF-based raw's strip and tile offsets in the 256 KiB already read, an ISO base media file's top-level box sizes. Files still being written are never listed. Nothing is repaired: Reveal in Finder, Move to Trash or Keep Anyway.
+- **Wrong extensions:** the first bytes, which the indexer reads anyway, against the extension's family (a `.jpg` holding HEIC, a `.CR3` holding JPEG), never one TIFF-based raw's extension for another's. The fix is a rename through LIB-26, with the sidecar, `.xmp` and pair following.
+- **Missing photos:** LIB-08's `missing` state, with Locate… and sidecars left behind offered back to their photos.
+- **Shown only while there's something to decide.** A Library Health group in the Library panel (LIB-23) lists each check that has findings, with its count, and goes when every check is empty. Each check is a source (LIB-10), so the grid, the loupe, Compare and the filter bar work on it. There's no dashboard or score.
+- **Proposals look like proposals.** A proposed keeper or drop is drawn apart from the user's own flags and never written as one. Accepting is one batch through LIB-26, to the Trash only, which one Undo reverses. A photo the user rated, flagged or labelled is never acted on because a proposal said so.
+- **Keep Anyway** is kept in `Definitions/Health.json`, keyed by the photo's content key and the check (for duplicates, by the group's SHA-256, so a third copy reopens the group), not in sidecars, so it survives an index rebuild; a Kept Anyway list takes it back.
+- **Budgets:** the checks that use only the index keep LIB-39's (a million photos grouped in under a second, off the main thread), with counts changing by diffs; reading the ends of files runs per volume in the background lane. `redlamp library health` lists the findings, with JSON.
 
 ## The stress harness (LIB-03, LIB-04)
 
@@ -624,5 +650,7 @@ What it changed: the first version took 3.7 s for the million, keeping 13 to 16 
 - Photo Mechanic's Urgency numbers for its colour classes (purple 1, red 2, yellow 4, green 5, blue 6), which nothing confirmed yet.
 - The capture-time zone: EXIF's offset tags when present, else the Mac's zone at import, recorded per photo.
 - Whether the map (LIB-35) moves into 1.0.
+- Soft frames (LIB-42) in 1.0 or after: first measured on three shoots the owner has culled (an event, travel, portraits). They go into 1.0 if the proposal is the owner's pick in at least 70% of bursts and would set aside an owner's pick in under 10% ([LIB-katami §6](../research/notes/LIB-katami.md#6-before-the-changes-are-accepted)). The same shoots set the moments' defaults (LIB-41), which stand if 45 of 50 boundaries are right in each.
+- Dust followed across shoots (LIB-43) needs each body's serial number in the index.
 - Indexing folders in iCloud Drive without downloading every photo: from what's already downloaded, and the rest as it arrives.
 - A batch's own check (the duplicates' one) runs before the file operations' queue, so another batch could move a kept copy in between; `FileOperations` needs a way to run a check inside its queue. `planTrash` also drops photos the index no longer has without saying so.
