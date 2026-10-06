@@ -75,7 +75,7 @@ public final class SAMSegmenter: @unchecked Sendable {
                 package: directory.appending(path: "\(name).mlpackage"),
                 key: "\(manifest.id)-v\(manifest.version)-\(name)",
             )
-            return try MLModel(contentsOf: compiled, configuration: configuration)
+            return try Inference.shared.load(compiled, configuration: configuration)
         }
         encoder = try load("ImageEncoder")
         promptEncoder = try load("PromptEncoder")
@@ -95,10 +95,9 @@ public final class SAMSegmenter: @unchecked Sendable {
     public func embedding(for image: CGImage) throws -> Embedding {
         let buffer = try Self.pixelBuffer(image, size: Self.inputSize)
         let output = try lock.withLock {
-            try encoder
-                .prediction(
-                    from: MLDictionaryFeatureProvider(dictionary: ["image": MLFeatureValue(pixelBuffer: buffer)]),
-                )
+            try Inference.shared.predict(
+                encoder, from: MLDictionaryFeatureProvider(dictionary: ["image": MLFeatureValue(pixelBuffer: buffer)]),
+            )
         }
         guard let image = output.featureValue(for: "image_embedding")?.multiArrayValue,
               let s0 = output.featureValue(for: "feats_s0")?.multiArrayValue,
@@ -132,13 +131,13 @@ public final class SAMSegmenter: @unchecked Sendable {
             labels[index] = NSNumber(value: label)
         }
         let decoded = try lock.withLock { () -> MLFeatureProvider in
-            let prompt = try promptEncoder.prediction(from: MLDictionaryFeatureProvider(dictionary: [
+            let prompt = try Inference.shared.predict(promptEncoder, from: MLDictionaryFeatureProvider(dictionary: [
                 "points": points, "labels": labels,
             ]))
             guard let sparse = prompt.featureValue(for: "sparse_embeddings"),
                   let dense = prompt.featureValue(for: "dense_embeddings")
             else { throw MaskComputationError.nothingFound(.objects) }
-            return try decoder.prediction(from: MLDictionaryFeatureProvider(dictionary: [
+            return try Inference.shared.predict(decoder, from: MLDictionaryFeatureProvider(dictionary: [
                 "image_embedding": MLFeatureValue(multiArray: embedding.image),
                 "feats_s0": MLFeatureValue(multiArray: embedding.featsS0),
                 "feats_s1": MLFeatureValue(multiArray: embedding.featsS1),

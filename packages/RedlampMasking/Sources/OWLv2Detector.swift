@@ -60,7 +60,7 @@ public final class OWLv2Detector: @unchecked Sendable {
             package: directory.appending(path: "Owlv2Detector.mlpackage"),
             key: "\(manifest.id)-v\(manifest.version)-Owlv2Detector",
         )
-        model = try MLModel(contentsOf: compiled, configuration: configuration)
+        model = try Inference.shared.load(compiled, configuration: configuration)
         let index = try JSONDecoder().decode(
             [String: Prompt].self, from: Data(contentsOf: directory.appending(path: "Owlv2Queries.json")),
         )
@@ -91,7 +91,7 @@ public final class OWLv2Detector: @unchecked Sendable {
     public func detect(_ image: CGImage, things wanted: Set<String>? = nil, threshold: Float) throws -> [Detection] {
         let buffer = try Self.square(image)
         let output = try lock.withLock {
-            try model.prediction(from: MLDictionaryFeatureProvider(dictionary: [
+            try Inference.shared.predict(model, from: MLDictionaryFeatureProvider(dictionary: [
                 "image": MLFeatureValue(pixelBuffer: buffer),
             ]))
         }

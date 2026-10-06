@@ -35,7 +35,7 @@ public final class ViTMatte: @unchecked Sendable {
         let configuration = MLModelConfiguration()
         // On the Neural Engine a tile takes three times as long.
         configuration.computeUnits = .cpuAndGPU
-        model = try MLModel(contentsOf: compiled, configuration: configuration)
+        model = try Inference.shared.load(compiled, configuration: configuration)
     }
 
     /// `coarse` with its unsure band solved against `image`, at the image's size. Only the tiles
@@ -158,7 +158,7 @@ public final class ViTMatte: @unchecked Sendable {
             }
         }
         let output = try lock.withLock {
-            try model.prediction(from: MLDictionaryFeatureProvider(dictionary: [
+            try Inference.shared.predict(model, from: MLDictionaryFeatureProvider(dictionary: [
                 "image": MLFeatureValue(multiArray: image), "trimap": MLFeatureValue(multiArray: tri),
             ]))
         }

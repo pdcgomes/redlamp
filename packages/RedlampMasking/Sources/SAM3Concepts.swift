@@ -55,7 +55,7 @@ public final class SAM3Concepts: @unchecked Sendable {
                 package: directory.appending(path: "\(name).mlpackage"),
                 key: "\(manifest.id)-v\(manifest.version)-\(name)",
             )
-            return try MLModel(contentsOf: compiled, configuration: configuration)
+            return try Inference.shared.load(compiled, configuration: configuration)
         }
         encoder = try model("Sam3ImageEncoder")
         decoder = try model("Sam3TextDecoder")
@@ -66,8 +66,8 @@ public final class SAM3Concepts: @unchecked Sendable {
     public func features(of image: CGImage) throws -> Features {
         let buffer = try DepthAnything3.input(image, size: PixelSize(width: Self.inputSize, height: Self.inputSize))
         let levels = try lock.withLock {
-            try encoder.prediction(
-                from: MLDictionaryFeatureProvider(dictionary: ["image": MLFeatureValue(pixelBuffer: buffer)]),
+            try Inference.shared.predict(
+                encoder, from: MLDictionaryFeatureProvider(dictionary: ["image": MLFeatureValue(pixelBuffer: buffer)]),
             )
         }
         return Features(levels: levels)
@@ -148,7 +148,9 @@ public final class SAM3Concepts: @unchecked Sendable {
                 inputs[level] = features.levels.featureValue(for: level)
             }
             let out = try lock
-                .withLock { try decoder.prediction(from: MLDictionaryFeatureProvider(dictionary: inputs)) }
+                .withLock {
+                    try Inference.shared.predict(decoder, from: MLDictionaryFeatureProvider(dictionary: inputs))
+                }
             guard let instanceArray = out.featureValue(for: "instances")?.multiArrayValue,
                   let semanticArray = out.featureValue(for: "semantic")?.multiArrayValue
             else { throw MaskComputationError.unsupported(.landscape) }

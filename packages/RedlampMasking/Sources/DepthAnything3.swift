@@ -46,7 +46,7 @@ public final class DepthAnything3: @unchecked Sendable {
         let configuration = MLModelConfiguration()
         configuration.computeUnits = .cpuAndGPU
         configuration.functionName = portrait ? "portrait" : "landscape"
-        let model = try MLModel(contentsOf: compiled, configuration: configuration)
+        let model = try Inference.shared.load(compiled, configuration: configuration)
         models[portrait] = model
         return model
     }
@@ -59,7 +59,8 @@ public final class DepthAnything3: @unchecked Sendable {
             : PixelSize(width: Self.inputLong, height: Self.inputShort)
         let buffer = try Self.input(image, size: input)
         let output = try lock.withLock {
-            try model(portrait: portrait).prediction(
+            try Inference.shared.predict(
+                model(portrait: portrait),
                 from: MLDictionaryFeatureProvider(dictionary: ["image": MLFeatureValue(pixelBuffer: buffer)]),
             )
         }

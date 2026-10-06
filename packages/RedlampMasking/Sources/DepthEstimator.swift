@@ -22,7 +22,7 @@ public final class DepthEstimator: @unchecked Sendable {
         let compiled = try CompiledModels.compiled(
             package: directory.appending(path: "\(name).mlpackage"), key: "\(manifest.id)-v\(manifest.version)-\(name)",
         )
-        model = try MLModel(contentsOf: compiled, configuration: configuration)
+        model = try Inference.shared.load(compiled, configuration: configuration)
     }
 
     /// Depth of `image` (near is white), scaled to the image's shape within `longEdge`, and
@@ -33,10 +33,9 @@ public final class DepthEstimator: @unchecked Sendable {
         }
         let buffer = try SAMSegmenter.pixelBuffer(image, width: input.pixelsWide, height: input.pixelsHigh)
         let output = try lock.withLock {
-            try model
-                .prediction(
-                    from: MLDictionaryFeatureProvider(dictionary: ["image": MLFeatureValue(pixelBuffer: buffer)]),
-                )
+            try Inference.shared.predict(
+                model, from: MLDictionaryFeatureProvider(dictionary: ["image": MLFeatureValue(pixelBuffer: buffer)]),
+            )
         }
         guard let depth = output.featureValue(for: "depth")?.imageBufferValue else {
             throw MaskComputationError.unsupported(.depthRange)
