@@ -103,16 +103,16 @@ extension EmbeddedEdit {
         return xmp
     }
 
-    /// The XMP to write for the edit in a `format` file with `properties`, or nil if writing it would
-    /// change how the file's properties read back.
+    /// The XMP to write in a `format` file with `properties`: the tags of each of `parts` (the edit's,
+    /// the photo's fields'), or nil if writing them would change how the file's properties read back.
     ///
     /// Given XMP, ImageIO writes it instead of the XMP it would make from `properties`, the only place
     /// it keeps some of them (lens details and a rating; in HEIC and AVIF, every IPTC field). It also
     /// writes EXIF and IPTC fields from what it's given, so handing it all of its own XMP back changes
-    /// them. The XMP is the edit's, then, with the tags ImageIO matches to whichever properties a file
-    /// with only the edit's XMP loses. Each is tried on one pixel in `image`'s pixel format.
+    /// them. The XMP is the parts', then, with the tags ImageIO matches to whichever properties a file
+    /// with only their XMP loses. Each is tried on one pixel in `image`'s pixel format.
     static func xmp(
-        adding edit: Data,
+        adding parts: [Data],
         to properties: [CFString: Any],
         format: ExportFormat,
         like image: CGImage,
@@ -120,8 +120,7 @@ extension EmbeddedEdit {
         guard let pixel = pixel(like: image),
               let plain = encode(pixel, format: format, properties: properties),
               let expected = readProperties(plain),
-              let tags = CGImageMetadataCreateFromXMPData(edit as CFData),
-              let xmp = CGImageMetadataCreateMutableCopy(tags),
+              let xmp = combined(parts),
               let alone = encode(pixel, format: format, properties: properties, metadata: xmp).flatMap(readProperties)
         else { return nil }
         if alone.isEqual(expected) {
@@ -143,6 +142,31 @@ extension EmbeddedEdit {
         guard let restored = encode(pixel, format: format, properties: properties, metadata: xmp)
             .flatMap(readProperties), restored.isEqual(expected)
         else { return nil }
+        return xmp
+    }
+
+    /// The first of `parts`' XMP with the others' tags added; nil when one can't be read.
+    private static func combined(_ parts: [Data]) -> CGMutableImageMetadata? {
+        guard let first = parts.first.flatMap({ CGImageMetadataCreateFromXMPData($0 as CFData) }),
+              let xmp = CGImageMetadataCreateMutableCopy(first)
+        else { return nil }
+        for part in parts.dropFirst() {
+            guard let tags = CGImageMetadataCreateFromXMPData(part as CFData) else { return nil }
+            var added = true
+            CGImageMetadataEnumerateTagsUsingBlock(tags, nil, nil) { _, tag in
+                guard let namespace = CGImageMetadataTagCopyNamespace(tag),
+                      let prefix = CGImageMetadataTagCopyPrefix(tag),
+                      let name = CGImageMetadataTagCopyName(tag)
+                else {
+                    added = false
+                    return false
+                }
+                _ = CGImageMetadataRegisterNamespaceForPrefix(xmp, namespace, prefix, nil)
+                added = CGImageMetadataSetTagWithPath(xmp, nil, "\(prefix):\(name)" as CFString, tag)
+                return added
+            }
+            guard added else { return nil }
+        }
         return xmp
     }
 

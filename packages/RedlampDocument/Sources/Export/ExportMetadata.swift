@@ -23,22 +23,26 @@ public enum ExportMetadata {
     /// (none for `.none` or a stack). Only an allowlist is copied:
     /// maker notes, thumbnails, raw-specific dictionaries and anything describing the source's
     /// pixels (size, orientation, colour space) stay behind. Unless `policy` is `.none`, they carry
-    /// `recipe` too, for `addImage` to embed in the file's XMP (see `EmbeddedEdit`).
+    /// `recipe` too, for `addImage` to embed in the file's XMP (see `EmbeddedEdit`), and the photo's
+    /// `fields` in place of what the source says of them (see `Fields`).
     public static func properties(
         from source: URL,
         reading files: any FileInspecting,
         policy: ExportMetadataPolicy,
         recipe: EditRecipe? = nil,
+        fields: Fields? = nil,
         software: String = software,
     ) -> [CFString: Any] {
         var result = copied(from: source, reading: files, policy: policy, software: software)
         if policy != .none, let recipe, let edit = EmbeddedEdit.xmp(for: recipe) {
             result[EmbeddedEdit.propertyKey] = edit
         }
+        fields?.write(into: &result, policy: policy)
         return result
     }
 
-    /// Adds `image` to `destination` with `properties`, and the edit they carry in its XMP.
+    /// Adds `image` to `destination` with `properties`, and the edit and fields they carry in its XMP.
+    /// Fields whose XMP can't be written beside the edit leave the edit written as it is without them.
     static func addImage(
         _ image: CGImage,
         to destination: CGImageDestination,
@@ -47,11 +51,18 @@ public enum ExportMetadata {
     ) {
         var properties = properties
         let edit = properties.removeValue(forKey: EmbeddedEdit.propertyKey) as? Data
-        if let edit, let xmp = EmbeddedEdit.xmp(adding: edit, to: properties, format: format, like: image) {
-            CGImageDestinationAddImageAndMetadata(destination, image, xmp, properties as CFDictionary)
-        } else {
-            CGImageDestinationAddImage(destination, image, properties as CFDictionary)
+        let fields = properties.removeValue(forKey: Fields.propertyKey) as? Data
+        var attempts = [[edit, fields].compactMap(\.self)]
+        if let edit, fields != nil {
+            attempts.append([edit])
         }
+        for parts in attempts where !parts.isEmpty {
+            if let xmp = EmbeddedEdit.xmp(adding: parts, to: properties, format: format, like: image) {
+                CGImageDestinationAddImageAndMetadata(destination, image, xmp, properties as CFDictionary)
+                return
+            }
+        }
+        CGImageDestinationAddImage(destination, image, properties as CFDictionary)
     }
 
     private static func copied(
