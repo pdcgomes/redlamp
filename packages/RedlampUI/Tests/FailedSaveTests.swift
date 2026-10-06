@@ -166,11 +166,11 @@ struct FailedSaveTests {
         try await open(folder.other, in: model)
         await model.saves.flush()
         try await eventually { model.saveError?.url == folder.photo }
-        #expect(model.saveBeforeQuitting() == .unsaved([folder.photo]))
+        #expect(model.saveBeforeQuitting(within: .seconds(30)) == .unsaved([folder.photo]))
         try await eventually { model.failedSaves[folder.photo] != nil }
 
         try folder.unlock()
-        #expect(model.saveBeforeQuitting() == .saved)
+        #expect(model.saveBeforeQuitting(within: .seconds(30)) == .saved)
         #expect(SidecarStore().load(for: folder.photo)?.recipe[.exposure] == 0.6)
     }
 
