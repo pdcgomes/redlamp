@@ -4,8 +4,10 @@
     import Foundation
     import RedlampDesign
     import RedlampDocument
+    import RedlampEngine
     import RedlampEngineAPI
     import RedlampLibrary
+    import RedlampServices
     @_spi(Harness) import RedlampUI
 
     /// `--library-perf <fixture> [--library-perf-library <folder>] [--library-perf-memory]
@@ -19,8 +21,10 @@
     /// keys through it at the key-repeat rate and at 120 Hz (the main thread, and blank frames: the
     /// canvas, or a cell near the active photo, without its thumbnail a frame after each step), and 200
     /// switches between Library and Develop in the editor's own views with a photo open (the main
-    /// thread's work per switch until it's idle, and what the process read from disk meanwhile). The
-    /// footprint is followed through every phase, then after a memory-pressure trim and a few idle
+    /// thread's work per switch until it's idle, and what the process read from disk meanwhile), and the
+    /// edited photos rendered in the background (LIB-17): the grid scrolled as they render, renders a
+    /// second with Develop idle and busy, and Develop's own render times with renders running and paused.
+    /// The footprint is followed through every phase, then after a memory-pressure trim and a few idle
     /// seconds.
     /// Nothing joins the working set, and the temporary library is removed at the end;
     /// `--library-perf-library <folder>` keeps it in `<folder>` instead, where the next run finds it
@@ -50,6 +54,8 @@
             var arrows: [(label: String, summary: MainThreadMonitor.Summary?, steps: Int, blank: Int)] = []
             var switches: [Double] = []
             var switchReads: UInt64 = 0
+            /// The grid scrolled as edited photos render.
+            var editScrolling: MainThreadMonitor.Summary?
         }
 
         static func scheduleIfRequested(model: EditorModel) {
@@ -202,6 +208,10 @@
             lines.append(switched.report)
             await memory.mark("switched")
 
+            let edits = await renderEdits(model, memory: memory)
+            measured.editScrolling = edits.scrolling
+            lines += edits.lines
+
             try? await Task.sleep(for: .seconds(3))
             await memory.mark("settled")
             loader.trim(to: 0)
@@ -227,6 +237,7 @@
                 "library-main-switch": percentile(measured.switches, 0.99),
                 "library-switch-reads": Double(measured.switchReads),
                 "library-peak-memory": browsing,
+                "library-main-grid-scroll-rendering": measured.editScrolling?.p99 ?? .infinity,
             ])
             let budgets: [Budget] = budgets(measured, arrows: arrows, blank: blank, browsing: browsing)
             finish(
@@ -437,6 +448,120 @@
             return (durations, read, report + "\n" + monitor.report("Main thread switching modules", seconds: elapsed))
         }
 
+        /// Edited photos rendered in the background (LIB-17), in an engine of the library's own, each phase
+        /// from no render at all: the grid scrolled end to end in 8 s as they render (its main thread, and
+        /// the renders made); 12 s with Develop showing an unedited photo and idle; then 15 s of Develop
+        /// busy, a frame asked for at 60 Hz for 1 s in every 3 s, with renders paused and then running:
+        /// the renders made, their waits, Develop's frames asked for while a render's step ran, and
+        /// Develop's own render times either way.
+        private static func renderEdits(
+            _ model: EditorModel, memory: MemoryPhases,
+        ) async -> (scrolling: MainThreadMonitor.Summary?, lines: [String]) {
+            DebugPerformance.trace("library-perf: rendering edits")
+            let renders = model.editRenders
+            renders.makeEngine = { try? RedlampEngine(decoder: DecodeServiceClient(), lensProfiles: .user) }
+            defer {
+                renders.isRunning = false
+                renders.letEngineGo()
+            }
+            var lines = [
+                "Edited photos rendered in the background: \(model.items.count(where: renders.renders)) of the "
+                    + "\(model.items.count) photos are edited",
+            ]
+
+            renders.renderAgain()
+            renders.isRunning = true
+            let window = NSWindow(
+                contentRect: CGRect(x: 0, y: 0, width: 1100, height: 800), styleMask: [.borderless],
+                backing: .buffered, defer: false,
+            )
+            let grid = LibraryGridViews.make(model: model)
+            window.contentView = grid
+            window.orderBack(nil)
+            try? await Task.sleep(for: .milliseconds(300))
+            let monitor = MainThreadMonitor()
+            monitor.start()
+            let duration = 8.0
+            let started = CFAbsoluteTimeGetCurrent()
+            while CFAbsoluteTimeGetCurrent() - started < duration {
+                LibraryGridViews.scroll(grid, to: (CFAbsoluteTimeGetCurrent() - started) / duration)
+                try? await Task.sleep(for: .microseconds(8333))
+            }
+            monitor.stop()
+            window.orderOut(nil)
+            let scrolling = monitor.summary(seconds: duration)
+            lines.append(rendered("Scrolling the grid end to end in 8 s", renders.statistics, seconds: duration))
+            lines.append(monitor.report("Main thread scrolling the grid as edits render", seconds: duration))
+            await memory.mark("edits, scrolling")
+
+            let develop = NSWindow(
+                contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000),
+                styleMask: [.titled, .resizable, .fullSizeContentView], backing: .buffered, defer: false,
+            )
+            develop.contentViewController = ModuleViews.make(model: model, theme: ThemeSettings())
+            develop.orderBack(nil)
+            defer { develop.orderOut(nil) }
+            model.showModule(.develop)
+            if let photo = model.items.first(where: { !$0.hasEdits }) {
+                model.select(photo.url)
+            }
+            let opening = ContinuousClock.now
+            while !model.hasFrame || model.isLoading, ContinuousClock.now - opening < .seconds(30) {
+                try? await Task.sleep(for: .milliseconds(10))
+            }
+            renders.renderAgain()
+            try? await Task.sleep(for: .seconds(12))
+            lines.append(rendered("With Develop idle", renders.statistics, seconds: 12))
+            await memory.mark("edits, Develop idle")
+
+            renders.isRunning = false
+            renders.letEngineGo()
+            try? await Task.sleep(for: .milliseconds(500))
+            let paused = await askForFrames(model, seconds: 15)
+            renders.renderAgain()
+            renders.isRunning = true
+            let running = await askForFrames(model, seconds: 15)
+            let busy = renders.statistics
+            lines.append(rendered("With Develop busy (frames at 60 Hz for 1 s in every 3 s)", busy, seconds: 15))
+            lines.append(String(
+                format: "Develop's render time with renders paused: p50 %.1f ms, p95 %.1f ms, max %.1f ms (%d frames); "
+                    + "running: p50 %.1f ms, p95 %.1f ms, max %.1f ms (%d frames, %d of them asked for while a "
+                    + "render's step ran)",
+                percentile(paused, 0.5), percentile(paused, 0.95), paused.max() ?? 0, paused.count,
+                percentile(running, 0.5), percentile(running, 0.95), running.max() ?? 0, running.count, busy.overlaps,
+            ))
+            await memory.mark("edits, Develop busy")
+            return (scrolling, lines)
+        }
+
+        /// "`label`: N rendered, N a second", with the renders' waits and the p50 of their steps.
+        private static func rendered(_ label: String, _ statistics: EditRenders.Statistics, seconds: Double) -> String {
+            String(
+                format: "%@: %d edits rendered, %.2f a second (%d failed); %d waits for Develop or the screen, %.1f s "
+                    + "in all; each opened in p50 %.0f ms, rendered in %.0f ms, stored in %.0f ms",
+                label, statistics.rendered, Double(statistics.rendered) / seconds, statistics.failed, statistics.waits,
+                Self.seconds(statistics.waited), percentile(statistics.opening, 0.5) * 1000,
+                percentile(statistics.rendering, 0.5) * 1000, percentile(statistics.storing, 0.5) * 1000,
+            )
+        }
+
+        /// Asks Develop for a frame at 60 Hz for 1 s in every 3 s, for `seconds`, as a slider dragged and let
+        /// go does: Develop's render time of each frame that came, in milliseconds.
+        private static func askForFrames(_ model: EditorModel, seconds: Double) async -> [Double] {
+            let frames = model.debugFrameCount
+            let started = CFAbsoluteTimeGetCurrent()
+            while CFAbsoluteTimeGetCurrent() - started < seconds {
+                let burst = CFAbsoluteTimeGetCurrent()
+                while CFAbsoluteTimeGetCurrent() - burst < 1 {
+                    model.requestRender()
+                    try? await Task.sleep(for: .microseconds(16667))
+                }
+                try? await Task.sleep(for: .seconds(2))
+            }
+            let count = model.debugFrameCount - frames
+            return model.debugRenderDurations.suffix(count).map { Self.seconds($0) * 1000 }
+        }
+
         /// The bytes the process has read from disk.
         private static func diskReads() -> UInt64 {
             var usage = rusage_info_v4()
@@ -495,6 +620,10 @@
                 .below("Main thread p99 switching modules", percentile(measured.switches, 0.99), 8, unit: "ms"),
                 .below("Disk reads switching modules", Double(measured.switchReads), 1, unit: "bytes"),
                 .below("Peak footprint over launch, browsing", footprint, 250, unit: "MB"),
+                .below(
+                    "Main thread p99 scrolling the grid as edits render", measured.editScrolling?.p99 ?? .infinity, 8.3,
+                    unit: "ms",
+                ),
             ]
             return browsing + grid + rest
         }
