@@ -28,6 +28,9 @@ struct XMPGroupOutcome: Sendable {
     /// Photos with a `.redlamp` whose `.xmp` Redlamp wrote, with what their rows keep of their `.xmp` files
     /// now: the later modification date and the signature.
     var xmpModified: [(id: Int64, modified: Date, signature: Int64?)] = []
+    /// Photos whose `.redlamp` the sync wrote, with its date as its folder's listing gives it, and the
+    /// fields it took, which are its own now.
+    var sidecars: [(id: Int64, modified: Date, taken: [XMPField])] = []
 }
 
 extension XMPGroup {
@@ -37,6 +40,8 @@ extension XMPGroup {
         let photo: URL
         /// Its `.redlamp`'s edit, where the locator reads it.
         var editStamp: XMPFileStamp?
+        /// When the sync saved its `.redlamp`, as its folder's listing dates it; nil when it didn't.
+        var saved: Date?
         /// The `.redlamp`'s fields; nil when it has none, or it can't be read.
         var redlamp: XMPFields?
         var record: XMPMergeRecord?
@@ -125,7 +130,9 @@ extension XMPGroup {
             let problem: String
             switch result?.outcome {
             case .saved?:
-                sides[taker].editStamp = XMPGroup.editURL(store, sides[taker].photo).flatMap(XMPFileStamp.init(at:))
+                let photo = sides[taker].photo
+                sides[taker].editStamp = XMPGroup.editURL(store, photo).flatMap(XMPFileStamp.init(at:))
+                sides[taker].saved = try? LocalFileSystem().attributes(of: store.locator.readURL(for: photo)).modified
                 return
             case let .failed(error)?:
                 problem = XMPGroup.describe(error)
@@ -254,6 +261,9 @@ extension XMPGroup {
             guard !side.failed else { continue }
             if !merge.taken.isEmpty {
                 outcome.organising.append((id, merge.fields))
+            }
+            if let saved = side.saved {
+                outcome.sidecars.append((id, saved, merge.taken))
             }
             if merge.taken.contains(.keywords) {
                 outcome.keywords.append((id, merge.fields.keywords ?? []))

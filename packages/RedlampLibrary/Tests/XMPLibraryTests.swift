@@ -292,6 +292,37 @@ struct XMPLibraryTests {
         #expect(reads[LibraryIndexer.path(theirs)] != nil, "\(reads)")
     }
 
+    @Test func `the .redlamp sidecars a sync writes keep their dates in the index, so indexing again reads nothing`(
+    ) async throws {
+        let sandbox = try await XMPSandbox.make()
+        defer { sandbox.remove() }
+        try sandbox.photo("IMG_0021.ARW")
+        try sandbox.sidecar("IMG_0021.ARW", PhotoMetadata(label: .red))
+        try sandbox.write("IMG_0021.xmp", OtherApps.lightroom(rating: 4, keywords: ["Places/Porto"]), modified: -600)
+        try await sandbox.indexAll()
+        #expect(try await sandbox.row("IMG_0021.ARW").otherFields == [.rating, .keywords])
+        let report = try await sandbox.sync()
+        #expect(report.photo("IMG_0021.ARW")?.taken == [.rating, .keywords])
+        #expect(sandbox.metadata("IMG_0021.ARW")?.rating == 4)
+
+        let files = CountingFileSystem()
+        let indexer = LibraryIndexer(index: sandbox.index, fileSystem: files, configuration: .testing())
+        let run = await IndexerRun.collect(indexer.index([sandbox.root]))
+        #expect(run.failures.isEmpty)
+        #expect(run.summary?.photosUpdated == 0 && run.summary?.headsRead == 0, "\(String(describing: run.summary))")
+        #expect(files.counts.reads.isEmpty, "\(files.counts.reads)")
+
+        // The row shows what reading the files from scratch gives: the fields taken are the .redlamp's.
+        let synced = try await sandbox.row("IMG_0021.ARW")
+        #expect(synced.otherFields.isEmpty && synced.rating == 4 && synced.label == .red)
+        let rebuilt = try await LibraryIndex.open(at: sandbox.library.url.appending(path: "Rebuilt.sqlite"), readers: 1)
+        defer { rebuilt.closeAndWait() }
+        _ = await IndexerRun.collect(LibraryIndexer(index: rebuilt, configuration: .testing()).index([sandbox.root]))
+        let path = LibraryIndexer.path(sandbox.url("IMG_0021.ARW"))
+        let fromFiles = try #require(try await rebuilt.read { try $0.photo(path: path) })
+        #expect(fromFiles.otherFields == synced.otherFields && fromFiles.rating == 4 && fromFiles.label == .red)
+    }
+
     @Test func `a dry run works out the merge and the writes and changes nothing`() async throws {
         let sandbox = try await XMPSandbox.make()
         defer { sandbox.remove() }

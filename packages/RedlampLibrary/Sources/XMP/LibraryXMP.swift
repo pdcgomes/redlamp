@@ -37,8 +37,9 @@ public struct LibraryXMP: Sendable {
     /// would do and writes nothing. Photos sharing an `.xmp` with one of them are merged with it.
     /// Records what was merged and written, so the next sync takes only what changed since and
     /// doesn't take Redlamp's own `.xmp` for another app's, and brings the index's rows up to date:
-    /// the organising fields of photos whose `.redlamp` changed, and the `.xmp` date of those whose
-    /// `.xmp` Redlamp wrote, so the indexer doesn't read them again.
+    /// the organising fields and `.redlamp` dates of photos whose `.redlamp` changed, those fields its
+    /// own now, and the `.xmp` date of those whose `.xmp` Redlamp wrote, so the indexer reads neither
+    /// again.
     public func sync(_ ids: [Int64], writing: Bool? = nil, dryRun: Bool = false) async throws -> XMPReport {
         let clock = ContinuousClock()
         let started = clock.now
@@ -100,7 +101,9 @@ public struct LibraryXMP: Sendable {
             let organising = outcomes.flatMap(\.organising)
             let keywords = outcomes.flatMap(\.keywords)
             let xmpModified = outcomes.flatMap(\.xmpModified)
-            if !records.isEmpty || !dropped.isEmpty || !organising.isEmpty || !xmpModified.isEmpty {
+            let sidecars = outcomes.flatMap(\.sidecars)
+            if !records.isEmpty || !dropped.isEmpty || !organising.isEmpty || !xmpModified.isEmpty
+                || !sidecars.isEmpty {
                 try await index.write { writer in
                     try XMPMergeRecord.save(records, dropping: dropped, in: writer)
                     for (id, fields) in organising {
@@ -110,6 +113,10 @@ public struct LibraryXMP: Sendable {
                         try writer.setKeywords(paths, forPhoto: id)
                     }
                     try writer.setXMPModified(xmpModified)
+                    for (id, modified, taken) in sidecars {
+                        try writer.setSidecarModified(modified, forPhoto: id)
+                        try writer.setOwnFields(taken, forPhoto: id)
+                    }
                 }
             }
         }
@@ -171,5 +178,14 @@ extension LibraryIndex.Writer {
             try statement.bind(id, at: 3)
             try statement.run()
         }
+    }
+
+    /// Records that `fields` of `photo` are its `.redlamp`'s now, not other apps'.
+    func setOwnFields(_ fields: [XMPField], forPhoto photo: Int64) throws {
+        guard !fields.isEmpty else { return }
+        let statement = try database.cached("UPDATE photos SET other_fields = other_fields & ~? WHERE id = ?")
+        try statement.bind(PhotoRecord.code(for: Set(fields)), at: 1)
+        try statement.bind(photo, at: 2)
+        try statement.run()
     }
 }
