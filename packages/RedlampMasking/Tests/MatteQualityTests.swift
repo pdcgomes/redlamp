@@ -150,6 +150,20 @@ struct MatteQualityTests {
         #expect(result.recall > 0.6, "strands brought back: \(result.recall)")
     }
 
+    /// Closed-form's matte with only the strands ViTMatte finds beyond it, as the app makes them.
+    @Test(.enabled(if: MatteQualityTests.vitMatte != nil))
+    func `closed-form with ViTMatte's strands brings back more of them`() throws {
+        let scene = try strandScene()
+        let closed = ClosedFormMatte.refine(scene.coarse, image: scene.image)
+        let matte = try ViTMatte.strands(
+            of: #require(Self.vitMatte).refine(scene.coarse, image: scene.image),
+            addedTo: closed,
+        )
+        let result = score(matte, truth: scene.truth, thin: scene.thin)
+        #expect(result.band < 0.04, "error along the head and strands: \(result.band)")
+        #expect(result.recall > 0.6, "strands brought back: \(result.recall)")
+    }
+
     static let vitMatte: ViTMatte? = {
         guard let manifest = ModelCatalog.manifest("vitmatte-base") else { return nil }
         let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]

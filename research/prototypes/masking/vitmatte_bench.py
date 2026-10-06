@@ -170,14 +170,14 @@ def portraits(matter, outer):
         Image.fromarray(sheet.astype(np.uint8)).save(out / f"{name}-sheet.jpg", quality=92)
 
 
-def evaluation_set():
+def evaluation_set(folder="eval-vitmatte"):
     import os
     import subprocess
 
     import mask_bench as mb
     from scipy import ndimage
 
-    out = mb.OUT / "eval-vitmatte"
+    out = mb.OUT / folder
     (out / "sheets").mkdir(parents=True, exist_ok=True)
     report = {}
     rows = {}
@@ -335,13 +335,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("command", nargs="?", default="heads", choices=("heads", "portraits", "eval", "strands"))
     parser.add_argument("--radius", type=int, default=3)
+    parser.add_argument("--folder", default="eval-vitmatte", help="where `eval` writes, under build/mask-bench")
     parser.add_argument("--model", default="base", choices=("small", "base"))
     parser.add_argument("--outer", type=float, default=0.02)
     parser.add_argument("--coreml", type=pathlib.Path, help="a converted package instead of the PyTorch model")
     parser.add_argument("--units", default="gpu", choices=("gpu", "all"))
     args = parser.parse_args()
     if args.command == "eval":
-        evaluation_set()
+        evaluation_set(args.folder)
         return
     if args.command == "strands":
         strands(args.radius)

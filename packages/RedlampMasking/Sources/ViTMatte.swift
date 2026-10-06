@@ -73,6 +73,49 @@ public final class ViTMatte: @unchecked Sendable {
         return GrayMask(width: size.width, height: size.height, coverage: coverage)
     }
 
+    /// How wide, either side of a strand's centre, an addition to a matte may be and still count
+    /// as a strand.
+    static let strandRadius = 3
+
+    /// `base` with what `matte` adds to it kept only where it is thin enough to be hair: the part
+    /// of the addition that a grey opening by a square `2 * strandRadius + 1` px wide removes.
+    /// Over the wide band it needs for strands, ViTMatte also pulls patches of background beside
+    /// the subject into its matte (on the evaluation set, about 1.7% of each frame); added this
+    /// way to closed-form's matte it keeps 42% of hair_bench's strands, against closed-form's
+    /// 15%, and adds almost nothing else (`vitmatte_bench.py strands`).
+    public static func strands(of matte: GrayMask, addedTo base: GrayMask) -> GrayMask {
+        let size = PixelSize(width: base.width, height: base.height)
+        let ours = base.coverage
+        let added = zip(matte.resized(to: size).coverage, ours).map { max($0 - $1, 0) }
+        let opened = opening(added, width: size.width, height: size.height, radius: strandRadius)
+        return GrayMask(
+            width: size.width, height: size.height,
+            coverage: ours.indices.map { min(ours[$0] + added[$0] - opened[$0], 1) },
+        )
+    }
+
+    /// A grey opening by a square `2 * radius + 1` px wide: erosion (the least value around), then
+    /// dilation (the most), each as a row pass and a column pass.
+    static func opening(_ values: [Float], width: Int, height: Int, radius: Int) -> [Float] {
+        func pass(_ input: [Float], along rows: Bool, keep: (Float, Float) -> Float) -> [Float] {
+            var output = input
+            let (lines, length) = rows ? (height, width) : (width, height)
+            for line in 0 ..< lines {
+                for position in 0 ..< length {
+                    let index = rows ? line * width + position : position * width + line
+                    var value = input[index]
+                    for offset in max(0, position - radius) ... min(length - 1, position + radius) {
+                        value = keep(value, input[rows ? line * width + offset : offset * width + line])
+                    }
+                    output[index] = value
+                }
+            }
+            return output
+        }
+        let eroded = pass(pass(values, along: true, keep: min), along: false, keep: min)
+        return pass(pass(eroded, along: true, keep: max), along: false, keep: max)
+    }
+
     /// Where tiles start along a side: whole tiles where the side allows, the last one flush with
     /// its end.
     static func starts(_ length: Int) -> [Int] {

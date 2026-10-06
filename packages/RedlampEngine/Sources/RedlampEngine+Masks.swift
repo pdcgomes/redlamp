@@ -90,8 +90,8 @@ extension RedlampEngine {
 
     static let depthAnything3ID = "depth-anything-3-mono-large"
 
-    /// ViTMatte, when it's on this Mac and offered: Subject, Background and People edges are then
-    /// solved with it rather than by closed-form matting (MSK-32).
+    /// ViTMatte, when it's on this Mac and offered: Subject, Background and People edges then
+    /// gain the strands it finds beyond closed-form matting's (MSK-32).
     func vitMatte() async -> ViTMatte? {
         if let loaded = vitMatteModel.withLock({ $0 }) {
             return loaded
@@ -362,10 +362,10 @@ extension RedlampEngine {
             first.instance = nil
             provided = [first]
         }
-        // Stray hairs and beard curls, per pixel at the size masks are stored at: by ViTMatte once
-        // it's downloaded, else by closed-form matting. Embedded mattes (iPhone) are already fine,
-        // and face parts are drawn shapes. REDLAMP_EDGE_MATTE=off keeps Vision's edges, and
-        // =closed-form skips ViTMatte, to compare.
+        // Stray hairs and beard curls, per pixel at the size masks are stored at: by closed-form
+        // matting, with the strands ViTMatte finds beyond it once it's downloaded. Embedded mattes
+        // (iPhone) are already fine, and face parts are drawn shapes. REDLAMP_EDGE_MATTE=off keeps
+        // Vision's edges, and =closed-form skips ViTMatte, to compare.
         let edgeMatte = ProcessInfo.processInfo.environment["REDLAMP_EDGE_MATTE"]
         if edgeMatte != "off",
            provided.contains(where: Self.takesClosedFormMatte), let full = try? await matteImage(for: session) {
@@ -375,12 +375,16 @@ extension RedlampEngine {
                 masks.map { mask in
                     guard Self.takesClosedFormMatte(mask) else { return mask }
                     var refined = mask
-                    if let matte, let solved = try? Self.vitMatte(mask, image: full, model: matte) {
-                        refined.mask = solved
-                        refined.provider += "+vitmatte"
-                    } else {
-                        refined.mask = Self.closedForm(mask, image: full)
-                        refined.provider += "+closed-form"
+                    refined.mask = Self.closedForm(mask, image: full)
+                    refined.provider += "+closed-form"
+                    if let matte, let strands = try? Self.vitMatteStrands(
+                        mask,
+                        closedForm: refined.mask,
+                        image: full,
+                        model: matte,
+                    ) {
+                        refined.mask = strands
+                        refined.provider += "+vitmatte-strands"
                     }
                     return refined
                 }
@@ -411,11 +415,16 @@ extension RedlampEngine {
         }
     }
 
+    /// `closedForm`'s matte with the strands ViTMatte finds beyond it (`ViTMatte.strands`).
     /// Background is solved as the Subject it is the inverse of, as `closedForm` solves it.
-    static func vitMatte(_ mask: ProvidedMask, image: CGImage, model: ViTMatte) throws -> GrayMask {
-        mask.kind == .background
-            ? try model.refine(mask.mask.inverted, image: image).inverted
-            : try model.refine(mask.mask, image: image)
+    static func vitMatteStrands(
+        _ mask: ProvidedMask, closedForm: GrayMask, image: CGImage, model: ViTMatte,
+    ) throws -> GrayMask {
+        if mask.kind == .background {
+            let subject = try model.refine(mask.mask.inverted, image: image)
+            return ViTMatte.strands(of: subject, addedTo: closedForm.inverted).inverted
+        }
+        return try ViTMatte.strands(of: model.refine(mask.mask, image: image), addedTo: closedForm)
     }
 
     /// Subject, Background and whole people from Vision; not embedded mattes or face parts.
@@ -499,8 +508,10 @@ extension RedlampEngine {
         let matte = ProcessInfo.processInfo.environment["REDLAMP_EDGE_MATTE"] == "closed-form" ? nil : await vitMatte()
         let mattes = await Task.detached(priority: .userInitiated) {
             people.map { person in
-                matte.flatMap { try? $0.refine(person.mask, image: image) }
-                    ?? ClosedFormMatte.refine(person.mask, image: image)
+                let closed = ClosedFormMatte.refine(person.mask, image: image)
+                return matte
+                    .flatMap { try? ViTMatte.strands(of: $0.refine(person.mask, image: image), addedTo: closed) }
+                    ?? closed
             }
         }.value
         personMatteCache.withLock { $0 = (analysis.hash, mattes) }

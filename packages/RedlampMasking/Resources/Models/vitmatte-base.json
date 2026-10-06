@@ -2,7 +2,7 @@
   "id": "vitmatte-base",
   "version": 1,
   "name": "ViTMatte (base)",
-  "purpose": "Hair and fine edges of Subject, Background and People masks.",
+  "purpose": "Stray hairs on the edges of Subject, Background and People masks.",
   "provider": "redlamp.vitmatte-base",
   "assetPack": "models.vitmatte-base.v1",
   "source": "https://github.com/pdcgomes/redlamp/releases/download/models-vitmatte-base-v1/",
@@ -39,6 +39,6 @@
   },
   "decision": "DEC-35",
   "evaluationOnly": false,
-  "cleared": false,
-  "notes": "Converted by research/prototypes/masking/convert_vitmatte.py (ViTMatte-base, fixed 1024x1024 tiles; the backbone's position embeddings frozen for that size) and compress_vitmatte.py (8-bit weights in blocks of 32; within 0.002 of fp16 on average over a portrait tile's unsure pixels). On hair_bench's heads, over a band from 1% of the long side inside the coarse edge to 5% outside, it halves closed-form matting's error along the edge and keeps 43% of the strands against 15% (vitmatte_bench.py). 0.2 s a tile on an M1 Ultra's GPU; the Neural Engine is slower. Its training data allows research use only; the owner accepted it for everyone as an exception (DEC-35). Published, with the owner's approval (DEC-26), as the prerelease models-vitmatte-base-v1, with its licence (LICENSE.txt). Not cleared for everyone: on the evaluation set's photos it pulls background beside the subject into the matte (dark, flat or foliage backgrounds), which closed-form matting leaves out (vitmatte_bench.py eval)."
+  "cleared": true,
+  "notes": "Converted by research/prototypes/masking/convert_vitmatte.py (ViTMatte-base, fixed 1024x1024 tiles; the backbone's position embeddings frozen for that size) and compress_vitmatte.py (8-bit weights in blocks of 32; within 0.002 of fp16 on average over a portrait tile's unsure pixels). On hair_bench's heads, over a band from 1% of the long side inside the coarse edge to 5% outside, it halves closed-form matting's error along the edge and keeps 43% of the strands against 15% (vitmatte_bench.py). 0.2 s a tile on an M1 Ultra's GPU; the Neural Engine is slower. Its training data allows research use only; the owner accepted it for everyone as an exception (DEC-35). Published, with the owner's approval (DEC-26), as the prerelease models-vitmatte-base-v1, with its licence (LICENSE.txt). On its own, on the evaluation set's photos it pulls background beside the subject into the matte (dark, flat or foliage backgrounds); the app adds to closed-form matting's matte only the strands it finds (ViTMatte.strands), which adds over a quarter of coverage on at most 0.07% of a frame, mostly hair (vitmatte_bench.py eval --folder eval-strands-app), so it is cleared for everyone again."
 }
