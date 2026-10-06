@@ -32,6 +32,9 @@ enum LibraryCommand {
            redlamp library keywords delete <keyword>… --index <path> [--dry-run]
            redlamp library keywords undo --index <path>
            redlamp library stacks --index <path> [<query>] [--kind pairs|bursts|focus|manual] [--json]
+           redlamp library import <source> --to <folder> [--backup <folder>] [--folders <template>]
+                                  [--names <template>] [--raw-only] [--keywords <k>,…] [--index <path>]
+                                  [--dry-run] [--json]
       fixture  makes a synthetic library in <folder>: a fifth of the photos APFS clones of the raws in
                --raw-sources (tests/fixtures/raw) with their capture dates rewritten, the rest small JPEGs
                and HEICs with varied EXIF, GPS and IPTC; sidecars on 15% and other apps' .xmp on 5%; folders
@@ -90,6 +93,12 @@ enum LibraryCommand {
                manual stacks the index keeps. Prints each with its photos' paths, the top photo first, then how
                many of each it found and how long that took. <query> keeps the stacks holding a photo it
                finds; --kind keeps one kind; --json prints JSON.
+      import   copies the photos of a card or folder to <folder> in folders and names from the templates,
+               and to --backup as real copies, each read back and checked by size and SHA-256 before the
+               card counts as safe to erase; photos the library at --index already has are skipped;
+               --raw-only copies raw files alone, leaving a raw's JPEG and photos that aren't raws on the
+               source; --keywords adds keywords. A journal lets an import
+               a forced quit cut short finish on the next run; --dry-run shows the plan.
     """
 
     private static var scenarioNames: String {
@@ -107,6 +116,7 @@ enum LibraryCommand {
         BenchScenarios.registerFiles()
         BenchScenarios.registerKeywords()
         BenchScenarios.registerStacks()
+        BenchScenarios.registerImport(rawFolder: Repository.root.appending(path: "tests/fixtures/raw"))
         guard let command = arguments.first, !arguments.contains("--help") else {
             print(usage)
             return
@@ -128,6 +138,7 @@ enum LibraryCommand {
         case "journal": try await journal(Array(arguments.dropFirst()))
         case "keywords": try await keywords(Array(arguments.dropFirst()))
         case "stacks": try await stacks(Array(arguments.dropFirst()))
+        case "import": try await importing(Array(arguments.dropFirst()))
         default: throw CLIError(description: "unknown library command \(command)\n\n\(usage)")
         }
     }
