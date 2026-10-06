@@ -44,6 +44,10 @@ enum LibraryCommand {
            redlamp library keywords undo --index <path>
            redlamp library stacks --index <path> [<query>] [--kind pairs|bursts|focus|manual] [--json]
            redlamp library stacks stack|unstack|top <query> --index <path> [--top <name>] [--dry-run] [--json]
+           redlamp library groups --index <path> [<query>] [--collection <name or path>]
+                                  [--by none|moment|day|folder|camera|lens|orientation|moment-camera]
+                                  [--tighter <n> | --looser <n>] [--sort captured|name|rating|edited|modified|size]
+                                  [--descending] [--json]
            redlamp library metadata --index <path> [<query>] [--limit <n>] [--json]
            redlamp library metadata set --index <path> <query> [--rating <n>] [--flag <flag>] [--label <name>]
                                     [--mark | --unmark] [--<field> <text>]… [--codes <file>] [--dry-run] [--json]
@@ -147,6 +151,14 @@ enum LibraryCommand {
                finds; --kind keeps one kind; --json prints JSON. stack, unstack and top make a manual stack
                of the photos <query> finds (--top names the one shown), take them out of theirs, or show
                the first for its stack, each photo's .redlamp keeping its place.
+      groups   groups the photos <query> finds (every photo without one), or a collection's with --collection,
+               in their order (--sort, as search has it): by moment, the default (photos taken together, a new
+               moment starting at a pause longer than 60 s and four times the pace of the photos around it, the
+               two moved together by up to 4 steps of --tighter or --looser), day, folder, camera, lens,
+               orientation, moment-camera (each moment's photos by camera, for two bodies whose clocks disagree)
+               or none, a stack always whole. Prints each group with how many photos and picks it has and the
+               filter that finds it, the moments without a pick, and a summary: the days, cameras, lenses, ISO,
+               shutter and aperture ranges, pairs and stacks. --json prints JSON.
       metadata prints each photo <query> finds with its rating, flag, label, mark, IPTC Core's fields,
                collections and stack as the index shows them; set gives them ratings, flags, labels (a
                colour's name in any label set, or a custom label), marks and IPTC Core's fields (--title,
@@ -212,6 +224,7 @@ enum LibraryCommand {
         case "stacks" where stackVerbs.contains(arguments.dropFirst().first ?? ""):
             try await stackChange(Array(arguments.dropFirst()))
         case "stacks": try await stacks(Array(arguments.dropFirst()))
+        case "groups": try await groups(Array(arguments.dropFirst()))
         case "metadata": try await metadata(Array(arguments.dropFirst()))
         case "collections": try await collections(Array(arguments.dropFirst()))
         case "import": try await importing(Array(arguments.dropFirst()))
