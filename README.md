@@ -19,6 +19,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/pdcgomes/redlamp?style=flat&color=1A1414&labelColor=57504E" alt="License: MPL-2.0"></a>
   <br>
   <a href="https://redlamp.app"><img src="https://img.shields.io/badge/website-redlamp.app-1A1414?style=flat&labelColor=57504E" alt="Redlamp's website, redlamp.app"></a>
+  <a href="https://discord.gg/4VZpxpgRCA"><img src="https://img.shields.io/badge/Discord-join-5865F2?style=flat&logo=discord&logoColor=white&labelColor=57504E" alt="Join Redlamp on Discord"></a>
   <a href="https://ko-fi.com/pdcgomes"><img src="https://img.shields.io/badge/support-Ko--fi-E0402E?style=flat&logo=kofi&logoColor=white&labelColor=57504E" alt="Support Redlamp on Ko-fi"></a>
 </p>
 
@@ -1231,7 +1232,7 @@ Help › Your Reports lists the reports sent from this Mac (kept in `~/Library/A
 
 ## Contributing
 
-Redlamp is at an early stage and moving quickly. Issues and discussion are very welcome: Report a Bug or Send Feedback in the app files an issue for you, with the details that help.
+Redlamp is at an early stage and moving quickly. Issues and discussion are very welcome: Report a Bug or Send Feedback in the app files an issue for you, with the details that help. To ask a question or follow along, join the [Redlamp Discord](https://discord.gg/4VZpxpgRCA).
 
 - **Clean-room policy.** No GPL or LGPL code or data. Algorithms are implemented from published papers and specifications. Reading GPL projects such as darktable and RawTherapee to understand an idea is fine, but never port, translate or paraphrase their code, and never copy their data (profiles, tables, presets).
 - **Third-party components:** LibRaw is used under its CDDL-1.0 option. MLX Swift (MIT) and Swift Numerics (Apache-2.0) run generative fill's models on the Mac. Planned additions are lcms2 (MIT) and the lensfun database (CC-BY-SA, data only).
