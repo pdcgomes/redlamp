@@ -151,16 +151,7 @@ enum DNGGainMaps {
     static let opcodeList2: UInt16 = 0xC741
     static let gainMapOpcode: UInt32 = 9
 
-    static func read(_ url: URL) -> [GainMap] {
-        guard url.pathExtension.lowercased() == "dng",
-              let data = try? Data(contentsOf: url, options: .alwaysMapped)
-        else {
-            return []
-        }
-        return read(data, url: url)
-    }
-
-    /// The same from the file's bytes, `url` naming the file.
+    /// `url` names the file `data` holds.
     static func read(_ data: Data, url: URL) -> [GainMap] {
         guard url.pathExtension.lowercased() == "dng" else {
             return []
