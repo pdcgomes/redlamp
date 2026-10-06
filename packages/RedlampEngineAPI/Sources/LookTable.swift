@@ -181,12 +181,6 @@ public struct LookTable: Sendable, Hashable {
         }
     }
 
-    /// Resamples to another size, for example a 64-point HaldCLUT to 33 points.
-    public func resampled(to newSize: Int) throws -> LookTable {
-        guard newSize != size else { return self }
-        return try LookTable(size: newSize, space: space) { sample($0) }
-    }
-
     /// The values as little-endian Float16 bytes, the storage format in recipe files.
     public var littleEndianBytes: Data {
         var data = Data(capacity: values.count * 2)

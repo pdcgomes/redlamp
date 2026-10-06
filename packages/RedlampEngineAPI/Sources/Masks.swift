@@ -615,14 +615,6 @@ public enum MaskShape: Sendable, Hashable {
         case .maskReference, .unknown: ImagePoint(x: 0.5, y: 0.5)
         }
     }
-
-    /// Whether coverage comes from a bitmap rather than a formula.
-    public var isRaster: Bool {
-        switch self {
-        case .brush, .ai, .depthRange: true
-        default: false
-        }
-    }
 }
 
 /// `{"linear": {"_0": {...}}}`, the shape Swift synthesizes for enums with a payload.
