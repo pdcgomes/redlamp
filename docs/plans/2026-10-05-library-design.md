@@ -247,6 +247,15 @@ Sorting is separate from the query: captured (the default), name, rating, edited
 - **Lightroom Classic's keyword-list file** imports and exports with everything it holds: levels by tabs, synonyms in braces, keywords not exported in brackets.
 - **Other apps' keywords** come through XMP (LIB-24): `lr:hierarchicalSubject` as paths and `dc:subject` as flat names, both ways.
 
+## Import (LIB-27)
+
+- **Sources:** a card (a removable volume with a `DCIM` folder, as cameras write them) or any folder, several at once, each read through its own volume's readers.
+- **Browsing before copying:** a source's photos are listed and their embedded previews made into the store, newest first, before anything is copied; the choices made while browsing (which photos, ratings, flags, labels) stay in the session and are written into each photo's `.redlamp` at the destination. A photo the library already has (by content key) is skipped before its preview is read.
+- **The plan:** a folder template from capture dates and a name template (LIB-25), collisions numbered in capture order, an optional backup destination, raw-only (a raw's JPEG and photos that aren't raws stay on the source), and keywords and metadata to apply, previewed before anything is copied.
+- **Copying** is journaled and resumable. Each file is read once and written to the destination and the backup as real copies (never clones), read back and matched by size and SHA-256, and renamed into place without replacing anything; the drives are flushed (`F_FULLFSYNC`) every 64 photos or every second.
+- **Safe to erase,** card by card: the import finished and every photo chosen on that card is verified at every destination. Photos left out, by the user or by raw-only, don't count, and the plan lists them so the app can warn.
+- **One ingest step** puts a new file where a session's templates say, with the same defaults, for the import window and, later, tethered capture (TET-01).
+
 ## Stacks (LIB-28)
 
 Stacks are found from the index alone, never by reading a file, on every core:
@@ -514,6 +523,15 @@ The `files` scenario: 10,000 photos and 16,000 files in a temporary folder on th
 | Photos lost, or parted from their sidecar or `.xmp` | 0 | 0 |
 
 A bare `rename` cost 0.54 ms on the internal disk and 1.4 ms on the external SSD under the same load, so the batch spends 19 to 37 ms a photo on more than its two or three renames: the sidecar's `originalName` write is the first suspect. To be measured on a quiet Mac and brought down.
+
+### Import (LIB-27)
+
+The `import` scenario: 2,000 photos from a simulated card read at about 90 MB a second, to a destination and a backup, load average 46 to 81:
+
+- **The first 100 previews,** before anything is copied: 0.63 to 0.87 s.
+- **Copied to both destinations and verified:** 30 to 33 MB a second.
+- **The same card again,** everything already imported and skipped: 3.6 to 4.5 s.
+- At load average 80 to 120, all of it ran two to four times slower.
 
 ### Stacks (LIB-28)
 
