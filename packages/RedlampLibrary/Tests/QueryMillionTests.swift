@@ -223,6 +223,15 @@ struct SyntheticLibrary {
         ("rating>=3 city:porto", { $0.hot.rating >= 3 && includes($0.location?.city, "porto") }),
         ("montréal", { includes($0.location?.city, "montréal") }),
         ("tremblay", { includes($0.creator, "tremblay") }),
+        ("is:long-exposure", { ColumnEncoding.shutter($0.shutter) >= 1_000_000 }),
+        ("is:panorama", { ColumnEncoding.aspect(width: $0.width, height: $0.height) >= 200 }),
+        ("is:high-resolution", { ColumnEncoding.megapixels(width: $0.width, height: $0.height) >= 400 }),
+        ("is:low-light", { ColumnEncoding.iso($0.hot.iso) >= 3200 }),
+        ("is:no-location", { !$0.details.contains(.location) }),
+        ("is:panorama,low-light rating>=3", { row in
+            (ColumnEncoding.aspect(width: row.width, height: row.height) >= 200
+                || ColumnEncoding.iso(row.hot.iso) >= 3200) && row.hot.rating >= 3
+        }),
     ]
 
     private static func includes(_ text: String?, _ part: String) -> Bool {
@@ -283,6 +292,10 @@ struct SyntheticLibrary {
         if photo.label == nil, photo.index % 50 == 7 {
             row.customLabel = Self.customLabels[photo.index / 50 % Self.customLabels.count]
         }
+        (row.width, row.height) = photo.index % 97 == 0 ? (12000, 4000) : photo.index % 13 == 0 ? (5504, 8256) : (
+            6000,
+            4000,
+        )
         for (number, query) in Self.fieldQueries.enumerated() where query.matches(row) {
             fieldCounts[number] += 1
         }

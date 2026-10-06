@@ -337,7 +337,7 @@ struct LibraryFilterTests {
             .map(\.title) == ["Approved"])
     }
 
-    @Test func `Tab completes collections and custom labels from the index`() async throws {
+    @Test func `Tab completes collections, custom labels and traits, a trait with the photos it finds`() async throws {
         defer { cleanUp() }
         let (model, _) = try await open()
         let filters = try #require(model.libraryFilters)
@@ -353,6 +353,11 @@ struct LibraryFilterTests {
         filters.complete("lis", cursor: 3)
         try await eventually { filters.completions.contains { $0.kind == "Collection" } }
         #expect(filters.completions.contains { $0.text == "collection:Trips/Lisbon " })
+        filters.complete("type:jpeg pano", cursor: 14)
+        try await eventually { filters.completions.first?.kind == "Trait" }
+        let panorama = try #require(filters.completions.first)
+        #expect(panorama.text == "is:panorama " && panorama.title == "Panorama")
+        #expect(panorama.count == 1 && panorama.detail == "Trait · 1", "DSC_0005.JPG, twice as wide as it's tall")
     }
 
     @Test func `the text and the bar's attributes and columns are one query, each written by the other`() async throws {

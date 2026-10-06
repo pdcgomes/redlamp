@@ -184,6 +184,26 @@ struct QueryFilterBarTests {
         #expect(clients.map(\.term).starts(with: ["label:Client", "collection:Clients"]))
     }
 
+    @Test func `traits are offered as names are typed, each with the photos of the source it finds`() async throws {
+        let library = try await QueryTestLibrary.make()
+        defer { library.remove() }
+        let engine = try await library.engine(loaded: true)
+        let pano = await engine.completions("pano", field: nil)
+        #expect(pano.first == QueryCompletion(field: .trait, value: "panorama", count: 2))
+        #expect(pano.first?.term == "is:panorama")
+        let light = await engine.completions("l", field: .trait)
+        #expect(light.map(\.value) == ["long-exposure", "low-light", "no-location", "high-resolution"])
+        #expect(light.map(\.count) == [1, 2, 6, 2], "names starting, then words, then inside a word")
+        let studio = PhotoSource.folder(Self.folder("2024/Studio"), includingSubfolders: false)
+        let inStudio = await engine.completions("res", field: .trait, in: studio)
+        #expect(inStudio.map(\.term) == ["is:high-resolution"] && inStudio.first?.count == 1)
+        #expect(await engine.completions("loca", field: nil).map(\.term) == ["is:no-location"])
+        for trait in LibraryQuery.Trait.allCases {
+            let expanded = try await engine.ids(trait.query.description)
+            #expect(try await engine.ids("is:\(trait.rawValue)") == expanded, "\(trait) is \(trait.query)")
+        }
+    }
+
     @Test func `a query's rules give it back, and rules give back their query`() throws {
         let texts = [
             "", "sunset", "-sunset", "rating>=3 flag:pick", "label:red OR label:blue", "-(a OR b)", "-(a b)",

@@ -375,8 +375,9 @@ public final class LibraryFilters {
             completionRange = nil
             return
         }
+        let source = folder.map { PhotoSource.folder($0.url, includingSubfolders: $0.subfolders) } ?? .allPhotographs
         completing = Task { [weak self] in
-            let values = await engine.completions(term.value, field: term.field, limit: 8)
+            let values = await engine.completions(term.value, field: term.field, limit: 8, in: source)
             guard !Task.isCancelled, let self else { return }
             let fields = term.field == nil ? FilterTerm.fields(startingWith: term.value) : []
             completions = (fields + values.map(FilterCompletion.init)).map { $0.negated(term.negated) }
@@ -401,17 +402,20 @@ public final class LibraryFilters {
 
 /// A row of the text's completions: a field to type a value for, or a value of one.
 public struct FilterCompletion: Sendable, Hashable {
-    /// What the row shows: `Places › Portugal`, `Fujifilm X-T5`, `rating:`.
+    /// What the row shows: `Places › Portugal`, `Fujifilm X-T5`, `rating:`, `Long Exposure`.
     public var title: String
-    /// What it is: `Keyword`, `Camera`, `Field`.
+    /// What it is: `Keyword`, `Camera`, `Field`, `Trait`.
     public var kind: String
     /// What replaces the term: a term of the language, then a space, or a field's name and `:`.
     public var text: String
+    /// For a trait, the source's photos it finds.
+    public var count: Int?
 
-    init(title: String, kind: String, text: String) {
+    init(title: String, kind: String, text: String, count: Int? = nil) {
         self.title = title
         self.kind = kind
         self.text = text
+        self.count = count
     }
 
     init(_ completion: QueryCompletion) {
@@ -419,6 +423,7 @@ public struct FilterCompletion: Sendable, Hashable {
         case .keyword, .collection: KeywordPath(completion.value)?.displayName ?? completion.value
         case .folder: URL(fileURLWithPath: completion.value).pathComponents.suffix(2).joined(separator: "/")
         case .label: ColorLabel(rawValue: completion.value) == nil ? completion.value : completion.value.capitalized
+        case .trait: LibraryQuery.Trait(rawValue: completion.value)?.title ?? completion.value
         default: completion.value
         }
         let kind = switch completion.field {
@@ -428,13 +433,19 @@ public struct FilterCompletion: Sendable, Hashable {
         case .folder: "Folder"
         case .label: ColorLabel(rawValue: completion.value) == nil ? "Custom Label" : "Label"
         case .collection: "Collection"
+        case .trait: "Trait"
         default: completion.field.rawValue
         }
-        self.init(title: title, kind: kind, text: completion.term + " ")
+        self.init(title: title, kind: kind, text: completion.term + " ", count: completion.count)
     }
 
     func negated(_ negated: Bool) -> FilterCompletion {
-        negated ? FilterCompletion(title: title, kind: kind, text: "-" + text) : self
+        negated ? FilterCompletion(title: title, kind: kind, text: "-" + text, count: count) : self
+    }
+
+    /// What the row shows of what it is: its kind, and a trait's count.
+    var detail: String {
+        count.map { "\(kind) · \($0.formatted())" } ?? kind
     }
 }
 

@@ -86,6 +86,8 @@ extension LibraryQuery.Value {
             }
         case let .detail(detail):
             detail.rawValue
+        case let .trait(trait):
+            trait.rawValue
         }
     }
 

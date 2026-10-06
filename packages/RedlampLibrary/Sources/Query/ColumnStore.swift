@@ -34,11 +34,15 @@ public struct ColumnStore: Sendable {
         public var location: PhotoLocation?
         /// A label's name outside the five colours.
         public var customLabel: String?
+        /// Pixels.
+        public var width: Int?
+        public var height: Int?
 
         public init(
             _ hot: HotColumns, shutter: Double? = nil, details: Details = [], sidecarModified: Double? = nil,
             size: Int64 = 0, modified: Double? = nil, state: PhotoRecord.State = [], creator: String? = nil,
-            copyright: String? = nil, location: PhotoLocation? = nil, customLabel: String? = nil,
+            copyright: String? = nil, location: PhotoLocation? = nil, customLabel: String? = nil, width: Int? = nil,
+            height: Int? = nil,
         ) {
             self.hot = hot
             self.shutter = shutter
@@ -51,6 +55,8 @@ public struct ColumnStore: Sendable {
             self.copyright = copyright
             self.location = location
             self.customLabel = customLabel
+            self.width = width
+            self.height = height
         }
     }
 
@@ -98,6 +104,9 @@ public struct ColumnStore: Sendable {
     private(set) var copyrights: ContiguousArray<UInt16> = []
     private(set) var customLabels: ContiguousArray<UInt8> = []
     private(set) var places: ContiguousArray<UInt32> = []
+    /// `ColumnEncoding.megapixels` and `ColumnEncoding.aspect`.
+    private(set) var megapixels: ContiguousArray<UInt16> = []
+    private(set) var aspects: ContiguousArray<UInt16> = []
     /// The rows holding a photo.
     private(set) var live = RowBits(rows: 0)
 
@@ -236,6 +245,8 @@ public struct ColumnStore: Sendable {
             store.copyrights.append(contentsOf: columns.copyrights.lazy.map { copyrights[Int($0)] })
             store.customLabels.append(contentsOf: columns.customLabels.lazy.map { customLabels[Int($0)] })
             store.places.append(contentsOf: columns.places.lazy.map { places[Int($0)] })
+            store.megapixels.append(contentsOf: columns.megapixels)
+            store.aspects.append(contentsOf: columns.aspects)
             keys.append(contentsOf: part.keys)
             largest = max(largest, columns.ids.max() ?? -1)
         }
@@ -369,7 +380,8 @@ public struct ColumnStore: Sendable {
         let columns = bytes(ids) + bytes(folders) + bytes(captured) + bytes(cameras) + bytes(lenses) + bytes(packed)
             + bytes(iso) + bytes(aperture) + bytes(focal) + bytes(shutter) + bytes(kinds) + bytes(nameRanks)
             + bytes(editedAt) + bytes(sizes) + bytes(modifiedAt) + bytes(states) + bytes(live.words)
-            + bytes(creators) + bytes(copyrights) + bytes(customLabels) + bytes(places)
+            + bytes(creators) + bytes(copyrights) + bytes(customLabels) + bytes(places) + bytes(megapixels)
+            + bytes(aspects)
         let orders = bytes(byCaptured) + bytes(byName) + bytes(byRating) + bytes(byEdited)
             + (byModified.map(bytes) ?? 0) + (bySize.map(bytes) ?? 0)
         let codes = bytes(cameraIDs) + bytes(lensIDs) + (cameraCodes.capacity + lensCodes.capacity) * 16
@@ -406,6 +418,8 @@ public struct ColumnStore: Sendable {
         copyrights.reserveCapacity(count)
         customLabels.reserveCapacity(count)
         places.reserveCapacity(count)
+        megapixels.reserveCapacity(count)
+        aspects.reserveCapacity(count)
     }
 
     /// Adds a row for a photo the store doesn't hold.
@@ -445,6 +459,8 @@ public struct ColumnStore: Sendable {
         copyrights.append(0)
         customLabels.append(0)
         places.append(0)
+        megapixels.append(0)
+        aspects.append(0)
         set(row, at: ids.count - 1)
     }
 
@@ -469,6 +485,8 @@ public struct ColumnStore: Sendable {
         copyrights[index] = UInt16(copyrightNames.code(for: row.copyright))
         customLabels[index] = UInt8(customLabelNames.code(for: row.customLabel))
         places[index] = placeNames.code(for: row.location)
+        megapixels[index] = ColumnEncoding.megapixels(width: row.width, height: row.height)
+        aspects[index] = ColumnEncoding.aspect(width: row.width, height: row.height)
     }
 
     /// Takes a row out: its photo is gone from the store, and from every order once `removeFromOrders`
@@ -615,6 +633,8 @@ public struct ColumnStore: Sendable {
         copyrights = kept(copyrights)
         customLabels = kept(customLabels)
         places = kept(places)
+        megapixels = kept(megapixels)
+        aspects = kept(aspects)
         self.live = RowBits(rows: ids.count, filled: true)
         rowOfID.withUnsafeMutableBufferPointer { $0.update(repeating: -1) }
         for (row, id) in ids.enumerated() {
@@ -719,6 +739,31 @@ enum ColumnEncoding {
     }
 
     static let shutterSQL = scaledSQL("p.shutter", by: "1000000", limit: "4294967295")
+
+    /// Tenths of a megapixel, rounded half up, 1 to 65,535; 0 without both sides.
+    static func megapixels(width: Int?, height: Int?) -> UInt16 {
+        guard let width, let height, width > 0, height > 0 else { return 0 }
+        return UInt16(max(1, min(65535, (Int64(width) * Int64(height) + 50000) / 100_000)))
+    }
+
+    static let megapixelsSQL = """
+    (CASE WHEN p.width > 0 AND p.height > 0 \
+    THEN max(1, min(65535, (CAST(p.width AS INTEGER) * CAST(p.height AS INTEGER) + 50000) / 100000)) ELSE 0 END)
+    """
+
+    /// The long side over the short in hundredths, rounded half up, 100 to 65,535; 0 without both sides.
+    static func aspect(width: Int?, height: Int?) -> UInt16 {
+        guard let width, let height, width > 0, height > 0 else { return 0 }
+        let (long, short) = (Int64(max(width, height)), Int64(min(width, height)))
+        return UInt16(min(65535, (long * 100 + short / 2) / short))
+    }
+
+    static let aspectSQL = """
+    (CASE WHEN p.width > 0 AND p.height > 0 THEN min(65535, \
+    (max(CAST(p.width AS INTEGER), CAST(p.height AS INTEGER)) * 100 \
+    + min(CAST(p.width AS INTEGER), CAST(p.height AS INTEGER)) / 2) \
+    / min(CAST(p.width AS INTEGER), CAST(p.height AS INTEGER))) ELSE 0 END)
+    """
 
     /// Seconds since 2001, for a photo with an edit; `Int32.min` without.
     static func editedAt(edited: Bool, sidecarModified: Double?) -> Int32 {

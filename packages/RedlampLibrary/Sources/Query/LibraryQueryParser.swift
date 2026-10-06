@@ -314,6 +314,25 @@ enum LibraryQueryValues {
             return try numbers(text, invalid: "shutter is seconds, such as 1/250 or 2, or a range") {
                 number($0, unit: "s")
             }
+        case .megapixels:
+            return try numbers(text, invalid: "megapixels is a number, such as 24, or a range such as 24..45") {
+                number($0, unit: "mp")
+            }
+        case .aspect:
+            return try numbers(
+                text,
+                invalid: "aspect is the long side over the short, such as 1.5 or 3:2, or a range",
+            ) {
+                ratio($0)
+            }
+        case .trait:
+            guard let trait = LibraryQuery.Trait(rawValue: lowered) else {
+                let names = LibraryQuery.Trait.allCases.map(\.rawValue)
+                throw Invalid(
+                    message: "is takes a trait: \(names.dropLast().joined(separator: ", ")) or \(names.last ?? "")",
+                )
+            }
+            return .trait(trait)
         case .date:
             return try dates(text)
         case .flag:
@@ -381,6 +400,14 @@ enum LibraryQueryValues {
             throw Invalid(message: "this range runs backwards: \(lowerText) is more than \(upperText)")
         }
         return .numberRange(lower, upper)
+    }
+
+    /// A ratio of two numbers (`3:2`), or a number as `number` reads it.
+    static func ratio(_ text: Substring) -> Double? {
+        guard let colon = text.firstIndex(of: ":") else { return number(text, unit: nil) }
+        guard let long = decimal(text[..<colon]), let short = decimal(text[text.index(after: colon)...]), short > 0
+        else { return nil }
+        return long / short
     }
 
     /// A decimal number (`2.8`, `1e-5`) or a fraction (`1/250`), with `unit` after it or not.

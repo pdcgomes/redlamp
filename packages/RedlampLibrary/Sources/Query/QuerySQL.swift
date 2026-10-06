@@ -90,6 +90,8 @@ struct QuerySQL: Sendable, Hashable {
                 case .aperture: ColumnEncoding.apertureSQL
                 case .focal: ColumnEncoding.focalSQL
                 case .shutter: ColumnEncoding.shutterSQL
+                case .megapixels: ColumnEncoding.megapixelsSQL
+                case .aspect: ColumnEncoding.aspectSQL
                 default: ColumnEncoding.capturedSQL
                 }
                 return range.isEmpty ? "0" : "(\(expression) BETWEEN \(range.lowerBound) AND \(range.upperBound - 1))"
@@ -141,6 +143,8 @@ struct QuerySQL: Sendable, Hashable {
             case let (.collection, .text(text)):
                 return "p.id IN (SELECT cp.photo FROM collection_photos cp JOIN collections c ON c.id = cp.collection"
                     + " WHERE c.path IS NOT NULL AND redlamp_keyword(c.path, \(bind(text))))"
+            case let (.trait, .trait(trait)):
+                return predicate(trait.query)
             case let (.has, .detail(detail)):
                 return switch detail {
                 case .gps: ColumnEncoding.locationSQL
@@ -209,6 +213,12 @@ enum QueryRanges {
         case .shutter:
             encode = { Int64(ColumnEncoding.shutter($0)) }
             all = 1 ... Int64(UInt32.max)
+        case .megapixels:
+            encode = { Int64(ColumnEncoding.scaled($0, by: 10, limit: Double(UInt16.max))) }
+            all = 1 ... Int64(UInt16.max)
+        case .aspect:
+            encode = { Int64(ColumnEncoding.scaled($0, by: 100, limit: Double(UInt16.max))) }
+            all = 1 ... Int64(UInt16.max)
         case .date:
             return dates(comparison, value, today: today)
         default:

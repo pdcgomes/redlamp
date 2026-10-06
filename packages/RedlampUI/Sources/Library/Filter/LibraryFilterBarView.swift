@@ -482,7 +482,7 @@ final class FilterCompletionView: NSView {
             kinds[index].isHidden = index >= items.count
             if index < items.count {
                 row.stringValue = items[index].title
-                kinds[index].stringValue = items[index].kind
+                kinds[index].stringValue = items[index].detail
                 row.setAccessibilityIdentifier("library.filter.completion.\(index)")
             }
         }

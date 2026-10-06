@@ -90,10 +90,17 @@ public indirect enum LibraryQuery: Sendable, Hashable {
         case state
         case country
         case countryCode = "countrycode"
+        /// The pixels, width times height, in millions (`mp`).
+        case megapixels
+        /// The long side over the short: `1.5` or `3:2`, whichever way the photo is turned.
+        case aspect
+        /// A trait (`Trait`), such as `is:long-exposure`: a name for a query over the other fields.
+        case trait = "is"
 
         /// The other names fields go by.
         public static let aliases: [String: Field] = [
             "stars": .rating, "keyword": .keyword, "taken": .date, "in": .folder, "type": .ext, "province": .state,
+            "mp": .megapixels,
         ]
 
         /// The field `name` names, ignoring case: its own name or an alias.
@@ -106,7 +113,7 @@ public indirect enum LibraryQuery: Sendable, Hashable {
         /// Whether it can be compared with `<`, `<=`, `>` and `>=`, and take ranges.
         public var isOrdered: Bool {
             switch self {
-            case .rating, .iso, .aperture, .focal, .shutter, .date: true
+            case .rating, .iso, .aperture, .focal, .shutter, .date, .megapixels, .aspect: true
             default: false
             }
         }
@@ -144,6 +151,44 @@ public indirect enum LibraryQuery: Sendable, Hashable {
         case bool(Bool)
         case kind(PhotoRecord.Kind)
         case detail(Detail)
+        case trait(Trait)
+    }
+
+    /// A trait (LIB-06): a name for a query over the index's fields, written `is:` and its name, and
+    /// offered as the filter bar completes what's typed.
+    public enum Trait: String, Sendable, Hashable, CaseIterable {
+        /// A second or more: `shutter>=1`.
+        case longExposure = "long-exposure"
+        /// The long side twice the short or more: `aspect>=2`.
+        case panorama
+        /// 40 megapixels or more: `megapixels>=40`.
+        case highResolution = "high-resolution"
+        /// ISO 3200 or more: `iso>=3200`.
+        case lowLight = "low-light"
+        /// No GPS position: `-has:gps`.
+        case noLocation = "no-location"
+
+        /// Its name as the filter bar shows it.
+        public var title: String {
+            switch self {
+            case .longExposure: "Long Exposure"
+            case .panorama: "Panorama"
+            case .highResolution: "High Resolution"
+            case .lowLight: "Low Light"
+            case .noLocation: "No Location"
+            }
+        }
+
+        /// The query it stands for.
+        public var query: LibraryQuery {
+            switch self {
+            case .longExposure: .filter(Filter(.shutter, .greaterOrEqual, [.number(1)]))
+            case .panorama: .filter(Filter(.aspect, .greaterOrEqual, [.number(2)]))
+            case .highResolution: .filter(Filter(.megapixels, .greaterOrEqual, [.number(40)]))
+            case .lowLight: .filter(Filter(.iso, .greaterOrEqual, [.number(3200)]))
+            case .noLocation: .not(.filter(Filter(.has, .equal, [.detail(.gps)])))
+            }
+        }
     }
 
     /// What a photo `has`.

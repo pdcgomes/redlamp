@@ -62,6 +62,9 @@ struct QueryDifferentialTests {
             case .copyright: .text(random.pick(["©", "2019", "Silva", "Agency"]))
             case .sublocation, .city, .state, .country, .countryCode:
                 .text(part(of: random.pick(Self.places.flatMap(\.self).filter { !$0.isEmpty } + ["Nowhere"])))
+            case .megapixels: number([0.1, 1, 12.2, 24, 40, 44.8, 48, 61], ranges: ranges)
+            case .aspect: number([1, 4.0 / 3, 1.5, 16.0 / 9, 2, 3], ranges: ranges)
+            case .trait: .trait(random.pick(LibraryQuery.Trait.allCases))
             }
         }
 
@@ -75,7 +78,8 @@ struct QueryDifferentialTests {
         ]
 
         /// Gives some of the photos in `index` creators, copyrights, places, custom labels and
-        /// collections, as the sidecars' organising fields would.
+        /// collections, as the sidecars' organising fields would, and some panoramas' and larger
+        /// sensors' sizes.
         static func organise(_ index: LibraryIndex) async throws {
             try await index.write { writer in
                 let ids = try writer.database.cached("SELECT id FROM photos ORDER BY id").map { $0.int64(at: 0) }
@@ -83,6 +87,15 @@ struct QueryDifferentialTests {
                 UPDATE photos SET creator = ?, copyright = ?, sublocation = ?, city = ?, province = ?, country = ?,
                   country_code = ?, custom_label = CASE WHEN label = 0 THEN ? END WHERE id = ?
                 """)
+                let resize = try writer.database.prepare("UPDATE photos SET width = ?, height = ? WHERE id = ?")
+                let sizes = [(12000, 4000), (8192, 5464), (4000, 6000), (3024, 4032)]
+                for (number, id) in ids.enumerated() where number % 3 == 0 {
+                    let (width, height) = sizes[number / 3 % sizes.count]
+                    try resize.bind(width, at: 1)
+                    try resize.bind(height, at: 2)
+                    try resize.bind(id, at: 3)
+                    try resize.run()
+                }
                 for (number, id) in ids.enumerated() {
                     var values: [String?] = []
                     values.append(number % 4 == 3 ? nil : Self.creators[number % Self.creators.count])

@@ -24,6 +24,8 @@ indirect enum QueryPlan: Sendable, Hashable {
         case aperture(Range<Int64>)
         case focal(Range<Int64>)
         case shutter(Range<Int64>)
+        case megapixels(Range<Int64>)
+        case aspect(Range<Int64>)
         case captured(Range<Int64>)
         /// A bit per `PhotoRecord.Kind`.
         case kinds(UInt64)
@@ -128,10 +130,14 @@ indirect enum QueryPlan: Sendable, Hashable {
             case .aperture: return .leaf(.aperture(range))
             case .focal: return .leaf(.focal(range))
             case .shutter: return .leaf(.shutter(range))
+            case .megapixels: return .leaf(.megapixels(range))
+            case .aspect: return .leaf(.aspect(range))
             default: return .leaf(.captured(range))
             }
         }
         switch (field, value) {
+        case let (.trait, .trait(trait)):
+            return compile(trait.query, store: store, vocabulary: vocabulary, today: today)
         case let (.flag, .flag(flag)):
             return .leaf(.packed(
                 shift: Packed.flagShift,
@@ -308,6 +314,10 @@ extension ColumnStore {
             Self.fill(&words, focal, within: range)
         case let .shutter(range):
             Self.fill(&words, shutter, within: range)
+        case let .megapixels(range):
+            Self.fill(&words, megapixels, within: range)
+        case let .aspect(range):
+            Self.fill(&words, aspects, within: range)
         case let .captured(range):
             let span = UInt64(bitPattern: range.upperBound &- range.lowerBound)
             let lower = range.lowerBound

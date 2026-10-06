@@ -88,6 +88,12 @@ struct QueryParserTests {
             ("countryCode:PT", Self.filter(.countryCode, .equal, .text("PT"))),
             ("has:creator", Self.filter(.has, .equal, .detail(.creator))),
             ("has:Location", Self.filter(.has, .equal, .detail(.location))),
+            ("megapixels>=40", Self.filter(.megapixels, .greaterOrEqual, .number(40))),
+            ("mp:24mp..45", Self.filter(.megapixels, .equal, .numberRange(24, 45))),
+            ("aspect:3:2", Self.filter(.aspect, .equal, .number(1.5))),
+            ("aspect:4/3..2:1", Self.filter(.aspect, .equal, .numberRange(4.0 / 3, 2))),
+            ("is:long-exposure", Self.filter(.trait, .equal, .trait(.longExposure))),
+            ("IS:Panorama,low-light", Self.filter(.trait, .equal, .trait(.panorama), .trait(.lowLight))),
         ]
         for (text, expected) in cases {
             #expect(try Self.parse(text) == expected, "\(text)")
@@ -146,6 +152,13 @@ struct QueryParserTests {
             ("flag:maybe", 5 ..< 10, "flag is pick, reject or none"),
             ("marked:si", 7 ..< 9, "marked is yes or no"),
             ("has:wifi", 4 ..< 8, "has is gps, keywords, caption, title, xmp, creator, copyright or location"),
+            (
+                "is:sharp",
+                3 ..< 8,
+                "is takes a trait: long-exposure, panorama, high-resolution, low-light or no-location",
+            ),
+            ("aspect:3:0", 7 ..< 10, "aspect is the long side over the short"),
+            ("is>panorama", 2 ..< 3, "is can't be compared with >"),
             ("camera>3", 6 ..< 7, "camera can't be compared with >"),
             ("rating>=3,4", 8 ..< 11, "a comparison takes one value"),
             ("iso>=100..200", 5 ..< 13, "a comparison takes one value, not a range"),
@@ -232,6 +245,7 @@ struct QueryParserTests {
             ("\"a:b\"", "\"a:b\""),
             ("label!=red,blue", "label!=red,blue"),
             ("province:\"Île-de-France\" countryCode:FR", "state:Île-de-France countrycode:FR"),
+            ("mp>=40 aspect:3:2 IS:Low-Light", "megapixels>=40 aspect:1.5 is:low-light"),
             ("creator:\"Ana Silva; João\"", "creator:\"Ana Silva; João\""),
             ("iso:..800", "iso:..800"),
             ("iso:1e-5", "iso:1e-05"),

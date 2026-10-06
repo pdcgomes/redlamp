@@ -322,12 +322,15 @@ public struct QueryCompletion: Sendable, Hashable {
     /// The value as the library names it: a keyword's or a collection's path, a camera's or a lens's
     /// name, a folder's path, or a label's name, a colour's or a custom label's.
     public var value: String
-    /// The term as the language writes it: `kw:"Places/Portugal"`, `camera:"X-T5"`.
+    /// The term as the language writes it: `kw:"Places/Portugal"`, `camera:"X-T5"`, `is:panorama`.
     public var term: String
+    /// For a trait, the photos it finds.
+    public var count: Int?
 
-    public init(field: LibraryQuery.Field, value: String) {
+    public init(field: LibraryQuery.Field, value: String, count: Int? = nil) {
         self.field = field
         self.value = value
+        self.count = count
         term = LibraryQuery.Filter(field, .equal, [Self.queryValue(field, value)]).description
     }
 
@@ -335,26 +338,47 @@ public struct QueryCompletion: Sendable, Hashable {
         if field == .label, let label = ColorLabel(rawValue: value.lowercased()) {
             return .label(label)
         }
+        if field == .trait, let trait = LibraryQuery.Trait(rawValue: value) {
+            return .trait(trait)
+        }
         return .text(value)
     }
 
     /// The fields completion has values for, in the order it offers them.
-    public static let fields: [LibraryQuery.Field] = [.keyword, .camera, .lens, .folder, .label, .collection]
+    public static let fields: [LibraryQuery.Field] = [.keyword, .camera, .lens, .folder, .label, .collection, .trait]
 }
 
 public extension QueryEngine {
-    /// The values of `field`, or of keywords, cameras, lenses, folders, labels and collections when
-    /// it's nil, that `typed` starts or starts a word of, then those it's inside, best first: as the
-    /// filter bar's text completes a term. Nothing runs on the caller's thread.
-    func completions(_ typed: String, field: LibraryQuery.Field?, limit: Int = 8) async -> [QueryCompletion] {
+    /// The values of `field`, or of keywords, cameras, lenses, folders, labels, collections and traits
+    /// when it's nil, that `typed` starts or starts a word of, then those it's inside, best first: as
+    /// the filter bar's text completes a term. A trait comes with the photos of `source` it finds.
+    /// Nothing runs on the caller's thread.
+    func completions(
+        _ typed: String, field: LibraryQuery.Field?, limit: Int = 8, in source: PhotoSource = .allPhotographs,
+    ) async -> [QueryCompletion] {
         let typed = typed.trimmingCharacters(in: .whitespaces)
-        guard !typed.isEmpty, limit > 0, let (store, vocabulary, _) = await loadedSnapshot() else { return [] }
+        guard !typed.isEmpty, limit > 0, let (store, vocabulary, generation) = await loadedSnapshot() else {
+            return []
+        }
         let customLabels = Array(store.customLabelNames.names.dropFirst())
-        return await Task.detached(priority: .userInitiated) {
+        var completions = await Task.detached(priority: .userInitiated) {
             vocabulary.completions(
                 typed, fields: field.map { [$0] } ?? QueryCompletion.fields, limit: limit, customLabels: customLabels,
             )
         }.value
+        guard completions.contains(where: { $0.field == .trait }),
+              let photos = try? await rows(of: source, in: store, vocabulary: vocabulary, generation: generation)
+        else { return completions }
+        for (place, completion) in completions.enumerated() {
+            guard let trait = LibraryQuery.Trait(rawValue: completion.value), completion.field == .trait,
+                  var found = try? await matches(
+                      for: trait.query.searchable, in: store, vocabulary: vocabulary, generation: generation,
+                  )
+            else { continue }
+            found.formIntersection(photos)
+            completions[place].count = found.count
+        }
+        return completions
     }
 }
 
@@ -387,6 +411,12 @@ extension QueryVocabulary {
             case .collection:
                 let paths = Set(names.collections.values).sorted { FinderOrder.compare($0, $1) < 0 }
                 offer(.collection, paths) { CollectionPath($0)?.names.joined(separator: "/") ?? $0 }
+            case .trait:
+                for trait in LibraryQuery.Trait.allCases {
+                    let ranks = [trait.title, trait.rawValue].compactMap { Self.rank(Self.fold($0), folded) }
+                    guard let rank = ranks.min() else { continue }
+                    ranked.append((rank, ranked.count, QueryCompletion(field: .trait, value: trait.rawValue)))
+                }
             default: break
             }
         }

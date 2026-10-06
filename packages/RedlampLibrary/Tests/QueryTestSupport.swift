@@ -43,8 +43,9 @@ struct QueryTestLibrary {
             let ids = try writer.upsertPhotos([
                 PhotoRecord(
                     folder: lisbon, name: "DSCF0001.RAF", captured: date(2024, 6, 14, 10), camera: xt5, lens: xf35,
-                    iso: 200, aperture: 1.4, shutter: 1.0 / 250, focal: 35, latitude: 38.7, longitude: -9.1, rating: 5,
-                    flag: .pick, label: .red, edited: true, sidecarModified: date(2025, 1, 2), title: "Tram 28",
+                    iso: 200, aperture: 1.4, shutter: 1.0 / 250, focal: 35, width: 7728, height: 5152, latitude: 38.7,
+                    longitude: -9.1, rating: 5, flag: .pick, label: .red, edited: true,
+                    sidecarModified: date(2025, 1, 2), title: "Tram 28",
                     caption: "Alfama at dusk", creator: "Ana Silva", copyright: "© 2024 Ana Silva",
                     location: PhotoLocation(
                         country: "Portugal", state: "Lisboa", city: "Lisboa", sublocation: "Alfama", countryCode: "PT",
@@ -58,17 +59,19 @@ struct QueryTestLibrary {
                 ),
                 PhotoRecord(
                     folder: studio, name: "IMG_0010.CR3", captured: date(2024, 7, 1, 9), camera: r5, lens: rf50,
-                    iso: 100, aperture: 8, shutter: 2, focal: 50, flag: .reject, caption: "Headshots for Acme",
+                    iso: 100, aperture: 8, shutter: 2, focal: 50, width: 8192, height: 5464, flag: .reject,
+                    caption: "Headshots for Acme",
                     creator: "Studio Acme", copyright: "Acme Corp",
                     location: PhotoLocation(country: "Portugal", city: "Porto"),
                 ),
                 PhotoRecord(
                     folder: studio, name: "IMG_0009.HEIC", camera: iphone, iso: 64, aperture: 1.78, shutter: 1.0 / 120,
-                    focal: 6.765, rating: 1, marked: true, customLabel: "Approved",
+                    focal: 6.765, width: 3024, height: 4032, rating: 1, marked: true, customLabel: "Approved",
                 ),
                 PhotoRecord(
-                    folder: algarve, name: "Sunset.JPG", captured: date(2019, 8, 20, 19, 30), latitude: 37.1,
-                    longitude: -8.6, rating: 4, label: .green, caption: "Sunset over the harbour",
+                    folder: algarve, name: "Sunset.JPG", captured: date(2019, 8, 20, 19, 30), width: 12000,
+                    height: 4000, latitude: 37.1, longitude: -8.6, rating: 4, label: .green,
+                    caption: "Sunset over the harbour",
                     location: PhotoLocation(
                         country: "Portugal", state: "Faro", city: "Lagoa", sublocation: "Praia da Marinha",
                         countryCode: "PT",
@@ -76,11 +79,11 @@ struct QueryTestLibrary {
                 ),
                 PhotoRecord(
                     folder: montreal, name: "Café-0001.JPG", captured: date(2014, 7, 4), camera: xt5, lens: xf35,
-                    iso: 800, aperture: 4, shutter: 1.0 / 500, focal: 23, rating: 2, label: .purple,
-                    creator: "Élodie Tremblay",
+                    iso: 800, aperture: 4, shutter: 1.0 / 500, focal: 23, width: 6000, height: 4000, rating: 2,
+                    label: .purple, creator: "Élodie Tremblay",
                     location: PhotoLocation(country: "Canada", state: "Québec", city: "Montréal", countryCode: "CA"),
                 ),
-                PhotoRecord(folder: studio, name: "IMG_0011.PNG", customLabel: "Client"),
+                PhotoRecord(folder: studio, name: "IMG_0011.PNG", width: 2000, height: 500, customLabel: "Client"),
                 PhotoRecord(
                     folder: algarve,
                     name: "DSC_0100.NEF",
