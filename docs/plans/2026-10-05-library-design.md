@@ -339,6 +339,24 @@ Any source (a folder, a collection, a search, a selection, or a card browsed for
 - **Stored:** the grouping and its setting are part of the source's view, which LIB-14 keeps for each source; moments are worked out for the list.
 - **Budgets:** LIB-28's: one pass over sorted times, off the main thread, under 1 s for a million photos, a moment opened or closed in under 2 ms and all of them in under 50 ms, with diffs.
 
+As built (LIB-41), in the library and the command line; Group By in the grid and groups opening and closing in lists come later:
+
+- **Moments:** the photos in capture order, ties broken by name and then ID. A new moment starts at a pause longer than the floor and longer than the multiple times the median of the 20 nearest gaps over a second; bursts and raw and JPEG pairs are left out of that median, so they don't set the pace, and it counts as 15 minutes at most, so a pause over an hour always splits (without that, five photos a year apart are one moment). The setting's steps, −4 to 4, move the floor from 15 s to 4 min and the multiple from 2 to 8 together; the default is 60 s and 4. Stacks go whole to their top photo's moment, and photos without a capture time come last.
+- **Group By:** moments and days by time, newest first when the list is; the other keys' names in the Finder's order, photos without a value last. A group's filter is `date:`, or `folder:`, `camera:` or `lens:` with the other values left out, since the language matches parts of names and a folder's filter would also find its subfolders; a group has none where a stack crosses values, and moments have none until `date:` takes a time of day.
+- **Coverage** (`MomentCoverage`): the moments without a pick and their photos. **A source's summary** (`summary(of:)`): its days, cameras, lenses, ISO, shutter and aperture ranges, pairs and stacks. **Cards** (`MomentFinder.moments(captured:names:)`): a card's photos grouped as the index's are, before anything is copied.
+- **`redlamp library groups`** takes a search or `--collection`, `--by`, `--tighter` or `--looser`, and `--json`.
+
+Results (`redlamp library bench --scenario groups`, Release, twice at a load average of 74 to 80, a million synthetic photos in sessions of known cadences; all nine exact counts held):
+
+| Grouping | A million photos |
+|---|---|
+| Moments | 46 to 48 ms |
+| Moment, then camera | 53 ms |
+| Day, folder, camera, lens or orientation | 18 to 25 ms |
+| The moments without a pick | 49 ms |
+| The source's summary | 22 ms |
+| A card of 20,000 photos, into moments | 2.7 ms |
+
 Soft frames (LIB-42) would propose a pick for each moment: the sharpest frame of each burst at the camera's focus point, measured on the largest embedded preview and judged only within its burst, kept in the index by content key, drawn dashed until accepted, never touching a frame the user decided, with Changed by You as a filter.
 
 ## Other apps' metadata (LIB-24)
@@ -796,6 +814,8 @@ What it changed: the first version took 3.7 s for the million, keeping 13 to 16 
 - Indexing folders in iCloud Drive without downloading every photo: from what's already downloaded, and the rest as it arrives.
 - Whether FSEvents reports Redlamp's own writes on this Mac. The streams don't ask to leave them out (`kFSEventStreamCreateFlagIgnoreSelf` isn't set), so they should, but the app's saves were seen going unreported, perhaps only inside Cursor's sandbox. The app reports its writes to `LibraryLive` either way.
 - Another app's shifted capture time reaches the index only once the XMP sync has merged it into the photo's `.redlamp`; a photo without one keeps its camera's time until the indexer reads the time from its `.xmp` too.
+- Moments in the app: Group By and the Tighter–Looser setting kept with each source's view, regrouping off the main thread on each list update, ⌥← and ⌥→ by moment, and a scenario; in lists, a `GroupedList`, as `StackedList` is, opening and closing groups with diffs (one in under 2 ms, all in under 50 ms). Their defaults, 60 s, four times the median and the median's 15-minute cap, are to be measured on the owner's culled shoots.
+- An orientation column in the column store and an `orientation:` term: grouping by orientation reads every photo's size from the index until then. A time of day in `date:` would give moments filters.
 - Culling's Undo: in one run, one photo of 1,398, which had no sidecar before, kept its rating after Undo. Undo plans each batch again from its journal (`planUndo`), and the own saves it puts back are only those its step made; a photo whose sidecar was written by its own save rather than by the batch may look changed since. To reproduce and fix.
 - `LibraryMetadata` for culling: a change by each photo's own value (`[` and `]` take up to five batches); Redo made as a new batch; `plan` leaving out photos whose rows already show the change, though the indexer may have read a sidecar a batch before; `SidecarStore.change` reading with `try?`, so an unreadable sidecar counts as missing; no list of the library's custom labels, nor a colour for each; Foundation's decomposed paths against the index's composed names in `canShow` and `sidecarSaved`.
 - Culling 20,000 photos within budget, measured again after ca84cea; a main-thread stall of 7 to 12 s in each `--library-perf` run, which `sample` can't profile inside the sandbox; and the smoke tier's stalls: a file move on the main thread from a menu action, and Core Image on the main thread while typing in the filter bar.
