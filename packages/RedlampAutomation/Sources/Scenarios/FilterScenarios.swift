@@ -120,7 +120,7 @@
     }
 
     enum FilterScenarios {
-        static let all: [Scenario] = [text, columns, sources]
+        static let all: [Scenario] = [text, columns, sources, empty]
 
         private static let raws: Set<String> = ["arw", "raf", "cr3", "nef", "dng", "orf", "pef", "rw2", "3fr"]
 
@@ -280,6 +280,31 @@
                     }
                 }
                 app.covered([.feature("library.filter"), .action(.lockFilters), .action(.sortByFileSize)], via: .menu)
+            }
+        }
+
+        static let empty = Scenario(
+            "library.filter-empty",
+            "A filter that finds none of the folder's photos names the term whose removal brings the most back, and "
+                + "its button takes that term out",
+            claims: [.feature("library.filter")],
+        ) { app in
+            try app.withFilterBar { names in
+                let raws = names.filter(isRaw)
+                try app.typeQuery("type:raw kw:zzzz")
+                try app.wait("no photos, and the keyword named") { model in
+                    model.items.isEmpty && model.libraryFilters?.removal?.term == "kw:zzzz"
+                        && model.libraryFilters?.removal?.count == raws.count
+                }
+                try app.wait("its button on screen") { _ in
+                    Views.editorWindow.flatMap { Views.find("library.filter.removal", in: $0) } != nil
+                }
+                try app.clickView("library.filter.removal")
+                try app.wait("the raws back, the keyword taken out") { model in
+                    model.libraryFilters?.filter.text == "type:raw" && model.items.count == raws.count
+                        && model.libraryFilters?.removal == nil
+                }
+                app.covered(.feature("library.filter"), via: .mouse)
             }
         }
     }

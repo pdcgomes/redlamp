@@ -5,9 +5,10 @@ import RedlampLibrary
 
 /// The Library filter bar above the grid and the loupe (LIB-18), as Lightroom Classic's: Text,
 /// Attribute and Metadata, any of them shown (⇧-click for several) or None; the photos found of the
-/// source's; the sort; saved filters; and the lock. The Text section is the filter's query as typed,
-/// its terms completed from the index; the Attribute section and the metadata columns read the same
-/// query and write it, so what's chosen there shows in the text and the other way round.
+/// source's, and when that's none, a button taking out the term whose removal brings back the most;
+/// the sort; saved filters; and the lock. The Text section is the filter's query as typed, its terms
+/// completed from the index; the Attribute section and the metadata columns read the same query and
+/// write it, so what's chosen there shows in the text and the other way round.
 ///
 /// `\` shows and hides it, its text taking the keyboard; Esc in the text goes back to the grid.
 final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
@@ -22,6 +23,8 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
     private let sections: [FilterSection: FilterToggle]
     private let none = FilterToggle(title: "None", identifier: "library.filter.none", tip: "No Filter")
     private let count = filterLabel("")
+    /// Takes out the term the filter's removal brings back the most photos for, while it finds none.
+    private let removal = FilterToggle(title: "", identifier: "library.filter.removal", tip: "")
     private let sortLabel = filterLabel("Sort:")
     private let sort = FilterPopUp(identifier: "library.filter.sort", tip: "Sort")
     private let direction = FilterToggle(
@@ -77,12 +80,15 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
         presets.onChoose = { [weak self] tag in self?.presetChosen(tag) }
         lock.onPress = { [weak self] _ in self?.model.perform(.lockFilters) }
         clear.onPress = { [weak self] _ in self?.model.libraryFilters?.clear() }
+        removal.onPress = { [weak self] _ in self?.model.libraryFilters?.takeOutRemoval() }
+        removal.isHidden = true
         field.delegate = self
         field.placeholderString = "Search, or rating>=3 camera:X-T5 kw:birds -flag:reject…"
         error.textColor = NSColor.systemRed
         completions.onChoose = { [weak self] completion in self?.accept(completion) }
-        let views: [NSView] = [title, none, count, sortLabel, sort, direction, presets, lock, field, error, clear, note]
-            + FilterSection.allCases.compactMap { sections[$0] } + [attributes, columns]
+        let views: [NSView] = [
+            title, none, count, removal, sortLabel, sort, direction, presets, lock, field, error, clear, note,
+        ] + FilterSection.allCases.compactMap { sections[$0] } + [attributes, columns]
         for view in views {
             addSubview(view)
         }
@@ -165,6 +171,21 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
             model.folder != nil && !model.library.isShownFromLibrary && !filters.filter.isEmpty
                 ? "Filters apply once the library has indexed this folder" : "",
         )
+        let offer = filters.removal.map { removal in
+            let photos = removal.count == 1 ? "1 photo" : "\(removal.count.formatted()) photos"
+            return (
+                title: "Remove \(removal.term): \(photos)",
+                tip: "No photo matches every term of the filter; without \(removal.term) it finds \(photos)",
+            )
+        }
+        if removal.isHidden != (offer == nil) {
+            removal.isHidden = offer == nil
+        }
+        if removal.title != offer?.title ?? "" {
+            removal.title = offer?.title ?? ""
+            removal.toolTip = offer?.tip
+            removal.setAccessibilityLabel(offer?.title)
+        }
         sort.set(
             LibrarySortField.allCases.enumerated().map { ($1.title, $0) },
             chosen: LibrarySortField.allCases
@@ -197,7 +218,7 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
         if clear.isHidden != clearHidden {
             clear.isHidden = clearHidden
         }
-        let layout: [AnyHashable] = [filter.sections, error.stringValue.isEmpty, note.stringValue]
+        let layout: [AnyHashable] = [filter.sections, error.stringValue.isEmpty, note.stringValue, removal.title]
         if layout != laidOut {
             if layout.first != laidOut.first {
                 invalidateIntrinsicContentSize()
@@ -241,6 +262,9 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
         placeRight(direction, width: 22)
         placeRight(sort, width: 128)
         placeRight(sortLabel, width: filterWidth(sortLabel))
+        if !removal.isHidden {
+            placeRight(removal, width: max(min(removal.fittingWidth, 360, right - x - 8 - 120), 0))
+        }
         placeRight(count, width: max(min(right - x - 8, 200), 0))
         count.alignment = .right
         var y = header

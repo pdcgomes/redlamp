@@ -360,6 +360,44 @@ struct LibraryFilterTests {
         #expect(panorama.count == 1 && panorama.detail == "Trait · 1", "DSC_0005.JPG, twice as wide as it's tall")
     }
 
+    @Test func `a filter that finds nothing offers to take out the term in its way, as a button in the bar`(
+    ) async throws {
+        defer { cleanUp() }
+        let (model, _) = try await open()
+        let filters = try #require(model.libraryFilters)
+        filters.setFilter(LibraryFilter(text: "", sections: [.text]))
+        model.showLibrary(.grid)
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000), styleMask: [.titled], backing: .buffered,
+            defer: false,
+        )
+        window.contentViewController = ModuleViews.make(model: model, theme: ThemeSettings())
+        window.setContentSize(NSSize(width: 1600, height: 1000))
+        defer { window.contentViewController = nil }
+        model.perform(.toggleFilterBar)
+
+        try await filtered(model, "camera:X-T5 rating:4")
+        #expect(model.items.isEmpty)
+        try await eventually { filters.removal != nil }
+        #expect(filters.removal?.term == "rating:4" && filters.removal?.count == 2, "the X-T5's two photos")
+        let bar = try #require(Self.find(LibraryFilterBarView.self, in: window.contentView))
+        let button = try #require(Self.view("library.filter.removal", in: bar))
+        try await eventually { !button.isHidden }
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!button.isHidden && bar.bounds.contains(button.frame) && button.frame.width > 100)
+        #expect(button.accessibilityLabel() == "Remove rating:4: 2 photos")
+
+        filters.setText("camera:X-T5 rating:4 x")
+        #expect(filters.removal == nil, "a change to the filter takes the offer back at once")
+        try await filtered(model, "camera:X-T5 rating:4")
+        try await eventually { filters.removal != nil }
+        try click("library.filter.removal", in: window)
+        try await listed(model)
+        #expect(filters.filter.text == "camera:X-T5" && Set(names(model)) == ["IMG_0001.JPG", "IMG_0002.JPG"])
+        try await eventually { button.isHidden }
+        #expect(filters.removal == nil)
+    }
+
     @Test func `the text and the bar's attributes and columns are one query, each written by the other`() async throws {
         defer { cleanUp() }
         let (model, _) = try await open()

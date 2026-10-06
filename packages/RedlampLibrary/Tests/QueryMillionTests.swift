@@ -158,6 +158,20 @@ struct QueryMillionTests {
                 Self.percentile(facets, 0.5), Self.percentile(facets, 0.95), worstFacets,
             ))
             #expect(Self.percentile(facets, 0.95) < 100)
+
+            var removals: [Duration] = []
+            for query in FixtureQuery.corpus {
+                let text = "(\(query.text)) date:1999"
+                let started = clock.now
+                let found = try await engine.removal(from: LibraryQuery(parsing: text), in: .allPhotographs)
+                removals.append(clock.now - started)
+                #expect(found?.term == "date:1999" && found?.count == manifest.count(of: query.text), "\(text)")
+            }
+            Self.report(String(
+                format: "run %ld, %ld searches finding nothing, the term in their way: p50 %.2f ms, p95 %.2f ms",
+                run, removals.count, Self.percentile(removals, 0.5), Self.percentile(removals, 0.95),
+            ))
+            #expect(Self.percentile(removals, 0.95) < 100)
         }
     }
 

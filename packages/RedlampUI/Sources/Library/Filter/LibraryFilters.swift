@@ -35,6 +35,9 @@ public final class LibraryFilters {
     /// What the term being typed could be, best first, and the characters it replaces.
     public private(set) var completions: [FilterCompletion] = []
     @ObservationIgnored public private(set) var completionRange: Range<Int>?
+    /// While the filter finds none of the source's photos: the term whose removal brings back the
+    /// most of them, which the bar offers to take out.
+    public private(set) var removal: QueryRemoval?
     /// Counts the lists the library handed over, and the filter of the last, for the harness.
     @ObservationIgnored @_spi(Harness) public private(set) var listings = 0
     @ObservationIgnored @_spi(Harness) public private(set) var lastListed: LibraryListFilterSummary?
@@ -48,6 +51,7 @@ public final class LibraryFilters {
     @ObservationIgnored private var applied: LibraryQuery?
     @ObservationIgnored private var counting: Task<Void, Never>?
     @ObservationIgnored private var completing: Task<Void, Never>?
+    @ObservationIgnored private var findingRemoval: Task<Void, Never>?
     @ObservationIgnored private var countAgain = false
     @ObservationIgnored private var lastChange = ContinuousClock.now
     /// The text has the keyboard: the active photo stays as it is until it's given back.
@@ -117,6 +121,7 @@ public final class LibraryFilters {
         listed = nil
         columns = [:]
         completions = []
+        withdrawRemoval()
         remember()
     }
 
@@ -238,6 +243,7 @@ public final class LibraryFilters {
     }
 
     private func changed() {
+        withdrawRemoval()
         remember()
         apply()
     }
@@ -314,6 +320,54 @@ public final class LibraryFilters {
             listed = (ordered.items.count, ordered.total)
         }
         countColumns()
+        findRemoval(after: ordered)
+    }
+
+    // MARK: - A filter that finds nothing
+
+    /// When the list the filter made is empty and the source isn't: the term to offer to take out,
+    /// found off the main thread. Any other list takes the offer back.
+    private func findRemoval(after ordered: LibraryFolderList.Ordered) {
+        findingRemoval?.cancel()
+        findingRemoval = nil
+        guard ordered.items.isEmpty, ordered.total > 0, let query = ordered.filter.query, let folder,
+              let engine = service?.engine
+        else {
+            if removal != nil {
+                removal = nil
+            }
+            return
+        }
+        let source = PhotoSource.folder(folder.url, includingSubfolders: folder.subfolders)
+        findingRemoval = Task { [weak self] in
+            let found = try? await engine.removal(from: query, in: source)
+            guard !Task.isCancelled, let self else { return }
+            if removal != found {
+                removal = found
+            }
+        }
+    }
+
+    /// The filter changed: the offer, and the search for one, go.
+    private func withdrawRemoval() {
+        findingRemoval?.cancel()
+        findingRemoval = nil
+        if removal != nil {
+            removal = nil
+        }
+    }
+
+    /// Takes the term the bar offers out of the filter.
+    public func takeOutRemoval() {
+        guard let removal else { return }
+        edit { rules in
+            guard rules.rules.indices.contains(removal.index), rules.rules[removal.index] == removal.rule else {
+                return rules
+            }
+            var rules = rules
+            rules.rules.remove(at: removal.index)
+            return rules
+        }
     }
 
     /// Counts the metadata columns again, once what's under way is done: when the source's photos

@@ -40,6 +40,7 @@ final class FilterToggle: NSView {
             label.stringValue = title
             label.font = Typography.caption.nsFont
             label.alignment = .center
+            label.lineBreakMode = .byTruncatingTail
             addSubview(label)
         }
         toolTip = tip
@@ -58,6 +59,17 @@ final class FilterToggle: NSView {
     /// The width its title or symbol needs.
     var fittingWidth: CGFloat {
         label.stringValue.isEmpty ? 22 : ceil(label.intrinsicContentSize.width) + 12
+    }
+
+    /// Its title, for a button made with one.
+    var title: String {
+        get { label.stringValue }
+        set {
+            if label.stringValue != newValue {
+                label.stringValue = newValue
+                needsLayout = true
+            }
+        }
     }
 
     private func update() {
