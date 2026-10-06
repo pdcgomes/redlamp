@@ -6,10 +6,9 @@ import Testing
 /// A sidecar this build can't read, or can't open now, is never saved over or deleted.
 struct SidecarProtectionTests {
     /// Edits this build can't decode, though no version number says a newer Redlamp wrote them:
-    /// an enum value it doesn't know, a truncated file, and a value of the wrong type.
+    /// an enum value it doesn't know and a value of the wrong type.
     static let unreadable = [
         #"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":1,"treatment":"infrared"}}"#,
-        #"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":1,"values":{"basic.expo"#,
         #"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":1,"values":{"basic.exposure":"+1"}}}"#,
     ]
 

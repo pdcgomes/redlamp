@@ -118,7 +118,7 @@
     }
 
     enum SavingScenarios {
-        static let all: [Scenario] = [failedSave, readOnly]
+        static let all: [Scenario] = [failedSave, readOnly, startOver]
 
         static let failedSave = Scenario(
             "saving.failed-save", "A save the disk refuses is shown, retried, and lands once the disk allows it",
@@ -170,6 +170,33 @@
             let after = (try? String(contentsOf: package.appending(path: "edit.json"), encoding: .utf8)) ?? ""
             try app.expect(after == newer, "The newer sidecar was rewritten")
             try FileManager.default.removeItem(at: package)
+            try app.openWorking()
+            app.covered(.feature("saving.read-only"), via: .model)
+        }
+
+        static let startOver = Scenario(
+            "saving.start-over", "A damaged edit opens read-only, and Start Over keeps it aside for a new edit",
+            claims: [.feature("saving.read-only")],
+        ) { app in
+            let name = "Bitmap.png"
+            let package = app.photos.appending(path: "\(name).redlamp")
+            try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: package) }
+            let damaged = #"{"format": "app.redlamp.edit", "recipe": {"version": 3, "#
+            try damaged.write(to: package.appending(path: "edit.json"), atomically: true, encoding: .utf8)
+            try app.open(name)
+            try app.wait("the damaged edit", timeout: 20) { $0.canStartOver }
+            try app.main { $0.startOver() }
+            try app.wait("a new edit", timeout: 20) { !$0.isReadOnly }
+            try app.set(.exposure, 0.3)
+            try app.wait("the new edit saved", timeout: 20) { model in
+                model.saveNow()
+                return FileManager.default.fileExists(atPath: package.appending(path: "edit.json").path)
+            }
+            let names = try FileManager.default.contentsOfDirectory(atPath: package.path)
+            let copies = names.filter { $0.hasPrefix("edit.damaged-") }
+            let kept = try copies.first.map { try String(contentsOf: package.appending(path: $0), encoding: .utf8) }
+            try app.expect(copies.count == 1 && kept == damaged, "The damaged edit wasn't kept: \(names)")
             try app.openWorking()
             app.covered(.feature("saving.read-only"), via: .model)
         }

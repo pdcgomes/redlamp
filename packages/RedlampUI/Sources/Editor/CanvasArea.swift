@@ -84,9 +84,12 @@ struct CanvasArea: View {
                    model.exportStatus != nil
                    || model.isShowingOriginal || model.previewingRecipe != nil || model.previewingEdit != nil
                    || model.eyedropperActive || model.pointColorEyedropperActive || model.drawingKind != nil
-                   || model.notice != nil
+                   || (model.notice != nil && !model.canStartOver)
                    || (model.info != nil && model.isBaseLookMissing) {
                     StatusPill(text: statusText)
+                }
+                if model.canStartOver, let notice = model.notice {
+                    DamagedEditBanner(notice: notice)
                 }
                 if let error = model.saveError {
                     SaveErrorBanner(error: error)
@@ -197,7 +200,7 @@ struct CanvasArea: View {
         if model.isShowingOriginal {
             return "Before"
         }
-        if let notice = model.notice {
+        if let notice = model.notice, !model.canStartOver {
             return notice
         }
         return "Base Look “\(model.baseLook.name)” isn't installed  ·  Showing the photo without it"
@@ -262,6 +265,26 @@ private struct SaveErrorBanner: View {
             }
             .buttonStyle(.borderless)
             .help("Report a Bug about edits not saving")
+        }
+        .font(.system(size: 12, weight: .medium))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .glassEffect(.regular, in: .capsule)
+    }
+}
+
+/// A damaged edit can't be shown or saved over; Start Over keeps it in the sidecar and begins again.
+private struct DamagedEditBanner: View {
+    let notice: String
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Label(notice, systemImage: "exclamationmark.triangle.fill")
+                .symbolRenderingMode(.multicolor)
+            Button("Start Over") { model.startOver() }
+                .buttonStyle(.borderless)
+                .help("Start a new edit. The damaged file is kept in the photo's sidecar.")
         }
         .font(.system(size: 12, weight: .medium))
         .padding(.horizontal, 14)

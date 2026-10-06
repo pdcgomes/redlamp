@@ -6,9 +6,12 @@ import RedlampEngineAPI
 public enum SidecarProtection: Equatable, Sendable {
     /// Its file format or process version is newer than this build's.
     case writtenByNewerVersion
+    /// Its edit isn't a JSON object: no Redlamp wrote it as it is, and none can read it. It can
+    /// be set aside for a new edit (`setAsideDamagedEdit(for:)`).
+    case damaged
     /// Its edit can't be opened or doesn't decode: a newer Redlamp added a value this build
-    /// doesn't know, the file is damaged, or it is there but can't be read now (no permission,
-    /// an I/O error, or iCloud Drive can't download it).
+    /// doesn't know, or it is there but can't be read now (no permission, an I/O error, or
+    /// iCloud Drive can't download it).
     case unreadable
     /// Saving it back would drop or change something: a field a newer Redlamp added where this
     /// build doesn't keep it, or a value this build can't hold.
@@ -34,6 +37,9 @@ extension SidecarStore {
     /// the read's error if it can't be read now.
     static func existing(at destination: URL) throws -> Sidecar? {
         guard let data = try editData(inSidecar: destination) else { return nil }
+        if isDamaged(data) {
+            throw SidecarStoreError.damaged(destination)
+        }
         if isNewer(data) {
             throw SidecarStoreError.writtenByNewerVersion(destination)
         }
@@ -84,6 +90,9 @@ extension SidecarStore {
     }
 
     static func protection(_ data: Data) -> SidecarProtection? {
+        if isDamaged(data) {
+            return .damaged
+        }
         if isNewer(data) {
             return .writtenByNewerVersion
         }
@@ -174,6 +183,12 @@ extension SidecarStore {
             default: return nil
             }
         }
+    }
+
+    /// Whether `data` isn't a JSON object, as a truncated or overwritten file isn't.
+    static func isDamaged(_ data: Data) -> Bool {
+        guard case .object = try? JSONDecoder().decode(JSONValue.self, from: data) else { return true }
+        return false
     }
 
     private static func isNewer(_ data: Data) -> Bool {

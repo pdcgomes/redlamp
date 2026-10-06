@@ -8,12 +8,15 @@ import Testing
 /// can't read leave the file as it was.
 @MainActor
 struct SidecarSafetyTests {
-    /// Edits this build can't decode: an enum value it doesn't know, a truncated file, and a
-    /// value of the wrong type.
+    /// Edits this build can't decode: an enum value it doesn't know and a value of the wrong type,
+    /// then a damaged one, cut short.
     nonisolated static let unreadable = [
         #"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":1,"treatment":"infrared"}}"#,
-        #"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":1,"values":{"basic.expo"#,
         #"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":1,"values":{"basic.exposure":"+1"}}}"#,
+    ] + damaged
+
+    nonisolated static let damaged = [
+        #"{"format":"app.redlamp.edit","recipe":{"version":1,"processVersion":1,"values":{"basic.expo"#,
     ]
 
     private struct Folder {
@@ -77,7 +80,7 @@ struct SidecarSafetyTests {
 
         try await open(folder.photo, in: model)
         #expect(model.isReadOnly)
-        #expect(model.readOnlyReason == .unreadable)
+        #expect(model.readOnlyReason == (Self.damaged.contains(json) ? .damaged : .unreadable))
         try await open(folder.other, in: model)
         try await settle()
         #expect(try folder.contents() == before, "browsing past it keeps it")
@@ -239,7 +242,8 @@ struct SidecarSafetyTests {
         model.select(folder.other)
         await model.saves.flush()
         try await eventually { model.saveError != nil }
-        #expect(model.saveError?.message == "Edits to IMG_0001 can't be saved: its edit can't be read")
+        let reason = Self.damaged.contains(json) ? "its edit file is damaged" : "its edit can't be read"
+        #expect(model.saveError?.message == "Edits to IMG_0001 can't be saved: \(reason)")
         #expect(model.saveError?.canRetry == false)
         try await settle()
         #expect(try folder.contents() == before)
@@ -336,6 +340,56 @@ struct SidecarSafetyTests {
         #expect(model.notice == "Edits from another Mac couldn't be merged here  ·  They're kept as they are")
         model.readOnlyReason = .unreadable
         #expect(model.notice == "This photo's edit file can't be read  ·  Changes won't be saved")
+        model.readOnlyReason = .damaged
+        #expect(model.notice == "This photo's edit file is damaged  ·  Changes won't be saved")
+    }
+
+    @Test func `Start Over keeps a damaged edit aside in the sidecar and opens the photo with a new one`() async throws {
+        let folder = Folder()
+        try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder.url) }
+        let damaged = try #require(Self.damaged.first)
+        try folder.seed(damaged)
+        let model = EditorModel(engine: StubEngine())
+        model.library.insert(LibraryItem(url: folder.photo))
+
+        try await open(folder.photo, in: model)
+        #expect(model.readOnlyReason == .damaged)
+        #expect(model.canStartOver)
+        let visit = model.currentVisit
+        model.startOver()
+        try await eventually { !model.isReadOnly }
+        #expect(!model.isReadOnly)
+        #expect(!model.canStartOver)
+        #expect(model.currentVisit != visit, "a new visit")
+        #expect(model.recipe[.exposure] == 0)
+
+        model.setValue(.exposure, 0.5)
+        model.saveNow()
+        await model.saves.flush()
+        try await eventually { SidecarStore().load(for: folder.photo)?.recipe[.exposure] == 0.5 }
+        #expect(SidecarStore().load(for: folder.photo)?.recipe[.exposure] == 0.5)
+        let copies = try folder.contents().filter { $0.key.contains("edit.damaged-") }
+        #expect(copies.count == 1)
+        #expect(copies.first?.value == Data(damaged.utf8))
+        #expect(model.saveError == nil)
+    }
+
+    @Test func `Start Over isn't offered for an edit that doesn't decode`() async throws {
+        let folder = Folder()
+        try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder.url) }
+        try folder.seed(#require(Self.unreadable.first))
+        let before = try folder.contents()
+        let model = EditorModel(engine: StubEngine())
+
+        try await open(folder.photo, in: model)
+        #expect(model.readOnlyReason == .unreadable)
+        #expect(!model.canStartOver)
+        model.startOver()
+        try await settle()
+        #expect(model.isReadOnly)
+        #expect(try folder.contents() == before)
     }
 
     @Test(arguments: unreadable)

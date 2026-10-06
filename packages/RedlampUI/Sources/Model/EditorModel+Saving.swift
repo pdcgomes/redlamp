@@ -32,6 +32,7 @@ extension EditorModel {
     public var notice: String? {
         switch readOnlyReason {
         case .writtenByNewerVersion: "Edited in a newer version of Redlamp  ·  Changes won't be saved"
+        case .damaged: "This photo's edit file is damaged  ·  Changes won't be saved"
         case .unreadable: "This photo's edit file can't be read  ·  Changes won't be saved"
         case .lossy: "This edit has settings this version doesn't know  ·  Changes won't be saved"
         case nil: hasUnmergedEdits ? "Edits from another Mac couldn't be merged here  ·  They're kept as they are" : nil
@@ -193,6 +194,7 @@ extension EditorModel {
     private static func protection(of error: any Error) -> SidecarProtection? {
         switch error as? SidecarStoreError {
         case .writtenByNewerVersion: .writtenByNewerVersion
+        case .damaged: .damaged
         case .unreadable: .unreadable
         case .lossy: .lossy
         case nil: nil
@@ -203,6 +205,7 @@ extension EditorModel {
     private static func reason(_ protection: SidecarProtection) -> String {
         switch protection {
         case .writtenByNewerVersion: "a newer version of Redlamp changed it since it opened"
+        case .damaged: "its edit file changed and is damaged"
         case .unreadable: "its edit file changed and can't be read"
         case .lossy: "it now has settings this version doesn't know"
         }
@@ -212,9 +215,17 @@ extension EditorModel {
     private static func reason(beforeOpening protection: SidecarProtection) -> String {
         switch protection {
         case .writtenByNewerVersion: "a newer version of Redlamp edited it"
+        case .damaged: "its edit file is damaged"
         case .unreadable: "its edit can't be read"
         case .lossy: "it has settings this version doesn't know"
         }
+    }
+
+    /// Start Over couldn't set the damaged edit aside: the photo stays as it is, read-only.
+    func startOverFailed(_ url: URL, _ error: any Error) {
+        let name = url.deletingPathExtension().lastPathComponent
+        activity.record(.photo, "Couldn't start over on \(activity.alias(for: url)): \(Self.reason(error))")
+        saveError = SaveError(url: url, message: "\(name) can't start over: \(Self.reason(error))", canRetry: false)
     }
 
     private static func reason(_ error: any Error) -> String {

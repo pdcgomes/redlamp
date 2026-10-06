@@ -28,7 +28,7 @@ IMG_1234.CR3.redlamp/
   history/<uuid>.json     one file per editing session
 ```
 
-`edit.json` is always there; `masks/` and `history/` exist only when something is in them. Sidecars written before format 3 are a single JSON file at the package's path, with the same content as `edit.json`. A reader must accept both; Redlamp turns a single file into a package when it next saves it.
+`edit.json` is always there, except in a package that holds only a damaged edit set aside (rule 6 under [Versions and compatibility](#versions-and-compatibility)); `masks/` and `history/` exist only when something is in them. Sidecars written before format 3 are a single JSON file at the package's path, with the same content as `edit.json`. A reader must accept both; Redlamp turns a single file into a package when it next saves it.
 
 To show a photo's badges, Redlamp reads only `recipe` and `metadata` from `edit.json`, without file coordination. That is safe because the file is only ever replaced whole.
 
@@ -398,7 +398,12 @@ What Redlamp does when it reads a sidecar, which is also what another reader mus
 3. **Unknown values**: a spot's `mode` reads as `heal`, and the sidecar is read-only, since saving would write `heal`; a history step's `action` reads as `edit`. Any other value outside its list (`treatment`, `whiteBalance`, a component's `operation`, an AI mask's `kind`, a swatch's `color`, `flag`, `label`) makes the sidecar unreadable.
 4. **Values out of range**: parameters and local adjustments are clamped to their ranges, and the sidecar is read-only, since saving would write the clamped values. Nothing else is checked.
 5. **History files** with another `format`, a newer `version`, or that can't be read are skipped, and kept.
-6. **A sidecar that can't be read** (a missing required key, a value of the wrong type or outside its list, or a date without a time zone, anywhere in `edit.json`) opens as if the photo had no edit, read-only: Redlamp never overwrites or deletes it (it may still hold an edit, history and masks), says so over the photo, and applying settings to many photos leaves it alone. The same goes for an `edit.json` that is there but can't be opened (no permission, an I/O error, or iCloud Drive can't download it). Validate a sidecar against the schema before writing it.
+6. **A sidecar that can't be read** opens as if the photo had no edit, read-only: Redlamp never overwrites or deletes it (it may still hold an edit, history and masks), says why over the photo, and applying settings to many photos leaves it alone. There are three cases:
+   - **Damaged:** `edit.json` isn't a JSON object (it is cut short, empty, or not JSON at all). No Redlamp wrote it as it is, so Redlamp offers Start Over: it renames `edit.json` to `edit.damaged-<date>.json` in the package (a single-file sidecar becomes a package holding it under that name), where `<date>` is the local time as `yyyy-MM-dd-HHmmss`, with `-2` and on added if that name is taken. The photo then opens with no edit, and its history and masks stay. Redlamp never deletes a damaged copy: removing the sidecar removes the rest of the package and leaves the copies, and the masks a copy names are kept. Readers ignore `edit.damaged-*.json` files.
+   - **Unreadable:** `edit.json` is a JSON object that doesn't decode (a missing required key, a value of the wrong type or outside its list, or a date without a time zone). A newer Redlamp may have written it, so there is no Start Over.
+   - **Not opened:** `edit.json` is there but can't be opened now (no permission, an I/O error, another app holding it, or iCloud Drive can't download it). Redlamp reads it again, at growing intervals up to a minute, and opens the photo with its edit once it reads.
+
+   Validate a sidecar against the schema before writing it.
 
 When writing a sidecar for Redlamp:
 

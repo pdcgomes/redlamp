@@ -105,7 +105,6 @@ struct SidecarTests {
     /// history and masks: it is never saved over or deleted, as a newer one isn't.
     @Test(arguments: [
         #"{"format":"app.redlamp.edit","recipe":{"version":3,"processVersion":9,"values":{"basic.exposure":"high"}}}"#,
-        #"{"format":"app.redlamp.edit","recipe":{"version":3,"processVersion":9,"#,
     ])
     func `sidecars that can't be read are read only`(json: String) throws {
         let (image, cleanup) = try temporaryImage()

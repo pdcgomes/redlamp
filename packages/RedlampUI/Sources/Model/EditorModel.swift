@@ -845,6 +845,41 @@ public final class EditorModel {
         }
     }
 
+    /// The open photo's edit is damaged, and Start Over can set it aside for a new one.
+    public var canStartOver: Bool {
+        readOnlyReason == .damaged && opening == nil && info?.url == selection
+    }
+
+    /// Sets the open photo's damaged edit aside in its sidecar (`edit.damaged-<date>.json`, for
+    /// recovery) and opens it again with no edit, in a new visit.
+    public func startOver() {
+        guard canStartOver, let url = selection else { return }
+        let visit = visits
+        Task { [sidecars, scheduler = library.scheduler] in
+            let result: Result<(URL, OpenedSidecar), any Error>
+            do {
+                result = try await .success(scheduler.run(.onScreen) {
+                    let copy = try sidecars.setAsideDamagedEdit(for: url)
+                    return (copy, OpenedSidecar(url, in: sidecars))
+                })
+            } catch {
+                result = .failure(error)
+            }
+            guard visits == visit, let info, info.url == url, selection == url, opening == nil else { return }
+            switch result {
+            case let .success((copy, read)):
+                activity.record(
+                    .photo,
+                    "Started over on \(activity.alias(for: url)), its damaged edit kept as \(copy.lastPathComponent)",
+                )
+                leave(for: url, keepingSelection: true, ready: true)
+                didOpen(info, read, keepingView: true)
+            case let .failure(error):
+                startOverFailed(url, error)
+            }
+        }
+    }
+
     /// "Opened Photo A: CR3, Canon EOS R5, 8192 × 5464, with an edit, in 1.2 s".
     private func recordOpening(_ opened: ImageInfo, edited: Bool) {
         var parts = [opened.url.pathExtension.uppercased()]

@@ -298,7 +298,7 @@ struct PhotoSelectionTests {
         photos.reads.release()
         try await opened(b, in: model)
         try await Task.sleep(for: .milliseconds(200))
-        #expect(model.readOnlyReason == .unreadable)
+        #expect(model.readOnlyReason == .damaged)
         #expect(model.saveError == nil, "B's banner says why")
     }
 

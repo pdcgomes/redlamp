@@ -32,10 +32,22 @@ extension SidecarStore {
     }
 
     /// Removes the sidecar at `url` by moving it to a hidden name first, so an interrupted removal
-    /// leaves it whole or gone, never a package without its edit.
+    /// leaves it whole or gone, never a package without its edit. Damaged edits set aside stay,
+    /// for recovery: the rest of the package goes, its edit first.
     static func remove(_ url: URL) throws {
+        let fileManager = FileManager.default
         let hidden = hiddenSibling(of: url)
-        try FileManager.default.moveItem(at: url, to: hidden)
-        try FileManager.default.removeItem(at: hidden)
+        let kept = Set(damagedCopies(in: url).map(\.lastPathComponent))
+        guard !kept.isEmpty else {
+            try fileManager.moveItem(at: url, to: hidden)
+            try fileManager.removeItem(at: hidden)
+            return
+        }
+        let rest = try fileManager.contentsOfDirectory(atPath: url.path).filter { !kept.contains($0) }
+        try fileManager.createDirectory(at: hidden, withIntermediateDirectories: false)
+        for name in rest.filter({ $0 == editFile }) + rest.filter({ $0 != editFile }) {
+            try fileManager.moveItem(at: url.appending(path: name), to: hidden.appending(path: name))
+        }
+        try fileManager.removeItem(at: hidden)
     }
 }

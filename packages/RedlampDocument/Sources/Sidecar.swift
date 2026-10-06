@@ -132,6 +132,8 @@ public enum SidecarStoreError: Error, Equatable {
     /// The sidecar was written by a newer Redlamp. It is read-only here, so it is never
     /// overwritten or deleted.
     case writtenByNewerVersion(URL)
+    /// The sidecar's edit isn't a JSON object. It is never overwritten or deleted, only set aside.
+    case damaged(URL)
     /// The sidecar's edit doesn't decode in this build, so it is never overwritten or deleted.
     case unreadable(URL)
     /// Saving over the sidecar would drop or change what's in it, so it is never overwritten or
@@ -190,8 +192,8 @@ public struct SidecarStore: Sendable {
 
     /// The image's sidecar, or nil only when it has none. Where `load(for:)` takes a sidecar it
     /// can't read for none, this throws: the coordinated read's or the file's error (worth trying
-    /// again), or `SidecarStoreError.unreadable` when the edit doesn't decode. Use it wherever
-    /// what's read is saved back.
+    /// again), `SidecarStoreError.damaged` when the edit isn't JSON, or `.unreadable` when it
+    /// doesn't decode. Use it wherever what's read is saved back.
     public func loadThrowing(for image: URL) throws -> Sidecar? {
         let sidecar = url(for: image)
         guard let loaded = try Self.reading(sidecar, { try Self.decodeThrowing(sidecar: $0) }) else { return nil }
@@ -285,10 +287,13 @@ public struct SidecarStore: Sendable {
     }
 
     /// The sidecar at `sidecar`, with its mask bitmaps; nil when it has none. Throws the read's
-    /// error when its edit can't be read now, and `SidecarStoreError.unreadable` when it doesn't
-    /// decode.
+    /// error when its edit can't be read now, `SidecarStoreError.damaged` when it isn't JSON, and
+    /// `.unreadable` when it doesn't decode.
     static func decodeThrowing(sidecar: URL) throws -> Sidecar? {
         guard let data = try editData(inSidecar: sidecar) else { return nil }
+        if isDamaged(data) {
+            throw SidecarStoreError.damaged(sidecar)
+        }
         guard let decoded = decode(data, inSidecar: sidecar) else {
             throw SidecarStoreError.unreadable(sidecar)
         }
@@ -380,12 +385,13 @@ public struct SidecarStore: Sendable {
     }
 
     /// Removes the package's bitmaps that nothing refers to: not the edit, its snapshots or its
-    /// history, nor any field of `json` (the edit as written) or of a history file, where fields
-    /// a newer build added (a mask shape this build doesn't know, say) may name one. Nothing is
+    /// history, nor any field of `json` (the edit as written), of a history file or of a damaged
+    /// edit set aside, where fields a newer build added (a mask shape this build doesn't know,
+    /// say) may name one. Nothing is
     /// removed while a session file can't be read, since the bitmaps it needs aren't known.
     private static func removeUnusedBitmaps(of sidecar: Sidecar, in package: URL, json: Data) {
         var used = Set(bitmaps(of: sidecar).map(\.sha256))
-        var written = [json]
+        var written = [json] + damagedCopies(in: package).compactMap { try? Data(contentsOf: $0) }
         for file in historyFiles(in: package) {
             guard let data = try? Data(contentsOf: file),
                   let summary = try? JSONDecoder.sidecar.decode(HistoryFile.Summary.self, from: data)
