@@ -86,6 +86,9 @@ public final class FolderLibrary {
     /// scenes', each test's): a job with another's key would replace it, or be cancelled with it.
     @ObservationIgnored let keyPrefix = "library \(UUID().uuidString) "
     @ObservationIgnored let defaults: UserDefaults?
+    /// Puts the badges of a change's rows right before anyone is told of it (culling's, which the library's
+    /// lists can be a change behind).
+    @ObservationIgnored var adjust: (@MainActor (LibraryDiff) -> Void)?
     /// Where each photo's sidecar is read and written: beside it, or where the library keeps it.
     @ObservationIgnored public let sidecars = SidecarPlacement()
     /// The library, when it's on (`attach`).
@@ -332,6 +335,7 @@ public final class FolderLibrary {
     }
 
     func publish(_ diff: LibraryDiff) {
+        adjust?(diff)
         count = items.count
         revision += 1
         for observer in observers.values {

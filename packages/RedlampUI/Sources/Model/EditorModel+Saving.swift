@@ -170,10 +170,11 @@ extension EditorModel {
 
     /// The filmstrip item as its sidecar is now.
     private func showOnDisk(_ url: URL) {
-        Task { [saves, library] in
+        Task { [weak self, saves, library] in
             let store = saves.store(for: url)
             let summary = await saves.read { store.summary(for: url) ?? SidecarSummary() }
             guard !saves.isPending(url) else { return }
+            self?.cullingOverlay.forget(url)
             library.update(url) { item in
                 item.hasEdits = summary.hasEdits
                 item.metadata = summary.metadata

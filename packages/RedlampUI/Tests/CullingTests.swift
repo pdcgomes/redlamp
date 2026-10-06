@@ -53,8 +53,10 @@ struct CullingTests {
             }
             model = EditorModel(engine: StubEngine(), library: library)
             model.open([root])
-            try await eventually { self.library.isShownFromLibrary && self.model.items.count == count }
-            try #require(library.isShownFromLibrary, "the folder is shown from the library")
+            try await eventually {
+                self.library.isShownFromLibrary && self.model.items.count == count && self.model.info != nil
+            }
+            try #require(library.isShownFromLibrary && model.info?.url == photos[0], "the first photo open in Develop")
             model.showModule(.library)
         }
 
@@ -164,9 +166,38 @@ struct CullingTests {
         }
         await folder.written()
         #expect(!folder.hasSidecar(5), "a sidecar a batch made is gone")
-        #expect(folder.sidecar(0)?.isEmpty ?? true, "Develop's photo, saved by Develop, holds nothing either")
+        #expect(folder.sidecar(0)?.isEmpty ?? true, "the photo Develop has open holds nothing either")
         #expect(folder.sidecar(1) == PhotoMetadata(rating: 2))
         #expect(all.map(folder.shown).map(\.rating) == [0, 2, 0, 0, 0, 0])
+    }
+
+    @Test func `the photo Develop has open is culled with the rest, and Develop's saves keep the change`() async throws {
+        let folder = IndexedFolder()
+        defer { folder.cleanUp() }
+        try await folder.open(count: 3)
+        let model = try #require(folder.model)
+        #expect(model.info?.url == folder.photos[0] && model.module == .library)
+        #expect(model.perform(.selectAllPhotos) && model.perform(.rating4) && model.photoMetadata.rating == 4)
+        await folder.written()
+        #expect((0 ..< 3).map { folder.sidecar($0)?.rating } == [4, 4, 4])
+
+        model.showModule(.develop)
+        model.setValue(.exposure, 0.5)
+        model.saveNow()
+        await folder.written()
+        let edited = try #require(SidecarStore().load(for: folder.photos[0]))
+        #expect(edited.metadata?.rating == 4 && edited.recipe[.exposure] == 0.5, "Develop's save keeps the rating")
+
+        model.showModule(.library)
+        #expect(model.perform(.undo))
+        await folder.written()
+        model.showModule(.develop)
+        model.setValue(.exposure, 0.7)
+        model.saveNow()
+        await folder.written()
+        let undone = try #require(SidecarStore().load(for: folder.photos[0]))
+        #expect((undone.metadata?.rating ?? 0) == 0 && undone.recipe[.exposure] == 0.7, "nor brings it back")
+        #expect(model.photoMetadata.rating == 0 && folder.shown(0).rating == 0)
     }
 
     @Test func `a custom label and No Label reach the selection, a custom label never as a colour`() async throws {

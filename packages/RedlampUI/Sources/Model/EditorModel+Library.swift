@@ -73,6 +73,7 @@ public extension EditorModel {
     /// deleted or moved away, its neighbour is selected, as deleting does in Lightroom.
     internal func followLibrary() {
         libraryObservation = library.observe { [weak self] diff in self?.libraryChanged(diff) }
+        library.adjust = { [weak self] diff in self?.keepCullingShown(diff) }
         library.onReopened = { [weak self] found in self?.didList(found, select: self?.selection) }
         library.files = engine.files
         library.onStacks = { [weak self] found in
@@ -82,7 +83,6 @@ public extension EditorModel {
     }
 
     private func libraryChanged(_ diff: LibraryDiff) {
-        keepCullingShown(diff)
         if diff.reset || !diff.removed.isEmpty || !diff.inserted.isEmpty {
             keepSelectionShown()
         }
