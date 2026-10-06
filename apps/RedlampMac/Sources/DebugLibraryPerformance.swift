@@ -493,6 +493,16 @@
             lines.append(rendered("Scrolling the grid end to end in 8 s", renders.statistics, seconds: duration))
             lines.append(monitor.report("Main thread scrolling the grid as edits render", seconds: duration))
             await memory.mark("edits, scrolling")
+            renders.isRunning = false
+            renders.letEngineGo()
+            try? await Task.sleep(for: .seconds(1))
+            await memory.mark("edits, engine let go")
+            renders.isRunning = true
+            renders.isRunning = false
+            renders.letEngineGo()
+            try? await Task.sleep(for: .seconds(1))
+            await memory.mark("edits, engine let go")
+            renders.isRunning = true
 
             let develop = NSWindow(
                 contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000),
@@ -502,7 +512,8 @@
             develop.orderBack(nil)
             defer { develop.orderOut(nil) }
             model.showModule(.develop)
-            if let photo = model.items.first(where: { !$0.hasEdits }) {
+            if let photo = model.items.first(where: { !$0.hasEdits && SupportedFormats.isRaw($0.url) })
+                ?? model.items.first(where: { !$0.hasEdits }) {
                 model.select(photo.url)
             }
             let opening = ContinuousClock.now
@@ -534,14 +545,24 @@
             return (scrolling, lines)
         }
 
-        /// "`label`: N rendered, N a second", with the renders' waits and the p50 of their steps.
+        /// "`label`: N rendered, N a second", with the renders' waits, the engines made, and the p50 of the
+        /// steps of photos of 12 MP or more (the fixture's raws; its JPEGs and HEICs are 64 by 48) and of
+        /// the others.
         private static func rendered(_ label: String, _ statistics: EditRenders.Statistics, seconds: Double) -> String {
-            String(
-                format: "%@: %d edits rendered, %.2f a second (%d failed); %d waits for Develop or the screen, %.1f s "
-                    + "in all; each opened in p50 %.0f ms, rendered in %.0f ms, stored in %.0f ms",
-                label, statistics.rendered, Double(statistics.rendered) / seconds, statistics.failed, statistics.waits,
-                Self.seconds(statistics.waited), percentile(statistics.opening, 0.5) * 1000,
-                percentile(statistics.rendering, 0.5) * 1000, percentile(statistics.storing, 0.5) * 1000,
+            let large = statistics.steps.filter { $0.pixels >= 12_000_000 }
+            let small = statistics.steps.filter { $0.pixels < 12_000_000 }
+            func steps(_ steps: [EditRenders.Statistics.Step]) -> String {
+                String(
+                    format: "%d, opened in p50 %.0f ms (max %.0f), rendered in %.0f ms, stored in %.0f ms", steps.count,
+                    percentile(steps.map(\.opening), 0.5) * 1000, (steps.map(\.opening).max() ?? 0) * 1000,
+                    percentile(steps.map(\.rendering), 0.5) * 1000, percentile(steps.map(\.storing), 0.5) * 1000,
+                )
+            }
+            return String(
+                format: "%@: %d edits rendered, %.2f a second (%d failed, %d engines made); %d waits for Develop or "
+                    + "the screen, %.1f s in all; photos of 12 MP or more: %@; smaller: %@",
+                label, statistics.rendered, Double(statistics.rendered) / seconds, statistics.failed,
+                statistics.engines, statistics.waits, Self.seconds(statistics.waited), steps(large), steps(small),
             )
         }
 
