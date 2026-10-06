@@ -12,7 +12,7 @@ A 16-second video for social feeds that asks people to star Redlamp on GitHub. I
 | Length | 16 s: 8 bars at 120 BPM. |
 | The one message | Redlamp is a free, open-source raw editor for the Mac, and a star helps it. |
 | The ask | Star Redlamp on GitHub: `github.com/pdcgomes/redlamp`. |
-| Tone | Playful and quick, in the brand's plain voice: the lamp is the comedian, the words stay calm. |
+| Tone | Playful and quick in what happens, in the brand's plain voice: the lamp is the comedian, the words stay calm, and the music is dark and cinematic. |
 | Must keep | The brand's rules ([docs/brand/README.md](../brand/README.md)): the red is light with a source, one light per picture, lit from above left, no bright point in the lens, no superlatives. "Please star us!" is the one exclamation, as the owner wrote it. |
 | Success | Stars on the repository in the week after posting, against the week before; completion and replay rates where the platform reports them. |
 
@@ -45,21 +45,21 @@ The beat sheet, at 120 BPM and 30 fps: a beat every 15 frames, a bar every 60 (2
 
 | Beat | Time | Picture | Words on screen | Sound |
 | --- | --- | --- | --- | --- |
-| 0 | 0.0 s | The lamp, close, already lit, light gathering behind it, a faint tremble. | The hook's first line. | A low thump on the first frame; the lamp's hum starts rising; a filtered pulse in B minor. |
-| 2 | 1.0 s | The camera creeps in. | The hook's second line. | |
-| 4 | 2.0 s | Rays reach out; the motes thicken; the tremble grows. | Redlamp is a free raw editor for the Mac. | The snare roll in eighths, shaking the lamp; G major; a riser starts. |
-| 8 | 4.0 s | The lamp shakes hard; the glow tightens. | Open source, on GitHub. | Sixteenths, then thirty-seconds from beat 10; A major. |
-| 10.5 | 5.25 s | Squash: the lamp shrinks and brightens, holding its breath, and turns towards the badge to aim. The words go. The camera starts to pull back, and the badge comes into frame. | | The drums stop; the hum whines up, and an in-breath. |
-| 11 | 5.5 s | The shot leaves from behind the tile's top edge and arcs across the frame; the lamp recoils, swinging back past upright. | | A zap that pans with the shot. |
-| 12 | 6.0 s | The hit: a flash and sparks, the badge swells and springs back, its star spins, two lights chase round it. A camera shake. | | The drop: impact, the full groove in D major. |
-| 13 to 15 | 6.5 s | The badge bumps on every kick. The camera eases in on it. | | The groove, and the lead's first phrase. |
-| 15.55 | 7.78 s | The sign falls out from behind the badge: its physics takes 0.225 s to pull the rope taut, so it's let go that long before the beat. | | A slide whistle down. |
-| 16 | 8.0 s | It catches on its rope, exactly on the beat, and swings in time. | Please star us! (on the sign) | A wooden knock and the rope's creak. |
-| 20 | 10.0 s | A cursor glides in from below. | | A soft whoosh. |
-| 22 | 11.0 s | It clicks the star: the star lights and stays lit, the count goes up by one, sparks, and the sign jumps on its rope. | | A click, a bell, a sparkle, the counter's tick. |
-| 24 | 12.0 s | The end card: the camera pulls back to the whole scene, the lamp, the badge and the sign, with the ask above them. | Star Redlamp on GitHub. Then github.com/pdcgomes/redlamp (beat 25), and Every star helps photographers find it. (beat 26) | A whoosh, the last phrase of the lead. |
-| 28 | 14.0 s | The end card holds. | | A final stab; the groove stops and the chord rings. |
-| 30 | 15.0 s | Light begins to gather behind the lamp again. | | The hum rises again, into the loop. |
+| 0 | 0.0 s | The lamp, close, already lit, light gathering behind it, a faint tremble. | The hook's first line. | A deep hit on the first frame; a low drone on D; a felt piano's open fifth; a watch ticking; a Shepard tone that seems to rise for ever starts its climb. |
+| 2 | 1.0 s | The camera creeps in. | The hook's second line. | A heartbeat on each beat of the first bar. |
+| 4 | 2.0 s | Rays reach out; the motes thicken; the tremble grows. | Redlamp is a free raw editor for the Mac. | Low toms take over the roll, in eighths, each hit shaking the lamp; a taiko on the bar; spiccato strings come in under a section that swells, on B flat. |
+| 8 | 4.0 s | The lamp shakes hard; the glow tightens. | Open source, on GitHub. | The toms in sixteenths, then thirty-seconds from beat 10, with a tick of metal; the bass in eighths; a riser; G minor, then A. |
+| 10.5 | 5.25 s | Squash: the lamp shrinks and brightens, holding its breath, and turns towards the badge to aim. The words go. The camera starts to pull back, and the badge comes into frame. |  | Silence: the mix and its reverb are choked, but for a breath drawn in. |
+| 11 | 5.5 s | The shot leaves from behind the tile's top edge and arcs across the frame; the lamp recoils, swinging back past upright. |  | A thump as the lamp recoils; a shot of struck glass, and air that pans with it; the hit's own reverb, reversed, swells up into it. |
+| 12 | 6.0 s | The hit: a flash and sparks, the badge swells and springs back, its star spins, two lights chase round it. A camera shake. |  | The drop: a trailer's low brass on a D minor cluster, a taiko, a deep kick and a dark crash; the half-time groove begins. |
+| 13 to 15 | 6.5 s | The badge bumps on each of the drums' hits. The camera eases in on it. |  | A kick on each bar, the snare on its third beat and a lighter kick before the next, and the badge bumps on each; the strings' ostinato and the bass. |
+| 15.55 | 7.78 s | The sign falls out from behind the badge: its physics takes 0.225 s to pull the rope taut, so it's let go that long before the beat. |  | Air as it falls. |
+| 16 | 8.0 s | It catches on its rope, exactly on the beat, and swings in time. | Please star us! (on the sign) | A taiko, a wooden knock and the rope's creak; the strings' line starts high on A and falls a step every bar. |
+| 20 | 10.0 s | A cursor glides in from below. |  | A taiko, and a soft whoosh from the right. |
+| 22 | 11.0 s | It clicks the star: the star lights and stays lit, the count goes up by one, sparks, and the sign jumps on its rope. |  | A click, a sub thump, struck glass and a piano's fifth, and the counter's tick; the line falls to G. |
+| 24 | 12.0 s | The end card: the camera pulls back to the whole scene, the lamp, the badge and the sign, with the ask above them. | Star Redlamp on GitHub. Then github.com/pdcgomes/redlamp (beat 25), and Every star helps photographers find it. (beat 26) | A reversed cymbal into it, a taiko and a crash; the brass opens up. |
+| 28 | 14.0 s | The end card holds. |  | A last hit of the low brass; the groove stops; the strings hold D minor as they darken, and the piano plays alone. |
+| 30 | 15.0 s | Light begins to gather behind the lamp again. |  | The watch and the Shepard tone start again, into the loop. |
 | 32 | 16.0 s | Loops to the start. | | |
 
 ## Formats
@@ -71,7 +71,7 @@ The same timeline in both shapes; only the layout and the camera's framing chang
 
 ## Sound
 
-Original, written in code (`video/scripts/star-score.py`, on the studio's synth library `video/scripts/synth.py`), so it is free to use on every platform. 120 BPM in D major, the Introducing film's key: B minor for the hook, G for the build, A for the rush, then the drop's D, A, B minor, G, and D to end. The build is arranged for momentum rather than added layers alone: the roll's subdivision doubles every bar, a riser climbs with the charge, the lamp's hum follows the charge's own curve, and everything stops for a half-beat before the drop. Every visible event has a sound on the same frame: the thump, each knock of the roll, the shot's zap, the hit, the badge's spring, the sign's fall and catch, the cursor and its click. Mastered to about −14 LUFS integrated, peaks under −1 dBFS.
+Original, written in code (`video/scripts/star-score.py`, on the studio's synth library `video/scripts/synth.py`), so it is free to use on every platform. Dark and cinematic: 120 BPM in D minor, with the drums in half time after the drop, so it moves at the picture's pace and lands with a trailer's weight. D minor under the charge, B flat for the build, G minor and A for the rush, then D minor, B flat, G minor, B flat and A, and D minor to end; the chords carry their colour notes (a ninth against the minor third, a major seventh) rather than plain triads. The build is arranged for momentum rather than added layers alone: the roll's subdivision doubles every bar, spiccato strings grow from a murmur, a Shepard tone climbs faster as the lamp charges, and the whole mix, reverb and all, stops dead for the half-beat squash. There's no tune to hum: the strings' ostinato drives it, and one line falls a step at a time from the sign to the last chord. Every visible event has a sound on the same frame: the first frame, each knock of the roll, the shot, the hit, the sign's fall and catch, the cursor and its click, the end card. Mastered to −14 LUFS integrated, true peaks under −1 dBFS; `scripts/score-report.py` measures it bar by bar and cue by cue. The first score, in D major with a bouncy lead, a pumping supersaw and cartoon effects, was turned down by the owner as cheesy and too happy.
 
 ## Post copy
 

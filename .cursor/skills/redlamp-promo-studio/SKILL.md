@@ -58,6 +58,7 @@ npm run studio                                                    # Remotion Stu
 python3 scripts/star-score.py                                     # a promo's score
 npm run review -- StarPromo9x16 0,165,180 --out=/tmp/r --scale=0.5  # stills
 npm run storyboard -- StarPromo9x16 --cues=src/star/cues.json --score=star/score.json
+python3 scripts/score-report.py public/star/score.wav --cues=src/star/cues.json   # the score, bar by bar and cue by cue
 ffmpeg -i public/star/score.wav -af ebur128=peak=true -f null -  # loudness, as the platforms measure it
 npm run star                                                      # the renders, after the owner approves
 ```
@@ -67,6 +68,7 @@ npm run star                                                      # the renders,
 ## Rules every role keeps
 
 - **The brand** ([docs/brand/README.md](../../../docs/brand/README.md)): the red is light with a source and moves rather than multiplies; one light per picture; lit from above left; no bright point in the lens. The voice is calm, plain and precise, with no superlatives and no exclamation marks, except "Please star us!", which the owner wrote; every claim is one the README makes. A promo may be playful in what happens; the words stay plain.
+- **The owner's taste in music** is dark, cinematic and sophisticated; a bright, happy pop score was turned down as cheesy ([sound.md](sound.md)). The picture can be playful; the music isn't.
 - **One cue sheet.** Every timing is a beat in `cues.json`, read by the composition and the score alike. Nothing is timed by hand in one and not the other.
 - **Every frame stands alone.** Remotion renders frames in parallel tabs and in any order: no `Math.random`, no state carried from one frame to the next, no CSS animations ([visuals.md](visuals.md) has the rest).
 - **Only what's verified** goes in the canvas and the doc: loudness from the meter, frames you rendered and looked at.

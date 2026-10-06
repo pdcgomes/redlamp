@@ -12,7 +12,8 @@ From `video/`:
 | Contact sheet | `ffmpeg -pattern_type glob -i '/tmp/r/*.jpg' -vf "scale=360:-1,tile=6x3" sheet.jpg` | Many stills in one image |
 | Storyboard sheet | `npm run storyboard -- <id> --cues=src/<slug>/cues.json --score=<slug>/score.json` | Every cue's frame over the score's level: the whole script on one page |
 | Safe zones | The `guides` prop, in Studio or in stills | Words clear of the apps' interface |
-| Loudness | `ffmpeg -i public/<slug>/score.wav -af ebur128=peak=true -f null -`, and `synth.loudness()` on slices for each section | The master's level and the build's climb |
+| Score report | `python3 scripts/score-report.py public/<slug>/score.wav --cues=src/<slug>/cues.json` | Loudness and true peak, the climb bar by bar, each cue's sound against its frame, the energy from sub to air ([sound.md](sound.md)) |
+| Loudness | `ffmpeg -i public/<slug>/score.wav -af ebur128=peak=true -f null -` | The platforms' own measurement, to confirm the report's |
 | Spectrogram | `ffmpeg -i public/<slug>/score.wav -lavfi showspectrumpic=s=1600x500:legend=1:fscale=log out.png` | The arrangement, without listening |
 | Draft | `npm run <slug> -- --draft` | A half-size MP4 for a phone |
 
@@ -32,8 +33,10 @@ Picture:
 Sound and sync:
 
 - [ ] −14 LUFS integrated, ±0.5, and a true peak at or under −1 dBFS, by ffmpeg.
-- [ ] The build climbs into the drop, section by section, and the drop is the loudest moment.
-- [ ] Each cue's onset is within a frame of its picture: check the storyboard sheet, and measure the strongest rise in level near each cue.
+- [ ] The build climbs into the drop, bar by bar, and the drop is the loudest bar (the score report).
+- [ ] Each cue with a sound of its own lands within a frame of its picture (the score report), and the storyboard sheet agrees.
+- [ ] The sub is about a third of the energy or less and the mids 15% or more, so it carries on a phone.
+- [ ] It fits the owner's taste ([sound.md](sound.md)): dark and cinematic, unless the brief asks otherwise.
 - [ ] In the encoded draft, the audio's offset from the score is 0 ms (cross-correlate their envelopes).
 
 The loop and the file:

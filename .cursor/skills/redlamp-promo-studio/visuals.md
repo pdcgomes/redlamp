@@ -20,7 +20,8 @@ From `docs/brand/README.md` and `docs/brand/star-nudge.md`:
 | `random.ts` | `random(seed)`: the same numbers in every tab, every time |
 | `camera.ts` | `framing(frame, keys)` eases between framings (zoom in log space; a key can name its own easing); `shake()` for impacts; `cssTransform()` and `canvasMatrix()` so DOM layers and canvases move together; `toScreen()` |
 | `LightCanvas.tsx` | A canvas the size of the frame, drawn every frame in world space through the camera |
-| `light.ts` | The brand's light, from the website's star nudge: a `Charge` (`backlight`, `motes`, `chargeLevel`, `squashLevel`), an `arc()` path, a `Shot` (`beam`, `headAt`), `sparks` (`burst`, `shotSparks`, analytic flight), `strike` and `aura` round a pill, `ripple`, `pool` (light on the wall), and `keyframes()` |
+| `light.ts` | The brand's light, from the website's star nudge: a `Charge` (`backlight`, `motes`, `chargeLevel`, `squashLevel`), an `arc()` path, a `Shot` (`beam`, `headAt`), `sparks` (`burst`, `shotSparks`, analytic flight), `strike`, `aura` and `halo` round a pill, `ripple`, `pool` (light on the wall), and `keyframes()` |
+| `FilmGrain.tsx` | Grain that moves every two frames, from one cached tile of noise |
 | `Lamp.tsx` | `Lamp`, the app icon's lamp on its tile; `lampPose()`: knocks that shake it (one per hit of a drum roll), the squash, an aim towards its target, and the recoil; `glowScale()` |
 | `GitHubBadge.tsx` | The website header's GitHub button on its own, with its star and count: `badgeSize()`, `badgeParts()` (where the star is and where a rope ties on), `formatCount()`, `GitHubMark`, `StarGlyph` |
 | `rope.ts`, `Sign.tsx` | The website's sign on its rope (`web/lib/hanging-sign.ts`, unchanged): `performSign()` simulates a scripted performance once (the drop, an anchor that moves, hands that grab and throw) and caches every frame; `fallTime()` so a catch can land on a beat; `Sign` and `signSize()` draw it |
@@ -59,5 +60,10 @@ Remotion renders frames in parallel browser tabs and in any order, so each frame
 - No CSS animations or transitions; derive every value from `useCurrentFrame()`.
 - Canvases draw in `useLayoutEffect`, in software (`getContext("2d", { willReadFrequently: true })`, as `LightCanvas` does). A GPU canvas can be captured before it's painted: on the star promo, a tab's first frame lost its canvases, once its whole background.
 - Don't hold frames with `requestAnimationFrame` inside `delayRender`: it stalls in the CLI's parallel tabs and hung a render.
+- Keep every frame cheap to paint. On a busy machine (a load average over 100, with other sessions building), headless Chrome captured whole frames before it had painted them, as flat white. The scripts catch it (`scripts/blank.mjs` checks every still and every frame of a render and renders it again), but the less each frame costs, the rarer it is:
+  - Light is drawn on a canvas, never as wide blurred `box-shadow`s or `drop-shadow` filters on something the camera magnifies (the badge's halo is `halo()` behind it).
+  - Shadows on the wall are radial gradients.
+  - Grain comes from `FilmGrain`, not a full-frame SVG turbulence filter.
+  - Things appear by scaling in, not by fading a large layer through partial opacity.
 - Importing from `web/` works (the sign's physics comes from `web/lib/hanging-sign.ts`) for modules that import nothing from the site.
 - After any change to a layer, render frame 0 on its own and in sequence (`npm run review -- <id> 0` and `1,0`) and look at both.

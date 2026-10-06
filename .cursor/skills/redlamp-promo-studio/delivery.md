@@ -9,6 +9,7 @@ Each promo has a render script, `video/scripts/<slug>.mjs` (copy `star.mjs`), ru
 - Reads anything live the promo shows when it renders (the star promo's count from the GitHub API), and stops if it can't, rather than render a stale number.
 - Writes the score if it's missing.
 - Renders every shape into `video/out/<slug>/` as H.264 at CRF 16, 4:2:0, BT.709, with 320 kbps AAC at 48 kHz, which every site and player reads the same way, and a JPEG poster for each.
+- Checks every frame it wrote for a blank, white frame (`renderUntilPainted` in `scripts/blank.mjs`), renders the file again if it finds one, and stops after three tries rather than deliver a flash ([visuals.md](visuals.md) says why they happen).
 - Takes `--hook=<id>` or `--hooks` for variants, and `--draft` for a half-size preview.
 
 In the agent sandbox, run it with `NODE_USE_ENV_PROXY=1` so its own request reaches GitHub; the script keeps that setting away from Remotion, whose requests to its own server on localhost would otherwise go to the proxy and stall the encode.

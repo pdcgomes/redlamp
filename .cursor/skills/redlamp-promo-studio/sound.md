@@ -2,40 +2,62 @@
 
 The composer and sound designer write the score in `video/scripts/<slug>-score.py`, on the studio's synth library `video/scripts/synth.py`, from the promo's `cues.json`. Everything is synthesised and nothing is sampled, so the music is original and free to use on every platform, and it can be re-timed whenever the picture is. The score writes `public/<slug>/score.wav` and `score.json` (its level at every frame, for the storyboard sheet); the composition plays the WAV with `Html5Audio` and stays silent while it's missing.
 
+## The owner's taste
+
+Dark, cinematic and sophisticated. The star promo's first score, in D major with a bouncy pulse lead, a pumping supersaw, four-on-the-floor with claps and hats, a boing and a slide whistle, was turned down as cheesy and too happy, and replaced by the one described here. Start from the cinematic palette; reach for the bright one (`lead`, `supersaw`, `stab`, `clap`, `hat`, `boing`, `slide`) only when a brief asks for it in so many words.
+
+What makes it sophisticated rather than loud:
+
+- **A minor key, and chords with their colour notes**: a ninth against the minor third, a major seventh, a seventh on the dominant; not bare triads.
+- **No tune to hum.** An ostinato drives it, and a single line moves by step (the star promo's falls a step a bar from A to D).
+- **Space.** Few instruments at a time in the opening; a lone piano note can carry a bar.
+- **Weight from the drums in half time**: a kick on the bar and the snare on its third beat, at 120 BPM, so it moves at the picture's pace and lands like a trailer.
+- **Silence as an event**: the whole mix choked for the half-beat before the drop.
+
 ## The library
 
 `synth.py` has, at 48 kHz:
 
 | Kind | Functions |
 | --- | --- |
-| Drums | `kick`, `snare` (its `tone` rises through a build), `clap`, `hat` (closed or open), `crash` |
-| Tuned | `pluck` (a filter that snaps shut), `bass` (a saw with a quick filter over a sine an octave down), `sub`, `lead` (a narrow pulse with a late vibrato), `supersaw` and `stab` (detuned saws), `bell` (glass) |
-| Effects | `riser`, `whoosh`, `inhale` (the breath before a drop), `boom`, `hum` (a tone that follows a pitch curve, as a charge), `zap` (a shot of light), `boing` (a spring), `slide` (a slide whistle), `knock` (wood), `creak` (rope), `click` (a mouse button), `tick`, `crackle` (static that follows a density curve) |
-| Mixing | `Bus` (stereo, with a reverb send; `pan_to` may change every sample), `sidechain` (the pump), `reverb`, `master` |
+| Cinematic | `strings` (a bowed section, legato, opening up as it plays), `spiccato` (short bounced strings for an ostinato), `piano` (felt), `braam` (a trailer's low brass hit), `drone` (a dark bed), `taiko` (also a low tom, with a short `decay`), `deep_kick`, `big_snare`, `tock` (a watch's tick), `glass` (struck, or bowed with a slow `attack`), `shepard` (a Shepard–Risset tone that seems to rise for ever), `swell_into` (a sound's own reverb, reversed, swelling into it) |
+| Drums | `kick`, `snare` (its `tone` rises through a build), `clap`, `hat` (closed or open), `crash` (with its `decay`) |
+| Tuned | `pluck`, `bass` (a saw with a quick filter over a sine an octave down: keep its note above about D2), `sub`, `lead`, `supersaw`, `stab`, `bell` |
+| Effects | `riser`, `whoosh`, `inhale` (the breath before a drop), `boom`, `hum`, `zap`, `boing`, `slide`, `knock` (wood), `creak` (rope), `click` (a mouse button), `tick`, `crackle` |
+| Mixing | `Bus` (stereo, with a reverb send; `pan_to` may change every sample), `sidechain`, `reverb`, `master` (with a `choke` and `presence`) |
 | Measuring | `loudness` (ITU-R BS.1770-4, gated, as ffmpeg's `ebur128` reads it), `true_peak` (four times oversampled) |
 
-Every random sound draws from `synth.rng`; call `reset(seed)` at the start of a score so it renders the same every time. `harmonics()` builds tones additively with a filter whose cutoff can change every sample, which is how plucks and leads get their envelopes without a per-sample loop. `scripts/score.py` (Introducing Redlamp) predates the library and keeps its own copies, so its published score can't change.
+Every random sound draws from `synth.rng`; call `reset(seed)` at the start of a score so it renders the same every time. `harmonics()` builds tones additively with a filter whose cutoff can change every sample, which is how plucks, spiccato and the braam get their envelopes without a per-sample loop. `scripts/score.py` (Introducing Redlamp) predates the library and keeps its own copies, so its published score can't change.
 
 ## Sync
 
 - **One cue sheet.** Read `cues.json` and place every sound at `beat × 60 / bpm` seconds. Don't type a time in seconds.
-- **If it moves, it sounds; if it lands, it lands on a beat.** Each visible event has its sound on its frame: the first frame, each knock of the roll, the shot (panned along its path), the hit, the badge's spring, the sign's fall and catch, the cursor, the click, the count.
-- **Share the curves.** Where the picture follows a curve (the charge), the score computes the same one (`charge()` in `star-score.py` mirrors `chargeLevel` in `kit/light.ts`), so the hum rises exactly as the light grows.
-- **Picture events driven by sound.** The star promo's lamp is shaken by the roll: both read the cue sheet's `knocks`, so each hit is a jolt.
+- **If it moves, it sounds; if it lands, it lands on a beat.** Each visible event has its sound on its frame: the first frame, each knock of the roll, the shot (panned along its path), the hit, the sign's fall and catch, the cursor, the click, the count. Real sounds for real objects (wood, rope, glass, a mouse button), never cartoon ones.
+- **Share the curves.** Where the picture follows a curve (the charge), the score computes the same one (`charge()` in `star-score.py` mirrors `chargeLevel` in `kit/light.ts`), so the Shepard tone climbs faster exactly as the light grows.
+- **Share the hits.** Picture events driven by sound read the same list as the score: the star promo's lamp is shaken by the cue sheet's `knocks` (the roll), and its badge bumps on the `groove` (the drop's drum hits, each with its weight).
 
 ## Arrangement for momentum
 
-- Start with something on the first frame (a thump) so a viewer with sound on is held from the start.
-- Build in steps the ear can count: a roll that doubles (eighths, sixteenths, thirty-seconds), a filter opening, a riser, a rising hum.
-- Leave a half-beat of near silence before the drop.
-- Land the drop on the release in the picture, with the full groove at once.
-- Measure the climb, section by section, with `loudness()` on slices. The star promo's: hook −19 LUFS, build −17, rush −13, drop −12, the rest about −13.5, the tail −17.5. The drop should be the loudest moment.
-- End on a chord, and lead the last bar back into the first frame for the loop.
+- Something on the first frame (a deep hit) so a viewer with sound on is held from the start.
+- Build in steps the ear can count: a roll that doubles (eighths, sixteenths, thirty-seconds), strings from a murmur to full, a Shepard tone that screws tighter, a riser.
+- Cut to silence before the drop: `master(..., choke=…)` takes the whole mix down, reverb tails and all, for the half-beat, with a breath drawn in through it (`through=[…]`).
+- Let the hit swell in (`swell_into`, its own reverb reversed) and land it with the full weight at once: low brass, taiko, deep kick, crash.
+- Keep growing after the drop, so the end card arrives at a height, then a last hit, and a quiet last bar that runs back into the first frame.
+- Measure the climb with `scripts/score-report.py`, bar by bar. The star promo's, in LUFS: −17.2, −15.9, −14.9, the drop at −12.0, then −14.2, −14.1, the end card at −13.4, and −14.2. The drop should be the loudest bar.
 
 ## Mixing and mastering
 
-- `master()` sums the buses and their reverb, takes out the rumble below 32 Hz, adds a little air above 7 kHz, levels to −14 LUFS integrated and keeps the true peak under −1 dBFS with a soft limiter, and fades the last 30 ms.
-- Check with ffmpeg as well: `ffmpeg -i public/<slug>/score.wav -af ebur128=peak=true -f null -`. Its integrated loudness and `synth.loudness()` agree.
-- Phones play little below 100 Hz: a bass line needs harmonics (the `bass` saw), not only a sub.
-- Duck the pad and the bass under each kick (`sidechain`) so the beat pumps and stays clear.
-- Draw the spectrogram to check the arrangement without listening: `ffmpeg -i score.wav -lavfi showspectrumpic=s=1600x500:legend=1:fscale=log spectrum.png`.
+- `master()` sums the buses and their reverb, takes out what's under 36 Hz, adds a little air above 7 kHz and, with `presence`, a lift from 3 kHz; then it levels to −14 LUFS integrated and keeps the true peak under −1 dBFS with a soft limiter, and fades the last 30 ms.
+- Phones play little below 100 Hz. Keep the sub to about a third of the energy and the mids (250 Hz to 2 kHz) at 15% or more, by the report: low notes need harmonics (a saw bass, the braam's saws), and a sine under 60 Hz only takes headroom (`braam` moves its sub up an octave for that reason).
+- A dark mix still needs `presence` (the star promo uses 3 dB) to carry on a phone.
+- Duck the bass and the strings a little under each kick (`sidechain`), so the drums stay clear.
+- Check with ffmpeg as well: `ffmpeg -i public/<slug>/score.wav -af ebur128=peak=true -f null -`; its integrated loudness and `synth.loudness()` agree.
+- Draw the spectrogram to see the arrangement without listening: `ffmpeg -i score.wav -lavfi showspectrumpic=s=1600x500:legend=1:fscale=log spectrum.png`. The choke shows as a black band.
+
+## The report
+
+```bash
+python3 scripts/score-report.py public/<slug>/score.wav --cues=src/<slug>/cues.json
+```
+
+It prints the integrated loudness and true peak; the loudness of every bar, with its chord; for every cue, how far the steepest rise in level is from the cue's time (a cue with a sound of its own should be within a frame, 33 ms; a cue with nothing new on it shows whatever is nearby); where the energy sits from the sub to the air; and the stereo width.
