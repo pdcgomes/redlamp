@@ -301,7 +301,7 @@
                 }
                 try app.clickView("library.filter.removal")
                 try app.wait("the raws back, the keyword taken out") { model in
-                    model.libraryFilters?.filter.text == "type:raw" && model.items.count == raws.count
+                    model.libraryFilters?.filter.text == "ext:raw" && model.items.count == raws.count
                         && model.libraryFilters?.removal == nil
                 }
                 app.covered(.feature("library.filter"), via: .mouse)
