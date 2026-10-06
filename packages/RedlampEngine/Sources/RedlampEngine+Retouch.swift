@@ -60,20 +60,23 @@ public extension RedlampEngine {
         session base: ImageSession,
     ) throws -> [ShootDust.Sighting] {
         guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
-        let session = try retouch.session(for: recipe, base: base, commands: commands)
-        let pyramid = session.pyramid
-        let longEdge = max(pyramid.width, pyramid.height)
-        let level = min(max(Int(floor(log2(Double(longEdge) / 2000))), 0), pyramid.mipmapLevelCount - 1)
-        let width = max(1, pyramid.width >> level), height = max(1, pyramid.height >> level)
-        guard let buffer = device.makeBuffer(length: width * height * 8, options: .storageModeShared),
-              let blit = commands.makeBlitCommandEncoder()
-        else { throw EngineError.gpuUnavailable }
-        blit.copy(
-            from: pyramid, sourceSlice: 0, sourceLevel: level, sourceOrigin: MTLOrigin(),
-            sourceSize: MTLSize(width: width, height: height, depth: 1), to: buffer, destinationOffset: 0,
-            destinationBytesPerRow: width * 8, destinationBytesPerImage: width * height * 8,
-        )
-        blit.endEncoding()
+        let (session, buffer, width, height) = try encoding(commands) {
+            let session = try retouch.session(for: recipe, base: base, commands: commands)
+            let pyramid = session.pyramid
+            let longEdge = max(pyramid.width, pyramid.height)
+            let level = min(max(Int(floor(log2(Double(longEdge) / 2000))), 0), pyramid.mipmapLevelCount - 1)
+            let width = max(1, pyramid.width >> level), height = max(1, pyramid.height >> level)
+            guard let buffer = device.makeBuffer(length: width * height * 8, options: .storageModeShared),
+                  let blit = commands.makeBlitCommandEncoder()
+            else { throw EngineError.gpuUnavailable }
+            blit.copy(
+                from: pyramid, sourceSlice: 0, sourceLevel: level, sourceOrigin: MTLOrigin(),
+                sourceSize: MTLSize(width: width, height: height, depth: 1), to: buffer, destinationOffset: 0,
+                destinationBytesPerRow: width * 8, destinationBytesPerImage: width * height * 8,
+            )
+            blit.endEncoding()
+            return (session, buffer, width, height)
+        }
         try finish(commands)
         let halves = buffer.contents().assumingMemoryBound(to: Float16.self)
         let pixels = (0 ..< width * height).map { index in
@@ -112,11 +115,11 @@ public extension RedlampEngine {
         recipe: EditRecipe,
         session base: ImageSession,
     ) throws -> ImagePoint? {
-        guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
-        let session = try retouch.session(for: recipe, base: base, commands: commands)
-        let pyramid = session.pyramid
+        // Placed on the original, which the retouched copy matches in shape, before the spots go into a
+        // command buffer: a return once they had would drop the buffer without rolling it back.
+        let pyramid = base.original.pyramid
         guard let placement = RetouchStage.placement(
-            spot, orientation: session.orientation, width: pyramid.width, height: pyramid.height,
+            spot, orientation: base.orientation, width: pyramid.width, height: pyramid.height,
         ) else { return nil }
         let level = RetouchSource.level(radius: placement.radius, levels: pyramid.mipmapLevelCount)
         let scale = Float(1 << level)
@@ -130,15 +133,20 @@ public extension RedlampEngine {
         let x1 = min(Int(high.x) + margin, levelWidth), y1 = min(Int(high.y) + margin, levelHeight)
         guard x1 > x0, y1 > y0 else { return nil }
         let (width, height) = (x1 - x0, y1 - y0)
-        guard let buffer = device.makeBuffer(length: width * height * 8, options: .storageModeShared),
-              let blit = commands.makeBlitCommandEncoder()
-        else { throw EngineError.gpuUnavailable }
-        blit.copy(
-            from: pyramid, sourceSlice: 0, sourceLevel: level, sourceOrigin: MTLOrigin(x: x0, y: y0, z: 0),
-            sourceSize: MTLSize(width: width, height: height, depth: 1), to: buffer, destinationOffset: 0,
-            destinationBytesPerRow: width * 8, destinationBytesPerImage: width * height * 8,
-        )
-        blit.endEncoding()
+        guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
+        let (session, buffer) = try encoding(commands) {
+            let session = try retouch.session(for: recipe, base: base, commands: commands)
+            guard let buffer = device.makeBuffer(length: width * height * 8, options: .storageModeShared),
+                  let blit = commands.makeBlitCommandEncoder()
+            else { throw EngineError.gpuUnavailable }
+            blit.copy(
+                from: session.pyramid, sourceSlice: 0, sourceLevel: level, sourceOrigin: MTLOrigin(x: x0, y: y0, z: 0),
+                sourceSize: MTLSize(width: width, height: height, depth: 1), to: buffer, destinationOffset: 0,
+                destinationBytesPerRow: width * 8, destinationBytesPerImage: width * height * 8,
+            )
+            blit.endEncoding()
+            return (session, buffer)
+        }
         try finish(commands)
 
         let weights = DetailStage.luma(session)

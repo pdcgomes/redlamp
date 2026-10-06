@@ -227,27 +227,30 @@ extension RedlampEngine {
         guard let commands = queue.makeCommandBuffer(),
               let buffer = device.makeBuffer(length: 8, options: .storageModeShared)
         else { throw EngineError.gpuUnavailable }
-        masks.use(session, commands: commands)
-        let size = masks.guideSize
-        let retouched = try retouched(recipe, session: session, commands: commands, maps: .refreshLater)
-        let guide = try masks.editGuide(for: recipe, from: retouched, commands: commands) { [self] global, texture in
-            try encodeDevelop(
-                global, session: session, into: texture, size: size, encoding: .okLab, showClipping: false,
-                commands: commands, cacheDetail: false, detail: false, retouchMaps: .refreshLater,
+        try encoding(commands) {
+            masks.use(session, commands: commands)
+            let size = masks.guideSize
+            let retouched = try retouched(recipe, session: session, commands: commands, maps: .refreshLater)
+            let guide = try masks
+                .editGuide(for: recipe, from: retouched, commands: commands) { [self] global, texture in
+                    try encodeDevelop(
+                        global, session: session, into: texture, size: size, encoding: .okLab, showClipping: false,
+                        commands: commands, cacheDetail: false, detail: false, retouchMaps: .refreshLater,
+                    )
+                }
+            let level = min(1, guide.mipmapLevelCount - 1)
+            let width = max(1, guide.width >> level)
+            let height = max(1, guide.height >> level)
+            let x = min(max(Int(point.x * Double(width)), 0), width - 1)
+            let y = min(max(Int(point.y * Double(height)), 0), height - 1)
+            guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
+            blit.copy(
+                from: guide, sourceSlice: 0, sourceLevel: level, sourceOrigin: MTLOrigin(x: x, y: y, z: 0),
+                sourceSize: MTLSize(width: 1, height: 1, depth: 1), to: buffer, destinationOffset: 0,
+                destinationBytesPerRow: 8, destinationBytesPerImage: 8,
             )
+            blit.endEncoding()
         }
-        let level = min(1, guide.mipmapLevelCount - 1)
-        let width = max(1, guide.width >> level)
-        let height = max(1, guide.height >> level)
-        let x = min(max(Int(point.x * Double(width)), 0), width - 1)
-        let y = min(max(Int(point.y * Double(height)), 0), height - 1)
-        guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
-        blit.copy(
-            from: guide, sourceSlice: 0, sourceLevel: level, sourceOrigin: MTLOrigin(x: x, y: y, z: 0),
-            sourceSize: MTLSize(width: 1, height: 1, depth: 1), to: buffer, destinationOffset: 0,
-            destinationBytesPerRow: 8, destinationBytesPerImage: 8,
-        )
-        blit.endEncoding()
         try finish(commands)
         let halves = buffer.contents().assumingMemoryBound(to: Float16.self)
         return SIMD3(Double(halves[0]), Double(halves[1]), Double(halves[2]))

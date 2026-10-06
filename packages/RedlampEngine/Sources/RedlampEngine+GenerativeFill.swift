@@ -178,21 +178,21 @@ public extension RedlampEngine {
         of recipe: EditRecipe, base: ImageSession, level: Int, origin: SIMD2<Int>, width: Int, height: Int,
     ) throws -> [Float] {
         guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
-        let pyramid = try retouch.session(for: recipe, base: base, commands: commands).pyramid
-        guard let buffer = device.makeBuffer(length: width * height * 8, options: .storageModeShared),
-              let blit = commands.makeBlitCommandEncoder()
-        else { throw EngineError.gpuUnavailable }
-        blit.copy(
-            from: pyramid, sourceSlice: 0, sourceLevel: level, sourceOrigin: MTLOrigin(x: origin.x, y: origin.y, z: 0),
-            sourceSize: MTLSize(width: width, height: height, depth: 1), to: buffer, destinationOffset: 0,
-            destinationBytesPerRow: width * 8, destinationBytesPerImage: width * height * 8,
-        )
-        blit.endEncoding()
-        commands.commit()
-        commands.waitUntilCompleted()
-        if let error = commands.error {
-            throw EngineError.renderFailed(error.localizedDescription)
+        let buffer = try encoding(commands) {
+            let pyramid = try retouch.session(for: recipe, base: base, commands: commands).pyramid
+            guard let buffer = device.makeBuffer(length: width * height * 8, options: .storageModeShared),
+                  let blit = commands.makeBlitCommandEncoder()
+            else { throw EngineError.gpuUnavailable }
+            blit.copy(
+                from: pyramid, sourceSlice: 0, sourceLevel: level,
+                sourceOrigin: MTLOrigin(x: origin.x, y: origin.y, z: 0),
+                sourceSize: MTLSize(width: width, height: height, depth: 1), to: buffer, destinationOffset: 0,
+                destinationBytesPerRow: width * 8, destinationBytesPerImage: width * height * 8,
+            )
+            blit.endEncoding()
+            return buffer
         }
+        try finish(commands)
         let halves = buffer.contents().assumingMemoryBound(to: Float16.self)
         return (0 ..< width * height * 3).map { Float(halves[($0 / 3) * 4 + $0 % 3]) }
     }

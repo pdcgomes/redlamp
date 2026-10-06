@@ -84,32 +84,34 @@ extension RedlampEngine {
         guard let commands = queue.makeCommandBuffer(),
               let buffer = device.makeBuffer(length: 8, options: .storageModeShared)
         else { throw EngineError.gpuUnavailable }
-        masks.use(session, commands: commands)
-        let size = masks.guideSize
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .rgba16Float, width: size.width, height: size.height, mipmapped: true,
-        )
-        descriptor.usage = [.shaderRead, .shaderWrite]
-        descriptor.storageMode = .private
-        guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
-        try encodeDevelop(
-            recipe, session: session, into: texture, size: size, encoding: .pointColorInput, showClipping: false,
-            commands: commands, cacheDetail: false, detail: false, retouchMaps: .refreshLater,
-        )
-        guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
-        blit.generateMipmaps(for: texture)
-        let disc = ColorRangeMath.level(radius: radius, guideHeight: size.height).rounded(.up)
-        let level = min(Int(disc), texture.mipmapLevelCount - 1)
-        let width = max(1, texture.width >> level)
-        let height = max(1, texture.height >> level)
-        let x = min(max(Int(point.x * Double(width)), 0), width - 1)
-        let y = min(max(Int(point.y * Double(height)), 0), height - 1)
-        blit.copy(
-            from: texture, sourceSlice: 0, sourceLevel: level, sourceOrigin: MTLOrigin(x: x, y: y, z: 0),
-            sourceSize: MTLSize(width: 1, height: 1, depth: 1), to: buffer, destinationOffset: 0,
-            destinationBytesPerRow: 8, destinationBytesPerImage: 8,
-        )
-        blit.endEncoding()
+        try encoding(commands) {
+            masks.use(session, commands: commands)
+            let size = masks.guideSize
+            let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+                pixelFormat: .rgba16Float, width: size.width, height: size.height, mipmapped: true,
+            )
+            descriptor.usage = [.shaderRead, .shaderWrite]
+            descriptor.storageMode = .private
+            guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
+            try encodeDevelop(
+                recipe, session: session, into: texture, size: size, encoding: .pointColorInput, showClipping: false,
+                commands: commands, cacheDetail: false, detail: false, retouchMaps: .refreshLater,
+            )
+            guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
+            blit.generateMipmaps(for: texture)
+            let disc = ColorRangeMath.level(radius: radius, guideHeight: size.height).rounded(.up)
+            let level = min(Int(disc), texture.mipmapLevelCount - 1)
+            let width = max(1, texture.width >> level)
+            let height = max(1, texture.height >> level)
+            let x = min(max(Int(point.x * Double(width)), 0), width - 1)
+            let y = min(max(Int(point.y * Double(height)), 0), height - 1)
+            blit.copy(
+                from: texture, sourceSlice: 0, sourceLevel: level, sourceOrigin: MTLOrigin(x: x, y: y, z: 0),
+                sourceSize: MTLSize(width: 1, height: 1, depth: 1), to: buffer, destinationOffset: 0,
+                destinationBytesPerRow: 8, destinationBytesPerImage: 8,
+            )
+            blit.endEncoding()
+        }
         try finish(commands)
         let halves = buffer.contents().assumingMemoryBound(to: Float16.self)
         let lab = SIMD3(Double(halves[0]), Double(halves[1]), Double(halves[2]))
