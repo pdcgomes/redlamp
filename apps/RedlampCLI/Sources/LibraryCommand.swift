@@ -7,7 +7,8 @@ import Synchronization
 enum LibraryCommand {
     static let usage = """
     usage: redlamp library fixture <folder> --photos <n> [--seed <s>] [--raw-sources <folder>] [--duplicates <share>]
-           redlamp library bench <fixture> [--profile <profile>] [--scenario <name>…] [--photos <n>] [--json <path>]
+           redlamp library bench <fixture> [--profile <profile>] [--scenario <name>…] [--photos <n>] [--index <folder>]
+                                 [--json <path>]
            redlamp library index <folder>… --index <path> [--profile <profile>]
            redlamp library search <query> --index <path> [--sort captured|name|rating|edited] [--descending]
                                   [--json] [--limit <n>]
@@ -44,7 +45,9 @@ enum LibraryCommand {
       bench    measures the fixture through a simulated volume (ssd, spinning, nas, wifi or vpn; ssd by
                default) and prints one line per measurement, ending PASS or FAIL where there's a budget;
                exits 1 when a budget fails. --json writes the report. --photos sets how many thumbnails the
-               store scenario writes to the Mac's own disk (100,000 by default). Scenarios: \(scenarioNames).
+               store scenario writes to the Mac's own disk (100,000 by default). --index keeps warm-launch's
+               index of the fixture in <folder>, built there the first time, and launches a copy of it after
+               that. Scenarios: \(scenarioNames).
       index    adds the folders to the library index at <path> (made if there's none) and indexes them: every
                folder listed, and each photo that's new or changed since it was indexed read once. Prints its
                progress and a summary; exits 1 when a photo couldn't be read or a volume stopped answering.
@@ -202,11 +205,14 @@ enum LibraryCommand {
     }
 
     private static func bench(_ arguments: [String]) async throws {
-        let options = try Arguments(arguments, valued: ["--profile", "--scenario", "--photos", "--json"])
+        let options = try Arguments(arguments, valued: ["--profile", "--scenario", "--photos", "--index", "--json"])
         guard options.positional.count == 1 else { throw CLIError(description: "bench needs a fixture\n\n\(usage)") }
         if let photos = try options.int("--photos") {
             guard photos > 0 else { throw CLIError(description: "--photos needs a number above 0") }
             BenchScenarios.registerStore(photos: photos)
+        }
+        if let index = options.value("--index") {
+            BenchScenarios.register(IndexLaunchScenario(indexFolder: URL(fileURLWithPath: index, isDirectory: true)))
         }
         let fixture = URL(fileURLWithPath: options.positional[0], isDirectory: true)
         let manifest: FixtureManifest
