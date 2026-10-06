@@ -9,8 +9,9 @@
     /// - `--script "<key=value,…>"` applies scripted state after launch (see
     ///   `EditorModel.applyDebugCommand`), e.g. `select=3,exposure=0.5,panel=all`. `select`
     ///   also takes a file name, `mask=<kind>[:<part>]` computes an AI mask, such as
-    ///   `mask=sky` or `mask=people:faceSkin`, and `overlay=<style>` shows masks in one of
-    ///   `MaskOverlayStyle`'s modes, such as `overlay=imageOnBlack`; `palette=<steps>` drives
+    ///   `mask=sky` or `mask=people:faceSkin`, `mask-select=<n>` selects the nth mask, and
+    ///   `overlay=<style>` shows masks in one of `MaskOverlayStyle`'s modes, such as
+    ///   `overlay=imageOnBlack` (`overlay=off` hides it); `palette=<steps>` drives
     ///   the command palette as the harness's `--palette-steps` does, such as
     ///   `palette=open;type:exposure;enter;right`; `quit=now` quits there and then, as ⌘Q would.
     /// - `--snapshot <path.png> [--snapshot-delay <s>] [--snapshot-quit]` writes an image of
@@ -26,9 +27,9 @@
     ///   open error fills it), and `feedback=reports` Your Reports. `whats-new=<step>`
     ///   opens What's New from the Help menu playing its film (`film`), on its highlights
     ///   (`highlights`) or on a page (`page1`, `page2`, …). `filmstrip=shown` keeps the filmstrip
-    ///   up with a photo selected, `extend=<n>` selects from the open photo to the nth, as ⇧-click
-    ///   does, and `filmstrip-menu=<n>` opens the context menu of the nth photo on screen; the menu
-    ///   holds the app, so it comes last.
+    ///   up with a photo selected, `inspector=end` scrolls the inspector to its end, `extend=<n>`
+    ///   selects from the open photo to the nth, as ⇧-click does, and `filmstrip-menu=<n>` opens
+    ///   the context menu of the nth photo on screen; the menu holds the app, so it comes last.
     /// - `--whats-new-endpoint <url>` reads What's New from elsewhere for this launch: a Preview
     ///   deployment's `/api/whats-new`, or a `file://` feed whose image URLs are absolute.
     /// - `--window-size <width>x<height>` sizes the editor's content in points and centres it
@@ -106,10 +107,18 @@
                 await openWhatsNew(at: value)
             case "filmstrip-menu":
                 await showFilmstripMenu(at: Int(value) ?? 0)
+            case "inspector" where value == "end":
+                await scrollInspectorToEnd()
             case "select" where Int(value) == nil:
                 await select(named: value, model: model)
             case "mask":
                 await createMask(value, model: model)
+            case "mask-select":
+                guard let index = Int(value), model.masks.indices.contains(index) else { return true }
+                model.selectedMaskID = model.masks[index].id
+                model.selectedComponentID = nil
+            case "overlay" where value == "off":
+                model.showMaskOverlay = false
             case "overlay":
                 model.maskOverlayStyle = MaskOverlayStyle.allCases.first { value == "\($0)" } ?? model.maskOverlayStyle
             case "feedback" where value == "reports":
@@ -244,6 +253,25 @@
         /// Opens the context menu of the filmstrip's `index`th photo on screen, rising from its
         /// middle as a right-click there does near the bottom of the screen, with the photo ringed.
         /// The menu holds the app until it closes, so it comes last in a script.
+        /// The inspector is the scroll view furthest right in the editor window.
+        private static func scrollInspectorToEnd() async {
+            try? await Task.sleep(for: .seconds(1))
+            guard let root = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil })?.contentView
+            else { return }
+            func scrollViews(in view: NSView) -> [NSScrollView] {
+                ((view as? NSScrollView).map { [$0] } ?? []) + view.subviews.flatMap(scrollViews)
+            }
+            guard let inspector = scrollViews(in: root)
+                .filter({ !$0.isHiddenOrHasHiddenAncestor && $0.documentView != nil })
+                .max(by: { $0.convert($0.bounds, to: nil).maxX < $1.convert($1.bounds, to: nil).maxX }),
+                let document = inspector.documentView
+            else { return }
+            let clip = inspector.contentView
+            let end = document.isFlipped ? max(0, document.bounds.height - clip.bounds.height) : 0
+            clip.scroll(to: NSPoint(x: clip.bounds.minX, y: end))
+            inspector.reflectScrolledClipView(clip)
+        }
+
         private static func showFilmstripMenu(at index: Int) async {
             try? await Task.sleep(for: .seconds(1))
             guard let root = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil })?.contentView,
