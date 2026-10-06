@@ -175,4 +175,31 @@ struct DamagedSidecarTests {
         let beside = try FileManager.default.contentsOfDirectory(atPath: package.deletingLastPathComponent().path)
         #expect(beside.allSatisfy { !$0.hasPrefix(".") }, "nothing left beside it")
     }
+
+    @Test(arguments: [true, false])
+    func `removing a sidecar keeps every mask while a damaged edit set aside can't be read`(deleting: Bool) throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let store = SidecarStore()
+        let package = try seed(#"{"recipe":{"masks":[{"bitmap":{"sha256":"\#(named)""#, for: image)
+        let masks = package.appending(path: SidecarStore.masksDirectory)
+        try FileManager.default.createDirectory(at: masks, withIntermediateDirectories: true)
+        try Data("png".utf8).write(to: masks.appending(path: "\(named).png"))
+        let copy = try #require(try store.setAsideDamagedEdit(for: image, at: date()))
+        var recipe = EditRecipe()
+        recipe[.exposure] = 0.5
+        try store.save(Sidecar(recipe: recipe), for: image)
+        try Data("png".utf8).write(to: masks.appending(path: "\(unnamed).png"))
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: copy.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: copy.path) }
+
+        if deleting {
+            store.delete(for: image)
+        } else {
+            try store.saveOrRemove(Sidecar(recipe: EditRecipe()), for: image)
+        }
+        #expect(try names(in: package) == [copy.lastPathComponent, SidecarStore.masksDirectory])
+        #expect(try names(in: masks) == ["\(named).png", "\(unnamed).png"])
+        #expect(store.load(for: image) == nil)
+    }
 }

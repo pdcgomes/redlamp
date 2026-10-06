@@ -384,16 +384,16 @@ public struct SidecarStore: Sendable {
         }
     }
 
-    /// Removes the package's bitmaps that nothing refers to: not the edit, its snapshots or its
-    /// history, nor any field of `json` (the edit as written), of a history file or of a damaged
-    /// edit set aside, where fields a newer build added (a mask shape this build doesn't know,
-    /// say) may name one. Nothing is
-    /// removed while a session file can't be read, since the bitmaps it needs aren't known.
     /// Whether any of `written` names the bitmap `sha256`, in a field this build may not know.
     static func isNamed(_ sha256: String, in written: [Data]) -> Bool {
         written.contains { $0.range(of: Data(sha256.utf8)) != nil }
     }
 
+    /// Removes the package's bitmaps that nothing refers to: not the edit, its snapshots or its
+    /// history, nor any field of `json` (the edit as written), of a history file or of a damaged
+    /// edit set aside, where fields a newer build added (a mask shape this build doesn't know,
+    /// say) may name one. Nothing is removed while a session file can't be read, since the
+    /// bitmaps it needs aren't known.
     private static func removeUnusedBitmaps(of sidecar: Sidecar, in package: URL, json: Data) {
         var used = Set(bitmaps(of: sidecar).map(\.sha256))
         var written = [json] + damagedCopies(in: package).compactMap { try? Data(contentsOf: $0) }
