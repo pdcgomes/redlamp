@@ -52,7 +52,8 @@ public struct LibraryIndexerSummary: Sendable, Hashable {
     public var photosRemoved = 0
     /// Photos whose first `PhotoMetadataReader.headLength` bytes were read.
     public var headsRead = 0
-    /// Photos written as unreadable (LIB-40): empty, failing to read, or starting as no image does.
+    /// Photos written as unreadable (LIB-40): their read failed, though they're there and their volume
+    /// answers. Empty files and files no format starts or that end early aren't counted: lists keep them.
     public var photosUnreadable = 0
     /// Photos whose ends were read to see whether they end early.
     public var endsRead = 0

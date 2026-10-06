@@ -84,6 +84,11 @@ extension LibraryCommand {
                 + "\(count(summary.photosMoved)) renamed or moved, \(count(summary.photosRemoved)) removed; "
                 + "\(count(summary.headsRead)) read, \(count(Int(Double(summary.headsRead) / seconds))) a second",
         ]
+        if summary.photosUnreadable > 0 {
+            lines.append(
+                "  \(count(summary.photosUnreadable)) unreadable, left out of lists: `redlamp library health` says why",
+            )
+        }
         if summary.failures > 0 {
             lines.append("  \(count(summary.failures)) couldn't be read or written: run it again to retry them")
         }
