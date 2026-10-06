@@ -57,6 +57,23 @@ class Matter:
         return np.clip(alpha[: image.shape[0], : image.shape[1]], 0, 1)
 
 
+class CoreMLMatter:
+    """The converted model (convert_vitmatte.py), on 1024 px tiles."""
+
+    def __init__(self, path, units):
+        import coremltools as ct
+
+        units = {"gpu": ct.ComputeUnit.CPU_AND_GPU, "all": ct.ComputeUnit.ALL}[units]
+        self.model = ct.models.MLModel(str(path), compute_units=units)
+
+    def __call__(self, image, tri):
+        feed = {
+            "image": (image.astype(np.float32) / 255).transpose(2, 0, 1)[None],
+            "trimap": tri.astype(np.float32)[None, None],
+        }
+        return np.clip(self.model.predict(feed)["alpha"][0, 0], 0, 1)
+
+
 def window(height, width):
     """A tile's blending weight: 1 inside, falling linearly across the overlap to the edges."""
     def ramp(n):
@@ -140,12 +157,15 @@ def main():
     parser.add_argument("command", nargs="?", default="heads", choices=("heads", "portraits"))
     parser.add_argument("--model", default="base", choices=("small", "base"))
     parser.add_argument("--outer", type=float, default=0.02)
+    parser.add_argument("--coreml", type=pathlib.Path, help="a converted package instead of the PyTorch model")
+    parser.add_argument("--units", default="gpu", choices=("gpu", "all"))
     args = parser.parse_args()
-    matter = Matter(args.model)
+    matter = CoreMLMatter(args.coreml, args.units) if args.coreml else Matter(args.model)
     if args.command == "portraits":
         portraits(matter, args.outer)
         return
-    method = f"vitmatte-{args.model}-{args.outer:g}"
+    model = f"coreml-{args.coreml.stem}-{args.units}" if args.coreml else args.model
+    method = f"vitmatte-{model}-{args.outer:g}"
     for scene in json.loads((hb.WORK / "scenes.json").read_text()):
         image = np.asarray(Image.open(hb.WORK / f"{scene}.png").convert("RGB"))
         coarse = np.asarray(Image.open(hb.WORK / f"{scene}-coarse.png").convert("L"), np.float32) / 255
