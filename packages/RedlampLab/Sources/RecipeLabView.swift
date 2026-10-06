@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import RedlampEngineAPI
 import RedlampRecipes
+@_spi(Harness) import RedlampUI
 import SwiftUI
 import UniformTypeIdentifiers
 

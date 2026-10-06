@@ -2,13 +2,27 @@ import Foundation
 import RedlampEngineAPI
 import RedlampRecipes
 import Testing
-@testable import RedlampUI
+@_spi(Harness) @testable import RedlampUI
 
 /// The Recipes panel's import: Lightroom presets beside recipes and look tables, files and
 /// folders installed in one pass, and how what happened is told.
 @MainActor
 struct RecipeImportTests {
     private let root = FileManager.default.temporaryDirectory.appending(path: "recipe-import-\(UUID().uuidString)")
+
+    /// A warm 2-point `.cube`, red fastest.
+    private static let warmCube = """
+    TITLE "Warm"
+    LUT_3D_SIZE 2
+    0.1 0 0
+    1 0 0
+    0.1 1 0
+    1 1 0
+    0.1 0 0.8
+    1 0 0.8
+    0.1 1 0.8
+    1 1 0.8
+    """
 
     private func catalog() throws -> RecipeCatalog {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -55,7 +69,7 @@ struct RecipeImportTests {
     @Test func `files and folders install in one pass, and what didn't come in is listed`() throws {
         defer { try? FileManager.default.removeItem(at: root) }
         let catalog = try catalog()
-        let cube = try write(RecipeLabImportTests.warmCube, as: "warm.cube")
+        let cube = try write(Self.warmCube, as: "warm.cube")
         let sidecar = try write(Self.sidecar, as: "Photos/DSC01234.xmp")
         let revision = catalog.revision
 
@@ -89,7 +103,7 @@ struct RecipeImportTests {
     @Test func `an import opens the lists it added to, once`() throws {
         defer { try? FileManager.default.removeItem(at: root) }
         let catalog = try catalog()
-        let cube = try write(RecipeLabImportTests.warmCube, as: "warm.cube")
+        let cube = try write(Self.warmCube, as: "warm.cube")
         let sidecar = try write(Self.sidecar, as: "DSC01234.xmp")
         #expect(catalog.takeImportedLists().isEmpty)
 
@@ -119,5 +133,15 @@ struct RecipeImportTests {
             title: "Nothing was imported",
             text: "Old.xmp: Lightroom process version 5.0 predates Process 2012",
         ))
+    }
+
+    @Test func `the import panel's choice is the space tables are read in`() {
+        let choice = LookTableSpaceChoice()
+        #expect(choice.space == .sRGB && !choice.isForCameraFootage)
+        choice.output = .sRGB
+        choice.input = .displayRec2020
+        #expect(choice.space == .displayRec2020)
+        choice.input = .camera(.vLog)
+        #expect(choice.isForCameraFootage && choice.space == .cameraLog(.vLog, output: .sRGB))
     }
 }

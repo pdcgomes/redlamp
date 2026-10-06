@@ -1,5 +1,6 @@
 import AppKit
 import RedlampRecipes
+@_spi(Harness) import RedlampUI
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -259,7 +260,7 @@ struct DevelopPanelsHost: NSViewRepresentable {
 
     func makeNSView(context _: Context) -> NSView {
         // The column scrolls its own panels.
-        InspectorColumnView(model: model)
+        InspectorColumnViews.make(model: model)
     }
 
     func updateNSView(_: NSView, context _: Context) {}

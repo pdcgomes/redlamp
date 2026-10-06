@@ -1,8 +1,10 @@
 import Foundation
+import RedlampEngine
 import RedlampEngineAPI
 import RedlampRecipes
+import RedlampUI
 import Testing
-@testable import RedlampUI
+@testable import RedlampLab
 
 /// The Recipe Lab's import: a look table into the draft, read in the space chosen on the
 /// import panel, as the Recipes panel's import installs it.
@@ -40,7 +42,7 @@ struct RecipeLabImportTests {
     /// A Lab on an empty library in `root`, with a new draft.
     private func lab() throws -> RecipeLabModel {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let engine = StubEngine()
+        let engine = try RedlampEngine()
         let catalog = RecipeCatalog(engine: engine, library: RecipeLibrary(root: root, includeBundled: false))
         let model = RecipeLabModel(
             engine: engine, editor: EditorModel(engine: engine, recipes: catalog), root: nil, images: [],
@@ -93,15 +95,5 @@ struct RecipeLabImportTests {
         try model.importTable(write("0 512 1023\n0 0 0\n", as: "short.3dl"))
         #expect(model.draft == draft)
         #expect(model.creatorMessage == "Couldn't import: not a .3dl file: expected 27 rows, found 1")
-    }
-
-    @Test func `the import panel's choice is the space tables are read in`() {
-        let choice = LookTableSpaceChoice()
-        #expect(choice.space == .sRGB && !choice.isForCameraFootage)
-        choice.output = .sRGB
-        choice.input = .displayRec2020
-        #expect(choice.space == .displayRec2020)
-        choice.input = .camera(.vLog)
-        #expect(choice.isForCameraFootage && choice.space == .cameraLog(.vLog, output: .sRGB))
     }
 }

@@ -111,3 +111,10 @@ struct BaseLookBrowser: View {
         }
     }
 }
+
+@_spi(Harness) public enum BaseLookPreviews {
+    /// The recipe that previews `look` alone, as hovering it in the browser does.
+    @MainActor public static func recipe(for look: BaseLookPackage) -> Recipe {
+        BaseLookBrowser.previewRecipe(for: look)
+    }
+}

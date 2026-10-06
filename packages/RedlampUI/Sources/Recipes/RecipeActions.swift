@@ -8,7 +8,7 @@ import UniformTypeIdentifiers
 public enum RecipeActions {
     public static let recipeType = UTType(filenameExtension: Recipe.fileExtension, conformingTo: .json) ?? .json
     /// The look tables `RecipeLibrary.lookTable` reads: `.cube`, `.3dl` and HaldCLUT images.
-    static var lookTableTypes: [UTType] {
+    @_spi(Harness) public static var lookTableTypes: [UTType] {
         [UTType(filenameExtension: "cube") ?? .data, UTType(filenameExtension: "3dl") ?? .data, .png, .tiff]
     }
 
@@ -136,7 +136,7 @@ public enum RecipeActions {
 
     /// Asks for files of `types`, and folders when `folders` is set, on an open panel whose
     /// accessory chooses what the look tables among them were made for. Nil when cancelled.
-    static func chooseImports(
+    @_spi(Harness) public static func chooseImports(
         _ types: [UTType],
         message: String,
         multiple: Bool = false,

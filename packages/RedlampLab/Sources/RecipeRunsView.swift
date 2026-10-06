@@ -3,6 +3,7 @@ import Charts
 import Foundation
 import Observation
 import RedlampRecipes
+@_spi(Harness) import RedlampUI
 import SwiftUI
 
 /// The agent studio's runs, read from `build/recipe-runs/`. The view polls the run folder,

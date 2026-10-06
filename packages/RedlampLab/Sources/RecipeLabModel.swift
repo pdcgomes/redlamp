@@ -3,6 +3,7 @@ import Foundation
 import Observation
 import RedlampEngineAPI
 import RedlampRecipes
+@_spi(Harness) import RedlampUI
 
 /// One thing the Lab can show: a recipe, or a Base Look on its own.
 public struct LabItem: Identifiable, Hashable, Sendable {
@@ -151,7 +152,7 @@ public final class RecipeLabModel {
                 group: package.slot
                     .map { _ in "Film Styles" } ??
                     (BuiltInBaseLook(rawValue: package.id) != nil ? "Redlamp" : "Installed"),
-                kind: .baseLook, recipe: BaseLookBrowser.previewRecipe(for: package), package: package,
+                kind: .baseLook, recipe: BaseLookPreviews.recipe(for: package), package: package,
             )
         }
         return recipes + looks + candidates

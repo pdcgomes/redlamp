@@ -1,5 +1,6 @@
 import Foundation
 import RedlampEngine
+import RedlampLab
 import RedlampUI
 import SwiftUI
 
