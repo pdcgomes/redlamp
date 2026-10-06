@@ -62,6 +62,8 @@ public enum ThemeMapping {
             thumbShadow: RGBA(white: 0, alpha: isDark ? 0.4 : 0.2),
             editedDot: primary(for: .editedDot),
             accent: tint > 0 && roles.contains(.accent) ? palette.primary : nil,
+            caution: .caution(dark: isDark),
+            info: .info(foreground: foreground, dark: isDark),
         )
     }
 

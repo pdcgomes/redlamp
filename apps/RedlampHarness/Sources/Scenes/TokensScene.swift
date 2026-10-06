@@ -59,6 +59,25 @@ private struct TokensScene: View {
             }
 
             SpecimenGroup(
+                title: "Notices",
+                note: "A notice's card, edge and glyph in each tone. Caution is amber in every theme; info takes the theme's foreground.",
+            ) {
+                HStack(alignment: .top, spacing: 14) {
+                    ForEach(NoticeTone.allCases, id: \.self) { tone in
+                        let colors = Palette.notice(tone)
+                        Specimen(caption: tone.rawValue) {
+                            RoundedRectangle(cornerRadius: Metrics.cardRadius)
+                                .fill(colors.fill.color)
+                                .overlay(RoundedRectangle(cornerRadius: Metrics.cardRadius)
+                                    .strokeBorder(colors.border.color))
+                                .overlay(Image(systemName: tone.symbol).foregroundStyle(colors.glyph.color))
+                                .frame(width: 100, height: 44)
+                        }
+                    }
+                }
+            }
+
+            SpecimenGroup(
                 title: "Type ramp",
                 note: "SwiftUI Text on the left, AppKit's CoreText drawing on the right. A difference in weight, spacing or baseline shows up as a mismatch here first.",
             ) {
@@ -102,7 +121,8 @@ private struct TokensScene: View {
             ("rowSpacing", Metrics.rowSpacing), ("panelRowSpacing", Metrics.panelRowSpacing),
             ("panelPadding", Metrics.panelPadding), ("panelHeaderHeight", Metrics.panelHeaderHeight),
             ("controlRowMinHeight", Metrics.controlRowMinHeight), ("thumbSize", Metrics.thumbSize),
-            ("trackHeight", Metrics.trackHeight),
+            ("trackHeight", Metrics.trackHeight), ("cardRadius", Metrics.cardRadius),
+            ("cardPadding", Metrics.cardPadding),
         ].map { ($0.0, Double($0.1)) }
     }
 }

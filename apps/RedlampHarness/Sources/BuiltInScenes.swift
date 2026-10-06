@@ -7,6 +7,7 @@ enum BuiltInScenes {
         catalog.register(.themeGallery)
         catalog.register(.sliderRows)
         catalog.register(.panelChrome)
+        catalog.register(.notices)
         catalog.register(.basicPanel)
         catalog.register(.history)
         catalog.register(.folders)

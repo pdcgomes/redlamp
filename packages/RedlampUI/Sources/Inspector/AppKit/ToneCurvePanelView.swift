@@ -10,7 +10,10 @@ import SwiftUI
 @_spi(Harness) public enum ToneCurvePanelView {
     public static func make(model: EditorModel) -> PanelSectionView {
         let state = ToneCurveState()
-        let picker = HostedControl(model: model, ToneCurveModePicker(state: state).padding(.bottom, 6))
+        let picker = PaddingView(
+            ControlRowView(label: "Curve", controls: [HostedControl(model: model, ToneCurveModePicker(state: state))]),
+            bottom: 6,
+        )
         let graph = CurveGraphView(model: model, state: state)
         let parametric: [NSView] = [
             SplitHandlesView(model: model),
@@ -50,12 +53,8 @@ private struct ToneCurveModePicker: View {
     @Bindable var state: ToneCurveState
 
     var body: some View {
-        Picker("Curve", selection: $state.mode) {
-            ForEach(ToneCurvePanel.Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .controlSize(.small)
+        ChoiceMenu("Curve", selection: $state.mode)
+            .controlSize(.small)
     }
 }
 

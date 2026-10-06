@@ -10,7 +10,7 @@ struct HealToolPanel: View {
     var body: some View {
         @Bindable var model = model
         let selected = model.selectedSpot
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Label(EditTool.heal.title, systemImage: EditTool.heal.symbol)
                     .font(.system(size: 13, weight: .semibold))
@@ -22,41 +22,25 @@ struct HealToolPanel: View {
                     .help("Delete every spot")
             }
 
-            Picker(
-                "Mode",
-                selection: Binding(
+            ControlRow(label: "Mode") {
+                ChoiceMenu("Mode", selection: Binding(
                     get: { selected?.mode ?? model.spotMode },
                     set: { mode in Task { await model.setSpotMode(mode) } },
-                ),
-            ) {
-                ForEach(RetouchSpot.Mode.allCases, id: \.self) { mode in
-                    Text(mode.name).tag(mode)
-                }
+                ))
+                .controlSize(.small)
+                .help(
+                    "Remove fills the spot from the photo around it; Heal matches a source to the light around the spot; Clone copies it as it is",
+                )
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.small)
-            .help(
-                "Remove fills the spot from the photo around it; Heal matches a source to the light around the spot; Clone copies it as it is",
-            )
 
             if (selected?.mode ?? model.spotMode) == .remove, model.offersGenerativeFill {
                 generativeRows(selected)
             }
 
-            HStack(spacing: 6) {
-                Text("Click picks")
-                    .font(Theme.labelFont)
-                    .foregroundStyle(Theme.label)
-                Picker("Click picks", selection: $model.spotPick) {
-                    ForEach(SpotPick.allCases, id: \.self) { pick in
-                        Text(pick.name).tag(pick)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.small)
-                .help("Spot adds a spot where you click; Person and Object remove the person or object you click")
+            ControlRow(label: "Click picks") {
+                ChoiceMenu("Click picks", selection: $model.spotPick)
+                    .controlSize(.small)
+                    .help("Spot adds a spot where you click; Person and Object remove the person or object you click")
                 if model.isPickingRegion {
                     ProgressView().controlSize(.small)
                 }
@@ -65,6 +49,7 @@ struct HealToolPanel: View {
                 .toggleStyle(.checkbox)
                 .font(Theme.labelFont)
                 .help("A person or object you pick, or remove from Find, takes its shadow and its reflection with it")
+                .padding(.leading, Self.controlInset)
             if let message = model.pickMessage {
                 Text(message)
                     .font(Theme.labelFont)
@@ -141,33 +126,31 @@ struct HealToolPanel: View {
         }
     }
 
+    /// Where a row's controls start, past its label: for what sits under them without a label.
+    private static let controlInset = Theme.labelWidth + Metrics.rowSpacing
+
     /// Generative Remove (RM-10): Fill, the model's download, the fill being made, and the selected
     /// spot's fills to choose from, labelled as generated.
     @ViewBuilder private func generativeRows(_ selected: RetouchSpot?) -> some View {
         @Bindable var model = model
         let availability = model.generativeAvailability
-        HStack(spacing: 6) {
-            Text("Fill")
-                .font(Theme.labelFont)
-                .foregroundStyle(Theme.label)
-            Picker("Fill", selection: $model.fillsGeneratively) {
-                Text("Content-Aware").tag(false)
-                Text("Generative").tag(true)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+        ControlRow(label: "Fill") {
+            ChoiceMenu("Fill", selection: Binding(
+                get: { FillChoice(generative: model.fillsGeneratively) },
+                set: { model.fillsGeneratively = $0 == .generative },
+            ))
             .controlSize(.small)
             .help(
                 "Content-Aware fills from the photo around the spot; Generative repaints it with an image model on this Mac, for areas too large to fill from the photo",
             )
         }
         if model.fillsGeneratively, case let .needsModel(info) = availability {
-            VStack(alignment: .leading, spacing: 6) {
-                note(
-                    "Generative fill uses \(info.name), a \(info.formattedSize) download. It runs on this Mac; your photos are never uploaded. Its training data is undisclosed, so what it makes is labelled as generated fill."
-                        + (info.licence.map { " Its licence: \($0)." } ?? ""),
-                )
-                HStack {
+            NoticeCard(
+                "Generative fill uses \(info.name), a \(info.formattedSize) download. It runs on this Mac; your photos are never uploaded. Its training data is undisclosed, so what it makes is labelled as generated fill."
+                    + (info.licence.map { " Its licence: \($0)." } ?? ""),
+                tone: .caution,
+            ) {
+                HStack(spacing: 6) {
                     if let url = info.licenceURL {
                         Link("Read the licence", destination: url).font(Theme.labelFont)
                     }
@@ -233,24 +216,14 @@ struct HealToolPanel: View {
             }
         }
         if let message = model.generativeMessage {
-            note(message)
+            NoticeCard(message, tone: .caution, dismiss: { model.generativeMessage = nil })
         }
-    }
-
-    private func note(_ text: String) -> some View {
-        Text(text)
-            .font(Theme.labelFont)
-            .foregroundStyle(Theme.label)
-            .fixedSize(horizontal: false, vertical: true)
     }
 
     /// Find: a thing to look for (or everything), outlined on the photo for a click to remove.
     @ViewBuilder private var findRow: some View {
         @Bindable var model = model
-        HStack(spacing: 6) {
-            Text("Find")
-                .font(Theme.labelFont)
-                .foregroundStyle(Theme.label)
+        ControlRow(label: "Find") {
             Picker("Find", selection: $model.thingToFind) {
                 Text("Everything").tag(String?.none)
                 Divider()
@@ -280,6 +253,7 @@ struct HealToolPanel: View {
                     .controlSize(.small)
                     .help("Stop outlining what was found")
             }
+            .padding(.leading, Self.controlInset)
         }
         if let message = model.findMessage {
             Text(message)

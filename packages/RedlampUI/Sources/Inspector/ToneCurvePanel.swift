@@ -14,12 +14,10 @@ import SwiftUI
 
     public var body: some View {
         PanelSection(panel: .toneCurve) {
-            Picker("Curve", selection: $mode) {
-                ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            ControlRow(label: "Curve") {
+                ChoiceMenu("Curve", selection: $mode)
+                    .controlSize(.small)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.small)
             .padding(.bottom, 6)
 
             CurveEditor(mode: mode)

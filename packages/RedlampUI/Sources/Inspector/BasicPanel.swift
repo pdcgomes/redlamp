@@ -49,14 +49,10 @@ struct TreatmentPicker: View {
     @Environment(EditorModel.self) private var model
 
     var body: some View {
-        Picker("Treatment", selection: Binding(
+        ChoiceMenu("Treatment", selection: Binding(
             get: { model.treatment },
             set: { model.setTreatment($0) },
-        )) {
-            ForEach(Treatment.allCases, id: \.self) { Text($0.name).tag($0) }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
+        ))
         .controlSize(.small)
     }
 }

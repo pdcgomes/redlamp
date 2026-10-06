@@ -229,15 +229,9 @@ struct MaskCurvesEditor: View {
                     .font(Theme.labelFont)
                     .foregroundStyle(Theme.label)
                 Spacer()
-                Picker("Channel", selection: $channel) {
-                    ForEach(MaskCurves.Channel.allCases, id: \.self) { channel in
-                        Text(channel.name).tag(channel)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.mini)
-                .fixedSize()
+                ChoiceMenu("Channel", selection: $channel)
+                    .controlSize(.mini)
+                    .fixedSize()
                 Button {
                     model.resetMaskCurves()
                 } label: {
@@ -353,22 +347,15 @@ struct MaskStatus: View {
 
     var body: some View {
         if let pending = model.pendingModel {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("\(pending.kind.name) masks use \(pending.model.name), a \(pending.model.formattedSize) download.")
-                    .font(Theme.labelFont)
-                    .foregroundStyle(Theme.value)
-                Text(
-                    "It runs on this Mac; your photos are never uploaded. You can remove it in Settings › Models."
-                        + (pending.model.licence.map { " Its licence: \($0)." } ?? ""),
-                )
-                .font(Theme.captionFont)
-                .foregroundStyle(Theme.secondaryLabel)
-                .fixedSize(horizontal: false, vertical: true)
-                if let url = pending.model.licenceURL {
-                    Link("Read the licence", destination: url)
-                        .font(Theme.captionFont)
-                }
-                HStack {
+            NoticeCard(
+                "\(pending.kind.name) masks use \(pending.model.name), a \(pending.model.formattedSize) download. It runs on this Mac; your photos are never uploaded. You can remove it in Settings › Models."
+                    + (pending.model.licence.map { " Its licence: \($0)." } ?? ""),
+                tone: .info, symbol: "arrow.down.circle.fill",
+            ) {
+                HStack(spacing: 6) {
+                    if let url = pending.model.licenceURL {
+                        Link("Read the licence", destination: url).font(Theme.labelFont)
+                    }
                     Spacer()
                     Button("Not Now") { model.declinePendingModel() }
                     Button("Download") { Task { await model.downloadPendingModel() } }
@@ -376,8 +363,6 @@ struct MaskStatus: View {
                 }
                 .controlSize(.small)
             }
-            .padding(10)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Theme.selection))
             .padding(.horizontal, Theme.panelPadding)
             .padding(.bottom, 10)
         } else if let progress = model.modelDownloadProgress {
@@ -401,24 +386,14 @@ struct MaskStatus: View {
             .padding(.horizontal, Theme.panelPadding)
             .padding(.bottom, 10)
         } else if let message = model.maskMessage {
-            HStack(spacing: 8) {
-                Image(systemName: "exclamationmark.triangle")
-                Text(message).fixedSize(horizontal: false, vertical: true)
-                Spacer()
+            NoticeCard(message, tone: .caution, dismiss: { model.maskMessage = nil }) {
                 Button("Report…") {
                     model.sendFeedback(FeedbackPrefill(featureID: FeedbackContext.suggestion(model), message: message))
                 }
                 .buttonStyle(.link)
+                .font(Theme.labelFont)
                 .help("Report a Bug about this message")
-                Button {
-                    model.maskMessage = nil
-                } label: {
-                    Image(systemName: "xmark")
-                }
-                .buttonStyle(.plain)
             }
-            .font(Theme.captionFont)
-            .foregroundStyle(Theme.label)
             .padding(.horizontal, Theme.panelPadding)
             .padding(.bottom, 10)
         }
@@ -466,14 +441,11 @@ struct DrawingHint: View {
             }
             if model.drawingKind == .objects {
                 @Bindable var model = model
-                Picker("Drag", selection: $model.objectSelection) {
-                    ForEach(ObjectSelection.allCases, id: \.self) { selection in
-                        Text(selection.name).tag(selection)
-                    }
+                ControlRow(label: "Drag") {
+                    ChoiceMenu("Drag", selection: $model.objectSelection)
+                        .controlSize(.small)
+                        .help("What a drag on the photo selects with: a box around the object, or a stroke over it")
                 }
-                .pickerStyle(.segmented)
-                .controlSize(.small)
-                .help("What a drag on the photo selects with: a box around the object, or a stroke over it")
             }
         }
         .font(Theme.captionFont)
@@ -795,14 +767,11 @@ struct BrushChoicePicker: View {
 
     var body: some View {
         @Bindable var model = model
-        Picker("Brush", selection: $model.activeBrush) {
-            ForEach(BrushChoice.allCases, id: \.self) { choice in
-                Text(choice.rawValue).tag(choice)
-            }
+        ControlRow(label: "Brush") {
+            ChoiceMenu("Brush", selection: $model.activeBrush)
+                .controlSize(.small)
+                .help("A, B and Erase each keep their own size, feather, flow and density; Erase takes paint away")
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .controlSize(.small)
     }
 }
 

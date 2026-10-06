@@ -30,6 +30,18 @@ extension HarnessScene {
         }
     }
 
+    static var notices: HarnessScene {
+        HarnessScene(
+            id: "notices",
+            title: "Notices",
+            symbol: "exclamationmark.triangle",
+            synopsis: "Text to read before going on, on a card in its tone: a download's terms, a warning, an error to dismiss",
+            section: .controls,
+        ) {
+            NoticesScene()
+        }
+    }
+
     static var basicPanel: HarnessScene {
         HarnessScene(
             id: "basic-panel",
@@ -109,13 +121,22 @@ private struct PanelChromeScene: View {
         }
     }
 
+    private func treatmentMenu() -> NSPopUpButton {
+        let menu = NSPopUpButton(frame: .zero, pullsDown: false)
+        menu.controlSize = .small
+        menu.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        for (title, symbol) in [("Color", "paintpalette"), ("B&W", "circle.lefthalf.filled")] {
+            menu.addItem(withTitle: title)
+            menu.lastItem?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        }
+        return menu
+    }
+
     private func section(title: String, badge: String?) -> NSView {
         let state = state
         let model = HarnessEditor.model
         let rows: [NSView] = [
-            ControlRowView(label: "Treatment", controls: [NSSegmentedControl(
-                labels: ["Color", "B&W"], trackingMode: .selectOne, target: nil, action: nil,
-            )]),
+            ControlRowView(label: "Treatment", controls: [treatmentMenu()]),
             SubsectionHeaderView(title: "Tone", parameters: [.exposure, .contrast], editor: model),
             SliderRowView(parameter: .exposure, editor: model),
             SliderRowView(parameter: .contrast, editor: model),
@@ -129,5 +150,39 @@ private struct PanelChromeScene: View {
             )),
             DividerView(),
         ])
+    }
+}
+
+private struct NoticesScene: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SpecimenGroup(
+                title: "Tones",
+                note: "Caution for what to weigh before going on (Generative fill's download, an error); info for what to know (a model's download).",
+            ) {
+                VStack(alignment: .leading, spacing: 10) {
+                    NoticeCard(
+                        "Generative fill uses FLUX.2 [klein] 4B, a 2.41 GB download. It runs on this Mac; your photos are never uploaded.",
+                        tone: .caution,
+                    ) {
+                        HStack(spacing: 6) {
+                            Link("Read the licence", destination: URL(string: "https://redlamp.app")!)
+                            Spacer()
+                            Button("Not Now") {}
+                            Button("Download") {}
+                        }
+                        .controlSize(.small)
+                    }
+                    NoticeCard(
+                        "Objects masks use SAM 3, a 1.7 GB download. You can remove it in Settings › Models.",
+                        tone: .info, symbol: "arrow.down.circle.fill",
+                    )
+                    NoticeCard("Sky masks couldn't be computed: the model failed to load.", tone: .caution, dismiss: {})
+                }
+                .frame(width: 288)
+                .padding(14)
+                .background(Palette.panelBackground.color)
+            }
+        }
     }
 }

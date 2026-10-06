@@ -38,7 +38,7 @@ import SwiftUI
 
             switch state.mixer {
             case .hsl:
-                AttributePicker(state: state)
+                ControlRow(label: "Adjust") { AttributePicker(state: state) }
                     .padding(.bottom, 4)
 
                 if state.attribute == .all {
@@ -125,12 +125,8 @@ struct MixerPicker: View {
     @Bindable var state: ColorMixerState
 
     var body: some View {
-        Picker("Mixer", selection: $state.mixer) {
-            ForEach(ColorMixerPanel.Mixer.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .controlSize(.small)
+        ChoiceMenu("Mixer", selection: $state.mixer)
+            .controlSize(.small)
     }
 }
 
@@ -138,12 +134,8 @@ struct AttributePicker: View {
     @Bindable var state: ColorMixerState
 
     var body: some View {
-        Picker("Adjust", selection: $state.attribute) {
-            ForEach(ColorMixerPanel.Attribute.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .controlSize(.small)
+        ChoiceMenu("Adjust", selection: $state.attribute)
+            .controlSize(.small)
     }
 }
 

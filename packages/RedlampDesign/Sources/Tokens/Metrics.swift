@@ -22,4 +22,7 @@ public enum Metrics {
     /// The small gap Lightroom leaves between slider groups (Exposure/Contrast, then
     /// Highlights…).
     public static let groupGap: CGFloat = 4
+    /// A card inside a panel (a notice, a mask's list).
+    public static let cardRadius: CGFloat = 8
+    public static let cardPadding: CGFloat = 8
 }

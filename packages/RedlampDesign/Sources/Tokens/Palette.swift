@@ -83,6 +83,10 @@ public enum Palette {
     public static var accent: NSColor {
         current.accent?.nsColor ?? .controlAccentColor
     }
+
+    public static func notice(_ tone: NoticeTone) -> NoticeColors {
+        current.notice(tone)
+    }
 }
 
 /// One complete set of the colors `Palette` hands out.
@@ -107,12 +111,15 @@ public struct PaletteTokens: Sendable, Hashable {
     /// The tint for native macOS controls (checkboxes, segmented pickers, prominent
     /// buttons). `nil` leaves them on the system accent the user chose.
     public var nativeTint: RGBA?
+    /// Notices: a download's terms, a warning (`NoticeTone`).
+    public var caution: NoticeColors
+    public var info: NoticeColors
 
     public init(
         label: RGBA, labelHover: RGBA, secondaryLabel: RGBA, tertiaryLabel: RGBA, value: RGBA,
         divider: RGBA, track: RGBA, well: RGBA, selection: RGBA, panelBackground: RGBA,
         trackFill: RGBA, thumb: RGBA, thumbStroke: RGBA, thumbShadow: RGBA, editedDot: RGBA,
-        accent: RGBA?, nativeTint: RGBA? = nil,
+        accent: RGBA?, nativeTint: RGBA? = nil, caution: NoticeColors, info: NoticeColors,
     ) {
         self.label = label
         self.labelHover = labelHover
@@ -131,6 +138,15 @@ public struct PaletteTokens: Sendable, Hashable {
         self.editedDot = editedDot
         self.accent = accent
         self.nativeTint = nativeTint
+        self.caution = caution
+        self.info = info
+    }
+
+    public func notice(_ tone: NoticeTone) -> NoticeColors {
+        switch tone {
+        case .caution: caution
+        case .info: info
+        }
     }
 
     /// Redlamp's neutral greys on dark, the colors the editor ships with.
@@ -151,6 +167,8 @@ public struct PaletteTokens: Sendable, Hashable {
         thumbShadow: RGBA(white: 0, alpha: 0.4),
         editedDot: RGBA(white: 1, alpha: 0.55),
         accent: nil,
+        caution: .caution(dark: true),
+        info: .info(foreground: RGBA(white: 1), dark: true),
     )
 
     /// The same neutral greys on light.
@@ -171,5 +189,7 @@ public struct PaletteTokens: Sendable, Hashable {
         thumbShadow: RGBA(white: 0, alpha: 0.2),
         editedDot: RGBA(white: 0, alpha: 0.5),
         accent: nil,
+        caution: .caution(dark: false),
+        info: .info(foreground: RGBA(white: 0), dark: false),
     )
 }

@@ -15,7 +15,10 @@ import SwiftUI
             ControlRowView(label: "Mixer", controls: [rows.native(MixerPicker(state: state))]),
             bottom: 4,
         )
-        let attribute = rows.native(AttributePicker(state: state).padding(.bottom, 4))
+        let attribute = PaddingView(
+            ControlRowView(label: "Adjust", controls: [rows.native(AttributePicker(state: state))]),
+            bottom: 4,
+        )
         let swatches = rows.native(BandSwatches(state: state).padding(.bottom, 6))
         let pointColorSwatches = rows.native(PointColorSwatches().padding(.bottom, 2))
         let visualize = rows.native(PointColorVisualizeToggle().padding(.top, 4))
