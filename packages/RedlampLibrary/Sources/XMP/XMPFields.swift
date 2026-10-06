@@ -15,8 +15,9 @@ public struct XMPFields: Sendable, Hashable, Codable {
     /// A label none of the sets names ("Urgent", Capture One's "Orange"), as it's written, when `label`
     /// is nil.
     public var customLabel: String?
-    /// Each keyword's path from the top of its hierarchy: "Places/Portugal/Lisbon".
-    public var keywords: [String]
+    /// Each keyword's path from the top of its hierarchy: "Places/Portugal/Lisbon". Empty: the
+    /// `.redlamp`'s keyword list that has none, which XMP writes as no keywords; nil: none held.
+    public var keywords: [String]?
     /// An empty title, caption, creator, copyright or location is the `.redlamp`'s none, which XMP
     /// writes as no value.
     public var title: String?
@@ -28,7 +29,7 @@ public struct XMPFields: Sendable, Hashable, Codable {
 
     public init(
         rating: Int? = nil, flag: PhotoFlag? = nil, label: ColorLabel? = nil, customLabel: String? = nil,
-        keywords: [String] = [], title: String? = nil, caption: String? = nil, creator: String? = nil,
+        keywords: [String]? = nil, title: String? = nil, caption: String? = nil, creator: String? = nil,
         copyright: String? = nil, location: PhotoLocation? = nil,
     ) {
         self.rating = rating
@@ -43,12 +44,13 @@ public struct XMPFields: Sendable, Hashable, Codable {
         self.location = location
     }
 
-    /// The fields a `.redlamp` sidecar's metadata holds: a rating of 0 is none, and so are no keywords.
+    /// The fields a `.redlamp` sidecar's metadata holds: a rating of 0 is none, and an empty keyword list
+    /// is keywords held, none of them.
     public init(_ metadata: PhotoMetadata?) {
         self.init(
             rating: metadata.flatMap { $0.rating > 0 ? $0.rating : nil }, flag: metadata?.flag, label: metadata?.label,
             customLabel: metadata?.label == nil ? metadata?.customLabel.flatMap(XMPSource.trimmed) : nil,
-            keywords: KeywordPath.texts(metadata?.keywords ?? []), title: metadata?.title, caption: metadata?.caption,
+            keywords: metadata?.keywords.map(KeywordPath.texts), title: metadata?.title, caption: metadata?.caption,
             creator: metadata?.creator, copyright: metadata?.copyright, location: metadata?.location,
         )
     }
@@ -57,13 +59,13 @@ public struct XMPFields: Sendable, Hashable, Codable {
         XMPField.allCases.allSatisfy { !holds($0) }
     }
 
-    /// Whether it has a value for `field`; an empty text or location is one.
+    /// Whether it has a value for `field`; an empty text, location or keyword list is one.
     public func holds(_ field: XMPField) -> Bool {
         switch field {
         case .rating: rating != nil
         case .flag: flag != nil
         case .label: label != nil || customLabel != nil
-        case .keywords: !keywords.isEmpty
+        case .keywords: keywords != nil
         case .title: title != nil
         case .caption: caption != nil
         case .creator: creator != nil
@@ -73,13 +75,14 @@ public struct XMPFields: Sendable, Hashable, Codable {
     }
 
     /// Whether `other` has the same value for `field`, as XMP can tell: keywords in any order, texts
-    /// without the spaces at their ends, creators name by name, and an empty text or location as none.
+    /// without the spaces at their ends, creators name by name, and an empty text, location or keyword
+    /// list as none.
     public func same(_ field: XMPField, as other: XMPFields) -> Bool {
         switch field {
         case .rating: rating == other.rating
         case .flag: flag == other.flag
         case .label: label == other.label && (label != nil || Self.text(customLabel) == Self.text(other.customLabel))
-        case .keywords: Set(keywords) == Set(other.keywords)
+        case .keywords: Set(keywords ?? []) == Set(other.keywords ?? [])
         case .title: Self.text(title) == Self.text(other.title)
         case .caption: Self.text(caption) == Self.text(other.caption)
         case .creator: Self.names(creator) == Self.names(other.creator)
@@ -139,7 +142,7 @@ public struct XMPFields: Sendable, Hashable, Codable {
             applied.customLabel = label == nil ? customLabel : nil
         }
         if fields.contains(.keywords) {
-            applied.keywords = keywords
+            applied.keywords = keywords ?? []
         }
         if fields.contains(.title) {
             applied.title = title
@@ -250,9 +253,10 @@ public struct XMPSource: Sendable, Hashable, Codable {
 
         if packet.has(XMPNamespace.subject) || packet.has(XMPNamespace.hierarchicalSubject) {
             present.insert(.keywords)
-            fields.keywords = Self.keywords(
+            let keywords = Self.keywords(
                 hierarchical: packet.items(XMPNamespace.hierarchicalSubject), flat: packet.items(XMPNamespace.subject),
             )
+            fields.keywords = keywords.isEmpty ? nil : keywords
         }
         if packet.has(XMPNamespace.title) {
             present.insert(.title)
@@ -464,9 +468,7 @@ extension XMPFields {
             }
         }
         if fields.contains(.keywords), !current.same(.keywords, as: self) {
-            if keywords.isEmpty {
-                changes += [XMPNamespace.hierarchicalSubject, XMPNamespace.subject].filter(has).map { ($0, nil) }
-            } else {
+            if let keywords, !keywords.isEmpty {
                 let keywords = KeywordPath.paths(keywords)
                 let paths = keywords.map { $0.names.joined(separator: "|") }
                 var names: [String] = []
@@ -476,6 +478,8 @@ extension XMPFields {
                 }
                 changes.append((XMPNamespace.hierarchicalSubject, .bag(paths)))
                 changes.append((XMPNamespace.subject, .bag(names)))
+            } else {
+                changes += [XMPNamespace.hierarchicalSubject, XMPNamespace.subject].filter(has).map { ($0, nil) }
             }
         }
         for (field, property, value) in [

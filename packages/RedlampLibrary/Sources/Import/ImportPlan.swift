@@ -401,7 +401,7 @@ struct ImportPlanner {
     }
 
     static func ownKeywords(of photo: ImportPhoto) -> [String] {
-        LibraryIndexer.Run.organising(photo.metadata, sidecar: nil, xmp: photo.xmp).fields.keywords
+        LibraryIndexer.Run.organising(photo.metadata, sidecar: nil, xmp: photo.xmp).fields.keywords ?? []
     }
 
     static func join(_ folder: String, _ path: String) -> String {

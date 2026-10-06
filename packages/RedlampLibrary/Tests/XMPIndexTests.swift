@@ -31,7 +31,8 @@ struct XMPIndexTests {
 
         init(_ fields: XMPFields) {
             self.init(
-                rating: fields.rating ?? 0, flag: fields.flag, label: fields.label, keywords: Set(fields.keywords),
+                rating: fields.rating ?? 0, flag: fields.flag, label: fields.label,
+                keywords: Set(fields.keywords ?? []),
                 title: fields.title, caption: fields.caption,
             )
         }

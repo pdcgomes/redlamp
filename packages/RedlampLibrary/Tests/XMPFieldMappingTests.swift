@@ -242,7 +242,7 @@ struct XMPFieldMappingTests {
         ] as CFDictionary)
         #expect(CGImageDestinationFinalize(iptc))
         let fromIPTC = try #require(XMPSource.embedded(in: iptcURL))
-        #expect(Set(fromIPTC.fields.keywords) == ["Gulls", "Tagus"] && fromIPTC.fields.title == "Ferries")
+        #expect(Set(fromIPTC.fields.keywords ?? []) == ["Gulls", "Tagus"] && fromIPTC.fields.title == "Ferries")
 
         #expect(XMPSource.embedded(in: folder.url.appending(path: "missing.jpg")) == nil)
     }

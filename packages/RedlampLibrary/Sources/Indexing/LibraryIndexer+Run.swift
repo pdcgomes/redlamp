@@ -37,9 +37,14 @@ extension LibraryIndexer {
         /// hasn't.
         var merged: XMPMergeRecord?
 
-        /// What its row keeps of its `.xmp` files, to see when they change.
+        /// When its `.xmp` files were last changed.
         var xmpModified: Date? {
             Run.xmpModified(xmp, darktable)
+        }
+
+        /// What its row keeps of its `.xmp` files, to see when they change.
+        var xmpSignature: Int64? {
+            Run.xmpSignature(xmp, darktable)
         }
     }
 
@@ -468,7 +473,7 @@ extension LibraryIndexer {
                     continue
                 }
                 if row.size != entry.size || !Self.same(row.modified, entry.modified) || row.indexed == 0
-                    || !Self.same(row.xmpModified, Self.xmpModified(xmp, darktable))
+                    || row.xmpSignature != Self.xmpSignature(xmp, darktable)
                     || (row.sidecarModified != nil && sidecar == nil) {
                     jobs.append(job(.changed, row))
                 } else if !Self.same(row.sidecarModified, sidecar?.modified) {
@@ -508,17 +513,15 @@ extension LibraryIndexer {
             return (shared, darktable?.name == shared?.name ? nil : darktable)
         }
 
-        /// What a row keeps of its photo's `.xmp` files (`xmp_modified`), to see when they change: the
-        /// modification date of the one there is; with both, the sum of their dates, which changes
-        /// when either does or goes.
+        /// The modification date of the photo's `.xmp` there is, or the later of its two (`xmp_modified`).
         static func xmpModified(_ shared: FileEntry?, _ darktable: FileEntry?) -> Date? {
-            switch (shared, darktable) {
-            case let (shared?, darktable?):
-                Date(timeIntervalSince1970: shared.modified.timeIntervalSince1970
-                    + darktable.modified.timeIntervalSince1970)
-            case let (one?, nil), let (nil, one?): one.modified
-            case (nil, nil): nil
-            }
+            [shared?.modified, darktable?.modified].compactMap(\.self).max()
+        }
+
+        /// What a row keeps of its photo's `.xmp` files to see when they change (`xmp_signature`): it
+        /// changes whenever either file does, comes or goes.
+        static func xmpSignature(_ shared: FileEntry?, _ darktable: FileEntry?) -> Int64? {
+            XMPFileStamp.signature(shared: shared.map(XMPFileStamp.init), darktable: darktable.map(XMPFileStamp.init))
         }
 
         /// Whether two dates from listings and the index are the same, allowing for what storing a

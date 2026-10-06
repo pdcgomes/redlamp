@@ -160,14 +160,15 @@ public struct LibraryXMP: Sendable {
 }
 
 extension LibraryIndex.Writer {
-    /// Records the modification dates of `.xmp` sidecars Redlamp wrote, as the indexer compares them
-    /// with the folder's listing: those photos aren't read again for them.
-    func setXMPModified(_ dates: [(id: Int64, modified: Date)]) throws {
+    /// Records what the rows keep of `.xmp` sidecars Redlamp wrote, as the indexer compares them with
+    /// the folder's listing: those photos aren't read again for them.
+    func setXMPModified(_ dates: [(id: Int64, modified: Date, signature: Int64?)]) throws {
         guard !dates.isEmpty else { return }
-        let statement = try database.cached("UPDATE photos SET xmp_modified = ? WHERE id = ?")
-        for (id, modified) in dates {
+        let statement = try database.cached("UPDATE photos SET xmp_modified = ?, xmp_signature = ? WHERE id = ?")
+        for (id, modified, signature) in dates {
             try statement.bind(modified.timeIntervalSince1970, at: 1)
-            try statement.bind(id, at: 2)
+            try statement.bind(signature, at: 2)
+            try statement.bind(id, at: 3)
             try statement.run()
         }
     }

@@ -33,6 +33,29 @@ public struct XMPFileStamp: Sendable, Hashable, Codable {
         default: false
         }
     }
+
+    /// What the index keeps of a photo's `.xmp` files (`xmp_signature`): the size and modification date
+    /// of each, hashed with which file it is, so it changes whenever either file does, comes or goes;
+    /// nil when there's neither. Dates come from the same resource value in a listing and a stamp.
+    static func signature(shared: XMPFileStamp?, darktable: XMPFileStamp?) -> Int64? {
+        guard shared != nil || darktable != nil else { return nil }
+        var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+        for (marker, stamp) in [(UInt64(1), shared), (2, darktable)] {
+            guard let stamp else { continue }
+            hash = mix(hash ^ marker)
+            hash = mix(hash &+ UInt64(bitPattern: stamp.size))
+            hash = mix(hash &+ stamp.modified.timeIntervalSinceReferenceDate.bitPattern)
+        }
+        return Int64(bitPattern: hash)
+    }
+
+    /// SplitMix64's finaliser: every bit of the input reaches every bit of the output.
+    private static func mix(_ value: UInt64) -> UInt64 {
+        var z = value
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z >> 31)
+    }
 }
 
 /// What Redlamp recorded when it last merged a photo's other apps' fields into its `.redlamp`, or

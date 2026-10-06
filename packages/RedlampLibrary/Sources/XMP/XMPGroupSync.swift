@@ -25,8 +25,9 @@ struct XMPGroupOutcome: Sendable {
     var organising: [(id: Int64, fields: XMPFields)] = []
     /// Photos whose `.redlamp` took other apps' keywords, with them.
     var keywords: [(id: Int64, paths: [String])] = []
-    /// Photos with a `.redlamp` whose `.xmp` Redlamp wrote, with the `.xmp`'s modification date.
-    var xmpModified: [(id: Int64, modified: Date)] = []
+    /// Photos with a `.redlamp` whose `.xmp` Redlamp wrote, with what their rows keep of their `.xmp` files
+    /// now: the later modification date and the signature.
+    var xmpModified: [(id: Int64, modified: Date, signature: Int64?)] = []
 }
 
 extension XMPGroup {
@@ -255,10 +256,14 @@ extension XMPGroup {
                 outcome.organising.append((id, merge.fields))
             }
             if merge.taken.contains(.keywords) {
-                outcome.keywords.append((id, merge.fields.keywords))
+                outcome.keywords.append((id, merge.fields.keywords ?? []))
             }
             if let written {
-                outcome.xmpModified.append((id, written.modified))
+                let darktable = side.member.darktable.map(XMPFileStamp.init)
+                outcome.xmpModified.append((
+                    id, max(written.modified, darktable?.modified ?? .distantPast),
+                    XMPFileStamp.signature(shared: written, darktable: darktable),
+                ))
             }
             let record = XMPMergeRecord(
                 sidecar: written ?? file.stamp, darktable: side.member.darktable.map(XMPFileStamp.init),
@@ -340,17 +345,13 @@ extension XMPGroup {
             side.embedded = XMPSource.embedded(in: side.photo, conventions: context.conventions)
         }
         side.other = XMPSource.combining([shared, side.darktable, side.embedded])
-        let record = side.record
-        let darktableStamp = member.darktable.map(XMPFileStamp.init)
-        let changed = [
-            (record?.sidecar, sharedStamp), (record?.darktable, darktableStamp), (record?.photo, photoStamp),
-        ].compactMap { recorded, now -> Date? in
-            guard let now, record == nil || !XMPFileStamp.same(recorded, now) else { return nil }
-            return now.modified
-        }
-        let otherIsLater = changed.max().map { $0 > side.editStamp?.modified ?? .distantPast } ?? false
+        let otherIsLater = XMPMerge.otherIsLater(
+            side.record, sidecar: sharedStamp, darktable: member.darktable.map(XMPFileStamp.init), photo: photoStamp,
+            redlampSaved: side.editStamp?.modified,
+        )
         side.merge = XMPMerge.merge(
-            redlamp: redlamp, other: side.other, record: record, fields: context.fields, otherIsLater: otherIsLater,
+            redlamp: redlamp, other: side.other, record: side.record, fields: context.fields,
+            otherIsLater: otherIsLater,
         )
     }
 

@@ -41,7 +41,7 @@ public enum XMPMetadata {
         let fields = source?.fields ?? XMPFields()
         found.rating = fields.flag == .reject ? -1 : fields.rating
         found.label = fields.label.map { XMPLabelNames.lightroom.name(for: $0) } ?? fields.customLabel
-        found.keywords = fields.keywords
+        found.keywords = fields.keywords ?? []
         found.title = fields.title
         found.caption = fields.caption
         found.creator = fields.creator

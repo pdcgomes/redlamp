@@ -88,7 +88,7 @@ struct KeywordXMPTests {
         let packet = try #require(XMPPacket(Data(contentsOf: sandbox.url("IMG_0003.xmp"))))
         #expect(packet.items(XMPNamespace.hierarchicalSubject) == ["Places|Portugal|Lisbon", "Music|AC/DC", "Places"])
         #expect(packet.items(XMPNamespace.subject) == ["Places", "Portugal", "Lisbon", "Music", "AC/DC"])
-        #expect(try XMPSource(xmp: Data(contentsOf: sandbox.url("IMG_0003.xmp")))?.fields.keywords.sorted() == [
+        #expect(try XMPSource(xmp: Data(contentsOf: sandbox.url("IMG_0003.xmp")))?.fields.keywords?.sorted() == [
             "Music/AC%2FDC", "Places", "Places/Portugal/Lisbon",
         ])
 

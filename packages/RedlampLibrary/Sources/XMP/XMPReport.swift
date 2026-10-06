@@ -150,8 +150,8 @@ public struct XMPReport: Sendable {
         } else if let custom = fields.customLabel {
             parts.append("label “\(custom)”")
         }
-        if !fields.keywords.isEmpty {
-            parts.append(count(fields.keywords.count, "keyword"))
+        if let keywords = fields.keywords, !keywords.isEmpty {
+            parts.append(count(keywords.count, "keyword"))
         }
         if fields.title != nil {
             parts.append("a title")
@@ -190,7 +190,7 @@ public struct XMPReport: Sendable {
     public func json() throws -> Data {
         func fields(_ fields: XMPFields?) -> Any {
             guard let fields else { return NSNull() }
-            var object: [String: Any] = ["keywords": fields.keywords]
+            var object: [String: Any] = ["keywords": fields.keywords ?? []]
             object["rating"] = fields.rating
             object["flag"] = fields.flag?.rawValue
             object["label"] = fields.label?.rawValue

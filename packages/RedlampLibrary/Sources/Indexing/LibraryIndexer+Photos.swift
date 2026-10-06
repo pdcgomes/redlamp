@@ -132,7 +132,7 @@ extension LibraryIndexer.Run {
             camera: metadata?.cameraName.map {
                 LibraryIndexer.CameraName(name: $0, make: metadata?.make, model: metadata?.model)
             },
-            lens: metadata?.lens, keywords: organising.fields.keywords,
+            lens: metadata?.lens, keywords: organising.fields.keywords ?? [],
             collections: sidecar?.summary.metadata.collections ?? [], isNew: job.existing == nil,
             thumbnail: indexer.thumbnails == nil ? nil : LibraryIndexer.Thumbnail(
                 url: url,
@@ -193,7 +193,7 @@ extension LibraryIndexer.Run {
     private func placed(_ job: LibraryIndexer.PhotoJob) async -> LibraryIndexer.PhotoJob? {
         guard job.kind == .changed, job.sidecar == nil, let row = job.existing, let recorded = row.sidecarModified,
               row.size == job.entry.size, Self.same(row.modified, job.entry.modified), row.indexed != 0,
-              Self.same(row.xmpModified, job.xmpModified)
+              row.xmpSignature == job.xmpSignature
         else { return job }
         let photo = URL(fileURLWithPath: job.folder + "/" + job.entry.name, isDirectory: false)
         guard let mac = await sidecarLocator().onThisMac(photo), let saved = Self.modified(mac) else { return job }
@@ -269,6 +269,7 @@ extension LibraryIndexer.Run {
             width: metadata?.pixelSize?.width, height: metadata?.pixelSize?.height, orientation: metadata?.orientation,
             latitude: metadata?.latitude, longitude: metadata?.longitude, edited: edited,
             sidecarModified: job.sidecar?.modified, xmpModified: job.xmpModified, indexed: 1,
+            xmpSignature: job.xmpSignature,
         )
         show(organising, in: &record)
         return record
@@ -314,9 +315,9 @@ extension LibraryIndexer.Run {
 
     /// The photo's organising fields as `LibraryXMP` merges them (`XMPMerge`): other apps' value is
     /// its `.xmp`'s, then darktable's, then its own XMP's and IPTC's, field by field; its `.redlamp`'s
-    /// stand where it holds them, an empty title or location included, or, once `LibraryXMP` has merged
-    /// the photo (`merged`), where other apps haven't changed them since. Until then, a keyword list the
-    /// `.redlamp` holds is the photo's keywords even when it's empty, as the sidecar format has it.
+    /// stand where it holds them, an empty keyword list, title or location included, as the sidecar
+    /// format has it, or, once `LibraryXMP` has merged the photo (`merged`), where other apps haven't
+    /// changed them since.
     static func organising(
         _ embedded: CaptureMetadata?, sidecar: SidecarSummary?, xmp: CaptureMetadata?,
         darktable: CaptureMetadata? = nil, merged: XMPMergeRecord? = nil, otherIsLater: Bool = false,
@@ -331,12 +332,7 @@ extension LibraryIndexer.Run {
         for field in XMPField.held {
             shown.take(field, from: merge.fields)
         }
-        var others = Set(merge.taken)
-        if merged == nil, sidecar.metadata.keywords?.isEmpty == true {
-            shown.keywords = []
-            others.remove(.keywords)
-        }
-        return Organising(fields: shown, others: others)
+        return Organising(fields: shown, others: Set(merge.taken))
     }
 
     /// The organising fields of a photo whose `.redlamp` alone changed, from the `.redlamp` and the
@@ -354,7 +350,7 @@ extension LibraryIndexer.Run {
                   XMPFileStamp.same(record.photo, XMPFileStamp(job.entry))
             else { return nil }
             let merged = XMPMerge.merge(redlamp: redlamp, other: record.other, record: record, otherIsLater: false)
-            return (Organising(fields: merged.fields, others: Set(merged.taken)), merged.fields.keywords)
+            return (Organising(fields: merged.fields, others: Set(merged.taken)), merged.fields.keywords ?? [])
         }
         let shown = fields(of: row)
         guard XMPField.allCases.allSatisfy({ $0 == .keywords || redlamp.holds($0) || !shown.holds($0) }) else {
@@ -417,7 +413,7 @@ extension LibraryIndexer.Run {
     ) async throws -> LibraryIndexer.PendingMove {
         var replacement: LibraryIndexer.PendingPhoto?
         let besideChanged = !Self.same(record.sidecarModified, job.sidecar?.modified)
-            || !Self.same(record.xmpModified, job.xmpModified)
+            || record.xmpSignature != job.xmpSignature
         if besideChanged {
             let id = record.id
             var merged: XMPMergeRecord?
