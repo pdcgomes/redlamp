@@ -212,10 +212,17 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
     }
 
     var neededModel: ModelInfo?
+    /// The mask kinds and People parts `neededModel` is for.
+    var kindsNeedingModel: Set<MaskKind> = [.objects]
+    var partsNeedingModel: Set<PersonPart> = []
     var downloaded: [String] = []
 
     func modelNeeded(for kind: MaskKind) async -> ModelInfo? {
-        kind == .objects ? neededModel : nil
+        kindsNeedingModel.contains(kind) ? neededModel : nil
+    }
+
+    func modelNeeded(for kind: MaskKind, part: PersonPart) async -> ModelInfo? {
+        kind == .people && partsNeedingModel.contains(part) ? neededModel : await modelNeeded(for: kind)
     }
 
     /// What Find can look for and finds, the model it still needs, and what it was last asked for.
@@ -545,6 +552,69 @@ struct MaskEditingTests {
 
         model.cancelDrawing()
         #expect(!model.isRefiningEdges)
+    }
+
+    /// A Landscape class, and a People part only SAM 3 makes, ask before downloading it as
+    /// Objects do, and the mask follows the download.
+    @Test func `landscape classes and SAM 3's people parts ask before downloading it`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let engine = StubEngine()
+        engine.availableKinds.insert(.landscape)
+        engine.neededModel = ModelInfo(
+            id: "sam3", name: "SAM 3", purpose: "Landscape", downloadBytes: 988_000_000, state: .notDownloaded,
+        )
+        engine.kindsNeedingModel = [.landscape]
+        engine.partsNeedingModel = [.clothes]
+        engine.computed = [AIMask(
+            kind: .landscape, provider: "stub", revision: 1, part: LandscapeClass.water.rawValue, analysisHash: "h",
+            center: ImagePoint(x: 0.5, y: 0.5), bitmap: MaskBitmap(sha256: "w", width: 4, height: 4),
+        )]
+        let model = EditorModel(engine: engine)
+        model.select(folder.appending(path: "IMG_0003.ARW"))
+        for _ in 0 ..< 200 where model.info == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        await model.startAIMask(.people, part: .clothes)
+        #expect(model.pendingModel?.model.id == "sam3")
+        #expect(model.pendingModel?.part == .clothes)
+        model.declinePendingModel()
+
+        await model.startAIMask(.landscape, landscape: .water)
+        #expect(model.pendingModel?.landscape == .water)
+        #expect(model.recipe.masks.isEmpty)
+        await model.downloadPendingModel()
+        #expect(engine.downloaded == ["sam3"])
+        #expect(engine.lastRequest?.landscape == .water)
+        #expect(model.recipe.masks.first?.name == "Water")
+    }
+
+    /// A photo holds up to 16 masks; a 17th says why it isn't made, rather than nothing happening.
+    @Test func `a seventeenth mask says why it isn't made`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let engine = StubEngine()
+        engine.computed = [AIMask(
+            kind: .subject, provider: "stub", revision: 1, analysisHash: "h", center: ImagePoint(x: 0.5, y: 0.5),
+            bitmap: MaskBitmap(sha256: "s", width: 4, height: 4),
+        )]
+        let model = EditorModel(engine: engine)
+        model.select(folder.appending(path: "IMG_0003.ARW"))
+        for _ in 0 ..< 200 where model.info == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        await model.createAIMask(.subject)
+        let first = try #require(model.recipe.masks.first?.id)
+        for _ in 1 ..< MaskLayer.maximumLayers {
+            model.duplicateMask(first)
+        }
+        #expect(model.recipe.masks.count == MaskLayer.maximumLayers)
+        #expect(model.maskMessage == nil)
+        model.duplicateMask(first)
+        #expect(model.recipe.masks.count == MaskLayer.maximumLayers)
+        #expect(model.maskMessage == "A photo can have up to 16 masks: delete one to make another.")
     }
 
     @Test func `objects ask before downloading their model, then refine with clicks`() async throws {

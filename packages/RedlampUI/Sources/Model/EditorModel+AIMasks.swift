@@ -23,6 +23,7 @@ public extension EditorModel {
         operation: MaskOperation = .add, addingTo target: UUID? = nil,
     ) async {
         guard let visit = currentVisit, aiMaskProgress == nil else { return }
+        guard target != nil || hasRoomForMask(recipe.masks) else { return }
         activeTool = .masking
         cancelDrawing()
         aiMaskProgress = kind
@@ -54,7 +55,7 @@ public extension EditorModel {
                 selectedMaskID = target
                 commit(next, .mask(kind), "\(operation.name) \(title)")
             } else {
-                guard next.masks.count < MaskLayer.maximumLayers else { return }
+                guard hasRoomForMask(next.masks) else { return }
                 let mask = MaskLayer(name: title, components: components)
                 next.masks.append(mask)
                 selectedMaskID = mask.id
@@ -68,10 +69,14 @@ public extension EditorModel {
     }
 
     /// Starts an AI mask, asking first when its model needs downloading (App Review 4.2.3: the
-    /// size is shown and nothing downloads without consent).
-    func startAIMask(_ kind: MaskKind, operation: MaskOperation = .add, addingTo target: UUID? = nil) async {
-        if let model = await engine.modelNeeded(for: kind) {
-            pendingModel = (model, kind)
+    /// size is shown and nothing downloads without consent): a People part or a Landscape class
+    /// as much as a mask kind.
+    func startAIMask(
+        _ kind: MaskKind, part: PersonPart = .entirePerson, landscape: LandscapeClass = .vegetation,
+        operation: MaskOperation = .add, addingTo target: UUID? = nil,
+    ) async {
+        if let model = await engine.modelNeeded(for: kind, part: part) {
+            pendingModel = (model, kind, part, landscape)
             drawingOperation = operation
             drawingTarget = target
             return
@@ -79,13 +84,13 @@ public extension EditorModel {
         if kind == .objects {
             armObjectSelection(operation: operation, addingTo: target)
         } else {
-            await createAIMask(kind, operation: operation, addingTo: target)
+            await createAIMask(kind, part: part, landscape: landscape, operation: operation, addingTo: target)
         }
     }
 
     /// The user agreed: downloads the pending model, then carries on with the mask.
     func downloadPendingModel() async {
-        guard let (model, kind) = pendingModel, let visit = currentVisit else { return }
+        guard let (model, kind, part, landscape) = pendingModel, let visit = currentVisit else { return }
         let operation = drawingOperation
         let target = drawingTarget
         pendingModel = nil
@@ -99,7 +104,7 @@ public extension EditorModel {
             availableAIMaskKinds = engine.availableMaskKinds()
             modelDownloadProgress = nil
             guard currentVisit == visit else { return }
-            await startAIMask(kind, operation: operation, addingTo: target)
+            await startAIMask(kind, part: part, landscape: landscape, operation: operation, addingTo: target)
         } catch {
             maskMessage = "\(model.name) couldn't be downloaded: \(error)"
         }

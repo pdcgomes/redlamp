@@ -456,7 +456,9 @@ public final class EditorModel {
     /// The AI mask kinds the engine can make for the open photo.
     public internal(set) var availableAIMaskKinds: Set<MaskKind> = []
     /// A model the chosen mask needs, waiting for the user to agree to download it.
-    public internal(set) var pendingModel: (model: ModelInfo, kind: MaskKind)?
+    public internal(set) var pendingModel: (
+        model: ModelInfo, kind: MaskKind, part: PersonPart, landscape: LandscapeClass,
+    )?
     /// The model being downloaded, 0...1.
     public internal(set) var modelDownloadProgress: Double?
     /// What a click would select while choosing an object (a low-resolution mask).

@@ -36,6 +36,17 @@ public extension RedlampEngine {
         return info.state == .ready ? nil : info
     }
 
+    /// SAM 3 for the People parts only it makes; Hair needs it only without an iPhone's hair matte.
+    func modelNeeded(for kind: MaskKind, part: PersonPart) async -> ModelInfo? {
+        guard kind == .people, SAM3Concepts.partPrecedence.contains(part) else { return await modelNeeded(for: kind) }
+        if part == .hair, currentSession()?.embeddedMattes.contains(.hair) == true {
+            return nil
+        }
+        guard let manifest = ModelCatalog.offered.first(where: { $0.id == Self.sam3ID }) else { return nil }
+        let info = await info(manifest)
+        return info.state == .ready ? nil : info
+    }
+
     func downloadModel(_ id: String, progress: @escaping @Sendable (Double) -> Void) async throws {
         guard let manifest = ModelCatalog.manifest(id) else { throw ModelStoreError.unknownModel(id) }
         try await ModelStore.shared.download(manifest, progress: progress)

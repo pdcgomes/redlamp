@@ -74,7 +74,7 @@ public extension EditorModel {
                 }
             }
         }
-        guard currentVisit == visit, !components.isEmpty, recipe.masks.count < MaskLayer.maximumLayers else { return }
+        guard currentVisit == visit, !components.isEmpty, hasRoomForMask(recipe.masks) else { return }
         var mask = MaskLayer(
             name: preset.name, components: components, amount: preset.amount, adjustments: preset.localAdjustments,
         )

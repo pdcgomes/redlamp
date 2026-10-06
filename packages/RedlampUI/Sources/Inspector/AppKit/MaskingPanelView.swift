@@ -17,7 +17,8 @@ final class MaskingPanelView: ColumnView {
     private lazy var header = panelRows.native(MasksHeaderBar())
     private lazy var createGrid = panelRows.native(CreateMaskGrid(
         title: "Create New Mask",
-        onLandscapeClass: { [model] cls in Task { await model.createAIMask(.landscape, landscape: cls) } },
+        onPersonPart: { [model] part in Task { await model.startAIMask(.people, part: part) } },
+        onLandscapeClass: { [model] cls in Task { await model.startAIMask(.landscape, landscape: cls) } },
     ) { [model] kind in
         model.startDrawing(kind)
     }.padding(.horizontal, Metrics.panelPadding).padding(.bottom, 12))

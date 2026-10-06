@@ -81,6 +81,9 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// The AI mask kinds that need a model downloaded first, and that model.
     func modelNeeded(for kind: MaskKind) async -> ModelInfo?
 
+    /// The model a People part needs downloaded first, if any: the parts only SAM 3 makes.
+    func modelNeeded(for kind: MaskKind, part: PersonPart) async -> ModelInfo?
+
     /// The downloadable models and their state.
     func models() async -> [ModelInfo]
 
@@ -162,6 +165,10 @@ public protocol EditingEngine: AnyObject, Sendable {
 
 public extension EditingEngine {
     func warmUpMasks() {}
+
+    func modelNeeded(for kind: MaskKind, part _: PersonPart) async -> ModelInfo? {
+        await modelNeeded(for: kind)
+    }
 
     func pointColorInput(sampledAt _: CGPoint, radius _: Double, recipe _: EditRecipe) async -> OKLCh? {
         nil

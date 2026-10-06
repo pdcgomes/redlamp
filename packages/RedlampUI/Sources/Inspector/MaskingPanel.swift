@@ -14,7 +14,8 @@ import SwiftUI
             if model.maskOutlines.isEmpty {
                 CreateMaskGrid(
                     title: "Create New Mask",
-                    onLandscapeClass: { cls in Task { await model.createAIMask(.landscape, landscape: cls) } },
+                    onPersonPart: { part in Task { await model.startAIMask(.people, part: part) } },
+                    onLandscapeClass: { cls in Task { await model.startAIMask(.landscape, landscape: cls) } },
                 ) { kind in model.startDrawing(kind) }
                     .padding(.horizontal, Theme.panelPadding)
                     .padding(.bottom, 8)
@@ -270,8 +271,8 @@ struct MaskActionsBar: View {
         HStack {
             CreateMaskMenu(
                 title: "Create New Mask", systemImage: "plus",
-                onPersonPart: { part in Task { await model.createAIMask(.people, part: part) } },
-                onLandscapeClass: { cls in Task { await model.createAIMask(.landscape, landscape: cls) } },
+                onPersonPart: { part in Task { await model.startAIMask(.people, part: part) } },
+                onLandscapeClass: { cls in Task { await model.startAIMask(.landscape, landscape: cls) } },
             ) { kind in
                 model.startDrawing(kind)
             }
@@ -478,6 +479,8 @@ struct EdgeBrushSize: View {
 /// visible but disabled, with their phase in the tooltip.
 struct CreateMaskGrid: View {
     let title: String
+    /// People parts: the People tile opens a menu of them, as Create New Mask's menu does.
+    var onPersonPart: ((PersonPart) -> Void)?
     /// Landscape classes: the Landscape tile opens a menu of them.
     var onLandscapeClass: ((LandscapeClass) -> Void)?
     let onCreate: (MaskKind) -> Void
@@ -494,7 +497,17 @@ struct CreateMaskGrid: View {
             LazyVGrid(columns: columns, spacing: 6) {
                 ForEach(MaskKind.creatable, id: \.self) { kind in
                     Group {
-                        if kind == .landscape, let onLandscapeClass {
+                        if kind == .people, let onPersonPart {
+                            Menu {
+                                ForEach(model.availablePersonParts, id: \.self) { part in
+                                    Button(part.name) { onPersonPart(part) }
+                                }
+                            } label: {
+                                tile(kind)
+                            }
+                            .menuStyle(.button)
+                            .menuIndicator(.hidden)
+                        } else if kind == .landscape, let onLandscapeClass {
                             Menu {
                                 ForEach(LandscapeClass.allCases, id: \.self) { cls in
                                     Button(cls.name) { onLandscapeClass(cls) }
@@ -605,6 +618,9 @@ struct MaskList: View {
     @Environment(EditorModel.self) private var model
     @State private var renaming: UUID?
     @State private var draftName = ""
+    /// The mask Save as Mask Preset… names a preset after, while it asks.
+    @State private var presetSource: UUID?
+    @State private var presetName = ""
 
     var body: some View {
         VStack(spacing: 2) {
@@ -661,7 +677,10 @@ struct MaskList: View {
                     Button("Duplicate") { model.duplicateMask(mask.id) }
                     Button("Duplicate and Invert") { model.duplicateMask(mask.id, inverted: true) }
                     Button("Reset Adjustments") { model.resetMaskAdjustments(mask.id) }
-                    Button("Save as Mask Preset") { model.saveMaskPreset(from: mask.id, name: mask.name) }
+                    Button("Save as Mask Preset…") {
+                        presetName = mask.name
+                        presetSource = mask.id
+                    }
                     Divider()
                     Button("Delete \(mask.name)", role: .destructive) { model.deleteMask(mask.id) }
                 }
@@ -670,6 +689,24 @@ struct MaskList: View {
         // The list outlives photos and selections, so an unfinished rename mustn't.
         .onChange(of: model.selectedMaskID) { cancelRename() }
         .onChange(of: model.selection) { cancelRename() }
+        .alert("Save Mask Preset", isPresented: Binding(
+            get: { presetSource != nil }, set: {
+                if !$0 {
+                    presetSource = nil
+                }
+            },
+        )) {
+            TextField("Name", text: $presetName)
+            Button("Save") {
+                if let source = presetSource {
+                    model.saveMaskPreset(from: source, name: presetName)
+                }
+                presetSource = nil
+            }
+            Button("Cancel", role: .cancel) { presetSource = nil }
+        } message: {
+            Text("A preset with the same name is replaced.")
+        }
     }
 
     private func cancelRename() {
@@ -949,11 +986,11 @@ struct ComponentOperationMenus: View {
                     others: model.maskOutlines.filter { $0.id != mask.id },
                     onReuse: { model.addMaskReference($0, to: mask.id, operation: operation) },
                     onPersonPart: { part in
-                        Task { await model.createAIMask(.people, part: part, operation: operation, addingTo: mask.id) }
+                        Task { await model.startAIMask(.people, part: part, operation: operation, addingTo: mask.id) }
                     },
                     onLandscapeClass: { cls in
                         Task {
-                            await model.createAIMask(
+                            await model.startAIMask(
                                 .landscape,
                                 landscape: cls,
                                 operation: operation,

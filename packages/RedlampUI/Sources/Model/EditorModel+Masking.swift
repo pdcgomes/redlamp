@@ -58,7 +58,7 @@ public extension EditorModel {
             next.masks[index].components.append(component)
             selectedMaskID = target
         } else {
-            guard next.masks.count < MaskLayer.maximumLayers else { return }
+            guard hasRoomForMask(next.masks) else { return }
             let mask = MaskLayer(name: "Mask \(nextMaskNumber)", components: [component])
             next.masks.append(mask)
             selectedMaskID = mask.id
@@ -97,7 +97,7 @@ public extension EditorModel {
             selectedMaskID = target
             name = "Add \(kind.name)"
         } else {
-            guard next.masks.count < MaskLayer.maximumLayers else { return nil }
+            guard hasRoomForMask(next.masks) else { return nil }
             let mask = MaskLayer(name: "Mask \(nextMaskNumber)", components: [component])
             next.masks.append(mask)
             selectedMaskID = mask.id
@@ -200,8 +200,15 @@ public extension EditorModel {
         commit(next, .mask(nil), "Delete \(mask.name)")
     }
 
+    /// Whether `masks` has room for another (`MaskLayer.maximumLayers`); when not, says so.
+    func hasRoomForMask(_ masks: [MaskLayer]) -> Bool {
+        guard masks.count >= MaskLayer.maximumLayers else { return true }
+        maskMessage = "A photo can have up to \(MaskLayer.maximumLayers) masks: delete one to make another."
+        return false
+    }
+
     func duplicateMask(_ id: UUID, inverted: Bool = false) {
-        guard let original = recipe.mask(id), recipe.masks.count < MaskLayer.maximumLayers else { return }
+        guard let original = recipe.mask(id), hasRoomForMask(recipe.masks) else { return }
         var copy = original
         copy.id = UUID()
         copy.name = "\(original.name) Copy"
