@@ -2,34 +2,43 @@ import Foundation
 import RedlampDocument
 
 /// What grouping a list's photos reads (LIB-41): the column store as a query engine has it, with the
-/// small tables' names, and the library's stacks (LIB-28), which grouping never splits. A grouping is
-/// a pass over the list's capture times and a few over the list, which a million photos take well
-/// under a second for; call it off the main thread.
+/// small tables' names of folders, cameras and lenses; the library's stacks (LIB-28), which grouping
+/// never splits; and the photos' orientations, which the store doesn't keep. A grouping is a pass
+/// over the list's capture times and a few over the list, which a million photos take well under a
+/// second for; call it off the main thread.
 public struct LibraryGrouping: Sendable {
     let store: ColumnStore
     let names: QueryNames
     /// The stacks `StackFinder` found in the store.
     public let stacks: Stacks
+    public let orientations: PhotoOrientations
 
-    init(store: ColumnStore, names: QueryNames = QueryNames(), stacks: Stacks = Stacks()) {
+    init(
+        store: ColumnStore, names: QueryNames = QueryNames(), stacks: Stacks = Stacks(),
+        orientations: PhotoOrientations = PhotoOrientations(),
+    ) {
         self.store = store
         self.names = names
         self.stacks = stacks
+        self.orientations = orientations
     }
 }
 
 public extension QueryEngine {
     /// What grouping reads, from the column store as it is now (once a load or change in progress is
-    /// done), loading it first if it hasn't been; `stacks` are those `StackFinder` found in it. Like
-    /// `list`, it cancels nothing.
-    func grouping(stacks: Stacks = Stacks()) async throws -> LibraryGrouping {
+    /// done), loading it first if it hasn't been; `stacks` are those `StackFinder` found in it, and
+    /// `orientations` its photos' (`PhotoOrientations.read(from:)`), needed only to group by
+    /// orientation. Like `list`, it cancels nothing.
+    func grouping(
+        stacks: Stacks = Stacks(), orientations: PhotoOrientations = PhotoOrientations(),
+    ) async throws -> LibraryGrouping {
         if await loadedSnapshot() == nil {
             try await load()
         }
         guard let (store, vocabulary, _) = snapshot() else {
-            return LibraryGrouping(store: ColumnStore(), stacks: stacks)
+            return LibraryGrouping(store: ColumnStore(), stacks: stacks, orientations: orientations)
         }
-        return LibraryGrouping(store: store, names: vocabulary.names, stacks: stacks)
+        return LibraryGrouping(store: store, names: vocabulary.names, stacks: stacks, orientations: orientations)
     }
 }
 
@@ -38,11 +47,92 @@ public extension LibraryGrouping {
     /// hold has none of the fields.
     func groups(of list: PhotoList, by key: GroupKey, setting: MomentSetting = MomentSetting()) -> PhotoGroups {
         let rows = rows(of: list)
-        let own = switch key {
-        case .ungrouped: ContiguousArray<Int64>(repeating: 0, count: list.count)
-        case .moment: moments(of: list, rows: rows, setting: setting)
+        let newestFirst = list.sort.key == .captured && !list.sort.ascending
+        let byTime = { (codes: [Int64]) in codes.sorted { newestFirst ? $0 > $1 : $0 < $1 } }
+        let sorted: Sorted
+        let describe: (_ code: Int64?, _ group: Int, _ span: ClosedRange<Int64>?) -> (GroupValue, String, LibraryQuery?)
+        switch key {
+        case .ungrouped:
+            sorted = self.sorted(list, rows: rows, own: ContiguousArray(repeating: 0, count: list.count)) { $0 }
+            describe = { _, _, _ in (.all, "All photos", nil) }
+        case .moment:
+            sorted = self.sorted(list, rows: rows, own: moments(of: list, rows: rows, setting: setting), order: byTime)
+            let dated = sorted.codes.count { $0 != .min }
+            describe = { code, group, span in
+                guard code != nil else { return (.moment(nil), Self.undated, nil) }
+                return (.moment(newestFirst ? dated - 1 - group : group), Self.name(of: span), nil)
+            }
+        case .day:
+            let days = column(rows, store.captured) { $0 == .min ? .min : Int64(QueryCalendar.day(ofMilliseconds: $0)) }
+            sorted = self.sorted(list, rows: rows, own: days, order: byTime)
+            describe = { code, _, _ in
+                guard let code else { return (.day(nil), Self.undated, nil) }
+                let (year, month, date) = QueryCalendar.civil(Int(code))
+                let day = QueryDate.day(year, month, date)
+                let filter = LibraryQuery.filter(LibraryQuery.Filter(.date, .equal, [.date(day)]))
+                return (.day(day), GroupNames.day(Int(code)), sorted.crossed.contains(code) ? nil : filter)
+            }
+        case .folder, .camera, .lens:
+            let named = named(key, rows: rows)
+            sorted = self.sorted(list, rows: rows, own: named.codes) { Self.byName($0, named.names) }
+            let values = Set(sorted.codes + sorted.crossed).compactMap { named.names[$0] }.sorted()
+            let filters = GroupFilters(field: named.field, values: values)
+            describe = { code, _, _ in
+                guard let code, let name = named.names[code] else { return (named.value(nil), named.none, nil) }
+                return (named.value(name), name, sorted.crossed.contains(code) ? nil : filters.filter(for: name))
+            }
+        case .orientation:
+            let codes = ContiguousArray(list.ids.lazy.map { [orientations] id in
+                let code = orientations.code(of: id)
+                return code == 0 ? Int64.min : Int64(code)
+            })
+            sorted = self.sorted(list, rows: rows, own: codes) { $0.sorted() }
+            describe = { code, _, _ in
+                guard let code else { return (.orientation(nil), "No orientation", nil) }
+                let orientation = PhotoOrientation.allCases[Int(code) - 1]
+                return (.orientation(orientation), orientation.rawValue.capitalized, nil)
+            }
+        case .momentCamera:
+            let combined = momentCameras(of: list, rows: rows, setting: setting)
+            sorted = self.sorted(list, rows: rows, own: combined.codes) { codes in
+                codes.sorted { lhs, rhs in
+                    let (left, right) = (combined.moment(lhs), combined.moment(rhs))
+                    guard left != right else { return combined.camera(lhs) < combined.camera(rhs) }
+                    if left == combined.undated || right == combined.undated {
+                        return right == combined.undated
+                    }
+                    return newestFirst ? left > right : left < right
+                }
+            }
+            let moments = sorted.codes.map(combined.moment)
+            let dated = Set(moments).subtracting([combined.undated]).count
+            var ordinals: [Int] = []
+            for (group, moment) in moments.enumerated() {
+                let shown = group == 0 ? 0 : moment == moments[group - 1] ? ordinals[group - 1] : ordinals[group - 1] +
+                    1
+                ordinals.append(shown)
+            }
+            describe = { code, group, span in
+                let camera = code.flatMap(combined.cameraName)
+                let suffix = " — " + (camera ?? "No camera")
+                guard let code, combined.moment(code) != combined.undated else {
+                    return (.momentCamera(nil, camera: camera), Self.undated + suffix, nil)
+                }
+                let ordinal = newestFirst ? dated - 1 - ordinals[group] : ordinals[group]
+                return (.momentCamera(ordinal, camera: camera), Self.name(of: span) + suffix, nil)
+            }
         }
-        return grouped(list, by: key, setting: setting, rows: rows, own: own)
+        let details = sorted.codes.enumerated().map { group, code in
+            let span = sorted.layout.span(of: group)
+            let (value, name, filter) = describe(code == .min ? nil : code, group, span)
+            return PhotoGroups.Detail(
+                value: value, name: name, picks: sorted.layout.picks[group], filter: filter, span: span,
+            )
+        }
+        return PhotoGroups(
+            key: key, setting: setting, list: list, photos: sorted.layout.photos, starts: sorted.layout.starts,
+            details: details, groupOfPlace: sorted.layout.groupOfPlace,
+        )
     }
 
     /// `list`'s moments, as `groups(of:by:setting:)` makes them, the photos without a capture time
@@ -53,6 +143,19 @@ public extension LibraryGrouping {
 }
 
 extension LibraryGrouping {
+    static let undated = "No capture time"
+
+    /// A span of capture times in words.
+    static func name(of span: ClosedRange<Int64>?) -> String {
+        span.map { GroupNames.span($0.lowerBound, $0.upperBound) } ?? undated
+    }
+
+    /// `codes` by their names, in the Finder's order.
+    static func byName(_ codes: [Int64], _ names: [Int64: String]) -> [Int64] {
+        codes.map { code in (code: code, name: names[code] ?? "", key: FinderOrder.key(names[code] ?? "")) }
+            .sorted { $0.key == $1.key ? $0.name < $1.name : $0.key.lexicographicallyPrecedes($1.key) }.map(\.code)
+    }
+
     /// Each of `list`'s photos' row in the store, by its place; -1 for a photo the store doesn't hold.
     func rows(of list: PhotoList) -> ContiguousArray<Int32> {
         var rows = ContiguousArray<Int32>(repeating: -1, count: list.count)
@@ -64,6 +167,81 @@ extension LibraryGrouping {
             }
         }
         return rows
+    }
+
+    /// Each photo's code from its row's value in `column`, by place: `Int64.min` for a photo the store
+    /// doesn't hold.
+    func column<T>(_ rows: ContiguousArray<Int32>, _ column: ContiguousArray<T>, _ code: (T) -> Int64)
+        -> ContiguousArray<Int64> {
+        var codes = ContiguousArray<Int64>(repeating: .min, count: rows.count)
+        codes.withUnsafeMutableBufferPointer { codes in
+            column.withUnsafeBufferPointer { column in
+                for (place, row) in rows.enumerated() where row >= 0 {
+                    codes[place] = code(column[Int(row)])
+                }
+            }
+        }
+        return codes
+    }
+
+    /// A key whose values are names in the small tables: each photo's code by place, `Int64.min` for
+    /// none or one without a name, and each code's name.
+    struct NamedColumn {
+        let field: LibraryQuery.Field
+        let codes: ContiguousArray<Int64>
+        let names: [Int64: String]
+        let none: String
+        let value: (String?) -> GroupValue
+    }
+
+    func named(_ key: GroupKey, rows: ContiguousArray<Int32>) -> NamedColumn {
+        switch key {
+        case .folder:
+            let largest = Int(min(names.folders.keys.max() ?? -1, 1 << 24))
+            var known = [Bool](repeating: false, count: largest + 1)
+            for id in names.folders.keys where id >= 0 && id <= largest {
+                known[Int(id)] = true
+            }
+            let folders = names.folders
+            let codes = column(rows, store.folders) { folder in
+                let id = Int(folder)
+                let named = id >= 0 && (id < known.count ? known[id] : folders[Int64(id)] != nil)
+                return named ? Int64(id) : .min
+            }
+            return NamedColumn(
+                field: .folder,
+                codes: codes,
+                names: folders,
+                none: "No folder",
+                value: GroupValue.folder,
+            )
+        case .lens:
+            let (codes, lenses) = coded(rows, store.lenses, ids: store.lensIDs, names: names.lenses)
+            return NamedColumn(field: .lens, codes: codes, names: lenses, none: "No lens", value: GroupValue.lens)
+        default:
+            let (codes, cameras) = coded(rows, store.cameras, ids: store.cameraIDs, names: names.cameras)
+            return NamedColumn(
+                field: .camera,
+                codes: codes,
+                names: cameras,
+                none: "No camera",
+                value: GroupValue.camera,
+            )
+        }
+    }
+
+    /// Each photo's code in one of the store's columns of camera or lens codes, by place, those without
+    /// a name `Int64.min`, and the codes' names; `ids` are the codes' IDs in the index's tables.
+    private func coded(
+        _ rows: ContiguousArray<Int32>, _ column: ContiguousArray<UInt16>, ids: ContiguousArray<Int64>,
+        names: [Int64: String],
+    ) -> (ContiguousArray<Int64>, [Int64: String]) {
+        var named: [Int64: String] = [:]
+        for (code, id) in ids.enumerated() where code != 0 {
+            named[Int64(code)] = names[id]
+        }
+        let known = ids.indices.map { $0 != 0 && named[Int64($0)] != nil }
+        return (self.column(rows, column) { known[Int($0)] ? Int64($0) : .min }, named)
     }
 
     /// The places of `list`'s photos with a capture time in capture order, ties by name and then ID as
@@ -133,6 +311,51 @@ extension LibraryGrouping {
         return moments
     }
 
+    /// Each photo's moment and camera as one code: the moment (`undated` for the photos without a
+    /// capture time) times the cameras and one, and the camera's place among them by name, the photos
+    /// without one last.
+    struct MomentCameras {
+        let codes: ContiguousArray<Int64>
+        /// The cameras' names in the Finder's order.
+        let cameras: [String]
+        let undated: Int64
+
+        func moment(_ code: Int64) -> Int64 {
+            code / Int64(cameras.count + 1)
+        }
+
+        func camera(_ code: Int64) -> Int64 {
+            code % Int64(cameras.count + 1)
+        }
+
+        func cameraName(_ code: Int64) -> String? {
+            let place = Int(camera(code))
+            return place < cameras.count ? cameras[place] : nil
+        }
+    }
+
+    func momentCameras(of list: PhotoList, rows: ContiguousArray<Int32>, setting: MomentSetting) -> MomentCameras {
+        let moments = moments(of: list, rows: rows, setting: setting)
+        let named = named(.camera, rows: rows)
+        let ordered = Self.byName(Array(named.names.keys), named.names)
+        var places: [Int64: Int64] = [:]
+        for (place, code) in ordered.enumerated() {
+            places[code] = Int64(place)
+        }
+        let largest = Int(named.names.keys.max() ?? 0)
+        let placeOfCode = (0 ... largest).map { places[Int64($0)] ?? Int64(ordered.count) }
+        let undated = (moments.lazy.filter { $0 != .min }.max() ?? -1) + 1
+        let width = Int64(ordered.count + 1)
+        var codes = ContiguousArray<Int64>(repeating: 0, count: list.count)
+        for place in codes.indices {
+            let moment = moments[place] == .min ? undated : moments[place]
+            let camera = named.codes[place]
+            codes[place] = moment * width + (camera == .min || Int(camera) > largest
+                ? Int64(ordered.count) : placeOfCode[Int(camera)])
+        }
+        return MomentCameras(codes: codes, cameras: ordered.compactMap { named.names[$0] }, undated: undated)
+    }
+
     /// For each photo of `list` in a stack the list has another photo of, but the one standing for the
     /// stack while it's closed: its place, and the place of the photo standing for it. That's the
     /// stack's top, or else the first of its photos the list has in the stack's order (a burst's and a
@@ -169,62 +392,46 @@ extension LibraryGrouping {
         return found
     }
 
+    /// A list's photos laid out by their groups' codes: the codes in the groups' order, those without
+    /// the field last, and the codes a stack's photos were taken from or given to.
+    struct Sorted {
+        let codes: [Int64]
+        let layout: Layout
+        let crossed: Set<Int64>
+    }
+
     /// `list`'s photos grouped by `own`, each one's code by its place (`Int64.min` for the photos
-    /// without the field), every photo of a stack taking the code of the photo standing for it.
-    func grouped(
-        _ list: PhotoList, by key: GroupKey, setting: MomentSetting, rows: ContiguousArray<Int32>,
-        own: ContiguousArray<Int64>,
-    ) -> PhotoGroups {
+    /// without the field), every photo of a stack taking the code of the photo standing for it; `order`
+    /// puts the codes but `Int64.min` in their groups' order.
+    func sorted(
+        _ list: PhotoList, rows: ContiguousArray<Int32>, own: ContiguousArray<Int64>,
+        order: ([Int64]) -> [Int64],
+    ) -> Sorted {
         var codes = own
+        var crossed = Set<Int64>()
         for (place, standIn) in standIns(in: list) {
-            codes[Int(place)] = own[Int(standIn)]
+            let (mine, theirs) = (own[Int(place)], own[Int(standIn)])
+            if mine != theirs {
+                crossed.insert(mine)
+                crossed.insert(theirs)
+            }
+            codes[Int(place)] = theirs
         }
         var numbering = CodeNumbering(codes)
         var numbers = ContiguousArray<Int32>(repeating: 0, count: codes.count)
         for place in codes.indices {
             numbers[place] = numbering.number(codes[place])
         }
-        let found = numbering.codes
-        let newestFirst = list.sort.key == .captured && !list.sort.ascending
-        let order = found.indices.sorted { lhs, rhs in
-            let (left, right) = (found[lhs], found[rhs])
-            if left == .min || right == .min {
-                return right == .min && left != .min
-            }
-            switch key {
-            case .ungrouped: return left < right
-            case .moment: return newestFirst ? left > right : left < right
-            }
+        var ordered = order(numbering.codes.filter { $0 != .min })
+        if numbering.codes.contains(.min) {
+            ordered.append(.min)
         }
-        var ranks = ContiguousArray<Int32>(repeating: 0, count: found.count)
-        for (rank, number) in order.enumerated() {
-            ranks[number] = Int32(rank)
+        var ranks = ContiguousArray<Int32>(repeating: 0, count: ordered.count)
+        for (rank, code) in ordered.enumerated() {
+            ranks[Int(numbering.number(code))] = Int32(rank)
         }
-        let layout = Layout(list, rows: rows, groups: ranks.count, store: store) { ranks[Int(numbers[$0])] }
-        let dated = order.count { found[$0] != .min }
-        var details: [PhotoGroups.Detail] = []
-        details.reserveCapacity(order.count)
-        for (group, number) in order.enumerated() {
-            let code = found[number]
-            let span = layout.span(of: group)
-            let value: GroupValue
-            let name: String
-            switch key {
-            case .ungrouped:
-                (value, name) = (.all, "All photos")
-            case .moment:
-                value = .moment(code == .min ? nil : newestFirst ? dated - 1 - group : group)
-                name = code == .min ? "No capture time" : span
-                    .map { GroupNames.span($0.lowerBound, $0.upperBound) } ?? ""
-            }
-            details.append(PhotoGroups.Detail(
-                value: value, name: name, picks: layout.picks[group], filter: nil, span: span,
-            ))
-        }
-        return PhotoGroups(
-            key: key, setting: setting, list: list, photos: layout.photos, starts: layout.starts, details: details,
-            groupOfPlace: layout.groupOfPlace,
-        )
+        let layout = Layout(list, rows: rows, groups: ordered.count, store: store) { ranks[Int(numbers[$0])] }
+        return Sorted(codes: ordered, layout: layout, crossed: crossed)
     }
 }
 

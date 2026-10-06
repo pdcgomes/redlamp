@@ -92,10 +92,19 @@ struct GroupLibrary {
         return names
     }
 
+    var orientations: PhotoOrientations {
+        var orientations = PhotoOrientations()
+        for photo in photos {
+            orientations[photo.id] = PhotoOrientation(width: photo.width, height: photo.height)
+        }
+        return orientations
+    }
+
     func grouping() -> LibraryGrouping {
         let store = store
         return LibraryGrouping(
             store: store, names: names, stacks: StackFinder.find(in: store, names: stackNames, choices: choices),
+            orientations: orientations,
         )
     }
 

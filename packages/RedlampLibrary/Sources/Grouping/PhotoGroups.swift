@@ -1,13 +1,24 @@
 import Foundation
 
-/// What a list's photos are grouped by (LIB-41), as the grid's Group By offers it. Moments come in
-/// the order they were taken, the newest first when the list is sorted by capture time from the
-/// newest; the photos without the field come last.
+/// What a list's photos are grouped by (LIB-41), as the grid's Group By offers it. Moments and days
+/// come in the order they were taken, the newest first when the list is sorted by capture time from
+/// the newest; folders, cameras and lenses by name, in the Finder's order, as facets order their
+/// values; orientations landscape, portrait, square. The photos without the field come last.
 public enum GroupKey: String, Sendable, Hashable, CaseIterable, Codable {
     /// One group of every photo.
     case ungrouped = "none"
     /// Photos taken together, as `MomentFinder` finds them.
     case moment
+    /// The day a photo was taken, by the camera's clock, as `date:` counts days.
+    case day
+    case folder
+    /// The camera's model: the index doesn't tell two bodies of one model apart.
+    case camera
+    case lens
+    case orientation
+    /// Moments, and each moment's photos by camera, so two bodies whose clocks disagree come apart
+    /// within a moment.
+    case momentCamera = "moment-camera"
 }
 
 /// What a group's photos share; nil for the photos without it.
@@ -16,18 +27,29 @@ public enum GroupValue: Sendable, Hashable {
     case all
     /// A moment, numbered from 0 in the order the list's moments were taken.
     case moment(Int?)
+    case day(QueryDate?)
+    /// The folder's path.
+    case folder(String?)
+    case camera(String?)
+    case lens(String?)
+    case orientation(PhotoOrientation?)
+    /// A moment's photos from one camera, the moment numbered as `moment`'s are.
+    case momentCamera(Int?, camera: String?)
 }
 
 /// One of a list's groups: its photos, and what its header shows.
 public struct PhotoGroup: Sendable, Hashable {
     public let value: GroupValue
-    /// Its name in words: `14 June 2025, 14:03 to 14:47`, `No capture time`.
+    /// Its name in words: `14 June 2025, 14:03 to 14:47`, `Nikon Z 6`, `No capture time`.
     public let name: String
     /// Its photos, in the list's order.
     public let photos: ArraySlice<Int64>
     /// How many of its photos are picks.
     public let picks: Int
-    /// The query finding exactly its photos among the list's, where the language has one.
+    /// The query finding exactly its photos among the list's, where the language has one: a day's
+    /// `date:`, and a folder's, camera's or lens's term as a facet's value gives it
+    /// (`FacetValue.filter`), the other values among the list's it would also find left out. None
+    /// for a group a stack joined photos of another value to, or took its photos from.
     public let filter: LibraryQuery?
     /// When its first and last photos were taken, by the camera's clock read as UTC as the index keeps
     /// capture times; nil when none of them has a capture time.
