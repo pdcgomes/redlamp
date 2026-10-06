@@ -25,6 +25,8 @@ public struct ModelInfo: Sendable, Hashable, Identifiable {
     /// the download.
     public var licence: String?
     public var licenceURL: URL?
+    /// The datasets its weights were trained on, as its manifest names them.
+    public var trainingData: [String]
     /// The least memory it runs in, in bytes, and whether this Mac has that much.
     public var minimumMemory: Int?
     public var fitsThisMac: Bool
@@ -32,8 +34,9 @@ public struct ModelInfo: Sendable, Hashable, Identifiable {
     public init(
         id: String, name: String, purpose: String, downloadBytes: Int, state: State, isEvaluationOnly: Bool = false,
         isCleared: Bool = true, isPublished: Bool = true, decision: String? = nil, licence: String? = nil,
-        licenceURL: URL? = nil, minimumMemory: Int? = nil, fitsThisMac: Bool = true,
+        licenceURL: URL? = nil, trainingData: [String] = [], minimumMemory: Int? = nil, fitsThisMac: Bool = true,
     ) {
+        self.trainingData = trainingData
         self.minimumMemory = minimumMemory
         self.fitsThisMac = fitsThisMac
         self.isCleared = isCleared

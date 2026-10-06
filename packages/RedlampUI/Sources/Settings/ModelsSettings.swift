@@ -60,6 +60,10 @@ struct ModelsSettings: View {
                     }
                     .font(.caption).foregroundStyle(.secondary)
                 }
+                if !model.trainingData.isEmpty {
+                    Text("Trained on \(model.trainingData.joined(separator: "; ")).")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 if !model.isCleared {
                     Text("Awaiting licence review (\(model.decision ?? "pending")).")
                         .font(.caption).foregroundStyle(.orange)
