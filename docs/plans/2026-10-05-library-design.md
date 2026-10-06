@@ -181,14 +181,15 @@ term     := "-"? (group | filter | text)
 group    := "(" query ")"
 filter   := field (":" | "=" | "!=" | "<" | "<=" | ">" | ">=") value
 value    := word | quoted | range                          -- range: a..b, either end open
-text     := word | quoted                                  -- matches name, folder, keywords, title, caption, camera, lens
+text     := word | quoted                                  -- matches name, folder, keywords, title, caption, camera, lens,
+                                                           -- creator, location
 ```
 
 | Field | Values | Examples |
 | --- | --- | --- |
 | `rating` (`stars`) | 0 to 5 | `rating>=3`, `rating:0` |
 | `flag` | `pick`, `reject`, `none` | `flag:pick`, `-flag:reject` |
-| `label` | `red`, `yellow`, `green`, `blue`, `purple`, `none`, custom names | `label:red,blue` |
+| `label` | `red`, `yellow`, `green`, `blue`, `purple`, `none` (neither a colour nor a custom name), a custom label's name, or a label set's name for its colour | `label:red,blue`, `label:Hero`, `label:approved` |
 | `marked` | `yes`, `no` | `marked:yes` |
 | `edited` | `yes`, `no` | `edited:no` |
 | `kw` (`keyword`) | a keyword or a path; a parent matches its children | `kw:birds`, `kw:"Places/Portugal"` |
@@ -197,9 +198,13 @@ text     := word | quoted                                  -- matches name, fold
 | `date` (`taken`) | `2024`, `2024-06`, `2024-06-01`, ranges, `today`, `last:30d` | `date:2024-06..2024-08` |
 | `folder` (`in`) | a path or part of one | `in:"Trips/2024"` |
 | `name`, `ext` (`type`) | substring, extension or `raw`, `jpeg`, `heic`, `tiff`, `png` | `type:raw`, `name:DSC_12` |
-| `collection` | a collection's name or path | `collection:"Portfolio"` |
-| `has` | `gps`, `keywords`, `caption`, `title`, `xmp` | `has:gps` |
+| `collection` | a collection's name or path, as `kw:` matches keywords; a set matches the collections in it; smart collections aren't matched | `collection:"Portfolio"` |
+| `has` | `gps`, `keywords`, `caption`, `title`, `xmp`, `creator`, `copyright`, `location` | `has:gps` |
 | `title`, `caption` | substring | `caption:wedding` |
+| `creator`, `copyright` | substring | `creator:Sousa` |
+| `sublocation`, `city`, `state` (`province`), `country`, `countrycode` | substring | `city:Lisbon`, `countrycode:PT` |
+| `megapixels`, `aspect` | numbers, ranges; an aspect also as a ratio | `megapixels>=40`, `aspect:3:2` |
+| `is` | traits, each a query over the fields above: `long-exposure` (`shutter>=1`), `panorama` (`aspect>=2`), `high-resolution` (`megapixels>=40`), `low-light` (`iso>=3200`), `no-location` (`-has:gps`) | `is:low-light` |
 | `missing`, `offline` | `yes`, `no`: gone from its folder, or on a volume that isn't connected (LIB-18) | `offline:yes` |
 
 Sorting is separate from the query: captured (the default), name, rating, edited, the file's modification date, file size, imported, or a collection's own order, each either way.
@@ -238,6 +243,7 @@ As built (LIB-17): an edited photo the library shows is rendered with its edit b
 - A selection is a bitset over photo IDs (125 KB for a million) and an active photo; not over the column store's rows, which compaction renumbers.
 - `LibraryLive` keeps the open lists current: it applies the indexer's and change tracking's events to the query engine in batches, one update at a time, and publishes each list's diff. The app also sends Redlamp's own writes to `LibraryLive` itself, so open lists follow them at once whether or not FSEvents reports them (an open point).
 - The open folder becomes one source among the others (folder, folder with subfolders, collection, smart collection, search, All Photographs, Previous Import, Marked, Rejected). `FolderLibrary` keeps its listing and watching for folders the library hasn't indexed, and its `--folders-perf` budgets.
+- A collection, a set (its smart collections included) or a smart collection's query is a source (`PhotoSource.collection(path)`), its list kept current by `LibraryLive` and showing stacks as every list does (LIB-23).
 
 ## Sidecars on this Mac (LIB-11)
 
@@ -279,7 +285,7 @@ When Develop saves an edit over a sidecar another writer changed since it was re
 - **Naming's metadata tokens** (`{title}`, `{caption}`, `{creator}`, `{copyright}`, `{city}`, `{state}`, `{country}`, `{sublocation}`) read the merged fields.
 - **Sidecars a batch leaves as they are** keep the index's date for them, in keyword and metadata batches alike, and the XMP sync records the dates of the `.redlamp` sidecars it writes, so change tracking reads none of them again.
 - **`redlamp library metadata`, `metadata shift` and `zone`, `collections` and `stacks stack|unstack|top`** change the photos a query finds, each with `--dry-run`.
-- **Not yet in searches:** `label:` with a custom label's name, `collection:`, smart collections' queries, and the creator, copyright and location as filters and free text wait for the query engine (LIB-06, LIB-18).
+- **In searches:** custom labels, `collection:`, and the creator, copyright and location as filters and free text, matched against small tables of names rather than the text index, so indexing isn't slower (The query language).
 
 ## Import (LIB-27)
 
@@ -357,7 +363,7 @@ As built (LIB-13): Library and Develop share the editor window, each built once;
 
 As built (LIB-14): the grid's cells are layers recycled row by row, with thumbnails drawn off the main thread in the window's colour space. Sizes go from 80 to 400 points by `=`, `-` or a slider, from the store's grid tier and its preview tier for large cells. `J` cycles three cell styles: compact, expanded (the name, the date and the camera's settings) and thumbnails only. A rubber band selects, ⇧ or ⌘ adding to the selection, on photo IDs the filmstrip shares. Context menus on photos and on the grid's background, and a Library toolbar, hold every grid action; each source keeps its size, style, place and selection. The Loupe goes between Fit and 1:1 with `Z`, Space or a click, and pans by dragging. ⌘R went to an earlier ⇧⌘R menu item in AppKit, so it reset a photo's settings; it now shows the selection in Finder.
 
-As built (LIB-18): `\` in Library shows the filter bar above the grid, in three parts: Text, the query language with Tab completing keywords, cameras, lenses, folders and labels; Attribute, flags, stars with a comparison, labels, edited or not, raw, JPEG or HEIC, and missing or offline photos; and Metadata, up to eight columns with counts, each narrowing the next. Every choice is written into the query's text, and editing the text changes the choices, so the bar and the query are one. Seven sort orders go either way; filters are saved as presets and kept with each source, a lock keeps one across sources, ⌘L turns them off and on, and the filmstrip says how many photos a filter leaves out ("12 of 40 photos"). The query engine gained `missing:` and `offline:`, sorts by modification date and file size, counts per metadata column, filtered lists, a rule form and completions. Typing misses its budgets by about three times, at a load average near 30 as above 100, so the cost is in the path, not the load: most of each key goes to AppKit's layout and drawing and to SwiftUI views laying out again (Results). `missing:yes` finds nothing yet, since the indexer removes the photos that leave their folders.
+As built (LIB-18): `\` in Library shows the filter bar above the grid, in three parts: Text, the query language with Tab completing keywords, cameras, lenses, folders and labels; Attribute, flags, stars with a comparison, labels, edited or not, raw, JPEG or HEIC, and missing or offline photos; and Metadata, up to eight columns with counts, each narrowing the next. Every choice is written into the query's text, and editing the text changes the choices, so the bar and the query are one. Seven sort orders go either way; filters are saved as presets and kept with each source, a lock keeps one across sources, ⌘L turns them off and on, and the filmstrip says how many photos a filter leaves out ("12 of 40 photos"). The query engine gained `missing:` and `offline:`, sorts by modification date and file size, counts per metadata column, filtered lists, a rule form and completions. Typing misses its budgets by about three times, at a load average near 30 as above 100, so the cost is in the path, not the load: most of each key goes to AppKit's layout and drawing and to SwiftUI views laying out again (Results). `missing:yes` finds nothing yet, since the indexer removes the photos that leave their folders. Since then: Metadata columns for the creator, city, country, collection and custom label; Tab completing collections, custom labels and traits; and a filter that finds nothing naming, in the bar's header, the term whose removal brings back the most photos ("Remove kw:zzzz: 12 photos"), from one count per term, cancelled when the filter changes.
 
 ## File operations (LIB-25, LIB-26)
 
@@ -473,6 +479,17 @@ The column store and engine on 1,000,000 synthetic rows in memory, every query o
 | Column store | 70 bytes a photo | |
 
 On the 20,000-photo fixture (`redlamp library bench … --scenario search`), all 43 counts equal the manifest's, with the first page and count in p95 0.12 ms and facets in p95 0.3 ms; the store builds in 26 ms. What helped: matching folder names as lowercased bytes instead of Foundation's case-insensitive search (p95 27 ms to 2.1 ms), keeping each term's matches per store, and sorting folders by key rather than with `localizedStandardCompare` for facets (29 ms to 11 ms).
+
+With the organising fields, the traits and the empty search (LIB-06, LIB-18, LIB-23), `redlamp library bench` on lib-1m, two runs each:
+
+| | Before (load 24) | After (load 34) |
+| --- | --- | --- |
+| Search, p95 | 2.6 and 2.5 ms | 2.5 and 2.5 ms |
+| Facets, p95 | 15.3 and 15.3 ms | 6.0 and 10.6 ms, with four cheap facets added |
+| The column store loaded | 337 and 323 ms | 634 and 459 ms |
+| Column store | 74.4 bytes a photo | 87.5 bytes a photo |
+
+The 13 bytes are the creator (2), copyright (2), custom label (1), place (4), megapixels (2) and aspect (2). In memory at a million, the new fields' and traits' queries take p95 2.1 ms and the empty search's counts p95 9.7 ms; lib-20k stays at or under 0.5 ms. Free text that isn't ASCII still takes about 45 ms a keystroke over 5,604 folders, since folder paths are then matched with Foundation's slower search.
 
 ### Metadata (LIB-07)
 
@@ -733,6 +750,9 @@ What it changed: the first version took 3.7 s for the million, keeping 13 to 16 
 - Whether the map (LIB-35) moves into 1.0.
 - Soft frames (LIB-42) in 1.0 or after: first measured on three shoots the owner has culled (an event, travel, portraits). They go into 1.0 if the proposal is the owner's pick in at least 70% of bursts and would set aside an owner's pick in under 10% ([LIB-katami §6](../research/notes/LIB-katami.md#6-before-the-changes-are-accepted)). The same shoots set the moments' defaults (LIB-41), which stand if 45 of 50 boundaries are right in each.
 - Dust followed across shoots (LIB-43) needs each body's serial number in the index.
+- The traits Wide Open, Telephoto and Ultra Wide need the lens's widest aperture and the 35 mm-equivalent focal length as index columns.
+- Free text that isn't ASCII matches folder paths with Foundation's search, about 45 ms a keystroke over 5,604 folders, where ASCII text takes under a millisecond.
+- The column store loads in 459 to 634 ms at a million photos since the organising fields (from 323 to 337), within the warm launch's 1 s; warm launch at a million is to be measured again.
 - Indexing folders in iCloud Drive without downloading every photo: from what's already downloaded, and the rest as it arrives.
 - Whether FSEvents reports Redlamp's own writes on this Mac. The streams don't ask to leave them out (`kFSEventStreamCreateFlagIgnoreSelf` isn't set), so they should, but the app's saves were seen going unreported, perhaps only inside Cursor's sandbox. The app reports its writes to `LibraryLive` either way.
 - A shifted capture time in the `.xmp` Redlamp writes: Adobe documents Lightroom Classic's Edit Capture Time as changing EXIF's DateTimeOriginal, written into raws only with a catalog setting that's off by default, and Photo Mechanic's as adjusting the camera's timestamp; neither names XMP properties. Redlamp's `.xmp` should carry `exif:DateTimeOriginal` and `photoshop:DateCreated` for a shifted photo, and read them from other apps' as a shift.
