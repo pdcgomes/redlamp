@@ -9,6 +9,8 @@ The evidence is in four notes:
 - [Open-source managers and DAMs](notes/LIB-dams-and-open-source.md): darktable, digiKam, IMatch, Photo Supreme, NeoFinder, Peakto, Excire, Apple Photos, ACDSee, ON1 and DxO.
 - [AI culling, renaming, platform and scale](notes/LIB-culling-renaming-platform.md): five AI culling tools, six renaming tools, the macOS 26 APIs the library would use (three measured), and library sizes on network storage.
 
+Added on 6 October 2026: [Katami](notes/LIB-katami.md), a raw photo browser for the Mac, read against the track, with Library Health, moments and the tracker changes they'd need, for the owner to accept.
+
 Each note keeps its sources and what it couldn't reach or confirm; this document keeps their "(unverified)" marks. Adobe's help site, DPReview and Reddit refused automated requests, so Adobe's own wording is unchecked, and Lightroom Classic's counts are thread titles sorted by keyword patterns, a rough measure of frequency.
 
 ## 1. Summary
