@@ -87,6 +87,43 @@ struct DuplicateTrashCheckTests {
         #expect(try await operations.entries().isEmpty, "nothing was written to the journal")
     }
 
+    @Test func `a copy kept that a batch queued before the Trash moves stops it, the check waiting its turn`(
+    ) async throws {
+        let sandbox = try await DuplicateSandbox.make()
+        defer { sandbox.remove() }
+        let x = duplicateBytes(100_000, seed: 91)
+        try sandbox.write("A/X.JPG", x, modified: 0)
+        try sandbox.write("B/X.JPG", x, modified: 10)
+        try sandbox.write("C/Other.JPG", duplicateBytes(50000, seed: 92))
+        try await sandbox.indexAll()
+        let finder = sandbox.finder(sandbox.fileSystem)
+        let review = try await finder.review(finder.confirm(finder.candidates()))
+        let plan = try DuplicateRemovalPlan(review, removing: review.allButProposed)
+        let a = try await sandbox.id("A/X.JPG")
+        #expect(plan.removals.map(\.kept.photo) == [a])
+        let held = HeldWrite("move ")
+        let operations = FileOperations(
+            index: sandbox.index, fileSystem: WatchedFileSystem(sandbox.fileSystem, beforeWrite: held.before),
+        )
+        let batch = try await finder.trashBatch(for: plan, operations: operations)
+
+        // The copy kept moves to another folder in a batch held partway, ahead of the Trash's.
+        let elsewhere = sandbox.url("C")
+        let moving = Task { try await operations.run(operations.planMove(photos: [a], to: elsewhere)) }
+        await held.reached.wait()
+        let trashing = Task { try await finder.trash(plan, batch, operations: operations) }
+        // Long enough for a check that didn't wait its turn to have read the copies.
+        try await Task.sleep(for: .milliseconds(100))
+        held.release()
+
+        #expect(try await moving.value.isFinished)
+        await #expect(throws: Refusal.differs([
+            Difference(path: sandbox.path("A/X.JPG"), reason: .notInLibrary, isKept: true),
+        ])) { try await trashing.value }
+        #expect(FileManager.default.fileExists(atPath: sandbox.url("B/X.JPG").path) && sandbox.trashed().isEmpty)
+        #expect(FileManager.default.fileExists(atPath: sandbox.url("C/X.JPG").path))
+    }
+
     @Test func `every copy of a group stays, even when a plan asks the API to move them all`() async throws {
         let sandbox = try await DuplicateSandbox.make()
         defer { sandbox.remove() }

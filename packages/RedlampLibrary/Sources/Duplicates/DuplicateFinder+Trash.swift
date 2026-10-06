@@ -19,18 +19,21 @@ public extension DuplicateFinder {
     }
 
     /// Runs `batch`, `plan`'s (`trashBatch`), once `check` finds nothing that differs from the plan;
-    /// otherwise throws `DuplicateRemovalPlan.Refusal.differs`, having moved nothing. It throws as
-    /// `FileOperations.run` does too, `FileOperationError.conflicts` among them, also moving nothing.
-    /// Undo (`FileOperations.undo`) puts every copy back where it was, with its sidecars, while the
-    /// Trash still has it. `progress` follows the files as they're read again.
+    /// otherwise throws `DuplicateRemovalPlan.Refusal.differs`, having moved nothing. The check runs in
+    /// the batch's turn among `operations`' batches, right before it, so none of them can move a copy
+    /// or the copy kept for it in between. It throws as `FileOperations.run` does too,
+    /// `FileOperationError.conflicts` among them, also moving nothing. Undo (`FileOperations.undo`)
+    /// puts every copy back where it was, with its sidecars, while the Trash still has it. `progress`
+    /// follows the files as they're read again.
     @discardableResult
     func trash(
         _ plan: DuplicateRemovalPlan, _ batch: FileBatch, operations: FileOperations,
         progress: (@Sendable (Progress) -> Void)? = nil,
     ) async throws -> FileOutcome {
-        let differences = try await check(plan, batch, operations: operations, progress: progress)
-        guard differences.isEmpty else { throw DuplicateRemovalPlan.Refusal.differs(differences) }
-        return try await operations.run(batch)
+        try await operations.run(batch, checkedBy: { [self] in
+            let differences = try await check(plan, batch, operations: operations, progress: progress)
+            guard differences.isEmpty else { throw DuplicateRemovalPlan.Refusal.differs(differences) }
+        })
     }
 
     /// What stops `batch` (`trashBatch`) carrying out `plan`, as the library is now, by path; empty

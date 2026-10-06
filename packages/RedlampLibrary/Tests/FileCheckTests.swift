@@ -5,7 +5,8 @@ import Synchronization
 import Testing
 @testable import RedlampLibrary
 
-/// What stops a batch before anything moves, as its files are when it runs (LIB-26).
+/// What stops a batch before anything moves, as its files are when it runs, and the check a caller
+/// runs in the batch's turn (LIB-26).
 struct FileCheckTests {
     /// Adds a byte to the file at `relative`, in place: the same file, of another size and date.
     private static func rewrite(_ relative: String, in sandbox: FileSandbox) throws {
@@ -74,5 +75,65 @@ struct FileCheckTests {
         #expect(try await sandbox.sidecar("B/IMG_0001.ARW")?.metadata?.rating == 5)
         #expect(try await operations.undo().isFinished)
         #expect(sandbox.files() == written)
+    }
+
+    @Test func `a check run in its batch's turn sees what the batches before it did and holds back those after it`(
+    ) async throws {
+        let held = HeldWrite("move ")
+        let sandbox = try await FileSandbox.make(
+            [.init("A/IMG_0001.JPG"), .init("A/IMG_0002.JPG")], folders: ["B", "C"],
+            fileSystem: WatchedFileSystem(beforeWrite: held.before),
+        )
+        defer { sandbox.remove() }
+        let operations = sandbox.operations()
+        let ids = try await sandbox.rows()
+        let (first, second) = try (#require(ids["A/IMG_0001.JPG"]), #require(ids["A/IMG_0002.JPG"]))
+        let ahead = try await operations.planMove(photos: [first], to: sandbox.url("B"))
+        let checked = try await operations.planMove(photos: [second], to: sandbox.url("C"))
+        let behind = try await operations.planMove(photos: [second], to: sandbox.url("B"))
+
+        // The batch ahead is held partway through its move.
+        let running = Task { try await operations.run(ahead) }
+        await held.reached.wait()
+        let seen = Mutex<Bool?>(nil)
+        let asked = Signal()
+        let late = Mutex<Task<FileOutcome, any Error>?>(nil)
+        let checking = Task {
+            try await operations.run(checked, checkedBy: {
+                seen.withLock { $0 = FileManager.default.fileExists(atPath: sandbox.url("A/IMG_0001.JPG").path) }
+                late.withLock { late in
+                    late = Task {
+                        asked.fire()
+                        return try await operations.run(behind)
+                    }
+                }
+                await asked.wait()
+            })
+        }
+        // Long enough for a check that didn't wait its turn to have looked.
+        try await Task.sleep(for: .milliseconds(100))
+        held.release()
+
+        #expect(try await running.value.isFinished)
+        #expect(try await checking.value.isFinished)
+        #expect(seen.withLock { $0 } == false, "the check came after the batch ahead had moved its photo")
+        let behindRun = try #require(late.withLock { $0 })
+        await #expect(throws: FileOperationError.conflicts([
+            FileConflict(path: sandbox.rootPath + "/A/IMG_0002.JPG", reason: .gone),
+        ]), "the batch asked for during the check ran after the batch checked") { try await behindRun.value }
+        #expect(Set(sandbox.files().keys) == ["B/IMG_0001.JPG", "C/IMG_0002.JPG"])
+    }
+
+    @Test func `a check that throws stops its batch before anything moves`() async throws {
+        let sandbox = try await FileSandbox.make([.init("A/IMG_0001.JPG")], folders: ["B"])
+        defer { sandbox.remove() }
+        let operations = sandbox.operations()
+        let batch = try await operations.planMove(photos: Array(sandbox.rows().values), to: sandbox.url("B"))
+        let before = sandbox.files()
+        struct Refused: Error, Equatable {}
+        await #expect(throws: Refused()) { try await operations.run(batch, checkedBy: { throw Refused() }) }
+        #expect(sandbox.files() == before)
+        #expect(try await operations.entries().isEmpty, "nothing was written to the journal")
+        #expect(try await operations.run(batch, checkedBy: {}).isFinished)
     }
 }

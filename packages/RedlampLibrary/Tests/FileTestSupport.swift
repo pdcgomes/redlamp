@@ -210,14 +210,18 @@ extension FileOutcome {
     }
 }
 
-/// The Mac's file system, counting what's read through it and calling `beforeWrite` before each
-/// write.
+/// The Mac's file system, or `base`, counting what's read through it and calling `beforeWrite` before
+/// each write.
 final class WatchedFileSystem: LibraryFileSystem {
-    let base = LocalFileSystem()
+    let base: any LibraryFileSystem
     private let state = Mutex((reads: 0, writes: 0))
     private let beforeWrite: @Sendable (String) -> Void
 
-    init(beforeWrite: @escaping @Sendable (String) -> Void = { _ in }) {
+    init(
+        _ base: any LibraryFileSystem = LocalFileSystem(),
+        beforeWrite: @escaping @Sendable (String) -> Void = { _ in },
+    ) {
+        self.base = base
         self.beforeWrite = beforeWrite
     }
 
@@ -278,5 +282,63 @@ final class WatchedFileSystem: LibraryFileSystem {
     private func wrote(_ operation: String) {
         beforeWrite(operation)
         state.withLock { $0.writes += 1 }
+    }
+}
+
+/// Something that happens once, which tasks can wait for.
+final class Signal: Sendable {
+    private let state = Mutex<(fired: Bool, waiting: [CheckedContinuation<Void, Never>])>((false, []))
+
+    var fired: Bool {
+        state.withLock { $0.fired }
+    }
+
+    func fire() {
+        let waiting = state.withLock { state in
+            defer { state = (true, []) }
+            return state.waiting
+        }
+        waiting.forEach { $0.resume() }
+    }
+
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            let fired = state.withLock { state in
+                if !state.fired {
+                    state.waiting.append(continuation)
+                }
+                return state.fired
+            }
+            if fired {
+                continuation.resume()
+            }
+        }
+    }
+}
+
+/// A write a test holds: the first whose operation (`WatchedFileSystem`'s) has `prefix`, from its
+/// file system's thread, until it's released.
+final class HeldWrite: Sendable {
+    let prefix: String
+    let reached = Signal()
+    private let held = Mutex(false)
+    private let released = DispatchSemaphore(value: 0)
+
+    init(_ prefix: String) {
+        self.prefix = prefix
+    }
+
+    /// For `WatchedFileSystem(beforeWrite:)`.
+    func before(_ operation: String) {
+        guard operation.hasPrefix(prefix), held.withLock({ held in
+            defer { held = true }
+            return !held
+        }) else { return }
+        reached.fire()
+        released.wait()
+    }
+
+    func release() {
+        released.signal()
     }
 }

@@ -19,7 +19,8 @@ import Synchronization
 ///   folders are made and moved, and no photo is read; `live` hears of every change. The store
 ///   needs nothing, since it's keyed by the photos' content.
 ///
-/// One batch runs at a time; the file system's work runs off the caller.
+/// One batch runs at a time, with the check a caller gives it (`run(_:checkedBy:progress:)`) just
+/// before it; the file system's work runs off the caller.
 public final class FileOperations: Sendable {
     public let index: LibraryIndex
     public let paths: LibraryPaths
@@ -66,7 +67,20 @@ public final class FileOperations: Sendable {
     public func run(_ batch: FileBatch, progress: (@Sendable (FileProgress) -> Void)? = nil) async throws
         -> FileOutcome {
         try await serially { [self] in
-            try await runNow(batch, progress: progress)
+            try await runNow(batch, check: nil, progress: progress)
+        }
+    }
+
+    /// Runs `batch` as `run(_:progress:)` does, once `check` returns: in the batch's turn, right before
+    /// it, so no other batch moves anything between them. `check` throws to stop the batch, which then
+    /// moves nothing; it doesn't run while a batch a forced quit interrupted waits for `recover`.
+    @discardableResult
+    public func run(
+        _ batch: FileBatch, checkedBy check: @escaping @Sendable () async throws -> Void,
+        progress: (@Sendable (FileProgress) -> Void)? = nil,
+    ) async throws -> FileOutcome {
+        try await serially { [self] in
+            try await runNow(batch, check: check, progress: progress)
         }
     }
 
@@ -79,11 +93,14 @@ public final class FileOperations: Sendable {
         }
     }
 
-    private func runNow(_ batch: FileBatch, progress: (@Sendable (FileProgress) -> Void)?) async throws
-        -> FileOutcome {
+    private func runNow(
+        _ batch: FileBatch, check: (@Sendable () async throws -> Void)?,
+        progress: (@Sendable (FileProgress) -> Void)?,
+    ) async throws -> FileOutcome {
         if let unfinished = try await unfinishedEntries().first {
             throw FileOperationError.unfinished(unfinished.id)
         }
+        try await check?()
         guard !batch.steps.isEmpty else {
             // Nothing to do, and nothing for the journal or Undo.
             return FileOutcome(batch: batch, state: .finished)
