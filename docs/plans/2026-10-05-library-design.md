@@ -294,6 +294,8 @@ Every list can show its stacks closed, each one cell with a count, and open them
 
 Every one has a menu item and most a mouse gesture: stars, flag and label on a cell; context menus on photos, folders, collections and keywords; drag and drop onto folders, collections and photos; a thumbnail-size slider; a module picker in the toolbar.
 
+As built (LIB-13): Library and Develop share the editor window, each built once; a switch changes only which one is opaque, so nothing is rebuilt and nothing is read from the disk. Library shows the grid or the loupe (from the photo's preview), its own Folders and Photo info panels, and the filmstrip docked below; the grid and the filmstrip share one selection. C and N show the loupe until Compare and Survey exist (LIB-16), and say so in their menu items; D, R, Q and ⇧W open Develop with that tool. Develop keeps its photo open while Library is shown, and actions that would change that hidden photo (sliders, masks, Undo) are off until it's shown again. Undo is per module for now. No existing key moved.
+
 ## File operations (LIB-25, LIB-26)
 
 Renames, moves, new folders and moves to the Trash go through a journal in `LibraryPaths.root` written before anything moves: each step's source and destination, the photo's sidecar and other apps' `.xmp`. A forced quit leaves a journal the next launch finishes or rolls back; Undo replays it backwards. Nothing is ever overwritten; a collision stops the batch before it starts, in the preview.
@@ -477,6 +479,19 @@ What it changed:
 
 The blank frames come from the editor rather than the library: when a photo is already decoded, opening it clears the canvas's thumbnail before its first frame exists (LIB-16). `--folders-perf` on the 20,000-photo fixture, under the same load, missed 3 of its 13 budgets before the change and 3, then 1, after, different ones each time, so that's load rather than the library.
 
+### Library and Develop in one window (LIB-13)
+
+`--library-perf`, Release, on lib-20k's 2007 folder (1,398 photos), two runs at load average 50 to 72:
+
+| | Measured | Budget |
+| --- | --- | --- |
+| A switch between Library and Develop, main thread | p99 2.3 and 3.8 ms | under 8 ms |
+| Disk reads during 200 switches | none | none |
+| Grid scrolling, main thread | p99 11.9 and 12.0 ms | under 8.3 ms: FAIL |
+| Blank frames while holding the arrow keys | none, from 52 and 62 before | none |
+
+Hiding and showing the modules' views cost 12 to 15 ms a switch; changing only their opacity brought it under 4.
+
 ### Exact duplicates (LIB-39)
 
 `DuplicateBenchTests` and the `duplicates` scenario, load average 25 to 70:
@@ -551,7 +566,8 @@ What it changed: the first version took 3.7 s for the million, keeping 13 to 16 
 
 ## Open points
 
-- One Undo across both modules, as in Lightroom, or one per module.
+- One Undo across both modules, as in Lightroom, or one per module (per module for now).
+- The shared selection is on photo URLs for now: `PhotoSelection` needs a public way to build a `PhotoList` from IDs, and IDs for folders the library hasn't indexed.
 - Collections in sidecars by path (a renamed collection rewrites its photos' sidecars) or by ID (the definitions file is then needed to read them).
 - The XMP merge records: a table of their own rather than one settings row per photo.
 - Photo Mechanic's Urgency numbers for its colour classes (purple 1, red 2, yellow 4, green 5, blue 6), which nothing confirmed yet.
