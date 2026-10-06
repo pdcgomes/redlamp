@@ -247,6 +247,17 @@ Sorting is separate from the query: captured (the default), name, rating, edited
 - **Lightroom Classic's keyword-list file** imports and exports with everything it holds: levels by tabs, synonyms in braces, keywords not exported in brackets.
 - **Other apps' keywords** come through XMP (LIB-24): `lr:hierarchicalSubject` as paths and `dc:subject` as flat names, both ways.
 
+## Stacks (LIB-28)
+
+Stacks are found from the index alone, never by reading a file, on every core:
+
+- **Pairs:** a raw, a JPEG and a HEIC in one folder named alike but for the extension (case and Unicode's forms folded), with the raw on top.
+- **Bursts:** one camera model, one folder and one exposure length, each frame starting at most a second after the last one ended (continuous drive at its slowest is about a frame a second); the first frame on top unless the user chose another.
+- **Focus-stack suggestions:** `StackDetector`'s capture rules over each folder's frames, a pair counted once; the app still confirms them from thumbnails.
+- **Manual stacks,** across folders; a photo in one is in no burst. Each photo's sidecar will hold `"stack": {"id": "<UUID>", "top": true}` in its metadata: the photos sharing an `id` are one stack, and `top` is written only when true. Until that field lands, manual stacks live in the index.
+
+Every list can show its stacks closed, each one cell with a count, and open them one at a time or all at once, with diffs as they open, close and change. A closed stack's selection is all of its photos, so a pair's change reaches both files and nothing is chosen out of sight. Working out a list's stacks again costs about as much as building the list, so it runs off the main thread.
+
 ## Other apps' metadata (LIB-24)
 
 `LibraryXMP` reads what other apps wrote and, when the library's option is on (off by default), writes standard `.xmp` beside each photo, whatever the root's sidecar placement. The `.redlamp` sidecar stays the source of truth (DEC-37); originals are never written.
@@ -488,6 +499,19 @@ The `files` scenario: 10,000 photos and 16,000 files in a temporary folder on th
 | Photos lost, or parted from their sidecar or `.xmp` | 0 | 0 |
 
 A bare `rename` cost 0.54 ms on the internal disk and 1.4 ms on the external SSD under the same load, so the batch spends 19 to 37 ms a photo on more than its two or three renames: the sidecar's `originalName` write is the first suspect. To be measured on a quiet Mac and brought down.
+
+### Stacks (LIB-28)
+
+The `stacks` scenario at a million synthetic photos, two runs:
+
+| | Measured | Budget |
+| --- | --- | --- |
+| Finding every stack | 87 and 62 ms | under 1 s, off the main thread |
+| The list with its stacks closed | 14 ms | under 50 ms |
+| The list with them open | 26 and 21 ms | under 50 ms |
+| Opening every stack, with its diff | 49.5 and 42 ms | under 50 ms |
+| Closing every stack | 44 and 30 ms | under 50 ms |
+| One stack opened or closed | about 2 µs | under 2 ms, on the main thread |
 
 ### Keywords (LIB-21)
 
