@@ -205,7 +205,8 @@ Sorting is separate from the query: captured (the default), name, rating, edited
 - **When the history is gone** (a different event database, `MustScanSubDirs`, a volume used on another Mac): folder signatures (the directory's modification date, its entry count and a hash of names, sizes and dates) are compared folder by folder, in the indexer's order.
 - **Network volumes** have no FSEvents: the shown folders are polled every 15 s and the rest with backoff up to 15 minutes, and polling stops while the app is in the background.
 - **Renames and moves made in Finder** are recognised by file identifier (Photo identity); sidecars left behind are offered back to their photos.
-- **A volume that can't be reached** never blocks anything: every file operation on it has a timeout, its photos show as offline, and it's browsed and searched from the index and the store until it's back.
+- **A volume that can't be reached** never blocks anything: every file operation on it has a timeout, its photos show as offline, and it's browsed and searched from the index and the store until it's back. A volume that only answers slowly isn't unreachable: an overdue operation asks the volume's root first, and an operation still going after thirty timeouts fails alone, leaving its folder to the next run.
+- **Launch** shows the index at once and reconciles behind it: from the event history when there is one, by folder signatures otherwise, the folders on screen first.
 
 ## The store (LIB-09)
 
@@ -417,8 +418,8 @@ On the 20,000-photo fixture (`redlamp library bench … --scenario search`), all
 | Scenario | Result | Budget | Peak memory |
 | --- | --- | --- | --- |
 | index-build | all 1,000,000 in 2,153 s, 464 a second, no failures; the first 1,000 searchable in 3.5 s | first 1,000 under 2 s: FAIL | 1.33 GB |
-| warm-launch | 12.0 s; what was listed, read again and changed all as expected | under 1 s: FAIL | 1.32 GB |
-| vanishing-volume | 3 checks failed | | 86 MB |
+| warm-launch | visible and searchable in 419 to 428 ms with the index cold on the disk, 309 to 318 ms warm (12.0 s before); reconciled behind it in 17 to 37 s by folder signatures, or 322 to 471 ms after launch from the event history | under 1 s: PASS | 1.32 GB |
+| vanishing-volume | every check passed (3 failed before) | PASS | 86 MB |
 | search | all 43 counts equal the manifest's | p95 under 16 ms: PASS | 1.56 GB |
 | facets | p95 17.2 ms | under 100 ms: PASS | 387 MB |
 | lists | every check passed | PASS | 707 MB |
@@ -427,9 +428,10 @@ What it changed:
 
 - **A crash only a million photos reach.** The batcher kept its commit callback, a closure, in a `Mutex`, and each read wrapped it in another thunk: 192 bytes of stack more per batch, until a 524 KB cooperative thread's stack ran out about a thousand batches in (5,560 nested frames in the crash report, whose own backtrace showed 27). The batcher now holds its run by a weak reference; a test of 5,000 one-photo batches crashed the test process before the fix.
 - **Photos read while the walk goes on.** Every folder listing went to the volume ahead of every photo read, so nothing was searchable until the walk ended: the first 1,000 photos took 30.7 s. Now only the folders on screen and those above them go first.
-- **A warm launch mustn't list everything again.** Without the event history, the launch path lists all 5,604 folders before it's done, which can't meet 1 s at this size; the index has to be shown at once and reconciled behind it.
-- **The vanishing volume** under this load is the disk itself: real listings stalled for up to 10.2 s, so the 1 s reader timeout took the volume for gone. It passes at 20,000 photos.
-- Reconcile wasn't run at a million: it clones the fixture, a million files, which this Mac's security scanners make expensive. One warm-launch run died with signal 11 at 400,000 photos, with no crash report; the same binary passed when run again.
+- **A warm launch shows the index at once.** It listed all 5,604 folders before it was done, 12 s at this size. Now the index's file is read into memory and the column store loads in four parts across the index's readers (0.42 s, from 1.5 to 1.8), All Photographs and searches answer from it, and change tracking reconciles behind it. While every folder is compared by signature, the folder on screen is compared first, at about 445 ms, and searches typed meanwhile stay at p95 1.7 to 2.6 ms.
+- **The folders on screen first, really.** Other folders' photos were read, and those folders finished, before the folder on screen had even been listed; that was what made "the folders asked for are indexed first" fail about one run in twenty. Their photos now wait while the way to it is listed.
+- **A volume that answers slowly isn't gone.** Real listings stalled for up to 10.2 s under this load, and the 1 s reader timeout took the volume for gone. An overdue operation now asks the volume's root first, and only no answer means offline. One real operation then stalled for 68 minutes, so an operation still going after thirty timeouts fails alone, and its folder waits for the next run.
+- Reconcile wasn't run at a million: it clones the fixture, a million files, which this Mac's security scanners make expensive. One warm-launch run died with signal 11 at 400,000 photos, with no crash report; nine Thread Sanitizer runs, 60,000 one-photo batches and sixteen warm launches didn't reproduce it. Thread Sanitizer flagged two intermittent races of one shape, an array built inside an index read and used after the `await`, which a probe of 6,600 such hand-offs didn't reproduce; they stay open.
 
 ### Photo lists and selections (LIB-10)
 
