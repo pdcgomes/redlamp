@@ -20,7 +20,7 @@ final class EditorSplitViewController: NSSplitViewController {
         self.model = model
         self.content = content
         sidebarItem = NSSplitViewItem(sidebarWithViewController: PaneViewController(
-            model: model, theme: theme, width: PanelMetrics.sidebarNominal,
+            model: model, theme: theme, width: PanelMetrics.sidebarNominal, library: LibraryFoldersColumn.init(model:),
         ) {
             if DevelopPanels.usesSwiftUI {
                 NSHostingView(rootView: SidebarView().environment(model).environment(theme).focusEffectDisabled())
@@ -36,7 +36,7 @@ final class EditorSplitViewController: NSSplitViewController {
         contentItem.automaticallyAdjustsSafeAreaInsets = true
 
         inspectorItem = NSSplitViewItem(inspectorWithViewController: PaneViewController(
-            model: model, theme: theme, width: PanelMetrics.inspectorNominal,
+            model: model, theme: theme, width: PanelMetrics.inspectorNominal, library: LibraryInfoColumn.init(model:),
         ) {
             if DevelopPanels.usesSwiftUI {
                 NSHostingView(rootView: InspectorView().environment(model).environment(theme).focusEffectDisabled())
@@ -110,22 +110,27 @@ final class EditorSplitViewController: NSSplitViewController {
 /// with the theme's panel color as far as the theme's transparency setting allows (at 0 %
 /// the photo sliding beneath a zoomed-in canvas can't tint the panels). Lights Out shades
 /// it. A theme change rebuilds the content, since AppKit views take their colors when they
-/// are made.
+/// are made. Each module has its own content, both kept (`ModuleColumnView`).
 private final class PaneViewController: NSViewController {
     private let model: EditorModel
     private let theme: ThemeSettings
     private let width: CGFloat
     private let makeContent: @MainActor () -> NSView
+    private let makeLibrary: @MainActor (EditorModel) -> NSView
     private var content: NSView?
     private var shownTheme: ThemeSelection?
     private let shade = ShadeView()
     private var trackers: [Tracker] = []
 
-    init(model: EditorModel, theme: ThemeSettings, width: CGFloat, content: @escaping @MainActor () -> NSView) {
+    init(
+        model: EditorModel, theme: ThemeSettings, width: CGFloat,
+        library: @escaping @MainActor (EditorModel) -> NSView, content: @escaping @MainActor () -> NSView,
+    ) {
         self.model = model
         self.theme = theme
         self.width = width
         makeContent = content
+        makeLibrary = library
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -182,7 +187,7 @@ private final class PaneViewController: NSViewController {
     private func applyTheme() {
         shownTheme = theme.selection
         content?.removeFromSuperview()
-        let next = makeContent()
+        let next = ModuleColumnView(model: model, develop: makeContent(), library: makeLibrary(model))
         next.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(next, positioned: .below, relativeTo: shade)
         NSLayoutConstraint.activate([

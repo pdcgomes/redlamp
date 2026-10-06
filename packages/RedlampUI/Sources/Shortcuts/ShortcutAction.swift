@@ -75,12 +75,15 @@ public struct KeyCombo: Hashable, Sendable {
         case let .character(character): return KeyboardShortcut(KeyEquivalent(character), modifiers: modifiers)
         case .left: return KeyboardShortcut(.leftArrow, modifiers: modifiers)
         case .right: return KeyboardShortcut(.rightArrow, modifiers: modifiers)
+        case .up: return KeyboardShortcut(.upArrow, modifiers: modifiers)
+        case .down: return KeyboardShortcut(.downArrow, modifiers: modifiers)
         default: return nil
         }
     }
 }
 
 public enum ShortcutCategory: String, CaseIterable, Sendable {
+    case modules = "Modules"
     case view = "View"
     case panels = "Panels"
     case navigation = "Navigation"
@@ -91,12 +94,15 @@ public enum ShortcutCategory: String, CaseIterable, Sendable {
     case file = "File & Edit"
 }
 
-/// Every Develop-module shortcut, modelled on Lightroom Classic.
+/// Every shortcut of the Library and Develop modules, modelled on Lightroom Classic.
 ///
 /// Single source of truth: the key monitor, the menus and the Keyboard Shortcuts sheet all
 /// read this. Shortcuts for tools that are not built yet are listed with their phase, so the
 /// full map is visible from day one.
 public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
+    /// Modules
+    case libraryModule, developModule, previousModule, gridView, loupeView, compareView, surveyView
+
     // View
     case beforeAfter, nextCompareLayout, previousCompareLayout
     case toggleZoom, zoomIn, zoomOut
@@ -141,6 +147,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
 
     public var category: ShortcutCategory {
         switch self {
+        case .libraryModule, .developModule, .previousModule, .gridView, .loupeView, .compareView, .surveyView:
+            .modules
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout,
              .toggleZoom, .zoomIn, .zoomOut, .clipping, .rawClipping, .colorAssessment, .labReadout, .infoOverlay,
              .lightsOut, .fullScreenPreview, .toggleToolbar:
@@ -176,6 +184,13 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
 
     public var title: String {
         switch self {
+        case .libraryModule: "Library"
+        case .developModule: "Develop"
+        case .previousModule: "Previous Module"
+        case .gridView: "Grid"
+        case .loupeView: "Loupe"
+        case .compareView: "Compare (Loupe for Now)"
+        case .surveyView: "Survey (Loupe for Now)"
         case .beforeAfter: "Before / After"
         case .nextCompareLayout: "Next Before / After Layout"
         case .previousCompareLayout: "Previous Before / After Layout"
@@ -278,9 +293,16 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         }
     }
 
-    /// The keys, first one shown as primary. Lightroom Classic's Develop defaults.
+    /// The keys, first one shown as primary. Lightroom Classic's defaults.
     public var combos: [KeyCombo] {
         switch self {
+        case .libraryModule: [.char("1", option: true, command: true)]
+        case .developModule: [.char("2", option: true, command: true)]
+        case .previousModule: [KeyCombo(.up, option: true, command: true)]
+        case .gridView: [.char("g")]
+        case .loupeView: [.char("e")]
+        case .compareView: [.char("c")]
+        case .surveyView: [.char("n")]
         case .beforeAfter: [.char("\\")]
         case .nextCompareLayout: [.char("y")]
         case .previousCompareLayout: [.char("y", shift: true)]

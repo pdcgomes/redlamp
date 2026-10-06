@@ -86,6 +86,15 @@ struct AppCommands: Commands {
             }
         }
 
+        CommandGroup(before: .toolbar) {
+            item(.libraryModule)
+            item(.developModule)
+            item(.previousModule)
+            Divider()
+            ForEach([ShortcutAction.gridView, .loupeView, .compareView, .surveyView]) { mouseItem($0) }
+            Divider()
+        }
+
         CommandGroup(after: .toolbar) {
             Menu("Before / After") {
                 mouseItem(.beforeAfter)

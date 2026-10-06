@@ -17,7 +17,7 @@ public enum SizedBrush: Equatable, Sendable {
 public extension EditorModel {
     /// A tool draws over the canvas and takes its clicks and drags.
     var hasToolOverlay: Bool {
-        guard info != nil, !isShowingOriginal else { return false }
+        guard module == .develop, info != nil, !isShowingOriginal else { return false }
         return [.masking, .crop, .heal].contains(activeTool) || isPlacingGuides
     }
 
@@ -25,6 +25,7 @@ public extension EditorModel {
         if let stackWorkspace {
             return stackWorkspace.isRetouching ? .stack : nil
         }
+        guard module == .develop else { return nil }
         if isRefiningEdges {
             return .edge
         }

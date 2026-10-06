@@ -4,6 +4,13 @@ import RedlampEngineAPI
 extension ShortcutAction {
     /// The words people use for actions, besides their titles.
     static let paletteKeywords: [ShortcutAction: [String]] = [
+        .libraryModule: ["module", "library", "browse", "photos", "catalog"],
+        .developModule: ["module", "develop", "edit"],
+        .previousModule: ["module", "back", "previous", "switch"],
+        .gridView: ["grid", "thumbnails", "contact sheet", "library"],
+        .loupeView: ["loupe", "single", "large", "library"],
+        .compareView: ["compare", "side by side", "library"],
+        .surveyView: ["survey", "several", "library"],
         .beforeAfter: ["compare", "before", "after", "original"],
         .nextCompareLayout: ["compare", "side by side", "split", "layout"],
         .previousCompareLayout: ["compare", "side by side", "split", "layout"],
@@ -103,6 +110,12 @@ extension ShortcutAction {
     /// The symbol beside the action in the command palette.
     var paletteSymbol: String {
         switch self {
+        case .libraryModule, .gridView: "square.grid.3x3"
+        case .developModule: "slider.horizontal.3"
+        case .previousModule: "arrow.uturn.backward.circle"
+        case .loupeView: "photo"
+        case .compareView: "rectangle.split.2x1"
+        case .surveyView: "rectangle.split.3x1"
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout: "rectangle.2.swap"
         case .toggleZoom: "1.magnifyingglass"
         case .zoomIn: "plus.magnifyingglass"

@@ -29,7 +29,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     private var selected: URL?
     private var marked: Set<URL> = []
     private var prefetching: [URL: UInt64] = [:]
-    /// Shown again: it goes to the active photo once laid out.
+    /// Shown again: it goes back to the filmstrip's place once laid out.
     private var needsPlace = false
 
     init(model: EditorModel) {
@@ -95,11 +95,20 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         needsLayout = true
     }
 
-    /// Goes to the active photo once laid out at its width: a strip made again, as the filmstrip is when
+    override func viewDidUnhide() {
+        super.viewDidUnhide()
+        needsPlace = true
+        needsLayout = true
+    }
+
+    /// Goes back to the filmstrip's place, in either module, once laid out at its width: the photo in its
+    /// middle as it was last scrolled, else the active photo. A strip made again, as the filmstrip is when
     /// it's shown again after F6, Lights Out or presenting, would start at the first photo.
     private func restorePlace() {
         needsPlace = false
-        guard let selection = model.selection, let row = model.library.index(of: selection) else { return }
+        guard let place = model.filmstripPlace ?? model.selection, let row = model.library.index(of: place) else {
+            return
+        }
         center(row: row, animated: false)
     }
 
@@ -217,6 +226,10 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         guard let first = rows.min(), let last = rows.max() else { return }
         model.thumbnailLoader.protected = Set(rows.filter(model.items.indices.contains).map { model.items[$0].url })
         model.library.prioritize(first ..< last + 1)
+        let middle = CGPoint(x: scrollView.contentView.bounds.midX, y: collectionView.bounds.midY)
+        if let row = collectionView.indexPathForItem(at: middle)?.item, model.items.indices.contains(row) {
+            model.filmstripPlace = model.items[row].url
+        }
     }
 
     // MARK: - Changes

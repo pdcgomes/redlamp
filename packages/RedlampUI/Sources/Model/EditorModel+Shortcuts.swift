@@ -37,6 +37,10 @@ public extension EditorModel {
     private func runShortcut(_ action: ShortcutAction, shifted: Bool) -> Bool {
         guard !isModalDialogOpen else { return false }
         guard action.isAvailable else { return false }
+        guard module == .develop || !action.isDevelopOnly else { return false }
+        if let performed = performModuleShortcut(action) {
+            return performed
+        }
         switch action {
         // View
         case .beforeAfter: showBefore.toggle()
@@ -112,7 +116,6 @@ public extension EditorModel {
         case .increaseSetting: nudgeFocusedParameter(direction: 1, large: shifted)
         case .decreaseSetting: nudgeFocusedParameter(direction: -1, large: shifted)
         // Tools
-        case .editTool: activeTool = .edit
         case .maskingTool: activeTool = activeTool == .masking ? .edit : .masking
         case .cropTool: activeTool = activeTool == .crop ? .edit : .crop
         case .healTool: activeTool = activeTool == .heal ? .edit : .heal
@@ -166,7 +169,7 @@ public extension EditorModel {
         case .increaseRating: updateMetadata(advance: shifted) { $0.rating = min($0.rating + 1, 5) }
         case .flagPick: updateMetadata(advance: shifted) { $0.flag = $0.flag == .pick ? nil : .pick }
         // In the Crop tool, X swaps the crop's orientation rather than rejecting the photo.
-        case .flagReject where activeTool == .crop: swapCropOrientation()
+        case .flagReject where module == .develop && activeTool == .crop: swapCropOrientation()
         case .flagReject: updateMetadata(advance: shifted) { $0.flag = $0.flag == .reject ? nil : .reject }
         case .unflag: updateMetadata(advance: shifted) { $0.flag = nil }
         case .labelRed: updateMetadata(advance: shifted) { $0.label = $0.label == .red ? nil : .red }
@@ -209,6 +212,10 @@ public extension EditorModel {
         guard action.isAvailable else {
             return action == .cropTool
         }
+        guard module == .develop || !action.isDevelopOnly else { return false }
+        if let available = canPerformModuleShortcut(action) {
+            return available
+        }
         let photo = info != nil
         let whiteBalance = info?.supportsWhiteBalance == true
         let masking = activeTool == .masking
@@ -221,7 +228,7 @@ public extension EditorModel {
              .toggleLeftPanel, .toggleRightPanel, .panelBasic, .panelToneCurve, .panelColorMixer, .panelColorGrading,
              .panelDetail, .panelLens, .panelTransform, .panelEffects, .panelCalibration:
             return true
-        case .selectAllPhotos: return photo && selectedPhotos.count < items.count
+        case .selectAllPhotos: return selection != nil && selectedPhotos.count < items.count
         case .syncSettings, .syncSettingsAgain: return canSync
         case .undoSync: return settingsSync.canUndo
         case .toggleAutoSync: return true
@@ -286,32 +293,35 @@ public extension EditorModel {
         onToggleFullScreen?()
     }
 
-    /// Esc: leaves whatever temporary mode is active, innermost first.
+    /// Esc: leaves whatever temporary mode is active, innermost first; in Library, the loupe for the grid.
     private func cancelCurrentMode() -> Bool {
+        let develop = module == .develop
         if showShortcuts {
             showShortcuts = false
-        } else if drawingKind != nil || isRefiningEdges {
+        } else if develop, drawingKind != nil || isRefiningEdges {
             cancelDrawing()
         } else if peoplePicker != nil {
             closePeoplePicker()
-        } else if landscapePicker != nil {
+        } else if develop, landscapePicker != nil {
             closeLandscapePicker()
-        } else if eyedropperActive {
+        } else if develop, eyedropperActive {
             eyedropperActive = false
         } else if calibrationTargetActive || calibrationTarget != nil {
             calibrationTargetActive = false
             calibrationTarget = nil
         } else if pointColorEyedropperActive {
             pointColorEyedropperActive = false
-        } else if isPlacingGuides {
+        } else if develop, isPlacingGuides {
             isPlacingGuides = false
-        } else if isStraightening {
+        } else if develop, isStraightening {
             isStraightening = false
         } else if isPresenting {
             togglePresentation()
         } else if lightsOut > 0 {
             lightsOut = 0
-        } else if activeTool != .edit {
+        } else if !develop, libraryView != .grid {
+            libraryView = .grid
+        } else if develop, activeTool != .edit {
             activeTool = .edit
         } else {
             return false

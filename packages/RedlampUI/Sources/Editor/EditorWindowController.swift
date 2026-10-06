@@ -40,9 +40,10 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
         self.onOpen = onOpen
         self.onExport = onExport
 
-        let content = NSHostingController(rootView: EditorContentView(model: model, theme: theme, onOpen: onOpen)
+        let develop = NSHostingController(rootView: EditorContentView(model: model, theme: theme, onOpen: onOpen)
             .focusEffectDisabled())
-        content.sizingOptions = []
+        develop.sizingOptions = []
+        let content = ModuleContentController(model: model, theme: theme, develop: develop)
         let split = EditorSplitViewController(model: model, theme: theme, content: content)
         let root = EditorRootViewController(
             split: split,
@@ -131,7 +132,7 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
 
     public func toolbarDefaultItemIdentifiers(_: NSToolbar) -> [NSToolbarItem.Identifier] {
         [
-            .toggleSidebar, .sidebarTrackingSeparator,
+            .toggleSidebar, .sidebarTrackingSeparator, .modules,
             .flexibleSpace, .openFolder, .export, .space, .view,
             .inspectorTrackingSeparator,
             .theme, .feedback, .flexibleSpace, .toggleInspector,
@@ -146,6 +147,8 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
         _: NSToolbar, itemForItemIdentifier identifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar _: Bool,
     ) -> NSToolbarItem? {
         switch identifier {
+        case .modules:
+            return ModulePicker.item(identifier, model: model)
         case .openFolder:
             return button(identifier, "Open Folder", "folder", help: "Open Folder (⌘O)", action: #selector(openFolder))
         case .export:
@@ -254,6 +257,7 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
 }
 
 private extension NSToolbarItem.Identifier {
+    static let modules = Self("modules")
     static let openFolder = Self("openFolder")
     static let export = Self("export")
     static let view = Self("view")

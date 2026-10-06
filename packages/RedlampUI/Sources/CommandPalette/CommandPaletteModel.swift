@@ -101,8 +101,12 @@ public final class CommandPaletteModel {
 
     /// Whether ↵ on the row would do something now.
     public func isEnabled(_ item: PaletteItem) -> Bool {
-        switch item.kind {
-        case let .action(action): editor.canPerform(action)
+        if case let .action(action) = item.kind {
+            return editor.canPerform(action)
+        }
+        // Sliders, pickers and choices change Develop's photo, which the Library module doesn't show.
+        guard editor.module == .develop else { return false }
+        return switch item.kind {
         case let .slider(parameter), let .setValue(parameter, _): isLive(parameter)
         case let .page(page): PaletteCatalog.isAvailable(page, editor: editor)
         case .whiteBalance: editor.info?.supportsWhiteBalance == true

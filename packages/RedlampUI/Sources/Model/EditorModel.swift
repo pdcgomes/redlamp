@@ -47,6 +47,8 @@ public final class EditorModel {
     /// The photos selected in the filmstrip, in its order: the open one (`selection`) and any
     /// others ⌘- or ⇧-clicked with it.
     public internal(set) var selectedPhotos: [URL] = []
+    /// Where ⇧ extends the selection from: the photo last clicked or moved to without ⇧.
+    @ObservationIgnored var selectionAnchor: URL?
     /// Focus stacks found in the folder that have no stack document yet.
     public internal(set) var stackSuggestions: [StackSuggestion] = []
     /// The Stack workspace, when open over the editor.
@@ -614,6 +616,20 @@ public final class EditorModel {
     public var leftPanelVisible = true
     public var rightPanelVisible = true
     public var filmstripVisible = true
+    /// The photo in the middle of the filmstrip as it was last scrolled, where a filmstrip shown again (in
+    /// either module) goes back to.
+    @ObservationIgnored var filmstripPlace: URL?
+
+    // MARK: Modules (EditorModel+Modules)
+
+    /// The module the window shows.
+    public internal(set) var module = AppModule.develop
+    /// What the Library module shows: the grid or the loupe.
+    public internal(set) var libraryView = LibraryView.grid
+    /// The module shown before this one, which ⌥⌘↑ goes back to.
+    public internal(set) var previousModule: AppModule?
+    /// Photos' previews, for the Library loupe and for Develop until a photo's render lands.
+    @ObservationIgnored public let previews: PhotoPreviews
     #if DEBUG || REDLAMP_PROFILING
         /// `filmstrip=shown` in a capture script: the floating filmstrip stays up with a photo
         /// selected, as it does while the pointer is over it.
@@ -752,7 +768,11 @@ public final class EditorModel {
                 engine.decodeThumbnail(for: url, maxPixelSize: size)
             }
         saves = SaveQueue(sidecars: self.library.sidecars)
+        previews = PhotoPreviews(scheduler: self.library.scheduler) { [engine] url, size in
+            engine.decodeThumbnail(for: url, maxPixelSize: size)
+        }
         self.thumbnailLoader.library = { [weak library = self.library] in library?.storeThumbnail(for: $0) }
+        previews.library = { [weak library = self.library] in library?.storeThumbnail(for: $0) }
         canvas.onRenderSizeChange = { [weak self] _ in self?.requestRender() }
         settingsSync.makeEngine = { [weak self] in self?.makeWorkerEngine?() }
         settingsSync.sidecars = self.library.sidecars
@@ -774,7 +794,8 @@ public final class EditorModel {
 
     // MARK: - Opening a photo (folders: EditorModel+Library)
 
-    /// Opens `url`. Unless `keepingSelection`, it becomes the only photo selected.
+    /// Opens `url`. Unless `keepingSelection`, it becomes the only photo selected. In the Library module it
+    /// becomes the active photo without opening: Develop opens it when it's shown (`openActivePhoto`).
     public func select(_ url: URL, keepingSelection: Bool = false) {
         if url == selection, opening != nil, engine.openIfReady(url) != nil {
             // Back before the next photo was read: the open one stays as it was, in a new visit,
@@ -785,6 +806,7 @@ public final class EditorModel {
             metadataChangesWhileOpening = []
             if !keepingSelection {
                 selectedPhotos = [url]
+                selectionAnchor = url
             }
             requestRender()
             if let adoption {
@@ -796,6 +818,7 @@ public final class EditorModel {
             if !keepingSelection {
                 if opening == nil {
                     selectedPhotos = [url]
+                    selectionAnchor = url
                 } else {
                     openingKeepsSelection = false
                 }
@@ -806,11 +829,32 @@ public final class EditorModel {
         saveNow()
         stopOpening()
         metadataChangesWhileOpening = []
+        guard module == .develop else {
+            leave(for: url, keepingSelection: keepingSelection, ready: false)
+            clearCanvas()
+            return
+        }
+        engine.prefetch(workingSet(around: url, comingFrom: selection))
+        open(url, keepingSelection: keepingSelection)
+    }
+
+    /// Develop is shown: the active photo opens there unless it's open, or opening, already, shown from its
+    /// preview until its render lands.
+    func openActivePhoto() {
+        guard let selection, info?.url != selection, !isLoading, opening == nil else { return }
+        open(selection, keepingSelection: true)
+        if !hasFrame {
+            showPreview(of: selection)
+        }
+    }
+
+    /// Opens `url` in the engine and reads its sidecar; the editor changes to it once it's read, and
+    /// unless `keepingSelection`, it becomes the only photo selected then.
+    private func open(_ url: URL, keepingSelection: Bool) {
         openStarted = .now
         // Made again before the photo is read, over the base its saves were tracking, so what
         // another writer saved meanwhile is merged, and the read shows the result.
         retry(url)
-        engine.prefetch(workingSet(around: url, comingFrom: selection))
         // The sidecar is read off the main thread even for a photo already decoded: it is
         // coordinated, and iCloud Drive may have to download it first. It waits for the
         // photo's saves still on their way, so a photo opened again reads what was left, and for
@@ -900,11 +944,17 @@ public final class EditorModel {
         adoptionWhileOpening = nil
         leave(for: url, keepingSelection: openingKeepsSelection, ready: ready)
         if ready {
-            selectionThumbnailRequest.map(thumbnailLoader.cancel)
-            selectionThumbnail = nil
+            showCachedPreview(of: url)
         } else {
             showPlaceholder(for: url)
         }
+    }
+
+    /// The canvas is empty when Library chose the photo: its preview shows until its render lands.
+    private func showCachedPreview(of url: URL) {
+        selectionThumbnailRequest.map(thumbnailLoader.cancel)
+        selectionThumbnail = hasFrame ? nil : previews.cached(url)
+            ?? library.item(for: url).flatMap { thumbnailLoader.cached($0) }
     }
 
     private func showPlaceholder(for url: URL) {
@@ -921,6 +971,7 @@ public final class EditorModel {
     private func leave(for url: URL, keepingSelection: Bool, ready: Bool) {
         if !keepingSelection {
             selectedPhotos = [url]
+            selectionAnchor = url
         }
         sidecarReadRetry?.cancel()
         unsavedSessions = []
@@ -966,15 +1017,39 @@ public final class EditorModel {
         closeLandscapePicker()
     }
 
-    /// Shows the photo's thumbnail on the canvas until its first frame arrives.
+    /// Shows the photo's thumbnail on the canvas until its first frame arrives, or the preview the Library
+    /// loupe has of it.
     private func showThumbnail(of url: URL) {
         selectionThumbnailRequest.map(thumbnailLoader.cancel)
-        selectionThumbnail = nil
+        selectionThumbnail = previews.cached(url)
+        guard selectionThumbnail == nil else { return }
         selectionThumbnailRequest = thumbnailLoader.request(library.item(for: url) ?? LibraryItem(url: url)) {
             [weak self] image in
-            guard let self, selection == url else { return }
+            guard let self, selection == url, selectionThumbnail == nil else { return }
             selectionThumbnail = image
         }
+    }
+
+    /// Shows the photo's preview on the empty canvas Develop opened it on, once it's decoded.
+    private func showPreview(of url: URL) {
+        guard previews.cached(url) == nil, let item = library.item(for: url) else { return }
+        previews.request(item) { [weak self] image in
+            guard let self, let image, selection == url, !hasFrame else { return }
+            selectionThumbnail = image
+        }
+    }
+
+    /// The canvas lets go of the photo the Library module moved on from: Develop opens the active one when
+    /// it's shown.
+    private func clearCanvas() {
+        isLoading = false
+        showFrame(nil)
+        pendingCanvas = nil
+        latestFrame = nil
+        histogram = .empty
+        selectionThumbnailRequest.map(thumbnailLoader.cancel)
+        selectionThumbnailRequest = nil
+        selectionThumbnail = nil
     }
 
     /// A photo's sidecar as read when it opens.
