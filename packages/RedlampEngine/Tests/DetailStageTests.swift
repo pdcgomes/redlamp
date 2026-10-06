@@ -1,7 +1,9 @@
 import Foundation
+import IOSurface
 import Metal
 import RedlampEngineAPI
 import RedlampKernels
+import RedlampMasking
 import RedlampServices
 import simd
 import Testing
@@ -452,6 +454,85 @@ struct DetailStageTests {
             #expect(stage.noiseReductions == before, "process \(recipe.processVersion)")
             let fresh = try processAndRead(DetailStage(device: device, kernels: kernels), session, recipe).texels
             #expect(EngineMemoryTests.differing(cached, fresh) == 0, "process \(recipe.processVersion)")
+        }
+    }
+
+    /// A render that fails after taking back the area's kept source leaves nothing that serves the
+    /// half-written texture: the next renders reduce noise afresh and match a fresh stage.
+    @Test(arguments: [false, true])
+    func `a render failing after it took the kept source back leaves no entry for it`(onGPU: Bool) throws {
+        let session = try makeSession(.bayer, width: 640, height: 480) { x, y in
+            Float(0.2 + 0.1 * sin(Double(x) / 3) * cos(Double(y) / 5))
+        }
+        let stage = DetailStage(device: device, kernels: kernels)
+        let before = Self.everyPassBeforeLadder
+        var after = before
+        after[.noiseLuminance] = 50
+        _ = try processAndRead(stage, session, before)
+        let commands = try #require(queue.makeCommandBuffer())
+        _ = try #require(try stage.process(
+            after, session: session, region: .full, outputSize: session.orientedSize, commands: commands,
+        ))
+        if onGPU {
+            commands.commit()
+            commands.waitUntilCompleted()
+            stage.forget(commands)
+        } else {
+            stage.abandon(commands)
+        }
+        #expect(stage.ladderCache.heldTextures.isEmpty)
+        // The render before the failure may still serve its own output, which its commands finished.
+        for (recipe, failed) in [(after, true), (before, false)] {
+            let reductions = stage.noiseReductions
+            let cached = try processAndRead(stage, session, recipe).texels
+            if failed {
+                #expect(stage.noiseReductions > reductions, "the failed render's settings")
+            }
+            let fresh = try processAndRead(DetailStage(device: device, kernels: kernels), session, recipe).texels
+            #expect(EngineMemoryTests.differing(cached, fresh) == 0, "failed: \(failed)")
+        }
+    }
+
+    /// From process 13 an AI mask's edges are refined to the photo's (`MaskEdges`), so a photo
+    /// moved from process 12 to 13 renders its masks' detail afresh rather than from what the
+    /// stage kept at 12 (PIPE-16).
+    @Test func `moving an AI mask from process 12 to 13 renders its detail afresh`() throws {
+        let session = try makeSession(.bayer, width: 512, height: 384) { x, _ in x < 268 ? 0.05 : 0.4 }
+        let gray = GrayMask(width: 128, height: 96, pixels: (0 ..< 128 * 96).map { $0 % 128 < 64 ? 255 : 0 })
+        var mask = try MaskLayer(name: "Subject", components: [MaskComponent(shape: .ai(AIMask(
+            kind: .subject, provider: "test", revision: 1, analysisHash: "0", center: ImagePoint(x: 0.25, y: 0.5),
+            bitmap: #require(gray.bitmap()),
+        )))])
+        mask[.localNoise] = 80
+        mask[.localSharpness] = 60
+        var recipe = Self.everyPassBeforeLadder
+        recipe.processVersion = 12
+        recipe.masks = [mask]
+        func frame(_ engine: RedlampEngine, _ recipe: EditRecipe) throws -> [SIMD3<Float>] {
+            let size = session.orientedSize
+            let frame = try engine.renderFrame(
+                RenderRequest(recipe: recipe, targetSize: size, generation: 0), session: session,
+            )
+            IOSurfaceLock(frame.surface, .readOnly, nil)
+            defer { IOSurfaceUnlock(frame.surface, .readOnly, nil) }
+            let rowBytes = IOSurfaceGetBytesPerRow(frame.surface)
+            let base = IOSurfaceGetBaseAddress(frame.surface)
+            return (0 ..< size.height).flatMap { y in
+                let row = (base + y * rowBytes).assumingMemoryBound(to: Float16.self)
+                return (0 ..< size.width).map { x in
+                    SIMD3(Float(row[x * 4]), Float(row[x * 4 + 1]), Float(row[x * 4 + 2]))
+                }
+            }
+        }
+        let engine = try RedlampEngine()
+        let twelve = try frame(engine, recipe)
+        recipe.processVersion = 13
+        let cached = try frame(engine, recipe)
+        let cold = try frame(RedlampEngine(), recipe)
+        #expect(EngineMemoryTests.differing(twelve, cold) > 0, "process 13 refines the mask")
+        let differing = EngineMemoryTests.differing(cached, cold)
+        withKnownIssue("PIPE-16: the stage serves process 12's detail at 13") {
+            #expect(differing == 0, "\(differing) texels differ from a cold render at 13")
         }
     }
 

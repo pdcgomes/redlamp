@@ -148,7 +148,9 @@ final class LadderCache {
     }
 
     /// Before process 11: takes out the noise-reduced source kept for `key`'s area under other
-    /// settings, to be written over. Renders wait for their commands, so none still reads it.
+    /// settings, to be written over. Earlier renders waited for their commands; a render earlier in
+    /// the same command buffer (an edit and its comparison) may still read it there, and Metal's
+    /// hazard tracking, on for work textures, orders this render's writes after those reads.
     func reclaimDenoised(_ key: LadderKey) -> (any MTLTexture)? {
         guard let index = entries.firstIndex(where: {
             $0.ladder == nil && $0.key.session == key.session && $0.key.work == key.work
