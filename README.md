@@ -1033,11 +1033,12 @@ mise run render -- render ~/Pictures/DSC01234.ARW -o out.jpg --size 2048 \
 
 | Task | What it does |
 | --- | --- |
-| `mise run setup` | Once per clone: use the repository's git hooks, whose pre-commit hook lints the staged Swift files with SwiftFormat as CI does |
+| `mise run setup` | Once per clone: use the repository's git hooks. The pre-commit hook lints the staged Swift files with SwiftFormat as CI does, and the pre-push hook runs the push gate before anything is pushed to main |
 | `mise run generate` (`g`) | Vendor LibRaw and generate the Xcode workspace |
 | `mise run build` (`b`) | Build the macOS app |
 | `mise run run` (`r`) | Build and launch; pass a folder after `--` |
 | `mise run test` (`t`) | Engine purity gate plus all unit and engine tests |
+| `mise run gate` | The push gate, which the pre-push hook runs before every push to main and which stops a push that fails. It checks a commit (HEAD by default, or `-- <commit>`) in a worktree of its own beside the main checkout that holds only what's committed: CI's quick checks, and for a push that changes code, SwiftFormat, a build of everything with its tests, and the reference tests, which compare what the code makes with what the repository records (golden renders, process references, recorded reports, the sidecar schema, scenario coverage), in a few minutes. A push that changes only docs, the site, the video, research notes or tools takes seconds. A commit whose files have passed isn't checked again, so running it before pushing makes the push itself immediate. `-- --suite` runs the whole test suite instead, and `-- --full` adds CI's Release builds |
 | `mise run e2e` (`e`) | The end-to-end regression suite: the smoke tier by default, `-- --tier full`, `release`, `performance` or `soak` (see [Regression suite](#regression-suite)) |
 | `mise run lint` (`l`) | Purity gate, SwiftFormat (lint mode), and SwiftLint |
 | `mise run vendor` (`v`) | Build the vendored C/C++ libraries (pinned version and SHA in `config/vendored-libs.json`) |
@@ -1237,7 +1238,7 @@ Redlamp is at an early stage and moving quickly. Issues and discussion are very 
 - **Clean-room policy.** No GPL or LGPL code or data. Algorithms are implemented from published papers and specifications. Reading GPL projects such as darktable and RawTherapee to understand an idea is fine, but never port, translate or paraphrase their code, and never copy their data (profiles, tables, presets).
 - **Third-party components:** LibRaw is used under its CDDL-1.0 option. MLX Swift (MIT) and Swift Numerics (Apache-2.0) run generative fill's models on the Mac. Planned additions are lcms2 (MIT) and the lensfun database (CC-BY-SA, data only).
 - **Conventions:**
-  - Run `mise run setup` once, so commits are linted, and `mise run lint` and `mise run test` before sending changes.
+  - Run `mise run setup` once, so commits are linted and pushes to main are tested, and `mise run lint` and `mise run test` before sending changes.
   - Keep engine code free of UI imports.
   - New parameters go into the schema in `RedlampEngineAPI/Sources/ParameterSpec.swift`.
 - **Fixtures:** `mise run fixtures` downloads CC0 samples. Please don't commit RAW files.

@@ -18,7 +18,7 @@ GitHub refuses any push to `main` that carries a merge commit (repository rules:
    git -C build/tmp-rebase rebase origin/main
    ```
 
-3. Build and run the tests that cover what conflicted, and what both sides changed. Git can merge cleanly code that doesn't compile: a case one side added to an enum that the other side's new `switch` doesn't handle.
+3. Build and run the tests that cover what conflicted, and what both sides changed; after a rebase with conflicts, `mise run gate -- --suite <rebased head>` runs the whole suite on the result, as CI will. Git can merge cleanly code that doesn't compile: a case one side added to an enum that the other side's new `switch` doesn't handle.
 4. Only if `main` hasn't moved meanwhile, point it at the result and push without force:
 
    ```bash
@@ -27,6 +27,14 @@ GitHub refuses any push to `main` that carries a merge commit (repository rules:
    ```
 
 5. A rebase gives every unpushed commit a new hash, other sessions' included. Replace each old hash the tracker, the README and the docs cite (match commits by subject), and tell the owner which commits changed, so canvases and chats citing them can be updated.
+
+## The push gate
+
+Every push to `main` runs the push gate first (`.githooks/pre-push`, `scripts/push-gate.py`) on the commit being pushed, in a worktree of its own that holds only what's committed: CI's quick checks, and when code changed, SwiftFormat, a build of everything with its tests, and the reference tests, which compare what the code makes with what the repository records. When only docs, the site, the video, research notes or tools changed, it takes seconds. A failure stops the push, and nothing is sent.
+
+- Don't skip it with `--no-verify`. Fix what fails and push again. If `origin/main` already fails the same way, fixing that comes first; tell the owner when it isn't yours to fix.
+- It passes a commit's files once: `mise run gate -- <commit>` checks them ahead of the push, which then goes straight through. A rebase changes what a commit holds, so it's the rebased head that needs checking.
+- The rest of the suite runs on CI. Before pushing work that spans packages, such as a wave's merge, run `mise run gate -- --suite` on it: the whole suite, as CI runs it, which the push then counts as passed.
 
 ## Issue syncs follow origin/main
 

@@ -5,4 +5,4 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 git config core.hooksPath .githooks
-echo "==> Git hooks enabled from .githooks (pre-commit: SwiftFormat lint of staged Swift files)"
+echo "==> Git hooks enabled from .githooks (pre-commit: SwiftFormat lint of staged Swift files; pre-push: the push gate on pushes to main)"
