@@ -149,13 +149,14 @@ private struct NameMatcher: Sendable {
 struct IndexQuerySource: QuerySource {
     let index: LibraryIndex
 
-    /// Read in parts, a range of photo IDs on each of the index's readers, the last open-ended, then
-    /// joined. Each part is read in a transaction of its own: what's written while they're read
-    /// reaches the store through the updates that follow the load.
+    /// Read in parts, a range of photo IDs on each of the index's readers, the last open-ended, once
+    /// the index file is in memory, then joined. Each part is read in a transaction of its own:
+    /// what's written while they're read reaches the store through the updates that follow the load.
     func columnStore() async throws -> ColumnStore {
-        guard let (ids, count) = try await index.read({ try $0.photoIDs() }) else { return ColumnStore() }
+        await index.readAhead()
+        guard let ids = try await index.read({ try $0.photoIDs() }) else { return ColumnStore() }
         let ranges = Self.ranges(ids, parts: index.readerCount)
-        let capacity = count / ranges.count + 1
+        let capacity = Int(ids.upperBound - ids.lowerBound) / ranges.count + 1
         let parts = try await withThrowingTaskGroup(of: (Int, ColumnStore.Part).self) { [index] group in
             for (number, range) in ranges.enumerated() {
                 group.addTask {

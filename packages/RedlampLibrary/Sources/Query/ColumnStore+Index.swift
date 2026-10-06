@@ -34,10 +34,10 @@ extension IndexQueries {
         return part
     }
 
-    /// The smallest and largest photo IDs, and how many photos there are; nil when there are none.
-    func photoIDs() throws -> (ids: ClosedRange<Int64>, count: Int)? {
-        try database.cached("SELECT min(id), max(id), count(*) FROM photos").first { row in
-            row.isNull(at: 0) ? nil : (row.int64(at: 0) ... row.int64(at: 1), row.int(at: 2))
+    /// The smallest and largest photo IDs, from the ends of the table; nil when there are none.
+    func photoIDs() throws -> ClosedRange<Int64>? {
+        try database.cached("SELECT (SELECT min(id) FROM photos), (SELECT max(id) FROM photos)").first { row in
+            row.isNull(at: 0) ? nil : row.int64(at: 0) ... row.int64(at: 1)
         } ?? nil
     }
 

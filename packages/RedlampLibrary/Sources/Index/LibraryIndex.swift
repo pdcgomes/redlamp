@@ -87,6 +87,42 @@ public final class LibraryIndex: Sendable {
         readers.count
     }
 
+    /// Reads the index file into memory, in parallel runs through it, ahead of a scan of most of it:
+    /// a table's pages lie scattered through the file, and a scan in its order would read them from
+    /// a cold disk a page at a time. Pages already in memory cost a mapping each.
+    func readAhead() async {
+        let path = url.path
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                Self.touchPages(of: path)
+                continuation.resume()
+            }
+        }
+    }
+
+    private static func touchPages(of path: String) {
+        let descriptor = Darwin.open(path, O_RDONLY | O_CLOEXEC)
+        guard descriptor >= 0 else { return }
+        defer { Darwin.close(descriptor) }
+        var info = stat()
+        guard fstat(descriptor, &info) == 0, info.st_size > 0 else { return }
+        let size = Int(info.st_size)
+        guard let mapping = mmap(nil, size, PROT_READ, MAP_SHARED, descriptor, 0), mapping != MAP_FAILED else { return }
+        defer { munmap(mapping, size) }
+        madvise(mapping, size, MADV_WILLNEED)
+        nonisolated(unsafe) let pages = UnsafeRawPointer(mapping)
+        let page = Int(getpagesize())
+        let run = 4 << 20
+        let touched = Atomic<Int>(0)
+        DispatchQueue.concurrentPerform(iterations: (size + run - 1) / run) { number in
+            var sum = 0
+            for offset in stride(from: number * run, to: min((number + 1) * run, size), by: page) {
+                sum &+= Int(pages.load(fromByteOffset: offset, as: UInt8.self))
+            }
+            _ = touched.wrappingAdd(sum, ordering: .relaxed)
+        }
+    }
+
     /// Runs `body` on the least busy reader, outside any transaction.
     func onReader<T: Sendable>(_ body: @escaping @Sendable (SQLiteDatabase) throws -> T) async throws -> T {
         let slot = readerLoad.withLock { load in

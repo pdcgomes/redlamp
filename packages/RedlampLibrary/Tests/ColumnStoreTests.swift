@@ -19,7 +19,11 @@ struct ColumnStoreTests {
             "東京-0001.JPG",
             "a.jpg",
             "a1.jpg",
+            "a\u{1}.jpg",
             "Zebra.png",
+            "Wedding in the hills 2.JPG",
+            "Wedding in the hills 10.JPG",
+            "wedding in the hills 10.jpg",
         ]
         return (0 ..< count).map { offset in
             let edited = random.chance(0.3)

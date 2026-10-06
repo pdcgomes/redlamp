@@ -641,7 +641,8 @@ enum ColumnEncoding {
 struct NameKeys {
     private var bytes = ContiguousArray<UInt8>()
     private var offsets: ContiguousArray<Int32> = [0]
-    /// Each key's first eight bytes, big-endian, which decide most comparisons.
+    /// Each key's first sixteen bytes, big-endian and padded with zeros, in two numbers a key: the
+    /// whole key, for most names.
     private var prefixes = ContiguousArray<UInt64>()
 
     init() {}
@@ -656,18 +657,20 @@ struct NameKeys {
     mutating func reserveCapacity(_ count: Int) {
         bytes.reserveCapacity(count * 16)
         offsets.reserveCapacity(count + 1)
-        prefixes.reserveCapacity(count)
+        prefixes.reserveCapacity(2 * count)
     }
 
     mutating func append(name: String) {
         let start = bytes.count
         FinderOrder.appendKey(of: name, to: &bytes)
         offsets.append(Int32(clamping: bytes.count))
-        var prefix: UInt64 = 0
-        for index in start ..< start + 8 {
-            prefix = prefix << 8 | UInt64(index < bytes.count ? bytes[index] : 0)
+        for half in 0 ..< 2 {
+            var prefix: UInt64 = 0
+            for index in start + 8 * half ..< start + 8 * half + 8 {
+                prefix = prefix << 8 | UInt64(index < bytes.count ? bytes[index] : 0)
+            }
+            prefixes.append(prefix)
         }
-        prefixes.append(prefix)
     }
 
     /// Adds `other`'s keys after these.
@@ -680,8 +683,15 @@ struct NameKeys {
 
     /// How key `lhs` orders against key `rhs`: true before, false after, nil the same.
     func compare(_ lhs: Int, _ rhs: Int) -> Bool? {
-        if prefixes[lhs] != prefixes[rhs] {
-            return prefixes[lhs] < prefixes[rhs]
+        if prefixes[2 * lhs] != prefixes[2 * rhs] {
+            return prefixes[2 * lhs] < prefixes[2 * rhs]
+        }
+        if prefixes[2 * lhs + 1] != prefixes[2 * rhs + 1] {
+            return prefixes[2 * lhs + 1] < prefixes[2 * rhs + 1]
+        }
+        let (left, right) = (offsets[lhs + 1] - offsets[lhs], offsets[rhs + 1] - offsets[rhs])
+        if left <= 16, right <= 16 {
+            return left == right ? nil : left < right
         }
         return bytes.withUnsafeBufferPointer { bytes in
             let left = UnsafeBufferPointer(rebasing: bytes[Int(offsets[lhs]) ..< Int(offsets[lhs + 1])])
