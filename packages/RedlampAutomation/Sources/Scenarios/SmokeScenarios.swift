@@ -411,6 +411,7 @@
         ) { app in
             let raws = ["arw", "raf", "cr3", "nef", "dng"]
             let names = try app.photoNames().filter { raws.contains(($0 as NSString).pathExtension.lowercased()) }
+            guard !names.isEmpty else { throw ScenarioFailure("The folder shows no raws") }
             let name = names[min(2, names.count - 1)]
             try app.open(name)
             try app.main { $0.expandedPanels.insert(.basic) }
