@@ -196,8 +196,9 @@ text     := word | quoted                                  -- matches name, fold
 | `collection` | a collection's name or path | `collection:"Portfolio"` |
 | `has` | `gps`, `keywords`, `caption`, `title`, `xmp` | `has:gps` |
 | `title`, `caption` | substring | `caption:wedding` |
+| `missing`, `offline` | `yes`, `no`: gone from its folder, or on a volume that isn't connected (LIB-18) | `offline:yes` |
 
-Sorting is separate from the query: captured (the default), name, rating, edited, imported, file size, or a collection's own order.
+Sorting is separate from the query: captured (the default), name, rating, edited, the file's modification date, file size, imported, or a collection's own order, each either way.
 
 ## Indexing (LIB-07)
 
@@ -347,6 +348,8 @@ Every one has a menu item and most a mouse gesture: stars, flag and label on a c
 As built (LIB-13): Library and Develop share the editor window, each built once; a switch changes only which one is opaque, so nothing is rebuilt and nothing is read from the disk. Library shows the grid or the loupe (from the photo's preview), its own Folders and Photo info panels, and the filmstrip docked below; the grid and the filmstrip share one selection. C and N show the loupe until Compare and Survey exist (LIB-16), and say so in their menu items; D, R, Q and ⇧W open Develop with that tool. Develop keeps its photo open while Library is shown, and actions that would change that hidden photo (sliders, masks, Undo) are off until it's shown again. Undo is per module for now. No existing key moved.
 
 As built (LIB-14): the grid's cells are layers recycled row by row, with thumbnails drawn off the main thread in the window's colour space. Sizes go from 80 to 400 points by `=`, `-` or a slider, from the store's grid tier and its preview tier for large cells. `J` cycles three cell styles: compact, expanded (the name, the date and the camera's settings) and thumbnails only. A rubber band selects, ⇧ or ⌘ adding to the selection, on photo IDs the filmstrip shares. Context menus on photos and on the grid's background, and a Library toolbar, hold every grid action; each source keeps its size, style, place and selection. The Loupe goes between Fit and 1:1 with `Z`, Space or a click, and pans by dragging. ⌘R went to an earlier ⇧⌘R menu item in AppKit, so it reset a photo's settings; it now shows the selection in Finder.
+
+As built (LIB-18): `\` in Library shows the filter bar above the grid, in three parts: Text, the query language with Tab completing keywords, cameras, lenses, folders and labels; Attribute, flags, stars with a comparison, labels, edited or not, raw, JPEG or HEIC, and missing or offline photos; and Metadata, up to eight columns with counts, each narrowing the next. Every choice is written into the query's text, and editing the text changes the choices, so the bar and the query are one. Seven sort orders go either way; filters are saved as presets and kept with each source, a lock keeps one across sources, ⌘L turns them off and on, and the filmstrip says how many photos a filter leaves out ("12 of 40 photos"). The query engine gained `missing:` and `offline:`, sorts by modification date and file size, counts per metadata column, filtered lists, a rule form and completions. Typing misses its budgets by about three times, at a load average near 30 as above 100, so the cost is in the path, not the load: most of each key goes to AppKit's layout and drawing and to SwiftUI views laying out again (Results). `missing:yes` finds nothing yet, since the indexer removes the photos that leave their folders.
 
 ## File operations (LIB-25, LIB-26)
 
@@ -573,6 +576,17 @@ Hiding and showing the modules' views cost 12 to 15 ms a switch; changing only t
 | Peak memory above the phase before | 1.43 GB | 1.56 GB |
 
 Develop busy is frames at 60 Hz for one second in every three. A raw takes about 550 ms to open, 150 ms to render and 55 ms to store. The memory peak is mostly the render engine's session for a raw; letting the engine go freed 0.18 and 0.81 GB.
+
+### The filter bar (LIB-18)
+
+`--library-perf`, Release, on lib-20k's 2007 folder, the fixture's queries typed in the bar a character at a time, two runs:
+
+| | Run 1 | Run 2 | Budget |
+| --- | --- | --- | --- |
+| Main thread while typing, p99 | 22.4 ms | 23.3 ms | under 8.3 ms: FAIL |
+| A key's photos on screen, p95 | 34.9 ms | 37.4 ms | under 16 ms: FAIL |
+
+The other 14 budgets of `--library-perf` pass. The miss is about the same at a load average near 30 as above 100. Typing does less on the main thread than it first did (the columns counted once the photos settle and recounted in place, the bar and the grid laid out only where they change), and the last profile puts most of what's left in AppKit's layout and drawing and in SwiftUI views laying out again, outside the bar's own code. The column store grows by 9 bytes a photo.
 
 ### Exact duplicates (LIB-39)
 

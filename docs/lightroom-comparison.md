@@ -245,8 +245,8 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Feature | Lightroom | Redlamp | vs Lightroom | Phase | Tracker | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | Catalog | Yes | In progress | | P4 | LIB-05, LIB-07, LIB-08, LIB-09, LIB-10, LIB-11 | An index on your Mac of the folders you add, designed for a million photos and rebuilt from the photos and their sidecars at any time; folders on your disk stay the organisation, and edits and metadata stay beside each photo or in Redlamp on this Mac; thumbnails and previews are kept so slow and disconnected drives can be browsed |
-| Library and Develop modules | Yes (Classic) | In progress | | P4 | LIB-13 | One window, switched by a key or a click, with the selection, source and filmstrip carried across |
-| Search and filters | Yes | In progress | | P4 | LIB-06, LIB-12, LIB-18, LIB-19 | Results as you type, with one query language for the filter bar, the command palette, smart collections and the command line |
+| Library and Develop modules | Yes (Classic) | In progress | | P4 | LIB-13 | One window, switched by a key or a click, with the selection, source, filter and filmstrip carried across |
+| Search and filters | Yes | In progress | | P4 | LIB-06, LIB-12, LIB-18, LIB-19 | Results as you type; a filter bar of text, attributes and metadata columns with counts, sorts and saved filters, in one query language with the command palette, smart collections and the command line |
 | Grid, Loupe, Compare and Survey | Yes | In progress | | P4 | LIB-14, LIB-16, LIB-17 | Held arrow keys move through photos without waiting; thumbnails show the edit |
 | Judging photos while culling | No | Planned | | P4 | LIB-38 | Sensor clipping and a raw histogram in the loupe and Compare, since a raw's embedded JPEG hides clipping, with focus peaking, the camera's focus point and a loupe that follows the pointer |
 | Rating, flagging and labelling many photos at once | Yes | In progress | | P4 | LIB-15 | With Undo, custom label names and colours, and marks; by key, by mouse or from the command palette |
