@@ -208,6 +208,10 @@ final class GridThumbnails {
             )
         }
         if edge <= edges[0] {
+            if let jpeg = packs.jpeg(for: item.url, size: item.size, modified: item.modified),
+               let image = StoreThumbnails.decode(jpeg, pixelSize: edge) {
+                return image
+            }
             return ThumbnailLoader.load(item, packs: packs, decode: decode)
         }
         return decode(item.url, edge)

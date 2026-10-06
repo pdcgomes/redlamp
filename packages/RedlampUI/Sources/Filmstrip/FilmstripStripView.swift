@@ -312,12 +312,12 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     private func follow(
         _ selection: URL?, marking photos: PhotoSelection, animated: Bool = true, scrolling: Bool = true,
     ) {
+        // The cells the strip holds, without asking it to lay out as `visibleItems()` would.
         let ids = model.library.photoIDs
-        for case let item as FilmstripItem in collectionView.visibleItems() {
-            guard let row = collectionView.indexPath(for: item)?.item, ids.indices.contains(row),
-                  let url = item.cell.item?.url else { continue }
-            item.cell.isSelected = url == selection
-            item.cell.isInSelection = url != selection && photos.contains(ids[row])
+        for case let cell as FilmstripCellView in collectionView.subviews {
+            guard let url = cell.item?.url, let row = model.library.index(of: url) else { continue }
+            cell.isSelected = url == selection
+            cell.isInSelection = url != selection && photos.contains(ids[row])
         }
         marked = photos
         let moved = selected != selection

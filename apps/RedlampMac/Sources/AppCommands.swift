@@ -41,6 +41,9 @@ struct AppCommands: Commands {
         }
 
         CommandMenu("Photo") {
+            // Ahead of Reset All Settings (⇧⌘R): AppKit gives ⌘R to the first item whose key is R.
+            item(.showInFinder)
+            Divider()
             item(.copySettings)
             item(.copySettingsAgain)
             item(.pasteSettings)
@@ -69,8 +72,6 @@ struct AppCommands: Commands {
             Divider()
             item(.mergeFocusStack)
             item(.editFocusStack)
-            Divider()
-            item(.showInFinder)
             Divider()
             item(.previousPhoto)
             item(.nextPhoto)
