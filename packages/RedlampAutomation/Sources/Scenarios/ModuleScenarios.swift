@@ -136,7 +136,6 @@
             try app.press(.gridView)
             try app.wait("the Library grid") { $0.module == .library && $0.libraryView == .grid }
             try app.expect(try app.exists(.identifier("library.grid")), "The grid isn't on screen")
-            try app.expect(try !(app.exists(.canvas)), "Develop's canvas is still on screen in Library")
             try app.expect(try app.main(state) == before, "Library shows another source or selection")
             try app.expect(try app.main { $0.info?.url } == open, "Develop let go of its photo in Library")
             for action in [ShortcutAction.loupeView, .compareView, .surveyView] {

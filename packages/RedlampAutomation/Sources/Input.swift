@@ -51,7 +51,7 @@
         }
 
         private static func search(_ view: NSView, _ identifier: String, _ window: NSWindow) -> NSRect? {
-            // The filmstrip slid away is left in place, transparent.
+            // The module not shown, and the filmstrip slid away, are left in place, transparent.
             if view.isHiddenOrHasHiddenAncestor || view.alphaValue == 0 {
                 return nil
             }

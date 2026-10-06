@@ -68,30 +68,42 @@ final class LibraryGridView: NSView, NSCollectionViewDataSource, NSCollectionVie
     }
 
     private var isShown: Bool {
-        window != nil && !isHiddenOrHasHiddenAncestor
+        isInShownModule(model)
     }
+
+    /// Whether the grid was on screen when it last looked.
+    private var wasShown = false
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         observation = nil
         tracker?.cancel()
         tracker = nil
+        wasShown = false
         guard window != nil else { return }
         observation = model.library.observe { [weak self] diff in self?.apply(diff) }
         tracker = Tracker { [weak self] in
             guard let self else { return }
-            let (selection, photos) = (model.selection, model.selectedPhotos)
-            guard isShown, !isStale else { return }
+            let (selection, photos, _) = (model.selection, model.selectedPhotos, model.module)
+            guard isShown else {
+                wasShown = false
+                return
+            }
+            guard wasShown, !isStale else {
+                return show()
+            }
             follow(selection, marking: photos)
         }
-        if isShown {
-            show()
-        }
+    }
+
+    override func viewDidHide() {
+        super.viewDidHide()
+        wasShown = false
     }
 
     override func viewDidUnhide() {
         super.viewDidUnhide()
-        if isShown {
+        if isShown, !wasShown {
             show()
         }
     }
@@ -99,6 +111,7 @@ final class LibraryGridView: NSView, NSCollectionViewDataSource, NSCollectionVie
     /// Shown: what changed while it was hidden, the thumbnails its cells lack, the selection, and the active
     /// photo scrolled into view.
     private func show() {
+        wasShown = true
         if isStale {
             reload()
         } else if !staleRows.isEmpty {

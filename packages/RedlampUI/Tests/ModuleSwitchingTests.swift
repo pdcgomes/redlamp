@@ -176,15 +176,33 @@ struct ModuleSwitchingTests {
         let model = fixture.model
         let modules = fixture.showModules()
         let built = modules.identities
-        #expect(modules.content.library.isHidden && !modules.content.developView.isHidden)
+        #expect(modules.content.library.alphaValue == 0 && !modules.grid.isInShownModule(model))
         #expect(modules.grid.reloads == 0, "the grid waits until Library is first shown")
         for index in 0 ..< 20 {
             model.showModule(index.isMultiple(of: 2) ? .library : .develop)
             try await fixture.settle()
             let library = model.module == .library
-            #expect(modules.content.library.isHidden == !library && modules.content.developView.isHidden == library)
-            #expect(modules.left.library.isHidden == !library && modules.left.develop.isHidden == library)
-            #expect(modules.right.library.isHidden == !library && modules.right.develop.isHidden == library)
+            #expect(modules.content.library.alphaValue == (library ? 1 : 0) && !modules.content.developView.isHidden)
+            #expect(
+                modules.grid.isInShownModule(model) == library,
+                "Library's parts follow nothing while Develop is shown",
+            )
+            let middle = CGPoint(x: 800, y: 450)
+            let hit = modules.content.view.hitTest(middle)
+            let target = library ? modules.content.library : modules.content.developView
+            #expect(hit.map { $0 === modules.content.view || $0.isDescendant(of: target) } == true)
+            for column in [modules.left, modules.right] {
+                let shown = library ? column.library : column.develop
+                let other = library ? column.develop : column.library
+                #expect(column.shown == model.module && shown.alphaValue == 1 && other.alphaValue == 0)
+                let point = CGPoint(x: column.frame.midX, y: column.frame.minY + 60)
+                let hit = column.hitTest(point)
+                #expect(
+                    hit.map { $0 === column || $0.isDescendant(of: shown) } == true,
+                    "a click reaches the other module",
+                )
+                #expect(column.accessibilityChildren()?.count == 1)
+            }
         }
         #expect(modules.identities == built, "a view was built again")
         #expect(modules.grid.reloads == 1, "the grid loaded once, when first shown")

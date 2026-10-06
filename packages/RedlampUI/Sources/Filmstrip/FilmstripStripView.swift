@@ -31,8 +31,11 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     private var prefetching: [URL: UInt64] = [:]
     /// Shown again: it goes back to the filmstrip's place once laid out.
     private var needsPlace = false
-    /// The photos changed while the strip was hidden (the other module's is): it reloads once shown.
+    /// The photos changed while the strip was out of sight (hidden, or in the module not shown): it reloads
+    /// once shown.
     private var isStale = false
+    /// In sight when it last looked.
+    private var wasInSight = false
 
     init(model: EditorModel) {
         self.model = model
@@ -89,16 +92,38 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         collectionView.reloadData()
         observation = model.library.observe { [weak self] diff in self?.apply(diff) }
         selected = model.selection
+        wasInSight = isInShownModule(model)
         tracker = Tracker { [weak self] in
             guard let self else { return }
-            follow(model.selection, marking: model.selectedPhotos)
+            let (selection, photos) = (model.selection, model.selectedPhotos)
+            let inSight = isInShownModule(model)
+            defer { wasInSight = inSight }
+            if inSight, !wasInSight {
+                cameIntoSight()
+            } else if inSight {
+                follow(selection, marking: photos)
+            }
         }
         needsPlace = true
         needsLayout = true
     }
 
+    override func viewDidHide() {
+        super.viewDidHide()
+        wasInSight = false
+    }
+
     override func viewDidUnhide() {
         super.viewDidUnhide()
+        if isInShownModule(model), !wasInSight {
+            wasInSight = true
+            cameIntoSight()
+        }
+    }
+
+    /// Shown again (in the other module, or unhidden): what changed meanwhile, the selection, and back to
+    /// the filmstrip's place.
+    private func cameIntoSight() {
         if isStale {
             isStale = false
             prefetching.values.forEach(model.thumbnailLoader.cancel)
@@ -107,6 +132,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
             // A reload counts the photos at the next layout; a change before then would be counted twice.
             collectionView.layoutSubtreeIfNeeded()
         }
+        follow(model.selection, marking: model.selectedPhotos, scrolling: false)
         needsPlace = true
         needsLayout = true
     }
@@ -245,7 +271,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     // MARK: - Changes
 
     private func apply(_ diff: LibraryDiff) {
-        guard !isHiddenOrHasHiddenAncestor else {
+        guard isInShownModule(model) else {
             isStale = isStale || !diff.isEmpty
             return
         }
@@ -280,7 +306,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
 
     // MARK: - Selection
 
-    private func follow(_ selection: URL?, marking photos: [URL], animated: Bool = true) {
+    private func follow(_ selection: URL?, marking photos: [URL], animated: Bool = true, scrolling: Bool = true) {
         let marking = Set(photos).subtracting([selection].compactMap(\.self))
         let changed = marked.symmetricDifference(marking).union([selected, selection].compactMap(\.self))
         for url in changed {
@@ -295,7 +321,9 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         let moved = selected != selection
         selected = selection
         // Scrolled to when it changes, and after a reload; not when only the marks do.
-        guard moved || !animated, let selection, let row = model.library.index(of: selection) else { return }
+        guard scrolling, moved || !animated, let selection, let row = model.library.index(of: selection) else {
+            return
+        }
         center(row: row, animated: animated)
     }
 }

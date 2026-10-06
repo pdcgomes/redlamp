@@ -378,6 +378,7 @@
             model.showModule(.develop)
             try? await Task.sleep(for: .milliseconds(500))
             var durations: [Double] = []
+            var parts: [(views: Double, drawing: Double)] = []
             let monitor = MainThreadMonitor()
             monitor.start()
             let reads = diskReads()
@@ -387,18 +388,23 @@
                 model.showModule(index.isMultiple(of: 2) ? .library : .develop)
                 // The views follow the model in tasks of their own, queued on the main actor before this.
                 await Task.yield()
+                let followed = CFAbsoluteTimeGetCurrent()
                 window.displayIfNeeded()
                 CATransaction.flush()
-                durations.append((CFAbsoluteTimeGetCurrent() - started) * 1000)
+                let drawn = CFAbsoluteTimeGetCurrent()
+                durations.append((drawn - started) * 1000)
+                parts.append(((followed - started) * 1000, (drawn - followed) * 1000))
                 try? await Task.sleep(for: .milliseconds(30))
             }
             let read = diskReads() &- reads
             let elapsed = CFAbsoluteTimeGetCurrent() - began
             monitor.stop()
             let report = String(
-                format: "Switching between Library and Develop: %d switches, each p50 %.2f ms, p99 %.2f ms, max %.2f ms; "
-                    + "%llu bytes read from disk",
-                durations.count, percentile(durations, 0.5), percentile(durations, 0.99), durations.max() ?? 0, read,
+                format: "Switching between Library and Develop: %d switches, each p50 %.2f ms, p99 %.2f ms, max %.2f ms "
+                    +
+                    "(the views following, p50 %.2f ms; drawing and committing, p50 %.2f ms); %llu bytes read from disk",
+                durations.count, percentile(durations, 0.5), percentile(durations, 0.99), durations.max() ?? 0,
+                percentile(parts.map(\.views), 0.5), percentile(parts.map(\.drawing), 0.5), read,
             )
             return (durations, read, report + "\n" + monitor.report("Main thread switching modules", seconds: elapsed))
         }

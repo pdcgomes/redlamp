@@ -4,7 +4,8 @@ import SwiftUI
 
 /// The Library module's middle: the grid or the loupe between the panels, and the filmstrip docked beneath
 /// them, the same filmstrip Develop floats, with the same photos, selection and place. Built once with the
-/// window and kept; G, E, C and N show the grid or the loupe.
+/// window and kept; G, E, C and N show the grid or the loupe. While Develop is shown it's transparent and
+/// its parts follow nothing (`isInShownModule`).
 final class LibraryModuleView: NSView {
     let grid: LibraryGridView
     let loupe: LibraryLoupeView
@@ -13,6 +14,9 @@ final class LibraryModuleView: NSView {
     private var trackers: [Tracker] = []
     private var withFilmstrip: [NSLayoutConstraint] = []
     private var withoutFilmstrip: [NSLayoutConstraint] = []
+    /// The Library module is the one shown (`ModuleContentController`).
+    private(set) var isShownModule = false
+    private var showsFilmstrip = true
 
     private static let filmstripHeight: CGFloat = 110
 
@@ -47,8 +51,7 @@ final class LibraryModuleView: NSView {
             withoutFilmstrip.append(view.bottomAnchor.constraint(equalTo: bottomAnchor))
         }
         NSLayoutConstraint.activate(constraints + withFilmstrip)
-        grid.isHidden = model.libraryView != .grid
-        loupe.isHidden = model.libraryView != .loupe
+        updateParts()
     }
 
     @available(*, unavailable)
@@ -64,7 +67,11 @@ final class LibraryModuleView: NSView {
         trackers = [
             Tracker { [weak self] in
                 guard let self else { return }
-                show(model.libraryView)
+                _ = model.libraryView
+                updateParts()
+                if isShownModule {
+                    takeFocus()
+                }
             },
             Tracker { [weak self] in
                 guard let self else { return }
@@ -74,20 +81,31 @@ final class LibraryModuleView: NSView {
         ]
     }
 
-    private func show(_ view: LibraryView) {
-        guard grid.isHidden != (view != .grid) else { return }
-        grid.isHidden = view != .grid
-        loupe.isHidden = view != .loupe
-        if !isHiddenOrHasHiddenAncestor {
-            takeFocus()
+    func setShown(_ shown: Bool) {
+        isShownModule = shown
+    }
+
+    private func updateParts() {
+        let view = model.libraryView
+        for (part, visible) in [(grid, view == .grid), (loupe, view == .loupe), (filmstrip, showsFilmstrip)] as
+            [(NSView, Bool)] where part.isHidden == visible {
+            part.isHidden = !visible
         }
     }
 
     private func showFilmstrip(_ shown: Bool) {
-        guard filmstrip.isHidden == shown else { return }
-        filmstrip.isHidden = !shown
+        guard showsFilmstrip != shown else { return }
+        showsFilmstrip = shown
         NSLayoutConstraint.deactivate(shown ? withoutFilmstrip : withFilmstrip)
         NSLayoutConstraint.activate(shown ? withFilmstrip : withoutFilmstrip)
+        updateParts()
+    }
+
+    /// Over Develop's canvas, the Library's own cursor, not the canvas's.
+    override func resetCursorRects() {
+        if isShownModule {
+            addCursorRect(visibleRect, cursor: .arrow)
+        }
     }
 
     /// Takes the keyboard as the module is shown: the grid's, or the window's in the loupe, where the
@@ -118,5 +136,24 @@ private struct LibraryFilmstrip: View {
             .environment(theme)
             .tint(Theme.nativeTint)
             .focusEffectDisabled()
+    }
+}
+
+extension NSView {
+    /// Whether the view is on screen in the module shown: not hidden, and not in the other module's view,
+    /// which a switch leaves in place, transparent. A view in neither module is on screen when it isn't hidden.
+    @MainActor func isInShownModule(_ model: EditorModel) -> Bool {
+        guard window != nil, !isHiddenOrHasHiddenAncestor else { return false }
+        var view: NSView? = self
+        while let current = view {
+            if current is LibraryModuleView {
+                return model.module == .library
+            }
+            if current is ModuleContainerView {
+                return model.module == .develop
+            }
+            view = current.superview
+        }
+        return true
     }
 }

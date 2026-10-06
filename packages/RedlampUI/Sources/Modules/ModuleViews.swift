@@ -3,8 +3,11 @@ import RedlampDesign
 import SwiftUI
 
 /// The window's middle, under the toolbar and between the panels: each module's view, built once with the
-/// window and kept. A switch hides one and shows the other, so nothing is built, loaded or read on the way,
-/// and the keyboard follows: the Library module takes it, and Develop gives it back to the window.
+/// window and kept, so a switch builds, loads and reads nothing. The Library module lies over Develop's
+/// canvas, opaque, and a switch changes only its opacity: hiding and showing a view makes AppKit lay it out
+/// and draw it again, more than a switch has. Clicks, scrolls, tooltips, cursors and VoiceOver reach only
+/// the module shown, and the keyboard follows: the Library module takes it, and Develop gives it back to
+/// the window.
 final class ModuleContentController: NSViewController {
     private let model: EditorModel
     private let develop: NSViewController
@@ -52,44 +55,59 @@ final class ModuleContentController: NSViewController {
         guard module != shown else { return }
         let first = shown == nil
         shown = module
-        // Hiding the view with the keyboard hands it to the window, so where it was is read first.
-        let focusedInLibrary = (view.window?.firstResponder as? NSView)?.isDescendant(of: library) == true
-        developView.isHidden = module != .develop
-        library.isHidden = module != .library
+        (view as? ModuleContainerView)?.shown = module == .library ? library : developView
+        library.alphaValue = module == .library ? 1 : 0
+        library.setShown(module == .library)
         guard !first, let window = view.window else { return }
+        window.invalidateCursorRects(for: library)
         if module == .library {
             library.takeFocus()
-        } else if focusedInLibrary || window.firstResponder === window {
+        } else if (window.firstResponder as? NSView)?.isDescendant(of: library) == true
+            || window.firstResponder === window {
             window.makeFirstResponder(view)
         }
     }
 }
 
-/// The middle's own first responder in Develop: it takes keys without drawing anything, as the window's
-/// root does, so they reach the shortcut monitor and the menus.
-private final class ModuleContainerView: NSView {
+/// The middle: it takes keys in Develop without drawing anything, as the window's root does, so they reach
+/// the shortcut monitor and the menus; and it hands clicks and VoiceOver to the module shown.
+final class ModuleContainerView: NSView {
+    weak var shown: NSView?
+
     override var acceptsFirstResponder: Bool {
         true
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard frame.contains(point), let shown else { return super.hitTest(point) }
+        return shown.hitTest(convert(point, from: superview)) ?? self
+    }
+
+    override func accessibilityChildren() -> [Any]? {
+        shown.map { [$0] } ?? super.accessibilityChildren()
     }
 }
 
 /// A side panel's column for each module, both built with the window and kept: the shown module's is
-/// visible.
+/// visible. They're switched by opacity rather than hidden, since hiding and showing a column of panels
+/// lays it out and draws it again, more than a switch has; clicks, scrolls, tooltips and VoiceOver reach
+/// only the shown column.
 final class ModuleColumnView: NSView {
     private let model: EditorModel
     let develop: NSView
     let library: NSView
     private var tracker: Tracker?
+    private(set) var shown: AppModule
 
     init(model: EditorModel, develop: NSView, library: NSView) {
         self.model = model
         self.develop = develop
         self.library = library
+        shown = model.module
         super.init(frame: .zero)
         addSubview(develop)
         addSubview(library)
-        develop.isHidden = model.module != .develop
-        library.isHidden = model.module != .library
+        show(model.module)
     }
 
     @available(*, unavailable)
@@ -101,6 +119,10 @@ final class ModuleColumnView: NSView {
         true
     }
 
+    private var shownColumn: NSView {
+        shown == .develop ? develop : library
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         tracker?.cancel()
@@ -108,10 +130,28 @@ final class ModuleColumnView: NSView {
         guard window != nil else { return }
         tracker = Tracker { [weak self] in
             guard let self else { return }
-            let module = model.module
-            develop.isHidden = module != .develop
-            library.isHidden = module != .library
+            show(model.module)
         }
+    }
+
+    private func show(_ module: AppModule) {
+        let leaving = shown == module ? nil : shownColumn
+        shown = module
+        develop.alphaValue = module == .develop ? 1 : 0
+        library.alphaValue = module == .library ? 1 : 0
+        if let leaving, let window, let responder = window.firstResponder as? NSView,
+           responder.isDescendant(of: leaving) {
+            window.makeFirstResponder(nil)
+        }
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard frame.contains(point) else { return nil }
+        return shownColumn.hitTest(convert(point, from: superview)) ?? self
+    }
+
+    override func accessibilityChildren() -> [Any]? {
+        [shownColumn]
     }
 
     override func layout() {
