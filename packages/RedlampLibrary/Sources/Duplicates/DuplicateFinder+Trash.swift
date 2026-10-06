@@ -8,9 +8,12 @@ public extension DuplicateFinder {
     /// it, taken out of the index, journaled and undoable. Planning it moves nothing: `trash` checks it
     /// against the plan and the files, and runs it.
     func trashBatch(for plan: DuplicateRemovalPlan, operations: FileOperations) async throws -> FileBatch {
-        var batch = try await operations.planTrash(plan.removals.map { PhotoFiles(id: $0.photo, files: [$0.file]) })
-        let count = plan.removals.count
-        batch.title = "Move \(count) duplicate\(count == 1 ? "" : "s") to the Trash"
+        var named = Set<Int64>()
+        let photos = plan.removals.filter { named.insert($0.photo).inserted }.map { removal in
+            PhotoFiles(id: removal.photo, files: [removal.file])
+        }
+        var batch = try await operations.planTrash(photos)
+        batch.title = "Move \(photos.count) duplicate\(photos.count == 1 ? "" : "s") to the Trash"
         return batch
     }
 

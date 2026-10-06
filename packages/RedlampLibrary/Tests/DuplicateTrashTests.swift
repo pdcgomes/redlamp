@@ -4,7 +4,8 @@ import Testing
 @testable import RedlampLibrary
 
 /// Removal plans carried out (LIB-39, LIB-26): their copies to the Trash of the sandbox's simulated
-/// volume, a folder of the sandbox's, as one journaled batch checked just before it runs.
+/// volume, a folder of the sandbox's, as one journaled batch, and back with Undo. What stops a batch
+/// is `DuplicateTrashCheckTests`'.
 struct DuplicateTrashTests {
     typealias Difference = DuplicateRemovalPlan.Difference
     typealias Refusal = DuplicateRemovalPlan.Refusal
@@ -57,7 +58,8 @@ struct DuplicateTrashTests {
             let outcome = try await finder.trash(plan, batch, operations: operations)
             #expect(outcome.isFinished && outcome.photos == 3)
             let moved: Set = ["B/X.JPG", "B/X.JPG.xmp", "C/X.JPG", "C/X.xmp", "D/Y.JPG"]
-            #expect(sandbox.files() == before.filter { !moved.contains($0.key) && !$0.key.contains("B/X.JPG.redlamp") })
+            let left = before.filter { !moved.contains($0.key) && !$0.key.contains("B/X.JPG.redlamp") }
+            #expect(sandbox.files() == left)
             #expect(sandbox.trashed().count == 6, "the copies, B's sidecar and the two .xmp: \(sandbox.trashed())")
             #expect(try await sandbox.rows() == rows.filter { ![b, c, dy].contains($0.value) })
             let entries = try await operations.entries()
@@ -71,118 +73,6 @@ struct DuplicateTrashTests {
             #expect(try await operations.entries().first?.state == .undone)
             #expect(try await finder.review(finder.confirm(finder.candidates())).groups == review.groups)
         }
-    }
-
-    @Test func `a copy or the copy kept changed or gone since the review stops the batch before anything moves`(
-    ) async throws {
-        let sandbox = try await DuplicateSandbox.make()
-        defer { sandbox.remove() }
-        var contents: [Data] = []
-        for number in 1 ... 6 {
-            let data = duplicateBytes(100_000 + number * 1000, seed: UInt64(50 + number))
-            try sandbox.write("Kept\(number)/X.JPG", data, modified: 0)
-            try sandbox.write("Copy\(number)/X.JPG", data, modified: 10)
-            contents.append(data)
-        }
-        try sandbox.sidecar("Copy5/X.JPG", PhotoMetadata(flag: .reject))
-        try await sandbox.indexAll()
-        let finder = sandbox.finder(sandbox.fileSystem)
-        let review = try await finder.review(finder.confirm(finder.candidates()))
-        let plan = try DuplicateRemovalPlan(review, removing: review.allButProposed)
-        #expect(plan.removals.count == 6 && plan.removals.allSatisfy { $0.kept.file.path.contains("/Kept") })
-        let operations = sandbox.operations()
-        let batch = try await finder.trashBatch(for: plan, operations: operations)
-
-        // Copy 1 changed in place, its size and date as they were, which only its full hash tells.
-        var changed = contents[0]
-        changed[50000] ^= 0xFF
-        try sandbox.write("Copy1/X.JPG", changed, modified: 10)
-        try FileManager.default.removeItem(at: sandbox.url("Copy2/X.JPG"))
-        try sandbox.write("Kept3/X.JPG", contents[2] + [0], modified: 0)
-        try FileManager.default.removeItem(at: sandbox.url("Kept4/X.JPG"))
-        try sandbox.sidecar("Copy5/X.JPG", PhotoMetadata(flag: .pick))
-        let before = sandbox.files()
-
-        let expected = [
-            Difference(path: sandbox.path("Copy1/X.JPG"), reason: .changed),
-            Difference(path: sandbox.path("Copy2/X.JPG"), reason: .gone),
-            Difference(path: sandbox.path("Copy5/X.JPG"), reason: .sidecarChanged),
-            Difference(path: sandbox.path("Kept3/X.JPG"), reason: .changed, isKept: true),
-            Difference(path: sandbox.path("Kept4/X.JPG"), reason: .gone, isKept: true),
-        ]
-        await #expect(throws: Refusal.differs(expected)) {
-            try await finder.trash(plan, batch, operations: operations)
-        }
-        #expect(sandbox.files() == before && sandbox.trashed().isEmpty && sandbox.fileSystem.writes.isEmpty)
-        #expect(try await operations.entries().isEmpty, "nothing was written to the journal")
-        #expect(expected[4].description == sandbox.path("Kept4/X.JPG") + ", the copy kept, isn't there any more")
-
-        // Without reading the files whole, only copy 1's change goes unseen.
-        #expect(try await finder.check(plan, batch, operations: operations, hashing: false) == expected.filter {
-            $0.path != sandbox.path("Copy1/X.JPG")
-        })
-    }
-
-    @Test func `every copy of a group stays, even when a plan asks the API to move them all`() async throws {
-        let sandbox = try await DuplicateSandbox.make()
-        defer { sandbox.remove() }
-        let x = duplicateBytes(120_000, seed: 60)
-        try sandbox.write("A/X.JPG", x, modified: 0)
-        try sandbox.write("B/X.JPG", x, modified: 10)
-        try sandbox.write("C/X.JPG", x, modified: 20)
-        let y = duplicateBytes(80000, seed: 61)
-        try sandbox.write("D/Y.JPG", y, modified: 0)
-        try sandbox.write("E/Y.JPG", y, modified: 10)
-        try await sandbox.indexAll()
-        let finder = sandbox.finder(sandbox.fileSystem)
-        let review = try await finder.review(finder.confirm(finder.candidates()))
-        let (a, b, c) = try await (sandbox.id("A/X.JPG"), sandbox.id("B/X.JPG"), sandbox.id("C/X.JPG"))
-        let (d, e) = try await (sandbox.id("D/Y.JPG"), sandbox.id("E/Y.JPG"))
-        let group = try #require(review.groups.first { $0.size == 120_000 })
-        #expect(throws: Refusal.everyCopy(sha256: group.sha256)) {
-            try DuplicateRemovalPlan(review, removing: [a, b, c])
-        }
-        let operations = sandbox.operations()
-
-        // Two plans from one review, each leaving a copy the other removes.
-        let first = try DuplicateRemovalPlan(review, removing: [b, c])
-        let second = try DuplicateRemovalPlan(review, removing: [a])
-        #expect(first.removals.map(\.kept.photo) == [a, a] && second.removals.map(\.kept.photo) == [b])
-        #expect(try await finder.trash(
-            first,
-            finder.trashBatch(for: first, operations: operations),
-            operations: operations,
-        )
-        .isFinished)
-        let late = try await finder.trashBatch(for: second, operations: operations)
-        await #expect(throws: Refusal.differs([
-            Difference(path: sandbox.path("B/X.JPG"), reason: .notInLibrary, isKept: true),
-        ])) {
-            try await finder.trash(second, late, operations: operations)
-        }
-        #expect(FileManager.default.fileExists(atPath: sandbox.url("A/X.JPG").path))
-
-        /// A plan whose copies keep each other, which no review makes: two plans' removals in one.
-        func removals(_ plan: DuplicateRemovalPlan) throws -> [Any] {
-            let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(plan)) as? [String: Any]
-            return try #require(object?["removals"] as? [Any])
-        }
-        let keepingE = try DuplicateRemovalPlan(review, removing: [d])
-        let keepingD = try DuplicateRemovalPlan(review, removing: [e])
-        let both = try JSONDecoder().decode(DuplicateRemovalPlan.self, from: JSONSerialization.data(
-            withJSONObject: ["removals": removals(keepingE) + removals(keepingD)],
-        ))
-        #expect(both.removals.map(\.photo) == [d, e] && both.removals.map(\.kept.photo) == [e, d])
-        let trashed = sandbox.trashed()
-        let batch = try await finder.trashBatch(for: both, operations: operations)
-        await #expect(throws: Refusal.differs([
-            Difference(path: sandbox.path("D/Y.JPG"), reason: .keptRemoved, isKept: true),
-            Difference(path: sandbox.path("E/Y.JPG"), reason: .keptRemoved, isKept: true),
-        ])) {
-            try await finder.trash(both, batch, operations: operations)
-        }
-        #expect(["D/Y.JPG", "E/Y.JPG"].allSatisfy { FileManager.default.fileExists(atPath: sandbox.url($0).path) })
-        #expect(sandbox.trashed() == trashed && trashed.count == 2)
     }
 
     @Test func `a raw and its JPEG are never duplicates, and the JPEG's copy goes to the Trash without them`(
@@ -257,10 +147,8 @@ struct DuplicateTrashTests {
         try FileManager.default.moveItem(at: sandbox.url("Pair/IMG_0001.ARW"), to: aside)
         let taking = try await finder.trashBatch(for: plan, operations: operations)
         #expect(taking.steps.flatMap(\.items).map(\.source).contains(sandbox.path("Pair/IMG_0001.xmp")))
-        await #expect(throws: Refusal.differs([Difference(
-            path: sandbox.path("Pair/IMG_0001.xmp"),
-            reason: .notInPlan,
-        )])) {
+        let shared = Difference(path: sandbox.path("Pair/IMG_0001.xmp"), reason: .notInPlan)
+        await #expect(throws: Refusal.differs([shared])) {
             try await finder.trash(plan, taking, operations: operations)
         }
         #expect(sandbox.fileSystem.writes.isEmpty && sandbox.trashed().isEmpty)
@@ -269,8 +157,8 @@ struct DuplicateTrashTests {
         let batch = try await finder.trashBatch(for: plan, operations: operations)
         #expect(try await finder.trash(plan, batch, operations: operations).isFinished)
         let moved: Set = ["Copies/X.JPG", "Copies/X.JPG.xmp", "Pair/IMG_0001.JPG"]
-        #expect(sandbox.files() == before
-            .filter { !moved.contains($0.key) && !$0.key.hasPrefix("Copies/X.JPG.redlamp/") })
+        let left = before.filter { !moved.contains($0.key) && !$0.key.hasPrefix("Copies/X.JPG.redlamp/") }
+        #expect(sandbox.files() == left)
         let writes = sandbox.fileSystem.writes
         #expect(writes.allSatisfy { $0.hasPrefix("trash ") }, "\(writes)")
         #expect(Set(writes.map { String($0.dropFirst("trash ".count).prefix { $0 != " " }) }) == Set(
