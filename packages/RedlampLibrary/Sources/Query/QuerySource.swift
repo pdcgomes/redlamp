@@ -15,6 +15,8 @@ protocol QuerySource: Sendable {
     func keywordSynonyms() async throws -> [String: [String]]
     /// The keywords of photos `ids`, or of every photo when nil, in the order of their photos' IDs.
     func photoKeywords(of ids: [Int64]?) async throws -> [PhotoKeyword]
+    /// The collections of photos `ids`, or of every photo when nil, alike.
+    func photoCollections(of ids: [Int64]?) async throws -> [PhotoKeyword]
     /// The state of every photo that's missing, offline or settling.
     func photoStates() async throws -> [Int64: PhotoRecord.State]
     /// `store` with photos `ids` as the index has them now: changed, added or gone.
@@ -35,12 +37,17 @@ extension QuerySource {
         []
     }
 
+    func photoCollections(of _: [Int64]?) async throws -> [PhotoKeyword] {
+        []
+    }
+
     func photoStates() async throws -> [Int64: PhotoRecord.State] {
         [:]
     }
 }
 
-/// A photo and one of its keywords, as `photo_keywords` holds them.
+/// A photo and one of its keywords, as `photo_keywords` holds them, or one of its collections, as
+/// `collection_photos` does.
 struct PhotoKeyword: Sendable, Hashable {
     var photo: Int64
     var keyword: Int64
@@ -79,8 +86,9 @@ final class QueryVocabulary: Sendable {
     private let keywords = Mutex<KeywordMatcher?>(nil)
     private let collections = Mutex<KeywordMatcher?>(nil)
     private let matched = Mutex<[Match: [Int64]]>([:])
-    /// Made the first time a column of keywords is counted, or keywords completed (LIB-18).
-    let levels = Mutex<KeywordLevels?>(nil)
+    /// Made the first time a column of keywords or collections is counted, or keywords completed
+    /// (LIB-18).
+    let levels = Mutex<[PostingKind: KeywordLevels]>([:])
     let completion = Mutex<KeywordCompletion?>(nil)
     /// Read the first time a collection's photos are listed.
     private let smart = Mutex<[(path: CollectionPath, query: LibraryQuery?)]?>(nil)
@@ -269,15 +277,25 @@ struct IndexQuerySource: QuerySource {
     }
 
     func photoKeywords(of ids: [Int64]?) async throws -> [PhotoKeyword] {
+        try await pairs(of: ids, table: "photo_keywords", owner: "keyword")
+    }
+
+    func photoCollections(of ids: [Int64]?) async throws -> [PhotoKeyword] {
+        try await pairs(of: ids, table: "collection_photos", owner: "collection")
+    }
+
+    /// The photos and owners `table` pairs for photos `ids`, or for every photo, in the order of the
+    /// photos' IDs.
+    private func pairs(of ids: [Int64]?, table: String, owner: String) async throws -> [PhotoKeyword] {
         try await index.read { reader in
             var found: [PhotoKeyword] = []
             guard let ids else {
-                try reader.database.cached("SELECT photo, keyword FROM photo_keywords ORDER BY photo, keyword")
+                try reader.database.cached("SELECT photo, \(owner) FROM \(table) ORDER BY photo, \(owner)")
                     .forEachRow { found.append(PhotoKeyword(photo: $0.int64(at: 0), keyword: $0.int64(at: 1))) }
                 return found
             }
             let statement = try reader.database.cached(
-                "SELECT keyword FROM photo_keywords WHERE photo = ? ORDER BY keyword",
+                "SELECT \(owner) FROM \(table) WHERE photo = ? ORDER BY \(owner)",
             )
             for id in Set(ids).sorted() {
                 try statement.bind(id, at: 1)

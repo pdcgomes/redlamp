@@ -133,6 +133,57 @@ struct QueryFilterBarTests {
         }
     }
 
+    @Test func `columns count creators, cities, countries, collections and labels, custom ones included`() async throws {
+        let library = try await QueryTestLibrary.make()
+        defer { library.remove() }
+        let engine = try await library.engine(loaded: true)
+        let kinds: [FacetColumn] = [.creator, .city, .country, .collection, .customLabel, .label]
+        var columns: [FacetColumn: FacetColumnCounts] = [:]
+        for try await counts in engine.columns(kinds.map { FacetColumnRequest($0, query: .all) }, in: .allPhotographs) {
+            columns[counts.column] = counts
+        }
+        #expect(Self.counts(columns[.creator]) == [
+            "Ana Silva": 1, "Ana Silva; João Costa": 1, "Studio Acme": 1, "Élodie Tremblay": 1, nil: 4,
+        ])
+        #expect(Self.counts(columns[.city]) == ["Lisboa": 2, "Porto": 1, "Lagoa": 1, "Montréal": 1, nil: 3])
+        #expect(Self.counts(columns[.country]) == ["Portugal": 4, "Canada": 1, nil: 3])
+        #expect(Self.counts(columns[.collection]) == [
+            "Portfolio": 2, "Portfolio/2024": 2, "Clients": 1, "AC%2FDC": 1, nil: 3,
+        ])
+        #expect(Self.counts(columns[.customLabel]) == ["Approved": 1, "Client": 1, nil: 6])
+        #expect(Self.counts(columns[.label]) == [
+            "none": 1, "red": 1, "yellow": 1, "green": 1, "blue": 1, "purple": 1, "Approved": 1, "Client": 1,
+        ])
+        #expect(columns[.label]?.values.suffix(2).compactMap(\.name) == ["Approved", "Client"], "after the colours")
+        for (column, counts) in columns {
+            for value in counts.values {
+                guard let filter = value.filter else { continue }
+                let found = try await engine.ids(filter.description).count
+                let exact = column != .creator
+                #expect(exact ? found == value.count : found >= value.count, "\(filter) finds the photos it counts")
+            }
+        }
+
+        let ana = library.ids[1]
+        try await library.index.write { try $0.setCollections(["Clients"], forPhoto: ana) }
+        try await engine.update(photos: [ana])
+        for try await counts in engine.columns([FacetColumnRequest(.collection, query: .all)], in: .allPhotographs) {
+            #expect(Self.counts(counts)["Clients"] == 2 && Self.counts(counts)[nil] == 2, "a photo put in one")
+        }
+    }
+
+    @Test func `completions offer collections by path, and custom labels after the colours`() async throws {
+        let library = try await QueryTestLibrary.make()
+        defer { library.remove() }
+        let engine = try await library.engine(loaded: true)
+        let collections = await engine.completions("port", field: .collection)
+        #expect(collections.map(\.term) == ["collection:Portfolio", "collection:Portfolio/2024"])
+        #expect(await engine.completions("ac/", field: .collection).map(\.value) == ["AC%2FDC"])
+        #expect(await engine.completions("appr", field: .label).map(\.term) == ["label:Approved"])
+        let clients = await engine.completions("cli", field: nil)
+        #expect(clients.map(\.term).starts(with: ["label:Client", "collection:Clients"]))
+    }
+
     @Test func `a query's rules give it back, and rules give back their query`() throws {
         let texts = [
             "", "sunset", "-sunset", "rating>=3 flag:pick", "label:red OR label:blue", "-(a OR b)", "-(a b)",

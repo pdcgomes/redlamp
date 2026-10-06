@@ -5,6 +5,10 @@ import RedlampDocument
 public enum Facet: String, Sendable, Hashable, CaseIterable {
     case camera, lens, rating, flag, label, year, month, folder, kind
     case day, iso, focal, aperture
+    /// IPTC Core's creator, and its location's city and country.
+    case creator, city, country
+    /// A label's name outside the five colours.
+    case customLabel
 }
 
 /// How many of a query's photos share each value of a facet.
@@ -124,7 +128,36 @@ extension ColumnStore {
             return try FacetCounts(
                 facet: facet, values: numbered(counts(matches, aperture, size: 1 << 16), .aperture, scale: 100),
             )
+        case .creator:
+            let names = creatorNames
+            return try FacetCounts(facet: facet, values: named(counts(matches, creators, size: names.count)) { code in
+                names.name(of: code).map { ($0, .creator) }
+            })
+        case .customLabel:
+            let names = customLabelNames
+            return try FacetCounts(
+                facet: facet,
+                values: named(counts(matches, customLabels, size: names.count)) { code in
+                    names.name(of: code).map { ($0, .label) }
+                },
+            )
+        case .city:
+            return try FacetCounts(facet: facet, values: placeCounts(of: matches, .city, field: .city))
+        case .country:
+            return try FacetCounts(facet: facet, values: placeCounts(of: matches, .country, field: .country))
         }
+    }
+
+    /// Counts by a part of the photos' places, by its name, those without one last.
+    private func placeCounts(of matches: RowBits, _ part: PlaceCodes.Part, field: LibraryQuery.Field) throws
+        -> [FacetValue] {
+        let byPlace = try counts(matches, places, size: placeNames.count)
+        let names = placeNames.parts[part.rawValue]
+        var byName = [Int](repeating: 0, count: names.count)
+        for (place, count) in byPlace.enumerated() where count > 0 {
+            byName[Int(placeNames.code(of: part, at: place))] += count
+        }
+        return named(byName) { code in names.name(of: code).map { ($0, field) } }
     }
 
     /// Counts by colour label, then the photos without one by their custom label's name: `none` for

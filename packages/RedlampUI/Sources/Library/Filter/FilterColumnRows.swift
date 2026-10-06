@@ -3,8 +3,8 @@ import RedlampDocument
 import RedlampLibrary
 
 /// A row of a metadata column: a value, how many photos have it, and the rows inside it (a year's
-/// months, a month's days, a keyword's keywords, a folder's folders). The photos without a value come
-/// last, as a row that can't be chosen.
+/// months, a month's days, a keyword's keywords, a set's collections, a folder's folders). The photos
+/// without a value come last, as a row that can't be chosen.
 final class FilterColumnRow: NSObject {
     /// The same for the same value as counts change, so the column keeps what's expanded.
     let key: String
@@ -30,7 +30,7 @@ final class FilterColumnRow: NSObject {
         }
         let rows: [FilterColumnRow] = switch counts.column {
         case .date: dates(known)
-        case .keyword: keywords(known)
+        case .keyword, .collection: nested(known)
         case .folder: folders(known, below: folder)
         default: known.compactMap(flat(counts.column))
         }
@@ -40,7 +40,9 @@ final class FilterColumnRow: NSObject {
     private static func unknownTitle(_ column: FacetColumn) -> String {
         switch column {
         case .keyword: "No Keywords"
+        case .collection: "No Collection"
         case .date: "No Date"
+        case .customLabel: "No Custom Label"
         default: "Unknown"
         }
     }
@@ -59,7 +61,7 @@ final class FilterColumnRow: NSObject {
         case .iso: "ISO \(name)"
         case .focal: "\(name) mm"
         case .aperture: "f/\(name)"
-        case .label: name == "none" ? "No Label" : name.capitalized
+        case .label: name == "none" ? "No Label" : ColorLabel(rawValue: name) == nil ? name : name.capitalized
         case .flag: ["pick": "Picked", "reject": "Rejected", "none": "Unflagged"][name] ?? name
         case .rating: Int(name).map { $0 == 0 ? "Unrated" : String(repeating: "★", count: $0) } ?? name
         case .kind: ["raw": "Raw", "jpeg": "JPEG", "heic": "HEIC", "tiff": "TIFF", "png": "PNG"][name] ?? name
@@ -117,8 +119,8 @@ final class FilterColumnRow: NSObject {
         return rows.sorted { FileOrder.precedes($0.title, $1.title) }.map(\.row)
     }
 
-    /// Keywords, each under the keyword it's inside.
-    private static func keywords(_ values: [FacetValue]) -> [FilterColumnRow] {
+    /// Keywords or collections, each under the keyword or set it's inside.
+    private static func nested(_ values: [FacetValue]) -> [FilterColumnRow] {
         let counts = Dictionary(values.compactMap { value in value.name.map { ($0, value.count) } }) { first, _ in
             first
         }
@@ -156,11 +158,15 @@ final class FilterColumnRow: NSObject {
         switch (chosen, value) {
         case let (.text(chosen), .text(name)):
             let (chosen, name) = (chosen.lowercased(), name.lowercased())
-            if column == .keyword {
+            switch column {
+            case .keyword, .collection:
                 return name == chosen || name.hasPrefix(chosen + "/") || name.hasSuffix("/" + chosen)
                     || name.contains("/" + chosen + "/")
+            case .label, .customLabel:
+                return name == chosen
+            default:
+                return name.contains(chosen)
             }
-            return name.contains(chosen)
         case let (.date(chosen), .date(date)):
             return chosen.description.count <= date.description.count && date.description.hasPrefix(chosen.description)
         case let (.number(chosen), .number(number)):
@@ -235,6 +241,11 @@ public extension FacetColumn {
         case .kind: "File Type"
         case .flag: "Flag"
         case .rating: "Rating"
+        case .creator: "Creator"
+        case .city: "City"
+        case .country: "Country"
+        case .collection: "Collection"
+        case .customLabel: "Custom Label"
         }
     }
 }

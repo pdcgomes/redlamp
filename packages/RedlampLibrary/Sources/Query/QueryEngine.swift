@@ -44,10 +44,11 @@ public final class QueryEngine: Sendable {
         var facets: Task<Void, Never>?
         /// Loading and updates, one at a time in the order they're asked for.
         var changing: Task<Void, any Error>?
-        /// Each photo's keywords, once a column of keywords is counted, and the photos changed since.
-        var postings: KeywordPostings?
-        var stalePostings = Set<Int64>()
-        var readingPostings = 0
+        /// Each photo's keywords or collections, once a column of them is counted, and the photos
+        /// changed since.
+        var postings: [PostingKind: KeywordPostings] = [:]
+        var stalePostings: [PostingKind: Set<Int64>] = [:]
+        var readingPostings: [PostingKind: Int] = [:]
         /// The columns counted for this store, by what they counted.
         var columnCounts: [ColumnKey: FacetColumnCounts] = [:]
     }
@@ -95,7 +96,7 @@ public final class QueryEngine: Sendable {
 
     /// Builds the column store from the index, with the small tables beside it.
     public func load() async throws {
-        state.withLock { $0.postings = nil }
+        state.withLock { $0.postings = [:] }
         try await change { [source] _ in
             async let names = source.names()
             return try await (source.columnStore(), names)
@@ -108,8 +109,9 @@ public final class QueryEngine: Sendable {
     public func update(photos ids: [Int64]) async throws {
         guard !ids.isEmpty else { return }
         state.withLock { state in
-            if state.postings != nil || state.readingPostings > 0 {
-                state.stalePostings.formUnion(ids)
+            for kind in [PostingKind.keywords, .collections]
+                where state.postings[kind] != nil || state.readingPostings[kind, default: 0] > 0 {
+                state.stalePostings[kind, default: []].formUnion(ids)
             }
         }
         try await change { [source] store in
@@ -345,25 +347,31 @@ public final class QueryEngine: Sendable {
         }
     }
 
-    /// Each photo's keywords: read from the index the first time, then only those of the photos
-    /// changed since.
-    func keywordPostings() async throws -> KeywordPostings {
+    /// Each photo's keywords or collections: read from the index the first time, then only those of
+    /// the photos changed since.
+    func postings(_ kind: PostingKind) async throws -> KeywordPostings {
         let (kept, stale) = state.withLock { state in
-            state.readingPostings += 1
-            return (state.postings, state.stalePostings)
+            state.readingPostings[kind, default: 0] += 1
+            return (state.postings[kind], state.stalePostings[kind] ?? [])
         }
-        defer { state.withLock { $0.readingPostings -= 1 } }
+        defer { state.withLock { $0.readingPostings[kind, default: 0] -= 1 } }
+        func read(_ ids: [Int64]?) async throws -> [PhotoKeyword] {
+            switch kind {
+            case .keywords: try await source.photoKeywords(of: ids)
+            case .collections: try await source.photoCollections(of: ids)
+            }
+        }
         var postings = kept ?? KeywordPostings()
         if kept == nil {
-            postings = try await KeywordPostings(source.photoKeywords(of: nil))
+            postings = try await KeywordPostings(read(nil))
         } else if !stale.isEmpty {
-            try await postings.replace(photos: stale, with: source.photoKeywords(of: Array(stale)))
+            try await postings.replace(photos: stale, with: read(Array(stale)))
         } else {
             return postings
         }
         state.withLock { state in
-            state.postings = postings
-            state.stalePostings.subtract(stale)
+            state.postings[kind] = postings
+            state.stalePostings[kind]?.subtract(stale)
         }
         return postings
     }

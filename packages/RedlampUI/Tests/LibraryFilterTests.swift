@@ -26,6 +26,8 @@ struct LibraryFilterTests {
         var flag: PhotoFlag?
         var label: ColorLabel?
         var edited = false
+        /// IPTC Core's fields, a custom label and collections, in its sidecar.
+        var metadata = PhotoMetadata()
     }
 
     static let photos = [
@@ -38,6 +40,10 @@ struct LibraryFilterTests {
             rating: 5,
             flag: .pick,
             label: .red,
+            metadata: PhotoMetadata(
+                creator: "Ana Silva", location: PhotoLocation(country: "Portugal", city: "Lisboa"),
+                collections: ["Trips/Lisbon"],
+            ),
         ),
         Photo(
             path: "IMG_0002.JPG",
@@ -48,6 +54,7 @@ struct LibraryFilterTests {
             rating: 3,
             label: .blue,
             edited: true,
+            metadata: PhotoMetadata(creator: "Ana Silva", collections: ["Trips/Lisbon"]),
         ),
         Photo(
             path: "IMG_0003.JPG",
@@ -57,7 +64,7 @@ struct LibraryFilterTests {
             date: "2023:01:02 09:00:00",
             flag: .reject,
         ),
-        Photo(path: "IMG_0004.PNG", rating: 1),
+        Photo(path: "IMG_0004.PNG", rating: 1, metadata: PhotoMetadata(customLabel: "Approved")),
         Photo(
             path: "DSC_0005.JPG",
             make: "Canon",
@@ -66,6 +73,7 @@ struct LibraryFilterTests {
             date: "2024:07:01 08:00:00",
             rating: 4,
             edited: true,
+            metadata: PhotoMetadata(location: PhotoLocation(country: "Portugal", city: "Porto")),
         ),
         Photo(
             path: "Below/IMG_0006.JPG",
@@ -126,18 +134,16 @@ struct LibraryFilterTests {
         try CGImageDestinationAddImage(destination, #require(context.makeImage()), properties as CFDictionary)
         #expect(CGImageDestinationFinalize(destination))
         try (data as Data).write(to: url)
-        if photo.rating > 0 || photo.flag != nil || photo.label != nil || photo.edited {
+        var metadata = photo.metadata
+        metadata.rating = photo.rating
+        metadata.flag = photo.flag
+        metadata.label = photo.label
+        if !metadata.isEmpty || photo.edited {
             var recipe = EditRecipe()
             if photo.edited {
                 recipe[.exposure] = 1
             }
-            try SidecarStore().save(
-                Sidecar(
-                    recipe: recipe,
-                    metadata: PhotoMetadata(rating: photo.rating, flag: photo.flag, label: photo.label),
-                ),
-                for: url,
-            )
+            try SidecarStore().save(Sidecar(recipe: recipe, metadata: metadata), for: url)
         }
     }
 
@@ -276,6 +282,77 @@ struct LibraryFilterTests {
         let rows = try FilterColumnRow.rows(#require(filters.columns[0]), folder: nil)
         let chosen = rows.filter { $0.isChosen(by: FilterColumnRow.choice(in: rules, column: .camera), in: .camera) }
         #expect(chosen.map(\.title) == ["Fujifilm X-T5"])
+    }
+
+    @Test func `columns count creators, cities, countries, collections and custom labels from the sidecars`(
+    ) async throws {
+        defer { cleanUp() }
+        let (model, _) = try await open()
+        let filters = try #require(model.libraryFilters)
+        filters.setBarShown(true)
+        filters.setFilter(LibraryFilter(
+            sections: [.metadata], columns: [.creator, .city, .country, .collection, .customLabel],
+        ))
+        filters.countColumns()
+        try await eventually { filters.columns.count == 5 }
+        func counts(_ index: Int) -> [String?: Int] {
+            Dictionary(uniqueKeysWithValues: (filters.columns[index]?.values ?? []).map { ($0.name, $0.count) })
+        }
+        #expect(counts(0) == ["Ana Silva": 2, nil: 3])
+        #expect(counts(1) == ["Lisboa": 1, "Porto": 1, nil: 3])
+        #expect(counts(2) == ["Portugal": 2, nil: 3])
+        #expect(counts(3) == ["Trips": 2, "Trips/Lisbon": 2, nil: 3])
+        #expect(counts(4) == ["Approved": 1, nil: 4])
+        let sets = try FilterColumnRow.rows(#require(filters.columns[3]), folder: nil)
+        #expect(sets.map(\.title) == ["Trips", "No Collection"] && sets[0].children.map(\.title) == ["Lisbon"])
+        #expect(FacetColumn.allCases.suffix(5).map(\.title) == [
+            "Creator",
+            "City",
+            "Country",
+            "Collection",
+            "Custom Label",
+        ])
+
+        filters.choose([.text("Ana Silva")], inColumn: 0)
+        try await listed(model)
+        #expect(Set(names(model)) == ["IMG_0001.JPG", "IMG_0002.JPG"])
+        try await eventually { filters.columns[1]?.total == 2 }
+        #expect(counts(1) == ["Lisboa": 1, nil: 1], "the city column counts the creator's photos")
+        filters.choose([.text("Trips/Lisbon")], inColumn: 3)
+        try await listed(model)
+        #expect(filters.filter.text == "creator:\"Ana Silva\" collection:Trips/Lisbon")
+        #expect(Set(names(model)) == ["IMG_0001.JPG", "IMG_0002.JPG"])
+        filters.choose([.text("Porto")], inColumn: 1)
+        try await listed(model)
+        #expect(model.items.isEmpty && filters.filter.text.hasSuffix(" city:Porto"))
+        filters.clear()
+        filters.choose([.text("Approved")], inColumn: 4)
+        try await listed(model)
+        #expect(filters.filter.text == "label:Approved" && names(model) == ["IMG_0004.PNG"])
+        try await eventually { filters.columns[4]?.total == 5 }
+        let rows = try FilterColumnRow.rows(#require(filters.columns[4]), folder: nil)
+        let rules = filters.filter.rules
+        #expect(rows
+            .filter { $0.isChosen(by: FilterColumnRow.choice(in: rules, column: .customLabel), in: .customLabel) }
+            .map(\.title) == ["Approved"])
+    }
+
+    @Test func `Tab completes collections and custom labels from the index`() async throws {
+        defer { cleanUp() }
+        let (model, _) = try await open()
+        let filters = try #require(model.libraryFilters)
+        filters.complete("collection:tri", cursor: 14)
+        try await eventually { !filters.completions.isEmpty }
+        #expect(filters.completions.map(\.text) == ["collection:Trips ", "collection:Trips/Lisbon "])
+        #expect(filters.completions.map(\.title) == ["Trips", "Trips › Lisbon"])
+        #expect(filters.completions.first?.kind == "Collection" && filters.completionRange == 0 ..< 14)
+        filters.complete("rating>=1 -label:appr", cursor: 21)
+        try await eventually { filters.completions.first?.kind == "Custom Label" }
+        #expect(filters.completions.map(\.text) == ["-label:Approved "] && filters.completions.first?
+            .title == "Approved")
+        filters.complete("lis", cursor: 3)
+        try await eventually { filters.completions.contains { $0.kind == "Collection" } }
+        #expect(filters.completions.contains { $0.text == "collection:Trips/Lisbon " })
     }
 
     @Test func `the text and the bar's attributes and columns are one query, each written by the other`() async throws {

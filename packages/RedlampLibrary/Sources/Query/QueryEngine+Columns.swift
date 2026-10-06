@@ -1,12 +1,14 @@
 import Foundation
 import RedlampDocument
 
-/// What a metadata column of the filter bar counts its photos by (LIB-18): a facet, or keywords.
+/// What a metadata column of the filter bar counts its photos by (LIB-18): a facet, keywords or
+/// collections.
 public enum FacetColumn: String, Sendable, Hashable, CaseIterable, Codable {
     case date, camera, lens, iso, focal, aperture, keyword, label, folder, kind, flag, rating
+    case creator, city, country, collection, customLabel
 
-    /// The facet it counts by: days for dates; nil for keywords, which count a photo under each of
-    /// its keywords and those above them.
+    /// The facet it counts by: days for dates; nil for keywords and collections, which count a photo
+    /// under each of its keywords or collections and those above them.
     public var facet: Facet? {
         switch self {
         case .date: .day
@@ -15,16 +17,20 @@ public enum FacetColumn: String, Sendable, Hashable, CaseIterable, Codable {
         case .iso: .iso
         case .focal: .focal
         case .aperture: .aperture
-        case .keyword: nil
+        case .keyword, .collection: nil
         case .label: .label
         case .folder: .folder
         case .kind: .kind
         case .flag: .flag
         case .rating: .rating
+        case .creator: .creator
+        case .city: .city
+        case .country: .country
+        case .customLabel: .customLabel
         }
     }
 
-    /// The field its values filter.
+    /// The field its values filter: a custom label's is `label`.
     public var field: LibraryQuery.Field {
         switch self {
         case .date: .date
@@ -34,11 +40,15 @@ public enum FacetColumn: String, Sendable, Hashable, CaseIterable, Codable {
         case .focal: .focal
         case .aperture: .aperture
         case .keyword: .keyword
-        case .label: .label
+        case .label, .customLabel: .label
         case .folder: .folder
         case .kind: .ext
         case .flag: .flag
         case .rating: .rating
+        case .creator: .creator
+        case .city: .city
+        case .country: .country
+        case .collection: .collection
         }
     }
 }
@@ -62,8 +72,8 @@ public struct FacetColumnCounts: Sendable, Hashable {
     /// The photos the column's query finds in the source.
     public let total: Int
     /// The values, in the value's order, photos without one last (a nil name): for dates, each day;
-    /// for keywords, each keyword and every keyword above one, each counting the photos with it or a
-    /// keyword inside it once.
+    /// for keywords and collections, each one and every one above one, each counting the photos with
+    /// it or one inside it once.
     public let values: [FacetValue]
 
     public init(index: Int, column: FacetColumn, total: Int, values: [FacetValue]) {
@@ -136,11 +146,10 @@ public extension QueryEngine {
                     if let facet = request.column.facet {
                         values = try store.counts(by: facet, of: rows, names: vocabulary.names).values
                     } else {
-                        let postings = try await keywordPostings()
-                        values = try store.keywordCounts(
-                            of: rows,
-                            postings: postings,
-                            levels: vocabulary.keywordLevels(),
+                        let kind = request.column == .collection ? PostingKind.collections : .keywords
+                        values = try await store.levelCounts(
+                            of: rows, postings: postings(kind), levels: vocabulary.levels(of: kind),
+                            field: request.column.field,
                         )
                     }
                     let counts = FacetColumnCounts(
@@ -182,9 +191,14 @@ public extension QueryEngine {
     }
 }
 
-// MARK: - Keywords
+// MARK: - Keywords and collections
 
-/// Each photo's keywords, in the order of their photos' IDs.
+/// What a photo has several of, which a column counts it under each of.
+enum PostingKind: Sendable, Hashable {
+    case keywords, collections
+}
+
+/// Each photo's keywords or collections, in the order of their photos' IDs.
 struct KeywordPostings: Sendable {
     private(set) var pairs: [PhotoKeyword] = []
 
@@ -210,7 +224,8 @@ struct KeywordPostings: Sendable {
     }
 }
 
-/// The library's keywords and every keyword above one, numbered, for counting photos by them.
+/// The library's keywords and every keyword above one, numbered, for counting photos by them; or its
+/// collections and the sets above them.
 struct KeywordLevels: Sendable {
     /// The paths, the keywords' and those above them.
     let paths: [String]
@@ -247,24 +262,25 @@ struct KeywordLevels: Sendable {
 }
 
 extension QueryVocabulary {
-    /// The keywords' levels, made the first time a column of keywords is counted.
-    func keywordLevels() -> KeywordLevels {
+    /// The keywords' or the collections' levels, made the first time a column of them is counted.
+    func levels(of kind: PostingKind) -> KeywordLevels {
         levels.withLock { levels in
-            if let levels {
-                return levels
+            if let made = levels[kind] {
+                return made
             }
-            let made = KeywordLevels(names.keywords)
-            levels = made
+            let made = KeywordLevels(kind == .keywords ? names.keywords : names.collections)
+            levels[kind] = made
             return made
         }
     }
 }
 
 extension ColumnStore {
-    /// How the rows of `matches` count by keyword: each keyword and each one above it counts the photos
-    /// with it or a keyword inside it once, in path order, then the photos without keywords.
-    func keywordCounts(of matches: RowBits, postings: KeywordPostings, levels: KeywordLevels) throws
-        -> [FacetValue] {
+    /// How the rows of `matches` count by keyword or collection (`field`): each one and each one above
+    /// it counts the photos with it or one inside it once, in path order, then the photos with none.
+    func levelCounts(
+        of matches: RowBits, postings: KeywordPostings, levels: KeywordLevels, field: LibraryQuery.Field,
+    ) throws -> [FacetValue] {
         var counts = [Int](repeating: 0, count: levels.paths.count)
         var lastRow = [Int](repeating: -1, count: levels.paths.count)
         var withKeywords = 0
@@ -290,7 +306,7 @@ extension ColumnStore {
             let path = levels.paths[Int(number)]
             values.append(FacetValue(
                 name: path, count: counts[Int(number)],
-                filter: .filter(LibraryQuery.Filter(.keyword, .equal, [.text(path)])),
+                filter: .filter(LibraryQuery.Filter(field, .equal, [.text(path)])),
             ))
         }
         let without = matches.count - withKeywords
@@ -303,8 +319,8 @@ extension ColumnStore {
 /// A term the filter bar offers to complete what's typed (LIB-18): a field's value from the index.
 public struct QueryCompletion: Sendable, Hashable {
     public var field: LibraryQuery.Field
-    /// The value as the library names it: a keyword's path, a camera's or a lens's name, a folder's
-    /// path or a label's.
+    /// The value as the library names it: a keyword's or a collection's path, a camera's or a lens's
+    /// name, a folder's path, or a label's name, a colour's or a custom label's.
     public var value: String
     /// The term as the language writes it: `kw:"Places/Portugal"`, `camera:"X-T5"`.
     public var term: String
@@ -323,29 +339,35 @@ public struct QueryCompletion: Sendable, Hashable {
     }
 
     /// The fields completion has values for, in the order it offers them.
-    public static let fields: [LibraryQuery.Field] = [.keyword, .camera, .lens, .folder, .label]
+    public static let fields: [LibraryQuery.Field] = [.keyword, .camera, .lens, .folder, .label, .collection]
 }
 
 public extension QueryEngine {
-    /// The values of `field`, or of keywords, cameras, lenses, folders and labels when it's nil, that
-    /// `typed` starts or starts a word of, then those it's inside, best first: as the filter bar's
-    /// text completes a term. Nothing runs on the caller's thread.
+    /// The values of `field`, or of keywords, cameras, lenses, folders, labels and collections when
+    /// it's nil, that `typed` starts or starts a word of, then those it's inside, best first: as the
+    /// filter bar's text completes a term. Nothing runs on the caller's thread.
     func completions(_ typed: String, field: LibraryQuery.Field?, limit: Int = 8) async -> [QueryCompletion] {
         let typed = typed.trimmingCharacters(in: .whitespaces)
-        guard !typed.isEmpty, limit > 0, let (_, vocabulary, _) = await loadedSnapshot() else { return [] }
+        guard !typed.isEmpty, limit > 0, let (store, vocabulary, _) = await loadedSnapshot() else { return [] }
+        let customLabels = Array(store.customLabelNames.names.dropFirst())
         return await Task.detached(priority: .userInitiated) {
-            vocabulary.completions(typed, fields: field.map { [$0] } ?? QueryCompletion.fields, limit: limit)
+            vocabulary.completions(
+                typed, fields: field.map { [$0] } ?? QueryCompletion.fields, limit: limit, customLabels: customLabels,
+            )
         }.value
     }
 }
 
 extension QueryVocabulary {
-    func completions(_ typed: String, fields: [LibraryQuery.Field], limit: Int) -> [QueryCompletion] {
+    /// `customLabels` are the custom labels' names the photos have.
+    func completions(
+        _ typed: String, fields: [LibraryQuery.Field], limit: Int, customLabels: [String] = [],
+    ) -> [QueryCompletion] {
         var ranked: [(rank: Int, order: Int, completion: QueryCompletion)] = []
         let folded = Self.fold(typed)
-        func offer(_ field: LibraryQuery.Field, _ names: some Sequence<String>) {
+        func offer(_ field: LibraryQuery.Field, _ names: some Sequence<String>, shown: (String) -> String = { $0 }) {
             for name in names {
-                guard let rank = Self.rank(Self.fold(name), folded) else { continue }
+                guard let rank = Self.rank(Self.fold(shown(name)), folded) else { continue }
                 ranked.append((rank, ranked.count, QueryCompletion(field: field, value: name)))
             }
         }
@@ -359,7 +381,12 @@ extension QueryVocabulary {
             case .camera: offer(.camera, Set(names.cameras.values).sorted())
             case .lens: offer(.lens, Set(names.lenses.values).sorted())
             case .folder: offer(.folder, Set(names.folders.values).sorted())
-            case .label: offer(.label, ColorLabel.allCases.map(\.rawValue))
+            case .label:
+                offer(.label, ColorLabel.allCases.map(\.rawValue))
+                offer(.label, customLabels.sorted { FinderOrder.compare($0, $1) < 0 })
+            case .collection:
+                let paths = Set(names.collections.values).sorted { FinderOrder.compare($0, $1) < 0 }
+                offer(.collection, paths) { CollectionPath($0)?.names.joined(separator: "/") ?? $0 }
             default: break
             }
         }

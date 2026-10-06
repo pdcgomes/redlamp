@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import RedlampDocument
 import RedlampLibrary
 
 /// The Library filter bar (LIB-18), as Lightroom Classic's: Text, Attribute and Metadata over one
@@ -415,9 +416,9 @@ public struct FilterCompletion: Sendable, Hashable {
 
     init(_ completion: QueryCompletion) {
         let title = switch completion.field {
-        case .keyword: KeywordPath(completion.value)?.displayName ?? completion.value
+        case .keyword, .collection: KeywordPath(completion.value)?.displayName ?? completion.value
         case .folder: URL(fileURLWithPath: completion.value).pathComponents.suffix(2).joined(separator: "/")
-        case .label: completion.value.capitalized
+        case .label: ColorLabel(rawValue: completion.value) == nil ? completion.value : completion.value.capitalized
         default: completion.value
         }
         let kind = switch completion.field {
@@ -425,7 +426,8 @@ public struct FilterCompletion: Sendable, Hashable {
         case .camera: "Camera"
         case .lens: "Lens"
         case .folder: "Folder"
-        case .label: "Label"
+        case .label: ColorLabel(rawValue: completion.value) == nil ? "Custom Label" : "Label"
+        case .collection: "Collection"
         default: completion.field.rawValue
         }
         self.init(title: title, kind: kind, text: completion.term + " ")
