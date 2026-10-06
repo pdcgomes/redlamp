@@ -81,7 +81,37 @@ extension SidecarStore {
     static func editData(inSidecar sidecar: URL) throws -> Data? {
         let edit = editURL(inSidecar: sidecar)
         guard isPresent(edit) else { return nil }
-        return try Data(contentsOf: edit)
+        return try contents(of: edit)
+    }
+
+    /// The bytes of `file`, each call a signal interrupts (`EINTR`) made again: a sidecar is never taken for
+    /// unreadable because a read was interrupted.
+    static func contents(of file: URL) throws -> Data {
+        let descriptor = try file.withUnsafeFileSystemRepresentation { path -> Int32 in
+            guard let path else { throw POSIXError(.ENOENT) }
+            while true {
+                let descriptor = open(path, O_RDONLY | O_CLOEXEC)
+                if descriptor >= 0 {
+                    return descriptor
+                }
+                guard errno == EINTR else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+            }
+        }
+        defer { close(descriptor) }
+        var status = stat()
+        let size = fstat(descriptor, &status) == 0 ? Int(status.st_size) : 0
+        var data = Data(capacity: size)
+        var buffer = [UInt8](repeating: 0, count: min(max(size + 1, 4096), 1 << 20))
+        while true {
+            let count = buffer.withUnsafeMutableBytes { read(descriptor, $0.baseAddress, $0.count) }
+            if count > 0 {
+                data.append(contentsOf: buffer[0 ..< count])
+            } else if count == 0 {
+                return data
+            } else if errno != EINTR {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            }
+        }
     }
 
     /// Why the sidecar at `sidecar` must be left as it is; call it under coordination.

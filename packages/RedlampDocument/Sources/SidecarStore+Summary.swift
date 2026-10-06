@@ -26,8 +26,7 @@ public extension SidecarStore {
     /// The summary of the sidecar at `sidecar`, a package or a single file, as `summary(for:)`
     /// reads it.
     static func summary(atSidecar sidecar: URL) -> SidecarSummary? {
-        guard let data = (try? Data(contentsOf: sidecar.appending(path: editFile)))
-            ?? (try? Data(contentsOf: sidecar))
+        guard let data = (try? contents(of: sidecar.appending(path: editFile))) ?? (try? contents(of: sidecar))
         else { return nil }
         struct Probe: Decodable {
             var recipe: EditRecipe

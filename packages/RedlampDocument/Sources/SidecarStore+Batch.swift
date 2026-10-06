@@ -26,9 +26,10 @@ public struct SidecarBatchResult: Sendable {
     /// The photo's place in the batch.
     public let index: Int
     public let image: URL
-    /// The sidecar the change was made from, as `load(for:)` reads it: nil when there's none or it
-    /// can't be read.
+    /// The sidecar the change was made from, as `load(for:)` reads it: nil when there's none, or when it's
+    /// there but can't be read, which fails the photo's change.
     public let sidecar: Sidecar?
+    /// `.keep` for a sidecar that couldn't be read: no change was asked of it.
     public let change: SidecarChange
     public let outcome: Outcome
 }
@@ -36,9 +37,9 @@ public struct SidecarBatchResult: Sendable {
 /// Many photos' sidecars changed at once (LIB-15, LIB-21, LIB-26), each by the rules its own save
 /// keeps: it's read and written under coordination, its change is made from what's on disk then, so
 /// another writer's changes are kept; a sidecar the change leaves as it is isn't written, one this
-/// build can't read or couldn't write back without loss is left alone, and one with conflicting
-/// copies is merged with them first, as `load(for:)` merges them. Each is written as its single save
-/// would write it, byte for byte.
+/// build can't read or couldn't write back without loss is left alone, its change failing, and one
+/// with conflicting copies is merged with them first, as `load(for:)` merges them. Each is written as
+/// its single save would write it, byte for byte.
 ///
 /// Sidecars are coordinated a group at a time, in one round trip to the file coordinator; each is
 /// read once, for its change and the checks; several groups are written at once; and each edit is put
@@ -51,9 +52,11 @@ public extension SidecarStore {
     static let batchGroup = 64
 
     /// Changes the sidecars of `images`, `make` deciding each one's change from the sidecar as it is
-    /// then (nil: there's none, or it can't be read), `width` groups at a time. `done` hears of each
-    /// as it's done, from any thread; once `stopped` says so, no more are started, and the batch
-    /// returns when those under way are done. A failure is that sidecar's alone: the rest go on.
+    /// then (nil: there's none), `width` groups at a time. A sidecar that's there but can't be read, or
+    /// doesn't decode, fails without `make` hearing of it: taken for none, its change could be written
+    /// over it, or found to change nothing. `done` hears of each as it's done, from any thread; once
+    /// `stopped` says so, no more are started, and the batch returns when those under way are done. A
+    /// failure is that sidecar's alone: the rest go on.
     ///
     /// `make` and `done` run while the batch coordinates the sidecars around theirs, so they must not
     /// read or write them through a store.
@@ -148,10 +151,12 @@ extension SidecarStore {
         _ make: @Sendable (Int, Sidecar?) -> SidecarChange,
     ) -> SidecarBatchResult? {
         let edit = Result { try Self.editData(inSidecar: write) }
-        let sidecar = if read.path == write.path {
-            (try? edit.get()).flatMap { Self.decode($0, inSidecar: write) }
-        } else {
-            Self.decode(sidecar: read)
+        let sidecar: Sidecar?
+        do {
+            sidecar = try read.path == write.path
+                ? Self.found(edit.get(), at: write) : Self.found(Self.editData(inSidecar: read), at: read)
+        } catch {
+            return Self.unreadable(place, error)
         }
         if sidecar != nil, !conflicts.versions(write).isEmpty {
             return nil
@@ -192,7 +197,12 @@ extension SidecarStore {
     /// The place's change made as a single save makes it: the sidecar loaded, which merges its
     /// conflicting copies, changed, and saved.
     private func changeAlone(_ place: Place, _ make: @Sendable (Int, Sidecar?) -> SidecarChange) -> SidecarBatchResult {
-        let sidecar = load(for: place.image)
+        let sidecar: Sidecar?
+        do {
+            sidecar = try loadForChange(for: place.image)
+        } catch {
+            return Self.unreadable(place, error)
+        }
         let change = make(place.index, sidecar)
         let outcome: SidecarBatchResult.Outcome = switch change {
         case .keep: .kept
@@ -206,6 +216,31 @@ extension SidecarStore {
             change: change,
             outcome: outcome,
         )
+    }
+
+    /// `load(for:)`, but throwing where it finds none because the sidecar can't be read.
+    func loadForChange(for image: URL) throws -> Sidecar? {
+        let sidecar = locator.readURL(for: image)
+        guard let loaded = try Self.reading(sidecar, { try Self.found(Self.editData(inSidecar: $0), at: $0) }) else {
+            return nil
+        }
+        return resolveConflicts(loaded, for: image) ?? loaded
+    }
+
+    /// The sidecar at `sidecar` whose edit is `data`, as a change finds it: nil when there's none. Throws why
+    /// it must be left as it is when it's there but doesn't decode.
+    static func found(_ data: Data?, at sidecar: URL) throws -> Sidecar? {
+        guard let data else { return nil }
+        if let decoded = decode(data, inSidecar: sidecar) {
+            return decoded
+        }
+        _ = try existing(data, at: sidecar)
+        throw SidecarStoreError.unreadable(sidecar)
+    }
+
+    /// The result of a place whose sidecar couldn't be read: failed, with nothing asked of it.
+    private static func unreadable(_ place: Place, _ error: any Error) -> SidecarBatchResult {
+        SidecarBatchResult(index: place.index, image: place.image, sidecar: nil, change: .keep, outcome: .failed(error))
     }
 
     private static func outcome(_ save: () throws -> Void) -> SidecarBatchResult.Outcome {
@@ -241,16 +276,23 @@ extension SidecarStore {
         let temporary = file.deletingLastPathComponent()
             .appending(path: ".\(file.lastPathComponent).\(UUID().uuidString)")
         try create(data, at: temporary)
-        guard rename(temporary.path, file.path) == 0 else {
-            let error = POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
-            unlink(temporary.path)
-            throw error
+        while rename(temporary.path, file.path) != 0 {
+            guard errno == EINTR else {
+                let error = POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+                unlink(temporary.path)
+                throw error
+            }
         }
     }
 
-    /// Writes `data` to a new file at `file`; on failure, none is left there.
+    /// Writes `data` to a new file at `file`; on failure, none is left there. Calls a signal interrupts
+    /// (`EINTR`) are made again.
     static func create(_ data: Data, at file: URL) throws {
-        let descriptor = open(file.path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0o644)
+        var descriptor = open(file.path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0o644)
+        while descriptor < 0, errno == EINTR {
+            // The name is new to this write, so a file an interrupted call made there is its own.
+            descriptor = open(file.path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0o644)
+        }
         guard descriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
         var failure: POSIXError?
         data.withUnsafeBytes { bytes in
@@ -264,7 +306,8 @@ extension SidecarStore {
                 }
             }
         }
-        if close(descriptor) != 0, failure == nil {
+        // An interrupted close has closed the descriptor all the same, and the bytes are written.
+        if close(descriptor) != 0, errno != EINTR, failure == nil {
             failure = POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
         if let failure {

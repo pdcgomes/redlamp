@@ -223,6 +223,110 @@ struct SidecarBatchTests {
         #expect(store.load(for: locked)?.metadata?.keywords == nil, "the edit that couldn't be opened is as it was")
     }
 
+    @Test func `a sidecar that can't be read fails its photo's change, and is never taken for none`() throws {
+        let shoot = try Shoot()
+        defer { shoot.remove() }
+        let store = SidecarStore()
+        let locked = shoot.url("B.ARW")
+        let edit = store.editURL(for: locked)
+        let before = try Data(contentsOf: edit)
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: edit.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: edit.path) }
+        let asked = Mutex<Set<Int>>([])
+        // As an Undo decides: a photo without a sidecar has nothing to put back.
+        let results = Self.batch(store, shoot.images, width: 2, group: 3) { number, sidecar in
+            asked.withLock { _ = $0.insert(number) }
+            return sidecar == nil ? .keep : Self.tagged(sidecar)
+        }
+        let place = try #require(shoot.images.firstIndex(of: locked))
+        #expect(Self.failed(results[place]) as? SidecarStoreError == .unreadable(store.url(for: locked)))
+        #expect(!asked.withLock { $0.contains(place) }, "nothing is asked of it")
+        #expect(results.count == shoot.images.count)
+        #expect(results.filter { $0.key != place }.values.allSatisfy { Self.failed($0) == nil })
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: edit.path)
+        #expect(try Data(contentsOf: edit) == before)
+    }
+
+    @Test func `a sidecar kept beside its photo that can't be read isn't written over where it's kept now`() throws {
+        let shoot = try Shoot()
+        defer { shoot.remove() }
+        let store = SidecarStore(locator: SidecarLocator(folder: shoot.folder.appending(path: "Mac"), roots: [
+            SidecarLocator.Root(path: shoot.photos.path, volume: "VOLUME", pathInVolume: "Shoot", onThisMac: true),
+        ]))
+        let locked = shoot.url("B.ARW")
+        let beside = SidecarStore().editURL(for: locked)
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: beside.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: beside.path) }
+        #expect(store.locator.readURL(for: locked) == SidecarStore().url(for: locked), "read from beside it")
+
+        let results = Self.batch(store, [locked]) { _, sidecar in Self.tagged(sidecar) }
+        #expect(Self.failed(results[0]) as? SidecarStoreError == .unreadable(SidecarStore().url(for: locked)))
+        #expect(
+            !FileManager.default.fileExists(atPath: store.url(for: locked).path),
+            "no sidecar that would hide its edit is made on this Mac",
+        )
+    }
+
+    // MARK: - Interrupted calls
+
+    /// What a read on another thread found, and the thread, for signals to reach it.
+    final class Reading: Sendable {
+        let thread = Atomic<UInt>(0)
+        let found = Mutex<(data: Data?, error: String?)>((nil, nil))
+    }
+
+    @Test func `a read a signal interrupts is made again`() throws {
+        let shoot = try Shoot()
+        defer { shoot.remove() }
+        let sidecar = SidecarStore().url(for: shoot.url("A.ARW"))
+        try FileManager.default.createDirectory(at: sidecar, withIntermediateDirectories: false)
+        let edit = sidecar.appending(path: SidecarStore.editFile)
+        // A pipe: reading it waits in `open` for its writer, where a signal interrupts it.
+        #expect(mkfifo(edit.path, 0o644) == 0)
+        var action = sigaction()
+        action.__sigaction_u.__sa_handler = { _ in }
+        sigemptyset(&action.sa_mask)
+        var previous = sigaction()
+        sigaction(SIGUSR1, &action, &previous)
+        defer { sigaction(SIGUSR1, &previous, nil) }
+
+        let reading = Reading()
+        let finished = DispatchSemaphore(value: 0)
+        Thread {
+            reading.thread.store(UInt(bitPattern: pthread_self()), ordering: .releasing)
+            do {
+                let data = try SidecarStore.editData(inSidecar: sidecar)
+                reading.found.withLock { $0 = (data, nil) }
+            } catch {
+                reading.found.withLock { $0 = (nil, "\(error)") }
+            }
+            finished.signal()
+        }.start()
+        Thread.sleep(forTimeInterval: 0.1)
+        for _ in 0 ..< 10 {
+            if let thread = pthread_t(bitPattern: reading.thread.load(ordering: .acquiring)) {
+                pthread_kill(thread, SIGUSR1)
+            }
+            Thread.sleep(forTimeInterval: 0.01)
+        }
+        let bytes = Data(#"{"format":"app.redlamp.edit","recipe":{"version":3,"processVersion":1}}"#.utf8)
+        // Without blocking, so a read that gave up can't hold the test: a pipe has no writer without a reader.
+        var writer: Int32 = -1
+        for _ in 0 ..< 500 where writer < 0 && finished.wait(timeout: .now()) == .timedOut {
+            writer = open(edit.path, O_WRONLY | O_NONBLOCK)
+            if writer < 0 {
+                Thread.sleep(forTimeInterval: 0.01)
+            }
+        }
+        if writer >= 0 {
+            _ = bytes.withUnsafeBytes { Darwin.write(writer, $0.baseAddress, $0.count) }
+            close(writer)
+            #expect(finished.wait(timeout: .now() + 10) == .success)
+        }
+        let found = reading.found.withLock { $0 }
+        #expect(found.data == bytes && found.error == nil, "\(found)")
+    }
+
     // MARK: - Conflicting copies
 
     @Test func `conflicting copies are merged first, as a single save merges them`() throws {
