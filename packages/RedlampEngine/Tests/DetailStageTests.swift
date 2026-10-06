@@ -404,6 +404,57 @@ struct DetailStageTests {
         }
     }
 
+    /// Noise reduction reads only the masks that set Noise, and only that amount, so dragging a
+    /// mask's Texture, Clarity or Sharpness reads the kept source or ladder; its Noise doesn't.
+    @Test(arguments: [10, EditRecipe.currentProcessVersion])
+    func `a mask's other amounts leave noise reduction alone`(process: Int) throws {
+        let session = try makeSession(.bayer, width: 640, height: 480) { x, y in
+            Float(0.2 + 0.1 * sin(Double(x) / 3) * cos(Double(y) / 5))
+        }
+        let stage = DetailStage(device: device, kernels: kernels)
+        var recipe = Self.everyPassBeforeLadder
+        recipe.processVersion = process
+        var noise = leftHalf(.localNoise, 40)
+        noise[.localTexture] = 20
+        recipe.masks = [noise, leftHalf(.localClarity, 30)]
+        _ = try processAndRead(stage, session, recipe)
+        let drags: [(mask: Int, ParameterID, Double, reduces: Bool)] = [
+            (1, .localClarity, 60, false), (1, .localTexture, -30, false), (1, .localSharpness, 40, false),
+            (0, .localTexture, 50, false), (0, .localNoise, 60, true),
+        ]
+        for (mask, parameter, value, reduces) in drags {
+            recipe.masks[mask][parameter] = value
+            let before = stage.noiseReductions
+            let cached = try processAndRead(stage, session, recipe).texels
+            let reductions = stage.noiseReductions - before
+            #expect(reduces ? reductions > 0 : reductions == 0, "\(parameter): \(reductions) noise reductions")
+            let fresh = try processAndRead(DetailStage(device: device, kernels: kernels), session, recipe).texels
+            #expect(EngineMemoryTests.differing(cached, fresh) == 0, "\(parameter)")
+        }
+    }
+
+    /// A process 10 render's kept source doesn't hide process 11's ladder for the same area.
+    @Test func `switching between processes 10 and 11 keeps both`() throws {
+        let session = try makeSession(.bayer, width: 640, height: 480) { x, y in
+            Float(0.2 + 0.1 * sin(Double(x) / 3) * cos(Double(y) / 5))
+        }
+        let stage = DetailStage(device: device, kernels: kernels)
+        var kept = Self.everyPassBeforeLadder
+        var ladder = kept
+        ladder.processVersion = 11
+        _ = try processAndRead(stage, session, kept)
+        _ = try processAndRead(stage, session, ladder)
+        ladder[.texture] = 60
+        kept[.texture] = 60
+        for recipe in [ladder, kept] {
+            let before = stage.noiseReductions
+            let cached = try processAndRead(stage, session, recipe).texels
+            #expect(stage.noiseReductions == before, "process \(recipe.processVersion)")
+            let fresh = try processAndRead(DetailStage(device: device, kernels: kernels), session, recipe).texels
+            #expect(EngineMemoryTests.differing(cached, fresh) == 0, "process \(recipe.processVersion)")
+        }
+    }
+
     /// With the noise-reduced source kept, tiles overlap by only what sharpening and local contrast
     /// read of it, and a halo short of that shows.
     @Test func `a halo short of the kept source's reach shows`() throws {

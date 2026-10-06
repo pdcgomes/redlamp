@@ -50,18 +50,24 @@ struct LadderKey: Hashable {
     var session: ObjectIdentifier
     var work: DetailStage.WorkArea
     var denoise: DenoiseSettings?
-    /// The masks, when any sets Noise, which noise reduction reads.
+    /// The masks that set Noise, which noise reduction reads.
     var local: LocalDetail?
     /// Whether masks' amounts are bound at Luminance 0: noise reduction then runs its energy and
     /// non-local passes, which it otherwise leaves out.
     var masked = false
+    /// Process 11's ladder, or before it the noise-reduced source alone.
+    var decomposes: Bool
 
-    init(session: ObjectIdentifier, work: DetailStage.WorkArea, denoise: DenoiseSettings?, local: LocalDetail) {
+    init(
+        session: ObjectIdentifier, work: DetailStage.WorkArea, denoise: DenoiseSettings?, local: LocalDetail,
+        decomposes: Bool,
+    ) {
         self.session = session
         self.work = work
         self.denoise = denoise
-        self.local = local.uses(3) ? local : nil
+        self.local = local.noise
         masked = !local.isEmpty && denoise?.luma == 0
+        self.decomposes = decomposes
     }
 }
 
@@ -135,7 +141,9 @@ final class LadderCache {
     /// Before process 11: keeps `denoised` as its area's only noise-reduced source, dropping those
     /// of other photos, so the stage holds one per area of the photo being edited.
     func keep(denoised: any MTLTexture, key: LadderKey, owner: ImageSession) {
-        entries.removeAll { $0.ladder == nil && ($0.key.session != key.session || $0.key.work == key.work) }
+        entries.removeAll {
+            $0.ladder == nil && ($0.key.session != key.session || ($0.key.work == key.work && !$0.key.decomposes))
+        }
         store(denoised: denoised, key: key, owner: owner)
     }
 
@@ -144,6 +152,7 @@ final class LadderCache {
     func reclaimDenoised(_ key: LadderKey) -> (any MTLTexture)? {
         guard let index = entries.firstIndex(where: {
             $0.ladder == nil && $0.key.session == key.session && $0.key.work == key.work
+                && $0.key.decomposes == key.decomposes
         }) else { return nil }
         let entry = entries.remove(at: index)
         guard let texture = entry.denoised, residency.wake(texture) else { return nil }

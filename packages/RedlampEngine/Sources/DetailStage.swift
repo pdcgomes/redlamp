@@ -257,6 +257,24 @@ struct LocalDetail: Hashable {
     func uses(_ amount: Int) -> Bool {
         layers.contains { $0.amounts[amount] != 0 }
     }
+
+    /// What noise reduction reads of the masks, which sum each amount on its own: the layers that
+    /// set Noise, with only that amount. Nil when none does.
+    var noise: LocalDetail? {
+        var noise = self
+        noise.layers = layers.filter { $0.amounts.w != 0 }.map { layer in
+            var layer = layer
+            layer.amounts = SIMD4(0, 0, 0, layer.amounts.w)
+            return layer
+        }
+        guard !noise.isEmpty else { return nil }
+        let ids = Set(noise.layers.flatMap { MaskLayer(name: "", components: $0.components).referencedMasks })
+        noise.referenced = referenced.filter { ids.contains($0.id) }
+        if !noise.readsEditGuide {
+            noise.guideGeneration = 0
+        }
+        return noise
+    }
 }
 
 /// The Detail panel, plus Texture and Clarity, as a cached spatial stage in front of the fused
@@ -461,7 +479,8 @@ final class DetailStage {
         let texture = try makeWorkTexture(.rgba16Float, work)
         let sigma = key.sharpen?.sigma(atLevel: work.level) ?? 0
         let ladderKey = passes.decomposes
-            ? LadderKey(session: key.session, work: work, denoise: key.denoise, local: key.local) : nil
+            ? LadderKey(session: key.session, work: work, denoise: key.denoise, local: key.local, decomposes: true)
+            : nil
         var ladder = ladderKey.map { LadderMeasures(ladder: ladderCache.ladder($0)) }
         let cachesLadder = cache && work.size.x * work.size.y <= ladderCacheTexels
         // Kept only where it leaves at least half the scratch budget for the tiles.
@@ -474,7 +493,8 @@ final class DetailStage {
         // larger areas do, outside the scratch budget as a ladder is.
         let sourceKey = cache && !passes.decomposes && key.denoise != nil && (key.sharpen != nil || key.contrast != nil)
             && work.size.x * work.size.y <= ladderCacheTexels
-            ? LadderKey(session: key.session, work: work, denoise: key.denoise, local: key.local) : nil
+            ? LadderKey(session: key.session, work: work, denoise: key.denoise, local: key.local, decomposes: false)
+            : nil
         var kept = sourceKey.map { KeptSource(given: ladderCache.denoised($0)) }
         if kept != nil, kept?.given == nil, let sourceKey {
             kept?.target = try ladderCache.reclaimDenoised(sourceKey) ?? makeWorkTexture(.rgba16Float, work)
