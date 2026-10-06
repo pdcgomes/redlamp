@@ -6,82 +6,90 @@ cover: /synced/images/hero.png
 coverAlt: Redlamp editing a raw photo of a dancer in a street parade, with Lightroom-style panels on the right
 ---
 
-Hello, I'm Pedro. I'm originally from Portugal, London has been my home for the past 14 years, and I've been a software engineer since 2003. I'm also a hobbyist photographer, and I love the editing as much as the shooting.
+I'm a software engineer and a hobbyist photographer. I'm originally from Portugal, I've lived in London for the past fourteen years, and I've been writing software professionally since 2003. Photography has been a fairly constant interest, and I enjoy editing as much as taking the photos.
 
-Like so many others, I started out editing in Photoshop and moved to Lightroom. It was simpler and more focused. It felt less powerful, and it was, but it was the better tool **for me**. I owned it, and I paid to upgrade whenever a new version was worth it. Then Lightroom became a subscription, and things got confusing: Lightroom Classic, Lightroom, Lightroom Mobile, a web version, different feature sets, cloud and no cloud. I adapted, but I wasn't happy.
+Like many people, I started with Photoshop and eventually moved to Lightroom. It was more focused and suited the way I wanted to work. I bought a licence and paid for upgrades when they felt worthwhile.
 
-This isn't about criticising Adobe, which has essentially defined the gold standard in several industries. I've worked for very large companies myself, and I understand how decisions like these come about, and how hard it can be to do the right thing even when it's obvious. I just want there to be a real alternative.
+The move to a subscription wasn't something I was particularly happy about. Over time, the product also became harder to follow: Lightroom Classic, Lightroom, mobile and web versions, different capabilities, and different approaches to local and cloud storage. I adapted, but I've wanted a credible alternative for a long time.
 
-Meanwhile, software engineering has changed. Given enough tokens, persistence and patience, we can build almost anything now. Execution, and how much of it you can do, no longer sets anyone apart: everyone is, or can be, an absolute machine. So I've doubled down on product thinking, and on the itches I've always wanted to scratch. A legitimate alternative to Lightroom is near the top of that list, and it comes with a question I couldn't resist: how close can one person really get?
+I have a lot of respect for what Adobe has built. I've also worked in very large companies, and I understand that decisions which seem obvious from outside can be difficult to make from within. Still, as a user, I'd like more choice.
 
-The shell is the easy part. Any decent model can write a Lightroom-like application that looks good, feels good, responds quickly and offers the same interface. But that isn't where the real value is. Behind Lightroom is real research, and access to specialist equipment and people: cameras, scanners, film stock, lenses and experts. That's Adobe's IP, and arguably where most of its value lies.
+## Why attempt it now?
 
-To be completely honest, I know almost nothing about color science and little about chemistry, and beyond a flood fill, I'd never dabbled in the kind of algorithms tools like Lightroom use. That's the beauty of the era we live in: any fool, like me, can wield great power and pretend to be an expert in many, many domains.
+AI has changed how much software I can build on my own. With enough iteration, I can explore ideas that I would previously have dismissed because of the time and people they'd require.
 
-Still, I'd never seriously considered attempting it. Products like Lightroom take a village: people with different skills, strengths and weaknesses, and more hours between them than one person has once sleep, family and friends have had their share. It turns out that, within reason, that's no longer true.
+That has made me spend more time thinking about products I've always wanted to exist. A Lightroom alternative is fairly high on that list. It also raises a question I find interesting: how far can one person get with the tools we have now?
 
-So here we are. It's the 1st of October, and the first pre-alpha of Redlamp is out, two days after I started. It's a competent raw editor, with a lot of the advanced, non-trivial functionality we now take for granted. Two years ago, getting this far would have taken a substantial team of engineers and researchers, significant funding and at least a few years of work.
+Building the interface is relatively straightforward. A model can produce an application with familiar panels and sliders, and it can look convincing quite quickly. But there's a substantial amount of work behind a photo editor that you don't see in the interface: colour science, camera behaviour, lens corrections, film characteristics, and the research and measurements that make those things reliable.
 
-Two. Days.
+I don't have much background in those areas. Before this project, I'd done very little with the algorithms used in raw processing, and I know little about colour science or chemistry. AI helps me investigate and implement things I couldn't have tackled alone, but I still need ways to establish whether the results are correct.
 
-I'm not suggesting everyone should go and build their own version of everything, but it does mean one person can now offer a legitimate alternative to software that used to need a large company behind it. Two days gets you a pre-alpha, though, not a Lightroom.
+That's part of what makes this project interesting to me. I can get much further with the implementation than I could before, while also having to learn how to evaluate work in areas where I'm not an expert.
 
-The parts that take real expertise, like the color science, the cameras I don't own and how each film stock really looks, are exactly where one person runs out. That's where the village comes back in: people who shoot raw trying it on their own photos, and people who know this field far better than I do telling me where it's wrong.
+Today, 1 October, I've released the first pre-alpha of Redlamp, two days after starting it. It already has a fairly capable raw editing workflow, including some features that are far from trivial to implement.
 
-Here it is: Redlamp.
+I'm surprised by how quickly it has come together. I'm also conscious that getting to a working pre-alpha says very little about how long it will take to build an editor people can depend on. Camera compatibility, rendering quality and the details of everyday use need much more testing.
 
-## What it is
+I'd like people who shoot raw to try it on their own photos, and people who understand these areas better than I do to tell me where it's wrong.
 
-If you know Lightroom's Develop module, you already know your way around. The panels are in the same order, the sliders have the same names and ranges, and Lightroom Classic's shortcuts work. Underneath, it's a native app that renders on the GPU, so it keeps up while you drag a slider.
+## What Redlamp does today
 
-It's an editor, not a catalog. You open a folder, and your edits are saved in a small file next to each photo, so the originals are never touched. There's no import step and no library to manage, and your photos never leave your Mac.
+The editing interface should feel familiar if you use Lightroom Classic. The Develop panels are in the same order, the sliders use the same names and ranges, and Lightroom Classic's keyboard shortcuts work. It's a native macOS app with GPU rendering, so adjustments update as you drag a slider.
 
-## What works today
+In this first release, you open a folder and start editing. Edits are stored in sidecar files beside the photos, leaving the originals untouched. There's no import step or catalog to manage, and your photos stay on your Mac.
 
-- **The Develop panels:** Basic (with Texture, Clarity and Dehaze), Tone Curve, Color Mixer, Color Grading, Detail and Effects.
-- **Masks:** gradients, a brush, color and luminance ranges, and AI masks that run on your Mac: subject, sky, background and people, down to face skin, eyes and teeth.
-- **36 film looks**, built from the manufacturers' datasheets, each with its stock's own curves and grain, plus halation and bloom. There are Fujifilm-style recipes too.
-- **Recipes**, Redlamp's name for presets, profiles and LUTs in one. Hover to preview, click to apply, and bring in your own `.cube` files.
-- **Export** to JPEG, HEIC, TIFF and PNG.
+The current feature set includes:
 
-![Redlamp's Masks panel, with a radial gradient over a tree shown in red](/synced/images/masking.png "Masks combine as Lightroom's do, by adding, subtracting and intersecting, and each has its own sliders.")
+- The Basic, Tone Curve, Color Mixer, Color Grading, Detail and Effects panels, including Texture, Clarity and Dehaze.
+- Gradient, brush, colour range and luminance range masks. Local AI masks can select subjects, sky, background and people, including face skin, eyes and teeth.
+- Thirty-six film looks built from manufacturers' datasheets, with stock-specific curves and grain, plus halation and bloom. There are also Fujifilm-style recipes.
+- Recipes that bring presets, profiles and LUTs together. You can preview them by hovering, apply them with a click, and import your own `.cube` files.
+- Export to JPEG, HEIC, TIFF and PNG.
 
-![The Film Looks window, previewing film stocks on the same photo](/synced/images/film-catalog.png "The Film Looks window previews every stock on your photo.")
+![Redlamp's Masks panel, with a radial gradient over a tree shown in red](/synced/images/masking.png "Masks support adding, subtracting and intersecting selections, with a separate set of adjustments for each mask.")
 
-## What it isn't yet
+![The Film Looks window, previewing film stocks on the same photo](/synced/images/film-catalog.png "The Film Looks window lets you compare the stocks using your own photo.")
 
-It's pre-alpha. It needs an Apple Silicon Mac on macOS 26 or later, and there's no crop, healing or lens corrections yet; those are next. Fujifilm's X-Trans files open, but their demosaic is a first version. And this first release can't update itself, so Homebrew is the easiest way to stay current.
+## What's still missing
 
-## Try it
+This is a pre-alpha. It requires an Apple Silicon Mac running macOS 26 or later, and it doesn't yet have crop, healing or lens corrections. Those are next on the list.
+
+Fujifilm X-Trans files open, but the demosaicing implementation is an initial version. Only a handful of cameras have been properly tested so far, so there's plenty of room for problems I haven't seen on my own files.
+
+The first release also has no automatic updater. For now, Homebrew is the easiest way to stay current.
+
+## Installing it
 
 ```
 brew tap pdcgomes/redlamp https://github.com/pdcgomes/redlamp
 brew install --cask redlamp
 ```
 
-Or download the app from the [latest release](https://github.com/pdcgomes/redlamp/releases/latest); it's signed and notarized. When a new version comes out, `brew upgrade --cask redlamp` gets it.
+You can also download the signed and notarised app from the [latest release on GitHub](https://github.com/pdcgomes/redlamp/releases/latest).
 
-## How you can help
+With Homebrew, updating is:
 
-Open your own raws, edit them the way you normally would, and tell me what breaks or looks wrong. Only a handful of cameras have been properly checked so far, so whatever you shoot is useful.
+```
+brew upgrade --cask redlamp
+```
 
-Please report what you find as a [GitHub issue](https://github.com/pdcgomes/redlamp/issues); a free GitHub account is all you need. These make a report much easier to act on:
+## Feedback that would help
 
-- your camera model and macOS version
-- the raw file, if you can share it
-- for a photo that looks wrong, a screenshot alongside your camera's JPEG or Lightroom's version
+The most useful thing you can do is open your own raw files, edit them as you normally would, and tell me what breaks or looks wrong. Camera coverage is still limited, so testing files from whatever you shoot is helpful.
 
-If you know color science, film or cameras far better than I do, I'd especially like to hear where Redlamp gets them wrong, and [the code is open](https://github.com/pdcgomes/redlamp#contributing) if you'd like to dig in. Feature requests are welcome too.
+Please report problems through [GitHub issues](https://github.com/pdcgomes/redlamp/issues). Include your camera model and macOS version, and, if you're able to share it, the raw file. For rendering problems, a screenshot alongside the camera's JPEG or Lightroom's rendering makes it much easier to understand the difference.
 
-And if you can share sample files under CC0, [raw.pixls.us](https://raw.pixls.us) collects them; that's how cameras get added to Redlamp's test suite.
+If you have experience with colour science, film or raw processing, I'd especially welcome feedback on those parts. The [code is open](https://github.com/pdcgomes/redlamp#contributing) if you want to inspect the implementation or contribute. Feature requests are welcome too.
 
-## What's next
+Sample raws shared under CC0 through [raw.pixls.us](https://raw.pixls.us) can be added to Redlamp's test suite, so they help beyond a single bug report.
 
-The next release, 0.2.0, will update itself. It also brings two things that already work in the development version: a full Export dialog, and ⌘K, a command palette that reaches every control from the keyboard. After that come crop, healing and lens corrections.
+## What I'm working on next
 
-I'll also write here about how Redlamp is built, starting with how the film looks come from datasheets and what it took to keep a slider drag smooth. There's an [RSS feed](/blog/feed.xml) if you'd like to follow along.
+The next release, 0.2.0, will add automatic updates. It will also include the full Export dialog and a command palette, opened with ⌘K, which already work in the development version. Crop, healing and lens corrections follow after that.
 
-If you'd rather watch than read, here's Redlamp in 24 seconds:
+I'll use this blog to write about the work as it develops, including how the film looks are derived from datasheets and what was involved in keeping slider adjustments responsive. You can follow it through the [RSS feed](/blog/feed.xml).
+
+There's also a 24-second video of Redlamp if you'd like to see it running:
 
 <figure>
 <video src="/video/redlamp-explainer.mp4" poster="/video/redlamp-explainer-poster.jpg" controls playsinline preload="none"></video>

@@ -26,7 +26,7 @@ When the work is a feature with milestones, each made of tracker rows (the libra
 - Fill in `BOARD`, `MILESTONES` (each row with its tracker ID, issue and state), `LATER`, `NOW`, `AGENTS`, `DOCS` and `workstream`; leave the rendering alone.
 - A row's state is `done` (merged where it ships, its done-when met), `built` (merged and tested, with a check at scale or a small part left, which its note names), `doing`, `you` (waiting on the owner) or `todo`. Never call a row done that the tracker doesn't.
 - Everything below applies to boards too: the owner's marks first, one step per todo, updates in the same turn, and only what was verified.
-- For a post or a report, [capture.py](capture.py) renders a canvas outside Cursor with Cursor's own canvas runtime and captures its sections (its docstring has the commands); the blog post How I run a feature too big for one chat was illustrated with it.
+- For a post or a report, [capture.py](capture.py) renders a canvas outside Cursor with Cursor's own canvas runtime and captures its sections (its docstring has the commands); the blog post How I manage a large feature across AI agents was illustrated with it.
 
 ## A plan's todos are its steps
 
