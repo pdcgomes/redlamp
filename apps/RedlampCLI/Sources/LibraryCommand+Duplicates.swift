@@ -118,8 +118,9 @@ extension LibraryCommand {
         }
     }
 
-    /// Checks the plan's copies and those kept for them again, with its progress on stderr, and moves
-    /// the copies to the Trash; or says what stopped them, nothing having moved.
+    /// Checks the plan's copies and those kept for them again, with its progress on stderr and then how
+    /// long reading them took, and moves the copies to the Trash; or says what stopped them, nothing
+    /// having moved.
     private static func moving(
         _ plan: DuplicateRemovalPlan, _ batch: FileBatch, finder: DuplicateFinder, operations: FileOperations,
     ) async throws -> DuplicateRemovalPlan.Outcome {
@@ -127,9 +128,22 @@ extension LibraryCommand {
         report("checking the \(count(plan.removals.count)) copies and those kept for them again: \(count(files)) files")
         let clock = ContinuousClock()
         let reported = Mutex(clock.now)
+        let read = Mutex<(progress: DuplicateFinder.Progress, at: ContinuousClock.Instant)?>(nil)
         let started = clock.now
+        defer {
+            if let (progress, at) = read.withLock({ $0 }) {
+                let seconds = max((at - started).seconds, 1e-9)
+                report(
+                    "\(count(progress.done)) files read again, \(megabytes(progress.bytesRead)) in "
+                        + String(format: "%.2f s (%.0f MB/s)", seconds, Double(progress.bytesRead) / 1e6 / seconds),
+                )
+            }
+        }
         do {
             let moved = try await finder.trash(plan, batch, operations: operations) { progress in
+                if progress.candidates > 0, progress.done == progress.candidates {
+                    read.withLock { $0 = (progress, clock.now) }
+                }
                 let due = reported.withLock { last in
                     guard clock.now - last >= .seconds(1) else { return false }
                     last = clock.now
