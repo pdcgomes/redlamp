@@ -18,14 +18,14 @@ enum FaceParts {
         case .eyebrows: face.eyebrows()
         case .iris: face.iris()
         case .eyeSclera: face.sclera()
-        case .faceSkin: face.skin(people: people)
+        case .faceSkin: face.skin(people: people, pixels: pixels)
         case .teeth: pixels.flatMap(face.teeth)
         case .entirePerson, .bodySkin, .hair, .facialHair, .clothes: nil
         }
     }
 
     /// One face's landmark regions, in image points of `size` (bottom-left origin).
-    private struct Face {
+    struct Face {
         let size: PixelSize
         let contour: [CGPoint]
         let eyes: [[CGPoint]]
@@ -37,18 +37,33 @@ enum FaceParts {
         let eyeWidth: CGFloat
 
         init(_ landmarks: VNFaceLandmarks2D, size: PixelSize) {
-            self.size = size
             let imageSize = CGSize(width: size.width, height: size.height)
             func polygon(_ region: VNFaceLandmarkRegion2D?) -> [CGPoint] {
                 region?.pointsInImage(imageSize: imageSize) ?? []
             }
-            contour = polygon(landmarks.faceContour)
-            eyes = [polygon(landmarks.leftEye), polygon(landmarks.rightEye)].filter { $0.count >= 3 }
-            pupils = [polygon(landmarks.leftPupil), polygon(landmarks.rightPupil)].compactMap(\.first)
-            brows = [polygon(landmarks.leftEyebrow), polygon(landmarks.rightEyebrow)].filter { $0.count >= 2 }
-            outerLips = polygon(landmarks.outerLips)
-            innerLips = polygon(landmarks.innerLips)
-            eyeWidth = eyes.map { points in
+            self.init(
+                size: size,
+                contour: polygon(landmarks.faceContour),
+                eyes: [polygon(landmarks.leftEye), polygon(landmarks.rightEye)],
+                pupils: [polygon(landmarks.leftPupil), polygon(landmarks.rightPupil)].compactMap(\.first),
+                brows: [polygon(landmarks.leftEyebrow), polygon(landmarks.rightEyebrow)],
+                outerLips: polygon(landmarks.outerLips),
+                innerLips: polygon(landmarks.innerLips),
+            )
+        }
+
+        init(
+            size: PixelSize, contour: [CGPoint], eyes: [[CGPoint]], pupils: [CGPoint], brows: [[CGPoint]],
+            outerLips: [CGPoint], innerLips: [CGPoint],
+        ) {
+            self.size = size
+            self.contour = contour
+            self.eyes = eyes.filter { $0.count >= 3 }
+            self.pupils = pupils
+            self.brows = brows.filter { $0.count >= 2 }
+            self.outerLips = outerLips
+            self.innerLips = innerLips
+            eyeWidth = self.eyes.map { points in
                 (points.map(\.x).max() ?? 0) - (points.map(\.x).min() ?? 0)
             }.max() ?? 0
         }
@@ -102,22 +117,29 @@ enum FaceParts {
             }
         }
 
-        /// The face outline (closed above the brows for the forehead), within the person, less
-        /// the eyes, brows and lips.
-        func skin(people: GrayMask?) -> GrayMask? {
+        /// The face outline (closed a little above the brows), within the person, less the eyes,
+        /// brows and lips. With the photo's pixels, the forehead then reaches up as far as the face's
+        /// own skin does (`foreheadSkin`).
+        func skin(people: GrayMask?, pixels: RGBImage?) -> GrayMask? {
             guard contour.count >= 3, let first = contour.first, let last = contour.last else { return nil }
-            let browTop = brows.joined().map(\.y).max() ?? contour.map(\.y).max() ?? 0
             let forehead = browTop + eyeWidth * 0.9
             let outline = contour + [CGPoint(x: last.x, y: forehead), CGPoint(x: first.x, y: forehead)]
-            let face = FaceParts.draw(size) { context in
+            guard var face = FaceParts.draw(size, { context in
                 FaceParts.fill(context, outline)
                 context.setBlendMode(.clear)
                 eyes.forEach { FaceParts.fill(context, $0) }
                 FaceParts.fill(context, outerLips)
                 browStrokes(context)
+            }) else { return nil }
+            if let pixels, let grown = foreheadSkin(face, pixels: pixels) {
+                face = grown
             }
-            guard let face, let people else { return face }
+            guard let people else { return face }
             return face.intersection(people)
+        }
+
+        var browTop: CGFloat {
+            brows.joined().map(\.y).max() ?? contour.map(\.y).max() ?? 0
         }
 
         /// Bright, pale pixels inside the lips.
@@ -141,7 +163,7 @@ enum FaceParts {
     /// Draws white shapes on black with CoreGraphics. Vision's image points have a bottom-left
     /// origin, as CoreGraphics does, and a bitmap context's memory starts with the top row, so
     /// the pixels come out top-left first, in mask space.
-    private static func draw(_ size: PixelSize, _ body: (CGContext) -> Void) -> GrayMask? {
+    static func draw(_ size: PixelSize, _ body: (CGContext) -> Void) -> GrayMask? {
         var pixels = [UInt8](repeating: 0, count: size.width * size.height)
         let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
             guard let context = CGContext(

@@ -182,8 +182,9 @@ public struct VisionMaskProvider: Sendable {
     // MARK: - Face parts
 
     /// Lips, eyebrows, eyes, iris and face skin drawn from Vision's 76 face landmarks, feathered
-    /// a little. Face skin is the face outline within the person, less the features. Teeth are
-    /// the bright, pale pixels inside the lips. Hair needs an embedded matte (see `EmbeddedMattes`)
+    /// a little. Face skin is the face outline within the person, less the features, its forehead
+    /// grown up to the hairline through the face's own skin colour. Teeth are the bright, pale
+    /// pixels inside the lips. Hair needs an embedded matte (see `EmbeddedMattes`)
     /// or SAM 3, as do facial hair, body skin and clothes (`SAM3Concepts`).
     private func personParts(_ part: PersonPart, in image: CGImage) throws -> [ProvidedMask] {
         guard !SAM3Concepts.partPrecedence.contains(part) else { throw MaskComputationError.unsupported(.people) }
@@ -195,7 +196,7 @@ public struct VisionMaskProvider: Sendable {
         let size = PixelSize(width: image.width, height: image.height)
             .fitted(within: PixelSize(width: Self.partsLongEdge, height: Self.partsLongEdge))
         let people = part == .faceSkin ? try? allPeople(image, handler: handler).resized(to: size) : nil
-        let pixels = part == .teeth ? RGBImage(image, size: size) : nil
+        let pixels = part == .teeth || part == .faceSkin ? RGBImage(image, size: size) : nil
         return observations.enumerated().compactMap { index, face in
             guard let landmarks = face.landmarks,
                   var mask = FaceParts.mask(part, landmarks: landmarks, size: size, people: people, pixels: pixels),
@@ -252,6 +253,13 @@ struct RGBImage {
     let width: Int
     let height: Int
     let pixels: [UInt8]
+
+    /// Four bytes a pixel, red, green, blue and one unused, top row first.
+    init(width: Int, height: Int, pixels: [UInt8]) {
+        self.width = width
+        self.height = height
+        self.pixels = pixels
+    }
 
     init?(_ image: CGImage, size: PixelSize) {
         width = size.width
