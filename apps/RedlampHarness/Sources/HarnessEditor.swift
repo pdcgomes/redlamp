@@ -2,7 +2,7 @@ import Foundation
 import RedlampDocument
 import RedlampEngine
 import RedlampEngineAPI
-import RedlampUI
+@_spi(Harness) import RedlampUI
 
 /// The editor every scene shares: the real `EditorModel` on the real engine, with a sample
 /// photo open so controls that depend on one (white balance, Auto) behave as in the app.
@@ -61,15 +61,17 @@ enum HarnessEditor {
         }
     }
 
-    /// Gives the Masking scenes a selected radial mask to show (the debug script draws it
-    /// through the same path a drag does).
+    /// Gives the Masking scenes a selected radial mask to show, drawn through the same path a
+    /// drag takes.
     static func ensureMask() {
         Task {
             while model.info == nil {
                 try? await Task.sleep(for: .milliseconds(100))
             }
             guard model.masks.isEmpty else { return }
-            model.applyDebugCommand("radial", "0.5:0.5:0.2:0.15")
+            model.drawMask(.radial(RadialMask(
+                center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.15, feather: 50,
+            )))
         }
     }
 

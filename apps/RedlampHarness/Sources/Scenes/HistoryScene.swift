@@ -83,7 +83,9 @@ enum HistoryScript {
         model.straighten(from: .zero, to: CGPoint(x: 100, y: 4))
         model.rotate(clockwise: true)
         model.rotate(clockwise: false)
-        model.applyDebugCommand("radial", "0.5:0.5:0.2:0.15")
+        model.drawMask(.radial(RadialMask(
+            center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.15, feather: 50,
+        )))
         model.setSliderValue(.localExposure, 0.4)
         if let mask = model.selectedMaskID {
             model.renameMask(mask, to: "Sky")

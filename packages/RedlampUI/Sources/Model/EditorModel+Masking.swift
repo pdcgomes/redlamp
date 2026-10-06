@@ -77,6 +77,15 @@ public extension EditorModel {
         pendingDrawingKind = nil
     }
 
+    /// Draws `shape` as a new mask through the path a drag takes, for the harness's scenes in
+    /// any configuration. AI masks are computed, not drawn, so they're left out.
+    @_spi(Harness) func drawMask(_ shape: MaskShape) {
+        guard let kind = shape.kind, !kind.isAI else { return }
+        startDrawing(kind)
+        beginDrawing(shape)
+        finishDrawing()
+    }
+
     /// Adds a component made with a tool that stays armed (brush, range samplers): to
     /// `drawingTarget` with `drawingOperation`, or as a new mask. Selects it and makes it the
     /// one later strokes or samples go into. Returns the history name, or nil when no mask fits.
