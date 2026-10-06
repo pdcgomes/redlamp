@@ -24,6 +24,13 @@ enum LibraryCommand {
            redlamp library trash <query> --index <path> [--dry-run] [--json]
            redlamp library undo --index <path> [--json]
            redlamp library journal --index <path> [--finish | --roll-back] [--json]
+           redlamp library keywords --index <path> [--tree] [--json]
+           redlamp library keywords import|export <file> --index <path>
+           redlamp library keywords add|remove <keyword> --index <path> <query> [--dry-run] [--json]
+           redlamp library keywords rename <keyword> <path> --index <path> [--dry-run]
+           redlamp library keywords merge <keyword>… --into <keyword> --index <path> [--dry-run]
+           redlamp library keywords delete <keyword>… --index <path> [--dry-run]
+           redlamp library keywords undo --index <path>
       fixture  makes a synthetic library in <folder>: a fifth of the photos APFS clones of the raws in
                --raw-sources (tests/fixtures/raw) with their capture dates rewritten, the rest small JPEGs
                and HEICs with varied EXIF, GPS and IPTC; sidecars on 15% and other apps' .xmp on 5%; folders
@@ -72,6 +79,10 @@ enum LibraryCommand {
                before it starts, and --dry-run shows the plan. undo takes the last batch back; journal lists
                the batches, and finishes (--finish) or rolls back (--roll-back) one a forced quit cut short,
                which every command does first.
+      keywords prints the keyword list with how many photos have each, indented by level with --tree;
+               imports and exports Lightroom Classic's keyword-list file; adds or removes a keyword on the
+               photos <query> finds; renames, moves, merges and deletes keywords, rewriting their photos'
+               sidecars as one journaled batch; and undoes the last batch.
     """
 
     private static var scenarioNames: String {
@@ -87,6 +98,7 @@ enum LibraryCommand {
         BenchScenarios.registerDuplicates()
         BenchScenarios.registerXMP()
         BenchScenarios.registerFiles()
+        BenchScenarios.registerKeywords()
         guard let command = arguments.first, !arguments.contains("--help") else {
             print(usage)
             return
@@ -106,6 +118,7 @@ enum LibraryCommand {
         case "trash": try await trash(Array(arguments.dropFirst()))
         case "undo": try await undo(Array(arguments.dropFirst()))
         case "journal": try await journal(Array(arguments.dropFirst()))
+        case "keywords": try await keywords(Array(arguments.dropFirst()))
         default: throw CLIError(description: "unknown library command \(command)\n\n\(usage)")
         }
     }
