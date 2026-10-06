@@ -318,15 +318,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 /// The command line, plus (in development builds) one line of arguments left in
 /// `/tmp/redlamp-launch-args`, consumed on launch. Tooling launches through `open`, since a
 /// process started straight from a non-GUI shell may never get a window, and `open` can
-/// silently drop `--args` and `--env`. A copy under another bundle ID (the regression suite's
-/// `app.redlamp.mac.e2e`) reads `/tmp/<bundle ID>-launch-args` instead, so it never takes
+/// silently drop `--args` and `--env`. Arguments left in `redlamp-launch-args` beside the bundle
+/// come first, so launches close together from other checkouts (each with its own build) can't
+/// take each other's. A copy under another bundle ID (the regression suite's
+/// `app.redlamp.mac.e2e`) otherwise reads `/tmp/<bundle ID>-launch-args`, so it never takes
 /// arguments left for the app.
 enum LaunchArguments {
     static let all: [String] = {
         var arguments = CommandLine.arguments
         #if DEBUG || REDLAMP_PROFILING
             let bundle = Bundle.main.bundleIdentifier ?? "app.redlamp.mac"
-            let path = bundle == "app.redlamp.mac" ? "/tmp/redlamp-launch-args" : "/tmp/\(bundle)-launch-args"
+            let beside = Bundle.main.bundleURL.deletingLastPathComponent().appending(path: "redlamp-launch-args").path
+            let path = FileManager.default.fileExists(atPath: beside) ? beside
+                : bundle == "app.redlamp.mac" ? "/tmp/redlamp-launch-args" : "/tmp/\(bundle)-launch-args"
             if let line = try? String(contentsOfFile: path, encoding: .utf8) {
                 try? FileManager.default.removeItem(atPath: path)
                 arguments += line.split(whereSeparator: \.isWhitespace).map(String.init)

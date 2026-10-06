@@ -58,7 +58,9 @@ PROFILE_FLAG=""
 # PANELS=swiftui measures the SwiftUI Develop panels instead of the AppKit ones.
 PANELS_FLAG=""
 [[ "${PANELS:-appkit}" == "swiftui" ]] && PANELS_FLAG="--swiftui-panels"
-echo "$FIXTURES --perf-report $REPORT --script $SCRIPT --sweep $PARAMETER --sweep-seconds 3 --sweep-quit $PROFILE_FLAG $PANELS_FLAG" >/tmp/redlamp-launch-args
+# Beside the bundle, so a launch from another checkout at the same moment can't take them.
+echo "$FIXTURES --perf-report $REPORT --script $SCRIPT --sweep $PARAMETER --sweep-seconds 3 --sweep-quit $PROFILE_FLAG $PANELS_FLAG" \
+    >"$(dirname "$BUNDLE")/redlamp-launch-args"
 open -n -g "$BUNDLE"
 PID=""
 for _ in $(seq 1 80); do

@@ -49,7 +49,9 @@ done
 # Launched through LaunchServices (in the background, without taking focus): a process started
 # straight from a non-GUI shell may never get a window.
 BEFORE="$(pgrep -f "$EXECUTABLE" || true)"
-echo "--perf-report $REPORT --folders-perf $FOLDER --folders-perf-warm ${WARM:-3000} --folders-perf-quit $*" >/tmp/redlamp-launch-args
+# Beside the bundle, so a launch from another checkout at the same moment can't take them.
+echo "--perf-report $REPORT --folders-perf $FOLDER --folders-perf-warm ${WARM:-3000} --folders-perf-quit $*" \
+    >"$(dirname "$BUNDLE")/redlamp-launch-args"
 echo "== load average before: $(sysctl -n vm.loadavg)"
 open -n -g ${ENV_FLAGS[@]+"${ENV_FLAGS[@]}"} "$BUNDLE"
 PID=""
