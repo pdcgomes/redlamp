@@ -9,6 +9,8 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
     var sampledColor = SIMD3<Double>(0.62, 0, 0)
     /// What `detectLines` finds, for automatic Upright.
     var detectedLines: [DetectedLine] = []
+    /// What the library reads focus stacks from.
+    var files: any FileInspecting = UnreadableFiles()
 
     func detectLines() async -> [DetectedLine] {
         detectedLines

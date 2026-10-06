@@ -100,8 +100,16 @@ struct FocusThumbnail: Codable, Sendable {
     var height: Int
     var bytes: Data
 
-    var grey: GreyThumbnail {
-        GreyThumbnail(width: width, height: height, bytes: [UInt8](bytes))
+    /// Nil for a size the reader never draws, so a damaged reply can't make the detector index
+    /// past its pixels.
+    var grey: GreyThumbnail? {
+        let edge = GreyThumbnail.longEdge
+        guard (1 ... edge).contains(width), (1 ... edge).contains(height), max(width, height) == edge,
+              bytes.count == width * height
+        else {
+            return nil
+        }
+        return GreyThumbnail(width: width, height: height, bytes: [UInt8](bytes))
     }
 }
 

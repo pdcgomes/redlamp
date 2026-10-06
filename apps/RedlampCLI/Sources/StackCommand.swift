@@ -2,6 +2,7 @@ import Foundation
 import RedlampDocument
 import RedlampEngine
 import RedlampEngineAPI
+import RedlampServices
 
 /// `redlamp stack`: merges a focus stack and writes the developed result.
 enum StackCommand {
@@ -109,7 +110,7 @@ enum StackCommand {
             let clock = ContinuousClock()
             let start = clock.now
             let images = Library.images(in: URL(fileURLWithPath: folder))
-            let suggestions = StackDetector.suggestions(in: images)
+            let suggestions = StackDetector.suggestions(in: images, reading: InProcessDecoder())
             print("\(folder): \(images.count) images, \(suggestions.count) stacks (\(clock.now - start))")
             for suggestion in suggestions {
                 let names = suggestion.frames.map(\.lastPathComponent)

@@ -47,10 +47,8 @@ struct FileInspectionTests {
         let thumbnails = local.focusThumbnails(of: Self.stack, concurrently: concurrently)
         #expect(captures.compactMap(\.self).count == Self.files.count)
         #expect(thumbnails.allSatisfy { $0?.width == GreyThumbnail.longEdge })
-        withKnownIssue("the decode service doesn't read captures or thumbnails yet") {
-            #expect(service.captures(of: Self.files, concurrently: concurrently) == captures)
-            #expect(service.focusThumbnails(of: Self.stack, concurrently: concurrently) == thumbnails)
-        }
+        #expect(service.captures(of: Self.files, concurrently: concurrently) == captures)
+        #expect(service.focusThumbnails(of: Self.stack, concurrently: concurrently) == thumbnails)
     }
 
     @Test(.enabled(if: !stack.isEmpty))
@@ -64,8 +62,16 @@ struct FileInspectionTests {
         let files = [missing, junk] + Self.stack.prefix(1)
         let local = InProcessDecoder().captures(of: files, concurrently: false)
         #expect(local.prefix(2).allSatisfy { $0 == nil })
-        withKnownIssue("the decode service doesn't read captures yet") {
-            #expect(service.captures(of: files, concurrently: false) == local)
-        }
+        #expect(service.captures(of: files, concurrently: false) == local)
+        #expect(service.focusThumbnails(of: files, concurrently: false).map { $0 == nil } == [true, true, false])
+    }
+
+    @Test func `a thumbnail of a size the reader never draws is refused`() {
+        let edge = GreyThumbnail.longEdge
+        #expect(FocusThumbnail(width: edge, height: 2, bytes: Data(count: 2 * edge)).grey?.height == 2)
+        #expect(FocusThumbnail(width: edge, height: 2, bytes: Data(count: edge)).grey == nil)
+        #expect(FocusThumbnail(width: 2 * edge, height: 2, bytes: Data(count: 4 * edge)).grey == nil)
+        #expect(FocusThumbnail(width: 2, height: 2, bytes: Data(count: 4)).grey == nil)
+        #expect(FocusThumbnail(width: -edge, height: -1, bytes: Data(count: edge)).grey == nil)
     }
 }

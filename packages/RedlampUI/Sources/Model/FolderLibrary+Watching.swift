@@ -289,8 +289,9 @@ extension FolderLibrary {
     ) {
         onStacks?(shown.flatMap { stackCache[$0]?.suggestions ?? [] })
         guard let next = remaining.first else { return }
+        let files = files
         scheduler.submit(.background, key: "stacks:\(generation):\(next.directory)") {
-            let found = StackDetector.suggestions(in: next.urls, concurrently: false)
+            let found = StackDetector.suggestions(in: next.urls, reading: files, concurrently: false)
             Task { @MainActor [weak self] in
                 guard let self, self.generation == generation else { return }
                 stackCache[next.directory] = (next.signature, found)

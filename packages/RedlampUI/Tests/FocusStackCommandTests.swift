@@ -1,5 +1,6 @@
 import Foundation
 import RedlampDocument
+import RedlampEngineAPI
 import Testing
 @_spi(Harness) @testable import RedlampUI
 
@@ -20,6 +21,60 @@ struct FocusStackCommandTests: PaletteTesting {
 
     private func remove(_ frames: [URL]) {
         try? FileManager.default.removeItem(at: frames[0].deletingLastPathComponent())
+    }
+
+    /// Five frames of one camera and a focus sweep across them, by file name, counting its calls.
+    private final class SweepFiles: FileInspecting, @unchecked Sendable {
+        private let lock = NSLock()
+        private var asked: [(thumbnails: Bool, count: Int)] = []
+        private let start = Date(timeIntervalSince1970: 1_800_000_000)
+
+        var calls: [(thumbnails: Bool, count: Int)] {
+            lock.withLock { asked }
+        }
+
+        private func frame(_ url: URL) -> Int? {
+            Int(url.deletingPathExtension().lastPathComponent.dropFirst(4)).map { $0 - 1 }
+        }
+
+        func captures(of urls: [URL], concurrently _: Bool) -> [CaptureSettings?] {
+            lock.withLock { asked.append((false, urls.count)) }
+            return urls.map { url in
+                frame(url).map { CaptureSettings(model: "Body", aperture: 4, date: start + Double($0) / 2) }
+            }
+        }
+
+        /// A gentle gradient, with a fine checker sharp in frame `f`'s fifth of the width only.
+        func focusThumbnails(of urls: [URL], concurrently _: Bool) -> [GreyThumbnail?] {
+            lock.withLock { asked.append((true, urls.count)) }
+            let (width, height) = (GreyThumbnail.longEdge, 128)
+            return urls.map { url in
+                frame(url).map { frame in
+                    GreyThumbnail(width: width, height: height, pixels: (0 ..< width * height).map { index in
+                        let (x, y) = (index % width, index / width)
+                        let checker: Float = x * 5 / width == frame ? ((x + y) % 2 == 0 ? 0.1 : -0.1) : 0
+                        return 0.1 + 0.5 * Float(x) / Float(width) + 0.3 * Float(y) / Float(height) + checker
+                    })
+                }
+            }
+        }
+    }
+
+    @Test func `a folder's stacks are found through the engine's reader, its captures in one call`() async throws {
+        let engine = StubEngine()
+        let files = SweepFiles()
+        engine.files = files
+        let model = EditorModel(engine: engine)
+        let frames = try frames(5)
+        defer { remove(frames) }
+        model.library.open(frames[0].deletingLastPathComponent())
+        let deadline = ContinuousClock.now + .seconds(30)
+        while model.stackSuggestions.isEmpty, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(model.stackSuggestions.map { $0.frames.map(\.lastPathComponent) } == [frames.map(\.lastPathComponent)])
+        #expect(files.calls.filter { !$0.thumbnails }.map(\.count) == [5])
+        #expect(files.calls.filter(\.thumbnails).map(\.count).reduce(0, +) == 5)
     }
 
     @Test func `merging needs a detected stack`() throws {

@@ -69,6 +69,7 @@ public extension EditorModel {
     internal func followLibrary() {
         libraryObservation = library.observe { [weak self] diff in self?.libraryChanged(diff) }
         library.onReopened = { [weak self] found in self?.didList(found, select: self?.selection) }
+        library.files = engine.files
         library.onStacks = { [weak self] found in
             guard let self else { return }
             stackSuggestions = found.filter { !dismissedStacks.contains($0) }

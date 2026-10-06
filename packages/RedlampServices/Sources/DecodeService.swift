@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import RedlampEngineAPI
 import Synchronization
 
@@ -26,6 +27,15 @@ public struct InProcessDecoder: ImageDecoding {
 /// archived `EngineError`.
 @objc public protocol DecodeServiceProtocol {
     func decode(_ file: Data, path: String, reply: @escaping @Sendable (Data?, Data?) -> Void)
+
+    /// `FileInspecting.captures` of files' bytes, with their paths for their types: a JSON array
+    /// holding a `CaptureSettings` or null for each.
+    func captures(_ files: [Data], paths: [String], concurrently: Bool, reply: @escaping @Sendable (Data?) -> Void)
+
+    /// `FileInspecting.focusThumbnails` likewise: a JSON array of `FocusThumbnail` or null.
+    func focusThumbnails(
+        _ files: [Data], paths: [String], concurrently: Bool, reply: @escaping @Sendable (Data?) -> Void,
+    )
 }
 
 /// The service side: decodes from the bytes it is sent (it has no file system access).
@@ -38,6 +48,27 @@ public final class DecodeService: NSObject, DecodeServiceProtocol {
         } catch {
             let failure = error as? EngineError ?? .decodeFailed(error.localizedDescription)
             reply(nil, try? JSONEncoder().encode(failure))
+        }
+    }
+
+    public func captures(
+        _ files: [Data], paths: [String], concurrently: Bool, reply: @escaping @Sendable (Data?) -> Void,
+    ) {
+        reply(try? JSONEncoder().encode(Self.inspect(files, paths: paths, concurrently, FileInspection.capture)))
+    }
+
+    public func focusThumbnails(
+        _ files: [Data], paths: [String], concurrently: Bool, reply: @escaping @Sendable (Data?) -> Void,
+    ) {
+        reply(try? JSONEncoder().encode(Self.inspect(files, paths: paths, concurrently, FileInspection.focusThumbnail)))
+    }
+
+    private static func inspect<T: Sendable>(
+        _ files: [Data], paths: [String], _ concurrently: Bool, _ read: @escaping @Sendable (CGImageSource) -> T?,
+    ) -> [T?] {
+        guard files.count == paths.count else { return [] }
+        return FileInspection.map(Array(files.indices), concurrently: concurrently) { index in
+            FileInspection.source(files[index], path: paths[index]).flatMap(read)
         }
     }
 }
@@ -237,13 +268,40 @@ public extension DecodedImage {
         }
     }
 
+    /// Each call sends the batch's files, mapped, in one message. A file that can't be read, or a
+    /// service that can't start or answers what the app can't use, gives nil, never a read in the
+    /// app.
     extension DecodeServiceClient: FileInspecting {
-        public func captures(of urls: [URL], concurrently _: Bool) -> [CaptureSettings?] {
-            urls.map { _ in nil }
+        public func captures(of urls: [URL], concurrently: Bool) -> [CaptureSettings?] {
+            inspect(urls, as: CaptureSettings.self) { proxy, files, paths, reply in
+                proxy.captures(files, paths: paths, concurrently: concurrently, reply: reply)
+            }
         }
 
-        public func focusThumbnails(of urls: [URL], concurrently _: Bool) -> [GreyThumbnail?] {
-            urls.map { _ in nil }
+        public func focusThumbnails(of urls: [URL], concurrently: Bool) -> [GreyThumbnail?] {
+            inspect(urls, as: FocusThumbnail.self) { proxy, files, paths, reply in
+                proxy.focusThumbnails(files, paths: paths, concurrently: concurrently, reply: reply)
+            }.map { $0?.grey }
+        }
+
+        private func inspect<T: Decodable>(
+            _ urls: [URL], as _: T.Type,
+            _ call: (any DecodeServiceProtocol, [Data], [String], @escaping @Sendable (Data?) -> Void) -> Void,
+        ) -> [T?] {
+            guard !urls.isEmpty else { return [] }
+            let files = urls.map { (try? Data(contentsOf: $0, options: .alwaysMapped)) ?? Data() }
+            let connection = connect()
+            defer { connection.invalidate() }
+            let answer = Mutex<Data?>(nil)
+            if let proxy = connection.synchronousRemoteObjectProxyWithErrorHandler({ _ in }) as? DecodeServiceProtocol {
+                call(proxy, files, urls.map(\.absoluteURL.path)) { data in answer.withLock { $0 = data } }
+            }
+            guard let data = answer.withLock({ $0 }),
+                  let read = try? JSONDecoder().decode([T?].self, from: data), read.count == urls.count
+            else {
+                return urls.map { _ in nil }
+            }
+            return read
         }
     }
 #endif

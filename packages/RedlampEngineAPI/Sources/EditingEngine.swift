@@ -101,6 +101,10 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// main thread.
     func decodeThumbnail(for url: URL, maxPixelSize: Int) -> CGImage?
 
+    /// Reads capture settings and focus thumbnails where the engine decodes (the decode service
+    /// in the Mac app). Its calls block, so never make them on the main thread.
+    var files: any FileInspecting { get }
+
     /// Makes a Base Look renderable. Edits reference it by id and version, and pin its
     /// look table by content hash; built-in looks need no registration. Registering the
     /// same look again is cheap. Edits whose look isn't registered render without it.
@@ -181,6 +185,10 @@ public extension EditingEngine {
 
     func decodeThumbnail(for _: URL, maxPixelSize _: Int) -> CGImage? {
         nil
+    }
+
+    var files: any FileInspecting {
+        UnreadableFiles()
     }
 
     func embeddedBaseLook() -> BaseLookDefinition? {

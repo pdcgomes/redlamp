@@ -87,6 +87,60 @@ struct StackDetectorTests {
         #expect(sized == [true, false], "another size")
     }
 
+    /// Answers from tables, recording each batch it is asked for.
+    final class RecordedFiles: FileInspecting, @unchecked Sendable {
+        let captures: [URL: StackDetector.Capture]
+        let thumbnails: [URL: StackDetector.Thumbnail]
+        private let lock = NSLock()
+        private var asked: [(thumbnails: Bool, urls: [URL])] = []
+
+        init(captures: [URL: StackDetector.Capture], thumbnails: [URL: StackDetector.Thumbnail]) {
+            self.captures = captures
+            self.thumbnails = thumbnails
+        }
+
+        var calls: [(thumbnails: Bool, urls: [URL])] {
+            lock.withLock { asked }
+        }
+
+        func captures(of urls: [URL], concurrently _: Bool) -> [CaptureSettings?] {
+            lock.withLock { asked.append((false, urls)) }
+            return urls.map { captures[$0] }
+        }
+
+        func focusThumbnails(of urls: [URL], concurrently _: Bool) -> [GreyThumbnail?] {
+            lock.withLock { asked.append((true, urls)) }
+            return urls.map { thumbnails[$0] }
+        }
+    }
+
+    @Test(arguments: [false, true])
+    func `a folder's captures are read in one call, and thumbnails only for its candidate runs`(
+        concurrently: Bool,
+    ) {
+        let (width, height) = (192, 128)
+        let texture = Self.texture(width: width + 64, height: height)
+        let run = frames(5)
+        let others = [
+            (URL(fileURLWithPath: "/shoot/9-a.raw"), StackDetector.Capture(model: "Other", date: start)),
+            (URL(fileURLWithPath: "/shoot/9-b.raw"), StackDetector.Capture(model: "Body")),
+        ]
+        let thumbnails = Dictionary(uniqueKeysWithValues: run.enumerated().map { frame, photo in
+            (photo.0, Self.blurred(texture, width: width + 64, height: height, crop: width) { x in
+                abs(Float(x) / Float(width) - Float(frame) / 4) * 12
+            })
+        })
+        let files = RecordedFiles(
+            captures: Dictionary(uniqueKeysWithValues: run + others), thumbnails: thumbnails,
+        )
+        let urls = (run + others).map(\.0)
+
+        let found = StackDetector.suggestions(in: urls, reading: files, concurrently: concurrently)
+        #expect(found == [StackSuggestion(frames: run.map(\.0))])
+        #expect(files.calls.filter { !$0.thumbnails }.map(\.urls) == [urls], "every capture in one call")
+        #expect(files.calls.filter(\.thumbnails).flatMap(\.urls) == run.map(\.0), "the run's frames, once each")
+    }
+
     /// Deterministic blobs and fine texture.
     static func texture(width: Int, height: Int) -> [Float] {
         var state: UInt64 = 7

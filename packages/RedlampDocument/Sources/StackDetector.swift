@@ -1,7 +1,5 @@
 import Accelerate
-import CoreGraphics
 import Foundation
-import ImageIO
 import RedlampEngineAPI
 
 /// A run of photos that looks like a focus stack, offered to the user, never merged unasked.
@@ -40,66 +38,7 @@ public struct StackSuggestion: Sendable, Hashable {
 /// between frames. The second test rejects bursts, time-lapses and panoramas.
 public enum StackDetector {
     /// The capture settings a stack keeps constant, read from the file's EXIF.
-    public struct Capture: Sendable, Hashable {
-        public var model: String?
-        public var lens: String?
-        public var focalLength: Double?
-        public var aperture: Double?
-        public var iso: Double?
-        public var exposureTime: Double?
-        public var date: Date?
-
-        public init(
-            model: String? = nil, lens: String? = nil, focalLength: Double? = nil, aperture: Double? = nil,
-            iso: Double? = nil, exposureTime: Double? = nil, date: Date? = nil,
-        ) {
-            self.model = model
-            self.lens = lens
-            self.focalLength = focalLength
-            self.aperture = aperture
-            self.iso = iso
-            self.exposureTime = exposureTime
-            self.date = date
-        }
-
-        public static func read(_ url: URL) -> Capture? {
-            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-                  let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
-            else {
-                return nil
-            }
-            let exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any] ?? [:]
-            let tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any] ?? [:]
-            let aux = properties[kCGImagePropertyExifAuxDictionary] as? [CFString: Any] ?? [:]
-            let isoRatings = exif[kCGImagePropertyExifISOSpeedRatings] as? [Double]
-            return Capture(
-                model: tiff[kCGImagePropertyTIFFModel] as? String,
-                lens: (exif[kCGImagePropertyExifLensModel] ?? aux[kCGImagePropertyExifAuxLensModel]) as? String,
-                focalLength: exif[kCGImagePropertyExifFocalLength] as? Double,
-                aperture: exif[kCGImagePropertyExifFNumber] as? Double,
-                iso: isoRatings?.first ?? exif[kCGImagePropertyExifISOSpeed] as? Double,
-                exposureTime: exif[kCGImagePropertyExifExposureTime] as? Double,
-                date: date(exif),
-            )
-        }
-
-        /// DateTimeOriginal with its sub-second digits, in the camera's (unknown) time zone.
-        private static func date(_ exif: [CFString: Any]) -> Date? {
-            guard let text = exif[kCGImagePropertyExifDateTimeOriginal] as? String else { return nil }
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.timeZone = TimeZone(secondsFromGMT: 0)
-            formatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
-            guard let date = formatter.date(from: text) else { return nil }
-            let subsec = (exif[kCGImagePropertyExifSubsecTimeOriginal] as? String).flatMap { Double("0." + $0) }
-            return date.addingTimeInterval(subsec ?? 0)
-        }
-
-        func sameSettings(as other: Capture) -> Bool {
-            model == other.model && lens == other.lens && focalLength == other.focalLength
-                && aperture == other.aperture && iso == other.iso && exposureTime == other.exposureTime
-        }
-    }
+    public typealias Capture = CaptureSettings
 
     /// Fewer frames than this aren't worth suggesting.
     public static let minimumFrames = 3
@@ -108,14 +47,16 @@ public enum StackDetector {
     public static let maximumGap: TimeInterval = 30
 
     /// Stacks among `urls` (sorted by name) that no stack document among them already covers.
-    /// Reads each file's EXIF and, for candidate runs, small thumbnails, on all cores unless the
-    /// caller already runs detections side by side (`concurrently: false`).
-    public static func suggestions(in urls: [URL], concurrently: Bool = true) -> [StackSuggestion] {
+    /// Reads every file's EXIF in one call to `files` and, for candidate runs, small thumbnails,
+    /// on all cores unless the caller already runs detections side by side (`concurrently: false`).
+    public static func suggestions(
+        in urls: [URL], reading files: any FileInspecting, concurrently: Bool = true,
+    ) -> [StackSuggestion] {
         let stacked = Set(urls.filter(SupportedFormats.isStack).flatMap { url in
             ((try? FocusStackDocument.read(url))?.frameURLs(at: url) ?? []).map(\.standardizedFileURL)
         })
         let photos = urls.filter { !SupportedFormats.isStack($0) }
-        let captures = zip(photos, concurrentMap(photos, concurrently: concurrently, Capture.read))
+        let captures = zip(photos, files.captures(of: photos, concurrently: concurrently))
             .compactMap { url, capture in
                 capture.map { (url, $0) }
             }
@@ -129,30 +70,12 @@ public enum StackDetector {
             var sweep = FocusSweep()
             for start in stride(from: 0, to: run.count, by: batch) {
                 let frames = Array(run[start ..< min(start + batch, run.count)])
-                for thumbnail in concurrentMap(frames, concurrently: concurrently, thumbnail) {
+                for thumbnail in files.focusThumbnails(of: frames, concurrently: concurrently) {
                     guard let thumbnail, sweep.add(thumbnail) else { return nil }
                 }
             }
             return sweep.isFocusSweep ? StackSuggestion(frames: run) : nil
         }
-    }
-
-    /// `transform` of every element, run across the cores (file reads and decodes).
-    static func concurrentMap<T: Sendable>(
-        _ elements: [URL], concurrently: Bool = true, _ transform: @Sendable (URL) -> T?,
-    ) -> [T?] {
-        guard concurrently else { return elements.map(transform) }
-        let results = UnsafeMutableBufferPointer<T?>.allocate(capacity: elements.count)
-        results.initialize(repeating: nil)
-        defer {
-            results.deinitialize()
-            results.deallocate()
-        }
-        nonisolated(unsafe) let output = results
-        DispatchQueue.concurrentPerform(iterations: elements.count) { index in
-            output[index] = transform(elements[index])
-        }
-        return Array(results)
     }
 
     /// Consecutive frames with identical settings, each within `maximumGap` of the last and not
@@ -189,17 +112,7 @@ public enum StackDetector {
     // MARK: - Focus signature
 
     /// Grey thumbnails of equal size, in capture order.
-    public struct Thumbnail: Sendable {
-        public let width: Int
-        public let height: Int
-        public let pixels: [Float]
-
-        public init(width: Int, height: Int, pixels: [Float]) {
-            self.width = width
-            self.height = height
-            self.pixels = pixels
-        }
-    }
+    public typealias Thumbnail = GreyThumbnail
 
     /// Whether the thumbnails show one scene whose sharpest region moves: neighbouring frames
     /// match once blurred, and across a grid of cells sharpness varies a lot from frame to frame,
@@ -207,34 +120,6 @@ public enum StackDetector {
     public static func isFocusSweep(_ thumbnails: [Thumbnail]) -> Bool {
         var sweep = FocusSweep()
         return thumbnails.allSatisfy { sweep.add($0) } && sweep.isFocusSweep
-    }
-
-    static func thumbnail(_ url: URL) -> Thumbnail? {
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
-            kCGImageSourceCreateThumbnailWithTransform: false,
-            kCGImageSourceThumbnailMaxPixelSize: 256,
-        ]
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
-        else {
-            return nil
-        }
-        // Thumbnails differ by a pixel or two between frames; a fixed size keeps them comparable.
-        let (width, height) = image.width >= image.height ? (256, 256 * image.height / image.width) : (
-            256 * image.width / image.height,
-            256,
-        )
-        var bytes = [UInt8](repeating: 0, count: width * height)
-        guard let context = CGContext(
-            data: &bytes, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width,
-            space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue,
-        ) else {
-            return nil
-        }
-        context.interpolationQuality = .high
-        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-        return Thumbnail(width: width, height: height, pixels: bytes.map { Float($0) / 255 })
     }
 
     /// Mean squared Laplacian per grid cell, over the pixels with all four neighbours.
@@ -362,5 +247,12 @@ extension StackDetector {
             }
             return varying * 2 >= Self.columns * Self.rows && peaks.count >= 2
         }
+    }
+}
+
+extension StackDetector.Capture {
+    func sameSettings(as other: Self) -> Bool {
+        model == other.model && lens == other.lens && focalLength == other.focalLength
+            && aperture == other.aperture && iso == other.iso && exposureTime == other.exposureTime
     }
 }

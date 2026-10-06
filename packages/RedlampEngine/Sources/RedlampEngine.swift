@@ -94,6 +94,9 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     private let rollbacks: [any CommandBufferRollback]
     /// Output tile edge for stills, in pixels.
     let stillTile: Int
+    /// The decoder's reader of capture settings and focus thumbnails; one that reads nothing
+    /// when the decoder has none.
+    public let files: any FileInspecting
 
     public convenience init() throws {
         try self.init(stillTile: 2048)
@@ -114,6 +117,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     ) throws {
         self.stillTile = stillTile
         self.thermalState = thermalState
+        files = decoder as? any FileInspecting ?? UnreadableFiles()
         renderQueue.setSpecific(key: Self.renderQueueKey, value: true)
         guard let device = MTLCreateSystemDefaultDevice(),
               let queue = device.makeCommandQueue(),

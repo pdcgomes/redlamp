@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import Observation
 import RedlampDocument
+import RedlampEngineAPI
 
 /// How the photos changed, for views that update row by row (the filmstrip): rows removed
 /// (indices before the change), rows inserted and rows whose badges changed (indices after it).
@@ -93,6 +94,9 @@ public final class FolderLibrary {
     @ObservationIgnored var onReopened: (@MainActor ([LibraryItem]) -> Void)?
     /// Focus stacks found in the shown directories.
     @ObservationIgnored var onStacks: (@MainActor ([StackSuggestion]) -> Void)?
+    /// What stacks are found from: the engine's reader, which in the Mac app reads in the decode
+    /// service. Until it is set, no stacks are found.
+    @ObservationIgnored var files: any FileInspecting = UnreadableFiles()
     /// Focus stacks found per directory, kept while its listing is unchanged.
     @ObservationIgnored var stackCache: [String: (signature: Int, suggestions: [StackSuggestion])] = [:]
 
