@@ -17,7 +17,9 @@
     /// included, and closes it as quitting does; then it checks a warm launch (the library open,
     /// searchable and caught up with the disk), opening the fixture with Show Photos in Subfolders in
     /// the filmstrip, its visible thumbnails, scrolling it and the Library grid end to end (with compact
-    /// cells at the standard size, expanded cells, and the largest thumbnails), held arrow
+    /// cells at the standard size, expanded cells, and the largest thumbnails), the fixture's queries
+    /// typed in the filter bar a character at a time (the main thread, and each key's photos on
+    /// screen), held arrow
     /// keys through it at the key-repeat rate and at 120 Hz (the main thread, and blank frames: the
     /// canvas, or a cell near the active photo, without its thumbnail a frame after each step), and 200
     /// switches between Library and Develop in the editor's own views with a photo open (the main
@@ -56,6 +58,9 @@
             var switchReads: UInt64 = 0
             /// The grid scrolled as edited photos render.
             var editScrolling: MainThreadMonitor.Summary?
+            /// Typing the fixture's queries in the filter bar: the main thread, and each key's photos on screen.
+            var typing: MainThreadMonitor.Summary?
+            var typed: [Double] = []
         }
 
         static func scheduleIfRequested(model: EditorModel) {
@@ -192,6 +197,12 @@
             }
             await memory.mark("grid phases")
 
+            let (typing, typed, typingReport) = await typeInFilterBar(model)
+            measured.typing = typing
+            measured.typed = typed
+            lines.append(typingReport)
+            await memory.mark("typed")
+
             for (label, interval) in [("at the key-repeat rate (30 ms)", 0.030), ("at 120 Hz", 1.0 / 120)] {
                 let held = await holdArrow(model, loader: loader, interval: interval, steps: 300)
                 measured.arrows.append((label, held.summary, held.steps, held.blank))
@@ -238,6 +249,8 @@
                 "library-switch-reads": Double(measured.switchReads),
                 "library-peak-memory": browsing,
                 "library-main-grid-scroll-rendering": measured.editScrolling?.p99 ?? .infinity,
+                "library-main-filter-typing": measured.typing?.p99 ?? .infinity,
+                "library-filter-first-page": percentile(measured.typed, 0.95),
             ])
             let budgets: [Budget] = budgets(measured, arrows: arrows, blank: blank, browsing: browsing)
             finish(
@@ -384,6 +397,86 @@
             }
             let title = "Main thread scrolling the grid end to end\(label.map { ", \($0)" } ?? "")"
             return (monitor.summary(seconds: duration), monitor.report(title, seconds: duration))
+        }
+
+        /// Types the fixture's queries in the filter bar a character at a time, a key every 60 ms, in the
+        /// editor window's own views with the grid and the metadata columns shown: the main thread over
+        /// the phase, and for each key that changes what the filter finds, the time from the key until
+        /// the photos it finds are on screen.
+        private static func typeInFilterBar(
+            _ model: EditorModel,
+        ) async -> (MainThreadMonitor.Summary?, [Double], String) {
+            DebugPerformance.trace("library-perf: typing in the filter bar")
+            guard let filters = model.libraryFilters else { return (nil, [], "Typing in the filter bar: no library") }
+            let window = NSWindow(
+                contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000),
+                styleMask: [.titled, .resizable, .fullSizeContentView], backing: .buffered, defer: false,
+            )
+            window.contentViewController = ModuleViews.make(model: model, theme: ThemeSettings())
+            window.setContentSize(NSSize(width: 1600, height: 1000))
+            window.orderBack(nil)
+            defer {
+                filters.setFilter(LibraryFilter())
+                filters.setBarShown(false)
+                model.showModule(.develop)
+                window.orderOut(nil)
+            }
+            model.showLibrary(.grid)
+            filters.setFilter(LibraryFilter(sections: [.text, .metadata]))
+            filters.setBarShown(true)
+            try? await Task.sleep(for: .milliseconds(500))
+            /// Until the library has listed what the bar's text reads as, or a second.
+            func listed(_ text: String, since started: Double) async -> Bool {
+                let query = (try? LibraryQuery(parsing: text, asYouType: true)).map { $0 == .all ? nil : $0 }
+                guard let query else { return false }
+                while filters.lastListed?.query != query, CFAbsoluteTimeGetCurrent() - started < 1 {
+                    try? await Task.sleep(for: .microseconds(250))
+                }
+                return filters.lastListed?.query == query
+            }
+            let monitor = MainThreadMonitor()
+            monitor.start()
+            var onScreen: [Double] = []
+            var keys = 0
+            var missed = 0
+            let began = CFAbsoluteTimeGetCurrent()
+            for query in FixtureQuery.corpus {
+                LibraryFilterBars.clear(in: window)
+                _ = await listed("", since: CFAbsoluteTimeGetCurrent())
+                var typed = ""
+                for character in query.text {
+                    let before = (try? LibraryQuery(parsing: typed, asYouType: true)) ?? .all
+                    typed.append(character)
+                    let started = CFAbsoluteTimeGetCurrent()
+                    guard LibraryFilterBars.type(String(character), in: window) else { break }
+                    keys += 1
+                    if let after = try? LibraryQuery(parsing: typed, asYouType: true), after != before {
+                        if await listed(typed, since: started) {
+                            window.displayIfNeeded()
+                            CATransaction.flush()
+                            onScreen.append((CFAbsoluteTimeGetCurrent() - started) * 1000)
+                        } else {
+                            missed += 1
+                        }
+                    }
+                    let wait = started + 0.060 - CFAbsoluteTimeGetCurrent()
+                    if wait > 0 {
+                        try? await Task.sleep(for: .microseconds(Int(wait * 1_000_000)))
+                    }
+                }
+            }
+            let elapsed = CFAbsoluteTimeGetCurrent() - began
+            monitor.stop()
+            let report = String(
+                format: "Typing the fixture's %d queries in the filter bar: %d keys, %d changing the photos found, "
+                    + "on screen p50 %.2f ms, p95 %.2f ms, max %.2f ms; %d not listed within a second",
+                FixtureQuery.corpus.count, keys, onScreen.count, percentile(onScreen, 0.5), percentile(onScreen, 0.95),
+                onScreen.max() ?? 0, missed,
+            )
+            return (
+                monitor.summary(seconds: elapsed), onScreen,
+                report + "\n" + monitor.report("Main thread typing in the filter bar", seconds: elapsed),
+            )
         }
 
         /// Switches between Library and Develop `count` times in the editor window's own views, with a
@@ -631,6 +724,8 @@
                 ),
             ]
             let rest: [Budget] = [
+                .below("Main thread p99 typing in the filter bar", measured.typing?.p99 ?? .infinity, 8.3, unit: "ms"),
+                .below("The photos a key finds on screen, p95", percentile(measured.typed, 0.95), 16, unit: "ms"),
                 .below("Main thread p99 holding the arrow keys", arrows, 8.3, unit: "ms"),
                 .below("Blank frames holding the arrow keys", Double(blank), 1, unit: ""),
                 .below("Main thread p99 switching modules", percentile(measured.switches, 0.99), 8, unit: "ms"),
