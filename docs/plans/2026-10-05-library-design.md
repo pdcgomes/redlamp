@@ -300,11 +300,15 @@ Every list can show its stacks closed, each one cell with a count, and open them
 | 0–5, `P`, `X`, `U`, 6–9, `[`, `]` | on the whole selection, with Undo | on the active photo |
 | arrows, Home, End, Page Up, Page Down | move; ⇧ extends the selection | previous and next photo |
 | Return, Space, double-click | open in the Loupe | |
+| `Z`, Space or a click in the Loupe | Fit and 1:1 | |
+| ⌘R | show the selection in Finder | show the photo in Finder |
 | ⌘K | the command palette | the command palette |
 
 Every one has a menu item and most a mouse gesture: stars, flag and label on a cell; context menus on photos, folders, collections and keywords; drag and drop onto folders, collections and photos; a thumbnail-size slider; a module picker in the toolbar.
 
 As built (LIB-13): Library and Develop share the editor window, each built once; a switch changes only which one is opaque, so nothing is rebuilt and nothing is read from the disk. Library shows the grid or the loupe (from the photo's preview), its own Folders and Photo info panels, and the filmstrip docked below; the grid and the filmstrip share one selection. C and N show the loupe until Compare and Survey exist (LIB-16), and say so in their menu items; D, R, Q and ⇧W open Develop with that tool. Develop keeps its photo open while Library is shown, and actions that would change that hidden photo (sliders, masks, Undo) are off until it's shown again. Undo is per module for now. No existing key moved.
+
+As built (LIB-14): the grid's cells are layers recycled row by row, with thumbnails drawn off the main thread in the window's colour space. Sizes go from 80 to 400 points by `=`, `-` or a slider, from the store's grid tier and its preview tier for large cells. `J` cycles three cell styles: compact, expanded (the name, the date and the camera's settings) and thumbnails only. A rubber band selects, ⇧ or ⌘ adding to the selection, on photo IDs the filmstrip shares. Context menus on photos and on the grid's background, and a Library toolbar, hold every grid action; each source keeps its size, style, place and selection. The Loupe goes between Fit and 1:1 with `Z`, Space or a click, and pans by dragging. ⌘R went to an earlier ⇧⌘R menu item in AppKit, so it reset a photo's settings; it now shows the selection in Finder.
 
 ## File operations (LIB-25, LIB-26)
 
@@ -498,10 +502,12 @@ The blank frames come from the editor rather than the library: when a photo is a
 | --- | --- | --- |
 | A switch between Library and Develop, main thread | p99 2.3 and 3.8 ms | under 8 ms |
 | Disk reads during 200 switches | none | none |
-| Grid scrolling, main thread | p99 11.9 and 12.0 ms | under 8.3 ms: FAIL |
+| Grid scrolling, main thread | p99 11.9 and 12.0 ms; with LIB-14, 1.26 and 1.25 ms | under 8.3 ms: PASS |
+| Grid scrolling with expanded cells | p99 1.03 and 0.72 ms | under 8.3 ms |
+| Grid scrolling with the largest thumbnails | p99 0.89 and 0.79 ms | under 8.3 ms |
 | Blank frames while holding the arrow keys | none, from 52 and 62 before | none |
 
-Hiding and showing the modules' views cost 12 to 15 ms a switch; changing only their opacity brought it under 4.
+Hiding and showing the modules' views cost 12 to 15 ms a switch; changing only their opacity brought it under 4. Grid scrolling spent its main thread on NSCollectionView adding each reused cell's view again and on Core Animation converting each thumbnail's colours; cells as layers recycled by row, and thumbnails drawn off the main thread in the window's colour space, took p99 from 13.0 ms to 1.25 (LIB-14, at load average about 90). All 14 of `--library-perf`'s budgets passed twice; one run had a single 182 ms stall, probably load.
 
 ### Exact duplicates (LIB-39)
 
