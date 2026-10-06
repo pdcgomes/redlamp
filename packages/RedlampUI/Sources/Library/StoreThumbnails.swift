@@ -7,7 +7,7 @@ import RedlampLibrary
 /// The filmstrip's thumbnails of the library's photos (LIB-09): from the store's grid tier, made
 /// for it first when it hasn't one yet, as the indexer makes them. A raw's comes from LibRaw's
 /// smallest embedded preview big enough for the grid (`thumbnail`, the engine's), anything else's
-/// from ImageIO.
+/// from ImageIO. An edited photo's, once its edit is rendered, is that render's (`EditRenders`).
 public struct StoreThumbnails: Sendable {
     public let store: PhotoStore
     public let maker: StoreThumbnailMaker
@@ -40,6 +40,16 @@ public struct StoreThumbnails: Sendable {
               let data = store.data(for: key, tier: .grid, size: size, modified: modified)
         else { return nil }
         return Self.decode(data, pixelSize: pixelSize)
+    }
+
+    /// The photo's `tier` showing `edit`, at most `pixelSize` on its long edge, from the store's render of
+    /// it (LIB-17) for the file as it is (`size` bytes, modified at `modified`); nil when the store has
+    /// none. It blocks: only ever off the main thread.
+    public func image(
+        for key: ContentKey, tier: PhotoStore.Tier, edit: EditDigest, size: Int64, modified: Date, pixelSize: Int,
+    ) -> CGImage? {
+        store.data(for: key, tier: tier, edit: edit, size: size, modified: modified)
+            .flatMap { Self.decode($0, pixelSize: pixelSize) }
     }
 
     /// A stored image decoded now, at most `pixelSize` on its long edge, as `StoreImageEncoder.decode`

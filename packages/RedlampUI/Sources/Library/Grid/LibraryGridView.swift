@@ -28,6 +28,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     let thumbnails: GridThumbnails
     let details: PhotoDetailsCache
     private var observation: LibraryObservation?
+    private var editObservation: LibraryObservation?
     private var trackers: [Tracker] = []
     /// The cells on screen, by row, and those out of sight waiting to be used again.
     private(set) var cells: [Int: LibraryGridCell] = [:]
@@ -71,7 +72,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         self.model = model
         thumbnails = GridThumbnails(
             scheduler: model.library.scheduler, packs: model.thumbnailLoader.packs,
-            store: { [weak library = model.library] in library?.storeThumbnail(for: $0) },
+            store: { [weak library = model.library] in library?.storeThumbnail(for: $0) }, renders: model.editRenders,
             decode: model.thumbnailLoader.decode,
         )
         details = PhotoDetailsCache(library: model.library)
@@ -115,6 +116,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         observation = nil
+        editObservation = nil
         trackers.forEach { $0.cancel() }
         trackers = []
         wasShown = false
@@ -125,6 +127,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         )
         screenChanged()
         observation = model.library.observe { [weak self] diff in self?.apply(diff) }
+        editObservation = model.editRenders.observe { [weak self] urls in self?.editsShown(urls) }
         trackers = [
             Tracker { [weak self] in
                 guard let self else { return }
@@ -282,6 +285,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         let items = model.items
         thumbnails.protected = Set(rows.map { items[$0].url })
         model.library.prioritize(rows)
+        model.editRenders.show(rows, in: .grid)
         if let first = rows.first(where: { gridLayout.frame(forItem: $0).minY >= visible.minY - 1 }) {
             model.libraryViews.topPhoto = items[first].url
         }
@@ -323,12 +327,17 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         guard model.items.indices.contains(row) else { return }
         let item = model.items[row]
         let edge = edge
+        let edit = thumbnails.edit(for: item)
         cell.place(gridLayout.frame(forItem: row), geometry: gridLayout.geometry, scale: scale)
+        cell.rendersEdit = model.editRenders.renders(item)
         if cell.item?.url != item.url || cell.row != row {
             let exact = thumbnails.cached(item, edge: edge)
             cell.configure(
                 item, row: row, image: exact ?? thumbnails.standIn(item, below: edge), edge: exact == nil ? 0 : edge,
+                edit: edit,
             )
+        } else if cell.shownEdit != edit, let exact = thumbnails.cached(item, edge: edge) {
+            cell.configure(item, row: row, image: exact, edge: edge, edit: edit)
         } else {
             cell.configure(item, row: row, image: nil, edge: cell.edge)
         }
@@ -339,7 +348,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         )
         cell.isMenuTarget = row == menuRow
         cell.root.isHidden = false
-        if cell.image == nil || cell.edge < edge {
+        if cell.image == nil || cell.edge < edge || cell.shownEdit != edit {
             requestThumbnail(for: cell, item, edge: edge)
         }
         if refresh || cell.textKey == nil {
@@ -354,15 +363,31 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
             cell.request = nil
             thumbnails.cancel(id)
         }
+        let edit = thumbnails.edit(for: item)
         let request = thumbnails.request(item, edge: edge, lane: .onScreen) { [weak cell] image in
             guard let cell, cell.item?.url == item.url else { return }
             cell.request = nil
             if let image {
-                cell.setImage(image, edge: edge)
+                cell.setImage(image, edge: edge, edit: edit)
             }
         }
-        if cell.image == nil || cell.edge < edge, cell.item?.url == item.url {
+        if cell.image == nil || cell.edge < edge || cell.shownEdit != edit, cell.item?.url == item.url {
             cell.request = request
+        }
+    }
+
+    /// The thumbnails of these photos show another edit: their cells ask for them, or once the grid is
+    /// shown again.
+    private func editsShown(_ urls: [URL]) {
+        let rows = IndexSet(urls.compactMap(model.library.index(of:)))
+        guard isShown, !isStale else {
+            staleRows.formUnion(rows)
+            return
+        }
+        for row in rows {
+            if let cell = cells[row] {
+                place(row, cell, refresh: false)
+            }
         }
     }
 
@@ -647,6 +672,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
                 to: nil,
             )))
             element.setAccessibilityLabel(item.name)
+            element.setAccessibilityValue(cell.showsUneditedPreview ? "Unedited preview" : nil)
             element.setAccessibilityIdentifier("grid.\(item.url.lastPathComponent)")
             element.setAccessibilitySelected(cell.isActive || cell.isInSelection)
             elements[item.url] = element

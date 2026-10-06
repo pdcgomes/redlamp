@@ -631,6 +631,8 @@ public final class EditorModel {
     public internal(set) var previousModule: AppModule?
     /// Photos' previews, for the Library loupe and for Develop until a photo's render lands.
     @ObservationIgnored public let previews: PhotoPreviews
+    /// Edited photos' thumbnails and previews, rendered with their edits in the background (LIB-17).
+    @ObservationIgnored public let editRenders: EditRenders
     /// The grid's thumbnail size and cell style, the loupe's zoom, and each source's view as last left.
     @ObservationIgnored public private(set) lazy var libraryViews = LibraryViewState(defaults: library.defaults)
     #if DEBUG || REDLAMP_PROFILING
@@ -776,6 +778,9 @@ public final class EditorModel {
         }
         self.thumbnailLoader.library = { [weak library = self.library] in library?.storeThumbnail(for: $0) }
         previews.library = { [weak library = self.library] in library?.storeThumbnail(for: $0) }
+        editRenders = EditRenders(library: self.library, scheduler: self.library.scheduler)
+        self.thumbnailLoader.renders = editRenders
+        previews.renders = editRenders
         canvas.onRenderSizeChange = { [weak self] _ in self?.requestRender() }
         settingsSync.makeEngine = { [weak self] in self?.makeWorkerEngine?() }
         settingsSync.sidecars = self.library.sidecars
@@ -793,6 +798,7 @@ public final class EditorModel {
             }
         }
         activityRecorder = ActivityRecorder(model: self)
+        editRenders.editor = self
     }
 
     // MARK: - Opening a photo (folders: EditorModel+Library)
@@ -1349,6 +1355,7 @@ public final class EditorModel {
         request.visualizePointColor = visualizePointColorRange ? selectedPointColorSwatch?.id : nil
         request.comparison = isComparing ? beforeRecipe : nil
         engine.render(request)
+        editRenders.developAsked()
         readoutRecipe = displayed
         refreshReadout()
     }
@@ -1361,6 +1368,7 @@ public final class EditorModel {
     @ObservationIgnored private var debugRequestTimes: [(generation: UInt64, at: ContinuousClock.Instant)] = []
 
     private func receive(_ frame: RenderedFrame) {
+        editRenders.developRendered()
         guard info != nil else { return }
         if let pending = pendingCanvas {
             guard frame.generation >= pending.firstGeneration else { return }

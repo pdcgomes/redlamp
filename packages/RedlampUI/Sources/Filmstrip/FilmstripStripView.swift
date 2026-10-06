@@ -24,6 +24,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     let scrollView = FilmstripScrollView()
     private let model: EditorModel
     private var observation: LibraryObservation?
+    private var editObservation: LibraryObservation?
     private var tracker: Tracker?
     /// The selection and marks as last followed. Cells are drawn from these, not from the model,
     /// which can be a turn ahead, so `follow` knows every cell it has to change.
@@ -87,11 +88,13 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         observation = nil
+        editObservation = nil
         tracker?.cancel()
         tracker = nil
         guard window != nil else { return }
         collectionView.reloadData()
         observation = model.library.observe { [weak self] diff in self?.apply(diff) }
+        editObservation = model.editRenders.observe { [weak self] urls in self?.editsShown(urls) }
         selected = model.selection
         wasInSight = isInShownModule(model)
         tracker = Tracker { [weak self] in
@@ -185,7 +188,10 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         let view = collectionView.makeItem(withIdentifier: FilmstripItem.identifier, for: indexPath)
         guard let item = view as? FilmstripItem, model.items.indices.contains(indexPath.item) else { return view }
         let photo = model.items[indexPath.item]
-        item.cell.configure(photo, image: model.thumbnailLoader.cached(photo))
+        item.cell.rendersEdit = model.editRenders.renders(photo)
+        item.cell.configure(
+            photo, image: model.thumbnailLoader.cached(photo), edit: model.editRenders.shownEdit(for: photo),
+        )
         item.cell.isSelected = photo.url == selected
         item.cell.isInSelection = photo.url != selected && marked.contains(model.library.photoIDs[indexPath.item])
         item.cell.onClick = { [weak self] modifiers in
@@ -227,16 +233,18 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
             item.request = nil
             model.thumbnailLoader.cancel(id)
         }
-        guard item.cell.image == nil || item.cell.item?.modified != photo.modified else { return }
+        let edit = model.editRenders.shownEdit(for: photo)
+        guard item.cell.image == nil || item.cell.item?.modified != photo.modified || item.cell.shownEdit != edit
+        else { return }
         if let image = model.thumbnailLoader.cached(photo) {
-            item.cell.setImage(image)
+            item.cell.setImage(image, edit: edit)
             return
         }
         item.request = model.thumbnailLoader.request(photo, lane: .onScreen) { [weak item] image in
             guard let item, item.cell.item?.url == photo.url else { return }
             item.request = nil
             if let image {
-                item.cell.setImage(image)
+                item.cell.setImage(image, edit: edit)
             }
         }
     }
@@ -265,6 +273,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         guard let first = rows.min(), let last = rows.max() else { return }
         model.thumbnailLoader.protected = Set(rows.filter(model.items.indices.contains).map { model.items[$0].url })
         model.library.prioritize(first ..< last + 1)
+        model.editRenders.show(first ..< last + 1, in: .filmstrip)
         let middle = CGPoint(x: scrollView.contentView.bounds.midX, y: collectionView.bounds.midY)
         if let row = collectionView.indexPathForItem(at: middle)?.item, model.items.indices.contains(row) {
             model.filmstripPlace = model.items[row].url
@@ -297,13 +306,31 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
             }
             let photo = model.items[row]
             let rewritten = item.cell.item?.modified != photo.modified
+            item.cell.rendersEdit = model.editRenders.renders(photo)
             item.cell.configure(photo, image: nil)
             if rewritten {
                 item.cell.setImage(nil)
             }
-            if item.cell.image == nil {
+            if item.cell.image == nil || item.cell.shownEdit != model.editRenders.shownEdit(for: photo) {
                 requestThumbnail(for: item, photo)
             }
+        }
+    }
+
+    /// The thumbnails of these photos show another edit: their cells ask for them, or the strip reloads
+    /// once it's in sight.
+    private func editsShown(_ urls: [URL]) {
+        guard isInShownModule(model) else {
+            isStale = true
+            return
+        }
+        for url in urls {
+            guard let row = model.library.index(of: url),
+                  let item = collectionView.item(at: IndexPath(item: row, section: 0)) as? FilmstripItem
+            else { continue }
+            let photo = model.items[row]
+            item.cell.rendersEdit = model.editRenders.renders(photo)
+            requestThumbnail(for: item, photo)
         }
     }
 

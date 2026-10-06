@@ -47,8 +47,10 @@ struct RedlampApp: App {
         }
         AppDelegate.closeLibrary = { [service] in service?.close() }
         let model = EditorModel(engine: engine, library: library)
-        // Sync and Paste onto a selection open the other photos in an engine of their own.
+        // Sync and Paste onto a selection open the other photos in an engine of their own, and the
+        // library renders edited photos' thumbnails in another.
         model.makeWorkerEngine = { try? RedlampEngine(decoder: DecodeServiceClient(), lensProfiles: .user) }
+        model.editRenders.makeEngine = { try? RedlampEngine(decoder: DecodeServiceClient(), lensProfiles: .user) }
         if let layout = UserDefaults.standard.string(forKey: "compareLayout").flatMap(CompareLayout.init) {
             model.compareLayout = layout
         }

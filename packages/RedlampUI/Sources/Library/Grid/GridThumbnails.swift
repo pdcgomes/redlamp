@@ -7,8 +7,9 @@ import RedlampLibrary
 /// grid tier up to its 384 pixels and its preview tier beyond, made there first when it has none; for any
 /// other, the filmstrip's pack at the smallest size and the photo's embedded preview beyond. Each is
 /// decoded off the main thread and drawn there in the window's colour space, so Core Animation shows it
-/// as it is rather than converting it on the main thread as it commits. Kept in memory within a byte
-/// budget, the photos on screen last to go.
+/// as it is rather than converting it on the main thread as it commits. An edited photo's, once `renders`
+/// has rendered its edit, is that render's tier (LIB-17). Kept in memory by the edit they show, within a
+/// byte budget, the photos on screen last to go.
 @MainActor
 final class GridThumbnails {
     /// The long edges thumbnails are decoded at; a cell takes the smallest at least as large as its image.
@@ -18,9 +19,11 @@ final class GridThumbnails {
         edges.first { CGFloat($0) >= pixels } ?? edges[edges.count - 1]
     }
 
+    /// A photo's thumbnail at `edge`, showing `edit`'s render, or with none its embedded preview.
     struct Key: Hashable {
         let url: URL
         let edge: Int
+        let edit: EditDigest?
     }
 
     private struct Entry {
@@ -46,6 +49,7 @@ final class GridThumbnails {
     private let scheduler: WorkScheduler
     private let decode: @Sendable (URL, Int) -> CGImage?
     private let store: @MainActor (LibraryItem) -> (StoreThumbnails, ContentKey)?
+    private weak var renders: EditRenders?
     private let packs: ThumbnailPacks
     private var cache: [Key: Entry] = [:]
     private var used = 0
@@ -59,13 +63,14 @@ final class GridThumbnails {
 
     init(
         scheduler: WorkScheduler, packs: ThumbnailPacks, budget: Int = 64 << 20,
-        store: @escaping @MainActor (LibraryItem) -> (StoreThumbnails, ContentKey)?,
+        store: @escaping @MainActor (LibraryItem) -> (StoreThumbnails, ContentKey)?, renders: EditRenders? = nil,
         decode: @escaping @Sendable (URL, Int) -> CGImage?,
     ) {
         self.scheduler = scheduler
         self.packs = packs
         self.budget = budget
         self.store = store
+        self.renders = renders
         self.decode = decode
     }
 
@@ -73,9 +78,15 @@ final class GridThumbnails {
         used
     }
 
-    /// The thumbnail at `edge`, if it's in memory and still matches the file.
+    /// The edit `item`'s thumbnails show: its edit's digest once that's rendered, nil for its embedded
+    /// preview.
+    func edit(for item: LibraryItem) -> EditDigest? {
+        renders?.shownEdit(for: item)
+    }
+
+    /// The thumbnail at `edge`, if it's in memory, still matches the file and shows the edit it's to show.
     func cached(_ item: LibraryItem, edge: Int) -> CGImage? {
-        let key = Key(url: item.url, edge: edge)
+        let key = Key(url: item.url, edge: edge, edit: edit(for: item))
         guard var entry = cache[key], entry.size == item.size, entry.modified == item.modified else { return nil }
         tick += 1
         entry.used = tick
@@ -105,7 +116,7 @@ final class GridThumbnails {
             completion(nil)
             return id
         }
-        let key = Key(url: item.url, edge: edge)
+        let key = Key(url: item.url, edge: edge, edit: edit(for: item))
         requested[id] = key
         if waiting[key] != nil {
             waiting[key]?[id] = completion
@@ -116,9 +127,8 @@ final class GridThumbnails {
         lanes[key] = lane
         let (store, packs, decode, space, generation) = (store(item), packs, decode, colorSpace, generation)
         scheduler.submit(lane, key: Self.job(key)) {
-            let image = Self.load(item, edge: edge, store: store, packs: packs, decode: decode).flatMap {
-                Self.drawn($0, in: space)
-            }
+            let image = Self.load(item, edge: edge, store: store, edit: key.edit, packs: packs, decode: decode)
+                .flatMap { Self.drawn($0, in: space) }
             Task { @MainActor [weak self] in self?.finish(key, item, image, generation: generation) }
         }
         return id
@@ -143,7 +153,7 @@ final class GridThumbnails {
     }
 
     private static func job(_ key: Key) -> String {
-        "grid:\(key.edge):" + key.url.path
+        "grid:\(key.edge):" + (key.edit.map { "\($0):" } ?? "") + key.url.path
     }
 
     private func finish(_ key: Key, _ item: LibraryItem, _ image: CGImage?, generation: Int) {
@@ -154,6 +164,8 @@ final class GridThumbnails {
         }
         if let image, generation == self.generation {
             insert(image, for: key, item)
+        } else if image == nil, let edit = key.edit {
+            renders?.missing(item.url, edit)
         }
         for completion in completions.values {
             completion(generation == self.generation ? image : nil)
@@ -192,12 +204,20 @@ final class GridThumbnails {
 
     // MARK: - Decoding
 
-    /// The photo's thumbnail at most `edge` pixels on its long edge. It blocks: only ever off the main
-    /// thread.
+    /// The photo's thumbnail at most `edge` pixels on its long edge; with `edit`, the store's render of it,
+    /// or nil when it has none. It blocks: only ever off the main thread.
     nonisolated static func load(
-        _ item: LibraryItem, edge: Int, store: (StoreThumbnails, ContentKey)?, packs: ThumbnailPacks,
-        decode: @escaping @Sendable (URL, Int) -> CGImage?,
+        _ item: LibraryItem, edge: Int, store: (StoreThumbnails, ContentKey)?, edit: EditDigest? = nil,
+        packs: ThumbnailPacks, decode: @escaping @Sendable (URL, Int) -> CGImage?,
     ) -> CGImage? {
+        if let edit {
+            guard let (thumbnails, key) = store else { return nil }
+            let tier: PhotoStore.Tier = edge > PhotoStore.Tier.grid.pixelSize ? .preview : .grid
+            return thumbnails.image(
+                for: key, tier: tier, edit: edit, size: item.size, modified: item.modified,
+                pixelSize: min(edge, tier.pixelSize),
+            )
+        }
         if let (thumbnails, key) = store {
             let grid = PhotoStore.Tier.grid.pixelSize
             if edge > grid, let preview = preview(item, edge: edge, thumbnails: thumbnails, key: key, decode: decode) {

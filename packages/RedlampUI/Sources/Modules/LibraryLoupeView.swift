@@ -2,26 +2,33 @@ import AppKit
 import QuartzCore
 import RedlampDesign
 import RedlampDocument
+import RedlampLibrary
 
 /// The Library loupe (E): the active photo large, from its thumbnail at once and its screen-size preview
 /// once that's decoded, with its name, date and camera settings above it as an expanded grid cell has
 /// them. Z, Space or a click zoom it to 1:1, where the preview shows at the photo's full size until the
-/// photo itself is decoded off the main thread, and a drag pans it; Z or a click fit it again. It reads
-/// nothing while it isn't shown. LIB-16 adds Compare and Survey.
+/// photo itself is decoded off the main thread, and a drag pans it; Z or a click fit it again. An edited
+/// photo shows its edit once the library has rendered it, and until then its embedded preview, marked in
+/// its corner as a grid cell is (LIB-17). It reads nothing while it isn't shown. LIB-16 adds Compare and
+/// Survey.
 final class LibraryLoupeView: NSView {
     private static let inset: CGFloat = 20
     private static let captionHeight: CGFloat = 34
 
     private let model: EditorModel
     private let photo = CALayer()
+    private let mark = CALayer()
     private let name = NSTextField(labelWithString: "")
     private let caption = NSTextField(labelWithString: "")
     private let details: PhotoDetailsCache
     private var trackers: [Tracker] = []
+    private var editObservation: LibraryObservation?
     /// The photo shown, and whether its preview, and at 1:1 the photo itself, are in.
     private var shown: URL?
     private(set) var showsPreview = false
     private(set) var showsFullPhoto = false
+    /// The edit the image shows, nil for the photo's embedded preview or the photo itself.
+    private(set) var shownEdit: EditDigest?
     /// The photo's size in pixels, from the index or its header, else from the image shown.
     private var pixelSize: CGSize?
     /// At 1:1, the point of the photo at the view's middle, 0 ... 1 across and down.
@@ -40,6 +47,9 @@ final class LibraryLoupeView: NSView {
         photo.minificationFilter = .trilinear
         photo.actions = LibraryGridCell.noActions
         layer?.addSublayer(photo)
+        mark.actions = LibraryGridCell.noActions
+        mark.isHidden = true
+        layer?.addSublayer(mark)
         name.font = Typography.label.nsFont
         name.textColor = Palette.label.nsColor
         caption.font = Typography.caption.nsFont
@@ -78,6 +88,12 @@ final class LibraryLoupeView: NSView {
         photo.frame
     }
 
+    /// An edited photo the library renders shows an image without its edit, and is marked so.
+    var showsUneditedPreview: Bool {
+        guard image != nil, shownEdit == nil, let shown, let item = model.library.item(for: shown) else { return false }
+        return model.editRenders.renders(item)
+    }
+
     private var zoom: LoupeZoom {
         model.libraryViews.loupeZoom
     }
@@ -86,7 +102,9 @@ final class LibraryLoupeView: NSView {
         super.viewDidMoveToWindow()
         trackers.forEach { $0.cancel() }
         trackers = []
+        editObservation = nil
         guard window != nil else { return }
+        editObservation = model.editRenders.observe { [weak self] urls in self?.editsShown(urls) }
         trackers = [
             Tracker { [weak self] in
                 guard let self else { return }
@@ -125,25 +143,41 @@ final class LibraryLoupeView: NSView {
             guard let self, shown == url else { return }
             showDetails(of: item)
         }
+        let edit = model.editRenders.shownEdit(for: item)
         if let preview = model.previews.cached(url) {
-            setImage(preview)
+            setImage(preview, edit: edit)
             showsPreview = true
         } else {
-            setImage(model.thumbnailLoader.cached(item))
+            setImage(model.thumbnailLoader.cached(item), edit: edit)
             if image == nil {
                 model.thumbnailLoader.request(item) { [weak self] image in
                     guard let self, shown == url, !showsPreview, let image else { return }
-                    setImage(image)
+                    setImage(image, edit: edit)
                 }
             }
-            model.previews.request(item) { [weak self] preview in
-                guard let self, shown == url, !showsFullPhoto, let preview else { return }
-                setImage(preview)
-                showsPreview = true
-            }
+            requestPreview(of: item)
         }
         if zoom == .actual {
             loadFullPhoto(item)
+        }
+    }
+
+    private func requestPreview(of item: LibraryItem) {
+        let edit = model.editRenders.shownEdit(for: item)
+        model.previews.request(item) { [weak self] preview in
+            guard let self, shown == item.url, !showsFullPhoto, let preview else { return }
+            setImage(preview, edit: edit)
+            showsPreview = true
+        }
+    }
+
+    /// The previews of these photos show another edit: the one shown is asked for again.
+    private func editsShown(_ urls: [URL]) {
+        guard let shown, urls.contains(shown), let item = model.library.item(for: shown) else { return }
+        if showsFullPhoto {
+            updateMark()
+        } else {
+            requestPreview(of: item)
         }
     }
 
@@ -156,9 +190,30 @@ final class LibraryLoupeView: NSView {
         }
     }
 
-    private func setImage(_ image: CGImage?) {
+    private func setImage(_ image: CGImage?, edit: EditDigest? = nil) {
         photo.contents = image
+        shownEdit = image == nil ? nil : edit
         layoutPhoto()
+    }
+
+    private func updateMark() {
+        let marked = showsUneditedPreview
+        setAccessibilityValue(marked ? "Unedited preview" : nil)
+        let size = GridBadges.Kind.uneditedPreview.size
+        let visible = photo.frame.intersection(bounds)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        mark.isHidden = !marked || visible.width < size.width * 3 || visible.height < size.height * 3
+        if !mark.isHidden {
+            let scale = window?.backingScaleFactor ?? 2
+            mark.contents = GridBadges.image(.uneditedPreview, scale: scale)
+            mark.contentsScale = scale
+            mark.frame = CGRect(
+                x: visible.maxX - size.width - 8, y: visible.maxY - size.height - 8, width: size.width,
+                height: size.height,
+            )
+        }
+        CATransaction.commit()
     }
 
     // MARK: - Zoom
@@ -221,6 +276,7 @@ final class LibraryLoupeView: NSView {
         photo.frame = frame
         photo.contentsScale = window?.backingScaleFactor ?? 2
         CATransaction.commit()
+        updateMark()
     }
 
     /// Where a side `length` long goes in `extent` with the point `focus` along it in the middle: centred

@@ -2,6 +2,7 @@ import AppKit
 import QuartzCore
 import RedlampDocument
 import RedlampEngineAPI
+import RedlampLibrary
 
 /// A grid cell: layers only, no view, so a cell scrolling into view sets a few layers' frames and contents
 /// and AppKit has no view to add, lay out, track or describe. The thumbnail and the text of an expanded
@@ -26,6 +27,17 @@ final class LibraryGridCell {
     /// The thumbnail request it's waiting on, and the edge it asked for.
     var request: UInt64?
     private(set) var edge = 0
+    /// The edit its thumbnail shows, nil for the photo's embedded preview.
+    private(set) var shownEdit: EditDigest?
+    /// The library renders the photo's edit (LIB-17), so its embedded preview is marked until then.
+    var rendersEdit = false {
+        didSet {
+            if rendersEdit != oldValue {
+                showBadges(of: item)
+            }
+        }
+    }
+
     /// What its text image shows.
     var textKey: GridText.Key?
 
@@ -76,6 +88,11 @@ final class LibraryGridCell {
         badges.values.count { !$0.isHidden } + (label?.isHidden == false ? 1 : 0)
     }
 
+    /// An edited photo the library renders shows its embedded preview, and is marked so.
+    var showsUneditedPreview: Bool {
+        item?.hasEdits == true && rendersEdit && shownEdit == nil
+    }
+
     /// Lays the cell out at `frame` for `geometry`, on a screen of `scale`.
     func place(_ frame: CGRect, geometry: GridCellGeometry, scale: CGFloat) {
         root.frame = frame
@@ -92,13 +109,13 @@ final class LibraryGridCell {
         }
     }
 
-    /// Shows `item` in row `row`; `image` is its thumbnail if it's in memory.
-    func configure(_ item: LibraryItem, row: Int, image: CGImage?, edge: Int) {
+    /// Shows `item` in row `row`; `image` is its thumbnail if it's in memory, showing `edit`.
+    func configure(_ item: LibraryItem, row: Int, image: CGImage?, edge: Int, edit: EditDigest? = nil) {
         let changedPhoto = item.url != self.item?.url || row != self.row
         self.item = item
         self.row = row
         if changedPhoto || image != nil {
-            setImage(image, edge: image == nil ? 0 : edge)
+            setImage(image, edge: image == nil ? 0 : edge, edit: edit)
         }
         if changedPhoto {
             text?.contents = nil
@@ -109,10 +126,12 @@ final class LibraryGridCell {
         showBadges(of: item)
     }
 
-    func setImage(_ image: CGImage?, edge: Int) {
+    func setImage(_ image: CGImage?, edge: Int, edit: EditDigest? = nil) {
         thumbnail.contents = image
         self.edge = edge
-        if item?.isLocal == false {
+        let marked = showsUneditedPreview
+        shownEdit = image == nil ? nil : edit
+        if item?.isLocal == false || showsUneditedPreview != marked {
             showBadges(of: item)
         }
     }
@@ -167,7 +186,8 @@ final class LibraryGridCell {
             shows && item.map { SupportedFormats.isStack($0.url) } == true ? .stack : nil,
             centre: geometry.stack,
         )
-        set(.edited, shows && item?.hasEdits == true ? .edited : nil, centre: geometry.edited)
+        let edited: GridBadges.Kind = showsUneditedPreview ? .uneditedPreview : .edited
+        set(.edited, shows && item?.hasEdits == true ? edited : nil, centre: geometry.edited)
         set(.rating, shows && metadata.rating > 0 ? .rating(metadata.rating) : nil, left: geometry.rating)
         set(.cloud, item?.isLocal == false && thumbnail.contents == nil ? .cloud : nil, centre: CGPoint(
             x: geometry.image.midX, y: geometry.image.midY,

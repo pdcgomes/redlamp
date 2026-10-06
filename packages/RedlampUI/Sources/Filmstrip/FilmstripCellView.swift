@@ -3,6 +3,7 @@ import QuartzCore
 import RedlampDesign
 import RedlampDocument
 import RedlampEngineAPI
+import RedlampLibrary
 
 /// A filmstrip cell: the thumbnail is a layer's contents, composited by Core Animation, and the
 /// badges are drawn into their own layer only when they change. Cells are reused as the strip
@@ -27,6 +28,13 @@ final class FilmstripCellView: NSView {
     private static let inset: CGFloat = 4
 
     private(set) var item: LibraryItem?
+    /// The edit its thumbnail shows, nil for the photo's embedded preview.
+    private(set) var shownEdit: EditDigest?
+    /// The library renders the photo's edit (LIB-17), so its embedded preview is marked until then.
+    var rendersEdit = false {
+        didSet { badges.uneditedPreview = showsUneditedPreview }
+    }
+
     /// A click, with the modifier keys held (⌘ and ⇧ select several photos).
     var onClick: ((NSEvent.ModifierFlags) -> Void)?
     /// The photo's context menu (`FilmstripMenu`).
@@ -90,31 +98,39 @@ final class FilmstripCellView: NSView {
 
     override func updateLayer() {}
 
-    /// Shows `item`; `image` is its thumbnail if already in memory.
-    func configure(_ item: LibraryItem, image: CGImage?) {
+    /// Shows `item`; `image` is its thumbnail if already in memory, showing `edit`.
+    func configure(_ item: LibraryItem, image: CGImage?, edit: EditDigest? = nil) {
         let changedPhoto = item.url != self.item?.url
         self.item = item
         if changedPhoto || image != nil {
-            setImage(image)
+            setImage(image, edit: edit)
         }
         if changedPhoto {
             isMenuTarget = false
         }
         badges.item = item
         badges.hasImage = thumbnail.contents != nil
+        badges.uneditedPreview = showsUneditedPreview
         toolTip = item.name
         layer?.opacity = item.metadata.flag == .reject ? 0.45 : 1
         setAccessibilityLabel(item.name)
         setAccessibilityIdentifier("filmstrip.\(item.url.lastPathComponent)")
     }
 
-    func setImage(_ image: CGImage?) {
+    func setImage(_ image: CGImage?, edit: EditDigest? = nil) {
         thumbnail.contents = image
+        shownEdit = image == nil ? nil : edit
         badges.hasImage = image != nil
+        badges.uneditedPreview = showsUneditedPreview
     }
 
     var image: CGImage? {
         thumbnail.contents.map { $0 as! CGImage } // swiftlint:disable:this force_cast
+    }
+
+    /// An edited photo the library renders shows its embedded preview, and is marked so.
+    var showsUneditedPreview: Bool {
+        item?.hasEdits == true && rendersEdit && shownEdit == nil
     }
 
     private func updateBackground() {
@@ -195,6 +211,14 @@ final class FilmstripBadgesView: LayerDrawnView {
         }
     }
 
+    /// The edited badge marks the embedded preview showing until the edit is rendered (LIB-17).
+    var uneditedPreview = false {
+        didSet {
+            guard uneditedPreview != oldValue, item?.hasEdits == true else { return }
+            setNeedsContentDisplay()
+        }
+    }
+
     private struct Badges: Equatable {
         var edited = false
         var metadata = PhotoMetadata()
@@ -249,7 +273,8 @@ final class FilmstripBadgesView: LayerDrawnView {
             context.setFillColor(shade.cgColor)
             context.fillEllipse(in: circle)
             Symbol.draw(
-                "slider.horizontal.3", pointSize: 8, weight: .semibold, color: white.opacity(0.85),
+                uneditedPreview ? "ellipsis" : "slider.horizontal.3", pointSize: 8,
+                weight: uneditedPreview ? .bold : .semibold, color: white.opacity(0.85),
                 centeredAt: CGPoint(x: circle.midX, y: circle.midY), scale: scale,
             )
         }

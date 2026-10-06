@@ -8,12 +8,14 @@ import RedlampDocument
 enum GridBadges {
     enum Kind: Hashable {
         case pick, reject, stack, edited, cloud
+        /// Edited, shown from its embedded preview until the library has rendered the edit (LIB-17).
+        case uneditedPreview
         case rating(Int)
 
         /// The badge's size in points.
         var size: CGSize {
             switch self {
-            case .pick, .reject, .stack, .edited: CGSize(width: 16, height: 16)
+            case .pick, .reject, .stack, .edited, .uneditedPreview: CGSize(width: 16, height: 16)
             case .cloud: CGSize(width: 24, height: 24)
             case let .rating(stars): CGSize(width: 8 + CGFloat(stars) * 7, height: 11)
             }
@@ -68,6 +70,17 @@ enum GridBadges {
             Symbol.draw(
                 "slider.horizontal.3", pointSize: 8, weight: .semibold, color: white.opacity(0.85),
                 centeredAt: middle, scale: scale,
+            )
+        case .uneditedPreview:
+            context.setFillColor(shade)
+            context.fillEllipse(in: CGRect(origin: .zero, size: size))
+            Symbol.draw(
+                "ellipsis",
+                pointSize: 8,
+                weight: .bold,
+                color: white.opacity(0.85),
+                centeredAt: middle,
+                scale: scale,
             )
         case .cloud:
             Symbol.draw(
