@@ -11,6 +11,8 @@ protocol QuerySource: Sendable {
     func photoIDs(matching match: String) async throws -> [Int64]
     func photoIDs(withKeywords keywords: [Int64]) async throws -> [Int64]
     func photoIDs(inCollections collections: [Int64]) async throws -> [Int64]
+    /// The synonyms of the library's keywords, by keyword path (LIB-21).
+    func keywordSynonyms() async throws -> [String: [String]]
     /// `store` with photos `ids` as the index has them now: changed, added or gone.
     func applying(_ ids: [Int64], to store: ColumnStore) async throws -> ColumnStore
     /// The IDs `sql` returns, handing the first `pageSize` to `firstPage` as soon as they're read.
@@ -18,6 +20,12 @@ protocol QuerySource: Sendable {
         _ sql: QuerySQL, pageSize: Int, cancellation: QueryCancellation,
         firstPage: @escaping @Sendable (ContiguousArray<Int64>) -> Void,
     ) async throws -> ContiguousArray<Int64>
+}
+
+extension QuerySource {
+    func keywordSynonyms() async throws -> [String: [String]] {
+        [:]
+    }
 }
 
 /// The library's small tables by ID: thousands of rows where photos are millions. Folder, camera,
@@ -30,6 +38,8 @@ struct QueryNames: Sendable, Hashable {
     /// Each collection's path from the top (`Portfolio/2024`); a collection whose parents don't
     /// lead to the top has none.
     var collections: [Int64: String] = [:]
+    /// The synonyms of the keywords that have some, by path, from the library's definitions.
+    var keywordSynonyms: [String: [String]] = [:]
 
     /// The IDs whose names `matches`, in order.
     static func ids(_ names: [Int64: String], where matches: (String) -> Bool) -> [Int64] {
@@ -42,12 +52,16 @@ struct QueryNames: Sendable, Hashable {
 final class QueryVocabulary: Sendable {
     enum Table: Sendable, Hashable {
         case folders, cameras, lenses, keywords, collections
+        /// Keywords by what their synonyms hold, for free text.
+        case keywordSynonyms
     }
 
     let names: QueryNames
     private let folders: NameMatcher
     private let cameras: NameMatcher
     private let lenses: NameMatcher
+    /// Made the first time a keyword term needs it.
+    private let keywords = Mutex<KeywordMatcher?>(nil)
     private let matched = Mutex<[Match: [Int64]]>([:])
 
     private struct Match: Hashable {
@@ -63,7 +77,8 @@ final class QueryVocabulary: Sendable {
     }
 
     /// The IDs in `table` that `text` matches, in order: folders, cameras and lenses whose path or
-    /// name holds it (`QueryText.contains`), keywords and collections it names (`QueryText.levelsMatch`).
+    /// name holds it (`QueryText.contains`), keywords it names or is a synonym of (`KeywordQuery`) and
+    /// those with a synonym holding it, and collections it names (`QueryText.levelsMatch`).
     func ids(in table: Table, matching text: String) -> [Int64] {
         let match = Match(table: table, text: text)
         if let ids = matched.withLock({ $0[match] }) {
@@ -73,7 +88,8 @@ final class QueryVocabulary: Sendable {
         case .folders: folders.ids(containing: text)
         case .cameras: cameras.ids(containing: text)
         case .lenses: lenses.ids(containing: text)
-        case .keywords: QueryNames.ids(names.keywords) { QueryText.levelsMatch(path: $0, value: text) }
+        case .keywords: keywordMatcher().ids(matching: text)
+        case .keywordSynonyms: keywordMatcher().ids(withSynonymContaining: text)
         case .collections: QueryNames.ids(names.collections) { QueryText.levelsMatch(path: $0, value: text) }
         }
         matched.withLock { matched in
@@ -83,6 +99,22 @@ final class QueryVocabulary: Sendable {
             matched[match] = ids
         }
         return ids
+    }
+
+    /// Whether any keyword has a synonym: free text looks them up only then.
+    var hasKeywordSynonyms: Bool {
+        !names.keywordSynonyms.isEmpty
+    }
+
+    private func keywordMatcher() -> KeywordMatcher {
+        keywords.withLock { matcher in
+            if let matcher {
+                return matcher
+            }
+            let made = KeywordMatcher(keywords: names.keywords, synonyms: names.keywordSynonyms)
+            matcher = made
+            return made
+        }
     }
 }
 
@@ -122,7 +154,14 @@ struct IndexQuerySource: QuerySource {
     }
 
     func names() async throws -> QueryNames {
-        try await index.read { try $0.queryNames() }
+        var names = try await index.read { try $0.queryNames() }
+        names.keywordSynonyms = try await keywordSynonyms()
+        return names
+    }
+
+    func keywordSynonyms() async throws -> [String: [String]] {
+        let url = KeywordDefinitions.url(in: LibraryPaths(root: index.url.deletingLastPathComponent()))
+        return try await LibraryIndex.offCaller { KeywordDefinitions.cached(at: url).synonyms }
     }
 
     func photoIDs(matching match: String) async throws -> [Int64] {

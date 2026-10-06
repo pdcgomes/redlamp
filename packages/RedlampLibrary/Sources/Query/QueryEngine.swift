@@ -189,7 +189,7 @@ public final class QueryEngine: Sendable {
     private func searchSQL(
         _ query: LibraryQuery?, sort: QuerySort, pageSize: Int, yield: @escaping @Sendable (QueryResult) -> Void,
     ) async throws {
-        let sql = QuerySQL(query, sort: sort, today: today)
+        let sql = try await QuerySQL(query, sort: sort, today: today, synonyms: source.keywordSynonyms())
         let cancellation = QueryCancellation()
         let ids = try await withTaskCancellationHandler {
             try await source.run(sql, pageSize: pageSize, cancellation: cancellation) { page in

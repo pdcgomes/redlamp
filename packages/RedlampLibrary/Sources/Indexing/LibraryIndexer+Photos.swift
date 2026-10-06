@@ -42,7 +42,10 @@ extension LibraryIndexer.Run {
             record.sidecarModified = sidecar.modified
             record.state = []
             record.fileID = job.entry.fileIdentifier
-            let photo = LibraryIndexer.PendingPhoto(folder: job.folder, record: record, isNew: false)
+            let photo = LibraryIndexer.PendingPhoto(
+                folder: job.folder, record: record, keywords: sidecar.summary.metadata.keywords.map(KeywordPath.texts),
+                isNew: false,
+            )
             count(photo, in: job.folder)
             await batcher.add([.photo(photo)])
         case .refresh:
@@ -226,8 +229,8 @@ extension LibraryIndexer.Run {
     // MARK: - Rows
 
     /// The photo's row, from its listing and what was read: its rating, flag and label are its
-    /// sidecar's, else its other app's `.xmp`'s, else its own XMP's; its keywords its own and its
-    /// `.xmp`'s; its title and caption its `.xmp`'s, else its own.
+    /// sidecar's, else its other app's `.xmp`'s, else its own XMP's; its keywords its sidecar's when it
+    /// holds them, else its own and its `.xmp`'s; its title and caption its `.xmp`'s, else its own.
     static func record(
         _ job: LibraryIndexer.PhotoJob, key: ContentKey, metadata: CaptureMetadata?, sidecar: SidecarSummary?,
         xmp: CaptureMetadata?,
@@ -264,9 +267,10 @@ extension LibraryIndexer.Run {
         let otherLabel = (xmp?.label ?? embedded?.label).flatMap { name in
             ColorLabel.allCases.first { $0.rawValue.caseInsensitiveCompare(name) == .orderedSame }
         }
-        var keywords: [String] = []
+        var keywords = sidecar?.metadata.keywords.map(KeywordPath.texts) ?? []
         var seen = Set<String>()
-        for keyword in (embedded?.keywords ?? []) + (xmp?.keywords ?? []) where seen.insert(keyword).inserted {
+        for keyword in sidecar?.metadata.keywords == nil ? (embedded?.keywords ?? []) + (xmp?.keywords ?? []) : []
+            where seen.insert(keyword).inserted {
             if keyword.split(separator: "/").contains(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) {
                 keywords.append(keyword)
             }

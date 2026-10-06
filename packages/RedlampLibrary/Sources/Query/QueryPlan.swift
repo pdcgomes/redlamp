@@ -63,11 +63,13 @@ indirect enum QueryPlan: Sendable, Hashable {
         case .all:
             return .all
         case let .text(text):
+            let synonyms = vocabulary.hasKeywordSynonyms ? vocabulary.ids(in: .keywordSynonyms, matching: text) : []
             return any([
                 .leaf(.rows(.match(QueryText.match(text)))),
                 folders(vocabulary.ids(in: .folders, matching: text)),
                 cameras(vocabulary.ids(in: .cameras, matching: text), store),
                 lenses(vocabulary.ids(in: .lenses, matching: text), store),
+                synonyms.isEmpty ? .nothing : .leaf(.rows(.keywords(synonyms))),
             ])
         case let .filter(filter):
             let alternatives = filter.values.map { value in

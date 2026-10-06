@@ -19,9 +19,9 @@ struct QuerySQL: Sendable, Hashable {
     static let collectionDepth = 64
 
     /// The photos `query` finds, in `sort`'s order; nil finds every photo. `query` has been through
-    /// `LibraryQuery.searchable`.
-    init(_ query: LibraryQuery?, sort: QuerySort, today: Int) {
-        var compiler = Compiler(today: today)
+    /// `LibraryQuery.searchable`. `synonyms` are the keywords' synonyms, by path.
+    init(_ query: LibraryQuery?, sort: QuerySort, today: Int, synonyms: [String: [String]] = [:]) {
+        var compiler = Compiler(today: today, synonyms: KeywordSynonyms(synonyms))
         let predicate = query.map { compiler.predicate($0) } ?? "1"
         let direction = sort.ascending ? "" : " DESC"
         let keys: [String] = switch sort.key {
@@ -37,6 +37,7 @@ struct QuerySQL: Sendable, Hashable {
 
     private struct Compiler {
         let today: Int
+        let synonyms: KeywordSynonyms
         var bindings: [Binding] = []
 
         /// A predicate that's never NULL, so `NOT` leaves out exactly what it keeps.
@@ -47,9 +48,12 @@ struct QuerySQL: Sendable, Hashable {
             case let .text(text):
                 let match = bind(QueryText.match(text))
                 let part = [bind(text), bind(text), bind(text)]
+                let owners = synonyms.owners(containing: text)
+                let synonymous = owners.isEmpty ? "" : " OR " + keywords(within: owners)
                 return "(p.id IN (SELECT rowid FROM photo_text WHERE photo_text MATCH \(match))"
                     + " OR p.folder IN (SELECT id FROM folders WHERE redlamp_contains(path, \(part[0])))"
-                    + " OR \(Self.named("camera", "cameras", part[1])) OR \(Self.named("lens", "lenses", part[2])))"
+                    + " OR \(Self.named("camera", "cameras", part[1])) OR \(Self.named("lens", "lenses", part[2]))"
+                    + "\(synonymous))"
             case let .filter(filter):
                 var alternatives: [String] = []
                 for value in filter.values {
@@ -99,8 +103,12 @@ struct QuerySQL: Sendable, Hashable {
             case let (.edited, .bool(yes)):
                 return yes ? "(p.edited != 0)" : "(p.edited = 0)"
             case let (.keyword, .text(text)):
+                var tests = ["redlamp_keyword(k.path, \(bind(text)))"]
+                for owner in synonyms.owners(of: text) {
+                    tests.append("redlamp_within(k.path, \(bind(owner)))")
+                }
                 return "p.id IN (SELECT pk.photo FROM photo_keywords pk JOIN keywords k ON k.id = pk.keyword"
-                    + " WHERE redlamp_levels(k.path, \(bind(text))))"
+                    + " WHERE " + tests.joined(separator: " OR ") + ")"
             case let (.camera, .text(text)):
                 return Self.named("camera", "cameras", bind(text))
             case let (.lens, .text(text)):
@@ -134,6 +142,16 @@ struct QuerySQL: Sendable, Hashable {
             default:
                 return "0"
             }
+        }
+
+        /// The photos with a keyword at one of `owners` or inside it.
+        private mutating func keywords(within owners: [String]) -> String {
+            var tests: [String] = []
+            for owner in owners {
+                tests.append("redlamp_within(k.path, \(bind(owner)))")
+            }
+            return "p.id IN (SELECT pk.photo FROM photo_keywords pk JOIN keywords k ON k.id = pk.keyword WHERE "
+                + tests.joined(separator: " OR ") + ")"
         }
 
         private mutating func textMatch(_ match: String) -> String {
@@ -271,8 +289,9 @@ extension IndexQueries {
 enum QueryFunctions {
     /// Registers them on `database`'s connection, once.
     static func register(on database: SQLiteDatabase) throws {
-        if (try? database.cached("SELECT redlamp_contains('', ''), redlamp_levels('', ''), '' COLLATE redlamp_finder"))
-            != nil {
+        let probe = "SELECT redlamp_contains('', ''), redlamp_levels('', ''), redlamp_keyword('', ''),"
+            + " redlamp_within('', ''), '' COLLATE redlamp_finder"
+        if (try? database.cached(probe)) != nil {
             return
         }
         let flags = SQLITE_UTF8 | SQLITE_DETERMINISTIC
@@ -289,6 +308,18 @@ enum QueryFunctions {
                 nil,
             ),
             sqlite3_create_function_v2(database.handle, "redlamp_levels", 2, flags, nil, levelsFunction, nil, nil, nil),
+            sqlite3_create_function_v2(
+                database.handle,
+                "redlamp_keyword",
+                2,
+                flags,
+                nil,
+                keywordFunction,
+                nil,
+                nil,
+                nil,
+            ),
+            sqlite3_create_function_v2(database.handle, "redlamp_within", 2, flags, nil, withinFunction, nil, nil, nil),
             sqlite3_create_collation_v2(database.handle, "redlamp_finder", SQLITE_UTF8, nil, finderCollation, nil),
         ]
         if let failed = results.first(where: { $0 != SQLITE_OK }) {
@@ -313,6 +344,20 @@ private func levelsFunction(_ context: OpaquePointer?, _: Int32, _ values: Unsaf
         return sqlite3_result_int(context, 0)
     }
     sqlite3_result_int(context, QueryText.levelsMatch(path: path, value: value) ? 1 : 0)
+}
+
+private func keywordFunction(_ context: OpaquePointer?, _: Int32, _ values: UnsafeMutablePointer<OpaquePointer?>?) {
+    guard let values, let path = string(of: values[0]), let value = string(of: values[1]) else {
+        return sqlite3_result_int(context, 0)
+    }
+    sqlite3_result_int(context, KeywordQuery.matches(path: path, value: value) ? 1 : 0)
+}
+
+private func withinFunction(_ context: OpaquePointer?, _: Int32, _ values: UnsafeMutablePointer<OpaquePointer?>?) {
+    guard let values, let path = string(of: values[0]), let owner = string(of: values[1]) else {
+        return sqlite3_result_int(context, 0)
+    }
+    sqlite3_result_int(context, KeywordQuery.isWithin(path: path, owner: owner) ? 1 : 0)
 }
 
 private func finderCollation(
