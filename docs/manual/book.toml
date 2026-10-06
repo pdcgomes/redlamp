@@ -1,0 +1,129 @@
+# The Redlamp User Manual: every part and section, written or not. A section with a `file`
+# (in content/) is written; the rest appear in the contents as the plan for the book. Parts are
+# numbered in order; each takes the colour of one of the Color Mixer's bands.
+
+[book]
+title = "Redlamp User Manual"
+edition = "Photographers' edition"
+subject = "Redlamp, the raw photo editor for the Mac: masking, from drawn gradients to AI masks, with every control, range and shortcut"
+summary = "How to develop raw photos with Redlamp on the Mac, panel by panel and tool by tool: every control, its range and default, its shortcut, and what it's for."
+contents_note = "This sample holds Part 3, Masking, and the reference pages that go with it. The other parts are listed as the plan for the whole book, in grey where they're not written yet."
+
+[[front]]
+id = "how-to-use"
+number = "00"
+title = "How to use this manual"
+file = "front/how-to-use.md"
+
+[[part]]
+number = "1"
+id = "start"
+title = "Getting Started"
+band = "orange"
+deck = "Open a folder, find your way around the window, and look at a photo closely."
+sections = [
+  { id = "start.window", title = "The editor window" },
+  { id = "start.folders", title = "Folders, the filmstrip and ratings" },
+  { id = "start.viewing", title = "Viewing: zoom, before and after, clipping" },
+  { id = "start.controls", title = "Sliders, shortcuts and the command palette" },
+  { id = "start.edits", title = "Where your edits are kept" },
+]
+
+[[part]]
+number = "2"
+id = "develop"
+title = "Developing a Photo"
+band = "yellow"
+deck = "The Edit panels, top to bottom: everything that changes the whole photo."
+sections = [
+  { id = "develop.white-balance", title = "White balance" },
+  { id = "develop.treatment", title = "Treatment and Base Looks" },
+  { id = "develop.tone", title = "Tone and presence" },
+  { id = "develop.tone-curve", title = "Tone Curve" },
+  { id = "develop.color", title = "Color Mixer and Color Grading" },
+  { id = "develop.detail", title = "Sharpening and noise reduction" },
+  { id = "develop.lens", title = "Lens Corrections" },
+  { id = "develop.geometry", title = "Crop, straighten and Transform" },
+  { id = "develop.effects", title = "Effects" },
+]
+
+[[part]]
+number = "3"
+id = "masking"
+title = "Masking"
+band = "green"
+deck = "Change one part of a photo and leave the rest alone: draw the part, pick it by its colour or brightness, or let Redlamp find it."
+sections = [
+  { id = "masking.how", title = "How a mask works", file = "masking/how-a-mask-works.md" },
+  { id = "masking.drawn", title = "Gradients and the brush", file = "masking/gradients-and-brush.md" },
+  { id = "masking.ranges", title = "Color, Luminance and Depth Range", file = "masking/ranges.md" },
+  { id = "masking.ai", title = "AI masks", file = "masking/ai-masks.md" },
+  { id = "masking.adjust", title = "Adjusting what a mask covers", file = "masking/adjustments.md" },
+  { id = "masking.manage", title = "The mask list, the overlay and presets", file = "masking/managing.md" },
+]
+
+[[part]]
+number = "4"
+id = "retouch"
+title = "Healing and Removal"
+band = "aqua"
+deck = "Take out dust, wires, people and anything else that shouldn't be there."
+sections = [
+  { id = "retouch.spots", title = "Remove, Heal and Clone" },
+  { id = "retouch.generative", title = "Generative Remove" },
+  { id = "retouch.find", title = "Finding things to remove" },
+  { id = "retouch.dust", title = "Remove Dust and Visualize Spots" },
+]
+
+[[part]]
+number = "5"
+id = "looks"
+title = "Looks and Recipes"
+band = "blue"
+deck = "Give a photo a look in one click, from Redlamp's film simulations or your own recipes."
+sections = [
+  { id = "looks.recipes", title = "Applying recipes" },
+  { id = "looks.film", title = "Film looks" },
+  { id = "looks.making", title = "Making and sharing recipes" },
+  { id = "looks.importing", title = "Importing presets and LUTs" },
+]
+
+[[part]]
+number = "6"
+id = "workflow"
+title = "Working Through a Shoot"
+band = "purple"
+deck = "History and snapshots, the same edit on many photos, focus stacks, and exporting."
+sections = [
+  { id = "workflow.history", title = "Undo, history and snapshots" },
+  { id = "workflow.sync", title = "Copy, paste and sync settings" },
+  { id = "workflow.stacking", title = "Focus stacking" },
+  { id = "workflow.export", title = "Exporting" },
+]
+
+[[part]]
+number = "7"
+id = "files"
+title = "Files, Settings and Help"
+band = "magenta"
+deck = "Which photos Redlamp opens, where everything is stored, and how to report a problem."
+sections = [
+  { id = "files.cameras", title = "Photos and cameras" },
+  { id = "files.sidecars", title = "Sidecars, iCloud and other disks" },
+  { id = "files.settings", title = "Settings and AI models" },
+  { id = "files.feedback", title = "Reporting a bug or sending feedback" },
+]
+
+[[part]]
+number = "R"
+id = "reference"
+title = "Reference"
+band = "steel"
+deck = "Tables generated from Redlamp's own code at the commit on the cover, so they can't drift from the app."
+sections = [
+  { id = "ref.shortcuts", title = "Masking shortcuts", file = "reference/masking-shortcuts.md" },
+  { id = "ref.sliders", title = "Mask sliders", file = "reference/mask-sliders.md" },
+  { id = "ref.all-shortcuts", title = "Every keyboard shortcut" },
+  { id = "ref.all-sliders", title = "Every slider" },
+  { id = "ref.glossary", title = "Lightroom names in Redlamp" },
+]

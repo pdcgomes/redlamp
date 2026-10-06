@@ -1,0 +1,49 @@
+title: How components combine
+tag: Model
+caption: **Each component after the first changes the shape so far.** The circle is the mask so far and the dashed square the component being added; the tint is what the mask covers afterwards. Invert belongs to a single component.
+---
+<div class="ops">
+  <div class="op-panel">
+    <div class="label">Add</div>
+    <svg viewBox="0 0 120 72" class="op">
+      <rect class="op-frame" x="0.5" y="0.5" width="119" height="71" rx="2"/>
+      <circle class="op-fill" cx="48" cy="36" r="22"/>
+      <rect class="op-fill" x="56" y="16" width="42" height="40" rx="4"/>
+      <circle class="op-a" cx="48" cy="36" r="22"/>
+      <rect class="op-b" x="56" y="16" width="42" height="40" rx="4"/>
+    </svg>
+    <p>Covers what either covers: a sky, and a river below it.</p>
+  </div>
+  <div class="op-panel">
+    <div class="label">Subtract</div>
+    <svg viewBox="0 0 120 72" class="op">
+      <defs><mask id="f-sub"><rect x="0" y="0" width="120" height="72" fill="white"/><rect x="56" y="16" width="42" height="40" rx="4" fill="black"/></mask></defs>
+      <rect class="op-frame" x="0.5" y="0.5" width="119" height="71" rx="2"/>
+      <circle class="op-fill" cx="48" cy="36" r="22" mask="url(#f-sub)"/>
+      <circle class="op-a" cx="48" cy="36" r="22"/>
+      <rect class="op-b" x="56" y="16" width="42" height="40" rx="4"/>
+    </svg>
+    <p>Takes away what the new one covers: a gradient, less a person in it.</p>
+  </div>
+  <div class="op-panel">
+    <div class="label">Intersect</div>
+    <svg viewBox="0 0 120 72" class="op">
+      <defs><clipPath id="f-int"><rect x="56" y="16" width="42" height="40" rx="4"/></clipPath></defs>
+      <rect class="op-frame" x="0.5" y="0.5" width="119" height="71" rx="2"/>
+      <circle class="op-fill" cx="48" cy="36" r="22" clip-path="url(#f-int)"/>
+      <circle class="op-a" cx="48" cy="36" r="22"/>
+      <rect class="op-b" x="56" y="16" width="42" height="40" rx="4"/>
+    </svg>
+    <p>Keeps only what both cover: a gradient, only in the sky.</p>
+  </div>
+  <div class="op-panel">
+    <div class="label">Invert</div>
+    <svg viewBox="0 0 120 72" class="op">
+      <defs><mask id="f-inv"><rect x="0" y="0" width="120" height="72" fill="white"/><circle cx="48" cy="36" r="22" fill="black"/></mask></defs>
+      <rect class="op-frame" x="0.5" y="0.5" width="119" height="71" rx="2"/>
+      <rect class="op-fill" x="1" y="1" width="118" height="70" rx="1.6" mask="url(#f-inv)"/>
+      <circle class="op-a" cx="48" cy="36" r="22"/>
+    </svg>
+    <p>One component, turned inside out: everything but a face.</p>
+  </div>
+</div>

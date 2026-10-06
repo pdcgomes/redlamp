@@ -1,0 +1,59 @@
+title: Linear and radial gradients on the photo
+tag: Handles
+caption: **Solid lines mark where an effect ends; dashed lines mark where it's full, or halfway on a linear gradient.** Handles reshape a gradient and its pin moves it. A radial gradient's Feather sets the gap between its two ellipses: here 50, its starting value.
+---
+<div class="pair">
+  <div>
+    <div class="label">Linear Gradient · [[M]]</div>
+    <svg viewBox="0 0 200 116" class="diagram">
+      <defs>
+        <linearGradient id="f-lin" gradientUnits="userSpaceOnUse" x1="0" y1="22" x2="0" y2="78">
+          <stop offset="0" class="stop-full"/>
+          <stop offset="1" class="stop-none"/>
+        </linearGradient>
+      </defs>
+      <rect class="op-frame" x="0.5" y="0.5" width="199" height="115" rx="2"/>
+      <rect x="1" y="1" width="198" height="78" fill="url(#f-lin)"/>
+      <line class="g-line" x1="8" y1="22" x2="192" y2="22"/>
+      <line class="g-dash" x1="8" y1="50" x2="192" y2="50"/>
+      <line class="g-line" x1="8" y1="78" x2="192" y2="78"/>
+      <circle class="g-handle" cx="70" cy="22" r="3.2"/>
+      <circle class="g-handle" cx="70" cy="78" r="3.2"/>
+      <circle class="g-pin" cx="70" cy="50" r="2.8"/>
+      <text class="g-text" x="12" y="17">full effect</text>
+      <text class="g-text" x="12" y="45">halfway</text>
+      <text class="g-text" x="12" y="73">no effect</text>
+      <text class="g-note" x="78" y="17">end handle: moves this end, and turns it</text>
+      <text class="g-note" x="78" y="45">pin: moves the whole gradient</text>
+      <text class="g-note" x="78" y="73">end handle</text>
+      <text class="g-dim" x="12" y="104">Drag from full effect to no effect.</text>
+    </svg>
+  </div>
+  <div>
+    <div class="label">Radial Gradient · [[⇧M]]</div>
+    <svg viewBox="0 0 200 116" class="diagram">
+      <defs>
+        <radialGradient id="f-rad" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0.5" class="stop-full"/>
+          <stop offset="1" class="stop-none"/>
+        </radialGradient>
+      </defs>
+      <rect class="op-frame" x="0.5" y="0.5" width="199" height="115" rx="2"/>
+      <ellipse cx="84" cy="64" rx="60" ry="38" fill="url(#f-rad)"/>
+      <ellipse class="g-line" cx="84" cy="64" rx="60" ry="38"/>
+      <ellipse class="g-dash" cx="84" cy="64" rx="30" ry="19"/>
+      <circle class="g-handle" cx="144" cy="64" r="3.2"/>
+      <circle class="g-handle" cx="84" cy="26" r="3.2"/>
+      <circle class="g-handle g-small" cx="84" cy="12" r="2.1"/>
+      <circle class="g-pin" cx="84" cy="64" r="2.8"/>
+      <text class="g-note" x="90" y="14">rotate</text>
+      <text class="g-note" x="78" y="23" text-anchor="end">resize</text>
+      <text class="g-note" x="150" y="62">resize</text>
+      <text class="g-note" x="150" y="70">this axis</text>
+      <line class="g-leader" x1="106" y1="71" x2="144" y2="91"/>
+      <text class="g-text" x="146" y="93">full inside</text>
+      <line class="g-leader" x1="132" y1="86" x2="144" y2="103"/>
+      <text class="g-text" x="146" y="105">none outside</text>
+    </svg>
+  </div>
+</div>

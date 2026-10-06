@@ -1,0 +1,91 @@
+<section class="cover" id="cover">
+  <header class="cover-top">
+    <img class="cover-mark" src="{{repo}}/docs/brand/logo/redlamp-mark-light.svg" alt="">
+    <div class="cover-edition">
+      <div>User Manual</div>
+      <div>{{edition}} · Redlamp at {{commit}} · {{date}}</div>
+    </div>
+  </header>
+
+  <div class="plate">
+    <div class="plate-head"><span>Plate I · One mask, every control</span><span>Sony α7R V raw · Subject mask</span></div>
+    <div class="plate-body">
+      <div class="shot plate-shot">
+        <div class="crop" style="--crop-x: 620; --crop-y: 0; --crop-w: 1780; --crop-h: 1500; --image-w: 2400; --image-h: 1500;">
+          <img src="{{repo}}/docs/images/hero-masks.png" alt="Redlamp's Masking tool with a Subject mask on a dancer, shown in the red overlay">
+        </div>
+        <span class="mark" style="left: 94.2%; top: 18.4%">1</span>
+        <span class="mark" style="left: 72.6%; top: 25.5%">2</span>
+        <span class="mark" style="left: 72.6%; top: 39.6%">3</span>
+        <span class="mark" style="left: 72.6%; top: 46.4%">4</span>
+        <span class="mark" style="left: 72.6%; top: 62%">5</span>
+        <span class="mark" style="left: 21%; top: 66%">6</span>
+      </div>
+      <div class="plate-side">
+        <div class="label">Key</div>
+        <ol class="key">
+          <li><span class="n">1</span><span><b>Masking</b><i>[[⇧W]] opens the tool; so does any mask's own key.</i></span></li>
+          <li><span class="n">2</span><span><b>Masks</b><i>Newest first, with Create New Mask and Presets.</i></span></li>
+          <li><span class="n">3</span><span><b>Components</b><i>The shapes a mask is made of, combined with Add, Subtract and Intersect.</i></span></li>
+          <li><span class="n">4</span><span><b>Amount · Detail</b><i>Act on the whole mask at once.</i></span></li>
+          <li><span class="n">5</span><span><b>Adjustments</b><i>Temp to Bloom, a colour tint and curves, only where the mask covers.</i></span></li>
+          <li><span class="n">6</span><span><b>Overlay</b><i>What the mask covers, in red at 55%. [[O]] hides it.</i></span></li>
+        </ol>
+        <p class="plate-caption"><b>Plate I.</b> The dancer was found by a Subject mask; the mask's Exposure is at +0.30 and its Clarity at +15. Captured from the app by <code>scripts/capture-hero.sh</code>.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="cover-figs band-green">
+    <figure>
+      <div class="cf-head">Add</div>
+      <svg viewBox="0 0 120 72" class="op">
+        <rect class="op-frame" x="0.5" y="0.5" width="119" height="71" rx="2"/>
+        <circle class="op-fill" cx="48" cy="36" r="22"/>
+        <rect class="op-fill" x="56" y="16" width="42" height="40" rx="4"/>
+        <circle class="op-a" cx="48" cy="36" r="22"/>
+        <rect class="op-b" x="56" y="16" width="42" height="40" rx="4"/>
+      </svg>
+      <figcaption>What either covers.</figcaption>
+    </figure>
+    <figure>
+      <div class="cf-head">Subtract</div>
+      <svg viewBox="0 0 120 72" class="op">
+        <defs><mask id="cv-sub"><rect x="0" y="0" width="120" height="72" fill="white"/><rect x="56" y="16" width="42" height="40" rx="4" fill="black"/></mask></defs>
+        <rect class="op-frame" x="0.5" y="0.5" width="119" height="71" rx="2"/>
+        <circle class="op-fill" cx="48" cy="36" r="22" mask="url(#cv-sub)"/>
+        <circle class="op-a" cx="48" cy="36" r="22"/>
+        <rect class="op-b" x="56" y="16" width="42" height="40" rx="4"/>
+      </svg>
+      <figcaption>The mask, less the new shape.</figcaption>
+    </figure>
+    <figure>
+      <div class="cf-head">Intersect</div>
+      <svg viewBox="0 0 120 72" class="op">
+        <defs><clipPath id="cv-int"><rect x="56" y="16" width="42" height="40" rx="4"/></clipPath></defs>
+        <rect class="op-frame" x="0.5" y="0.5" width="119" height="71" rx="2"/>
+        <circle class="op-fill" cx="48" cy="36" r="22" clip-path="url(#cv-int)"/>
+        <circle class="op-a" cx="48" cy="36" r="22"/>
+        <rect class="op-b" x="56" y="16" width="42" height="40" rx="4"/>
+      </svg>
+      <figcaption>Only what both cover.</figcaption>
+    </figure>
+    <figure>
+      <div class="cf-head">Invert</div>
+      <svg viewBox="0 0 120 72" class="op">
+        <defs><mask id="cv-inv"><rect x="0" y="0" width="120" height="72" fill="white"/><circle cx="48" cy="36" r="22" fill="black"/></mask></defs>
+        <rect class="op-frame" x="0.5" y="0.5" width="119" height="71" rx="2"/>
+        <rect class="op-fill" x="1" y="1" width="118" height="70" rx="1.6" mask="url(#cv-inv)"/>
+        <circle class="op-a" cx="48" cy="36" r="22"/>
+      </svg>
+      <figcaption>Everything outside the shape.</figcaption>
+    </figure>
+  </div>
+
+  <div class="cover-title">
+    <img class="cover-lockup" src="{{repo}}/docs/brand/logo/redlamp-lockup-light.svg" alt="Redlamp">
+    <div class="cover-subtitle">User Manual</div>
+    <p class="cover-summary">{{summary}}</p>
+    <ul class="cover-parts">{{parts}}</ul>
+  </div>
+</section>

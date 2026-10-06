@@ -1,0 +1,777 @@
+/*
+ * The Redlamp User Manual's print style sheet. Chrome lays the manual out from it; the build
+ * (scripts/manual/build.py) adds the fonts and one @page rule per section for its running head.
+ *
+ * Colours are the brand's (docs/brand/README.md): ink on paper, and the part openers in wall lit
+ * by the website's lamp glow, the only red in the manual. Each part's accent takes the hue of one
+ * of the Color Mixer's bands (ColorBand.hueDegrees) in OKLCh, at one lightness for every part.
+ * @page rules can't read custom properties, so their colours are written out.
+ */
+
+:root {
+  --paper: #f3eee8;
+  --paper-deep: #ebe4dc;
+  --paper-light: #f9f6f2;
+  --ink: #1a1414;
+  --ink-2: #5b5250;
+  --ink-3: #8c827d;
+  --rule: #dad1c9;
+  --rule-strong: #bfb4ac;
+  --wall: #0a0707;
+  --bakelite-hi: #262019;
+  --mute: #a89d98;
+  --dim: #6f6561;
+  --hairline: rgb(243 238 232 / 0.09);
+  --hairline-strong: rgb(243 238 232 / 0.16);
+  --mono: "JetBrains Mono", monospace;
+  --display: "Inter Display", "Inter", sans-serif;
+  --hue: 40;
+  --chroma: 0.012;
+}
+
+.band-orange { --hue: 55; --chroma: 0.1; }
+.band-yellow { --hue: 100; --chroma: 0.09; }
+.band-green { --hue: 140; --chroma: 0.09; }
+.band-aqua { --hue: 195; --chroma: 0.08; }
+.band-blue { --hue: 255; --chroma: 0.09; }
+.band-purple { --hue: 300; --chroma: 0.09; }
+.band-magenta { --hue: 340; --chroma: 0.1; }
+.band-steel, .callout-lightroom, .callout-not-yet { --hue: 40; --chroma: 0.012; }
+.callout-caution { --hue: 70; --chroma: 0.1; }
+
+/* Derived where the hue is set: a custom property is resolved where it's declared. */
+:root, [class*="band-"], [class*="callout-"] {
+  --accent: oklch(47% var(--chroma) var(--hue));
+  --accent-ink: oklch(40% calc(var(--chroma) * 0.8) var(--hue));
+  --accent-tint: oklch(93.5% calc(var(--chroma) * 0.3) var(--hue));
+  --accent-soft: oklch(86% calc(var(--chroma) * 0.6) var(--hue));
+  --accent-light: oklch(74% calc(var(--chroma) * 1.1) var(--hue));
+}
+
+/* ------------------------------------------------------------------ pages */
+
+@page {
+  size: A4;
+  margin: 20mm 20mm 22mm;
+  background: #f3eee8;
+  @top-left {
+    content: "";
+    font-family: "Inter";
+    font-size: 7pt;
+    color: #5b5250;
+    vertical-align: bottom;
+    padding-bottom: 5.5mm;
+  }
+  @top-right {
+    content: "";
+    font-family: "Inter";
+    font-size: 7pt;
+    color: #8c827d;
+    vertical-align: bottom;
+    padding-bottom: 5.5mm;
+  }
+  @bottom-left {
+    content: "REDLAMP / USER MANUAL";
+    font-family: "JetBrains Mono";
+    font-size: 5.6pt;
+    letter-spacing: 0.22em;
+    color: #8c827d;
+    vertical-align: top;
+    padding-top: 7.2mm;
+  }
+  @bottom-right {
+    content: counter(page);
+    font-family: "Inter";
+    font-weight: 500;
+    font-size: 7.4pt;
+    color: #1a1414;
+    vertical-align: top;
+    padding-top: 6.7mm;
+  }
+}
+
+@page front {
+  @top-left { content: none; }
+  @top-right { content: none; }
+  @bottom-left { content: none; }
+  @bottom-right {
+    content: counter(page, lower-roman);
+    font-family: "JetBrains Mono";
+    font-weight: 400;
+    color: #5b5250;
+  }
+}
+
+@page cover {
+  margin: 0;
+  @top-left { content: none; }
+  @top-right { content: none; }
+  @bottom-left { content: none; }
+  @bottom-right { content: none; }
+}
+
+@page opener {
+  margin: 0;
+  background: #0a0707;
+  @top-left { content: none; }
+  @top-right { content: none; }
+  @bottom-left { content: none; }
+  @bottom-right { content: none; }
+}
+
+html {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+body {
+  margin: 0;
+  font-family: "Inter", sans-serif;
+  font-size: 9.2pt;
+  line-height: 1.6;
+  color: var(--ink);
+  font-kerning: normal;
+}
+
+a { color: inherit; text-decoration: none; }
+p { margin: 0 0 2.6mm; text-wrap: pretty; orphans: 2; widows: 2; }
+strong, b { font-weight: 600; }
+img { display: block; max-width: 100%; }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  color: var(--accent-ink);
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.55em;
+  padding: 0 0.34em;
+  border: 0.6pt solid var(--rule-strong);
+  border-bottom-width: 1.3pt;
+  border-radius: 2.2pt;
+  background: var(--paper-light);
+  font-family: "Inter";
+  font-weight: 500;
+  font-size: 7.2pt;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--ink);
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+/* ------------------------------------------------------------------ sections */
+
+.section { break-before: page; }
+
+.section-head {
+  margin-bottom: 6mm;
+  padding-bottom: 5mm;
+  border-bottom: 0.8pt solid var(--rule-strong);
+}
+
+.section-no {
+  margin-bottom: 2mm;
+  font-family: var(--mono);
+  font-size: 7.6pt;
+  letter-spacing: 0.16em;
+  color: var(--accent);
+}
+
+.section-head h1 {
+  margin: 0 0 2.4mm;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 21pt;
+  line-height: 1.12;
+  letter-spacing: -0.022em;
+}
+
+.deck {
+  max-width: 130mm;
+  margin: 0;
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 300;
+  font-size: 11.2pt;
+  line-height: 1.42;
+  color: var(--ink-2);
+  text-wrap: balance;
+}
+
+.section-body > p:first-child { font-size: 10pt; }
+
+.section-body h2 {
+  margin: 6.5mm 0 2mm;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 12.6pt;
+  line-height: 1.25;
+  letter-spacing: -0.012em;
+  break-after: avoid;
+}
+
+.section-body h3 {
+  margin: 4.6mm 0 1.4mm;
+  font-weight: 600;
+  font-size: 9.4pt;
+  break-after: avoid;
+}
+
+.section-body ul { margin: 0 0 3mm; padding-left: 4.6mm; }
+.section-body ul > li { margin-bottom: 1mm; padding-left: 0.6mm; }
+.section-body ul > li::marker { content: "–  "; color: var(--ink-3); }
+.section-body li > p { margin-bottom: 1mm; }
+
+.keys, td kbd { white-space: nowrap; }
+.keys kbd + kbd, td kbd + kbd { margin-left: 0.45mm; }
+
+/* Numbered lists are steps. */
+.section-body ol:not(.key) { list-style: none; counter-reset: step; margin: 2mm 0 4mm; padding: 0; }
+.section-body ol:not(.key) > li {
+  position: relative;
+  margin-bottom: 1.8mm;
+  padding-left: 7.4mm;
+  counter-increment: step;
+  break-inside: avoid;
+}
+.section-body ol:not(.key) > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0.45mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 4.3mm;
+  height: 4.3mm;
+  border: 0.7pt solid var(--accent);
+  border-radius: 50%;
+  box-sizing: border-box;
+  font-weight: 600;
+  font-size: 6.4pt;
+  color: var(--accent);
+}
+
+a.xref { border-bottom: 0.5pt solid var(--rule-strong); }
+.pref { margin-left: 0.3em; font-size: 0.8em; color: var(--ink-3); white-space: nowrap; }
+.pref::before { content: "("; }
+.pref::after { content: ")"; }
+.xref-planned { color: var(--ink-2); }
+
+.sources {
+  margin: 7mm 0 0;
+  padding-top: 2.4mm;
+  border-top: 0.5pt solid var(--rule);
+  font-family: var(--mono);
+  font-size: 6.1pt;
+  line-height: 1.7;
+  color: var(--ink-3);
+  break-inside: avoid;
+}
+.sources b { font-weight: 500; color: var(--ink-2); }
+.sources code { font-size: inherit; color: inherit; }
+
+/* ------------------------------------------------------------------ tables and lists of terms */
+
+table {
+  width: 100%;
+  margin: 2.5mm 0 5mm;
+  border-collapse: collapse;
+  font-size: 7.8pt;
+  line-height: 1.45;
+}
+
+thead th {
+  padding: 0 3mm 1.8mm 0;
+  border-bottom: 0.8pt solid var(--rule-strong);
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: 6pt;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--ink-3);
+}
+
+tbody td {
+  padding: 1.75mm 3mm 1.75mm 0;
+  border-bottom: 0.5pt solid var(--rule);
+  vertical-align: top;
+}
+
+tbody tr { break-inside: avoid; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.keys { white-space: nowrap; }
+td.keys .or { margin: 0 1.4mm; font-size: 6.4pt; color: var(--ink-3); }
+
+.generated-table table { margin-bottom: 1.6mm; }
+.generated {
+  break-before: avoid;
+  margin: 0 0 5mm;
+  font-family: var(--mono);
+  font-size: 5.8pt;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+}
+.generated code { font-size: inherit; color: inherit; }
+
+dl {
+  display: grid;
+  grid-template-columns: 34mm 1fr;
+  margin: 2.2mm 0 5mm;
+  border-top: 0.5pt solid var(--rule);
+  font-size: 8.5pt;
+  line-height: 1.5;
+}
+dl > dt, dl > dd { margin: 0; padding: 1.7mm 0; border-bottom: 0.5pt solid var(--rule); }
+dl > dt { padding-right: 4mm; font-weight: 600; }
+dl > dd p { margin: 0; }
+dl > dd p + p { margin-top: 1.2mm; }
+
+/* ------------------------------------------------------------------ callouts */
+
+.callout {
+  margin: 3.5mm 0 4.5mm;
+  padding: 2.6mm 4mm 2.8mm 4.2mm;
+  border-left: 2pt solid var(--accent);
+  background: var(--accent-tint);
+  font-size: 8.5pt;
+  line-height: 1.55;
+  break-inside: avoid;
+}
+.callout-label {
+  margin-bottom: 1mm;
+  font-family: var(--mono);
+  font-size: 6pt;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.callout p:last-child, .callout ul:last-child { margin-bottom: 0; }
+.callout-not-yet { border-left-style: dashed; background: transparent; outline: 0.5pt dashed var(--rule-strong); }
+
+/* ------------------------------------------------------------------ figures */
+
+figure { margin: 0; }
+
+.fig { margin: 4.5mm 0 6mm; break-inside: avoid; }
+
+.fig-frame {
+  padding: 3mm 4mm 4mm;
+  border: 0.6pt solid var(--rule);
+  border-left: 2.4pt solid var(--accent);
+  background: var(--paper-deep);
+}
+
+.fig-head {
+  display: flex;
+  align-items: baseline;
+  gap: 2.6mm;
+  margin-bottom: 3.2mm;
+  font-family: var(--mono);
+  font-size: 6.1pt;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+.fig-no { font-weight: 700; color: var(--ink); }
+.fig-title { color: var(--accent); }
+.fig-tag { margin-left: auto; color: var(--ink-3); }
+
+figcaption {
+  margin-top: 2mm;
+  font-size: 7.6pt;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+figcaption strong { color: var(--ink); }
+
+/* Parts of diagrams. */
+.label {
+  font-family: var(--mono);
+  font-size: 5.8pt;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.box {
+  padding: 1.6mm 2.4mm;
+  border: 0.6pt solid var(--rule-strong);
+  border-radius: 1.4pt;
+  background: var(--paper-light);
+  font-size: 7.4pt;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--ink-2);
+}
+.box b { display: block; font-size: 8pt; color: var(--ink); }
+.box.accent { border-color: var(--accent); background: var(--accent-tint); }
+.box.dashed { border-style: dashed; background: transparent; }
+svg text { font-family: "Inter"; }
+
+/* A screenshot with numbered marks, and its key beside it. */
+.shot { position: relative; }
+.shot img { width: 100%; border-radius: 1.6pt; }
+.mark {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 4.2mm;
+  height: 4.2mm;
+  margin: -2.1mm 0 0 -2.1mm;
+  border: 0.7pt solid var(--ink);
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: var(--paper-light);
+  font-weight: 600;
+  font-size: 6.2pt;
+  color: var(--ink);
+}
+.key { list-style: none; margin: 0; padding: 0; }
+.key li {
+  display: grid;
+  grid-template-columns: 5.6mm 1fr;
+  align-items: start;
+  margin-bottom: 1.7mm;
+  font-size: 7.2pt;
+  line-height: 1.35;
+}
+.key .n {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 4mm;
+  height: 4mm;
+  border: 0.7pt solid var(--ink);
+  border-radius: 50%;
+  box-sizing: border-box;
+  font-weight: 600;
+  font-size: 6pt;
+}
+.key b {
+  display: block;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 6.2pt;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.key i { color: var(--ink-2); }
+.key-wide li { margin-bottom: 1.9mm; font-size: 7.6pt; }
+
+/* Part of a screenshot: the image is placed so only the crop shows (sizes in the image's pixels). */
+.crop {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: var(--crop-w) / var(--crop-h);
+  border-radius: 1.6pt;
+  background: #1d1b1b;
+}
+.shot .crop img {
+  position: absolute;
+  max-width: none;
+  width: calc(var(--image-w) / var(--crop-w) * 100%);
+  left: calc(var(--crop-x) / var(--crop-w) * -100%);
+  top: calc(var(--crop-y) / var(--crop-h) * -100%);
+  border-radius: 0;
+}
+
+/* Marks in the gutters beside a screenshot, level with what they point at, so they cover nothing. */
+.shot.gutters { padding: 0 6.4mm; }
+.shot.gutters .mark.l { left: 3.2mm; }
+.shot.gutters .mark.r { left: calc(100% - 3.2mm); }
+
+.anatomy { display: grid; grid-template-columns: 76mm 1fr; gap: 5mm; align-items: start; }
+.anatomy-tall { grid-template-columns: 56mm 1fr; }
+.ops { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4mm; }
+.ops .label, .pair .label { margin-bottom: 1.6mm; color: var(--ink); }
+.ops p { margin: 1.6mm 0 0; font-size: 7.2pt; line-height: 1.4; color: var(--ink-2); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+svg.diagram.wide { width: 128mm; margin: 0 auto; }
+
+/* Diagrams drawn in SVG take the part's accent; sizes are in the drawing's own units. */
+svg.op, svg.diagram { display: block; width: 100%; overflow: visible; }
+.op-frame { fill: var(--paper-light); stroke: var(--rule-strong); stroke-width: 0.6; }
+.op-fill { fill: var(--accent-soft); }
+.op-fill-line { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 0.8; stroke-linejoin: round; }
+.op-a { fill: none; stroke: var(--ink-2); stroke-width: 0.9; }
+.op-b { fill: none; stroke: var(--ink-2); stroke-width: 0.9; stroke-dasharray: 2.6 1.8; }
+.stop-full { stop-color: var(--accent-soft); stop-opacity: 1; }
+.stop-none { stop-color: var(--accent-soft); stop-opacity: 0; }
+.g-line { fill: none; stroke: var(--ink); stroke-width: 0.8; }
+.g-dash { fill: none; stroke: var(--ink); stroke-width: 0.8; stroke-dasharray: 3 2; }
+.g-handle { fill: var(--paper-light); stroke: var(--ink); stroke-width: 0.8; }
+.g-pin { fill: var(--accent); stroke: var(--paper-light); stroke-width: 0.9; }
+.g-leader { stroke: var(--ink-3); stroke-width: 0.5; }
+.g-base { stroke: var(--rule-strong); stroke-width: 0.6; }
+.g-bar { stroke: var(--rule-strong); stroke-width: 0.4; }
+.g-outer { fill: var(--ink-2); }
+.g-inner { fill: var(--paper-light); stroke: var(--ink); stroke-width: 0.7; }
+.g-text { font-family: "Inter"; font-weight: 600; font-size: 6.4px; fill: var(--ink); }
+.g-note { font-family: "Inter"; font-size: 6px; fill: var(--ink-2); }
+.g-dim { font-family: "Inter"; font-style: italic; font-size: 6px; fill: var(--ink-3); }
+.g-mono { font-family: "JetBrains Mono"; font-size: 5.4px; letter-spacing: 0.06em; fill: var(--ink-3); }
+
+/* ------------------------------------------------------------------ cover */
+
+.cover {
+  page: cover;
+  position: relative;
+  box-sizing: border-box;
+  width: 210mm;
+  height: 297mm;
+  padding: 15mm 20mm 0;
+  overflow: hidden;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(to right, rgb(26 20 20 / 0.07) 0.12mm, transparent 0.12mm),
+    linear-gradient(to bottom, rgb(26 20 20 / 0.07) 0.12mm, transparent 0.12mm);
+  background-size: 5mm 5mm;
+}
+
+.cover-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: 4.5mm;
+  border-bottom: 0.8pt solid var(--rule-strong);
+}
+.cover-mark { width: 9mm; height: 9mm; }
+.cover-edition {
+  font-family: var(--mono);
+  font-size: 6.2pt;
+  line-height: 1.9;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  text-align: right;
+  color: var(--ink-2);
+}
+.cover-edition div:first-child { font-weight: 500; color: var(--ink); }
+
+.plate { margin-top: 4mm; }
+.plate-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4mm;
+  padding-bottom: 2.4mm;
+  border-bottom: 0.5pt solid var(--rule);
+  font-family: var(--mono);
+  font-size: 6pt;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.plate-body { display: grid; grid-template-columns: 1fr 44mm; gap: 6mm; }
+.plate-side .label { margin-bottom: 2.6mm; }
+.plate-caption {
+  margin: 4mm 0 0;
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 300;
+  font-size: 8.2pt;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+.plate-caption b { font-weight: 500; color: var(--ink); }
+.plate-caption code { font-style: normal; font-size: 0.82em; color: var(--ink-2); }
+
+.cover-figs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6mm;
+  margin-top: 6mm;
+  padding-top: 3mm;
+  border-top: 0.5pt solid var(--rule);
+}
+.cf-head {
+  margin-bottom: 2mm;
+  font-family: var(--mono);
+  font-size: 6pt;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.cover-figs figcaption {
+  margin-top: 1.4mm;
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 300;
+  font-size: 8pt;
+  color: var(--ink-2);
+}
+
+.cover-title { position: absolute; left: 20mm; right: 20mm; bottom: 19mm; }
+.cover-lockup { width: 96mm; }
+.cover-subtitle {
+  margin-top: 2.5mm;
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 300;
+  font-size: 27pt;
+  letter-spacing: -0.01em;
+  color: var(--ink-2);
+}
+.cover-summary { max-width: 152mm; margin: 5mm 0 6mm; font-size: 10.4pt; line-height: 1.5; }
+.cover-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.6mm 5mm;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--mono);
+  font-size: 5.8pt;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.cover-parts li { display: flex; align-items: center; gap: 1.6mm; }
+.cover-parts .dot { width: 2mm; height: 2mm; border-radius: 50%; background: var(--accent); }
+
+/* ------------------------------------------------------------------ contents */
+
+.contents { page: front; break-after: page; }
+
+.contents-title {
+  margin: 1mm 0 2.4mm;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 22pt;
+  letter-spacing: -0.02em;
+}
+.contents-note { max-width: 150mm; margin-bottom: 6mm; font-size: 8pt; color: var(--ink-2); }
+
+.toc-group { margin-bottom: 4.6mm; break-inside: avoid; }
+.toc-group ol { list-style: none; margin: 0; padding: 0; }
+.toc-part { display: flex; align-items: center; gap: 2.4mm; margin-bottom: 1.4mm; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 4.6mm;
+  height: 4.6mm;
+  border-radius: 0.8mm;
+  background: var(--accent);
+  font-weight: 600;
+  font-size: 7pt;
+  color: var(--paper);
+}
+.toc-part-title {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 12pt;
+  letter-spacing: -0.01em;
+}
+.toc-row {
+  display: flex;
+  align-items: baseline;
+  gap: 2.4mm;
+  padding: 1.05mm 0 1.05mm 1mm;
+  font-size: 8.3pt;
+}
+.toc-row .no {
+  flex: none;
+  width: 8.6mm;
+  font-family: var(--mono);
+  font-size: 6.9pt;
+  color: var(--ink-3);
+}
+.toc-row .leader { flex: 1; border-bottom: 0.6pt dotted var(--rule-strong); }
+.toc-row .pg {
+  min-width: 6mm;
+  font-family: var(--mono);
+  font-size: 7pt;
+  text-align: right;
+  color: var(--ink-2);
+}
+.toc-row.planned .t { color: var(--ink-3); }
+.toc-front { margin-bottom: 5mm; }
+
+/* ------------------------------------------------------------------ part openers */
+
+.opener {
+  page: opener;
+  break-before: page;
+  position: relative;
+  width: 210mm;
+  height: 297mm;
+  overflow: hidden;
+  background: var(--wall);
+  color: var(--paper);
+}
+
+/* The website's lamp glow: the one light, falling from the top like a safelight above the bench. */
+.opener-glow {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 210mm;
+  background:
+    radial-gradient(60% 55% at 50% 0%, rgb(224 64 46 / 0.3), rgb(224 64 46 / 0.08) 45%, transparent 75%),
+    radial-gradient(25% 22% at 50% 4%, rgb(255 176 138 / 0.16), transparent 70%);
+}
+
+.opener-top { position: absolute; top: 38mm; left: 22mm; right: 22mm; }
+.opener-eyebrow {
+  margin-bottom: 4mm;
+  font-family: var(--mono);
+  font-size: 7.4pt;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--accent-light);
+}
+.opener h1 {
+  margin: 0 0 4mm;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 34pt;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  color: var(--paper);
+}
+.opener .deck { max-width: 122mm; font-size: 12.4pt; color: var(--mute); }
+.opener-rule { position: relative; height: 0.8pt; margin: 9mm 0 4mm; background: var(--hairline-strong); }
+.opener-rule span { position: absolute; left: 0; top: -0.3pt; width: 26mm; height: 1.4pt; background: var(--accent-light); }
+.opener-list { list-style: none; margin: 0; padding: 0; }
+.opener-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 4mm;
+  padding: 2.2mm 0;
+  border-bottom: 0.6pt solid var(--hairline);
+  font-size: 8.8pt;
+}
+.opener-list .no { flex: none; width: 9mm; font-family: var(--mono); font-size: 7pt; color: var(--accent-light); }
+.opener-list a, .opener-list li > span:not(.no):not(.pg) { flex: 1; color: var(--paper); }
+.opener-list .pg { font-family: var(--mono); font-size: 7pt; color: var(--mute); }
+.opener-list li.planned > * { color: var(--dim); }
+.opener-numeral {
+  position: absolute;
+  right: 20mm;
+  bottom: 24mm;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 210pt;
+  line-height: 0.74;
+  letter-spacing: -0.04em;
+  color: var(--bakelite-hi);
+}
+.opener-foot {
+  position: absolute;
+  left: 22mm;
+  right: 22mm;
+  bottom: 15mm;
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 5.8pt;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+/* ------------------------------------------------------------------ the measuring prints' last page */
+
+.link-index { break-before: page; font-size: 4pt; line-height: 1.2; word-break: break-all; color: var(--ink-3); }
