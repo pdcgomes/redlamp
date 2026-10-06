@@ -348,6 +348,29 @@ struct StoreShard {
         return batch.headers.count
     }
 
+    /// The key's records of edits, in either tier, each with the edit its header names.
+    mutating func edits(of key: StoreKey, now: UInt32) -> [(entry: StoreEntry, edit: EditDigest)] {
+        let start = table.lowerBound(key, 0)
+        var end = start
+        while end < table.count, table[end].key == key {
+            end += 1
+        }
+        if table.entries[start ..< end].contains(where: { $0.offset + Int($0.length) > mapping.count }) {
+            _ = remap(now: now)
+        }
+        var found: [(entry: StoreEntry, edit: EditDigest)] = []
+        var index = table.lowerBound(key, 0)
+        while index < table.count, table[index].key == key {
+            let entry = table[index]
+            index += 1
+            if entry.variant & 0x7FFF_FFFF != 0, let header = header(of: entry), header.key == key,
+               header.variant == entry.variant, !header.isRemoval {
+                found.append((entry, header.edit))
+            }
+        }
+        return found
+    }
+
     /// Whether the table has any tier or edit of `key`.
     func holds(_ key: StoreKey) -> Bool {
         let start = table.lowerBound(key, 0)

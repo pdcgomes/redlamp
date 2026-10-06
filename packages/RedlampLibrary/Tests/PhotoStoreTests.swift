@@ -117,6 +117,40 @@ struct PhotoStoreTests {
         #expect(reopened.size(of: .grid) == 0 && reopened.size(of: .preview) == 0)
     }
 
+    @Test func `a photo's renders of other edits go, its unedited tiers and the edits kept stay, and edits count toward their tier's budget`(
+    ) throws {
+        let folder = try TemporaryFolder()
+        let store = PhotoStore(root: folder.url, budgets: PhotoStore.Budgets(grid: nil, preview: 9000))
+        let key = Self.key(6)
+        let other = Self.key(7, shard: key.data[0])
+        let old = EditDigest(hashing: Data("old".utf8))
+        let current = EditDigest(hashing: Data("current".utf8))
+        let copy = EditDigest(hashing: Data("a copy's".utf8))
+        let grid = Self.store(store, key, "grid")
+        let preview = Self.store(store, key, "preview", tier: .preview, length: 2000)
+        for edit in [old, current, copy] {
+            Self.store(store, key, "grid \(edit)", edit: edit)
+            Self.store(store, key, "preview \(edit)", tier: .preview, edit: edit, length: 2000)
+        }
+        let others = Self.store(store, other, "other", edit: old)
+        #expect(store.edits(of: key) == [old, current, copy])
+        #expect(store.size(of: .preview) == Int64(4 * Self.recordLength(2000)), "edits count toward the budget")
+
+        #expect(store.removeEdits(of: key, keeping: [current, copy]) == 2)
+        #expect(store.edits(of: key) == [current, copy])
+        #expect(!store.contains(key, tier: .grid, edit: old) && !store.contains(key, tier: .preview, edit: old))
+        #expect(store.data(for: key, tier: .grid) == grid && store.data(for: key, tier: .preview) == preview)
+        #expect(store.data(for: other, tier: .grid, edit: old) == others, "another photo's render of it stays")
+        #expect(store.size(of: .preview) == Int64(3 * Self.recordLength(2000)))
+
+        Self.store(store, key, "preview again", tier: .preview, edit: old, length: 4000)
+        #expect(store.size(of: .preview) <= 9000, "an edit's render over the budget evicts the least recent")
+        store.close()
+        let reopened = PhotoStore(root: folder.url)
+        #expect(reopened.removeEdits(of: key) >= 2)
+        #expect(reopened.edits(of: key).isEmpty && reopened.data(for: key, tier: .grid) == grid)
+    }
+
     @Test func `an edit whose digest begins as another's never reads the other's image`() throws {
         let folder = try TemporaryFolder()
         let store = PhotoStore(root: folder.url)

@@ -228,6 +228,26 @@ public final class PhotoStore: Sendable {
         withShard(key.shard) { shard, now in shard.remove(key, tier: tier, edit: edit, now: now) }
     }
 
+    /// The edits the store holds the key's renders of, in either tier.
+    public func edits(of key: ContentKey) -> Set<EditDigest> {
+        let key = StoreKey(key)
+        return withShard(key.shard) { shard, now in Set(shard.edits(of: key, now: now).map(\.edit)) } ?? []
+    }
+
+    /// Removes the key's renders of every edit but `keeping`'s, in both tiers, and returns how many
+    /// records went: a photo's earlier edits, once it's rendered with its new one (LIB-17). The
+    /// unedited photo's tiers stay.
+    @discardableResult
+    public func removeEdits(of key: ContentKey, keeping: Set<EditDigest> = []) -> Int {
+        let key = StoreKey(key)
+        return withShard(key.shard) { shard, now -> Int in
+            let gone = shard.edits(of: key, now: now).filter { !keeping.contains($0.edit) }.map(\.entry)
+            guard !gone.isEmpty else { return 0 }
+            _ = shard.drop(gone, now: now)
+            return gone.count
+        } ?? 0
+    }
+
     // MARK: - Budgets
 
     /// The bytes the tier's records take.
