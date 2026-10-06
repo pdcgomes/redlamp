@@ -36,7 +36,13 @@ extension SidecarStore {
     /// The edit on disk, without its bitmaps; nil if there is none. Throws if it is protected, or
     /// the read's error if it can't be read now.
     static func existing(at destination: URL) throws -> Sidecar? {
-        guard let data = try editData(inSidecar: destination) else { return nil }
+        try existing(editData(inSidecar: destination), at: destination)
+    }
+
+    /// The edit `data`, as `editData(inSidecar:)` read it from `destination`, checked as
+    /// `existing(at:)` checks it.
+    static func existing(_ data: Data?, at destination: URL) throws -> Sidecar? {
+        guard let data else { return nil }
         if isDamaged(data) {
             throw SidecarStoreError.damaged(destination)
         }
@@ -54,8 +60,14 @@ extension SidecarStore {
 
     /// Whether saving `sidecar` at `destination` would leave nothing worth keeping.
     static func leavesNothing(_ sidecar: Sidecar, at destination: URL) throws -> Bool {
+        try leavesNothing(sidecar, over: existing(at: destination), at: destination)
+    }
+
+    /// Whether saving `sidecar` over `existing`, the edit at `destination`, would leave nothing worth
+    /// keeping.
+    static func leavesNothing(_ sidecar: Sidecar, over existing: Sidecar?, at destination: URL) -> Bool {
         var merged = sidecar
-        if let existing = try existing(at: destination) {
+        if let existing {
             merged.unknownFields.merge(existing.unknownFields) { new, _ in new }
         }
         guard merged.isPristine else { return false }

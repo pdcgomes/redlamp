@@ -51,7 +51,7 @@ public extension SidecarStore {
     /// Whether the image's sidecar has conflicting copies still unresolved: once `load` has
     /// run, ones this build couldn't merge.
     func hasUnmergedConflicts(for image: URL) -> Bool {
-        !(NSFileVersion.unresolvedConflictVersionsOfItem(at: url(for: image)) ?? []).isEmpty
+        !conflicts.versions(url(for: image)).isEmpty
     }
 
     /// Merges and saves the sidecar's unresolved conflict versions, then marks them resolved and
@@ -59,8 +59,8 @@ public extension SidecarStore {
     /// next load).
     internal func resolveConflicts(_ current: Sidecar, for image: URL) -> Sidecar? {
         let sidecar = url(for: image)
-        guard let versions = NSFileVersion.unresolvedConflictVersionsOfItem(at: sidecar), !versions.isEmpty
-        else { return nil }
+        let versions = conflicts.versions(sidecar)
+        guard !versions.isEmpty else { return nil }
         guard let merged = Self.merge(current, conflictsAt: versions.map(\.url)) else { return nil }
         do {
             try save(merged, for: image)
@@ -70,7 +70,7 @@ public extension SidecarStore {
                 }
             }
             for version in versions {
-                version.isResolved = true
+                version.resolve()
             }
             // Only the versions merged: one that arrived since stays for the next load.
             try Self.writing(sidecar, options: []) { _ in
@@ -83,4 +83,27 @@ public extension SidecarStore {
             return nil
         }
     }
+}
+
+/// A conflicting copy of a sidecar, kept until it's resolved: one of iCloud Drive's
+/// `NSFileVersion`s.
+protocol SidecarConflict {
+    /// Where its copy of the sidecar is.
+    var url: URL { get }
+    /// Marks it resolved, so it isn't found again.
+    func resolve()
+    func remove() throws
+}
+
+extension NSFileVersion: SidecarConflict {
+    func resolve() {
+        isResolved = true
+    }
+}
+
+/// Where a store finds a sidecar's unresolved conflicting copies.
+struct SidecarConflicts: Sendable {
+    let versions: @Sendable (_ sidecar: URL) -> [any SidecarConflict]
+
+    static let iCloudDrive = SidecarConflicts { NSFileVersion.unresolvedConflictVersionsOfItem(at: $0) ?? [] }
 }

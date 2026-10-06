@@ -176,16 +176,25 @@ public struct SidecarStore: Sendable {
 
     /// Where its sidecars are written and read from.
     public let locator: SidecarLocator
+    /// Where a sidecar's conflicting copies are found: iCloud Drive's versions, or a test's.
+    let conflicts: SidecarConflicts
 
     /// Keeps every sidecar beside its photo.
     public init() {
         locator = .besidePhotos
+        conflicts = .iCloudDrive
     }
 
     /// Writes each sidecar where `locator` says; `load` and `summary` read it from where
     /// `SidecarLocator.readURL(for:)` finds it.
     public init(locator: SidecarLocator) {
         self.locator = locator
+        conflicts = .iCloudDrive
+    }
+
+    init(locator: SidecarLocator, conflicts: SidecarConflicts) {
+        self.locator = locator
+        self.conflicts = conflicts
     }
 
     /// The sidecar: a package, or a single file written before packages.
@@ -350,8 +359,16 @@ public struct SidecarStore: Sendable {
     /// The write itself, under coordination.
     static func write(_ sidecar: Sidecar, to destination: URL) throws {
         let existingPackage = isPackage(destination)
+        try write(sidecar, to: destination, over: existing(at: destination), isPackage: existingPackage)
+    }
+
+    /// The write over `existing`, the edit at `destination` as `existing(at:)` read it, a package when
+    /// `existingPackage`; `edits` puts the edit's bytes in its file.
+    static func write(
+        _ sidecar: Sidecar, to destination: URL, over existing: Sidecar?, isPackage existingPackage: Bool,
+        edits: EditWriter = .foundation,
+    ) throws {
         var sidecar = sidecar
-        let existing = try existing(at: destination)
         if let existing {
             sidecar.unknownFields = existing.unknownFields.merging(sidecar.unknownFields) { _, new in new }
         }
@@ -369,7 +386,7 @@ public struct SidecarStore: Sendable {
             // restored, rather than an edit its history doesn't record.
             try writeBitmaps(of: sidecar, into: destination)
             try writeHistory(of: sidecar, in: destination)
-            try json.write(to: destination.appending(path: editFile), options: .atomic)
+            try edits.replace(json, destination.appending(path: editFile))
             removeUnusedBitmaps(of: sidecar, in: destination, json: json)
             return
         }
@@ -378,7 +395,7 @@ public struct SidecarStore: Sendable {
         try fileManager.createDirectory(at: staging, withIntermediateDirectories: false)
         do {
             try writeBitmaps(of: sidecar, into: staging)
-            try json.write(to: staging.appending(path: editFile), options: .atomic)
+            try edits.create(json, staging.appending(path: editFile))
             try writeHistory(of: sidecar, in: staging)
             if fileManager.fileExists(atPath: destination.path) {
                 _ = try fileManager.replaceItemAt(destination, withItemAt: staging)
@@ -449,6 +466,19 @@ public struct SidecarStore: Sendable {
             }
         }
     }
+}
+
+/// How a save puts an edit's bytes in its file.
+struct EditWriter: Sendable {
+    /// Replaces the edit of a package, atomically.
+    let replace: @Sendable (Data, URL) throws -> Void
+    /// Writes the edit of a package being built, which nothing reads before it's moved into place.
+    let create: @Sendable (Data, URL) throws -> Void
+
+    /// As single saves write it: `Data.write(options: .atomic)`.
+    static let foundation = EditWriter(
+        replace: { try $0.write(to: $1, options: .atomic) }, create: { try $0.write(to: $1, options: .atomic) },
+    )
 }
 
 extension JSONEncoder {
