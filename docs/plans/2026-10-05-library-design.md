@@ -118,7 +118,7 @@ CREATE TABLE photos (id INTEGER PRIMARY KEY, folder INTEGER NOT NULL, name TEXT 
   rating INTEGER NOT NULL DEFAULT 0, flag INTEGER NOT NULL DEFAULT 0, label INTEGER NOT NULL DEFAULT 0,
   marked INTEGER NOT NULL DEFAULT 0, edited INTEGER NOT NULL DEFAULT 0, sidecar_modified REAL, xmp_modified REAL,
   title TEXT, caption TEXT, state INTEGER NOT NULL DEFAULT 0, indexed INTEGER NOT NULL DEFAULT 0,
-  UNIQUE (folder, name));                                    -- state bits: missing, offline, settling
+  UNIQUE (folder, name));                                    -- state bits: missing, offline, settling, unreadable
 CREATE TABLE cameras (id INTEGER PRIMARY KEY, make TEXT, model TEXT, name TEXT UNIQUE NOT NULL);
 CREATE TABLE lenses (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL);
 CREATE TABLE keywords (id INTEGER PRIMARY KEY, parent INTEGER, name TEXT NOT NULL, path TEXT UNIQUE NOT NULL);
@@ -147,6 +147,12 @@ ALTER TABLE collections ADD COLUMN path TEXT;         -- unique: collections are
 -- or sets the zone, so the camera's time can always be had again and a changed sidecar needs no read
 ALTER TABLE photos ADD COLUMN camera_captured REAL;
 ALTER TABLE photos ADD COLUMN camera_offset INTEGER;
+-- version 6 (LIB-40): what indexing found wrong with a photo's file, for the photos with something to
+-- say, with the size and modification date the file had when read, so a row stands while they match;
+-- rows outlive their photos, as hashes do, so a photo Undo or Put Back brings back finds its row again
+CREATE TABLE photo_health (photo INTEGER PRIMARY KEY, size INTEGER NOT NULL, modified REAL NOT NULL,
+  format INTEGER NOT NULL DEFAULT 0, damage INTEGER NOT NULL DEFAULT 0, missing INTEGER, reason TEXT,
+  end_unread INTEGER NOT NULL DEFAULT 0, extension TEXT);
 ```
 
 - **Snapshots and integrity.** While the index changes, a snapshot is taken with `VACUUM INTO` at most every 30 minutes, the last three kept (`LibraryPaths.snapshots`). `PRAGMA quick_check` runs in the background lane at launch once a week. A damaged index is replaced by its newest good snapshot and reconciled with the disks (LIB-08); with no snapshot, it's rebuilt.
@@ -206,6 +212,7 @@ text     := word | quoted                                  -- matches name, fold
 | `megapixels`, `aspect` | numbers, ranges; an aspect also as a ratio | `megapixels>=40`, `aspect:3:2` |
 | `is` | traits, each a query over the fields above: `long-exposure` (`shutter>=1`), `panorama` (`aspect>=2`), `high-resolution` (`megapixels>=40`), `low-light` (`iso>=3200`), `no-location` (`-has:gps`) | `is:low-light` |
 | `missing`, `offline` | `yes`, `no`: gone from its folder, or on a volume that isn't connected (LIB-18) | `offline:yes` |
+| `unreadable` | `yes`, `no`: a file whose read failed (LIB-40). Lists, searches and facets leave these out unless the query names `unreadable`; empty files, files no format starts and files that end early stay in lists, and Library Health finds them | `unreadable:yes` |
 
 Sorting is separate from the query: captured (the default), name, rating, edited, the file's modification date, file size, imported, or a collection's own order, each either way.
 
@@ -426,6 +433,24 @@ Checks that each list the photos needing a decision, from the index, the store a
 - **Proposals look like proposals.** A proposed keeper or drop is drawn apart from the user's own flags and never written as one. Accepting is one batch through LIB-26, to the Trash only, which one Undo reverses. A photo the user rated, flagged or labelled is never acted on because a proposal said so.
 - **Keep Anyway** is kept in `Definitions/Health.json`, keyed by the photo's content key and the check (for duplicates, by the group's SHA-256, so a third copy reopens the group), not in sidecars, so it survives an index rebuild; a Kept Anyway list takes it back.
 - **Budgets:** the checks that use only the index keep LIB-39's (a million photos grouped in under a second, off the main thread), with counts changing by diffs; reading the ends of files runs per volume in the background lane. `redlamp library health` lists the findings, with JSON.
+
+As built (LIB-40), in the library and the command line; the app's half and missing photos come later:
+
+- **Damaged files:** a read that fails for any reason but a missing file or an offline volume keeps the photo as `unreadable`, with the reader's reason, in `photo_health` (schema version 6). Empty files are found from the listing, and files no format starts from their first bytes; both stay in lists, as before. Files that end early are found from a JPEG's or PNG's ending, a TIFF's strips and tiles, a RAF's parts and an ISO base media file's top-level boxes; ends past the first 256 KiB are read per volume in the background lane. Files modified in the last minute aren't listed yet.
+- **Wrong extensions** are found from the first bytes against the extension's family, and renamed through the file operations with the sidecar and `.xmp`.
+- **Pairs** follow the rule both, raw or JPEG; a half with decisions of its own is listed apart and acted on only when chosen.
+- **Lists:** unreadable photos are left out of every list, search, facet and SQL query unless the query names `unreadable`. Each check is a source, `PhotoSource.health(check)`, and Kept Anyway is `.keptAnyway`; both follow diffs. A check with no findings isn't offered.
+- **Acting** is one batch, checked again just before it runs, which one Undo takes back. **Keep Anyway** is keyed by content key and check, and for duplicates by SHA-256 and the number of copies.
+- **`redlamp library health`** takes `--json`, `--rule`, `--hash`, `--trash` or `--rename` (nothing moves without `--confirm`), `--choose`, `--keep`, `--unkeep` and `--kept`.
+
+Results (Release, twice each, at a load average of 80). Neither fixture has pairs, so the pairs check times its lookup; 166,331 synthetic pairs at a million took 143 to 152 ms in Debug. All are within LIB-39's second.
+
+| Check | 20,000 photos | A million photos (a copy of the index) |
+|---|---|---|
+| Exact duplicates | 2.7 to 3.0 ms | 109 to 115 ms |
+| Raw and JPEG pairs | 5.3 to 5.9 ms | 174 to 182 ms |
+| Damaged files | 0.2 to 0.3 ms | 1.3 to 1.6 ms |
+| Wrong extensions | 0.1 to 0.2 ms | 0.1 to 0.2 ms |
 
 ## The stress harness (LIB-03, LIB-04)
 
@@ -759,4 +784,9 @@ What it changed: the first version took 3.7 s for the million, keeping 13 to 16 
 - Whether FSEvents reports Redlamp's own writes on this Mac. The streams don't ask to leave them out (`kFSEventStreamCreateFlagIgnoreSelf` isn't set), so they should, but the app's saves were seen going unreported, perhaps only inside Cursor's sandbox. The app reports its writes to `LibraryLive` either way.
 - Another app's shifted capture time reaches the index only once the XMP sync has merged it into the photo's `.redlamp`; a photo without one keeps its camera's time until the indexer reads the time from its `.xmp` too.
 - The app's export doesn't pass the photo's fields yet: `EditorModel+Export.swift` needs the four lines that work them out through `LibraryMetadata.exportFields(for:)`, once the culling agent is out of the editor's model.
+- Library Health in the app: a group in the Library panel from the checks offered, with live counts; the pair rule kept as a setting; proposals drawn in the grid; a sheet to confirm a batch; Keep Anyway; an Unreadable filter; and their scenarios. The pairs check reads every name again after each change to the store (174 to 182 ms at a million), so live counts need it to follow diffs.
+- Missing photos in Library Health: the indexer has to keep a photo that leaves its folder as missing rather than remove it, which changes what every list shows.
+- Photos indexed before schema version 6 have no health facts until they're read again. JPEGs and PNGs larger than 256 KiB take one more read each while indexing, for their endings; indexing is to be measured again on a quiet Mac.
+- Health rows and hashes outlive their photos so that Undo and Put Back find them, and nothing prunes them; a sweep once no Trash journal can bring a photo back would.
+- Fixing a wrong extension plans its rename with the file operations' internal `moveSteps`; they need a public planner for renames.
 - The app's library service still works out when a volume is current from `.replayed` and `.finished`, which also marked one current after a pass that ended offline; it should use `.caughtUp(volume:)` and `.volumeOffline`.
