@@ -28,17 +28,13 @@ struct MaskFailureTests {
             engine.masks.use(session, commands: commands)
             _ = try engine.masks.slices(for: [component], analysisGuide: nil, commands: commands)
         }
-        withKnownIssue("CONC-05: the slice keeps its key") {
-            #expect(!engine.masks.keys.contains(MaskResources.key(for: component.shape)))
-        }
+        #expect(!engine.masks.keys.contains(MaskResources.key(for: component.shape)))
         let drawn = engine.masks.slicesDrawn
         try complete { commands in
             engine.masks.use(session, commands: commands)
             _ = try engine.masks.slices(for: [component], analysisGuide: nil, commands: commands)
         }
-        withKnownIssue("CONC-05: the slice keeps its key") {
-            #expect(engine.masks.slicesDrawn == drawn + 1)
-        }
+        #expect(engine.masks.slicesDrawn == drawn + 1)
     }
 
     /// The larger array a dropped render made never received the slices it was to copy.
@@ -56,10 +52,8 @@ struct MaskFailureTests {
             _ = try engine.masks.slices(for: [fifth], analysisGuide: nil, commands: commands)
         }
         let after = try first.map(readSlice)
-        withKnownIssue("CONC-05: the grown array is kept without its copy") {
-            #expect(after == before)
-            #expect(!engine.masks.keys.contains(MaskResources.key(for: fifth.shape)))
-        }
+        #expect(after == before)
+        #expect(!engine.masks.keys.contains(MaskResources.key(for: fifth.shape)))
     }
 
     @Test(arguments: failures)
@@ -74,9 +68,7 @@ struct MaskFailureTests {
         }
         try fail(failure, guide)
         try complete(guide)
-        withKnownIssue("CONC-05: the edit guide is kept") {
-            #expect(renders == 2)
-        }
+        #expect(renders == 2)
     }
 
     @Test(arguments: failures)
@@ -89,9 +81,7 @@ struct MaskFailureTests {
         }
         try fail(failure, guide)
         try complete(guide)
-        withKnownIssue("CONC-05: the analysis guide is kept") {
-            #expect(renders == 2)
-        }
+        #expect(renders == 2)
     }
 
     @Test(arguments: failures)
@@ -107,10 +97,8 @@ struct MaskFailureTests {
                 for: [MaskComponent(shape: .brush(brush))], analysisGuide: nil, commands: commands,
             )
         }
-        withKnownIssue("CONC-05: the painting cache is kept") {
-            #expect(engine.masks.paintBase == nil)
-            #expect(engine.masks.scratch == nil)
-        }
+        #expect(engine.masks.paintBase == nil)
+        #expect(engine.masks.scratch == nil)
     }
 
     /// The edge coefficients a dropped render grew into a larger array were never copied there.
@@ -132,9 +120,7 @@ struct MaskFailureTests {
         try complete { commands in
             after = try readFirst(#require(try edges(first, commands)))
         }
-        withKnownIssue("CONC-05: the grown array is kept without its copy") {
-            #expect(after == before)
-        }
+        #expect(after == before)
     }
 
     /// The Sky colours a dropped render grew into a larger array were never copied there.
@@ -156,9 +142,7 @@ struct MaskFailureTests {
         try complete { commands in
             after = try readFirst(#require(try colors(first, commands)))
         }
-        withKnownIssue("CONC-05: the grown array is kept without its copy") {
-            #expect(after == before)
-        }
+        #expect(after == before)
     }
 
     // MARK: - Helpers

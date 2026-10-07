@@ -194,6 +194,28 @@ final class MaskResources {
     /// Oldest first.
     private var parked: [Parked] = []
 
+    /// What a command buffer recorded here, undone if it fails or is dropped: the slices it drew,
+    /// the caches it rendered, and the arrays as they were before it first replaced one with a
+    /// larger one whose copy it carries.
+    private final class Recording {
+        weak var commands: (any MTLCommandBuffer)?
+        weak var session: ImageSession?
+        var slices: Set<Int> = []
+        var rasters: (texture: (any MTLTexture)?, keys: [RasterKey?], lastUsed: [UInt64])?
+        var painting = false
+        var editGuide = false
+        var analysisGuide = false
+        var edges: [(maps: EdgeMaps, texture: (any MTLTexture)?, keys: [RasterKey])] = []
+        var colors: [(maps: ColorMaps, texture: (any MTLTexture)?, keys: [RasterKey])] = []
+
+        init(commands: any MTLCommandBuffer, session: ImageSession?) {
+            self.commands = commands
+            self.session = session
+        }
+    }
+
+    private var recordings: [Recording] = []
+
     let emptyRasters: any MTLTexture
     let emptyGuide: any MTLTexture
     let emptyEdges: any MTLTexture
@@ -320,6 +342,10 @@ final class MaskResources {
                     )
                     blit.endEncoding()
                 }
+                let recorded = recording(commands)
+                if !recorded.edges.contains(where: { $0.maps === photo }) {
+                    recorded.edges.append((photo, photo.texture, Array(photo.keys.prefix(slice))))
+                }
                 photo.texture = grown
             }
             texels.withUnsafeBytes { bytes in
@@ -392,6 +418,10 @@ final class MaskResources {
                         destinationLevel: 0, sliceCount: old.arrayLength, levelCount: 1,
                     )
                     blit.endEncoding()
+                }
+                let recorded = recording(commands)
+                if !recorded.colors.contains(where: { $0.maps === photo }) {
+                    recorded.colors.append((photo, photo.texture, Array(photo.keys.prefix(pair))))
                 }
                 photo.texture = grown
             }
@@ -543,6 +573,7 @@ final class MaskResources {
             return editGuide.texture
         }
         let texture = try editGuide?.texture ?? makeGuide()
+        recording(commands).editGuide = true
         try render(global, texture)
         try generateMipmaps(texture, commands: commands)
         editGuide = EditGuide(recipe: global, texture: texture, photo: photo)
@@ -591,6 +622,7 @@ final class MaskResources {
             return analysisGuide
         }
         let texture = try makeGuide()
+        recording(commands).analysisGuide = true
         try render(EditRecipe(), texture)
         try generateMipmaps(texture, commands: commands)
         analysisGuide = texture
@@ -655,6 +687,7 @@ final class MaskResources {
             guard let slice = drawn else { continue }
             slicesDrawn += 1
             keys[slice] = key
+            recording(commands).slices.insert(slice)
             clock += 1
             lastUsed[slice] = clock
             used.insert(slice)
@@ -696,6 +729,10 @@ final class MaskResources {
                 )
             }
             blit.endEncoding()
+        }
+        let recorded = recording(commands)
+        if recorded.rasters == nil {
+            recorded.rasters = (rasters, keys, lastUsed)
         }
         rasters = next
         keys += [RasterKey?](repeating: nil, count: count - keys.count)
@@ -799,5 +836,61 @@ final class MaskResources {
         encoder.dispatchGrid(width: rasterSize.width, height: rasterSize.height, pipeline: kernels.maskUpload)
         encoder.endEncoding()
         return slice
+    }
+
+    // MARK: - Failures
+
+    private func recording(_ commands: any MTLCommandBuffer) -> Recording {
+        if let recorded = recordings.last(where: { $0.commands === commands }) {
+            return recorded
+        }
+        recordings.removeAll { $0.commands == nil || $0.commands?.status == .completed }
+        let recorded = Recording(commands: commands, session: session)
+        recordings.append(recorded)
+        return recorded
+    }
+
+    /// The painting cache and the scratch stroke texture, zero only once a stroke applies, are in
+    /// `commands`.
+    func recordPainting(in commands: any MTLCommandBuffer) {
+        recording(commands).painting = true
+    }
+}
+
+extension MaskResources: CommandBufferRollback {
+    /// The same whether `commands` was dropped or failed on the GPU, which may have run part of it.
+    func rollBack(_ commands: any MTLCommandBuffer, after _: CommandBufferFailure) {
+        guard let index = recordings.firstIndex(where: { $0.commands === commands }) else { return }
+        let recorded = recordings.remove(at: index)
+        for (maps, texture, keys) in recorded.edges {
+            maps.texture = texture
+            maps.keys = keys
+        }
+        for (maps, texture, keys) in recorded.colors {
+            maps.texture = texture
+            maps.keys = keys
+        }
+        guard recorded.session === session else {
+            parked.removeAll { $0.session === recorded.session }
+            return
+        }
+        if let (texture, keys, lastUsed) = recorded.rasters {
+            rasters = texture
+            self.keys = keys
+            self.lastUsed = lastUsed
+        }
+        for slice in recorded.slices where slice < keys.count {
+            keys[slice] = nil
+        }
+        if recorded.painting {
+            paintBase = nil
+            scratch = nil
+        }
+        if recorded.editGuide {
+            editGuide = nil
+        }
+        if recorded.analysisGuide {
+            analysisGuide = nil
+        }
     }
 }

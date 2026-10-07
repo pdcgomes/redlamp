@@ -60,6 +60,7 @@ extension MaskResources {
 
     /// Where a stroke's dabs gather; zero everywhere between strokes (applying clears it).
     private func scratchTexture(commands: any MTLCommandBuffer) throws -> any MTLTexture {
+        recordPainting(in: commands)
         if let scratch {
             return scratch
         }

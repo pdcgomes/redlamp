@@ -136,7 +136,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         retouch = RetouchStage(device: device, kernels: kernels, queue: queue)
         masks = try MaskResources(device: device, kernels: kernels)
         baseLooks = try BaseLookRegistry(device: device)
-        rollbacks = [detailStage, retouch]
+        rollbacks = [detailStage, retouch, masks]
 
         let stacks = FocusStackCache(device: device, kernels: kernels, root: stackCache, decoder: decoder)
         self.stacks = stacks
@@ -664,11 +664,13 @@ extension RedlampEngine {
             )
         } else {
             guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
-            try encodeDevelop(
-                recipe, session: session, into: texture, size: size,
-                encoding: encoding, showClipping: false, maskOverlay: maskOverlay, maskOverlayStyle: maskOverlayStyle,
-                commands: commands, retouchMaps: .fresh,
-            )
+            try self.encoding(commands) {
+                try encodeDevelop(
+                    recipe, session: session, into: texture, size: size,
+                    encoding: encoding, showClipping: false, maskOverlay: maskOverlay,
+                    maskOverlayStyle: maskOverlayStyle, commands: commands, retouchMaps: .fresh,
+                )
+            }
             try finish(commands)
         }
     }
