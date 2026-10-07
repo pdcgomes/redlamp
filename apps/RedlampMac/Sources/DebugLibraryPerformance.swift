@@ -50,12 +50,24 @@
         /// Names the phase in the debug log and in the stall report, its turns sampled once they run longer
         /// than `sampling` (half a second when nil).
         private static func phase(_ name: String, sampling: Duration? = nil) {
-            DebugPerformance.trace("library-perf: \(name)")
+            let line = "\(Date().formatted(.iso8601.time(includingFractionalSeconds: true))) library-perf: \(name)\n"
+            log.async {
+                guard let handle = FileHandle(forWritingAtPath: "/tmp/redlamp-debug.log") else {
+                    try? line.write(toFile: "/tmp/redlamp-debug.log", atomically: true, encoding: .utf8)
+                    return
+                }
+                handle.seekToEndOfFile()
+                handle.write(Data(line.utf8))
+                try? handle.close()
+            }
             stalls?.enter(name, sampling: LaunchArguments.all.contains("--library-perf-turns") ? sampling : nil)
         }
 
-        /// What the stall report adds about each phase: what changed in it, and which views were left to lay
-        /// out or draw.
+        /// Phases are logged off the main thread: opening the log can take a frame or more on a busy Mac,
+        /// within the phases measured.
+        private static let log = DispatchQueue(label: "app.redlamp.library-perf.log", qos: .utility)
+
+        /// What the stall report adds about each phase: what changed in it.
         private static var notes: [String] = []
 
         private struct Measured {
@@ -453,7 +465,7 @@
         private static func typeInFilterBar(
             _ model: EditorModel,
         ) async -> (MainThreadMonitor.Summary?, [Double], String) {
-            phase("typing in the filter bar", sampling: .milliseconds(16))
+            phase("typing in the filter bar, opening the bar")
             guard let filters = model.libraryFilters else { return (nil, [], "Typing in the filter bar: no library") }
             let window = NSWindow(
                 contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000),
@@ -480,6 +492,7 @@
                 }
                 return filters.lastListed?.query == query
             }
+            phase("typing in the filter bar", sampling: .milliseconds(16))
             let monitor = MainThreadMonitor()
             let sampler = LaunchArguments.all.contains("--library-perf-profile") ? MainThreadSampler() : nil
             monitor.start()
@@ -516,6 +529,7 @@
             let elapsed = CFAbsoluteTimeGetCurrent() - began
             monitor.stop()
             sampler?.stop()
+            phase("typing in the filter bar, clearing the filter")
             if let sampler {
                 try? await Task.sleep(for: .milliseconds(20))
                 try? sampler.report().write(
@@ -626,7 +640,7 @@
                     + "\(model.items.count) photos are edited",
             ]
 
-            renders.renderAgain()
+            await renders.renderAgain()
             renders.isRunning = true
             let window = NSWindow(
                 contentRect: CGRect(x: 0, y: 0, width: 1100, height: 800), styleMask: [.borderless],
@@ -672,7 +686,7 @@
             while !model.hasFrame || model.isLoading, ContinuousClock.now - opening < .seconds(30) {
                 try? await Task.sleep(for: .milliseconds(10))
             }
-            renders.renderAgain()
+            await renders.renderAgain()
             try? await Task.sleep(for: .seconds(12))
             lines.append(rendered("With Develop idle", renders.statistics, seconds: 12))
             await memory.mark("edits, Develop idle")
@@ -681,7 +695,7 @@
             renders.letEngineGo()
             try? await Task.sleep(for: .milliseconds(500))
             let paused = await askForFrames(model, seconds: 15)
-            renders.renderAgain()
+            await renders.renderAgain()
             renders.isRunning = true
             let running = await askForFrames(model, seconds: 15)
             let busy = renders.statistics
@@ -748,14 +762,13 @@
                 for (title, step) in [(action.title, action), ("Undo", ShortcutAction.undo)] {
                     let name = "culling, \(step == .undo ? "Undo " : "")\(action.title)"
                     phase(name, sampling: .milliseconds(16))
-                    let watch = StepWatch(model.library, looking: LaunchArguments.all.contains("--library-perf-turns"))
+                    let watch = StepWatch(model.library)
                     let started = CFAbsoluteTimeGetCurrent()
                     model.perform(step)
                     window.displayIfNeeded()
                     CATransaction.flush()
                     let shown = (CFAbsoluteTimeGetCurrent() - started) * 1000
                     while model.isWritingCulling, CFAbsoluteTimeGetCurrent() - started < 900 {
-                        watch.look(in: window)
                         try? await Task.sleep(for: .milliseconds(20))
                     }
                     let written = CFAbsoluteTimeGetCurrent() - started
@@ -940,20 +953,15 @@
         }
     }
 
-    /// What changed while a culling step ran: the library's diffs and their rows, and when `looking`, the
-    /// views most often found waiting to lay out or draw, by class.
+    /// What changed while a culling step ran: the library's diffs and their rows.
     @MainActor
     private final class StepWatch {
         private var diffs = 0
         private var resets = 0
         private var rows = 0
-        private var looks = 0
-        private var dirty: [String: Int] = [:]
-        private let looking: Bool
         private var observation: LibraryObservation?
 
-        init(_ library: FolderLibrary, looking: Bool) {
-            self.looking = looking
+        init(_ library: FolderLibrary) {
             observation = library.observe { [weak self] diff in
                 guard let self else { return }
                 diffs += 1
@@ -962,22 +970,8 @@
             }
         }
 
-        func look(in window: NSWindow) {
-            guard looking, let root = window.contentView else { return }
-            looks += 1
-            var pending = [root]
-            while let view = pending.popLast() {
-                if view.needsLayout || view.needsDisplay {
-                    dirty[String(describing: type(of: view)), default: 0] += 1
-                }
-                pending += view.subviews
-            }
-        }
-
         var summary: String {
-            let views = dirty.sorted { $0.value > $1.value }.prefix(12).map { "\($0.key) \($0.value)" }
-            return "\(diffs) diffs (\(resets) resets), \(rows) rows"
-                + (looking ? "; views waiting in \(looks) looks: " + views.joined(separator: ", ") : "")
+            "\(diffs) diffs (\(resets) resets), \(rows) rows"
         }
     }
 

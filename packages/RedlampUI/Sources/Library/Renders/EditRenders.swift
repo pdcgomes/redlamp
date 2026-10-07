@@ -194,18 +194,25 @@ public final class EditRenders {
     }
 
     /// Forgets every photo's edit and removes the store's renders of them, so they're read and rendered
-    /// again, and starts the statistics again: for measurements.
-    @_spi(Harness) public func renderAgain() {
+    /// again, and starts the statistics again: for measurements. The renders are removed off the main
+    /// thread, rewriting the store's shards, with renders paused until they're gone.
+    @_spi(Harness) public func renderAgain() async {
         current?.task.cancel()
+        let wasRunning = isRunning
+        isRunning = false
         if let store = library.service?.thumbnails?.store {
-            for key in Set(known.values.map(\.key)) {
-                store.removeEdits(of: key)
+            let keys = Set(known.values.map(\.key))
+            _ = try? await scheduler.run(.background) {
+                for key in keys {
+                    store.removeEdits(of: key)
+                }
             }
         }
         known = [:]
         waiting = 0
         (readCursor, renderCursor) = (0, 0)
         statistics = Statistics()
+        isRunning = wasRunning
         schedulePump()
     }
 
