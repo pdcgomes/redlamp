@@ -144,6 +144,12 @@ final class SharpenCache {
         analyses.removeAll()
         separations.removeAll()
     }
+
+    /// Drops the entries of the sessions `drops` picks.
+    func removeAll(where drops: (ImageSession) -> Bool) {
+        analyses.removeAll { drops($0.owner) }
+        separations.removeAll { drops($0.owner) }
+    }
 }
 
 extension DetailStage {

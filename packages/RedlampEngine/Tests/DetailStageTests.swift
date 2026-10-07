@@ -427,10 +427,8 @@ struct DetailStageTests {
         commands.commit()
         commands.waitUntilCompleted()
         #expect(output == nil)
-        withKnownIssue("PIPE-14: the stage keeps the last photo's textures and session") {
-            #expect(stage.ladderCache.heldTextures.isEmpty && stage.cachedOutputs.isEmpty)
-            #expect(first == nil, "the first photo's session is still held")
-        }
+        #expect(stage.ladderCache.heldTextures.isEmpty && stage.cachedOutputs.isEmpty)
+        #expect(first == nil, "the first photo's session is still held")
     }
 
     /// Noise reduction reads only the masks that set Noise, and only that amount, so dragging a

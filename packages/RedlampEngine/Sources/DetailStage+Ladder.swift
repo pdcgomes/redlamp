@@ -177,6 +177,11 @@ final class LadderCache {
     func removeAll() {
         entries.removeAll()
     }
+
+    /// Drops the entries of the sessions `drops` picks.
+    func removeAll(where drops: (ImageSession) -> Bool) {
+        entries.removeAll { drops($0.owner) }
+    }
 }
 
 extension DetailStage {

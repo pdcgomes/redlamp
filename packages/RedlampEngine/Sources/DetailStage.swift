@@ -416,6 +416,22 @@ final class DetailStage {
         return images
     }
 
+    /// The photo the stage last cached renders of.
+    private var cachedPhoto: PhotoKey?
+
+    /// Lets go of what the stage keeps for photos other than `session`'s (for every photo when nil),
+    /// and of their sessions: cached outputs, sharpening's analyses, ladders and kept sources, and
+    /// Clarity bases. Renders that cache call it when they move to another photo.
+    func keepOnly(_ session: ImageSession?) {
+        let photo = session.map { PhotoKey(url: $0.info.url, size: $0.info.pixelSize) }
+        let other = { (owner: ImageSession) in PhotoKey(url: owner.info.url, size: owner.info.pixelSize) != photo }
+        entries.removeAll { other($0.session) }
+        sharpenCache.removeAll(where: other)
+        ladderCache.removeAll(where: other)
+        clarityBases.removeAll { other($0.owner) }
+        cachedPhoto = photo
+    }
+
     /// The processed pyramid texels behind `region` rendered at `outputSize`, encoding the work
     /// into `commands` unless it's cached. Nil when the recipe needs none of the stage there.
     func process(
@@ -428,6 +444,9 @@ final class DetailStage {
         masks: MaskBindings = .none,
     ) throws -> Output? {
         guard outputSize.width > 0 else { return nil }
+        if cache, PhotoKey(url: session.info.url, size: session.info.pixelSize) != cachedPhoto {
+            keepOnly(session)
+        }
         let geometry = GeometryMap(recipe: recipe, imageSize: session.orientedSize, lens: session.info.lensCorrection)
         let work = Self.workArea(session: session, geometry: geometry, region: region, outputSize: outputSize)
         guard let passes = Self.passes(recipe, session: session, level: work.level, masks: masks) else { return nil }
