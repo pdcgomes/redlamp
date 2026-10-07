@@ -8,13 +8,17 @@ import Synchronization
 /// screen, while searches are typed: the first launch, with no event history recorded, compares
 /// every folder by signature and records the volume's history; the second replays that history,
 /// listing only the folders it names. Nothing is read again, no row changes, and the searches typed
-/// meanwhile keep the search budget.
+/// meanwhile keep the search budget. The process's footprint is followed through each launch, and
+/// read again once it has idled for 3 s after a trim, against the budgets for both.
 ///
 /// The index is built for the run, or kept in `indexFolder` and built there only the first time;
 /// each run launches a copy of it, so it starts with no history.
 public struct IndexLaunchScenario: BenchScenario {
     public let name = "warm-launch"
     static let budget = 1000.0
+    /// Megabytes: the most over launch, and idle after a trim.
+    static let launchMemory = 250.0
+    static let idleMemory = 120.0
     let indexFolder: URL?
 
     public init() {
@@ -98,7 +102,14 @@ public struct IndexLaunchScenario: BenchScenario {
         var summary = LibraryIndexerSummary()
         /// The searches typed while it reconciled: each one's first page and count.
         var searches: [Duration] = []
+        /// The footprint, in bytes: before it started, the most while it ran, and idle after a trim.
+        var before = 0
+        var peak = 0
+        var idle = 0
     }
+
+    /// How long a launch idles after its trim before its footprint is read.
+    static let idling = Duration.seconds(3)
 
     /// The query the launch searches for, typed whole: one of the manifest's.
     static let query = "rating>=3"
@@ -106,6 +117,9 @@ public struct IndexLaunchScenario: BenchScenario {
     static func launch(_ url: URL, _ context: BenchContext, showing shown: URL?) async throws -> Launch {
         let clock = ContinuousClock()
         var launch = Launch()
+        Footprint.relieve()
+        launch.before = Footprint.current()
+        let peak = FootprintPeak()
         let started = clock.now
         let index = try await LibraryIndex.open(at: url)
         launch.opened = clock.now - started
@@ -132,6 +146,11 @@ public struct IndexLaunchScenario: BenchScenario {
         withExtendedLifetime(events) {}
         typing.cancel()
         launch.searches = await typing.value
+        launch.peak = peak.stop()
+        engine.trim()
+        Footprint.relieve()
+        try? await Task.sleep(for: idling)
+        launch.idle = Footprint.current()
         launch.shownCompared = watch.listed.map { $0 - started }
         launch.replayed = reconciled.replayed
         launch.reason = reconciled.reason
@@ -228,6 +247,18 @@ public struct IndexLaunchScenario: BenchScenario {
                 value: first.loaded.seconds * 1000, unit: "ms",
             ),
             BenchResult(
+                scenario: name, id: "library-launch-memory-before", name: "Memory before launching",
+                value: Footprint.megabytes(first.before), unit: "MB",
+            ),
+            BenchResult(
+                scenario: name, id: "library-launch-memory", name: "Memory over launch, the most",
+                value: Footprint.megabytes(first.peak), unit: "MB", budget: .below(Self.launchMemory, "MB"),
+            ),
+            BenchResult(
+                scenario: name, id: "library-launch-idle", name: "Memory idle after a trim",
+                value: Footprint.megabytes(first.idle), unit: "MB", budget: .below(Self.idleMemory, "MB"),
+            ),
+            BenchResult(
                 scenario: name, id: "library-launch-shown", name: "All Photographs' first page and count",
                 value: first.shown.seconds * 1000, unit: "ms",
             ),
@@ -272,6 +303,18 @@ public struct IndexLaunchScenario: BenchScenario {
             BenchResult(
                 scenario: name, id: "library-launch-again", name: "Launched again: visible and searchable",
                 value: again.searchable.seconds * 1000, unit: "ms", budget: .below(Self.budget, "ms"),
+            ),
+            BenchResult(
+                scenario: name, id: "library-launch-again-store", name: "Launched again: column store loaded",
+                value: again.loaded.seconds * 1000, unit: "ms",
+            ),
+            BenchResult(
+                scenario: name, id: "library-launch-again-memory", name: "Launched again: memory over launch, the most",
+                value: Footprint.megabytes(again.peak), unit: "MB", budget: .below(Self.launchMemory, "MB"),
+            ),
+            BenchResult(
+                scenario: name, id: "library-launch-again-idle", name: "Launched again: memory idle after a trim",
+                value: Footprint.megabytes(again.idle), unit: "MB", budget: .below(Self.idleMemory, "MB"),
             ),
         ]
         if again.replayed {

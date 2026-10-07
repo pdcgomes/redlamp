@@ -142,6 +142,24 @@ public final class QueryEngine: Sendable {
         }
     }
 
+    /// Drops what the engine keeps to answer the same questions again quickly, keeping the store:
+    /// compiled queries, the rows terms found, results, the filter bar's columns, keywords' and
+    /// collections' photos, Library Health's findings and pairs, and the small tables' matches. For a
+    /// memory-pressure trim: each comes back the next time it's asked for.
+    public func trim() {
+        state.withLock { state in
+            state.plans.removeAll()
+            state.rowSets.removeAll()
+            state.matches.removeAll()
+            state.columnCounts.removeAll()
+            state.health.removeAll()
+            state.keptAnyway = nil
+            state.postings.removeAll()
+            state.pairs = nil
+            state.vocabulary = QueryVocabulary(state.vocabulary.names)
+        }
+    }
+
     /// Keeps `key`'s order in the store from now on, sorting it once, unless it's kept already.
     func prepareOrder(_ key: QuerySort.Key) async throws {
         guard state.withLock({ $0.store.map { !$0.keepsOrder(key) } ?? false }) else { return }
