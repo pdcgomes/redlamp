@@ -1,23 +1,15 @@
 name: CI
 
+# A probe, on its own branch and never merged: the histogram graph's references on the runner.
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 
-# A pull request's new push cancels its older run; each push to main runs to the end, because the
-# status badge reads a cancelled run as failing.
-concurrency:
-  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
-  cancel-in-progress: true
-
 jobs:
-  build-and-test:
+  histogram-probe:
     runs-on: macos-26
-    timeout-minutes: 90
+    timeout-minutes: 45
 
-    # The push gate (scripts/push-gate.py) runs these steps before a push to main; keep the two in step.
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,17 +23,8 @@ jobs:
           sudo xcode-select -s "$XCODE"
           xcodebuild -version
 
-      - name: Engine purity gate
-        run: scripts/check-engine-purity.sh
-
-      - name: Model licence gate
-        run: scripts/check-model-licenses.py
-
-      - name: Roadmap and Lightroom comparison in step with the tracker
-        run: scripts/roadmap-sync.py --check
-
-      - name: Camera list in step with the decode tests and LibRaw
-        run: scripts/camera-list.py --check
+      - name: The runner's screens, appearance, symbol layout and colours
+        run: xcrun swift scripts/probe-histogram.swift
 
       - name: Cache vendored LibRaw
         uses: actions/cache@v4
@@ -49,65 +32,35 @@ jobs:
           path: vendor/build
           key: libraw-${{ hashFiles('config/vendored-libs.json', 'vendor/shims/**', 'scripts/vendor-libraw.sh') }}
 
-      - name: Cache sample raw files
-        uses: actions/cache@v4
-        with:
-          path: |
-            tests/fixtures/raw
-            tests/fixtures/cameras
-            tests/fixtures/shoots
-          key: fixtures-${{ hashFiles('mise/tasks/fixtures', 'mise/tasks/fixtures-shoots', 'tests/decode/samples.json') }}
-
-      # The shoots are the dust evaluation's (DustEvaluationTests): without them it skips.
-      - name: Fetch fixtures
-        run: |
-          mise run fixtures
-          mise run fixtures-shoots
-
       - name: Generate workspace
         run: mise run generate
 
-      - name: Lint (SwiftFormat)
-        run: mise exec -- swiftformat --lint .
-
-      # GPU-dependent engine tests skip themselves when the runner has no Metal device.
-      - name: Test
+      - name: Histogram graph tests
+        continue-on-error: true
         run: |
           set -o pipefail
-          mkdir -p build
+          mkdir -p build/probe
           xcodebuild test \
             -workspace Redlamp.xcworkspace \
-            -scheme Redlamp-Workspace \
+            -scheme RedlampUITests \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath build/DerivedData \
             CODE_SIGNING_ALLOWED=NO \
-            | tee build/test.log | grep -E "error:|✔ Test|✘|TEST (SUCCEEDED|FAILED)"
+            -only-testing:RedlampUITests/HistogramGraphViewTests \
+            | tee build/probe/test.log | grep -E "error:|✔ Test|✘|↳|TEST (SUCCEEDED|FAILED)"
 
-      - name: Build app (Release)
+      - name: Collect what the test drew
+        if: always()
         run: |
-          xcodebuild build \
-            -workspace Redlamp.xcworkspace \
-            -scheme Redlamp \
-            -configuration Release \
-            -destination 'platform=macOS,arch=arm64' \
-            -derivedDataPath build/DerivedData \
-            CODE_SIGNING_ALLOWED=NO \
-            -quiet
+          mkdir -p build/probe
+          for dir in "$TMPDIR" "$(getconf DARWIN_USER_TEMP_DIR)"; do
+            cp "$dir"/histogram-*.png build/probe/ 2>/dev/null || true
+          done
+          ls -la build/probe
 
-      - name: Build harness (Release)
-        run: |
-          xcodebuild build \
-            -workspace Redlamp.xcworkspace \
-            -scheme RedlampHarness \
-            -configuration Release \
-            -destination 'platform=macOS,arch=arm64' \
-            -derivedDataPath build/DerivedData \
-            CODE_SIGNING_ALLOWED=NO \
-            -quiet
-
-      - name: Upload test log
-        if: failure()
+      - name: Upload the probe's images and log
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-log
-          path: build/test.log
+          name: histogram-probe
+          path: build/probe
