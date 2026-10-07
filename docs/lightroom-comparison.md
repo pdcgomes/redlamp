@@ -253,7 +253,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Keywords | Yes | In progress | | P4 | LIB-21 | Full paths in each photo's sidecar, synonyms and export flags, Lightroom Classic's keyword file both ways, and exports following each keyword's flags |
 | Metadata editing and presets | Yes | In progress | | P4 | LIB-22 | IPTC fields on many photos at once, presets that replace, append or prefix, and capture times shifted or set, each with Undo, carried into exports |
 | Collections and smart collections | Yes | In progress | | P4 | LIB-23 | Saved in each photo's sidecar by path, so moving photos never breaks them; smart collections kept current, with stacks |
-| Metadata shared with other apps (XMP) | Yes | In progress | | P4 | LIB-24 | Other apps' XMP is read, a corrected capture time included; standard `.xmp` sidecars are written only when you turn it on, and originals are never changed |
+| Metadata shared with other apps (XMP) | Yes | In progress | | P4 | LIB-24 | Other apps' XMP is read, a corrected capture time included; standard `.xmp` sidecars are written only when you turn it on (Settings › Library, as Lightroom's Automatically write changes into XMP), after each change and its Undo, and originals are never changed |
 | Import from cards and cameras | Yes | In progress | | P4 | LIB-27 | With a backup copy |
 | Moving files and folders | Yes (Classic) | In progress | | P4 | LIB-26 | With a preview and Undo, and Recently Trashed to put photos back after Undo is gone |
 | Stacks | Yes | In progress | | P4 | LIB-28 | Raw and JPEG pairs, bursts and focus stacks |
