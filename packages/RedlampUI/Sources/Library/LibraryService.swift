@@ -73,6 +73,7 @@ public final class LibraryService {
     @ObservationIgnored private var opening: Task<Void, Never>?
     @ObservationIgnored private var following: Task<Void, Never>?
     @ObservationIgnored private var writingAllXMP: Task<Void, Never>?
+    @ObservationIgnored private var memoryPressure: DispatchSourceMemoryPressure?
     /// Roots whose volumes change tracking has caught up with since launch, and that answer still.
     @ObservationIgnored private(set) var currentRoots: Set<String> = []
     /// Folders indexed in this session, as they were listed then.
@@ -174,6 +175,7 @@ public final class LibraryService {
             )
         case let .success(core):
             self.core = core
+            trimOnMemoryPressure(core.engine)
             let metadata = LibraryMetadata(index: core.index, paths: core.paths)
             self.metadata = metadata
             core.recover(metadata)
@@ -200,14 +202,18 @@ public final class LibraryService {
         }
     }
 
-    /// Stops indexing and writes the store's index files: when the app quits. The photos whose XMP
-    /// wasn't synced yet are kept for the next launch.
+    /// Stops indexing, saves the query engine's snapshot so the next launch maps it, and writes the
+    /// store's index files: when the app quits. The photos whose XMP wasn't synced yet are kept for
+    /// the next launch.
     public func close() {
         opening?.cancel()
         following?.cancel()
         writingAllXMP?.cancel()
+        memoryPressure?.cancel()
+        memoryPressure = nil
         guard let core else { return }
         core.tracker.stop()
+        core.engine.saveSnapshotAndWait()
         core.store.close()
         let waiting = core.waitingXMP
         if waiting.isEmpty {
@@ -215,6 +221,16 @@ public final class LibraryService {
         } else {
             defaults?.set(waiting.map { NSNumber(value: $0) }, forKey: Self.xmpWaitingKey)
         }
+    }
+
+    /// Lets go of what the query engine keeps only to answer again quickly when the Mac runs short of
+    /// memory; the store stays mapped from its snapshot.
+    private func trimOnMemoryPressure(_ engine: QueryEngine) {
+        memoryPressure?.cancel()
+        let source = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
+        source.setEventHandler { engine.trim() }
+        source.resume()
+        memoryPressure = source
     }
 
     /// Reads where each root keeps its sidecars again: after a placement changes.
