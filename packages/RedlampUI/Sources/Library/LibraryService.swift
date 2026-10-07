@@ -21,6 +21,11 @@ import Synchronization
 /// A folder is shown from the library once it's indexed as its last listing found it and that
 /// listing is current: made in this session, or in a root change tracking has caught up with since
 /// launch (`ChangeTracker.Event.caughtUp`) and not lost since.
+///
+/// Other apps' metadata (LIB-24): with the library's setting on, each batch it runs (and its Undo and
+/// Redo) and each save of a photo's rating, flag, label or mark writes the photos' `.xmp` sidecars
+/// through `LibraryXMP` afterwards, in the background; and the photos change tracking finds changed,
+/// other apps' `.xmp` among them, have those changes merged into their `.redlamp`, setting or not.
 @MainActor
 @Observable
 public final class LibraryService {
@@ -43,6 +48,10 @@ public final class LibraryService {
     public private(set) var state = State.opening
     /// The library's choices for other apps' metadata, once it's open.
     public private(set) var xmpSettings: XMPSettings?
+    /// Every photo's `.xmp` is being written, as Settings asked.
+    public private(set) var isWritingAllXMP = false
+    /// Meanwhile, how many photos are left, once they're counted.
+    public private(set) var xmpRemaining: Int?
     /// The filter bar: each source's filter and sort, applied to the lists the library makes (LIB-18).
     @ObservationIgnored public let filters: LibraryFilters
     /// Where photos' sidecars are read and written: `FolderLibrary`'s, set as placements change.
@@ -59,6 +68,7 @@ public final class LibraryService {
     @ObservationIgnored private(set) var roots: [String] = []
     @ObservationIgnored private var opening: Task<Void, Never>?
     @ObservationIgnored private var following: Task<Void, Never>?
+    @ObservationIgnored private var writingAllXMP: Task<Void, Never>?
     /// Roots whose volumes change tracking has caught up with since launch, and that answer still.
     @ObservationIgnored private(set) var currentRoots: Set<String> = []
     /// Folders indexed in this session, as they were listed then.
@@ -70,6 +80,8 @@ public final class LibraryService {
     private nonisolated static let log = Logger(subsystem: "app.redlamp.mac", category: "library")
     /// The defaults key set when the index was found damaged, so the next launch checks it as it opens.
     static let damagedKey = "library.indexDamaged"
+    /// The defaults key keeping the photos whose XMP the app quit before syncing, for the next launch.
+    static let xmpWaitingKey = "library.xmpWaiting"
 
     /// `sidecars` is the placement Folders and the editor read and write sidecars through; `thumbnail`
     /// the engine's `decodeThumbnail(for:maxPixelSize:)`. `defaults` keeps the sidecar locator between
@@ -92,6 +104,7 @@ public final class LibraryService {
     isolated deinit {
         opening?.cancel()
         following?.cancel()
+        writingAllXMP?.cancel()
         for observer in activity {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -157,6 +170,8 @@ public final class LibraryService {
             self.roots = []
             follow(roots.map { URL(fileURLWithPath: $0, isDirectory: true) })
             xmpSettings = core.xmpSettings
+            core.syncXMP((defaults?.array(forKey: Self.xmpWaitingKey) as? [NSNumber])?.map(\.int64Value) ?? [])
+            defaults?.removeObject(forKey: Self.xmpWaitingKey)
             Task.detached(priority: .utility) { [weak self] in
                 _ = try? await core.sidecars.resumeMove()
                 let locator = try? await core.sidecars.locator()
@@ -170,13 +185,21 @@ public final class LibraryService {
         }
     }
 
-    /// Stops indexing and writes the store's index files: when the app quits.
+    /// Stops indexing and writes the store's index files: when the app quits. The photos whose XMP
+    /// wasn't synced yet are kept for the next launch.
     public func close() {
         opening?.cancel()
         following?.cancel()
+        writingAllXMP?.cancel()
         guard let core else { return }
         core.tracker.stop()
         core.store.close()
+        let waiting = core.waitingXMP
+        if waiting.isEmpty {
+            defaults?.removeObject(forKey: Self.xmpWaitingKey)
+        } else {
+            defaults?.set(waiting.map { NSNumber(value: $0) }, forKey: Self.xmpWaitingKey)
+        }
     }
 
     /// Reads where each root keeps its sidecars again: after a placement changes.
@@ -297,6 +320,8 @@ public final class LibraryService {
         switch event {
         case let .indexer(.folderIndexed(folder)):
             await report(.indexed(folder.path))
+        case let .indexer(.photosUpdated(ids)):
+            await core.readAgain(ids)
         case .indexer(.volumeOffline), .indexer(.volumeOnline):
             // A volume marks all its photos at once, without an event for each.
             if let changed = try? await core.engine.photosWithChangedState(), !changed.isEmpty {
@@ -539,8 +564,9 @@ public final class LibraryService {
 
     // MARK: - Other apps' metadata (LIB-24)
 
-    /// Keeps `settings` in the index, where `redlamp library xmp` reads them too; the photos already in the
-    /// library are left as they are. False when they couldn't be kept.
+    /// Keeps `settings` in the index, where `redlamp library xmp` reads them too, and syncs by them from
+    /// now on; the photos already in the library are left as they are. Turning writing off stops writing
+    /// every photo's `.xmp`. False when they couldn't be kept.
     public func setXMPSettings(_ settings: XMPSettings) async -> Bool {
         guard let core else { return false }
         do {
@@ -553,7 +579,35 @@ public final class LibraryService {
         }
         core.xmpSettings = settings
         xmpSettings = settings
+        if !settings.writes {
+            writingAllXMP?.cancel()
+        }
         return true
+    }
+
+    /// Writes every photo's `.xmp` in the background, a batch at a time between the library's other
+    /// changes, merging other apps' changes as each sync does: asked for in Settings, with writing on.
+    func writeXMPForAllPhotos() {
+        guard let core, writingAllXMP == nil, xmpSettings?.writes == true else { return }
+        isWritingAllXMP = true
+        writingAllXMP = Task { [weak self] in
+            let ids = await core.allPhotoIDs()
+            var start = 0
+            while start < ids.count, !Task.isCancelled {
+                self?.xmpRemaining = ids.count - start
+                let batch = Array(ids[start ..< min(start + LibraryCore.xmpBatch, ids.count)])
+                await core.syncXMPNow(batch)
+                start += batch.count
+            }
+            self?.xmpRemaining = nil
+            self?.isWritingAllXMP = false
+            self?.writingAllXMP = nil
+        }
+    }
+
+    /// Stops writing every photo's `.xmp`: those written stay.
+    func stopWritingXMPForAllPhotos() {
+        writingAllXMP?.cancel()
     }
 
     /// How many photos the library has; nil until it's open.
@@ -562,8 +616,14 @@ public final class LibraryService {
         return try? await core.index.read { try $0.photoCount() }
     }
 
+    /// Returns once the XMP syncs asked for so far are done.
+    @_spi(Harness) public func xmpSynced() async {
+        await core?.xmpSynced()
+    }
+
     /// Runs `plan`, telling the lists of its photos once the index holds it (when its first sidecar is
-    /// written, or when it's done if it writes none); a batch that fails has been rolled back.
+    /// written, or when it's done if it writes none); a batch that fails has been rolled back. Its photos'
+    /// `.xmp` follow once it's done, when they're written.
     private nonisolated static func run(
         _ plan: MetadataPlan, metadata: LibraryMetadata, core: LibraryCore, sequence: UInt64, queue: CullingQueue,
         into written: inout CullingWritten,
@@ -577,6 +637,7 @@ public final class LibraryService {
         do {
             let outcome = try await metadata.run(plan) { _, _ in tell() }
             tell()
+            core.changed(photos)
             written.batches.append(outcome.batch)
             for photo in plan.photos {
                 guard let reason = outcome.reasons[photo.path], let url = written.ids[photo.id] else { continue }

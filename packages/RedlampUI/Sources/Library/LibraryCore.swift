@@ -29,15 +29,24 @@ final class LibraryCore: Sendable {
     private struct State {
         /// Redlamp's own writes to rows, one at a time in the order they're asked for.
         var lastWrite: Task<Void, Never>?
-        /// The library's changes, one at a time in the order they're asked for: its batches, recovery at
-        /// launch first.
+        /// The library's changes, one at a time in the order they're asked for: its batches, and the XMP
+        /// syncs between them.
         var lastChange: Task<Void, Never>?
         /// Settling at launch what a forced quit cut short, which change tracking waits for.
         var recovery: Task<Void, Never>?
         var lastSnapshot: ContinuousClock.Instant?
         var snapshotting = false
-        /// The library's choices for other apps' metadata.
-        var xmpSettings = XMPSettings()
+        var xmp = XMPQueue()
+    }
+
+    /// The photos whose XMP waits to be synced, in the order they were asked for.
+    private struct XMPQueue {
+        /// The library's choices, as it opened and as Settings changes them.
+        var settings = XMPSettings()
+        var waiting: [Int64] = []
+        var queued = Set<Int64>()
+        var syncing = false
+        var idle: [CheckedContinuation<Void, Never>] = []
     }
 
     /// Snapshots of the index are taken at most this often while it changes.
@@ -45,6 +54,8 @@ final class LibraryCore: Sendable {
     /// The file descriptors the process asks for: the store keeps up to 256 shards open, and the
     /// index, the decoder and the folders' packs need theirs.
     static let fileLimit: rlim_t = 4096
+    /// Photos an XMP sync takes at a time, so the library's batches asked for meanwhile go between them.
+    static let xmpBatch = 500
 
     private static let log = Logger(subsystem: "app.redlamp.mac", category: "library")
 
@@ -100,17 +111,18 @@ final class LibraryCore: Sendable {
 
     /// Brings `photo`'s row in step with its sidecar as `store` reads it now, and tells the open lists:
     /// FSEvents doesn't report Redlamp's own writes on this Mac. A photo the index doesn't hold is left
-    /// to the indexer.
+    /// to the indexer. A change to its rating, flag, label or mark reaches its `.xmp` when they're written.
     func sidecarSaved(_ photo: URL, store: SidecarStore) {
-        serially { [index, live] in
+        serially { [self, index, live] in
             let summary = store.summary(for: photo)
             let sidecar = store.locator.readURL(for: photo)
             // A sidecar there that can't be read says nothing of the photo: its row stays as it is.
             guard summary != nil || !FileManager.default.fileExists(atPath: sidecar.path) else { return }
             let modified = summary == nil ? nil : (try? URL(fileURLWithPath: sidecar.path)
                 .resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-            let id = try? await index.write { writer -> Int64? in
+            let saved = try? await index.write { writer -> (id: Int64, culled: Bool)? in
                 guard var row = try LibraryService.photo(at: photo, in: writer) else { return nil }
+                let before = row
                 row.rating = summary?.metadata.rating ?? 0
                 row.flag = summary?.metadata.flag
                 row.label = summary?.metadata.label
@@ -119,10 +131,15 @@ final class LibraryCore: Sendable {
                 row.edited = summary?.hasEdits ?? false
                 row.sidecarModified = summary == nil ? nil : modified ?? Date()
                 try writer.upsertPhotos([row])
-                return row.id
+                let culled = row.rating != before.rating || row.flag != before.flag || row.label != before.label
+                    || row.customLabel != before.customLabel || row.marked != before.marked
+                return (row.id, culled)
             }
-            if let id = id ?? nil {
-                live.photosChanged([id])
+            if let saved = saved ?? nil {
+                live.photosChanged([saved.id])
+                if saved.culled {
+                    changed([saved.id])
+                }
             }
         }
     }
@@ -141,7 +158,8 @@ final class LibraryCore: Sendable {
     // MARK: - The library's changes
 
     /// Runs `body` once the changes asked for before it are made, and returns what it returns: the
-    /// library's batches, one at a time. Recovery at launch goes first.
+    /// library's batches, and the XMP syncs between them, so a sync never reads a sidecar or a row a batch
+    /// is writing. Recovery at launch goes first.
     func change<T: Sendable>(
         priority: TaskPriority = .userInitiated, _ body: @escaping @Sendable () async -> T,
     ) async -> T {
@@ -196,8 +214,119 @@ final class LibraryCore: Sendable {
     /// The library's choices for other apps' metadata, as it opened and as Settings changes them: the
     /// index keeps them (`LibraryXMP.setSettings`).
     var xmpSettings: XMPSettings {
-        get { state.withLock { $0.xmpSettings } }
-        set { state.withLock { $0.xmpSettings = newValue } }
+        get { state.withLock { $0.xmp.settings } }
+        set { state.withLock { $0.xmp.settings = newValue } }
+    }
+
+    /// The library changed `ids` (a batch, its Undo or Redo, or a save of its own): their `.xmp` sidecars
+    /// follow when they're written.
+    func changed(_ ids: [Int64]) {
+        guard xmpSettings.writes else { return }
+        syncXMP(ids)
+    }
+
+    /// Syncs the XMP of `ids` through `LibraryXMP` once the changes asked for before them are made, a batch
+    /// at a time in the background: other apps' changes are merged into each `.redlamp`, field by field,
+    /// and the `.xmp` written when the setting is on. Photos asked for while they wait are synced once.
+    func syncXMP(_ ids: [Int64]) {
+        guard !ids.isEmpty else { return }
+        let starts = state.withLock { state -> Bool in
+            for id in ids where state.xmp.queued.insert(id).inserted {
+                state.xmp.waiting.append(id)
+            }
+            guard !state.xmp.syncing else { return false }
+            state.xmp.syncing = true
+            return true
+        }
+        if starts {
+            Task.detached(priority: .utility) { [self] in await syncWaitingXMP() }
+        }
+    }
+
+    /// Change tracking read `ids` again: their files, their sidecars or other apps' `.xmp` changed. Those
+    /// with a `.redlamp` take other apps' changes; the others have nothing to take them into, and the
+    /// index shows other apps' fields for them as it reads them.
+    func readAgain(_ ids: [Int64]) async {
+        let synced = await (try? index.read { reader in
+            try ids.filter { try reader.photo(id: $0)?.sidecarModified != nil }
+        }) ?? []
+        syncXMP(synced)
+    }
+
+    /// The photos waiting for an XMP sync, oldest first: those the app quits before syncing are kept for
+    /// the next launch.
+    var waitingXMP: [Int64] {
+        state.withLock { $0.xmp.waiting }
+    }
+
+    /// Returns once every sync asked for before it is done.
+    func xmpSynced() async {
+        await withCheckedContinuation { continuation in
+            let idle = state.withLock { state -> Bool in
+                guard state.xmp.syncing else { return true }
+                state.xmp.idle.append(continuation)
+                return false
+            }
+            if idle {
+                continuation.resume()
+            }
+        }
+    }
+
+    /// Syncs `ids` now, in the library's changes' turn; nil when the sync failed.
+    @discardableResult
+    func syncXMPNow(_ ids: [Int64]) async -> XMPReport? {
+        let report = await change(priority: .utility) { [xmp] () -> Result<XMPReport, any Error> in
+            do {
+                return try await .success(xmp.sync(ids))
+            } catch {
+                return .failure(error)
+            }
+        }
+        switch report {
+        case let .success(report):
+            live.photosChanged(LibraryXMP.changedPhotos(report))
+            for photo in report.photos where photo.problem != nil {
+                Self.log.error(
+                    "\(photo.path, privacy: .private) wasn't synced with other apps: \(photo.problem ?? "", privacy: .public)",
+                )
+            }
+            return report
+        case let .failure(error):
+            Self.log.error("Other apps' metadata wasn't synced: \(String(describing: error), privacy: .public)")
+            return nil
+        }
+    }
+
+    private func syncWaitingXMP() async {
+        while let batch = nextXMPBatch() {
+            await syncXMPNow(batch)
+        }
+    }
+
+    private func nextXMPBatch() -> [Int64]? {
+        let (batch, idle) = state.withLock { state -> ([Int64]?, [CheckedContinuation<Void, Never>]) in
+            guard !state.xmp.waiting.isEmpty else {
+                state.xmp.syncing = false
+                defer { state.xmp.idle = [] }
+                return (nil, state.xmp.idle)
+            }
+            let batch = Array(state.xmp.waiting.prefix(Self.xmpBatch))
+            state.xmp.waiting.removeFirst(batch.count)
+            state.xmp.queued.subtract(batch)
+            return (batch, [])
+        }
+        for continuation in idle {
+            continuation.resume()
+        }
+        return batch
+    }
+
+    /// Every photo in the index, by ID.
+    func allPhotoIDs() async -> [Int64] {
+        await (try? index.read { reader in
+            try reader.database.prepare("SELECT id FROM photos ORDER BY folder, name").map { $0.int64(at: 0) }
+        }) ?? []
     }
 
     // MARK: - Snapshots and checks

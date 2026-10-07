@@ -6,7 +6,8 @@ import SwiftUI
 /// Other apps' ratings, labels, keywords and captions are always read; standard `.xmp` sidecars are
 /// written beside the photos only once it's turned on, with labels in the names the chosen app reads,
 /// and kept in the library's index, where `redlamp library xmp` reads them too. Turning writing on or
-/// off says what becomes of the photos already in the library first, and nothing is done to them.
+/// off says what becomes of the photos already in the library first, and nothing is done to them
+/// unless Write for All Photos is asked for.
 struct LibrarySettings: View {
     @State private var model: LibrarySettingsModel
 
@@ -37,6 +38,9 @@ struct LibrarySettings: View {
                 ))
                 .help("Labels in photoshop:Urgency, which Capture One links to its color tags")
                 .accessibilityIdentifier("settings.library.xmp.urgency")
+                if model.settings.writes {
+                    allPhotos
+                }
             } header: {
                 Text("Other Apps")
             } footer: {
@@ -66,13 +70,34 @@ struct LibrarySettings: View {
             case .turningOn:
                 Button("Turn On") { model.confirm() }
                     .keyboardShortcut(.defaultAction)
+                Button("Turn On and Write All Photos") { model.confirm(writingAll: true) }
             case .turningOff:
                 Button("Turn Off") { model.confirm() }
+                    .keyboardShortcut(.defaultAction)
+            case .writingAll:
+                Button("Write All") { model.confirm() }
                     .keyboardShortcut(.defaultAction)
             }
             Button("Cancel", role: .cancel) { model.cancel() }
         } message: { confirmation in
             Text(model.message(confirmation))
+        }
+    }
+
+    @ViewBuilder private var allPhotos: some View {
+        if model.library.isWritingAllXMP {
+            LabeledContent {
+                Button("Stop") { model.library.stopWritingXMPForAllPhotos() }
+            } label: {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text(model.library.xmpRemaining.map { "Writing .xmp: \(LibrarySettingsModel.photos($0)) left" }
+                        ?? "Writing .xmp…")
+                }
+            }
+        } else {
+            Button("Write .xmp for All Photos…") { model.confirming = .writingAll }
+                .accessibilityIdentifier("settings.library.xmp.all")
         }
     }
 }
@@ -83,7 +108,7 @@ struct LibrarySettings: View {
 @Observable
 final class LibrarySettingsModel {
     enum Confirmation: Equatable {
-        case turningOn, turningOff
+        case turningOn, turningOff, writingAll
     }
 
     let library: LibraryService
@@ -119,14 +144,23 @@ final class LibrarySettingsModel {
         confirming = nil
     }
 
-    /// Makes the change waiting for its confirmation.
+    /// Makes the change waiting for its confirmation; with `writingAll`, writing turned on writes every
+    /// photo's `.xmp` too.
     @discardableResult
-    func confirm() -> Task<Void, Never>? {
+    func confirm(writingAll: Bool = false) -> Task<Void, Never>? {
         guard let confirmation = confirming else { return nil }
         confirming = nil
+        guard confirmation != .writingAll else {
+            library.writeXMPForAllPhotos()
+            return nil
+        }
         var changed = settings
         changed.writes = confirmation == .turningOn
-        return Task { await save(changed) }
+        return Task {
+            if await save(changed), writingAll, changed.writes {
+                library.writeXMPForAllPhotos()
+            }
+        }
     }
 
     @discardableResult
@@ -174,6 +208,7 @@ final class LibrarySettingsModel {
         switch confirmation {
         case .turningOn: "Write .xmp sidecars for other apps?"
         case .turningOff: "Stop writing .xmp sidecars?"
+        case .writingAll: "Write .xmp sidecars for \(photos.map { "all \(Self.photos($0))" } ?? "every photo")?"
         }
     }
 
@@ -186,12 +221,18 @@ final class LibrarySettingsModel {
             return """
             From now on, each change you make to a photo’s rating, flag, label, keywords, title, caption or \
             capture time writes a standard .xmp beside it, keeping what other apps wrote there. \(existing) left \
-            as they are until they change.
+            as they are until they change, unless you write them all now.
             """
         case .turningOff:
             return """
             The .xmp sidecars Redlamp wrote stay beside your photos, and other apps go on reading them, without \
             the changes you make from now on. Other apps’ changes are still taken in.
+            """
+        case .writingAll:
+            return """
+            Each photo’s .xmp gets the metadata its .redlamp sidecar holds, keeping what other apps wrote there, \
+            and changes other apps made since are taken into the .redlamp first. It runs in the background, \
+            between your own changes.
             """
         }
     }
