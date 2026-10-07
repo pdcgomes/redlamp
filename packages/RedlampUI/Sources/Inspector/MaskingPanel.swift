@@ -1,3 +1,4 @@
+import AppKit
 import RedlampEngineAPI
 import SwiftUI
 
@@ -657,10 +658,14 @@ struct MaskList: View {
             ForEach(model.maskOutlines.reversed()) { mask in
                 let selected = mask.id == model.selectedMaskID
                 HStack(spacing: 8) {
-                    Image(systemName: mask.components.first?.kind?.symbol ?? "circle.dashed")
-                        .font(.system(size: 12))
-                        .frame(width: 18)
-                        .foregroundStyle(selected ? Theme.value : Theme.secondaryLabel)
+                    if actionsOnScreen {
+                        MaskThumbnail(image: model.maskThumbnails[mask.id], symbol: mask.components.first?.kind?.symbol)
+                    } else {
+                        Image(systemName: mask.components.first?.kind?.symbol ?? "circle.dashed")
+                            .font(.system(size: 12))
+                            .frame(width: 18)
+                            .foregroundStyle(selected ? Theme.value : Theme.secondaryLabel)
+                    }
                     if renaming == mask.id {
                         TextField("Name", text: $draftName)
                             .textFieldStyle(.plain)
@@ -676,14 +681,23 @@ struct MaskList: View {
                     }
                     Spacer()
                     Button {
-                        model.toggleMaskVisibility(mask.id)
+                        if actionsOnScreen, NSEvent.modifierFlags.contains(.option) {
+                            model.showMaskAlone(mask.id)
+                        } else {
+                            model.toggleMaskVisibility(mask.id)
+                        }
                     } label: {
                         Image(systemName: mask.isVisible ? "eye" : "eye.slash")
                             .font(.system(size: 11))
                             .foregroundStyle(Theme.secondaryLabel)
                     }
                     .buttonStyle(.plain)
-                    .help(mask.isVisible ? "Hide mask" : "Show mask")
+                    .help(actionsOnScreen
+                        ?
+                        (mask
+                            .isVisible ? "Hide mask. Option-click to show it alone" :
+                            "Show mask. Option-click to show it alone")
+                        : (mask.isVisible ? "Hide mask" : "Show mask"))
                     if actionsOnScreen, selected || hovered == mask.id {
                         Menu {
                             actions(for: mask)

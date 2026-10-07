@@ -428,6 +428,11 @@ public final class EditorModel {
         didSet { requestRender() }
     }
 
+    /// Each mask's coverage, small, as the black and white overlay draws it, for the Masks panel's
+    /// list (`refreshMaskThumbnails`), and what each was drawn from.
+    public internal(set) var maskThumbnails: [UUID: CGImage] = [:]
+    var maskThumbnailKeys: [UUID: Int] = [:]
+
     /// The mask under the pointer in the Masks panel's list (`MasksPanelNext`), which the canvas
     /// previews even with the overlay off.
     public var hoveredMaskID: UUID? {

@@ -5,7 +5,8 @@ import SwiftUI
 /// harness first: it replaces `MaskingPanel` in the editor once every task in the design's
 /// checklist works through it. From UX-20: one picker starts every mask, the list's actions sit
 /// in the header, and messages and the armed tool show at the top of the list. From UX-22: every
-/// action is on screen, not only in context menus.
+/// action is on screen, not only in context menus. From UX-23: each row shows its mask's
+/// coverage, and the canvas previews the mask under the pointer.
 @_spi(Harness) public struct MasksPanelNext: View {
     @Environment(EditorModel.self) private var model
 
@@ -26,6 +27,7 @@ import SwiftUI
                 MaskList(actionsOnScreen: true)
                     .padding(.horizontal, Theme.panelPadding)
                     .padding(.bottom, 8)
+                    .background(MaskThumbnailRefresher())
                 Rectangle().fill(Theme.divider).frame(height: 1)
                 if let mask = model.selectedOutline {
                     SelectedMaskEditor(mask: mask, usesPicker: true)
@@ -372,5 +374,44 @@ struct ComponentOperationButtons: View {
                 }
             }
         }
+    }
+}
+
+/// A mask's coverage, small, white where it covers (`EditorModel.maskThumbnails`), or its first
+/// component's symbol until it's drawn.
+struct MaskThumbnail: View {
+    let image: CGImage?
+    let symbol: String?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(decorative: image, scale: 2)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            } else {
+                Image(systemName: symbol ?? "circle.dashed")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.secondaryLabel)
+            }
+        }
+        .frame(width: 30, height: 20)
+        .background(RoundedRectangle(cornerRadius: 3).fill(image == nil ? Color.clear : Color.black))
+        .clipShape(RoundedRectangle(cornerRadius: 3))
+    }
+}
+
+/// Draws the list's thumbnails again a moment after a mask's coverage may have changed, so a
+/// slider's drag draws them once, when it stops.
+struct MaskThumbnailRefresher: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        Color.clear
+            .task(id: model.maskCoverageKeys) {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                await model.refreshMaskThumbnails()
+            }
     }
 }

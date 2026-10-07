@@ -255,6 +255,18 @@ public extension EditorModel {
         mutateMask(id, name: mask.isVisible ? "Hide \(mask.name)" : "Show \(mask.name)") { $0.isVisible.toggle() }
     }
 
+    /// Option-click on a mask's eye: that mask alone, or every mask again when it already is
+    /// alone. One history step, so the export shows what the canvas does.
+    func showMaskAlone(_ id: UUID) {
+        guard let mask = recipe.mask(id) else { return }
+        var next = recipe
+        let alone = next.masks.allSatisfy { $0.id == id ? $0.isVisible : !$0.isVisible }
+        for index in next.masks.indices {
+            next.masks[index].isVisible = alone || next.masks[index].id == id
+        }
+        commit(next, .mask(nil), alone ? "Show All Masks" : "Show Only \(mask.name)")
+    }
+
     func resetMaskAdjustments(_ id: UUID) {
         guard let mask = recipe.mask(id), let index = recipe.masks.firstIndex(where: { $0.id == id }) else { return }
         var next = recipe

@@ -479,6 +479,74 @@ struct MaskEditingTests {
         model.endEdit()
     }
 
+    /// The new panel's thumbnails (UX-23): each mask's black and white overlay, small, a hidden
+    /// mask's as if shown; drawn again only when the mask's coverage may have changed.
+    @Test func `a mask's thumbnail is drawn once, and again only when its coverage may change`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let engine = StubEngine()
+        let model = EditorModel(engine: engine)
+        model.select(folder.appending(path: "IMG_0007.ARW"))
+        for _ in 0 ..< 200 where model.info == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        func drawRadial() {
+            model.startDrawing(.radial)
+            model.beginDrawing(.radial(RadialMask(center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.2)))
+            model.finishDrawing()
+        }
+        drawRadial()
+        drawRadial()
+        let hidden = model.masks[0].id
+        model.toggleMaskVisibility(hidden)
+        engine.stills.removeAll()
+        await model.refreshMaskThumbnails()
+        #expect(model.maskThumbnails.count == 2)
+        #expect(engine.stills.count == 2)
+        #expect(engine.stills.allSatisfy {
+            $0.maskOverlayStyle == .blackAndWhite && $0.maxLongEdge == EditorModel.maskThumbnailLongEdge
+        })
+        let drawnHidden = engine.stills.first { $0.maskOverlay == hidden }
+        #expect(drawnHidden?.recipe.masks.first { $0.id == hidden }?.isVisible == true)
+
+        model.selectMask(model.masks[1].id)
+        model.setValue(.localExposure, 1)
+        engine.stills.removeAll()
+        await model.refreshMaskThumbnails()
+        #expect(engine.stills.isEmpty, "a mask's own adjustment changes no coverage")
+
+        drawRadial()
+        await model.refreshMaskThumbnails()
+        #expect(engine.stills.count == 1, "only the new mask is drawn")
+        #expect(model.maskThumbnails.count == 3)
+    }
+
+    /// Option-click on a mask's eye (UX-24): that mask alone as one history step, and every mask
+    /// again from there.
+    @Test func `Option-click on an eye shows a mask alone, and every mask again`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let model = EditorModel(engine: StubEngine())
+        model.select(folder.appending(path: "IMG_0008.ARW"))
+        for _ in 0 ..< 200 where model.info == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        for _ in 0 ..< 3 {
+            model.startDrawing(.radial)
+            model.beginDrawing(.radial(RadialMask(center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.2)))
+            model.finishDrawing()
+        }
+        let middle = model.masks[1].id
+        model.showMaskAlone(middle)
+        #expect(model.masks.map(\.isVisible) == [false, true, false])
+        model.showMaskAlone(middle)
+        #expect(model.masks.allSatisfy(\.isVisible))
+        model.undo()
+        #expect(model.masks.map(\.isVisible) == [false, true, false], "one step back: alone again")
+    }
+
     /// The new panel's list previews the mask under the pointer (UX-23), with the overlay on or
     /// off, and only in the Masking tool.
     @Test func `the overlay shows the mask under the pointer, overlay on or off`() async throws {
