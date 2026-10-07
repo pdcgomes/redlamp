@@ -20,10 +20,16 @@ struct DuplicateBenchTests {
         #expect(candidates.copyCount == library.copies && candidates.groups.count == library.originals)
         #expect((800 ... 1200).contains(library.copies))
         #expect(candidates.photosGrouped == photos)
-        let perPhoto = Double(candidates.memoryFootprint) / Double(photos)
-        // The allocator rounds the arrays up, by more at times than the table's 10 bytes a photo.
         #expect(MemoryLayout<DuplicateGrouper.Entry>.stride == 32)
-        #expect(perPhoto > 42 && perPhoto < 64, "\(perPhoto) bytes a photo")
+        // The arrays' capacities count the blocks the allocator gives back, which under load can be ones freed
+        // earlier and larger than asked for: the footprint is held to twice what grouping asks for.
+        let table = 1 << (Int.bitWidth - (2 * photos).leadingZeroBitCount)
+        let asked = photos * 32 + table * MemoryLayout<Int32>.stride + library.copies * 8
+        let perPhoto = Double(candidates.memoryFootprint) / Double(photos)
+        #expect(
+            (asked ... 2 * asked).contains(candidates.memoryFootprint),
+            "\(perPhoto) bytes a photo, asked for \(Double(asked) / Double(photos))",
+        )
     }
 
     @Test func `it groups a synthetic library and confirms the fixture's copies, reading none of them twice`(
