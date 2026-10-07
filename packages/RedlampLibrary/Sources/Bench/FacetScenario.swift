@@ -3,7 +3,7 @@ import Foundation
 /// Counts the photos each query of the manifest finds by every facet (cameras, lenses, ratings,
 /// flags, labels, years, months, folders and kinds), a pass each, after the query's search, as the
 /// filter bar's facets follow the grid: each pass's time (the design's budget: p95 under 100 ms), and
-/// that every facet counts each of the query's photos once.
+/// that every facet counts each of the query's photos once. Like search, it uses the index it's given.
 public struct FacetScenario: BenchScenario {
     public let name = "facets"
     static let budget = 100.0
@@ -13,8 +13,8 @@ public struct FacetScenario: BenchScenario {
         indexFolder = nil
     }
 
-    /// Keeps the index in `indexFolder` rather than in the temporary folder.
-    init(indexFolder: URL?) {
+    /// Counts over the index in `indexFolder` rather than the one kept in the temporary folder.
+    public init(indexFolder: URL?) {
         self.indexFolder = indexFolder
     }
 

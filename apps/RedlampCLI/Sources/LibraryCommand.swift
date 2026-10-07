@@ -78,7 +78,9 @@ enum LibraryCommand {
                exits 1 when a budget fails. --json writes the report. --photos sets how many thumbnails the
                store scenario writes to the Mac's own disk (100,000 by default). --index keeps warm-launch's
                index of the fixture in <folder>, built there the first time, and launches a copy of it after
-               that. Scenarios: \(scenarioNames).
+               that; search and facets search the index there, or without --index the one kept under
+               $TMPDIR/redlamp-bench-query, and never index the fixture themselves: with no index of it they
+               say so. Scenarios: \(scenarioNames).
       index    adds the folders to the library index at <path> (made if there's none) and indexes them: every
                folder listed, and each photo that's new or changed since it was indexed read once. Prints its
                progress and a summary; exits 1 when a photo couldn't be read or a volume stopped answering.
@@ -299,7 +301,10 @@ enum LibraryCommand {
             BenchScenarios.registerStore(photos: photos)
         }
         if let index = options.value("--index") {
-            BenchScenarios.register(IndexLaunchScenario(indexFolder: URL(fileURLWithPath: index, isDirectory: true)))
+            let folder = URL(fileURLWithPath: index, isDirectory: true)
+            BenchScenarios.register(IndexLaunchScenario(indexFolder: folder))
+            BenchScenarios.register(SearchScenario(indexFolder: folder))
+            BenchScenarios.register(FacetScenario(indexFolder: folder))
         }
         let fixture = URL(fileURLWithPath: options.positional[0], isDirectory: true)
         let manifest: FixtureManifest
