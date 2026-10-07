@@ -908,7 +908,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [ ] **AI Denoise:** an on-device model working on raw data, matching or beating the best commercial denoisers, with a fast 1:1 preview and non-destructive results <!-- tracker: DN-06, DN-07, DN-08 -->
 - [ ] Focus stacking: lens corrections before alignment, halo handling, vendors' focus-bracketing tags, and baking a stack to DNG <!-- tracker: FS-01, FS-02, FS-03 -->
 - [ ] Manufacturer lens corrections embedded in Panasonic and OM System raw files <!-- tracker: LNS-02 -->
-- [ ] The remaining film simulations (Eterna, Classic Negative, Nostalgic Negative, Pro Neg, Acros, Reala Ace), which need a shoot with one camera, a chart matrix solve, and a DCP writer <!-- tracker: TON-14, TON-20 -->
+- [ ] The remaining film simulations (Eterna, Classic Negative, Nostalgic Negative, Pro Neg, Acros, Reala Ace), which need a shoot with one camera, a chart matrix solve, and a DCP writer <!-- tracker: TON-14, TON-20, TON-35 -->
 - [ ] **Analogue film stocks:** film and digital shot side by side with charts, scanned and fitted by the profiler, with halation, bloom and grain per stock <!-- tracker: TON-21 -->
 - [ ] **The agent recipe studio at scale:** many more recipes developed from briefs, once the critics agree with human picks (about 200 pairwise verdicts) <!-- internal -->
 
