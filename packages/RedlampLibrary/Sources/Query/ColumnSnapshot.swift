@@ -1,6 +1,7 @@
 import Darwin
 import Dispatch
 import Foundation
+import Synchronization
 
 /// The column store saved beside the index (LIB-44), `Index.columns` for `Index.sqlite`: a header
 /// page, then each of the store's columns, its sort orders, the row of each photo ID and the rows
@@ -10,7 +11,10 @@ import Foundation
 ///
 /// It's written to a temporary file beside it, made durable and renamed over the last, so it's
 /// whole or absent; when only the generation it reflects changes, its header alone is written
-/// again, in place, its checksum guarding it.
+/// again, in place, its checksum guarding it. One that doesn't reflect the index as it is now, or
+/// can't be read, is set aside, never trusted: one of another generation, schema, format or page
+/// size is removed, and one whose header, length or checksums don't hold is kept as
+/// `Index.columns.damaged`.
 enum ColumnSnapshot {
     /// The store's sections, in the file's order, each with the bytes of one value.
     enum Section: UInt32, CaseIterable, Sendable {
@@ -35,6 +39,22 @@ enum ColumnSnapshot {
         var isOptional: Bool {
             self == .byModified || self == .bySize
         }
+    }
+
+    /// Why a snapshot was set aside.
+    enum Refusal: Sendable, Hashable {
+        /// Of another generation, schema, format or page size: removed.
+        case stale
+        /// Unreadable: kept as `<name>.damaged`.
+        case damaged
+    }
+
+    /// What a snapshot holds besides its columns.
+    struct Contents: Sendable {
+        var store: ColumnStore
+        /// The small tables' names, as the index has them: folders, cameras, lenses, keywords and
+        /// collections.
+        var names: QueryNames
     }
 
     static let magic: UInt64 = 0x534E_4D55_4C4F_4352 // "RCOLUMNS", little-endian
@@ -165,6 +185,76 @@ enum ColumnSnapshot {
         }
     }
 
+    // MARK: - Reading
+
+    /// The store and names saved at `url`, mapped copy-on-write, when they reflect `generation`; nil
+    /// when there's none, and when there's one that doesn't, which is set aside (`refused`). A cold
+    /// file is read ahead with one request.
+    static func read(
+        at url: URL, generation: IndexGeneration, refused: (Refusal) -> Void = { _ in },
+    ) -> Contents? {
+        let descriptor = Darwin.open(url.path, O_RDONLY | O_CLOEXEC)
+        guard descriptor >= 0 else { return nil }
+        defer { Darwin.close(descriptor) }
+        var file = stat()
+        guard fstat(descriptor, &file) == 0 else { return nil }
+        func setAside(_ refusal: Refusal) -> Contents? {
+            var now = stat()
+            if stat(url.path, &now) == 0, now.st_ino == file.st_ino, now.st_dev == file.st_dev {
+                switch refusal {
+                case .stale:
+                    unlink(url.path)
+                case .damaged:
+                    let damaged = url.appendingPathExtension("damaged")
+                    unlink(damaged.path)
+                    rename(url.path, damaged.path)
+                }
+            }
+            refused(refusal)
+            return nil
+        }
+        let page = ColumnPages.pageSize
+        let size = Int(file.st_size)
+        var header = Data(count: page)
+        let read = header.withUnsafeMutableBytes { pread(descriptor, $0.baseAddress, page, 0) }
+        guard read >= headerBytes else { return setAside(.damaged) }
+        let (magic, kind, pageSize) = header.withUnsafeBytes { bytes in
+            (
+                UInt64(littleEndian: bytes.loadUnaligned(fromByteOffset: 0, as: UInt64.self)),
+                UInt32(littleEndian: bytes.loadUnaligned(fromByteOffset: 8, as: UInt32.self)),
+                Int(UInt32(littleEndian: bytes.loadUnaligned(fromByteOffset: 12, as: UInt32.self))),
+            )
+        }
+        guard magic == Self.magic else { return setAside(.damaged) }
+        guard kind == format, pageSize == page else { return setAside(.stale) }
+        guard read == page, size % page == 0, let layout = Layout(header, fileSize: size) else {
+            return setAside(.damaged)
+        }
+        guard layout.generation == generation else { return setAside(.stale) }
+        guard let mapping = mmap(nil, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, descriptor, 0),
+              mapping != MAP_FAILED
+        else { return nil }
+        readAheadIfCold(descriptor, mapping, size)
+        guard layout.checksumsHold(in: UnsafeRawPointer(mapping)) else {
+            munmap(mapping, size)
+            return setAside(.damaged)
+        }
+        guard let contents = layout.contents(in: mapping, size: size) else { return setAside(.damaged) }
+        return contents
+    }
+
+    /// One request to read the whole file ahead when its pages aren't in memory: the SSD then
+    /// delivers it at its own speed, where page faults bring it in a page at a time.
+    private static func readAheadIfCold(_ descriptor: Int32, _ mapping: UnsafeMutableRawPointer, _ size: Int) {
+        let page = ColumnPages.pageSize
+        var resident = [CChar](repeating: 0, count: size / page)
+        if mincore(mapping, size, &resident) == 0, resident.allSatisfy({ $0 & 1 != 0 }) {
+            return
+        }
+        var advice = radvisory(ra_offset: 0, ra_count: Int32(clamping: size))
+        _ = fcntl(descriptor, F_RDADVISE, &advice)
+    }
+
     /// A header read and checked against the file it's in.
     private struct Layout {
         struct Entry {
@@ -222,6 +312,56 @@ enum ColumnSnapshot {
             }
             guard next == fileSize else { return nil }
             self.entries = entries
+        }
+
+        /// Whether every section's bytes give its checksum, the sections checked side by side.
+        func checksumsHold(in mapping: UnsafeRawPointer) -> Bool {
+            let entries = entries
+            nonisolated(unsafe) let mapping = mapping
+            let mismatched = Atomic(0)
+            DispatchQueue.concurrentPerform(iterations: entries.count) { number in
+                let entry = entries[number]
+                let bytes = UnsafeRawBufferPointer(start: mapping + entry.offset, count: entry.length)
+                if ColumnSnapshot.checksum(bytes) != entry.checksum {
+                    mismatched.wrappingAdd(1, ordering: .relaxed)
+                }
+            }
+            return mismatched.load(ordering: .relaxed) == 0
+        }
+
+        /// The store and names, the columns taking their pages of `mapping`, and the rest of it
+        /// unmapped; nil, with all of it unmapped, when the sections don't make a store.
+        func contents(in mapping: UnsafeMutableRawPointer, size: Int) -> Contents? {
+            var store = ColumnStore()
+            var names: QueryNames?
+            var taken: [Range<Int>] = []
+            var valid = true
+            for entry in entries {
+                if entry.section == .names {
+                    let blob = UnsafeRawBufferPointer(start: mapping + entry.offset, count: entry.length)
+                    if let decoded = ColumnSnapshot.decode(blob, into: &store) {
+                        names = decoded
+                    } else {
+                        valid = false
+                    }
+                    continue
+                }
+                let length = ColumnPages.rounded(entry.length)
+                let pages = ColumnPages(base: length > 0 ? mapping + entry.offset : nil, size: length)
+                taken.append(entry.offset ..< entry.offset + length)
+                if !store.adopt(entry.section, pages: pages, count: entry.count) {
+                    valid = false
+                }
+            }
+            var unmapped = 0
+            for range in taken.sorted(by: { $0.lowerBound < $1.lowerBound }) + [size ..< size] {
+                if range.lowerBound > unmapped {
+                    munmap(mapping + unmapped, range.lowerBound - unmapped)
+                }
+                unmapped = max(unmapped, range.upperBound)
+            }
+            guard valid, let names, store.isWhole(rows: rows, count: count) else { return nil }
+            return Contents(store: store, names: names)
         }
     }
 
@@ -298,6 +438,78 @@ enum ColumnSnapshot {
             put(table)
         }
         return data
+    }
+
+    /// The small tables' names from `blob`, with the code columns' names put in `store`; nil when the
+    /// bytes don't hold them.
+    private static func decode(_ blob: UnsafeRawBufferPointer, into store: inout ColumnStore) -> QueryNames? {
+        var at = 0
+        func number() -> Int64? {
+            guard at + 8 <= blob.count else { return nil }
+            defer { at += 8 }
+            return Int64(littleEndian: blob.loadUnaligned(fromByteOffset: at, as: Int64.self))
+        }
+        func count() -> Int? {
+            guard let value = number(), value >= 0, value <= blob.count else { return nil }
+            return Int(value)
+        }
+        func text() -> String? {
+            guard let length = count(), at + length <= blob.count else { return nil }
+            defer { at += length }
+            return String(decoding: UnsafeRawBufferPointer(rebasing: blob[at ..< at + length]), as: UTF8.self)
+        }
+        func table() -> [Int64: String]? {
+            guard let entries = count() else { return nil }
+            var table: [Int64: String] = [:]
+            table.reserveCapacity(entries)
+            for _ in 0 ..< entries {
+                guard let id = number(), let name = text() else { return nil }
+                table[id] = name
+            }
+            return table
+        }
+        var codes = ColumnStore.SavedCodes()
+        for kind in 0 ..< 2 {
+            guard let entries = count() else { return nil }
+            var ids = ContiguousArray<Int64>()
+            ids.reserveCapacity(entries)
+            for _ in 0 ..< entries {
+                guard let id = number() else { return nil }
+                ids.append(id)
+            }
+            if kind == 0 {
+                codes.cameraIDs = ids
+            } else {
+                codes.lensIDs = ids
+            }
+        }
+        codes.nameLists = []
+        for _ in 0 ..< ColumnStore.SavedCodes.nameListCount {
+            guard let entries = count() else { return nil }
+            var list: [String] = []
+            list.reserveCapacity(entries)
+            for _ in 0 ..< entries {
+                guard let name = text() else { return nil }
+                list.append(name)
+            }
+            codes.nameLists.append(list)
+        }
+        guard let parts = count() else { return nil }
+        codes.placeParts.reserveCapacity(parts)
+        for _ in 0 ..< parts {
+            guard let part = number(), let code = UInt32(exactly: part) else { return nil }
+            codes.placeParts.append(code)
+        }
+        guard let folders = table(), let cameras = table(), let lenses = table(), let keywords = table(),
+              let collections = table(), at == blob.count, store.adopt(codes)
+        else { return nil }
+        return QueryNames(
+            folders: folders,
+            cameras: cameras,
+            lenses: lenses,
+            keywords: keywords,
+            collections: collections,
+        )
     }
 }
 

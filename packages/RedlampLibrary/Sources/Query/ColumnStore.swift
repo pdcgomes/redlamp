@@ -3,8 +3,8 @@ import RedlampDocument
 
 /// The library's hot columns in memory (LIB-06): a column for each field the query language filters
 /// and sorts on, indexed by a dense row number, and the sort orders as permutations of the rows.
-/// It's built from the index's hot-column scan, in the background at launch, saved beside the index
-/// (`ColumnSnapshot`, LIB-44), and changed as the writer commits (`apply`).
+/// It's mapped from its snapshot beside the index when that reflects the index (`ColumnSnapshot`,
+/// LIB-44), or built from the index's hot-column scan, and changed as the writer commits (`apply`).
 ///
 /// A value: copies share their columns until one of them changes, and then only the pages it writes
 /// are copied (`StoreColumn`), so a query reads a snapshot while changes go to another. A change
@@ -772,6 +772,31 @@ extension ColumnStore {
         )
     }
 
+    /// Takes `codes` as its tables; false when they don't make tables it could have.
+    mutating func adopt(_ codes: SavedCodes) -> Bool {
+        guard codes.cameraIDs.first == 0, codes.lensIDs.first == 0, codes.cameraIDs.count <= Int(UInt16.max) + 1,
+              codes.lensIDs.count <= Int(UInt16.max) + 1, codes.nameLists.count == SavedCodes.nameListCount,
+              let places = PlaceCodes(parts: Array(codes.nameLists[3...]), placeParts: codes.placeParts)
+        else { return false }
+        func coded(_ ids: ContiguousArray<Int64>) -> [Int64: UInt16] {
+            var codes: [Int64: UInt16] = [:]
+            for (code, id) in ids.enumerated() where code > 0 {
+                codes[id] = UInt16(code)
+            }
+            return codes
+        }
+        cameraIDs = codes.cameraIDs
+        lensIDs = codes.lensIDs
+        cameraCodes = coded(cameraIDs)
+        lensCodes = coded(lensIDs)
+        creatorNames = NameCodes(names: codes.nameLists[0], limit: UInt32(UInt16.max))
+        copyrightNames = NameCodes(names: codes.nameLists[1], limit: UInt32(UInt16.max))
+        customLabelNames = NameCodes(names: codes.nameLists[2], limit: UInt32(UInt8.max))
+        placeNames = places
+        return creatorNames.count == codes.nameLists[0].count && copyrightNames.count == codes.nameLists[1].count
+            && customLabelNames.count == codes.nameLists[2].count
+    }
+
     /// Calls `body` with each of its sections' bytes, in the snapshot's order.
     func withSections(_ body: (ColumnSnapshot.Section, UnsafeRawBufferPointer) throws -> Void) throws {
         func put(_ section: ColumnSnapshot.Section, _ column: StoreColumn<some FixedWidthInteger & Sendable>) throws {
@@ -812,6 +837,82 @@ extension ColumnStore {
             try put(.bySize, bySize)
         }
         try live.words.withUnsafeBufferPointer { try body(.live, UnsafeRawBufferPointer($0)) }
+    }
+
+    /// Takes `pages` as `section`'s column of `count` values; false for a section that isn't one.
+    mutating func adopt(_ section: ColumnSnapshot.Section, pages: ColumnPages, count: Int) -> Bool {
+        switch section {
+        case .ids: ids = StoreColumn(pages: pages, count: count)
+        case .folders: folders = StoreColumn(pages: pages, count: count)
+        case .captured: captured = StoreColumn(pages: pages, count: count)
+        case .cameras: cameras = StoreColumn(pages: pages, count: count)
+        case .lenses: lenses = StoreColumn(pages: pages, count: count)
+        case .packed: packed = StoreColumn(pages: pages, count: count)
+        case .iso: iso = StoreColumn(pages: pages, count: count)
+        case .aperture: aperture = StoreColumn(pages: pages, count: count)
+        case .focal: focal = StoreColumn(pages: pages, count: count)
+        case .shutter: shutter = StoreColumn(pages: pages, count: count)
+        case .kinds: kinds = StoreColumn(pages: pages, count: count)
+        case .nameRanks: nameRanks = StoreColumn(pages: pages, count: count)
+        case .editedAt: editedAt = StoreColumn(pages: pages, count: count)
+        case .sizes: sizes = StoreColumn(pages: pages, count: count)
+        case .modifiedAt: modifiedAt = StoreColumn(pages: pages, count: count)
+        case .states: states = StoreColumn(pages: pages, count: count)
+        case .creators: creators = StoreColumn(pages: pages, count: count)
+        case .copyrights: copyrights = StoreColumn(pages: pages, count: count)
+        case .customLabels: customLabels = StoreColumn(pages: pages, count: count)
+        case .places: places = StoreColumn(pages: pages, count: count)
+        case .megapixels: megapixels = StoreColumn(pages: pages, count: count)
+        case .aspects: aspects = StoreColumn(pages: pages, count: count)
+        case .orientations: orientations = StoreColumn(pages: pages, count: count)
+        case .rowOfID: rowOfID = StoreColumn(pages: pages, count: count)
+        case .byCaptured: byCaptured = StoreColumn(pages: pages, count: count)
+        case .byName: byName = StoreColumn(pages: pages, count: count)
+        case .byRating: byRating = StoreColumn(pages: pages, count: count)
+        case .byEdited: byEdited = StoreColumn(pages: pages, count: count)
+        case .byModified: byModified = StoreColumn(pages: pages, count: count)
+        case .bySize: bySize = StoreColumn(pages: pages, count: count)
+        case .live:
+            let words = StoreColumn<UInt64>(pages: pages, count: count)
+            live = RowBits(words: words.withUnsafeBufferPointer { ContiguousArray($0) })
+        case .names:
+            return false
+        }
+        return true
+    }
+
+    /// Pages of its columns that are the process's own memory rather than its snapshot's file:
+    /// written since they were mapped, or built in memory (`StoreColumn.ownPages`).
+    var ownPages: Int {
+        let columns: [Int] = [
+            ids.ownPages, folders.ownPages, captured.ownPages, cameras.ownPages, lenses.ownPages, packed.ownPages,
+            iso.ownPages, aperture.ownPages, focal.ownPages, shutter.ownPages, kinds.ownPages, nameRanks.ownPages,
+            editedAt.ownPages, sizes.ownPages, modifiedAt.ownPages, states.ownPages, creators.ownPages,
+            copyrights.ownPages, customLabels.ownPages, places.ownPages, megapixels.ownPages, aspects.ownPages,
+            orientations.ownPages, rowOfID.ownPages,
+        ]
+        let optional: [Int?] = [byModified?.ownPages, bySize?.ownPages]
+        let orders: [Int] = [byCaptured.ownPages, byName.ownPages, byRating.ownPages, byEdited.ownPages]
+            + optional.compactMap(\.self)
+        return columns.reduce(0, +) + orders.reduce(0, +)
+    }
+
+    /// Whether its columns make a store of `rows` rows, `count` of them live, setting its count.
+    mutating func isWhole(rows: Int, count: Int) -> Bool {
+        let columns: [Int] = [
+            ids.count, folders.count, captured.count, cameras.count, lenses.count, packed.count, iso.count,
+            aperture.count, focal.count, shutter.count, kinds.count, nameRanks.count, editedAt.count, sizes.count,
+            modifiedAt.count, states.count, creators.count, copyrights.count, customLabels.count, places.count,
+            megapixels.count, aspects.count, orientations.count,
+        ]
+        let optional: [Int?] = [byModified?.count, bySize?.count]
+        let orders: [Int] = [byCaptured.count, byName.count, byRating.count, byEdited.count] + optional
+            .compactMap(\.self)
+        guard columns.allSatisfy({ $0 == rows }), orders.allSatisfy({ $0 == count }),
+              live.wordCount == (rows + 63) / 64, live.count == count
+        else { return false }
+        self.count = count
+        return true
     }
 }
 

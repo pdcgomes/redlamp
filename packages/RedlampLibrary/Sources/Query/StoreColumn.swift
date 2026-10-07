@@ -52,6 +52,19 @@ public struct StoreColumn<Element: FixedWidthInteger & Sendable>: Sendable {
         pages.size
     }
 
+    /// Pages holding its values that are the process's own memory rather than the file's, in memory
+    /// or paged out: written since they were mapped, or allocated (`mincore`).
+    var ownPages: Int {
+        guard let base = pages.base, count > 0 else { return 0 }
+        let length = ColumnPages.rounded(count * Self.stride)
+        var flags = [CChar](repeating: 0, count: length / ColumnPages.pageSize)
+        guard mincore(base, length, &flags) == 0 else { return 0 }
+        return flags.count { flag in
+            let bits = Int32(UInt8(bitPattern: flag))
+            return bits & MINCORE_ANONYMOUS != 0 && bits & (MINCORE_INCORE | MINCORE_PAGED_OUT) != 0
+        }
+    }
+
     // MARK: - Reading
 
     public func withUnsafeBufferPointer<R>(_ body: (UnsafeBufferPointer<Element>) throws -> R) rethrows -> R {

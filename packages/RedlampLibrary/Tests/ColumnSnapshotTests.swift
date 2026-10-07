@@ -3,8 +3,155 @@ import RedlampDocument
 import Testing
 @testable import RedlampLibrary
 
-/// The column store's snapshot beside the index (LIB-44).
+/// The column store mapped from its snapshot beside the index (LIB-44).
 struct ColumnSnapshotTests {
+    @Test func `a launch from a matching snapshot gives the same answers as a store built from SQLite`() async throws {
+        let library = try await SnapshotLibrary.make(photos: 2400)
+        defer { library.remove() }
+        let built = library.engine()
+        try await built.load()
+        let saving = library.engine()
+        try await saving.load()
+        try await saving.saveSnapshot()
+        let mapped = library.engine()
+        try await mapped.load()
+        #expect(!built.isMapped && mapped.isMapped)
+        let (builtStore, mappedStore) = try (#require(built.store), #require(mapped.store))
+        #expect(try SnapshotLibrary.sections(of: builtStore) == SnapshotLibrary.sections(of: mappedStore))
+
+        for text in SnapshotLibrary.queries {
+            let query = try LibraryQuery(parsing: text)
+            for sort in SnapshotLibrary.sorts {
+                let expected = try await built.results(query, sort: sort).last
+                let found = try await mapped.results(query, sort: sort).last
+                #expect(found?.ids == expected?.ids && found?.count == expected?.count, "\(text), \(sort)")
+            }
+            for facet in Facet.allCases {
+                let expected = try await SnapshotLibrary.facet(facet, of: query, in: built)
+                #expect(try await SnapshotLibrary.facet(facet, of: query, in: mapped) == expected, "\(text), \(facet)")
+            }
+        }
+
+        let builtStacks = try await StackFinder.find(in: library.index, store: builtStore)
+        let mappedStacks = try await StackFinder.find(in: library.index, store: mappedStore)
+        #expect(mappedStacks.members == builtStacks.members && mappedStacks.starts == builtStacks.starts)
+        #expect(!builtStacks.members.isEmpty, "the library has pairs and bursts")
+        let names = try #require(built.snapshot()?.1.names)
+        #expect(mapped.snapshot()?.1.names == names)
+        let list = PhotoList(source: .allPhotographs, sort: QuerySort(), ids: builtStore.ids(sortedBy: QuerySort()))
+        for key in GroupKey.allCases {
+            let expected = LibraryGrouping(store: builtStore, names: names, stacks: builtStacks).groups(
+                of: list,
+                by: key,
+            )
+            let found = LibraryGrouping(store: mappedStore, names: names, stacks: mappedStacks).groups(
+                of: list,
+                by: key,
+            )
+            #expect(found.photoSets == expected.photoSets && found.map(\.name) == expected.map(\.name), "\(key)")
+        }
+        for rule in PairRule.allCases {
+            let expected = try await built.healthFindings(.pairs(rule))
+            #expect(try await mapped.healthFindings(.pairs(rule)) == expected, "\(rule)")
+        }
+        #expect(try await built.healthFindings(.pairs(.keepRaw)).findings.count > 0)
+        #expect(await mapped.completions("lis", field: nil) == built.completions("lis", field: nil))
+    }
+
+    @Test func `a snapshot from another generation, another schema, a truncated file or a wrong page size is set aside and the store built`(
+    ) async throws {
+        let library = try await QueryTestLibrary.make()
+        defer { library.remove() }
+        let url = ColumnSnapshot.url(forIndex: library.index.url)
+        let damaged = url.appendingPathExtension("damaged")
+        func engine() -> QueryEngine {
+            QueryEngine(index: library.index, timeZone: .gmt, now: { QueryTestLibrary.now }, saving: nil)
+        }
+        func save() async throws {
+            let saving = engine()
+            try await saving.load()
+            try await saving.saveSnapshot()
+            #expect(FileManager.default.fileExists(atPath: url.path))
+        }
+        /// Loads a new engine: whether it mapped the snapshot, and the photos `rating>=1` finds.
+        func launch() async throws -> (mapped: Bool, rated: [Int]) {
+            let launched = engine()
+            try await launched.load()
+            return try await (launched.isMapped, library.numbers(launched.ids("rating>=1")).sorted())
+        }
+
+        try await save()
+        let expected = try await launch()
+        #expect(expected.mapped && expected.rated == [1, 2, 4, 5, 6])
+
+        try await library.index.write { try $0.setOrganising([.rating(2)], forPhotos: [library.ids[6]]) }
+        #expect(try await launch() == (false, [1, 2, 4, 5, 6, 7]), "another generation")
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+
+        try await save()
+        try SnapshotHeader.patch(url) { $0.schema += 1 }
+        #expect(try await launch() == (false, [1, 2, 4, 5, 6, 7]), "another schema")
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+
+        try await save()
+        try SnapshotHeader.patch(url) { $0.pageSize = 4096 }
+        #expect(try await launch() == (false, [1, 2, 4, 5, 6, 7]), "a wrong page size")
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+
+        try await save()
+        let size = try #require(try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int)
+        let handle = try FileHandle(forUpdating: url)
+        try handle.truncate(atOffset: UInt64(size / 2))
+        try handle.close()
+        #expect(try await launch() == (false, [1, 2, 4, 5, 6, 7]), "a truncated file")
+        #expect(!FileManager.default.fileExists(atPath: url.path) && FileManager.default
+            .fileExists(atPath: damaged.path))
+
+        try await save()
+        let page = Int(getpagesize())
+        let writer = try FileHandle(forUpdating: url)
+        try writer.seek(toOffset: UInt64(page + 3))
+        try writer.write(contentsOf: Data([0xA5]))
+        try writer.close()
+        #expect(try await launch() == (false, [1, 2, 4, 5, 6, 7]), "a damaged page")
+        #expect(!FileManager.default.fileExists(atPath: url.path) && FileManager.default
+            .fileExists(atPath: damaged.path))
+
+        try Data("not a snapshot".utf8).write(to: url)
+        #expect(try await launch() == (false, [1, 2, 4, 5, 6, 7]), "another file")
+        try await save()
+        #expect(try await launch() == (true, [1, 2, 4, 5, 6, 7]))
+    }
+
+    @Test func `a change after launch copies only the pages it touches and is seen by the next search`() async throws {
+        let library = try await SnapshotLibrary.make(photos: 20000, extras: false)
+        defer { library.remove() }
+        let saving = library.engine()
+        try await saving.load()
+        #expect(try #require(saving.store).ownPages == SnapshotLibrary.pages(of: #require(saving.store)))
+        try await saving.saveSnapshot()
+        let engine = library.engine()
+        try await engine.load()
+        #expect(engine.isMapped)
+        #expect(try #require(engine.store).ownPages == 0, "every page the file's")
+
+        let marked = library.ids[12345]
+        try await library.index.write { try $0.setOrganising([.marked(true)], forPhotos: [marked]) }
+        try await engine.update(photos: [marked])
+        #expect(try #require(engine.store).ownPages == 1, "the page of the packed column holding its row")
+        #expect(try await engine.ids("marked:yes") == [marked])
+
+        let rated = try #require(try await engine.ids("rating:0").dropFirst(100).first)
+        try await library.index.write { try $0.setOrganising([.rating(5)], forPhotos: [rated]) }
+        try await engine.update(photos: [rated])
+        let store = try #require(engine.store)
+        let ratingPages = store.byRating.bytes / Int(getpagesize())
+        #expect(store.ownPages > 1 && store.ownPages <= 2 + ratingPages, "\(store.ownPages) of \(ratingPages)")
+        #expect(store.byCaptured.ownPages == 0 && store.byName.ownPages == 0 && store.ids.ownPages == 0)
+        #expect(try await engine.ids("rating:5").contains(rated))
+        #expect(try await engine.ids("marked:yes") == [marked])
+    }
+
     @Test func `the snapshot is written after commits and at quit, atomically`() async throws {
         let library = try await QueryTestLibrary.make()
         defer { library.remove() }
@@ -26,6 +173,7 @@ struct ColumnSnapshotTests {
         func reopened() async throws -> QueryEngine {
             let next = QueryEngine(index: library.index, timeZone: .gmt, now: { QueryTestLibrary.now }, saving: nil)
             try await next.load()
+            #expect(next.isMapped)
             return next
         }
 

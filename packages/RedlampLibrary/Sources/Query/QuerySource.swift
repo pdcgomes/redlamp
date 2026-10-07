@@ -337,10 +337,17 @@ struct IndexQuerySource: QuerySource {
         return names
     }
 
-    /// Built from the index, with the generation it reflects (LIB-44): brought up to whatever this
-    /// process wrote while it was read.
+    /// Mapped from the snapshot beside the index when it reflects the index's generation (LIB-44),
+    /// which sets aside one that doesn't; built from the index otherwise, and brought up to whatever
+    /// this process wrote while it was read.
     func loadStore() async throws -> LoadedStore {
         let generation = try await index.read { try $0.generation() }
+        let url = ColumnSnapshot.url(forIndex: index.url)
+        if let saved = try await LibraryIndex.offCaller({ ColumnSnapshot.read(at: url, generation: generation) }) {
+            return try await LoadedStore(
+                store: saved.store, names: withDefinitions(saved.names), generation: generation, mapped: true,
+            )
+        }
         let store = try await columnStore()
         let (names, now) = try await index.read { try ($0.queryNames(), $0.generation()) }
         let loaded = try await LoadedStore(store: store, names: withDefinitions(names), generation: generation)
@@ -398,7 +405,7 @@ struct IndexQuerySource: QuerySource {
                 return nil
             }
             try ColumnSnapshot.write(store, names: names, generation: generation, to: url)
-            return nil
+            return ColumnSnapshot.read(at: url, generation: generation)?.store
         }
     }
 

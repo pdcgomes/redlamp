@@ -19,6 +19,14 @@ struct NameCodes: Sendable {
         self.limit = limit
     }
 
+    /// The codes of `names` in order, `names[0]` being none, as the snapshot saves them (LIB-44).
+    init(names: [String], limit: UInt32) {
+        self.init(limit: limit)
+        for name in names.dropFirst() {
+            _ = code(for: name)
+        }
+    }
+
     /// Names, none included.
     var count: Int {
         names.count
@@ -141,6 +149,29 @@ struct PlaceCodes: Sendable {
 
     private struct Key: Hashable {
         var sublocation, city, state, country, countryCode: UInt32
+    }
+
+    init() {}
+
+    /// The places of `placeParts`, each its five parts' codes into `parts`' names, as the snapshot
+    /// saves them (LIB-44); nil when they don't make places.
+    init?(parts names: [[String]], placeParts: [UInt32]) {
+        let width = Part.allCases.count
+        guard names.count == width, placeParts.count >= width, placeParts.count % width == 0,
+              placeParts.prefix(width).allSatisfy({ $0 == 0 })
+        else { return nil }
+        parts = names.map { NameCodes(names: $0, limit: .max) }
+        guard zip(parts, names).allSatisfy({ $0.count == $1.count }) else { return nil }
+        self.placeParts = ContiguousArray(placeParts)
+        for place in 1 ..< placeParts.count / width {
+            let part = placeParts[place * width ..< (place + 1) * width]
+            guard zip(part, parts).allSatisfy({ Int($0) < $1.count }) else { return nil }
+            let at = part.startIndex
+            codes[Key(
+                sublocation: part[at], city: part[at + 1], state: part[at + 2], country: part[at + 3],
+                countryCode: part[at + 4],
+            )] = UInt32(place)
+        }
     }
 
     /// Each part's names and the places' parts, as the snapshot saves them.
