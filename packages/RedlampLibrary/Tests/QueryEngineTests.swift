@@ -128,7 +128,16 @@ struct QueryEngineTests {
         ("(rating>=4 OR flag:pick) -label:none", [1, 5]),
         ("camera:x-t5 iso<=800", [1, 6]),
         ("-(rating:0 OR has:gps)", [2, 4, 6]),
-        ("ab rating>=3", [1, 2, 5]),
+        ("ab rating>=3", []),
+        ("x- rating>=3", [1, 2]),
+        ("r5", [3]),
+        ("tr", [1, 2, 6]),
+        ("-tr", [3, 4, 5, 7, 8]),
+        ("montreal", [6]),
+        ("in:montreal", [6]),
+        ("creator:joao", [2]),
+        ("province:quebec", [6]),
+        ("cafe", [6]),
     ]
 
     /// Each sort and the photos' numbers in its ascending order.

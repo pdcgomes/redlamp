@@ -49,18 +49,21 @@ struct QuerySQL: Sendable, Hashable {
             case .all:
                 return "1"
             case let .text(text):
-                let match = bind(QueryText.match(text))
-                let part = [bind(text), bind(text), bind(text)]
-                var names: [String] = []
+                var alternatives: [String] = []
+                if QueryText.isSearchable(text) {
+                    alternatives.append(textMatch(QueryText.match(text)))
+                }
+                alternatives.append("p.folder IN (SELECT id FROM folders WHERE redlamp_contains(path, \(bind(text))))")
+                alternatives.append(Self.named("camera", "cameras", bind(text)))
+                alternatives.append(Self.named("lens", "lenses", bind(text)))
                 for column in ["creator"] + PlaceCodes.Part.allCases.map(\.column) {
-                    names.append("redlamp_contains(p.\(column), \(bind(text)))")
+                    alternatives.append("redlamp_contains(p.\(column), \(bind(text)))")
                 }
                 let owners = synonyms.owners(containing: text)
-                let synonymous = owners.isEmpty ? "" : " OR " + keywords(within: owners)
-                return "(p.id IN (SELECT rowid FROM photo_text WHERE photo_text MATCH \(match))"
-                    + " OR p.folder IN (SELECT id FROM folders WHERE redlamp_contains(path, \(part[0])))"
-                    + " OR \(Self.named("camera", "cameras", part[1])) OR \(Self.named("lens", "lenses", part[2]))"
-                    + " OR " + names.joined(separator: " OR ") + "\(synonymous))"
+                if !owners.isEmpty {
+                    alternatives.append(keywords(within: owners))
+                }
+                return "(" + alternatives.joined(separator: " OR ") + ")"
             case let .filter(filter):
                 var alternatives: [String] = []
                 for value in filter.values {

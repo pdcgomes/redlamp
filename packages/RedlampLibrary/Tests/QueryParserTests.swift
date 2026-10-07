@@ -272,18 +272,29 @@ struct QueryParserTests {
         }
     }
 
-    @Test func `searching leaves out text too short for trigrams, and what's left of the query with it`() throws {
+    @Test func `searching keeps short free text for the small tables, and leaves out short names, titles and captions`(
+    ) throws {
         let rating = Self.filter(.rating, .equal, .number(3))
-        #expect(try Self.parse("ab rating:3").searchable == rating)
-        #expect(try Self.parse("ab OR rating:3").searchable == rating)
-        #expect(try Self.parse("-ab").searchable == nil)
+        #expect(try Self.parse("ab rating:3").searchable == .and([.text("ab"), rating]))
+        #expect(try Self.parse("ab OR rating:3").searchable == .or([.text("ab"), rating]))
+        #expect(try Self.parse("-ab").searchable == .not(.text("ab")))
         #expect(try Self.parse("name:DS").searchable == nil)
+        #expect(try Self.parse("name:DS rating:3").searchable == rating, "what's left of the query")
         #expect(try Self.parse("name:DS,DSCF").searchable == Self.filter(.name, .equal, .text("DSCF")))
+        #expect(try Self.parse("title:ab caption:cd").searchable == nil)
         #expect(try Self.parse("ext:x").searchable == nil)
         #expect(try Self.parse("ext:cr3").searchable == Self.filter(.ext, .equal, .text("cr3")))
         #expect(try Self.parse("lens:35").searchable == Self.filter(.lens, .equal, .text("35")))
-        #expect(try Self.parse("東京").searchable == nil, "two characters")
+        #expect(try Self.parse("東京").searchable == .text("東京"), "two characters, still matched against folders")
         #expect(try Self.parse("東京駅").searchable == .text("東京駅"))
+    }
+
+    @Test func `text is searchable in the text index from three characters as it holds text`() {
+        #expect(!QueryText.isSearchable("ab") && QueryText.isSearchable("abc"))
+        #expect(!QueryText.isSearchable("東京") && QueryText.isSearchable("東京駅"))
+        #expect(QueryText.isSearchable("aß"), "ß is folded to ss")
+        #expect(!QueryText.isSearchable("e\u{301}e"), "two characters, one decomposed")
+        #expect(!QueryText.isSearchable("한국".decomposedStringWithCanonicalMapping), "two syllables, composed")
     }
 
     @Test func `dates span the capture times of their days, today and the last days, weeks, months and years`() throws {

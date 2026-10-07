@@ -10,9 +10,10 @@ import RedlampDocument
 /// `description` is the query's canonical text, which parses back to the same query. Parsing
 /// flattens groups: an `and` holds no `and` and an `or` no `or`, each with two queries or more.
 ///
-/// Text is matched with the index's trigrams, so free text and the values of `name`, `title`,
-/// `caption` and an extension in `ext` need three characters to narrow a search: shorter ones are
-/// kept in the query, and left out when it's run.
+/// Names, keywords, titles and captions are matched with the index's trigrams, so the values of
+/// `name`, `title`, `caption` and an extension in `ext` need three characters to narrow a search:
+/// shorter ones are kept in the query, and left out when it's run. Shorter free text is still
+/// matched against folders, cameras, lenses, creators, places and keywords' synonyms (LIB-06).
 public indirect enum LibraryQuery: Sendable, Hashable {
     /// Every photo: the empty query.
     case all

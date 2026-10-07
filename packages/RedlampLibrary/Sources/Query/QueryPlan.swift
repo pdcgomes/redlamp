@@ -97,7 +97,7 @@ indirect enum QueryPlan: Sendable, Hashable {
         case let .text(text):
             let synonyms = vocabulary.hasKeywordSynonyms ? vocabulary.ids(in: .keywordSynonyms, matching: text) : []
             return any([
-                .leaf(.rows(.match(QueryText.match(text)))),
+                QueryText.isSearchable(text) ? .leaf(.rows(.match(QueryText.match(text)))) : .nothing,
                 folders(vocabulary.ids(in: .folders, matching: text)),
                 cameras(vocabulary.ids(in: .cameras, matching: text), store),
                 lenses(vocabulary.ids(in: .lenses, matching: text), store),

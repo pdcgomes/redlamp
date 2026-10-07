@@ -220,14 +220,16 @@ enum FinderOrder {
 }
 
 extension LibraryQuery {
-    /// The query as it's run: free text, and values of `name`, `title`, `caption` and extensions,
-    /// too short for the trigram index are left out, and nil when that leaves nothing.
+    /// The query as it's run: values of `name`, `title`, `caption` and extensions too short for the
+    /// trigram index are left out, and nil when that leaves nothing. Free text is kept whatever its
+    /// length: too short for the index, it's still matched against the small tables
+    /// (`QueryPlan.compile`).
     var searchable: LibraryQuery? {
         switch self {
         case .all:
             return nil
-        case let .text(text):
-            return QueryText.isSearchable(text) ? self : nil
+        case .text:
+            return self
         case var .filter(filter):
             filter.values = filter.values.filter { $0.isSearchable(as: filter.field) }
             return filter.values.isEmpty ? nil : .filter(filter)

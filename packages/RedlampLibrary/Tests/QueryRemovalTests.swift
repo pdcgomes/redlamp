@@ -22,10 +22,13 @@ struct QueryRemovalTests {
         #expect(alone?.count == 8 && alone?.query == .all)
         let none = try await Self.removal(engine, "-(rating>=0 OR kw:nothing)")
         #expect(none?.term == "rating>=0" && none?.count == 8, "every photo rated 0 or more, none without it")
-        #expect(try await Self.removal(engine, "rating>=3 ab")?.term == nil, "a query that finds photos")
+        #expect(try await Self.removal(engine, "rating>=3 x-")?.term == nil, "a query that finds photos")
         #expect(try await Self.removal(engine, "kw:nothing OR camera:none") == nil, "taking out an OR finds fewer")
         #expect(try await Self.removal(engine, "kw:nothing camera:none") == nil, "no term alone is in the way")
-        #expect(try await Self.removal(engine, "kw:nothing ab")?.term == "kw:nothing", "too short to search, ab")
+        let short = try await Self.removal(engine, "kw:nothing r5")
+        #expect(short?.term == "kw:nothing" && short?.count == 1, "r5, short as it is, finds the Canon EOS R5")
+        #expect(try await Self.removal(engine, "kw:nothing ab") == nil, "ab finds no folder, camera or place either")
+        #expect(try await Self.removal(engine, "rating:4 ab")?.term == "ab", "short text can be in the way")
 
         let studio = PhotoSource.folder(
             URL(fileURLWithPath: IndexSandbox.rootPath + "/2024/Studio", isDirectory: true), includingSubfolders: false,
