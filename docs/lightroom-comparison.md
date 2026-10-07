@@ -119,7 +119,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Refine AI mask edges | Yes | Done | Different | | MSK-07, MSK-26, MSK-31 | Refine Edges, which solves a mask's whole edge again per pixel, and a Refine Edge brush that solves an edge again where you paint; from process 13, coarse masks (iPhone mattes, face parts) refined at full resolution as the photo is drawn |
 | Feather and Edge sliders for AI masks | Yes | Done | | | MSK-18 | Lightroom Classic 15.5 added the sliders |
 | Mask presets (Blue Sky, Whiten Teeth and others) | Yes | Done | | | | Save your own from any mask |
-| Add, Subtract, Intersect, invert and duplicate | Yes | Done | | | | |
+| Add, Subtract, Intersect, invert and duplicate | Yes | Done | | | UX-24 | A component or the whole mask inverted; Duplicate and Invert inverts the copy as a whole |
 | Reorder masks and components, every overlay mode and its opacity | Yes | Done | | | MSK-21 | |
 | Local adjustments in masks | Yes | Done | | | MSK-03, MSK-24 | Local Whites and Blacks move the end points as the global sliders do, for new edits (process 13) |
 | Local Whites and Blacks as true end points | Yes | Done | | | MSK-24 | |

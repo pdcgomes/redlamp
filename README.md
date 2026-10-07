@@ -109,7 +109,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] **Dehaze** (global and in masks): the dark channel prior (He, Sun and Tang, 2009) with the airlight and a haze map measured when the photo opens; negative values add a neutral veil. For new edits (process version 8) the haze map follows the photo's edges, so the sky beside a tree or a ridge has no pale glow.
 
 **Masking** (Lightroom's model)
-- [x] Each mask is a layer: its own adjustments plus a mask built from components. Components combine with **Add**, **Subtract**, and **Intersect**, and each can be inverted.
+- [x] Each mask is a layer: its own adjustments plus a mask built from components. Components combine with **Add**, **Subtract**, and **Intersect**, and each can be inverted, as can the whole mask (**Invert**, as Lightroom's).
 - [x] **Linear and radial gradient** components.
   - Draw them on the photo.
   - Drag the handles to move, resize, and rotate; radial gradients also have a Feather control.
