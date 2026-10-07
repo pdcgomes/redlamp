@@ -34,7 +34,7 @@ Redlamp is a macOS raw editor in Swift and Metal (`README.md`). These rules appl
 - **Bugs that produce wrong pixels** (NaN, black or out-of-range values) are fixed in every process version: no edit relies on them. A reference that recorded such a pixel is re-recorded in the same change, and the commit says which pixels changed and that nothing else did.
 - **No agent changes how an existing edit renders.** A rendering change needs a new process version, and that is the orchestrator's call. The process-stability gate (`ProcessStabilityTests`) catches it; a new version records its references with `TEST_RUNNER_REDLAMP_RECORD_PROCESS_GOLDEN=1`, which writes only missing ones, and raises the process version's maximum in `docs/recipes/sidecar-format.schema.json` and its table in `sidecar-format.md` (`SidecarSchemaTests` checks both).
 - **Off limits:** removal (RM-*), the audit fixes (AUD-*), noise (DN-*), `video/` and `web/`; other sessions are working there.
-- **Commit to your own branch** in small, described commits. Never push, merge or rebase onto `main`.
+- **Commit to your own branch** in small, described commits. Never push, merge or rebase onto `main`. A bug's agent, started from the reports room's Fix it, is the exception: it pushes its own fix to main through the push gate (`.cursor/skills/redlamp-reports/bug-agent.md`).
 - **Commit messages** are short and name the tracker row and its issue: `LCP lens profiles: parse and match (LNS-04, #82)`.
 
 ## Conventions
