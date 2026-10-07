@@ -35,6 +35,7 @@ Every push to `main` runs the push gate first (`.githooks/pre-push`, `scripts/pu
 - Don't skip it with `--no-verify`. Fix what fails and push again. If `origin/main` already fails the same way, fixing that comes first; tell the owner when it isn't yours to fix.
 - It passes a commit's files once: `mise run gate -- <commit>` checks them ahead of the push, which then goes straight through. A rebase changes what a commit holds, so it's the rebased head that needs checking.
 - The rest of the suite runs on CI. Before pushing work that spans packages, such as a wave's merge, run `mise run gate -- --suite` on it: the whole suite, as CI runs it, which the push then counts as passed.
+- It's a git hook, so it runs for pushes from this checkout and its worktrees. A clone elsewhere, on another Mac or for a cloud agent, gets it once `mise run setup` has been run there.
 
 ## Issue syncs follow origin/main
 
