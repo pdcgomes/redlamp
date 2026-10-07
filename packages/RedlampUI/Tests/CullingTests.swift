@@ -432,6 +432,16 @@ struct CullingTests {
         let photo = folder.root.appending(path: "Été à Montréal/Café-7706.JPG")
         let ids = await LibraryService.indexIDs(of: [photo], in: index)
         #expect(ids[photo] != nil, "found from the URL the app makes of it")
+        let details = PhotoDetailsCache(library: folder.library)
+        var read: [URL] = []
+        details.request([LibraryItem(url: photo)]) { read = $0 }
+        for _ in 0 ..< 500 where read.isEmpty {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(
+            read == [photo] && details.details(for: photo)?.width != nil,
+            "an expanded cell's details read from its row",
+        )
         let subfolder = folder.root.appending(path: "Été à Montréal", directoryHint: .isDirectory)
         #expect(
             await folder.service.canShow(subfolder, includingSubfolders: false),

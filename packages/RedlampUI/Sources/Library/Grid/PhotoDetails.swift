@@ -114,7 +114,7 @@ final class PhotoDetailsCache {
                 await (try? core.index.read { reader in
                     var found: [URL: PhotoDetails] = [:]
                     for url in wanted {
-                        if let record = try reader.photo(path: LibraryService.path(url)) {
+                        if let record = try LibraryService.photo(at: url, in: reader) {
                             found[url] = PhotoDetails(record)
                         }
                     }
