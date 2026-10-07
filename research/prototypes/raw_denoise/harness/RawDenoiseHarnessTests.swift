@@ -17,6 +17,8 @@ struct RawDenoiseHarnessTests {
         var out: String
         /// Detail panel values by parameter ID suffix (`luminance`, `color`, `luminanceDetail`, ...).
         var settings: [String: Double] = [:]
+        /// The edit's process version; absent, the latest.
+        var process: Int?
     }
 
     struct Job: Decodable {
@@ -54,6 +56,7 @@ struct RawDenoiseHarnessTests {
             let session = try makeSession(job, folder: folder)
             for render in job.renders {
                 var recipe = DetailStageTests.unsharpened
+                recipe.processVersion = render.process ?? EditRecipe.currentProcessVersion
                 for (key, value) in render.settings {
                     let id = try #require(ParameterID(rawValue: "detail.noise.\(key)"), "unknown setting \(key)")
                     recipe[id] = value

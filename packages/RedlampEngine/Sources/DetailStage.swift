@@ -1576,6 +1576,9 @@ final class DetailResidency: Sendable {
 /// reshapes it again, so these are measured (`DetailStageTests`, with `REDLAMP_CALIBRATE_NOISE=1`)
 /// rather than taken from white-noise theory. Linear raw is the white-noise case.
 enum NoiseCalibration {
+    /// Measured through Malvar's demosaic, which the Menon demosaic replaced the same day. It stays:
+    /// the noise sliders were tuned on it, and Menon's own table moves each setting along the same
+    /// trade-off between noise and texture without improving it (SKIP-17).
     static let bayer: [[SIMD3<Float>]] = [
         [
             SIMD3(1.153, 0.349, 0.272),

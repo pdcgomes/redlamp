@@ -29,10 +29,11 @@ struct DetailStageTests {
 
     /// The measured detail noise per scale must match `NoiseCalibration`, which is what the
     /// thresholds are scaled by. Slow (minutes), so it runs on request, after a demosaic or pyramid
-    /// change: `TEST_RUNNER_REDLAMP_CALIBRATE_NOISE=1`. It prints the table to paste.
+    /// change: `TEST_RUNNER_REDLAMP_CALIBRATE_NOISE=1`. It prints the table to paste. Bayer's table
+    /// is Malvar's demosaic's (SKIP-17), so Bayer is measured through Malvar.
     @Test(.enabled(if: calibrating), arguments: [SensorKind.bayer, .xTrans, .linear])
     func `calibration matches the pipeline`(sensor: SensorKind) throws {
-        let session = try makeSession(sensor, width: 2048, height: 1536)
+        let session = try makeSession(sensor, width: 2048, height: 1536, bayerDemosaic: .malvar)
         for level in 0 ... 2 {
             let measured = try measureScaleNoise(session, level: level)
             let table = NoiseCalibration.sigmas(sensor: sensor, level: level)
@@ -809,6 +810,7 @@ struct DetailStageTests {
         banding: BandingCorrection? = nil,
         profile: NoiseModel = DetailStageTests.noise,
         spikes: [(SIMD2<Int>, Float)] = [],
+        bayerDemosaic: BayerDemosaic = .menon,
         signal: (Int, Int) -> Float = { _, _ in DetailStageTests.level },
     ) throws -> ImageSession {
         let layout: DecodedImage.Layout
@@ -860,7 +862,9 @@ struct DetailStageTests {
         decoded.noiseProfile = profile
         decoded.gainMaps = gainMaps
         decoded.banding = banding
-        return try SessionBuilder(device: device, queue: queue, kernels: kernels).build(decoded)
+        var builder = SessionBuilder(device: device, queue: queue, kernels: kernels)
+        builder.bayerDemosaic = bayerDemosaic
+        return try builder.build(decoded)
     }
 
     /// One pyramid level read back as camera RGB.
