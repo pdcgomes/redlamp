@@ -65,12 +65,15 @@ struct HandCodedTypeTests {
         try check(typical, notWritten: ["picked"])
         var masked = everything.recipe.masks[0]
         masked.pointColor = [typical]
-        try check(masked, notWritten: ["curves"])
+        try check(masked, notWritten: ["curves", "inverted"])
     }
 
     @Test func `mask layers, components and AI masks`() throws {
         let masks = everything.recipe.masks
-        try check(masks[0], notWritten: ["curves", "pointColor"])
+        try check(masks[0], notWritten: ["curves", "pointColor", "inverted"])
+        var inverted = masks[0]
+        inverted.inverted = true
+        try check(inverted, notWritten: ["curves", "pointColor"])
         var curved = masks[0]
         var curves = MaskCurves()
         for (index, channel) in MaskCurves.Channel.allCases.enumerated() {
@@ -79,7 +82,7 @@ struct HandCodedTypeTests {
             ]
         }
         curved.curves = curves
-        try check(curved, notWritten: ["pointColor"])
+        try check(curved, notWritten: ["pointColor", "inverted"])
         try check(curves)
         for component in masks.flatMap(\.components) {
             try check(component)
