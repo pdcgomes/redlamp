@@ -159,7 +159,9 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
         }
         shownText = filter.text
         set(error, filters.error?.message ?? "")
-        error.toolTip = filters.error?.message
+        if error.toolTip != filters.error?.message {
+            error.toolTip = filters.error?.message
+        }
         let total = filters.listed?.total ?? model.library.count
         let shown = model.library.isFiltered ? model.library.count : total
         set(
@@ -193,7 +195,10 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
                 .firstIndex(of: filters.sort.field),
         )
         direction.symbol = filters.sort.ascending ? "arrow.up" : "arrow.down"
-        direction.toolTip = "\(filters.sort.ascending ? "Ascending" : "Descending") (\(ShortcutAction.reverseSort.title))"
+        let directionTip = "\(filters.sort.ascending ? "Ascending" : "Descending") (\(ShortcutAction.reverseSort.title))"
+        if direction.toolTip != directionTip {
+            direction.toolTip = directionTip
+        }
         let current = filters.preset
         var items: [(title: String?, tag: Int)] = current == nil ? [("Custom Filter", -1), (nil, 0)] : []
         items += filters.presets.enumerated().map { ($1.name, $0) }

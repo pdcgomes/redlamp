@@ -42,6 +42,7 @@ final class FilterColumnsView: NSView {
     private func update() {
         guard let filters = model.libraryFilters else { return }
         let kinds = filters.filter.columns
+        let count = columns.count
         while columns.count < kinds.count {
             let column = FilterColumnView(model: model, index: columns.count)
             columns.append(column)
@@ -59,7 +60,9 @@ final class FilterColumnsView: NSView {
                 canRemove: kinds.count > 1, canAdd: kinds.count < LibraryFilter.maxColumns,
             )
         }
-        needsLayout = true
+        if columns.count != count {
+            needsLayout = true
+        }
     }
 
     override func layout() {

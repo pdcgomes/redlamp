@@ -609,6 +609,36 @@ extension LibraryFilterTests {
         #expect(bar.isHidden && !filters.isBarShown)
     }
 
+    @Test func `a key typed shows in the bar without laying its columns out again`() async throws {
+        defer { cleanUp() }
+        let (model, _) = try await open()
+        let filters = try #require(model.libraryFilters)
+        filters.setFilter(LibraryFilter(sections: [.text, .metadata]))
+        model.showLibrary(.grid)
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000), styleMask: [.titled], backing: .buffered,
+            defer: false,
+        )
+        window.contentViewController = ModuleViews.make(model: model, theme: ThemeSettings())
+        window.setContentSize(NSSize(width: 1600, height: 1000))
+        defer { window.contentViewController = nil }
+        model.perform(.toggleFilterBar)
+        try await eventually(seconds: 5) { filters.columns.count == 4 }
+        window.contentView?.layoutSubtreeIfNeeded()
+        let bar = try #require(Self.find(LibraryFilterBarView.self, in: window.contentView))
+        let columns = try #require(Self.find(FilterColumnsView.self, in: window.contentView))
+        let frames = columns.subviews.map(\.frame)
+        for text in ["r", "ra", "rating>=3"] {
+            filters.setText(text)
+            try await eventually(seconds: 2) { bar.field.stringValue == text }
+            #expect(bar.field.stringValue == text)
+            #expect(!columns.needsLayout, "the columns laid out again after \(text)")
+        }
+        try await listed(model)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(columns.subviews.map(\.frame) == frames)
+    }
+
     @Test func `a click on a column's row chooses its photos, ⌘-click adds another, and All takes them out`(
     ) async throws {
         defer { cleanUp() }
