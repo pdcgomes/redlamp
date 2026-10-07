@@ -8,8 +8,10 @@ import Testing
 /// The histogram's graph, which takes a new histogram about 30 times a second while a photo
 /// renders (RESP-05).
 ///
-/// The look is compared with references drawn at a scale of 1, whatever the screen's, so one
-/// set serves every Mac. To record them again, run with `TEST_RUNNER_REDLAMP_RECORD_HISTOGRAM=1`.
+/// The look is compared with references drawn at a scale of 1, in the dark appearance and in
+/// sRGB, whatever the screen's and the system's, so one set serves every Mac: CI's runner is in
+/// Light mode, on a display of its own. To record them again, run with
+/// `TEST_RUNNER_REDLAMP_RECORD_HISTOGRAM=1`.
 @MainActor @Suite(.serialized)
 struct HistogramGraphViewTests {
     static let goldenURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
@@ -49,6 +51,8 @@ struct HistogramGraphViewTests {
             backing: .buffered, defer: false,
         )
         window.isReleasedWhenClosed = false
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.colorSpace = .sRGB
         window.contentView = view
         view.layoutSubtreeIfNeeded()
         return window
