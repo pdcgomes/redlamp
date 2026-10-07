@@ -150,6 +150,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Generative Upscale (Topaz) | Yes (Desktop; cloud, credits) | Undecided | | | DEC-14 | Redlamp's planned Super Resolution is faithful rather than generative |
 | AI sharpening for blur and missed focus (Topaz) | Yes (Desktop; cloud, credits) | Undecided | | | SHP-03 | Proposed for Redlamp as a head on its own raw denoiser, on the Mac |
 | Edit by describing the result (Prompt to Edit, Firefly) | Yes (Desktop early access; cloud, credits) | Undecided | | | | |
+| Generative and AI tools run in the cloud | Yes (cloud, credits) | Later | | | INF-11, INF-13, RM-17 | An option for later, beside the models that run on the Mac: a provider you bring your own key for, a third-party provider, or a ComfyUI server (DEC-39) |
 
 ## Presets and looks
 

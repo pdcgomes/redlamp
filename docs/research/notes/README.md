@@ -33,6 +33,10 @@ Later notes, each behind tracker rows or another findings document:
 | [MSK-25-photoset.md](MSK-25-photoset.md) | The mask evaluation photoset: 115 CC0 photos for Sky, Subject, People and face parts, what they cover and what they lack (6 October 2026) |
 | [DN-11-lightroom-raw-denoise.md](DN-11-lightroom-raw-denoise.md) | Lightroom's raw Denoise and what is published about it, the research on demosaicing and joint demosaicing and denoising, and a measured comparison of Redlamp, a pre-demosaic prototype and open models (7 October 2026) |
 | [MSK-25-mask-review.md](MSK-25-mask-review.md) | Where Sky, Subject and People masks stand, from what Redlamp draws: the halo of an edit at an edge, the render-time edge, hair's glow, and the fixes ranked (6 October 2026) |
+| [INF-11-README.md](INF-11-README.md) | The cloud processing study (INF-11, paused): what's written, what's left, how to resume, and each part's brief (7 October 2026) |
+| [INF-11-removal-apis.md](INF-11-removal-apis.md) | Cloud APIs for mask-based object removal: what each takes and returns, prices, terms, and the first to integrate (7 October 2026) |
+| [INF-11-app-store-privacy.md](INF-11-app-store-privacy.md) | App Store rules, privacy law, keys and provenance for sending work to a cloud provider, route by route (7 October 2026) |
+| [INF-11-comfyui-masks-denoise.md](INF-11-comfyui-masks-denoise.md) | ComfyUI as a route (its API, hosted services, removal workflows on commercially licensed weights), cloud masking and cloud denoise for raw photos (7 October 2026) |
 | [UX-17-masks-panel-audit.md](UX-17-masks-panel-audit.md) | The Masks panel, fourteen tasks step by step against Lightroom Classic's published workflow: where Redlamp's way is longer or hidden, and the redesign's findings ranked (7 October 2026) |
 
 Some notes mention scratch scripts under `/tmp/`. Those were one-off measurement harnesses and are not

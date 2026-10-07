@@ -934,6 +934,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - **Tethered shooting:** capture sessions with settings for the next captures and a hot folder for any camera, then camera control and Live View for Canon, Nikon, Sony and Fujifilm, wireless, and focus brackets straight into a stack ([research](docs/research/tethering-findings.md)) <!-- tracker: TET-01, TET-02, TET-04, TET-06, TET-07, TET-08, TET-09, TET-11, TET-13, TET-14 -->
 - Importing your own `.dcp` camera profiles (deferred in October 2026)
 - More AI features, subject to the research below: lens blur, distraction removal, and personalized auto settings <!-- tracker: OTH-03, AUT-03, AUT-04 -->
+- **Cloud processing** for work too heavy for the Mac, generative fill first and then masking and denoise: through a provider you bring your own key for, a third-party provider, or a ComfyUI server ([study, paused](docs/research/notes/INF-11-README.md)) <!-- tracker: INF-11, INF-13, RM-17 -->
 
 ### Research
 
