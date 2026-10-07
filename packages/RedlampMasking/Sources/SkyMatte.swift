@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import RedlampColor
 import RedlampEngineAPI
 import simd
 
@@ -195,8 +196,7 @@ public enum SkyMatte {
     /// sRGB to linear light, per pixel.
     static func linear(_ rgb: RGBImage) -> [SIMD3<Float>] {
         let table = (0 ..< 256).map { value -> Float in
-            let x = Float(value) / 255
-            return x <= 0.04045 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4)
+            SRGB.decode(Float(value) / 255)
         }
         var out = [SIMD3<Float>](repeating: .zero, count: rgb.width * rgb.height)
         let pixels = rgb.pixels

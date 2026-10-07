@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import RedlampColor
 import RedlampEngineAPI
 import simd
 import Vision
@@ -112,9 +113,10 @@ public enum SkyEstimator {
         guard let pixels = RGBImage(image, size: size) else { throw MaskComputationError.nothingFound(.sky) }
         let width = size.width
         let height = size.height
+        let weights = Luma.rec709
         let luma = (0 ..< width * height).map { index -> Float in
             let rgb = pixels.rgb(index % width, index / width)
-            return 0.2126 * rgb.x + 0.7152 * rgb.y + 0.0722 * rgb.z
+            return weights.x * rgb.x + weights.y * rgb.y + weights.z * rgb.z
         }
         let texture = BoxFilter.blur(
             gradient(luma, width: width, height: height),
@@ -252,20 +254,7 @@ public enum SkyEstimator {
 
     /// OKLab (Björn Ottosson, 2020) of an sRGB-encoded colour.
     static func oklab(sRGB c: SIMD3<Float>) -> SIMD3<Float> {
-        func linear(_ v: Float) -> Float {
-            v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4)
-        }
-        let r = linear(c.x)
-        let g = linear(c.y)
-        let b = linear(c.z)
-        let l = cbrt(max(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b, 0))
-        let m = cbrt(max(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b, 0))
-        let s = cbrt(max(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b, 0))
-        return SIMD3(
-            0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
-            1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
-            0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s,
-        )
+        OKLab.fromLinearSRGB(SRGB.decode(c))
     }
 
     static func median(_ values: [Float]) -> Float {
