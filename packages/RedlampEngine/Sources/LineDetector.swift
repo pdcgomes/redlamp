@@ -1,4 +1,5 @@
 import Foundation
+import RedlampColor
 import RedlampEngineAPI
 import simd
 
@@ -31,7 +32,7 @@ enum LineDetector {
         let analysis = session.analysis
         let swaps = [5, 6].contains(session.orientation)
         let (width, height) = swaps ? (analysis.height, analysis.width) : (analysis.width, analysis.height)
-        let weights = SIMD3<Float>(0.2627, 0.6780, 0.0593)
+        let weights = Luma.rec2020
         var values = [Float](repeating: 0, count: width * height)
         for y in 0 ..< height {
             for x in 0 ..< width {

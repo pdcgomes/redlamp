@@ -46,7 +46,7 @@ enum ImageAnalysis {
     static func autoTone(session: ImageSession, recipe: EditRecipe) -> [ParameterID: Double] {
         let ratio = SIMD3<Float>(session.whiteBalanceRatio(for: recipe))
         let matrix = session.cameraToWorking
-        let luma = SIMD3<Float>(0.2627, 0.6780, 0.0593)
+        let luma = Luma.rec2020
         let gain = Float(pow(2, session.baselineExposure))
 
         var values: [Float] = []

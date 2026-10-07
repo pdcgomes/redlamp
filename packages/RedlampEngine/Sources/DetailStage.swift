@@ -1,5 +1,6 @@
 import Foundation
 import Metal
+import RedlampColor
 import RedlampEngineAPI
 import RedlampKernels
 import RedlampServices
@@ -1399,7 +1400,7 @@ final class DetailStage {
 
     /// Rec. 2020 luminance weights for the pyramid's camera RGB, and a floor for its log.
     static func luma(_ session: ImageSession) -> SIMD4<Float> {
-        SIMD4(session.cameraToWorking.transpose * SIMD3<Float>(0.2627, 0.6780, 0.0593), 1.0 / 1024)
+        SIMD4(session.cameraToWorking.transpose * Luma.rec2020, 1.0 / 1024)
     }
 
     /// Working texture `slot` of `format`, covering the work area, reused across renders. It grows

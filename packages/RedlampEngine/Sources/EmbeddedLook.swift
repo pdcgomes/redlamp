@@ -62,7 +62,7 @@ enum EmbeddedLook {
     }
 
     private static func srgbEncode(_ x: Float) -> Float {
-        x <= 0.0031308 ? 12.92 * max(x, 0) : 1.055 * pow(x, 1 / 2.4) - 0.055
+        SRGB.encode(max(x, 0))
     }
 }
 
@@ -147,11 +147,11 @@ enum HSVMapMath {
     }
 
     private static func srgbEncode(_ x: Float) -> Float {
-        x <= 0.0031308 ? 12.92 * x : 1.055 * pow(x, 1 / 2.4) - 0.055
+        SRGB.encode(x)
     }
 
     private static func srgbDecode(_ x: Float) -> Float {
-        x <= 0.04045 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4)
+        SRGB.decode(x)
     }
 }
 
