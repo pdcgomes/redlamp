@@ -2,7 +2,7 @@ import Observation
 import RedlampLibrary
 import SwiftUI
 
-/// Settings › Library: the metadata the library shares with other apps (LIB-24, DEC-37).
+/// Settings › Library: the library's state, and the metadata it shares with other apps (LIB-24, DEC-37).
 /// Other apps' ratings, labels, keywords and captions are always read; standard `.xmp` sidecars are
 /// written beside the photos only once it's turned on, with labels in the names the chosen app reads,
 /// and kept in the library's index, where `redlamp library xmp` reads them too. Turning writing on or
@@ -17,6 +17,15 @@ struct LibrarySettings: View {
 
     var body: some View {
         Form {
+            Section {
+                LabeledContent("Index") {
+                    Text(model.status)
+                        .multilineTextAlignment(.trailing)
+                        .accessibilityIdentifier("settings.library.state")
+                }
+            } header: {
+                Text("Library")
+            }
             Section {
                 Toggle("Write .xmp sidecars for other apps", isOn: Binding(
                     get: { model.settings.writes },
@@ -102,8 +111,8 @@ struct LibrarySettings: View {
     }
 }
 
-/// What Settings › Library shows and changes: the library's choices for other apps' metadata, a change
-/// to writing confirmed before it's made.
+/// What Settings › Library shows and changes: the library's state, and its choices for other apps'
+/// metadata, a change to writing confirmed before it's made.
 @MainActor
 @Observable
 final class LibrarySettingsModel {
@@ -185,6 +194,19 @@ final class LibrarySettingsModel {
     }
 
     // MARK: - What it says
+
+    var status: String {
+        switch library.state {
+        case .opening where library.isUpdatingIndex:
+            "Being updated for this version of Redlamp. Search waits until it’s done."
+        case .opening:
+            "Opening…"
+        case .ready:
+            photos.map(Self.photos) ?? "Open"
+        case let .unavailable(reason):
+            "Not available, so Folders lists folders itself: \(reason)"
+        }
+    }
 
     var footer: String {
         let reading = """

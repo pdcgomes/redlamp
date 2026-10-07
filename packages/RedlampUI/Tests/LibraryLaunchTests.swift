@@ -7,8 +7,9 @@ import Testing
 @_spi(Harness) @testable import RedlampUI
 
 /// The library at launch: its roots current once change tracking has caught up with their volume, and
-/// not after a pass that ended offline; and the file operations a forced quit cut short finished before
-/// the indexer lists their folders, and the health rows and hashes nothing can bring back swept.
+/// not after a pass that ended offline; the file operations a forced quit cut short finished before the
+/// indexer lists their folders, and the health rows and hashes nothing can bring back swept; and an
+/// index from an earlier Redlamp migrated while Settings, the filter bar and the palette say so.
 @MainActor
 struct LibraryLaunchTests {
     private let base = FileManager.default.temporaryDirectory
@@ -163,5 +164,45 @@ struct LibraryLaunchTests {
         library.open(root)
         try await eventually { library.isShownFromLibrary && !library.isListing }
         #expect(library.items.map(\.name) == ["Renamed-1.JPG", "Renamed-2.JPG", "Renamed-3.JPG"])
+    }
+
+    @Test func `an index from an earlier Redlamp is migrated as it opens, the library saying so meanwhile`(
+    ) async throws {
+        defer { cleanUp() }
+        try photos(["IMG_1.JPG"])
+        try await indexOnce()
+        #expect(!LibraryCore.needsMigrating(paths.index), "an index this build made")
+        // Made by the version before: the text index is built again as it opens. Holding the write lock
+        // keeps it migrating while the test looks.
+        let holder = try SQLiteDatabase(path: paths.index.path)
+        #expect(try holder.userVersion == LibraryCore.indexVersion, "LibraryCore.indexVersion is the index's")
+        try holder.setUserVersion(LibraryCore.indexVersion - 1)
+        #expect(LibraryCore.needsMigrating(paths.index))
+        let library = FolderLibrary()
+        library.add([root])
+        let model = EditorModel(engine: StubEngine(), library: library)
+        let palette = CommandPaletteModel(editor: model, scope: .all, tip: 0, isSpecimen: true)
+        palette.setText("zzz")
+        let service = LibraryService(paths: paths, sidecars: library.sidecars) { url, size in
+            StoreThumbnailMaker.imageIO(url, nil, size)
+        }
+        defer { service.close() }
+        // The index waits 5 s for a lock before it gives up: what's checked meanwhile is quick.
+        try holder.execute("BEGIN IMMEDIATE")
+        library.attach(service)
+        try await eventually(seconds: 3) { service.isUpdatingIndex }
+        let waiting = library.libraryWaiting
+        let settings = LibrarySettingsModel(library: service).status
+        let nothing = palette.nothingFound
+        try holder.execute("COMMIT")
+        #expect(waiting?.contains("being updated for this version of Redlamp") == true)
+        #expect(settings.hasPrefix("Being updated for this version of Redlamp. Search waits"))
+        #expect(nothing.hasPrefix("No matches for “zzz” yet. Waiting for the library's index"), "\(nothing)")
+
+        try await eventually(seconds: 20) { service.isReady }
+        #expect(service.isReady && !service.isUpdatingIndex && library.libraryWaiting == nil)
+        #expect(palette.nothingFound == "No matches for “zzz”.")
+        let version = try await #require(service.core).index.read { try $0.database.userVersion }
+        #expect(version == LibraryCore.indexVersion)
     }
 }

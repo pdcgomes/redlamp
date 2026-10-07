@@ -202,7 +202,7 @@ private struct PaletteResults: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     if sections.allSatisfy(\.items.isEmpty) {
-                        Text(palette.text.isEmpty ? "Nothing here yet." : "No matches for “\(palette.text)”.")
+                        Text(palette.nothingFound)
                             .font(.system(size: 12))
                             .foregroundStyle(colors.secondaryLabel)
                             .padding(.horizontal, 10)
@@ -248,6 +248,18 @@ private struct PaletteResults: View {
         let headers = sections.count(where: { $0.title != nil && !$0.items.isEmpty })
         let content = CGFloat(max(rows, 1)) * PaletteMetrics.rowHeight + CGFloat(headers) * PaletteMetrics.headerHeight
         return min(content + 52, PaletteMetrics.maxListHeight)
+    }
+}
+
+extension CommandPaletteModel {
+    /// What the list says when nothing matches: while the library opens, that its labels are still to come.
+    var nothingFound: String {
+        switch (text.isEmpty, editor.library.libraryWaiting) {
+        case let (true, waiting?): "\(waiting)…"
+        case let (false, waiting?): "No matches for “\(text)” yet. \(waiting)…"
+        case (true, nil): "Nothing here yet."
+        case (false, nil): "No matches for “\(text)”."
+        }
     }
 }
 

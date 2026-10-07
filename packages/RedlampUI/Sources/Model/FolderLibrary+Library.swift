@@ -46,6 +46,16 @@ public extension FolderLibrary {
         fromLibrary.list != nil
     }
 
+    /// What the library's search waits for while it opens, for the filter bar and the palette to say
+    /// rather than finding nothing: its index being updated for this version of Redlamp (seconds at a
+    /// million photos), or its opening. Nil once it's open, and with the library off.
+    var libraryWaiting: String? {
+        guard let service, service.state == .opening else { return nil }
+        return service.isUpdatingIndex
+            ? "Waiting for the library's index, which is being updated for this version of Redlamp"
+            : "Waiting for the library to open"
+    }
+
     /// The store's thumbnails and the content key of a photo shown from the library.
     func storeThumbnail(for item: LibraryItem) -> (StoreThumbnails, ContentKey)? {
         guard let key = fromLibrary.keys[item.url], let thumbnails = service?.thumbnails else { return nil }

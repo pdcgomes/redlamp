@@ -38,6 +38,7 @@ struct LibraryOtherAppsTests {
 
         let settings = LibrarySettingsModel(library: service)
         await settings.countPhotos()
+        #expect(settings.status == "3 photos")
         settings.ask(writes: true)
         #expect(settings.confirming == .turningOn)
         #expect(settings.message(.turningOn).contains("The 3 photos already in the library are left as they are"))

@@ -56,6 +56,9 @@ final class LibraryCore: Sendable {
     static let fileLimit: rlim_t = 4096
     /// Photos an XMP sync takes at a time, so the library's batches asked for meanwhile go between them.
     static let xmpBatch = 500
+    /// The version of the index's schema this build opens: `LibraryIndex`'s count of migrations, which it
+    /// doesn't make public.
+    static let indexVersion = 7
 
     private static let log = Logger(subsystem: "app.redlamp.mac", category: "library")
 
@@ -79,11 +82,16 @@ final class LibraryCore: Sendable {
 
     /// Opens the index (restoring its newest good snapshot when it's damaged, checking it first when
     /// `check`), loads the column store and opens the thumbnail store. `thumbnail` is the engine's
-    /// `decodeThumbnail(for:maxPixelSize:)`, which the store's thumbnails of raws come from.
+    /// `decodeThumbnail(for:maxPixelSize:)`, which the store's thumbnails of raws come from; `migrating`
+    /// hears, before the index opens, that opening it brings its schema up to date first.
     static func open(
         paths: LibraryPaths, check: Bool, thumbnail: @escaping @Sendable (URL, Int) -> CGImage?,
+        migrating: @Sendable () async -> Void = {},
     ) async throws -> (core: LibraryCore, outcome: LibraryIndex.OpenOutcome) {
         raiseFileLimit()
+        if needsMigrating(paths.index) {
+            await migrating()
+        }
         let (index, outcome) = try await LibraryIndex.openOrRestore(
             at: paths.index, snapshots: paths.snapshots, check: check,
         )
@@ -97,6 +105,17 @@ final class LibraryCore: Sendable {
         )
         core.xmpSettings = await (try? core.xmp.settings()) ?? XMPSettings()
         return (core, outcome)
+    }
+
+    /// Whether the index at `url` was made by an earlier Redlamp, so opening it migrates its schema: version
+    /// 7 builds the text index again, 5.7 to 9.6 s at a million photos, with nothing searchable meanwhile.
+    /// A new index, or one that can't be read, isn't.
+    static func needsMigrating(_ url: URL) -> Bool {
+        guard FileManager.default.fileExists(atPath: url.path),
+              let database = try? SQLiteDatabase(path: url.path, flags: .readWrite),
+              let version = try? database.userVersion
+        else { return false }
+        return version > 0 && version < indexVersion
     }
 
     /// Raises the soft limit on open files towards `fileLimit`, never past the hard limit.

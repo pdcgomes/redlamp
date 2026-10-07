@@ -11,11 +11,12 @@ import Synchronization
 /// change tracking, over the folders in Folders.
 ///
 /// It opens at launch off the main thread: the index (from its newest good snapshot when it's
-/// damaged), the column store and the thumbnail store. Then, before any other change, it finishes or
-/// rolls back the file operations and metadata batches a forced quit cut short, and it finishes a
-/// sidecar move a quit interrupted. It indexes the folders in Folders and keeps them current, and
-/// `FolderLibrary` shows a folder it has indexed from a photo list. Until it's open, and for a folder
-/// it hasn't indexed, `FolderLibrary` lists folders itself, as it does with the library off
+/// damaged, migrating its schema first when an earlier Redlamp made it), the column store and the
+/// thumbnail store. Then, before any other change, it finishes or rolls back the file operations and
+/// metadata batches a forced quit cut short, and it finishes a sidecar move a quit interrupted. It
+/// indexes the folders in Folders and keeps them current, and `FolderLibrary` shows a folder it has
+/// indexed from a photo list. Until it's open, and for a folder it hasn't indexed, `FolderLibrary`
+/// lists folders itself, as it does with the library off
 /// (`defaults write app.redlamp.mac LibraryEnabled -bool NO`) or when the index can't open.
 ///
 /// A folder is shown from the library once it's indexed as its last listing found it and that
@@ -46,6 +47,9 @@ public final class LibraryService {
 
     @ObservationIgnored public let paths: LibraryPaths
     public private(set) var state = State.opening
+    /// While opening: the index's schema is being brought up to this version's, which builds its text
+    /// index again, so nothing can be searched until it's open.
+    public private(set) var isUpdatingIndex = false
     /// The library's choices for other apps' metadata, once it's open.
     public private(set) var xmpSettings: XMPSettings?
     /// Every photo's `.xmp` is being written, as Settings asked.
@@ -132,10 +136,13 @@ public final class LibraryService {
         guard opening == nil, core == nil else { return }
         let (paths, thumbnail) = (paths, thumbnail)
         let check = defaults?.bool(forKey: Self.damagedKey) ?? false
+        let migrating: @Sendable () async -> Void = { [weak self] in await self?.indexMigrating() }
         opening = Task { [weak self] in
             let opened = await Task.detached(priority: .userInitiated) { () -> Result<LibraryCore, any Error> in
                 do {
-                    let (core, outcome) = try await LibraryCore.open(paths: paths, check: check, thumbnail: thumbnail)
+                    let (core, outcome) = try await LibraryCore.open(
+                        paths: paths, check: check, thumbnail: thumbnail, migrating: migrating,
+                    )
                     if outcome != .opened {
                         Self.log
                             .notice("The library's index was damaged: \(String(describing: outcome), privacy: .public)")
@@ -149,8 +156,16 @@ public final class LibraryService {
         }
     }
 
+    /// Opening the index migrates its schema first.
+    private func indexMigrating() {
+        guard core == nil else { return }
+        isUpdatingIndex = true
+        Self.log.notice("The library's index is being updated for this version of Redlamp")
+    }
+
     private func opened(_ result: Result<LibraryCore, any Error>) {
         opening = nil
+        isUpdatingIndex = false
         switch result {
         case let .failure(error):
             state = .unavailable(String(describing: error))
