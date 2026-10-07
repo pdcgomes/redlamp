@@ -11,6 +11,8 @@ import Synchronization
 /// - **The photos:** the source shown, newest first, listed at once and filled in as their heads and
 ///   previews are read. The choices (which go, the rating, flag and label each gets) are kept in its
 ///   session, and written in each photo's `.redlamp` at the destination.
+/// - **To:** the destination, the folder and name templates with a live example and their errors in
+///   words, a backup, raw only and keywords, kept from one import to the next (`ImportPreferences`).
 ///
 /// Events from the sessions reach the main thread in batches.
 @MainActor
@@ -77,12 +79,24 @@ final class ImportWindowModel {
     private(set) var photos: [ImportPhoto] = []
     private var positions: [String: Int] = [:]
 
+    // The plan's settings, as typed.
+    private(set) var folderText: String
+    private(set) var namesText: String
+    private(set) var folderError: String?
+    private(set) var namesError: String?
+    /// Where the example photo goes, below the destination.
+    private(set) var example: String?
+    private(set) var examplePhoto: String?
+
     /// The import.
     var phase = Phase.choosing
+    /// The library's keywords, for completing those typed.
+    private(set) var keywordCompletion: KeywordCompletion?
 
     private var browsing: [String: Task<Void, Never>] = [:]
     private var counted: (photos: Int, bytes: Int64)?
     private var countsDue = false
+    private var exampleTask: Task<Void, Never>?
     private var cardsObservation: LibraryObservation?
     /// Previews made while browsing go to the library's store; without a library, to one of the window's own,
     /// removed as it closes.
@@ -116,18 +130,27 @@ final class ImportWindowModel {
         self.fileSystem = fileSystem
         self.destinationFileSystem = destinationFileSystem
         volumes = VolumeIORegistry(fileSystem: fileSystem)
+        folderText = preferences.settings.folders.description
+        namesText = preferences.settings.names.description
     }
 
-    /// Lists the cards in and follows them.
+    /// Lists the cards in and follows them, and loads the library's keywords.
     func start() {
         cardsObservation = cards.observe { [weak self] cards in self?.cardsChanged(cards) }
         cardsChanged(cards.cards)
+        if let index = library.index {
+            let keywords = LibraryKeywords(index: index, paths: library.paths, live: library.live)
+            Task {
+                keywordCompletion = try? await keywords.completion()
+            }
+        }
     }
 
     /// Stops browsing and lets the sessions go.
     func close() {
         cardsObservation?.invalidate()
         cardsObservation = nil
+        exampleTask?.cancel()
         for task in browsing.values {
             task.cancel()
         }
@@ -200,6 +223,7 @@ final class ImportWindowModel {
         sources[index].isIncluded = included
         notify(.sources)
         notify(.status)
+        updateExample()
     }
 
     /// Shows `id`'s photos.
@@ -207,6 +231,7 @@ final class ImportWindowModel {
         guard shown != id || id == nil else { return }
         shown = id
         loadShownPhotos()
+        updateExample()
     }
 
     func source(_ id: String) -> Source? {
@@ -283,6 +308,9 @@ final class ImportWindowModel {
             } else {
                 refresh(changed)
             }
+        }
+        if listed || examplePhoto.map(changed.contains) == true || examplePhoto == nil {
+            updateExample()
         }
         countsChanged()
     }
@@ -383,6 +411,9 @@ final class ImportWindowModel {
             }
         }
         refresh(Set(ids))
+        if examplePhoto.map(ids.contains) == true || ids.contains(where: { photo(id: $0)?.choices.isChosen == true }) {
+            updateExample()
+        }
         notify(.status)
     }
 
@@ -446,6 +477,131 @@ final class ImportWindowModel {
 
     static func count(_ value: Int, _ noun: String) -> String {
         "\(value.formatted()) \(noun)\(value == 1 ? "" : "s")"
+    }
+
+    // MARK: - Settings
+
+    var settings: ImportSettings {
+        preferences.settings
+    }
+
+    func setDestination(_ url: URL) {
+        preferences.update { $0.destination = URL(fileURLWithPath: LibraryService.path(url), isDirectory: true) }
+        settingsChanged()
+    }
+
+    /// A second copy at `url`; nil for none.
+    func setBackup(_ url: URL?) {
+        preferences.update { settings in
+            settings.backup = url.map { URL(fileURLWithPath: LibraryService.path($0), isDirectory: true) }
+        }
+        settingsChanged()
+    }
+
+    /// The folder template as it's typed: an error in it is said in words, and the last one that reads stays.
+    func setFolders(_ text: String) {
+        folderText = text
+        do {
+            let template = try NamingTemplate(parsing: text, asYouType: true)
+            folderError = nil
+            preferences.update { $0.folders = template }
+        } catch {
+            folderError = error.message
+        }
+        settingsChanged()
+    }
+
+    func setNames(_ text: String) {
+        namesText = text
+        do {
+            let template = try NamingTemplate(parsing: text, asYouType: true)
+            namesError = nil
+            preferences.update { $0.names = template }
+        } catch {
+            namesError = error.message
+        }
+        settingsChanged()
+    }
+
+    /// `{text}` and `{text:shoot}`, by their names ("" and "shoot").
+    func setText(_ name: String, _ value: String) {
+        preferences.update { settings in
+            settings.texts[name] = value.isEmpty ? nil : value
+        }
+        settingsChanged()
+    }
+
+    /// The names of the texts the templates use, `{text}` as "".
+    var textNames: [String] {
+        var names: [String] = []
+        for name in settings.folders.textNames + settings.names.textNames where !names.contains(name) {
+            names.append(name)
+        }
+        return names
+    }
+
+    func setRawOnly(_ rawOnly: Bool) {
+        preferences.update { $0.rawOnly = rawOnly }
+        settingsChanged()
+        notify(.status)
+    }
+
+    /// Keywords by path, `Places/Portugal/Lisbon`, put on every photo imported.
+    func setKeywords(_ keywords: [String]) {
+        preferences.update { $0.metadata.keywords = KeywordPath.texts(keywords) }
+        settingsChanged()
+    }
+
+    /// The library's keywords that complete `text`, the best first.
+    func keywords(completing text: String) -> [String] {
+        keywordCompletion?.matches(text).map(\.path.description) ?? []
+    }
+
+    private func settingsChanged() {
+        updateExample()
+        notify(.settings)
+    }
+
+    // MARK: - The example
+
+    /// The photo the example names: the first chosen of the shown source, else of the first source included.
+    private var exampleCandidate: (ImportPhoto, ImportSource)? {
+        let order = (shown.flatMap(source).map { [$0] } ?? []) + sources.filter { $0.isIncluded && $0.id != shown }
+        for source in order where source.isIncluded {
+            for id in source.photos {
+                if let photo = source.session.photo(id), photo.choices.isChosen, !isLeftOut(photo) {
+                    return (photo, source.source)
+                }
+            }
+        }
+        return nil
+    }
+
+    /// Names the example photo again, off the main thread, as the plan would.
+    private func updateExample() {
+        exampleTask?.cancel()
+        guard folderError == nil, namesError == nil, let (photo, source) = exampleCandidate else {
+            if example != nil || examplePhoto != nil {
+                example = nil
+                examplePhoto = nil
+                notify(.settings)
+            }
+            return
+        }
+        let settings = settings
+        let paths = library.paths
+        exampleTask = Task { [weak self] in
+            let named = await ImportExample.path(of: photo, on: source, settings: settings, paths: paths)
+            guard !Task.isCancelled, let self else { return }
+            example = named
+            examplePhoto = photo.id
+            notify(.settings)
+        }
+    }
+
+    /// Returns once the example asked for last is named.
+    func exampled() async {
+        await exampleTask?.value
     }
 
     func notify(_ change: Change) {

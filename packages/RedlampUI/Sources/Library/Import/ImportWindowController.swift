@@ -1,9 +1,9 @@
 import AppKit
 import RedlampLibrary
 
-/// File › Import Photos… (LIB-27): a window of its own, From and the photos (see `ImportWindowModel`),
-/// and below them what's chosen. There's one at a time: asking again brings it forward; closed, it lets
-/// its sources go.
+/// File › Import Photos… (LIB-27): a window of its own in three columns, From, the photos and To (see
+/// `ImportWindowModel`), and below them what's chosen. There's one at a time: asking again brings it
+/// forward; closed, it lets its sources go.
 @MainActor
 public final class ImportWindowController: NSWindowController, NSWindowDelegate {
     public nonisolated static let title = "Import Photos"
@@ -19,6 +19,7 @@ public final class ImportWindowController: NSWindowController, NSWindowDelegate 
     let model: ImportWindowModel
     let sourcesView: ImportSourcesViewController
     let grid: ImportGridViewController
+    let destinationView: ImportDestinationViewController
     private let status = NSTextField(wrappingLabelWithString: "")
 
     init(model: ImportWindowModel) {
@@ -28,6 +29,7 @@ public final class ImportWindowController: NSWindowController, NSWindowDelegate 
             model: model,
             thumbnails: model.library.store.map { ImportThumbnails(store: $0) },
         )
+        destinationView = ImportDestinationViewController(model: model)
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1180, height: 680),
             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false,
@@ -43,6 +45,7 @@ public final class ImportWindowController: NSWindowController, NSWindowDelegate 
         window.setFrameAutosaveName("ImportWindow")
         model.onChange = { [weak self] change in self?.changed(change) }
         sourcesView.onAddFolder = { [weak self] in self?.askForFolder() }
+        destinationView.onChooseFolder = { [weak self] backup in self?.askForDestination(backup: backup) }
     }
 
     @available(*, unavailable)
@@ -54,13 +57,15 @@ public final class ImportWindowController: NSWindowController, NSWindowDelegate 
         let split = NSSplitView()
         split.isVertical = true
         split.dividerStyle = .thin
-        for view in [sourcesView.view, grid.view] {
+        for view in [sourcesView.view, grid.view, destinationView.view] {
             split.addArrangedSubview(view)
         }
         split.setHoldingPriority(.defaultHigh, forSubviewAt: 0)
         split.setHoldingPriority(.defaultLow, forSubviewAt: 1)
+        split.setHoldingPriority(.defaultHigh, forSubviewAt: 2)
         sourcesView.view.widthAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
         grid.view.widthAnchor.constraint(greaterThanOrEqualToConstant: 360).isActive = true
+        destinationView.view.widthAnchor.constraint(greaterThanOrEqualToConstant: 290).isActive = true
 
         status.font = .systemFont(ofSize: 12)
         status.setAccessibilityIdentifier("import.summary")
@@ -132,6 +137,7 @@ public final class ImportWindowController: NSWindowController, NSWindowDelegate 
     private func changed(_ change: ImportWindowModel.Change) {
         sourcesView.modelChanged(change)
         grid.modelChanged(change)
+        destinationView.modelChanged(change)
         guard change == .status || change == .settings else { return }
         status.stringValue = model.summary
     }
@@ -150,6 +156,29 @@ public final class ImportWindowController: NSWindowController, NSWindowDelegate 
             guard response == .OK, let self else { return }
             for url in panel.urls {
                 Task { try? await self.model.addFolder(url) }
+            }
+        }
+    }
+
+    private func askForDestination(backup: Bool) {
+        guard let window else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.prompt = "Choose"
+        panel.message = backup ? "Choose where the backup copies go." : "Choose where the photos are copied to."
+        panel.directoryURL = backup ? model.settings.backup : model.settings.destination
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard let self else { return }
+            guard response == .OK, let url = panel.url else {
+                changed(.settings)
+                return
+            }
+            if backup {
+                model.setBackup(url)
+            } else {
+                model.setDestination(url)
             }
         }
     }

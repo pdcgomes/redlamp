@@ -405,6 +405,6 @@ struct ImportPlanner {
     }
 
     static func join(_ folder: String, _ path: String) -> String {
-        path.isEmpty ? folder : folder + "/" + path
+        path.isEmpty ? folder : folder.isEmpty ? path : folder + "/" + path
     }
 }

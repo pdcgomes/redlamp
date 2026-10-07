@@ -78,6 +78,14 @@ final class ImportWindowFixture {
         ImportWindowModel(library: library, preferences: preferences, cards: cards, fileSystem: fileSystem)
     }
 
+    /// The settings every test imports with: the destination and the backup here, a folder a day.
+    func settle(_ model: ImportWindowModel, backup: Bool = true) {
+        model.setDestination(destination)
+        model.setBackup(backup ? self.backup : nil)
+        model.setFolders("{date:yyyy}/{date:yyyy-MM-dd}")
+        model.setNames("{name}")
+    }
+
     /// A folder named `name` holding photos `from` to `from + count - 1`, each `padding` bytes larger
     /// than its JPEG, newer by its number.
     @discardableResult
