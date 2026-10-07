@@ -4,7 +4,6 @@ import Foundation
 import Metal
 import RedlampEngineAPI
 import RedlampMasking
-import Synchronization
 
 /// AI masks: computed on the analysis render (the photo with no edit, sRGB, 2048 px), so they
 /// don't move when the edit changes, and kept in the edit as bitmaps.
@@ -111,10 +110,6 @@ extension RedlampEngine {
     }
 
     static let vitMatteID = "vitmatte-base"
-
-    /// The Subject matte last solved, its edges per pixel, and what it was solved from. Background
-    /// is its inverse bit for bit (`closedForm`, `vitMatteStrands`), so either gives the other.
-    static let subjectMatte = Mutex<(key: SubjectMatteKey, mask: ProvidedMask)?>(nil)
 
     /// SAM 3, when it's on this Mac and offered (it is evaluation only).
     func sam3() async -> SAM3Concepts? {
@@ -368,7 +363,7 @@ extension RedlampEngine {
             let key = await SubjectMatteKey(
                 analysisHash: analysis.hash, edgeMatte: edgeMatte, strands: isReady(Self.vitMatteID),
             )
-            if let solved = Self.subjectMatte.withLock({ $0?.key == key ? $0?.mask : nil }) {
+            if let solved = subjectMatte.withLock({ $0?.key == key ? $0?.mask : nil }) {
                 return aiMasks([solved.matte(as: request.kind)])
             }
             subjectKey = key
@@ -424,7 +419,7 @@ extension RedlampEngine {
         }
         if let subjectKey, provided.count == 1, provided[0].provider.contains("+closed-form") {
             let subject = provided[0].matte(as: .subject)
-            Self.subjectMatte.withLock { $0 = (subjectKey, subject) }
+            subjectMatte.withLock { $0 = (subjectKey, subject) }
         }
         return aiMasks(provided)
     }

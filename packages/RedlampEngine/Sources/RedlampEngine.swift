@@ -50,6 +50,9 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     let thingFinder = Mutex<OWLv2Detector?>(nil)
     /// Each person's matte for the open photo, solved per pixel, which their parts' edges take.
     let personMatteCache = Mutex<(hash: String, mattes: [GrayMask])?>(nil)
+    /// The Subject matte last solved, its edges per pixel, and what it was solved from. Background
+    /// is its inverse bit for bit (`closedForm`, `vitMatteStrands`), so either gives the other.
+    let subjectMatte = Mutex<(key: SubjectMatteKey, mask: ProvidedMask)?>(nil)
     /// The analysis render at the size masks are stored at.
     let matteCache = Mutex<AnalysisCache?>(nil)
     /// Set once the Masking tool has opened: photos opened after get their AI masks ready too.
