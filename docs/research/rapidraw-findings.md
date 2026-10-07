@@ -1,13 +1,13 @@
 # What Redlamp Can Learn from RapidRAW
 
-**Date:** 7 October 2026. **Subject:** RapidRAW v1.6.5 (`main` at `8387fc1`, 6 October 2026), the RapidRAW AI Connector (`main` of 31 August 2026), and the RapidRAW Cloud page and privacy policy on getrapidraw.com (read 7 October 2026).
+**Date:** 7 October 2026. **Subject:** RapidRAW v1.6.5 (`main` at `8387fc1`, 6 October 2026), its rawler fork ([RapidRAW-DngLab](https://github.com/CyberTimon/RapidRAW-DngLab) at `934af4b`, the commit RapidRAW pins), the RapidRAW AI Connector (`main` of 31 August 2026), and the RapidRAW Cloud page and privacy policy on getrapidraw.com (read 7 October 2026).
 **Decisions and status:** the owner decided on 7 October 2026 ([section 8](#8-decisions-and-tracker-rows)): fills may go to paired Macs and servers on the local network only (DEC-37), and Generative Remove stays removal only for now (DEC-38). Five proposals are rows in the [research intake tracker](research-tracker.md): RM-15, RM-16, RM-17, INF-10 and CAM-27.
 
 RapidRAW is an open-source raw editor by Timon Käch, started in June 2025, with over 10,000 stars on GitHub. It runs on Windows, macOS, Linux and Android, and ships about once a week. What sets it apart is how it offers AI: the same tools run on small models built into the app, on a ComfyUI server the photographer runs, on a paid cloud, or not at all. This study asked how that works, how it compares with Redlamp, and what Redlamp should take from it.
 
 ## How this was done
 
-- RapidRAW and its AI Connector were read from shallow clones in `build/oss/` (gitignored), with their release notes, issues and website. RapidRAW is AGPL-3.0: as DEC-01 allows, its source was read to understand its behaviour only. No code was copied, translated or paraphrased; behaviour is described in prose.
+- RapidRAW, its rawler fork and its AI Connector were read from clones in `build/oss/` (gitignored), with their release notes, issues and website. RapidRAW is AGPL-3.0: as DEC-01 allows, its source was read to understand its behaviour only. No code was copied, translated or paraphrased; behaviour is described in prose.
 - Licences were read from GitHub's licence API and Hugging Face's model API on 7 October 2026.
 - Nothing was run: RapidRAW wasn't built, and no ComfyUI server was set up. Speeds quoted for RapidRAW come from its own issues.
 - Redlamp's side was checked against the README, the tracker and the code on 7 October 2026.
@@ -149,7 +149,33 @@ A patch is stored inside the sidecar as base64: its colour as an 8-bit JPEG (qua
 | Privacy | The computer, the photographer's network, or a chain of third parties | Every model runs on the Mac; photos are never uploaded |
 | Model licences | A model repository with no stated licence; Places2, GPL-3.0 and unstated lineages | Code, weights and training data read from primary sources; a licence gate in CI (INF-01) |
 
-### 4.2 Positioning
+### 4.2 Raws, cameras and colour
+
+RapidRAW doesn't use LibRaw. It decodes with rawler, the Rust library from dnglab (LGPL-2.1), through the author's fork, which is 56 commits ahead of dnglab and 136 behind. rawler's own steps develop the raw (scaling, demosaic, white balance, the colour matrix, crops) before RapidRAW's shader takes over. RapidRAW ships no camera profiles of its own: each camera's colour comes from the matrices in rawler's camera files.
+
+| | RapidRAW | Redlamp |
+| --- | --- | --- |
+| Decoder | rawler, in the app. Since July 2026, a raw it can't decode opens on its embedded JPEG | LibRaw 0.22.2, for unpacking only, in a sandboxed service. A raw it can't read doesn't open |
+| Cameras | About 825 models in rawler's list, each a small TOML file: the CFA pattern, crops, optional black and white levels, and two colour matrices. The fork adds bodies before dnglab does (Sony A7 V, Fujifilm X-T30 III, Nikon ZR). Nikon's High Efficiency NEFs aren't read | LibRaw lists 1,258; 26 are verified by CC0 samples in the decode tests and 742 camera modes have camera bench reports ([cameras](../cameras.md)). The A7 V and Nikon's High Efficiency NEFs wait on LibRaw (CAM-13, CAM-12) |
+| Bayer demosaic | PPG (patterned pixel grouping); a quarter-size "superpixel" for thumbnails and quick previews | Menon, Andriani and Calvagno (2007), with a dual pass where neighbours differ only by noise |
+| X-Trans demosaic | An interpolation from neighbours of the same colour, in four passes | A first-generation interpolation; Markesteijn is CAM-07 |
+| Highlights | Kept above white since a fork commit of 13 September 2026; before it, highlights could clip at white ([#1727](https://github.com/CyberTimon/RapidRAW/issues/1727)). Then a per-pixel correction removes the magenta that clipped green leaves and rolls clipped colours toward white | Clipped photosites rebuilt on the mosaic from unclipped neighbours, in the colour measured around them; fully blown areas stay neutral |
+| Colour matrix | Adobe's. rawler's files carry Adobe's matrices for illuminant A and D65 (the Sony A7 III's D65 matrix is the one LibRaw ships); rendering uses only the D65 one, and the other serves the Kelvin readout | LibRaw's Adobe-derived D65 matrix for non-DNG raws; DNGs interpolate their two calibrations by white balance (CAM-04) |
+| Working space | Linear sRGB. Negative values are cut to zero as the raw opens, so colours outside sRGB are lost before any edit. AgX tone mapping works in an inset Rec. 2020 | Linear Rec. 2020 from camera RGB; nothing is cut before the output |
+| DNG extras | Not applied: opcode lists (phones' lens-shading gain maps, lens warps and vignetting), ForwardMatrix, HueSatMap and LookTable, profile tone curves, baseline exposure and ProRAW's gain table map. rawler copies them only when it writes DNGs | Gain maps, WarpRectilinear and FixVignetteRadial, the HueSatMap, the profile's look as a Base Look, and ProRAW's gain table map |
+| Linear DNGs | Not demosaiced, and kept above white; settings apply a gamma or skip the matrix for files with a colour cast | Clamped at white, so no highlight headroom ([raw pipeline](../raw-pipeline.md)) |
+| Lens corrections | lensfun's database, bundled | Makers' embedded data, DNG opcodes and the photographer's own LCP files; lensfun waits on counsel (DEC-04) |
+| Profiles and looks | No camera profiles, DCPs or input ICC profiles. AgX or a basic tone mapper; a Color Calibration panel (shadows tint, primaries); `.cube`, `.3dl` and image LUTs; six film LUTs from spektrafilm (CC BY-SA 4.0) | Base Looks: Redlamp's own, four measured from cameras' JPEGs, 36 film simulations built from datasheets, and a DNG's own profile; `.cube`, `.3dl` and HaldCLUT import |
+| Output | sRGB only, with a CC0 sRGB profile embedded since 3 October 2026 | sRGB or Display P3, at 8, 10 or 16 bits |
+| Apple's decoder | RAW 9 on macOS 27 as an alternative developer, with Apple's boost, contrast, local tone mapping and lens correction off | Not used (CAM-27 would evaluate it) |
+
+RapidRAW's raw handling isn't ahead of Redlamp's on accuracy anywhere: its demosaic, highlights, gamut and DNG support are simpler, and its colour is one D65 matrix into sRGB. Its decoder is ahead on coverage in places: bodies LibRaw 0.22.2 doesn't read, such as the A7 V (CAM-13), and JPEG XL mosaic DNGs, which rawler decodes with jxl-oxide (Apache-2.0) and Redlamp refuses for now (CAM-10). Three smaller points:
+
+- **Linear DNGs keep their headroom in RapidRAW** and not in Redlamp, whose raw pipeline lists the clamp as a known limit.
+- **Opening an undecodable raw on its embedded JPEG** saves the photographer an error, but only RapidRAW's log says they're editing an 8-bit preview. If Redlamp ever did this, it would have to say so on the photo.
+- **dnglab's illuminant-A matrices** show that Adobe's second matrix exists for non-DNG cameras, where Redlamp has one. They're LGPL-2.1 data derived from Adobe's converter, so they can't come from there; a second matrix would come from Redlamp's own measurement.
+
+### 4.3 Positioning
 
 RapidRAW competes on breadth, price and speed of shipping: free, on every desktop platform and Android, with a paid cloud for heavy generative work. Redlamp competes on being native to the Mac and familiar to Lightroom users, on edits that never change, and on private AI with no account. RapidRAW Cloud makes one gap plain: photographers with neither a large GPU nor a 16 GB Mac. Redlamp has no Generative Remove for them today; lessons 1 and 2 address that without a cloud.
 
@@ -235,6 +261,7 @@ Read from GitHub's licence API and Hugging Face's model API on 7 October 2026.
 | nind-denoise | GPL-3.0 | Not allowed |
 | spektrafilm's film LUTs | CC BY-SA 4.0 (its code is GPL-3.0) | Not used; Redlamp's film looks are built from datasheets |
 | rawler (dnglab) | LGPL-2.1 | For cross-checks only ([CAM-12 note](notes/CAM-12-nikon-high-efficiency.md)) |
+| rawler's camera files | LGPL-2.1, with colour matrices derived from Adobe's | Not used; as with rawspeed's camera data ([darktable study §9](darktable-findings.md#9-licensing-of-reusable-pieces)), facts are measured again from CC0 samples |
 | Ideogram, through fal | Commercial APIs | Not used ([section 6](#6-what-not-to-follow)) |
 
 ---
