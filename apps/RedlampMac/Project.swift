@@ -80,7 +80,9 @@ let project = Project(
             ),
         ),
         // Decodes photos in a sandboxed process with no file access; the app sends each file's
-        // bytes. Embedded in Contents/XPCServices with its own copies of the two frameworks it uses.
+        // bytes. Embedded in Contents/XPCServices; it loads the two frameworks it uses from the
+        // app's. Tuist embeds every framework a target depends on, so they're linked by flag,
+        // and the schemes' implicit dependencies build them first.
         .target(
             name: "RedlampDecoder",
             destinations: [.mac],
@@ -95,16 +97,14 @@ let project = Project(
             ]),
             sources: ["DecoderService/**/*.swift"],
             entitlements: .file(path: "DecoderService/RedlampDecoder.entitlements"),
-            dependencies: [
-                Module.engineAPI.dependency,
-                Module.services.dependency,
-            ],
             settings: .settings(
                 base: [
                     "CODE_SIGN_STYLE": "Automatic",
                     "CODE_SIGN_IDENTITY": "Apple Development",
-                    // XPC services get no runpath by default; this one loads its own copies.
-                    "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/../Frameworks",
+                    "OTHER_LDFLAGS": "$(inherited) -framework RedlampEngineAPI -framework RedlampServices",
+                    // Redlamp.app/Contents/XPCServices/RedlampDecoder.xpc/Contents/MacOS to the app's
+                    // Contents/Frameworks.
+                    "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/../../../../Frameworks",
                 ],
                 configurations: [
                     .debug(name: .debug, settings: ["ENABLE_HARDENED_RUNTIME": "NO"]),
