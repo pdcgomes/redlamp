@@ -223,13 +223,19 @@ struct MaskInterleavingTests {
         let kept = resources.parkedSizes.count
         print("kept aside: \(resources.parkedSizes.map { $0 >> 20 }) MB for \(sessions.count - 1) photos")
         #expect(kept >= 1 && kept < sessions.count - 1, "the budget never ran out")
-        // The photos kept are the ones just before the current one.
+        // The photos kept are the ones just before the current one. Under memory pressure, as on
+        // CI's runner, the system may have purged one meanwhile; it was kept all the same.
         for (offset, session) in sessions.dropLast().reversed().enumerated() {
+            let purged = resources.rastersPurged
             let commands = try #require(engine.queue.makeCommandBuffer())
             resources.use(session, commands: commands)
             commands.commit()
             await commands.completed()
-            let wasKept = resources.keys.contains { $0 != nil }
+            let wasPurged = resources.rastersPurged > purged
+            if wasPurged {
+                print("\(offset + 1) photos back: its rasters were purged")
+            }
+            let wasKept = wasPurged || resources.keys.contains { $0 != nil }
             #expect(wasKept == (offset < kept), "\(offset + 1) photos back, \(kept) kept")
             if !wasKept {
                 break

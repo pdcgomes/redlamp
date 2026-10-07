@@ -180,6 +180,8 @@ final class MaskResources {
     private var clock: UInt64 = 0
     /// Slices drawn so far (not found on the GPU), for tests.
     private(set) var slicesDrawn = 0
+    /// Photos kept aside whose rasters the system purged before they were shown again, for tests.
+    private(set) var rastersPurged = 0
     var scratch: (any MTLTexture)?
     /// The most recently painted brush without its last stroke.
     var paintBase: (key: BrushMask, texture: any MTLTexture)?
@@ -461,7 +463,11 @@ final class MaskResources {
         )
         guideSize = next.orientedSize.fitted(within: PixelSize(width: Self.guideLongEdge, height: Self.guideLongEdge))
         scratch = nil
+        let hadRasters = kept?.rasters != nil
         kept?.reclaim()
+        if hadRasters, kept?.rasters == nil {
+            rastersPurged += 1
+        }
         rasters = kept?.rasters
         keys = kept?.keys ?? []
         lastUsed = kept?.lastUsed ?? []
