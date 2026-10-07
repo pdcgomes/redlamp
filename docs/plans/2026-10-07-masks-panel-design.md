@@ -1,6 +1,6 @@
 # Masks panel: design (UX-17)
 
-Approved by the owner on 7 October 2026, with the decisions below. It answers the task audit ([`UX-17-masks-panel-audit.md`](../research/notes/UX-17-masks-panel-audit.md)): every task there should take no more steps than in Lightroom Classic, with nothing reachable only from a context menu. It is built in the harness first, then in the app as rows UX-19 to UX-25.
+Approved by the owner on 7 October 2026, with the decisions below. It answers the task audit ([`UX-17-masks-panel-audit.md`](../research/notes/UX-17-masks-panel-audit.md)): every task there should take no more steps than in Lightroom Classic, with nothing reachable only from a context menu. It is built in the harness first, then in the app as rows UX-20 to UX-26.
 
 ## What changes
 
@@ -100,13 +100,13 @@ The panel replaces today's in the app only once every task in the checklist has 
 
 In these rows of the tracker:
 
-1. **UX-19:** the picker, the header and messages in place.
-2. **UX-20:** the People picker, with the engine's people and `MaskRequest.instances`.
-3. **UX-21:** actions on screen: the menu buttons, the operation menu, an AI component's tools.
-4. **UX-22:** thumbnails, previews on hover, and pins inside the mask.
-5. **UX-23:** Invert for a whole mask, and Option-click to show one mask alone.
-6. **UX-24:** mask presets applied to every selected photo.
-7. **UX-25:** the Landscape picker (evaluation models).
+1. **UX-20:** the picker, the header and messages in place.
+2. **UX-21:** the People picker, with the engine's people and `MaskRequest.instances`.
+3. **UX-22:** actions on screen: the menu buttons, the operation menu, an AI component's tools.
+4. **UX-23:** thumbnails, previews on hover, and pins inside the mask.
+5. **UX-24:** Invert for a whole mask, and Option-click to show one mask alone.
+6. **UX-25:** mask presets applied to every selected photo.
+7. **UX-26:** the Landscape picker (evaluation models).
 
 Each is built in the SwiftUI reference and the AppKit panel, with parity scenes, and with regression scenarios that reach every control through the UI, menus and pickers included (no scenario reaches these today). Part 3 of the manual is updated with each, and `mise run e2e` is run.
 
@@ -116,5 +116,5 @@ The owner chose:
 
 1. **Invert for a whole mask** is a flag stored with the mask, as Lightroom has: a new field in the sidecar. An older Redlamp keeps it but draws the mask uninverted.
 2. **Option-click on an eye** is a history step that changes the edit, so the export matches what's shown.
-3. **Effect presets** for a mask's adjustments come later, after the panel (UX-26).
+3. **Effect presets** for a mask's adjustments come later, after the panel (UX-27).
 4. **The People picker** opens in the panel, where the list was, so the photo stays clear with the people outlined on it.
