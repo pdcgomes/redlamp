@@ -77,17 +77,13 @@ struct CanvasRendererTests {
     @Test func `an idle canvas takes its display link off the run loop`() async {
         defer { renderer.shutdown() }
         await settled()
-        withKnownIssue("RESP-12: the link stays on the run loop, paused") {
-            #expect(idle, "nothing is shown yet")
-        }
+        #expect(idle, "nothing is shown yet")
         renderer.publish(scene(1))
         await settled()
         #expect(running)
         #expect(await update() == 1)
         #expect(await update() == nil)
-        withKnownIssue("RESP-12: the link stays on the run loop, paused") {
-            #expect(idle)
-        }
+        #expect(idle)
     }
 
     @Test func `a scene published as the link leaves the run loop is drawn`() async {

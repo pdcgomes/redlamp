@@ -14,7 +14,8 @@ protocol CanvasDisplayLink: AnyObject {
 extension CAMetalDisplayLink: CanvasDisplayLink {}
 
 /// Presents canvas scenes on its own thread. The display link runs only while there is
-/// something new to show, and pauses itself once the latest scene is on screen.
+/// something new to show, and pauses and leaves the run loop once the latest scene is on
+/// screen, so an idle canvas's thread sleeps.
 final class CanvasRenderer: NSObject, CAMetalDisplayLinkDelegate, @unchecked Sendable {
     struct Layer: @unchecked Sendable {
         var texture: any MTLTexture
@@ -44,6 +45,9 @@ final class CanvasRenderer: NSObject, CAMetalDisplayLinkDelegate, @unchecked Sen
     private let link: any CanvasDisplayLink
     /// Set once by the render thread before `init` returns.
     private var runLoop: CFRunLoop?
+    /// Whether the link is on the render thread's run loop; only while there is a scene to show.
+    /// Render thread only.
+    private var isAttached = false
     /// For tests, on the render thread: as the link is about to go idle, and as a publish wakes it.
     var beforeIdling: (() -> Void)?
     var whileWaking: (() -> Void)?
@@ -70,7 +74,6 @@ final class CanvasRenderer: NSObject, CAMetalDisplayLinkDelegate, @unchecked Sen
             runLoop = CFRunLoopGetCurrent()
             // Keeps the run loop alive while the display link is paused.
             RunLoop.current.add(NSMachPort(), forMode: .default)
-            self.link.add(to: .current, forMode: .default)
             started.signal()
             while !shared.withLock({ $0.stopped }) {
                 RunLoop.current.run(mode: .default, before: .distantFuture)
@@ -93,6 +96,10 @@ final class CanvasRenderer: NSObject, CAMetalDisplayLinkDelegate, @unchecked Sen
         onRenderThread { [self] in
             shared.withLock { $0.wakeScheduled = false }
             whileWaking?()
+            if !isAttached {
+                link.add(to: .current, forMode: .default)
+                isAttached = true
+            }
             link.isPaused = false
         }
     }
@@ -117,7 +124,9 @@ final class CanvasRenderer: NSObject, CAMetalDisplayLinkDelegate, @unchecked Sen
         draw(scene, to: update.drawable)
     }
 
-    /// The scene to draw at this display update; with none, the link pauses. On the render
+    /// The scene to draw at this display update. With none, the link pauses and leaves the run
+    /// loop, whose display timer would otherwise still wake the thread; a scene published
+    /// meanwhile has its wake queued behind this, which brings the link back. On the render
     /// thread.
     func nextScene() -> Scene? {
         let scene = shared.withLock { shared in
@@ -129,6 +138,10 @@ final class CanvasRenderer: NSObject, CAMetalDisplayLinkDelegate, @unchecked Sen
         }
         beforeIdling?()
         link.isPaused = true
+        if isAttached {
+            link.remove(from: .current, forMode: .default)
+            isAttached = false
+        }
         return nil
     }
 
