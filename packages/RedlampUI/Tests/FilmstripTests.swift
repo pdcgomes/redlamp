@@ -71,6 +71,20 @@ struct FilmstripTests {
         #expect(cells > 0 && cells < 40, "\(cells) cells for a 900 pt strip")
     }
 
+    @Test func `the strip never shows a scroller, even in the legacy style a mouse brings`() async throws {
+        defer { cleanUp() }
+        let (_, strip, window) = try await showStrip(count: 1000)
+        defer { window.contentView = nil }
+        let scrollView = strip.scrollView
+        scrollView.scrollerStyle = .legacy
+        scrollView.hasHorizontalScroller = true
+        scrollView.tile()
+        #expect(!scrollView.hasHorizontalScroller && !scrollView.hasVerticalScroller)
+        #expect(scrollView.scrollerStyle == .overlay)
+        #expect(scrollView.horizontalScroller.map { $0.isHidden || $0.superview == nil } ?? true)
+        #expect(scrollView.contentView.frame.height == strip.bounds.height)
+    }
+
     @Test func `visible cells get their thumbnails, and a badge changes only its cell`() async throws {
         defer { cleanUp() }
         let (model, strip, window) = try await showStrip(count: 50)

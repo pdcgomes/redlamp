@@ -241,8 +241,25 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     }
 }
 
-/// Scrolls horizontally with a mouse wheel too (trackpads already scroll sideways).
+/// Scrolls horizontally with a mouse wheel too (trackpads already scroll sideways). It never shows
+/// a scroller: with a mouse connected, AppKit's legacy style otherwise draws a track along the
+/// strip's bottom, though `hasHorizontalScroller` was turned off.
 final class FilmstripScrollView: NSScrollView {
+    override var hasHorizontalScroller: Bool {
+        get { false }
+        set { super.hasHorizontalScroller = false }
+    }
+
+    override var hasVerticalScroller: Bool {
+        get { false }
+        set { super.hasVerticalScroller = false }
+    }
+
+    override var scrollerStyle: NSScroller.Style {
+        get { .overlay }
+        set { super.scrollerStyle = .overlay }
+    }
+
     override func scrollWheel(with event: NSEvent) {
         guard !event.hasPreciseScrollingDeltas, abs(event.scrollingDeltaY) > abs(event.scrollingDeltaX),
               let cgEvent = event.cgEvent?.copy() else {
