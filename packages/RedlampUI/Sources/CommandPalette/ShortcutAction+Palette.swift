@@ -58,6 +58,9 @@ extension ShortcutAction {
         .importKeywords: ["keywords", "keyword list", "import", "lightroom", "tags", "text file", "library"],
         .exportKeywords: ["keywords", "keyword list", "export", "lightroom", "tags", "text file", "library"],
         .editCaptureTime: ["capture time", "date", "time", "shift", "clock", "time zone", "taken", "library"],
+        .renamePhotos: [
+            "rename", "file name", "filename", "template", "naming", "batch rename", "sequence", "f2", "library",
+        ],
         .beforeAfter: ["compare", "before", "after", "original"],
         .nextCompareLayout: ["compare", "side by side", "split", "layout"],
         .previousCompareLayout: ["compare", "side by side", "split", "layout"],
@@ -197,6 +200,7 @@ extension ShortcutAction {
         case .importKeywords: "square.and.arrow.down"
         case .exportKeywords: "square.and.arrow.up.on.square"
         case .editCaptureTime: "clock.arrow.2.circlepath"
+        case .renamePhotos: "character.cursor.ibeam"
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout: "rectangle.2.swap"
         case .toggleZoom: "1.magnifyingglass"
         case .zoomIn: "plus.magnifyingglass"

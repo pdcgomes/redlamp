@@ -2,9 +2,10 @@ import AppKit
 import RedlampLibrary
 
 /// The import window's To (LIB-27): the destination, the folder template and the name template (each a
-/// preset or typed, its error said in words), the texts they use, a live example from the first photo
-/// chosen, a backup, raw only, keywords completed from the library's, metadata presets' place, and
-/// Eject after Import; while copying and after, each destination's count.
+/// preset or typed in the field Rename Photos shares, `NamingTemplateField`, its error said in words), the
+/// texts they use, a live example from the first photo chosen, a backup, raw only, keywords completed from
+/// the library's, metadata presets' place, and Eject after Import; while copying and after, each
+/// destination's count.
 @MainActor
 final class ImportDestinationViewController: NSViewController, NSTextFieldDelegate, NSTokenFieldDelegate {
     let model: ImportWindowModel
@@ -12,12 +13,14 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
     var onChooseFolder: ((_ backup: Bool) -> Void)?
 
     private let destination = NSTextField(labelWithString: "")
-    private let folderPresets = NSPopUpButton()
-    private let folders = NSTextField()
-    private let folderError = NSTextField(wrappingLabelWithString: "")
-    private let namePresets = NSPopUpButton()
-    private let names = NSTextField()
-    private let nameError = NSTextField(wrappingLabelWithString: "")
+    private let folders = NamingTemplateField(
+        identifier: "import.folders", placeholder: "{date:yyyy}/{date:yyyy-MM-dd}",
+        presets: ImportSettings.folderPresets.map { ($0.name, $0.folders) }, store: nil,
+    )
+    private lazy var names = NamingTemplateField(
+        identifier: "import.names", placeholder: "{name}", presets: Self.namePresets.map { ($0.name, $0.names) },
+        store: NamingPresetStore.shared(for: model.library.paths),
+    )
     private let texts = NSStackView()
     private let example = NSTextField(wrappingLabelWithString: "")
     private let backupBox = NSButton(
@@ -52,24 +55,9 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
         let choose = NSButton(title: "Choose…", target: self, action: #selector(chooseDestination))
         choose.setAccessibilityIdentifier("import.destination.choose")
 
-        folderPresets.addItems(withTitles: ImportSettings.folderPresets.map(\.name) + ["Custom"])
-        folderPresets.target = self
-        folderPresets.action = #selector(folderPresetChosen)
-        folderPresets.setAccessibilityIdentifier("import.folders.preset")
-        folders.delegate = self
-        folders.placeholderString = "{date:yyyy}/{date:yyyy-MM-dd}"
-        folders.setAccessibilityIdentifier("import.folders")
-        namePresets.addItems(withTitles: Self.namePresets.map(\.name) + ["Custom"])
-        namePresets.target = self
-        namePresets.action = #selector(namePresetChosen)
-        namePresets.setAccessibilityIdentifier("import.names.preset")
-        names.delegate = self
-        names.placeholderString = "{name}"
-        names.setAccessibilityIdentifier("import.names")
-        for error in [folderError, nameError] {
-            error.textColor = .systemRed
-            error.font = .systemFont(ofSize: 11)
-        }
+        folders.onChange = { [weak self] text, _ in self?.model.setFolders(text) }
+        names.onChange = { [weak self] text, _ in self?.model.setNames(text) }
+        names.options = { [weak self] in self?.model.settings.naming ?? NamingOptions() }
         texts.orientation = .vertical
         texts.alignment = .leading
         example.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
@@ -101,11 +89,13 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
         ejects.setAccessibilityIdentifier("import.eject-after")
         destinations.font = .systemFont(ofSize: 11)
 
+        let (folderRows, nameRows) = (folders.rows, names.rows)
         let stack = NSStackView(views: [
             title,
             Self.heading("Destination"), destination, choose,
-            Self.heading("Folders"), folderPresets, folders, folderError,
-            Self.heading("Names"), namePresets, names, nameError, texts,
+            Self.heading("Folders"),
+        ] as [NSView] + folderRows + [Self.heading("Names")] + nameRows + [
+            texts,
             Self.heading("Example"), example,
             Self.heading("Backup"), backupBox, backup, backupChoose,
             Self.heading("Files"), rawOnly, rawNote,
@@ -118,7 +108,8 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
         stack.alignment = .leading
         stack.spacing = 6
         stack.edgeInsets = NSEdgeInsets(top: 12, left: 8, bottom: 12, right: 12)
-        for field in [destination, folders, names, folderError, nameError, example, backup, keywords, destinations] {
+        for field in [destination, example, backup, keywords, destinations] as [NSView] + folderRows.dropFirst()
+            + nameRows.dropFirst() {
             field.translatesAutoresizingMaskIntoConstraints = false
             field.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -20).isActive = true
         }
@@ -174,19 +165,10 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
         shownPhase = model.phase
         let settings = model.settings
         destination.stringValue = settings.destination.path
-        if folders.currentEditor() == nil {
-            folders.stringValue = model.folderText
-        }
-        if names.currentEditor() == nil {
-            names.stringValue = model.namesText
-        }
-        folderPresets.selectItem(at: ImportSettings.folderPresets.firstIndex { $0.folders == settings.folders }
-            ?? ImportSettings.folderPresets.count)
-        namePresets.selectItem(at: Self.namePresets.firstIndex { $0.names == settings.names } ?? Self.namePresets.count)
-        folderError.stringValue = model.folderError ?? ""
-        folderError.isHidden = model.folderError == nil
-        nameError.stringValue = model.namesError ?? ""
-        nameError.isHidden = model.namesError == nil
+        folders.text = model.folderText
+        names.text = model.namesText
+        folders.show(error: model.folderError)
+        names.show(error: model.namesError)
         updateTexts()
         example.stringValue = model.example ?? (model.folderError ?? model.namesError).map { _ in "—" }
             ?? "Choose a photo to see where it goes."
@@ -203,12 +185,12 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
         destinations.stringValue = lines.joined(separator: "\n")
         destinations.isHidden = lines.isEmpty
         let busy = model.phase == .copying || model.phase == .planning
-        for control in [folderPresets, namePresets, backupBox, backupChoose, rawOnly] as [NSControl] {
+        for control in [backupBox, backupChoose, rawOnly] as [NSControl] {
             control.isEnabled = !busy
         }
-        for field in [folders, names, keywords] as [NSTextField] {
-            field.isEditable = !busy
-        }
+        folders.isEditable = !busy
+        names.isEditable = !busy
+        keywords.isEditable = !busy
     }
 
     /// A field for each text the templates use: Shoot Name for `{text:shoot}`, Text for `{text}`.
@@ -236,10 +218,6 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
         guard let field = note.object as? NSTextField else { return }
         if field === keywords {
             model.setKeywords(keywords.objectValue as? [String] ?? [])
-        } else if field === folders {
-            model.setFolders(field.stringValue)
-        } else if field === names {
-            model.setNames(field.stringValue)
         } else if let name = textFields.first(where: { $0.value === field })?.key {
             model.setText(name, field.stringValue)
         }
@@ -261,22 +239,6 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
 
     func tokenField(_: NSTokenField, shouldAdd tokens: [Any], at _: Int) -> [Any] {
         tokens.compactMap { ($0 as? String)?.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-    }
-
-    @objc private func folderPresetChosen() {
-        let index = folderPresets.indexOfSelectedItem
-        guard ImportSettings.folderPresets.indices.contains(index) else { return }
-        let text = ImportSettings.folderPresets[index].folders.description
-        folders.stringValue = text
-        model.setFolders(text)
-    }
-
-    @objc private func namePresetChosen() {
-        let index = namePresets.indexOfSelectedItem
-        guard Self.namePresets.indices.contains(index) else { return }
-        let text = Self.namePresets[index].names.description
-        names.stringValue = text
-        model.setNames(text)
     }
 
     @objc private func chooseDestination() {

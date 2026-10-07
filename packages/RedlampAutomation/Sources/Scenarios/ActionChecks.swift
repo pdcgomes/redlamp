@@ -131,6 +131,8 @@
                  .groupByOrientation, .groupByMomentCamera, .tighterMoments, .looserMoments, .toggleGroup,
                  .openAllGroups, .closeAllGroups, .unpickedMoments, .previousGroup, .nextGroup:
                 groups(action)
+            case .renamePhotos:
+                ActionCheck(action: action, unavailable: "renames files: checked on copies by library.rename-photos")
             case .showInFinder:
                 ActionCheck(action: action, setUp: { app in
                     try app.main { $0.libraryViews.revealInFinder = { Revealed.photos.append(contentsOf: $0) } }

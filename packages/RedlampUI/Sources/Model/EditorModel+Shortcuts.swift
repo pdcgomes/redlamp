@@ -40,7 +40,7 @@ public extension EditorModel {
         guard module == .develop || !action.isDevelopOnly else { return false }
         guard module == .library || !action.isLibraryOnly else { return false }
         if let performed = performSourceShortcut(action) ?? performModuleShortcut(action)
-            ?? performGridShortcut(action) ?? performPanelShortcut(action)
+            ?? performGridShortcut(action) ?? performPanelShortcut(action) ?? performFileShortcut(action)
             ?? performCullingShortcut(action, shifted: shifted) {
             return performed
         }
@@ -206,7 +206,8 @@ public extension EditorModel {
         guard module == .develop || !action.isDevelopOnly else { return false }
         guard module == .library || !action.isLibraryOnly else { return false }
         if let available = canPerformSourceShortcut(action) ?? canPerformModuleShortcut(action)
-            ?? canPerformGridShortcut(action) ?? canPerformPanelShortcut(action) ?? canPerformCullingShortcut(action) {
+            ?? canPerformGridShortcut(action) ?? canPerformPanelShortcut(action) ?? canPerformFileShortcut(action)
+            ?? canPerformCullingShortcut(action) {
             return available
         }
         let photo = info != nil

@@ -43,11 +43,16 @@ struct AppCommands: Commands {
             item(.findAdjustment)
         }
 
+        CommandMenu("Library") {
+            mouseItem(.renamePhotos)
+        }
+
         CommandMenu("Photo") {
             // Ahead of Reset All Settings (⇧⌘R): AppKit gives ⌘R to the first item whose key is R.
             item(.showInFinder)
             item(.putBack)
             item(.putBackBatch)
+            mouseItem(.renamePhotos)
             Divider()
             item(.copySettings)
             item(.copySettingsAgain)

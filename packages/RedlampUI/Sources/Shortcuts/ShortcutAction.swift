@@ -118,6 +118,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case keywordSet1, keywordSet2, keywordSet3, keywordSet4, keywordSet5, keywordSet6, keywordSet7, keywordSet8
     case keywordSet9
     case importKeywords, exportKeywords, editCaptureTime
+    case renamePhotos
 
     // View
     case beforeAfter, nextCompareLayout, previousCompareLayout
@@ -175,7 +176,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
              .groupByOrientation, .groupByMomentCamera, .tighterMoments, .looserMoments, .toggleGroup,
              .openAllGroups, .closeAllGroups, .unpickedMoments,
              .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,
-             .keywordSet8, .keywordSet9, .importKeywords, .exportKeywords, .editCaptureTime:
+             .keywordSet8, .keywordSet9, .importKeywords, .exportKeywords, .editCaptureTime, .renamePhotos:
             .library
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout,
              .toggleZoom, .zoomIn, .zoomOut, .clipping, .rawClipping, .colorAssessment, .labReadout, .infoOverlay,
@@ -259,6 +260,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .importKeywords: "Import Keywords…"
         case .exportKeywords: "Export Keywords…"
         case .editCaptureTime: "Edit Capture Time…"
+        case .renamePhotos: "Rename Photos…"
         case .beforeAfter: "Before / After"
         case .nextCompareLayout: "Next Before / After Layout"
         case .previousCompareLayout: "Previous Before / After Layout"
@@ -400,6 +402,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .groupByNone, .groupByMoment, .groupByDay, .groupByFolder, .groupByCamera, .groupByLens,
              .groupByOrientation, .groupByMomentCamera, .tighterMoments, .looserMoments, .toggleGroup, .openAllGroups,
              .closeAllGroups, .unpickedMoments: []
+        case .renamePhotos: [KeyCombo(.function(2))]
         case .beforeAfter: [.char("\\")]
         case .nextCompareLayout: [.char("y")]
         case .previousCompareLayout: [.char("y", shift: true)]
