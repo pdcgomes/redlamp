@@ -46,6 +46,9 @@ OUT="build/release"
 PRODUCTS="$OUT/DerivedData/Build/Products/Release"
 APP="$OUT/Redlamp.app"
 ZIP="$OUT/Redlamp-$VERSION.zip"
+DSYMS="$OUT/dSYMs"
+# Not Redlamp-*.zip, which the site's download button takes for the app (web/lib/github.ts).
+DSYMS_ZIP="$OUT/dSYMs-$VERSION.zip"
 
 # The keychain can hold several Developer ID certificates with the same name, which
 # codesign rejects as ambiguous, so sign by SHA-1.
@@ -105,6 +108,8 @@ echo "==> Releasing Redlamp $VERSION (build $BUILD) from ${REF:-origin/main}: $(
     || ditto vendor/build/LibRaw.xcframework "$SRC/vendor/build/LibRaw.xcframework"
 (cd "$SRC" && mise run generate)
 
+# What ships is stripped of all but its exported symbols; the dSYMs keep the rest, for
+# symbolicating crash reports.
 for scheme in Redlamp redlamp; do
     echo "==> Building $scheme (Release, Developer ID)..."
     xcodebuild build \
@@ -121,6 +126,8 @@ for scheme in Redlamp redlamp; do
         CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
         ENABLE_HARDENED_RUNTIME=YES \
         OTHER_CODE_SIGN_FLAGS=--timestamp \
+        DEPLOYMENT_POSTPROCESSING=YES \
+        STRIP_STYLE=non-global \
         -quiet
 done
 
@@ -147,7 +154,11 @@ codesign --force --options runtime --timestamp \
     --preserve-metadata=entitlements,requirements,flags \
     --sign "$IDENTITY" "$APP"
 codesign --verify --deep --strict "$APP"
-scripts/check-release-bundle.sh "$APP" || fail "the app carries code for other than Apple Silicon"
+# Each release's dSYMs go up with it, beside the zip, since the next run deletes $OUT.
+mkdir -p "$DSYMS"
+cp -R "$PRODUCTS"/*.dSYM "$DSYMS/"
+ditto -c -k --keepParent "$DSYMS" "$DSYMS_ZIP"
+scripts/check-release-bundle.sh "$APP" "$DSYMS" || fail "the app isn't shaped for release; see above"
 # With no arguments the CLI prints its usage and exits 1; dyld failures print something else.
 grep -q 'usage: redlamp' <<<"$("$APP/Contents/Helpers/redlamp" 2>&1 || true)" \
     || fail "the bundled CLI does not run (missing frameworks?)"
@@ -176,7 +187,7 @@ fi
 
 if [ "$DRY_RUN" = 1 ]; then
     ditto -c -k --keepParent "$APP" "$ZIP"
-    echo "==> Dry run: signed but not notarized: $ZIP (mise run notarize -- $APP to notarize it)"
+    echo "==> Dry run: signed but not notarized: $ZIP (mise run notarize -- $APP to notarize it), dSYMs $DSYMS_ZIP"
     exit 0
 fi
 
@@ -224,7 +235,7 @@ echo "==> Publishing $TAG..."
 git tag -a "$TAG" "$COMMIT" -m "Redlamp $VERSION"
 git push origin "$TAG"
 # redlamp.app's download button, the Homebrew cask and the update feed follow the release marked Latest.
-gh release create "$TAG" "$ZIP" "$OUT/appcast.xml" --verify-tag --latest --title "Redlamp $VERSION" \
+gh release create "$TAG" "$ZIP" "$DSYMS_ZIP" "$OUT/appcast.xml" --verify-tag --latest --title "Redlamp $VERSION" \
     --notes-file "$NOTES" --generate-notes
 
 for _ in 1 2 3 4 5 6; do
