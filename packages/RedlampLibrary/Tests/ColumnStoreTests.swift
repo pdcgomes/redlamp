@@ -1,4 +1,5 @@
 import Foundation
+import RedlampDocument
 import Testing
 @testable import RedlampLibrary
 
@@ -47,6 +48,35 @@ struct ColumnStoreTests {
                 modified: random.chance(0.1) ? nil : Double(1_600_000_000 + random.int(below: 30) * 60),
                 state: random.chance(0.1) ? .offline : [],
             )
+        }
+    }
+
+    @Test func `short text's lookups in one pass find the rows each finds alone, ORed`() {
+        var rows = Self.rows(5000, seed: 71)
+        for index in rows.indices {
+            rows[index].creator = index % 3 == 0 ? "Ana Silva" : index % 5 == 0 ? "Abel" : nil
+            if index % 4 == 0 {
+                rows[index].location = PhotoLocation(country: "Portugal", city: index % 8 == 0 ? "Lisboa" : "Porto")
+            }
+        }
+        let store = ColumnStore(rows: rows)
+        let alternatives: [[QueryPlan]] = [
+            [.leaf(.folders([2, 4])), .leaf(.cameras([1])), .leaf(.lenses([2, 3]))],
+            [.leaf(.folders([1, 2, 3, 4, 5])), .leaf(.cameras([2])), .leaf(.lenses([1]))],
+            [
+                .leaf(.codes(.creator, CodeTable.make([1]))),
+                .leaf(.codes(.place, CodeTable.make([1, 2]))),
+                .leaf(.folders([3])),
+            ],
+            [.leaf(.cameras([9])), .leaf(.lenses([9]))],
+            [.leaf(.folders([2])), .leaf(.cameras([1])), .leaf(.packed(shift: 0, mask: 0x7, accepted: 1 << 5))],
+        ]
+        for plans in alternatives {
+            var expected = RowBits(rows: store.rowCount)
+            for plan in plans {
+                expected.formUnion(store.rows(matching: plan, sets: [:]))
+            }
+            #expect(store.rows(matching: .or(plans), sets: [:]) == expected, "\(plans)")
         }
     }
 

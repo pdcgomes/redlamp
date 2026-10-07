@@ -286,11 +286,106 @@ extension ColumnStore {
             }
             return rows
         case let .or(plans):
-            var rows = rows(matching: plans[0], sets: sets)
-            for plan in plans.dropFirst() {
+            let lookups = plans.compactMap { plan in
+                if case let .leaf(leaf) = plan {
+                    Lookup(leaf)
+                } else {
+                    nil
+                }
+            }
+            guard lookups.count > 1 else {
+                var rows = rows(matching: plans[0], sets: sets)
+                for plan in plans.dropFirst() {
+                    rows.formUnion(self.rows(matching: plan, sets: sets))
+                }
+                return rows
+            }
+            var rows = rows(lookingUp: lookups)
+            rows.formIntersection(live)
+            for plan in plans {
+                if case let .leaf(leaf) = plan, Lookup(leaf) != nil {
+                    continue
+                }
                 rows.formUnion(self.rows(matching: plan, sets: sets))
             }
             return rows
+        }
+    }
+
+    /// A leaf that looks each row's code up in a table: a folder, camera or lens term's, or one in a
+    /// column of names. Free text under three characters is several, ORed (LIB-06).
+    private enum Lookup {
+        case folders(ContiguousArray<UInt64>)
+        case cameras(ContiguousArray<UInt64>)
+        case lenses(ContiguousArray<UInt64>)
+        case codes(QueryPlan.CodeColumn, ContiguousArray<UInt64>)
+
+        init?(_ leaf: QueryPlan.Leaf) {
+            switch leaf {
+            case let .folders(ids): self = .folders(ColumnStore.table(ids.map(Int.init)))
+            case let .cameras(codes): self = .cameras(ColumnStore.table(codes.map(Int.init)))
+            case let .lenses(codes): self = .lenses(ColumnStore.table(codes.map(Int.init)))
+            case let .codes(column, table): self = .codes(column, table)
+            default: return nil
+            }
+        }
+    }
+
+    /// The rows any of `lookups` accepts, dead ones included, in one pass over blocks of rows: each
+    /// lookup ORs its bits into the block's words, and skips the words every row of which another
+    /// has accepted already.
+    private func rows(lookingUp lookups: [Lookup]) -> RowBits {
+        var words = ContiguousArray<UInt64>(repeating: 0, count: (rowCount + 63) / 64)
+        let rows = rowCount
+        words.withUnsafeMutableBufferPointer { words in
+            let block = 512
+            var start = 0
+            while start < words.count {
+                let range = start ..< min(start + block, words.count)
+                for lookup in lookups {
+                    switch lookup {
+                    case let .folders(table): Self.look(folders, up: table, into: words, range, rows: rows)
+                    case let .cameras(table): Self.look(cameras, up: table, into: words, range, rows: rows)
+                    case let .lenses(table): Self.look(lenses, up: table, into: words, range, rows: rows)
+                    case let .codes(.creator, table): Self.look(creators, up: table, into: words, range, rows: rows)
+                    case let .codes(.copyright, table): Self.look(copyrights, up: table, into: words, range, rows: rows)
+                    case let .codes(.customLabel, table):
+                        Self.look(customLabels, up: table, into: words, range, rows: rows)
+                    case let .codes(.place, table): Self.look(places, up: table, into: words, range, rows: rows)
+                    }
+                }
+                start = range.upperBound
+            }
+        }
+        return RowBits(words: words)
+    }
+
+    /// ORs into each of `words` in `range` a bit for each of its 64 rows whose value in `column` has
+    /// its bit in `table`, leaving words whose rows are all in already.
+    @inline(__always)
+    private static func look(
+        _ column: StoreColumn<some Any>, up table: ContiguousArray<UInt64>,
+        into words: UnsafeMutableBufferPointer<UInt64>,
+        _ range: Range<Int>, rows: Int,
+    ) {
+        column.withUnsafeBufferPointer { column in
+            table.withUnsafeBufferPointer { table in
+                for index in range {
+                    let first = index << 6
+                    let count = min(64, rows - first)
+                    let full: UInt64 = count == 64 ? .max : (1 << UInt64(count)) - 1
+                    guard words[index] != full else { continue }
+                    var word: UInt64 = 0
+                    for offset in 0 ..< count {
+                        let value = Int(column[first + offset])
+                        let at = value >> 6
+                        if value >= 0, at < table.count {
+                            word |= (table[at] >> UInt64(value & 63) & 1) << UInt64(offset)
+                        }
+                    }
+                    words[index] |= word
+                }
+            }
         }
     }
 
