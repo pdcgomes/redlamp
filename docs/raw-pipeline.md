@@ -77,6 +77,7 @@ While copying a mosaic, `RawDecoder.copyMosaic` builds a 65,536-bin histogram fo
 `DecodedImage` (`DecodedImage.swift`) holds the samples and layout, and:
 
 - **Black levels, one per pattern position** (`RawDecoder.blackPattern`): LibRaw's `color.black`, plus `cblack[channel]`, plus its spatial pattern (`cblack[4]` × `cblack[5]` values from `cblack[6]`). Linear layouts get one per channel.
+- **Canon's black levels checked against its masked photosites** (`CanonOpticalBlack`, CAM-21). LibRaw takes the black levels of a Canon body missing from its table from the maker note's colour data, whose layout it recognises by the block's length. LibRaw 0.22.2 reads the EOS R6 Mark III's and PowerShot V1's newer blocks with the R6 Mark II's layout and gets black levels of 0 to 145, where their masked photosites sit at 512; what isn't subtracted, white balance turns into a pink cast. So for a Canon CR3, the optical-black areas the file declares (`makernotes.canon.LeftOpticalBlack` and `UpperOpticalBlack`; LibRaw reads only the left one from a CR2, and every body newer than its tables shoots CR3) are measured 8 photosites in from their edges, as the median of each pattern position. Where a stated level is further from them than the camera bench fails (5 noise sigmas, 4 units and 1% of the range), the measured levels replace the stated ones.
 - **Banding** (`BandingCorrection`, `OpticalBlack.measure`): per-row and per-column offsets measured in the sensor's masked margins, kept only where lines vary more than their noise explains and enough masked photosites exist. Subtracted with the black level.
 - **The white level** (`WhiteLevel.measured`): LibRaw's `color.maximum`, unless the histogram has a spike at its maximum (the top five codes holding at least 20 times the background, and at least 16 photosites or one in 500,000), which marks where photosites actually clip. Without a spike nothing clipped, and the nominal level stands.
 - **As-shot white balance** (`asShotMultipliers`): LibRaw's `cam_mul`, else `pre_mul`, with green at 1; neutral if neither is usable.
@@ -141,7 +142,7 @@ Each render, `rl_develop` (`Develop.metal`) multiplies balanced camera RGB by `I
 | --- | --- |
 | JPEG XL mosaic DNGs are refused | CAM-10 |
 | Nikon High Efficiency NEFs are refused, waiting on LibRaw's next snapshot | CAM-12 |
-| Bodies newer than LibRaw 0.22.2 are refused, or open without a matrix or with a wrong black level | CAM-13, CAM-21 |
+| Bodies newer than LibRaw 0.22.2 are refused, or open without a matrix or with a cast (Sony's YCbCr ARWs) | CAM-13, CAM-21 |
 | Monochrome raws are refused | CAM-20 |
 | Fujifilm SuperCCD files crash the decode service | CAM-22 |
 | X-Trans uses the generic interpolation | CAM-07 |
@@ -170,6 +171,7 @@ Each render, `rl_develop` (`Develop.metal`) multiplies balanced camera RGB by `I
 - A missing decode service falls back to decoding in the app without saying so.
 - A throw while a Metal encoder is open aborts under the validation layer, which every test target turns on: validate before encoding.
 - The white level can come out below LibRaw's nominal level when the histogram shows a clip spike there; lossy formats spread the spike over a few codes.
+- Canon's declared optical-black areas aren't all at the black level: the R6 Mark III's takes in two exposed columns beside the image, the R5 Mark II's first 128 columns sit 44 units low, and the PowerShot V1's upper area holds four bright reference rows. `CanonOpticalBlack` relies on its guard band and the median, and replaces a stated black only where it is grossly off; its thresholds follow the camera bench's (`CameraBenchChecks.Threshold`).
 
 ## References
 

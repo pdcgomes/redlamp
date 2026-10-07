@@ -69,10 +69,13 @@ enum RawDecoder {
                     rawImage, width: width, height: height, top: top, left: left,
                     pitchBytes: pitch, histogram: &histogram,
                 )
-            blackLevels = blackPattern(raw, filters: filters, pattern: pattern, base: black)
             whiteLevel = histogram.withUnsafeBufferPointer {
                 WhiteLevel.measured(histogram: $0, nominal: whiteLevel, total: width * height)
             }
+            blackLevels = CanonOpticalBlack.checked(
+                raw, stated: blackPattern(raw, filters: filters, pattern: pattern, base: black),
+                pattern: pattern, white: whiteLevel,
+            )
             let patternBlack = { [blackLevels] (x: Int, y: Int) -> Float in
                 let column = (x % pattern.width + pattern.width) % pattern.width
                 let row = (y % pattern.height + pattern.height) % pattern.height
