@@ -185,8 +185,15 @@ else
     scripts/e2e.py --blackbox "$APP" ${E2E_NO_UPDATE:+--no-update} || fail "the signed app failed its black-box checks"
 fi
 
+# The zip leaves out the extended attributes the build gave the app's files: Finder puts them back
+# when it unpacks a download, and Gatekeeper on macOS 26 then refuses to open the app.
+zip_app() {
+    ditto -c -k --norsrc --noextattr --noacl --keepParent "$APP" "$ZIP"
+    scripts/check-release-zip.sh "$ZIP" ${1:+"$1"} || fail "the zip doesn't unpack to the app as it was signed; see above"
+}
+
 if [ "$DRY_RUN" = 1 ]; then
-    ditto -c -k --keepParent "$APP" "$ZIP"
+    zip_app
     echo "==> Dry run: signed but not notarized: $ZIP (mise run notarize -- $APP to notarize it), dSYMs $DSYMS_ZIP"
     exit 0
 fi
@@ -201,7 +208,7 @@ KEY="$("$SPARKLE_BIN/generate_keys" --account redlamp -p)" \
 mise run notarize -- "$APP"
 
 # Zipped after stapling so the download carries its ticket and opens offline.
-ditto -c -k --keepParent "$APP" "$ZIP"
+zip_app --notarized
 
 # GitHub's generated notes are only a changelog link, since nothing lands through pull requests.
 # The release's highlights, chosen in the release room, lead when docs/releases/<version>.md has them,
