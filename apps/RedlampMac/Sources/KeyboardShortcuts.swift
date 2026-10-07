@@ -50,7 +50,8 @@ final class KeyboardShortcuts {
         // sheet (the Export dialog) or the welcome window keeps its keys from the editor behind it.
         if NSApp.keyWindow?.firstResponder is NSTextView || model.commandPalette != nil || model.isModalDialogOpen
             || NSApp.keyWindow?.sheetParent != nil || NSApp.keyWindow?.attachedSheet != nil
-            || NSApp.keyWindow?.windowController is WelcomeWindowController {
+            || NSApp.keyWindow?.windowController is WelcomeWindowController
+            || NSApp.keyWindow?.windowController is ImportWindowController {
             return false
         }
         let flags = event.modifierFlags

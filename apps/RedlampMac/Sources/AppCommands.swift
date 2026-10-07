@@ -24,6 +24,7 @@ struct AppCommands: Commands {
 
         CommandGroup(replacing: .newItem) {
             item(.openFolder, perform: onOpen)
+            item(.importPhotos)
             Divider()
             item(.export, perform: onExport)
             item(.exportWithPrevious, perform: onExportWithPrevious)

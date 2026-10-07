@@ -384,6 +384,13 @@
                 ActionCheck(action: action, observe: { _ in windows() }, restore: { app in
                     try app.main { _ in NSApp.windows.first { $0.title == "Film Looks" }?.close() }
                 }, appRuns: true)
+            case .importPhotos:
+                ActionCheck(action: action, setUp: { app in
+                    try app.main { _ in ImportWindowController.ignoresVolumes = true }
+                }, observe: { _ in windows() }, restore: { app in
+                    try app.main { _ in ImportWindowController.current?.close() }
+                    try app.wait("the import window to close") { _ in ImportWindowController.current == nil }
+                })
             case .sendFeedback: .sheet(action)
             case .testCamera:
                 ActionCheck(action: action, observe: { _ in windows() }, restore: { app in

@@ -105,6 +105,7 @@ extension ShortcutAction {
         .toggleMark: ["mark", "quick collection", "target", "collect", "unmark"],
         .autoAdvance: ["advance", "next photo", "caps lock", "culling", "move on"],
         .openFolder: ["import", "open", "folder", "photos"],
+        .importPhotos: ["import", "card", "memory card", "sd", "camera", "copy", "ingest", "dcim", "backup"],
         .export: ["save", "jpeg", "heic", "avif", "png", "tiff", "export"],
         .exportWithPrevious: ["save", "again", "repeat", "last", "export"],
         .mergeFocusStack: ["focus stacking", "stack", "merge", "depth of field", "macro", "bracketing"],
@@ -217,6 +218,7 @@ extension ShortcutAction {
         case .toggleMark: "circle.inset.filled"
         case .autoAdvance: "arrow.right.to.line"
         case .openFolder: "folder"
+        case .importPhotos: "sdcard"
         case .export: "square.and.arrow.up"
         case .exportWithPrevious: "square.and.arrow.up.on.square"
         case .mergeFocusStack: "square.stack.3d.down.right"

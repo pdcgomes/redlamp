@@ -145,7 +145,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case toggleMark, autoAdvance
 
     /// File & Edit
-    case openFolder, export, exportWithPrevious, mergeFocusStack, editFocusStack, showShortcuts, filmLooks
+    case openFolder, importPhotos, export, exportWithPrevious, mergeFocusStack, editFocusStack, showShortcuts
+    case filmLooks
     case commandPalette, sendFeedback
     case testCamera
 
@@ -187,8 +188,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
              .flagPick, .flagReject, .unflag, .labelRed, .labelYellow, .labelGreen, .labelBlue, .labelPurple,
              .clearLabel, .toggleMark, .autoAdvance:
             .rating
-        case .openFolder, .export, .exportWithPrevious, .mergeFocusStack, .editFocusStack, .showShortcuts,
-             .filmLooks, .commandPalette, .sendFeedback:
+        case .openFolder, .importPhotos, .export, .exportWithPrevious, .mergeFocusStack, .editFocusStack,
+             .showShortcuts, .filmLooks, .commandPalette, .sendFeedback:
             .file
         case .testCamera:
             .file
@@ -312,6 +313,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .toggleMark: "Mark / Unmark"
         case .autoAdvance: "Auto Advance"
         case .openFolder: "Open Folder…"
+        case .importPhotos: "Import Photos…"
         case .export: "Export…"
         case .exportWithPrevious: "Export with Previous"
         case .mergeFocusStack: "Merge to Focus Stack…"
@@ -437,6 +439,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .labelPurple, .clearLabel, .autoAdvance: []
         case .toggleMark: [.char("b")]
         case .openFolder: [.char("o", command: true)]
+        case .importPhotos: [.char("i", shift: true, command: true)]
         case .export: [.char("e", shift: true, command: true)]
         case .exportWithPrevious: [.char("e", shift: true, option: true, command: true)]
         case .mergeFocusStack, .editFocusStack, .sendFeedback: []

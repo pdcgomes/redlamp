@@ -1,5 +1,6 @@
 import Foundation
 import RedlampDocument
+import Synchronization
 import Testing
 @testable import RedlampLibrary
 
@@ -192,5 +193,34 @@ struct ImportCopyTests {
         let outcome = try await session.importer().run(plan)
         #expect(outcome.verified == 6 && outcome.sources.count == 2 && outcome.sources.allSatisfy(\.isSafeToErase))
         #expect(ImportSandbox.files(in: sandbox.backup).count == 6)
+    }
+
+    @Test func `photos browsed in a session for each card are planned together, with the choices made in each`(
+    ) async throws {
+        let sandbox = try await ImportSandbox.make()
+        defer { sandbox.remove() }
+        let cards = try ["CARD_A", "CARD_B"].enumerated().map { offset, name in
+            try sandbox.card(name, (1 ... 2).map { number in
+                SimulatedCard.Shot(
+                    name: String(format: "IMG_%04d.JPG", number),
+                    captured: cameraTime(Double(number * 10 + offset * 5)),
+                )
+            })
+        }
+        let sessions = cards.map { sandbox.session([$0]) }
+        for session in sessions {
+            _ = await session.browsed()
+        }
+        let rated = try #require(sessions[1].id(named: "IMG_0002.JPG"))
+        sessions[1].rate([rated], 4)
+        sandbox.reads.reset()
+        let together = sandbox.session(cards, previews: false)
+        together.add(sessions.flatMap(\.photos))
+        let plan = try await together.plan(sandbox.settings(folders: ""))
+        #expect(plan.items.map { "\($0.source == cards[0].id ? "A" : "B") \($0.copies[0].name)" } == [
+            "A IMG_0001.JPG", "B IMG_0001-2.JPG", "A IMG_0002.JPG", "B IMG_0002-2.JPG",
+        ])
+        #expect(plan.items.first { $0.photo == rated }?.choices.rating == 4)
+        #expect(together.photos.allSatisfy { sandbox.reads.bytesRead($0.url) == 0 }, "photos read once, by their own")
     }
 }

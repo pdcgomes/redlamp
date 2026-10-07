@@ -124,9 +124,10 @@ public final class ImportSession: Sendable {
         change(ids) { $0.setLabel(label) }
     }
 
-    /// Takes `photos` as their sources' only ones, listed elsewhere: the ingest step lists the one it's
-    /// given.
-    func add(_ photos: [ImportPhoto]) {
+    /// Takes `photos` as their sources' only ones, listed elsewhere, as they were read and with the choices
+    /// made for them: the ingest step lists the one it's given, and the import window plans together the
+    /// photos it browsed in a session for each source.
+    public func add(_ photos: [ImportPhoto]) {
         state.withLock { state in
             for photo in photos where state.photos[photo.id] == nil {
                 state.photos[photo.id] = photo

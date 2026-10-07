@@ -184,6 +184,7 @@ public extension EditorModel {
         case .sendFeedback:
             guard onSendFeedback != nil else { return false }
             sendFeedback()
+        case .importPhotos: ImportActions.open(model: self)
         case .openFolder, .export, .exportWithPrevious, .filmLooks: return false
         case .testCamera:
             guard let onTestCamera else { return false }
@@ -239,7 +240,7 @@ public extension EditorModel {
             return photo
         case .autoWhiteBalance, .whiteBalanceSelector: return whiteBalance
         case .calibrateFromTarget: return canCalibrateFromTarget
-        case .editTool, .maskingTool, .cancel, .showShortcuts, .openFolder, .filmLooks, .commandPalette:
+        case .editTool, .maskingTool, .cancel, .showShortcuts, .openFolder, .importPhotos, .filmLooks, .commandPalette:
             return true
         case .testCamera: return onTestCamera != nil
         case .sendFeedback: return onSendFeedback != nil

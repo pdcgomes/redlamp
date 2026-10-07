@@ -13,6 +13,7 @@
             + PaletteLibraryScenarios.all
             + SyncScenarios.all + ExportScenarios.all
             + RecipeScenarios.all + StackScenarios.all + RawScenarios.all + FeedbackScenarios.all
+            + ImportScenarios.all
             + SoakScenarios.all + PerformanceScenarios.all + SmokeScenarios.last
 
         /// What the app offers, from its own catalogues: every action, parameter, panel, left
