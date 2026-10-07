@@ -187,8 +187,12 @@ final class GatedEngine: EditingEngine, @unchecked Sendable {
         try await base.renderStill(request)
     }
 
+    /// How long `availableMaskKinds` blocks its caller, as the model catalogue's first build does.
+    var maskKindsDelay: TimeInterval = 0
+
     func availableMaskKinds() -> Set<MaskKind> {
-        base.availableMaskKinds()
+        Thread.sleep(forTimeInterval: maskKindsDelay)
+        return base.availableMaskKinds()
     }
 
     func availablePersonParts() -> Set<PersonPart> {
