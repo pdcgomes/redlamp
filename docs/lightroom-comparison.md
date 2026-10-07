@@ -29,7 +29,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Feature | Lightroom | Redlamp | vs Lightroom | Phase | Tracker | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | Raw files from most cameras | Yes | Done | Behind | | CAM-01, CAM-05, CAM-12, CAM-13 | Through LibRaw 0.22; 26 cameras are verified by the decode tests, Hasselblad and Phase One medium format among them ([every camera](https://redlamp.app/cameras)). Nikon's High Efficiency NEFs and the Sony A7 V don't open yet, and raws other than DNG use one colour matrix per camera, where DNGs blend two by white balance |
-| Fujifilm X-Trans raw files | Yes | Done | Behind | | CAM-07 | A first-generation demosaic, which keeps about half the resolution of Redlamp's Bayer demosaic ([DN-11](research/notes/DN-11-lightroom-raw-denoise.md)); a Markesteijn-class one is planned. Fujifilm exposure differs from the camera's by up to ±0.9 EV, depending on the body |
+| Fujifilm X-Trans raw files | Yes | Done | Behind | | CAM-07 | Markesteijn's demosaic, which resolves a sharp edge as finely as Redlamp's Bayer demosaic ([DN-11](research/notes/DN-11-lightroom-raw-denoise.md)). Fujifilm exposure differs from the camera's by up to ±0.9 EV, depending on the body |
 | Apple ProRAW and other phone DNGs | Yes | Done | | | CAM-03, CAM-04, TON-09 | Gain maps and embedded camera profiles are applied, and ProRAW can render with the iPhone's own look |
 | JPEG XL DNGs | Yes | In progress | | P2 | CAM-10 | Linear ones (iPhone ProRAW) open; JPEG XL mosaic DNGs don't yet |
 | Testing your own camera | No | Done | | | CAM-14, CAM-15, CAM-16, CAM-17 | The camera bench checks your raws against the camera's own JPEG on your Mac, and sends only the measurements, which add to the cameras page |

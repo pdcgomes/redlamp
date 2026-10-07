@@ -34,6 +34,8 @@ struct RawDenoiseHarnessTests {
         var noiseB: [Float]
         var asShot: [Double] = [1, 1, 1]
         var demosaic: String = "menon"
+        /// "markesteijn" or "generic"; absent before CAM-07.
+        var xTrans: String?
         var dual: Bool = true
         var renders: [Render]
     }
@@ -111,6 +113,7 @@ struct RawDenoiseHarnessTests {
         var builder = SessionBuilder(device: detail.device, queue: detail.queue, kernels: detail.kernels)
         builder.bayerDemosaic = job.demosaic == "malvar" ? .malvar : .menon
         builder.dualDemosaic = job.dual
+        builder.xTransDemosaic = job.xTrans == "generic" ? .generic : .markesteijn
         return try builder.build(decoded)
     }
 }

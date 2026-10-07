@@ -82,7 +82,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 
 **RAW pipeline (our own, GPU-first)**
 - [x] Decodes RAW files through LibRaw (unpacking only). Black levels, white balance, demosaicing, and color are all done by Redlamp on the GPU.
-- [x] Bayer demosaic by directional filtering with a posteriori decision (Menon, Andriani and Calvagno, 2007), with a dual pass that takes plain green where the neighbours differ only by noise, a first-generation X-Trans demosaic, and linear DNG support (for example iPhone ProRAW).
+- [x] Bayer demosaic by directional filtering with a posteriori decision (Menon, Andriani and Calvagno, 2007), with a dual pass that takes plain green where the neighbours differ only by noise, Markesteijn's X-Trans demosaic (ported from LibRaw under its CDDL licence), and linear DNG support (for example iPhone ProRAW).
 - [x] Hot pixels are repaired before demosaicing, judged against each photo's own noise level.
 - [x] Row and column banding is measured in the sensor's masked (optical-black) margins and subtracted with the black level, only where the margins show more than their own noise.
 - [x] **DNG gain maps** (OpcodeList2), such as phones' lens shading correction, are applied before demosaicing, and noise reduction scales with the noise they amplify.
@@ -233,7 +233,6 @@ With both side panels in AppKit, most of what remains is Core Animation committi
 ### Known limitations
 
 - Highlights and Shadows are edge-aware for new edits (process version 7): each region moves by its brightness and keeps the texture inside it. Edits made before keep the per-pixel version, and they haven't yet been compared against Lightroom's own exports.
-- X-Trans demosaicing is a first-generation interpolation. A Markesteijn-class demosaic comes in Phase 2.
 - Redlamp's exposure for Fujifilm raws differs from the camera's by up to ±0.9 EV depending on the body; the profiler removes it when measuring looks, and the engine fix is tracked (TON-14).
 - Non-DNG raws use a single-illuminant Adobe-derived matrix (LibRaw's). DNGs interpolate their two calibrations by white balance, and since process 4 apply their embedded profile's HueSatMap, but the Temperature and Tint model still converts with one matrix. The profile's look (LookTable and tone curve) is offered as a Base Look under "In This Photo", Apple ProRAW's look comes with its gain table map, Apple's local tone mapping, so it renders the way the iPhone does. Importing `.dcp` files is deferred.
 - Landscape masks (mountains, water, vegetation, ground, architecture, snow) and people parts beyond the face (body skin, clothes, and hair without an iPhone matte) come from SAM 3, under Meta's SAM License; a model trained on data Redlamp has rights to, which would replace it, doesn't exist yet ([plan](docs/plans/2026-10-01-masking-plan.md#m8-trained-heads-msk-12-msk-13-only-if-m7-says-so)).
@@ -879,7 +878,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [x] Brush, color range, and luminance range masks, and Vision AI masks (subject, sky, background, people) <!-- tracker: MSK-05, MSK-08, MSK-16 -->
 - [x] Lightroom XMP preset import, setting by setting, with a report of what came across
 - [ ] **Best-in-class classical noise reduction** on raw data, profiled per camera and ISO, with the mosaic cleaned before demosaicing and deep shadows kept true <!-- tracker: DN-01, DN-05, DN-10, DN-12, DN-13 -->
-- [ ] Better X-Trans demosaicing (Markesteijn) <!-- tracker: CAM-07 -->
+- [x] Better X-Trans demosaicing (Markesteijn) <!-- tracker: CAM-07 -->
 - [x] **Camera bench:** test your own camera's raws against the camera's own JPEG on your Mac, and send only the measurements, which build the evidence on the cameras page <!-- tracker: CAM-14, CAM-15, CAM-16, CAM-17 -->
 - [ ] ICC input profiles <!-- tracker: TON-10 -->
 - [x] **Point Color**, globally and inside masks, with Capture One's uniformity for evening out skin tones <!-- tracker: TON-29 -->
@@ -1238,7 +1237,7 @@ Help › Your Reports lists the reports sent from this Mac (kept in `~/Library/A
 Redlamp is at an early stage and moving quickly. Issues and discussion are very welcome: Report a Bug or Send Feedback in the app files an issue for you, with the details that help. To ask a question or follow along, join the [Redlamp Discord](https://discord.gg/4VZpxpgRCA).
 
 - **Clean-room policy.** No GPL or LGPL code or data. Algorithms are implemented from published papers and specifications. Reading GPL projects such as darktable and RawTherapee to understand an idea is fine, but never port, translate or paraphrase their code, and never copy their data (profiles, tables, presets).
-- **Third-party components:** LibRaw is used under its CDDL-1.0 option. MLX Swift (MIT) and Swift Numerics (Apache-2.0) run generative fill's models on the Mac. Planned additions are lcms2 (MIT) and the lensfun database (CC-BY-SA, data only).
+- **Third-party components:** LibRaw is used under its CDDL-1.0 option, and two files ported from it, Markesteijn's X-Trans demosaic (`DemosaicXTrans.metal`, `XTransDemosaic.swift`), are CDDL-1.0 too (`LICENSES/CDDL-1.0.txt`). MLX Swift (MIT) and Swift Numerics (Apache-2.0) run generative fill's models on the Mac. Planned additions are lcms2 (MIT) and the lensfun database (CC-BY-SA, data only).
 - **Conventions:**
   - Run `mise run setup` once, so commits are linted and pushes to main are tested, and `mise run lint` and `mise run test` before sending changes.
   - Keep engine code free of UI imports.

@@ -15,12 +15,21 @@ enum BayerDemosaic {
     case malvar
 }
 
+/// How X-Trans mosaics are demosaiced.
+enum XTransDemosaic {
+    /// Frank Markesteijn's algorithm, one pass (XTransDemosaic.swift, under the CDDL).
+    case markesteijn
+    /// Distance-weighted same-colour interpolation; kept for comparison.
+    case generic
+}
+
 /// Uploads decoded sensor data and builds the demosaiced pyramid on the GPU.
 struct SessionBuilder {
     let device: any MTLDevice
     let queue: any MTLCommandQueue
     let kernels: KernelLibrary
     var bayerDemosaic = BayerDemosaic.menon
+    var xTransDemosaic = XTransDemosaic.markesteijn
     /// Menon's green is replaced by a plain average where only noise varies (CAM-06).
     var dualDemosaic = true
     /// The user's lens profiles, for raws that carry no correction (LNS-04). Off unless the app or
@@ -366,6 +375,13 @@ struct SessionBuilder {
             encoder.setBytes(&demosaicParams, length: MemoryLayout<DemosaicParams>.stride, index: 0)
             encoder.setBytes(&colors, length: colors.count, index: 1)
             encoder.dispatchGrid(width: width, height: height, pipeline: demosaic)
+            // X-Trans keeps the generic interpolation only in the 8 photosites at its edges.
+            if !bayer, xTransDemosaic == .markesteijn, let table = XTransMarkesteijn(pattern) {
+                try encodeMarkesteijn(
+                    table, mosaic: mosaic, colors: colors, cameraToSRGB: decoded.cameraToSRGB, into: pyramid,
+                    encoder: encoder,
+                )
+            }
         }
     }
 

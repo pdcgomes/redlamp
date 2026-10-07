@@ -98,7 +98,7 @@ def run(folder, worktree):
     command = [
         "mise", "exec", "--", "xcodebuild", "test-without-building", "-workspace", "Redlamp.xcworkspace",
         "-scheme", "RedlampEngine", "-destination", "platform=macOS,arch=arm64",
-        "-derivedDataPath", os.path.join(worktree, "build/DerivedData-rawdn"), "-only-testing:RedlampEngineTests/RawDenoiseHarnessTests",
+        "-derivedDataPath", os.path.join(worktree, os.environ.get("RAWDN_DERIVED_DATA", "build/DerivedData-rawdn")), "-only-testing:RedlampEngineTests/RawDenoiseHarnessTests",
     ]
     result = subprocess.run(command, cwd=worktree, env=env, capture_output=True, text=True)
     log = OUT / "harness.log"

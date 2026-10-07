@@ -17,6 +17,15 @@ public final class KernelLibrary: @unchecked Sendable {
     public let menonGreen: any MTLComputePipelineState
     public let menonRBAtGreen: any MTLComputePipelineState
     public let menonRBAtRB: any MTLComputePipelineState
+    public let xtransGreen: any MTLComputePipelineState
+    public let xtransSolitary: any MTLComputePipelineState
+    public let xtransOpposite: any MTLComputePipelineState
+    public let xtransOppositeMerge: any MTLComputePipelineState
+    public let xtransBlocks: any MTLComputePipelineState
+    public let xtransBlocksMerge: any MTLComputePipelineState
+    public let xtransDerivatives: any MTLComputePipelineState
+    public let xtransHomogeneity: any MTLComputePipelineState
+    public let xtransAverage: any MTLComputePipelineState
     public let develop: any MTLComputePipelineState
     public let histogram: any MTLComputePipelineState
     public let denoisePrepare: any MTLComputePipelineState
@@ -86,6 +95,15 @@ public final class KernelLibrary: @unchecked Sendable {
         menonGreen = try pipeline("rl_menon_green")
         menonRBAtGreen = try pipeline("rl_menon_rb_at_green")
         menonRBAtRB = try pipeline("rl_menon_rb_at_rb")
+        xtransGreen = try pipeline("rl_xtrans_green")
+        xtransSolitary = try pipeline("rl_xtrans_solitary")
+        xtransOpposite = try pipeline("rl_xtrans_opposite")
+        xtransOppositeMerge = try pipeline("rl_xtrans_opposite_merge")
+        xtransBlocks = try pipeline("rl_xtrans_blocks")
+        xtransBlocksMerge = try pipeline("rl_xtrans_blocks_merge")
+        xtransDerivatives = try pipeline("rl_xtrans_derivatives")
+        xtransHomogeneity = try pipeline("rl_xtrans_homogeneity")
+        xtransAverage = try pipeline("rl_xtrans_average")
         develop = try pipeline("rl_develop")
         histogram = try pipeline("rl_histogram")
         denoisePrepare = try pipeline("rl_denoise_prepare")

@@ -778,6 +778,12 @@ struct DetailStageTests {
         }
         let black: Float = 512
         let white: Float = 16383
+        // One black level per pattern position, as `SessionBuilder` reads them.
+        let blackCount = if case let .mosaic(pattern) = layout {
+            pattern.width * pattern.height
+        } else {
+            3
+        }
         var random = SeededRandom(seed: 7)
         func raw(_ value: Float) -> UInt16 {
             UInt16(min(max(black + value * (white - black), 0), 65535).rounded())
@@ -792,7 +798,7 @@ struct DetailStageTests {
         }
         var decoded = DecodedImage(
             width: width, height: height, layout: layout, samples: samples,
-            blackLevels: [Float](repeating: black, count: channels == 1 ? 4 : 3), whiteLevel: white,
+            blackLevels: [Float](repeating: black, count: blackCount), whiteLevel: white,
             asShotMultipliers: asShot, cameraToSRGB: [1, 0, 0, 0, 1, 0, 0, 0, 1], xyzToCamera: nil,
             orientation: 0, baselineExposure: 0,
             info: ImageInfo(

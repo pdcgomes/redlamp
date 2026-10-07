@@ -48,6 +48,36 @@ public struct DemosaicParams {
     }
 }
 
+/// Mirrors `XTransParams` in DemosaicXTrans.metal.
+public struct XTransParams {
+    public var width: UInt32
+    public var height: UInt32
+    public var bandTop: UInt32
+    public var bandRows: UInt32
+    public var outTop: UInt32
+    public var outBottom: UInt32
+    public var solitaryRow: Int32
+    public var solitaryColumn: Int32
+    public var xyzCam0: SIMD4<Float>
+    public var xyzCam1: SIMD4<Float>
+    public var xyzCam2: SIMD4<Float>
+
+    public init(
+        width: UInt32, height: UInt32, bandTop: UInt32, bandRows: UInt32, outTop: UInt32, outBottom: UInt32,
+        solitaryRow: Int32, solitaryColumn: Int32, xyzCam: (SIMD4<Float>, SIMD4<Float>, SIMD4<Float>),
+    ) {
+        self.width = width
+        self.height = height
+        self.bandTop = bandTop
+        self.bandRows = bandRows
+        self.outTop = outTop
+        self.outBottom = outBottom
+        self.solitaryRow = solitaryRow
+        self.solitaryColumn = solitaryColumn
+        (xyzCam0, xyzCam1, xyzCam2) = xyzCam
+    }
+}
+
 public struct HotPixelParams {
     public var width: UInt32
     public var height: UInt32
