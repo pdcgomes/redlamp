@@ -26,7 +26,10 @@ VERSION="$(read_config version)"
 URL="$(read_config url)"
 SHA256="$(read_config sha256)"
 SHIM="$ROOT/vendor/shims/redlamp_libraw.h"
-STAMP_VALUE="$VERSION $SHA256 $(shasum -a 256 "$SHIM" | cut -d' ' -f1)"
+# Hidden, so RedlampServices, which links it in, exports none of it and dead-stripping drops
+# what Redlamp doesn't call.
+CXXFLAGS="-std=c++17 -O3 -w -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -DUSE_ZLIB -DLIBRAW_NODLL"
+STAMP_VALUE="$VERSION $SHA256 $(shasum -a 256 "$SHIM" | cut -d' ' -f1) $CXXFLAGS"
 
 if [[ -f "$STAMP" && "$(cat "$STAMP")" == "$STAMP_VALUE" && "${FORCE:-0}" != "1" ]]; then
     echo "==> LibRaw $VERSION already built ($OUTPUT)"
@@ -98,13 +101,12 @@ for slice in "${SLICES[@]}"; do
     mkdir -p "$objdir"
     echo "==> Building slice $sdk ($target)"
     printf '%s\n' "${SOURCES[@]}" | xargs -P "$JOBS" -I{} sh -c '
-        src="$1"; objdir="$2"; target="$3"; sysroot="$4"; inc="$5"
+        src="$1"; objdir="$2"; target="$3"; sysroot="$4"; inc="$5"; flags="$6"
         out="$objdir/$(basename "$src" .cpp).o"
+        # shellcheck disable=SC2086
         xcrun clang++ -c "$src" -o "$out" \
-            -target "$target" -isysroot "$sysroot" \
-            -std=c++17 -O3 -w -fPIC -I"$inc" \
-            -DUSE_ZLIB -DLIBRAW_NODLL
-    ' _ {} "$objdir" "$target" "$sysroot" "$SRC"
+            -target "$target" -isysroot "$sysroot" -I"$inc" $flags
+    ' _ {} "$objdir" "$target" "$sysroot" "$SRC" "$CXXFLAGS"
     xcrun libtool -static -o "$objdir/libraw.a" "$objdir"/*.o 2>/dev/null
     XCF_ARGS+=(-library "$objdir/libraw.a" -headers "$HEADERS")
 done
