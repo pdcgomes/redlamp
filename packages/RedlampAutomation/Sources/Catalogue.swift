@@ -10,6 +10,7 @@
             + MaskingScenarios.all + MasksPanelScenarios.all + PointColorScenarios.all + CropScenarios.all
             + HealingScenarios.all
             + LibraryScenarios.all + ModuleScenarios.all + OtherAppsScenarios.all + SavingScenarios.all
+            + PaletteLibraryScenarios.all
             + SyncScenarios.all + ExportScenarios.all
             + RecipeScenarios.all + StackScenarios.all + RawScenarios.all + FeedbackScenarios.all
             + SoakScenarios.all + PerformanceScenarios.all + SmokeScenarios.last

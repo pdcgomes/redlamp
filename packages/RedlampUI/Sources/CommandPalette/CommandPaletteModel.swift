@@ -18,8 +18,8 @@ public final class CommandPaletteModel {
     public private(set) var scope: PaletteScope
     public private(set) var levels: [PaletteLevel]
     /// The rows of the topmost list level.
-    public private(set) var sections: [PaletteSection] = []
-    public private(set) var rows: [PaletteItem] = []
+    public internal(set) var sections: [PaletteSection] = []
+    public internal(set) var rows: [PaletteItem] = []
     /// ⇧ and ⌥ light up their hints in the slider bar.
     public var heldModifiers: PaletteModifiers = []
     /// The tip shown at the top level, an index into `PaletteTips.all`.
@@ -35,11 +35,19 @@ public final class CommandPaletteModel {
     /// Runs what only the app can: Open Folder, Export and Film Looks.
     @ObservationIgnored public var performAppAction: (ShortcutAction) -> Void = { _ in }
 
+    /// The library's names and photos for the search (LIB-19), as its last lookup found them.
+    public internal(set) var library = PaletteLibraryRows()
+
     /// Harness specimens: they don't preview, report events or move the editor's focus.
     @ObservationIgnored let isSpecimen: Bool
     var burstParameter: ParameterID?
     @ObservationIgnored var burstEnd: Task<Void, Never>?
     @ObservationIgnored var previewTask: Task<Void, Never>?
+    /// The rows the catalogue gave the level, before the library's.
+    @ObservationIgnored var catalogSections: [PaletteSection] = []
+    @ObservationIgnored var libraryLookup: Task<Void, Never>?
+    /// The text the library was last asked about.
+    @ObservationIgnored var lookedUp: String?
 
     public init(editor: EditorModel, scope: PaletteScope, tip: Int, isSpecimen: Bool = false) {
         self.editor = editor
@@ -48,6 +56,7 @@ public final class CommandPaletteModel {
         self.isSpecimen = isSpecimen
         levels = [.list(page: nil, query: "", selection: 0)]
         refresh()
+        editor.library.service?.engine?.prepareNames()
     }
 
     // MARK: - State
@@ -107,6 +116,8 @@ public final class CommandPaletteModel {
         switch item.kind {
         case .filterPreset, .page(.filterPresets): return PaletteCatalog.isAvailable(.filterPresets, editor: editor)
         case .customLabel: return editor.selection != nil && !editor.isModalDialogOpen
+        case .libraryName(.folder, _), .photo: return !editor.isModalDialogOpen
+        case .libraryName, .photosNamed: return PaletteCatalog.isAvailable(.filterPresets, editor: editor)
         default: break
         }
         // Sliders, pickers and choices change Develop's photo, which the Library module doesn't show.
@@ -339,6 +350,7 @@ public final class CommandPaletteModel {
         endBurst()
         clearPreview()
         previewTask?.cancel()
+        libraryLookup?.cancel()
     }
 
     // MARK: - Helpers
@@ -349,8 +361,9 @@ public final class CommandPaletteModel {
 
     func refresh() {
         guard case let .list(page, query, _) = level else { return }
-        sections = PaletteCatalog.sections(page: page, scope: scope, query: query, editor: editor)
-        rows = sections.flatMap(\.items)
+        catalogSections = PaletteCatalog.sections(page: page, scope: scope, query: query, editor: editor)
+        lookUpLibrary(page: page, query: query)
+        showSections()
     }
 
     func revealText(selectAll: Bool) {

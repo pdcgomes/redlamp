@@ -1,5 +1,6 @@
 import Foundation
 import RedlampEngineAPI
+import RedlampLibrary
 import RedlampRecipes
 
 /// The palette's rows: what each level lists, and how a query ranks them.
@@ -287,6 +288,50 @@ enum PaletteCatalog {
             kind: .baseLook(look.id), title: look.name, context: "Base Look", symbol: "camera.filters",
             keywords: ["base look", "profile"],
         )
+    }
+
+    // MARK: - The library
+
+    /// The rows for the library's names, then its photos found by name, and when more photos have
+    /// the name than are listed, one filtering by it (LIB-19).
+    static func libraryItems(names: [QueryCompletion], photos: PhotosNamed?) -> [PaletteItem] {
+        var items = names.map(libraryItem)
+        guard let photos else { return items }
+        for photo in photos.photos {
+            let url = URL(fileURLWithPath: photo.path)
+            items.append(PaletteItem(
+                kind: .photo(photo.path), title: url.lastPathComponent,
+                context: "Photo · \(url.deletingLastPathComponent().lastPathComponent)", symbol: "photo",
+            ))
+        }
+        if photos.count > photos.photos.count {
+            items.append(PaletteItem(
+                kind: .photosNamed(photos.text), title: "Photos Named “\(photos.text)”",
+                context: "\(photos.count.formatted()) photos", symbol: "photo.on.rectangle",
+            ))
+        }
+        return items
+    }
+
+    static func libraryItem(_ name: QueryCompletion) -> PaletteItem {
+        let url = URL(fileURLWithPath: name.value)
+        let title = switch name.field {
+        case .keyword, .collection: KeywordPath(name.value)?.displayName ?? name.value
+        case .folder: url.lastPathComponent
+        default: name.value
+        }
+        let (context, symbol) = switch name.field {
+        case .folder: ("Folder · \(url.deletingLastPathComponent().lastPathComponent)", "folder")
+        case .collection: ("Collection", "rectangle.stack")
+        case .keyword: ("Keyword", "tag")
+        case .camera: ("Camera", "camera")
+        case .lens: ("Lens", "camera.aperture")
+        case .city: ("City", "mappin.and.ellipse")
+        case .country: ("Country", "mappin.and.ellipse")
+        case .state: ("State or Province", "mappin.and.ellipse")
+        default: ("Place", "mappin.and.ellipse")
+        }
+        return PaletteItem(kind: .libraryName(name.field, name.value), title: title, context: context, symbol: symbol)
     }
 
     private static func recipeItem(_ recipe: Recipe) -> PaletteItem {

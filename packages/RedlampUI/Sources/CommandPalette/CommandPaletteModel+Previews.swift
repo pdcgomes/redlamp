@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import RedlampEngineAPI
+import RedlampLibrary
 import RedlampRecipes
 
 /// Choices previewing on the photo while highlighted, and applying them.
@@ -102,6 +103,14 @@ extension CommandPaletteModel {
             }
         case let .customLabel(name):
             editor.setCustomLabel(name)
+        case let .libraryName(.folder, path):
+            editor.open([URL(fileURLWithPath: path, isDirectory: true)])
+        case let .libraryName(field, value):
+            filterLibrary(by: LibraryQuery.Filter(field, .equal, [.text(value)]))
+        case let .photo(path):
+            editor.open([URL(fileURLWithPath: path)])
+        case let .photosNamed(text):
+            filterLibrary(by: LibraryQuery.Filter(.name, .equal, [.text(text)]))
         default:
             break
         }

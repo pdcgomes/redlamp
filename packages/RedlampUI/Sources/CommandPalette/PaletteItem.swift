@@ -1,5 +1,6 @@
 import Foundation
 import RedlampEngineAPI
+import RedlampLibrary
 
 /// What the palette searches: everything (⌘K), or only sliders (⌘F).
 @_spi(Harness) public enum PaletteScope: String, Sendable, Hashable {
@@ -74,6 +75,13 @@ import RedlampEngineAPI
     case filterPreset(String)
     /// A custom label, by its name, on the photos a label's key reaches (LIB-15).
     case customLabel(String)
+    /// A name of the library's (LIB-19), by its field and value: a folder, which ↵ shows, or a
+    /// collection, keyword, camera, lens or place, which ↵ makes the filter's term on its field.
+    case libraryName(LibraryQuery.Field, String)
+    /// A photo the library found by its name, by its path: ↵ shows it in its folder.
+    case photo(String)
+    /// The photos whose names hold the text: ↵ filters by it (`name:`).
+    case photosNamed(String)
 
     /// What ↵ does, for the hint bar.
     var verb: String {
@@ -83,17 +91,20 @@ import RedlampEngineAPI
         case .page: "Open"
         case .setValue: "Set"
         case .historyStep, .snapshot: "Go"
+        case .libraryName(.folder, _), .photo: "Show"
+        case .libraryName, .photosNamed: "Filter"
         default: "Apply"
         }
     }
 
-    /// Ties in search go to pages, then sliders, actions and choices.
+    /// Ties in search go to pages, then sliders, actions and choices; the library's rows come after.
     var rank: Int {
         switch self {
         case .setValue: 0
         case .page: 1
         case .slider: 2
         case .action: 3
+        case .libraryName, .photo, .photosNamed: 5
         default: 4
         }
     }

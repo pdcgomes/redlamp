@@ -24,6 +24,8 @@ protocol QuerySource: Sendable {
     ) async throws -> ColumnStore?
     /// The photos matching an FTS5 query of `photo_text`.
     func photoIDs(matching match: String) async throws -> [Int64]
+    /// The paths of photos `ids` the index has: each its folder's, a slash and its name.
+    func photoPaths(of ids: [Int64]) async throws -> [Int64: String]
     func photoIDs(withKeywords keywords: [Int64]) async throws -> [Int64]
     func photoIDs(inCollections collections: [Int64]) async throws -> [Int64]
     /// The synonyms of the library's keywords, by keyword path (LIB-21).
@@ -92,6 +94,10 @@ extension QuerySource {
     }
 
     func keywordSynonyms() async throws -> [String: [String]] {
+        [:]
+    }
+
+    func photoPaths(of _: [Int64]) async throws -> [Int64: String] {
         [:]
     }
 
@@ -427,6 +433,17 @@ struct IndexQuerySource: QuerySource {
             let statement = try reader.database.cached("SELECT rowid FROM photo_text WHERE photo_text MATCH ?")
             try statement.bind(match, at: 1)
             return try statement.map { $0.int64(at: 0) }
+        }
+    }
+
+    func photoPaths(of ids: [Int64]) async throws -> [Int64: String] {
+        guard !ids.isEmpty else { return [:] }
+        return try await index.read { reader in
+            var paths: [Int64: String] = [:]
+            for id in ids {
+                paths[id] = try reader.photoPath(id: id)
+            }
+            return paths
         }
     }
 

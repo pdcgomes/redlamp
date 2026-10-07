@@ -186,7 +186,11 @@ private struct PaletteList: View {
         if let page = palette.page {
             return "Search \(page.title)…"
         }
-        return palette.scope == .sliders ? "Find a slider (for example “haze”)" : "Search commands, sliders and looks…"
+        if palette.scope == .sliders {
+            return "Find a slider (for example “haze”)"
+        }
+        return palette.editor.library.service == nil ? "Search commands, sliders and looks…"
+            : "Search commands, sliders, looks and the library…"
     }
 }
 
@@ -258,7 +262,7 @@ extension CommandPaletteModel {
         case let (true, waiting?): "\(waiting)…"
         case let (false, waiting?): "No matches for “\(text)” yet. \(waiting)…"
         case (true, nil): "Nothing here yet."
-        case (false, nil): "No matches for “\(text)”."
+        case (false, nil): library.isSearching ? "Searching the library…" : "No matches for “\(text)”."
         }
     }
 }
