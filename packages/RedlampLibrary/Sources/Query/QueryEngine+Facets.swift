@@ -9,6 +9,8 @@ public enum Facet: String, Sendable, Hashable, CaseIterable {
     case creator, city, country
     /// A label's name outside the five colours.
     case customLabel
+    /// Which way the photos are turned: landscape, portrait, square.
+    case orientation
 }
 
 /// How many of a query's photos share each value of a facet.
@@ -148,6 +150,16 @@ extension ColumnStore {
             return try FacetCounts(facet: facet, values: placeCounts(of: matches, .city, field: .city))
         case .country:
             return try FacetCounts(facet: facet, values: placeCounts(of: matches, .country, field: .country))
+        case .orientation:
+            let counts = try counts(matches, orientations, size: PhotoOrientation.allCases.count + 1)
+            func value(_ orientation: PhotoOrientation?) -> FacetValue {
+                FacetValue(
+                    name: orientation?.rawValue, count: counts[Int(orientation?.code ?? 0)],
+                    filter: .filter(LibraryQuery.Filter(.orientation, .equal, [.orientation(orientation)])),
+                )
+            }
+            let ways: [PhotoOrientation?] = PhotoOrientation.allCases + [nil]
+            return FacetCounts(facet: facet, values: ways.map(value).filter { $0.count > 0 })
         }
     }
 

@@ -42,7 +42,6 @@ public struct GroupScenario: BenchScenario {
             LibraryGrouping(
                 store: store, names: library.names(),
                 stacks: StackFinder.find(in: store, names: library.stackNames(), choices: StackChoices()),
-                orientations: library.orientations(),
             )
         }.value
         let list = PhotoList(source: .allPhotographs, sort: QuerySort(), ids: store.ids(sortedBy: QuerySort()))
@@ -222,7 +221,6 @@ struct SyntheticSessionLibrary: Sendable {
 
     let photos: Int
     private(set) var rows: [ColumnStore.Row] = []
-    private var sizes: [(width: Int, height: Int)] = []
     private var folders: [Int64: String] = [:]
     private(set) var expected = Expected()
 
@@ -230,7 +228,6 @@ struct SyntheticSessionLibrary: Sendable {
         self.photos = photos
         var random = SeededRandom(seed: seed, stream: 41)
         rows.reserveCapacity(photos)
-        sizes.reserveCapacity(photos)
         let scans = Int64(1_000_000)
         folders[scans] = "/Volumes/Photos/Scans"
         var time: Int64 = 1_600_000_000_000
@@ -360,7 +357,6 @@ struct SyntheticSessionLibrary: Sendable {
             ),
             shutter: shutter, width: size.0, height: size.1,
         ))
-        sizes.append(size)
         return id
     }
 
@@ -387,14 +383,6 @@ struct SyntheticSessionLibrary: Sendable {
             names[row.hot.id] = row.hot.name
         }
         return names
-    }
-
-    func orientations() -> PhotoOrientations {
-        var orientations = PhotoOrientations()
-        for (place, size) in sizes.enumerated().reversed() {
-            orientations[Int64(place + 1)] = PhotoOrientation(width: size.width, height: size.height)
-        }
-        return orientations
     }
 
     /// Photos `ids` as a card holds them before they're copied: their capture times and names.

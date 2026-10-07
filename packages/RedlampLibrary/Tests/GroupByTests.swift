@@ -13,7 +13,6 @@ struct GroupByTests {
         defer { library.sandbox.remove() }
         let grouping = try await library.engine.grouping(
             stacks: StackFinder.find(in: library.index, store: #require(library.engine.store)),
-            orientations: PhotoOrientations.read(from: library.index),
         )
         let trips = PhotoSource.folder(
             URL(fileURLWithPath: IndexSandbox.rootPath + "/Trips", isDirectory: true), includingSubfolders: true,
@@ -27,7 +26,12 @@ struct GroupByTests {
                 #expect(groups.reduce(0) { $0 + $1.count } == list.count, "\(key)")
                 for group in groups {
                     #expect(group.photos.allSatisfy { groups.index(of: $0) == groups.firstIndex(of: group) })
-                    let filtered = [.day, .folder, .camera, .lens].contains(key) && !group.name.hasPrefix("No ")
+                    let filtered = switch key {
+                    case .ungrouped: false
+                    case .orientation: true
+                    case .moment, .momentCamera: false
+                    default: !group.name.hasPrefix("No ")
+                    }
                     #expect((group.filter != nil) == filtered, "\(key) \(group.name)")
                     guard let filter = group.filter else { continue }
                     #expect(try LibraryQuery(parsing: filter.description) == filter, "\(filter)")
@@ -65,6 +69,9 @@ struct GroupByTests {
             .day(.day(2025, 6, 14)), .day(.day(2025, 6, 15)), .day(.day(2025, 6, 16)), .day(nil),
         ])
         #expect(grouping.groups(of: all, by: .orientation).map(\.count) == [5, 2, 1, 1])
+        #expect(grouping.groups(of: all, by: .orientation).map { $0.filter?.description } == [
+            "orientation:landscape", "orientation:portrait", "orientation:square", "orientation:none",
+        ])
     }
 
     @Test func `two cameras whose clocks disagree come apart by moment, then camera`() {
@@ -160,7 +167,7 @@ struct GroupByTests {
         #expect(accents.filter(for: "/P/Été")?.description == #"folder:/P/Été -folder:"/P/ÉTÉ 2""#)
     }
 
-    @Test func `orientations come from the index's upright sizes`() async throws {
+    @Test func `orientations come from the index's upright sizes, which the column store keeps`() async throws {
         let sandbox = try await IndexSandbox.make()
         defer { sandbox.remove() }
         let folder = try #require(try await sandbox.addFolders(["Shoot"])["Shoot"])
@@ -170,10 +177,14 @@ struct GroupByTests {
             PhotoRecord(folder: folder, name: "SQUARE.JPG", width: 3000, height: 3000),
             PhotoRecord(folder: folder, name: "UNKNOWN.JPG"),
         ])
-        let orientations = try await PhotoOrientations.read(from: sandbox.index)
-        #expect(ids.map { orientations[$0] } == [.landscape, .portrait, .square, nil])
-        #expect(orientations[-1] == nil && orientations[1_000_000] == nil)
+        let engine = QueryEngine(index: sandbox.index)
+        try await engine.load()
+        let store = try #require(engine.store)
+        #expect(ids.map(store.orientation(of:)) == [.landscape, .portrait, .square, nil])
+        #expect(store.orientation(of: -1) == nil && store.orientation(of: 1_000_000) == nil)
         #expect(PhotoOrientation(width: 0, height: 10) == nil && PhotoOrientation(width: 3, height: 2) == .landscape)
+        #expect(PhotoOrientation.allCases.allSatisfy { PhotoOrientation(code: $0.code) == $0 })
+        #expect(PhotoOrientation(code: 0) == nil && PhotoOrientation(code: 4) == nil)
     }
 }
 

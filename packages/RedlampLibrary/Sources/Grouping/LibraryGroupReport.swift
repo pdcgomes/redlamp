@@ -40,8 +40,7 @@ public struct LibraryGroupReport: Sendable {
         started = clock.now
         let stacks = try await StackFinder.find(in: index, store: engine.store ?? ColumnStore())
         let stacked = clock.now - started
-        let orientations = key == .orientation ? try await PhotoOrientations.read(from: index) : PhotoOrientations()
-        let grouping = try await engine.grouping(stacks: stacks, orientations: orientations)
+        let grouping = try await engine.grouping(stacks: stacks)
         started = clock.now
         let groups = grouping.groups(of: list, by: key, setting: setting)
         let grouped = clock.now - started

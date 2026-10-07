@@ -331,11 +331,13 @@ extension ColumnStore {
 public struct QueryCompletion: Sendable, Hashable {
     public var field: LibraryQuery.Field
     /// The value as the library names it: a keyword's or a collection's path, a camera's or a lens's
-    /// name, a folder's path, or a label's name, a colour's or a custom label's.
+    /// name, a folder's path, a label's name, a colour's or a custom label's, a trait's or an
+    /// orientation's.
     public var value: String
-    /// The term as the language writes it: `kw:"Places/Portugal"`, `camera:"X-T5"`, `is:panorama`.
+    /// The term as the language writes it: `kw:"Places/Portugal"`, `camera:"X-T5"`, `is:panorama`,
+    /// `orientation:portrait`.
     public var term: String
-    /// For a trait, the photos it finds.
+    /// For a trait or an orientation, the photos of the source it finds.
     public var count: Int?
 
     public init(field: LibraryQuery.Field, value: String, count: Int? = nil) {
@@ -352,18 +354,32 @@ public struct QueryCompletion: Sendable, Hashable {
         if field == .trait, let trait = LibraryQuery.Trait(rawValue: value) {
             return .trait(trait)
         }
+        if field == .orientation, let orientation = PhotoOrientation(rawValue: value) {
+            return .orientation(orientation)
+        }
         return .text(value)
     }
 
+    /// The query the term for a trait or an orientation stands for; nil for another field's.
+    var counted: LibraryQuery? {
+        if field == .trait, let trait = LibraryQuery.Trait(rawValue: value) {
+            return trait.query
+        }
+        guard field == .orientation, let orientation = PhotoOrientation(rawValue: value) else { return nil }
+        return .filter(LibraryQuery.Filter(.orientation, .equal, [.orientation(orientation)]))
+    }
+
     /// The fields completion has values for, in the order it offers them.
-    public static let fields: [LibraryQuery.Field] = [.keyword, .camera, .lens, .folder, .label, .collection, .trait]
+    public static let fields: [LibraryQuery.Field] = [
+        .keyword, .camera, .lens, .folder, .label, .collection, .trait, .orientation,
+    ]
 }
 
 public extension QueryEngine {
-    /// The values of `field`, or of keywords, cameras, lenses, folders, labels, collections and traits
-    /// when it's nil, that `typed` starts or starts a word of, then those it's inside, best first: as
-    /// the filter bar's text completes a term. A trait comes with the photos of `source` it finds.
-    /// Nothing runs on the caller's thread.
+    /// The values of `field`, or of keywords, cameras, lenses, folders, labels, collections, traits
+    /// and orientations when it's nil, that `typed` starts or starts a word of, then those it's inside,
+    /// best first: as the filter bar's text completes a term. A trait or an orientation comes with the
+    /// photos of `source` it finds. Nothing runs on the caller's thread.
     func completions(
         _ typed: String, field: LibraryQuery.Field?, limit: Int = 8, in source: PhotoSource = .allPhotographs,
     ) async -> [QueryCompletion] {
@@ -377,13 +393,13 @@ public extension QueryEngine {
                 typed, fields: field.map { [$0] } ?? QueryCompletion.fields, limit: limit, customLabels: customLabels,
             )
         }.value
-        guard completions.contains(where: { $0.field == .trait }),
+        guard completions.contains(where: { $0.counted != nil }),
               let photos = try? await rows(of: source, in: store, vocabulary: vocabulary, generation: generation)
         else { return completions }
         for (place, completion) in completions.enumerated() {
-            guard let trait = LibraryQuery.Trait(rawValue: completion.value), completion.field == .trait,
+            guard let query = completion.counted,
                   var found = try? await matches(
-                      for: trait.query.searchable, in: store, vocabulary: vocabulary, generation: generation,
+                      for: query.searchable, in: store, vocabulary: vocabulary, generation: generation,
                   )
             else { continue }
             found.formIntersection(photos)
@@ -428,6 +444,8 @@ extension QueryVocabulary {
                     guard let rank = ranks.min() else { continue }
                     ranked.append((rank, ranked.count, QueryCompletion(field: .trait, value: trait.rawValue)))
                 }
+            case .orientation:
+                offer(.orientation, PhotoOrientation.allCases.map(\.rawValue))
             default: break
             }
         }

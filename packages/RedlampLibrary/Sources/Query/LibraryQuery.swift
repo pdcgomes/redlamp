@@ -98,6 +98,9 @@ public indirect enum LibraryQuery: Sendable, Hashable {
         case megapixels
         /// The long side over the short: `1.5` or `3:2`, whichever way the photo is turned.
         case aspect
+        /// `landscape`, `portrait`, `square` or `none`: which way the photo is turned once its EXIF
+        /// orientation is applied, none when the index doesn't have its size (LIB-41).
+        case orientation
         /// A trait (`Trait`), such as `is:long-exposure`: a name for a query over the other fields.
         case trait = "is"
 
@@ -156,6 +159,8 @@ public indirect enum LibraryQuery: Sendable, Hashable {
         case kind(PhotoRecord.Kind)
         case detail(Detail)
         case trait(Trait)
+        /// `none` is nil.
+        case orientation(PhotoOrientation?)
     }
 
     /// A trait (LIB-06): a name for a query over the index's fields, written `is:` and its name, and

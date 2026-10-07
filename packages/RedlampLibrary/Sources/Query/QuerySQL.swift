@@ -144,6 +144,8 @@ struct QuerySQL: Sendable, Hashable {
                 return textMatch(QueryText.match(text, in: .caption))
             case let (.ext, .kind(kind)):
                 return "(\(ColumnEncoding.kindSQL) = \(kind.rawValue))"
+            case let (.orientation, .orientation(orientation)):
+                return "(\(ColumnEncoding.orientationSQL) = \(orientation?.code ?? 0))"
             case let (.ext, .text(ext)):
                 return textMatch(QueryText.match("." + ext, in: .name))
             case let (.collection, .text(text)):

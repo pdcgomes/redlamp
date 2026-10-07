@@ -30,6 +30,8 @@ indirect enum QueryPlan: Sendable, Hashable {
         case captured(Range<Int64>)
         /// A bit per `PhotoRecord.Kind`.
         case kinds(UInt64)
+        /// A bit per `PhotoOrientation.code`, bit 0 for none.
+        case orientations(UInt8)
         case cameras([UInt16])
         case lenses([UInt16])
         case folders([Int32])
@@ -187,6 +189,8 @@ indirect enum QueryPlan: Sendable, Hashable {
             return .leaf(.rows(.match(QueryText.match(text, in: .caption))))
         case let (.ext, .kind(kind)):
             return .leaf(.kinds(1 << UInt64(kind.rawValue)))
+        case let (.orientation, .orientation(orientation)):
+            return .leaf(.orientations(1 << (orientation?.code ?? 0)))
         case let (.ext, .text(ext)):
             return .leaf(.rows(.match(QueryText.match("." + ext, in: .name))))
         case let (.has, .detail(detail)):
@@ -336,6 +340,8 @@ extension ColumnStore {
             Self.fill(&words, captured) { UInt64(bitPattern: $0 &- lower) < span ? 1 : 0 }
         case let .kinds(kinds):
             Self.fill(&words, self.kinds) { kinds >> UInt64($0) & 1 }
+        case let .orientations(codes):
+            Self.fill(&words, orientations) { UInt64(codes >> $0 & 1) }
         case let .cameras(codes):
             let table = Self.table(codes.map(Int.init))
             Self.fill(&words, cameras) { Self.lookUp(table, Int($0)) }

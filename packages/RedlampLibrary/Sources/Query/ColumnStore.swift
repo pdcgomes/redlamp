@@ -107,6 +107,8 @@ public struct ColumnStore: Sendable {
     /// `ColumnEncoding.megapixels` and `ColumnEncoding.aspect`.
     private(set) var megapixels: ContiguousArray<UInt16> = []
     private(set) var aspects: ContiguousArray<UInt16> = []
+    /// `ColumnEncoding.orientation`.
+    private(set) var orientations: ContiguousArray<UInt8> = []
     /// The rows holding a photo.
     private(set) var live = RowBits(rows: 0)
 
@@ -247,6 +249,7 @@ public struct ColumnStore: Sendable {
             store.places.append(contentsOf: columns.places.lazy.map { places[Int($0)] })
             store.megapixels.append(contentsOf: columns.megapixels)
             store.aspects.append(contentsOf: columns.aspects)
+            store.orientations.append(contentsOf: columns.orientations)
             keys.append(contentsOf: part.keys)
             largest = max(largest, columns.ids.max() ?? -1)
         }
@@ -316,6 +319,12 @@ public struct ColumnStore: Sendable {
         row(of: id) != nil
     }
 
+    /// Which way photo `id` is turned, from its size once its EXIF orientation is applied; nil for a
+    /// photo the store doesn't hold or whose size the index doesn't have.
+    public func orientation(of id: Int64) -> PhotoOrientation? {
+        row(of: id).flatMap { PhotoOrientation(code: orientations[$0]) }
+    }
+
     /// The live rows in `key`'s ascending order: sorted now for an order the store doesn't keep yet.
     func order(_ key: QuerySort.Key) -> ContiguousArray<Int32> {
         switch key {
@@ -381,7 +390,7 @@ public struct ColumnStore: Sendable {
             + bytes(iso) + bytes(aperture) + bytes(focal) + bytes(shutter) + bytes(kinds) + bytes(nameRanks)
             + bytes(editedAt) + bytes(sizes) + bytes(modifiedAt) + bytes(states) + bytes(live.words)
             + bytes(creators) + bytes(copyrights) + bytes(customLabels) + bytes(places) + bytes(megapixels)
-            + bytes(aspects)
+            + bytes(aspects) + bytes(orientations)
         let orders = bytes(byCaptured) + bytes(byName) + bytes(byRating) + bytes(byEdited)
             + (byModified.map(bytes) ?? 0) + (bySize.map(bytes) ?? 0)
         let codes = bytes(cameraIDs) + bytes(lensIDs) + (cameraCodes.capacity + lensCodes.capacity) * 16
@@ -420,6 +429,7 @@ public struct ColumnStore: Sendable {
         places.reserveCapacity(count)
         megapixels.reserveCapacity(count)
         aspects.reserveCapacity(count)
+        orientations.reserveCapacity(count)
     }
 
     /// Adds a row for a photo the store doesn't hold.
@@ -461,6 +471,7 @@ public struct ColumnStore: Sendable {
         places.append(0)
         megapixels.append(0)
         aspects.append(0)
+        orientations.append(0)
         set(row, at: ids.count - 1)
     }
 
@@ -487,6 +498,7 @@ public struct ColumnStore: Sendable {
         places[index] = placeNames.code(for: row.location)
         megapixels[index] = ColumnEncoding.megapixels(width: row.width, height: row.height)
         aspects[index] = ColumnEncoding.aspect(width: row.width, height: row.height)
+        orientations[index] = ColumnEncoding.orientation(width: row.width, height: row.height)
     }
 
     /// Takes a row out: its photo is gone from the store, and from every order once `removeFromOrders`
@@ -635,6 +647,7 @@ public struct ColumnStore: Sendable {
         places = kept(places)
         megapixels = kept(megapixels)
         aspects = kept(aspects)
+        orientations = kept(orientations)
         self.live = RowBits(rows: ids.count, filled: true)
         rowOfID.withUnsafeMutableBufferPointer { $0.update(repeating: -1) }
         for (row, id) in ids.enumerated() {
@@ -763,6 +776,18 @@ enum ColumnEncoding {
     (max(CAST(p.width AS INTEGER), CAST(p.height AS INTEGER)) * 100 \
     + min(CAST(p.width AS INTEGER), CAST(p.height AS INTEGER)) / 2) \
     / min(CAST(p.width AS INTEGER), CAST(p.height AS INTEGER))) ELSE 0 END)
+    """
+
+    /// Which way a photo is turned (`PhotoOrientation.code`), from its size as the index keeps it, which
+    /// the indexer turns upright by EXIF's orientation, a raw's own rather than its sensor's; 0 without
+    /// both sides.
+    static func orientation(width: Int?, height: Int?) -> UInt8 {
+        PhotoOrientation(width: width, height: height)?.code ?? 0
+    }
+
+    static let orientationSQL = """
+    (CASE WHEN p.width > 0 AND p.height > 0 \
+    THEN (CASE WHEN p.width > p.height THEN 1 WHEN p.width < p.height THEN 2 ELSE 3 END) ELSE 0 END)
     """
 
     /// Seconds since 2001, for a photo with an edit; `Int32.min` without.

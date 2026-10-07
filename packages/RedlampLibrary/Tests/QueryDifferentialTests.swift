@@ -64,6 +64,7 @@ struct QueryDifferentialTests {
                 .text(part(of: random.pick(Self.places.flatMap(\.self).filter { !$0.isEmpty } + ["Nowhere"])))
             case .megapixels: number([0.1, 1, 12.2, 24, 40, 44.8, 48, 61], ranges: ranges)
             case .aspect: number([1, 4.0 / 3, 1.5, 16.0 / 9, 2, 3], ranges: ranges)
+            case .orientation: .orientation(random.pick([nil] + PhotoOrientation.allCases))
             case .trait: .trait(random.pick(LibraryQuery.Trait.allCases))
             }
         }

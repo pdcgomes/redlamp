@@ -95,6 +95,11 @@ struct QueryParserTests {
             ("aspect:4/3..2:1", Self.filter(.aspect, .equal, .numberRange(4.0 / 3, 2))),
             ("is:long-exposure", Self.filter(.trait, .equal, .trait(.longExposure))),
             ("IS:Panorama,low-light", Self.filter(.trait, .equal, .trait(.panorama), .trait(.lowLight))),
+            (
+                "orientation:Portrait,square",
+                Self.filter(.orientation, .equal, .orientation(.portrait), .orientation(.square)),
+            ),
+            ("orientation!=none", Self.filter(.orientation, .notEqual, .orientation(nil))),
         ]
         for (text, expected) in cases {
             #expect(try Self.parse(text) == expected, "\(text)")
@@ -159,6 +164,8 @@ struct QueryParserTests {
                 "is takes a trait: long-exposure, panorama, high-resolution, low-light or no-location",
             ),
             ("aspect:3:0", 7 ..< 10, "aspect is the long side over the short"),
+            ("orientation:sideways", 12 ..< 20, "orientation is landscape, portrait, square or none"),
+            ("orientation>portrait", 11 ..< 12, "orientation can't be compared with >"),
             ("is>panorama", 2 ..< 3, "is can't be compared with >"),
             ("camera>3", 6 ..< 7, "camera can't be compared with >"),
             ("rating>=3,4", 8 ..< 11, "a comparison takes one value"),
@@ -247,6 +254,7 @@ struct QueryParserTests {
             ("label!=red,blue", "label!=red,blue"),
             ("province:\"Île-de-France\" countryCode:FR", "state:Île-de-France countrycode:FR"),
             ("mp>=40 aspect:3:2 IS:Low-Light", "megapixels>=40 aspect:1.5 is:low-light"),
+            ("orientation:Portrait -orientation:NONE", "orientation:portrait -orientation:none"),
             ("creator:\"Ana Silva; João\"", "creator:\"Ana Silva; João\""),
             ("iso:..800", "iso:..800"),
             ("iso:1e-5", "iso:1e-05"),

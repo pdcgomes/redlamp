@@ -2,43 +2,34 @@ import Foundation
 import RedlampDocument
 
 /// What grouping a list's photos reads (LIB-41): the column store as a query engine has it, with the
-/// small tables' names of folders, cameras and lenses; the library's stacks (LIB-28), which grouping
-/// never splits; and the photos' orientations, which the store doesn't keep. A grouping is a pass
-/// over the list's capture times and a few over the list, which a million photos take well under a
-/// second for; call it off the main thread.
+/// small tables' names of folders, cameras and lenses; and the library's stacks (LIB-28), which
+/// grouping never splits. A grouping is a pass over the list's capture times and a few over the list,
+/// which a million photos take well under a second for; call it off the main thread.
 public struct LibraryGrouping: Sendable {
     let store: ColumnStore
     let names: QueryNames
     /// The stacks `StackFinder` found in the store.
     public let stacks: Stacks
-    public let orientations: PhotoOrientations
 
-    init(
-        store: ColumnStore, names: QueryNames = QueryNames(), stacks: Stacks = Stacks(),
-        orientations: PhotoOrientations = PhotoOrientations(),
-    ) {
+    init(store: ColumnStore, names: QueryNames = QueryNames(), stacks: Stacks = Stacks()) {
         self.store = store
         self.names = names
         self.stacks = stacks
-        self.orientations = orientations
     }
 }
 
 public extension QueryEngine {
     /// What grouping reads, from the column store as it is now (once a load or change in progress is
-    /// done), loading it first if it hasn't been; `stacks` are those `StackFinder` found in it, and
-    /// `orientations` its photos' (`PhotoOrientations.read(from:)`), needed only to group by
-    /// orientation. Like `list`, it cancels nothing.
-    func grouping(
-        stacks: Stacks = Stacks(), orientations: PhotoOrientations = PhotoOrientations(),
-    ) async throws -> LibraryGrouping {
+    /// done), loading it first if it hasn't been; `stacks` are those `StackFinder` found in it. Like
+    /// `list`, it cancels nothing.
+    func grouping(stacks: Stacks = Stacks()) async throws -> LibraryGrouping {
         if await loadedSnapshot() == nil {
             try await load()
         }
         guard let (store, vocabulary, _) = snapshot() else {
-            return LibraryGrouping(store: ColumnStore(), stacks: stacks, orientations: orientations)
+            return LibraryGrouping(store: ColumnStore(), stacks: stacks)
         }
-        return LibraryGrouping(store: store, names: vocabulary.names, stacks: stacks, orientations: orientations)
+        return LibraryGrouping(store: store, names: vocabulary.names, stacks: stacks)
     }
 }
 
@@ -82,15 +73,13 @@ public extension LibraryGrouping {
                 return (named.value(name), name, sorted.crossed.contains(code) ? nil : filters.filter(for: name))
             }
         case .orientation:
-            let codes = ContiguousArray(list.ids.lazy.map { [orientations] id in
-                let code = orientations.code(of: id)
-                return code == 0 ? Int64.min : Int64(code)
-            })
+            let codes = column(rows, store.orientations) { $0 == 0 ? .min : Int64($0) }
             sorted = self.sorted(list, rows: rows, own: codes) { $0.sorted() }
             describe = { code, _, _ in
-                guard let code else { return (.orientation(nil), "No orientation", nil) }
-                let orientation = PhotoOrientation.allCases[Int(code) - 1]
-                return (.orientation(orientation), orientation.rawValue.capitalized, nil)
+                let orientation = code.flatMap { PhotoOrientation(code: UInt8($0)) }
+                let filter = sorted.crossed.contains(code ?? .min) ? nil
+                    : LibraryQuery.filter(LibraryQuery.Filter(.orientation, .equal, [.orientation(orientation)]))
+                return (.orientation(orientation), orientation?.rawValue.capitalized ?? "No orientation", filter)
             }
         case .momentCamera:
             let combined = momentCameras(of: list, rows: rows, setting: setting)

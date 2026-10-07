@@ -358,6 +358,14 @@ enum LibraryQueryValues {
                 throw Invalid(message: "has is gps, keywords, caption, title, xmp, creator, copyright or location")
             }
             return .detail(detail)
+        case .orientation:
+            if lowered == "none" {
+                return .orientation(nil)
+            }
+            guard let orientation = PhotoOrientation(rawValue: lowered) else {
+                throw Invalid(message: "orientation is landscape, portrait, square or none")
+            }
+            return .orientation(orientation)
         case .ext:
             if let kind = kinds[lowered] {
                 return .kind(kind)

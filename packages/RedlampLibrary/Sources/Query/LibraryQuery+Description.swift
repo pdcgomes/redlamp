@@ -88,6 +88,8 @@ extension LibraryQuery.Value {
             detail.rawValue
         case let .trait(trait):
             trait.rawValue
+        case let .orientation(orientation):
+            orientation?.rawValue ?? "none"
         }
     }
 
