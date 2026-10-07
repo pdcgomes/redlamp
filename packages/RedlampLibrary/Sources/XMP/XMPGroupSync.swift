@@ -46,6 +46,9 @@ extension XMPGroup {
         var saved: Date?
         /// The `.redlamp`'s fields; nil when it has none, or it can't be read.
         var redlamp: XMPFields?
+        /// Its `.redlamp` is gone since the last sync, as the Undo of the batch that made it leaves it: it
+        /// holds nothing now, and takes nothing.
+        var removed = false
         var record: XMPMergeRecord?
         var darktable: XMPSource?
         var embedded: XMPSource?
@@ -309,17 +312,24 @@ extension XMPGroup {
         return outcome
     }
 
-    /// A member's `.redlamp` and record, read where the locator finds them.
+    /// A member's `.redlamp` and record, read where the locator finds them. A `.redlamp` the record says the
+    /// last sync read, and that's gone, holds nothing: the `.xmp` loses what it had from it.
     private func side(_ member: Member, _ context: XMPSyncContext) -> Side {
         let photo = url(member.name)
         var side = Side(member: member, photo: photo)
         side.record = member.record.flatMap { context.records[$0.id] }
         let onThisMac = context.locator.onThisMac(photo)
-        guard member.besideSidecar || onThisMac.map({ FileManager.default.fileExists(atPath: $0.path) }) == true
-        else { return side }
         let sidecar = context.locator.readURL(for: photo)
         var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: sidecar.path, isDirectory: &isDirectory) else { return side }
+        guard member.besideSidecar || onThisMac.map({ FileManager.default.fileExists(atPath: $0.path) }) == true,
+              FileManager.default.fileExists(atPath: sidecar.path, isDirectory: &isDirectory)
+        else {
+            if side.record?.redlamp != nil {
+                side.redlamp = XMPFields()
+                side.removed = true
+            }
+            return side
+        }
         let edit = isDirectory.boolValue ? sidecar.appending(path: SidecarStore.editFile) : sidecar
         side.editStamp = XMPFileStamp(at: edit)
         if let record = side.record, XMPFileStamp.same(record.redlamp, side.editStamp) {
@@ -389,13 +399,17 @@ extension XMPGroup {
             fields: member.camera == nil ? context.fields.subtracting([.captureTime]) : context.fields,
             otherIsLater: otherIsLater,
         )
+        if side.removed {
+            side.merge?.taken = []
+        }
     }
 
     private func photo(_ side: Side, other: XMPFields, merged: XMPFields, unchanged: Bool) -> XMPPhotoSync {
         XMPPhotoSync(
             photo: side.id, path: side.photo.path, sidecar: shared != nil ? url(sharedName).path : nil,
             sharedWith: members.map(\.name).filter { $0 != side.member.name },
-            darktable: side.member.darktable.map { url($0.name).path }, other: other, redlamp: side.redlamp,
+            darktable: side.member.darktable.map { url($0.name).path }, other: other,
+            redlamp: side.removed ? nil : side.redlamp,
             merged: merged, taken: side.merge?.taken ?? [], kept: side.merge?.kept ?? [], unwritten: side.unwritten,
             unchanged: unchanged, problem: side.problem,
         )

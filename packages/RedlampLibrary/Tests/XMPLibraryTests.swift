@@ -116,6 +116,37 @@ struct XMPLibraryTests {
         #expect(sandbox.metadata("IMG_0003.NEF")?.rating == 2)
     }
 
+    @Test func `a .redlamp gone since the last sync takes back what it gave the .xmp, keeping other apps' changes`(
+    ) async throws {
+        let sandbox = try await XMPSandbox.make()
+        defer { sandbox.remove() }
+        let photo = try sandbox.photo("IMG_0004.ARW")
+        try sandbox.sidecar("IMG_0004.ARW", PhotoMetadata(rating: 3, label: .blue))
+        try await sandbox.indexAll()
+        try await sandbox.xmp.setSettings(XMPSettings(writes: true))
+        #expect(try await sandbox.sync().photo("IMG_0004.ARW")?.written == [.rating, .label])
+
+        // Another app adds a keyword; then the .redlamp goes, as the Undo of the batch that made it removes it.
+        try sandbox.write(
+            "IMG_0004.xmp",
+            OtherApps.lightroom(rating: 3, label: "Blue", keywords: ["Birds"]),
+            modified: 60,
+        )
+        try FileManager.default.removeItem(at: SidecarLocator.besidePhoto(photo))
+        let report = try await sandbox.sync()
+        let synced = try #require(report.photo("IMG_0004.ARW"))
+        #expect(synced.problem == nil && synced.taken == [] && synced.redlamp == nil)
+        #expect(synced.written.contains(.rating) && synced.written.contains(.label))
+        let fields = try #require(XMPSource(xmp: Data(contentsOf: sandbox.url("IMG_0004.xmp")))).fields
+        #expect(fields.rating == nil && fields.label == nil, "what the .redlamp gave the .xmp is taken back")
+        #expect(fields.keywords == ["Birds"], "the other app's keyword stays")
+        #expect(!sandbox.exists("IMG_0004.ARW.redlamp"), "no .redlamp is made for it")
+
+        let after = try sandbox.text("IMG_0004.xmp")
+        #expect(try await sandbox.sync().xmpWritten.isEmpty)
+        #expect(try sandbox.text("IMG_0004.xmp") == after, "the .xmp is other apps' from then on")
+    }
+
     @Test func `an .xmp rewritten keeps every element and namespace Redlamp doesn't own, byte for byte`() async throws {
         let sandbox = try await XMPSandbox.make()
         defer { sandbox.remove() }
