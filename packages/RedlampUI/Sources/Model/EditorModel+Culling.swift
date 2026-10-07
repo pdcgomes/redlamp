@@ -287,6 +287,9 @@ public extension EditorModel {
             }
             library.service?.photosChanged(cullingQueue.finished(sequence))
             cullingOverlay.finished(sequence)
+            if step.field == .label {
+                refreshCustomLabels()
+            }
         }
     }
 
@@ -493,6 +496,27 @@ public extension EditorModel {
             }
         }
         remember(Array(names))
+    }
+
+    /// Reads the library's custom labels and their counts again, once the read under way is done: when
+    /// other photos are shown, and after a change to labels.
+    internal func refreshCustomLabels() {
+        guard let service = library.service, service.isReady else { return }
+        guard customLabelsReading == nil else {
+            customLabelsStale = true
+            return
+        }
+        customLabelsReading = Task { [weak self] in
+            let counts = await service.customLabels()
+            guard let self else { return }
+            customLabelCounts = counts
+            remember(counts.map(\.name))
+            customLabelsReading = nil
+            if customLabelsStale {
+                customLabelsStale = false
+                refreshCustomLabels()
+            }
+        }
     }
 
     private func remember(_ names: [String]) {

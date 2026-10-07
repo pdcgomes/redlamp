@@ -297,6 +297,21 @@ struct MetadataChangeTests {
         #expect(sandbox.sidecar(paths[1])?.metadata?.rating == 5 && sandbox.sidecar(paths[3]) == nil)
     }
 
+    @Test func `the library's custom labels are listed with how many photos have each`() async throws {
+        let (sandbox, _, ids) = try await Self.library()
+        defer { sandbox.remove() }
+        let metadata = LibraryMetadata(index: sandbox.index, paths: sandbox.paths)
+        #expect(try await metadata.customLabels().isEmpty)
+        try await metadata.apply(.set([.namedLabel("Second Look")], on: Array(ids.prefix(3))))
+        try await metadata.apply(.set([.namedLabel("Client 2")], on: [ids[5]]))
+        try await metadata.apply(.set([.namedLabel("Client 10")], on: [ids[6], ids[7]]))
+        try await metadata.apply(.set([.namedLabel("Red")], on: [ids[8]]))
+        #expect(try await metadata.customLabels() == [
+            CustomLabelCount(name: "Client 2", photos: 1), CustomLabelCount(name: "Client 10", photos: 2),
+            CustomLabelCount(name: "Second Look", photos: 3),
+        ])
+    }
+
     @Test func `a batch a forced quit stopped is finished or rolled back at the next launch`() async throws {
         let (sandbox, paths, ids) = try await Self.library()
         defer { sandbox.remove() }

@@ -86,6 +86,9 @@ public extension EditorModel {
         if diff.reset || !diff.removed.isEmpty || !diff.inserted.isEmpty {
             keepSelectionShown()
         }
+        if diff.reset {
+            refreshCustomLabels()
+        }
         if library.isFiltered, diff.reset || !diff.removed.isEmpty, let selection, library.index(of: selection) == nil {
             if libraryFilters?.isTyping != true {
                 keepActivePhotoShown()

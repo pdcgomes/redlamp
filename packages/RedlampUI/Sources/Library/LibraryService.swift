@@ -537,6 +537,11 @@ public final class LibraryService {
         }) ?? [:]
     }
 
+    /// The custom labels the library's photos have, with how many have each.
+    func customLabels() async -> [CustomLabelCount] {
+        await (try? metadata?.customLabels()) ?? []
+    }
+
     /// Runs `plan`, telling the lists of its photos once the index holds it (when its first sidecar is
     /// written, or when it's done if it writes none); a batch that fails has been rolled back.
     private nonisolated static func run(

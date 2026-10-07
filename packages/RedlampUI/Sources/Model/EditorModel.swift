@@ -638,8 +638,14 @@ public final class EditorModel {
     /// The Library's culling changes, newest last, for Undo; and those Undo took back, for Redo.
     var cullingUndo: [CullingStep] = []
     var cullingRedo: [CullingStep] = []
-    /// The custom labels the photos shown and the culling of this session have, for the menus and the palette.
+    /// The custom labels the photos shown, the library and the culling of this session have, for the menus and
+    /// the palette.
     public internal(set) var customLabels: [String] = []
+    /// The library's custom labels, each with how many of its photos have it, by name.
+    public internal(set) var customLabelCounts: [CustomLabelCount] = []
+    @ObservationIgnored var customLabelsReading: Task<Void, Never>?
+    /// The library's custom labels changed while they were being read.
+    @ObservationIgnored var customLabelsStale = false
     /// The culling changes being made in the background, one after another.
     @ObservationIgnored let cullingQueue = CullingQueue()
     @ObservationIgnored var cullingTail: Task<Void, Never>?

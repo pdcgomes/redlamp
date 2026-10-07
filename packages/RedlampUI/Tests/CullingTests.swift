@@ -300,11 +300,15 @@ struct CullingTests {
             try paths.map { try reader.photo(path: $0)?.customLabel }
         }
         #expect(rows == ["Client Picks", "Client Picks", "Client Picks", "Client Picks", nil, nil])
+        try await folder.eventually { model.customLabelCounts == [CustomLabelCount(name: "Client Picks", photos: 4)] }
+        #expect(model.customLabelCounts == [CustomLabelCount(name: "Client Picks", photos: 4)], "the library's count")
 
         #expect(model.perform(.clearLabel))
         #expect((0 ... 3).allSatisfy { folder.shown($0).customLabel == nil && folder.shown($0).label == nil })
         await folder.written()
         #expect((0 ... 3).allSatisfy { folder.sidecar($0)?.customLabel == nil })
+        try await folder.eventually { model.customLabelCounts.isEmpty }
+        #expect(model.customLabelCounts.isEmpty && model.customLabels == ["Client Picks"], "still offered")
     }
 
     @Test func `the rating keys' ] and [ step each photo's own rating, as one Undo`() async throws {

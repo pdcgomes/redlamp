@@ -340,6 +340,14 @@ public final class LibraryMetadata: Sendable {
         }
     }
 
+    // MARK: - Custom labels
+
+    /// The custom labels the library's photos have, each with how many photos have it, by name: for the
+    /// menus, the palette and completion.
+    public func customLabels() async throws -> [CustomLabelCount] {
+        try await index.read { try $0.customLabelCounts() }
+    }
+
     // MARK: - Helpers
 
     /// Runs `body` after the batches asked for before it.

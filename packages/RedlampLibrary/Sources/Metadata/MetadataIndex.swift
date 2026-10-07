@@ -2,7 +2,28 @@ import Foundation
 import RedlampDocument
 import RedlampEngineAPI
 
+/// A custom label the library's photos have, and how many have it.
+public struct CustomLabelCount: Sendable, Hashable {
+    public let name: String
+    public let photos: Int
+
+    public init(name: String, photos: Int) {
+        self.name = name
+        self.photos = photos
+    }
+}
+
 extension IndexQueries {
+    /// Each custom label the photos have, with how many have it, in Finder's order of their names.
+    func customLabelCounts() throws -> [CustomLabelCount] {
+        let statement = try database.cached("""
+        SELECT custom_label, COUNT(*) FROM photos WHERE custom_label IS NOT NULL AND custom_label != ''
+        GROUP BY custom_label
+        """)
+        return try statement.map { CustomLabelCount(name: $0.string(at: 0) ?? "", photos: $0.int(at: 1)) }
+            .sorted { FinderOrder.compare($0.name, $1.name) < 0 }
+    }
+
     /// What the index shows of `keys` for each of `ids`, as the sidecar writes them, and which of the
     /// fields are other apps'; the photos the index doesn't have are left out.
     func metadataValues(ofPhotos ids: [Int64], keys: Set<String>) throws
