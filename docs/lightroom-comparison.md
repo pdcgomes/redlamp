@@ -254,7 +254,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Metadata editing and presets | Yes | In progress | | P4 | LIB-22 | IPTC fields on many photos at once, presets that replace, append or prefix, and capture times shifted or set, each with Undo, carried into exports |
 | Collections and smart collections | Yes | In progress | | P4 | LIB-23 | Saved in each photo's sidecar by path, so moving photos never breaks them; smart collections kept current, with stacks |
 | Metadata shared with other apps (XMP) | Yes | In progress | | P4 | LIB-24 | Other apps' XMP is read, a corrected capture time included; standard `.xmp` sidecars are written only when you turn it on (Settings › Library, as Lightroom's Automatically write changes into XMP), after each change and its Undo, and originals are never changed |
-| Import from cards and cameras | Yes | In progress | | P4 | LIB-27 | With a backup copy |
+| Import from cards and cameras | Yes | In progress | | P4 | LIB-27 | A card's photos browsed and culled from their previews before copying, those already imported left out; folder and name templates with a live example; a backup copy; every copy verified before a card is said to be safe to erase; the window opening when a card is inserted |
 | Moving files and folders | Yes (Classic) | In progress | | P4 | LIB-26 | With a preview and Undo, and Recently Trashed to put photos back after Undo is gone |
 | Stacks | Yes | In progress | | P4 | LIB-28 | Raw and JPEG pairs, bursts and focus stacks |
 | Bringing a Lightroom Classic catalog | Yes | Planned | | P4 | LIB-29, LIB-30 | Ratings, flags, labels, keywords and collections, from a copy of the catalog, with a report; Capture One and darktable libraries too |
