@@ -58,4 +58,5 @@ $P score.py && $P analyze.py && $P real_pairs.py score && $P figures.py
 | `fetch_rawnind.py`, `real_pairs.py` | A RawNIND subset; crops, exposure matching and fitted noise profiles; scores at full resolution and binned |
 | `score.py`, `analyze.py` | Fidelity, texture, slanted-edge MTF50, false colour, flat noise, shadow cast; `summary.md` |
 | `figures.py` | The note's figures, from CC0 and synthetic sources only |
+| `run_rawrefinery.py` | RawRefinery's and RawForge's models (the [RawRefinery study](../../../docs/research/rawrefinery-findings.md)): fetched and checked against the author's signatures, run with the inputs RawForge gives them, on both test sets; float16, conditioning and the study's figures |
 | `models/` | The port of Gharbi's noise-aware Caffe model, smoke tests for every model, and an import stub for a CUDA-only package |
