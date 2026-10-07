@@ -1,4 +1,4 @@
 // Semver, with the stage as a pre-release suffix until 1.0: -prealpha, then -alpha and -beta.
-MARKETING_VERSION = 0.2.5-prealpha
+MARKETING_VERSION = 0.2.6-prealpha
 // Release builds replace this with the number of commits on main, so build numbers only go up.
 CURRENT_PROJECT_VERSION = 1
