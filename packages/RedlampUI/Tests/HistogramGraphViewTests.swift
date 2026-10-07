@@ -9,13 +9,21 @@ import Testing
 /// renders (RESP-05).
 ///
 /// The look is compared with references drawn at a scale of 1, in the dark appearance and in
-/// sRGB, whatever the screen's and the system's, so one set serves every Mac: CI's runner is in
-/// Light mode, on a display of its own. To record them again, run with
+/// sRGB, whatever the screen's and the system's: CI's runner is in Light mode, on a display of
+/// its own. Symbol images are sized for the sharpest screen attached, so the clipping triangles
+/// come out a little differently on a Mac whose screens are all at a scale of 1, such as the
+/// runner, which has references of its own in Golden/1x. To record the Mac's set again, run with
 /// `TEST_RUNNER_REDLAMP_RECORD_HISTOGRAM=1`.
 @MainActor @Suite(.serialized)
 struct HistogramGraphViewTests {
-    static let goldenURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-        .appending(path: "Golden")
+    static var goldenFolder: String {
+        NSScreen.screens.contains { $0.backingScaleFactor > 1 } ? "Golden" : "Golden/1x"
+    }
+
+    static var goldenURL: URL {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: goldenFolder)
+    }
+
     static let recording = ProcessInfo.processInfo.environment["REDLAMP_RECORD_HISTOGRAM"] == "1"
 
     private final class Draws {
@@ -195,7 +203,9 @@ struct HistogramGraphViewTests {
             return
         }
         guard FileManager.default.fileExists(atPath: url.path) else {
-            Issue.record("Tests/Golden/\(name).png is missing: run with TEST_RUNNER_REDLAMP_RECORD_HISTOGRAM=1")
+            Issue.record(
+                "Tests/\(Self.goldenFolder)/\(name).png is missing: run with TEST_RUNNER_REDLAMP_RECORD_HISTOGRAM=1",
+            )
             return
         }
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
