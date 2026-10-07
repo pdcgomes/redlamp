@@ -4,9 +4,9 @@
 
     /// The snapshot script's sheets: the Export dialog, and a sheet captured over its window.
     extension DebugSnapshot {
-        /// Chooses Export… in the File menu, and with `scrolledToEnd` turns a mouse wheel over the
-        /// dialog's settings once it's up. SwiftUI enables a menu's items as the menu opens, so it
-        /// is brought up to date first. The dialog's modal loop holds main-actor tasks until it
+        /// Chooses Export… in the File menu, and with `scrolledToEnd` scrolls the dialog's
+        /// settings to the last one once it's up. SwiftUI enables a menu's items as the menu
+        /// opens, so it is brought up to date first. The dialog's modal loop holds main-actor tasks until it
         /// closes but runs the main run loop's common modes, so the work is scheduled there, and
         /// this comes last in a script.
         static func openExport(scrolledToEnd: Bool) {
@@ -31,21 +31,15 @@
             CFRunLoopWakeUp(CFRunLoopGetMain())
         }
 
-        /// Turns a mouse wheel over the middle of the open sheet, further than its content goes.
+        /// Scrolls the open sheet's scroll view under its middle to the end. A scroll wheel made
+        /// in the app reaches no scroll view, so the snapshot moves it as the scroller would.
         private static func scrollSheetToEnd() {
             guard let sheet = NSApp.windows.lazy.compactMap(\.attachedSheet).first,
                   let root = sheet.contentView,
-                  let view = root.hitTest(NSPoint(x: root.bounds.midX, y: root.bounds.midY))
+                  let view = root.hitTest(NSPoint(x: root.bounds.midX, y: root.bounds.midY)),
+                  let scroll = view.enclosingScrollView, let document = scroll.documentView
             else { return }
-            let location = sheet.convertPoint(toScreen: NSPoint(x: root.bounds.midX, y: root.bounds.midY))
-            for _ in 0 ..< 40 {
-                guard let wheel = CGEvent(
-                    scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: -5, wheel2: 0, wheel3: 0,
-                ) else { return }
-                wheel.location = CGPoint(x: location.x, y: (NSScreen.screens.first?.frame.height ?? 0) - location.y)
-                guard let event = NSEvent(cgEvent: wheel) else { return }
-                view.scrollWheel(with: event)
-            }
+            document.scroll(NSPoint(x: 0, y: document.isFlipped ? document.bounds.maxY : 0))
         }
 
         /// The window, then the sheet at its place on it, on a canvas holding both.
