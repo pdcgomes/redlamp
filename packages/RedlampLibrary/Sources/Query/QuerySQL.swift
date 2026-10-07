@@ -320,17 +320,19 @@ extension IndexQueries {
 
 /// The query language's text matching and name order, as SQL functions and a collation:
 /// `redlamp_contains` a substring, `redlamp_named` a name, `redlamp_keyword` a keyword's or a
-/// collection's path, `redlamp_within` a keyword inside another.
+/// collection's path, `redlamp_within` a keyword inside another, and `redlamp_text` text as the
+/// text index holds it (`QueryText.indexed`).
 enum QueryFunctions {
     /// Registers them on `database`'s connection, once.
     static func register(on database: SQLiteDatabase) throws {
         let probe = "SELECT redlamp_contains('', ''), redlamp_named('', ''), redlamp_keyword('', ''),"
-            + " redlamp_within('', ''), '' COLLATE redlamp_finder"
+            + " redlamp_within('', ''), redlamp_text(''), '' COLLATE redlamp_finder"
         if (try? database.cached(probe)) != nil {
             return
         }
         let flags = SQLITE_UTF8 | SQLITE_DETERMINISTIC
         let results = [
+            sqlite3_create_function_v2(database.handle, "redlamp_text", 1, flags, nil, textFunction, nil, nil, nil),
             sqlite3_create_function_v2(
                 database.handle,
                 "redlamp_contains",
@@ -386,6 +388,21 @@ private func keywordFunction(_ context: OpaquePointer?, _: Int32, _ values: Unsa
         return sqlite3_result_int(context, 0)
     }
     sqlite3_result_int(context, KeywordQuery.matches(path: path, value: value) ? 1 : 0)
+}
+
+/// Text other than all ASCII as the text index holds it; anything else as it is.
+private func textFunction(_ context: OpaquePointer?, _: Int32, _ values: UnsafeMutablePointer<OpaquePointer?>?) {
+    guard let value = values?[0] else { return sqlite3_result_null(context) }
+    guard sqlite3_value_type(value) == SQLITE_TEXT, let text = sqlite3_value_text(value) else {
+        return sqlite3_result_value(context, value)
+    }
+    let bytes = UnsafeBufferPointer(start: text, count: Int(sqlite3_value_bytes(value)))
+    guard bytes.contains(where: { $0 >= 0x80 }) else { return sqlite3_result_value(context, value) }
+    let indexed = QueryText.indexed(String(decoding: bytes, as: UTF8.self))
+    sqlite3_result_text64(
+        context, indexed, sqlite3_uint64(indexed.utf8.count), unsafeBitCast(-1, to: sqlite3_destructor_type.self),
+        UInt8(SQLITE_UTF8),
+    )
 }
 
 private func withinFunction(_ context: OpaquePointer?, _: Int32, _ values: UnsafeMutablePointer<OpaquePointer?>?) {

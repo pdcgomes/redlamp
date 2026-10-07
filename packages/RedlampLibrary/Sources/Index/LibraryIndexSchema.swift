@@ -7,7 +7,7 @@ extension LibraryIndex {
     /// The schema's steps in order: the first makes version 1 from an empty database.
     static let migrations: [Migration] = [
         createVersion1, migrateToVersion2, migrateToVersion3, migrateToVersion4, migrateToVersion5,
-        migrateToVersion6,
+        migrateToVersion6, migrateToVersion7,
     ]
 
     static func createVersion1(_ database: SQLiteDatabase) throws {
@@ -32,6 +32,11 @@ extension LibraryIndex {
 
     static func migrateToVersion6(_ database: SQLiteDatabase) throws {
         try database.execute(schemaVersion6)
+    }
+
+    static func migrateToVersion7(_ database: SQLiteDatabase) throws {
+        try QueryFunctions.register(on: database)
+        try database.execute(schemaVersion7)
     }
 
     /// Brings `database` up to the last version `migrations` knows, one step per transaction.
@@ -184,5 +189,19 @@ extension LibraryIndex {
       format INTEGER NOT NULL DEFAULT 0, damage INTEGER NOT NULL DEFAULT 0, missing INTEGER, reason TEXT,
       end_unread INTEGER NOT NULL DEFAULT 0, extension TEXT);  -- photo is photos.id; damage: PhotoHealth.Damage
     CREATE INDEX photo_health_unread ON photo_health (photo) WHERE end_unread != 0;
+    """
+
+    /// Text that ignores accents and width, as the small tables and completion do (DEC-45): the text
+    /// index built again with the trigram tokenizer's `remove_diacritics 1`, and every photo's text
+    /// written again from the view folded as the writer now folds it (`redlamp_text`), in one
+    /// statement as version 2's was.
+    static let schemaVersion7 = """
+    DROP TABLE photo_text;
+    CREATE VIRTUAL TABLE photo_text USING fts5(name, keywords, title, caption,
+      content='', contentless_delete=1, tokenize='trigram remove_diacritics 1');  -- rowid is photos.id
+
+    INSERT INTO photo_text (rowid, name, keywords, title, caption)
+      SELECT id, redlamp_text(name), redlamp_text(keywords), redlamp_text(title), redlamp_text(caption)
+      FROM photo_text_rows;
     """
 }

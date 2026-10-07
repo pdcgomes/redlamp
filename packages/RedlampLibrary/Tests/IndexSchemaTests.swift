@@ -42,7 +42,8 @@ struct IndexSchemaTests {
             "collection_photos", "photo_text", "settings",
         ]
         #expect(designed.isSubset(of: tables))
-        #expect(text?.contains("tokenize='trigram'") == true && text?.contains("contentless_delete=1") == true)
+        #expect(text?.contains("tokenize='trigram remove_diacritics 1'") == true)
+        #expect(text?.contains("contentless_delete=1") == true)
         #expect(
             writer == ["wal", "1", "\(1 << 30)", "2", "-16384", "\(Self.version)"],
             "WAL, NORMAL, 1 GB mapped, in memory, 16 MB",

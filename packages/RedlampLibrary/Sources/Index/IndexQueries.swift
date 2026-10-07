@@ -167,15 +167,14 @@ public extension IndexQueries {
     // MARK: - Text, keywords, cameras and lenses
 
     /// The IDs of the photos whose name, keywords, title or caption contain `text`, ignoring case,
-    /// in ID order, or only those whose `column` does. Text shorter than three characters matches
-    /// nothing, since the index holds trigrams.
+    /// accents and width, in ID order, or only those whose `column` does. Text shorter than three
+    /// characters matches nothing, since the index holds trigrams.
     func photoIDs(matching text: String, in column: LibraryIndex.TextColumn? = nil, limit: Int? = nil) throws
         -> [Int64] {
-        let phrase = "\"" + text.replacingOccurrences(of: "\"", with: "\"\"") + "\""
         let statement = try database.cached(
             "SELECT rowid FROM photo_text WHERE photo_text MATCH ? ORDER BY rowid LIMIT ?",
         )
-        try statement.bind(column.map { "\($0.rawValue) : \(phrase)" } ?? phrase, at: 1)
+        try statement.bind(QueryText.match(text, in: column), at: 1)
         try statement.bind(limit ?? -1, at: 2)
         return try statement.map { $0.int64(at: 0) }
     }

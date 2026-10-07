@@ -23,20 +23,22 @@ struct QueryAccentTests {
                 let ids = try writer.upsertPhotos([
                     PhotoRecord(
                         folder: #require(folders["Viagens/São Paulo 2019"]), name: "SP-0001.JPG",
+                        title: "Avenida Paulista à noite", caption: "Café da manhã em São Paulo",
                         customLabel: "Célèbre", creator: "João Costa",
                         location: PhotoLocation(country: "Brasil", city: "São Paulo"),
                     ),
                     PhotoRecord(
-                        folder: #require(folders["Reisen/Zu\u{308}rich"]), name: "ZH-0001.JPG",
-                        location: PhotoLocation(country: "Schweiz", city: "Zürich"),
+                        folder: #require(folders["Reisen/Zu\u{308}rich"]), name: "ZH-0001.JPG", title: "Zürichsee",
+                        caption: "Grossmu\u{308}nster", location: PhotoLocation(country: "Schweiz", city: "Zürich"),
                     ),
-                    PhotoRecord(folder: #require(folders["Cafés"]), name: "Café-0001.JPG"),
+                    PhotoRecord(folder: #require(folders["Cafés"]), name: "Café-0001.JPG", title: "Au lait"),
                     PhotoRecord(
-                        folder: #require(folders["ＴＯＫＹＯ"]), name: "IMG_0001.JPG", creator: "ＡＣＭＥ",
-                        location: PhotoLocation(city: "Ｔｏｋｙｏ"),
+                        folder: #require(folders["ＴＯＫＹＯ"]), name: "IMG_0001.JPG", title: "ＦＵＬＬ ＷＩＤＴＨ",
+                        caption: "ｶﾀｶﾅ", creator: "ＡＣＭＥ", location: PhotoLocation(city: "Ｔｏｋｙｏ"),
                     ),
                     PhotoRecord(
-                        folder: #require(folders["Plain"]), name: "Plain.JPG", customLabel: "Celebre", creator: "Joao",
+                        folder: #require(folders["Plain"]), name: "Plain.JPG", title: "Full width",
+                        caption: "Zurich lake, Sao Paulo cafe", customLabel: "Celebre", creator: "Joao",
                         location: PhotoLocation(city: "Zurich"),
                     ),
                 ])
@@ -105,6 +107,38 @@ struct QueryAccentTests {
         let library = try await Library.make()
         defer { library.sandbox.remove() }
         for (text, expected) in Self.smallTables {
+            let (columns, sql) = try await library.numbers(text)
+            #expect(columns == expected, "\(text) with the column store")
+            #expect(sql == expected, "\(text) with SQL")
+        }
+    }
+
+    static let textIndex: [(String, [Int])] = [
+        ("title:zurich", [2]),
+        ("title:\"full width\"", [4, 5]),
+        ("title:ｆｕｌｌ", [4, 5]),
+        ("title:\"paulista a noite\"", [1]),
+        ("caption:\"sao paulo\"", [1, 5]),
+        ("caption:são", [1, 5]),
+        ("caption:grossmunster", [2]),
+        ("caption:GROSSMÜNSTER", [2]),
+        ("caption:カタカナ", [4]),
+        ("name:cafe", [3]),
+        ("name:CAFÉ-0", [3]),
+        ("zurichsee", [2]),
+        ("grossmünster", [2]),
+        ("cafe", [1, 3, 5]),
+        ("\"sao paulo\"", [1, 5]),
+        ("tokyo", [4, 5]),
+        ("\"brasil/sao\"", [1]),
+        ("ＷＩＤＴＨ", [4, 5]),
+    ]
+
+    @Test func `names, keywords, titles and captions match without accents or width, through the text index`(
+    ) async throws {
+        let library = try await Library.make()
+        defer { library.sandbox.remove() }
+        for (text, expected) in Self.textIndex {
             let (columns, sql) = try await library.numbers(text)
             #expect(columns == expected, "\(text) with the column store")
             #expect(sql == expected, "\(text) with SQL")

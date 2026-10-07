@@ -46,12 +46,14 @@ public final class LibraryIndex: Sendable {
     /// The design's settings: WAL, so readers never wait for the writer; `synchronous=NORMAL`,
     /// so a commit doesn't wait for the disk (a power cut can lose the last commits, never the
     /// database); mapped reads, whose clean pages don't count against Redlamp's memory; and a
-    /// 16 MB page cache per connection.
+    /// 16 MB page cache per connection. The writer has the query language's functions, which fold
+    /// the text it indexes (`redlamp_text`).
     private static func configure(_ database: SQLiteDatabase, writing: Bool) throws {
         if writing {
             let mode = try database.prepare("PRAGMA journal_mode = WAL").first { $0.string(at: 0) ?? "" }
             guard mode == "wal" else { throw LibraryIndexError.walUnavailable(journalMode: mode ?? "") }
             try database.execute("PRAGMA synchronous = NORMAL")
+            try QueryFunctions.register(on: database)
         }
         try database.execute("""
         PRAGMA busy_timeout = 5000;

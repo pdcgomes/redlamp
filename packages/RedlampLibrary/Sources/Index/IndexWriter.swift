@@ -494,15 +494,19 @@ extension LibraryIndex.Writer {
     }
 
     /// Writes the text of the photos in `adding`, which have none in `photo_text` yet, and of those
-    /// in `replacing`, from `photo_text_rows`. Its statements open no savepoint, so FTS5 keeps the
-    /// terms in memory until the transaction commits; a photo that's gone gets no text.
+    /// in `replacing`, from `photo_text_rows`, folded as the index holds text (`redlamp_text`). Its
+    /// statements open no savepoint, so FTS5 keeps the terms in memory until the transaction
+    /// commits; a photo that's gone gets no text.
     func writeText(adding added: [Int64] = [], replacing replaced: [Int64]) throws {
         let delete = try database.cached("DELETE FROM photo_text WHERE rowid = ?")
         for id in replaced {
             try delete.bind(id, at: 1)
             try delete.run()
         }
-        let select = try database.cached("SELECT name, keywords, title, caption FROM photo_text_rows WHERE id = ?")
+        let select = try database.cached("""
+        SELECT redlamp_text(name), redlamp_text(keywords), redlamp_text(title), redlamp_text(caption)
+        FROM photo_text_rows WHERE id = ?
+        """)
         let insert = try database.cached("""
         INSERT INTO photo_text (rowid, name, keywords, title, caption) VALUES (?, ?, ?, ?, ?)
         """)

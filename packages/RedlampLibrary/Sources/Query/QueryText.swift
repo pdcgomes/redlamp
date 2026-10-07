@@ -4,15 +4,24 @@ import Foundation
 /// (DEC-45). The column engine and the SQL it compiles to call the same functions (`QuerySQL`
 /// registers them with SQLite), so both answer alike.
 enum QueryText {
-    /// Whether the trigram index can search for `text`: three characters or more, as SQLite counts
-    /// them (Unicode scalars).
+    /// Whether the trigram index can search for `text`: three characters or more as the index holds
+    /// text (`indexed`), as SQLite counts them (Unicode scalars).
     static func isSearchable(_ text: String) -> Bool {
-        text.unicodeScalars.count >= 3
+        indexed(text).unicodeScalars.count >= 3
     }
 
     /// `text` with its case, accents and width folded, as completion compares names.
     static func folded(_ text: some StringProtocol) -> String {
         text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
+    }
+
+    /// `text` as the text index holds it and is searched for there: folded (`folded`) and composed,
+    /// so its trigrams are of whole characters; ASCII as it is, since the tokenizer folds its case.
+    /// The trigram tokenizer's `remove_diacritics` takes accents only from Latin letters (Greek ό,
+    /// Cyrillic ё and ß stay) and folds no width, and the index keeps no copy of the text to fold
+    /// later, so the writer folds it on the way in (`redlamp_text`).
+    static func indexed(_ text: String) -> String {
+        text.utf8.allSatisfy { $0 < 0x80 } ? text : folded(text).precomposedStringWithCanonicalMapping
     }
 
     /// `part` anywhere in `text`, ignoring case, accents and width, byte by byte (`FoldedText`).
@@ -53,9 +62,10 @@ enum QueryText {
         return left == right
     }
 
-    /// An FTS5 query for `text` as one phrase, in every column of `photo_text` or only `column`.
+    /// An FTS5 query for `text` as one phrase, folded as the index holds text (`indexed`), in every
+    /// column of `photo_text` or only `column`.
     static func match(_ text: String, in column: LibraryIndex.TextColumn? = nil) -> String {
-        let phrase = "\"" + text.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+        let phrase = "\"" + indexed(text).replacingOccurrences(of: "\"", with: "\"\"") + "\""
         return column.map { "\($0.rawValue) : \(phrase)" } ?? phrase
     }
 }
