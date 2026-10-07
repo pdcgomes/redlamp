@@ -10,10 +10,11 @@ import Synchronization
 /// change tracking, over the folders in Folders.
 ///
 /// It opens at launch off the main thread: the index (from its newest good snapshot when it's
-/// damaged), the column store and the thumbnail store, then it finishes a sidecar move a quit
-/// interrupted. It indexes the folders in Folders and keeps them current, and `FolderLibrary`
-/// shows a folder it has indexed from a photo list. Until it's open, and for a folder it hasn't
-/// indexed, `FolderLibrary` lists folders itself, as it does with the library off
+/// damaged), the column store and the thumbnail store. Then, before any other change, it finishes or
+/// rolls back the file operations and metadata batches a forced quit cut short, and it finishes a
+/// sidecar move a quit interrupted. It indexes the folders in Folders and keeps them current, and
+/// `FolderLibrary` shows a folder it has indexed from a photo list. Until it's open, and for a folder
+/// it hasn't indexed, `FolderLibrary` lists folders itself, as it does with the library off
 /// (`defaults write app.redlamp.mac LibraryEnabled -bool NO`) or when the index can't open.
 ///
 /// A folder is shown from the library once it's indexed as its last listing found it and that
@@ -50,8 +51,6 @@ public final class LibraryService {
     /// Culling's batches (LIB-15), once the library is open. Lists hear of them from culling, which knows
     /// whether a change asked for since will change the same photos again (`CullingQueue`).
     private(set) var metadata: LibraryMetadata?
-    /// Finishing the batches a forced quit interrupted, which every batch after them waits for.
-    private var recovering: Task<Void, Never>?
     /// The roots followed, as the index keeps their paths.
     private(set) var roots: [String] = []
     private var opening: Task<Void, Never>?
@@ -145,9 +144,7 @@ public final class LibraryService {
             self.core = core
             let metadata = LibraryMetadata(index: core.index, paths: core.paths)
             self.metadata = metadata
-            recovering = Task.detached(priority: .userInitiated) {
-                _ = try? await metadata.recover()
-            }
+            core.recover(metadata)
             defaults?.removeObject(forKey: Self.damagedKey)
             placed(core.locator)
             state = .ready
@@ -249,6 +246,7 @@ public final class LibraryService {
     private nonisolated static func follow(
         _ paths: [String], core: LibraryCore, report: @escaping @Sendable (Progress) async -> Void,
     ) async {
+        await core.recovered()
         let roots = paths.filter { !isInICloudDrive($0) }
         let known = await Set((try? core.index.read { try $0.roots().map(\.path) }) ?? [])
         let added = roots.filter { !known.contains($0) }
@@ -414,16 +412,14 @@ public final class LibraryService {
 
     // MARK: - Culling (LIB-15)
 
-    /// Gives each of `photos` its own fields (`fields`, by place), as one batch off the main thread, after
-    /// the batches a forced quit left unfinished. Lists hear of its photos once the index holds it, as
+    /// Gives each of `photos` its own fields (`fields`, by place), as one batch off the main thread, in the
+    /// library's changes' turn (`LibraryCore.change`). Lists hear of its photos once the index holds it, as
     /// `queue` allows for change `sequence`; the photos the index doesn't have are left for their own saves.
     func cull(
         _ photos: [URL], fields: [[MetadataField]], sequence: UInt64, queue: CullingQueue,
     ) async -> CullingWritten {
         guard let core, let metadata else { return CullingWritten(unindexed: photos) }
-        let recovering = recovering
-        return await Task.detached(priority: .userInitiated) {
-            await recovering?.value
+        return await core.change {
             let ids = await Self.indexIDs(of: photos, in: core.index)
             var written = CullingWritten(ids: Dictionary(ids.map { ($1, $0) }) { first, _ in first })
             var each: [Int64: [MetadataField]] = [:]
@@ -451,7 +447,7 @@ public final class LibraryService {
             }
             core.live.photosChanged(queue.indexed([], by: sequence))
             return written
-        }.value
+        }
     }
 
     /// Takes back `batches`, newest first, as `cull` makes them; `photos` are their photos by index ID. The
@@ -470,17 +466,15 @@ public final class LibraryService {
     func redoCulling(
         _ undos: [UUID], photos: [Int64: URL], sequence: UInt64, queue: CullingQueue,
     ) async -> CullingWritten? {
-        guard let metadata else { return nil }
-        let recovering = recovering
-        let plans: [MetadataPlan]? = await Task.detached(priority: .userInitiated) {
-            await recovering?.value
+        guard let core, let metadata else { return nil }
+        let plans: [MetadataPlan]? = await core.change {
             var plans: [MetadataPlan] = []
             for undo in undos.reversed() {
                 guard let plan = try? await metadata.planRedo(undo) else { return nil }
                 plans.append(plan)
             }
             return plans
-        }.value
+        }
         guard let plans else { return nil }
         return await runCulling(
             plans.map { plan -> CullingPlanning in { _ in plan } }, photos: photos, sequence: sequence, queue: queue,
@@ -490,14 +484,12 @@ public final class LibraryService {
     /// A batch to run, planned when it's its turn.
     private typealias CullingPlanning = @Sendable (LibraryMetadata) async throws -> MetadataPlan
 
-    /// Runs each of `plans` in turn, off the main thread, after the batches a forced quit left unfinished.
+    /// Runs each of `plans` in turn, off the main thread, in the library's changes' turn.
     private func runCulling(
         _ plans: [CullingPlanning], photos: [Int64: URL], sequence: UInt64, queue: CullingQueue,
     ) async -> CullingWritten {
         guard let core, let metadata else { return CullingWritten() }
-        let recovering = recovering
-        return await Task.detached(priority: .userInitiated) {
-            await recovering?.value
+        return await core.change {
             var written = CullingWritten(ids: photos)
             for plan in plans {
                 do {
@@ -511,7 +503,7 @@ public final class LibraryService {
             }
             core.live.photosChanged(queue.indexed([], by: sequence))
             return written
-        }.value
+        }
     }
 
     /// Redlamp changed these photos' rows itself: the open lists read them again.

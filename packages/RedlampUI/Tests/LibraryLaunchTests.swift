@@ -7,7 +7,8 @@ import Testing
 @_spi(Harness) @testable import RedlampUI
 
 /// The library at launch: its roots current once change tracking has caught up with their volume, and
-/// not after a pass that ended offline.
+/// not after a pass that ended offline; and the file operations a forced quit cut short finished before
+/// the indexer lists their folders, and the health rows and hashes nothing can bring back swept.
 @MainActor
 struct LibraryLaunchTests {
     private let base = FileManager.default.temporaryDirectory
@@ -104,5 +105,63 @@ struct LibraryLaunchTests {
         await LibraryService.followed(.caughtUp(volume: volume), core: core, report: report)
         let paths = [LibraryService.path(root)]
         #expect(reported.withLock { $0 }.suffix(2) == [.offline(paths), .current(paths)])
+    }
+
+    @Test func `a rename a forced quit cut short is finished at launch, before its folder is indexed again`(
+    ) async throws {
+        defer { cleanUp() }
+        try photos(["A.JPG", "B.JPG", "C.JPG"])
+        try SidecarStore().save(Sidecar(recipe: EditRecipe(), metadata: PhotoMetadata(rating: 3)), for: photo("A.JPG"))
+        try await indexOnce()
+
+        let index = try await LibraryIndex.open(at: paths.index)
+        let originals = ["A.JPG", "B.JPG", "C.JPG"].map { LibraryService.path(photo($0)) }
+        let rows = try await index.read { reader in try originals.compactMap { try reader.photo(path: $0) } }
+        try #require(rows.count == 3)
+        // Health rows and hashes of a photo the index no longer has, which no batch can bring back.
+        try await index.write { writer in
+            try writer.database.execute("""
+            INSERT INTO photo_hashes (photo, size, modified, content_key, sha256) VALUES (987654, 1, 0, x'01', x'02')
+            """)
+        }
+        let killed = FileOperations(index: index, paths: paths)
+        killed.interruption.withLock { $0 = .afterStep(0) }
+        let preview = try await killed.renamePreview(
+            NamingTemplate(parsing: "Renamed-{sequence}"),
+            photos: rows.map(\.id),
+        )
+        let batch = try await killed.planRename(preview)
+        await #expect(throws: FileOperations.ForcedQuit.self) { try await killed.run(batch) }
+        let left = try FileManager.default.contentsOfDirectory(atPath: root.path).filter { $0.hasSuffix(".JPG") }
+        #expect(Set(left) != ["A.JPG", "B.JPG", "C.JPG"] && Set(left).count == 3, "cut short partway: \(left)")
+        await index.close()
+
+        let (library, service) = launch()
+        defer { service.close() }
+        try await eventually { await service.canShow(root, includingSubfolders: true) }
+        let core = try #require(service.core)
+        let entries = try await core.files.entries()
+        #expect(entries.map(\.state) == [.finished], "the batch was finished: \(entries.map(\.state))")
+        let names = try FileManager.default.contentsOfDirectory(atPath: root.path).filter { !$0.hasPrefix(".") }
+        #expect(Set(names.filter { !$0.hasSuffix(".redlamp") }) == ["Renamed-1.JPG", "Renamed-2.JPG", "Renamed-3.JPG"])
+        let new = ["Renamed-1.JPG", "Renamed-2.JPG", "Renamed-3.JPG"].map { LibraryService.path(photo($0)) }
+        let renamed = try await core.index.read { reader in try new.compactMap { try reader.photo(path: $0) } }
+        #expect(Set(renamed.map(\.id)) == Set(rows.map(\.id)), "each photo keeps its row")
+        #expect(try await core.index.read { try $0.photoCount() } == 3, "and no other row was made")
+        for row in renamed {
+            let original = try #require(rows.first { $0.id == row.id }).name
+            let metadata = SidecarStore().load(for: photo(row.name))?.metadata
+            #expect(metadata?.originalName == original, "\(row.name) records that it was \(original)")
+            #expect(metadata?.rating == (original == "A.JPG" ? 3 : 0), "A's sidecar went with it")
+        }
+        let hashes = try await core.index.read { reader in
+            try reader.database.prepare("SELECT count(*) FROM photo_hashes WHERE photo = 987654").first {
+                $0.int(at: 0)
+            }
+        }
+        #expect(hashes == 0, "the hashes nothing can bring back are swept")
+        library.open(root)
+        try await eventually { library.isShownFromLibrary && !library.isListing }
+        #expect(library.items.map(\.name) == ["Renamed-1.JPG", "Renamed-2.JPG", "Renamed-3.JPG"])
     }
 }

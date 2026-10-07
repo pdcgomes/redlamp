@@ -1,6 +1,7 @@
 import CoreGraphics
 import Darwin
 import Foundation
+import OSLog
 import RedlampDocument
 import RedlampLibrary
 import Synchronization
@@ -17,6 +18,8 @@ final class LibraryCore: Sendable {
     let tracker: ChangeTracker
     let live: LibraryLive
     let sidecars: LibrarySidecars
+    /// Renames, moves and the Trash (LIB-26): the batches a forced quit cut short are settled at launch.
+    let files: FileOperations
     /// The locator when it opened.
     let locator: SidecarLocator
     private let state = Mutex(State())
@@ -24,6 +27,11 @@ final class LibraryCore: Sendable {
     private struct State {
         /// Redlamp's own writes to rows, one at a time in the order they're asked for.
         var lastWrite: Task<Void, Never>?
+        /// The library's changes, one at a time in the order they're asked for: its batches, recovery at
+        /// launch first.
+        var lastChange: Task<Void, Never>?
+        /// Settling at launch what a forced quit cut short, which change tracking waits for.
+        var recovery: Task<Void, Never>?
         var lastSnapshot: ContinuousClock.Instant?
         var snapshotting = false
     }
@@ -33,6 +41,8 @@ final class LibraryCore: Sendable {
     /// The file descriptors the process asks for: the store keeps up to 256 shards open, and the
     /// index, the decoder and the folders' packs need theirs.
     static let fileLimit: rlim_t = 4096
+
+    private static let log = Logger(subsystem: "app.redlamp.mac", category: "library")
 
     private init(
         paths: LibraryPaths, index: LibraryIndex, engine: QueryEngine, store: PhotoStore,
@@ -48,6 +58,7 @@ final class LibraryCore: Sendable {
         tracker = ChangeTracker(indexer: indexer)
         live = LibraryLive(engine: engine)
         sidecars = LibrarySidecars(index: index, paths: paths)
+        files = FileOperations(index: index, paths: paths, live: live)
     }
 
     /// Opens the index (restoring its newest good snapshot when it's damaged, checking it first when
@@ -119,6 +130,59 @@ final class LibraryCore: Sendable {
                 await body()
             }
         }
+    }
+
+    // MARK: - The library's changes
+
+    /// Runs `body` once the changes asked for before it are made, and returns what it returns: the
+    /// library's batches, one at a time. Recovery at launch goes first.
+    func change<T: Sendable>(
+        priority: TaskPriority = .userInitiated, _ body: @escaping @Sendable () async -> T,
+    ) async -> T {
+        await enqueue(priority: priority, body).value
+    }
+
+    /// `body` in the changes' turn, asked for now.
+    @discardableResult
+    private func enqueue<T: Sendable>(
+        priority: TaskPriority, _ body: @escaping @Sendable () async -> T,
+    ) -> Task<T, Never> {
+        state.withLock { state in
+            let previous = state.lastChange
+            let task = Task.detached(priority: priority) {
+                await previous?.value
+                return await body()
+            }
+            state.lastChange = Task.detached(priority: priority) { _ = await task.value }
+            return task
+        }
+    }
+
+    /// Finishes or rolls back the file operations, then the metadata batches, a forced quit cut short, and
+    /// sweeps the health rows and hashes of photos no batch can bring back: before any other change.
+    func recover(_ metadata: LibraryMetadata) {
+        let recovery = enqueue(priority: .userInitiated) { [files] in
+            do {
+                for outcome in try await files.recover() {
+                    let done = outcome.state == .rolledBack ? "rolled back" : "finished"
+                    Self.log.notice("A file operation a forced quit cut short was \(done, privacy: .public)")
+                }
+            } catch {
+                Self.log.error("File operations couldn't recover: \(String(describing: error), privacy: .public)")
+            }
+            do {
+                _ = try await metadata.recover()
+            } catch {
+                Self.log.error("Metadata batches couldn't recover: \(String(describing: error), privacy: .public)")
+            }
+        }
+        state.withLock { $0.recovery = recovery }
+    }
+
+    /// Returns once what a forced quit cut short is settled: the indexer would otherwise list a folder
+    /// whose renames are half done.
+    func recovered() async {
+        await state.withLock { $0.recovery }?.value
     }
 
     // MARK: - Snapshots and checks
