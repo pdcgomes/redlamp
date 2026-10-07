@@ -286,6 +286,10 @@
     border-radius: 16px;
   }
 
+  .post-pixel img {
+    image-rendering: pixelated;
+  }
+
   .post figcaption {
     margin-top: 0.75rem;
     text-align: center;

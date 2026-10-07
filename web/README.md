@@ -34,12 +34,14 @@ summary: One line, for the index, the feed and link previews.
 date: 2026-10-01
 cover: hero.png          # optional, shown wide above the text
 coverAlt: What the cover shows
+pixelArt: true           # optional: the post's images are pixel art, scaled without smoothing
 draft: true              # optional: shown by `mise run site`, left out of production builds
 ---
 ```
 
 - Put a post's images beside its `index.md` and use them by name, as in `![alt](masks.png "Caption")`; `sync-assets` copies them into `public/synced/blog/<slug>/`. Absolute paths such as `/synced/images/hero.png` work too.
 - An image on its own line becomes a figure, wider than the text, with its title as the caption.
+- An animated GIF with a `NAME-poster.png` beside it, as the pixel-graphics kit exports them, shows the poster instead to readers who have asked their system for reduced motion.
 - Headings get ids from their text, so `#whats-next` links to "What's next". Start at `##`: the title is the page's heading.
 - Raw HTML passes through, for embeds such as the explainer video in the first post.
 - A post without a title, summary or date stops the build, naming the post.

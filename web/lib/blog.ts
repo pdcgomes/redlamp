@@ -17,8 +17,12 @@ export type Post = {
   date: string;
   cover?: string;
   coverAlt?: string;
+  /** Its images are pixel art, scaled without smoothing so each pixel stays square. */
+  pixelArt: boolean;
   /** Shown in development, left out of production builds. */
   draft: boolean;
+  /** The files beside its index.md. */
+  files: string[];
   /** The Markdown after the front matter. */
   body: string;
 };
@@ -28,8 +32,8 @@ export function assetPath(slug: string, src: string): string {
   return /^([a-z][a-z0-9+.-]*:|\/|#)/i.test(src) ? src : `/synced/blog/${slug}/${src.replace(/^\.\//, "")}`;
 }
 
-/** Reads a post's front matter (`lib/front-matter.ts`). */
-export function parsePost(slug: string, source: string): Post {
+/** Reads a post's front matter (`lib/front-matter.ts`); `files` are the ones beside its index.md. */
+export function parsePost(slug: string, source: string, files: string[] = []): Post {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
     throw new Error(`Blog post folder "${slug}" is its URL, so name it in lowercase letters, digits and hyphens`);
   }
@@ -53,20 +57,30 @@ export function parsePost(slug: string, source: string): Post {
     date,
     cover: cover ? assetPath(slug, cover) : undefined,
     coverAlt: fields.get("coverAlt"),
+    pixelArt: fields.get("pixelArt") === "true",
     draft: fields.get("draft") === "true",
+    files,
     body: front.body,
   };
 }
 
 /**
  * A post's HTML. An image on its own line becomes a figure, captioned with its title; image paths
- * resolve to the post's folder; headings get ids from their text; raw HTML passes through, since
- * posts are the project's own writing.
+ * resolve to the post's folder; an animated GIF with a NAME-poster.png among the post's `files`
+ * shows the poster instead to readers who ask for reduced motion; headings get ids from their text;
+ * raw HTML passes through, since posts are the project's own writing.
  */
-export function renderMarkdown(slug: string, markdown: string): string {
-  const image = ({ href, title, text }: Tokens.Image, inFigure = false) =>
-    `<img src="${escape(assetPath(slug, href))}" alt="${escape(text)}" loading="lazy" decoding="async"` +
-    `${title && !inFigure ? ` title="${escape(title)}"` : ""}>`;
+export function renderMarkdown(slug: string, markdown: string, files: readonly string[] = []): string {
+  const image = ({ href, title, text }: Tokens.Image, inFigure = false) => {
+    const img =
+      `<img src="${escape(assetPath(slug, href))}" alt="${escape(text)}" loading="lazy" decoding="async"` +
+      `${title && !inFigure ? ` title="${escape(title)}"` : ""}>`;
+    const gif = href.replace(/^\.\//, "").match(/^(.+)\.gif$/i);
+    const poster = gif ? `${gif[1]}-poster.png` : undefined;
+    return poster && files.includes(poster)
+      ? `<picture><source srcset="${escape(assetPath(slug, poster))}" media="(prefers-reduced-motion: reduce)">${img}</picture>`
+      : img;
+  };
   const marked = new Marked({
     gfm: true,
     renderer: {
@@ -108,7 +122,10 @@ export function readPosts(dir: string, { drafts = false } = {}): Post[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && existsSync(path.join(dir, entry.name, "index.md")))
-    .map((entry) => parsePost(entry.name, readFileSync(path.join(dir, entry.name, "index.md"), "utf8")))
+    .map((entry) => {
+      const folder = path.join(dir, entry.name);
+      return parsePost(entry.name, readFileSync(path.join(folder, "index.md"), "utf8"), readdirSync(folder));
+    })
     .filter((post) => drafts || !post.draft)
     .sort((a, b) => b.date.localeCompare(a.date) || a.slug.localeCompare(b.slug));
 }

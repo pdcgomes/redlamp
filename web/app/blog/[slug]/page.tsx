@@ -53,10 +53,17 @@ export default async function PostPage({ params }: Props) {
       {post.cover ? (
         <figure className="mx-auto mt-12 max-w-5xl">
           {/* Posts' images have no known size, so they're plain images rather than next/image. */}
-          <img src={post.cover} alt={post.coverAlt ?? ""} className="shot w-full rounded-2xl border border-hairline" />
+          <img
+            src={post.cover}
+            alt={post.coverAlt ?? ""}
+            className={`shot w-full rounded-2xl border border-hairline${post.pixelArt ? " [image-rendering:pixelated]" : ""}`}
+          />
         </figure>
       ) : null}
-      <div className="post mt-12" dangerouslySetInnerHTML={{ __html: renderMarkdown(post.slug, post.body) }} />
+      <div
+        className={post.pixelArt ? "post post-pixel mt-12" : "post mt-12"}
+        dangerouslySetInnerHTML={{ __html: renderMarkdown(post.slug, post.body, post.files) }}
+      />
       <footer className="mx-auto mt-16 flex max-w-2xl flex-wrap items-center justify-between gap-4 border-t border-hairline pt-6 text-[14px]">
         <a href="/blog" className="text-mute transition-colors hover:text-paper">
           ← All posts

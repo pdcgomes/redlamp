@@ -48,6 +48,23 @@ test("parsePost reads the optional cover and draft, resolving a relative cover t
   assert.equal(parsePost("intro", source.replace("date:", "cover: /synced/images/hero.png\ndate:")).cover, "/synced/images/hero.png");
 });
 
+test("parsePost reads pixelArt, off unless the front matter says true", () => {
+  assert.equal(parsePost("intro", source).pixelArt, false);
+  assert.equal(parsePost("intro", source.replace("date:", "pixelArt: true\ndate:")).pixelArt, true);
+});
+
+test("renderMarkdown shows an animated GIF's poster to readers who ask for reduced motion", () => {
+  const markdown = '![The layers](stack.gif "One frame")';
+  const html = renderMarkdown("intro", markdown, ["index.md", "stack.gif", "stack-poster.png"]);
+  assert.match(
+    html,
+    /^<figure><picture><source srcset="\/synced\/blog\/intro\/stack-poster\.png" media="\(prefers-reduced-motion: reduce\)"><img src="\/synced\/blog\/intro\/stack\.gif"/,
+  );
+  assert.match(html, /<\/picture><figcaption>One frame<\/figcaption><\/figure>/);
+  assert.doesNotMatch(renderMarkdown("intro", markdown, ["index.md", "stack.gif"]), /<picture>/);
+  assert.doesNotMatch(renderMarkdown("intro", "![A still](stack-poster.png)", ["stack-poster.png"]), /<picture>/);
+});
+
 test("renderMarkdown turns an image on its own line into a lazily loaded figure with its title as the caption", () => {
   const html = renderMarkdown("intro", '![The masks panel](masks.png "Masks, on your Mac")');
   assert.match(html, /^<figure><img src="\/synced\/blog\/intro\/masks\.png" alt="The masks panel" loading="lazy"/);
@@ -117,6 +134,12 @@ test("readPosts leaves drafts out unless asked for them", () => {
   });
   assert.deepEqual(readPosts(dir).map((post) => post.slug), ["live"]);
   assert.deepEqual(readPosts(dir, { drafts: true }).map((post) => post.slug), ["wip", "live"]);
+});
+
+test("readPosts lists the files beside each post's index.md", () => {
+  const dir = folder({ live: "title: Live\nsummary: Out.\ndate: 2026-10-01" });
+  writeFileSync(path.join(dir, "live", "stack.gif"), "");
+  assert.deepEqual(readPosts(dir)[0].files.sort(), ["index.md", "stack.gif"]);
 });
 
 test("readPosts finds nothing in a folder that doesn't exist", () => {
