@@ -48,6 +48,8 @@ import RedlampLibrary
     @ObservationIgnored private var observation: LibraryObservation?
     @ObservationIgnored private var selectionTracker: AnyObject?
     @ObservationIgnored private var grouping = false
+    /// The grouping that follows badges' changes once they're quiet.
+    @ObservationIgnored private var quiet: Task<Void, Never>?
     @ObservationIgnored private var pending = false
     /// Each photo's ID in the index, by its ID here, for the source they were found for.
     @ObservationIgnored private var indexIDs: [Int64: Int64] = [:]
@@ -196,11 +198,11 @@ import RedlampLibrary
     /// or for moments, which keep none from one grouping to the next, by the first of their photos it had.
     /// The same photos in the same groups change only the headers whose names changed.
     private func adopt(_ groups: PhotoGroups) {
-        if let old = list, old.groups.key == groups.key, Self.sameGroups(old.groups, groups) {
+        if let old = list, old.groups.key == groups.key, let renamed = Self.renamed(old.groups, groups) {
+            guard !renamed.isEmpty || old.groups.setting != groups.setting else { return }
             var grouped = GroupedList(groups, stacks: Stacks())
             Self.open(&grouped, as: old)
             list = grouped
-            let renamed = IndexSet(groups.indices.filter { old.groups[$0].name != groups[$0].name })
             if !renamed.isEmpty {
                 changed(.headers(renamed))
             }
@@ -216,9 +218,19 @@ import RedlampLibrary
         set(grouped)
     }
 
-    /// Whether two groupings hold the same photos in the same groups, in the same order.
-    private static func sameGroups(_ old: PhotoGroups, _ new: PhotoGroups) -> Bool {
-        old.photos == new.photos && old.map(\.count) == new.map(\.count) && old.map(\.value) == new.map(\.value)
+    /// The groups whose names changed, when two groupings hold the same photos in the same groups, in the same
+    /// order; nil when they don't.
+    private static func renamed(_ old: PhotoGroups, _ new: PhotoGroups) -> IndexSet? {
+        guard old.count == new.count, old.photos == new.photos else { return nil }
+        var renamed = IndexSet()
+        for group in new.indices {
+            let (before, after) = (old[group], new[group])
+            guard before.count == after.count, before.value == after.value else { return nil }
+            if before.name != after.name {
+                renamed.insert(group)
+            }
+        }
+        return renamed
     }
 
     /// Opens and closes `grouped`'s groups as their matches in `old` are; groups without one open when
@@ -272,12 +284,19 @@ import RedlampLibrary
         }
     }
 
+    /// Photos that came, went or moved are grouped again at once; badges, which change only the picks, are
+    /// counted here, and the grouping follows once they've been quiet a moment, for a photo whose capture time,
+    /// camera or size changed with its file.
     private func libraryChanged(_ diff: LibraryDiff) {
         guard model?.libraryViews.groupKey != .ungrouped else { return }
-        if !diff.reset, !diff.updated.isEmpty, list != nil {
-            badgesChanged(diff.updated)
+        guard !diff.reset, diff.removed.isEmpty, diff.inserted.isEmpty, list != nil else { return regroup() }
+        badgesChanged(diff.updated)
+        quiet?.cancel()
+        quiet = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            self?.regroup()
         }
-        regroup()
     }
 
     // MARK: - Picks
