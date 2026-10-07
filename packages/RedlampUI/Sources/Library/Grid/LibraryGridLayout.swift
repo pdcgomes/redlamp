@@ -3,14 +3,24 @@ import AppKit
 /// The grid's layout: cells of one size in rows as wide as the grid, centred, each cell's place worked out
 /// from its index, so a grid of a million photos lays out what's on screen and nothing more. A cell is as
 /// wide as the thumbnail size; an expanded cell is taller, for the photo's name, date and settings above
-/// its thumbnail and its badges below.
+/// its thumbnail and its badges below. Grouped (LIB-41), each group's header has a row of its own and its
+/// cells rows of their own, placed from each group's rows before it (`GridSections`).
 struct LibraryGridLayout: Equatable {
     var width: CGFloat = 0
     var count = 0
     var size = CGFloat(GridSize.standard)
     var style = GridCellStyle.compact
+    /// The groups' headers and cells; nil for one run of cells.
+    var sections: GridSections?
+    /// Each group's cell rows before it, then all of them, as `prepare` counts them.
+    private(set) var rowsBefore: [Int] = []
 
     static let insets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+
+    /// Counts the sections' rows for the width, size and style set.
+    mutating func prepare() {
+        rowsBefore = sections.map { Self.rowsBefore($0, columns: columns) } ?? []
+    }
 
     var spacing: CGFloat {
         max(6, (size * 0.05).rounded())
@@ -31,7 +41,12 @@ struct LibraryGridLayout: Equatable {
     }
 
     var contentHeight: CGFloat {
-        Self.insets.top + Self.insets.bottom + CGFloat(rows) * cellSize.height + CGFloat(max(rows - 1, 0)) * spacing
+        if let sections, rowsBefore.count == sections.groups + 1 {
+            guard sections.groups > 0 else { return Self.insets.top + Self.insets.bottom }
+            return top(ofGroup: sections.groups) - spacing + Self.insets.bottom
+        }
+        return Self.insets.top + Self.insets.bottom + CGFloat(rows) * cellSize.height
+            + CGFloat(max(rows - 1, 0)) * spacing
     }
 
     /// Whole rows in `height` points.
@@ -39,13 +54,16 @@ struct LibraryGridLayout: Equatable {
         max(Int((height + spacing) / (cellSize.height + spacing)), 1)
     }
 
-    private var left: CGFloat {
+    var left: CGFloat {
         let used = CGFloat(columns) * cellSize.width + CGFloat(columns - 1) * spacing
         return max((width - used) / 2, Self.insets.left)
     }
 
-    /// Where cell `index` is.
+    /// Where cell `index` is, or grouped, the header or cell.
     func frame(forItem index: Int) -> CGRect {
+        if let sections, rowsBefore.count == sections.groups + 1 {
+            return groupedFrame(forItem: index, in: sections)
+        }
         let (columns, cell, spacing) = (columns, cellSize, spacing)
         return CGRect(
             x: left + CGFloat(index % columns) * (cell.width + spacing),
@@ -54,9 +72,12 @@ struct LibraryGridLayout: Equatable {
         )
     }
 
-    /// The cells in the rows that meet `rect`.
+    /// The cells in the rows that meet `rect`, or grouped, the headers and cells.
     func items(in rect: CGRect) -> Range<Int> {
         guard count > 0 else { return 0 ..< 0 }
+        if let sections, rowsBefore.count == sections.groups + 1 {
+            return groupedItems(in: rect, of: sections).clamped(to: 0 ..< count)
+        }
         let pitch = cellSize.height + spacing
         let first = max(Int(((rect.minY - Self.insets.top) / pitch).rounded(.down)), 0)
         let last = min(Int(((rect.maxY - Self.insets.top) / pitch).rounded(.down)), rows - 1)

@@ -1,10 +1,12 @@
 import AppKit
 import RedlampDesign
+import RedlampLibrary
 
 /// The Library module's toolbar, under the grid or the loupe, as Lightroom Classic's: the grid and the
 /// loupe, the cell style and the thumbnail size in the grid or the zoom in the loupe, and the photo in
 /// Develop or in Finder. Each button's tooltip names its key. Its controls act on the press itself, as
-/// the module picker does, rather than tracking the mouse as AppKit's controls do.
+/// the module picker does, rather than tracking the mouse as AppKit's controls do. In the grid, Group By
+/// (LIB-41) is AppKit's own pop-up button until the library's polish phase (LIB-45).
 final class LibraryToolbarView: NSView {
     static let height: CGFloat = 30
 
@@ -17,6 +19,7 @@ final class LibraryToolbarView: NSView {
     private let actual = ToolbarButton(title: LoupeZoom.actual.title, identifier: "library.toolbar.actual")
     private let develop = ToolbarButton(symbol: "slider.horizontal.3", identifier: "library.toolbar.develop")
     private let finder = ToolbarButton(symbol: "folder", identifier: "library.toolbar.finder")
+    private let groupBy = NSPopUpButton(frame: .zero, pullsDown: false)
     private var trackers: [Tracker] = []
 
     init(model: EditorModel) {
@@ -55,6 +58,7 @@ final class LibraryToolbarView: NSView {
             as [NSView] {
             addSubview(view)
         }
+        setUpGroups()
         setAccessibilityElement(true)
         setAccessibilityRole(.toolbar)
         setAccessibilityLabel("Library Toolbar")
@@ -68,6 +72,36 @@ final class LibraryToolbarView: NSView {
 
     private static func tip(_ action: ShortcutAction) -> String {
         "\(action.title) (\(action.combos.first?.display ?? ""))"
+    }
+
+    private func setUpGroups() {
+        let model = model
+        groupBy.controlSize = .small
+        groupBy.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        for key in GroupKey.allCases {
+            groupBy.addItem(withTitle: key.title)
+            groupBy.lastItem?.representedObject = key.rawValue
+        }
+        groupBy.toolTip = "Group By"
+        groupBy.setAccessibilityLabel("Group By")
+        groupBy.setAccessibilityIdentifier("library.toolbar.groupBy")
+        groupBy.onAction { [weak self] _ in
+            guard let self, let raw = groupBy.selectedItem?.representedObject as? String,
+                  let key = GroupKey(rawValue: raw) else { return }
+            model.setGroupKey(key)
+        }
+        addSubview(groupBy)
+    }
+
+    /// Group By's controls as the grid's view and its groups have them now.
+    private func updateGroups(inGrid: Bool) {
+        let state = model.libraryViews
+        let index = GroupKey.allCases.firstIndex(of: state.groupKey) ?? 0
+        if groupBy.indexOfSelectedItem != index {
+            groupBy.selectItem(at: index)
+        }
+        groupBy.isHidden = !inGrid
+        groupBy.isEnabled = model.canGroupPhotos || state.groupKey != .ungrouped
     }
 
     override var isFlipped: Bool {
@@ -99,6 +133,7 @@ final class LibraryToolbarView: NSView {
             develop.isEnabled = hasPhoto
             finder.isEnabled = hasPhoto
             loupe.isEnabled = hasPhoto
+            updateGroups(inGrid: inGrid)
             needsLayout = true
         }]
     }
@@ -119,6 +154,8 @@ final class LibraryToolbarView: NSView {
                     place(button, width: 28)
                 }
             }
+            x += 14
+            place(groupBy, width: 150)
         } else {
             place(fit, width: 40)
             place(actual, width: 40)

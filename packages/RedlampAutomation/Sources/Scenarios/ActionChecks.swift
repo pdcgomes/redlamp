@@ -99,6 +99,9 @@
             case .toggleFilterBar, .toggleFilters, .lockFilters, .sortByFolder, .sortByCaptureTime, .sortByName,
                  .sortByRating, .sortByEditTime, .sortByModified, .sortByFileSize, .reverseSort:
                 filter(action)
+            case .groupByNone, .groupByMoment, .groupByDay, .groupByFolder, .groupByCamera, .groupByLens,
+                 .groupByOrientation, .groupByMomentCamera, .toggleGroup, .openAllGroups, .closeAllGroups:
+                groups(action)
             case .showInFinder:
                 ActionCheck(action: action, setUp: { app in
                     try app.main { $0.libraryViews.revealInFinder = { Revealed.photos.append(contentsOf: $0) } }

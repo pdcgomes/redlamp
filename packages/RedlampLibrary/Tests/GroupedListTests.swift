@@ -233,6 +233,33 @@ struct GroupedListTests {
         #expect(selection.isEmpty && selection.active == nil)
     }
 
+    @Test func `groups relabelled with a view's own IDs keep each photo's group, name, picks and filter`() throws {
+        var (library, id) = Self.library()
+        library.setFlag(.pick, of: id("b1"))
+        let list = library.list
+        let grouping = library.grouping()
+        let groups = grouping.groups(of: list, by: .moment)
+        // A view's IDs: the list's photos numbered from 1000 the other way round.
+        let own = PhotoList(source: list.source, sort: list.sort, ids: ContiguousArray(list.ids.indices.map {
+            Int64(1000 + list.count - $0)
+        }))
+        let viewID = { (photo: Int64) in own.ids[list.index(of: photo)!] }
+        let relabelled = groups.relabelled(as: own)
+        #expect(relabelled.list == own && relabelled.count == groups.count)
+        #expect(relabelled.photoSets == groups.photoSets.map { $0.map(viewID) })
+        #expect(relabelled.map(\.name) == groups.map(\.name) && relabelled.map(\.picks) == [0, 1, 0, 0])
+        #expect(relabelled.map(\.filter) == groups.map(\.filter) && relabelled.map(\.value) == groups.map(\.value))
+        #expect(relabelled.index(of: viewID(id("b1"))) == 1 && relabelled.index(of: id("b1")) == nil)
+
+        var grouped = GroupedList(relabelled, stacks: Stacks())
+        #expect(grouped.count == list.count + groups.count, "without stacks every photo has a cell")
+        let b1 = try #require(Array(relabelled[1].photos).firstIndex(of: viewID(id("b1"))))
+        #expect(grouped.index(ofHeader: 1) == 9 && grouped.index(of: viewID(id("b1"))) == 10 + b1)
+        let diff = grouped.close(0)
+        #expect(diff == PhotoListDiff(removed: IndexSet(integersIn: 1 ... 8), updated: [0]))
+        #expect(!grouped.isVisible(viewID(id("a1"))) && grouped.isVisible(viewID(id("b1"))))
+    }
+
     // MARK: - Against a model
 
     /// Shoots of photos alone, bursts and raw and JPEG pairs from two cameras into two folders, hours

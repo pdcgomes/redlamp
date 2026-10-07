@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Observation
+import RedlampLibrary
 
 /// How the grid's cells look, cycled by J as in Lightroom Classic.
 public enum GridCellStyle: String, CaseIterable, Sendable, Codable {
@@ -58,15 +59,20 @@ public enum LoupeZoom: String, Sendable {
     }
 }
 
-/// The Library module's view: the grid's thumbnail size and cell style and the loupe's zoom, and each
-/// source's view as it was last left (its size, cell style, the photo at the top of the grid and the
-/// selection), for the 25 latest sources, as Lightroom Classic remembers them, and across launches.
+/// The Library module's view: the grid's thumbnail size, cell style and Group By, and the loupe's zoom,
+/// and each source's view as it was last left (its size, cell style, grouping, the photo at the top of the
+/// grid and the selection), for the 25 latest sources, as Lightroom Classic remembers them, and across
+/// launches.
 @MainActor
 @Observable
 public final class LibraryViewState {
     public internal(set) var thumbnailSize = GridSize.standard
     public internal(set) var cellStyle = GridCellStyle.compact
     public internal(set) var loupeZoom = LoupeZoom.fit
+    /// What the grid groups the source's photos by (LIB-41).
+    public internal(set) var groupKey = GroupKey.ungrouped
+    /// The grid's groups, made as the grid or a group's action first asks for them.
+    @ObservationIgnored var groups: LibraryGroups?
     /// The photo at the top of the grid as it was last scrolled.
     @ObservationIgnored var topPhoto: URL?
     /// Where a source's grid goes back to when it's shown: set as the source's view is restored, and
@@ -86,8 +92,10 @@ public final class LibraryViewState {
     private static let viewsKey = "library.views"
     private static let sizeKey = "library.thumbnailSize"
     private static let styleKey = "library.cellStyle"
+    private static let groupKeyKey = "library.groupBy"
 
-    /// A source's view as it was left. Photos are kept by path, so the view outlives the photos' IDs.
+    /// A source's view as it was left. Photos are kept by path, so the view outlives the photos' IDs. A view
+    /// kept before Group By has no `group`, and was ungrouped.
     struct SourceView: Codable, Equatable {
         var source: String
         var size: Double
@@ -95,6 +103,7 @@ public final class LibraryViewState {
         var top: String?
         var selected: [String]
         var active: String?
+        var group: GroupKey?
     }
 
     init(defaults: UserDefaults?) {
@@ -107,6 +116,7 @@ public final class LibraryViewState {
             )
         }
         cellStyle = defaults.string(forKey: Self.styleKey).flatMap(GridCellStyle.init) ?? .compact
+        groupKey = defaults.string(forKey: Self.groupKeyKey).flatMap(GroupKey.init) ?? .ungrouped
         if let data = defaults.data(forKey: Self.viewsKey),
            let saved = try? JSONDecoder().decode([SourceView].self, from: data) {
             views = saved
@@ -131,11 +141,18 @@ public final class LibraryViewState {
         loupeZoom = zoom
     }
 
+    func setGroupKey(_ key: GroupKey) {
+        guard key != groupKey else { return }
+        groupKey = key
+        defaults?.set(key.rawValue, forKey: Self.groupKeyKey)
+        groups?.regroup()
+    }
+
     /// Keeps `source`'s view as it's left: the grid as it is, and these photos selected.
     func remember(_ source: String, selection: [URL], active: URL?) {
         let view = SourceView(
             source: source, size: thumbnailSize, style: cellStyle, top: topPhoto?.path,
-            selected: selection.prefix(Self.keptSelection).map(\.path), active: active?.path,
+            selected: selection.prefix(Self.keptSelection).map(\.path), active: active?.path, group: groupKey,
         )
         views.removeAll { $0.source == source }
         views.append(view)
@@ -146,12 +163,13 @@ public final class LibraryViewState {
         save()
     }
 
-    /// `source`'s view as it was left, its size and cell style shown again, and the grid going back to
-    /// its top photo; nil for a source not seen lately.
+    /// `source`'s view as it was left, its size, cell style and grouping shown again, and the grid going
+    /// back to its top photo; nil for a source not seen lately.
     func restore(_ source: String) -> SourceView? {
         guard let view = views.last(where: { $0.source == source }) else { return nil }
         setThumbnailSize(view.size)
         setCellStyle(view.style)
+        setGroupKey(view.group ?? .ungrouped)
         restoredTop = view.top.map { URL(fileURLWithPath: $0) }
         return view
     }

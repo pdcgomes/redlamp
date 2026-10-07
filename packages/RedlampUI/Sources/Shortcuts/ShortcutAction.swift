@@ -112,6 +112,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case toggleFilterBar, toggleFilters, lockFilters
     case sortByFolder, sortByCaptureTime, sortByName, sortByRating, sortByEditTime, sortByModified, sortByFileSize
     case reverseSort
+    case groupByNone, groupByMoment, groupByDay, groupByFolder, groupByCamera, groupByLens, groupByOrientation
+    case groupByMomentCamera, toggleGroup, openAllGroups, closeAllGroups
 
     // View
     case beforeAfter, nextCompareLayout, previousCompareLayout
@@ -164,7 +166,9 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .cycleGridStyle, .largerThumbnails, .smallerThumbnails, .showInFinder, .showPhotosInSubfolders,
              .showRecentlyTrashed, .putBack, .putBackBatch,
              .toggleFilterBar, .toggleFilters, .lockFilters, .sortByFolder, .sortByCaptureTime, .sortByName,
-             .sortByRating, .sortByEditTime, .sortByModified, .sortByFileSize, .reverseSort:
+             .sortByRating, .sortByEditTime, .sortByModified, .sortByFileSize, .reverseSort,
+             .groupByNone, .groupByMoment, .groupByDay, .groupByFolder, .groupByCamera, .groupByLens,
+             .groupByOrientation, .groupByMomentCamera, .toggleGroup, .openAllGroups, .closeAllGroups:
             .library
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout,
              .toggleZoom, .zoomIn, .zoomOut, .clipping, .rawClipping, .colorAssessment, .labReadout, .infoOverlay,
@@ -228,6 +232,17 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .sortByModified: "Sort by Modified Date"
         case .sortByFileSize: "Sort by File Size"
         case .reverseSort: "Reverse Sort Order"
+        case .groupByNone: "No Grouping"
+        case .groupByMoment: "Group by Moment"
+        case .groupByDay: "Group by Day"
+        case .groupByFolder: "Group by Folder"
+        case .groupByCamera: "Group by Camera"
+        case .groupByLens: "Group by Lens"
+        case .groupByOrientation: "Group by Orientation"
+        case .groupByMomentCamera: "Group by Moment, then Camera"
+        case .toggleGroup: "Open / Close Group"
+        case .openAllGroups: "Open All Groups"
+        case .closeAllGroups: "Close All Groups"
         case .beforeAfter: "Before / After"
         case .nextCompareLayout: "Next Before / After Layout"
         case .previousCompareLayout: "Previous Before / After Layout"
@@ -358,6 +373,9 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
              .reverseSort: []
         // Finder's Put Back, in the Trash.
         case .putBack: [KeyCombo(.delete, command: true)]
+        // Lightroom Classic has no Group By; its menus, the grid's toolbar and headers, and the palette have them.
+        case .groupByNone, .groupByMoment, .groupByDay, .groupByFolder, .groupByCamera, .groupByLens,
+             .groupByOrientation, .groupByMomentCamera, .toggleGroup, .openAllGroups, .closeAllGroups: []
         case .beforeAfter: [.char("\\")]
         case .nextCompareLayout: [.char("y")]
         case .previousCompareLayout: [.char("y", shift: true)]

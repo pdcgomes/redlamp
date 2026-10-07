@@ -111,4 +111,23 @@ public struct PhotoGroups: Sendable, RandomAccessCollection {
     public func index(of id: Int64) -> Int? {
         list.index(of: id).map { Int(groupOfPlace[$0]) }
     }
+
+    /// These groups over `list`, which holds the same photos in the same places under a view's own IDs,
+    /// as the app numbers the photos it lists so a selection outlives a filter: each photo keeps its
+    /// group, and the groups their names, picks and filters.
+    public func relabelled(as list: PhotoList) -> PhotoGroups {
+        precondition(list.count == self.list.count, "the lists hold the same photos")
+        var relabelled = ContiguousArray<Int64>(repeating: 0, count: photos.count)
+        relabelled.withUnsafeMutableBufferPointer { relabelled in
+            for (index, id) in photos.enumerated() {
+                if let place = self.list.index(of: id) {
+                    relabelled[index] = list.ids[place]
+                }
+            }
+        }
+        return PhotoGroups(
+            key: key, setting: setting, list: list, photos: relabelled, starts: starts, details: details,
+            groupOfPlace: groupOfPlace,
+        )
+    }
 }

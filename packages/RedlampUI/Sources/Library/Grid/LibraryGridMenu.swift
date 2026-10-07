@@ -5,8 +5,8 @@ import RedlampDocument
 /// The grid's context menus (LIB-14), each item with its key as the menu bar shows it. On a photo: open
 /// it in the loupe or Develop and show it in Finder, acting on the selection when the photo is in it and
 /// on the photo alone when it isn't, its rating, flag, labels and mark (LIB-15), acting the same way, then
-/// the filmstrip's copy, paste and sync items; between the photos: selecting them. Both end with the
-/// thumbnail size and the cell style.
+/// the filmstrip's copy, paste and sync items; between the photos: selecting them; on a group's header
+/// (LIB-41): opening and closing groups. Each ends with the cell style, Group By and the thumbnail size.
 @MainActor
 enum LibraryGridMenu {
     static func menu(for photo: URL, model: EditorModel) -> NSMenu {
@@ -45,6 +45,36 @@ enum LibraryGridMenu {
         return menu
     }
 
+    /// On a group's header (LIB-41): opening or closing it and every group, and Group By.
+    static func menu(forGroup group: Int, model: EditorModel) -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        let isOpen = model.gridGroups.isOpen(group)
+        let toggle = NSMenuItem(title: isOpen ? "Close Group" : "Open Group") { model.toggleGroup(group) }
+        toggle.setAccessibilityIdentifier("library.menu.group.toggle")
+        add([toggle] + [ShortcutAction.openAllGroups, .closeAllGroups].map { action(model, $0) }, to: menu)
+        addView(model: model, to: menu)
+        return menu
+    }
+
+    /// Group By's keys, and every group opened or closed.
+    private static func groupBy(model: EditorModel) -> NSMenuItem {
+        let keys = NSMenu()
+        keys.autoenablesItems = false
+        for action in ShortcutAction.allCases where action.groupKey != nil {
+            let item = self.action(model, action)
+            item.state = model.libraryViews.groupKey == action.groupKey ? .on : .off
+            keys.addItem(item)
+        }
+        keys.addItem(.separator())
+        for action in [ShortcutAction.openAllGroups, .closeAllGroups] {
+            keys.addItem(self.action(model, action))
+        }
+        let item = NSMenuItem(title: "Group By", action: nil, keyEquivalent: "")
+        item.submenu = keys
+        return item
+    }
+
     private static func addView(model: EditorModel, to menu: NSMenu) {
         let styles = NSMenu()
         styles.autoenablesItems = false
@@ -59,7 +89,10 @@ enum LibraryGridMenu {
         styles.addItem(action(model, .cycleGridStyle))
         let style = NSMenuItem(title: "Grid View Style", action: nil, keyEquivalent: "")
         style.submenu = styles
-        add([style, action(model, .largerThumbnails), action(model, .smallerThumbnails)], to: menu)
+        add(
+            [style, groupBy(model: model), action(model, .largerThumbnails), action(model, .smallerThumbnails)],
+            to: menu,
+        )
     }
 
     // MARK: - Culling

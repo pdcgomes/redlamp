@@ -3,7 +3,7 @@ import RedlampLibrary
 
 /// The Library grid's and loupe's actions (LIB-14): the thumbnail size, the cell style, the loupe's zoom,
 /// opening a photo in the loupe or Develop, showing photos in Finder, the rubber band's selection, and
-/// each source's view kept as it's left and shown again as it comes back.
+/// each source's view kept as it's left and shown again as it comes back, with its Group By (LIB-41).
 public extension EditorModel {
     /// J: compact, expanded, none, as in Lightroom Classic.
     func cycleCellStyle() {
@@ -119,7 +119,7 @@ public extension EditorModel {
             // In the grid, Space and Z go on to it: Space opens the loupe, Z the loupe at 1:1.
             guard libraryView == .loupe, selection != nil else { return false }
             toggleLoupeZoom()
-        default: return performFilterShortcut(action)
+        default: return performGroupShortcut(action) ?? performFilterShortcut(action)
         }
         return true
     }
@@ -132,7 +132,7 @@ public extension EditorModel {
         case .smallerThumbnails: libraryViews.thumbnailSize > GridSize.range.lowerBound
         case .showInFinder: selection != nil
         case .toggleZoom where module == .library: libraryView == .loupe && selection != nil
-        default: canPerformFilterShortcut(action)
+        default: canPerformGroupShortcut(action) ?? canPerformFilterShortcut(action)
         }
     }
 

@@ -30,6 +30,17 @@ extension ShortcutAction {
         .sortByModified: ["sort", "order", "modified", "date", "file", "library"],
         .sortByFileSize: ["sort", "order", "size", "bytes", "largest", "library"],
         .reverseSort: ["sort", "reverse", "descending", "ascending", "order", "library"],
+        .groupByNone: ["group", "ungroup", "no groups", "flat", "library"],
+        .groupByMoment: ["group", "moment", "session", "event", "time", "pause", "library"],
+        .groupByDay: ["group", "day", "date", "library"],
+        .groupByFolder: ["group", "folder", "library"],
+        .groupByCamera: ["group", "camera", "body", "library"],
+        .groupByLens: ["group", "lens", "library"],
+        .groupByOrientation: ["group", "orientation", "portrait", "landscape", "square", "library"],
+        .groupByMomentCamera: ["group", "moment", "camera", "body", "second shooter", "library"],
+        .toggleGroup: ["group", "open", "close", "collapse", "expand", "library"],
+        .openAllGroups: ["group", "open", "expand", "all", "library"],
+        .closeAllGroups: ["group", "close", "collapse", "all", "library"],
         .beforeAfter: ["compare", "before", "after", "original"],
         .nextCompareLayout: ["compare", "side by side", "split", "layout"],
         .previousCompareLayout: ["compare", "side by side", "split", "layout"],
@@ -154,6 +165,11 @@ extension ShortcutAction {
         case .sortByFolder, .sortByCaptureTime, .sortByName, .sortByRating, .sortByEditTime, .sortByModified,
              .sortByFileSize: "arrow.up.arrow.down"
         case .reverseSort: "arrow.up.and.down.text.horizontal"
+        case .groupByNone, .groupByMoment, .groupByDay, .groupByFolder, .groupByCamera, .groupByLens,
+             .groupByOrientation, .groupByMomentCamera: "rectangle.3.group"
+        case .toggleGroup: "chevron.down.circle"
+        case .openAllGroups: "rectangle.expand.vertical"
+        case .closeAllGroups: "rectangle.compress.vertical"
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout: "rectangle.2.swap"
         case .toggleZoom: "1.magnifyingglass"
         case .zoomIn: "plus.magnifyingglass"

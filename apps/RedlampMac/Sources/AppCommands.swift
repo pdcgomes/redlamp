@@ -132,6 +132,15 @@ struct AppCommands: Commands {
                 Divider()
                 mouseItem(.cycleGridStyle)
             }
+            Menu("Group By") {
+                ForEach(ShortcutAction.allCases.filter { $0.groupKey != nil }) { action in
+                    toggle(action, isOn: model.libraryViews.groupKey == action.groupKey)
+                }
+                Divider()
+                item(.toggleGroup)
+                item(.openAllGroups)
+                item(.closeAllGroups)
+            }
             mouseItem(.largerThumbnails)
             mouseItem(.smallerThumbnails)
             Divider()

@@ -12,6 +12,7 @@
             + LibraryScenarios.all + ModuleScenarios.all + OtherAppsScenarios.all + SavingScenarios.all
             + PaletteLibraryScenarios.all
             + SourceScenarios.all
+            + GroupScenarios.all
             + SyncScenarios.all + ExportScenarios.all
             + RecipeScenarios.all + StackScenarios.all + RawScenarios.all + FeedbackScenarios.all
             + ImportScenarios.all
