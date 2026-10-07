@@ -887,6 +887,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [ ] Slider-feel calibration against Lightroom: response curves fitted against Lightroom's renders <!-- tracker: EDT-11 -->
 - [ ] Photos library integration and a Photos editing extension
 - [x] Tools that behave like Lightroom's: zoom and pan in every tool, and every brush sized from the keyboard and pointer with its size shown as it changes <!-- tracker: UX-15 -->
+- [x] The filmstrip hidden automatically or kept up, as a setting, with the photo fitted above it <!-- tracker: UX-19 -->
 - [x] Masks: reorder masks and components, every overlay mode and its opacity <!-- tracker: MSK-21 -->
 - [x] Masks: a Color swatch <!-- tracker: MSK-23 -->
 - [x] Masks: local Whites and Blacks as true end points <!-- tracker: MSK-24 -->
