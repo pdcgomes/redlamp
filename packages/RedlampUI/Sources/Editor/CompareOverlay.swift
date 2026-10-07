@@ -69,8 +69,8 @@ private struct SplitHandle: View {
         let knobRect = CGRect(
             x: knob.x - Self.knobSize / 2, y: knob.y - Self.knobSize / 2, width: Self.knobSize, height: Self.knobSize,
         )
-        var hitArea = line.strokedPath(StrokeStyle(lineWidth: 14))
-        hitArea.addEllipse(in: knobRect)
+        // A union: added to the same path, the knob's circle and the line's stroke cancel where they overlap.
+        let hitArea = line.strokedPath(StrokeStyle(lineWidth: 14)).union(Path(ellipseIn: knobRect))
 
         return ZStack {
             line.stroke(Color.white.opacity(0.9), lineWidth: 1.5)
