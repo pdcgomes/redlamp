@@ -125,9 +125,8 @@ struct FileInspectionTests {
             of: files,
             concurrently: true,
         ))
-        withKnownIssue("A call carries the whole folder until the service's calls are capped") {
-            #expect(recording.batches == [1000, 1, 1000, 1])
-        }
+        let cap = DecodeServiceClient.filesPerCall
+        #expect(recording.batches == [cap, files.count - cap, cap, files.count - cap])
     }
 
     private func size(_ url: URL) -> Int {

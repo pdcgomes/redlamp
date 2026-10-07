@@ -268,10 +268,14 @@ public extension DecodedImage {
         }
     }
 
-    /// Each call sends the batch's files, mapped, in one message. A file that can't be read, or a
-    /// service that can't start or answers what the app can't use, gives nil, never a read in the
-    /// app.
+    /// Each call sends the batch's files, mapped, in messages of at most `filesPerCall`. A file that
+    /// can't be read, or a service that can't start or answers what the app can't use, gives nil,
+    /// never a read in the app.
     extension DecodeServiceClient: FileInspecting {
+        /// Both sides hold about 0.1 MB a file while a message is answered (its mapped pages, not
+        /// copies), so a message carries no more than this many.
+        static let filesPerCall = 1000
+
         public func captures(of urls: [URL], concurrently: Bool) -> [CaptureSettings?] {
             inspect(urls, as: CaptureSettings.self) { proxy, files, paths, reply in
                 proxy.captures(files, paths: paths, concurrently: concurrently, reply: reply)
@@ -289,19 +293,23 @@ public extension DecodedImage {
             _ call: (any DecodeServiceProtocol, [Data], [String], @escaping @Sendable (Data?) -> Void) -> Void,
         ) -> [T?] {
             guard !urls.isEmpty else { return [] }
-            let files = urls.map { (try? Data(contentsOf: $0, options: .alwaysMapped)) ?? Data() }
             let connection = connect()
             defer { connection.invalidate() }
-            let answer = Mutex<Data?>(nil)
-            if let proxy = connection.synchronousRemoteObjectProxyWithErrorHandler({ _ in }) as? DecodeServiceProtocol {
-                call(proxy, files, urls.map(\.absoluteURL.path)) { data in answer.withLock { $0 = data } }
+            let proxy = connection.synchronousRemoteObjectProxyWithErrorHandler { _ in } as? DecodeServiceProtocol
+            return stride(from: 0, to: urls.count, by: Self.filesPerCall).flatMap { start -> [T?] in
+                let batch = urls[start ..< min(start + Self.filesPerCall, urls.count)]
+                let files = batch.map { (try? Data(contentsOf: $0, options: .alwaysMapped)) ?? Data() }
+                let answer = Mutex<Data?>(nil)
+                if let proxy {
+                    call(proxy, files, batch.map(\.absoluteURL.path)) { data in answer.withLock { $0 = data } }
+                }
+                guard let data = answer.withLock({ $0 }),
+                      let read = try? JSONDecoder().decode([T?].self, from: data), read.count == batch.count
+                else {
+                    return batch.map { _ in nil }
+                }
+                return read
             }
-            guard let data = answer.withLock({ $0 }),
-                  let read = try? JSONDecoder().decode([T?].self, from: data), read.count == urls.count
-            else {
-                return urls.map { _ in nil }
-            }
-            return read
         }
     }
 #endif
