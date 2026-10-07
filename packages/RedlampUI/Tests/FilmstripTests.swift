@@ -125,10 +125,7 @@ struct FilmstripTests {
         #expect(asked > 0 && asked < 40, "\(asked) cells made for a 900 pt strip")
         let layout = try #require(strip.collectionView.collectionViewLayout as? FilmstripLayout)
         #expect(strip.collectionView.frame.width == layout.collectionViewContentSize.width)
-        strip.collectionView.scrollToItems(
-            at: [IndexPath(item: 15000, section: 0)],
-            scrollPosition: .centeredHorizontally,
-        )
+        strip.center(row: 15000, animated: false)
         strip.collectionView.layoutSubtreeIfNeeded()
         #expect(strip.collectionView.indexPathsForVisibleItems().contains(IndexPath(item: 15000, section: 0)))
         #expect(layout.items(in: strip.scrollView.contentView.bounds).contains(15000))
