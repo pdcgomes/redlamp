@@ -291,16 +291,8 @@ public struct RunStore: Sendable {
         return candidate
     }
 
-    public func update(_ candidate: RecipeRun.Candidate) throws {
-        try write(candidate, to: "candidates/\(candidate.id).json")
-    }
-
     public func critiques() -> [RecipeRun.Critique] {
         lines("critiques.jsonl")
-    }
-
-    public func comparisons() -> [RecipeRun.Comparison] {
-        lines("comparisons.jsonl")
     }
 
     public func scores() -> [RecipeRun.Score] {
