@@ -344,6 +344,8 @@ public final class QueryEngine: Sendable {
     /// collections' photos, Library Health's findings and pairs, and the small tables' matches. For a
     /// memory-pressure trim: each comes back the next time it's asked for.
     public func trim() {
+        let (names, generation) = state.withLock { ($0.vocabulary.names, $0.generation) }
+        let vocabulary = QueryVocabulary(names)
         state.withLock { state in
             state.plans.removeAll()
             state.rowSets.removeAll()
@@ -353,7 +355,9 @@ public final class QueryEngine: Sendable {
             state.keptAnyway = nil
             state.postings.removeAll()
             state.pairs = nil
-            state.vocabulary = QueryVocabulary(state.vocabulary.names)
+            if state.generation == generation {
+                state.vocabulary = vocabulary
+            }
         }
     }
 
