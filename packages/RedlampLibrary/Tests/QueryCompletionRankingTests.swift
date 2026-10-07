@@ -129,7 +129,7 @@ struct QueryCompletionRankingTests {
     @Test func `a word one typo away is found after every name that holds the text as typed`() {
         let names = [RankedName(.city, "Lisbon"), RankedName(.keyword, "Lisbomb Records"), RankedName(.city, "Lisboa")]
         let found = matches("lisbom", names)
-        #expect(found.map(\.value) == ["Lisbomb Records", "Lisboa", "Lisbon"])
+        #expect(found.map(\.value) == ["Lisbomb Records", "Lisbon", "Lisboa"], "ties in the order names are given")
         #expect(found.map(\.match) == [.start, .typo, .typo])
         #expect(ranked("portgual", [RankedName(.country, "Portugal")]) == ["Portugal"], "a swapped letter")
         #expect(ranked("fujiflim", [RankedName(.camera, "FUJIFILM GFX100S")]) == ["FUJIFILM GFX100S"])

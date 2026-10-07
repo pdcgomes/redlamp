@@ -99,19 +99,15 @@ extension NameRanking {
         -> [RankedMatch] {
         let typed = TypedName(text)
         guard typed.typos > 0, limit > 0 else { return [] }
-        let wanted = fields.reduce(UInt64(0)) { $0 | NameTable.bit($1) }
-        let twins = Twin.closest(tables.flatMap { $0.twins(of: typed, fields: wanted) }, to: typed.bytes.count)
+        let wanted = FieldSet(fields)
+        let twins = Twin.closest(tables.flatMap { $0.twins(of: typed, fields: wanted.bits) }, to: typed.bytes.count)
         guard !twins.isEmpty else { return [] }
-        var late: [LateMatch] = []
+        var matches: [TwinMatch] = []
         for (number, table) in tables.enumerated() {
-            table.findLate(
-                typed, twins: twins, fields: fields, table: number, skipping: [], lettersInOrder: false, into: &late,
-            )
+            table.findTwins(twins, fields: wanted, table: number, into: &matches)
         }
         var found = Found(tables: tables, limit: limit)
-        found.addTypos(late.compactMap { match in
-            match.twin.map { (match.place, $0.typos, $0.match, $0.index) }
-        }, twins: twins)
+        found.addTypos(matches, twins: twins)
         return found.matches
     }
 }
