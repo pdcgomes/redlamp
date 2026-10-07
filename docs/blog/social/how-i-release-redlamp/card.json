@@ -1,0 +1,7 @@
+{
+  "title": ["How I release", "Redlamp"],
+  "subtitle": [
+    "Agents work on a bunch of branches at once.",
+    "This is how I keep track of what goes into a release."
+  ]
+}

@@ -1,0 +1,5 @@
+# Renders from .cursor/skills/redlamp-blog/card/render.py; each kit's card.json makes them again.
+*.png
+*.gif
+*.mp4
+*.jpg

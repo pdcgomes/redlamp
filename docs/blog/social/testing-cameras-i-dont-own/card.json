@@ -1,0 +1,7 @@
+{
+  "title": ["Testing cameras", "I don’t own"],
+  "subtitle": [
+    "LibRaw opens [1,258] cameras, and Redlamp’s tests check [25].",
+    "This is how the other [1,233] get tested."
+  ]
+}

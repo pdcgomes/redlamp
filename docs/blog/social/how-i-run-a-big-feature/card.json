@@ -1,0 +1,8 @@
+{
+  "title": ["How I manage", "a large feature", "across AI agents"],
+  "titleSize": 100,
+  "subtitle": [
+    "Eleven agents worked on the library on its first day.",
+    "This is how I keep track without reading their chats."
+  ]
+}

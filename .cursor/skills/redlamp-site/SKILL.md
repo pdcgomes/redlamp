@@ -25,7 +25,7 @@ The website presents the README. Much of it is read from the repository when it 
 | `/cameras` | `docs/cameras.md` through `lib/cameras.ts` |
 | `/cameras/test` | How to run the camera bench: steps and screenshots in `content/camera-bench.ts`, counts from `lib/cameras.ts` |
 | `/performance` | `docs/performance/metrics.json` and `history.jsonl` through `lib/performance.ts`, drawn by `components/charts/` |
-| `/blog`, `/blog/<slug>`, `/blog/feed.xml` | `content/blog/<slug>/index.md` through `lib/blog.ts`; `web/README.md` has the front matter |
+| `/blog`, `/blog/<slug>`, `/blog/feed.xml` | `content/blog/<slug>/index.md` through `lib/blog.ts`; `web/README.md` has the front matter. Each post's card and its X and LinkedIn copy, and the blog room that tracks every post: `.cursor/skills/redlamp-blog/SKILL.md` |
 | `/api/…` | The relays the app posts to, such as `/api/feedback` (`lib/feedback.ts`, `lib/github-app.ts`), described in `web/README.md` |
 | `/api/whats-new` | The app's What's New feed, linked from no page: `content/whats-new/<id>/index.md` through `lib/whats-new.ts`; `web/README.md` has the front matter |
 
