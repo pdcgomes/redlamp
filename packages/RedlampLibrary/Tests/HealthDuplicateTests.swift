@@ -35,4 +35,32 @@ struct HealthDuplicateTests {
         #expect(Set(found.findings.map(\.group)).count == 1)
         #expect(try await sandbox.paths(found.proposed) == ["C/IMG_1.jpg"])
     }
+
+    @Test func `confirming sweeps the hashes of copies nothing can bring back, and keeps those Undo can`(
+    ) async throws {
+        let copy = HealthImages.data(.jpeg, seed: 5)
+        let sandbox = try await HealthSandbox.make(["A/IMG_1.jpg": copy, "B/Copy/IMG_1.jpg": copy])
+        defer { sandbox.remove() }
+        await sandbox.index()
+        let health = sandbox.library()
+        func hashed() async throws -> Set<Int64> {
+            try await sandbox.index.read { reader in
+                try Set(reader.database.prepare("SELECT photo FROM photo_hashes").map { $0.int64(at: 0) })
+            }
+        }
+        try await health.confirmDuplicates()
+        let rows = try await sandbox.rows()
+        let (kept, copied) = try (#require(rows["A/IMG_1.jpg"]?.id), #require(rows["B/Copy/IMG_1.jpg"]?.id))
+        #expect(try await hashed() == [kept, copied])
+
+        let plan = try await health.plan(health.findings(.duplicates))
+        #expect(plan.photos == [copied])
+        try await health.run(plan)
+        try await health.confirmDuplicates()
+        #expect(try await hashed() == [kept, copied], "Undo can bring the copy back under its ID")
+
+        try FileManager.default.removeItem(at: sandbox.paths.root.appending(path: "File Operations"))
+        try await health.confirmDuplicates()
+        #expect(try await hashed() == [kept], "with no journal, nothing can bring the copy back")
+    }
 }

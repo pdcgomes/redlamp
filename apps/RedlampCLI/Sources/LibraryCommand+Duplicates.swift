@@ -5,7 +5,8 @@ import Synchronization
 
 extension LibraryCommand {
     /// `redlamp library duplicates`: the exact duplicates in an index (LIB-39), grouped by content
-    /// key and size and, with `--confirm`, confirmed by reading every candidate whole; prints the
+    /// key and size and, with `--confirm`, confirmed by reading every candidate whole, once the hashes
+    /// of photos gone from the index that no batch can bring back are removed; prints the
     /// groups, what removing all but the proposed copies would free, the proposals and why, and the
     /// candidates that couldn't be compared, with its progress on stderr. It removes nothing unless
     /// `--trash` is given: then every candidate is read whole, every file that would move to the
@@ -46,7 +47,9 @@ extension LibraryCommand {
             )
             let reported = Mutex(clock.now)
             let started = clock.now
-            let confirmation = try await finder.confirm(candidates, readingFiles: confirming) { progress in
+            let confirmation = try await finder.confirm(
+                candidates, readingFiles: confirming, operations: operations,
+            ) { progress in
                 let due = reported.withLock { last in
                     guard clock.now - last >= .seconds(1) else { return false }
                     last = clock.now

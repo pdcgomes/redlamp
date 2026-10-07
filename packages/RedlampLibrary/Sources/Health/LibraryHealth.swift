@@ -59,13 +59,14 @@ public final class LibraryHealth: Sendable {
     }
 
     /// Reads the duplicate candidates no recorded hash confirms whole, as `redlamp library duplicates
-    /// --confirm` does, so the duplicates check finds every group; lists follow.
+    /// --confirm` does, so the duplicates check finds every group; lists follow. First it removes the
+    /// hashes of photos gone from the index that no batch of `operations` can bring back (LIB-39).
     @discardableResult
     public func confirmDuplicates(
         progress: (@Sendable (DuplicateFinder.Progress) -> Void)? = nil,
     ) async throws -> DuplicateConfirmation {
         let finder = try await finder()
-        let confirmation = try await finder.confirm(finder.candidates(), progress: progress)
+        let confirmation = try await finder.confirm(finder.candidates(), operations: operations, progress: progress)
         await changed()
         return confirmation
     }
