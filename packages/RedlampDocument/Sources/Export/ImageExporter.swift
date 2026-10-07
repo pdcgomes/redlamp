@@ -1,19 +1,21 @@
 import CoreGraphics
 import Foundation
 import ImageIO
+import RedlampEngineAPI
 
 /// Encodes rendered stills and writes them to disk.
 public enum ImageExporter {
     /// Writes `image` to `url` as `settings` describe, tagged as Redlamp's, replacing any file
-    /// there unless it is a photo (see `place(at:source:writing:)`).
+    /// there unless it is a photo (see `place(at:source:reading:writing:)`).
     public static func write(
         _ image: CGImage,
         to url: URL,
         settings: ExportSettings,
         metadata: [CFString: Any] = [:],
         source: URL? = nil,
+        reading files: any FileInspecting,
     ) throws {
-        try place(at: url, source: source) { temporary in
+        try place(at: url, source: source, reading: files) { temporary in
             if settings.appliesFileSizeLimit {
                 let data = try encodeWithinLimit(image, settings: settings, metadata: metadata)
                 do {
@@ -36,15 +38,17 @@ public enum ImageExporter {
     /// The file is written beside the target first and moved into place, so a failure never
     /// leaves a partial file or loses the one it would have replaced. Throws
     /// `ExportError.wouldReplacePhoto`, before writing anything, if `url` is a photo rather
-    /// than an earlier export (see `ExportDestination.isPhoto`).
-    public static func place(at url: URL, source: URL? = nil, writing: (URL) throws -> Void) throws {
+    /// than an earlier export (see `ExportDestination.isPhoto`), whose tags `files` read.
+    public static func place(
+        at url: URL, source: URL? = nil, reading files: any FileInspecting, writing: (URL) throws -> Void,
+    ) throws {
         let fileManager = FileManager.default
         let folder = url.deletingLastPathComponent()
         var isDirectory: ObjCBool = false
         guard fileManager.fileExists(atPath: folder.path, isDirectory: &isDirectory), isDirectory.boolValue else {
             throw ExportError.folderMissing(folder)
         }
-        guard !ExportDestination.isPhoto(url, source: source, fileManager: fileManager) else {
+        guard !ExportDestination.isPhoto(url, source: source, reading: files, fileManager: fileManager) else {
             throw ExportError.wouldReplacePhoto(url)
         }
         let staging: URL

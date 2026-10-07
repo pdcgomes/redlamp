@@ -5,6 +5,115 @@ import RedlampDocument
 import RedlampEngineAPI
 import Testing
 
+/// Reads a file's ImageIO properties as RedlampServices' `InProcessDecoder` does, which the
+/// decode service is checked against.
+struct ImageIOFiles: FileInspecting {
+    func captures(of urls: [URL], concurrently _: Bool) -> [CaptureSettings?] {
+        urls.map { _ in nil }
+    }
+
+    func focusThumbnails(of urls: [URL], concurrently _: Bool) -> [GreyThumbnail?] {
+        urls.map { _ in nil }
+    }
+
+    func imageProperties(of urls: [URL]) -> [ImageProperties?] {
+        urls.map { url in
+            CGImageSourceCreateWithURL(url as CFURL, nil)
+                .flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) as? [CFString: Any] }
+                .flatMap(ImageProperties.init)
+        }
+    }
+}
+
+/// Export takes what it reads from files from its reader, which in the app is the decode service.
+struct ExportReadingTests {
+    /// Answers properties from a table, by URL, and records what it was asked.
+    final class RecordedProperties: FileInspecting, @unchecked Sendable {
+        private let properties: [URL: ImageProperties]
+        private let lock = NSLock()
+        private var urls: [URL] = []
+
+        var asked: [URL] {
+            lock.withLock { urls }
+        }
+
+        init(_ properties: [URL: [CFString: Any]]) {
+            self.properties = properties.compactMapValues(ImageProperties.init)
+        }
+
+        func captures(of urls: [URL], concurrently _: Bool) -> [CaptureSettings?] {
+            urls.map { _ in nil }
+        }
+
+        func focusThumbnails(of urls: [URL], concurrently _: Bool) -> [GreyThumbnail?] {
+            urls.map { _ in nil }
+        }
+
+        func imageProperties(of urls: [URL]) -> [ImageProperties?] {
+            lock.withLock { self.urls += urls }
+            return urls.map { properties[$0] }
+        }
+    }
+
+    @Test func `an export's metadata comes from the reader, not the file`() {
+        let source = URL(fileURLWithPath: "/nowhere/IMG_0001.ARW")
+        let files = RecordedProperties([source: [
+            kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFModel: "Z 8"],
+            kCGImagePropertyGPSDictionary: [kCGImagePropertyGPSLatitude: 38.7],
+        ]])
+        let metadata = ExportMetadata.properties(from: source, reading: files, policy: .all)
+        let tiff = metadata[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
+        #expect(tiff?[kCGImagePropertyTIFFModel] as? String == "Z 8")
+        #expect(tiff?[kCGImagePropertyTIFFSoftware] as? String == ExportMetadata.software)
+        #expect(metadata[kCGImagePropertyGPSDictionary] != nil)
+        #expect(files.asked == [source])
+        _ = ExportMetadata.properties(from: source, reading: files, policy: .none)
+        #expect(files.asked == [source], "an export without metadata reads nothing")
+    }
+
+    @Test func `whether a file is an export is read through the reader`() throws {
+        let (folder, cleanup) = try ExportWriterTests.temporaryFolder()
+        defer { cleanup() }
+        let file = folder.appending(path: "IMG_0001.jpg")
+        try Data("not an image".utf8).write(to: file)
+        let files = RecordedProperties([file: [
+            kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFSoftware: "\(ExportMetadata.software) 0.2.5"],
+        ]])
+        #expect(ExportMetadata.isExport(file, reading: files))
+        #expect(!ExportDestination.isPhoto(file, source: nil, reading: files))
+        #expect(files.asked == [file, file])
+        #expect(ExportDestination.isPhoto(file, source: nil, reading: UnreadableFiles()), "one it can't read is kept")
+    }
+
+    @Test func `an export, a camera JPEG and a damaged file are told apart`() throws {
+        let (folder, cleanup) = try ExportWriterTests.temporaryFolder()
+        defer { cleanup() }
+        let export = folder.appending(path: "IMG_0001.jpg")
+        try ImageExporter.write(
+            ExportWriterTests.image(),
+            to: export,
+            settings: ExportSettings(),
+            reading: ImageIOFiles(),
+        )
+        let camera = folder.appending(path: "IMG_0002.JPG")
+        let destination = try #require(CGImageDestinationCreateWithURL(
+            camera as CFURL,
+            "public.jpeg" as CFString,
+            1,
+            nil,
+        ))
+        CGImageDestinationAddImage(destination, ExportWriterTests.image(width: 64, height: 48), [
+            kCGImagePropertyOrientation: 1, kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFMake: "Nikon"],
+        ] as CFDictionary)
+        #expect(CGImageDestinationFinalize(destination))
+        let damaged = folder.appending(path: "IMG_0003.jpg")
+        try Data(repeating: 7, count: 4096).write(to: damaged)
+        #expect(ExportMetadata.isExport(export, reading: ImageIOFiles()))
+        #expect(!ExportMetadata.isExport(camera, reading: ImageIOFiles()))
+        #expect(!ExportMetadata.isExport(damaged, reading: ImageIOFiles()))
+    }
+}
+
 struct ExportWriterTests {
     /// A gradient with some noise, so lossy sizes respond to quality.
     static func image(
@@ -147,7 +256,7 @@ struct ExportWriterTests {
     @Test func `a missing folder throws`() {
         let url = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString).appending(path: "out.jpg")
         #expect(throws: ExportError.folderMissing(url.deletingLastPathComponent())) {
-            try ImageExporter.write(Self.image(), to: url, settings: ExportSettings())
+            try ImageExporter.write(Self.image(), to: url, settings: ExportSettings(), reading: ImageIOFiles())
         }
     }
 }
@@ -182,7 +291,7 @@ struct ExportMetadataTests {
     private func exported(_ policy: ExportMetadataPolicy) throws -> [CFString: Any] {
         let (folder, cleanup) = try ExportWriterTests.temporaryFolder()
         defer { cleanup() }
-        let metadata = try ExportMetadata.properties(from: source(in: folder), policy: policy)
+        let metadata = try ExportMetadata.properties(from: source(in: folder), reading: ImageIOFiles(), policy: policy)
         let data = try ImageExporter.encode(ExportWriterTests.image(), settings: ExportSettings(), metadata: metadata)
         return try ExportWriterTests.properties(data)
     }
@@ -289,14 +398,17 @@ struct ExportSettingsTests {
 
     @Test func `names follow the rule and the format`() {
         var settings = ExportSettings()
-        #expect(ExportDestination.url(for: source, settings: settings).path == "/Photos/IMG_1234-redlamp.jpg")
+        #expect(ExportDestination.url(for: source, settings: settings, reading: ImageIOFiles())
+            .path == "/Photos/IMG_1234-redlamp.jpg")
         settings.setFormat(.tiff)
         settings.naming = ExportNaming(mode: .custom, customName: " Harbour: dusk/2 ")
         settings.destinationFolder = URL(fileURLWithPath: "/Exports")
-        #expect(ExportDestination.url(for: source, settings: settings).path == "/Exports/Harbour- dusk-2.tif")
+        #expect(ExportDestination.url(for: source, settings: settings, reading: ImageIOFiles())
+            .path == "/Exports/Harbour- dusk-2.tif")
         settings.naming = ExportNaming(mode: .custom, customName: "  ")
         #expect(!settings.naming.isValid)
-        #expect(ExportDestination.url(for: source, settings: settings).lastPathComponent == "IMG_1234.tif")
+        #expect(ExportDestination.url(for: source, settings: settings, reading: ImageIOFiles())
+            .lastPathComponent == "IMG_1234.tif")
     }
 
     @Test func `numbering skips names that are taken`() throws {

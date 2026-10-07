@@ -20,12 +20,33 @@ public struct ExportSheet: View {
     @State private var settings: ExportSettings
     @State private var presetID: UUID?
     @State private var conflict: URL?
+    @State private var plan: ExportPlan
+    @State private var isWaitingForStep = false
     @State private var isNamingPreset = false
     @State private var presetName = ""
 
+    /// `files` reads the destination's files, to tell an earlier export from a photo.
     public init(
         photo: URL,
         photoSize: PixelSize,
+        files: any FileInspecting,
+        store: ExportPresetStore,
+        settings: ExportSettings? = nil,
+        presetID: UUID? = nil,
+        height: CGFloat = ExportSheet.size.height,
+        onCancel: @escaping () -> Void,
+        onExport: @escaping (ExportSettings, UUID?, URL) -> Void,
+    ) {
+        self.init(
+            photo: photo, photoSize: photoSize, plan: ExportPlan(photo: photo, files: files), store: store,
+            settings: settings, presetID: presetID, height: height, onCancel: onCancel, onExport: onExport,
+        )
+    }
+
+    init(
+        photo: URL,
+        photoSize: PixelSize,
+        plan: ExportPlan,
         store: ExportPresetStore,
         settings: ExportSettings? = nil,
         presetID: UUID? = nil,
@@ -35,6 +56,7 @@ public struct ExportSheet: View {
     ) {
         self.photo = photo
         self.photoSize = photoSize
+        _plan = State(initialValue: plan)
         self.store = store
         self.height = height
         self.onCancel = onCancel
@@ -105,7 +127,7 @@ public struct ExportSheet: View {
                     },
                 )
             }
-            ExportLocationSection(photo: photo, settings: $settings)
+            ExportLocationSection(photo: photo, plan: plan, settings: $settings)
             ExportFileSection(settings: $settings)
             ExportSizeSection(photoSize: photoSize, sizing: $settings.sizing)
             Section {
@@ -140,7 +162,21 @@ public struct ExportSheet: View {
     }
 
     private func export() {
-        switch ExportActions.step(for: settings, photo: photo) {
+        if let step = plan.step {
+            return take(step)
+        }
+        guard !isWaitingForStep else { return }
+        isWaitingForStep = true
+        Task {
+            if let step = await plan.currentStep() {
+                take(step)
+            }
+            isWaitingForStep = false
+        }
+    }
+
+    private func take(_ step: ExportActions.Step) {
+        switch step {
         case let .ready(url, _): finish(url)
         case let .confirmReplace(url, _): conflict = url
         case .needsDialog: break

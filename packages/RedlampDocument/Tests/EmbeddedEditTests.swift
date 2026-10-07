@@ -75,6 +75,7 @@ struct EmbeddedEditTests {
         configure(&settings)
         let metadata = try ExportMetadata.properties(
             from: source ?? Self.source(in: folder),
+            reading: ImageIOFiles(),
             policy: policy,
             recipe: recipe,
         )
@@ -202,17 +203,23 @@ struct EmbeddedEditTests {
         let source = try Self.source(in: folder)
         var settings = ExportSettings()
         settings.setFormat(format)
-        let url = ExportDestination.url(for: source, settings: settings)
-        let metadata = ExportMetadata.properties(from: source, policy: .all, recipe: Self.recipe)
+        let url = ExportDestination.url(for: source, settings: settings, reading: ImageIOFiles())
+        let metadata = ExportMetadata.properties(
+            from: source,
+            reading: ImageIOFiles(),
+            policy: .all,
+            recipe: Self.recipe,
+        )
         try ImageExporter.write(
             ExportWriterTests.image(),
             to: url,
             settings: settings,
             metadata: metadata,
             source: source,
+            reading: ImageIOFiles(),
         )
         #expect(EmbeddedEdit.read(url)?.recipe == Self.recipe)
-        #expect(ExportMetadata.isExport(url))
+        #expect(ExportMetadata.isExport(url, reading: ImageIOFiles()))
     }
 
     @Test func `a size-limited export carries the edit within the limit`() throws {

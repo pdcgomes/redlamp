@@ -31,7 +31,7 @@ struct ExportStagingTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let folder = try folder("out")
         let url = folder.appending(path: "Export.jpg")
-        try ImageExporter.place(at: url) { try Data("jpeg".utf8).write(to: $0) }
+        try ImageExporter.place(at: url, reading: ImageIOFiles()) { try Data("jpeg".utf8).write(to: $0) }
         #expect(try Data(contentsOf: url) == Data("jpeg".utf8))
         #expect(UserDefaults.standard.dictionary(forKey: ExportStaging.key)?.keys
             .contains { $0.contains("out") } != true)

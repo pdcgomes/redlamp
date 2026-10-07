@@ -10,16 +10,20 @@ extension EditorModel {
         guard let info else { throw EngineError.noImageOpen }
         let source = info.url
         let request = settings.stillRequest(recipe: unobservedRecipe, source: source, size: info.pixelSize)
+        let files = engine.files
         setExportStatus("Exporting \(info.fileName)…", clearAfter: nil)
         do {
             let image = try await engine.renderStill(request)
             try await Task.detached(priority: .userInitiated) {
                 let metadata = ExportMetadata.properties(
                     from: source,
+                    reading: files,
                     policy: settings.metadata,
                     recipe: request.recipe,
                 )
-                try ImageExporter.write(image, to: url, settings: settings, metadata: metadata, source: source)
+                try ImageExporter.write(
+                    image, to: url, settings: settings, metadata: metadata, source: source, reading: files,
+                )
             }.value
         } catch {
             setExportStatus(nil, clearAfter: nil)

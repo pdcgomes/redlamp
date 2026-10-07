@@ -12,7 +12,10 @@ import Testing
 struct ExportSheetTests {
     /// The dialog at `height`, in a window of its own.
     private func dialog(
-        height: CGFloat, onCancel: @escaping () -> Void = {},
+        height: CGFloat,
+        photo: URL = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString)/IMG_0001.ARW"),
+        plan: ExportPlan? = nil,
+        onCancel: @escaping () -> Void = {},
         onExport: @escaping (ExportSettings, UUID?, URL) -> Void = { _, _, _ in },
     ) async throws -> NSWindow {
         _ = NSApplication.shared
@@ -20,8 +23,12 @@ struct ExportSheetTests {
         let defaults = try #require(UserDefaults(suiteName: name))
         defaults.removePersistentDomain(forName: name)
         let sheet = ExportSheet(
-            photo: FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString)/IMG_0001.ARW"),
-            photoSize: PixelSize(width: 6000, height: 4000), store: ExportPresetStore(defaults: defaults),
+            photo: photo,
+            photoSize: PixelSize(width: 6000, height: 4000), plan: plan ?? ExportPlan(
+                photo: photo,
+                files: UnreadableFiles(),
+            ),
+            store: ExportPresetStore(defaults: defaults),
             height: height, onCancel: onCancel, onExport: onExport,
         )
         let window = NSWindow(
@@ -158,5 +165,37 @@ struct ExportSheetTests {
             scroll.contentView.documentVisibleRect.contains(frame),
             "\(frame) outside \(scroll.contentView.documentVisibleRect)",
         )
+    }
+
+    /// The destination's files are read through the decode service in the app, which may be
+    /// starting or stuck on a damaged file: the dialog never waits for it on the main thread.
+    @Test func `the dialog works out where the export goes off the main thread, and shows it when it arrives`(
+    ) async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let photo = folder.appending(path: "IMG_0001.ARW")
+        try Data("raw".utf8).write(to: photo)
+        // Not an export, as the reader reads it, so the export takes the next number.
+        try Data("photo".utf8).write(to: folder.appending(path: "IMG_0001-redlamp.jpg"))
+        let files = ThreadRecordingFiles(delay: .milliseconds(500))
+        let plan = ExportPlan(photo: photo, files: files)
+        var exported: URL?
+        let window = try await dialog(height: 720, photo: photo, plan: plan, onExport: { _, _, url in exported = url })
+        defer { window.contentViewController = nil }
+        #expect(plan.savesAs == "IMG_0001-redlamp.jpg", "until it arrives, the name without a file there")
+        #expect(plan.step == nil)
+        for _ in 0 ..< 500 where plan.step == nil {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(plan.savesAs == "IMG_0001-redlamp-2.jpg")
+
+        #expect(try window.performKeyEquivalent(with: key(kVK_Return, "\r")))
+        for _ in 0 ..< 500 where exported == nil {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(exported == folder.appending(path: "IMG_0001-redlamp-2.jpg"))
+        #expect(!files.asked.isEmpty)
+        #expect(files.mainThreadCalls.isEmpty, "\(files.mainThreadCalls) read on the main thread")
     }
 }

@@ -98,7 +98,7 @@ private struct ExportStatesScene: View {
             ForEach(Self.specimens, id: \.title) { specimen in
                 SpecimenGroup(title: specimen.title, note: specimen.note) {
                     ExportSheet(
-                        photo: photo, photoSize: photoSize, store: harnessExportStore,
+                        photo: photo, photoSize: photoSize, files: UnreadableFiles(), store: harnessExportStore,
                         settings: specimen.settings, presetID: specimen.presetID,
                         onCancel: {}, onExport: { _, _, _ in },
                     )

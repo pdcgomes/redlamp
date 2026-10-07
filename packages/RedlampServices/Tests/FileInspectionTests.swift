@@ -64,6 +64,11 @@ struct FileInspectionTests {
             recorded.withLock { $0.append(files.count) }
             service.focusThumbnails(files, paths: paths, concurrently: concurrently, reply: reply)
         }
+
+        func imageProperties(_ files: [Data], paths: [String], reply: @escaping @Sendable (Data?) -> Void) {
+            recorded.withLock { $0.append(files.count) }
+            service.imageProperties(files, paths: paths, reply: reply)
+        }
     }
 
     @Test(.enabled(if: !series.isEmpty))
@@ -192,9 +197,7 @@ struct FileInspectionTests {
 
         let listener = Listener()
         let service = DecodeServiceClient(endpoint: listener.listener.endpoint)
-        withKnownIssue("The service reads no properties until it is asked them") {
-            #expect(service.imageProperties(of: files) == local)
-        }
+        #expect(service.imageProperties(of: files) == local)
     }
 
     @Test func `a thumbnail of a size the reader never draws is refused`() {

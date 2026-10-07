@@ -48,7 +48,7 @@ struct ExportTests {
         settings.colorSpace = .displayP3
         settings.sizing = ExportSizing(mode: .longEdge)
         settings.sizing.longEdge = 300
-        let url = try ExportDestination.url(for: #require(model.info).url, settings: settings)
+        let url = try ExportDestination.url(for: #require(model.info).url, settings: settings, reading: engine.files)
         #expect(url.lastPathComponent == "IMG_0001-redlamp.png")
 
         try await model.export(settings, to: url)
@@ -62,6 +62,58 @@ struct ExportTests {
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
         #expect(CGImageSourceGetType(source) as String? == "public.png")
         #expect(model.exportStatus == "Exported IMG_0001-redlamp.png")
+    }
+
+    /// Answers one file's properties and records what it was asked.
+    private final class SourceProperties: FileInspecting, @unchecked Sendable {
+        let source: URL
+        let properties: ImageProperties?
+        private let lock = NSLock()
+        private var urls: [URL] = []
+
+        var asked: [URL] {
+            lock.withLock { urls }
+        }
+
+        init(_ source: URL, _ properties: [CFString: Any]) {
+            self.source = source
+            self.properties = ImageProperties(properties)
+        }
+
+        func captures(of urls: [URL], concurrently _: Bool) -> [CaptureSettings?] {
+            urls.map { _ in nil }
+        }
+
+        func focusThumbnails(of urls: [URL], concurrently _: Bool) -> [GreyThumbnail?] {
+            urls.map { _ in nil }
+        }
+
+        func imageProperties(of urls: [URL]) -> [ImageProperties?] {
+            lock.withLock { self.urls += urls }
+            return urls.map { $0 == source ? properties : nil }
+        }
+    }
+
+    @Test func `an export copies its source's metadata as the engine's reader reads it`() async throws {
+        let fixture = try await openEditor()
+        defer { fixture.cleanup() }
+        let (model, engine, folder) = (fixture.model, fixture.engine, fixture.folder)
+        let source = folder.appending(path: "IMG_0001.ARW")
+        let files = SourceProperties(source, [
+            kCGImagePropertyIPTCDictionary: [kCGImagePropertyIPTCCity: "Lisbon"],
+        ])
+        engine.files = files
+        var settings = ExportSettings()
+        settings.metadata = .all
+        let url = folder.appending(path: "IMG_0001-redlamp.jpg")
+
+        try await model.export(settings, to: url)
+
+        let written = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let properties = CGImageSourceCopyPropertiesAtIndex(written, 0, nil) as? [CFString: Any]
+        let iptc = properties?[kCGImagePropertyIPTCDictionary] as? [CFString: Any]
+        #expect(iptc?[kCGImagePropertyIPTCCity] as? String == "Lisbon")
+        #expect(files.asked == [source])
     }
 
     @Test func `a failed export clears the status and throws`() async throws {
@@ -119,23 +171,45 @@ struct ExportTests {
         defer { fixture.cleanup() }
         let (model, engine, folder) = (fixture.model, fixture.engine, fixture.folder)
         let store = ExportPresetStore(defaults: defaults())
-        #expect(ExportActions.previousExport(model: model, store: store) == .needsDialog)
+        #expect(await ExportActions.previousExport(model: model, store: store) == .needsDialog)
 
         var settings = ExportSettings()
         settings.existingFiles = .addNumber
         store.recordExport(settings, presetID: nil)
-        guard case let .ready(url, _) = ExportActions.previousExport(model: model, store: store) else {
+        guard case let .ready(url, _) = await ExportActions.previousExport(model: model, store: store) else {
             Issue.record("expected a destination")
             return
         }
         #expect(url == folder.appending(path: "IMG_0001-redlamp.jpg"))
         try Data().write(to: url)
-        guard case let .ready(numbered, _) = ExportActions.previousExport(model: model, store: store) else {
+        guard case let .ready(numbered, _) = await ExportActions.previousExport(model: model, store: store) else {
             Issue.record("expected a destination")
             return
         }
         #expect(numbered.lastPathComponent == "IMG_0001-redlamp-2.jpg")
         #expect(engine.stills.isEmpty)
+    }
+
+    @Test func `Export with Previous works out where the export goes off the main thread`() async throws {
+        let fixture = try await openEditor()
+        defer { fixture.cleanup() }
+        let (model, engine, folder) = (fixture.model, fixture.engine, fixture.folder)
+        let files = ThreadRecordingFiles(delay: .milliseconds(100))
+        engine.files = files
+        // Not an export, as the reader reads it, so the export takes the next number.
+        try Data("photo".utf8).write(to: folder.appending(path: "IMG_0001-redlamp.jpg"))
+        let store = ExportPresetStore(defaults: defaults())
+        store.recordExport(ExportSettings(), presetID: nil)
+
+        ExportActions.exportWithPrevious(model: model, store: store)
+
+        let numbered = folder.appending(path: "IMG_0001-redlamp-2.jpg")
+        for _ in 0 ..< 500 where !FileManager.default.fileExists(atPath: numbered.path) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(FileManager.default.fileExists(atPath: numbered.path))
+        #expect(!files.asked.isEmpty)
+        #expect(files.mainThreadCalls.isEmpty, "\(files.mainThreadCalls) read on the main thread")
     }
 
     @Test(arguments: ExistingFilePolicy.allCases)
@@ -148,7 +222,7 @@ struct ExportTests {
         var settings = ExportSettings()
         settings.naming = ExportNaming(suffix: "")
         settings.existingFiles = policy
-        #expect(ExportActions.step(for: settings, photo: photo) == .ready(
+        #expect(ExportActions.step(for: settings, photo: photo, reading: UnreadableFiles()) == .ready(
             folder.appending(path: "IMG_0001-2.jpg"), settings,
         ))
     }

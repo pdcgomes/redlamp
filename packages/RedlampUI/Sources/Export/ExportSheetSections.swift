@@ -6,10 +6,11 @@ import SwiftUI
 /// Where the file goes and what it is called.
 struct ExportLocationSection: View {
     let photo: URL
+    /// Where the settings put the export, worked out when they change, not on every redraw: it
+    /// reads files in the folder.
+    let plan: ExportPlan
     @Binding var settings: ExportSettings
     @State private var chosenFolder: URL?
-    /// Worked out when the settings change, not on every redraw: it reads files in the folder.
-    @State private var savesAs = ""
 
     private enum Choice: Hashable {
         case original, folder(URL), choose
@@ -35,7 +36,7 @@ struct ExportLocationSection: View {
                 TextField("Name", text: $settings.naming.customName, prompt: Text("Name"))
             }
             LabeledContent("Saves as") {
-                Text(savesAs)
+                Text(plan.savesAs)
                     .foregroundStyle(.secondary)
                     .truncationMode(.middle)
                     .lineLimit(1)
@@ -45,9 +46,7 @@ struct ExportLocationSection: View {
             }
         }
         .onAppear { chosenFolder = settings.destinationFolder }
-        .onChange(of: settings, initial: true) {
-            savesAs = ExportDestination.url(for: photo, settings: settings).lastPathComponent
-        }
+        .onChange(of: settings, initial: true) { plan.update(settings) }
     }
 
     private var choice: Binding<Choice> {

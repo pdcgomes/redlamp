@@ -5,25 +5,33 @@ import RedlampEngineAPI
 public enum ExportDestination {
     /// The file `settings` name for `source`. A name that is a photo (see `isPhoto`) gets the
     /// first free number instead, so no rule for existing files can replace one.
-    public static func url(for source: URL, settings: ExportSettings) -> URL {
+    public static func url(for source: URL, settings: ExportSettings, reading files: any FileInspecting) -> URL {
+        let named = named(for: source, settings: settings)
+        return isPhoto(named, source: source, reading: files) ? firstFree(named) : named
+    }
+
+    /// The file `settings` name for `source` before any file there is read: `url`'s answer when
+    /// no photo has that name.
+    public static func named(for source: URL, settings: ExportSettings) -> URL {
         let folder = settings.destinationFolder ?? source.deletingLastPathComponent()
-        let named = folder
+        return folder
             .appending(path: settings.naming.baseName(for: source), directoryHint: .notDirectory)
             .appendingPathExtension(settings.format.fileExtension)
-        return isPhoto(named, source: source) ? firstFree(named) : named
     }
 
     /// Whether the file at `url` is a photo an export must never replace: anything there but an
     /// earlier export (see `ExportMetadata.isExport`), and always `source` itself (whatever the
-    /// letter case of the name), a raw file, or a file with Redlamp edits.
-    public static func isPhoto(_ url: URL, source: URL?, fileManager: FileManager = .default) -> Bool {
+    /// letter case of the name), a raw file, or a file with Redlamp edits. `files` reads its tags.
+    public static func isPhoto(
+        _ url: URL, source: URL?, reading files: any FileInspecting, fileManager: FileManager = .default,
+    ) -> Bool {
         guard fileManager.fileExists(atPath: url.path) else { return false }
         if let source, isSameFile(url, source) {
             return true
         }
         return SupportedFormats.isRaw(url)
             || fileManager.fileExists(atPath: SidecarStore().url(for: url).path)
-            || !ExportMetadata.isExport(url)
+            || !ExportMetadata.isExport(url, reading: files)
     }
 
     /// Through symbolic links; by path, ignoring letter case and Unicode normalisation, when the

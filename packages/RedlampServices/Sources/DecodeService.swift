@@ -36,6 +36,9 @@ public struct InProcessDecoder: ImageDecoding {
     func focusThumbnails(
         _ files: [Data], paths: [String], concurrently: Bool, reply: @escaping @Sendable (Data?) -> Void,
     )
+
+    /// `FileInspecting.imageProperties` likewise: a JSON array of `ImageProperties` or null.
+    func imageProperties(_ files: [Data], paths: [String], reply: @escaping @Sendable (Data?) -> Void)
 }
 
 /// The service side: decodes from the bytes it is sent (it has no file system access).
@@ -61,6 +64,10 @@ public final class DecodeService: NSObject, DecodeServiceProtocol {
         _ files: [Data], paths: [String], concurrently: Bool, reply: @escaping @Sendable (Data?) -> Void,
     ) {
         reply(try? JSONEncoder().encode(Self.inspect(files, paths: paths, concurrently, FileInspection.focusThumbnail)))
+    }
+
+    public func imageProperties(_ files: [Data], paths: [String], reply: @escaping @Sendable (Data?) -> Void) {
+        reply(try? JSONEncoder().encode(Self.inspect(files, paths: paths, false, FileInspection.imageProperties)))
     }
 
     private static func inspect<T: Sendable>(
@@ -299,7 +306,9 @@ public extension DecodedImage {
         }
 
         public func imageProperties(of urls: [URL]) -> [ImageProperties?] {
-            urls.map { _ in nil }
+            inspect(urls, as: ImageProperties.self) { proxy, files, paths, reply in
+                proxy.imageProperties(files, paths: paths, reply: reply)
+            }
         }
 
         private func inspect<T: Decodable>(

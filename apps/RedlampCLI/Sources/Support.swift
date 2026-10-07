@@ -3,6 +3,7 @@ import Foundation
 import ImageIO
 import RedlampDocument
 import RedlampRecipes
+import RedlampServices
 import UniformTypeIdentifiers
 
 /// `--name value` options, `--flag`s and positional arguments.
@@ -145,10 +146,11 @@ enum ImageFile {
     /// place, and never over one of `sources` or another photo.
     static func place(at url: URL, protecting sources: [URL] = [], writing: (URL) throws -> Void) throws {
         do {
-            for source in sources.dropFirst() where ExportDestination.isPhoto(url, source: source) {
+            let files = InProcessDecoder()
+            for source in sources.dropFirst() where ExportDestination.isPhoto(url, source: source, reading: files) {
                 throw ExportError.wouldReplacePhoto(url)
             }
-            try ImageExporter.place(at: url, source: sources.first, writing: writing)
+            try ImageExporter.place(at: url, source: sources.first, reading: files, writing: writing)
         } catch let error as ExportError {
             throw CLIError(description: error.localizedDescription)
         }
