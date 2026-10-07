@@ -29,7 +29,7 @@ public struct SearchScenario: BenchScenario {
     }
 
     public func run(_ context: BenchContext) async throws -> [BenchResult] {
-        let setup = try await QueryScenario.engine(for: context, in: indexFolder)
+        let setup = try await QueryScenario.engine(searching: context, in: indexFolder)
         let engine = setup.engine
         let clock = ContinuousClock()
         var firsts: [Duration] = []
@@ -112,10 +112,26 @@ enum QueryScenario {
         return temporaryDirectory.appending(path: "redlamp-bench-query/\(name)", directoryHint: .isDirectory)
     }
 
-    /// The fixture's index in `folder`, or in `indexFolder(for:)`, with a query engine over it, its
-    /// column store loaded, and how long that took. Throws `MissingIndex` when there's no index
-    /// there, or one that doesn't hold the manifest's photos.
+    /// The fixture's index, indexed with `LibraryIndexer` unless it holds the manifest's photos
+    /// already, and a query engine over it with its column store loaded, and how long that took.
     static func engine(for context: BenchContext, in folder: URL?) async throws
+        -> (index: LibraryIndex, engine: QueryEngine, loaded: Duration) {
+        let url = (folder ?? indexFolder(for: context)).appending(path: "Index.sqlite")
+        let index = try await LibraryIndex.open(at: url)
+        if try await index.read({ try $0.photoCount() }) != context.manifest.totals.photos {
+            for await _ in LibraryIndexer(index: index).index([context.fixture]) {}
+        }
+        let engine = QueryEngine(index: index)
+        let clock = ContinuousClock()
+        let started = clock.now
+        try await engine.load()
+        return (index, engine, clock.now - started)
+    }
+
+    /// For search and facets: the fixture's index in `folder`, or in `indexFolder(for:)`, with a query
+    /// engine over it, its column store loaded, and how long that took. Throws `MissingIndex` when
+    /// there's no index there, or one that doesn't hold the manifest's photos.
+    static func engine(searching context: BenchContext, in folder: URL?) async throws
         -> (index: LibraryIndex, engine: QueryEngine, loaded: Duration) {
         let url = (folder ?? indexFolder(for: context)).appending(path: "Index.sqlite")
         let expected = context.manifest.totals.photos

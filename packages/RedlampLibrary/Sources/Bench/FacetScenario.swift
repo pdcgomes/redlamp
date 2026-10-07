@@ -19,7 +19,7 @@ public struct FacetScenario: BenchScenario {
     }
 
     public func run(_ context: BenchContext) async throws -> [BenchResult] {
-        let setup = try await QueryScenario.engine(for: context, in: indexFolder)
+        let setup = try await QueryScenario.engine(searching: context, in: indexFolder)
         let engine = setup.engine
         let clock = ContinuousClock()
         var passes: [Duration] = []
