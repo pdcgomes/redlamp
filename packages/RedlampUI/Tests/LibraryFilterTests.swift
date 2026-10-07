@@ -809,7 +809,7 @@ extension LibraryFilterTests {
                     for (place, url) in urls.enumerated() {
                         let metadata = PhotoMetadata(rating: wave[place])
                         try? stores[place].save(Sidecar(recipe: EditRecipe(), metadata: metadata), for: url)
-                        core.sidecarSaved(at: LibraryService.path(url), photo: url, store: stores[place])
+                        core.sidecarSaved(url, store: stores[place])
                         try? await Task.sleep(for: .milliseconds(150))
                     }
                 }
