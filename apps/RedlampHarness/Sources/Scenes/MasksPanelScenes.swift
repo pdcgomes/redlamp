@@ -160,7 +160,6 @@ private struct MasksTask: Identifiable, Sendable {
         ),
         MasksTask(
             id: 5, title: "Find which mask changed an area", steps: "Pointer over the rows; pins inside each mask",
-            row: "UX-23",
         ),
         MasksTask(
             id: 6, title: "Change a component to Subtract", steps: "Click its operation icon", row: "UX-22",

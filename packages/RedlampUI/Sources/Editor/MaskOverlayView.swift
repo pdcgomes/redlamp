@@ -47,11 +47,18 @@ struct MaskOverlayView: View {
 
                 let shapes = model.maskShapes
                 ForEach(model.maskOutlines) { mask in
-                    if model.showMaskPins, mask.id != model.selectedMaskID,
-                       let first = mask.components.first, let center = shapes[first.id]?.center {
+                    if model.showMaskPins, mask.id != model.selectedMaskID, let first = mask.components.first,
+                       let center = model.maskPins[mask.id] ?? shapes[first.id]?.center {
                         Pin(selected: false)
                             .position(frame.view(center))
                             .onTapGesture { model.selectMask(mask.id) }
+                            .onHover { inside in
+                                if inside {
+                                    model.hoveredMaskID = mask.id
+                                } else if model.hoveredMaskID == mask.id {
+                                    model.hoveredMaskID = nil
+                                }
+                            }
                             .help(mask.name)
                     }
                 }

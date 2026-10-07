@@ -440,12 +440,25 @@ public final class EditorModel {
     /// list (`refreshMaskThumbnails`), and what each was drawn from.
     public internal(set) var maskThumbnails: [UUID: CGImage] = [:]
     var maskThumbnailKeys: [UUID: Int] = [:]
+    /// Where each mask's pin goes, found with its thumbnail: the point furthest inside it, in the
+    /// photo's coordinates. A mask without one has its pin at its first component's centre.
+    public internal(set) var maskPins: [UUID: ImagePoint] = [:]
 
     /// The mask under the pointer in the Masks panel's list (`MasksPanelNext`), which the canvas
     /// previews even with the overlay off.
     public var hoveredMaskID: UUID? {
         didSet {
             if hoveredMaskID != oldValue {
+                requestRender()
+            }
+        }
+    }
+
+    /// The component under the pointer in the new Masks panel, whose own coverage the canvas
+    /// previews (`componentPreview`).
+    public var hoveredComponentID: UUID? {
+        didSet {
+            if hoveredComponentID != oldValue {
                 requestRender()
             }
         }
@@ -1113,9 +1126,14 @@ public final class EditorModel {
         if debugRequestTimes.count > 64 {
             debugRequestTimes.removeFirst(32)
         }
-        let overlay = maskOverlayShown
+        var overlay = maskOverlayShown
+        var shown = displayed
+        if let preview = componentPreview(in: displayed) {
+            shown.masks.append(preview)
+            overlay = preview.id
+        }
         var request = RenderRequest(
-            recipe: displayed,
+            recipe: shown,
             targetSize: target.size,
             region: target.region,
             showClipping: showClipping || temporaryClipping,

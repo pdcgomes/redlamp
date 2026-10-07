@@ -1232,6 +1232,14 @@ struct ComponentRow: View {
         .background(RoundedRectangle(cornerRadius: 6).fill(selected ? Theme.selection : .clear))
         .contentShape(Rectangle())
         .onTapGesture { model.selectedComponentID = component.id }
+        .onHover { inside in
+            guard actionsOnScreen else { return }
+            if inside {
+                model.hoveredComponentID = component.id
+            } else if model.hoveredComponentID == component.id {
+                model.hoveredComponentID = nil
+            }
+        }
         .modifier(Reorderable(payload: "redlamp.component:\(component.id.uuidString)", isEnabled: true) {
             guard let dragged = Reorderable.id(in: $0, kind: "component") else { return false }
             model.moveComponent(dragged, in: mask.id, onto: component.id)

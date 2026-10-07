@@ -6,8 +6,9 @@ import SwiftUI
 /// checklist works through it. From UX-20: one picker starts every mask, the list's actions sit
 /// in the header, and messages and the armed tool show at the top of the list. From UX-22: every
 /// action is on screen, not only in context menus. From UX-23: each row shows its mask's
-/// coverage, and the canvas previews the mask under the pointer. From UX-21: People opens a
-/// picker of who is in the photo and which of their parts to mask.
+/// coverage, the canvas previews the mask or component under the pointer, and pins sit where
+/// each mask covers most. From UX-21: People opens a picker of who is in the photo and which of
+/// their parts to mask.
 @_spi(Harness) public struct MasksPanelNext: View {
     @Environment(EditorModel.self) private var model
 
