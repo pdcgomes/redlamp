@@ -4,7 +4,8 @@ import SwiftUI
 /// The Masks panel as redesigned (`docs/plans/2026-10-07-masks-panel-design.md`), built in the
 /// harness first: it replaces `MaskingPanel` in the editor once every task in the design's
 /// checklist works through it. From UX-20: one picker starts every mask, the list's actions sit
-/// in the header, and messages and the armed tool show at the top of the list.
+/// in the header, and messages and the armed tool show at the top of the list. From UX-22: every
+/// action is on screen, not only in context menus.
 @_spi(Harness) public struct MasksPanelNext: View {
     @Environment(EditorModel.self) private var model
 
@@ -22,7 +23,7 @@ import SwiftUI
                     .padding(.horizontal, Theme.panelPadding)
                     .padding(.bottom, 12)
             } else {
-                MaskList()
+                MaskList(actionsOnScreen: true)
                     .padding(.horizontal, Theme.panelPadding)
                     .padding(.bottom, 8)
                 Rectangle().fill(Theme.divider).frame(height: 1)

@@ -641,7 +641,11 @@ struct CreateMaskMenu: View {
 }
 
 struct MaskList: View {
+    /// A menu button on the selected row and the one under the pointer, with the context menu's
+    /// actions (`MasksPanelNext`).
+    var actionsOnScreen = false
     @Environment(EditorModel.self) private var model
+    @State private var hovered: UUID?
     @State private var renaming: UUID?
     @State private var draftName = ""
     /// The mask Save as Mask Preset… names a preset after, while it asks.
@@ -680,11 +684,31 @@ struct MaskList: View {
                     }
                     .buttonStyle(.plain)
                     .help(mask.isVisible ? "Hide mask" : "Show mask")
+                    if actionsOnScreen, selected || hovered == mask.id {
+                        Menu {
+                            actions(for: mask)
+                        } label: {
+                            Image(systemName: "ellipsis.circle").font(.system(size: 11))
+                        }
+                        .menuStyle(.button)
+                        .buttonStyle(.plain)
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .foregroundStyle(Theme.secondaryLabel)
+                        .help("Rename, Duplicate, Save as Mask Preset, Delete")
+                    }
                 }
                 .padding(.horizontal, 8)
                 .frame(height: 28)
                 .background(RoundedRectangle(cornerRadius: 6).fill(selected ? Theme.selection : .clear))
                 .contentShape(Rectangle())
+                .onHover { inside in
+                    if inside {
+                        hovered = mask.id
+                    } else if hovered == mask.id {
+                        hovered = nil
+                    }
+                }
                 .onTapGesture(count: 2) {
                     draftName = mask.name
                     renaming = mask.id
@@ -696,19 +720,7 @@ struct MaskList: View {
                     return true
                 })
                 .contextMenu {
-                    Button("Rename…") {
-                        draftName = mask.name
-                        renaming = mask.id
-                    }
-                    Button("Duplicate") { model.duplicateMask(mask.id) }
-                    Button("Duplicate and Invert") { model.duplicateMask(mask.id, inverted: true) }
-                    Button("Reset Adjustments") { model.resetMaskAdjustments(mask.id) }
-                    Button("Save as Mask Preset…") {
-                        presetName = mask.name
-                        presetSource = mask.id
-                    }
-                    Divider()
-                    Button("Delete \(mask.name)", role: .destructive) { model.deleteMask(mask.id) }
+                    actions(for: mask)
                 }
             }
         }
@@ -739,6 +751,23 @@ struct MaskList: View {
         renaming = nil
         draftName = ""
     }
+
+    @ViewBuilder
+    private func actions(for mask: MaskOutline) -> some View {
+        Button("Rename…") {
+            draftName = mask.name
+            renaming = mask.id
+        }
+        Button("Duplicate") { model.duplicateMask(mask.id) }
+        Button("Duplicate and Invert") { model.duplicateMask(mask.id, inverted: true) }
+        Button("Reset Adjustments") { model.resetMaskAdjustments(mask.id) }
+        Button("Save as Mask Preset…") {
+            presetName = mask.name
+            presetSource = mask.id
+        }
+        Divider()
+        Button("Delete \(mask.name)", role: .destructive) { model.deleteMask(mask.id) }
+    }
 }
 
 struct SelectedMaskEditor: View {
@@ -751,7 +780,7 @@ struct SelectedMaskEditor: View {
         VStack(alignment: .leading, spacing: 3) {
             SubsectionHeader(title: "Components", parameters: [])
             ForEach(mask.components) { component in
-                ComponentRow(mask: mask, component: component)
+                ComponentRow(mask: mask, component: component, actionsOnScreen: usesPicker)
             }
             Group {
                 if usesPicker {
@@ -787,6 +816,17 @@ struct SelectedMaskEditor: View {
                 ParameterSlider(parameter: .maskAIFeather)
                     .padding(.top, 6)
                 ParameterSlider(parameter: .maskAIEdge)
+                if usesPicker, kind != .depthRange, let component = model.selectedComponentOutline {
+                    HStack(spacing: 6) {
+                        Button("Refine Edges") { Task { await model.refineEdges(component.id, in: mask.id) } }
+                            .help("Solve the mask's edge again from the photo")
+                        Button("Refine Edge Brush") { model.startRefiningEdges(component.id, in: mask.id) }
+                            .help("Paint over an edge to solve it again, hair by hair")
+                    }
+                    .controlSize(.small)
+                    .font(Theme.labelFont)
+                    .padding(.top, 2)
+                }
             default:
                 EmptyView()
             }
@@ -1053,17 +1093,36 @@ struct ResetMaskButton: View {
 struct ComponentRow: View {
     let mask: MaskOutline
     let component: MaskOutline.Component
+    /// The operation's icon as a menu, and a menu button for Delete and an AI component's
+    /// Refine Edges (`MasksPanelNext`).
+    var actionsOnScreen = false
     @Environment(EditorModel.self) private var model
 
     var body: some View {
         let selected = component.id == model.selectedComponentOutline?.id
         let index = (mask.components.firstIndex(of: component) ?? 0) + 1
         HStack(spacing: 8) {
-            Image(systemName: component.operation.symbol)
-                .font(.system(size: 9, weight: .bold))
+            if actionsOnScreen {
+                Menu {
+                    operations
+                } label: {
+                    Image(systemName: component.operation.symbol)
+                        .font(.system(size: 9, weight: .bold))
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
+                .fixedSize()
                 .frame(width: 14)
                 .foregroundStyle(Theme.secondaryLabel)
-                .help(component.operation.name)
+                .help("\(component.operation.name): choose how it combines")
+            } else {
+                Image(systemName: component.operation.symbol)
+                    .font(.system(size: 9, weight: .bold))
+                    .frame(width: 14)
+                    .foregroundStyle(Theme.secondaryLabel)
+                    .help(component.operation.name)
+            }
             Image(systemName: component.kind?.symbol ?? "questionmark.square.dashed")
                 .font(.system(size: 11))
             Text("\(component.kind?.name ?? "Newer Component") \(index)")
@@ -1091,14 +1150,29 @@ struct ComponentRow: View {
             .toggleStyle(.checkbox)
             .controlSize(.mini)
             .font(Theme.captionFont)
-            Button {
-                model.deleteComponent(component.id, in: mask.id)
-            } label: {
-                Image(systemName: "trash").font(.system(size: 10))
+            if actionsOnScreen {
+                Menu {
+                    refinements
+                    Button("Delete", role: .destructive) { model.deleteComponent(component.id, in: mask.id) }
+                } label: {
+                    Image(systemName: "ellipsis.circle").font(.system(size: 10))
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .foregroundStyle(Theme.secondaryLabel)
+                .help(component.kind?.isAI == true ? "Refine Edges, Refine Edge Brush, Delete" : "Delete")
+            } else {
+                Button {
+                    model.deleteComponent(component.id, in: mask.id)
+                } label: {
+                    Image(systemName: "trash").font(.system(size: 10))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.secondaryLabel)
+                .help("Delete component")
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(Theme.secondaryLabel)
-            .help("Delete component")
         }
         .foregroundStyle(selected ? Theme.value : Theme.label)
         .padding(.horizontal, 8)
@@ -1112,14 +1186,23 @@ struct ComponentRow: View {
             return true
         })
         .contextMenu {
-            ForEach(MaskOperation.allCases, id: \.self) { operation in
-                Button("Set to \(operation.name)") { model.setComponentOperation(component.id, in: mask.id, operation) }
-            }
-            if let kind = component.kind, kind.isAI, kind != .depthRange {
-                Divider()
-                Button("Refine Edges") { Task { await model.refineEdges(component.id, in: mask.id) } }
-                Button("Refine Edge Brush") { model.startRefiningEdges(component.id, in: mask.id) }
-            }
+            operations
+            refinements
+        }
+    }
+
+    private var operations: some View {
+        ForEach(MaskOperation.allCases, id: \.self) { operation in
+            Button("Set to \(operation.name)") { model.setComponentOperation(component.id, in: mask.id, operation) }
+        }
+    }
+
+    @ViewBuilder
+    private var refinements: some View {
+        if let kind = component.kind, kind.isAI, kind != .depthRange {
+            Divider()
+            Button("Refine Edges") { Task { await model.refineEdges(component.id, in: mask.id) } }
+            Button("Refine Edge Brush") { model.startRefiningEdges(component.id, in: mask.id) }
         }
     }
 }
