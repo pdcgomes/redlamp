@@ -285,6 +285,11 @@ public extension FeedbackArea {
                     "Changes on Disk",
                     ["new photos", "deleted", "renamed", "copied", "refresh"],
                 ),
+                FeedbackFeature(
+                    "import",
+                    "Import Photos",
+                    ["import", "card", "memory card", "backup", "destination", "eject", "safe to erase"],
+                ),
             ],
         ),
         FeedbackArea(

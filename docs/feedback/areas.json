@@ -414,6 +414,10 @@
           "title" : "Changes on Disk"
         },
         {
+          "id" : "library.import",
+          "title" : "Import Photos"
+        },
+        {
           "id" : "library.other",
           "title" : "Something else in Library"
         }

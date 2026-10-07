@@ -14,7 +14,7 @@
             "import.from-folder",
             "Import Photos… copies a folder's photos, rated, flagged and labelled from the grid's keys, to a "
                 + "destination and a backup, and Library shows them selected",
-            claims: [.action(.importPhotos)],
+            claims: [.action(.importPhotos), .feature("library.import")],
         ) { app in
             try app.openWorking()
             let scratch = try ImportScratch(app, photos: 3)
@@ -72,6 +72,7 @@
                 model.folder?.standardizedFileURL.path == folder.standardizedFileURL.path
                     && model.selectedPhotos.count == 3 && model.module == .library
             }
+            app.covered(.feature("library.import"), via: .menu)
         }
 
         static let performance = Scenario(
