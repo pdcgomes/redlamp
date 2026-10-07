@@ -61,6 +61,16 @@
                 let now = try app.main { $0.baseLook }
                 try app.expect(now == look.reference, "The Base Look is \(now), not \(look)")
             }
+            // The Base Look Amount's value takes typing.
+            try app.main { $0.expandedPanels = [.basic] }
+            app.pause(0.3)
+            try app.click(.identifier("baseLook.amount.value"))
+            try app.wait("the Base Look Amount's value to take typing") { _ in
+                Views.editorWindow?.firstResponder is NSTextView
+            }
+            try app.type("60")
+            try app.pressInWindow(KeyCombo(.character("\r")))
+            try app.wait("the Base Look Amount to be 60") { $0.baseLook.amount == 60 }
             try app.main { $0.setBaseLook(BuiltInBaseLook.color.reference) }
             app.covered(.feature("develop.treatment"), via: .key)
         }
@@ -104,6 +114,15 @@
             try app.type("x+15")
             try app.pressInWindow(KeyCombo(.character("\r")))
             try app.wait("Shadows to be 25") { abs($0.value(.shadows) - 25) < 1e-6 }
+            // Dragging the number scrubs it, as one history step. (⌘-scroll's own step ends 400 ms
+            // after scrolling stops, so only the steps naming Shadows are counted.)
+            let steps = try app.main { $0.history.count }
+            try app.drag(.sliderValue(.shadows), from: CGPoint(x: 0.5, y: 0.5), by: CGVector(dx: 50, dy: 0))
+            try app.wait("dragging the number to scrub Shadows") { $0.value(.shadows) > 25 }
+            try app.wait("the scrub's history step") { $0.history.count > steps }
+            app.pause(0.5)
+            let scrubSteps = try app.main { $0.history.dropFirst(steps).count(where: { $0.title == "Shadows" }) }
+            try app.expect(scrubSteps == 1, "The scrub made \(scrubSteps) Shadows steps, not one")
             // , and . choose a slider, - and = nudge it.
             try app.main { $0.focusedParameter = .whites }
             try app.press(.increaseSetting)
@@ -137,10 +156,12 @@
         ) { app in
             try app.openWorking()
             try app.main { $0.expandedPanels = [.toneCurve] }
+            app.pause(0.3)
+            // Each split's value under its handle takes typing.
             for parameter in [ParameterID.curveSplitShadows, .curveSplitMidtones, .curveSplitHighlights] {
                 let spec = parameter.spec
-                try app.set(parameter, spec.clamp(spec.defaultValue + 10))
-                app.covered(.parameter(parameter), via: .model)
+                try typeValue(spec.clamp(spec.defaultValue + 10), into: parameter, app: app)
+                app.covered(.parameter(parameter), via: .key)
             }
             try app.expectRenders("a point curve") {
                 try app.main { model in
@@ -184,18 +205,39 @@
             },
         ) { app in
             try app.openWorking()
+            try app.main { $0.expandedPanels = [.colorGrading] }
+            app.pause(0.3)
             for range in GradingRange.allCases {
-                try app.set(range.hueParameter, 200)
-                try app.set(range.saturationParameter, 30)
-                try app.set(range.luminanceParameter, 10)
-                app.covered([
-                    .parameter(range.hueParameter),
-                    .parameter(range.saturationParameter),
-                    .parameter(range.luminanceParameter),
-                ], via: .model)
+                let parameters = [range.hueParameter, range.saturationParameter, range.luminanceParameter]
+                // The 3-way view's wheels show their hue, saturation and luminance as values; Global
+                // has no wheel there.
+                if range == .global {
+                    try app.set(range.hueParameter, 200)
+                    try app.set(range.saturationParameter, 30)
+                    try app.set(range.luminanceParameter, 10)
+                    app.covered(parameters.map { Claim.parameter($0) }, via: .model)
+                } else {
+                    try typeValue(200, into: range.hueParameter, app: app)
+                    try typeValue(30, into: range.saturationParameter, app: app)
+                    try typeValue(10, into: range.luminanceParameter, app: app)
+                    app.covered(parameters.map { Claim.parameter($0) }, via: .key)
+                }
             }
             try app.choose(.resetAll)
-            app.covered(.feature("develop.color-grading"), via: .model)
+            app.covered(.feature("develop.color-grading"), via: .key)
+        }
+
+        /// Clicks a parameter's value field, types `value` and presses Return.
+        static func typeValue(_ value: Double, into parameter: ParameterID, app: RunningApp) throws {
+            try app.click(.sliderValue(parameter))
+            try app.wait("\(parameter.spec.label)'s value to take typing") { _ in
+                Views.editorWindow?.firstResponder is NSTextView
+            }
+            try app.type(parameter.spec.formatted(value))
+            try app.pressInWindow(KeyCombo(.character("\r")))
+            try app.wait("\(parameter.spec.label) to be \(parameter.spec.formatted(value))") {
+                abs($0.value(parameter) - value) < 1e-6
+            }
         }
 
         static let detail = Scenario(
