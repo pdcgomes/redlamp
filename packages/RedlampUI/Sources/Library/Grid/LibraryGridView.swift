@@ -64,6 +64,12 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     private var wasShown = false
     private var texts: [GridText.Key: CGImage] = [:]
     private var drawingTexts: Set<GridText.Key> = []
+    private var headerTexts: [GroupHeaderText.Key: CGImage] = [:]
+    private var drawingHeaderTexts: Set<GroupHeaderText.Key> = []
+    /// The group whose header showed the focus when the selection was last followed.
+    private var shownFocus: Int?
+    /// The content's tooltip area is made.
+    private var hasToolTip = false
     /// A rubber band being drawn: where it started, and the selection it adds to (with ⇧ or ⌘).
     private var band: Band?
     /// The item whose context menu is open.
@@ -172,6 +178,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     @objc private func screenChanged() {
         thumbnails.colorSpace = window?.colorSpace?.cgColorSpace
         texts = [:]
+        headerTexts = [:]
         GridBadges.prepare(scale: scale)
     }
 
@@ -225,11 +232,29 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     }
 
     /// The same source's photos in another order or another number (a filter, LIB-18), or grouped afresh:
-    /// cells on screen keep their layers, and those whose item shows another photo now take it.
+    /// cells on screen keep their layers, and those whose item shows another photo now take it. Grouped, a
+    /// photo still on show keeps its cell, which moves to its item.
     private func refill(keeping anchor: ScreenAnchor? = nil) {
+        let photos = cells.compactMap { item, cell in cell.item.map { (item, cell, $0.url) } }
         followGroups()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
+        if shownGroups != nil {
+            var moved: [Int: LibraryGridCell] = [:]
+            var left: [LibraryGridCell] = []
+            for (_, cell, url) in photos {
+                if let next = item(of: url), moved[next] == nil {
+                    moved[next] = cell
+                } else {
+                    left.append(cell)
+                }
+            }
+            for (item, cell) in cells where cell.item == nil {
+                moved[item] = cell
+            }
+            left.forEach(release)
+            cells = moved
+        }
         for (item, cell) in cells where item >= shownCount || sections?.isHeader(item) == true {
             cells.removeValue(forKey: item)
             release(cell)
@@ -407,9 +432,16 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         gridLayout = next
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        content.frame.size = CGSize(width: next.width, height: height)
-        content.removeAllToolTips()
-        content.addToolTip(content.bounds, owner: self, userData: nil)
+        let size = CGSize(width: next.width, height: height)
+        if content.frame.size != size {
+            content.frame.size = size
+        }
+        // One area for any content: one made again as the content's height changes has AppKit update its
+        // tracking areas in the next display cycle, milliseconds for each grouping.
+        if !hasToolTip {
+            content.addToolTip(CGRect(x: 0, y: 0, width: 1e5, height: 1e9), owner: self, userData: nil)
+            hasToolTip = true
+        }
         if styled {
             texts = [:]
         }
@@ -430,6 +462,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     private func scroll(toTop y: CGFloat) {
         let clip = scrollView.contentView
         let top = min(max(y, 0), max(content.frame.height - clip.bounds.height, 0))
+        guard abs(clip.bounds.minY - top) >= 0.5 else { return }
         clip.scroll(to: CGPoint(x: 0, y: top))
         scrollView.reflectScrolledClipView(clip)
     }
@@ -548,14 +581,47 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     private func place(header: Int, _ cell: GroupHeaderCell) {
         guard case let .header(group) = content(ofItem: header), let shownGroups else { return }
         let groups = model.gridGroups
-        let picks = groups.picks.indices.contains(group) ? groups.picks[group] : shownGroups.groups[group].picks
-        let focused = !shownGroups.isOpen(group) && selected.flatMap(model.library.photoID(of:))
-            .flatMap(shownGroups.groups.index(of:)) == group
+        let shown = shownGroups.groups[group]
+        let picks = groups.picks.indices.contains(group) ? groups.picks[group] : shown.picks
+        let frame = gridLayout.frame(forItem: header)
+        let detail = GroupHeaderText.detail(count: shown.count, picks: picks)
         cell.show(
-            group: group, title: shownGroups.groups[group].name, count: shownGroups.groups[group].count, picks: picks,
-            open: shownGroups.isOpen(group), focused: focused, frame: gridLayout.frame(forItem: header),
-            scale: scale,
+            group: group, title: shown.name, detail: detail, open: shownGroups.isOpen(group),
+            focused: !shownGroups.isOpen(group) && focusedGroup == group, frame: frame, scale: scale,
         )
+        let key = GroupHeaderText.Key(title: shown.name, detail: detail, width: max(frame.width - 34, 1), scale: scale)
+        guard cell.textKey != key else { return }
+        if let image = headerTexts[key] {
+            return cell.setText(image, for: key)
+        }
+        cell.setText(nil, for: key)
+        guard drawingHeaderTexts.insert(key).inserted else { return }
+        let space = thumbnails.colorSpace
+        model.library.scheduler.submit(.onScreen) {
+            let image = GroupHeaderText.render(key, in: space)
+            Task { @MainActor [weak self] in self?.drewHeader(key, image) }
+        }
+    }
+
+    private func drewHeader(_ key: GroupHeaderText.Key, _ image: CGImage?) {
+        drawingHeaderTexts.remove(key)
+        guard let image else { return }
+        if headerTexts.count > 400 {
+            let shown = Set(headers.values.compactMap(\.textKey))
+            headerTexts = headerTexts.filter { shown.contains($0.key) }
+        }
+        headerTexts[key] = image
+        for header in headers.values where header.textKey == key {
+            header.setText(image, for: key)
+        }
+    }
+
+    /// The group of the active photo when it's in a closed group: its header shows the focus.
+    private var focusedGroup: Int? {
+        guard let shownGroups, let id = selected.flatMap(model.library.photoID(of:)),
+              let group = shownGroups.groups.index(of: id), !shownGroups.isOpen(group)
+        else { return nil }
+        return group
     }
 
     /// Sets `cell` to item `index` where the layout puts it: its photo, thumbnail, badges and selection, and,
@@ -782,8 +848,12 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         marked = photos
         let moved = selected != selection
         selected = selection
-        for (item, header) in headers {
-            place(header: item, header)
+        let focus = focusedGroup
+        if focus != shownFocus {
+            shownFocus = focus
+            for (item, header) in headers {
+                place(header: item, header)
+            }
         }
         guard moved || revealing, let selection else { return }
         if let item = item(of: selection), item < shownCount {

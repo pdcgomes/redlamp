@@ -28,6 +28,11 @@ final class LibraryToolbarView: NSView {
     private let tighter = NSTextField(labelWithString: "Tighter")
     private let looser = NSTextField(labelWithString: "Looser")
     private let unpicked = NSButton(title: "", target: nil, action: nil)
+    /// The moments-without-a-pick button's width, measured as its title changes, in steps of 40 points, so a
+    /// count that changes as photos are picked doesn't lay the window out again.
+    private var unpickedWidth: CGFloat = 120
+    /// What the toolbar was last laid out for: the grid or the loupe, and which of Group By's controls show.
+    private var laidOut: [CGFloat]?
     private var trackers: [Tracker] = []
 
     init(model: EditorModel) {
@@ -132,7 +137,6 @@ final class LibraryToolbarView: NSView {
     private func updateGroups(inGrid: Bool) {
         let state = model.libraryViews
         let groups = model.gridGroups
-        _ = groups.revision
         let index = GroupKey.allCases.firstIndex(of: state.groupKey) ?? 0
         if groupBy.indexOfSelectedItem != index {
             groupBy.selectItem(at: index)
@@ -149,9 +153,15 @@ final class LibraryToolbarView: NSView {
         let coverage = groups.coverage
         unpicked.isHidden = !moments || coverage == nil
         if let coverage {
-            unpicked.title = "\(coverage.unpicked.formatted()) of \(coverage.moments.formatted()) "
+            let title = "\(coverage.unpicked.formatted()) of \(coverage.moments.formatted()) "
                 + "\(coverage.moments == 1 ? "moment" : "moments") without a pick"
-            unpicked.setAccessibilityLabel(unpicked.title)
+            if unpicked.title != title {
+                unpicked.title = title
+                unpicked.setAccessibilityLabel(title)
+                let font = unpicked.font ?? .systemFont(ofSize: NSFont.smallSystemFontSize)
+                let width = (title as NSString).size(withAttributes: [.font: font]).width + 24
+                unpickedWidth = max((width / 40).rounded(.up) * 40, 120)
+            }
         }
         unpicked.state = groups.showsUnpicked ? .on : .off
     }
@@ -186,7 +196,11 @@ final class LibraryToolbarView: NSView {
             finder.isEnabled = hasPhoto
             loupe.isEnabled = hasPhoto
             updateGroups(inGrid: inGrid)
-            needsLayout = true
+            let layout: [CGFloat] = [inGrid ? 1 : 0, looseness.isHidden ? 0 : 1, unpicked.isHidden ? 0 : unpickedWidth]
+            if layout != laidOut {
+                laidOut = layout
+                needsLayout = true
+            }
         }]
     }
 
@@ -217,7 +231,7 @@ final class LibraryToolbarView: NSView {
             }
             if !unpicked.isHidden {
                 x += 8
-                place(unpicked, width: max(unpicked.intrinsicContentSize.width, 120))
+                place(unpicked, width: unpickedWidth)
             }
         } else {
             place(fit, width: 40)

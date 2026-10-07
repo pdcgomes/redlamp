@@ -134,19 +134,7 @@ struct AppCommands: Commands {
                 Divider()
                 mouseItem(.cycleGridStyle)
             }
-            Menu("Group By") {
-                ForEach(ShortcutAction.allCases.filter { $0.groupKey != nil }) { action in
-                    toggle(action, isOn: model.libraryViews.groupKey == action.groupKey)
-                }
-                Divider()
-                item(.tighterMoments)
-                item(.looserMoments)
-                toggle(.unpickedMoments, isOn: model.showsUnpickedMoments)
-                Divider()
-                item(.toggleGroup)
-                item(.openAllGroups)
-                item(.closeAllGroups)
-            }
+            Menu("Group By") { GroupByMenu(model: model) }
             mouseItem(.largerThumbnails)
             mouseItem(.smallerThumbnails)
             Divider()
@@ -253,6 +241,36 @@ struct AppCommands: Commands {
     private func toggle(_ action: ShortcutAction, isOn: Bool) -> some View {
         Toggle(action.title, isOn: Binding(get: { isOn }, set: { _ in model.perform(action) }))
             .keyboardShortcut(action.combos.first?.keyboardShortcut)
+            .disabled(!model.canPerform(action))
+    }
+}
+
+/// View ▸ Group By (LIB-41), a view of its own, so a change of grouping updates these items rather than the
+/// whole menu bar.
+private struct GroupByMenu: View {
+    let model: EditorModel
+
+    var body: some View {
+        ForEach(ShortcutAction.allCases.filter { $0.groupKey != nil }) { action in
+            toggle(action, isOn: model.libraryViews.groupKey == action.groupKey)
+        }
+        Divider()
+        item(.tighterMoments)
+        item(.looserMoments)
+        toggle(.unpickedMoments, isOn: model.showsUnpickedMoments)
+        Divider()
+        item(.toggleGroup)
+        item(.openAllGroups)
+        item(.closeAllGroups)
+    }
+
+    private func item(_ action: ShortcutAction) -> some View {
+        Button(action.title) { model.perform(action) }
+            .disabled(!model.canPerform(action))
+    }
+
+    private func toggle(_ action: ShortcutAction, isOn: Bool) -> some View {
+        Toggle(action.title, isOn: Binding(get: { isOn }, set: { _ in model.perform(action) }))
             .disabled(!model.canPerform(action))
     }
 }
