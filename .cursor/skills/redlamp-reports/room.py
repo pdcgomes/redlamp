@@ -15,7 +15,8 @@ question, and open ones with no tracker ID, but never the issues the tracker mir
 already follows them, as it does a suggestion once it's accepted). For each, GitHub gives its state,
 labels, the redlamp-feedback line the app writes, the reporter's words and the comments; git gives
 the commits naming #n on origin/main and on local branches (copies of commits already on main are
-ignored), and the first v* tag that holds them. The room's notes, one JSON file per report in
+ignored), and the first v* tag that holds them. A commit on main that changes only the tracker and
+the roadmap documents, as accepting a suggestion does, isn't its fix. The room's notes, one JSON file per report in
 ~/.cursor/projects/<workspace>/reports-room/reports/, hold what agents record; the owner's clicks are
 read from reports-room.canvas.data.json, which only the canvas writes.
 
@@ -48,6 +49,10 @@ MARKER = re.compile(r"<!-- redlamp-feedback v1 (\{.*?\}) -->")
 SECTIONS = ("What happened", "What I expected", "Steps to reproduce", "What I'd like to do", "How it could work", "Message")
 # A fix touching only these paths ships without a release: the site deploys and the cask updates from main.
 OUTSIDE_APP = ("web/", "Casks/", "docs/", "README.md", ".cursor/", ".github/", "research/", "video/", "CONTRIBUTING.md")
+# A commit that changes the tracker and nothing past these adds or updates rows, such as an accepted
+# suggestion's: it plans the work and never fixes the report it names.
+TRACKER_DOC = "docs/research/research-tracker.md"
+ROADMAP_DOCS = {TRACKER_DOC, "README.md", "docs/lightroom-comparison.md"}
 FIXED_CANDIDATE = ("awaiting approval", "approved", "releasing")
 STAGES = ("reading", "reproducing", "fixing", "testing", "pushing", "landed", "replied", "closed")
 
@@ -257,18 +262,29 @@ def tags_holding(shas):
     return out
 
 
-def app_commits(shas):
-    """The shas, of those given, that change something in the app, in one call."""
+def changed_files(shas):
+    """{sha: the paths it changes}, for the shas given, in one call."""
     if not shas:
-        return set()
+        return {}
     shown = git("show", "--name-only", "--format=@@%H", *shas)
-    out, current = set(), None
+    out, current = {}, None
     for line in shown.splitlines():
         if line.startswith("@@"):
             current = line[2:]
-        elif line and current and not line.startswith(OUTSIDE_APP):
-            out.add(current)
+            out[current] = set()
+        elif line and current:
+            out[current].add(line)
     return out
+
+
+def app_commits(files):
+    """The commits, of those in `changed_files`, that change something in the app."""
+    return {sha for sha, paths in files.items() if any(not path.startswith(OUTSIDE_APP) for path in paths)}
+
+
+def roadmap_commits(files):
+    """The commits, of those in `changed_files`, that change the tracker and nothing past the roadmap documents."""
+    return {sha for sha, paths in files.items() if TRACKER_DOC in paths and paths <= ROADMAP_DOCS}
 
 
 # ---------------------------------------------------------------- the release
@@ -384,7 +400,9 @@ def build(offline):
     numbers = {issue["number"] for issue in found}
     shas = sorted({c["sha"] for n, commits in on_main.items() if n in numbers for c in commits})
     holding = tags_holding(shas)
-    in_app = app_commits(shas)
+    files = changed_files(shas)
+    in_app = app_commits(files)
+    planning = roadmap_commits(files)
     all_tags = [t for t in git("tag", "--list", "v*", "--sort=v:refname").splitlines() if t]
     rel = release(offline)
     reports = []
@@ -398,7 +416,7 @@ def build(offline):
         who = reporter(issue, parsed)
         comments = [{"by": c["author"]["login"], "you": c["author"]["login"] == OWNER, "at": c["createdAt"],
                      "text": excerpt(c["body"]), "url": c.get("url")} for c in issue.get("comments", [])]
-        fix = on_main.get(number, [])
+        fix = [c for c in on_main.get(number, []) if c["sha"] not in planning]
         fix_info = None
         if fix:
             held = [holding.get(c["sha"]) for c in fix]
