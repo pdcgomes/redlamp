@@ -192,8 +192,32 @@ public struct GrayMask: Sendable, Hashable {
     /// is blurred (twice a box of half the larger reach, so a straight edge ramps over twice it),
     /// then cut at a level Edge moves from the middle, as sharply as Feather allows. At 0 and 0 it
     /// is the mask itself.
-    public func shaped(feather: Double, edge: Double, reach: Int) -> GrayMask {
+    ///
+    /// Stray hairs and soft wisps blur to almost nothing and fall below the cut, so with
+    /// `keepingDetail` (process 14) only the mask's body is shaped, what a grey opening keeps
+    /// (`detailRadius`), and the rest is added back: whole for Feather and an outward Edge, faded
+    /// by an inward Edge's share. On hair_bench's heads at Feather 50, 48% of strands are kept
+    /// against 35%, with less background taken in (`edge_feather.py`, MSK-31).
+    public func shaped(feather: Double, edge: Double, reach: Int, keepingDetail: Bool = false) -> GrayMask {
         guard feather != 0 || edge != 0, reach > 0 else { return self }
+        guard keepingDetail else { return shapedWhole(feather: feather, edge: edge, reach: reach) }
+        let values = coverage
+        let body = Self.opening(values, width: width, height: height, radius: detailRadius)
+        let shapedBody = GrayMask(width: width, height: height, coverage: body)
+            .shapedWhole(feather: feather, edge: edge, reach: reach).coverage
+        let gain = Float(1 - min(max(-edge, 0), 100) / 100)
+        return GrayMask(width: width, height: height, coverage: values.indices.map {
+            min(shapedBody[$0] + (values[$0] - body[$0]) * gain, 1)
+        })
+    }
+
+    /// The widest detail Feather and Edge leave as it is, either side of its centre: 3 px at the
+    /// size AI masks are stored at (4096 on the long side), less in smaller masks.
+    var detailRadius: Int {
+        max(1, Int((3 * Double(max(width, height)) / 4096).rounded()))
+    }
+
+    private func shapedWhole(feather: Double, edge: Double, reach: Int) -> GrayMask {
         let featherReach = min(max(feather, 0), 100) / 100 * Double(reach)
         let edgeReach = min(abs(edge), 100) / 100 * Double(reach)
         let larger = max(featherReach, edgeReach)
@@ -204,6 +228,26 @@ public struct GrayMask: Sendable, Hashable {
             let t = min(max((value - (level - softness)) / (2 * softness), 0), 1)
             return t * t * (3 - 2 * t)
         })
+    }
+
+    /// A grey opening by a square `2 * radius + 1` px wide: erosion (the least value around), then
+    /// dilation (the most), each as a row pass and a column pass, in parallel.
+    static func opening(_ values: [Float], width: Int, height: Int, radius: Int) -> [Float] {
+        func pass(_ input: [Float], along rows: Bool, keep: @escaping @Sendable (Float, Float) -> Float) -> [Float] {
+            var output = input
+            Parallel.fill(&output) { index in
+                let (x, y) = (index % width, index / width)
+                let (position, length) = rows ? (x, width) : (y, height)
+                var value = input[index]
+                for offset in max(0, position - radius) ... min(length - 1, position + radius) {
+                    value = keep(value, input[rows ? y * width + offset : offset * width + x])
+                }
+                return value
+            }
+            return output
+        }
+        let eroded = pass(pass(values, along: true, keep: min), along: false, keep: min)
+        return pass(pass(eroded, along: true, keep: max), along: false, keep: max)
     }
 
     /// Rotates or flips a mask stored in a file's native orientation into the oriented frame

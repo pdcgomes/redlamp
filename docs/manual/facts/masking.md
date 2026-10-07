@@ -941,7 +941,11 @@ Shown for any selected AI component except Depth Range —
 - They are stored on the component, not as mask adjustments
   (`packages/RedlampUI/Sources/Model/EditorModel+Masking.swift:316-320`, `:353-362`), and are omitted
   from the sidecar when 0 (`packages/RedlampEngineAPI/Sources/Masks.swift:349-354`).
-- README: "**Feather** and **Edge** soften an AI mask's edge or move it out or in" — `README.md:112`.
+- README: "**Feather** and **Edge** soften an AI mask's edge or move it out or in" — `README.md:120`.
+- From process 14 they shape the mask's body only and add its fine partial coverage back (stray hairs,
+  wisps a few pixels wide): whole for Feather and an outward Edge, faded by an inward Edge's share
+  (Edge -50 keeps half). Before, they blurred the whole mask and cut it at a level, which threw the
+  strands away (`GrayMask.shaped`, `packages/RedlampMasking/Sources/GrayMask.swift`; MSK-31).
 - `docs/lightroom-comparison.md:120` notes Lightroom Classic 15.5 added the same two sliders.
 
 ---

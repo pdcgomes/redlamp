@@ -93,6 +93,27 @@ struct GrayMaskTests {
         #expect(soft(feathered) >= 10 && abs(covered(feathered) - 100) <= 1, "\(soft(feathered)) soft pixels")
     }
 
+    /// A subject on the left with a faint strand, a pixel wide, reaching 30 pixels out of it.
+    /// Shaping the whole mask blurs the strand away; keeping detail (process 14) shapes the body
+    /// and adds the strand back: whole for Feather and an outward Edge, halved by Edge -50.
+    @Test func `Feather and Edge keep a strand's partial coverage when keeping detail`() {
+        let (width, height) = (200, 60)
+        let mask = GrayMask(width: width, height: height, coverage: (0 ..< width * height).map { index in
+            let (x, y) = (index % width, index / width)
+            return x < 100 ? 1 : y == 30 && x < 130 ? 0.4 : 0
+        })
+        let strand = { (shaped: GrayMask) in Float(shaped[115, 30]) / 255 }
+        for (feather, edge) in [(50.0, 0.0), (0, 50), (30, 30)] {
+            let whole = mask.shaped(feather: feather, edge: edge, reach: 10)
+            let kept = mask.shaped(feather: feather, edge: edge, reach: 10, keepingDetail: true)
+            #expect(strand(whole) < 0.15, "Feather \(feather), Edge \(edge), whole: \(strand(whole))")
+            #expect(abs(strand(kept) - 0.4) < 0.03, "Feather \(feather), Edge \(edge), kept: \(strand(kept))")
+            #expect(kept[20, 30] == 255 && kept[180, 10] == 0, "the body and the background stay")
+        }
+        let pulledIn = mask.shaped(feather: 0, edge: -50, reach: 10, keepingDetail: true)
+        #expect(abs(strand(pulledIn) - 0.2) < 0.03, "Edge -50: \(strand(pulledIn))")
+    }
+
     /// A beard is facial hair, not hair, and a sleeve clothes, not skin.
     @Test func `people parts are exclusive by precedence`() {
         let parts = SAM3Concepts.exclusive([

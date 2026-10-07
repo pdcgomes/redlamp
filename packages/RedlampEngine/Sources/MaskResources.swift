@@ -73,8 +73,9 @@ final class MaskResources {
 
     enum RasterKey: Hashable {
         case brush(BrushMask)
-        /// A bitmap's hash, and an AI mask's Feather and Edge.
-        case bitmap(String, feather: Double = 0, edge: Double = 0)
+        /// A bitmap's hash, and an AI mask's Feather and Edge, and whether they keep its detail
+        /// (`GrayMask.shaped`, from process 14).
+        case bitmap(String, feather: Double = 0, edge: Double = 0, keepsDetail: Bool = false)
     }
 
     /// A photo's AI mask edge coefficients: an array at its analysis image's size, a slice per
@@ -280,7 +281,8 @@ final class MaskResources {
     /// ones it doesn't have. Up to `edgeSlicesPerPhoto` masks are refined; with `growing`
     /// (process 14) the slices grow to every mask's.
     func edges(
-        for components: [MaskComponent], session: ImageSession, commands: any MTLCommandBuffer, growing: Bool = false,
+        for components: [MaskComponent], session: ImageSession, process: Int = EditRecipe.currentProcessVersion,
+        commands: any MTLCommandBuffer, growing: Bool = false,
     ) throws -> (texture: any MTLTexture, slices: [UUID: Int], offset: Float)? {
         let stored = session.orientedSize.fitted(
             within: PixelSize(width: Self.rasterLongEdge, height: Self.rasterLongEdge),
@@ -309,13 +311,15 @@ final class MaskResources {
         }
         var slices: [UUID: Int] = [:]
         for (id, mask) in masks {
-            guard let key = Self.key(for: .ai(mask)) else { continue }
+            guard let key = Self.key(for: .ai(mask), process: process) else { continue }
             if let slice = photo.keys.firstIndex(of: key) {
                 slices[id] = slice
                 continue
             }
             guard let png = mask.bitmap.png, let gray = GrayMask.decode(png) else { continue }
-            let shaped = gray.shaped(feather: mask.feather, edge: mask.edge, reach: MaskEdges.reach(gray))
+            let shaped = gray.shaped(
+                feather: mask.feather, edge: mask.edge, reach: MaskEdges.reach(gray), keepingDetail: process >= 14,
+            )
             let texels = MaskEdges.texels(
                 for: shaped, guide: photo.guide, width: photo.width, height: photo.height,
                 orientation: session.orientation,
@@ -364,7 +368,8 @@ final class MaskResources {
     /// The colours either side of the edges of `components`' Sky masks for `session` (process 14),
     /// computing the ones it doesn't have: each mask's pair of slices starts at twice its index.
     func colors(
-        for components: [MaskComponent], session: ImageSession, commands: any MTLCommandBuffer,
+        for components: [MaskComponent], session: ImageSession, process: Int = EditRecipe.currentProcessVersion,
+        commands: any MTLCommandBuffer,
     ) throws -> (texture: any MTLTexture, pairs: [UUID: Int])? {
         let masks = components.compactMap { component -> (UUID, AIMask)? in
             if case let .ai(mask) = component.shape, MaskColors.splits(mask) {
@@ -383,13 +388,15 @@ final class MaskResources {
         }
         var pairs: [UUID: Int] = [:]
         for (id, mask) in masks {
-            guard let key = Self.key(for: .ai(mask)), !photo.without.contains(key) else { continue }
+            guard let key = Self.key(for: .ai(mask), process: process), !photo.without.contains(key) else { continue }
             if let pair = photo.keys.firstIndex(of: key) {
                 pairs[id] = pair
                 continue
             }
             guard let png = mask.bitmap.png, let gray = GrayMask.decode(png) else { continue }
-            let shaped = gray.shaped(feather: mask.feather, edge: mask.edge, reach: MaskEdges.reach(gray))
+            let shaped = gray.shaped(
+                feather: mask.feather, edge: mask.edge, reach: MaskEdges.reach(gray), keepingDetail: process >= 14,
+            )
             guard let texels = MaskColors.texels(
                 for: shaped, analysis: session.analysis, orientation: session.orientation,
             ) else {
@@ -647,11 +654,14 @@ final class MaskResources {
 
     // MARK: - Rasters
 
-    static func key(for shape: MaskShape) -> RasterKey? {
+    static func key(for shape: MaskShape, process: Int = EditRecipe.currentProcessVersion) -> RasterKey? {
         switch shape {
         case let .brush(brush): .brush(brush)
         case let .ai(mask) where mask.bitmap.png != nil:
-            .bitmap(mask.bitmap.sha256, feather: mask.feather, edge: mask.edge)
+            .bitmap(
+                mask.bitmap.sha256, feather: mask.feather, edge: mask.edge,
+                keepsDetail: process >= 14 && (mask.feather != 0 || mask.edge != 0),
+            )
         case let .depthRange(range) where range.depth.bitmap.png != nil: .bitmap(range.depth.bitmap.sha256)
         default: nil
         }
@@ -660,13 +670,14 @@ final class MaskResources {
     /// The slice of every raster component, drawing the ones not already on the GPU.
     func slices(
         for components: [MaskComponent],
+        process: Int = EditRecipe.currentProcessVersion,
         analysisGuide: (any MTLTexture)?,
         commands: any MTLCommandBuffer,
     ) throws -> [UUID: Int] {
         var result: [UUID: Int] = [:]
         var used = Set<Int>()
         for component in components {
-            guard let key = Self.key(for: component.shape) else { continue }
+            guard let key = Self.key(for: component.shape, process: process) else { continue }
             if let slice = keys.firstIndex(of: key) {
                 clock += 1
                 lastUsed[slice] = clock
@@ -678,7 +689,10 @@ final class MaskResources {
             case let .brush(brush):
                 try drawBrush(brush, avoiding: used, guide: analysisGuide, commands: commands)
             case let .ai(mask):
-                try upload(mask.bitmap, feather: mask.feather, edge: mask.edge, avoiding: used, commands: commands)
+                try upload(
+                    mask.bitmap, feather: mask.feather, edge: mask.edge, keepingDetail: process >= 14, avoiding: used,
+                    commands: commands,
+                )
             case let .depthRange(range):
                 try upload(range.depth.bitmap, avoiding: used, commands: commands)
             default:
@@ -805,11 +819,13 @@ final class MaskResources {
     // MARK: Bitmaps
 
     private func upload(
-        _ bitmap: MaskBitmap, feather: Double = 0, edge: Double = 0, avoiding used: Set<Int>,
-        commands: any MTLCommandBuffer,
+        _ bitmap: MaskBitmap, feather: Double = 0, edge: Double = 0, keepingDetail: Bool = false,
+        avoiding used: Set<Int>, commands: any MTLCommandBuffer,
     ) throws -> Int? {
         guard let png = bitmap.png, let decoded = GrayMask.decode(png) else { return nil }
-        let gray = decoded.shaped(feather: feather, edge: edge, reach: MaskEdges.reach(decoded))
+        let gray = decoded.shaped(
+            feather: feather, edge: edge, reach: MaskEdges.reach(decoded), keepingDetail: keepingDetail,
+        )
         guard let slice = try freeSlice(avoiding: used, commands: commands), let rasters else { return nil }
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .r8Unorm, width: gray.width, height: gray.height, mipmapped: false,

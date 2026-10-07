@@ -80,7 +80,8 @@ public struct EditRecipe: Sendable, Hashable {
     /// 13: AI masks coarser than masks are stored at have their edges refined at the size drawn
     /// (`MaskEdges`), and a mask's Whites and Blacks move the white and black points where it covers.
     /// 14: a Sky mask's per-pixel adjustments reach only the sky's share of an edge pixel's light
-    /// (`MaskColors`), so twigs and leaves keep their own colour and brightness.
+    /// (`MaskColors`), so twigs and leaves keep their own colour and brightness; an AI mask's
+    /// Feather and Edge shape its body and keep its stray hairs and wisps (`GrayMask.shaped`).
     /// A new version records its references for the process-stability gate (`ProcessStabilityTests`).
     public static let currentProcessVersion = 14
     public static let linearPointCurve = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]

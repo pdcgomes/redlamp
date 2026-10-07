@@ -857,6 +857,20 @@ struct MaskRenderTests {
         }
     }
 
+    /// From process 14 Feather and Edge keep an AI mask's detail (MSK-31), so its raster is drawn
+    /// again: a process-13 edit and a process-14 one never share one shaped with Feather or Edge.
+    @Test func `an AI mask shaped by Feather or Edge is keyed by whether it keeps detail`() {
+        let bitmap = MaskBitmap(sha256: "mask", width: 4, height: 4, png: Data([0]))
+        var mask = AIMask(
+            kind: .subject, provider: "test", revision: 1, analysisHash: "", center: ImagePoint(x: 0.5, y: 0.5),
+            bitmap: bitmap,
+        )
+        #expect(MaskResources.key(for: .ai(mask), process: 13) == MaskResources.key(for: .ai(mask), process: 14))
+        mask.feather = 30
+        #expect(MaskResources.key(for: .ai(mask), process: 13) != MaskResources.key(for: .ai(mask), process: 14))
+        #expect(MaskResources.key(for: .ai(mask), process: 14) == MaskResources.key(for: .ai(mask), process: 15))
+    }
+
     /// With Segment Anything on this Mac: a click on the globe in the Nikon sample selects it
     /// (about a tenth of the frame), and the hover preview is quick once the photo is encoded.
     @Test(.enabled(if: EngineSmokeTests.canRender && Self.samIsInstalled))

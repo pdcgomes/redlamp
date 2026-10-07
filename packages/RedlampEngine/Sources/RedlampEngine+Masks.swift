@@ -187,7 +187,8 @@ extension RedlampEngine {
     ) throws -> MaskBindings {
         let components = recipe.masks.flatMap(\.components)
         let readsGuide = needsGuide || components.contains { $0.shape.readsEditGuide }
-        let rasterComponents = components.filter { MaskResources.key(for: $0.shape) != nil }
+        let process = recipe.processVersion
+        let rasterComponents = components.filter { MaskResources.key(for: $0.shape, process: process) != nil }
         guard readsGuide || !rasterComponents.isEmpty else { return .none }
         masks.use(session, commands: commands)
         let size = masks.guideSize
@@ -206,11 +207,14 @@ extension RedlampEngine {
         if !rasterComponents.isEmpty {
             let analysis = rasterComponents.contains { $0.shape.usesAutoMask }
                 ? try masks.analysisGuide(commands: commands, render: render) : nil
-            bindings.slices = try masks.slices(for: rasterComponents, analysisGuide: analysis, commands: commands)
+            bindings.slices = try masks.slices(
+                for: rasterComponents, process: process, analysisGuide: analysis, commands: commands,
+            )
             bindings.rasters = masks.rasters
-            if recipe.processVersion >= 13,
+            if process >= 13,
                let edges = try masks.edges(
-                   for: rasterComponents, session: session, commands: commands, growing: recipe.processVersion >= 14,
+                   for: rasterComponents, session: session, process: process, commands: commands,
+                   growing: process >= 14,
                ) {
                 bindings.edges = edges.texture
                 bindings.edgeSlices = edges.slices
@@ -218,8 +222,8 @@ extension RedlampEngine {
             }
             // Edge-aware application (MSK-27): a mask of several components keeps blending.
             let single = recipe.masks.compactMap { $0.components.count == 1 ? $0.components[0] : nil }
-            if recipe.processVersion >= 14,
-               let colors = try masks.colors(for: single, session: session, commands: commands) {
+            if process >= 14,
+               let colors = try masks.colors(for: single, session: session, process: process, commands: commands) {
                 bindings.colors = colors.texture
                 bindings.colorPairs = colors.pairs
             }
