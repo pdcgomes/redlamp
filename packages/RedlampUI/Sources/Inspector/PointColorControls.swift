@@ -166,21 +166,9 @@ extension PointColorSwatch {
 }
 
 extension OKLCh {
-    /// The colour on screen, clipped to sRGB, by Björn Ottosson's inverse of OKLab.
+    /// The colour on screen, clipped to sRGB.
     var displayColor: Color {
-        let radians = hue * .pi / 180
-        let a = chroma * cos(radians)
-        let b = chroma * sin(radians)
-        let cube = { (value: Double) in value * value * value }
-        let l = cube(lightness + 0.3963377774 * a + 0.2158037573 * b)
-        let m = cube(lightness - 0.1055613458 * a - 0.0638541728 * b)
-        let s = cube(lightness - 0.0894841775 * a - 1.2914855480 * b)
-        let clip = { (value: Double) in min(max(value, 0), 1) }
-        return Color(
-            .sRGBLinear,
-            red: clip(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
-            green: clip(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
-            blue: clip(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s),
-        )
+        let rgb = clippedLinearSRGB
+        return Color(.sRGBLinear, red: rgb.x, green: rgb.y, blue: rgb.z)
     }
 }
