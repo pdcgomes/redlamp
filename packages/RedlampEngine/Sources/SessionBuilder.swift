@@ -134,7 +134,7 @@ struct SessionBuilder {
             throw EngineError.renderFailed(error.localizedDescription)
         }
         let halves = readback.contents().assumingMemoryBound(to: Float16.self)
-        let pixels = (0 ..< analysisWidth * analysisHeight).map { index in
+        let pixels = (0 ..< analysisWidth * analysisHeight).lazy.map { index in
             SIMD3<Float>(Float(halves[index * 4]), Float(halves[index * 4 + 1]), Float(halves[index * 4 + 2]))
         }
         let analysis = AnalysisImage(width: analysisWidth, height: analysisHeight, pixels: pixels)

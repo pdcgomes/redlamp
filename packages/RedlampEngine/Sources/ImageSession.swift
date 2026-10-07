@@ -184,7 +184,7 @@ final class ImageSession: @unchecked Sendable {
         textures += [hueSatMaps?.cool, hueSatMaps?.warm, gainTableMap?.texture].compactMap(\.self)
         var seen = Set<ObjectIdentifier>()
         return textures.filter { seen.insert(ObjectIdentifier($0)).inserted }.map(\.allocatedSize).reduce(0, +)
-            + analysis.pixels.count * MemoryLayout<SIMD3<Float>>.stride
+            + analysis.pixels.withUnsafeBytes(\.count)
     }
 
     /// Per-channel gains that move the as-shot balance to the requested white balance.
@@ -252,7 +252,13 @@ struct ImageMaps {
 struct AnalysisImage: Sendable {
     let width: Int
     let height: Int
-    let pixels: [SIMD3<Float>]
+    let pixels: PackedRGB
+
+    init(width: Int, height: Int, pixels: some Collection<SIMD3<Float>>) {
+        self.width = width
+        self.height = height
+        self.pixels = PackedRGB(pixels)
+    }
 
     func pixel(x: Int, y: Int) -> SIMD3<Float> {
         pixels[min(max(y, 0), height - 1) * width + min(max(x, 0), width - 1)]

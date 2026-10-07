@@ -36,7 +36,7 @@ struct SessionCacheTests {
             .compactMap(\.self)
         var seen = Set<ObjectIdentifier>()
         return textures.filter { seen.insert(ObjectIdentifier($0)).inserted }.map(\.allocatedSize).reduce(0, +)
-            + session.analysis.pixels.count * MemoryLayout<SIMD3<Float>>.stride
+            + session.analysis.pixels.withUnsafeBytes(\.count)
     }
 
     private func held(_ index: Int) throws -> Int {
@@ -75,9 +75,7 @@ struct SessionCacheTests {
     /// Every photo kept ready holds its analysis copy, so the copy takes no padding.
     @Test func `a photo's analysis copy takes 12 bytes a pixel`() throws {
         let analysis = try #require(sessions[Self.urls[0]]).analysis
-        withKnownIssue("the analysis copy is padded to 16 bytes a pixel") {
-            #expect(analysis.pixels.withUnsafeBytes(\.count) == analysis.width * analysis.height * 12)
-        }
+        #expect(analysis.pixels.withUnsafeBytes(\.count) == analysis.width * analysis.height * 12)
     }
 
     @Test func `prefetches stay within the budget, the photo being opened first`() async throws {
