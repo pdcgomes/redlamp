@@ -20,6 +20,8 @@ final class LibraryCore: Sendable {
     let sidecars: LibrarySidecars
     /// Renames, moves and the Trash (LIB-26): the batches a forced quit cut short are settled at launch.
     let files: FileOperations
+    /// Other apps' metadata (LIB-24).
+    let xmp: LibraryXMP
     /// The locator when it opened.
     let locator: SidecarLocator
     private let state = Mutex(State())
@@ -34,6 +36,8 @@ final class LibraryCore: Sendable {
         var recovery: Task<Void, Never>?
         var lastSnapshot: ContinuousClock.Instant?
         var snapshotting = false
+        /// The library's choices for other apps' metadata.
+        var xmpSettings = XMPSettings()
     }
 
     /// Snapshots of the index are taken at most this often while it changes.
@@ -59,6 +63,7 @@ final class LibraryCore: Sendable {
         live = LibraryLive(engine: engine)
         sidecars = LibrarySidecars(index: index, paths: paths)
         files = FileOperations(index: index, paths: paths, live: live)
+        xmp = LibraryXMP(index: index, paths: paths)
     }
 
     /// Opens the index (restoring its newest good snapshot when it's damaged, checking it first when
@@ -79,6 +84,7 @@ final class LibraryCore: Sendable {
             paths: paths, index: index, engine: engine, store: store,
             thumbnails: StoreThumbnails(store: store, thumbnail: thumbnail), locator: locator,
         )
+        core.xmpSettings = await (try? core.xmp.settings()) ?? XMPSettings()
         return (core, outcome)
     }
 
@@ -183,6 +189,15 @@ final class LibraryCore: Sendable {
     /// whose renames are half done.
     func recovered() async {
         await state.withLock { $0.recovery }?.value
+    }
+
+    // MARK: - Other apps' metadata (LIB-24)
+
+    /// The library's choices for other apps' metadata, as it opened and as Settings changes them: the
+    /// index keeps them (`LibraryXMP.setSettings`).
+    var xmpSettings: XMPSettings {
+        get { state.withLock { $0.xmpSettings } }
+        set { state.withLock { $0.xmpSettings = newValue } }
     }
 
     // MARK: - Snapshots and checks

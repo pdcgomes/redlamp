@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import Observation
 import OSLog
 import RedlampDocument
 import RedlampLibrary
@@ -21,6 +22,7 @@ import Synchronization
 /// listing is current: made in this session, or in a root change tracking has caught up with since
 /// launch (`ChangeTracker.Event.caughtUp`) and not lost since.
 @MainActor
+@Observable
 public final class LibraryService {
     public enum State: Equatable, Sendable {
         case opening
@@ -37,31 +39,33 @@ public final class LibraryService {
         defaults.object(forKey: enabledKey) == nil || defaults.bool(forKey: enabledKey)
     }
 
-    public let paths: LibraryPaths
+    @ObservationIgnored public let paths: LibraryPaths
     public private(set) var state = State.opening
+    /// The library's choices for other apps' metadata, once it's open.
+    public private(set) var xmpSettings: XMPSettings?
     /// The filter bar: each source's filter and sort, applied to the lists the library makes (LIB-18).
-    public let filters: LibraryFilters
+    @ObservationIgnored public let filters: LibraryFilters
     /// Where photos' sidecars are read and written: `FolderLibrary`'s, set as placements change.
-    let sidecars: SidecarPlacement
+    @ObservationIgnored let sidecars: SidecarPlacement
     /// The list made last, which the filter bar filters.
-    private weak var currentList: LibraryFolderList?
-    private let defaults: UserDefaults?
-    private let thumbnail: @Sendable (URL, Int) -> CGImage?
-    private(set) var core: LibraryCore?
+    @ObservationIgnored private weak var currentList: LibraryFolderList?
+    @ObservationIgnored private let defaults: UserDefaults?
+    @ObservationIgnored private let thumbnail: @Sendable (URL, Int) -> CGImage?
+    @ObservationIgnored private(set) var core: LibraryCore?
     /// Culling's batches (LIB-15), once the library is open. Lists hear of them from culling, which knows
     /// whether a change asked for since will change the same photos again (`CullingQueue`).
-    private(set) var metadata: LibraryMetadata?
+    @ObservationIgnored private(set) var metadata: LibraryMetadata?
     /// The roots followed, as the index keeps their paths.
-    private(set) var roots: [String] = []
-    private var opening: Task<Void, Never>?
-    private var following: Task<Void, Never>?
+    @ObservationIgnored private(set) var roots: [String] = []
+    @ObservationIgnored private var opening: Task<Void, Never>?
+    @ObservationIgnored private var following: Task<Void, Never>?
     /// Roots whose volumes change tracking has caught up with since launch, and that answer still.
-    private(set) var currentRoots: Set<String> = []
+    @ObservationIgnored private(set) var currentRoots: Set<String> = []
     /// Folders indexed in this session, as they were listed then.
-    private var indexedFolders: Set<String> = []
-    private var observers: [UUID: @MainActor () -> Void] = [:]
-    private var notifying = false
-    private var activity: [any NSObjectProtocol] = []
+    @ObservationIgnored private var indexedFolders: Set<String> = []
+    @ObservationIgnored private var observers: [UUID: @MainActor () -> Void] = [:]
+    @ObservationIgnored private var notifying = false
+    @ObservationIgnored private var activity: [any NSObjectProtocol] = []
 
     private nonisolated static let log = Logger(subsystem: "app.redlamp.mac", category: "library")
     /// The defaults key set when the index was found damaged, so the next launch checks it as it opens.
@@ -152,6 +156,7 @@ public final class LibraryService {
             let roots = roots
             self.roots = []
             follow(roots.map { URL(fileURLWithPath: $0, isDirectory: true) })
+            xmpSettings = core.xmpSettings
             Task.detached(priority: .utility) { [weak self] in
                 _ = try? await core.sidecars.resumeMove()
                 let locator = try? await core.sidecars.locator()
@@ -530,6 +535,31 @@ public final class LibraryService {
     /// The custom labels the library's photos have, with how many have each.
     func customLabels() async -> [CustomLabelCount] {
         await (try? metadata?.customLabels()) ?? []
+    }
+
+    // MARK: - Other apps' metadata (LIB-24)
+
+    /// Keeps `settings` in the index, where `redlamp library xmp` reads them too; the photos already in the
+    /// library are left as they are. False when they couldn't be kept.
+    public func setXMPSettings(_ settings: XMPSettings) async -> Bool {
+        guard let core else { return false }
+        do {
+            try await core.xmp.setSettings(settings)
+        } catch {
+            Self.log.error(
+                "The library's settings for other apps weren't saved: \(String(describing: error), privacy: .public)",
+            )
+            return false
+        }
+        core.xmpSettings = settings
+        xmpSettings = settings
+        return true
+    }
+
+    /// How many photos the library has; nil until it's open.
+    func photoCount() async -> Int? {
+        guard let core else { return nil }
+        return try? await core.index.read { try $0.photoCount() }
     }
 
     /// Runs `plan`, telling the lists of its photos once the index holds it (when its first sidecar is

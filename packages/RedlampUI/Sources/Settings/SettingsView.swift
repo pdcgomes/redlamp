@@ -10,18 +10,20 @@ public struct SettingsView: View {
 
     @Bindable var theme: ThemeSettings
     let engine: (any EditingEngine)?
+    let library: LibraryService?
     let checksForUpdates: Binding<Bool>?
     let showsWhatsNew: Binding<Bool>?
 
-    /// `checksForUpdates` is Sparkle's automatic-check setting, from builds that update
-    /// themselves; the app passes it in because this package doesn't link Sparkle. `showsWhatsNew`
-    /// is whether What's New opens after an update, in those builds too.
+    /// `library` is the library, when it's on. `checksForUpdates` is Sparkle's automatic-check setting,
+    /// from builds that update themselves; the app passes it in because this package doesn't link
+    /// Sparkle. `showsWhatsNew` is whether What's New opens after an update, in those builds too.
     public init(
-        theme: ThemeSettings, engine: (any EditingEngine)? = nil, checksForUpdates: Binding<Bool>? = nil,
-        showsWhatsNew: Binding<Bool>? = nil,
+        theme: ThemeSettings, engine: (any EditingEngine)? = nil, library: LibraryService? = nil,
+        checksForUpdates: Binding<Bool>? = nil, showsWhatsNew: Binding<Bool>? = nil,
     ) {
         self.theme = theme
         self.engine = engine
+        self.library = library
         self.checksForUpdates = checksForUpdates
         self.showsWhatsNew = showsWhatsNew
     }
@@ -30,6 +32,11 @@ public struct SettingsView: View {
         TabView {
             Tab("Appearance", systemImage: "paintpalette") {
                 AppearanceSettings(theme: theme)
+            }
+            if let library {
+                Tab("Library", systemImage: "photo.stack") {
+                    LibrarySettings(library: library)
+                }
             }
             if let engine {
                 Tab("Models", systemImage: "cpu") {

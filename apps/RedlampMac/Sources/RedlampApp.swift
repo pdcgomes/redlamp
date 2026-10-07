@@ -135,6 +135,7 @@ struct RedlampApp: App {
             SettingsView(
                 theme: theme,
                 engine: model.engine,
+                library: model.library.service,
                 checksForUpdates: appDelegate.updates.map { updates in
                     Binding(get: { updates.checksAutomatically }, set: { updates.setChecksAutomatically($0) })
                 },
