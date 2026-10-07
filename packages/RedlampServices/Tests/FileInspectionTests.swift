@@ -1,5 +1,6 @@
 import Foundation
 import RedlampEngineAPI
+import Synchronization
 import Testing
 @testable import RedlampServices
 
@@ -15,8 +16,10 @@ struct FileInspectionTests {
     /// A listener in this process that answers as the service does, through a real connection.
     final class Listener: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
         let listener = NSXPCListener.anonymous()
+        let exported: any DecodeServiceProtocol
 
-        override init() {
+        init(exporting exported: any DecodeServiceProtocol = DecodeService()) {
+            self.exported = exported
             super.init()
             listener.delegate = self
             listener.resume()
@@ -24,9 +27,40 @@ struct FileInspectionTests {
 
         func listener(_: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
             connection.exportedInterface = NSXPCInterface(with: DecodeServiceProtocol.self)
-            connection.exportedObject = DecodeService()
+            connection.exportedObject = exported
             connection.resume()
             return true
+        }
+    }
+
+    /// The service, recording how many files each captures or focus-thumbnails call carries.
+    final class RecordingService: NSObject, DecodeServiceProtocol, @unchecked Sendable {
+        private let service = DecodeService()
+        private let recorded = Mutex<[Int]>([])
+
+        var batches: [Int] {
+            recorded.withLock { $0 }
+        }
+
+        func decode(_ file: Data, path: String, reply: @escaping @Sendable (Data?, Data?) -> Void) {
+            service.decode(file, path: path, reply: reply)
+        }
+
+        func captures(
+            _ files: [Data],
+            paths: [String],
+            concurrently: Bool,
+            reply: @escaping @Sendable (Data?) -> Void,
+        ) {
+            recorded.withLock { $0.append(files.count) }
+            service.captures(files, paths: paths, concurrently: concurrently, reply: reply)
+        }
+
+        func focusThumbnails(
+            _ files: [Data], paths: [String], concurrently: Bool, reply: @escaping @Sendable (Data?) -> Void,
+        ) {
+            recorded.withLock { $0.append(files.count) }
+            service.focusThumbnails(files, paths: paths, concurrently: concurrently, reply: reply)
         }
     }
 
@@ -65,6 +99,39 @@ struct FileInspectionTests {
         #expect(local.prefix(2).allSatisfy { $0 == nil })
         #expect(service.captures(of: files, concurrently: false) == local)
         #expect(service.focusThumbnails(of: files, concurrently: false).map { $0 == nil } == [true, true, false])
+    }
+
+    /// 1,001 hard links, beside the samples so they can be made, to the three smallest in turn.
+    @Test(.enabled(if: DecodeRegressionTests.fixtures.count >= 3))
+    func `a folder over the cap is read in calls of at most 1,000, and reads as in the app`() throws {
+        let samples = DecodeRegressionTests.fixtures.sorted { size($0) < size($1) }.prefix(3)
+        let folder = DecodeRegressionTests.root.appending(path: "build/file-inspection-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let files = try (0 ..< 1001).map { index in
+            let sample = samples[samples.startIndex + index % samples.count]
+            let link = folder.appending(path: String(format: "IMG_%04d.", index) + sample.pathExtension)
+            try FileManager.default.linkItem(at: sample, to: link)
+            return link
+        }
+        let recording = RecordingService()
+        let listener = Listener(exporting: recording)
+        let service = DecodeServiceClient(endpoint: listener.listener.endpoint)
+        let local = InProcessDecoder()
+        let captures = local.captures(of: files, concurrently: true)
+        #expect(captures.compactMap(\.self).count == files.count)
+        #expect(service.captures(of: files, concurrently: true) == captures)
+        #expect(service.focusThumbnails(of: files, concurrently: true) == local.focusThumbnails(
+            of: files,
+            concurrently: true,
+        ))
+        withKnownIssue("A call carries the whole folder until the service's calls are capped") {
+            #expect(recording.batches == [1000, 1, 1000, 1])
+        }
+    }
+
+    private func size(_ url: URL) -> Int {
+        (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? .max
     }
 
     @Test func `a thumbnail of a size the reader never draws is refused`() {
