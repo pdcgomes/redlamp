@@ -5,16 +5,7 @@ import Foundation
 enum DNGNoiseProfile {
     static let tag: UInt16 = 0xC761
 
-    static func read(_ url: URL) -> NoiseModel? {
-        guard url.pathExtension.lowercased() == "dng",
-              let data = try? Data(contentsOf: url, options: .alwaysMapped)
-        else {
-            return nil
-        }
-        return read(data, url: url)
-    }
-
-    /// The same from the file's bytes, `url` naming the file.
+    /// From the file's bytes, `url` naming the file.
     static func read(_ data: Data, url: URL) -> NoiseModel? {
         guard url.pathExtension.lowercased() == "dng" else {
             return nil
