@@ -314,18 +314,28 @@ public final class LibraryMetadata: Sendable {
     /// The photos of `ids` whose fields in the index `edit` changes, or which show other apps' values of
     /// fields it sets, with what the index shows of them.
     func photos(_ ids: [Int64], edit: [String: FieldEdit]) async throws -> [MetadataBatch.Photo] {
+        try await photos(ids, edits: [:], edit: edit, keepingUnchanged: false)
+    }
+
+    /// `photos(_:edit:)`, a photo of `edits` getting its own edit in place of `edit`; with `keepingUnchanged`,
+    /// those whose rows already show what they're given too.
+    func photos(
+        _ ids: [Int64], edits: [Int64: [String: FieldEdit]], edit: [String: FieldEdit], keepingUnchanged: Bool,
+    ) async throws -> [MetadataBatch.Photo] {
         let ids = Array(Set(ids)).sorted()
-        let keys = edit.touched
+        let keys = edits.values.reduce(edit.touched) { $0.union($1.touched) }
         return try await index.read { reader in
             let shown = try reader.metadataValues(ofPhotos: ids, keys: keys)
             let paths = try reader.photoPaths(ids)
             return ids.compactMap { id -> MetadataBatch.Photo? in
                 guard let shown = shown[id], let path = paths[id] else { return nil }
-                let current = PhotoMetadata.canonical(shown.values)
-                let after = PhotoMetadata.canonical(edit.applied(to: current, fallback: current))
+                let own = edits[id]
+                let touched = (own ?? edit).touched
+                let current = PhotoMetadata.canonical(shown.values.filter { touched.contains($0.key) })
+                let after = PhotoMetadata.canonical((own ?? edit).applied(to: current, fallback: current))
                 let others = shown.others.intersection(Self.fields(after))
-                guard after != current || !others.isEmpty else { return nil }
-                return MetadataBatch.Photo(id: id, path: path, index: current, others: others)
+                guard after != current || !others.isEmpty || keepingUnchanged else { return nil }
+                return MetadataBatch.Photo(id: id, path: path, index: current, others: others, edits: own)
             }
         }
     }

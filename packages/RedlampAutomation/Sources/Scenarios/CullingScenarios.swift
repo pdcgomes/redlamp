@@ -75,7 +75,7 @@
     }
 
     enum CullingScenarios {
-        static let all: [Scenario] = [keys, mouse, autoAdvance, filtered]
+        static let all: [Scenario] = [keys, redo, mouse, autoAdvance, filtered]
 
         static let keys = Scenario(
             "library.culling-keys",
@@ -122,6 +122,56 @@
                 }
                 try app.expect(try app.shown(names[0]).rating == 2 && app.shown(names[3]).rating == 0, "⇧2 rated")
                 app.covered(.feature("library.ratings"), via: .key)
+            }
+        }
+
+        static let redo = Scenario(
+            "library.culling-redo",
+            "⇧⌘Z makes a change again as the Undo of its Undo: a photo rated in Develop since keeps its rating, and "
+                + "the others get the change again",
+            claims: [.action(.redo), .feature("library.ratings")],
+        ) { app in
+            try app.withCulling { names in
+                try app.selectFromKeyboard(3, of: names)
+                let own = try app.shown(names[1]).rating
+                let keys: [ShortcutAction] = [.rating0, .rating1, .rating2, .rating3, .rating4, .rating5]
+                let develop = own == 1 ? 2 : 1
+                try app.press(.rating4)
+                try app
+                    .wait("four stars on the three photos") { $0.items.prefix(3).allSatisfy { $0.metadata.rating == 4 }
+                    }
+                try app.waitWritten()
+                try app.press(.undo)
+                try app.wait("⌘Z to take them back") { !$0.items.prefix(3).contains { $0.metadata.rating == 4 } }
+                try app.waitWritten()
+                /// The middle photo rated in Develop, by its own key: not Library's to undo or redo.
+                func rateInDevelop(_ stars: Int) throws {
+                    try app.click(.identifier("grid.\(names[1])"))
+                    try app.wait("\(names[1]) alone") { $0.selectedPhotos.map(\.lastPathComponent) == [names[1]] }
+                    try app.press(.developModule)
+                    try app.settle()
+                    try app.press(keys[stars])
+                    try app.waitInSidecar(names[1], "Develop's \(stars) stars") { $0.rating == stars }
+                    try app.press(.gridView)
+                    try app.wait("the grid to take the keyboard") { _ in
+                        Views.editorWindow?.firstResponder.map { "\(Swift.type(of: $0))" } == "LibraryGridContentView"
+                    }
+                }
+                try rateInDevelop(develop)
+                try app.expectKeyBinding(.redo)
+                try app.choose(.redo)
+                try app.wait("⇧⌘Z to give the others four stars again") { model in
+                    [names[0], names[2]].allSatisfy { name in
+                        model.items.first { $0.url.lastPathComponent == name }?.metadata.rating == 4
+                    }
+                }
+                try app.waitWritten()
+                try app.waitInSidecar(names[0], "four stars made again") { $0.rating == 4 }
+                try app.waitInSidecar(names[2], "four stars made again") { $0.rating == 4 }
+                try app.waitInSidecar(names[1], "Develop's \(develop) stars, kept") { $0.rating == develop }
+                try app.expect(try app.shown(names[1]).rating == develop, "the grid shows \(names[1])'s own rating")
+                app.covered(.action(.redo), via: .menu)
+                try rateInDevelop(own)
             }
         }
 

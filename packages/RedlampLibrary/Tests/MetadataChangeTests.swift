@@ -233,6 +233,70 @@ struct MetadataChangeTests {
         #expect(rows == [2, 0, 0, 0], "the photo whose sidecar holds 2 stars still shows them")
     }
 
+    @Test func `each photo's own fields are one batch, and its Undo gives each its own value back`() async throws {
+        let (sandbox, paths, ids) = try await Self.library()
+        defer { sandbox.remove() }
+        let metadata = LibraryMetadata(index: sandbox.index, paths: sandbox.paths)
+        // As `]` does: each photo's own rating, one up.
+        let fields = Dictionary(uniqueKeysWithValues: ids.enumerated().map { place, id in
+            (id, [MetadataField.rating(place % 2 == 0 ? 3 : 1)])
+        })
+        let before = try await metadata.entries().count
+        let outcome = try await metadata.apply(.each(fields))
+        #expect(outcome.title == "Set the rating of 40 photos" && outcome.photos == 40)
+        #expect(try await metadata.entries().count == before + 1, "one batch")
+        #expect(paths.indices.allSatisfy { sandbox.sidecar(paths[$0])?.metadata?.rating == ($0 % 2 == 0 ? 3 : 1) })
+        try await metadata.undo()
+        for (number, path) in paths.enumerated() {
+            #expect(sandbox.sidecar(path)?.metadata?.rating == (number % 2 == 0 ? 2 : nil), "\(path)")
+        }
+    }
+
+    @Test func `a photo whose row already shows its fields is in the batch, its sidecar written if it doesn't hold them`(
+    ) async throws {
+        let (sandbox, paths, ids) = try await Self.library()
+        defer { sandbox.remove() }
+        // The row shows three stars where the sidecar holds two.
+        try await sandbox.index.write { [id = ids[0]] writer in try writer.setMetadata(
+            ["rating": .number(3)],
+            forPhoto: id,
+        ) }
+        let metadata = LibraryMetadata(index: sandbox.index, paths: sandbox.paths)
+        let outcome = try await metadata.apply(.each([ids[0]: [.rating(3)], ids[2]: [.rating(2)]]))
+        #expect(outcome.written == 2 && outcome.skipped.isEmpty)
+        #expect(sandbox.sidecar(paths[0])?.metadata?.rating == 3, "the sidecar gets what its row showed")
+        #expect(sandbox.sidecar(paths[2])?.metadata?.rating == 2, "one that holds it already is left as it is")
+        try await metadata.undo()
+        #expect(sandbox.sidecar(paths[0])?.metadata?.rating == 2 && sandbox.sidecar(paths[2])?.metadata?.rating == 2)
+    }
+
+    @Test func `Redo is the Undo of the Undo: a photo changed since keeps its change, and Redo has an Undo of its own`(
+    ) async throws {
+        let (sandbox, paths, ids) = try await Self.library()
+        defer { sandbox.remove() }
+        let metadata = LibraryMetadata(index: sandbox.index, paths: sandbox.paths)
+        let made = try await metadata.apply(.set([.rating(4)], on: Array(ids.prefix(4))))
+        let undone = try await metadata.undo()
+        // Rated by hand since the Undo, and indexed.
+        try sandbox.sidecar(paths[1], PhotoMetadata(rating: 5))
+        try await sandbox.indexAll()
+
+        let redone = try await metadata.run(metadata.planRedo(undone.batch))
+        #expect(redone.title == made.title && redone.state == .finished)
+        #expect(paths.prefix(4).map { sandbox.sidecar($0)?.metadata?.rating } == [4, 5, 4, 4], "the hand's five stay")
+        let rows = try await sandbox.index.read { reader in try ids.prefix(4).map { try reader.photo(id: $0)?.rating } }
+        #expect(rows == [4, 5, 4, 4])
+        let entries = try await metadata.entries()
+        #expect(entries.first { $0.id == undone.batch }?.state == .undone, "its Undo is taken back")
+        #expect(try await metadata.lastUndoable()?.id == redone.batch)
+        await #expect(throws: MetadataError.nothingToRedo(undone.batch)) { try await metadata.planRedo(undone.batch) }
+        await #expect(throws: MetadataError.nothingToRedo(made.batch)) { try await metadata.planRedo(made.batch) }
+
+        try await metadata.undo()
+        #expect(sandbox.sidecar(paths[0])?.metadata == PhotoMetadata(rating: 2, caption: "Before 0"))
+        #expect(sandbox.sidecar(paths[1])?.metadata?.rating == 5 && sandbox.sidecar(paths[3]) == nil)
+    }
+
     @Test func `a batch a forced quit stopped is finished or rolled back at the next launch`() async throws {
         let (sandbox, paths, ids) = try await Self.library()
         defer { sandbox.remove() }

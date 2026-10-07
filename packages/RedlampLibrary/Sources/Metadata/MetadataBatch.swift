@@ -305,6 +305,8 @@ public enum MetadataError: Error, Sendable, Hashable, CustomStringConvertible {
     /// A batch a forced quit interrupted waits for `LibraryMetadata.recover`.
     case unfinished(UUID)
     case nothingToUndo
+    /// The Undo to take back isn't in the journal as it was run: pruned, or taken back already.
+    case nothingToRedo(UUID)
     /// A preset file or a code replacement file that can't be read.
     case unreadableFile(String)
     case noSuchPreset(String)
@@ -317,6 +319,7 @@ public enum MetadataError: Error, Sendable, Hashable, CustomStringConvertible {
         case let .newerJournal(id): "the metadata change \(id) was written by a newer Redlamp"
         case let .unfinished(id): "a metadata change a forced quit interrupted (\(id)) is unfinished"
         case .nothingToUndo: "no metadata change to undo"
+        case let .nothingToRedo(id): "the Undo \(id) can't be taken back from the journal"
         case let .unreadableFile(name): "\(name) can't be read"
         case let .noSuchPreset(name): "there's no metadata preset “\(name)”"
         case let .collection(error): error.description

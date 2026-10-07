@@ -61,6 +61,11 @@ public enum MetadataField: Sendable, Hashable {
         }
     }
 
+    /// What `fields` do to each photo's sidecar fields, a later field's edit replacing an earlier one's.
+    static func edits(_ fields: [MetadataField]) -> [String: FieldEdit] {
+        fields.reduce(into: [String: FieldEdit]()) { $0.merge($1.edits) { _, new in new } }
+    }
+
     /// `the rating`, `the caption`, as a batch's title names it.
     var name: String {
         switch self {
@@ -86,6 +91,9 @@ public enum MetadataField: Sendable, Hashable {
 public enum MetadataChange: Sendable, Hashable {
     /// Gives the photos each field.
     case set([MetadataField], on: [Int64])
+    /// Gives each photo its own fields, as culling does (`]` steps each photo's own rating). A photo whose
+    /// row already shows them is in the batch too: its sidecar is read, and written if it doesn't hold them.
+    case each([Int64: [MetadataField]])
     /// Gives the photos the fields the preset ticks, each replacing, appending to or prefixing what
     /// they have, with the codes of `codes` expanded in its texts.
     case preset(MetadataPreset, to: [Int64], codes: CodeReplacements = CodeReplacements())
@@ -110,10 +118,19 @@ public extension LibraryMetadata {
         var batch: MetadataBatch
         switch change {
         case let .set(fields, ids):
-            let edit = fields.reduce(into: [String: FieldEdit]()) { $0.merge($1.edits) { _, new in new } }
+            let edit = MetadataField.edits(fields)
             batch = MetadataBatch(kind: .metadata, title: Self.title(fields, ids.count))
             batch.edit = edit
             batch.photos = try await photos(ids, edit: edit)
+        case let .each(fields):
+            let ids = fields.keys.sorted()
+            batch = MetadataBatch(kind: .metadata, title: Self.title(ids.flatMap { fields[$0] ?? [] }, ids.count))
+            let alike = Set(fields.values).count == 1
+            batch.edit = alike ? fields.values.first.map(MetadataField.edits) ?? [:] : [:]
+            batch.photos = try await photos(
+                ids, edits: alike ? [:] : fields.mapValues(MetadataField.edits), edit: batch.edit,
+                keepingUnchanged: true,
+            )
         case let .preset(preset, ids, codes):
             batch = MetadataBatch(kind: .preset, title: "Apply “\(preset.name)” to \(Self.count(ids.count))")
             batch.edit = preset.edits(codes: codes)

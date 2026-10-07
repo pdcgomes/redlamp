@@ -7,8 +7,10 @@ import Synchronization
 ///
 /// - **In Library** each change reaches the whole selection (or the photo clicked, when it isn't in it), as
 ///   one change with Undo and Redo. It's shown at once in the grid, the filmstrip and the loupe, then made in
-///   the background: through the library's batches (`LibraryMetadata`) for the photos it has indexed, the
-///   photo Develop has open among them, and through the photos' own saves for the rest.
+///   the background: as one of the library's batches (`LibraryMetadata`) for the photos it has indexed, the
+///   photo Develop has open among them, each photo given its own values, and through the photos' own saves
+///   for the rest. Redo is the Undo of the Undo where the journal still has it. A photo whose sidecar the
+///   library can't read or write is reported in the activity log and shown as the library has it.
 /// - **In Develop** each change reaches the active photo, as it always has, and isn't on Library's Undo.
 /// - A toggle (P, X, 6 to 9, a custom label, B) sets its value on every photo it reaches, or takes it off
 ///   them all when every one has it already. `[` and `]` step each photo's own rating.
@@ -137,20 +139,23 @@ public extension EditorModel {
         }
         let sequence = cullingQueue.request(step.photos)
         show(shown.values, field: step.field, rows: shown.rows, photoIDs: shown.photoIDs, sequence: sequence)
-        make(step, sequence: sequence, undoing: true)
+        make(step, sequence: sequence, as: .undo)
         activity.record(.action, "Undo \(step.title)")
         return true
     }
 
-    /// Makes again the culling change Undo took back last.
+    /// Makes again the culling change Undo took back last: each photo that still shows what it had before it
+    /// gets it again.
     @discardableResult
     func redoCulling() -> Bool {
         guard module == .library, let step = cullingRedo.popLast() else { return false }
         cullingUndo.append(step)
-        let shown = find(step) { _, place in step.after[place] }
+        let shown = find(step) { shown, place in
+            shown.matches(step.before[place], in: step.field) ? step.after[place] : nil
+        }
         let sequence = cullingQueue.request(step.photos)
         show(shown.values, field: step.field, rows: shown.rows, photoIDs: shown.photoIDs, sequence: sequence)
-        make(step, sequence: sequence, undoing: false)
+        make(step, sequence: sequence, as: .redo)
         activity.record(.action, "Redo \(step.title)")
         return true
     }
@@ -192,7 +197,7 @@ public extension EditorModel {
         }
         cullingRedo.removeAll()
         remember(step.after.compactMap(\.customLabel))
-        make(step, sequence: sequence, undoing: false)
+        make(step, sequence: sequence, as: .change)
     }
 
     /// What `change` makes of the photos of `rows` that it changes, or nil when it changes none. It reads the
@@ -263,63 +268,75 @@ public extension EditorModel {
         }
     }
 
-    /// Makes `step` in the background, after the changes asked for before it: its values, or with `undoing`,
-    /// takes them back.
-    private func make(_ step: CullingStep, sequence: UInt64, undoing: Bool) {
+    /// What a culling step's background work makes of it.
+    private enum Making {
+        case change, undo, redo
+    }
+
+    /// Makes `step` in the background, after the changes asked for before it: its values, or takes them
+    /// back, or makes them again.
+    private func make(_ step: CullingStep, sequence: UInt64, as making: Making) {
         let previous = cullingTail
         cullingTail = Task { [weak self] in
             await previous?.value
             guard let self else { return }
-            if undoing {
-                await takeBack(step, sequence: sequence)
-            } else {
-                await write(step, sequence: sequence)
+            switch making {
+            case .change: await write(step, sequence: sequence, redoing: false)
+            case .undo: await takeBack(step, sequence: sequence)
+            case .redo: await write(step, sequence: sequence, redoing: true)
             }
             library.service?.photosChanged(cullingQueue.finished(sequence))
             cullingOverlay.finished(sequence)
         }
     }
 
-    /// Writes the step's values: through the library for the photos it has indexed, each group of photos
-    /// given the same fields a batch, and through the others' own saves.
-    private func write(_ step: CullingStep, sequence: UInt64) async {
+    /// Writes the step's values: through the library for the photos it has indexed, as one batch, and
+    /// through the others' own saves. With `redoing`, the library takes back the Undo that took them back
+    /// when its journal still has it, and makes a new batch when it doesn't.
+    private func write(_ step: CullingStep, sequence: UInt64, redoing: Bool) async {
         let field = step.field
         var written = CullingWritten()
         if let service = library.service, service.isReady {
             await waitForSaves(of: step.photos)
-            let (photos, after) = (step.photos, step.after)
-            let requests = await Task.detached(priority: .userInitiated) {
-                var groups: [[MetadataField]: [Int]] = [:]
-                for place in photos.indices {
-                    groups[after[place].fields(field), default: []].append(place)
-                }
-                return groups.sorted { $0.value[0] < $1.value[0] }.map { fields, places in
-                    CullingGroup(fields: fields, photos: places.map { photos[$0] })
-                }
-            }.value
-            written = await service.cull(requests, sequence: sequence, queue: cullingQueue)
+            if redoing, !step.undos.isEmpty,
+               let redone = await service.redoCulling(
+                   step.undos,
+                   photos: step.ids,
+                   sequence: sequence,
+                   queue: cullingQueue,
+               ) {
+                written = redone
+                written.unindexed = step.saved.map { step.photos[$0] }
+            } else {
+                written = await service.cull(
+                    step.photos, fields: step.after.map { $0.fields(field) }, sequence: sequence, queue: cullingQueue,
+                )
+                step.ids = written.ids
+            }
         } else {
             written.unindexed = step.photos
         }
         step.batches = written.batches
-        step.ids = written.ids
-        if !written.unindexed.isEmpty {
-            let unindexed = Set(written.unindexed)
-            step.saved = step.photos.indices.filter { unindexed.contains(step.photos[$0]) }
-        }
+        step.undos = []
+        let unindexed = Set(written.unindexed)
+        step.saved = step.photos.indices.filter { unindexed.contains(step.photos[$0]) }
         let held = step.held
         await save(step.saved.map { place in
-            let (url, after) = (step.photos[place], step.after[place])
+            let (url, before, after) = (step.photos[place], step.before[place], step.after[place])
             return (url, { @Sendable (metadata: inout PhotoMetadata) in
-                held.keep(CullingValues(metadata), for: url)
+                let current = CullingValues(metadata)
+                guard !redoing || current.matches(held.value(for: url) ?? before, in: field) else { return }
+                held.keep(current, for: url)
                 after.apply(field, to: &metadata)
             })
         })
-        await finish(written, of: step, title: step.title, undoing: false, sequence: sequence)
+        await finish(
+            written, of: step, title: redoing ? "Redo \(step.title)" : step.title, undoing: false, sequence: sequence,
+        )
     }
 
-    /// Takes the step back: its batches through the library, and its other photos through their own saves,
-    /// each field that still holds what the step gave it.
+    /// Takes the step back: its batches through the library, which keeps their Undos for Redo, and its other
+    /// photos through their own saves, each field that still holds what the step gave it.
     private func takeBack(_ step: CullingStep, sequence: UInt64) async {
         let field = step.field
         var written = CullingWritten()
@@ -327,18 +344,17 @@ public extension EditorModel {
             await waitForSaves(of: step.photos)
             written = await service.undoCulling(step.batches, photos: step.ids, sequence: sequence, queue: cullingQueue)
         }
+        step.undos = written.batches
+        step.batches = []
         let held = step.held
-        let saved = step.saved.map { place in
+        await save(step.saved.map { place in
             let (url, before, after) = (step.photos[place], step.before[place], step.after[place])
             return (url, { @Sendable (metadata: inout PhotoMetadata) in
                 if CullingValues(metadata).matches(after, in: field) {
                     (held.value(for: url) ?? before).apply(field, to: &metadata)
                 }
             })
-        }
-        step.batches = []
-        step.saved = []
-        await save(saved)
+        })
         await finish(written, of: step, title: "Undo \(step.title)", undoing: true, sequence: sequence)
     }
 
@@ -663,7 +679,9 @@ final class CullingStep {
     /// The library's batches that made it last, for its Undo, and its photos' IDs in the index.
     var batches: [UUID] = []
     var ids: [Int64: URL] = [:]
-    /// The photos (by place) their own saves wrote: those the library hasn't indexed.
+    /// The Undos that took those batches back, for Redo to take back in turn.
+    var undos: [UUID] = []
+    /// The photos (by place) their own saves write: those the library hadn't indexed.
     var saved: [Int] = []
     /// What their sidecars held before it, which Undo puts back: the grid may have shown other apps' values.
     let held = CullingHeld()

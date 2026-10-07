@@ -36,7 +36,33 @@ public extension LibraryMetadata {
         let journal = journal
         let (batch, logged) = try await LibraryIndex.offCaller { try journal.load(id) }
         guard logged.state == .finished, batch.kind != .undo else { throw MetadataError.nothingToUndo }
-        var undo = MetadataBatch(kind: .undo, title: "Undo \(batch.title)", undoes: batch.id)
+        return try await plan(takingBack: batch, logged: logged, as: MetadataBatch(
+            kind: .undo, title: "Undo \(batch.title)", undoes: batch.id,
+        ))
+    }
+
+    /// What making again the batch Undo `id` took back would do, as the Undo of that Undo: each sidecar
+    /// and row it put back gets what the batch gave it again, unless it changed since, and nothing else
+    /// is touched. Its batch is the same kind as the one undone, so it has an Undo of its own. Throws
+    /// `nothingToRedo` when the journal no longer has the Undo as it was run.
+    func planRedo(_ id: UUID) async throws -> MetadataPlan {
+        let journal = journal
+        guard let undo = try? await LibraryIndex.offCaller({ try journal.load(id) }),
+              undo.progress.state == .finished, undo.batch.kind == .undo, let original = undo.batch.undoes,
+              let undone = try? await LibraryIndex.offCaller({ try journal.load(original) }),
+              undone.progress.state == .undone
+        else { throw MetadataError.nothingToRedo(id) }
+        return try await plan(takingBack: undo.batch, logged: undo.progress, as: MetadataBatch(
+            kind: undone.batch.kind, title: undone.batch.title, undoes: id,
+        ))
+    }
+
+    /// `taking`, the batch that takes back what `batch` did as `logged` says: each sidecar it wrote back
+    /// as it was, unless a field changed since, the index alike, and the definitions as they were.
+    private func plan(
+        takingBack batch: MetadataBatch, logged: MetadataJournal.Progress, as taking: MetadataBatch,
+    ) async throws -> MetadataPlan {
+        var undo = taking
         undo.definitions = batch.definitions?.reversed
         let places = batch.photos.indices.filter { place in
             logged.written[place].map { $0.before != $0.after } ?? false
@@ -51,11 +77,11 @@ public extension LibraryMetadata {
             let photoKeys = batch.keys(of: photo)
             let written = logged.written[place]
             let indexAfter = batch.indexAfter(photo, current: photo.index)
+            let shown = current[photo.id]
+            let values = shown.map { PhotoMetadata.canonical($0.values.filter { photoKeys.contains($0.key) }) }
             return MetadataBatch.Photo(
-                id: photo.id, path: photo.path,
-                index: current[photo.id]
-                    .map { PhotoMetadata.canonical($0.values.filter { photoKeys.contains($0.key) }) }
-                    ?? [:],
+                id: photo.id, path: photo.path, index: values ?? [:],
+                others: shown.map { $0.others.intersection(Self.fields(values ?? [:])) } ?? [],
                 undo: MetadataBatch.Undo(
                     sidecarBefore: written?.before ?? [:], sidecarAfter: written?.after ?? [:],
                     indexBefore: photo.index, indexAfter: indexAfter, othersBefore: photo.others,

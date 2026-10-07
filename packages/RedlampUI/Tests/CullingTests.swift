@@ -316,16 +316,48 @@ struct CullingTests {
         #expect(model.perform(.rating5))
         model.click(folder.photos[0])
         model.click(folder.photos[2], extending: true)
+        await folder.written()
+        let batches = try await folder.batches()
         #expect(model.perform(.increaseRating))
         #expect((0 ..< 3).map { folder.shown($0).rating } == [1, 3, 5])
         await folder.written()
         #expect((0 ..< 3).map { folder.sidecar($0)?.rating } == [1, 3, 5])
+        #expect(try await folder.batches() == batches + 1, "one batch, each photo given its own rating")
         #expect(model.perform(.undo))
         #expect((0 ..< 3).map { folder.shown($0).rating } == [0, 2, 5])
         await folder.written()
         #expect((0 ..< 3).map { folder.sidecar($0)?.rating ?? 0 } == [0, 2, 5])
         #expect(model.perform(.decreaseRating))
         #expect((0 ..< 3).map { folder.shown($0).rating } == [0, 1, 4])
+    }
+
+    @Test func `Redo takes back the Undo, so a photo changed since keeps its change`() async throws {
+        let folder = IndexedFolder()
+        defer { folder.cleanUp() }
+        try await folder.open(count: 4)
+        let model = try #require(folder.model)
+        model.click(folder.photos[3])
+        #expect(model.perform(.selectAllPhotos) && model.perform(.labelGreen))
+        await folder.written()
+        #expect(model.perform(.undo))
+        await folder.written()
+        // Labelled since by another app, and read again as change tracking reads it, once the grid has let go of
+        // what Undo showed.
+        try await Task.sleep(for: CullingOverlay.kept + .milliseconds(200))
+        try Library.writeMetadata(for: folder.photos[1]) { $0.label = .blue }
+        try await folder.indexAgain()
+        try await folder.eventually { folder.shown(1).label == .blue }
+        let batches = try await folder.batches()
+
+        #expect(model.perform(.redo))
+        #expect((0 ..< 4).map { folder.shown($0).label } == [.green, .blue, .green, .green], "shown at once")
+        await folder.written()
+        #expect((0 ..< 4).map { folder.sidecar($0)?.label } == [.green, .blue, .green, .green])
+        let entries = try await #require(folder.service.metadata).entries()
+        #expect(entries.count == batches + 1 && entries.last?.undoes == entries.dropLast().last?.id, "\(entries)")
+        #expect(model.perform(.undo))
+        await folder.written()
+        #expect((0 ..< 4).map { folder.sidecar($0)?.label } == [nil, .blue, nil, nil])
     }
 
     @Test func `a batch that fails leaves the grid showing what the sidecars hold`() async throws {

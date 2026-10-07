@@ -416,26 +416,29 @@ public final class LibraryService {
 
     // MARK: - Culling (LIB-15)
 
-    /// Gives each group's photos its fields, a batch a group, off the main thread and after the batches a
-    /// forced quit left unfinished. Lists hear of a batch's photos once the index holds it, as `queue`
-    /// allows for change `sequence`; the photos the index doesn't have are left for their own saves.
-    func cull(_ groups: [CullingGroup], sequence: UInt64, queue: CullingQueue) async -> CullingWritten {
-        guard let core, let metadata else { return CullingWritten(unindexed: groups.flatMap(\.photos)) }
+    /// Gives each of `photos` its own fields (`fields`, by place), as one batch off the main thread, after
+    /// the batches a forced quit left unfinished. Lists hear of its photos once the index holds it, as
+    /// `queue` allows for change `sequence`; the photos the index doesn't have are left for their own saves.
+    func cull(
+        _ photos: [URL], fields: [[MetadataField]], sequence: UInt64, queue: CullingQueue,
+    ) async -> CullingWritten {
+        guard let core, let metadata else { return CullingWritten(unindexed: photos) }
         let recovering = recovering
         return await Task.detached(priority: .userInitiated) {
             await recovering?.value
-            let ids = await Self.indexIDs(of: groups.flatMap(\.photos), in: core.index)
+            let ids = await Self.indexIDs(of: photos, in: core.index)
             var written = CullingWritten(ids: Dictionary(ids.map { ($1, $0) }) { first, _ in first })
-            for group in groups {
-                let found = group.photos.compactMap { ids[$0] }
-                written.unindexed += group.photos.filter { ids[$0] == nil }
-                guard !found.isEmpty else { continue }
+            var each: [Int64: [MetadataField]] = [:]
+            for (place, photo) in photos.enumerated() {
+                if let id = ids[photo] {
+                    each[id] = fields[place]
+                } else {
+                    written.unindexed.append(photo)
+                }
+            }
+            if !each.isEmpty {
                 do {
-                    let plan = try await metadata.plan(.set(group.fields, on: found))
-                    // Left out as their rows already show it: the indexer may have read a sidecar a batch
-                    // before this one was writing, so their own saves see to it.
-                    let planned = Set(plan.photos.map(\.id))
-                    written.unindexed += found.filter { !planned.contains($0) }.compactMap { written.ids[$0] }
+                    let plan = try await metadata.plan(.each(each))
                     await Self.run(
                         plan,
                         metadata: metadata,
@@ -445,7 +448,7 @@ public final class LibraryService {
                         into: &written,
                     )
                 } catch {
-                    written.failed(found.compactMap { written.ids[$0] }, error)
+                    written.failed(each.keys.compactMap { written.ids[$0] }, error)
                 }
             }
             core.live.photosChanged(queue.indexed([], by: sequence))
@@ -453,24 +456,55 @@ public final class LibraryService {
         }.value
     }
 
-    /// Takes back `batches`, newest first, as `cull` makes them; `photos` are their photos by index ID.
+    /// Takes back `batches`, newest first, as `cull` makes them; `photos` are their photos by index ID. The
+    /// written batches are the Undos, which `redoCulling` takes back.
     func undoCulling(
         _ batches: [UUID], photos: [Int64: URL], sequence: UInt64, queue: CullingQueue,
+    ) async -> CullingWritten {
+        await runCulling(
+            batches.reversed().map { batch -> CullingPlanning in { try await $0.planUndo(batch) } }, photos: photos,
+            sequence: sequence, queue: queue,
+        )
+    }
+
+    /// Makes again the batches Undo took back (`undos`, as `undoCulling` wrote them) as the Undo of each Undo,
+    /// oldest batch first; nil, nothing made, when the journal doesn't have every one of them as it was run.
+    func redoCulling(
+        _ undos: [UUID], photos: [Int64: URL], sequence: UInt64, queue: CullingQueue,
+    ) async -> CullingWritten? {
+        guard let metadata else { return nil }
+        let recovering = recovering
+        let plans: [MetadataPlan]? = await Task.detached(priority: .userInitiated) {
+            await recovering?.value
+            var plans: [MetadataPlan] = []
+            for undo in undos.reversed() {
+                guard let plan = try? await metadata.planRedo(undo) else { return nil }
+                plans.append(plan)
+            }
+            return plans
+        }.value
+        guard let plans else { return nil }
+        return await runCulling(
+            plans.map { plan -> CullingPlanning in { _ in plan } }, photos: photos, sequence: sequence, queue: queue,
+        )
+    }
+
+    /// A batch to run, planned when it's its turn.
+    private typealias CullingPlanning = @Sendable (LibraryMetadata) async throws -> MetadataPlan
+
+    /// Runs each of `plans` in turn, off the main thread, after the batches a forced quit left unfinished.
+    private func runCulling(
+        _ plans: [CullingPlanning], photos: [Int64: URL], sequence: UInt64, queue: CullingQueue,
     ) async -> CullingWritten {
         guard let core, let metadata else { return CullingWritten() }
         let recovering = recovering
         return await Task.detached(priority: .userInitiated) {
             await recovering?.value
             var written = CullingWritten(ids: photos)
-            for batch in batches.reversed() {
+            for plan in plans {
                 do {
-                    let plan = try await metadata.planUndo(batch)
-                    await Self.run(
-                        plan,
-                        metadata: metadata,
-                        core: core,
-                        sequence: sequence,
-                        queue: queue,
+                    try await Self.run(
+                        plan(metadata), metadata: metadata, core: core, sequence: sequence, queue: queue,
                         into: &written,
                     )
                 } catch {
@@ -576,20 +610,13 @@ public final class LibraryService {
     }
 }
 
-/// Photos culling gives the same fields, as one batch.
-struct CullingGroup: Sendable {
-    var fields: [MetadataField]
-    var photos: [URL]
-}
-
 /// What the library made of a culling change.
 struct CullingWritten: Sendable {
     /// The batches it ran, for their Undo.
     var batches: [UUID] = []
     /// The photos it has, by index ID.
     var ids: [Int64: URL] = [:]
-    /// The photos it leaves to their own saves: those it hasn't indexed, and those whose rows show the change
-    /// already.
+    /// The photos it leaves to their own saves: those it hasn't indexed.
     var unindexed: [URL] = []
     /// Photos it left as they were: their sidecars can't be read or written here, or their batch failed and
     /// was rolled back.
