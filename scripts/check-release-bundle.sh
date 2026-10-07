@@ -9,13 +9,15 @@
 #   crash reports couldn't be symbolicated (Sparkle's come built and ship none);
 # - RedlampServices exports anything but its Swift and Objective-C symbols: LibRaw, linked in
 #   statically, is built hidden so dead-stripping can drop what Redlamp doesn't call;
+# - an XPC service carries its own copy of a framework the app has, which it loads from the
+#   app's Frameworks instead;
 # - the bundle outgrows its budget, 2% above what it measured when the budget was set.
 #
 #   scripts/check-release-bundle.sh build/release/Redlamp.app [build/release/dSYMs]
 
 set -euo pipefail
 
-BUDGET_KB=56500
+BUDGET_KB=54300
 OWN_EXPORTS='^(_\$s|_OBJC_(METACLASS_|CLASS_)\$_|_RedlampServicesVersion)'
 
 APP="${1:?usage: check-release-bundle.sh <app> [dsyms]}"
@@ -70,6 +72,16 @@ fi
 if [ "${#exporting[@]}" -gt 0 ]; then
     echo "error: RedlampServices exports LibRaw's symbols (count: file); build LibRaw hidden:" >&2
     printf '  %s\n' "${exporting[@]}" >&2
+    failed=1
+fi
+copies=()
+for framework in "$APP"/Contents/XPCServices/*.xpc/Contents/Frameworks/*.framework; do
+    [ -d "$framework" ] || continue
+    [ ! -d "$APP/Contents/Frameworks/$(basename "$framework")" ] || copies+=("${framework#"$APP"/}")
+done
+if [ "${#copies[@]}" -gt 0 ]; then
+    echo "error: XPC services carry copies of the app's frameworks:" >&2
+    printf '  %s\n' "${copies[@]}" >&2
     failed=1
 fi
 size_kb="$(du -sk "$APP" | cut -f1)"
