@@ -466,6 +466,18 @@ import RedlampLibrary
         return nil
     }
 
+    /// The first photo on show, or the last.
+    @_spi(Harness) public func endPhoto(first: Bool) -> Int64? {
+        guard let list else { return nil }
+        let order = first ? Array(list.groups.indices) : Array(list.groups.indices.reversed())
+        for group in order where list.isOpen(group) {
+            if let photo = first ? list.groups[group].photos.first : list.groups[group].photos.last {
+                return photo
+            }
+        }
+        return nil
+    }
+
     /// The photos on show from `start` through `end`, in the grid's order, both on show.
     func shownPhotos(from start: Int64, through end: Int64) -> [Int64] {
         guard let list, let first = list.index(of: start), let last = list.index(of: end) else { return [] }

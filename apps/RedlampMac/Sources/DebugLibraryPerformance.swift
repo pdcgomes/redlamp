@@ -27,18 +27,22 @@
     /// thread's work per switch until it's idle, and what the process read from disk meanwhile), the
     /// edited photos rendered in the background (LIB-17): the grid scrolled as they render, renders a
     /// second with Develop idle and busy, and Develop's own render times with renders running and paused,
-    /// and culling every photo at once (LIB-15): a rating, a flag, a label and the mark, each undone, each
-    /// on screen and in every sidecar, the sidecars checked to read as they did after the last Undo.
+    /// culling every photo at once (LIB-15): a rating, a flag, a label and the mark, each undone, each
+    /// on screen and in every sidecar, the sidecars checked to read as they did after the last Undo, and
+    /// Group By in the grid (LIB-41): each key and moments' setting, every group closed and opened, and
+    /// the arrow keys held through the groups. `--library-perf-groups-only` measures Group By alone once the
+    /// fixture is open.
     /// The footprint is followed through every phase, then after a memory-pressure trim and a few idle
     /// seconds.
     /// Nothing joins the working set, and the temporary library is removed at the end;
     /// `--library-perf-library <folder>` keeps it in `<folder>` instead, where the next run finds it
     /// indexed.
     ///
-    /// Writes /tmp/redlamp-perf.txt, ending with each budget's PASS or FAIL, and the metrics to
-    /// /tmp/redlamp-perf.json, as `--folders-perf` does; with `--library-perf-quit` it then quits,
+    /// Writes its report to `PerformanceReport.text` (/tmp/redlamp-perf.txt, or perf.txt in the directory
+    /// `--perf-report` names), ending with each budget's PASS or FAIL, and the metrics to perf.json beside
+    /// it, as `--folders-perf` does; with `--library-perf-quit` it then quits,
     /// with status 1 if a budget failed. `--library-perf-memory` also breaks the footprint down at
-    /// each phase into /tmp/redlamp-memory.txt, and `--library-perf-profile` samples the main thread
+    /// each phase into memory.txt beside it, and `--library-perf-profile` samples the main thread
     /// while the grid scrolls into /tmp/redlamp-profile.txt. Every turn of the main thread's run loop
     /// longer than half a second is sampled (with `--library-perf-turns`, while typing and culling every turn
     /// longer than 16 ms), and where they went written to /tmp/redlamp-stalls.txt, with what changed in each
@@ -72,6 +76,12 @@
         /// within the phases measured.
         private static let log = DispatchQueue(label: "app.redlamp.library-perf.log", qos: .utility)
 
+        /// Where the stall report goes: beside the run's report, or /tmp/redlamp-stalls.txt.
+        private static var stallsPath: String {
+            PerformanceReport.directory.map { ($0 as NSString).appendingPathComponent("stalls.txt") }
+                ?? "/tmp/redlamp-stalls.txt"
+        }
+
         /// What the stall report adds about each phase: what changed in it.
         private static var notes: [String] = []
 
@@ -104,6 +114,15 @@
             var cullWrites: [Double] = []
             var cullLeft = 0
             var cullCount = 0
+            /// Group By (LIB-41): the main thread changing the key and moments' setting, and each change's
+            /// photos on screen; opening and closing every group, the main thread and each one on screen; and
+            /// the arrow keys held through the groups.
+            var grouping: MainThreadMonitor.Summary?
+            var regrouped: [Double] = []
+            var toggling: MainThreadMonitor.Summary?
+            var toggled: [Double] = []
+            var groupArrows: MainThreadMonitor.Summary?
+            var grouped = false
         }
 
         static func scheduleIfRequested(model: EditorModel) {
@@ -237,6 +256,24 @@
             lines.append(scrollReport)
             await memory.mark("scrolled")
 
+            if arguments.contains("--library-perf-groups-only") {
+                let groups = await group(model)
+                lines.append(groups.report)
+                measured.grouped = groups.grouped
+                (measured.grouping, measured.regrouped) = (groups.changing, groups.onScreen)
+                (measured.toggling, measured.toggled, measured.groupArrows) = (
+                    groups.toggling,
+                    groups.toggled,
+                    groups.arrows,
+                )
+                memory.stop()
+                service.close()
+                stalls.stop()
+                self.stalls = nil
+                try? ((notes + [stalls.report()]).joined(separator: "\n") + "\n")
+                    .write(toFile: Self.stallsPath, atomically: true, encoding: .utf8)
+                return finish(lines, budgets: groupBudgets(measured), memory: memory, title: fixture.path)
+            }
             let (gridScrolling, gridReport) = await scrollGrid(model)
             measured.gridScrolling = gridScrolling
             lines.append(gridReport)
@@ -284,6 +321,17 @@
             lines.append(culled.report)
             await memory.mark("culled")
 
+            let groups = await group(model)
+            lines.append(groups.report)
+            measured.grouped = groups.grouped
+            (measured.grouping, measured.regrouped) = (groups.changing, groups.onScreen)
+            (measured.toggling, measured.toggled, measured.groupArrows) = (
+                groups.toggling,
+                groups.toggled,
+                groups.arrows,
+            )
+            await memory.mark("grouped")
+
             phase("settling")
             try? await Task.sleep(for: .seconds(3))
             await memory.mark("settled")
@@ -297,9 +345,9 @@
             lines.append(memory.summary())
             stalls.stop()
             self.stalls = nil
-            lines.append((stalls.summary ?? "No main-thread turn over 500 ms") + " (/tmp/redlamp-stalls.txt)")
+            lines.append((stalls.summary ?? "No main-thread turn over 500 ms") + " (\(Self.stallsPath))")
             try? ((notes + [stalls.report()]).joined(separator: "\n") + "\n")
-                .write(toFile: "/tmp/redlamp-stalls.txt", atomically: true, encoding: .utf8)
+                .write(toFile: Self.stallsPath, atomically: true, encoding: .utf8)
 
             let arrows = measured.arrows.compactMap(\.summary?.p99).max() ?? .infinity
             let blank = measured.arrows.reduce(0) { $0 + $1.blank }
@@ -321,8 +369,14 @@
                 "library-main-culling": measured.culling?.p99 ?? .infinity,
                 "library-cull-on-screen": measured.culled.max() ?? .infinity,
                 "library-cull-written": measured.cullWrites.max() ?? .infinity,
+                "library-main-grouping": measured.grouping?.p99 ?? .infinity,
+                "library-group-on-screen": measured.regrouped.max() ?? .infinity,
+                "library-main-group-toggles": measured.toggling?.p99 ?? .infinity,
+                "library-group-toggle-on-screen": measured.toggled.max() ?? .infinity,
+                "library-main-group-arrows": measured.groupArrows?.p99 ?? .infinity,
             ])
             let budgets: [Budget] = budgets(measured, arrows: arrows, blank: blank, browsing: browsing)
+                + groupBudgets(measured)
             finish(
                 lines,
                 budgets: budgets,
@@ -830,6 +884,206 @@
             )
         }
 
+        /// Groups the grid (LIB-41) in the editor window's own views, the grid shown: → held through the photos
+        /// ungrouped, for comparison; the photos grouped by moment once, as a source is first grouped, which reads
+        /// its photos' IDs from the index; then by each key in turn and the moments' Tighter–Looser setting
+        /// through its steps, twice, each change timed from the change until its groups are drawn and committed;
+        /// every group closed and opened again, by Close All Groups, Open All Groups and an ⌥-click's toggle of
+        /// every group, each timed from the action until drawn; and → held through the moments. The main thread
+        /// is watched over each part.
+        private static func group(_ model: EditorModel) async -> (
+            grouped: Bool, changing: MainThreadMonitor.Summary?, onScreen: [Double],
+            toggling: MainThreadMonitor.Summary?,
+            toggled: [Double], arrows: MainThreadMonitor.Summary?, report: String,
+        ) {
+            phase("grouping, the first time")
+            let window = NSWindow(
+                contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000),
+                styleMask: [.titled, .resizable, .fullSizeContentView], backing: .buffered, defer: false,
+            )
+            window.contentViewController = ModuleViews.make(model: model, theme: ThemeSettings())
+            window.orderBack(nil)
+            defer {
+                model.setLooseness(0)
+                model.setGroupKey(.ungrouped)
+                model.showModule(.develop)
+                window.orderOut(nil)
+                window.contentViewController = nil
+            }
+            model.showLibrary(.grid)
+            if let first = model.items.first {
+                model.select(first.url)
+            }
+            try? await Task.sleep(for: .milliseconds(500))
+            phase("grouping, holding the arrow keys ungrouped", sampling: .milliseconds(8))
+            let ungrouped = await holdRight(model)
+            if let first = model.items.first {
+                model.select(first.url)
+            }
+            let groups = model.gridGroups
+            func drawn() {
+                window.displayIfNeeded()
+                CATransaction.flush()
+            }
+            /// Until the groups are by `key` at `looseness`, or two seconds.
+            func grouped(by key: GroupKey, looseness: Int, since started: Double) async -> Bool {
+                let setting = MomentSetting(looseness: looseness)
+                while groups.list.map({ $0.groups.key != key || $0.groups.setting != setting }) ?? true,
+                      CFAbsoluteTimeGetCurrent() - started < 2 {
+                    try? await Task.sleep(for: .microseconds(250))
+                }
+                return groups.list.map { $0.groups.key == key && $0.groups.setting == setting } ?? false
+            }
+            var started = CFAbsoluteTimeGetCurrent()
+            model.setGroupKey(.moment)
+            guard await grouped(by: .moment, looseness: 0, since: started) else {
+                return (false, nil, [], nil, [], nil, "Grouping: the source couldn't be grouped")
+            }
+            drawn()
+            let first = (CFAbsoluteTimeGetCurrent() - started) * 1000
+            let firstOffMain = seconds(groups.lastGrouping) * 1000
+            let count = groups.list?.groups.count ?? 0
+            try? await Task.sleep(for: .milliseconds(300))
+
+            phase("grouping, changing Group By and the setting", sampling: .milliseconds(8))
+            var onScreen: [Double] = []
+            var offMain: [Double] = []
+            var missed = 0
+            let keys: [GroupKey] = [.day, .camera, .folder, .lens, .orientation, .momentCamera, .moment]
+            let steps = [-1, -2, -3, -4, -3, -2, -1, 0, 1, 2, 3, 4, 3, 2, 1, 0]
+            var monitor = MainThreadMonitor()
+            monitor.start()
+            var began = CFAbsoluteTimeGetCurrent()
+            for _ in 0 ..< 2 {
+                for key in keys {
+                    started = CFAbsoluteTimeGetCurrent()
+                    model.setGroupKey(key)
+                    if await grouped(by: key, looseness: 0, since: started) {
+                        drawn()
+                        onScreen.append((CFAbsoluteTimeGetCurrent() - started) * 1000)
+                        offMain.append(seconds(groups.lastGrouping) * 1000)
+                    } else {
+                        missed += 1
+                    }
+                    try? await Task.sleep(for: .milliseconds(150))
+                }
+                for looseness in steps {
+                    started = CFAbsoluteTimeGetCurrent()
+                    model.setLooseness(looseness)
+                    if await grouped(by: .moment, looseness: looseness, since: started) {
+                        drawn()
+                        onScreen.append((CFAbsoluteTimeGetCurrent() - started) * 1000)
+                        offMain.append(seconds(groups.lastGrouping) * 1000)
+                    } else {
+                        missed += 1
+                    }
+                    try? await Task.sleep(for: .milliseconds(150))
+                }
+            }
+            var elapsed = CFAbsoluteTimeGetCurrent() - began
+            monitor.stop()
+            let changing = monitor.summary(seconds: elapsed)
+            var report = String(
+                format: "Grouping %d photos: first by moment (%d moments) on screen in %.1f ms (%.1f ms off the main "
+                    + "thread, reading the photos' IDs); %d changes of Group By and the setting on screen p50 %.2f ms, "
+                    + "p95 %.2f ms, max %.2f ms (off the main thread p50 %.2f ms, max %.2f ms), %d not within 2 s",
+                model.items.count, count, first, firstOffMain, onScreen.count, percentile(onScreen, 0.5),
+                percentile(onScreen, 0.95), onScreen.max() ?? 0, percentile(offMain, 0.5), offMain.max() ?? 0, missed,
+            )
+            report += "\n" + monitor.report("Main thread changing Group By and the setting", seconds: elapsed)
+
+            phase("grouping, opening and closing every group", sampling: .milliseconds(8))
+            var toggled: [Double] = []
+            monitor = MainThreadMonitor()
+            monitor.start()
+            began = CFAbsoluteTimeGetCurrent()
+            for round in 0 ..< 40 {
+                for close in [true, false] {
+                    started = CFAbsoluteTimeGetCurrent()
+                    if round % 2 == 0 {
+                        model.perform(close ? .closeAllGroups : .openAllGroups)
+                    } else if let list = groups.list, !list.groups.isEmpty {
+                        model.toggleGroup(list.groups.count - 1, all: true)
+                    }
+                    drawn()
+                    toggled.append((CFAbsoluteTimeGetCurrent() - started) * 1000)
+                    try? await Task.sleep(for: .milliseconds(150))
+                }
+            }
+            elapsed = CFAbsoluteTimeGetCurrent() - began
+            monitor.stop()
+            let toggling = monitor.summary(seconds: elapsed)
+            report += "\n" + String(
+                format: "Every one of %d moments closed and opened again, %d times: on screen p50 %.2f ms, p95 %.2f ms, "
+                    + "max %.2f ms",
+                groups.list?.groups.count ?? 0, toggled.count, percentile(toggled, 0.5), percentile(toggled, 0.95),
+                toggled.max() ?? 0,
+            )
+            report += "\n" + monitor.report("Main thread opening and closing every group", seconds: elapsed)
+
+            phase("grouping, holding the arrow keys through the moments", sampling: .milliseconds(8))
+            model.openAllGroups()
+            if let first = groups.endPhoto(first: true), let url = model.library.url(ofPhoto: first) {
+                model.select(url)
+            }
+            let held = await holdRight(model)
+            report += "\n" + ungrouped.report.replacingOccurrences(of: "holding →", with: "holding → ungrouped")
+            report += "\n" + held.report.replacingOccurrences(of: "holding →", with: "holding → through the moments")
+            return (true, changing, onScreen, toggling, toggled, held.summary, report)
+        }
+
+        /// → held for 300 steps, a step every 30 ms as key repeat sends them, through the photos on show from the
+        /// active one: the main thread over them.
+        private static func holdRight(_ model: EditorModel) async
+            -> (summary: MainThreadMonitor.Summary?, report: String) {
+            try? await Task.sleep(for: .milliseconds(300))
+            let monitor = MainThreadMonitor()
+            monitor.start()
+            let began = CFAbsoluteTimeGetCurrent()
+            var taken = 0
+            for step in 0 ..< 300 {
+                guard model.canPerform(.nextPhoto) else { break }
+                model.perform(.nextPhoto)
+                taken += 1
+                let wait = began + Double(step + 1) * 0.030 - CFAbsoluteTimeGetCurrent()
+                if wait > 0 {
+                    try? await Task.sleep(for: .microseconds(Int(wait * 1_000_000)))
+                }
+            }
+            let elapsed = CFAbsoluteTimeGetCurrent() - began
+            monitor.stop()
+            return (
+                monitor.summary(seconds: elapsed),
+                monitor.report("Main thread holding →, \(taken) steps", seconds: elapsed),
+            )
+        }
+
+        private static func groupBudgets(_ measured: Measured) -> [Budget] {
+            [
+                .atLeast("Grouped (1 yes, 0 no)", measured.grouped ? 1 : 0, 1, unit: ""),
+                .below(
+                    "Main thread p99 changing Group By and the setting", measured.grouping?.p99 ?? .infinity, 8.3,
+                    unit: "ms",
+                ),
+                .below(
+                    "Group By or the setting changed, its groups on screen, the slowest",
+                    measured.regrouped.max() ?? .infinity, 16, unit: "ms",
+                ),
+                .below(
+                    "Main thread p99 opening and closing every group", measured.toggling?.p99 ?? .infinity, 8.3,
+                    unit: "ms",
+                ),
+                .below(
+                    "Every group opened or closed, on screen, the slowest", measured.toggled.max() ?? .infinity, 16,
+                    unit: "ms",
+                ),
+                .below(
+                    "Main thread p99 holding the arrow keys through the groups", measured.groupArrows?.p99 ?? .infinity,
+                    8.3, unit: "ms",
+                ),
+            ]
+        }
+
         /// "`label`: N rendered, N a second", with the renders' waits, the engines made, and the p50 of the
         /// steps of photos of 12 MP or more (the fixture's raws; its JPEGs and HEICs are 64 by 48) and of
         /// the others.
@@ -956,9 +1210,9 @@
             print(report)
             if memory.breakdowns {
                 let table = memory.report(title: title, notes: ["Load average at the end: \(loadAverage())"])
-                try? (table + "\n").write(toFile: "/tmp/redlamp-memory.txt", atomically: true, encoding: .utf8)
+                try? (table + "\n").write(toFile: PerformanceReport.memory, atomically: true, encoding: .utf8)
             }
-            try? (report + "\n").write(toFile: "/tmp/redlamp-perf.txt", atomically: true, encoding: .utf8)
+            try? (report + "\n").write(toFile: PerformanceReport.text, atomically: true, encoding: .utf8)
             if LaunchArguments.all.contains("--library-perf-quit") {
                 if failed.isEmpty {
                     NSApp.terminate(nil)
