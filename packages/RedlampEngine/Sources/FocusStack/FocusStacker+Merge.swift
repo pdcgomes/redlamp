@@ -117,6 +117,9 @@ extension FocusStacker {
         }
         let alignment = StackAligner.align(analyses)
         lap("align")
+        for index in analyses.indices {
+            analyses[index].quarterLuma()
+        }
         // Sharpness is measured where each frame was captured and only then resampled: warping
         // softens every frame but the reference, which would then look sharpest everywhere.
         // Brightness is matched first (focus breathing changes exposure too), or where nothing
@@ -125,10 +128,9 @@ extension FocusStacker {
         let aligned = Parallel.map(frameCount) { [analyses] index in
             let analysis = analyses[index]
             let gain = dot(alignment.gains[index], SIMD3<Float>(0.25, 0.5, 0.25)).squareRoot()
-            var luma = analysis.luma.halved().halved()
+            var luma = analysis.luma
             luma.pixels = luma.pixels.map { $0 * gain }
-            let factor = analysis.factor * Float(analysis.luma.width) / Float(luma.width)
-            let transform = StackAligner.analysisResolution(alignment.transforms[index], factor: factor)
+            let transform = StackAligner.analysisResolution(alignment.transforms[index], factor: analysis.factor)
             var focus = LumaImage(
                 width: luma.width, height: luma.height,
                 pixels: StackDepthSolver.sumModifiedLaplacian(luma, radius: depthSettings.focusRadius),

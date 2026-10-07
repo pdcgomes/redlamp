@@ -119,9 +119,7 @@ struct FocusStackTests {
         let analysis = FrameAnalysis(
             width: 64, height: 48, rgb: [SIMD3<Float>](repeating: SIMD3(0.2, 0.3, 0.4), count: 64 * 48), factor: 1,
         )
-        withKnownIssue("the colour copy is padded to 16 bytes a pixel") {
-            #expect(analysis.colour.withUnsafeBytes(\.count) == analysis.colourWidth * analysis.colourHeight * 12)
-        }
+        #expect(analysis.colour.withUnsafeBytes(\.count) == analysis.colourWidth * analysis.colourHeight * 12)
     }
 
     /// Warping a frame by its true transform reproduces the reference, up to interpolation.

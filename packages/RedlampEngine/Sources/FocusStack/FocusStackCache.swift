@@ -296,9 +296,12 @@ final class FocusStackCache: Sendable {
             },
             progress: progress,
         )
-        let alignment = result.alignment
+        let (alignment, depth, timings) = (result.alignment, result.depth, result.timings)
+        let (frameWidth, frameHeight) = (result.fused.width, result.fused.height)
         guard let reference = metadata[alignment.reference] else { throw EngineError.gpuUnavailable }
-        let (samples, crop) = try readCovered(result.fused, queue: queue)
+        // Each copy of the fused image goes as soon as the next is made, so no more than two are held.
+        let readback = try readBack(consume result, queue: queue)
+        let (samples, crop) = Self.covered(consume readback, width: frameWidth, height: frameHeight)
         let report = FocusStackReport(
             frames: urls.count,
             reference: alignment.reference,
@@ -306,22 +309,22 @@ final class FocusStackCache: Sendable {
             height: crop.height,
             maximumScaleChange: Double(alignment.transforms.map { abs($0.scale - 1) }.max() ?? 0),
             minimumCorrelation: Double(alignment.correlations.min() ?? 1),
-            confidentDepthFraction: analysed?.report.confidentDepthFraction ?? Double(result.depth.confidentFraction),
-            timings: result.timings,
+            confidentDepthFraction: analysed?.report.confidentDepthFraction ?? Double(depth.confidentFraction),
+            timings: timings,
         )
         let decoded = reference.stacked(
             samples: samples, width: crop.width, height: crop.height, frames: urls.count, url: documentURL,
         )
         return MergedStack(
-            decoded: decoded, report: report, depth: result.depth.depth, depthWidth: result.depth.width,
-            depthHeight: result.depth.height, crop: crop, frameWidth: result.fused.width,
-            frameHeight: result.fused.height, referenceURL: urls[alignment.reference], alignment: alignment,
+            decoded: decoded, report: report, depth: depth.depth, depthWidth: depth.width,
+            depthHeight: depth.height, crop: crop, frameWidth: frameWidth,
+            frameHeight: frameHeight, referenceURL: urls[alignment.reference], alignment: alignment,
         )
     }
 
-    /// The fused texture's float16 RGBA samples inside the largest rectangle every frame covers,
-    /// with alpha set to 1.
-    private func readCovered(_ fused: any MTLTexture, queue: any MTLCommandQueue) throws -> ([UInt16], PixelRect) {
+    /// The fused texture's float16 RGBA samples in a shared buffer, rows packed.
+    private func readBack(_ result: StackMergeResult, queue: any MTLCommandQueue) throws -> any MTLBuffer {
+        let fused = result.fused
         let (width, height) = (fused.width, fused.height)
         let rowBytes = width * 8
         guard let buffer = device.makeBuffer(length: rowBytes * height, options: .storageModeShared),
@@ -337,6 +340,12 @@ final class FocusStackCache: Sendable {
         blit.endEncoding()
         commands.commit()
         commands.waitUntilCompleted()
+        return buffer
+    }
+
+    /// A read-back fused image's samples inside the largest rectangle every frame covers, with
+    /// alpha set to 1.
+    private static func covered(_ buffer: any MTLBuffer, width: Int, height: Int) -> ([UInt16], PixelRect) {
         let halves = buffer.contents().assumingMemoryBound(to: UInt16.self)
         let crop = Self.coveredRect(width: width, height: height) { x, y in
             Float(Float16(bitPattern: halves[(y * width + x) * 4 + 3])) >= 0.999
@@ -400,8 +409,8 @@ final class FocusStackCache: Sendable {
         try fileManager.createDirectory(at: staging, withIntermediateDirectories: false)
         do {
             try stack.decoded.samples
-                .withUnsafeBytes { try Data($0).write(to: staging.appendingPathComponent("fused.half")) }
-            try stack.depth.withUnsafeBytes { try Data($0).write(to: staging.appendingPathComponent("depth.f32")) }
+                .withUnsafeBytes { try Self.write($0, to: staging.appendingPathComponent("fused.half")) }
+            try stack.depth.withUnsafeBytes { try Self.write($0, to: staging.appendingPathComponent("depth.f32")) }
             try JSONEncoder().encode(StackMetadata(stack)).write(to: staging.appendingPathComponent("stack.json"))
             if let document {
                 try Data(document.standardizedFileURL.path.utf8)
@@ -417,6 +426,13 @@ final class FocusStackCache: Sendable {
             try? fileManager.removeItem(at: Self.incomplete(key))
         }
         Self.trim(root, budget: budget, keeping: folder, document: document, incomplete: incomplete)
+    }
+
+    /// Writes `bytes` without copying them first: a merge's samples are hundreds of megabytes.
+    private static func write(_ bytes: UnsafeRawBufferPointer, to url: URL) throws {
+        guard let base = bytes.baseAddress else { return try Data().write(to: url) }
+        try Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: base), count: bytes.count, deallocator: .none)
+            .write(to: url)
     }
 
     /// The file naming the document a retouched merge belongs to.
