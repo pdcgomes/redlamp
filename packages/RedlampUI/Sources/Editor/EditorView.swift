@@ -24,6 +24,7 @@ struct EditorContentView: View {
     @Bindable var theme: ThemeSettings
     let onOpen: () -> Void
     @State private var toolbarHeight: CGFloat = 0
+    @State private var layoutHeight: CGFloat = 0
 
     var body: some View {
         CanvasArea(onOpen: onOpen)
@@ -36,12 +37,14 @@ struct EditorContentView: View {
                 }
             }
             .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { toolbarHeight = $0 }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { layoutHeight = $0 }
             .sheet(item: $model.stackWorkspace) { workspace in
                 StackWorkspaceView(workspace: workspace, onDone: model.finishStackWorkspace)
                     .environment(theme)
             }
             .sheet(item: $model.settingsChooser) { chooser in
                 CopySettingsSheet(chooser: chooser)
+                    .frame(maxHeight: NSWindow.sheetHeight(fitting: .infinity, below: layoutHeight))
                     .environment(model)
                     .environment(theme)
             }

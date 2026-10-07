@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import RedlampEngineAPI
 import Testing
@@ -96,5 +97,32 @@ struct CopySettingsTests {
         try await Task.sleep(for: .milliseconds(50))
         #expect(model.recipe.masks.count == 2, "the photo's own sky and the pasted subject, once")
         #expect(engine.requests.dropFirst(before).allSatisfy { $0.kind == .subject })
+    }
+
+    /// The checklist is taller than the editor window at its smallest (#290): it fits below the
+    /// toolbar, its buttons on the window, and the groups scroll.
+    @Test func `the checklist fits on the editor window at its smallest`() async throws {
+        let folder = try folder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let model = EditorModel(engine: StubEngine())
+        let controller = EditorWindowController(
+            model: model, theme: ThemeSettings(), onOpen: {}, onExport: {}, onExportWithPrevious: {},
+        )
+        let window = try #require(controller.window)
+        defer {
+            model.settingsChooser = nil
+            window.orderOut(nil)
+        }
+        window.setContentSize(window.contentMinSize)
+        window.orderFront(nil)
+        try await open(model, folder.appending(path: "A.ARW"))
+        model.chooseSettingsToCopy()
+        for _ in 0 ..< 400 where window.attachedSheet?.frame.height ?? 0 < 100 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        try await Task.sleep(for: .milliseconds(300))
+        let sheet = try #require(window.attachedSheet)
+        #expect(window.frame.contains(sheet.frame), "\(sheet.frame) hangs past \(window.frame)")
+        #expect(sheet.frame.height >= 400)
     }
 }
