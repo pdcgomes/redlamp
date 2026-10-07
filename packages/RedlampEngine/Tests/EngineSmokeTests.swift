@@ -2,9 +2,9 @@ import CoreGraphics
 import Foundation
 import IOSurface
 import Metal
-import RedlampEngine
 import RedlampEngineAPI
 import Testing
+@testable import RedlampEngine
 
 /// Renders every downloaded fixture (tests/fixtures/raw, fetched from raw.pixls.us).
 struct EngineSmokeTests {
@@ -235,6 +235,41 @@ struct EngineSmokeTests {
         engine.render(request(at: 0.4, edited, clipping: true, 4))
         let clipped = try #require(await frames.next())
         #expect(try IOSurfaceGetID(#require(clipped.overview)) != IOSurfaceGetID(changedOverview))
+    }
+
+    /// A pinch or a resize changes the frame's size every frame: once the ring holds the larger
+    /// size, frames of either size render into the surfaces it has, as they would alone.
+    @Test(.enabled(if: canRender))
+    func `frames of alternating sizes reuse their surfaces`() async throws {
+        let engine = try RedlampEngine()
+        _ = try await engine.open(Self.fixtures[0])
+        let sizes = [PixelSize(width: 1640, height: 1640), PixelSize(width: 1600, height: 1600)]
+        func render(_ index: Int, on engine: RedlampEngine) throws -> RenderedFrame {
+            try engine.renderFrame(
+                RenderRequest(recipe: EditRecipe(), targetSize: sizes[index % 2], generation: UInt64(index)),
+                session: #require(engine.currentSession()),
+            )
+        }
+        for index in 0 ..< 6 {
+            _ = try render(index, on: engine)
+        }
+        let made = engine.surfaces.surfacesMade
+        var last: RenderedFrame?
+        for index in 0 ..< 12 {
+            let frame = try render(index, on: engine)
+            #expect(frame.size.longEdge == sizes[index % 2].longEdge)
+            last = frame
+        }
+        withKnownIssue("PIPE-05: every size change makes three surfaces") {
+            #expect(engine.surfaces.surfacesMade - made <= 1)
+        }
+
+        let frame = try #require(last)
+        let fresh = try RedlampEngine()
+        _ = try await fresh.open(Self.fixtures[0])
+        let reference = try render(11, on: fresh)
+        #expect(frame.size == reference.size)
+        #expect(pixels(of: frame) == pixels(of: reference), "the same pixels in a larger surface")
     }
 
     /// RGBA float16 surface contents, row-major and tightly packed.

@@ -77,7 +77,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     private let continuation = Mutex<AsyncStream<RenderedFrame>.Continuation?>(nil)
 
     // Owned by `renderQueue`.
-    private let surfaces: SurfacePool
+    let surfaces: SurfacePool
     private let histogramBuffer: any MTLBuffer
     /// Small whole-photo renders sent with region frames; they also feed the histogram.
     private let overviews: SurfacePool

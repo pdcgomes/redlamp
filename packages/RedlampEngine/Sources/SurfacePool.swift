@@ -18,6 +18,8 @@ final class SurfacePool {
     private var size = PixelSize.zero
     private var targets: [Target] = []
     private var cursor = 0
+    /// Surfaces made so far, for tests.
+    private(set) var surfacesMade = 0
 
     init(device: any MTLDevice) {
         self.device = device
@@ -50,6 +52,7 @@ final class SurfacePool {
             kIOSurfacePixelFormat: kCVPixelFormatType_64RGBAHalf,
         ]
         guard let surface = IOSurfaceCreate(properties as CFDictionary) else { throw EngineError.gpuUnavailable }
+        surfacesMade += 1
 
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .rgba16Float, width: size.width, height: size.height, mipmapped: false,
