@@ -167,7 +167,7 @@ struct GroupByTests {
         #expect(grouping.groups(of: PhotoList(source: .allPhotographs, ids: []), by: .moment).isEmpty)
     }
 
-    @Test func `a folder's filter leaves out its subfolders in one term, and a name differing only in case has none`() {
+    @Test func `a folder's filter leaves out its subfolders in one term, and a name differing only in case or accents has none`() {
         let paths = ["/P/Trips", "/P/Trips/Day 1", "/P/Trips/Day 1/Raw", "/P/Trips/Day 2", "/P/Trips 2", "/Q/P/Trips"]
         let folders = GroupFilters(field: .folder, values: paths)
         #expect(folders.filter(for: "/P/Trips")?.description
@@ -178,7 +178,10 @@ struct GroupByTests {
         let cameras = GroupFilters(field: .camera, values: ["Canon", "CANON EOS", "canon"])
         #expect(cameras.filter(for: "Canon") == nil && cameras.filter(for: "CANON EOS") != nil)
         let accents = GroupFilters(field: .folder, values: ["/P/Été", "/P/ÉTÉ 2", "/P/Ete"])
-        #expect(accents.filter(for: "/P/Été")?.description == #"folder:/P/Été -folder:"/P/ÉTÉ 2""#)
+        #expect(accents.filter(for: "/P/Été") == nil && accents.filter(for: "/P/Ete") == nil)
+        #expect(accents.filter(for: "/P/ÉTÉ 2")?.description == #"folder:"/P/ÉTÉ 2""#)
+        let siblings = GroupFilters(field: .folder, values: ["/P/Café", "/P/Cafe Noir"])
+        #expect(siblings.filter(for: "/P/Café")?.description == #"folder:/P/Café -folder:"/P/Cafe Noir""#)
     }
 
     @Test func `orientations come from the index's upright sizes, which the column store keeps`() async throws {

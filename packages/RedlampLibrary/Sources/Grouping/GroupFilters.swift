@@ -66,14 +66,9 @@ struct GroupFilters {
         return places.sorted().map { values[$0] }.filter { $0 != value && QueryText.contains($0, value) }
     }
 
-    /// `text` as paths are compared to find which hold which: ASCII lowercased as the language does,
-    /// anything else composed with its case folded, so a path the language finds is always among them.
+    /// `text` as paths are compared to find which hold which: folded as the language folds it, case,
+    /// accents and width, so a path the language finds is always among them.
     private static func folded(_ text: String) -> ContiguousArray<UInt8> {
-        QueryText.asciiLowercased(text)
-            ?? ContiguousArray(text.precomposedStringWithCanonicalMapping.folding(
-                options: .caseInsensitive,
-                locale: nil,
-            )
-            .utf8)
+        FoldedText(text).bytes
     }
 }
