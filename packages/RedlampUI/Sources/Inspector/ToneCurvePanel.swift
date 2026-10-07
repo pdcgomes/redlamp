@@ -59,11 +59,8 @@ struct CurveEditor: View {
                 }
                 if mode == .point {
                     ForEach(Array(model.pointCurve.enumerated()), id: \.offset) { index, point in
-                        Circle()
-                            .fill(dragIndex == index ? Color.white : Color(white: 0.85))
-                            .overlay(Circle().strokeBorder(Color.black.opacity(0.5), lineWidth: 0.5))
-                            .frame(width: 9, height: 9)
-                            .position(x: point.x * size.width, y: (1 - point.y) * size.height)
+                        CurveHandle(selected: dragIndex == index)
+                            .position(point.location(in: size))
                             .onTapGesture(count: 2) { removePoint(index) }
                     }
                 }
@@ -202,46 +199,55 @@ struct PointCurveGraph: View {
             let size = geometry.size
             let sorted = points.sorted { $0.x < $1.x }
             ZStack {
-                Canvas { context, size in
-                    context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.well))
-                    var grid = Path()
-                    for step in 1 ..< 4 {
-                        let t = Double(step) / 4
-                        grid.move(to: CGPoint(x: t * size.width, y: 0))
-                        grid.addLine(to: CGPoint(x: t * size.width, y: size.height))
-                        grid.move(to: CGPoint(x: 0, y: t * size.height))
-                        grid.addLine(to: CGPoint(x: size.width, y: t * size.height))
-                    }
-                    context.stroke(grid, with: .color(Theme.divider), lineWidth: 1)
-                    let curve = ToneCurveMath.pointCurve(sorted)
-                    var path = Path()
-                    for index in 0 ... 128 {
-                        let x = Double(index) / 128
-                        let point = CGPoint(x: x * size.width, y: (1 - min(max(curve(x), 0), 1)) * size.height)
-                        if index == 0 {
-                            path.move(to: point)
-                        } else {
-                            path.addLine(to: point)
-                        }
-                    }
-                    context.stroke(path, with: .color(tint), lineWidth: 1.5)
-                }
-                ForEach(Array(sorted.enumerated()), id: \.offset) { index, point in
-                    Circle()
-                        .fill(dragIndex == index ? Color.white : Color(white: 0.85))
-                        .overlay(Circle().strokeBorder(Color.black.opacity(0.5), lineWidth: 0.5))
-                        .frame(width: 9, height: 9)
-                        .position(x: point.x * size.width, y: (1 - point.y) * size.height)
-                        .onTapGesture(count: 2) {
-                            guard index > 0, index < sorted.count - 1 else { return }
-                            change(sorted.enumerated().filter { $0.offset != index }.map(\.element))
-                        }
-                }
+                Canvas { context, size in draw(context, size: size, sorted: sorted) }
+                handles(sorted, size: size)
             }
             .contentShape(Rectangle())
             .gesture(drag(sorted, size: size))
         }
         .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    /// The grid and the curve. They, the handles and their arithmetic stay out of `body`, with CGFloat
+    /// spelled out, so each part type-checks within the Debug build's limit (typeCheckGuard in
+    /// Module.swift) on CI's slower runners.
+    private func draw(_ context: GraphicsContext, size: CGSize, sorted: [CurvePoint]) {
+        context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.well))
+        var grid = Path()
+        for step in 1 ..< 4 {
+            let t = CGFloat(step) / 4
+            grid.move(to: CGPoint(x: t * size.width, y: 0))
+            grid.addLine(to: CGPoint(x: t * size.width, y: size.height))
+            grid.move(to: CGPoint(x: 0, y: t * size.height))
+            grid.addLine(to: CGPoint(x: size.width, y: t * size.height))
+        }
+        context.stroke(grid, with: .color(Theme.divider), lineWidth: 1)
+        let curve = ToneCurveMath.pointCurve(sorted)
+        var path = Path()
+        for index in 0 ... 128 {
+            let x = Double(index) / 128
+            let y: Double = 1 - min(max(curve(x), 0), 1)
+            let point = CGPoint(x: CGFloat(x) * size.width, y: CGFloat(y) * size.height)
+            if index == 0 {
+                path.move(to: point)
+            } else {
+                path.addLine(to: point)
+            }
+        }
+        context.stroke(path, with: .color(tint), lineWidth: 1.5)
+    }
+
+    private func handles(_ sorted: [CurvePoint], size: CGSize) -> some View {
+        ForEach(Array(sorted.enumerated()), id: \.offset) { index, point in
+            CurveHandle(selected: dragIndex == index)
+                .position(point.location(in: size))
+                .onTapGesture(count: 2) { remove(index, from: sorted) }
+        }
+    }
+
+    private func remove(_ index: Int, from sorted: [CurvePoint]) {
+        guard index > 0, index < sorted.count - 1 else { return }
+        change(sorted.enumerated().filter { $0.offset != index }.map(\.element))
     }
 
     private func drag(_ sorted: [CurvePoint], size: CGSize) -> some Gesture {
@@ -284,6 +290,25 @@ struct PointCurveGraph: View {
                 dragIndex = nil
                 end()
             }
+    }
+}
+
+/// A point on a curve graph, white while it's dragged.
+private struct CurveHandle: View {
+    let selected: Bool
+
+    var body: some View {
+        Circle()
+            .fill(selected ? Color.white : Color(white: 0.85))
+            .overlay(Circle().strokeBorder(Color.black.opacity(0.5), lineWidth: 0.5))
+            .frame(width: 9, height: 9)
+    }
+}
+
+private extension CurvePoint {
+    /// Where the point sits in a graph of this size, whose y runs up from the bottom.
+    func location(in size: CGSize) -> CGPoint {
+        CGPoint(x: CGFloat(x) * size.width, y: (1 - CGFloat(y)) * size.height)
     }
 }
 
