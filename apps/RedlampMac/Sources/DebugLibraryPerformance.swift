@@ -120,6 +120,12 @@
                 "Load average at the start: \(loadAverage())",
             ]
             var measured = Measured()
+            // With nobody at the Mac, its windows out of sight, App Nap would otherwise lower every thread to
+            // the background band within minutes and stop the run.
+            let activity = ProcessInfo.processInfo.beginActivity(
+                options: [.userInitiated, .latencyCritical], reason: "Measuring the library",
+            )
+            defer { ProcessInfo.processInfo.endActivity(activity) }
             let stalls = StallSampler()
             self.stalls = stalls
             stalls.start()
