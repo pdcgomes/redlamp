@@ -51,7 +51,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Vibrance and Saturation | Yes | Done | | | TON-07 | Boosts stop at the edge of the output's colours instead of clipping |
 | Tone curve: parametric and point curves | Yes | Done | | | | With split points and the point curve's presets |
 | Tone curve: separate red, green and blue curves | Yes | Planned | | P2 | | |
-| Targeted Adjustment Tool | Yes | Planned | | P2 | | Drag on the photo to move a curve or a colour band |
+| Targeted Adjustment Tool | Yes | Planned | | P2 | UX-35 | Drag on the photo to move a curve or a colour band |
 | Color Mixer: hue, saturation and luminance per colour | Yes | Done | | | | Works in OKLCh |
 | Black and white | Yes | Done | | | | |
 | B&W mix: brightness per colour band | Yes | Planned | | P2 | | Today the Color Mixer's Luminance shapes a black-and-white photo |
@@ -156,7 +156,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Feature | Lightroom | Redlamp | vs Lightroom | Phase | Tracker | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | Presets | Yes | Done | Different | | EDT-07 | Presets, profiles and LUTs are all Recipes, with an Amount slider; Lightroom's words still work in search |
-| Lightroom presets (`.xmp`) | Yes | Done | | | EDT-11 | Imported with a report of what came across exactly, approximately or not at all. Sliders aren't yet calibrated against Lightroom's renders, so a preset can look different |
+| Lightroom presets (`.xmp`) | Yes | Done | | | EDT-11, EDT-24 | Imported with a report of what came across exactly, approximately or not at all. Sliders aren't yet calibrated against Lightroom's renders, so a preset can look different |
 | LUTs (`.cube`, `.3dl`, HaldCLUT) | Partly | Done | Beyond | | TON-11, TON-28 | Imported directly, including LUTs made for camera log footage; Lightroom takes LUTs only wrapped as profiles |
 | Film stock simulations (Portra, Tri-X and others) | Partly (film-inspired presets) | Done | Beyond | | TON-22, TON-26 | 36 looks from 30 stocks, built from the manufacturers' datasheets; Lightroom's film-inspired presets don't replicate particular films |
 | Film looks fitted from film shot beside digital | No | Planned | | P3 | TON-21 | With charts and lab scans, per stock |
@@ -174,6 +174,8 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Batch export | Yes | Planned | | P4 | EDT-16 | |
 | Batch rename | Yes | Undecided | | | | |
 | Open photos edited in Lightroom | Yes | Planned | | P4 | EDT-12 | Converts Lightroom's XMP sidecars once, and never writes them |
+| Bring a Lightroom Classic catalog across | Yes (Lightroom's migration from Classic) | Undecided | | | EDT-23 | Each photo's develop settings, rating, flag and label, read without changing the catalog |
+| Match Total Exposures | Yes (Classic) | Undecided | | | EDT-21 | |
 
 ## History and versions
 
@@ -183,7 +185,8 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Snapshots | Yes | Done | | | | |
 | Virtual copies and versions | Yes | Planned | | P2 | EDT-09 | |
 | Before and after | Yes | Done | | | | Three layouts |
-| Reference view | Yes | Planned | | P4 | | |
+| Before and after: your choice of layout, Copy and Swap | Yes | Undecided | | | UX-31 | Left/right or top/bottom by choice, Copy Before's or After's settings, and Swap; Redlamp orients side by side from the photo's shape |
+| Reference view | Yes | Planned | | P4 | UX-34 | |
 
 ## Viewing
 
@@ -193,6 +196,10 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Zoom, pan and brush sizes in every tool | Yes | Done | | | UX-15 | The wheel zooms and Space pans while masking, healing and cropping, and every brush sizes with [ and ] or ⌘-scroll |
 | Panels that hide automatically or stay up | Yes | Done | Different | | UX-19 | The filmstrip hides automatically or stays up with the photo fitted above it (View › Filmstrip, its right-click menu, Settings); Lightroom offers Auto Hide & Show, Auto Hide and Manual for each panel |
 | Histogram you can drag to adjust | Yes | Done | | | | |
+| RGB values of the pixel under the pointer | Yes | Undecided | | | UX-32 | Under the histogram |
+| Panel on/off switches | Yes | Undecided | | | UX-30 | Turn a panel's settings off and on without losing them |
+| Typing a slider's value | Yes | Done | | | UX-01 | Arithmetic works too (`x+15`) |
+| A value on every control, and values that scrub when dragged | Yes | Planned | | P2 | UX-28, UX-29 | The grading wheels, curve points, Base Look Amount and the Masks panel's sizes and ranges get values |
 | Lightroom Classic's keyboard shortcuts | Yes | Done | | | | 97 actions on 96 key bindings |
 | Command palette | No | Done | | | UX-07 | Every action and slider from the keyboard (⌘K) |
 | Sensor clipping and a colour-assessment view | No | Done | | | UX-05 | |
@@ -217,7 +224,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Size, metadata and export presets | Yes | Done | | | EDT-15 | With Export with Previous |
 | Adobe RGB, ProPhoto and custom ICC output | Yes | Planned | | P4 | | |
 | DNG, PSD and JPEG XL output | Yes | Planned | | P4 | | |
-| Watermarks | Yes | Planned | | P4 | | |
+| Watermarks | Yes | Planned | | P4 | EDT-25 | |
 | Output sharpening | Yes | Planned | | P4 | | |
 | Edit in Photoshop or another app | Yes | Planned | | P4 | | |
 | Content Credentials | Yes | Planned | | P3 | RM-03 | |
