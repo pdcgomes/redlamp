@@ -215,7 +215,7 @@ Each feature has a roadmap tag:
 Lightroom Classic's Library module as of Classic 15.6 (September 2026), from the [Lightroom Classic research note](research/notes/LIB-lightroom-classic.md), which has the sources. What Redlamp should adopt, do better or skip is in the [library findings](research/library-findings.md), and the track is planned in section 13 of the [research tracker](research/research-tracker.md#13-library-and-catalog). Here [P4] is the library that ships in 1.0, and [Later] its AI and the map, after 1.0 (DEC-46).
 
 **Catalog and storage**
-- One catalog database (`.lrcat`, SQLite) as the only complete record, with previews, smart previews and AI pixel data (`.lrcat-data`) stored beside it; the photos stay in folders [P4 as an index on the Mac, rebuilt from the photos and their sidecars; a catalog as the record is skipped (SKIP-17)]
+- One catalog database (`.lrcat`, SQLite) as the only complete record, with previews, smart previews and AI pixel data (`.lrcat-data`) stored beside it; the photos stay in folders [P4 as an index on the Mac, rebuilt from the photos and their sidecars; a catalog as the record is skipped (SKIP-18)]
 - Collections, stacks, virtual copies and history kept only in the catalog [P4, saved in each photo's sidecar instead; for stacks, proposed in the findings]
 - Catalog backups on quitting (zipped, catalog only, never pruned), the Backups tab (14.2), repair of a damaged catalog, Optimize Catalog, and a startup check of AI data (15.5) [P4, as snapshots and background integrity checks of the index]
 - Catalog format upgrades in 14.0, 15.0 and 15.4 that keep the old catalog aside [P4, as migrations of an index that can always be rebuilt]
