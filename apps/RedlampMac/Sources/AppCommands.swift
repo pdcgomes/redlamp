@@ -78,6 +78,8 @@ struct AppCommands: Commands {
             Divider()
             item(.previousPhoto)
             item(.nextPhoto)
+            mouseItem(.previousGroup)
+            mouseItem(.nextGroup)
             item(.selectAllPhotos)
             item(.deselectOtherPhotos)
             Divider()

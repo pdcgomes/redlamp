@@ -2,9 +2,9 @@ import Foundation
 import RedlampLibrary
 
 /// Group By in the Library grid (LIB-41): the key and moments' Tighter–Looser setting, kept with each
-/// source's view; groups opened and closed, by their headers, the menus and the palette; and ← and →, in the
-/// grid, the loupe, Develop and the filmstrip, through the photos in the grid's order, leaving out closed
-/// groups' photos.
+/// source's view; groups opened and closed, by their headers, the menus and the palette; ⌥← and ⌥→ to the
+/// first photo of the group before or after the active photo's; and ← and →, in the grid, the loupe, Develop
+/// and the filmstrip, through the photos in the grid's order, leaving out closed groups' photos.
 public extension EditorModel {
     /// Whether the source can be grouped: it's shown from the library, whose column store grouping reads.
     var canGroupPhotos: Bool {
@@ -35,6 +35,19 @@ public extension EditorModel {
     func closeAllGroups() {
         gridGroups.closeAll()
     }
+
+    /// ⌥← and ⌥→: the first photo of the group before or after the active photo's, alone, its group opened if
+    /// it was closed.
+    @discardableResult
+    func moveToGroup(by offset: Int) -> Bool {
+        guard let target = groupBeside(by: offset), let list = gridGroups.list,
+              let first = list.groups[target].photos.first, let url = library.url(ofPhoto: first)
+        else { return false }
+        gridGroups.open(target)
+        select(url)
+        selectionAnchor = url
+        return true
+    }
 }
 
 extension EditorModel {
@@ -56,6 +69,14 @@ extension EditorModel {
     /// Whether the active photo is in a closed group: every group was closed, so no photo is on show.
     var activePhotoIsClosed: Bool {
         activeGroup.map { !gridGroups.isOpen($0) } ?? false
+    }
+
+    /// The group `offset` before or after the active photo's; without one, the first or the last.
+    private func groupBeside(by offset: Int) -> Int? {
+        guard let list = gridGroups.list, !list.groups.isEmpty else { return nil }
+        guard let group = activeGroup else { return offset > 0 ? 0 : list.groups.count - 1 }
+        let target = group + offset
+        return list.groups.indices.contains(target) ? target : nil
     }
 
     /// ← and → while grouped: the photo on show after or before the active one, alone.
@@ -170,6 +191,8 @@ extension EditorModel {
         case .closeAllGroups:
             guard canPerformGroupShortcut(action) == true else { return false }
             closeAllGroups()
+        case .previousGroup, .nextGroup:
+            return moveToGroup(by: action == .nextGroup ? 1 : -1)
         case .previousPhoto, .nextPhoto:
             guard gridGroups.list != nil else { return nil }
             stepInGroups(by: action == .nextPhoto ? 1 : -1)
@@ -202,6 +225,7 @@ extension EditorModel {
         case .toggleGroup: return activeGroup != nil
         case .openAllGroups: return list.map { list in list.groups.indices.contains { !list.isOpen($0) } } ?? false
         case .closeAllGroups: return list.map { list in list.groups.indices.contains(where: list.isOpen) } ?? false
+        case .previousGroup, .nextGroup: return groupBeside(by: action == .nextGroup ? 1 : -1) != nil
         case .previousPhoto, .nextPhoto:
             guard list != nil else { return nil }
             guard let id = (opening ?? selection).flatMap(library.photoID(of:)) else { return false }

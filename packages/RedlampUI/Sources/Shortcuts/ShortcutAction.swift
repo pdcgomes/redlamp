@@ -126,7 +126,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case panelLens, panelTransform, panelEffects, panelCalibration
 
     /// Navigation
-    case previousPhoto, nextPhoto, selectAllPhotos, deselectOtherPhotos
+    case previousPhoto, nextPhoto, selectAllPhotos, deselectOtherPhotos, previousGroup, nextGroup
 
     // Develop
     case undo, redo, copySettings, copySettingsAgain, pasteSettings, pastePrevious, resetAll
@@ -179,7 +179,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
              .panelBasic, .panelToneCurve, .panelColorMixer, .panelColorGrading, .panelDetail,
              .panelLens, .panelTransform, .panelEffects, .panelCalibration:
             .panels
-        case .previousPhoto, .nextPhoto, .selectAllPhotos, .deselectOtherPhotos:
+        case .previousPhoto, .nextPhoto, .selectAllPhotos, .deselectOtherPhotos, .previousGroup, .nextGroup:
             .navigation
         case .undo, .redo, .copySettings, .copySettingsAgain, .pasteSettings, .pastePrevious, .resetAll, .autoTone,
              .syncSettings, .syncSettingsAgain, .undoSync, .toggleAutoSync,
@@ -276,6 +276,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .panelCalibration: "Calibration Panel"
         case .previousPhoto: "Previous Photo"
         case .nextPhoto: "Next Photo"
+        case .previousGroup: "Previous Group"
+        case .nextGroup: "Next Group"
         case .undo: "Undo"
         case .redo: "Redo"
         case .copySettings: "Copy Settings…"
@@ -410,6 +412,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .panelCalibration: [.char("9", command: true)]
         case .previousPhoto: [KeyCombo(.left), KeyCombo(.left, command: true)]
         case .nextPhoto: [KeyCombo(.right), KeyCombo(.right, command: true)]
+        case .previousGroup: [KeyCombo(.left, option: true)]
+        case .nextGroup: [KeyCombo(.right, option: true)]
         case .undo: [.char("z", command: true)]
         case .redo: [.char("z", shift: true, command: true)]
         case .copySettings: [.char("c", shift: true, command: true)]

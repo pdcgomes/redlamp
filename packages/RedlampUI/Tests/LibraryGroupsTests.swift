@@ -12,8 +12,8 @@ import UniformTypeIdentifiers
 
 /// Group By in the Library grid (LIB-41), over a folder the library has indexed: each key's groups, counts and
 /// picks as the library makes them, each a header in the grid; groups opened and closed with the selection and
-/// the active photo kept and the grid's cells moved rather than reloaded; ← and → past closed groups; moments'
-/// Tighter–Looser setting; and Group By and the setting kept with each source.
+/// the active photo kept and the grid's cells moved rather than reloaded; ⌥← and ⌥→, and ← and → past closed
+/// groups; moments' Tighter–Looser setting; and Group By and the setting kept with each source.
 @MainActor
 struct LibraryGroupsTests {
     /// A photo of the folder: when it was taken, seconds after 10:00 on 14 June 2024 by the camera's clock (nil
@@ -337,6 +337,31 @@ struct LibraryGroupsTests {
             isARepeat: false, keyCode: UInt16(code),
         ))
         grid.content.keyDown(with: event)
+    }
+
+    @Test func `Option-Left and Option-Right go to the first photo of the group before and after, opening it`(
+    ) async throws {
+        defer { cleanUp() }
+        let (model, _, window) = try await open()
+        defer { window.contentView = nil }
+        try await group(model, by: .moment)
+        try model.select(url(model, "A04.JPG"))
+        #expect(model.canPerform(.nextGroup) && !model.canPerform(.previousGroup))
+        #expect(model.perform(.nextGroup) && model.selection?.lastPathComponent == "B01.JPG")
+        #expect(model.perform(.nextGroup) && model.selection?.lastPathComponent == "C01.JPG")
+        model.gridGroups.close(3)
+        #expect(model.perform(.nextGroup) && model.selection?.lastPathComponent == "D01.JPG")
+        #expect(model.gridGroups.isOpen(3), "⌥→ opens the group it goes to")
+        #expect(model.perform(.previousGroup) && model.selection?.lastPathComponent == "C01.JPG")
+        model.perform(.nextGroup)
+        model.perform(.nextGroup)
+        #expect(model.selection?.lastPathComponent == "SCAN.PNG" && !model.canPerform(.nextGroup))
+        #expect(!model.perform(.nextGroup))
+        #expect(ShortcutAction.resolve(KeyCombo(.right, option: true), in: .library)?.action == .nextGroup)
+        #expect(ShortcutAction.resolve(KeyCombo(.left, option: true), in: .develop)?.action == .previousGroup)
+
+        try await group(model, by: .ungrouped)
+        #expect(!model.canPerform(.nextGroup) && !model.perform(.previousGroup))
     }
 
     // MARK: - Moments' setting and each source's view

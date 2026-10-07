@@ -43,6 +43,8 @@ extension ShortcutAction {
         .toggleGroup: ["group", "open", "close", "collapse", "expand", "library"],
         .openAllGroups: ["group", "open", "expand", "all", "library"],
         .closeAllGroups: ["group", "close", "collapse", "all", "library"],
+        .previousGroup: ["group", "moment", "previous", "back", "jump"],
+        .nextGroup: ["group", "moment", "next", "jump", "skip"],
         .beforeAfter: ["compare", "before", "after", "original"],
         .nextCompareLayout: ["compare", "side by side", "split", "layout"],
         .previousCompareLayout: ["compare", "side by side", "split", "layout"],
@@ -174,6 +176,8 @@ extension ShortcutAction {
         case .toggleGroup: "chevron.down.circle"
         case .openAllGroups: "rectangle.expand.vertical"
         case .closeAllGroups: "rectangle.compress.vertical"
+        case .previousGroup: "chevron.left.2"
+        case .nextGroup: "chevron.right.2"
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout: "rectangle.2.swap"
         case .toggleZoom: "1.magnifyingglass"
         case .zoomIn: "plus.magnifyingglass"

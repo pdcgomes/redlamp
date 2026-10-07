@@ -7,7 +7,8 @@
     extension ActionCheck {
         /// A Group By action, in the Library grid shown from the library: ungrouped for a key, grouped by day for
         /// Group by Camera and by camera for No Grouping and the groups' own actions, by moment for the moments'
-        /// setting, with every group closed for Open All Groups. Ungrouped and in Develop afterwards.
+        /// setting; the first photo of the first or second group active for ⌥→ and ⌥←, and every group closed
+        /// for Open All Groups. Ungrouped and in Develop afterwards.
         static func groups(_ action: ShortcutAction) -> ActionCheck {
             ActionCheck(action: action, setUp: { app in
                 let key: GroupKey = switch action {
@@ -16,8 +17,17 @@
                 default: action.groupKey == nil ? .camera : .ungrouped
                 }
                 try app.showGroups(by: key)
-                if action == .openAllGroups {
-                    try app.main { $0.closeAllGroups() }
+                switch action {
+                case .previousGroup, .nextGroup:
+                    try app.main { model in
+                        let group = action == .previousGroup ? 1 : 0
+                        if let list = model.gridGroups.list, list.groups.count > 1,
+                           let photo = list.groups[group].photos.first, let url = model.library.url(ofPhoto: photo) {
+                            model.select(url)
+                        }
+                    }
+                case .openAllGroups: try app.main { $0.closeAllGroups() }
+                default: break
                 }
                 try app.settle()
             }, observe: GroupScenarios.state, restore: { app in
@@ -87,7 +97,7 @@
     }
 
     enum GroupScenarios {
-        static let all: [Scenario] = [groupBy, openAndClose, setting]
+        static let all: [Scenario] = [groupBy, openAndClose, moving, setting]
 
         /// What the group actions change, for their checks.
         @MainActor static func state(_ model: EditorModel) -> String {
@@ -217,6 +227,52 @@
             }
             try app.runFromPalette(.openAllGroups)
             try app.main { $0.setGroupKey(.ungrouped) }
+            try app.backToDevelop()
+        }
+
+        static let moving = Scenario(
+            "library.groups-moving",
+            "⌥→ and ⌥← by key, the Photo menu and the palette go to the first photo of the next and previous group; "
+                + "→ passes over a closed group's photos",
+            claims: [.action(.previousGroup), .action(.nextGroup), .feature("library.grid")],
+        ) { app in
+            try app.showGroups(by: .camera)
+            func firstPhotos() throws -> [String] {
+                try app.main { model in
+                    (model.gridGroups.list?.groups.map(\.photos.first).compactMap(\.self) ?? [])
+                        .compactMap(model.library.url(ofPhoto:)).map(\.lastPathComponent)
+                }
+            }
+            let firsts = try firstPhotos()
+            try app.expect(firsts.count > 2, "Grouped by camera, \(firsts.count) groups")
+            try app.main { model in
+                if let first = model.items.first(where: { $0.url.lastPathComponent == firsts[0] }) {
+                    model.select(first.url)
+                }
+            }
+            try app.press(.nextGroup)
+            try app.wait("⌥→ to the second group's first photo") { $0.selection?.lastPathComponent == firsts[1] }
+            try app.choose(.nextGroup)
+            try app.wait("Next Group to the third's") { $0.selection?.lastPathComponent == firsts[2] }
+            try app.runFromPalette(.previousGroup)
+            try app.wait("the palette's Previous Group") { $0.selection?.lastPathComponent == firsts[1] }
+            try app.press(.previousGroup)
+            try app.wait("⌥← to the first group's first photo") { $0.selection?.lastPathComponent == firsts[0] }
+
+            // → from the first group's last photo passes over the second group, closed, to the third's first.
+            try app.main { model in
+                guard let list = model.gridGroups.list, let last = list.groups[0].photos.last,
+                      let url = model.library.url(ofPhoto: last) else { return }
+                model.select(url)
+                model.gridGroups.close(1)
+            }
+            try app.press(.nextPhoto)
+            try app.wait("→ past the closed group") { $0.selection?.lastPathComponent == firsts[2] }
+            app.covered(.feature("library.grid"), via: .key)
+            try app.main { model in
+                model.openAllGroups()
+                model.setGroupKey(.ungrouped)
+            }
             try app.backToDevelop()
         }
 
