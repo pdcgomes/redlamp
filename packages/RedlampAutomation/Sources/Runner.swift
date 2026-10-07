@@ -232,13 +232,15 @@
                 }
                 model.activeTool = .edit
                 model.showShortcuts = false
-                // What every scenario starts from: the panels, filmstrip and toolbar showing.
+                // What every scenario starts from: the panels, filmstrip and toolbar showing, and the
+                // filmstrip hiding automatically.
                 if model.isPresenting {
                     _ = model.perform(.fullScreenPreview)
                 }
                 model.leftPanelVisible = true
                 model.rightPanelVisible = true
                 model.filmstripVisible = true
+                model.filmstripHidesAutomatically = true
                 model.lightsOut = 0
                 model.infoOverlay = 0
                 model.showBefore = false

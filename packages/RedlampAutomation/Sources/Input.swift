@@ -350,10 +350,158 @@
         }
     }
 
+    // MARK: - Context menus and other windows
+
+    public extension RunningApp {
+        /// Right-clicks `target` at `point` (0...1 across and down its frame; beyond, beside it) through
+        /// the window, as the mouse does, and chooses `title` in the menu that opens, or closes it
+        /// unchosen. Returns the menu's items, and whether each is checked.
+        @discardableResult
+        func rightClick(
+            _ target: Target, at point: CGPoint = CGPoint(x: 0.5, y: 0.5), choosing title: String? = nil,
+        ) throws -> [(title: String, on: Bool)] {
+            let location = try Self.location(point, in: frame(of: target))
+            let inside = try main { _ in Views.editorWindow?.contentView?.bounds.contains(location) == true }
+            try expect(inside, "\(target) is off the window at \(location)")
+            let opened = OpenedMenu()
+            try main { _ in opened.watch() }
+            defer { try? main { _ in opened.stop() } }
+            // The menu tracks inside the press, so this doesn't return until it closes.
+            post { _ in
+                guard let window = Views.editorWindow else { return }
+                for type in [NSEvent.EventType.rightMouseDown, .rightMouseUp] {
+                    guard let event = NSEvent.mouseEvent(
+                        with: type, location: location, modifierFlags: [],
+                        timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                        context: nil, eventNumber: 0, clickCount: 1, pressure: type == .rightMouseUp ? 0 : 1,
+                    ) else { continue }
+                    window.sendEvent(event)
+                }
+            }
+            try wait("\(target)'s context menu to open") { _ in opened.menu != nil }
+            let items = try main { _ -> [(title: String, on: Bool)] in
+                guard let menu = opened.menu else { return [] }
+                defer { menu.cancelTracking() }
+                let items = menu.items.filter { !$0.isSeparatorItem }.map { (title: $0.title, on: $0.state == .on) }
+                if let title {
+                    guard let index = menu.items.firstIndex(where: { $0.title == title }) else {
+                        throw ScenarioFailure("\(target)'s menu has no \(title): \(items.map(\.title))")
+                    }
+                    menu.performActionForItem(at: index)
+                }
+                return items
+            }
+            try wait("\(target)'s context menu to close") { _ in opened.closed }
+            return items
+        }
+
+        /// Clicks the control carrying `identifier` in the window titled `title`, such as a switch
+        /// in Settings, through that window as the mouse does.
+        func click(_ identifier: String, inWindowTitled title: String) throws {
+            let location = try main { _ -> NSPoint in
+                guard let window = Views.window(titled: title) else { throw ScenarioFailure("No \(title) window") }
+                guard let control = Views.accessible(identifier, in: window) else {
+                    throw ScenarioFailure("\(identifier) isn't in the \(title) window")
+                }
+                let frame = control.convert(control.bounds, to: nil)
+                return NSPoint(x: frame.midX, y: frame.midY)
+            }
+            post { _ in
+                guard let window = Views.window(titled: title) else { return }
+                let events = [NSEvent.EventType.leftMouseDown, .leftMouseUp].compactMap { type in
+                    NSEvent.mouseEvent(
+                        with: type, location: location, modifierFlags: [],
+                        timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                        context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1,
+                    )
+                }
+                guard events.count == 2 else { return }
+                // A control that tracks the press takes the release from the queue, as the mouse's.
+                NSApp.postEvent(events[1], atStart: false)
+                window.sendEvent(events[0])
+            }
+            pause(0.2)
+        }
+
+        /// Whether the switch or checkbox carrying `identifier` in the window titled `title` is on.
+        func isOn(_ identifier: String, inWindowTitled title: String) throws -> Bool {
+            try main { _ in
+                guard let window = Views.window(titled: title),
+                      let control = Views.accessible(identifier, in: window) as? NSControl
+                else { throw ScenarioFailure("\(identifier) isn't in the \(title) window") }
+                return control.integerValue != 0
+            }
+        }
+    }
+
+    /// The context menu a right-click opens, caught as it starts tracking; only touched on main.
+    final class OpenedMenu: @unchecked Sendable {
+        var menu: NSMenu?
+        var closed = false
+        private var observers: [any NSObjectProtocol] = []
+
+        @MainActor func watch() {
+            let center = NotificationCenter.default
+            observers = [
+                // Menus post these on the main thread.
+                center.addObserver(forName: NSMenu.didBeginTrackingNotification, object: nil, queue: nil) { note in
+                    nonisolated(unsafe) let opened = note.object as? NSMenu
+                    MainActor.assumeIsolated {
+                        if self.menu == nil, let opened, opened.supermenu == nil {
+                            self.menu = opened
+                        }
+                    }
+                },
+                center.addObserver(forName: NSMenu.didEndTrackingNotification, object: nil, queue: nil) { note in
+                    nonisolated(unsafe) let ended = note.object as? NSMenu
+                    MainActor.assumeIsolated {
+                        if let menu = self.menu, ended === menu {
+                            self.closed = true
+                        }
+                    }
+                },
+            ]
+        }
+
+        @MainActor func stop() {
+            observers.forEach(NotificationCenter.default.removeObserver)
+            observers = []
+        }
+    }
+
+    extension Views {
+        static func window(titled title: String) -> NSWindow? {
+            NSApp.windows.first { $0.isVisible && $0.title == title }
+        }
+
+        /// The control carrying `identifier`, found through the window's accessibility: SwiftUI gives
+        /// its controls their identifiers as their accessibility is first asked for.
+        static func accessible(_ identifier: String, in window: NSWindow) -> NSView? {
+            func search(_ element: Any, depth: Int) -> NSView? {
+                if let view = element as? NSView, view.accessibilityIdentifier() == identifier {
+                    return view
+                }
+                guard depth < 40 else { return nil }
+                // SwiftUI's elements answer NSAccessibility without declaring its protocol.
+                let children = ((element as AnyObject).accessibilityChildren?() as [Any]?) ?? []
+                return children.lazy.compactMap { search($0, depth: depth + 1) }.first
+            }
+            return search(window, depth: 0)
+        }
+    }
+
     @MainActor
     enum Menus {
         nonisolated static func title(of action: ShortcutAction) -> String {
             action.plannedPhase.map { "\(action.title) (\($0))" } ?? action.title
+        }
+
+        /// Whether the menu bar's item titled `title` shows a checkmark, once its menu has updated it.
+        static func isChecked(_ title: String) -> Bool? {
+            guard let (menu, index) = find(title) else { return nil }
+            open(menu)
+            defer { close(menu) }
+            return menu.items[index].state == .on
         }
 
         /// The item that runs `title`: a leaf, never a menu of the same name (the Edit menu, the

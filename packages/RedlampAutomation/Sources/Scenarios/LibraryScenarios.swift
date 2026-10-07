@@ -22,8 +22,114 @@
         }
     }
 
+    /// A frame read on main between checks; only touched there.
+    final class PlaceBox: @unchecked Sendable {
+        var last: NSRect?
+    }
+
     enum LibraryScenarios {
-        static let all: [Scenario] = [subfolders, thumbnails, diskChanges, ratings]
+        static let all: [Scenario] = [subfolders, thumbnails, diskChanges, ratings, filmstripHiding]
+
+        /// UX-19: the three controls are one preference; kept up, the filmstrip has room of its own.
+        static let filmstripHiding = Scenario(
+            "library.filmstrip-hide-automatically",
+            "Hide Automatically from the View menu, the filmstrip's own menu and Settings, the photo fitted above it",
+            claims: [.feature("library.filmstrip")],
+        ) { app in
+            let item = "Hide Automatically", toggle = "settings.filmstrip.hide-automatically"
+            try app.openWorking()
+            try app.waitForCanvas()
+            let floating = try app.main { $0.canvas.stageInsets.bottom }
+            try app.expect(try app.main { $0.filmstripHidesAutomatically }, "Hide Automatically isn't on at first")
+            try app.expect(
+                try app.main { _ in Menus.isChecked(item) } == true,
+                "View › Filmstrip › \(item) isn't checked",
+            )
+
+            /// Kept up, with the photo fitted above it.
+            @MainActor func kept(_ model: EditorModel) -> Bool {
+                let canvas = model.canvas
+                let stageBottom = canvas.viewSize.height - canvas.stageInsets.bottom
+                return !model.filmstripHidesAutomatically && canvas.stageInsets.bottom > floating + 100
+                    && canvas.imageRect(in: canvas.viewSize).maxY <= stageBottom + 0.5
+            }
+            /// Floating over the photo, which has the whole stage.
+            @MainActor func floats(_ model: EditorModel) -> Bool {
+                model.filmstripHidesAutomatically && model.canvas.stageInsets.bottom == floating
+            }
+
+            // The View menu: the filmstrip stays up without the pointer, and the photo is fitted above it.
+            try app.choose(item)
+            try app.wait("the filmstrip kept up, the photo fitted above it", until: kept)
+            // It slides in: in place once its first photo stays put inside the window.
+            let first = try app.photoNames()[0]
+            let place = PlaceBox()
+            try app.wait("the filmstrip on screen") { _ in
+                guard let window = Views.editorWindow, let cell = Views.find("filmstrip.\(first)", in: window),
+                      window.contentView?.bounds.contains(cell) == true
+                else { return false }
+                defer { place.last = cell }
+                return place.last == cell
+            }
+            try app.wait("View › Filmstrip › \(item) unchecked") { _ in Menus.isChecked(item) == false }
+            let key = "app.redlamp.filmstripHidesAutomatically"
+            let saved = try app.main { _ in UserDefaults.standard.object(forKey: key) as? Bool }
+            try app.expect(saved == false, "The preference saved is \(String(describing: saved))")
+            app.covered(.feature("library.filmstrip"), via: .menu)
+
+            // A photo keeps its menu; beside it, the filmstrip's own has the item, unchecked, and turns it on.
+            let photoMenu = try app.rightClick(.filmstrip(first)).map(\.title)
+            try app.expect(
+                photoMenu.contains(ShortcutAction.copySettings.title) && !photoMenu.contains(item),
+                "A photo's menu has \(photoMenu)",
+            )
+            let cell = try app.frame(of: .filmstrip(first))
+            let beside = CGPoint(x: 1 + 3 / cell.width, y: 0.5)
+            let stripMenu = try app.rightClick(.filmstrip(first), at: beside, choosing: item)
+            try app.expect(
+                stripMenu.map(\.title) == [item] && stripMenu.first?.on == false,
+                "The filmstrip's menu has \(stripMenu)",
+            )
+            try app.wait("the filmstrip floating again, its room given back", until: floats)
+            try app.wait("View › Filmstrip › \(item) checked") { _ in Menus.isChecked(item) == true }
+            app.covered(.feature("library.filmstrip"), via: .mouse)
+
+            // Settings › Appearance: its switch turns it off and on, and follows the View menu.
+            let settings = try app.main { _ -> String in
+                NSApp.mainMenu?.items.first?.submenu?.items.first { $0.title.hasPrefix("Settings") }?.title ?? ""
+            }
+            try app.choose(settings)
+            try app.wait("Settings › Appearance") { _ in Views.window(titled: "Appearance") != nil }
+            try app.expect(try app.isOn(toggle, inWindowTitled: "Appearance"), "Settings' switch is off")
+            try app.click(toggle, inWindowTitled: "Appearance")
+            try app.wait("Settings' switch to keep the filmstrip up", until: kept)
+            try app.wait("View › Filmstrip › \(item) unchecked") { _ in Menus.isChecked(item) == false }
+            try app.choose(item)
+            try app.wait("the View menu to let it hide", until: floats)
+            try app.wait("Settings' switch to follow the View menu") { _ in
+                Views.window(titled: "Appearance").flatMap { Views.accessible(toggle, in: $0) as? NSControl }?
+                    .integerValue == 1
+            }
+            try app.click(toggle, inWindowTitled: "Appearance")
+            try app.wait("Settings' switch to keep the filmstrip up again", until: kept)
+            try app.main { _ in Views.window(titled: "Appearance")?.close() }
+            app.covered(.feature("library.filmstrip"), via: .mouse)
+
+            // Kept up, F6 hides the filmstrip and gives its room back, and presenting takes the whole window.
+            try app.press(.toggleFilmstrip)
+            try app.wait("F6 to hide it, the room given back") {
+                !$0.filmstripVisible && $0.canvas.stageInsets.bottom == floating
+            }
+            try app.press(.toggleFilmstrip)
+            try app.wait("F6 to bring it back, kept up", until: kept)
+            try app.press(.fullScreenPreview)
+            try app.wait("presenting on the whole window") { $0.isPresenting && $0.canvas.stageInsets == .zero }
+            try app.press(.fullScreenPreview)
+            try app.wait("presenting to put it back, kept up") { !$0.isPresenting && kept($0) }
+
+            try app.choose(item)
+            try app.wait("hiding automatically, as at first", until: floats)
+        }
 
         static let subfolders = Scenario(
             "library.subfolders", "Show Photos in Subfolders from the View menu, and the Folders panel's counts",

@@ -91,6 +91,7 @@ private struct AppearanceSettings: View {
             CommandPaletteThemeSettings(theme: theme)
             Section {
                 Toggle("Hide automatically", isOn: Bindable(FilmstripPreference.shared).hidesAutomatically)
+                    .accessibilityIdentifier("settings.filmstrip.hide-automatically")
             } header: {
                 Text("Filmstrip")
             } footer: {
