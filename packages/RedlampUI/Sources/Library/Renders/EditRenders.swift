@@ -253,7 +253,11 @@ public final class EditRenders {
             (readCursor, renderCursor) = (0, 0)
             if diff.reset {
                 onScreen = [:]
-                for url in known.keys where library.index(of: url) == nil {
+                // The photos a filter leaves out are still the source's: their renders stay known, shown again at
+                // once as it widens. Those still to render go, as only the photos listed render.
+                let filtered = library.isFiltered
+                for (url, entry) in known where library.index(of: url) == nil
+                    && (!filtered || entry.state == .unrendered) {
                     set(url, nil)
                 }
             }

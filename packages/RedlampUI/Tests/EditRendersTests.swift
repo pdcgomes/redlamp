@@ -475,6 +475,29 @@ struct EditRendersTests {
         #expect(renders.known[fixture.photo(names[5])] == nil, "what's left the source is forgotten")
     }
 
+    @Test func `a filter that leaves edited photos out keeps their renders, shown again at once as it widens`(
+    ) async throws {
+        let fixture = EditRenderFixture()
+        defer { fixture.cleanUp() }
+        let names = (0 ..< 36).map { String(format: "IMG_%02d.JPG", $0) } + ["DSC_99.JPG"]
+        try fixture.photos(names)
+        for name in names {
+            try fixture.edit(name, exposure: 1)
+        }
+        try await fixture.open()
+        let renders = fixture.renders
+        try await fixture.eventually { renders.statistics.rendered == names.count }
+        let filters = try #require(fixture.model.libraryFilters)
+        filters.setText("DSC")
+        try await fixture.eventually { fixture.library.items.map(\.name) == ["DSC_99.JPG"] }
+        #expect(renders.known.count == names.count, "the photos the filter leaves out keep their renders")
+
+        filters.setText("")
+        try await fixture.eventually { fixture.library.items.count == names.count }
+        #expect(fixture.library.items.allSatisfy { renders.shownEdit(for: $0) != nil }, "each shows its edit at once")
+        #expect(renders.statistics.rendered == names.count, "none is rendered again")
+    }
+
     @Test func `an open dialog or an export running holds the renders until it's done`() async throws {
         let fixture = EditRenderFixture()
         defer { fixture.cleanUp() }
