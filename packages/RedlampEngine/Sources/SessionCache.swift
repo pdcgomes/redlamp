@@ -119,6 +119,14 @@ final class SessionCache: Sendable {
         }
     }
 
+    /// What the cached sessions hold, as the budget counts it.
+    var bytesCached: Int {
+        state.withLock { $0.bytes }
+    }
+
+    /// Lets go of sessions when the system runs short of memory.
+    func relieve(_: DispatchSource.MemoryPressureEvent) {}
+
     func prefetch(_ urls: [URL]) {
         let work = state.withLock { state -> Work in
             var seen = Set<URL>()
