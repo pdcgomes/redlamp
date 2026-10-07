@@ -7,13 +7,16 @@ public extension LibraryIndex {
     /// the changes made so far.
     final class Writer: IndexQueries {
         public let database: SQLiteDatabase
+        /// Where the photos whose keywords change are noted, for the column store (LIB-44).
+        let journal: IndexJournal?
         /// IDs looked up in this transaction: gone with it, so a rollback leaves none stale.
         private var cameraIDs: [String: Int64] = [:]
         private var lensIDs: [String: Int64] = [:]
         private var keywordIDs: [String: Int64] = [:]
 
-        init(database: SQLiteDatabase) {
+        init(database: SQLiteDatabase, journal: IndexJournal? = nil) {
             self.database = database
+            self.journal = journal
         }
     }
 
@@ -498,6 +501,8 @@ extension LibraryIndex.Writer {
     /// statements open no savepoint, so FTS5 keeps the terms in memory until the transaction
     /// commits; a photo that's gone gets no text.
     func writeText(adding added: [Int64] = [], replacing replaced: [Int64]) throws {
+        journal?.touch(photos: added)
+        journal?.touch(photos: replaced)
         let delete = try database.cached("DELETE FROM photo_text WHERE rowid = ?")
         for id in replaced {
             try delete.bind(id, at: 1)

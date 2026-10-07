@@ -1,5 +1,6 @@
 import Dispatch
 import Foundation
+import SQLite3
 import Synchronization
 
 /// The library's index: the volumes, roots, folders and photos the library knows, how the photos
@@ -15,6 +16,8 @@ public final class LibraryIndex: Sendable {
     private let readers: [Connection]
     /// Reads waiting or running on each reader, so the next goes to the least busy.
     private let readerLoad: Mutex<[Int]>
+    /// What this process's transactions changed, by the generation each made (LIB-44).
+    let journal = IndexJournal()
 
     /// Opens the index at `url`, creating it and its folder if there's none, and brings its
     /// schema up to date.
@@ -33,6 +36,10 @@ public final class LibraryIndex: Sendable {
         let database = try SQLiteDatabase(path: url.path)
         try Self.configure(database, writing: true)
         try Self.migrate(database, with: migrations)
+        sqlite3_update_hook(database.handle, { context, _, _, table, row in
+            guard let context, let table else { return }
+            Unmanaged<IndexJournal>.fromOpaque(context).takeUnretainedValue().record(table: table, row: row)
+        }, Unmanaged.passUnretained(journal).toOpaque())
         self.url = url
         writer = Connection(database, label: "writer")
         self.readers = try (0 ..< max(readers, 1)).map { _ in
@@ -67,12 +74,34 @@ public final class LibraryIndex: Sendable {
 
     /// Runs `body` on the write connection, in one transaction: committed when it returns, rolled
     /// back when it throws. Writes run one at a time, in the order they're called. Once called,
-    /// a write runs even if the calling task is cancelled.
+    /// a write runs even if the calling task is cancelled. A transaction that changes the index bumps
+    /// its generation (`IndexGeneration`).
     @discardableResult
     public func write<T: Sendable>(_ body: @escaping @Sendable (Writer) throws -> T) async throws -> T {
-        try await writer.run { database in
-            try database.transaction(.immediate) { try body(Writer(database: database)) }
+        let result = try await writer.run { [journal] database -> (T, Bool) in
+            var staged: IndexGeneration?
+            do {
+                let result = try database.transaction(.immediate) {
+                    let before = database.totalChanges
+                    journal.begin()
+                    let result = try body(Writer(database: database, journal: journal))
+                    if database.totalChanges != before {
+                        staged = try journal.stage(on: database)
+                    }
+                    return result
+                }
+                return (result, staged != nil)
+            } catch {
+                if let staged {
+                    journal.unstage(staged)
+                }
+                throw error
+            }
         }
+        if result.1 {
+            journal.committed()
+        }
+        return result.0
     }
 
     /// Runs `body` on one of the read connections, in a read transaction: everything it reads is
