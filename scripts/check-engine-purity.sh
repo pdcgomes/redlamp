@@ -142,6 +142,34 @@ for package in "${ENGINE_PACKAGES[@]}"; do
     fi
 done
 
+# Colour math has one Swift copy, in RedlampColor (SRGB, Luma, OKLab), beside the kernels' in
+# Metal: the sRGB transfer functions' thresholds, the Rec.2020 and Rec.709 luma weights and
+# OKLab's matrices. These known exceptions (file, reason) keep their own.
+COLOR_MATH='0\.04045|0\.0031308|0\.2627|0\.2126|0\.4122214708|0\.6167557872|0\.2104542553|0\.3963377774|2\.1399067357|4\.0767416621'
+OWN_COLOR_MATH=(
+    "RedlampEngineAPI/Sources/PointColor.swift|OKLCh's swatch colour, for the UI, which can't import RedlampColor"
+    "RedlampMasking/Sources/RemovalRegion.swift|removal's, left to the removal work (RM-*)"
+    "RedlampEngine/Sources/RedlampEngine+GenerativeFill.swift|generative fill's, left to the removal work (RM-*)"
+)
+own_color_math() {
+    local match=$1 entry
+    for entry in "${OWN_COLOR_MATH[@]}"; do
+        [[ "${match%%:*}" == */packages/${entry%%|*} ]] && return 0
+    done
+    return 1
+}
+matches=""
+while IFS= read -r match; do
+    own_color_math "$match" || matches+="$match"$'\n'
+done < <(grep -RInE --include='*.swift' "$COLOR_MATH" "$ROOT"/packages/*/Sources "$ROOT"/apps/*/Sources \
+    | grep -v "/packages/RedlampColor/" || true)
+if [[ -n "$matches" ]]; then
+    echo "Colour math outside RedlampColor (use SRGB, Luma or OKLab):"
+    printf '%s' "$matches"
+    echo
+    failed=1
+fi
+
 if [[ $failed -ne 0 ]]; then
     exit 1
 fi
