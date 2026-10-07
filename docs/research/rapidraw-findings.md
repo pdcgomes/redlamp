@@ -1,7 +1,7 @@
 # What Redlamp Can Learn from RapidRAW
 
 **Date:** 7 October 2026. **Subject:** RapidRAW v1.6.5 (`main` at `8387fc1`, 6 October 2026), its rawler fork ([RapidRAW-DngLab](https://github.com/CyberTimon/RapidRAW-DngLab) at `934af4b`, the commit RapidRAW pins), the RapidRAW AI Connector (`main` of 31 August 2026), and the RapidRAW Cloud page and privacy policy on getrapidraw.com (read 7 October 2026).
-**Decisions and status:** the owner decided on 7 October 2026 ([section 8](#8-decisions-and-tracker-rows)): fills may go to paired Macs and servers on the local network only (DEC-37), and Generative Remove stays removal only for now (DEC-38). Five proposals are rows in the [research intake tracker](research-tracker.md): RM-15, RM-16, RM-17, INF-10 and CAM-27.
+**Decisions and status:** the owner decided on 7 October 2026 ([section 8](#8-decisions-and-tracker-rows)): fills may go to paired Macs and servers on the local network only (DEC-37), and Generative Remove stays removal only for now (DEC-38). Later that day the owner chose cloud providers instead (DEC-39): fills from another Mac aren't pursued (RM-16), ComfyUI (RM-17) becomes one of the cloud routes, and INF-11 studies which route comes first. The proposals are rows in the [research intake tracker](research-tracker.md): RM-15 (done), RM-16 (rejected), RM-17, INF-10, INF-11 and CAM-27.
 
 RapidRAW is an open-source raw editor by Timon Käch, started in June 2025, with over 10,000 stars on GitHub. It runs on Windows, macOS, Linux and Android, and ships about once a week. What sets it apart is how it offers AI: the same tools run on small models built into the app, on a ComfyUI server the photographer runs, on a paid cloud, or not at all. This study asked how that works, how it compares with Redlamp, and what Redlamp should take from it.
 
@@ -197,6 +197,7 @@ The seam is already there. The engine hands its model a crop through `Generative
 - **ComfyUI.** For photographers with a GPU on the network, the app talks to ComfyUI's own HTTP and WebSocket API (upload the crop and mask, queue a workflow, follow its progress, fetch the result, interrupt it to cancel), with nothing in between. A workflow is a template whose named inputs (image, mask, reference, seed, prompt) are mapped to its nodes and checked when it's imported, so a workflow that doesn't fit is refused with the reason, not at fill time. Templates shipped with Redlamp name only models whose weights allow commercial use, such as FLUX.2 [klein] 4B or Qwen-Image-Edit-2511 (both Apache-2.0); photographers may import their own. Redlamp ships no weights on this path, so a model's licence is the photographer's to accept.
 - **What stays the same:** only the crop leaves the Mac, and only for an address the photographer entered or paired. The fill keeps its provenance (the server, the model or workflow, and its hash) and its Generated label, and Content Credentials record it once they land (RM-03).
 - **Decided** (DEC-37, 7 October 2026): fills may go to paired Macs and servers on the local network only. The README says photos are never uploaded; when the first remote fill ships it will say they leave the Mac only for a server you run on your network.
+- **Superseded the same day** (DEC-39): the owner won't pursue fills from another Mac, as too hard for most photographers to set up (RM-16, rejected). Cloud providers are the direction instead, with ComfyUI as one route wherever it runs (RM-17).
 - **Still unknown:** ComfyUI's images are 8-bit, so a fill's round trip is too; Redlamp's tone-normalised crop and the noise it adds should hide that, which needs checking. Pairing and TLS need a design.
 
 Size M for the remote filler and the Mac server, and S for each ComfyUI template.
@@ -238,6 +239,8 @@ The [CAM-12 note](notes/CAM-12-nikon-high-efficiency.md) judged `CIRAWFilter` a 
 ## 6. What not to follow
 
 - **A Redlamp cloud, or bring-your-own-key model APIs** (fal, Replicate, Ideogram and others). They need accounts, billing and quotas, and send photos through providers whose retention can't be checked, as RapidRAW's own policy says of Ideogram. Both contradict "no cloud and no credits". Record a skip.
+
+  **The owner decided otherwise** (7 October 2026, DEC-39): optional cloud processing, through a provider the photographer brings their own key for, a third-party provider or ComfyUI, is the direction, as Adobe uses its own cloud. The concerns above (retention, accounts, billing, the Mac App Store's purchase rules) become questions for the cloud study, INF-11.
 - **A middleware between the app and ComfyUI.** It doubles what can be misconfigured; 5.2 talks to ComfyUI directly.
 - **Generated pixels as 8-bit JPEG, or bitmaps as base64 inside the sidecar's JSON.**
 - **Rendering changes that alter old edits.**
@@ -276,13 +279,15 @@ Read from GitHub's licence API and Hugging Face's model API on 7 October 2026.
 2. **Prompted generation waits** (DEC-38): Generative Remove stays removal only for now. Generative Expand wasn't decided, and stays Undecided in the Lightroom comparison.
 3. **AI-Free mode's levels,** no AI tools or also "no generated pixels", are decided in INF-10's design.
 4. **Not taken up for now:** LUT export (5.4), and a recorded skip of a Redlamp-run cloud and bring-your-own-key model APIs (section 6).
+5. **Cloud providers are the direction** (DEC-39, later the same day), superseding decision 1: work too heavy for the Mac (generative fill, denoise, masking) can go to a cloud provider, through a key the photographer brings, a third-party provider, or ComfyUI. Fills from another Mac aren't pursued. Which route comes first is INF-11's study.
 
-**Tracker rows,** all Proposed:
+**Tracker rows:**
 
 | ID | Item | Recommended | Phase | Size | Depends on |
 | --- | --- | --- | --- | --- | --- |
-| RM-15 | Generative Remove on Macs with less than 16 GB, offered with a note that it hasn't been tested on them (accepted 7 October; the measurement waits for an 8 GB Mac) | Adopt | P3 | S | RM-10 |
-| RM-16 | Fills from another Mac on the local network: `GenerativeFiller` to a Mac running Redlamp, found over Bonjour and paired once; iPad and iPhone in Phase 5 | Do better | P3, P5 | M | DEC-37, RM-10 |
-| RM-17 | ComfyUI as a fill server on the local network: its own API, templates with named inputs checked on import, shipped templates for commercially licensed models only | Adopt | P3–P4 | M | DEC-37, RM-10 |
+| RM-15 | Generative Remove on Macs with less than 16 GB, offered with a note that it hasn't been tested on them (done 7 October; the measurement waits for an 8 GB Mac) | Adopt | P3 | S | RM-10 |
+| RM-16 | Fills from another Mac on the local network (rejected 7 October: too hard for most photographers to set up) | Do better | P3, P5 | M | DEC-37, RM-10 |
+| RM-17 | ComfyUI as a fill server wherever it runs, on the photographer's network or hosted: its own API, templates with named inputs checked on import, shipped templates for commercially licensed models only | Adopt | P3–P4 | M | DEC-39, RM-10 |
 | INF-10 | AI-Free mode | Adopt | P3 | S | — |
+| INF-11 | Cloud processing study: the first route and providers for generative fill, then masking and denoise; prices, terms, what's sent, quality and latency; the Mac App Store's rules; a design behind the engine's seams | Adopt | P3 | M | DEC-39 |
 | CAM-27 | Apple's RAW 9 on macOS 27: a DN-09 comparator and a labelled fallback decoder for CAM-12 and CAM-13 bodies | Adopt | P3 | S | — |
