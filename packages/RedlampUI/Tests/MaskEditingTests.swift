@@ -542,7 +542,7 @@ struct MaskEditingTests {
         model.showMaskAlone(middle)
         #expect(model.masks.map(\.isVisible) == [false, true, false])
         model.showMaskAlone(middle)
-        #expect(model.masks.allSatisfy(\.isVisible))
+        #expect(!model.masks.contains { !$0.isVisible }, "every mask shown again")
         model.undo()
         #expect(model.masks.map(\.isVisible) == [false, true, false], "one step back: alone again")
     }
