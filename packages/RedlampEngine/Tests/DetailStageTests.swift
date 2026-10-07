@@ -458,9 +458,7 @@ struct DetailStageTests {
             let area = work(nudged)
             #expect(area != work(recipe) && area.level == 0, "\(parameter) leaves the work area as it was")
             let served = try processAndRead(stage, session, nudged, outputSize: size)
-            withKnownIssue("PIPE-02: the stage caches only the exact work area") {
-                #expect(served.output.texture === first.output.texture, "\(parameter) rendered again")
-            }
+            #expect(served.output.texture === first.output.texture, "\(parameter) rendered again")
             let fresh = try processAndRead(
                 DetailStage(device: device, kernels: kernels), session, nudged, outputSize: size, cache: false,
             )

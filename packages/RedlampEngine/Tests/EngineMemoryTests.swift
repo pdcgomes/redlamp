@@ -331,6 +331,7 @@ struct EngineMemoryTests {
 
     /// A tiled frame and a differently shaped area that fits in one pass, rendered in turn, as an
     /// export's tiles are between interactive renders: the textures are made for the first two.
+    /// The area goes first, since the frame's render would serve it.
     @Test func `alternating work areas reuse the scratch textures`() throws {
         let session = try helpers.makeSession(.bayer, width: 4000, height: 3000)
         let stage = DetailStage(device: helpers.device, kernels: helpers.kernels)
@@ -338,16 +339,16 @@ struct EngineMemoryTests {
         let wide = ImageRect(x: 0.1, y: 0.2, width: 0.475, height: 1250.0 / 3000)
         let wideSize = PixelSize(width: 1900, height: 1250)
         func both() throws {
-            _ = try render(stage, session, Self.everyPass)
             _ = try render(stage, session, Self.everyPass, region: wide, outputSize: wideSize)
+            _ = try render(stage, session, Self.everyPass)
         }
         try both()
         let before = stage.allocated.count
         var changed = Self.everyPass
         for amount in [70.0, 80] {
             changed[.sharpenAmount] = amount
-            _ = try render(stage, session, changed)
             _ = try render(stage, session, changed, region: wide, outputSize: wideSize)
+            _ = try render(stage, session, changed)
         }
         // Each render makes its output and nothing else.
         #expect(stage.allocated.count - before == 4)

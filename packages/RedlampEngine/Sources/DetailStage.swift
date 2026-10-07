@@ -448,8 +448,12 @@ final class DetailStage {
             keepOnly(session)
         }
         let geometry = GeometryMap(recipe: recipe, imageSize: session.orientedSize, lens: session.info.lensCorrection)
-        let work = Self.workArea(session: session, geometry: geometry, region: region, outputSize: outputSize)
-        guard let passes = Self.passes(recipe, session: session, level: work.level, masks: masks) else { return nil }
+        let exact = Self.workArea(session: session, geometry: geometry, region: region, outputSize: outputSize)
+        guard let passes = Self.passes(recipe, session: session, level: exact.level, masks: masks) else { return nil }
+        let snapped = Self.snapped(exact, session: session)
+        // Not where rounding out would take the area past the ladder's size when it fits as it is.
+        let work = cache && (snapped.size.x * snapped.size.y <= ladderCacheTexels
+            || exact.size.x * exact.size.y > ladderCacheTexels) ? snapped : exact
         let key = Key(
             session: ObjectIdentifier(session), work: work, denoise: passes.denoise, sharpen: passes.sharpen,
             contrast: passes.contrast, local: passes.local,
@@ -462,11 +466,38 @@ final class DetailStage {
             encoding = Encoding(commands: commands)
         }
         do {
-            return try process(key, passes, session: session, work: work, commands: commands, cache: cache)
+            return try process(
+                key,
+                passes,
+                session: session,
+                work: work,
+                exact: exact,
+                commands: commands,
+                cache: cache,
+            )
         } catch {
             abandon(commands)
             throw error
         }
+    }
+
+    /// Texels a cached work area is rounded out to at its level, so the areas a drag of the crop,
+    /// its angle or a transform asks for fall inside one already rendered.
+    static let grid = 256
+
+    /// `work` rounded out to the grid, within its level.
+    static func snapped(_ work: WorkArea, session: ImageSession) -> WorkArea {
+        let level = SIMD2(max(1, session.pyramid.width >> work.level), max(1, session.pyramid.height >> work.level))
+        let low = work.origin / grid &* grid
+        let high = simd_min((work.origin &+ work.size &+ (grid - 1)) / grid &* grid, level)
+        return WorkArea(level: work.level, origin: low, size: high &- low)
+    }
+
+    /// Whether `outer`'s texels include all of `inner`'s, margins too: a render of `outer` makes
+    /// the texels a render of `inner` makes there, as a region makes the frame's.
+    static func covers(_ outer: WorkArea, _ inner: WorkArea) -> Bool {
+        outer.level == inner.level && all(outer.origin .<= inner.origin)
+            && all(inner.origin &+ inner.size .<= outer.origin &+ outer.size)
     }
 
     /// The passes `recipe` needs at a work level: nil when it needs none.
@@ -488,16 +519,25 @@ final class DetailStage {
         )
     }
 
+    /// Renders `work`, or serves `exact`, the area asked for, from a cached render that covers it.
+    /// A render that isn't cached takes only one of exactly its area, so an export doesn't depend
+    /// on what the editor cached last.
     private func process(
         _ key: Key,
         _ passes: Passes,
         session: ImageSession,
         work: WorkArea,
+        exact: WorkArea,
         commands: any MTLCommandBuffer,
         cache: Bool,
     ) throws -> Output {
-        if let index = entries.firstIndex(where: { $0.key == key }) {
-            let entry = entries.remove(at: index)
+        let served = entries.lastIndex { entry in
+            var covered = key
+            covered.work = entry.key.work
+            return entry.key == key || cache && entry.key == covered && Self.covers(entry.key.work, exact)
+        }
+        if let served {
+            let entry = entries.remove(at: served)
             if residency.wake(entry.output.texture) {
                 entries.append(entry)
                 return entry.output
