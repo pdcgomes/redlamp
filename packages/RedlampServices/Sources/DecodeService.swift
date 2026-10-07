@@ -177,13 +177,14 @@ public extension DecodedImage {
         if let url {
             header.info.url = url
         }
-        let body = data.subdata(in: 8 + length ..< data.count)
-        guard header.isValid, body.count.isMultiple(of: 2), body.count / 2 == header.sampleCount else {
+        let bodyCount = data.count - 8 - length
+        guard header.isValid, bodyCount.isMultiple(of: 2), bodyCount / 2 == header.sampleCount else {
             throw EngineError.decodeFailed("the decode service sent a damaged image")
         }
         let samples = [UInt16](unsafeUninitializedCapacity: header.sampleCount) { buffer, count in
-            body.withUnsafeBytes { bytes in
-                _ = bytes.copyBytes(to: UnsafeMutableRawBufferPointer(buffer))
+            data.withUnsafeBytes { bytes in
+                UnsafeMutableRawBufferPointer(buffer)
+                    .copyMemory(from: UnsafeRawBufferPointer(rebasing: bytes[(8 + length)...]))
             }
             count = header.sampleCount
         }

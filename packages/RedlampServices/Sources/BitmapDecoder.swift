@@ -32,27 +32,28 @@ enum BitmapDecoder {
 
         let width = image.width
         let height = image.height
-        guard let colorSpace = CGColorSpace(name: CGColorSpace.extendedLinearSRGB),
-              let context = CGContext(
-                  data: nil,
-                  width: width,
-                  height: height,
-                  bitsPerComponent: 16,
-                  bytesPerRow: width * 8,
-                  space: colorSpace,
-                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-                      | CGBitmapInfo.floatComponents.rawValue
-                      | CGImageByteOrderInfo.order16Little.rawValue,
-              )
-        else {
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.extendedLinearSRGB) else {
             throw EngineError.decodeFailed("could not allocate a float bitmap")
         }
-        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-        guard let data = context.data else { throw EngineError.decodeFailed("empty bitmap") }
-        let samples = [UInt16](UnsafeBufferPointer(
-            start: data.assumingMemoryBound(to: UInt16.self),
-            count: width * height * 4,
-        ))
+        // Zeroed first, so transparent pixels composite over nothing.
+        let samples = try [UInt16](unsafeUninitializedCapacity: width * height * 4) { buffer, count in
+            buffer.initialize(repeating: 0)
+            count = buffer.count
+            guard let context = CGContext(
+                data: buffer.baseAddress,
+                width: width,
+                height: height,
+                bitsPerComponent: 16,
+                bytesPerRow: width * 8,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                    | CGBitmapInfo.floatComponents.rawValue
+                    | CGImageByteOrderInfo.order16Little.rawValue,
+            ) else {
+                throw EngineError.decodeFailed("could not allocate a float bitmap")
+            }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        }
 
         let orientation = switch exifOrientation {
         case 3: 3

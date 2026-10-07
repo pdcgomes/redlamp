@@ -78,9 +78,7 @@ struct DecodeMemoryTests {
         let archive = try image.archived()
         let bytes = image.samples.count * 2
         let held = try Self.peak(of: Self.heap) { _ = try DecodedImage(archive: archive) }
-        withKnownIssue("the reply's body is copied before the samples are") {
-            #expect(held < bytes * 3 / 2, "held \(held >> 20) MB for \(bytes >> 20) MB of samples")
-        }
+        #expect(held < bytes * 3 / 2, "held \(held >> 20) MB for \(bytes >> 20) MB of samples")
     }
 
     /// A grey JPEG, so the decoded file itself (a byte a pixel) is small beside the samples.
@@ -103,8 +101,6 @@ struct DecodeMemoryTests {
         #expect(CGImageDestinationFinalize(destination))
         let bytes = width * height * 8
         let held = try Self.peak(of: Self.footprint) { _ = try BitmapDecoder.decode(url) }
-        withKnownIssue("the bitmap is drawn into a context, then copied") {
-            #expect(held < bytes * 3 / 2, "held \(held >> 20) MB for \(bytes >> 20) MB of samples")
-        }
+        #expect(held < bytes * 3 / 2, "held \(held >> 20) MB for \(bytes >> 20) MB of samples")
     }
 }
