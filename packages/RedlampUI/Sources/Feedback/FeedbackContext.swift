@@ -258,7 +258,8 @@ public extension FeedbackContext {
         if !models.isEmpty {
             parts.append(models.sorted().joined(separator: ", "))
         }
-        return "“\(mask.name)”\(mask.isVisible ? "" : " (hidden)"): " + parts.joined(separator: "; ")
+        return "“\(mask.name)”\(mask.isVisible ? "" : " (hidden)")\(mask.inverted ? " (inverted)" : ""): "
+            + parts.joined(separator: "; ")
     }
 
     @MainActor

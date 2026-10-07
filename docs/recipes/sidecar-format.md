@@ -220,6 +220,7 @@ A mask is a local adjustment: coverage built from components, and its own adjust
 | `name` | string | `Mask` | |
 | `isVisible` | boolean | `true` | A hidden mask doesn't render. |
 | `components` | [component] | `[]` | Combined in order. |
+| `inverted` | boolean | `false` | The whole mask inverted, once its components have combined, as Lightroom's Invert. A component reusing this mask follows it inverted. Written only when true; a Redlamp from before it keeps the field but draws the mask uninverted. |
 | `amount` | number | 100 | Scales every adjustment of the mask, in percent, 0 to 200. |
 | `detail` | number | 0 | −100 to 100: above 0 keeps only the textured areas of the mask, below 0 only the flat ones. Written only when it isn't 0. |
 | `adjustments` | {key: number} | `{}` | The local parameters below, each written only when it isn't 0. Always written, even empty. |

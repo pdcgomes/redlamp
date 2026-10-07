@@ -190,7 +190,8 @@ struct MaskLayerGPU {
     float4 color;             // x temperature, y tint, z hue shift (degrees), w saturation
     float4 tone;              // x exposure (EV), y contrast, z highlights, w shadows
     float4 tone2;             // x whites, y blacks, z first component index, w component count
-    float4 detail;            // x Dehaze (slider / 100), y Detail refinement (-1...1), z pyramid level it measures texture at
+    float4 detail;            // x Dehaze (slider / 100), y Detail refinement (-1...1), z pyramid level it measures texture at,
+                              // w 1 when the whole mask is inverted
     float4 glow;              // x halation, y bloom, z defringe, w moiré (slider / 100, scaled by the mask's Amount);
                               // halation, bloom and defringe add to the global amounts
     float4 display;           // xy the Color swatch's OKLab (a, b) tint, scaled by the mask's Amount; z the mask's

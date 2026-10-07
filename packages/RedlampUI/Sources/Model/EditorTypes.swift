@@ -350,6 +350,8 @@ public struct MaskOutline: Hashable, Identifiable, Sendable {
     public let id: UUID
     public let name: String
     public let isVisible: Bool
+    /// The whole mask inverted.
+    public let inverted: Bool
     public let components: [Component]
     /// Whether the mask has Point Color swatches, which its editor shows sliders for.
     public let hasPointColor: Bool
@@ -358,6 +360,7 @@ public struct MaskOutline: Hashable, Identifiable, Sendable {
         id = mask.id
         name = mask.name
         isVisible = mask.isVisible
+        inverted = mask.inverted
         components = mask.components.map {
             Component(id: $0.id, kind: $0.shape.kind, operation: $0.operation, inverted: $0.inverted)
         }

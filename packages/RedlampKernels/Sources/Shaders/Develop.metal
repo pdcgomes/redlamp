@@ -799,7 +799,8 @@ kernel void rl_develop(
                 uint pair = 2 * uint(c.rotation.x - 0.5f);
                 float3 inside = maskColors.sample(colorSampler, sourceUV, pair).rgb * vignetting;
                 float3 outside = maskColors.sample(colorSampler, sourceUV, pair + 1).rgb * vignetting;
-                bool inverted = c.shape.z > 0.5f;
+                // The component's Invert or the whole mask's (not both) swaps the sides.
+                bool inverted = (c.shape.z > 0.5f) != (layers[i].detail.w > 0.5f);
                 splitInside[splitCount] = inverted ? outside : inside;
                 splitOutside[splitCount] = inverted ? inside : outside;
                 splitLayer[splitCount] = i;

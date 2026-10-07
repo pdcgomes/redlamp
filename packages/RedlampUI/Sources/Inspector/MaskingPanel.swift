@@ -780,6 +780,7 @@ struct MaskList: View {
             draftName = mask.name
             renaming = mask.id
         }
+        Toggle("Invert", isOn: Binding(get: { mask.inverted }, set: { model.setMaskInverted(mask.id, $0) }))
         Button("Duplicate") { model.duplicateMask(mask.id) }
         Button("Duplicate and Invert") { model.duplicateMask(mask.id, inverted: true) }
         Button("Reset Adjustments") { model.resetMaskAdjustments(mask.id) }
@@ -800,7 +801,22 @@ struct SelectedMaskEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            SubsectionHeader(title: "Components", parameters: [])
+            if usesPicker {
+                // Invert and Amount lead the mask's settings (`MasksPanelNext`).
+                SubsectionHeader(title: mask.name, parameters: []) {
+                    Toggle("Invert", isOn: Binding(
+                        get: { mask.inverted }, set: { model.setMaskInverted(mask.id, $0) },
+                    ))
+                    .toggleStyle(.checkbox)
+                    .controlSize(.mini)
+                    .font(Theme.captionFont)
+                    .help("Invert the whole mask")
+                    ResetMaskButton(mask: mask)
+                }
+                ParameterSlider(parameter: .maskAmount)
+                Spacer().frame(height: 6)
+            }
+            SubsectionHeader(title: usesPicker ? "Components, applied top to bottom" : "Components", parameters: [])
             ForEach(mask.components) { component in
                 ComponentRow(mask: mask, component: component, actionsOnScreen: usesPicker)
             }
@@ -853,10 +869,14 @@ struct SelectedMaskEditor: View {
                 EmptyView()
             }
 
-            SubsectionHeader(title: mask.name, parameters: []) {
-                ResetMaskButton(mask: mask)
+            if !usesPicker {
+                SubsectionHeader(title: mask.name, parameters: []) {
+                    ResetMaskButton(mask: mask)
+                }
+                ParameterSlider(parameter: .maskAmount)
+            } else {
+                Spacer().frame(height: 6)
             }
-            ParameterSlider(parameter: .maskAmount)
             ParameterSlider(parameter: .maskDetail)
             Spacer().frame(height: 4)
             ForEach(ParameterID.localParameters.filter { !ParameterID.swatchParameters.contains($0) }, id: \.self) {

@@ -49,6 +49,24 @@ struct EditRecipeTests {
         #expect(decoded.masks[0].adjustments.count == 1)
     }
 
+    /// Invert for the whole mask (UX-24): written only when set, and read as off when missing.
+    @Test func `a mask's Invert round trips, written only when set`() throws {
+        var mask = MaskLayer(name: "Sky", components: [
+            MaskComponent(shape: .linear(LinearMask(start: ImagePoint(x: 0.5, y: 0), end: ImagePoint(x: 0.5, y: 0.4)))),
+        ])
+        /// The mask's own keys: each component writes an `inverted` of its own.
+        func keys(_ data: Data) throws -> [String: Any] {
+            try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        }
+        let plain = try JSONEncoder().encode(mask)
+        #expect(try keys(plain)["inverted"] == nil)
+        #expect(try JSONDecoder().decode(MaskLayer.self, from: plain).inverted == false)
+        mask.inverted = true
+        let inverted = try JSONEncoder().encode(mask)
+        #expect(try keys(inverted)["inverted"] as? Bool == true)
+        #expect(try JSONDecoder().decode(MaskLayer.self, from: inverted) == mask)
+    }
+
     @Test func `global recipe ignores mask parameters`() {
         var recipe = EditRecipe()
         recipe[.localExposure] = 2

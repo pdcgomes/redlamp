@@ -817,6 +817,9 @@ public struct MaskLayer: Sendable, Hashable, Identifiable {
     public var name: String
     public var isVisible: Bool
     public var components: [MaskComponent]
+    /// The whole mask inverted, once its components have combined (Lightroom's Invert); written
+    /// only when set, so an older Redlamp keeps it but draws the mask uninverted.
+    public var inverted = false
     /// Scales every adjustment of the mask, 0...200 (Lightroom's mask Amount).
     public var amount: Double
     /// -100...100: above 0 keeps only textured areas of the mask, below 0 only flat ones.
@@ -891,7 +894,7 @@ public struct MaskLayer: Sendable, Hashable, Identifiable {
 
 extension MaskLayer: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case id, name, isVisible, components, amount, detail, adjustments, curves, pointColor
+        case id, name, isVisible, components, inverted, amount, detail, adjustments, curves, pointColor
     }
 
     public init(from decoder: Decoder) throws {
@@ -900,6 +903,7 @@ extension MaskLayer: Codable {
         name = try container.decodeIfPresent(String.self, forKey: .name) ?? "Mask"
         isVisible = try container.decodeIfPresent(Bool.self, forKey: .isVisible) ?? true
         components = try container.decodeIfPresent([MaskComponent].self, forKey: .components) ?? []
+        inverted = try container.decodeIfPresent(Bool.self, forKey: .inverted) ?? false
         amount = try container.decodeIfPresent(Double.self, forKey: .amount) ?? 100
         detail = try container.decodeIfPresent(Double.self, forKey: .detail) ?? 0
         let curves = try container.decodeIfPresent(MaskCurves.self, forKey: .curves)
@@ -926,6 +930,9 @@ extension MaskLayer: Codable {
         try container.encode(name, forKey: .name)
         try container.encode(isVisible, forKey: .isVisible)
         try container.encode(components, forKey: .components)
+        if inverted {
+            try container.encode(inverted, forKey: .inverted)
+        }
         try container.encode(amount, forKey: .amount)
         if detail != 0 {
             try container.encode(detail, forKey: .detail)

@@ -26,6 +26,8 @@ public struct MaskPreset: Codable, Sendable, Hashable, Identifiable {
     /// People parts the preset does without when they can't be computed, such as Body Skin before
     /// SAM 3 is installed.
     public var optionalParts: [PersonPart]?
+    /// The whole mask inverted; missing in presets saved before masks could be.
+    public var inverted: Bool?
 
     public init(
         id: String = UUID().uuidString, name: String, components: [Component], amount: Double = 100, detail: Double = 0,
@@ -79,6 +81,7 @@ public struct MaskPreset: Codable, Sendable, Hashable, Identifiable {
             adjustments: mask.adjustments, landscapeClasses: classes.contains { $0 != nil } ? classes : nil,
             pointColor: mask.pointColor.isEmpty ? nil : mask.pointColor,
         )
+        inverted = mask.inverted ? true : nil
     }
 
     /// The swatches the preset's mask gets, each with an identity of its own.

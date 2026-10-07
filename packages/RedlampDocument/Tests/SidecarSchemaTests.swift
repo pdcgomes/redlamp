@@ -540,6 +540,7 @@ enum RichSidecar {
             amount: 150, adjustments: [.localExposure: 0.3],
         )
         dodge.detail = 30
+        dodge.inverted = true
         let linear = LinearMask(start: point(0.5, -0.1), end: point(0.5, 0.45))
         let radial = RadialMask(center: point(0.6, 0.55), radiusX: 0.2, radiusY: 0.12, rotation: 15, feather: 70)
         let samples = [ColorSample(center: point(0.2, 0.8)), ColorSample(center: point(0.25, 0.75), radius: 0.01)]

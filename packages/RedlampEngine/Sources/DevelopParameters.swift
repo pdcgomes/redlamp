@@ -371,7 +371,7 @@ enum DevelopParameters {
                     value(.localShadows),
                 ),
                 tone2: SIMD4(value(.localWhites), value(.localBlacks), Float(first), Float(count)),
-                detail: SIMD4(value(.localDehaze), Float(mask.detail / 100), Float(detailLevel), 0),
+                detail: SIMD4(value(.localDehaze), Float(mask.detail / 100), Float(detailLevel), mask.inverted ? 1 : 0),
                 glow: SIMD4(value(.localHalation), value(.localBloom), value(.localDefringe), value(.localMoire)),
                 display: SIMD4(lowHalf: swatch(of: mask, scale: scale), highHalf: SIMD2(table, Float(scale))),
             ))
@@ -555,7 +555,8 @@ struct MaskComponentEncoder {
                     result.append(gpu)
                 }
             }
-            result[index].geometry = SIMD4(Float(first), Float(result.count - first), 0, 0)
+            // The referenced mask's own Invert follows it into the reference.
+            result[index].geometry = SIMD4(Float(first), Float(result.count - first), referenced.inverted ? 1 : 0, 0)
         }
         return result
     }

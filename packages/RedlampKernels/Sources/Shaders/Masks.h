@@ -125,6 +125,8 @@ static inline float evaluateMaskComponent(MaskComponentGPU c, float2 p, MaskImag
     return c.shape.z > 0.5f ? 1.0f - weight : weight;
 }
 
+// Another mask reused as a component: geometry.x its first component, y their count, z 1 when
+// that mask is itself inverted.
 constant float kMaskReference = 6.0f;
 
 static inline float combineMaskCoverage(float coverage, float w, int operation, bool first) {
@@ -160,13 +162,16 @@ static inline float evaluateMaskLayer(
         float w;
         if (abs(c.shape.x - kMaskReference) < 0.5f) {
             w = evaluateMaskComponents(components, int(c.geometry.x), int(c.geometry.y), p, images);
+            // The reused mask's own Invert, then this component's.
+            if (c.geometry.z > 0.5f) w = 1.0f - w;
             if (c.shape.z > 0.5f) w = 1.0f - w;
         } else {
             w = evaluateMaskComponent(c, p, images);
         }
         coverage = combineMaskCoverage(coverage, w, int(c.shape.y), i == 0);
     }
-    return coverage;
+    // The whole mask's Invert (detail.w), once its components have combined.
+    return layer.detail.w > 0.5f ? 1.0f - coverage : coverage;
 }
 
 // Local texture for a mask's Detail refinement: the Scharr gradient of log luminance, in stops

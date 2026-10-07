@@ -207,17 +207,19 @@ public extension EditorModel {
         return false
     }
 
+    /// A copy of the mask; `inverted`, the copy's whole mask inverted (inverting each component
+    /// would invert only them, not a mask of several).
     func duplicateMask(_ id: UUID, inverted: Bool = false) {
         guard let original = recipe.mask(id), hasRoomForMask(recipe.masks) else { return }
         var copy = original
         copy.id = UUID()
         copy.name = "\(original.name) Copy"
+        if inverted {
+            copy.inverted.toggle()
+        }
         copy.components = original.components.map { component in
             var duplicate = component
             duplicate.id = UUID()
-            if inverted {
-                duplicate.inverted.toggle()
-            }
             return duplicate
         }
         copy.pointColor = original.pointColor.map { swatch in
@@ -253,6 +255,12 @@ public extension EditorModel {
     func toggleMaskVisibility(_ id: UUID) {
         guard let mask = recipe.mask(id) else { return }
         mutateMask(id, name: mask.isVisible ? "Hide \(mask.name)" : "Show \(mask.name)") { $0.isVisible.toggle() }
+    }
+
+    /// Inverts the whole mask, once its components have combined (Lightroom's Invert).
+    func setMaskInverted(_ id: UUID, _ inverted: Bool) {
+        guard let mask = recipe.mask(id), mask.inverted != inverted else { return }
+        mutateMask(id, name: "Invert \(mask.name)") { $0.inverted = inverted }
     }
 
     /// Option-click on a mask's eye: that mask alone, or every mask again when it already is

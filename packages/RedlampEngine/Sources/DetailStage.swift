@@ -219,6 +219,7 @@ struct LocalDetail: Hashable {
         var components: [MaskComponent]
         var amounts: SIMD4<Float>
         var detail: Double = 0
+        var inverted = false
     }
 
     var layers: [Layer] = []
@@ -256,7 +257,12 @@ struct LocalDetail: Hashable {
             else {
                 continue
             }
-            layers.append(Layer(components: mask.components, amounts: amounts, detail: mask.detail))
+            layers.append(Layer(
+                components: mask.components,
+                amounts: amounts,
+                detail: mask.detail,
+                inverted: mask.inverted,
+            ))
             components += mask.components.count
         }
         let ids = Set(layers.flatMap { MaskLayer(name: "", components: $0.components).referencedMasks })
@@ -1372,7 +1378,7 @@ final class DetailStage {
             layers.append(MaskLayerGPU(
                 color: layer.amounts, tone: .zero,
                 tone2: SIMD4(0, 0, Float(first), Float(maskComponents.components.count - first)),
-                detail: SIMD4(0, Float(layer.detail / 100), Float(detailLevel), 0),
+                detail: SIMD4(0, Float(layer.detail / 100), Float(detailLevel), layer.inverted ? 1 : 0),
             ))
         }
         var components = maskComponents.finished()

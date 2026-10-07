@@ -78,6 +78,7 @@ public extension EditorModel {
         var mask = MaskLayer(
             name: preset.name, components: components, amount: preset.amount, adjustments: preset.localAdjustments,
         )
+        mask.inverted = preset.inverted ?? false
         mask.detail = preset.detail
         mask.pointColor = preset.newSwatches
         var next = recipe

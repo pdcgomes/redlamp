@@ -547,6 +547,33 @@ struct MaskEditingTests {
         #expect(model.masks.map(\.isVisible) == [false, true, false], "one step back: alone again")
     }
 
+    /// Invert for the whole mask (UX-24): one history step; and Duplicate and Invert inverts the
+    /// copy as a whole, its components as they were.
+    @Test func `Invert inverts the whole mask, and Duplicate and Invert inverts the copy`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let model = EditorModel(engine: StubEngine())
+        model.select(folder.appending(path: "IMG_0009.ARW"))
+        for _ in 0 ..< 200 where model.info == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        model.startDrawing(.radial)
+        model.beginDrawing(.radial(RadialMask(center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.2)))
+        model.finishDrawing()
+        let mask = try #require(model.selectedMaskID)
+        model.setMaskInverted(mask, true)
+        #expect(model.recipe.mask(mask)?.inverted == true)
+        #expect(model.maskOutlines.first { $0.id == mask }?.inverted == true)
+        model.undo()
+        #expect(model.recipe.mask(mask)?.inverted == false, "one step")
+
+        model.duplicateMask(mask, inverted: true)
+        let copy = try #require(model.masks.last)
+        #expect(copy.id != mask && copy.inverted)
+        #expect(copy.components.map(\.inverted) == [false], "the components as they were")
+    }
+
     /// The new panel's list previews the mask under the pointer (UX-23), with the overlay on or
     /// off, and only in the Masking tool.
     @Test func `the overlay shows the mask under the pointer, overlay on or off`() async throws {

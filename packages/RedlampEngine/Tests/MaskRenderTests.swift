@@ -438,7 +438,52 @@ struct MaskRenderTests {
         #expect(plain[corner].x - plain[corner].z > 0.05, "the photo outside is coloured")
     }
 
+    /// Invert for the whole mask (UX-24): a centred radial gradient, inverted, brightens the
+    /// corners and leaves the centre; its overlay shows the corners.
+    @Test func `an inverted mask covers what the mask doesn't`() throws {
+        let session = try makeSession(width: 200, height: 100) { _, _ in SIMD3(repeating: 0.18) }
+        var mask = MaskLayer(name: "Centre", components: [MaskComponent(shape: .radial(RadialMask(
+            center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.3, radiusY: 0.3, feather: 0,
+        )))])
+        mask[.localExposure] = 1
+        mask.inverted = true
+        var recipe = EditRecipe()
+        recipe.masks = [mask]
+        let (centre, corner) = (50 * 200 + 100, 5 * 200 + 5)
+        let plain = try render(EditRecipe(), session: session)
+        let inverted = try render(recipe, session: session)
+        #expect(simd_abs(inverted[centre] - plain[centre]).max() < 1e-4, "the centre as it was")
+        #expect(inverted[corner].y > plain[corner].y * 1.3, "the corner brightened: \(inverted[corner])")
+        let overlay = try render(recipe, session: session, overlay: mask.id, style: .blackAndWhite)
+        #expect(overlay[corner].y > 0.9 && overlay[centre].y < 0.1, "\(overlay[corner]) \(overlay[centre])")
+    }
+
     // MARK: - Refinements
+
+    /// A component reusing an inverted mask follows it inverted.
+    @Test func `a reference to an inverted mask covers what that mask covers, inverted`() throws {
+        let session = try makeSession(width: 200, height: 100) { _, _ in SIMD3(repeating: 0.18) }
+        var centre = MaskLayer(name: "Centre", components: [MaskComponent(shape: .radial(RadialMask(
+            center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.3, radiusY: 0.3, feather: 0,
+        )))])
+        centre.inverted = true
+        centre.isVisible = false
+        var reuse = MaskLayer(name: "Reuse", components: [
+            MaskComponent(shape: .maskReference(MaskReference(maskID: centre.id))),
+        ])
+        reuse[.localExposure] = 1
+        var direct = centre
+        direct.isVisible = true
+        direct[.localExposure] = 1
+        var reused = EditRecipe()
+        reused.masks = [centre, reuse]
+        var drawn = EditRecipe()
+        drawn.masks = [direct]
+        let a = try render(reused, session: session)
+        let b = try render(drawn, session: session)
+        let worst = zip(a, b).map { simd_abs($0 - $1).max() }.max() ?? 1
+        #expect(worst < 1e-3, "differs by \(worst)")
+    }
 
     /// A layer reusing another's coverage covers the same area, even when that mask is hidden.
     @Test func `a mask reference covers what the referenced mask covers`() throws {
