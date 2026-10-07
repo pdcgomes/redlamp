@@ -46,8 +46,8 @@ public enum FeedbackActions {
                 }
             }
             sheet.onQueue = { history.enqueue($0) }
-            show(over: window, model: model, size: FeedbackSheet.size) { close in
-                FeedbackSheet(sheet: sheet, dismiss: close, showReports: {
+            show(over: window, model: model, size: FeedbackSheet.size) { close, height in
+                FeedbackSheet(sheet: sheet, height: height, dismiss: close, showReports: {
                     close()
                     presentReports(model: model, history: history)
                 })
@@ -74,7 +74,7 @@ public enum FeedbackActions {
     public static func presentReports(model: EditorModel, history: FeedbackHistory = .shared) {
         guard !model.isModalDialogOpen, let window = editorWindow else { return }
         model.isModalDialogOpen = true
-        show(over: window, model: model, size: YourReportsView.size) { close in
+        show(over: window, model: model, size: YourReportsView.size) { close, _ in
             YourReportsView(history: history, dismiss: close)
         }
     }
@@ -89,11 +89,15 @@ public enum FeedbackActions {
         EditorWindowController.frontWindow
     }
 
+    /// Shows `content` in a sheet `size` big, or less tall on a short window: `content` is given
+    /// the sheet's close action and its height.
     private static func show(
-        over window: NSWindow, model: EditorModel, size: CGSize, content: (@escaping () -> Void) -> some View,
+        over window: NSWindow, model: EditorModel, size: CGSize,
+        content: (@escaping () -> Void, CGFloat) -> some View,
     ) {
+        let height = window.sheetHeight(fitting: size.height)
         let sheetWindow = RinglessWindow(
-            contentRect: CGRect(origin: .zero, size: size),
+            contentRect: CGRect(x: 0, y: 0, width: size.width, height: height),
             styleMask: [.titled],
             backing: .buffered,
             defer: false,
@@ -104,7 +108,7 @@ public enum FeedbackActions {
                 window.endSheet(sheetWindow)
             }
         }
-        sheetWindow.contentViewController = NSHostingController(rootView: content(close)
+        sheetWindow.contentViewController = NSHostingController(rootView: content(close, height)
             .tint(Theme.nativeTint)
             .focusEffectDisabled())
         window.beginSheet(sheetWindow)

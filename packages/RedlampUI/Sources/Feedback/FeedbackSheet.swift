@@ -6,6 +6,8 @@ import UniformTypeIdentifiers
 /// what became of it.
 struct FeedbackSheet: View {
     @Bindable var sheet: FeedbackSheetModel
+    /// `size`'s height, or less on a short window: the report's fields scroll above its buttons.
+    var height = Self.size.height
     let dismiss: () -> Void
     /// Closes the sheet and opens Your Reports.
     let showReports: () -> Void
@@ -25,7 +27,7 @@ struct FeedbackSheet: View {
                 FeedbackQueued(dismiss: dismiss, showReports: showReports)
             }
         }
-        .frame(width: Self.size.width, height: Self.size.height)
+        .frame(width: Self.size.width, height: height)
     }
 }
 
