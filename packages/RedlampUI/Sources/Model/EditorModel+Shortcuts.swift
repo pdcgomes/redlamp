@@ -8,6 +8,9 @@ public extension EditorModel {
     /// the key event can continue to the rest of the app.
     @discardableResult
     func perform(_ action: ShortcutAction, shifted: Bool = false) -> Bool {
+        if action != .increaseSetting, action != .decreaseSetting {
+            endNudgeRun()
+        }
         let performed = runShortcut(action, shifted: shifted)
         if performed {
             activity.record(.action, action.title)
@@ -219,8 +222,9 @@ public extension EditorModel {
         case .previousPhoto, .nextPhoto:
             guard let from = opening ?? selection, let index = library.index(of: from) else { return false }
             return items.indices.contains(index + (action == .nextPhoto ? 1 : -1))
-        // A burst of arrow presses in the palette is a step not yet recorded, and ⌘Z undoes it.
-        case .undo: return canUndo || commandPalette?.hasOpenStep == true
+        // A burst of arrow presses in the palette, or a run of nudges, is a step not yet
+        // recorded, and ⌘Z undoes it.
+        case .undo: return canUndo || commandPalette?.hasOpenStep == true || hasOpenNudgeRun
         case .redo: return canRedo
         case .pasteSettings: return hasClipboard && photo
         case .pastePrevious: return previousSelection != nil && photo
@@ -336,16 +340,48 @@ public extension EditorModel {
         focusedParameter = cycle[(index + offset + cycle.count) % cycle.count]
     }
 
-    /// `=` / `-`: a Lightroom-sized nudge (1/40 of the slider's travel; ⇧ for 1/10).
+    /// `=` / `-`: a Lightroom-sized nudge (1/40 of the slider's travel; ⇧ for 1/10). A run of
+    /// them on one slider is one history step, which ends when they pause, on another shortcut,
+    /// on Undo, or when another photo opens.
     func nudgeFocusedParameter(direction: Double, large: Bool) {
         let cycle = focusCycle
         let parameter = focusedParameter.flatMap { cycle.contains($0) ? $0 : nil }
             ?? cycle.first { $0 == .exposure || $0 == .localExposure }
         guard let parameter, info != nil else { return }
         focusedParameter = parameter
+        if let run = nudgeRun, run.parameter != parameter || run.photo != selection {
+            endNudgeRun()
+        }
+        // A nudge during a drag is part of the drag's step.
+        if nudgeRun == nil, editStart == nil {
+            beginEdit(parameter)
+            nudgeRun = NudgeRun(parameter: parameter, photo: selection, start: recipe)
+        }
         let spec = parameter.spec
         let position = spec.position(for: sliderValue(parameter)) + direction * (large ? 0.1 : 0.025)
         setSliderValue(parameter, spec.value(atPosition: position))
+        guard nudgeRun != nil else { return }
+        nudgeRun?.end?.cancel()
+        nudgeRun?.end = Task { [weak self] in
+            try? await Task.sleep(for: NudgeRun.gap)
+            guard !Task.isCancelled else { return }
+            self?.endNudgeRun()
+        }
+    }
+
+    internal var hasOpenNudgeRun: Bool {
+        nudgeRun != nil
+    }
+
+    /// Records a run of nudges as one step. Undo calls it first, so ⌘Z during a run undoes all
+    /// of it, and opening another photo does, so the step is saved with the photo it was made on.
+    internal func endNudgeRun() {
+        guard let run = nudgeRun else { return }
+        run.end?.cancel()
+        nudgeRun = nil
+        // An edit begun since (a slider drag) has taken the run's place.
+        guard editStart == run.start, editParameter == run.parameter else { return }
+        endEdit()
     }
 
     // MARK: - Rating, flags and labels
@@ -401,4 +437,15 @@ public extension EditorModel {
             }
         }
     }
+}
+
+/// The `=` / `-` presses since the last pause, recorded as one history step when it ends.
+struct NudgeRun {
+    /// The pause that ends a run, as for ⌘-scrolling a slider.
+    static let gap = Duration.milliseconds(400)
+
+    let parameter: ParameterID
+    let photo: URL?
+    let start: EditRecipe
+    var end: Task<Void, Never>?
 }

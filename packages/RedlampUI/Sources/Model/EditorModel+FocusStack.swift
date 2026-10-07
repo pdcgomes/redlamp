@@ -25,6 +25,7 @@ public extension EditorModel {
     }
 
     func openStackWorkspace(_ url: URL) {
+        endNudgeRun()
         saveNow()
         stackWorkspace = StackWorkspaceModel(documentURL: url, engine: engine)
     }

@@ -14,12 +14,14 @@ public extension EditorModel {
 
     func undo() {
         commandPalette?.endBurst()
+        endNudgeRun()
         guard canUndo else { return }
         goToHistory(historyIndex - 1)
     }
 
     func redo() {
         commandPalette?.endBurst()
+        endNudgeRun()
         guard canRedo else { return }
         goToHistory(historyIndex + 1)
     }

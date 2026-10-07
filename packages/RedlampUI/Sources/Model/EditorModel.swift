@@ -576,6 +576,8 @@ public final class EditorModel {
     @ObservationIgnored var pendingDrawingKind: MaskKind?
     @ObservationIgnored var editStart: EditRecipe?
     @ObservationIgnored var editParameter: ParameterID?
+    /// The `=` / `-` presses on one slider since their last pause (EditorModel+Shortcuts).
+    @ObservationIgnored var nudgeRun: NudgeRun?
     @ObservationIgnored private var session = (id: UUID(), started: Date())
     /// The next save removes the earlier sessions' files (Clear History).
     @ObservationIgnored var clearsSavedHistory = false
@@ -653,6 +655,7 @@ public final class EditorModel {
             }
             return
         }
+        endNudgeRun()
         saveNow()
         stopOpening()
         metadataChangesWhileOpening = []

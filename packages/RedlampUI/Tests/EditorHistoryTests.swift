@@ -348,10 +348,8 @@ struct EditorHistoryTests {
         }
         let after = model.recipe[.exposure]
         try await pause()
-        withKnownIssue("RESP-09: each nudge is a step of its own") {
-            #expect(model.history.count == steps + 1)
-            #expect(model.history.last?.before == before)
-        }
+        #expect(model.history.count == steps + 1)
+        #expect(model.history.last?.before == before)
         #expect(model.history.last?.after == spec.formatted(after))
         #expect(model.history.last?.recipe[.exposure] == after)
     }
@@ -367,13 +365,9 @@ struct EditorHistoryTests {
         }
         #expect(model.canPerform(.undo))
         model.perform(.undo)
-        withKnownIssue("RESP-09: undo takes back only the last nudge") {
-            #expect(model.recipe[.exposure] == start)
-        }
+        #expect(model.recipe[.exposure] == start)
         try await pause()
-        withKnownIssue("RESP-09: undo takes back only the last nudge") {
-            #expect(model.recipe[.exposure] == start, "the run's end records nothing after the undo")
-        }
+        #expect(model.recipe[.exposure] == start, "the run's end records nothing after the undo")
         #expect(model.canRedo)
     }
 
@@ -392,10 +386,8 @@ struct EditorHistoryTests {
         try await pause()
         model.perform(.increaseSetting)
         try await pause()
-        withKnownIssue("RESP-09: each nudge is a step of its own") {
-            #expect(model.history.count == steps + 3)
-            #expect(model.history.suffix(3).map(\.title) == ["Exposure", "Contrast", "Contrast"])
-        }
+        #expect(model.history.count == steps + 3)
+        #expect(model.history.suffix(3).map(\.title) == ["Exposure", "Contrast", "Contrast"])
     }
 
     @Test func `a run of nudges cut short by another photo is saved in its own photo's history`() async throws {
@@ -415,11 +407,9 @@ struct EditorHistoryTests {
         try await open(editor.photo, in: model)
         try await eventually { !model.earlierSessions.isEmpty }
         #expect(spec.formatted(model.recipe[.exposure]) == after, "the run's values are saved either way")
-        withKnownIssue("RESP-09: a run open when another photo is selected is dropped from the history") {
-            let step = model.earlierSessions.first?.steps.last
-            #expect(step?.title == "Exposure")
-            #expect(step?.before == before)
-            #expect(step?.after == after)
-        }
+        let step = model.earlierSessions.first?.steps.last
+        #expect(step?.title == "Exposure")
+        #expect(step?.before == before)
+        #expect(step?.after == after)
     }
 }
