@@ -150,6 +150,7 @@ OWN_COLOR_MATH=(
     "RedlampEngineAPI/Sources/PointColor.swift|OKLCh's swatch colour, for the UI, which can't import RedlampColor"
     "RedlampMasking/Sources/RemovalRegion.swift|removal's, left to the removal work (RM-*)"
     "RedlampEngine/Sources/RedlampEngine+GenerativeFill.swift|generative fill's, left to the removal work (RM-*)"
+    "RedlampEngine/Sources/XTransDemosaic.swift|Markesteijn's sRGB-to-XYZ matrix for its CIELab homogeneity map, at LibRaw's precision (CAM-07)"
 )
 own_color_math() {
     local match=$1 entry
