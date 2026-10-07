@@ -217,6 +217,8 @@ final class PaletteSession {
         case let .compareLayout(layout): layout?.title ?? "Before / After off"
         case let .snapshot(id): model.snapshots.first { $0.id == id }?.name ?? "Snapshot"
         case let .historyStep(index): model.history.indices.contains(index) ? model.history[index].name : "Step"
+        case let .filterPreset(id): model.libraryFilters?.presets.first { $0.id == id }?.name ?? id
+        case let .customLabel(name): name
         }
     }
 
