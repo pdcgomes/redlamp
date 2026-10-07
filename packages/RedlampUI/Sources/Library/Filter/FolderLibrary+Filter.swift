@@ -32,9 +32,12 @@ extension FolderLibrary {
             ids.append(photoIDs.indices.contains(before) ? photoIDs[before] : newPhotoIDs(1).lowerBound)
         }
         let unchanged = carried && ordered.diff.isEmpty
+        // Freeing tens of thousands of photos takes milliseconds: the list replaced goes off the main thread.
+        let replaced = (items, positions)
         items = ordered.items
         positions = ordered.positions
         photoIDs = ids
+        scheduler.submit(.background) { withExtendedLifetime(replaced) {} }
         isListing = false
         isOpenFolderUnavailable = false
         if opened != nil {
