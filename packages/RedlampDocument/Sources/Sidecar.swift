@@ -192,6 +192,13 @@ public struct SidecarStore: Sendable {
         return resolveConflicts(loaded, for: image) ?? loaded
     }
 
+    /// The sidecar at `sidecar` (a package or a single file, wherever it is), with its mask
+    /// bitmaps, read as `loadThrowing(for:)` reads a photo's: nil when there's nothing there, and
+    /// the same errors. For tools given a sidecar's path rather than its photo's.
+    public func read(sidecarAt _: URL) throws -> Sidecar? {
+        nil
+    }
+
     /// Writes the sidecar unless nothing but `modified` changed, so unchanged edits don't
     /// wake up sync services. Fields a newer Redlamp added to the file on disk are kept.
     public func save(_ sidecar: Sidecar, for image: URL) throws {

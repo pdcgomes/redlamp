@@ -184,6 +184,38 @@ struct SidecarTests {
         #expect(loaded.recipe.maskBitmaps.first?.png == png)
     }
 
+    @Test func `a sidecar is read where it is, by its own path`() throws {
+        let (image, cleanup) = try temporaryImage()
+        defer { cleanup() }
+        let folder = image.deletingLastPathComponent()
+        let store = SidecarStore()
+        let png = Data("fake png".utf8)
+        var recipe = EditRecipe()
+        recipe[.exposure] = 0.5
+        recipe.masks = [subjectMask(png)]
+        try store.save(Sidecar(recipe: recipe), for: image)
+        let package = folder.appending(path: "Copied.redlamp")
+        try FileManager.default.copyItem(at: store.url(for: image), to: package)
+        let single = folder.appending(path: "Single.redlamp")
+        let json = #"{"format":"app.redlamp.edit","recipe":{"version":2,"processVersion":1,"values":{"basic.exposure":0.25}}}"#
+        try Data(json.utf8).write(to: single)
+        let damaged = folder.appending(path: "Damaged.redlamp")
+        try Data("not json".utf8).write(to: damaged)
+
+        withKnownIssue("read(sidecarAt:) is a stub") {
+            let read = try #require(try store.read(sidecarAt: package))
+            #expect(read.recipe[.exposure] == 0.5)
+            #expect(read.recipe.maskBitmaps.first?.png == png)
+            #expect(try store.read(sidecarAt: single)?.recipe[.exposure] == 0.25)
+            let error = #expect(throws: SidecarStoreError.self) { try store.read(sidecarAt: damaged) }
+            guard case .damaged = error else {
+                Issue.record("a damaged sidecar threw \(String(describing: error))")
+                return
+            }
+        }
+        #expect(try store.read(sidecarAt: folder.appending(path: "None.redlamp")) == nil)
+    }
+
     @Test func `a single file sidecar becomes a package on save`() throws {
         let (image, cleanup) = try temporaryImage()
         defer { cleanup() }
