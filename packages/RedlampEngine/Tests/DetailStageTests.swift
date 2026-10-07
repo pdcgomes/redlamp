@@ -406,6 +406,33 @@ struct DetailStageTests {
         }
     }
 
+    /// Moving to another photo lets go of what the stage kept for the one before, and of its
+    /// session, even when the new photo needs none of the stage.
+    @Test func `moving to another photo lets go of the last one's textures and session`() throws {
+        let stage = DetailStage(device: device, kernels: kernels)
+        weak var first: ImageSession?
+        try autoreleasepool {
+            let session = try makeSession(.bayer, width: 640, height: 480) { x, y in
+                Float(0.2 + 0.1 * sin(Double(x) / 3) * cos(Double(y) / 5))
+            }
+            first = session
+            _ = try processAndRead(stage, session, Self.everyPassBeforeLadder)
+        }
+        #expect(!stage.ladderCache.heldTextures.isEmpty)
+        let other = try makeSession(.bayer, width: 512, height: 384)
+        let commands = try #require(queue.makeCommandBuffer())
+        let output = try stage.process(
+            Self.untouched, session: other, region: .full, outputSize: other.orientedSize, commands: commands,
+        )
+        commands.commit()
+        commands.waitUntilCompleted()
+        #expect(output == nil)
+        withKnownIssue("PIPE-14: the stage keeps the last photo's textures and session") {
+            #expect(stage.ladderCache.heldTextures.isEmpty && stage.cachedOutputs.isEmpty)
+            #expect(first == nil, "the first photo's session is still held")
+        }
+    }
+
     /// Noise reduction reads only the masks that set Noise, and only that amount, so dragging a
     /// mask's Texture, Clarity or Sharpness reads the kept source or ladder; its Noise doesn't.
     @Test(arguments: [10, EditRecipe.currentProcessVersion])
