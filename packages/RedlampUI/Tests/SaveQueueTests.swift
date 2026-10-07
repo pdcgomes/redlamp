@@ -32,8 +32,11 @@ struct SaveQueueTests {
         }
     }
 
+    /// Opening reads the sidecar once the photo's saves on their way are on disk, which on a busy Mac can take
+    /// seconds: the open is waited for from then.
     private func open(_ url: URL, in model: EditorModel) async throws {
         model.select(url)
+        await model.saves.wait(for: url)
         try await eventually { model.info?.url == url }
         try #require(model.info?.url == url)
     }
@@ -76,6 +79,28 @@ struct SaveQueueTests {
             try await Task.sleep(for: .milliseconds(300))
         }
         #expect(folder.saved != nil, "saved while the edits went on")
+    }
+
+    @Test func `edits that never pause are saved within the maximum wait`() async throws {
+        let folder = try Folder()
+        defer { folder.remove() }
+        let model = EditorModel(engine: StubEngine())
+        try await open(folder.photo, in: model)
+
+        let start = ContinuousClock.now
+        var saved: Duration?
+        for step in 1 ... 20 where saved == nil {
+            model.setValue(.exposure, Double(step) / 10)
+            try await Task.sleep(for: .milliseconds(300))
+            // Asked of the save queue, or written already: the wait is the editor's, the write the disk's.
+            if model.saves.isPending(folder.photo) || folder.saved != nil {
+                saved = .now - start
+            }
+        }
+        let after = try #require(saved, "saved while the edits went on")
+        #expect(after <= .milliseconds(2500))
+        await model.saves.wait(for: folder.photo)
+        #expect(folder.saved != nil, "on disk")
     }
 
     @Test func `a drag is saved once it pauses`() async throws {

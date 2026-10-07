@@ -471,8 +471,11 @@ struct StaleResultTests {
         model = EditorModel(engine: engine)
     }
 
+    /// Opening reads the sidecar once the photo's saves on their way are on disk, which on a busy Mac can take
+    /// seconds: the open is waited for from then.
     private func open(_ url: URL, for analysis: Analysis) async throws {
         model.select(url)
+        await model.saves.wait(for: url)
         try await eventually { model.info?.url == url }
         try #require(model.info?.url == url)
         analysis.rearm(model)
