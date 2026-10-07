@@ -106,6 +106,8 @@ struct ExportSheetTests {
         #expect(window.frame.contains(sheet.frame), "\(sheet.frame) hangs past \(window.frame)")
         window.endSheet(sheet)
 
+        // macOS keeps a window on screen within the screen, and CI's runner's is shorter than this.
+        window.orderOut(nil)
         window.setContentSize(CGSize(width: 1600, height: 1000))
         try await settle(window)
         #expect(window.sheetHeight(fitting: ExportSheet.size.height) == ExportSheet.size.height)
