@@ -177,4 +177,52 @@ struct DuplicateConfirmationTests {
         let again = try await sandbox.finder().confirm(candidates)
         #expect(again.hashed == 3 && again.reused == 5 && again.duplicates.count == 4)
     }
+
+    @Test func `a copy a batch can bring back keeps its hash, and loses it once none can`() async throws {
+        let sandbox = try await DuplicateSandbox.make()
+        defer { sandbox.remove() }
+        let x = duplicateBytes(150_000, seed: 90)
+        try sandbox.write("A/X.JPG", x, modified: 0)
+        try sandbox.write("B/X.JPG", x, modified: 10)
+        try await sandbox.indexAll()
+        let (a, b) = try await (sandbox.id("A/X.JPG"), sandbox.id("B/X.JPG"))
+        func hashed() async throws -> Set<Int64> {
+            try await sandbox.index.read { reader in
+                try Set(reader.database.prepare("SELECT photo FROM photo_hashes").map { $0.int64(at: 0) })
+            }
+        }
+        let operations = sandbox.operations()
+        let finder = sandbox.finder(sandbox.fileSystem)
+        let review = try await finder.review(finder.confirm(finder.candidates(), operations: operations))
+        #expect(try await hashed() == [a, b])
+        let plan = try DuplicateRemovalPlan(review, removing: [b])
+
+        #expect(try await finder.trash(
+            plan,
+            finder.trashBatch(for: plan, operations: operations),
+            operations: operations,
+        )
+        .isFinished)
+        let alone = try await finder.confirm(finder.candidates(), operations: operations)
+        #expect(alone.groups.isEmpty)
+        #expect(try await hashed() == [a, b], "Undo can bring B back under its ID")
+
+        try await operations.undo()
+        let counting = CountingFileSystem()
+        let back = try await sandbox.finder(counting).confirm(finder.candidates(), operations: operations)
+        #expect(back.hashed == 0 && back.reused == 2 && counting.counts.read == 0, "B's hash stood, so B wasn't read")
+        #expect(back.duplicates.map(\.photos) == [[a, b].sorted()])
+
+        #expect(try await finder.trash(
+            plan,
+            finder.trashBatch(for: plan, operations: operations),
+            operations: operations,
+        )
+        .isFinished)
+        _ = try await finder.confirm(finder.candidates())
+        #expect(try await hashed() == [a, b], "without the file operations, no hash goes")
+        try FileManager.default.removeItem(at: sandbox.indexFolder.appending(path: "File Operations"))
+        _ = try await finder.confirm(finder.candidates(), operations: operations)
+        #expect(try await hashed() == [a], "with no journal, nothing can bring B back")
+    }
 }

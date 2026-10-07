@@ -10,11 +10,17 @@ public extension DuplicateFinder {
     /// are left unconfirmed; so is a photo with no other in its group to compare it with. With
     /// `readingFiles` false, no disk is touched: what the index's recorded hashes say is all there is.
     ///
+    /// Reading files, it first removes the hashes of photos the index no longer has that no batch of
+    /// `operations` can bring back (`FileOperations.removeUnrestorable`), in the batches' turn, so a
+    /// copy Undo or Put Back returns keeps its hash; without `operations` it removes none, leaving them
+    /// to the file operations' sweep. Not for a check `operations` runs before one of its batches.
+    ///
     /// `progress` is called from any thread as candidates are done. Cancelling the calling task
     /// stops it once the files being read are done, keeping their hashes, and throws
     /// `CancellationError`.
     func confirm(
-        _ candidates: DuplicateCandidates, readingFiles: Bool = true, progress: (@Sendable (Progress) -> Void)? = nil,
+        _ candidates: DuplicateCandidates, readingFiles: Bool = true, operations: FileOperations? = nil,
+        progress: (@Sendable (Progress) -> Void)? = nil,
     ) async throws -> DuplicateConfirmation {
         let started = ContinuousClock.now
         let photos = candidates.groups.flatMap(\.photos)
@@ -58,7 +64,7 @@ public extension DuplicateFinder {
         run.start(unread)
 
         if readingFiles {
-            try await index.write { try $0.removeOrphanedPhotoHashes() }
+            try await operations?.removeUnrestorable()
             let byVolume = Dictionary(grouping: unread) { $0.volume }
             await withTaskGroup(of: Void.self) { group in
                 for (volume, rows) in byVolume {
