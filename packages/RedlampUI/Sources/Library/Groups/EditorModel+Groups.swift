@@ -3,8 +3,9 @@ import RedlampLibrary
 
 /// Group By in the Library grid (LIB-41): the key and moments' Tighter–Looser setting, kept with each
 /// source's view; groups opened and closed, by their headers, the menus and the palette; ⌥← and ⌥→ to the
-/// first photo of the group before or after the active photo's; and ← and →, in the grid, the loupe, Develop
-/// and the filmstrip, through the photos in the grid's order, leaving out closed groups' photos.
+/// first photo of the group before or after the active photo's; the moments without a pick; and ← and →,
+/// in the grid, the loupe, Develop and the filmstrip, through the photos in the grid's order, leaving out
+/// closed groups' photos.
 public extension EditorModel {
     /// Whether the source can be grouped: it's shown from the library, whose column store grouping reads.
     var canGroupPhotos: Bool {
@@ -34,6 +35,15 @@ public extension EditorModel {
 
     func closeAllGroups() {
         gridGroups.closeAll()
+    }
+
+    /// Only the moments without a pick open, or every group again.
+    func showUnpickedMoments(_ show: Bool) {
+        gridGroups.showUnpicked(show)
+    }
+
+    var showsUnpickedMoments: Bool {
+        gridGroups.showsUnpicked
     }
 
     /// ⌥← and ⌥→: the first photo of the group before or after the active photo's, alone, its group opened if
@@ -191,6 +201,9 @@ extension EditorModel {
         case .closeAllGroups:
             guard canPerformGroupShortcut(action) == true else { return false }
             closeAllGroups()
+        case .unpickedMoments:
+            guard gridGroups.coverage != nil else { return false }
+            showUnpickedMoments(!gridGroups.showsUnpicked)
         case .previousGroup, .nextGroup:
             return moveToGroup(by: action == .nextGroup ? 1 : -1)
         case .previousPhoto, .nextPhoto:
@@ -225,6 +238,7 @@ extension EditorModel {
         case .toggleGroup: return activeGroup != nil
         case .openAllGroups: return list.map { list in list.groups.indices.contains { !list.isOpen($0) } } ?? false
         case .closeAllGroups: return list.map { list in list.groups.indices.contains(where: list.isOpen) } ?? false
+        case .unpickedMoments: return groups.coverage != nil
         case .previousGroup, .nextGroup: return groupBeside(by: action == .nextGroup ? 1 : -1) != nil
         case .previousPhoto, .nextPhoto:
             guard list != nil else { return nil }

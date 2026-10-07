@@ -114,6 +114,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case reverseSort
     case groupByNone, groupByMoment, groupByDay, groupByFolder, groupByCamera, groupByLens, groupByOrientation
     case groupByMomentCamera, tighterMoments, looserMoments, toggleGroup, openAllGroups, closeAllGroups
+    case unpickedMoments
 
     // View
     case beforeAfter, nextCompareLayout, previousCompareLayout
@@ -169,7 +170,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
              .sortByRating, .sortByEditTime, .sortByModified, .sortByFileSize, .reverseSort,
              .groupByNone, .groupByMoment, .groupByDay, .groupByFolder, .groupByCamera, .groupByLens,
              .groupByOrientation, .groupByMomentCamera, .tighterMoments, .looserMoments, .toggleGroup,
-             .openAllGroups, .closeAllGroups:
+             .openAllGroups, .closeAllGroups, .unpickedMoments:
             .library
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout,
              .toggleZoom, .zoomIn, .zoomOut, .clipping, .rawClipping, .colorAssessment, .labReadout, .infoOverlay,
@@ -246,6 +247,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .toggleGroup: "Open / Close Group"
         case .openAllGroups: "Open All Groups"
         case .closeAllGroups: "Close All Groups"
+        case .unpickedMoments: "Only Moments without a Pick"
         case .beforeAfter: "Before / After"
         case .nextCompareLayout: "Next Before / After Layout"
         case .previousCompareLayout: "Previous Before / After Layout"
@@ -381,7 +383,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         // Lightroom Classic has no Group By; its menus, the grid's toolbar and headers, and the palette have them.
         case .groupByNone, .groupByMoment, .groupByDay, .groupByFolder, .groupByCamera, .groupByLens,
              .groupByOrientation, .groupByMomentCamera, .tighterMoments, .looserMoments, .toggleGroup, .openAllGroups,
-             .closeAllGroups: []
+             .closeAllGroups, .unpickedMoments: []
         case .beforeAfter: [.char("\\")]
         case .nextCompareLayout: [.char("y")]
         case .previousCompareLayout: [.char("y", shift: true)]

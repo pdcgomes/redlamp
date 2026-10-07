@@ -13,8 +13,8 @@ import UniformTypeIdentifiers
 /// Group By in the Library grid (LIB-41), over a folder the library has indexed: each key's groups, counts and
 /// picks as the library makes them, each a header in the grid; groups opened and closed with the selection and
 /// the active photo kept and the grid's cells moved rather than reloaded; ⌥← and ⌥→, and ← and → past closed
-/// groups; moments' Tighter–Looser setting; Group By and the setting kept with each source; and the filter bar's
-/// orientation column and completions.
+/// groups; moments' Tighter–Looser setting; Group By and the setting kept with each source; the moments without a
+/// pick; and the filter bar's orientation column and completions.
 @MainActor
 struct LibraryGroupsTests {
     /// A photo of the folder: when it was taken, seconds after 10:00 on 14 June 2024 by the camera's clock (nil
@@ -419,6 +419,28 @@ struct LibraryGroupsTests {
         #expect(again.groupKey == .lens && again.looseness == MomentSetting.loosest)
         again.setGroupKey(.day)
         #expect(again.restore("/Somewhere")?.group == .lens && again.groupKey == .lens)
+    }
+
+    @Test func `the moments without a pick are counted, and shown alone`() async throws {
+        defer { cleanUp() }
+        let (model, _, window) = try await open()
+        defer { window.contentView = nil }
+        try await group(model, by: .moment)
+        #expect(model.gridGroups.coverage == LibraryGroups.Coverage(unpicked: 3, moments: 5))
+        #expect(model.canPerform(.unpickedMoments) && model.perform(.unpickedMoments))
+        #expect(model.gridGroups.showsUnpicked)
+        #expect(model.gridGroups.list.map { list in list.groups.indices.filter(list.isOpen) } == [1, 2, 4])
+        try model.select(url(model, "B01.JPG"))
+        model.cull(.flag(.pick))
+        try await eventually { model.gridGroups.coverage?.unpicked == 2 }
+        #expect(model.gridGroups.coverage == LibraryGroups.Coverage(unpicked: 2, moments: 5))
+        #expect(model.gridGroups.picks[1] == 1)
+        model.perform(.unpickedMoments)
+        #expect(!model.gridGroups.showsUnpicked && model.gridGroups.list.map { list in
+            list.groups.indices.allSatisfy(list.isOpen)
+        } == true)
+        try await group(model, by: .camera)
+        #expect(model.gridGroups.coverage == nil && !model.canPerform(.unpickedMoments))
     }
 
     // MARK: - Orientation in the filter bar

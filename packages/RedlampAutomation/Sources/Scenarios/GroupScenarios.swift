@@ -5,15 +5,14 @@
     @_spi(Harness) import RedlampUI
 
     extension ActionCheck {
-        /// A Group By action, in the Library grid shown from the library: ungrouped for a key, grouped by day for
-        /// Group by Camera and by camera for No Grouping and the groups' own actions, by moment for the moments'
-        /// setting; the first photo of the first or second group active for ⌥→ and ⌥←, and every group closed
-        /// for Open All Groups. Ungrouped and in Develop afterwards.
+        /// A Group By action, in the Library grid shown from the library: grouped by camera, or by moment for
+        /// the moments' own; the first photo of the second group active for ⌥←, and every group closed for
+        /// Open All Groups. Ungrouped and in Develop afterwards.
         static func groups(_ action: ShortcutAction) -> ActionCheck {
             ActionCheck(action: action, setUp: { app in
                 let key: GroupKey = switch action {
                 case .groupByCamera, .groupByNone: action == .groupByNone ? .camera : .day
-                case .tighterMoments, .looserMoments: .moment
+                case .tighterMoments, .looserMoments, .unpickedMoments: .moment
                 default: action.groupKey == nil ? .camera : .ungrouped
                 }
                 try app.showGroups(by: key)
@@ -97,13 +96,13 @@
     }
 
     enum GroupScenarios {
-        static let all: [Scenario] = [groupBy, openAndClose, moving, setting]
+        static let all: [Scenario] = [groupBy, openAndClose, moving, setting, unpicked]
 
         /// What the group actions change, for their checks.
         @MainActor static func state(_ model: EditorModel) -> String {
             let groups = model.gridGroups
             let open = groups.list.map { list in list.groups.indices.count(where: list.isOpen) } ?? -1
-            return "\(model.libraryViews.groupKey) \(model.libraryViews.looseness) \(open) "
+            return "\(model.libraryViews.groupKey) \(model.libraryViews.looseness) \(open) \(groups.showsUnpicked) "
                 + (model.selection?.lastPathComponent ?? "")
         }
 
@@ -301,6 +300,30 @@
                 model.setLooseness(0)
                 model.setGroupKey(.ungrouped)
             }
+            try app.backToDevelop()
+        }
+
+        static let unpicked = Scenario(
+            "library.moments-unpicked",
+            "Grouped by moment, the toolbar counts the moments without a pick, and it and the View menu show "
+                + "those moments alone and every moment again",
+            claims: [.action(.unpickedMoments), .feature("library.grid")],
+        ) { app in
+            try app.showGroups(by: .moment)
+            try app.wait("the moments counted") { $0.gridGroups.coverage != nil }
+            let coverage = try app.main { $0.gridGroups.coverage }
+            try app.clickView("library.toolbar.unpicked")
+            try app.wait("only the moments without a pick open") { $0.gridGroups.showsUnpicked }
+            let open = try app.main { model in
+                model.gridGroups.list.map { list in list.groups.indices.count(where: list.isOpen) } ?? 0
+            }
+            try app.expect(
+                open == coverage?.unpicked, "\(open) moments open of \(String(describing: coverage)) without a pick",
+            )
+            app.covered(.feature("library.grid"), via: .mouse)
+            try app.choose(.unpickedMoments)
+            try app.wait("every moment again") { !$0.gridGroups.showsUnpicked }
+            try app.main { $0.setGroupKey(.ungrouped) }
             try app.backToDevelop()
         }
     }

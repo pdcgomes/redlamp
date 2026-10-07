@@ -141,6 +141,7 @@ struct AppCommands: Commands {
                 Divider()
                 item(.tighterMoments)
                 item(.looserMoments)
+                toggle(.unpickedMoments, isOn: model.showsUnpickedMoments)
                 Divider()
                 item(.toggleGroup)
                 item(.openAllGroups)

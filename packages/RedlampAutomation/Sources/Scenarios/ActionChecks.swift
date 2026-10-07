@@ -101,7 +101,7 @@
                 filter(action)
             case .groupByNone, .groupByMoment, .groupByDay, .groupByFolder, .groupByCamera, .groupByLens,
                  .groupByOrientation, .groupByMomentCamera, .tighterMoments, .looserMoments, .toggleGroup,
-                 .openAllGroups, .closeAllGroups, .previousGroup, .nextGroup:
+                 .openAllGroups, .closeAllGroups, .unpickedMoments, .previousGroup, .nextGroup:
                 groups(action)
             case .showInFinder:
                 ActionCheck(action: action, setUp: { app in

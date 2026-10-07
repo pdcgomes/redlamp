@@ -26,6 +26,13 @@ import RedlampLibrary
         case headers(IndexSet)
     }
 
+    /// How many of the list's moments have no pick, while grouped by moment: the photos without a capture
+    /// time count as one more moment, as `MomentCoverage` counts them.
+    @_spi(Harness) public struct Coverage: Equatable, Sendable {
+        @_spi(Harness) public var unpicked: Int
+        @_spi(Harness) public var moments: Int
+    }
+
     @ObservationIgnored private weak var model: EditorModel?
     /// The source's photos in their groups; nil while ungrouped, without the library, and until the first
     /// grouping is in.
@@ -34,6 +41,9 @@ import RedlampLibrary
     @ObservationIgnored @_spi(Harness) public private(set) var picks: [Int] = []
     /// Bumped by every change, for the views showing the groups' counts.
     @_spi(Harness) public private(set) var revision = 0
+    @_spi(Harness) public private(set) var coverage: Coverage?
+    /// Only the moments without a pick are open (`showUnpicked`).
+    @_spi(Harness) public private(set) var showsUnpicked = false
     /// Whether groups the list gains come open: not after Close All Groups.
     @ObservationIgnored private var opensNew = true
     @ObservationIgnored private var observers: [UUID: @MainActor (Change) -> Void] = [:]
@@ -92,6 +102,7 @@ import RedlampLibrary
         guard let model, let wanted, let core = model.library.service?.core else {
             pending = false
             if list != nil {
+                showsUnpicked = false
                 set(nil)
             }
             return
@@ -202,6 +213,7 @@ import RedlampLibrary
             Self.open(&grouped, as: old, opensNew: opensNew)
         } else {
             opensNew = true
+            showsUnpicked = false
         }
         set(grouped)
     }
@@ -276,6 +288,7 @@ import RedlampLibrary
     private func countPicks() {
         guard let list, let model else {
             picks = []
+            coverage = nil
             return
         }
         let library = model.library
@@ -285,6 +298,7 @@ import RedlampLibrary
                 count + (photos.index(of: id).map { items[$0].metadata.flag == .pick ? 1 : 0 } ?? 0)
             }
         }
+        updateCoverage()
     }
 
     /// The badges of these rows changed: their groups' picks are counted again.
@@ -309,7 +323,38 @@ import RedlampLibrary
             }
         }
         guard !changed.isEmpty else { return }
+        updateCoverage()
         self.changed(.headers(changed))
+    }
+
+    private func updateCoverage() {
+        guard let list, let moments = momentOfGroup(list.groups) else {
+            coverage = nil
+            return
+        }
+        var picked: [Int?: Bool] = [:]
+        for (group, moment) in moments.enumerated() {
+            picked[moment, default: false] = picked[moment, default: false] || picks[group] > 0
+        }
+        let next = Coverage(unpicked: picked.values.count { !$0 }, moments: picked.count)
+        if next != coverage {
+            coverage = next
+        }
+    }
+
+    /// Each group's moment, nil for the photos without a capture time, while grouped by moment; nil for
+    /// other keys.
+    private func momentOfGroup(_ groups: PhotoGroups) -> [Int?]? {
+        switch groups.key {
+        case .moment, .momentCamera:
+            groups.map { group -> Int? in
+                switch group.value {
+                case let .moment(moment), let .momentCamera(moment, _): moment
+                default: nil
+                }
+            }
+        default: nil
+        }
     }
 
     // MARK: - Opening and closing
@@ -349,6 +394,7 @@ import RedlampLibrary
     @_spi(Harness) public func openAll() {
         guard var grouped = list else { return }
         opensNew = true
+        showsUnpicked = false
         let diff = grouped.openAll()
         list = grouped
         changed(.items(diff))
@@ -357,10 +403,30 @@ import RedlampLibrary
     @_spi(Harness) public func closeAll() {
         guard var grouped = list else { return }
         opensNew = false
+        showsUnpicked = false
         let diff = grouped.closeAll()
         list = grouped
         model?.deselectClosed(in: grouped)
         changed(.items(diff))
+    }
+
+    /// Only the moments without a pick open, the others closed, as the library's coverage finds them; off,
+    /// every group open again.
+    func showUnpicked(_ show: Bool) {
+        guard var grouped = list, let moments = momentOfGroup(grouped.groups) else { return }
+        guard show else { return openAll() }
+        var picked: [Int?: Bool] = [:]
+        for (group, moment) in moments.enumerated() {
+            picked[moment, default: false] = picked[moment, default: false] || picks[group] > 0
+        }
+        grouped.openAll()
+        for (group, moment) in moments.enumerated() where picked[moment] == true {
+            grouped.close(group)
+        }
+        list = grouped
+        showsUnpicked = true
+        model?.deselectClosed(in: grouped)
+        changed(.regrouped)
     }
 
     /// The active photo became one in a closed group, by a click in the filmstrip or a step that isn't the

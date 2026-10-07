@@ -6,8 +6,8 @@ import RedlampLibrary
 /// loupe, the cell style and the thumbnail size in the grid or the zoom in the loupe, and the photo in
 /// Develop or in Finder. Each button's tooltip names its key. Its controls act on the press itself, as
 /// the module picker does, rather than tracking the mouse as AppKit's controls do. In the grid, Group By
-/// (LIB-41) and, grouped by moment, the Tighter–Looser slider are AppKit's own controls until the library's
-/// polish phase (LIB-45).
+/// (LIB-41) and, grouped by moment, the Tighter–Looser slider and the moments without a pick are AppKit's
+/// own controls until the library's polish phase (LIB-45).
 final class LibraryToolbarView: NSView {
     static let height: CGFloat = 30
 
@@ -27,6 +27,7 @@ final class LibraryToolbarView: NSView {
     )
     private let tighter = NSTextField(labelWithString: "Tighter")
     private let looser = NSTextField(labelWithString: "Looser")
+    private let unpicked = NSButton(title: "", target: nil, action: nil)
     private var trackers: [Tracker] = []
 
     init(model: EditorModel) {
@@ -115,7 +116,14 @@ final class LibraryToolbarView: NSView {
             label.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
             label.textColor = .secondaryLabelColor
         }
-        for view in [groupBy, looseness, tighter, looser] as [NSView] {
+        unpicked.controlSize = .small
+        unpicked.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        unpicked.setButtonType(.pushOnPushOff)
+        unpicked.bezelStyle = .push
+        unpicked.toolTip = ShortcutAction.unpickedMoments.title
+        unpicked.setAccessibilityIdentifier("library.toolbar.unpicked")
+        unpicked.onAction { _ in model.perform(.unpickedMoments) }
+        for view in [groupBy, looseness, tighter, looser, unpicked] as [NSView] {
             addSubview(view)
         }
     }
@@ -123,6 +131,8 @@ final class LibraryToolbarView: NSView {
     /// Group By's controls as the grid's view and its groups have them now.
     private func updateGroups(inGrid: Bool) {
         let state = model.libraryViews
+        let groups = model.gridGroups
+        _ = groups.revision
         let index = GroupKey.allCases.firstIndex(of: state.groupKey) ?? 0
         if groupBy.indexOfSelectedItem != index {
             groupBy.selectItem(at: index)
@@ -136,6 +146,14 @@ final class LibraryToolbarView: NSView {
         if Int(looseness.doubleValue.rounded()) != state.looseness {
             looseness.doubleValue = Double(state.looseness)
         }
+        let coverage = groups.coverage
+        unpicked.isHidden = !moments || coverage == nil
+        if let coverage {
+            unpicked.title = "\(coverage.unpicked.formatted()) of \(coverage.moments.formatted()) "
+                + "\(coverage.moments == 1 ? "moment" : "moments") without a pick"
+            unpicked.setAccessibilityLabel(unpicked.title)
+        }
+        unpicked.state = groups.showsUnpicked ? .on : .off
     }
 
     override var isFlipped: Bool {
@@ -196,6 +214,10 @@ final class LibraryToolbarView: NSView {
                     place(view, width: width)
                     x += 2
                 }
+            }
+            if !unpicked.isHidden {
+                x += 8
+                place(unpicked, width: max(unpicked.intrinsicContentSize.width, 120))
             }
         } else {
             place(fit, width: 40)
