@@ -169,11 +169,7 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
             model.folder == nil ? "" : shown == total
                 ? "\(total.formatted()) photos" : "\(shown.formatted()) of \(total.formatted()) photos",
         )
-        set(
-            note,
-            model.folder != nil && !model.library.isShownFromLibrary && !filters.filter.isEmpty
-                ? "Filters apply once the library has indexed this folder" : "",
-        )
+        set(note, model.libraryFilterNote)
         let offer = filters.removal.map { removal in
             let photos = removal.count == 1 ? "1 photo" : "\(removal.count.formatted()) photos"
             return (
@@ -455,6 +451,18 @@ extension LibraryFilterBarView {
         default: nil
         }
         return key.map { handle($0) } ?? false
+    }
+}
+
+extension EditorModel {
+    /// The note beside the filter bar's count: while the library opens, what its search waits for; with
+    /// a filter on a folder the library hasn't indexed, that filters wait for it.
+    var libraryFilterNote: String {
+        if let waiting = library.libraryWaiting {
+            return "\(waiting)…"
+        }
+        guard folder != nil, !library.isShownFromLibrary, libraryFilters?.filter.isEmpty == false else { return "" }
+        return "Filters apply once the library has indexed this folder"
     }
 }
 

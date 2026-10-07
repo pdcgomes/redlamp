@@ -194,14 +194,17 @@ struct LibraryLaunchTests {
         let waiting = library.libraryWaiting
         let settings = LibrarySettingsModel(library: service).status
         let nothing = palette.nothingFound
+        let note = model.libraryFilterNote
         try holder.execute("COMMIT")
         #expect(waiting?.contains("being updated for this version of Redlamp") == true)
         #expect(settings.hasPrefix("Being updated for this version of Redlamp. Search waits"))
         #expect(nothing.hasPrefix("No matches for “zzz” yet. Waiting for the library's index"), "\(nothing)")
+        #expect(note.hasPrefix("Waiting for the library's index"), "the filter bar says so too: \(note)")
 
         try await eventually(seconds: 20) { service.isReady }
         #expect(service.isReady && !service.isUpdatingIndex && library.libraryWaiting == nil)
         #expect(palette.nothingFound == "No matches for “zzz”.")
+        #expect(model.libraryFilterNote.isEmpty)
         let version = try await #require(service.core).index.read { try $0.database.userVersion }
         #expect(version == LibraryCore.indexVersion)
     }
