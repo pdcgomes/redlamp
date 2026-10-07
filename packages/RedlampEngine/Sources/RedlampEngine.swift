@@ -62,6 +62,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     }
 
     let sessions: SessionCache
+    /// Lets go of cached sessions when the system runs short of memory.
+    private let memoryPressure: any DispatchSourceMemoryPressure
     private let openGeneration = Mutex<UInt64>(0)
     private let renderState = Mutex(RenderState())
     let stillLanes = Mutex(StillLanes())
@@ -150,10 +152,21 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
                 return try builder.build(SupportedFormats.isStack(url) ? stacks.decode(url) : decoder.decode(url))
             },
         )
+        let pressure = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .global())
+        pressure.setEventHandler { [weak sessions, weak pressure] in
+            guard let pressure else { return }
+            sessions?.relieve(pressure.data)
+        }
+        pressure.resume()
+        memoryPressure = pressure
         retouch.onRefresh = { [weak self] in
             guard let latest = self?.renderState.withLock({ $0.latest }) else { return }
             self?.render(latest)
         }
+    }
+
+    deinit {
+        memoryPressure.cancel()
     }
 
     // MARK: - Opening

@@ -176,6 +176,17 @@ final class ImageSession: @unchecked Sendable {
         )
     }
 
+    /// What the session holds: each of its textures once, and its analysis copy.
+    var allocatedBytes: Int {
+        var textures: [any MTLTexture] = [
+            pyramid, hazeMap, refinedHaze, toneBase, clarityBase, glowSource, glowLights, noiseGain,
+        ]
+        textures += [hueSatMaps?.cool, hueSatMaps?.warm, gainTableMap?.texture].compactMap(\.self)
+        var seen = Set<ObjectIdentifier>()
+        return textures.filter { seen.insert(ObjectIdentifier($0)).inserted }.map(\.allocatedSize).reduce(0, +)
+            + analysis.pixels.count * MemoryLayout<SIMD3<Float>>.stride
+    }
+
     /// Per-channel gains that move the as-shot balance to the requested white balance.
     func whiteBalanceRatio(for recipe: EditRecipe) -> SIMD3<Double> {
         guard isRaw, recipe.whiteBalanceMode != .asShot, let colorModel else { return SIMD3(1, 1, 1) }

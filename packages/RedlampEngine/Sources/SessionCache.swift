@@ -5,8 +5,9 @@ import Synchronization
 ///
 /// `wanted` lists the images to keep ready, most important first; the first is the one
 /// being opened. Decodes start in that order, a few at a time, and finished sessions stay
-/// cached within a byte budget, least recently used evicted first. Wanted sessions are
-/// never evicted.
+/// cached within a byte budget, least recently used evicted first. Wanted sessions go last,
+/// least wanted first, and are decoded only while they fit; the one being opened is kept
+/// whatever its size.
 final class SessionCache: Sendable {
     typealias Build = @Sendable (URL) throws -> ImageSession
     private typealias Waiter = CheckedContinuation<ImageSession, any Error>
@@ -35,6 +36,8 @@ final class SessionCache: Sendable {
         var wanted: [URL] = []
         var clock: UInt64 = 0
         var bytes = 0
+        /// What the latest decoded session held: the guess for one not decoded yet.
+        var typical = 0
 
         mutating func touch(_ url: URL) -> ImageSession? {
             guard var entry = ready[url] else { return nil }
@@ -46,27 +49,51 @@ final class SessionCache: Sendable {
 
         mutating func insert(_ session: ImageSession, for url: URL, budget: Int) {
             clock += 1
-            let size = session.pyramid.allocatedSize
+            let size = session.allocatedBytes
             ready[url] = Entry(session: session, bytes: size, lastUse: clock)
             bytes += size
+            typical = size
             while bytes > budget,
                   let oldest = ready.filter({ !wanted.contains($0.key) })
                   .min(by: { $0.value.lastUse < $1.value.lastUse }) {
-                ready[oldest.key] = nil
-                bytes -= oldest.value.bytes
+                remove(oldest.key)
+            }
+            for url in wanted.dropFirst().reversed() where bytes > budget {
+                remove(url)
             }
         }
 
-        mutating func schedule() -> Work {
+        mutating func remove(_ url: URL) {
+            if let entry = ready.removeValue(forKey: url) {
+                bytes -= entry.bytes
+            }
+        }
+
+        /// Lets go of every session but those of `kept`.
+        mutating func keep(only kept: some Sequence<URL>) {
+            let kept = Set(kept)
+            for url in Array(ready.keys) where !kept.contains(url) {
+                remove(url)
+            }
+        }
+
+        mutating func schedule(budget: Int) -> Work {
             var work = Work()
             // Nothing would ever finish these: they aren't decoding and nobody wants them.
             for (url, pending) in waiters where !decoding.contains(url) && !wanted.contains(url) {
                 waiters[url] = nil
                 work.resume += pending.map { ($0, .failure(CancellationError())) }
             }
-            for (index, url) in wanted.enumerated()
-                where ready[url] == nil && !decoding.contains(url) && !failed.contains(url) {
-                guard decoding.count < (index == 0 ? SessionCache.maxDecodes : SessionCache.maxPrefetchDecodes)
+            var planned = 0
+            for (index, url) in wanted.enumerated() where !failed.contains(url) {
+                planned += ready[url]?.bytes ?? typical
+                // Past the one being opened, only what fits: on a small budget the least wanted
+                // aren't decoded at all.
+                if index > 0, planned > budget {
+                    break
+                }
+                guard ready[url] == nil, !decoding.contains(url),
+                      decoding.count < (index == 0 ? SessionCache.maxDecodes : SessionCache.maxPrefetchDecodes)
                 else { continue }
                 decoding.insert(url)
                 work.start.append(url)
@@ -103,7 +130,7 @@ final class SessionCache: Sendable {
                 state.wanted.removeAll { $0 == url }
                 state.wanted.insert(url, at: 0)
                 state.waiters[url, default: []].append(continuation)
-                return state.schedule()
+                return state.schedule(budget: budget)
             }
             run(work)
         }
@@ -112,9 +139,7 @@ final class SessionCache: Sendable {
     /// Forgets `url`'s session, so the next request decodes the file again.
     func invalidate(_ url: URL) {
         state.withLock { state in
-            if let entry = state.ready.removeValue(forKey: url) {
-                state.bytes -= entry.bytes
-            }
+            state.remove(url)
             state.failed.remove(url)
         }
     }
@@ -124,14 +149,23 @@ final class SessionCache: Sendable {
         state.withLock { $0.bytes }
     }
 
-    /// Lets go of sessions when the system runs short of memory.
-    func relieve(_: DispatchSource.MemoryPressureEvent) {}
+    /// Lets go of sessions when the system runs short of memory: on a warning those not wanted,
+    /// when critical all but the one being opened. The next `prefetch` decodes them again.
+    func relieve(_ pressure: DispatchSource.MemoryPressureEvent) {
+        state.withLock { state in
+            if pressure.contains(.critical) {
+                state.keep(only: state.wanted.prefix(1))
+            } else if pressure.contains(.warning) {
+                state.keep(only: state.wanted)
+            }
+        }
+    }
 
     func prefetch(_ urls: [URL]) {
         let work = state.withLock { state -> Work in
             var seen = Set<URL>()
             state.wanted = urls.filter { seen.insert($0).inserted }
-            return state.schedule()
+            return state.schedule(budget: budget)
         }
         run(work)
     }
@@ -144,7 +178,7 @@ final class SessionCache: Sendable {
             case .failure: state.failed.insert(url)
             }
             let finished = state.waiters.removeValue(forKey: url) ?? []
-            var work = state.schedule()
+            var work = state.schedule(budget: budget)
             work.resume += finished.map { ($0, result) }
             return work
         }

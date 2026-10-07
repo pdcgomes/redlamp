@@ -69,9 +69,7 @@ struct SessionCacheTests {
         let cache = cache(budget: 1 << 40, building: building)
         _ = try await cache.session(for: Self.urls[0])
         let expected = try held(0)
-        withKnownIssue("MEM-04: the cache counts only the pyramid") {
-            #expect(cache.bytesCached == expected)
-        }
+        #expect(cache.bytesCached == expected)
     }
 
     @Test func `prefetches stay within the budget, the photo being opened first`() async throws {
@@ -81,10 +79,8 @@ struct SessionCacheTests {
             let cache = cache(budget: budget, building: building)
             cache.prefetch(Self.urls)
             try await settle(building)
-            withKnownIssue("MEM-04: wanted photos are never evicted") {
-                #expect(cachedIndices(cache) == kept)
-                #expect(cache.bytesCached <= max(budget, size))
-            }
+            #expect(cachedIndices(cache) == kept)
+            #expect(cache.bytesCached <= max(budget, size))
         }
     }
 
@@ -96,14 +92,10 @@ struct SessionCacheTests {
         try await settle(building)
         #expect(cachedIndices(cache) == [0, 1, 2, 3])
         cache.relieve(DispatchSource.MemoryPressureEvent.warning)
-        withKnownIssue("MEM-04: the cache doesn't answer memory pressure") {
-            #expect(cachedIndices(cache) == [0, 1, 2])
-        }
+        #expect(cachedIndices(cache) == [0, 1, 2])
         cache.relieve(DispatchSource.MemoryPressureEvent.critical)
         let expected = try held(0)
-        withKnownIssue("MEM-04: the cache doesn't answer memory pressure") {
-            #expect(cachedIndices(cache) == [0])
-            #expect(cache.bytesCached == expected)
-        }
+        #expect(cachedIndices(cache) == [0])
+        #expect(cache.bytesCached == expected)
     }
 }
