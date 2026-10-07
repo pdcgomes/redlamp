@@ -17,7 +17,9 @@ public extension ColumnStore {
     }
 
     /// Applies `changes`: removals first, then each upserted photo's row, written in place for a
-    /// photo the store holds and added for one it doesn't, then each order put right.
+    /// photo the store holds and added for one it doesn't, then each order put right. Each column and
+    /// order is written only where its values change, so the pages a change doesn't touch are never
+    /// copied.
     ///
     /// The store keeps no names, so `name` tells it the name of a photo it holds, to place the
     /// changed photos in the name order: it's asked about a few photos for each one, never about
@@ -43,10 +45,13 @@ public extension ColumnStore {
         }
         guard !placing.isEmpty || !leaving.isEmpty else { return }
         leaving.grow(to: rowCount)
-        for key in QuerySort.Key.allCases where !leaving.isEmpty && keepsOrder(key) {
-            var order = order(key)
-            order.removeAll { leaving.contains(Int($0)) }
-            setOrder(order, for: key)
+        var remaining: [QuerySort.Key: ContiguousArray<Int32>] = [:]
+        for key in QuerySort.Key.allCases where keepsOrder(key) {
+            remaining[key] = order(key).withUnsafeBufferPointer { order in
+                leaving
+                    .isEmpty ? ContiguousArray(order) :
+                    ContiguousArray(order.lazy.filter { !leaving.contains(Int($0)) })
+            }
         }
 
         let rows = placing.keys.sorted()
@@ -63,26 +68,33 @@ public extension ColumnStore {
             let (left, right) = try (key(ofRow: lhs), key(ofRow: rhs))
             return left == right ? ids[lhs] < ids[rhs] : left.lexicographicallyPrecedes(right)
         }
-        let names = byName
+        let names = remaining[.name] ?? []
         var placed: [(place: Int, row: Int)] = []
         for row in rows {
             try placed.append((Self.place(of: row, in: names, precedes: namePrecedes), row))
         }
         try placed.sort { try $0.place == $1.place ? namePrecedes($0.row, $1.row) : $0.place < $1.place }
-        setOrder(Self.inserting(placed, into: names), for: .name)
+        updateOrder(.name, to: Self.inserting(placed, into: names))
         renumberNames()
 
-        for sortKey in [QuerySort.Key.captured, .rating, .edited, .modified, .size] where keepsOrder(sortKey) {
-            let order = order(sortKey)
+        for sortKey in [QuerySort.Key.captured, .rating, .edited, .modified, .size] {
+            guard let order = remaining[sortKey] else { continue }
             var placed = rows.map { row in
                 (place: Self.place(of: row, in: order) { precedes($0, $1, by: sortKey) }, row: row)
             }
             placed.sort { $0.place == $1.place ? precedes($0.row, $1.row, by: sortKey) : $0.place < $1.place }
-            setOrder(Self.inserting(placed, into: order), for: sortKey)
+            updateOrder(sortKey, to: Self.inserting(placed, into: order))
         }
         if rowCount - count > max(1024, count / 4) {
             compact()
         }
+    }
+
+    /// Makes `key`'s order `rows`, writing only the pages where it changes.
+    private mutating func updateOrder(_ key: QuerySort.Key, to rows: ContiguousArray<Int32>) {
+        var order = order(key)
+        rows.withUnsafeBufferPointer { order.update(from: $0) }
+        setOrder(order, for: key)
     }
 }
 

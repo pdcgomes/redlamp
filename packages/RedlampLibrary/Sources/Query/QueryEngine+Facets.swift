@@ -218,8 +218,8 @@ extension ColumnStore {
 
     /// How many rows of `matches` have each value of `column`, by `index`, below `size`.
     @inline(__always)
-    private func counts<T: BinaryInteger>(
-        _ matches: RowBits, _ column: ContiguousArray<T>, size: Int, index: (T) -> Int = { Int($0) },
+    private func counts<T>(
+        _ matches: RowBits, _ column: StoreColumn<T>, size: Int, index: (T) -> Int = { Int($0) },
     ) throws -> [Int] {
         var counts = [Int](repeating: 0, count: max(size, 1))
         try counts.withUnsafeMutableBufferPointer { counts in

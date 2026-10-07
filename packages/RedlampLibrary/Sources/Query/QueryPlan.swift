@@ -375,7 +375,7 @@ extension ColumnStore {
     @inline(__always)
     private static func fill<T>(
         _ words: inout ContiguousArray<UInt64>,
-        _ column: ContiguousArray<T>,
+        _ column: StoreColumn<T>,
         _ test: (T) -> UInt64,
     ) {
         let rows = column.count
@@ -396,7 +396,8 @@ extension ColumnStore {
 
     @inline(__always)
     private static func fill(
-        _ words: inout ContiguousArray<UInt64>, _ column: ContiguousArray<some FixedWidthInteger & UnsignedInteger>,
+        _ words: inout ContiguousArray<UInt64>,
+        _ column: StoreColumn<some FixedWidthInteger & UnsignedInteger & Sendable>,
         within range: Range<Int64>,
     ) {
         let lower = UInt64(max(range.lowerBound, 0))
@@ -424,7 +425,7 @@ extension ColumnStore {
     /// `matches` to `ids` until `limit` of them are there or `places` places are passed; returns
     /// where it stopped.
     func collect(
-        _ matches: RowBits, in order: ContiguousArray<Int32>, ascending: Bool, from start: Int, limit: Int, places: Int,
+        _ matches: RowBits, in order: StoreColumn<Int32>, ascending: Bool, from start: Int, limit: Int, places: Int,
         into ids: inout ContiguousArray<Int64>,
     ) -> Int {
         let end = min(order.count, start + places)

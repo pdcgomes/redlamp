@@ -181,7 +181,7 @@ extension LibraryGrouping {
 
     /// Each photo's code from its row's value in `column`, by place: `Int64.min` for a photo the store
     /// doesn't hold.
-    func column<T>(_ rows: ContiguousArray<Int32>, _ column: ContiguousArray<T>, _ code: (T) -> Int64)
+    func column<T>(_ rows: ContiguousArray<Int32>, _ column: StoreColumn<T>, _ code: (T) -> Int64)
         -> ContiguousArray<Int64> {
         var codes = ContiguousArray<Int64>(repeating: .min, count: rows.count)
         codes.withUnsafeMutableBufferPointer { codes in
@@ -243,7 +243,7 @@ extension LibraryGrouping {
     /// Each photo's code in one of the store's columns of camera or lens codes, by place, those without
     /// a name `Int64.min`, and the codes' names; `ids` are the codes' IDs in the index's tables.
     private func coded(
-        _ rows: ContiguousArray<Int32>, _ column: ContiguousArray<UInt16>, ids: ContiguousArray<Int64>,
+        _ rows: ContiguousArray<Int32>, _ column: StoreColumn<UInt16>, ids: ContiguousArray<Int64>,
         names: [Int64: String],
     ) -> (ContiguousArray<Int64>, [Int64: String]) {
         var named: [Int64: String] = [:]
