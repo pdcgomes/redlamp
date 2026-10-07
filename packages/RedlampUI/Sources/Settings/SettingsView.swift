@@ -38,6 +38,9 @@ public struct SettingsView: View {
                     LibrarySettings(library: library)
                 }
             }
+            Tab("Import", systemImage: "sdcard") {
+                ImportSettingsView(preferences: .shared)
+            }
             if let engine {
                 Tab("Models", systemImage: "cpu") {
                     ModelsSettings(engine: engine)

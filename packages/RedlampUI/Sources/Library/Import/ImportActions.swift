@@ -4,12 +4,17 @@ import Observation
 import RedlampLibrary
 
 /// How the app reaches the import window (LIB-27): File › Import Photos… (⇧⌘I, as in Lightroom Classic)
-/// and the command palette, and an import a forced quit cut short, found at launch, to be resumed.
+/// and the command palette, a card inserted while Settings › Import says so, and an import a forced quit
+/// cut short, found at launch, to be resumed.
 @MainActor
 public enum ImportActions {
     /// From launch: follows the cards, and opens the import window on an import a forced quit cut short.
     public static func start(model: EditorModel) {
         let cards = ImportCards.shared
+        cards.onInserted = { [weak model] card in
+            guard let model else { return }
+            cardInserted(card) { open(model: model, adding: $0) }
+        }
         cards.start()
         Task { [weak model] in
             guard let model else { return }
@@ -18,6 +23,14 @@ public enum ImportActions {
                 open(model: model)
             }
         }
+    }
+
+    /// A card was inserted: `present` opens the import window on it when Settings › Import says to.
+    static func cardInserted(
+        _ card: ImportSource, preferences: ImportPreferences = .shared, present: (ImportSource) -> Void,
+    ) {
+        guard preferences.showsWindowWhenCardInserted, card.kind == .card else { return }
+        present(card)
     }
 
     /// Opens the import window, or brings it forward, with `source` among its sources.

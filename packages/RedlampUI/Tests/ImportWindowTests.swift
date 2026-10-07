@@ -10,7 +10,7 @@ import Testing
 /// The import window (LIB-27), driven as the window drives it: its sources browsed and counted, the
 /// photos chosen, rated, flagged and labelled from the grid's keys, the templates' example and errors,
 /// Import copying to the destination and the backup with the choices made and showing the photos in
-/// Library, Cancel and Import again, and a forced quit resumed.
+/// Library, Cancel and Import again, a forced quit resumed, and what a card's insertion does.
 @MainActor
 @Suite(.serialized)
 struct ImportWindowTests {
@@ -260,6 +260,70 @@ struct ImportWindowTests {
         #expect(next.outcome?.state == .finished && next.outcome?.verified == 6 && next.outcome?.recoveredFrom != nil)
         #expect(ImportWindowFixture.files(in: fixture.backup).count == 6)
         #expect(ImportWindowFixture.leftovers(in: fixture.destination).isEmpty)
+    }
+
+    @Test func `a card inserted opens the import window on it while Settings says so`() async throws {
+        let fixture = try await ImportWindowFixture.make()
+        defer { fixture.remove() }
+        let preferences = fixture.preferences
+        #expect(preferences.showsWindowWhenCardInserted, "on at first, as in Lightroom Classic")
+        #expect(!preferences.ejectsAfterImport, "off at first")
+        let root = try fixture.card("EOS_DIGITAL", count: 2)
+        let other = try fixture.folder("Not a card", count: 1)
+        let cards = ImportCards { url in
+            url.lastPathComponent == "EOS_DIGITAL" ? try? ImportSource.at(url, medium: .card(at: url)) : nil
+        }
+        var presented: [ImportSource] = []
+        cards
+            .onInserted = { card in
+                ImportActions.cardInserted(card, preferences: preferences) { presented.append($0) }
+            }
+        let model = fixture.model(cards: cards)
+        model.start()
+
+        cards.mounted(root)
+        try await waitUntil("the card listed") { cards.cards.count == 1 }
+        #expect(presented.map(\.kind) == [.card] && presented.first?.url.lastPathComponent == "EOS_DIGITAL")
+        #expect(model.sources.map(\.source.kind) == [.card], "From lists it as it's inserted")
+        cards.mounted(other)
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(cards.cards.count == 1 && presented.count == 1, "a volume that isn't a card")
+
+        cards.unmounted(root)
+        #expect(cards.cards.isEmpty && model.sources.first?.problem == "The card was taken out.")
+        preferences.showsWindowWhenCardInserted = false
+        cards.mounted(root)
+        try await waitUntil("the card listed again") { cards.cards.count == 1 }
+        #expect(presented.count == 1, "nothing opens with the setting off")
+        #expect(model.sources.count == 1 && model.sources.first?.problem == nil, "the card put back is browsed afresh")
+        #expect(
+            ImportPreferences(defaults: fixture.defaults).showsWindowWhenCardInserted == false,
+            "the setting is kept",
+        )
+    }
+
+    @Test func `Eject after Import ejects a card once every photo copied from it is verified`() async throws {
+        let fixture = try await ImportWindowFixture.make()
+        defer { fixture.remove() }
+        let cards = try [
+            fixture.cardSource(fixture.card("EOS_DIGITAL", count: 3)),
+            fixture.cardSource(fixture.card("NIKON", count: 3, from: 10)),
+        ]
+        let ejected = Mutex<[String]>([])
+        for (card, ejects) in zip(cards, [false, true]) {
+            let model = fixture.model()
+            model.ejector = { card in ejected.withLock { $0.append(card.id) } }
+            fixture.preferences.ejectsAfterImport = ejects
+            model.add(card)
+            await model.browsed()
+            fixture.settle(model)
+            model.startImport()
+            await model.imported()
+            #expect(model.outcome?.isSafeToErase == true)
+            #expect(ejected.withLock { $0 } == (ejects ? [card.id] : []))
+            #expect(model.sources.first?.isEjected == ejects)
+            model.close()
+        }
     }
 
     @Test func `the destination, backup, templates, raw only and keywords are kept from one import to the next`(

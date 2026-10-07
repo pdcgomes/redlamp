@@ -4,7 +4,8 @@ import RedlampLibrary
 
 /// What the import window keeps from one import to the next (LIB-27), in the app's defaults: the
 /// destination and the backup, the folder and name templates and their texts, raw only, the keywords,
-/// and the named counters an import moves on.
+/// the named counters an import moves on, and what the app does around a card: the import window shown
+/// when one is inserted (on, as in Lightroom Classic) and the cards ejected after importing (off).
 @MainActor
 @Observable
 public final class ImportPreferences {
@@ -24,7 +25,19 @@ public final class ImportPreferences {
     static var standard: ImportSettings {
         let pictures = FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory()).appending(path: "Pictures", directoryHint: .isDirectory)
-        return ImportSettings(destination: pictures)
+        return ImportSettings(destination: pictures, startsWhenCardInserted: true)
+    }
+
+    /// The import window opens on a card as it's inserted.
+    public var showsWindowWhenCardInserted: Bool {
+        get { settings.startsWhenCardInserted }
+        set { update { $0.startsWhenCardInserted = newValue } }
+    }
+
+    /// Cards are ejected once an import is over and every photo copied from them is verified.
+    public var ejectsAfterImport: Bool {
+        get { settings.ejectsWhenDone }
+        set { update { $0.ejectsWhenDone = newValue } }
     }
 
     func update(_ change: (inout ImportSettings) -> Void) {

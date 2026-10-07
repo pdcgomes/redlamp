@@ -3,8 +3,8 @@ import RedlampLibrary
 
 /// The import window's To (LIB-27): the destination, the folder template and the name template (each a
 /// preset or typed, its error said in words), the texts they use, a live example from the first photo
-/// chosen, a backup, raw only, keywords completed from the library's, and metadata presets' place;
-/// while copying and after, each destination's count.
+/// chosen, a backup, raw only, keywords completed from the library's, metadata presets' place, and
+/// Eject after Import; while copying and after, each destination's count.
 @MainActor
 final class ImportDestinationViewController: NSViewController, NSTextFieldDelegate, NSTokenFieldDelegate {
     let model: ImportWindowModel
@@ -29,6 +29,7 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
     private let backupChoose = NSButton(title: "Choose…", target: nil, action: nil)
     private let rawOnly = NSButton(checkboxWithTitle: "Raw files only", target: nil, action: nil)
     private let keywords = NSTokenField()
+    private let ejects = NSButton(checkboxWithTitle: "Eject cards after importing", target: nil, action: nil)
     private let destinations = NSTextField(wrappingLabelWithString: "")
     private var textFields: [String: NSTextField] = [:]
     private var shownPhase: ImportWindowModel.Phase?
@@ -95,6 +96,9 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
         presets.isEnabled = false
         let presetsNote = Self.note("Metadata presets (creator, copyright, captions) come with the metadata panel.")
 
+        ejects.target = self
+        ejects.action = #selector(ejectsToggled)
+        ejects.setAccessibilityIdentifier("import.eject-after")
         destinations.font = .systemFont(ofSize: 11)
 
         let stack = NSStackView(views: [
@@ -107,6 +111,7 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
             Self.heading("Files"), rawOnly, rawNote,
             Self.heading("Keywords"), keywords,
             Self.heading("Metadata Preset"), presets, presetsNote,
+            Self.heading("Card"), ejects,
             destinations,
         ])
         stack.orientation = .vertical
@@ -193,6 +198,7 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
         if keywords.currentEditor() == nil {
             keywords.objectValue = settings.metadata.keywords
         }
+        ejects.state = model.preferences.ejectsAfterImport ? .on : .off
         let lines = model.destinationLines
         destinations.stringValue = lines.joined(separator: "\n")
         destinations.isHidden = lines.isEmpty
@@ -291,6 +297,10 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
 
     @objc private func rawOnlyToggled() {
         model.setRawOnly(rawOnly.state == .on)
+    }
+
+    @objc private func ejectsToggled() {
+        model.setEjectsAfterImport(ejects.state == .on)
     }
 }
 

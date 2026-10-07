@@ -146,6 +146,11 @@ extension ImportWindowModel {
         if !placed.isEmpty {
             showInLibrary(placed.map(\.1))
         }
+        if preferences.ejectsAfterImport {
+            for source in sources where source.isCard && source.outcome?.isSafeToErase == true {
+                await eject(source.id)
+            }
+        }
     }
 
     /// Resume: finishes the imports a forced quit cut short, copying the rest from their sources, which

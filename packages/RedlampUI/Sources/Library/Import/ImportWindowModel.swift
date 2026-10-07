@@ -632,6 +632,11 @@ final class ImportWindowModel {
         settingsChanged()
     }
 
+    func setEjectsAfterImport(_ ejects: Bool) {
+        preferences.ejectsAfterImport = ejects
+        notify(.settings)
+    }
+
     /// The library's keywords that complete `text`, the best first.
     func keywords(completing text: String) -> [String] {
         keywordCompletion?.matches(text).map(\.path.description) ?? []
