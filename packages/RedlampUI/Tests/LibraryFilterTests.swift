@@ -761,4 +761,46 @@ extension LibraryFilterTests {
         try await filtered(model, "")
         #expect(model.items.count == 5)
     }
+
+    @Test func `changes made while the main thread is busy reach it as one, filtered or not`() async throws {
+        defer { cleanUp() }
+        let (model, service) = try await open()
+        let library = model.library
+        let core = try #require(service.core)
+        var changes = 0
+        let observation = library.observe { _ in changes += 1 }
+        defer { observation.invalidate() }
+        for (round, text) in ["", "IMG"].enumerated() {
+            if !text.isEmpty {
+                try await filtered(model, text)
+            }
+            let urls = library.items.map(\.url)
+            let stores = urls.map { library.sidecars.store(for: $0) }
+            let ratings = urls.indices.map { 1 + ($0 + round + 1) % 5 }
+            changes = 0
+            let written = DispatchSemaphore(value: 0)
+            Task.detached {
+                // Each photo rated twice, each in its own write, further apart than LibraryLive gathers changes.
+                for wave in [ratings.map { 6 - $0 }, ratings] {
+                    for (place, url) in urls.enumerated() {
+                        let metadata = PhotoMetadata(rating: wave[place])
+                        try? stores[place].save(Sidecar(recipe: EditRecipe(), metadata: metadata), for: url)
+                        core.sidecarSaved(at: LibraryService.path(url), photo: url, store: stores[place])
+                        try? await Task.sleep(for: .milliseconds(150))
+                    }
+                }
+                written.signal()
+            }
+            Self.hold(until: written, then: 2)
+            try await eventually { library.items.map(\.metadata.rating) == ratings }
+            #expect(library.items.map(\.metadata.rating) == ratings)
+            #expect(changes <= 3, "\(changes) changes for \(2 * urls.count) writes made while the main thread was busy")
+        }
+    }
+
+    /// Keeps the main thread busy until `done` is signalled, and for `seconds` after.
+    private static func hold(until done: DispatchSemaphore, then seconds: Double) {
+        _ = done.wait(timeout: .now() + 60)
+        Thread.sleep(forTimeInterval: seconds)
+    }
 }

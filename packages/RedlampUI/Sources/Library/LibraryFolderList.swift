@@ -7,7 +7,8 @@ import Synchronization
 /// alone or with every folder below it, as `LibraryItem`s in the order Folders lists them (a
 /// folder's photos by name, then each subfolder's), kept current by `LibraryLive`, whose diffs
 /// become the photos removed, inserted and changed. The rows come from the index off the main
-/// thread; only the changes reach it.
+/// thread; only the changes reach it, each once the one before has: what changes meanwhile comes
+/// as one change, so a culling batch's thousands of rows take a few turns of the main thread.
 ///
 /// With a filter or a sort (LIB-18) it hands over the photos the filter finds, in the sort's order,
 /// each time the filter or the folder's photos change: worked out off the main thread from the
@@ -93,13 +94,21 @@ final class LibraryFolderList: Sendable {
                 state.updates = updates
                 return !state.closed
             }) else { return updates.close() }
+            // An update is taken only once the one before it has reached the main thread: LibraryLive makes
+            // one update of what changes meanwhile, so a burst (a culling batch's rows) arrives as a few.
+            let (handled, handing) = AsyncStream.makeStream(of: Void.self, bufferingPolicy: .bufferingNewest(1))
             let forwarding = Task {
+                var turns = handled.makeAsyncIterator()
                 for await update in updates {
                     continuation.yield(.update(update))
+                    guard await turns.next() != nil else { break }
                 }
                 continuation.finish()
             }
-            defer { forwarding.cancel() }
+            defer {
+                forwarding.cancel()
+                handing.finish()
+            }
             var mapping = Mapping(folder: folder, includesSubfolders: includingSubfolders)
             var handed = Handed()
             for await event in events {
@@ -107,20 +116,27 @@ final class LibraryFolderList: Sendable {
                 if !filter.isEmpty, !handed.isOrdered, mapping.hasList {
                     handed.takeOver(&mapping)
                 }
+                let orders: Bool
                 switch event {
                 case let .update(update):
-                    guard let change = try? await mapping.change(for: update, index: index) else { continue }
-                    if filter.isEmpty, !handed.isOrdered {
+                    let change = try? await mapping.change(for: update, index: index)
+                    if let change, filter.isEmpty, !handed.isOrdered {
                         handed.filter = filter
                         await deliver(change)
-                        continue
+                        orders = false
+                    } else {
+                        orders = change != nil
                     }
                 case .filter:
-                    guard mapping.hasList, filter != handed.filter else { continue }
+                    orders = mapping.hasList && filter != handed.filter
                 }
-                guard let ordered = try? await handed.next(filter, from: &mapping, engine: engine, source: source)
-                else { continue }
-                await deliver(Change(ordered: ordered))
+                if orders,
+                   let ordered = try? await handed.next(filter, from: &mapping, engine: engine, source: source) {
+                    await deliver(Change(ordered: ordered))
+                }
+                if case .update = event {
+                    handing.yield()
+                }
             }
         }
         state.withLock { $0.task = task }
