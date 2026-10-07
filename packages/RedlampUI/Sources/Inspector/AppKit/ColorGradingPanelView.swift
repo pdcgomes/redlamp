@@ -234,16 +234,20 @@ final class ThreeWayWheelsView: NSView, HeightProviding {
     }
 }
 
-/// A range's name, its wheel and its luminance slider.
+/// A range's name, its wheel, its luminance slider with its value, and the wheel's hue and
+/// saturation as values.
 final class WheelGroupView: NSView {
     let diameter: CGFloat
     private let range: GradingRange
     private let wheel: ColorWheelView
     private let luminance: SliderTrackView
+    private let luminanceValue: ValueFieldView
+    private let hueAndSaturation: LabelledValuesView
     private let model: EditorModel
     private var tracker: Tracker?
 
     private static let font = Typography.caption
+    private static let luminanceValueWidth: CGFloat = 30
 
     init(range: GradingRange, diameter: CGFloat, model: EditorModel) {
         self.range = range
@@ -251,10 +255,15 @@ final class WheelGroupView: NSView {
         self.model = model
         wheel = ColorWheelView(range: range, diameter: diameter, model: model)
         luminance = SliderTrackView(spec: range.luminanceParameter.spec)
+        luminanceValue = .editing(range.luminanceParameter, in: model)
+        luminanceValue.trailingInset = ValueFieldView.wellPadding
+        hueAndSaturation = LabelledValuesView([
+            ("H", .editing(range.hueParameter, in: model)),
+            ("S", .editing(range.saturationParameter, in: model)),
+        ])
         super.init(frame: .zero)
         wantsLayer = true
-        addSubview(wheel)
-        addSubview(luminance)
+        [wheel, luminance, luminanceValue, hueAndSaturation].forEach(addSubview)
         let parameter = range.luminanceParameter
         luminance.onBegin = { model.beginEdit(parameter) }
         luminance.onChange = { model.setValue(parameter, $0) }
@@ -272,7 +281,7 @@ final class WheelGroupView: NSView {
     }
 
     var groupHeight: CGFloat {
-        TextLine.lineHeight(Self.font) + 4 + diameter + 4 + Metrics.trackHeight
+        TextLine.lineHeight(Self.font) + 4 + diameter + 4 + Metrics.trackHeight + Metrics.rowHeight
     }
 
     override func viewDidMoveToWindow() {
@@ -281,19 +290,33 @@ final class WheelGroupView: NSView {
         tracker = nil
         guard window != nil else { return }
         let parameter = range.luminanceParameter
+        let hue = range.hueParameter
+        let saturation = range.saturationParameter
         tracker = Tracker { [weak self] in
             guard let self else { return }
             let value = model.value(parameter)
             luminance.value = value
+            luminanceValue.value = value
             luminance.toolTip = "Luminance \(parameter.spec.formatted(value))"
+            hueAndSaturation.fields[0].value = model.value(hue)
+            hueAndSaturation.fields[1].value = model.value(saturation)
         }
     }
 
     override func layout() {
         super.layout()
         let label = TextLine.lineHeight(Self.font)
+        let valueWidth = Self.luminanceValueWidth
         wheel.frame = CGRect(x: 0, y: label + 4, width: diameter, height: diameter)
-        luminance.frame = CGRect(x: 0, y: label + 4 + diameter + 4, width: diameter, height: Metrics.trackHeight)
+        let luminanceY = label + 4 + diameter + 4
+        luminance.frame = CGRect(x: 0, y: luminanceY, width: diameter - valueWidth, height: Metrics.trackHeight)
+        luminanceValue.frame = CGRect(
+            x: diameter - valueWidth, y: luminanceY - (Metrics.rowHeight - Metrics.trackHeight) / 2,
+            width: valueWidth + ValueFieldView.wellPadding, height: Metrics.rowHeight,
+        )
+        hueAndSaturation.frame = CGRect(
+            x: 0, y: luminanceY + Metrics.trackHeight, width: diameter, height: Metrics.rowHeight,
+        )
     }
 
     override func draw(_: NSRect) {

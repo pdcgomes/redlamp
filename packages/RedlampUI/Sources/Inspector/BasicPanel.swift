@@ -119,6 +119,7 @@ struct BaseLookMenu: View {
 /// The Base Look's strength, as Lightroom's profile Amount.
 struct BaseLookAmountRow: View {
     @Environment(EditorModel.self) private var model
+    private static let amountSpec = FieldSpec(range: BaseLookReference.amountRange)
 
     var body: some View {
         let amount = model.baseLook.amount
@@ -136,10 +137,14 @@ struct BaseLookAmountRow: View {
                 }
             }
             .controlSize(.mini)
-            Text("\(Int(amount.rounded()))").font(Theme.valueFont).monospacedDigit().frame(
-                width: 30,
-                alignment: .trailing,
+            ValueFieldControl(
+                spec: Self.amountSpec, value: amount, identifier: "baseLook.amount.value",
+                onBegin: { model.beginEdit() },
+                onChange: { model.setBaseLookAmount($0) },
+                onEnd: { model.endEdit(.baseLook, "Base Look Amount", value: EditorModel.baseLookAmountText) },
             )
+            .frame(width: ValueFieldControl.width(for: "200"), height: Metrics.rowHeight)
+            .padding(.trailing, -ValueFieldView.wellPadding)
         }
         .onTapGesture(count: 2) { model.setBaseLookAmount(100) }
         .help("Base Look Amount: 0 turns the look off, 200 doubles it. Double-click to reset.")

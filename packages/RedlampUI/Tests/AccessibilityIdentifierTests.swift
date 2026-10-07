@@ -10,9 +10,9 @@ import Testing
 struct AccessibilityIdentifierTests {
     /// Panel parameters drawn as something other than a slider row, and where they are.
     static let drawnElsewhere: [ParameterID: String] = Dictionary(uniqueKeysWithValues: [
-        (ParameterID.curveSplitShadows, "a handle under the curve"),
-        (.curveSplitMidtones, "a handle under the curve"),
-        (.curveSplitHighlights, "a handle under the curve"),
+        (ParameterID.curveSplitShadows, "a handle under the curve, and its value"),
+        (.curveSplitMidtones, "a handle under the curve, and its value"),
+        (.curveSplitHighlights, "a handle under the curve, and its value"),
         (.frameStyle, "the frame menu"),
     ] + ColorBand.allCases.flatMap { band in
         [
@@ -21,9 +21,9 @@ struct AccessibilityIdentifierTests {
         ]
     } + GradingRange.allCases.flatMap { range in
         [
-            (range.hueParameter, "its colour wheel"),
-            (range.saturationParameter, "its colour wheel"),
-            (range.luminanceParameter, "the slider under its wheel"),
+            (range.hueParameter, "its colour wheel, and its value under it"),
+            (range.saturationParameter, "its colour wheel, and its value under it"),
+            (range.luminanceParameter, "the slider under its wheel, with its value"),
         ]
     })
 
@@ -78,6 +78,18 @@ struct AccessibilityIdentifierTests {
                 #expect(found.contains("slider.\(parameter.rawValue)"), "no slider row for \(parameter.spec.label)")
                 #expect(found.contains("slider.\(parameter.rawValue).track"), "no track for \(parameter.spec.label)")
             }
+        }
+    }
+
+    @Test func `the curve's splits and the 3-way wheels' hue, saturation and luminance have values`() async throws {
+        let (_, window, folder) = try await showEditor()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let found = try identifiers(in: #require(window.contentView))
+        let threeWay = GradingRange.allCases.filter { $0 != .global }
+        let parameters = [ParameterID.curveSplitShadows, .curveSplitMidtones, .curveSplitHighlights]
+            + threeWay.flatMap { [$0.hueParameter, $0.saturationParameter, $0.luminanceParameter] }
+        for parameter in parameters {
+            #expect(found.contains("slider.\(parameter.rawValue).value"), "no value for \(parameter.spec.label)")
         }
     }
 

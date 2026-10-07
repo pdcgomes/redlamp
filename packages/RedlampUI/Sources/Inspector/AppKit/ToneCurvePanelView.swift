@@ -17,6 +17,7 @@ import SwiftUI
         let graph = CurveGraphView(model: model, state: state)
         let parametric: [NSView] = [
             SplitHandlesView(model: model),
+            SplitValuesView(model: model),
             SubsectionHeaderView(
                 title: "Region",
                 parameters: [.curveHighlights, .curveLights, .curveDarks, .curveShadows],
@@ -25,7 +26,10 @@ import SwiftUI
         ] + [ParameterID.curveHighlights, .curveLights, .curveDarks, .curveShadows].map {
             SliderRowView(parameter: $0, editor: model)
         }
-        let point: [NSView] = [HostedControl(model: model, PointCurvePresets().padding(.top, 6))]
+        let point: [NSView] = [
+            PointValuesView(model: model, state: state),
+            HostedControl(model: model, PointCurvePresets().padding(.top, 6)),
+        ]
 
         let panel = PanelSectionView(panel: .toneCurve, model: model, rows: [picker, graph] + parametric)
         state.onModeChange = { [weak panel] mode in
@@ -45,6 +49,10 @@ final class ToneCurveState {
             }
         }
     }
+
+    /// The point curve's point last pressed, by its place in x order; its Input and Output show
+    /// under the graph.
+    var selectedPoint: Int?
 
     @ObservationIgnored var onModeChange: (ToneCurvePanel.Mode) -> Void = { _ in }
 }
@@ -68,6 +76,7 @@ final class CurveGraphView: LayerDrawnView, HeightProviding {
     private var curve = EditRecipe()
     private var points: [CurvePoint] = []
     private var mode = ToneCurvePanel.Mode.parametric
+    private var selected: Int?
     private var dragIndex: Int? {
         didSet {
             if dragIndex != oldValue {
@@ -102,6 +111,7 @@ final class CurveGraphView: LayerDrawnView, HeightProviding {
             curve = model.toneCurve
             points = curve.pointCurve
             mode = state.mode
+            selected = state.selectedPoint
             setNeedsContentDisplay()
         }
     }
@@ -159,12 +169,13 @@ final class CurveGraphView: LayerDrawnView, HeightProviding {
 
         if mode == .point {
             let scale = backingScale
-            for (index, point) in points.enumerated() {
+            for (index, point) in points.sorted(by: { $0.x < $1.x }).enumerated() {
                 let rect = PixelGrid.centered(
                     CGSize(width: 9, height: 9), at: CGPoint(x: point.x * size.width, y: (1 - point.y) * size.height),
                     scale: scale,
                 )
-                context.setFillColor((dragIndex == index ? RGBA(white: 1) : RGBA(white: 0.85)).cgColor)
+                let active = dragIndex == index || selected == index
+                context.setFillColor((active ? RGBA(white: 1) : RGBA(white: 0.85)).cgColor)
                 context.fillEllipse(in: rect)
                 context.setStrokeColor(RGBA(white: 0, alpha: 0.5).cgColor)
                 context.setLineWidth(0.5)
@@ -221,6 +232,7 @@ final class CurveGraphView: LayerDrawnView, HeightProviding {
         if event.clickCount == 2, let hit {
             guard hit > 0, hit < sorted.count - 1 else { return }
             sorted.remove(at: hit)
+            state.selectedPoint = nil
             model.setPointCurve(sorted)
             return
         }
@@ -233,6 +245,7 @@ final class CurveGraphView: LayerDrawnView, HeightProviding {
             sorted.sort { $0.x < $1.x }
             dragIndex = sorted.firstIndex { abs($0.x - start.x) < 1e-9 }
         }
+        state.selectedPoint = dragIndex
         move(to: start, in: sorted)
     }
 
@@ -358,5 +371,127 @@ final class SplitHandlesView: LayerDrawnView, NSViewToolTipOwner {
         let index = Int(bitPattern: userData) - 1
         let parameter = Self.parameters[max(0, min(index, Self.parameters.count - 1))]
         return "\(parameter.spec.label): drag to move, double-click to reset"
+    }
+}
+
+/// The three split points as values, under their handles: drag or click one to move it.
+final class SplitValuesView: NSView {
+    private static let parameters: [ParameterID] = [.curveSplitShadows, .curveSplitMidtones, .curveSplitHighlights]
+    private let model: EditorModel
+    private let row: LabelledValuesView
+    private var tracker: Tracker?
+
+    init(model: EditorModel) {
+        self.model = model
+        row = LabelledValuesView(title: "Splits", Self.parameters.map { ("", .editing($0, in: model)) })
+        super.init(frame: .zero)
+        addSubview(row)
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    override var intrinsicContentSize: NSSize {
+        row.intrinsicContentSize
+    }
+
+    override func layout() {
+        super.layout()
+        row.frame = bounds
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        tracker?.cancel()
+        tracker = nil
+        guard window != nil else { return }
+        tracker = Tracker { [weak self] in
+            guard let self else { return }
+            for (field, parameter) in zip(row.fields, Self.parameters) {
+                field.value = model.value(parameter)
+            }
+        }
+    }
+}
+
+/// The selected point's Input and Output, 0 to 255: drag or click either to move the point.
+final class PointValuesView: NSView {
+    private static let spec = FieldSpec(range: 0 ... 255)
+    private enum Axis {
+        case input, output
+    }
+
+    private let model: EditorModel
+    private let state: ToneCurveState
+    private let row: LabelledValuesView
+    private var tracker: Tracker?
+
+    init(model: EditorModel, state: ToneCurveState) {
+        self.model = model
+        self.state = state
+        let input = ValueFieldView(spec: Self.spec)
+        let output = ValueFieldView(spec: Self.spec)
+        input.setAccessibilityIdentifier("curve.point.input")
+        output.setAccessibilityIdentifier("curve.point.output")
+        row = LabelledValuesView([("Input", input), ("Output", output)])
+        super.init(frame: .zero)
+        addSubview(row)
+        for (field, axis) in [(input, Axis.input), (output, .output)] {
+            field.onBegin = { model.beginEdit() }
+            field.onChange = { [weak self] in self?.move(axis, to: $0) }
+            field.onEnd = { model.endEdit(.toneCurve, "Point Curve") }
+            field.onCommit = { [weak self] in self?.move(axis, to: $0) }
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    override var intrinsicContentSize: NSSize {
+        row.intrinsicContentSize
+    }
+
+    override func layout() {
+        super.layout()
+        row.frame = bounds
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        tracker?.cancel()
+        tracker = nil
+        guard window != nil else { return }
+        tracker = Tracker { [weak self] in
+            guard let self else { return }
+            let points = model.toneCurve.pointCurve.sorted { $0.x < $1.x }
+            guard let index = state.selectedPoint, points.indices.contains(index) else {
+                row.hint = "Click a point to type its Input and Output"
+                return
+            }
+            row.hint = nil
+            row.fields[0].value = points[index].x * 255
+            row.fields[1].value = points[index].y * 255
+        }
+    }
+
+    /// Moves the selected point, keeping it between its neighbours; the end points keep their Input.
+    private func move(_ axis: Axis, to value: Double) {
+        var points = model.toneCurve.pointCurve.sorted { $0.x < $1.x }
+        guard let index = state.selectedPoint, points.indices.contains(index) else { return }
+        let t = min(max(value / 255, 0), 1)
+        var point = points[index]
+        switch axis {
+        case .input:
+            guard index > 0, index < points.count - 1 else { return }
+            point = CurvePoint(x: min(max(t, points[index - 1].x + 0.01), points[index + 1].x - 0.01), y: point.y)
+        case .output:
+            point = CurvePoint(x: point.x, y: t)
+        }
+        points[index] = point
+        model.setPointCurve(points)
     }
 }
