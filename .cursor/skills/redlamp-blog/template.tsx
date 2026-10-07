@@ -388,13 +388,19 @@ function allShares(): Share[] {
   return room.posts.flatMap((post) => post.shares);
 }
 
+/** The owner's mark on a share while the room hasn't recorded it: one made after the room's last update. */
+function pendingMark(share: Share, marks: ShareMarks): ShareMark | undefined {
+  const mark = marks[share.id];
+  return mark && Date.parse(mark.at) > Date.parse(room.updated) ? mark : undefined;
+}
+
 function shareState(share: Share, marks: ShareMarks): ShareState {
-  return marks[share.id]?.state ?? share.state;
+  return pendingMark(share, marks)?.state ?? share.state;
 }
 
 /** The buttons a share takes in its state; a mark from the owner shows instead, with Undo. */
 function ShareButtons({ share, marks, setMarks }: { share: Share; marks: ShareMarks; setMarks: SetCanvasState<ShareMarks> }) {
-  const mark = marks[share.id];
+  const mark = pendingMark(share, marks);
   const set = (state: ShareMark["state"] | null) =>
     setMarks((previous) => {
       const next = { ...previous };
@@ -473,7 +479,7 @@ function settled(item: NeedsYouItem, marks: Marks, shareMarks: ShareMarks): bool
   if (item.share) {
     const share = allShares().find((candidate) => candidate.id === item.share);
     const state = share ? shareState(share, shareMarks) : "posted";
-    return state === "posted" || state === "scheduled" || state === "skipped" || shareMarks[item.share]?.state === "draft";
+    return state === "posted" || state === "scheduled" || state === "skipped" || (share !== undefined && pendingMark(share, shareMarks)?.state === "draft");
   }
   const state = marks[item.id]?.state;
   return state === "done" || state === "skipped";

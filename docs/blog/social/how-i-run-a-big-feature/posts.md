@@ -6,7 +6,7 @@ The card's words are in `card.json`. `.cursor/skills/redlamp-blog/card/render.py
 
 ## X
 
-Not posted yet. Attach `card.gif`. 273 of 280 characters, with the link counted as 23:
+Posted on 7 October at 11:04. Which version went out isn't recorded. It takes `card.gif`. 273 of 280 characters, with the link counted as 23:
 
 ```text
 Redlamp is a free, open-source raw editor for the Mac that works like Lightroom.
