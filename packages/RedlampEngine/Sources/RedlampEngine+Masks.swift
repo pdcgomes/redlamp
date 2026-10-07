@@ -596,16 +596,44 @@ extension RedlampEngine {
         return result
     }
 
-    public func refineMaskEdges(_ bitmap: MaskBitmap) async throws -> MaskBitmap {
+    /// Solved again per pixel at the size masks are stored at, from the mask as it is, as masks of
+    /// its kind are made: the sky's matte for Sky; closed-form matting for the rest, with ViTMatte's
+    /// strands for Subject, Background and whole people. A mask made since edges were solved per
+    /// pixel comes back much as it was, and an older one gains its strands. On hair_bench's heads:
+    /// an error of 0.089 around the edge and 49% of strands kept from today's mattes, 0.076 and 31%
+    /// from coarse masks, where the guided filter this replaces gave 0.136 and 16%
+    /// (`refine_edges.py`, MSK-31). People's parts keep that filter: solved per pixel, hair bleeds
+    /// into the forehead.
+    public func refineMaskEdges(_ mask: AIMask) async throws -> MaskBitmap {
         guard let session = currentSession() else { throw EngineError.noImageOpen }
-        guard let png = bitmap.png,
-              let mask = GrayMask.decode(png) else { throw MaskComputationError.nothingFound(.subject) }
-        let analysis = try await analysisImage(for: session)
-        let image = analysis.image
-        let refined = await Task.detached(priority: .userInitiated) {
-            GuidedFilter.refine(mask, guide: image, radius: max(4, mask.width / 128), epsilon: 4e-4)
-        }.value
-        guard let result = refined.bitmap() else { throw MaskComputationError.nothingFound(.subject) }
+        guard let png = mask.bitmap.png,
+              let coarse = GrayMask.decode(png) else { throw MaskComputationError.nothingFound(mask.kind) }
+        let part = mask.part.flatMap(PersonPart.init(rawValue:))
+        let refined: GrayMask
+        if mask.kind == .people, let part, part != .entirePerson {
+            let image = try await analysisImage(for: session).image
+            refined = await Task.detached(priority: .userInitiated) {
+                GuidedFilter.refine(coarse, guide: image, radius: max(4, coarse.width / 128), epsilon: 4e-4)
+            }.value
+        } else {
+            let full = try await matteImage(for: session)
+            let provided = ProvidedMask(kind: mask.kind, provider: mask.provider, revision: mask.revision, mask: coarse)
+            let strands = Self.takesClosedFormMatte(provided) ? await vitMatte() : nil
+            refined = await Task.detached(priority: .userInitiated) {
+                switch mask.kind {
+                case .sky:
+                    return SkyMatte.refine(coarse, image: full)
+                case .subject, .background, .people:
+                    let closed = Self.closedForm(provided, image: full)
+                    guard let strands else { return closed }
+                    return (try? Self.vitMatteStrands(provided, closedForm: closed, image: full, model: strands))
+                        ?? closed
+                default:
+                    return ClosedFormMatte.refine(coarse, image: full)
+                }
+            }.value
+        }
+        guard let result = refined.bitmap() else { throw MaskComputationError.nothingFound(mask.kind) }
         return result
     }
 

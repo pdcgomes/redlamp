@@ -94,18 +94,14 @@ public extension EditorModel {
         Task { await updateAIMasks(in: masks) }
     }
 
-    /// Snaps an AI mask's edges to the photo's (a wider guided filter than when it was made).
+    /// Solves an AI mask's edges again from the photo, as masks of its kind are made now.
     func refineEdges(_ componentID: UUID, in maskID: UUID) async {
         guard let visit = currentVisit,
-              let component = recipe.mask(maskID)?.components.first(where: { $0.id == componentID })
+              let component = recipe.mask(maskID)?.components.first(where: { $0.id == componentID }),
+              case let .ai(mask) = component.shape
         else { return }
-        let bitmap: MaskBitmap
-        switch component.shape {
-        case let .ai(mask): bitmap = mask.bitmap
-        default: return
-        }
         do {
-            let refined = try await engine.refineMaskEdges(bitmap)
+            let refined = try await engine.refineMaskEdges(mask)
             guard currentVisit == visit,
                   case var .ai(mask) = recipe.mask(maskID)?.components.first(where: { $0.id == componentID })?.shape
             else { return }

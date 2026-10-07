@@ -883,12 +883,17 @@ The Masking panel shows a prompt in place of the status line
 
 - Where: a component row's context menu, for AI components other than Depth Range — **Refine Edges**
   — `packages/RedlampUI/Sources/Inspector/MaskingPanel.swift:1077-1079`.
-- What it does: "Snaps an AI mask's edges to the photo's (a wider guided filter than when it was
-  made)" — `packages/RedlampUI/Sources/Model/EditorModel+MaskPresets.swift:93-113`. For the
-  photographer: it pulls the mask harder onto the photo's own edges.
+- What it does: "Solves an AI mask's edges again from the photo, as masks of its kind are made
+  now" — `packages/RedlampUI/Sources/Model/EditorModel+MaskPresets.swift`. The engine solves the
+  edge per pixel at the size masks are stored at: the sky's matte for Sky, closed-form matting with
+  ViTMatte's strands for Subject, Background and whole people, closed-form for Objects and
+  Landscape; People's parts keep a guided filter (`refineMaskEdges`,
+  `packages/RedlampEngine/Sources/RedlampEngine+Masks.swift`; MSK-31). For the photographer: it
+  solves the mask's edge again from the photo, bringing back stray hairs an older mask missed; a
+  mask made recently comes back much as it was.
 - It has no settings. History step: **Refine Edges** (`:109`).
 - Failure: **"The edges couldn't be refined: …"** (`:112`).
-- README: "**Refine Edges** snaps them harder to the photo" — `README.md:112`.
+- README: "**Refine Edges** solves their edges again from the photo, as masks of their kind are made now" — `README.md:120`.
 
 ### The Refine Edge Brush
 
@@ -1250,8 +1255,8 @@ titles the app shows (e.g. `⌫` is titled "Delete Selected Mask or Spot" in the
   `docs/lightroom-comparison.md:130`: "Lightroom can start a new mask from an existing one; Redlamp
   also adds, subtracts or intersects one inside another". README: `README.md:114`.
 - **Refine Edges and the Refine Edge Brush** are marked "Different" from Lightroom's —
-  `docs/lightroom-comparison.md:119`: "Refine Edges, and a Refine Edge brush that solves an edge
-  again where you paint".
+  `docs/lightroom-comparison.md:119`: "Refine Edges, which solves a mask's whole edge again per
+  pixel, and a Refine Edge brush that solves an edge again where you paint".
 - **Local Halation and Bloom** sliders in a mask (film-glow effects Lightroom has no equivalent of —
   `docs/lightroom-comparison.md:102` lists halation and bloom as "Lightroom: No").
 

@@ -56,8 +56,9 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// A quick, low-resolution Objects mask for hovering, or nil when its model isn't ready.
     func previewObjectMask(_ request: MaskRequest) async throws -> MaskBitmap?
 
-    /// An AI mask's bitmap with its edges snapped harder to the current photo's.
-    func refineMaskEdges(_ bitmap: MaskBitmap) async throws -> MaskBitmap
+    /// An AI mask's bitmap with its edges solved again from the current photo, as masks of its kind
+    /// are made now.
+    func refineMaskEdges(_ mask: AIMask) async throws -> MaskBitmap
 
     /// A person's or object's mask, about to be removed, with the shadow it casts and its
     /// reflection in the current photo (RM-13); the mask itself when it has neither.

@@ -260,8 +260,8 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         nil
     }
 
-    func refineMaskEdges(_ bitmap: MaskBitmap) async throws -> MaskBitmap {
-        MaskBitmap(sha256: bitmap.sha256 + "-refined", width: bitmap.width, height: bitmap.height)
+    func refineMaskEdges(_ mask: AIMask) async throws -> MaskBitmap {
+        MaskBitmap(sha256: mask.bitmap.sha256 + "-refined", width: mask.bitmap.width, height: mask.bitmap.height)
     }
 
     var brushRefinements: [[BrushStroke]] = []

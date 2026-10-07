@@ -93,9 +93,9 @@ final class GatedEngine: EditingEngine, @unchecked Sendable {
         return MaskBitmap(sha256: "preview", width: 4, height: 4)
     }
 
-    func refineMaskEdges(_ bitmap: MaskBitmap) async throws -> MaskBitmap {
+    func refineMaskEdges(_ mask: AIMask) async throws -> MaskBitmap {
         await gate.pass()
-        return try await base.refineMaskEdges(bitmap)
+        return try await base.refineMaskEdges(mask)
     }
 
     /// Refine Edge brush solves still to fail, the next ones first.
