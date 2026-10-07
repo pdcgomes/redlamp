@@ -46,7 +46,7 @@ A point curve for RGB, Red, Green and Blue, chosen above the graph, working on t
 
 ## Working with the sliders
 
-- They take the same gestures as every slider: double-click a label or thumb to reset it, [[⇧]]-drag for fine control, click a value to type a new one, and use the arrow keys to step it ([[⇧]] steps by ten).
+- They take the same gestures as every slider: double-click a label or thumb to reset it, [[⇧]]-drag for fine control, click a value to type a new one or drag it to scrub it ([[⇧]] for fine control), and use the arrow keys to step it ([[⇧]] steps by ten).
 - With the Masking tool open, [[,]] and [[.]] select the previous and next of the mask's sliders, and [[-]] and [[=]] move the selected one ([[⇧]] for larger steps).
 - The overlay steps aside while you drag an adjustment or Amount, and comes back when you let go. Sliders that shape the mask itself, such as Feather, Detail and Refine, keep it showing.
 - Reset, beside the mask's name, sets every adjustment back to 0, straightens the curves, and returns Amount to 100 and Detail to 0. It leaves the components as they are. Reset Adjustments in the list of masks does the same.

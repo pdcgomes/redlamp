@@ -200,7 +200,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | RGB values of the pixel under the pointer | Yes | Undecided | | | UX-32 | Under the histogram |
 | Panel on/off switches | Yes | Undecided | | | UX-30 | Turn a panel's settings off and on without losing them |
 | Typing a slider's value | Yes | Done | | | UX-01 | Arithmetic works too (`x+15`) |
-| A value on every control, and values that scrub when dragged | Yes | Planned | | P2 | UX-28, UX-29 | The grading wheels, curve points, Base Look Amount and the Masks panel's sizes and ranges get values |
+| A value on every control, and values that scrub when dragged | Yes | In progress | | P2 | UX-28, UX-29 | The grading wheels, curve points, Base Look Amount and the Masks panel's sizes and ranges get values |
 | Lightroom Classic's keyboard shortcuts | Yes | Done | | | | 97 actions on 96 key bindings |
 | Command palette | No | Done | | | UX-07 | Every action and slider from the keyboard (⌘K) |
 | Sensor clipping and a colour-assessment view | No | Done | | | UX-05 | |
