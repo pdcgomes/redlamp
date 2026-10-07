@@ -16,8 +16,9 @@ struct LibraryMoves: Sendable {
     }
 
     var moves: [Move]
-    /// Photos to show again that the folder no longer lists: a move's Undo.
+    /// Photos to show again that the folder no longer lists, a move's Undo, with their content keys.
     var restoring: [LibraryItem] = []
+    var keys: [URL: ContentKey] = [:]
 }
 
 extension FolderLibrary {
@@ -90,6 +91,7 @@ extension FolderLibrary {
         for (url, key) in keys {
             fromLibrary.keys[url] = key
         }
+        fromLibrary.keys.merge(moves.keys) { _, restored in restored }
         if moved.reordered {
             photosMoved()
         }
@@ -180,6 +182,11 @@ extension FolderLibrary {
             positions: Dictionary(shown.enumerated().map { ($1.url, $0) }) { first, _ in first }, diff: diff,
             reordered: !leaving.isEmpty || !inOrder || !restoredIDs.isEmpty,
         )
+    }
+
+    /// The content key of the photo shown at `url`, when it's shown from the library.
+    func contentKey(of url: URL) -> ContentKey? {
+        fromLibrary.keys[url]
     }
 
     /// Returns once the open folder's list from the library has handed over every change the library had for

@@ -3,8 +3,8 @@ import Foundation
 import RedlampLibrary
 import Synchronization
 
-/// Renaming photos in Library (LIB-25, LIB-26), each rename one of the library's journaled batches with Undo
-/// and Redo on Library's ⌘Z and ⇧⌘Z, in turn with culling's changes.
+/// Renaming and moving photos in Library (LIB-25, LIB-26), each one of the library's journaled batches with
+/// Undo and Redo on Library's ⌘Z and ⇧⌘Z, in turn with culling's changes.
 ///
 /// - **Shown at once:** the photos go where the batch puts them in the grid and the filmstrip before it runs
 ///   (`LibraryMoves`), each keeping its ID, so the selection follows; the active photo, leaving Develop's
@@ -28,7 +28,7 @@ public extension EditorModel {
         return true
     }
 
-    /// Rename Photos acts on Library's selection, with the library open.
+    /// Rename Photos and Move to Folder act on Library's selection, with the library open.
     var canRenamePhotos: Bool {
         module == .library && !isModalDialogOpen && selection != nil && library.service?.isReady == true
     }
@@ -50,11 +50,13 @@ extension EditorModel {
 
     // MARK: - Keys, menus and the palette
 
-    /// Rename Photos, and Library's Undo and Redo when a file step is newer than culling's latest change; nil
+    /// Rename Photos, Move to Folder, and Library's Undo and Redo when a file step is newer than culling's latest
+    /// change; nil
     /// for every other action.
     func performFileShortcut(_ action: ShortcutAction) -> Bool? {
         switch action {
         case .renamePhotos: renamePhotos()
+        case .moveToFolder: moveToFolder()
         case .undo where module == .library && fileUndoIsNewest: undoFiles()
         case .redo where module == .library && fileRedoIsNewest: redoFiles()
         default: nil
@@ -63,14 +65,14 @@ extension EditorModel {
 
     func canPerformFileShortcut(_ action: ShortcutAction) -> Bool? {
         switch action {
-        case .renamePhotos: canRenamePhotos
+        case .renamePhotos, .moveToFolder: canRenamePhotos
         case .undo where module == .library && fileUndoIsNewest: true
         case .redo where module == .library && fileRedoIsNewest: true
         default: nil
         }
     }
 
-    /// The renames Undo and Redo take back and make again.
+    /// The renames and moves Undo and Redo take back and make again.
     var fileSteps: LibraryFileSteps {
         if let steps = Self.fileSteps.object(forKey: self) {
             return steps
@@ -174,6 +176,7 @@ extension EditorModel {
             let run = await perform(step, undoing: false) {
                 switch step.kind {
                 case let .rename(renames): await service.rename(renames)
+                case let .move(ids, folder): await service.move(ids, to: folder)
                 }
             }
             if let batch = run.batch {
@@ -217,8 +220,8 @@ extension EditorModel {
         return run
     }
 
-    /// Shows `moves` at once: the photos at their new URLs, or out of the folders shown; those the folders shown
-    /// no longer list are shown again, selected as they were. The active photo goes with them, or, when it
+    /// Shows `moves` at once: the photos at their new URLs, or out of the folders shown; a move's Undo shows
+    /// again the photos it took away, selected as they were. The active photo goes with them, or, when it
     /// leaves the folders shown, the photo after it becomes active. Returns the URLs of the photos as they were,
     /// whose saves the batch waits for.
     private func show(
@@ -226,15 +229,23 @@ extension EditorModel {
     ) async -> [URL] {
         // What was asked for before reaches the lists first: culling's batches, then the list's changes.
         await cullingTail?.value
-        if let live = library.service?.core?.live, let photo = moves.lazy.compactMap({ move -> (Int64, URL)? in
-            guard let url = self.library.listedURL(ofPath: move.from), self.library.index(of: url) != nil
-            else { return nil }
-            return (move.id, url)
-        }).first {
-            await library.caughtUp(with: (id: photo.0, url: photo.1), live: live)
+        if let core = library.service?.core {
+            var sentinel = moves.lazy.compactMap { move -> (id: Int64, url: URL)? in
+                guard let url = self.library.listedURL(ofPath: move.from), self.library.contentKey(of: url) != nil
+                else { return nil }
+                return (move.id, url)
+            }.first
+            if sentinel == nil, let url = items.first(where: { library.contentKey(of: $0.url) != nil })?.url,
+               let id = await LibraryService.indexIDs(of: [url], in: core.index)[url] {
+                sentinel = (id, url)
+            }
+            if let sentinel {
+                await library.caughtUp(with: sentinel, live: core.live)
+            }
         }
         var shown: [LibraryMoves.Move] = []
         var restoring: [LibraryItem] = []
+        var keys: [URL: ContentKey] = [:]
         var saving: [URL] = []
         for move in moves {
             saving.append(URL(fileURLWithPath: move.from))
@@ -242,12 +253,14 @@ extension EditorModel {
             guard let from = library.listedURL(ofPath: move.from), library.index(of: from) != nil else {
                 if let to, let item = step.items[move.id] {
                     restoring.append(FolderLibrary.item(item, at: to))
+                    keys[to] = step.keys[move.id]
                 }
                 continue
             }
             saving.append(from)
             if !undoing, step.items[move.id] == nil, let item = library.item(for: from) {
                 step.items[move.id] = item
+                step.keys[move.id] = library.contentKey(of: from)
             }
             shown.append(LibraryMoves.Move(from: from, to: to))
         }
@@ -257,7 +270,7 @@ extension EditorModel {
         }
         let (active, activeRow) = (selection, selectionIndex)
         let destination = active.flatMap { active in shown.first { $0.from == active } }
-        await library.show(LibraryMoves(moves: shown, restoring: restoring)) { [self] in
+        await library.show(LibraryMoves(moves: shown, restoring: restoring, keys: keys)) { [self] in
             if let destination {
                 if let to = destination.to {
                     select(to, keepingSelection: true)
@@ -286,6 +299,7 @@ extension EditorModel {
     ) async {
         var corrections: [LibraryMoves.Move] = []
         var restoring: [LibraryItem] = []
+        var keys: [URL: ContentKey] = [:]
         for move in moves {
             guard let path = paths[move.id], path != move.to else { continue }
             let actual = library.listedURL(ofPath: path)
@@ -293,10 +307,11 @@ extension EditorModel {
                 corrections.append(LibraryMoves.Move(from: shown, to: actual))
             } else if let actual, library.index(of: actual) == nil, let item = step.items[move.id] {
                 restoring.append(FolderLibrary.item(item, at: actual))
+                keys[actual] = step.keys[move.id]
             }
         }
         guard !corrections.isEmpty || !restoring.isEmpty else { return }
-        await library.show(LibraryMoves(moves: corrections, restoring: restoring))
+        await library.show(LibraryMoves(moves: corrections, restoring: restoring, keys: keys))
     }
 
     /// Returns once the saves asked for any of `photos` before the call are on disk.
@@ -308,8 +323,8 @@ extension EditorModel {
     }
 }
 
-/// The renames Library's Undo and Redo take back and make again, made one at a time in the order they're
-/// asked for.
+/// The renames and moves Library's Undo and Redo take back and make again, made one at a time in the order
+/// they're asked for.
 @MainActor
 final class LibraryFileSteps {
     var undo: [LibraryFileStep] = []
@@ -343,11 +358,13 @@ final class LibraryFileSteps {
     }
 }
 
-/// One of Library's renames, as Undo takes it back and Redo makes it again.
+/// One of Library's renames or moves, as Undo takes it back and Redo makes it again.
 @MainActor
 final class LibraryFileStep {
     enum Kind {
         case rename([PhotoRename])
+        /// The photos asked for, by index ID, and the folder they go to.
+        case move([Int64], URL)
     }
 
     let kind: Kind
@@ -357,8 +374,10 @@ final class LibraryFileStep {
     let photos: [(id: Int64, from: String, to: String)]
     /// The batch that made it last, for its Undo.
     var batch: UUID?
-    /// The photos as the folders shown listed them before it, by index ID.
+    /// The photos as the folders shown listed them before it, and their content keys, by index ID: a move's Undo
+    /// shows them again.
     var items: [Int64: LibraryItem] = [:]
+    var keys: [Int64: ContentKey] = [:]
     /// The photos selected and the active one, before it.
     var selected: Set<URL> = []
     var active: URL?

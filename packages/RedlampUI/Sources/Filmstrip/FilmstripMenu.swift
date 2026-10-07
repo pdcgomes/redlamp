@@ -3,7 +3,8 @@ import RedlampDesign
 
 /// A filmstrip photo's context menu (`docs/plans/2026-10-02-copy-paste-sync-design.md`), as in
 /// Lightroom and Finder: on a selected photo, the Photo menu's copy, paste and sync items and, in
-/// Library, renaming, acting on the selection as they do there; on any other photo, copying from it or pasting onto it
+/// Library, renaming and moving, acting on the selection as they do there; on any other photo, copying from it or
+/// pasting onto it
 /// alone, without opening it. Items that don't apply are left out. In Library, its rating, flag,
 /// labels and mark come first (`LibraryGridMenu.culling`); the grid's menu has its own. A photo in
 /// Recently Trashed has Put Back's instead (`TrashMenu`).
@@ -21,7 +22,7 @@ enum FilmstripMenu {
             let groups: [[ShortcutAction]] = [
                 [.copySettings, .copySettingsAgain, .pasteSettings, .pastePrevious],
                 [.syncSettings, .syncSettingsAgain, .undoSync, .toggleAutoSync],
-                [.renamePhotos],
+                [.renamePhotos, .moveToFolder],
             ]
             for group in groups {
                 let actions = group.filter { action in

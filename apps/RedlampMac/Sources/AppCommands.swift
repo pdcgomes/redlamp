@@ -53,6 +53,7 @@ struct AppCommands: Commands {
             item(.putBack)
             item(.putBackBatch)
             mouseItem(.renamePhotos)
+            item(.moveToFolder)
             Divider()
             item(.copySettings)
             item(.copySettingsAgain)

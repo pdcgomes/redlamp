@@ -342,7 +342,7 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTa
         fileSteps.redo.count
     }
 
-    /// Returns once every rename asked for, and their Undos and Redos, are made.
+    /// Returns once every rename and move asked for, and their Undos and Redos, are made.
     func filesMade() async {
         await fileSteps.made()
     }
