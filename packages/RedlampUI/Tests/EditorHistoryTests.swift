@@ -327,4 +327,99 @@ struct EditorHistoryTests {
         #expect(list.recipes.numberOfRows == 1, "only “No matching recipes”")
         #expect((window.firstResponder as? NSText)?.delegate === field)
     }
+
+    // MARK: - Nudges
+
+    /// Waits out the pause that ends a run of nudges.
+    private func pause() async throws {
+        try await Task.sleep(for: .milliseconds(600))
+    }
+
+    @Test func `a run of nudges is one history step, from the value before it to the last`() async throws {
+        let (editor, cleanup) = try await openEditor()
+        defer { cleanup() }
+        let model = editor.model
+        let steps = model.history.count
+        let spec = ParameterID.exposure.spec
+        let before = spec.formatted(model.recipe[.exposure])
+        model.focusedParameter = .exposure
+        for _ in 0 ..< 10 {
+            model.perform(.increaseSetting)
+        }
+        let after = model.recipe[.exposure]
+        try await pause()
+        withKnownIssue("RESP-09: each nudge is a step of its own") {
+            #expect(model.history.count == steps + 1)
+            #expect(model.history.last?.before == before)
+        }
+        #expect(model.history.last?.after == spec.formatted(after))
+        #expect(model.history.last?.recipe[.exposure] == after)
+    }
+
+    @Test func `undo during a run of nudges undoes all of it`() async throws {
+        let (editor, cleanup) = try await openEditor()
+        defer { cleanup() }
+        let model = editor.model
+        let start = model.recipe[.exposure]
+        model.focusedParameter = .exposure
+        for _ in 0 ..< 3 {
+            model.perform(.increaseSetting)
+        }
+        #expect(model.canPerform(.undo))
+        model.perform(.undo)
+        withKnownIssue("RESP-09: undo takes back only the last nudge") {
+            #expect(model.recipe[.exposure] == start)
+        }
+        try await pause()
+        withKnownIssue("RESP-09: undo takes back only the last nudge") {
+            #expect(model.recipe[.exposure] == start, "the run's end records nothing after the undo")
+        }
+        #expect(model.canRedo)
+    }
+
+    @Test func `a nudge after a pause or on another setting starts a new step`() async throws {
+        let (editor, cleanup) = try await openEditor()
+        defer { cleanup() }
+        let model = editor.model
+        let steps = model.history.count
+        model.focusedParameter = .exposure
+        model.perform(.increaseSetting)
+        model.perform(.increaseSetting)
+        model.perform(.nextSetting)
+        #expect(model.focusedParameter == .contrast)
+        model.perform(.increaseSetting)
+        model.perform(.increaseSetting)
+        try await pause()
+        model.perform(.increaseSetting)
+        try await pause()
+        withKnownIssue("RESP-09: each nudge is a step of its own") {
+            #expect(model.history.count == steps + 3)
+            #expect(model.history.suffix(3).map(\.title) == ["Exposure", "Contrast", "Contrast"])
+        }
+    }
+
+    @Test func `a run of nudges cut short by another photo is saved in its own photo's history`() async throws {
+        let (editor, cleanup) = try await openEditor()
+        defer { cleanup() }
+        let model = editor.model
+        let spec = ParameterID.exposure.spec
+        let before = spec.formatted(model.recipe[.exposure])
+        model.focusedParameter = .exposure
+        for _ in 0 ..< 3 {
+            model.perform(.increaseSetting)
+        }
+        let after = spec.formatted(model.recipe[.exposure])
+        model.select(editor.other)
+        try await eventually { model.info?.url == editor.other }
+        try await eventually { !editor.savedSessions.isEmpty }
+        try await open(editor.photo, in: model)
+        try await eventually { !model.earlierSessions.isEmpty }
+        #expect(spec.formatted(model.recipe[.exposure]) == after, "the run's values are saved either way")
+        withKnownIssue("RESP-09: a run open when another photo is selected is dropped from the history") {
+            let step = model.earlierSessions.first?.steps.last
+            #expect(step?.title == "Exposure")
+            #expect(step?.before == before)
+            #expect(step?.after == after)
+        }
+    }
 }
