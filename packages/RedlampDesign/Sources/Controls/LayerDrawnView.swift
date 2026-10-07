@@ -7,26 +7,37 @@ import QuartzCore
 /// on every commit, which cost ~0.4 ms per slider readout; a layer drawing its own
 /// contents skips that. Subclasses override `drawContent(in:)`, which runs with a flipped
 /// `NSGraphicsContext` current, exactly like `draw(_:)`, and call `setNeedsContentDisplay()`.
+///
+/// A view whose drawing includes an image that changes often (the histogram's channels) can
+/// add an image layer above the drawing and a drawn overlay above that
+/// (`addImageAndOverlayLayers()`): it makes the image off the main thread and hands it to
+/// `setImage(_:frame:)`, and only the parts around it are drawn.
 open class LayerDrawnView: NSView, @preconcurrency CALayerDelegate {
     private let contentLayer = CALayer()
+    private var imageLayer: CALayer?
+    private var overlayLayer: CALayer?
 
     override public init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
         layerContentsRedrawPolicy = .never
-        contentLayer.delegate = self
-        contentLayer.needsDisplayOnBoundsChange = true
-        contentLayer.anchorPoint = .zero
-        // A fixed format spares Core Animation a first pass over the drawing to choose one,
-        // and drawing asynchronously rasterizes off the main thread.
-        contentLayer.contentsFormat = .RGBA8Uint
-        contentLayer.drawsAsynchronously = true
+        configure(contentLayer)
         layer?.addSublayer(contentLayer)
     }
 
     @available(*, unavailable)
     public required init?(coder _: NSCoder) {
         fatalError("init(coder:) is not supported")
+    }
+
+    private func configure(_ drawn: CALayer) {
+        drawn.delegate = self
+        drawn.needsDisplayOnBoundsChange = true
+        drawn.anchorPoint = .zero
+        // A fixed format spares Core Animation a first pass over the drawing to choose one,
+        // and drawing asynchronously rasterizes off the main thread.
+        drawn.contentsFormat = .RGBA8Uint
+        drawn.drawsAsynchronously = true
     }
 
     override open var isFlipped: Bool {
@@ -41,8 +52,39 @@ open class LayerDrawnView: NSView, @preconcurrency CALayerDelegate {
 
     open func drawContent(in _: CGRect) {}
 
+    /// Draws above the image layer; see `addImageAndOverlayLayers()`.
+    open func drawOverlay(in _: CGRect) {}
+
     public func setNeedsContentDisplay() {
         contentLayer.setNeedsDisplay()
+    }
+
+    public func setNeedsOverlayDisplay() {
+        overlayLayer?.setNeedsDisplay()
+    }
+
+    /// Adds the image layer and the overlay above the drawing.
+    public func addImageAndOverlayLayers() {
+        guard imageLayer == nil, let host = layer else { return }
+        let image = CALayer()
+        image.delegate = self
+        image.anchorPoint = .zero
+        let overlay = CALayer()
+        configure(overlay)
+        host.addSublayer(image)
+        host.addSublayer(overlay)
+        imageLayer = image
+        overlayLayer = overlay
+    }
+
+    /// Shows `image` at `frame`, in the view's coordinates; nil shows nothing there.
+    public func setImage(_ image: CGImage?, frame: CGRect) {
+        guard let imageLayer else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        imageLayer.contents = image
+        imageLayer.frame = frame
+        CATransaction.commit()
     }
 
     override open func layout() {
@@ -52,8 +94,10 @@ open class LayerDrawnView: NSView, @preconcurrency CALayerDelegate {
         #endif
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        contentLayer.frame = bounds
-        contentLayer.contentsScale = backingScale
+        for drawn in [contentLayer, overlayLayer].compactMap(\.self) {
+            drawn.frame = bounds
+            drawn.contentsScale = backingScale
+        }
         CATransaction.commit()
         #if DEBUG || REDLAMP_PROFILING
             if previous.size != bounds.size || previous.scale != backingScale {
@@ -64,8 +108,10 @@ open class LayerDrawnView: NSView, @preconcurrency CALayerDelegate {
 
     override open func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
-        contentLayer.contentsScale = backingScale
-        contentLayer.setNeedsDisplay()
+        for drawn in [contentLayer, overlayLayer].compactMap(\.self) {
+            drawn.contentsScale = backingScale
+            drawn.setNeedsDisplay()
+        }
         #if DEBUG || REDLAMP_PROFILING
             Self.drawObserver?(self, .backingChanged(scale: backingScale))
         #endif
@@ -73,7 +119,7 @@ open class LayerDrawnView: NSView, @preconcurrency CALayerDelegate {
 
     #if DEBUG || REDLAMP_PROFILING
         public enum DrawEvent {
-            /// `drawContent` ran, taking this long on the main thread.
+            /// `drawContent` or `drawOverlay` ran, taking this long on the main thread.
             case drew(milliseconds: Double)
             /// Layout gave the content layer a new size or scale.
             case laidOut(size: CGSize, scale: CGFloat)
@@ -90,6 +136,7 @@ open class LayerDrawnView: NSView, @preconcurrency CALayerDelegate {
 
     /// Layers of a view display on the main thread.
     public func draw(_ layer: CALayer, in context: CGContext) {
+        guard layer !== imageLayer else { return }
         #if DEBUG || REDLAMP_PROFILING
             let started = Self.drawObserver == nil ? nil : CFAbsoluteTimeGetCurrent()
             defer {
@@ -107,7 +154,11 @@ open class LayerDrawnView: NSView, @preconcurrency CALayerDelegate {
         NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)
         // Dynamic colors (the accent, system blue) resolve for this view's appearance.
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            drawContent(in: bounds)
+            if layer === overlayLayer {
+                drawOverlay(in: bounds)
+            } else {
+                drawContent(in: bounds)
+            }
         }
         NSGraphicsContext.current = previous
     }

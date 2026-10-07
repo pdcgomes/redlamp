@@ -112,9 +112,7 @@ struct HistogramGraphViewTests {
             view.layoutSubtreeIfNeeded()
             try display(#require(view.layer))
         }
-        withKnownIssue("RESP-05: each histogram redraws the graph on the main thread") {
-            #expect(draws.count == 0)
-        }
+        #expect(draws.count == 0)
     }
 
     @Test func `the graph looks the same for each histogram, clipping and hovered region`() async throws {

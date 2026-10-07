@@ -6,18 +6,20 @@ import SwiftUI
 /// The RGB histogram with Lightroom's clipping indicators and drag-to-adjust regions,
 /// and the capture summary under it.
 ///
-/// It redraws only when the histogram (published ~30 times a second), the photo, the
-/// clipping overlay or the hovered region's value changes, without touching SwiftUI.
+/// The histogram arrives about 30 times a second while a photo renders. Its channels are an
+/// image made off the main thread, shown in a layer of their own; the well and summary under
+/// them and the indicators over them are drawn only when the photo, the clipping overlay or
+/// the hovered region changes, without touching SwiftUI.
 final class HistogramGraphView: LayerDrawnView, NSViewToolTipOwner {
     typealias Region = HistogramView.Region
 
     static let graphHeight: CGFloat = 104
     private static let spacing: CGFloat = 6
     private static let indicatorSize = CGSize(width: 14, height: 12)
-    private static let channels: [(KeyPath<Histogram, [UInt32]>, RGBA)] = [
-        (\.red, RGBA(red: 0.95, green: 0.25, blue: 0.25)),
-        (\.green, RGBA(red: 0.25, green: 0.9, blue: 0.35)),
-        (\.blue, RGBA(red: 0.3, green: 0.45, blue: 1.0)),
+    private nonisolated static let channelColors = [
+        RGBA(red: 0.95, green: 0.25, blue: 0.25),
+        RGBA(red: 0.25, green: 0.9, blue: 0.35),
+        RGBA(red: 0.3, green: 0.45, blue: 1.0),
     ]
 
     private let model: EditorModel
@@ -50,9 +52,36 @@ final class HistogramGraphView: LayerDrawnView, NSViewToolTipOwner {
     private var summary: [String] = []
     private var regionValue = 0.0
 
+    /// What the drawn layers last showed, so an update that changes neither draws nothing.
+    private struct Content: Equatable {
+        var region: Region?
+        var summary: [String]
+    }
+
+    private struct Overlay: Equatable {
+        var region: Region?
+        var regionValue: Double
+        var showClipping: Bool
+        var shadowsClipped: Bool
+        var highlightsClipped: Bool
+    }
+
+    private var content: Content?
+    private var overlay: Overlay?
+
+    /// The channels image asked for last; one that finishes after a newer request is dropped.
+    private struct Channels: Equatable {
+        var histogram: Histogram
+        var size: CGSize
+        var scale: CGFloat
+    }
+
+    private var channels: Channels?
+
     init(model: EditorModel) {
         self.model = model
         super.init(frame: .zero)
+        addImageAndOverlayLayers()
         setAccessibilityIdentifier("histogram")
     }
 
@@ -112,9 +141,34 @@ final class HistogramGraphView: LayerDrawnView, NSViewToolTipOwner {
             summary = model.info?.exposureSummary ?? []
             showClipping = model.showClipping
             regionValue = region.map { model.value($0.parameter) } ?? 0
-            setNeedsContentDisplay()
-            updateToolTips()
+            update()
         }
+    }
+
+    private func update() {
+        let content = Content(region: shownRegion, summary: summary)
+        if content != self.content {
+            self.content = content
+            setNeedsContentDisplay()
+        }
+        let overlay = Overlay(
+            region: shownRegion, regionValue: regionValue, showClipping: showClipping,
+            shadowsClipped: histogram.shadowsClipped, highlightsClipped: histogram.highlightsClipped,
+        )
+        if overlay != self.overlay {
+            if overlay.region != self.overlay?.region {
+                updateToolTips()
+            }
+            self.overlay = overlay
+            setNeedsOverlayDisplay()
+        }
+        updateChannels()
+    }
+
+    override func layout() {
+        super.layout()
+        updateToolTips()
+        updateChannels()
     }
 
     // MARK: - Geometry
@@ -134,6 +188,10 @@ final class HistogramGraphView: LayerDrawnView, NSViewToolTipOwner {
             at: CGPoint(x: x + size.width / 2, y: 4 + indicatorRowHeight / 2),
             scale: backingScale,
         )
+    }
+
+    private var channelsRect: CGRect {
+        CGRect(x: 2, y: 14, width: bounds.width - 4, height: Self.graphHeight - 18)
     }
 
     private static let captionFont = Typography.caption.monospacedDigit
@@ -161,67 +219,78 @@ final class HistogramGraphView: LayerDrawnView, NSViewToolTipOwner {
             context.fill(band)
         }
 
-        drawChannels(in: CGRect(x: 2, y: 14, width: width - 4, height: graph.height - 18), context: context)
+        drawSummary(y: graph.maxY + Self.spacing, scale: scale)
+    }
 
-        drawIndicator(clipped: histogram.shadowsClipped, color: .systemBlue, trailing: false, context: context)
-        drawIndicator(clipped: histogram.highlightsClipped, color: .systemRed, trailing: true, context: context)
+    override func drawOverlay(in _: CGRect) {
+        drawIndicator(clipped: histogram.shadowsClipped, color: .systemBlue, trailing: false)
+        drawIndicator(clipped: histogram.highlightsClipped, color: .systemRed, trailing: true)
         if let region = shownRegion {
             let spec = region.parameter.spec
             TextLine.draw(
                 "\(spec.label)  \(spec.formatted(regionValue))", font: Self.captionFont, color: Palette.value.nsColor,
-                in: CGRect(x: 0, y: 4, width: width, height: indicatorRowHeight), alignment: .center, scale: scale,
+                in: CGRect(x: 0, y: 4, width: bounds.width, height: indicatorRowHeight), alignment: .center,
+                scale: backingScale,
             )
         }
-
-        drawSummary(y: graph.maxY + Self.spacing, scale: scale)
     }
 
-    private func drawChannels(in rect: CGRect, context: CGContext) {
-        let peak = Self.channels.flatMap { histogram[keyPath: $0.0].dropFirst().dropLast() }.max() ?? 0
-        guard peak > 0 else { return }
-        let scale = sqrt(Double(peak))
+    private func updateChannels() {
+        let rect = channelsRect
+        let request = Channels(histogram: histogram, size: rect.size, scale: backingScale)
+        guard request != channels else { return }
+        channels = request
+        Task { [weak self] in
+            let image = await Task.detached(priority: .userInitiated) {
+                Self.channelsImage(request.histogram, size: request.size, scale: request.scale)
+            }.value
+            guard let self, channels == request else { return }
+            let size = image.map { CGSize(width: CGFloat($0.width), height: CGFloat($0.height)) } ?? .zero
+            let frame = CGRect(
+                x: rect.minX, y: rect.maxY - size.height / request.scale,
+                width: size.width / request.scale, height: size.height / request.scale,
+            )
+            setImage(image, frame: frame)
+        }
+    }
+
+    /// The channels at `size` points, top row first; nil for an empty histogram.
+    private nonisolated static func channelsImage(_ histogram: Histogram, size: CGSize, scale: CGFloat) -> CGImage? {
+        let bins = [histogram.red, histogram.green, histogram.blue]
+        let peak = bins.flatMap { $0.dropFirst().dropLast() }.max() ?? 0
+        guard peak > 0 else { return nil }
+        let peakScale = sqrt(Double(peak))
         // SwiftUI adds the channels (plus-lighter) in sRGB; blending in the window's wider
         // color space would tint the overlaps. So they are composited in an sRGB bitmap.
-        let pixelScale = backingScale
-        let width = Int((rect.width * pixelScale).rounded(.up)), height = Int((rect.height * pixelScale).rounded(.up))
+        let width = Int((size.width * scale).rounded(.up)), height = Int((size.height * scale).rounded(.up))
         guard width > 0, height > 0, let space = CGColorSpace(name: CGColorSpace.sRGB),
               let bitmap = CGContext(
                   data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue,
               )
-        else { return }
+        else { return nil }
         // Flipped, in points, like the view.
         bitmap.translateBy(x: 0, y: CGFloat(height))
-        bitmap.scaleBy(x: pixelScale, y: -pixelScale)
+        bitmap.scaleBy(x: scale, y: -scale)
         bitmap.setBlendMode(.plusLighter)
-        for (channel, color) in Self.channels {
-            let bins = histogram[keyPath: channel]
+        for (channel, color) in zip(bins, channelColors) {
             let path = CGMutablePath()
-            path.move(to: CGPoint(x: 0, y: rect.height))
-            for (index, count) in bins.enumerated() {
-                let x = Double(index) / Double(bins.count - 1) * rect.width
-                let y = rect.height - min(sqrt(Double(count)) / scale, 1) * rect.height
+            path.move(to: CGPoint(x: 0, y: size.height))
+            for (index, count) in channel.enumerated() {
+                let x = Double(index) / Double(channel.count - 1) * size.width
+                let y = size.height - min(sqrt(Double(count)) / peakScale, 1) * size.height
                 path.addLine(to: CGPoint(x: x, y: y))
             }
-            path.addLine(to: CGPoint(x: rect.width, y: rect.height))
+            path.addLine(to: CGPoint(x: size.width, y: size.height))
             path.closeSubpath()
             bitmap.addPath(path)
             bitmap.setFillColor(color.opacity(0.55).cgColor)
             bitmap.fillPath()
         }
-        guard let image = bitmap.makeImage() else { return }
-        context.saveGState()
-        // The bitmap is stored top row first; undo the view's flip while drawing it.
-        context.translateBy(x: rect.minX, y: rect.maxY)
-        context.scaleBy(x: 1, y: -1)
-        context.draw(
-            image,
-            in: CGRect(x: 0, y: 0, width: CGFloat(width) / pixelScale, height: CGFloat(height) / pixelScale),
-        )
-        context.restoreGState()
+        return bitmap.makeImage()
     }
 
-    private func drawIndicator(clipped: Bool, color: NSColor, trailing: Bool, context _: CGContext) {
+    private func drawIndicator(clipped: Bool, color: NSColor, trailing: Bool) {
         let tint = clipped || showClipping ? color.usingColorSpace(.sRGB).map(RGBA.init) : Palette.tertiaryLabel
         guard let tint else { return }
         let frame = indicatorFrame(trailing: trailing)
