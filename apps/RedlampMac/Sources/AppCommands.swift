@@ -111,6 +111,14 @@ struct AppCommands: Commands {
             Menu("Develop Panels") {
                 ForEach(ShortcutAction.allCases.filter { $0.category == .panels && $0.isMenuShortcut }) { item($0) }
             }
+            Menu("Filmstrip") {
+                mouseItem(.toggleFilmstrip)
+                Toggle("Hide Automatically", isOn: Binding(
+                    get: { model.filmstripHidesAutomatically },
+                    set: { model.filmstripHidesAutomatically = $0 },
+                ))
+                .disabled(model.isModalDialogOpen)
+            }
             Divider()
         }
 

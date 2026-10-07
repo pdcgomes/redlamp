@@ -89,6 +89,18 @@ private struct AppearanceSettings: View {
                 .formFooter()
             }
             CommandPaletteThemeSettings(theme: theme)
+            Section {
+                Toggle("Hide automatically", isOn: Bindable(FilmstripPreference.shared).hidesAutomatically)
+            } header: {
+                Text("Filmstrip")
+            } footer: {
+                Text("""
+                The filmstrip slides in when the pointer reaches the bottom of the window, and away \
+                once it leaves. Turned off, the filmstrip stays up and the photo is fitted above it. \
+                View › Filmstrip and the filmstrip's own menu change this too.
+                """)
+                .formFooter()
+            }
         }
         .formStyle(.grouped)
         .fixedSize(horizontal: false, vertical: true)

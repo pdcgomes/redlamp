@@ -145,6 +145,7 @@ private struct FloatingFilmstrip: View {
     }
 
     var body: some View {
+        @Bindable var model = model
         ZStack(alignment: .bottom) {
             Color.clear
                 .frame(height: PanelMetrics.filmstripTrigger)
@@ -156,6 +157,10 @@ private struct FloatingFilmstrip: View {
             if shown {
                 FilmstripView()
                     .modifier(FloatingPane(opacity: theme.panelOpacity))
+                    // On the pane, so its empty parts take it too; a photo's cell has its own.
+                    .contextMenu {
+                        Toggle("Hide Automatically", isOn: $model.filmstripHidesAutomatically)
+                    }
                     .onHover { inside in
                         overStrip = inside
                         hoverChanged()
