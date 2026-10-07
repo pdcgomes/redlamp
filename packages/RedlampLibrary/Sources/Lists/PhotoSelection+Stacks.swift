@@ -177,6 +177,20 @@ public struct StackSelection: Sendable, Equatable {
         active = id
     }
 
+    /// Takes out the cells `shouldRemove` names, leaving the active one as it is.
+    mutating func removeAll(where shouldRemove: (Int64) -> Bool) {
+        var removing: [Int64] = []
+        bits.forEach { cell in
+            if shouldRemove(Int64(cell)) {
+                removing.append(Int64(cell))
+            }
+            return true
+        }
+        for cell in removing {
+            remove(cell)
+        }
+    }
+
     /// The selected cell nearest `index` in `list`: at it or after it, else before it.
     private func nearestSelected(to index: Int, in list: StackedList) -> Int64? {
         guard count > 0, !list.isEmpty else { return nil }

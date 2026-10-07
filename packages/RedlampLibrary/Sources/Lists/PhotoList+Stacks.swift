@@ -566,7 +566,7 @@ public struct StackedList: Sendable, RandomAccessCollection {
     }
 
     /// `list` with `stacks`, the stacks open here open there: those holding an open one's top photo.
-    private func remade(list: PhotoList, stacks: Stacks) -> StackedList {
+    func remade(list: PhotoList, stacks: Stacks) -> StackedList {
         var open = RowBits(rows: stacks.count)
         opened.forEach { stack in
             guard stack < self.stacks.count, let top = self.stacks.members(of: stack).first else { return true }
@@ -691,6 +691,65 @@ public struct StackedList: Sendable, RandomAccessCollection {
             place += 1
         }
         return nil
+    }
+
+    /// The first cell from `start` up to `end` that `matches`.
+    func firstCell(from start: Int, before end: Int, where matches: (Int64) -> Bool) -> Int64? {
+        let end = Swift.min(end, count)
+        guard start >= 0, start < end else { return nil }
+        var (place, offset) = tree.find(start)
+        var index = start
+        while place < sizes.count, index < end {
+            let size = Int(sizes[place])
+            if size > 1, let cells = openCells(at: place) {
+                for cell in cells.dropFirst(offset).prefix(end - index) {
+                    if matches(cell) {
+                        return cell
+                    }
+                }
+                index += size - offset
+            } else if size == 1 {
+                if matches(list.ids[place]) {
+                    return list.ids[place]
+                }
+                index += 1
+            }
+            offset = 0
+            place += 1
+        }
+        return nil
+    }
+
+    /// The last cell before `end` and from `start` on that `matches`.
+    func lastCell(before end: Int, from start: Int, where matches: (Int64) -> Bool) -> Int64? {
+        let end = Swift.min(end, count)
+        guard start >= 0, start < end else { return nil }
+        var (place, offset) = tree.find(end - 1)
+        var index = end - 1
+        while place >= 0, index >= start {
+            let size = Int(sizes[place])
+            if size > 1, let cells = openCells(at: place) {
+                for cell in cells.prefix(offset + 1).reversed().prefix(index - start + 1) {
+                    if matches(cell) {
+                        return cell
+                    }
+                }
+                index -= offset + 1
+            } else if size == 1 {
+                if matches(list.ids[place]) {
+                    return list.ids[place]
+                }
+                index -= 1
+            }
+            place -= 1
+            offset = place >= 0 ? Int(sizes[place]) - 1 : 0
+        }
+        return nil
+    }
+
+    /// Cells at the places before `place`.
+    func cellCount(before place: Int) -> Int {
+        tree.prefix(place)
     }
 
     /// The last cell before `end` that `matches`.

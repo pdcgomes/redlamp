@@ -15,14 +15,27 @@ public extension BenchScenarios {
 /// generator's, its moments without a pick those of the sessions without one, looser never finding more
 /// moments than tighter, and a card of its first photos grouped as the index groups them. Each Group By
 /// key, the moments without a pick and the summary are timed off the main thread against LIB-28's
-/// budget of a second, their medians held to it and their slowest reported beside them. Nothing is read
-/// from the fixture, so its volume doesn't matter.
+/// budget of a second, their medians held to it and their slowest reported beside them. Then All
+/// Photographs is shown under its moments, as a grid grouped by moment shows it: made off the main
+/// thread within the second, every moment closed and opened (under 50 ms each) and single moments
+/// opened and closed (under 2 ms each), as the main thread does them, and the list made again after a
+/// thousand photos are picked or unpicked, off the main thread within the second; every diff checked
+/// turns the items before into those after. Nothing is read from the fixture, so its volume doesn't
+/// matter.
 public struct GroupScenario: BenchScenario {
     public static let defaultPhotos = 1_000_000
     static let budget = 1000.0
+    static let listBudget = 50.0
+    /// Microseconds.
+    static let groupBudget = 2000.0
     static let runs = 5
     /// The photos the card is made of.
     static let cardPhotos = 20000
+    /// Moments opened and closed one at a time, and how many of their diffs are checked.
+    static let singles = 400
+    static let checked = 8
+    /// Photos picked or unpicked before the list is made again.
+    static let changes = 1000
 
     public let name = "groups"
     public let photos: Int
@@ -47,6 +60,9 @@ public struct GroupScenario: BenchScenario {
         let list = PhotoList(source: .allPhotographs, sort: QuerySort(), ids: store.ids(sortedBy: QuerySort()))
         let measured = try await Task.detached(priority: .userInitiated) {
             try Self.measure(grouping, list: list, library: library)
+        }.value
+        let listed = try await Task.detached(priority: .userInitiated) {
+            try Self.listing(grouping, list: list, library: library)
         }.value
 
         let size = BenchResult.grouped(photos)
@@ -97,6 +113,43 @@ public struct GroupScenario: BenchScenario {
         results.append(BenchResult(
             scenario: name, id: "library-groups-loosest", name: "Moments at the loosest step",
             value: Double(measured.steps.last ?? 0), unit: "moments",
+        ))
+        let items = BenchResult.grouped(listed.items)
+        results += timed(
+            listed.made, id: "library-groups-list",
+            name: "All Photographs of \(size) under its moments (\(items) items), made off the main thread",
+            budget: .below(Self.budget, "ms"),
+        )
+        results += timed(
+            listed.closing, id: "library-groups-close-all", name: "Every moment closed, with the diff",
+            budget: .below(Self.listBudget, "ms"),
+        )
+        results += timed(
+            listed.opening, id: "library-groups-open-all", name: "Every moment opened, with the diff",
+            budget: .below(Self.listBudget, "ms"),
+        )
+        results += timed(
+            listed.closingOne, id: "library-groups-close-one", name: "A moment closed, with the diff",
+            inMicroseconds: true, budget: .below(Self.groupBudget, "µs"),
+        )
+        results += timed(
+            listed.openingOne, id: "library-groups-open-one", name: "A moment opened, with the diff",
+            inMicroseconds: true, budget: .below(Self.groupBudget, "µs"),
+        )
+        results += timed(
+            listed.updating, id: "library-groups-update",
+            name: "The list under its moments made again after \(BenchResult.grouped(Self.changes)) photos changed, "
+                + "with the diff, off the main thread",
+            budget: .below(Self.budget, "ms"),
+        )
+        results.append(BenchResult(
+            scenario: name, id: "library-groups-diff-mismatched", name: "Items a diff didn't put in place",
+            value: Double(listed.mismatched), unit: "items", budget: .exactly(0, "items"),
+        ))
+        results.append(BenchResult(
+            scenario: name, id: "library-groups-update-mismatched",
+            name: "Items the diff of the list made again didn't put in place",
+            value: Double(listed.updateMismatched), unit: "items", budget: .exactly(0, "items"),
         ))
         return results
     }
@@ -181,20 +234,128 @@ public struct GroupScenario: BenchScenario {
         return measured
     }
 
-    /// A step's median, under `budget`, and its slowest, in milliseconds.
+    /// What showing All Photographs under its moments measures.
+    struct Listed: Sendable {
+        var made = ListScenario.Timings()
+        var closing = ListScenario.Timings()
+        var opening = ListScenario.Timings()
+        var closingOne = ListScenario.Timings()
+        var openingOne = ListScenario.Timings()
+        var updating = ListScenario.Timings()
+        var items = 0
+        var mismatched = 0
+        var updateMismatched = 0
+    }
+
+    /// Shows `list` under its moments: made, every moment closed and opened again, single moments
+    /// closed and opened, and made again once `changes` photos are picked or unpicked, with every other
+    /// moment closed.
+    private static func listing(
+        _ grouping: LibraryGrouping, list: PhotoList, library: SyntheticSessionLibrary,
+    ) throws -> Listed {
+        let clock = ContinuousClock()
+        var listed = Listed()
+        var grouped = grouping.grouped(list, by: .moment)
+        for _ in 0 ..< runs {
+            let started = clock.now
+            grouped = grouping.grouped(list, by: .moment)
+            listed.made.add(clock.now - started)
+        }
+        listed.items = grouped.count
+        for run in 0 ..< runs {
+            let open = run == 0 ? Array(grouped) : []
+            var started = clock.now
+            let closed = grouped.closeAll()
+            listed.closing.add(clock.now - started)
+            let shut = run == 0 ? Array(grouped) : []
+            if run == 0 {
+                listed.mismatched += mismatches(grouped.applying(closed, to: open), shut)
+            }
+            started = clock.now
+            let opened = grouped.openAll()
+            listed.opening.add(clock.now - started)
+            if run == 0 {
+                listed.mismatched += mismatches(grouped.applying(opened, to: shut), Array(grouped))
+            }
+        }
+        var random = SeededRandom(seed: 41)
+        for single in 0 ..< (grouped.groups.isEmpty ? 0 : singles) {
+            let group = random.int(below: grouped.groups.count)
+            let checking = single < checked
+            let before = checking ? Array(grouped) : []
+            var started = clock.now
+            let closed = grouped.close(group)
+            listed.closingOne.add(clock.now - started)
+            let after = checking ? Array(grouped) : []
+            started = clock.now
+            let opened = grouped.open(group)
+            listed.openingOne.add(clock.now - started)
+            if checking {
+                listed.mismatched += mismatches(grouped.applying(closed, to: before), after)
+                listed.mismatched += mismatches(grouped.applying(opened, to: after), Array(grouped))
+            }
+        }
+
+        let pick = PhotoRecord.code(for: .pick)
+        let step = max(1, library.rows.count / changes)
+        let rows = stride(from: 0, to: library.rows.count, by: step).prefix(changes).map { index in
+            var row = library.rows[index]
+            row.hot.flag = row.hot.flag == pick ? 0 : pick
+            return row
+        }
+        var store = grouping.store
+        store.apply(ColumnStore.Changes(upserted: rows)) { library.rows[Int($0) - 1].hot.name }
+        let changed = LibraryGrouping(store: store, names: grouping.names, stacks: grouping.stacks)
+        for group in grouped.groups.indices where group % 2 == 1 {
+            grouped.close(group)
+        }
+        var selection = StackSelection()
+        var updated = (list: grouped, diff: PhotoListDiff())
+        for _ in 0 ..< runs {
+            let started = clock.now
+            updated = grouped.updated(list: list, grouping: changed, changed: rows.map(\.hot.id), selection: &selection)
+            listed.updating.add(clock.now - started)
+        }
+        let (same, _) = GroupedList.match(grouped.groups, updated.list.groups)
+        let numbers = GroupedList.headerNumbers(same, after: grouped.groups.count)
+        let base = GroupedList.headerBase(grouped, updated.list)
+        var items = Array(GroupedList.itemIDs(of: grouped, base: base) { $0 }.ids)
+        let after = Array(GroupedList.itemIDs(of: updated.list, base: base) { numbers[$0] }.ids)
+        updated.diff.apply(to: &items) { after[$0] }
+        listed.updateMismatched = mismatches(items, after)
+        return listed
+    }
+
+    /// Places where `items` differs from `expected`, every one of them when their counts differ.
+    private static func mismatches<Item: Equatable>(_ items: [Item], _ expected: [Item]) -> Int {
+        items.count == expected.count ? zip(items, expected).count { $0 != $1 } : max(items.count, expected.count)
+    }
+
+    /// A step's median, under `budget`, and its slowest, in milliseconds or microseconds.
     private func timed(
-        _ timings: ListScenario.Timings, id: String, name: String, budget: BenchBudget,
+        _ timings: ListScenario.Timings, id: String, name: String, inMicroseconds: Bool = false,
+        budget: BenchBudget,
     ) -> [BenchResult] {
-        [
+        let (unit, value) = inMicroseconds ? ("µs", ListScenario.microseconds) : ("ms", ListScenario.milliseconds)
+        return [
             BenchResult(
                 scenario: self.name, id: id, name: "\(name), median of \(timings.samples.count)",
-                value: ListScenario.milliseconds(timings.median), unit: "ms", budget: budget,
+                value: value(timings.median), unit: unit, budget: budget,
             ),
             BenchResult(
-                scenario: self.name, id: id + "-slowest", name: "\(name), slowest",
-                value: ListScenario.milliseconds(timings.slowest), unit: "ms",
+                scenario: self.name, id: id + "-slowest", name: "\(name), slowest", value: value(timings.slowest),
+                unit: unit,
             ),
         ]
+    }
+}
+
+extension GroupedList {
+    /// `diff` applied to `old`'s items, its inserted items taken from this list's.
+    func applying(_ diff: PhotoListDiff, to old: [Item]) -> [Item] {
+        var items = old
+        diff.apply(to: &items) { self[$0] }
+        return items
     }
 }
 

@@ -10,7 +10,10 @@ struct GroupBenchTests {
         let results = try await GroupScenario(photos: 30000).measure(seed: 5)
         let report = BenchReport(fixture: "synthetic photos", profile: "ssd", photos: 30000, results: results)
         #expect(report.failed.isEmpty, "\(report.failed)")
-        #expect(results.count { $0.budget?.kind == .exactly } == 9)
+        #expect(results.count { $0.budget?.kind == .exactly } == 11)
+        for id in ["list", "close-all", "open-all", "close-one", "open-one", "update"] {
+            #expect(results.contains { $0.id == "library-groups-\(id)" && $0.budget != nil }, "\(id)")
+        }
         for key in GroupKey.allCases {
             #expect(results.contains { $0.id == "library-groups-\(key.rawValue)" && $0.budget != nil }, "\(key)")
         }
