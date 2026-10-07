@@ -620,10 +620,8 @@ struct EngineMemoryTests {
             engine.renderQueue.sync {}
             try await Task.sleep(for: .milliseconds(20))
         }
-        withKnownIssue("MEM-03: the engine's caches keep closed photos") {
-            #expect(photo == nil)
-            #expect(retouched == nil)
-        }
+        #expect(photo == nil)
+        #expect(retouched == nil)
     }
 
     /// The photo open now, fitted in a canvas.

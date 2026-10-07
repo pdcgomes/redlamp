@@ -291,6 +291,22 @@ final class RetouchStage: @unchecked Sendable {
         return entry.interim
     }
 
+    /// Lets go of the retouches and Remove fills of photos other than `session`'s, and of their
+    /// sessions.
+    func keepOnly(_ session: ImageSession) {
+        let original = session.original
+        let photo = ObjectIdentifier(original)
+        let dropped = lock.withLock {
+            let dropped = (entries.filter { $0.original !== original }, fills.filter { $0.key.session != photo })
+            entries.removeAll { $0.original !== original }
+            fills = fills.filter { $0.key.session == photo }
+            fillOrder.removeAll { $0.session != photo }
+            return dropped
+        }
+        // Released once unlocked: a buffer dropped uncommitted runs its completed handlers then.
+        withExtendedLifetime(dropped) {}
+    }
+
     /// Forgets the retouches whose spots were going into `commands`, which never ran or failed on
     /// the GPU, so the next render puts them in again.
     func forget(_ commands: any MTLCommandBuffer) {

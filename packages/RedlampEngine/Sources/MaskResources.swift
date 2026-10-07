@@ -477,6 +477,27 @@ final class MaskResources {
         analysisGuide = kept?.analysisGuide
     }
 
+    /// Lets go of the photo rendered last unless it's `kept`, keeping its rasters and guides aside
+    /// as `use(_:commands:)` does, and of what is kept for photos that are gone.
+    func keepOnly(_ kept: ImageSession, queue: any MTLCommandQueue) {
+        parked.removeAll { $0.session == nil }
+        edgeMaps.removeAll { $0.session == nil }
+        colorMaps.removeAll { $0.session == nil }
+        guard let session, session.original !== kept.original else { return }
+        park(session, queue: queue)
+        self.session = nil
+        rasterSize = .zero
+        guideSize = .zero
+        scratch = nil
+        rasters = nil
+        keys = []
+        lastUsed = []
+        paintBase = nil
+        editGuide = nil
+        editGuideGeneration = 0
+        analysisGuide = nil
+    }
+
     /// The bytes each photo kept aside holds, oldest first.
     var parkedSizes: [Int] {
         parked.map(\.bytes)

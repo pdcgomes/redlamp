@@ -162,12 +162,13 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             },
         )
         let pressure = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .global())
-        pressure.setEventHandler { [weak sessions, weak pressure] in
-            guard let pressure else { return }
-            sessions?.relieve(pressure.data)
+        memoryPressure = pressure
+        pressure.setEventHandler { [weak self, weak pressure] in
+            guard let self, let pressure else { return }
+            sessions.relieve(pressure.data)
+            renderQueue.async { self.detailStage.keepOnly(nil) }
         }
         pressure.resume()
-        memoryPressure = pressure
         retouch.onRefresh = { [weak self] in
             guard let latest = self?.renderState.withLock({ $0.latest }) else { return }
             self?.render(latest)
@@ -189,12 +190,14 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             stacks.retryUnreadableFrames(of: url)
         }
         let built = try await sessions.session(for: url)
-        let installed = openGeneration.withLock { latest in
-            guard !Task.isCancelled, latest == generation else { return false }
-            session.withLock { $0 = built }
-            return true
+        let changed = openGeneration.withLock { latest -> Bool? in
+            guard !Task.isCancelled, latest == generation else { return nil }
+            return install(built)
         }
-        guard installed else { throw CancellationError() }
+        guard let changed else { throw CancellationError() }
+        if changed {
+            release(keeping: built)
+        }
         registerEmbeddedLook(built)
         warmIfWanted(built)
         return built.info
@@ -202,13 +205,67 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
 
     public func openIfReady(_ url: URL) -> ImageInfo? {
         guard let ready = sessions.cached(url) else { return nil }
-        openGeneration.withLock { latest in
+        let changed = openGeneration.withLock { latest in
             latest += 1
-            session.withLock { $0 = ready }
+            return install(ready)
+        }
+        if changed {
+            release(keeping: ready)
         }
         registerEmbeddedLook(ready)
         warmIfWanted(ready)
         return ready.info
+    }
+
+    /// Makes `next` the photo open; true when it's another photo than the one open before.
+    private func install(_ next: ImageSession) -> Bool {
+        session.withLock { current in
+            defer { current = next }
+            return current?.original !== next.original
+        }
+    }
+
+    /// Lets go of what the caches keep for photos other than `kept`, so a photo is freed once the
+    /// session cache lets go of it. The masks keep the photo shown before aside, holding it weakly.
+    private func release(keeping kept: ImageSession) {
+        let photo = kept.original
+        analysisCache.withLock {
+            if $0?.session.original !== photo {
+                $0 = nil
+            }
+        }
+        matteCache.withLock {
+            if $0?.session.original !== photo {
+                $0 = nil
+            }
+        }
+        // The models' results are keyed by the analysis render they were made from.
+        let hashes = Set([analysisCache.withLock { $0?.hash }, matteCache.withLock { $0?.hash }].compactMap(\.self))
+        func keepOnlyThisPhoto<Value>(_ cache: borrowing Mutex<Value?>, _ hash: (Value) -> String) {
+            cache.withLock { value in
+                if let held = value, !hashes.contains(hash(held)) {
+                    value = nil
+                }
+            }
+        }
+        keepOnlyThisPhoto(depthAnything3Cache) { $0.hash }
+        keepOnlyThisPhoto(objectEmbeddingCache) { $0.hash }
+        keepOnlyThisPhoto(sam3Features) { $0.hash }
+        keepOnlyThisPhoto(landscapeCache) { $0.hash }
+        keepOnlyThisPhoto(peoplePartsCache) { $0.hash }
+        keepOnlyThisPhoto(personMatteCache) { $0.hash }
+        keepOnlyThisPhoto(subjectMatte) { $0.key.analysisHash }
+        renderQueue.async { [self] in
+            detailStage.keepOnly(photo)
+            retouch.keepOnly(photo)
+            masks.keepOnly(photo, queue: queue)
+            if comparison?.session.original !== photo {
+                comparison = nil
+            }
+            if lastOverview?.session.original !== photo {
+                lastOverview = nil
+            }
+        }
     }
 
     public func prefetch(_ urls: [URL]) {
