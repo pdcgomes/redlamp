@@ -375,9 +375,16 @@ struct LibraryFilterTests {
         window.setContentSize(NSSize(width: 1600, height: 1000))
         defer { window.contentViewController = nil }
         model.perform(.toggleFilterBar)
+        let module = try #require(Self.find(LibraryModuleView.self, in: window.contentView))
+        try #require(module.showsFilmstrip)
 
         try await filtered(model, "camera:X-T5 rating:4")
         #expect(model.items.isEmpty)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(
+            module.showsFilmstrip,
+            "the filmstrip stays as a filter finds nothing, so the grid doesn't change height",
+        )
         try await eventually { filters.removal != nil }
         #expect(filters.removal?.term == "rating:4" && filters.removal?.count == 2, "the X-T5's two photos")
         let bar = try #require(Self.find(LibraryFilterBarView.self, in: window.contentView))

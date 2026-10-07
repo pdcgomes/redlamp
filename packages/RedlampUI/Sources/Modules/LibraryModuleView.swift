@@ -21,7 +21,7 @@ final class LibraryModuleView: NSView {
     private var showsFilterBar = false
     /// The Library module is the one shown (`ModuleContentController`).
     private(set) var isShownModule = false
-    private var showsFilmstrip = true
+    private(set) var showsFilmstrip = true
 
     private static let filmstripHeight: CGFloat = 110
 
@@ -94,8 +94,10 @@ final class LibraryModuleView: NSView {
             },
             Tracker { [weak self] in
                 guard let self else { return }
+                // A filter that finds nothing keeps the strip: the grid keeps its height as keys are typed.
+                let library = model.library
                 showFilmstrip(model.filmstripVisible && model.lightsOut == 0
-                    && (model.library.count > 0 || model.library.isOpenFolderUnavailable))
+                    && (library.count > 0 || library.isFiltered || library.isOpenFolderUnavailable))
             },
             Tracker { [weak self] in
                 guard let self, let filters = model.libraryFilters else { return }
