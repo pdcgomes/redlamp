@@ -54,7 +54,11 @@ struct FoldersPanelTests {
         model.open([root.appending(path: "Trip")])
         let (list, window) = showPanel(model)
         defer { window.contentView = nil }
+        try await eventually { model.library.node(for: root.appending(path: "Trip")) != nil }
+        #expect(rows(list.folders).first?.count == nil, "without the library, its subfolders' photos aren't counted")
+        #expect(rows(list.folders).first?.isSelectable == true)
 
+        model.setIncludesSubfolders(false)
         try await eventually { rows(list.folders).first?.count == 2 }
         let trip = try #require(rows(list.folders).first)
         #expect(trip.name == "Trip" && trip.isRoot && trip.hasSubfolders)
@@ -126,19 +130,20 @@ struct FoldersPanelTests {
         #expect(model.folder?.lastPathComponent == "Empty")
     }
 
-    @Test func `a folder holding only subfolders opens with Show Photos in Subfolders`() async throws {
+    @Test func `a folder holding only subfolders opens with Show Photos in Subfolders, which is on by default`(
+    ) async throws {
         defer { try? FileManager.default.removeItem(at: root) }
         try photos(["Year/March/a.ARW"])
         let model = EditorModel(engine: StubEngine())
         model.library.add([root.appending(path: "Year")])
         let (list, window) = showPanel(model)
         defer { window.contentView = nil }
+        try await eventually { model.library.node(for: root.appending(path: "Year")) != nil }
+        #expect(rows(list.folders).first?.isSelectable == true)
+
+        model.library.setIncludesSubfolders(false)
         try await eventually { rows(list.folders).first?.count == 0 }
         #expect(rows(list.folders).first?.isSelectable == false)
-
-        model.library.setIncludesSubfolders(true)
-        try await eventually { rows(list.folders).first?.isSelectable == true }
-        #expect(rows(list.folders).first?.isSelectable == true)
     }
 
     @Test func `a missing root is flagged in the panel`() async throws {

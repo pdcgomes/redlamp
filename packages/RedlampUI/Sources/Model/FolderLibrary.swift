@@ -55,8 +55,8 @@ public final class FolderLibrary {
     /// Roots that can't be found now (deleted, or on a volume that isn't mounted).
     public internal(set) var missing: Set<UUID> = []
     public internal(set) var openFolder: URL?
-    /// Show Photos in Subfolders.
-    public internal(set) var includesSubfolders = false
+    /// Show Photos in Subfolders: on, as in Lightroom Classic, unless the user turned it off.
+    public internal(set) var includesSubfolders = true
     /// The folder tree's expanded rows (paths). Not observed, like `tree`: the Folders panel
     /// changes only the rows a change touches.
     @ObservationIgnored public internal(set) var expandedFolders: Set<String> = []
@@ -65,6 +65,8 @@ public final class FolderLibrary {
     @ObservationIgnored public internal(set) var tree: [String: FolderNode] = [:]
     @ObservationIgnored var listingTree: Set<String> = []
     @ObservationIgnored var treeObservers: [UUID: @MainActor (Set<String>) -> Void] = [:]
+    /// The library's counts of the folders it has indexed, for the tree (see `FolderLibrary+Library`).
+    @ObservationIgnored var counting = Counting()
     /// The open folder (and with subfolders, its tree) is still being listed.
     public internal(set) var isListing = false
     /// The open folder can't be listed (its volume went away).
@@ -266,13 +268,14 @@ public final class FolderLibrary {
         }
     }
 
-    /// Shows or hides the photos of the open folder's subfolders.
+    /// Shows or hides the photos of the open folder's subfolders, and counts them in the folder tree or
+    /// not: the user's choice, kept across launches.
     public func setIncludesSubfolders(
         _ include: Bool, opened: @escaping @MainActor ([LibraryItem]) -> Void = { _ in },
     ) {
         guard include != includesSubfolders else { return }
         includesSubfolders = include
-        saveSettings()
+        defaults?.set(include, forKey: Key.subfolders)
         if let openFolder {
             open(openFolder, opened: opened)
         }

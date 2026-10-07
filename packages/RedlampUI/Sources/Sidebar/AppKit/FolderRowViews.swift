@@ -8,14 +8,18 @@ struct FolderRow: Equatable {
     let name: String
     /// The root this folder is in.
     let root: WorkingFolder
-    /// Photos directly in it, once listed.
+    /// The photos it shows, once known: those directly in it, or with Show Photos in Subfolders those
+    /// below it too (`FolderLibrary.photoCount(of:)`).
     let count: Int?
     let hasSubfolders: Bool
     let isMissing: Bool
     let isOpen: Bool
-    /// Opening it would show photos: it has some, or (with Show Photos in Subfolders) it has
-    /// subfolders that may. Folders not listed yet count as selectable, so rows don't flicker.
+    /// Opening it would show photos: it counts some, or, not counted yet, has subfolders that may
+    /// with Show Photos in Subfolders. Folders not listed yet count as selectable, so rows don't
+    /// flicker.
     let isSelectable: Bool
+    /// Show Photos in Subfolders, which its count and its help follow.
+    var includesSubfolders = false
 
     /// Listed, and nothing to show: dimmed, and clicking it doesn't open it.
     var isEmpty: Bool {
@@ -28,43 +32,52 @@ struct FolderRow: Equatable {
 }
 
 extension SidebarCellView {
-    /// What a folder row shows beside its name.
-    struct FolderDecoration {
-        let symbol: String
-        let color: RGBA
-        let trailing: NSView?
+    /// What a folder's row shows: its name, its help, its icon, and at its end its count or, for a missing
+    /// root, a question mark. A row whose count changes shows the new one without anything else changing.
+    struct FolderDecoration: Equatable {
+        var name: String
+        var nameColor: RGBA
+        var help: String
+        var accessibilityLabel: String
+        var symbol: String
+        var color: RGBA
+        var count: String?
+        var isMissing = false
     }
 
     /// A folder's icon, name and photo count; a missing root is dimmed with a question mark, and a
     /// folder with no photos to show is dimmed.
-    func showFolder(_ row: FolderRow, label: NSTextField) -> FolderDecoration {
+    static func folderDecoration(_ row: FolderRow) -> FolderDecoration {
         let dimmed = row.isMissing || row.isEmpty
-        label.stringValue = row.name
-        label.textColor = (dimmed ? Palette.tertiaryLabel : row.isOpen ? Palette.labelHover : Palette.label).nsColor
-        toolTip = if row.isMissing {
+        let help = if row.isMissing {
             "\(row.root.path)\nNot found: it may be on a disk that isn't connected"
         } else if row.isEmpty {
-            row.hasSubfolders
+            row.hasSubfolders && !row.includesSubfolders
                 ? "\(row.url.path)\nNo photos directly in this folder. Turn on Show Photos in Subfolders to see the ones below it."
+                : row.hasSubfolders ? "\(row.url.path)\nNo photos in this folder or the folders in it"
                 : "\(row.url.path)\nNo photos in this folder"
+        } else if row.hasSubfolders {
+            row.includesSubfolders
+                ? "\(row.url.path)\nCounts the photos in this folder and the folders in it"
+                : "\(row.url.path)\nCounts the photos directly in this folder"
         } else {
             row.url.path
         }
-        setAccessibilityLabel(row
-            .name + (row.isMissing ? ", missing" : row.isEmpty ? ", no photos" : row.isOpen ? ", open" : ""))
-        var trailing: NSView?
-        if let count = row.count, !row.isMissing {
-            let text = NSTextField(labelWithString: count.formatted())
-            text.font = Typography.caption.nsFont
-            text.textColor = Palette.tertiaryLabel.nsColor
-            trailing = text
-        } else if row.isMissing {
-            trailing = SymbolImageView("questionmark.circle", pointSize: 10, color: Palette.tertiaryLabel.nsColor)
-        }
-        let symbol = row.isMissing ? "folder.badge.questionmark" : row.isOpen ? "folder.fill" : "folder"
         return FolderDecoration(
-            symbol: symbol, color: dimmed ? Palette.tertiaryLabel : Palette.secondaryLabel, trailing: trailing,
+            name: row.name,
+            nameColor: dimmed ? Palette.tertiaryLabel : row.isOpen ? Palette.labelHover : Palette.label,
+            help: help,
+            accessibilityLabel: row.name + (row.isMissing ? ", missing" : row.isEmpty ? ", no photos"
+                : row.count.map { ", " + Self.photos($0) } ?? "") + (row.isOpen ? ", open" : ""),
+            symbol: row.isMissing ? "folder.badge.questionmark" : row.isOpen ? "folder.fill" : "folder",
+            color: dimmed ? Palette.tertiaryLabel : Palette.secondaryLabel,
+            count: row.isMissing ? nil : row.count?.formatted(), isMissing: row.isMissing,
         )
+    }
+
+    /// "1 photo", "1,204 photos".
+    static func photos(_ count: Int) -> String {
+        "\(count.formatted()) photo\(count == 1 ? "" : "s")"
     }
 
     /// Show in Finder, Show Photos in Subfolders, Remove from Folders, Locate….
@@ -74,11 +87,11 @@ extension SidebarCellView {
             menu.addItem(NSMenuItem(title: "Show in Finder") {
                 NSWorkspace.shared.activateFileViewerSelecting([row.url])
             })
-            let subfolders = NSMenuItem(title: "Show Photos in Subfolders") {
+            let subfolders = NSMenuItem(title: ShortcutAction.showPhotosInSubfolders.title) {
                 if model.folder != row.url {
                     model.showFolder(row.url)
                 }
-                model.setIncludesSubfolders(!model.library.includesSubfolders)
+                model.perform(.showPhotosInSubfolders)
             }
             subfolders.state = model.library.includesSubfolders ? .on : .off
             menu.addItem(subfolders)

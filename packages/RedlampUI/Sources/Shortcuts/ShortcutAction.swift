@@ -105,7 +105,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case libraryModule, developModule, previousModule, gridView, loupeView, compareView, surveyView
 
     /// Library
-    case cycleGridStyle, largerThumbnails, smallerThumbnails, showInFinder
+    case cycleGridStyle, largerThumbnails, smallerThumbnails, showInFinder, showPhotosInSubfolders
     case toggleFilterBar, toggleFilters, lockFilters
     case sortByFolder, sortByCaptureTime, sortByName, sortByRating, sortByEditTime, sortByModified, sortByFileSize
     case reverseSort
@@ -158,7 +158,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         switch self {
         case .libraryModule, .developModule, .previousModule, .gridView, .loupeView, .compareView, .surveyView:
             .modules
-        case .cycleGridStyle, .largerThumbnails, .smallerThumbnails, .showInFinder,
+        case .cycleGridStyle, .largerThumbnails, .smallerThumbnails, .showInFinder, .showPhotosInSubfolders,
              .toggleFilterBar, .toggleFilters, .lockFilters, .sortByFolder, .sortByCaptureTime, .sortByName,
              .sortByRating, .sortByEditTime, .sortByModified, .sortByFileSize, .reverseSort:
             .library
@@ -209,6 +209,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .largerThumbnails: "Increase Thumbnail Size"
         case .smallerThumbnails: "Decrease Thumbnail Size"
         case .showInFinder: "Show in Finder"
+        case .showPhotosInSubfolders: "Show Photos in Subfolders"
         case .toggleFilterBar: "Show / Hide Filter Bar"
         case .toggleFilters: "Enable Filters"
         case .lockFilters: "Lock Filters"
@@ -345,8 +346,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         // In Library, where Develop's Before / After key shows the filter bar, as in Lightroom Classic.
         case .toggleFilterBar: [.char("\\")]
         case .toggleFilters: [.char("l", command: true)]
-        case .lockFilters, .sortByFolder, .sortByCaptureTime, .sortByName, .sortByRating, .sortByEditTime,
-             .sortByModified, .sortByFileSize, .reverseSort: []
+        case .showPhotosInSubfolders, .lockFilters, .sortByFolder, .sortByCaptureTime, .sortByName, .sortByRating,
+             .sortByEditTime, .sortByModified, .sortByFileSize, .reverseSort: []
         case .beforeAfter: [.char("\\")]
         case .nextCompareLayout: [.char("y")]
         case .previousCompareLayout: [.char("y", shift: true)]

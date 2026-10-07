@@ -103,16 +103,19 @@ public extension FolderLibrary {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 var appeared: [WorkingFolder] = []
+                // `missing` changes only when a root is found or lost: any change to it shows the roots
+                // again, and a change in a root's own folder comes here.
                 for (root, resolved) in found where roots.contains(where: { $0.id == root.id }) {
                     if let resolved {
-                        if missing.remove(root.id) != nil {
+                        if missing.contains(root.id) {
+                            missing.remove(root.id)
                             appeared.append(resolved)
                             startAccess(resolved)
                         }
                         if resolved != root {
                             replaceRoot(resolved)
                         }
-                    } else {
+                    } else if !missing.contains(root.id) {
                         missing.insert(root.id)
                     }
                 }
@@ -126,6 +129,19 @@ public extension FolderLibrary {
     /// What the tree knows of `folder`; nil until it has been listed (see `listTree`).
     func node(for folder: URL) -> FolderNode? {
         tree[folder.standardizedFileURL.path]
+    }
+
+    /// The photos `folder`'s row counts, as Show Photos in Subfolders shows it: those directly in it, or
+    /// with it on those in every folder below it too. A folder the library has indexed is counted from its
+    /// index (`countFolders`); any other from its listing, which counts only the photos directly in it, so
+    /// with Show Photos in Subfolders on one with subfolders isn't counted. Nil until known.
+    func photoCount(of folder: URL) -> Int? {
+        let path = folder.standardizedFileURL.path
+        if let counted = counting.counts.folders[path] {
+            return includesSubfolders ? counted.all : counted.own
+        }
+        guard let node = tree[path] else { return nil }
+        return includesSubfolders && !node.subfolders.isEmpty ? nil : node.count
     }
 
     /// Lists `folder` for the tree: when its row first shows, and again when it changes on disk.
@@ -215,7 +231,10 @@ extension FolderLibrary {
     enum Key {
         static let roots = "folders.roots"
         static let open = "folders.open"
-        static let subfolders = "folders.subfolders"
+        /// Show Photos in Subfolders as the user last set it, written only when they do. Earlier versions
+        /// kept it in `folders.subfolders`, written at every save, which can't tell a choice from the
+        /// default they had, off, so it isn't read.
+        static let subfolders = "folders.includesSubfolders"
         static let expanded = "folders.expanded"
         static let lastPhotos = "folders.lastPhotos"
         /// The single folder earlier versions remembered.
@@ -232,7 +251,7 @@ extension FolderLibrary {
             roots = [WorkingFolder(path: URL(fileURLWithPath: legacy).standardizedFileURL.path)]
             openFolder = roots.first?.url
         }
-        includesSubfolders = defaults.bool(forKey: Key.subfolders)
+        includesSubfolders = defaults.object(forKey: Key.subfolders) as? Bool ?? true
         expandedFolders = Set(defaults.stringArray(forKey: Key.expanded) ?? [])
         let pairs = defaults.array(forKey: Key.lastPhotos) as? [[String]] ?? []
         for pair in pairs where pair.count == 2 {
@@ -245,7 +264,6 @@ extension FolderLibrary {
         guard let defaults else { return }
         defaults.set(try? JSONEncoder().encode(roots), forKey: Key.roots)
         defaults.set(openFolder?.standardizedFileURL.path, forKey: Key.open)
-        defaults.set(includesSubfolders, forKey: Key.subfolders)
         defaults.set(expandedFolders.sorted(), forKey: Key.expanded)
         defaults.set(
             lastPhotoOrder.compactMap { folder in lastPhotos[folder].map { [folder, $0] } },

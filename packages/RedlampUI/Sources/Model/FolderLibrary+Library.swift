@@ -28,6 +28,16 @@ struct FromLibrary {
     var gaveUp: Int?
 }
 
+/// What `FolderLibrary` keeps for counting the folder tree from the library.
+struct Counting {
+    var counts = FolderCounts()
+    /// Counting runs, and was asked for again meanwhile.
+    var running = false
+    var again = false
+    var observation: LibraryObservation?
+    var observers: [UUID: @MainActor (Set<String>) -> Void] = [:]
+}
+
 /// Folders shown from the library (LIB-10). A folder it has indexed is shown from its photo list:
 /// the same photos, in the same order, with the same badges as listing it gives, and LibraryLive's
 /// changes become `LibraryDiff`s in place of FSEvents' listings. A folder it hasn't indexed yet is
@@ -35,9 +45,10 @@ struct FromLibrary {
 /// so the filmstrip doesn't jump.
 public extension FolderLibrary {
     /// Shows the folders `service` has indexed from its photo lists, starting it, and has it follow
-    /// the folders in Folders.
+    /// the folders in Folders; the tree counts the folders it has indexed from it.
     func attach(_ service: LibraryService) {
         self.service = service
+        counting.observation = service.observe { [weak self] in self?.countFolders() }
         service.start(following: roots.map(\.url))
     }
 
@@ -328,5 +339,68 @@ extension FolderLibrary {
                 retryLibrary(generation)
             }
         }
+    }
+
+    // MARK: - Counting the tree
+
+    /// Counting at most this often while folders keep changing: it reads every folder's count.
+    static let countingInterval = Duration.seconds(1)
+
+    /// Counts the folders the library has indexed again, off the main thread, and tells the tree the paths
+    /// whose counts changed: when the library opens, and as folders are indexed, which change tracking does
+    /// as photos come and go.
+    @_spi(Harness) public func countFolders() {
+        guard let core = service?.core else { return }
+        guard !counting.running else {
+            counting.again = true
+            return
+        }
+        counting.running = true
+        let before = counting.counts
+        Task { [weak self] in
+            let started = ContinuousClock.now
+            let counted = await Task.detached(priority: .utility) { () -> (FolderCounts, Set<String>)? in
+                guard let counts = try? await FolderCounts.read(index: core.index, engine: core.engine) else {
+                    return nil
+                }
+                return (counts, counts.changed(from: before))
+            }.value
+            guard let self else { return }
+            if let (counts, changed) = counted {
+                counting.counts = counts
+                if !changed.isEmpty {
+                    for observer in counting.observers.values {
+                        observer(changed)
+                    }
+                }
+            }
+            guard counting.again else {
+                counting.running = false
+                return
+            }
+            counting.again = false
+            try? await Task.sleep(for: max(Self.countingInterval - (ContinuousClock.now - started), .zero))
+            counting.running = false
+            countFolders()
+        }
+    }
+
+    /// Calls `handler` with the paths of folders whose counts from the library changed.
+    func observeCounts(_ handler: @escaping @MainActor (Set<String>) -> Void) -> LibraryObservation {
+        let id = UUID()
+        counting.observers[id] = handler
+        return LibraryObservation { [weak self] in self?.counting.observers.removeValue(forKey: id) }
+    }
+
+    /// Returns once the counts asked for so far are in.
+    @_spi(Harness) public func countedFolders() async {
+        while counting.running {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
+    /// The library's index, for the performance harness to change what it counts.
+    @_spi(Harness) public var libraryIndex: LibraryIndex? {
+        service?.core?.index
     }
 }

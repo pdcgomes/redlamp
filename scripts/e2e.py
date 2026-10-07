@@ -267,6 +267,9 @@ def seed_defaults(relay: int) -> None:
     # would stop an export to a name an earlier scenario's export took. A value the app can't read is Ask.
     previous = json.dumps({"revealInFinder": False, "existingFiles": "addNumber"}).encode().hex()
     defaults("write", BUNDLE_ID, "exportPrevious", "-data", previous)
+    # Show Photos in Subfolders, on by default, off: the photos folder keeps a focus bracket and a damaged
+    # raw in subfolders, which the scenarios that open every photo of the folder leave out.
+    defaults("write", BUNDLE_ID, "folders.includesSubfolders", "-bool", "NO")
 
 
 # ---------------------------------------------------------------- the stub relay

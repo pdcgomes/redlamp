@@ -105,6 +105,11 @@
                 }, observe: { _ in "\(Revealed.photos.count)" }, restore: { app in
                     try app.main { $0.libraryViews.revealInFinder = Revealed.finder }
                 })
+            case .showPhotosInSubfolders:
+                ActionCheck(action: action, observe: { "\($0.library.includesSubfolders)" }, restore: { app in
+                    try app.main { _ = $0.perform(action) }
+                    try app.wait("the folder listed again", timeout: 20) { !$0.library.isListing }
+                })
             // View
             case .beforeAfter: .toggle(action) { "\($0.showBefore)" }
             case .nextCompareLayout, .previousCompareLayout:

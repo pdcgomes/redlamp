@@ -15,6 +15,7 @@ extension ShortcutAction {
         .largerThumbnails: ["thumbnail size", "bigger", "larger", "zoom", "grid", "library"],
         .smallerThumbnails: ["thumbnail size", "smaller", "grid", "library"],
         .showInFinder: ["finder", "reveal", "folder", "file", "library"],
+        .showPhotosInSubfolders: ["subfolders", "folders", "nested", "include", "count", "library"],
         .toggleFilterBar: ["filter", "search", "find", "query", "library filter", "text", "attribute", "metadata"],
         .toggleFilters: ["filter", "filters off", "turn off", "library"],
         .lockFilters: ["filter", "lock", "keep", "every folder", "library"],
@@ -140,6 +141,7 @@ extension ShortcutAction {
         case .largerThumbnails: "plus.square.on.square"
         case .smallerThumbnails: "minus.square"
         case .showInFinder: "folder"
+        case .showPhotosInSubfolders: "list.bullet.indent"
         case .toggleFilterBar: "line.3.horizontal.decrease.circle"
         case .toggleFilters: "line.3.horizontal.decrease"
         case .lockFilters: "lock"

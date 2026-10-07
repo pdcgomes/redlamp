@@ -7,7 +7,8 @@ import RedlampDocument
 /// Its rows come straight from the library's tree as the outline view asks for them, one node per
 /// folder kept for the list's life, so a folder with thousands of subfolders costs a screenful:
 /// only rows on screen get views, and only folders on screen are listed. A listing that changes a
-/// folder's count or subfolders reloads that row alone; only the roots changing reloads the list.
+/// folder's subfolders reloads that row and its children, and a count that changes (from a listing,
+/// or the library's counts) that row alone; only the roots changing reloads the list.
 final class FolderOutlineView: SidebarOutlineView {
     private var rootNodes: [SidebarNode] = []
     private var nodes: [String: SidebarNode] = [:]
@@ -15,6 +16,7 @@ final class FolderOutlineView: SidebarOutlineView {
     private var structure: Tracker?
     private var openTracker: Tracker?
     private var treeObservation: LibraryObservation?
+    private var countsObservation: LibraryObservation?
     private var openPath: String?
 
     private var library: FolderLibrary {
@@ -43,6 +45,7 @@ final class FolderOutlineView: SidebarOutlineView {
             setOpen(library.openFolder)
         }
         treeObservation = library.observeTree { [weak self] paths in self?.treeChanged(paths) }
+        countsObservation = library.observeCounts { [weak self] paths in self?.countsChanged(paths) }
     }
 
     override func stopTracking() {
@@ -51,6 +54,7 @@ final class FolderOutlineView: SidebarOutlineView {
         structure = nil
         openTracker = nil
         treeObservation = nil
+        countsObservation = nil
     }
 
     // MARK: - Rows
@@ -59,11 +63,13 @@ final class FolderOutlineView: SidebarOutlineView {
         let listed = missing ? nil : library.node(for: url)
         let path = url.standardizedFileURL.path
         let hasSubfolders = !(listed?.subfolders.isEmpty ?? true)
-        let selectable = !missing &&
-            (listed.map { $0.count > 0 || library.includesSubfolders && hasSubfolders } ?? true)
+        let count = missing ? nil : library.photoCount(of: url)
+        let selectable = !missing
+            && (count.map { $0 > 0 } ?? listed.map { _ in library.includesSubfolders && hasSubfolders } ?? true)
         return FolderRow(
-            url: url, name: path == root.path ? root.name : url.lastPathComponent, root: root, count: listed?.count,
+            url: url, name: path == root.path ? root.name : url.lastPathComponent, root: root, count: count,
             hasSubfolders: hasSubfolders, isMissing: missing, isOpen: path == openPath, isSelectable: selectable,
+            includesSubfolders: library.includesSubfolders,
         )
     }
 
@@ -124,6 +130,23 @@ final class FolderOutlineView: SidebarOutlineView {
         refreshHighlights()
         isReloading = false
         invalidateColumnLayout()
+    }
+
+    /// The library counted folders again: the rows on screen whose counts changed show them in place,
+    /// without being made again; the others show them when they're next made.
+    private func countsChanged(_ paths: Set<String>) {
+        let changed = paths.count <= nodes.count ? paths.compactMap { nodes[$0] }
+            : nodes.compactMap { paths.contains($0.key) ? $0.value : nil }
+        for item in changed {
+            guard case let .folder(old) = item.kind else { continue }
+            let updated = row(for: old.url, root: old.root, missing: old.isMissing)
+            guard updated != old else { continue }
+            item.kind = .folder(updated)
+            let index = row(forItem: item)
+            if index >= 0, let cell = view(atColumn: 0, row: index, makeIfNecessary: false) as? SidebarCellView {
+                cell.refreshFolder(updated)
+            }
+        }
     }
 
     private func setOpen(_ folder: URL?) {

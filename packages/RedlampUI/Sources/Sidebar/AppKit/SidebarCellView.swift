@@ -32,6 +32,8 @@ final class SidebarCellView: NSTableCellView {
     private var chevron: ChevronView?
     private var icon: SymbolImageView?
     private var trailing: NSView?
+    /// What a folder's row shows, for `refreshFolder`.
+    private var decoration: FolderDecoration?
     private var values: HistoryValuesView?
     private var amountSlider: NSSlider?
     private var hoverArea: NSTrackingArea?
@@ -112,12 +114,65 @@ final class SidebarCellView: NSTableCellView {
     }
 
     private func decorate(_ row: FolderRow) {
-        let shown = showFolder(row, label: label)
+        setAccessibilityIdentifier("folders." + row.url.standardizedFileURL.path)
         if row.hasSubfolders {
             showChevron()
         }
-        showIcon(shown.symbol, color: shown.color)
-        trailing = shown.trailing
+        show(Self.folderDecoration(row))
+    }
+
+    /// Shows `row`, the folder's row as it is now, in place: only what changed, so a count that changes
+    /// sets its text and nothing else.
+    func refreshFolder(_ row: FolderRow) {
+        show(Self.folderDecoration(row))
+    }
+
+    /// Shows `shown` over what the row showed.
+    private func show(_ shown: FolderDecoration) {
+        let before = decoration
+        guard shown != before else { return }
+        decoration = shown
+        var relayout = false
+        if shown.name != before?.name {
+            label.stringValue = shown.name
+            relayout = true
+        }
+        if shown.nameColor != before?.nameColor {
+            label.textColor = shown.nameColor.nsColor
+        }
+        if shown.help != before?.help {
+            toolTip = shown.help
+        }
+        if shown.accessibilityLabel != before?.accessibilityLabel {
+            setAccessibilityLabel(shown.accessibilityLabel)
+        }
+        if shown.symbol != before?.symbol || shown.color != before?.color {
+            icon?.removeFromSuperview()
+            showIcon(shown.symbol, color: shown.color)
+            relayout = true
+        }
+        if let count = trailing as? FolderCountView, let text = shown.count {
+            count.text = text
+        } else if shown.count != before?.count || shown.isMissing != before?.isMissing {
+            trailing?.removeFromSuperview()
+            trailing = Self.trailing(shown)
+            if let trailing, before != nil {
+                addSubview(trailing)
+            }
+            relayout = true
+        }
+        if relayout, before != nil {
+            needsLayout = true
+        }
+    }
+
+    /// The view at the end of a folder's row: its count, or a missing root's question mark.
+    private static func trailing(_ decoration: FolderDecoration) -> NSView? {
+        if let count = decoration.count {
+            return FolderCountView(count)
+        }
+        return decoration.isMissing
+            ? SymbolImageView("questionmark.circle", pointSize: 10, color: Palette.tertiaryLabel.nsColor) : nil
     }
 
     private func showChevron() {

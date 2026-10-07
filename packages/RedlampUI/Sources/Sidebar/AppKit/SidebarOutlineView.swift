@@ -213,9 +213,9 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
 
     func outlineView(_: NSOutlineView, viewFor _: NSTableColumn?, item: Any) -> NSView? {
         guard let node = item as? SidebarNode else { return nil }
-        // Rows are made only as they show, so a folder is listed (for its count and subfolders)
-        // only once it's on screen, however many siblings it has.
-        if case let .folder(folder) = node.kind, folder.count == nil, !folder.isMissing {
+        // Rows are made only as they show, so a folder is listed (for its subfolders, and its count
+        // until the library counts it) only once it's on screen, however many siblings it has.
+        if case let .folder(folder) = node.kind, !folder.isMissing, model.library.node(for: folder.url) == nil {
             model.library.listTree(folder.url)
         }
         return SidebarCellView(node: node, model: model, isExpanded: isItemExpanded(node))
