@@ -100,7 +100,8 @@
                  .sortByRating, .sortByEditTime, .sortByModified, .sortByFileSize, .reverseSort:
                 filter(action)
             case .groupByNone, .groupByMoment, .groupByDay, .groupByFolder, .groupByCamera, .groupByLens,
-                 .groupByOrientation, .groupByMomentCamera, .toggleGroup, .openAllGroups, .closeAllGroups:
+                 .groupByOrientation, .groupByMomentCamera, .tighterMoments, .looserMoments, .toggleGroup,
+                 .openAllGroups, .closeAllGroups:
                 groups(action)
             case .showInFinder:
                 ActionCheck(action: action, setUp: { app in

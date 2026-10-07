@@ -59,10 +59,10 @@ public enum LoupeZoom: String, Sendable {
     }
 }
 
-/// The Library module's view: the grid's thumbnail size, cell style and Group By, and the loupe's zoom,
-/// and each source's view as it was last left (its size, cell style, grouping, the photo at the top of the
-/// grid and the selection), for the 25 latest sources, as Lightroom Classic remembers them, and across
-/// launches.
+/// The Library module's view: the grid's thumbnail size and cell style, its Group By and moments'
+/// Tighter–Looser setting, and the loupe's zoom, and each source's view as it was last left (its size,
+/// cell style, grouping, the photo at the top of the grid and the selection), for the 25 latest
+/// sources, as Lightroom Classic remembers them, and across launches.
 @MainActor
 @Observable
 public final class LibraryViewState {
@@ -71,6 +71,8 @@ public final class LibraryViewState {
     public internal(set) var loupeZoom = LoupeZoom.fit
     /// What the grid groups the source's photos by (LIB-41).
     public internal(set) var groupKey = GroupKey.ungrouped
+    /// Moments' Tighter–Looser setting, from `MomentSetting.tightest` to `loosest`.
+    public internal(set) var looseness = 0
     /// The grid's groups, made as the grid or a group's action first asks for them.
     @ObservationIgnored var groups: LibraryGroups?
     /// The photo at the top of the grid as it was last scrolled.
@@ -93,9 +95,10 @@ public final class LibraryViewState {
     private static let sizeKey = "library.thumbnailSize"
     private static let styleKey = "library.cellStyle"
     private static let groupKeyKey = "library.groupBy"
+    private static let loosenessKey = "library.looseness"
 
     /// A source's view as it was left. Photos are kept by path, so the view outlives the photos' IDs. A view
-    /// kept before Group By has no `group`, and was ungrouped.
+    /// kept before Group By has neither of its fields, and was ungrouped.
     struct SourceView: Codable, Equatable {
         var source: String
         var size: Double
@@ -104,6 +107,7 @@ public final class LibraryViewState {
         var selected: [String]
         var active: String?
         var group: GroupKey?
+        var looseness: Int?
     }
 
     init(defaults: UserDefaults?) {
@@ -117,6 +121,7 @@ public final class LibraryViewState {
         }
         cellStyle = defaults.string(forKey: Self.styleKey).flatMap(GridCellStyle.init) ?? .compact
         groupKey = defaults.string(forKey: Self.groupKeyKey).flatMap(GroupKey.init) ?? .ungrouped
+        looseness = MomentSetting(looseness: defaults.integer(forKey: Self.loosenessKey)).looseness
         if let data = defaults.data(forKey: Self.viewsKey),
            let saved = try? JSONDecoder().decode([SourceView].self, from: data) {
             views = saved
@@ -148,11 +153,20 @@ public final class LibraryViewState {
         groups?.regroup()
     }
 
+    func setLooseness(_ value: Int) {
+        let value = MomentSetting(looseness: value).looseness
+        guard value != looseness else { return }
+        looseness = value
+        defaults?.set(value, forKey: Self.loosenessKey)
+        groups?.regroup()
+    }
+
     /// Keeps `source`'s view as it's left: the grid as it is, and these photos selected.
     func remember(_ source: String, selection: [URL], active: URL?) {
         let view = SourceView(
             source: source, size: thumbnailSize, style: cellStyle, top: topPhoto?.path,
             selected: selection.prefix(Self.keptSelection).map(\.path), active: active?.path, group: groupKey,
+            looseness: looseness,
         )
         views.removeAll { $0.source == source }
         views.append(view)
@@ -170,6 +184,7 @@ public final class LibraryViewState {
         setThumbnailSize(view.size)
         setCellStyle(view.style)
         setGroupKey(view.group ?? .ungrouped)
+        setLooseness(view.looseness ?? 0)
         restoredTop = view.top.map { URL(fileURLWithPath: $0) }
         return view
     }

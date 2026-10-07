@@ -1,9 +1,10 @@
 import Foundation
 import RedlampLibrary
 
-/// Group By in the Library grid (LIB-41): the key, kept with each source's view; groups opened and closed, by
-/// their headers, the menus and the palette; and ← and →, in the grid, the loupe, Develop and the filmstrip,
-/// through the photos in the grid's order, leaving out closed groups' photos.
+/// Group By in the Library grid (LIB-41): the key and moments' Tighter–Looser setting, kept with each
+/// source's view; groups opened and closed, by their headers, the menus and the palette; and ← and →, in the
+/// grid, the loupe, Develop and the filmstrip, through the photos in the grid's order, leaving out closed
+/// groups' photos.
 public extension EditorModel {
     /// Whether the source can be grouped: it's shown from the library, whose column store grouping reads.
     var canGroupPhotos: Bool {
@@ -14,6 +15,12 @@ public extension EditorModel {
         guard key == .ungrouped || canGroupPhotos else { return }
         _ = gridGroups
         libraryViews.setGroupKey(key)
+    }
+
+    /// The Tighter–Looser control, from `MomentSetting.tightest` (more moments) to `loosest`.
+    func setLooseness(_ looseness: Int) {
+        _ = gridGroups
+        libraryViews.setLooseness(looseness)
     }
 
     /// A click on group `group`'s header opens or closes it; an ⌥-click, every group.
@@ -151,6 +158,9 @@ extension EditorModel {
             return true
         }
         switch action {
+        case .tighterMoments, .looserMoments:
+            guard canPerformGroupShortcut(action) == true else { return false }
+            setLooseness(libraryViews.looseness + (action == .looserMoments ? 1 : -1))
         case .toggleGroup:
             guard let group = activeGroup else { return false }
             gridGroups.toggle(group)
@@ -185,6 +195,10 @@ extension EditorModel {
         let groups = gridGroups
         let list = groups.list
         switch action {
+        case .tighterMoments, .looserMoments:
+            guard libraryViews.groupKey.usesMoments, canGroupPhotos else { return false }
+            return action == .looserMoments ? libraryViews.looseness < MomentSetting.loosest
+                : libraryViews.looseness > MomentSetting.tightest
         case .toggleGroup: return activeGroup != nil
         case .openAllGroups: return list.map { list in list.groups.indices.contains { !list.isOpen($0) } } ?? false
         case .closeAllGroups: return list.map { list in list.groups.indices.contains(where: list.isOpen) } ?? false
@@ -247,5 +261,10 @@ public extension GroupKey {
         case .orientation: "Orientation"
         case .momentCamera: "Moment, then Camera"
         }
+    }
+
+    /// Whether it groups by moments, which the Tighter–Looser setting finds.
+    var usesMoments: Bool {
+        self == .moment || self == .momentCamera
     }
 }

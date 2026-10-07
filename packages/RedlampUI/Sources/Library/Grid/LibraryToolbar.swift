@@ -6,7 +6,8 @@ import RedlampLibrary
 /// loupe, the cell style and the thumbnail size in the grid or the zoom in the loupe, and the photo in
 /// Develop or in Finder. Each button's tooltip names its key. Its controls act on the press itself, as
 /// the module picker does, rather than tracking the mouse as AppKit's controls do. In the grid, Group By
-/// (LIB-41) is AppKit's own pop-up button until the library's polish phase (LIB-45).
+/// (LIB-41) and, grouped by moment, the Tighter–Looser slider are AppKit's own controls until the library's
+/// polish phase (LIB-45).
 final class LibraryToolbarView: NSView {
     static let height: CGFloat = 30
 
@@ -20,6 +21,12 @@ final class LibraryToolbarView: NSView {
     private let develop = ToolbarButton(symbol: "slider.horizontal.3", identifier: "library.toolbar.develop")
     private let finder = ToolbarButton(symbol: "folder", identifier: "library.toolbar.finder")
     private let groupBy = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let looseness = NSSlider(
+        value: 0, minValue: Double(MomentSetting.tightest), maxValue: Double(MomentSetting.loosest), target: nil,
+        action: nil,
+    )
+    private let tighter = NSTextField(labelWithString: "Tighter")
+    private let looser = NSTextField(labelWithString: "Looser")
     private var trackers: [Tracker] = []
 
     init(model: EditorModel) {
@@ -90,7 +97,27 @@ final class LibraryToolbarView: NSView {
                   let key = GroupKey(rawValue: raw) else { return }
             model.setGroupKey(key)
         }
-        addSubview(groupBy)
+        looseness.controlSize = .small
+        looseness.numberOfTickMarks = MomentSetting.loosest - MomentSetting.tightest + 1
+        looseness.allowsTickMarkValuesOnly = true
+        looseness.isContinuous = true
+        looseness.toolTip = "Moments: tighter splits at shorter pauses, looser only at longer ones"
+        looseness.setAccessibilityLabel("Tighter or Looser Moments")
+        looseness.setAccessibilityIdentifier("library.toolbar.looseness")
+        looseness.onAction { [weak self] _ in
+            guard let self else { return }
+            let value = Int(looseness.doubleValue.rounded())
+            if value != model.libraryViews.looseness {
+                model.setLooseness(value)
+            }
+        }
+        for label in [tighter, looser] {
+            label.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+            label.textColor = .secondaryLabelColor
+        }
+        for view in [groupBy, looseness, tighter, looser] as [NSView] {
+            addSubview(view)
+        }
     }
 
     /// Group By's controls as the grid's view and its groups have them now.
@@ -102,6 +129,13 @@ final class LibraryToolbarView: NSView {
         }
         groupBy.isHidden = !inGrid
         groupBy.isEnabled = model.canGroupPhotos || state.groupKey != .ungrouped
+        let moments = inGrid && state.groupKey.usesMoments
+        for view in [looseness, tighter, looser] as [NSView] {
+            view.isHidden = !moments
+        }
+        if Int(looseness.doubleValue.rounded()) != state.looseness {
+            looseness.doubleValue = Double(state.looseness)
+        }
     }
 
     override var isFlipped: Bool {
@@ -156,6 +190,13 @@ final class LibraryToolbarView: NSView {
             }
             x += 14
             place(groupBy, width: 150)
+            if !looseness.isHidden {
+                x += 8
+                for (view, width) in [(tighter, 44), (looseness, 96), (looser, 40)] as [(NSView, CGFloat)] {
+                    place(view, width: width)
+                    x += 2
+                }
+            }
         } else {
             place(fit, width: 40)
             place(actual, width: 40)

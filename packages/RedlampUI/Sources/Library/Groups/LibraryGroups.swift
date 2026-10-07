@@ -79,7 +79,9 @@ import RedlampLibrary
         guard state.groupKey != .ungrouped, library.isShownFromLibrary, library.service?.core != nil else {
             return nil
         }
-        return Grouping(key: state.groupKey, setting: MomentSetting(), source: library.photoList.source)
+        return Grouping(
+            key: state.groupKey, setting: MomentSetting(looseness: state.looseness), source: library.photoList.source,
+        )
     }
 
     // MARK: - Grouping

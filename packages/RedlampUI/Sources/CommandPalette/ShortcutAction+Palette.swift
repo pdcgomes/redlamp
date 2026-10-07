@@ -38,6 +38,8 @@ extension ShortcutAction {
         .groupByLens: ["group", "lens", "library"],
         .groupByOrientation: ["group", "orientation", "portrait", "landscape", "square", "library"],
         .groupByMomentCamera: ["group", "moment", "camera", "body", "second shooter", "library"],
+        .tighterMoments: ["moment", "tighter", "split", "more moments", "group", "library"],
+        .looserMoments: ["moment", "looser", "merge", "fewer moments", "group", "library"],
         .toggleGroup: ["group", "open", "close", "collapse", "expand", "library"],
         .openAllGroups: ["group", "open", "expand", "all", "library"],
         .closeAllGroups: ["group", "close", "collapse", "all", "library"],
@@ -167,6 +169,8 @@ extension ShortcutAction {
         case .reverseSort: "arrow.up.and.down.text.horizontal"
         case .groupByNone, .groupByMoment, .groupByDay, .groupByFolder, .groupByCamera, .groupByLens,
              .groupByOrientation, .groupByMomentCamera: "rectangle.3.group"
+        case .tighterMoments: "arrow.right.and.line.vertical.and.arrow.left"
+        case .looserMoments: "arrow.left.and.line.vertical.and.arrow.right"
         case .toggleGroup: "chevron.down.circle"
         case .openAllGroups: "rectangle.expand.vertical"
         case .closeAllGroups: "rectangle.compress.vertical"

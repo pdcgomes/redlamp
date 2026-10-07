@@ -137,6 +137,9 @@ struct AppCommands: Commands {
                     toggle(action, isOn: model.libraryViews.groupKey == action.groupKey)
                 }
                 Divider()
+                item(.tighterMoments)
+                item(.looserMoments)
+                Divider()
                 item(.toggleGroup)
                 item(.openAllGroups)
                 item(.closeAllGroups)

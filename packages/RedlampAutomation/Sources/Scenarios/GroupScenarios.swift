@@ -6,12 +6,13 @@
 
     extension ActionCheck {
         /// A Group By action, in the Library grid shown from the library: ungrouped for a key, grouped by day for
-        /// Group by Camera and by camera for No Grouping and the groups' own actions, with every group closed for
-        /// Open All Groups. Ungrouped and in Develop afterwards.
+        /// Group by Camera and by camera for No Grouping and the groups' own actions, by moment for the moments'
+        /// setting, with every group closed for Open All Groups. Ungrouped and in Develop afterwards.
         static func groups(_ action: ShortcutAction) -> ActionCheck {
             ActionCheck(action: action, setUp: { app in
                 let key: GroupKey = switch action {
                 case .groupByCamera, .groupByNone: action == .groupByNone ? .camera : .day
+                case .tighterMoments, .looserMoments: .moment
                 default: action.groupKey == nil ? .camera : .ungrouped
                 }
                 try app.showGroups(by: key)
@@ -20,7 +21,10 @@
                 }
                 try app.settle()
             }, observe: GroupScenarios.state, restore: { app in
-                try app.main { $0.setGroupKey(.ungrouped) }
+                try app.main { model in
+                    model.setLooseness(0)
+                    model.setGroupKey(.ungrouped)
+                }
                 try app.backToDevelop()
             })
         }
@@ -60,6 +64,22 @@
             pause(0.05)
         }
 
+        /// The slider carrying `identifier`, its values whole steps, a step up or down, as dragging its knob to
+        /// the next tick does.
+        func step(slider identifier: String, up: Bool) throws {
+            try main { _ in
+                guard let window = Views.editorWindow,
+                      let slider = Views.all(NSSlider.self, in: window.contentView?.superview ?? NSView())
+                      .first(where: { $0.accessibilityIdentifier() == identifier })
+                else { throw ScenarioFailure("No \(identifier) slider") }
+                guard !slider.isHiddenOrHasHiddenAncestor else { throw ScenarioFailure("\(identifier) is hidden") }
+                let next = slider.doubleValue.rounded() + (up ? 1 : -1)
+                slider.doubleValue = min(max(next, slider.minValue), slider.maxValue)
+                _ = slider.sendAction(slider.action, to: slider.target)
+            }
+            pause(0.05)
+        }
+
         /// How many times the editor window's grid has reloaded every cell.
         func gridReloads() throws -> Int {
             try main { _ in Views.editorWindow.flatMap(LibraryGridViews.reloads(in:)) ?? -1 }
@@ -67,13 +87,14 @@
     }
 
     enum GroupScenarios {
-        static let all: [Scenario] = [groupBy, openAndClose]
+        static let all: [Scenario] = [groupBy, openAndClose, setting]
 
         /// What the group actions change, for their checks.
         @MainActor static func state(_ model: EditorModel) -> String {
             let groups = model.gridGroups
             let open = groups.list.map { list in list.groups.indices.count(where: list.isOpen) } ?? -1
-            return "\(model.libraryViews.groupKey) \(open) " + (model.selection?.lastPathComponent ?? "")
+            return "\(model.libraryViews.groupKey) \(model.libraryViews.looseness) \(open) "
+                + (model.selection?.lastPathComponent ?? "")
         }
 
         @MainActor private static func groups(_ model: EditorModel) -> [(name: String, count: Int, picks: Int)] {
@@ -196,6 +217,34 @@
             }
             try app.runFromPalette(.openAllGroups)
             try app.main { $0.setGroupKey(.ungrouped) }
+            try app.backToDevelop()
+        }
+
+        static let setting = Scenario(
+            "library.moments-setting",
+            "Grouped by moment, the toolbar's Tighter–Looser slider, the View menu and the palette make moments "
+                + "tighter and looser, the grid grouped again as it moves",
+            claims: [.action(.tighterMoments), .action(.looserMoments), .feature("library.grid")],
+        ) { app in
+            try app.showGroups(by: .moment)
+            try app.step(slider: "library.toolbar.looseness", up: true)
+            try app.wait("the toolbar's slider: looser") { $0.libraryViews.looseness == 1 }
+            try app.wait("moments found at the looser setting") { model in
+                model.gridGroups.list?.groups.setting == MomentSetting(looseness: 1)
+            }
+            app.covered(.feature("library.grid"), via: .mouse)
+            try app.choose(.tighterMoments)
+            try app.wait("Tighter Moments") { $0.libraryViews.looseness == 0 }
+            try app.runFromPalette(.tighterMoments)
+            try app.wait("the palette's Tighter Moments") { $0.libraryViews.looseness == -1 }
+            try app.choose(.looserMoments)
+            try app.wait("Looser Moments") { $0.libraryViews.looseness == 0 }
+            try app.runFromPalette(.looserMoments)
+            try app.wait("the palette's Looser Moments") { $0.libraryViews.looseness == 1 }
+            try app.main { model in
+                model.setLooseness(0)
+                model.setGroupKey(.ungrouped)
+            }
             try app.backToDevelop()
         }
     }

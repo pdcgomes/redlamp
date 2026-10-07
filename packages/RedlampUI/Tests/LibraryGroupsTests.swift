@@ -12,8 +12,8 @@ import UniformTypeIdentifiers
 
 /// Group By in the Library grid (LIB-41), over a folder the library has indexed: each key's groups, counts and
 /// picks as the library makes them, each a header in the grid; groups opened and closed with the selection and
-/// the active photo kept and the grid's cells moved rather than reloaded; ← and → past closed groups; and Group By
-/// kept with each source.
+/// the active photo kept and the grid's cells moved rather than reloaded; ← and → past closed groups; moments'
+/// Tighter–Looser setting; and Group By and the setting kept with each source.
 @MainActor
 struct LibraryGroupsTests {
     /// A photo of the folder: when it was taken, seconds after 10:00 on 14 June 2024 by the camera's clock (nil
@@ -143,11 +143,14 @@ struct LibraryGroupsTests {
         }
     }
 
-    /// Groups the grid by `key` and waits for the groups.
-    private func group(_ model: EditorModel, by key: GroupKey) async throws {
+    /// Groups the grid by `key` at `looseness` and waits for the groups.
+    private func group(_ model: EditorModel, by key: GroupKey, looseness: Int = 0) async throws {
+        model.setLooseness(looseness)
         model.setGroupKey(key)
         try await eventually {
-            key == .ungrouped ? model.gridGroups.list == nil : model.gridGroups.list?.groups.key == key
+            key == .ungrouped ? model.gridGroups.list == nil
+                : model.gridGroups.list?.groups.key == key
+                && model.gridGroups.list?.groups.setting == MomentSetting(looseness: looseness)
         }
         try await Task.sleep(for: .milliseconds(30))
     }
@@ -336,7 +339,34 @@ struct LibraryGroupsTests {
         grid.content.keyDown(with: event)
     }
 
-    // MARK: - Each source's view
+    // MARK: - Moments' setting and each source's view
+
+    @Test func `the Tighter–Looser setting finds moments again as it moves, and each source keeps it`() async throws {
+        defer { cleanUp() }
+        let (model, _, window) = try await open()
+        defer { window.contentView = nil }
+        try await group(model, by: .moment)
+        #expect(model.gridGroups.list?.groups.count == 5)
+        try await group(model, by: .moment, looseness: MomentSetting.tightest)
+        #expect(groupNames(model).prefix(2) == [["A01.JPG", "A02.JPG", "A03.JPG"], ["A04.JPG", "A05.JPG", "A06.JPG"]])
+        #expect(!model.canPerform(.tighterMoments) && model.canPerform(.looserMoments))
+        try await group(model, by: .moment, looseness: MomentSetting.loosest)
+        #expect(groupNames(model).first?.count == 9, "the loosest setting joins A and B")
+        #expect(model.perform(.tighterMoments) && model.libraryViews.looseness == 3)
+        try await eventually { model.gridGroups.list?.groups.setting == MomentSetting(looseness: 3) }
+        #expect(model.gridGroups.list?.groups.setting == MomentSetting(looseness: 3))
+
+        // The folder with its subfolders is another source, with a setting of its own.
+        model.setIncludesSubfolders(true)
+        try await eventually(seconds: 20) { model.library.count == 15 && model.library.isShownFromLibrary }
+        try await group(model, by: .moment, looseness: -2)
+        model.setIncludesSubfolders(false)
+        try await eventually(seconds: 20) { model.library.count == 14 && model.libraryViews.looseness == 3 }
+        #expect(model.libraryViews.looseness == 3 && model.libraryViews.groupKey == .moment)
+        model.setIncludesSubfolders(true)
+        try await eventually(seconds: 20) { model.library.count == 15 && model.libraryViews.looseness == -2 }
+        #expect(model.libraryViews.looseness == -2)
+    }
 
     @Test func `Group By is kept with each source's view, and across launches`() async throws {
         defer { cleanUp() }
@@ -357,9 +387,10 @@ struct LibraryGroupsTests {
 
         let state = LibraryViewState(defaults: defaults)
         state.setGroupKey(.lens)
+        state.setLooseness(9)
         state.remember("/Somewhere", selection: [], active: nil)
         let again = LibraryViewState(defaults: defaults)
-        #expect(again.groupKey == .lens)
+        #expect(again.groupKey == .lens && again.looseness == MomentSetting.loosest)
         again.setGroupKey(.day)
         #expect(again.restore("/Somewhere")?.group == .lens && again.groupKey == .lens)
     }

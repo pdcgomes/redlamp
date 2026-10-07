@@ -57,7 +57,7 @@ enum LibraryGridMenu {
         return menu
     }
 
-    /// Group By's keys, and every group opened or closed.
+    /// Group By's keys, moments' Tighter and Looser, and every group opened or closed.
     private static func groupBy(model: EditorModel) -> NSMenuItem {
         let keys = NSMenu()
         keys.autoenablesItems = false
@@ -67,7 +67,7 @@ enum LibraryGridMenu {
             keys.addItem(item)
         }
         keys.addItem(.separator())
-        for action in [ShortcutAction.openAllGroups, .closeAllGroups] {
+        for action in [ShortcutAction.tighterMoments, .looserMoments, .openAllGroups, .closeAllGroups] {
             keys.addItem(self.action(model, action))
         }
         let item = NSMenuItem(title: "Group By", action: nil, keyEquivalent: "")
