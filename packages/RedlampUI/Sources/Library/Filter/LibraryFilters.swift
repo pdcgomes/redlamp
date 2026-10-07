@@ -41,6 +41,8 @@ public final class LibraryFilters {
     /// Counts the lists the library handed over, and the filter of the last, for the harness.
     @ObservationIgnored @_spi(Harness) public private(set) var listings = 0
     @ObservationIgnored @_spi(Harness) public private(set) var lastListed: LibraryListFilterSummary?
+    /// How long the last list took off the main thread: the query engine finding its photos, then the list.
+    @ObservationIgnored @_spi(Harness) public private(set) var lastListing: (query: Duration, list: Duration)?
 
     @ObservationIgnored weak var service: LibraryService?
     @ObservationIgnored private let defaults: UserDefaults?
@@ -316,6 +318,7 @@ public final class LibraryFilters {
         lastListed = LibraryListFilterSummary(
             query: ordered.filter.query, sort: ordered.filter.sort, reversed: ordered.filter.reversed,
         )
+        lastListing = ordered.took
         if listed?.shown != ordered.items.count || listed?.total != ordered.total {
             listed = (ordered.items.count, ordered.total)
         }

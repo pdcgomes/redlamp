@@ -48,6 +48,8 @@ final class LibraryFolderList: Sendable {
         var total: Int
         /// The filter it was made with.
         var filter: LibraryListFilter
+        /// How long the query engine took to find its photos, and the list to be made of them.
+        var took: (query: Duration, list: Duration) = (.zero, .zero)
     }
 
     let folder: URL
@@ -421,6 +423,9 @@ private extension LibraryFolderList {
             _ filter: LibraryListFilter, from mapping: inout Mapping, engine: QueryEngine, source: PhotoSource,
             changed: Bool,
         ) async throws -> Ordered {
+            let clock = ContinuousClock()
+            let started = clock.now
+            var queried = Duration.zero
             var ids: [Int64]
             if filter.query == nil, filter.sort == nil {
                 ids = mapping.walkOrder()
@@ -428,6 +433,7 @@ private extension LibraryFolderList {
                 let list = try await engine.list(
                     source, matching: filter.query ?? .all, sort: filter.sort ?? QuerySort(.name),
                 )
+                queried = clock.now - started
                 ids = filter.sort == nil ? mapping.walkOrder().filter(list.contains)
                     : list.ids.filter { mapping.items[$0] != nil }
             }
@@ -439,11 +445,13 @@ private extension LibraryFolderList {
             if !first, !changed, let listed, listed.ids == ids {
                 self.filter = filter
                 isOrdered = !filter.isEmpty
-                return Ordered(
+                var ordered = Ordered(
                     items: self.items, positions: listed.positions, previous: Array(0 ..< Int32(self.items.count)),
                     previousCount: self.items.count, diff: LibraryDiff(), keys: [:], total: mapping.items.count,
                     filter: filter,
                 )
+                ordered.took = (queried, clock.now - started - queried)
+                return ordered
             }
             var items: [LibraryItem] = []
             items.reserveCapacity(ids.count)
@@ -488,10 +496,11 @@ private extension LibraryFolderList {
             let inserted = IndexSet(previous.indices.filter { previous[$0] < 0 })
             let diff = !first && inOrder && removed.count + inserted.count <= Self.largestDiff
                 ? LibraryDiff(removed: removed, inserted: inserted, updated: updated) : LibraryDiff(reset: true)
-            let ordered = Ordered(
+            var ordered = Ordered(
                 items: items, positions: positions, previous: previous, previousCount: first ? -1 : self.items.count,
                 diff: diff, keys: keys, total: mapping.items.count, filter: filter,
             )
+            ordered.took = (queried, clock.now - started - queried)
             self.items = items
             self.places = places
             listed = (listedIDs, positions)

@@ -50,7 +50,13 @@
         /// Names the phase in the debug log and in the stall report, its turns sampled once they run longer
         /// than `sampling` (half a second when nil).
         private static func phase(_ name: String, sampling: Duration? = nil) {
-            let line = "\(Date().formatted(.iso8601.time(includingFractionalSeconds: true))) library-perf: \(name)\n"
+            trace(name)
+            stalls?.enter(name, sampling: LaunchArguments.all.contains("--library-perf-turns") ? sampling : nil)
+        }
+
+        /// `text` in the debug log, written off the main thread.
+        private static func trace(_ text: String) {
+            let line = "\(Date().formatted(.iso8601.time(includingFractionalSeconds: true))) library-perf: \(text)\n"
             log.async {
                 guard let handle = FileHandle(forWritingAtPath: "/tmp/redlamp-debug.log") else {
                     try? line.write(toFile: "/tmp/redlamp-debug.log", atomically: true, encoding: .utf8)
@@ -60,7 +66,6 @@
                 handle.write(Data(line.utf8))
                 try? handle.close()
             }
-            stalls?.enter(name, sampling: LaunchArguments.all.contains("--library-perf-turns") ? sampling : nil)
         }
 
         /// Phases are logged off the main thread: opening the log can take a frame or more on a busy Mac,
@@ -343,7 +348,7 @@
                 polls += 1
                 if polls % 100 == 0 {
                     let count = await (try? service.engine?.list(.allPhotographs))?.count ?? 0
-                    DebugPerformance.trace("library-perf: \(count) photos indexed")
+                    trace("\(count) photos indexed")
                 }
                 try? await Task.sleep(for: .milliseconds(100))
             }
@@ -504,8 +509,11 @@
             monitor.start()
             sampler?.start()
             var onScreen: [Double] = []
-            // Of those, until the library had listed what the key found, before the views followed.
+            // Of those, until the library had listed what the key found, before the views followed; and of that,
+            // the query engine finding the photos and the list made of them, off the main thread.
             var listing: [Double] = []
+            var queried: [Double] = []
+            var made: [Double] = []
             var keys = 0
             var missed = 0
             let began = CFAbsoluteTimeGetCurrent()
@@ -522,6 +530,10 @@
                     if let after = try? LibraryQuery(parsing: typed, asYouType: true), after != before {
                         if await listed(typed, since: started) {
                             listing.append((CFAbsoluteTimeGetCurrent() - started) * 1000)
+                            if let took = filters.lastListing {
+                                queried.append(seconds(took.query) * 1000)
+                                made.append(seconds(took.list) * 1000)
+                            }
                             window.displayIfNeeded()
                             CATransaction.flush()
                             onScreen.append((CFAbsoluteTimeGetCurrent() - started) * 1000)
@@ -556,10 +568,11 @@
             model.showModule(.develop)
             let report = String(
                 format: "Typing the fixture's %d queries in the filter bar: %d keys, %d changing the photos found, "
-                    + "on screen p50 %.2f ms, p95 %.2f ms, max %.2f ms (listed p50 %.2f ms, p95 %.2f ms); "
-                    + "%d not listed within a second",
+                    + "on screen p50 %.2f ms, p95 %.2f ms, max %.2f ms (listed p50 %.2f ms, p95 %.2f ms; the query "
+                    + "p50 %.2f ms, p95 %.2f ms, the list p50 %.2f ms, p95 %.2f ms); %d not listed within a second",
                 FixtureQuery.corpus.count, keys, onScreen.count, percentile(onScreen, 0.5), percentile(onScreen, 0.95),
-                onScreen.max() ?? 0, percentile(listing, 0.5), percentile(listing, 0.95), missed,
+                onScreen.max() ?? 0, percentile(listing, 0.5), percentile(listing, 0.95), percentile(queried, 0.5),
+                percentile(queried, 0.95), percentile(made, 0.5), percentile(made, 0.95), missed,
             )
             return (
                 monitor.summary(seconds: elapsed), onScreen,
@@ -765,34 +778,41 @@
             var onScreen: [Double] = []
             var writes: [Double] = []
             var parts: [String] = []
+            // With --library-perf-culling n, the first n of the changes and their Undos alone.
+            let arguments = LaunchArguments.all
+            let limit = arguments.firstIndex(of: "--library-perf-culling").flatMap {
+                $0 + 1 < arguments.count ? Int(arguments[$0 + 1]) : nil
+            } ?? 8
+            let steps = [ShortcutAction.rating3, .flagPick, .labelRed, .toggleMark]
+                .flatMap { action in [(action, action), (action, ShortcutAction.undo)] }
+                .prefix(limit)
             let monitor = MainThreadMonitor()
             monitor.start()
             let began = CFAbsoluteTimeGetCurrent()
-            for action in [ShortcutAction.rating3, .flagPick, .labelRed, .toggleMark] {
-                for (title, step) in [(action.title, action), ("Undo", ShortcutAction.undo)] {
-                    let name = "culling, \(step == .undo ? "Undo " : "")\(action.title)"
-                    phase(name, sampling: .milliseconds(16))
-                    let watch = StepWatch(model.library)
-                    let started = CFAbsoluteTimeGetCurrent()
-                    model.perform(step)
-                    window.displayIfNeeded()
-                    CATransaction.flush()
-                    let shown = (CFAbsoluteTimeGetCurrent() - started) * 1000
-                    while model.isWritingCulling, CFAbsoluteTimeGetCurrent() - started < 900 {
-                        try? await Task.sleep(for: .milliseconds(20))
-                    }
-                    let written = CFAbsoluteTimeGetCurrent() - started
-                    notes.append("\(name): \(watch.summary)")
-                    onScreen.append(shown)
-                    writes.append(written)
-                    parts.append(String(
-                        format: "%@ on screen in %.2f ms, in every sidecar in %.1f s",
-                        title,
-                        shown,
-                        written,
-                    ))
-                    try? await Task.sleep(for: .milliseconds(300))
+            for (action, step) in steps {
+                let title = step == .undo ? "Undo" : action.title
+                let name = "culling, \(step == .undo ? "Undo " : "")\(action.title)"
+                phase(name, sampling: .milliseconds(16))
+                let watch = StepWatch(model.library)
+                let started = CFAbsoluteTimeGetCurrent()
+                model.perform(step)
+                window.displayIfNeeded()
+                CATransaction.flush()
+                let shown = (CFAbsoluteTimeGetCurrent() - started) * 1000
+                while model.isWritingCulling, CFAbsoluteTimeGetCurrent() - started < 900 {
+                    try? await Task.sleep(for: .milliseconds(20))
                 }
+                let written = CFAbsoluteTimeGetCurrent() - started
+                notes.append("\(name): \(watch.summary)")
+                onScreen.append(shown)
+                writes.append(written)
+                parts.append(String(
+                    format: "%@ on screen in %.2f ms, in every sidecar in %.1f s",
+                    title,
+                    shown,
+                    written,
+                ))
+                try? await Task.sleep(for: .milliseconds(300))
             }
             let elapsed = CFAbsoluteTimeGetCurrent() - began
             monitor.stop()
