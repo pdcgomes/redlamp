@@ -114,6 +114,12 @@ struct FoldedText: Sendable, Hashable {
         starts = nil
     }
 
+    /// Bytes already folded, and where their characters start, with a last true for the end.
+    init(folded bytes: ContiguousArray<UInt8>, starts: ContiguousArray<Bool>?) {
+        self.bytes = bytes
+        self.starts = starts
+    }
+
     /// Whether `needle` is in it, starting and ending where characters do; an empty needle is in
     /// nothing, as Foundation has it.
     func contains(_ needle: FoldedText) -> Bool {

@@ -176,10 +176,11 @@ final class QueryVocabulary: Sendable {
     private let keywords = Mutex<KeywordMatcher?>(nil)
     private let collections = Mutex<KeywordMatcher?>(nil)
     private let matched = Mutex<[Match: [Int64]]>([:])
-    /// Made the first time a column of keywords or collections is counted, or keywords completed
-    /// (LIB-18).
+    /// Made the first time a column of keywords or collections is counted (LIB-18).
     let levels = Mutex<[PostingKind: KeywordLevels]>([:])
-    let completion = Mutex<KeywordCompletion?>(nil)
+    /// The tables' names ranked for completion and the palette, made the first time they're asked for
+    /// (LIB-18, LIB-19).
+    let ranked = Mutex<NameTable?>(nil)
     /// Read the first time a collection's photos are listed.
     private let smart = Mutex<[(path: CollectionPath, query: LibraryQuery?)]?>(nil)
 

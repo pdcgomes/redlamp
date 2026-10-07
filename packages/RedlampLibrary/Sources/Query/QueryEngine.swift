@@ -83,6 +83,8 @@ public final class QueryEngine: Sendable {
         var keptAnyway: [Int64]?
         /// The photos that can be in a pair, kept with the store once the pairs check is asked for.
         var pairs: HealthPairs?
+        /// The names the store's columns hold, ranked for completion, and the lists they were made of.
+        var storeNames: (lists: [ContiguousArray<String>], table: NameTable)?
     }
 
     /// What a change to the store does to the photos kept for the pairs check: keeps them, drops
@@ -355,6 +357,7 @@ public final class QueryEngine: Sendable {
             state.keptAnyway = nil
             state.postings.removeAll()
             state.pairs = nil
+            state.storeNames = nil
             if state.generation == generation {
                 state.vocabulary = vocabulary
             }
@@ -551,6 +554,17 @@ public final class QueryEngine: Sendable {
 
     var today: Int {
         QueryCalendar.today(now: now(), timeZone: timeZone)
+    }
+
+    /// The names `store`'s columns hold, ranked for completion (LIB-18): made again once they change.
+    func storeNames(of store: ColumnStore) -> NameTable {
+        let lists = NameTable.storeNameLists(store)
+        if let kept = state.withLock({ $0.storeNames }), kept.lists == lists {
+            return kept.table
+        }
+        let table = NameTable(storeNames: store)
+        state.withLock { $0.storeNames = (lists, table) }
+        return table
     }
 
     /// The rows `query` finds in `store`, compiling it unless its plan is kept.

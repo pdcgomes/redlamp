@@ -327,23 +327,28 @@ extension ColumnStore {
 
 // MARK: - Completions
 
-/// A term the filter bar offers to complete what's typed (LIB-18): a field's value from the index.
+/// A term the filter bar offers to complete what's typed (LIB-18), or a name the palette lists
+/// (LIB-19): a field's value from the index.
 public struct QueryCompletion: Sendable, Hashable {
     public var field: LibraryQuery.Field
     /// The value as the library names it: a keyword's or a collection's path, a camera's or a lens's
     /// name, a folder's path, a label's name, a colour's or a custom label's, a trait's or an
-    /// orientation's.
+    /// orientation's, a place's.
     public var value: String
     /// The term as the language writes it: `kw:"Places/Portugal"`, `camera:"X-T5"`, `is:panorama`,
     /// `orientation:portrait`.
     public var term: String
     /// For a trait or an orientation, the photos of the source it finds.
     public var count: Int?
+    /// For a name found with a word a typo or two from what was typed, how many (`NameRanking`);
+    /// 0 for a name holding what was typed.
+    public var typos: Int
 
-    public init(field: LibraryQuery.Field, value: String, count: Int? = nil) {
+    public init(field: LibraryQuery.Field, value: String, count: Int? = nil, typos: Int = 0) {
         self.field = field
         self.value = value
         self.count = count
+        self.typos = typos
         term = LibraryQuery.Filter(field, .equal, [Self.queryValue(field, value)]).description
     }
 
@@ -371,27 +376,33 @@ public struct QueryCompletion: Sendable, Hashable {
 
     /// The fields completion has values for, in the order it offers them.
     public static let fields: [LibraryQuery.Field] = [
-        .keyword, .camera, .lens, .folder, .label, .collection, .trait, .orientation,
+        .keyword, .camera, .lens, .folder, .label, .collection, .trait, .orientation, .city, .country, .state,
+        .sublocation,
     ]
 }
 
 public extension QueryEngine {
-    /// The values of `field`, or of keywords, cameras, lenses, folders, labels, collections, traits
-    /// and orientations when it's nil, that `typed` starts or starts a word of, then those it's inside,
-    /// best first: as the filter bar's text completes a term. A trait or an orientation comes with the
-    /// photos of `source` it finds. Nothing runs on the caller's thread.
+    /// The values of `field`, or of every field completion has values for when it's nil
+    /// (`QueryCompletion.fields`), best first, as `NameRanking` ranks them: as the filter bar's text
+    /// completes a term. A trait or an orientation comes with the photos of `source` it finds.
+    /// Nothing runs on the caller's thread.
     func completions(
         _ typed: String, field: LibraryQuery.Field?, limit: Int = 8, in source: PhotoSource = .allPhotographs,
+    ) async -> [QueryCompletion] {
+        await completions(typed, fields: field.map { [$0] } ?? QueryCompletion.fields, limit: limit, in: source)
+    }
+
+    /// The values of `fields` best first, ties going to the field listed first: as the palette lists
+    /// the library's names (LIB-19).
+    func completions(
+        _ typed: String, fields: [LibraryQuery.Field], limit: Int = 8, in source: PhotoSource = .allPhotographs,
     ) async -> [QueryCompletion] {
         let typed = typed.trimmingCharacters(in: .whitespaces)
         guard !typed.isEmpty, limit > 0, let (store, vocabulary, generation) = await loadedSnapshot() else {
             return []
         }
-        let customLabels = Array(store.customLabelNames.names.dropFirst())
-        var completions = await Task.detached(priority: .userInitiated) {
-            vocabulary.completions(
-                typed, fields: field.map { [$0] } ?? QueryCompletion.fields, limit: limit, customLabels: customLabels,
-            )
+        var completions = await Task.detached(priority: .userInitiated) { [self] in
+            vocabulary.completions(typed, fields: fields, limit: limit, storeNames: storeNames(of: store))
         }.value
         guard completions.contains(where: { $0.counted != nil }),
               let photos = try? await rows(of: source, in: store, vocabulary: vocabulary, generation: generation)
@@ -410,74 +421,71 @@ public extension QueryEngine {
 }
 
 extension QueryVocabulary {
-    /// `customLabels` are the custom labels' names the photos have.
+    /// The names of `fields` ranked for `typed` (`NameRanking`): the small tables', the colour
+    /// labels, traits and orientations, and `storeNames`, the names the store's columns hold.
     func completions(
-        _ typed: String, fields: [LibraryQuery.Field], limit: Int, customLabels: [String] = [],
+        _ typed: String, fields: [LibraryQuery.Field], limit: Int, storeNames: NameTable? = nil,
     ) -> [QueryCompletion] {
-        var ranked: [(rank: Int, order: Int, completion: QueryCompletion)] = []
-        let folded = Self.fold(typed)
-        func offer(_ field: LibraryQuery.Field, _ names: some Sequence<String>, shown: (String) -> String = { $0 }) {
-            for name in names {
-                guard let rank = Self.rank(Self.fold(shown(name)), folded) else { continue }
-                ranked.append((rank, ranked.count, QueryCompletion(field: field, value: name)))
-            }
+        let tables = [rankedNames(), NameTable.fixed] + (storeNames.map { [$0] } ?? [])
+        return NameRanking.rank(typed, in: tables, fields: fields, limit: limit).map { match in
+            QueryCompletion(field: match.field, value: match.value, typos: match.typos)
         }
-        for field in fields {
-            switch field {
-            case .keyword:
-                for match in keywordCompletion().matches(typed, limit: limit) {
-                    let rank = match.kind == .name || match.kind == .nameStart ? 0 : match.kind == .word ? 1 : 2
-                    ranked.append((rank, ranked.count, QueryCompletion(field: .keyword, value: match.path.text)))
-                }
-            case .camera: offer(.camera, Set(names.cameras.values).sorted())
-            case .lens: offer(.lens, Set(names.lenses.values).sorted())
-            case .folder: offer(.folder, Set(names.folders.values).sorted())
-            case .label:
-                offer(.label, ColorLabel.allCases.map(\.rawValue))
-                offer(.label, customLabels.sorted { FinderOrder.compare($0, $1) < 0 })
-            case .collection:
-                let paths = Set(names.collections.values).sorted { FinderOrder.compare($0, $1) < 0 }
-                offer(.collection, paths) { CollectionPath($0)?.names.joined(separator: "/") ?? $0 }
-            case .trait:
-                for trait in LibraryQuery.Trait.allCases {
-                    let ranks = [trait.title, trait.rawValue].compactMap { Self.rank(Self.fold($0), folded) }
-                    guard let rank = ranks.min() else { continue }
-                    ranked.append((rank, ranked.count, QueryCompletion(field: .trait, value: trait.rawValue)))
-                }
-            case .orientation:
-                offer(.orientation, PhotoOrientation.allCases.map(\.rawValue))
-            default: break
-            }
-        }
-        return ranked.sorted { ($0.rank, $0.order) < ($1.rank, $1.order) }.prefix(limit).map(\.completion)
     }
 
-    /// 0 when `typed` starts `name`, 1 when it starts a word of it, 2 when it's inside it.
-    private static func rank(_ name: String, _ typed: String) -> Int? {
-        guard let found = name.range(of: typed) else { return nil }
-        if found.lowerBound == name.startIndex {
-            return 0
-        }
-        let before = name[name.index(before: found.lowerBound)]
-        return before.isLetter || before.isNumber ? 2 : 1
-    }
-
-    private static func fold(_ text: String) -> String {
-        QueryText.folded(text)
-    }
-
-    /// Keyword completion over the library's keywords, made the first time it's asked for.
-    private func keywordCompletion() -> KeywordCompletion {
-        completion.withLock { completion in
-            if let completion {
-                return completion
+    /// The small tables' names ranked for completion: keywords with their synonyms, collections,
+    /// folders, cameras and lenses.
+    func rankedNames() -> NameTable {
+        ranked.withLock { table in
+            if let table {
+                return table
             }
-            let entries = names.keywords.values.compactMap { text in
-                KeywordPath(text).map { KeywordCompletion.Entry(path: $0, synonyms: names.keywordSynonyms[text] ?? []) }
+            var ranked: [RankedName] = []
+            ranked.reserveCapacity(names.keywords.count + names.folders.count + names.collections.count + 64)
+            for (_, path) in names.keywords.sorted(by: { $0.key < $1.key }) {
+                ranked.append(.levels(.keyword, path: path, others: names.keywordSynonyms[path] ?? []))
             }
-            let made = KeywordCompletion(entries)
-            completion = made
+            for (_, path) in names.collections.sorted(by: { $0.key < $1.key }) {
+                ranked.append(.levels(.collection, path: path))
+            }
+            for (_, path) in names.folders.sorted(by: { $0.key < $1.key }) {
+                ranked.append(.folder(path))
+            }
+            for camera in Set(names.cameras.values).sorted() {
+                ranked.append(RankedName(.camera, camera))
+            }
+            for lens in Set(names.lenses.values).sorted() {
+                ranked.append(RankedName(.lens, lens))
+            }
+            let made = NameTable(ranked)
+            table = made
             return made
         }
     }
+}
+
+extension NameTable {
+    /// The colour labels, the traits by title and by word, and the orientations.
+    static let fixed = NameTable(
+        ColorLabel.allCases.map { RankedName(.label, $0.rawValue) }
+            + LibraryQuery.Trait.allCases.map { RankedName(.trait, $0.rawValue, name: $0.title, others: [$0.rawValue]) }
+            + PhotoOrientation.allCases.map { RankedName(.orientation, $0.rawValue) },
+    )
+
+    /// The names `store`'s columns hold that completion offers: custom labels, and places' parts.
+    init(storeNames store: ColumnStore) {
+        var names = store.customLabelNames.names.dropFirst().map { RankedName(.label, $0) }
+        for (part, field) in Self.placeFields {
+            names += store.placeNames.parts[part.rawValue].names.dropFirst().map { RankedName(field, $0) }
+        }
+        self.init(names)
+    }
+
+    /// The lists of names `init(storeNames:)` makes a table of, to tell when they've changed.
+    static func storeNameLists(_ store: ColumnStore) -> [ContiguousArray<String>] {
+        [store.customLabelNames.names] + placeFields.map { store.placeNames.parts[$0.part.rawValue].names }
+    }
+
+    private static let placeFields: [(part: PlaceCodes.Part, field: LibraryQuery.Field)] = [
+        (.city, .city), (.country, .country), (.state, .state), (.sublocation, .sublocation),
+    ]
 }
