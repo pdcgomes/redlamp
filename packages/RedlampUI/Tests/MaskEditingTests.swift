@@ -190,7 +190,7 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         if request.kind == .people, missingParts.contains(request.part) {
             throw MaskComputationError.needsSAM3(request.part)
         }
-        return computed.map { mask in
+        let masks = computed.map { mask in
             var mask = mask
             mask.kind = request.kind
             if !request.prompts.isEmpty {
@@ -200,8 +200,20 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
                 mask.excludedPrompts = request.excluded
             }
             mask.box = request.box ?? mask.box
+            if request.people != nil {
+                mask.part = request.part.rawValue
+            }
             return mask
         }
+        guard request.kind == .people, let chosen = request.people else { return masks }
+        return masks.filter { $0.instance.map(chosen.contains) ?? true }
+    }
+
+    /// Who `peopleFound` reports.
+    var people: [PersonFound] = []
+
+    func peopleFound() async throws -> [PersonFound] {
+        people
     }
 
     /// What `withShadowAndReflection` gives in place of a mask; nil gives the mask itself.

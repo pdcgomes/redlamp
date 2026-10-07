@@ -29,7 +29,7 @@ extension HarnessScene {
             id: "masks-panel-states",
             title: "States",
             symbol: "square.grid.2x2",
-            synopsis: "The picker for a new mask and for a mask's component",
+            synopsis: "The picker for a new mask and for a mask's component, and the People picker",
             section: .masks,
         ) {
             MasksStatesScene()
@@ -127,7 +127,12 @@ private struct MasksTask: Identifiable, Sendable {
         ),
         MasksTask(
             id: 2, title: "Brighten one face of three", steps: "New Mask ▸ People: tick one person and Face Skin",
-            row: "UX-21",
+            shown: { masks in
+                masks.contains { mask in
+                    mask.components.count(where: { person(in: $0)?.part == .faceSkin }) == 1
+                        && mask[.localExposure] > 0
+                }
+            },
         ),
         MasksTask(
             id: 3, title: "Take a person out of a sky", steps: "Select the sky, Subtract ▸ People",
@@ -199,7 +204,14 @@ private struct MasksTask: Identifiable, Sendable {
         ),
         MasksTask(id: 12, title: "Undo a wrong click", steps: "⌘Z"),
         MasksTask(
-            id: 13, title: "A mask for each person", steps: "New Mask ▸ People: Separate masks", row: "UX-21",
+            id: 13, title: "A mask for each person", steps: "New Mask ▸ People: Separate masks",
+            shown: { masks in
+                let people = masks.compactMap { mask -> Int? in
+                    let instances = Set(mask.components.compactMap { person(in: $0)?.instance })
+                    return instances.count == 1 ? instances.first : nil
+                }
+                return Set(people).count > 1
+            },
         ),
         MasksTask(
             id: 14, title: "Water and vegetation", steps: "New Mask ▸ Landscape: tick both", row: "UX-26",
@@ -208,6 +220,12 @@ private struct MasksTask: Identifiable, Sendable {
 
     private static func has(_ kind: MaskKind, in mask: MaskLayer) -> Bool {
         mask.components.contains { $0.shape.kind == kind }
+    }
+
+    /// A People component's part and person.
+    private static func person(in component: MaskComponent) -> (part: PersonPart, instance: Int?)? {
+        guard case let .ai(ai) = component.shape, ai.kind == .people else { return nil }
+        return (ai.part.flatMap(PersonPart.init(rawValue:)) ?? .entirePerson, ai.instance)
     }
 }
 
@@ -230,6 +248,14 @@ private struct MasksStatesScene: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .frame(width: 300)
+                }
+            }
+            VStack(alignment: .leading, spacing: 24) {
+                specimen("People, three found") {
+                    PeoplePickerSpecimen(people: 3)
+                }
+                specimen("People, nobody found") {
+                    PeoplePickerSpecimen(people: 0)
                 }
             }
         }

@@ -487,6 +487,31 @@ public enum LandscapeClass: String, Codable, Sendable, Hashable, CaseIterable {
 
 /// What an AI mask is computed for. Masks are computed from the photo without any edit, so
 /// they don't move when the edit changes.
+/// A person People finds in the open photo, for the People picker: Vision's person instance,
+/// where they are, and their face. A face part's AI mask is numbered by its face
+/// (`faceInstance`), a whole person's or a SAM 3 part's by the person.
+public struct PersonFound: Sendable, Hashable, Identifiable {
+    /// Their person instance; nil when Vision can't tell people apart (none separated, or four or
+    /// more), so People covers everyone as one.
+    public var instance: Int?
+    /// The instance of their face's parts (Face Skin, Lips, Teeth...), when a face is found in them.
+    public var faceInstance: Int?
+    /// Their bounds, and their face's, in the oriented frame (0...1 from the top left).
+    public var box: ImageRect
+    public var face: ImageRect?
+
+    public var id: Int {
+        instance ?? -1
+    }
+
+    public init(instance: Int?, faceInstance: Int? = nil, box: ImageRect, face: ImageRect? = nil) {
+        self.instance = instance
+        self.faceInstance = faceInstance
+        self.box = box
+        self.face = face
+    }
+}
+
 public struct MaskRequest: Sendable, Hashable {
     public var kind: MaskKind
     /// For People: the part of each person.
@@ -502,10 +527,12 @@ public struct MaskRequest: Sendable, Hashable {
     /// For Objects: a box around the object (dragged, or a thing found by name), which bounds it
     /// as the prompts point at it.
     public var box: ImageRect?
+    /// For People: only these people (`PersonFound.instance`); nil for everyone.
+    public var people: [Int]?
 
     public init(
         kind: MaskKind, part: PersonPart = .entirePerson, prompts: [ImagePoint] = [], excluded: [ImagePoint] = [],
-        combined: Bool = false, landscape: LandscapeClass = .vegetation, box: ImageRect? = nil,
+        combined: Bool = false, landscape: LandscapeClass = .vegetation, box: ImageRect? = nil, people: [Int]? = nil,
     ) {
         self.kind = kind
         self.part = part
@@ -514,6 +541,7 @@ public struct MaskRequest: Sendable, Hashable {
         self.combined = combined
         self.landscape = landscape
         self.box = box
+        self.people = people
     }
 
     /// The request an existing AI mask was made with, to update it. (A mask's `part` is its person

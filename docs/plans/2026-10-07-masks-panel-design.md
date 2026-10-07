@@ -79,7 +79,7 @@ Progress shows on the row of the mask being made ("Finding people…"); a failur
 
 ## What the engine and the edit need
 
-- **Who is in the photo:** a new `EditingEngine` call returning each person Vision finds (their box, and their face's box when there is one), cached per photo as the masks are. `MaskRequest` gains the people to make (`instances`), so a picker's choice makes only theirs.
+- **Who is in the photo:** a new `EditingEngine` call (`peopleFound`) returning each person Vision finds, left to right (their box, and their face's box when there is one), cached per photo as the masks are. `MaskRequest` gains the people to make (`people`), so a picker's choice makes only theirs; a face part goes with the person whose mask covers most of its face, as faces are numbered on their own.
 - **Which regions:** SAM 3's classes with their share of the photo, from the same encoding Landscape masks use.
 - **Thumbnails:** a mask's coverage at thumbnail size, rendered by the engine and cached by the mask's contents.
 - **Pins:** the point furthest inside a mask's coverage, computed with the thumbnail.

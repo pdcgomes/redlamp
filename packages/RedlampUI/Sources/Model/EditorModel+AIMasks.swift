@@ -104,13 +104,20 @@ public extension EditorModel {
             availableAIMaskKinds = engine.availableMaskKinds()
             modelDownloadProgress = nil
             guard currentVisit == visit else { return }
-            await startAIMask(kind, part: part, landscape: landscape, operation: operation, addingTo: target)
+            if peoplePicker != nil {
+                await refreshPartsNeedingModel()
+            } else {
+                await startAIMask(kind, part: part, landscape: landscape, operation: operation, addingTo: target)
+            }
         } catch {
             maskMessage = "\(model.name) couldn't be downloaded: \(error)"
         }
     }
 
     func declinePendingModel() {
+        if let pending = pendingModel, pending.kind == .people {
+            peoplePicker?.parts.remove(pending.part)
+        }
         pendingModel = nil
         drawingTarget = nil
     }

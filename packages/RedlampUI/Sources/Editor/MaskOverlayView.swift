@@ -35,6 +35,16 @@ struct MaskOverlayView: View {
                         }
                 }
 
+                if let box = model.hoveredPersonBox {
+                    let topLeft = frame.view(ImagePoint(x: box.x, y: box.y))
+                    let bottomRight = frame.view(ImagePoint(x: box.x + box.width, y: box.y + box.height))
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color.accentColor, lineWidth: 2)
+                        .frame(width: abs(bottomRight.x - topLeft.x), height: abs(bottomRight.y - topLeft.y))
+                        .position(x: (topLeft.x + bottomRight.x) / 2, y: (topLeft.y + bottomRight.y) / 2)
+                        .allowsHitTesting(false)
+                }
+
                 let shapes = model.maskShapes
                 ForEach(model.maskOutlines) { mask in
                     if model.showMaskPins, mask.id != model.selectedMaskID,

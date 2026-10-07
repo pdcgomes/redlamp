@@ -166,6 +166,88 @@ public struct VisionMaskProvider: Sendable {
         return masks
     }
 
+    /// The people `people(_:)` makes masks of, left to right, with the instance it numbers each by
+    /// and the face `personParts(_:in:)` numbers their face's parts by: of the faces their mask
+    /// covers most of, the largest. When Vision separates no one, or four or more, one entry for
+    /// everyone.
+    public func peopleFound(in image: CGImage) throws -> [PersonFound] {
+        let handler = VNImageRequestHandler(cgImage: image, options: [:])
+        let instances = VNGeneratePersonInstanceMaskRequest()
+        try handler.perform([instances])
+        // Vision's boxes are normalised, from the bottom left.
+        let faceBoxes = try Self.faces(in: image).faces.map { face in
+            let box = face.boundingBox
+            return ImageRect(x: box.minX, y: 1 - box.maxY, width: box.width, height: box.height)
+        }
+        guard let observation = instances.results?.first, !observation.allInstances.isEmpty,
+              observation.allInstances.count < 4
+        else {
+            let everyone = try allPeople(image, handler: handler)
+            guard everyone.coveredFraction > 0.001, let box = Self.bounds(of: everyone) else { return [] }
+            return [PersonFound(instance: nil, box: box)]
+        }
+        let masks = try observation.allInstances.sorted().map { instance in
+            try Self.gray(observation.generateScaledMaskForImage(
+                forInstances: IndexSet(integer: instance),
+                from: handler,
+            ))
+        }
+        // Small figures' masks are soft at the face, so a face is theirs by the share it covers.
+        var faceOf: [Int: Int] = [:]
+        for (face, box) in faceBoxes.enumerated() {
+            let shares = masks.map { Self.share(of: $0, in: box) }
+            guard let person = shares.indices.max(by: { shares[$0] < shares[$1] }),
+                  shares[person] > 0.2 else { continue }
+            if let other = faceOf[person], faceBoxes[other].width * faceBoxes[other].height > box.width * box.height {
+                continue
+            }
+            faceOf[person] = face
+        }
+        return masks.enumerated().map { index, mask in
+            PersonFound(
+                instance: index, faceInstance: faceOf[index],
+                box: Self.bounds(of: mask) ?? ImageRect(x: 0, y: 0, width: 1, height: 1),
+                face: faceOf[index].map { faceBoxes[$0] },
+            )
+        }
+        .sorted { $0.box.x + $0.box.width / 2 < $1.box.x + $1.box.width / 2 }
+    }
+
+    /// The mean coverage of `mask` over `box` (fractions of it from the top left), 0...1.
+    static func share(of mask: GrayMask, in box: ImageRect) -> Double {
+        let x0 = max(Int(box.x * Double(mask.width)), 0)
+        let y0 = max(Int(box.y * Double(mask.height)), 0)
+        let x1 = min(Int(((box.x + box.width) * Double(mask.width)).rounded(.up)), mask.width)
+        let y1 = min(Int(((box.y + box.height) * Double(mask.height)).rounded(.up)), mask.height)
+        guard x1 > x0, y1 > y0 else { return 0 }
+        var total = 0
+        for y in y0 ..< y1 {
+            for x in x0 ..< x1 {
+                total += Int(mask.pixels[y * mask.width + x])
+            }
+        }
+        return Double(total) / Double((x1 - x0) * (y1 - y0) * 255)
+    }
+
+    /// The bounds of what `mask` covers over half, as fractions of it from the top left.
+    static func bounds(of mask: GrayMask) -> ImageRect? {
+        var (minX, minY, maxX, maxY) = (mask.width, mask.height, -1, -1)
+        for y in 0 ..< mask.height {
+            for x in 0 ..< mask.width where mask.pixels[y * mask.width + x] > 127 {
+                minX = min(minX, x)
+                maxX = max(maxX, x)
+                minY = min(minY, y)
+                maxY = max(maxY, y)
+            }
+        }
+        guard maxX >= minX, maxY >= minY else { return nil }
+        let (width, height) = (Double(mask.width), Double(mask.height))
+        return ImageRect(
+            x: Double(minX) / width, y: Double(minY) / height,
+            width: Double(maxX - minX + 1) / width, height: Double(maxY - minY + 1) / height,
+        )
+    }
+
     private func allPeople(_ image: CGImage, handler: VNImageRequestHandler) throws -> GrayMask {
         let request = VNGeneratePersonSegmentationRequest()
         request.qualityLevel = .accurate
@@ -188,10 +270,8 @@ public struct VisionMaskProvider: Sendable {
     /// or SAM 3, as do facial hair, body skin and clothes (`SAM3Concepts`).
     private func personParts(_ part: PersonPart, in image: CGImage) throws -> [ProvidedMask] {
         guard !SAM3Concepts.partPrecedence.contains(part) else { throw MaskComputationError.unsupported(.people) }
+        let (observations, revision) = try Self.faces(in: image)
         let handler = VNImageRequestHandler(cgImage: image, options: [:])
-        let faces = VNDetectFaceLandmarksRequest()
-        try handler.perform([faces])
-        let observations = (faces.results ?? []).filter { $0.landmarks != nil }
         guard !observations.isEmpty else { throw MaskComputationError.nothingFound(.people) }
         let size = PixelSize(width: image.width, height: image.height)
             .fitted(within: PixelSize(width: Self.partsLongEdge, height: Self.partsLongEdge))
@@ -204,13 +284,43 @@ public struct VisionMaskProvider: Sendable {
             else { return nil }
             mask = mask.blurred(radius: max(1, size.longEdge / 1000))
             return ProvidedMask(
-                kind: .people, provider: "redlamp.faceLandmarks", revision: faces.revision, instance: index,
+                kind: .people, provider: "redlamp.faceLandmarks", revision: revision, instance: index,
                 part: part, mask: mask,
             )
         }
     }
 
     // MARK: - Helpers
+
+    /// The faces Vision finds with landmarks, numbered left to right, as their parts and the
+    /// People picker number them: Vision returns them in no set order. Landmarks found on face
+    /// rectangles catch small faces that landmarks alone miss, and the other way round, so it
+    /// takes both, each request with a handler of its own (after other requests on the same
+    /// handler, Vision misses small faces).
+    static func faces(in image: CGImage) throws -> (faces: [VNFaceObservation], revision: Int) {
+        let rectangles = VNDetectFaceRectanglesRequest()
+        try VNImageRequestHandler(cgImage: image, options: [:]).perform([rectangles])
+        let seeded = VNDetectFaceLandmarksRequest()
+        seeded.inputFaceObservations = rectangles.results ?? []
+        try VNImageRequestHandler(cgImage: image, options: [:]).perform([seeded])
+        let alone = VNDetectFaceLandmarksRequest()
+        try VNImageRequestHandler(cgImage: image, options: [:]).perform([alone])
+        var faces = (seeded.results ?? []).filter { $0.landmarks != nil }
+        for face in alone.results ?? [] where face.landmarks != nil
+            && !faces.contains(where: { overlap($0.boundingBox, face.boundingBox) > 0.3 }) {
+            faces.append(face)
+        }
+        faces.sort { ($0.boundingBox.minX, -$0.boundingBox.maxY) < ($1.boundingBox.minX, -$1.boundingBox.maxY) }
+        return (faces, seeded.revision)
+    }
+
+    /// Intersection over union.
+    private static func overlap(_ a: CGRect, _ b: CGRect) -> Double {
+        let both = a.intersection(b)
+        guard !both.isNull else { return 0 }
+        let shared = both.width * both.height
+        return shared / (a.width * a.height + b.width * b.height - shared)
+    }
 
     /// A one-component 8-bit or 32-bit float pixel buffer as a gray mask.
     static func gray(_ buffer: CVPixelBuffer) throws -> GrayMask {

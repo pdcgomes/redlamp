@@ -386,6 +386,9 @@ extension RedlampEngine {
         } catch MaskComputationError.unsupported(.people) where part.map(SAM3Concepts.partPrecedence.contains) == true {
             throw MaskComputationError.needsSAM3(request.part)
         }
+        if request.kind == .people, let chosen = request.people {
+            provided = try await Self.only(chosen, of: provided, found: peopleFound())
+        }
         guard !provided.isEmpty else {
             throw part.map(MaskComputationError.notFound) ?? MaskComputationError.nothingFound(request.kind)
         }
@@ -505,6 +508,9 @@ extension RedlampEngine {
         var kept: [(instance: Int?, mask: GrayMask)] = zip(instances, pieces)
             .filter { Self.selected($0.1) > 0.0002 }
             .map { (instance: $0.0, mask: $0.1) }
+        if let chosen = request.people.map(Set.init) {
+            kept = kept.filter { $0.instance.map(chosen.contains) ?? true }
+        }
         if request.combined, let first = kept.first {
             kept = [(nil, kept.dropFirst().reduce(first.mask) { $0.union($1.mask) })]
         }
@@ -543,6 +549,34 @@ extension RedlampEngine {
         }.value
         personMatteCache.withLock { $0 = (analysis.hash, mattes) }
         return mattes
+    }
+
+    /// Who People finds in the open photo, cached with its analysis render.
+    public func peopleFound() async throws -> [PersonFound] {
+        guard let session = currentSession() else { throw EngineError.noImageOpen }
+        let analysis = try await analysisImage(for: session)
+        if let cached = peopleFoundCache.withLock({ $0 }), cached.hash == analysis.hash {
+            return cached.people
+        }
+        let image = analysis.image
+        let people = try await Task.detached(priority: .userInitiated) {
+            try VisionMaskProvider().peopleFound(in: image)
+        }.value
+        peopleFoundCache.withLock { $0 = (analysis.hash, people) }
+        return people
+    }
+
+    /// The masks of the `chosen` people (`PersonFound.instance`): a face part by its face, the
+    /// rest by its person. A mask of everyone (no instance) stays.
+    static func only(_ chosen: [Int], of masks: [ProvidedMask], found: [PersonFound]) -> [ProvidedMask] {
+        let people = Set(chosen)
+        let faces = Set(found.filter { $0.instance.map(people.contains) ?? false }.compactMap(\.faceInstance))
+        return masks.filter { mask in
+            guard let instance = mask.instance else { return true }
+            let byPerson = (mask.part ?? .entirePerson) == .entirePerson
+                || SAM3Concepts.partPrecedence.contains(mask.part ?? .entirePerson)
+            return byPerson ? people.contains(instance) : faces.contains(instance)
+        }
     }
 
     /// The share of `mask` over half covered.

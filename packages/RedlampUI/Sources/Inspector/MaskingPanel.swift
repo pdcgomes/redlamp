@@ -1140,6 +1140,16 @@ struct ComponentRow: View {
     var actionsOnScreen = false
     @Environment(EditorModel.self) private var model
 
+    /// "Subject 1"; in the new panel a People component names its part and person, "Face Skin · Person 2".
+    private func title(_ index: Int) -> String {
+        guard actionsOnScreen, component.kind == .people else {
+            return "\(component.kind?.name ?? "Newer Component") \(index)"
+        }
+        let part = component.part.flatMap(PersonPart.init(rawValue:)) ?? .entirePerson
+        guard let person = model.personNumber(part: part, instance: component.instance) else { return part.name }
+        return "\(part.name) · Person \(person)"
+    }
+
     var body: some View {
         let selected = component.id == model.selectedComponentOutline?.id
         let index = (mask.components.firstIndex(of: component) ?? 0) + 1
@@ -1167,7 +1177,7 @@ struct ComponentRow: View {
             }
             Image(systemName: component.kind?.symbol ?? "questionmark.square.dashed")
                 .font(.system(size: 11))
-            Text("\(component.kind?.name ?? "Newer Component") \(index)")
+            Text(title(index))
                 .font(Theme.labelFont)
             Spacer()
             if component.kind == .brush || component.kind == .colorRange || component.kind == .luminanceRange {

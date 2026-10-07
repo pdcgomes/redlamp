@@ -428,6 +428,14 @@ public final class EditorModel {
         didSet { requestRender() }
     }
 
+    /// The People picker while it's open (UX-21), the crops of the faces it shows, and the box
+    /// of the person under the pointer, which the canvas outlines.
+    var peoplePicker: PeoplePicker?
+    var peopleCrops: [Int: CGImage] = [:]
+    var hoveredPersonBox: ImageRect?
+    /// The people found in the photo, which names People components "Person 2".
+    var foundPeople: (visit: PhotoVisit, people: [PersonFound])?
+
     /// Each mask's coverage, small, as the black and white overlay draws it, for the Masks panel's
     /// list (`refreshMaskThumbnails`), and what each was drawn from.
     public internal(set) var maskThumbnails: [UUID: CGImage] = [:]

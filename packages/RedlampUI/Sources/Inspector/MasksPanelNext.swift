@@ -6,7 +6,8 @@ import SwiftUI
 /// checklist works through it. From UX-20: one picker starts every mask, the list's actions sit
 /// in the header, and messages and the armed tool show at the top of the list. From UX-22: every
 /// action is on screen, not only in context menus. From UX-23: each row shows its mask's
-/// coverage, and the canvas previews the mask under the pointer.
+/// coverage, and the canvas previews the mask under the pointer. From UX-21: People opens a
+/// picker of who is in the photo and which of their parts to mask.
 @_spi(Harness) public struct MasksPanelNext: View {
     @Environment(EditorModel.self) private var model
 
@@ -19,7 +20,11 @@ import SwiftUI
                 DrawingHint()
             }
             MaskMessages()
-            if model.maskOutlines.isEmpty {
+            if let picker = model.peoplePicker {
+                PeoplePickerView(picker: picker)
+                    .padding(.horizontal, Theme.panelPadding)
+                    .padding(.bottom, 12)
+            } else if model.maskOutlines.isEmpty {
                 MaskPicker(mode: .new, inline: true)
                     .padding(.horizontal, Theme.panelPadding)
                     .padding(.bottom, 12)
@@ -36,6 +41,7 @@ import SwiftUI
                 }
             }
         }
+        .task(id: model.maskOutlines) { await model.findPeopleForNames() }
     }
 }
 
@@ -227,15 +233,12 @@ enum MaskKindGroup: String, CaseIterable, Identifiable {
     private func tile(_ kind: MaskKind) -> some View {
         Group {
             if kind == .people {
-                Menu {
-                    ForEach(model.availablePersonParts, id: \.self) { part in
-                        Button(part.name) { choose(.people, part: part) }
-                    }
+                Button {
+                    model.openPeoplePicker(mode)
+                    dismiss()
                 } label: {
                     face(kind)
                 }
-                .menuStyle(.button)
-                .menuIndicator(.hidden)
             } else if kind == .landscape {
                 Menu {
                     ForEach(LandscapeClass.allCases, id: \.self) { cls in

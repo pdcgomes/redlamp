@@ -1120,6 +1120,47 @@ extension MaskRenderTests {
         }
     }
 
+    /// The People picker's people (UX-21): on the Canon sample, the statue, in a box around it; the
+    /// masks People makes are theirs, and asking for one makes only theirs.
+    @Test(.enabled(if: EngineSmokeTests.canRender))
+    func `the people found are those people masks are made of`() async throws {
+        let engine = try RedlampEngine()
+        let canon = try #require(EngineSmokeTests.fixtures.first { $0.pathExtension == "CR3" })
+        _ = try await engine.open(canon)
+        let people = try await engine.peopleFound()
+        let first = try #require(people.first)
+        #expect(first.box.width > 0.05 && first.box.height > 0.05)
+        #expect(first.box.x >= 0 && first.box.x + first.box.width <= 1.0001)
+        let masks = try await engine.computeMasks(MaskRequest(kind: .people))
+        #expect(masks.count == people.count)
+        if let instance = first.instance {
+            let theirs = try await engine.computeMasks(MaskRequest(kind: .people, people: [instance]))
+            #expect(theirs.map(\.instance) == [instance])
+        }
+    }
+
+    /// Each picked person keeps their own masks and their face's parts, which Vision numbers by
+    /// face; a mask of everyone stays.
+    @Test func `only the people picked keep their masks`() {
+        let blank = GrayMask(width: 2, height: 2, coverage: [0, 0, 0, 0])
+        func mask(_ part: PersonPart, _ instance: Int?) -> ProvidedMask {
+            ProvidedMask(kind: .people, provider: "test", revision: 1, instance: instance, part: part, mask: blank)
+        }
+        let box = ImageRect(x: 0, y: 0, width: 0.2, height: 0.5)
+        let found = [
+            PersonFound(instance: 0, faceInstance: 1, box: box),
+            PersonFound(instance: 1, faceInstance: 0, box: box),
+            PersonFound(instance: 2, box: box),
+        ]
+        let masks = [
+            mask(.entirePerson, 0), mask(.entirePerson, 1), mask(.entirePerson, 2),
+            mask(.lips, 0), mask(.lips, 1), mask(.hair, 1), mask(.hair, 2), mask(.entirePerson, nil),
+        ]
+        let kept = RedlampEngine.only([1], of: masks, found: found)
+        #expect(kept.map(\.part) == [.entirePerson, .lips, .hair, .entirePerson])
+        #expect(kept.map(\.instance) == [1, 0, 1, nil])
+    }
+
     /// With Depth Anything 3 on this Mac: on the Nikon sample the front of the table is nearer
     /// than the wall behind the objects.
     @Test(.enabled(if: EngineSmokeTests.canRender && Self.isInstalled("depth-anything-3-mono-large")))

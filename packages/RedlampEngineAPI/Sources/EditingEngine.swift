@@ -53,6 +53,9 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// for People. Throws `MaskComputationError` when the mask can't be made.
     func computeMasks(_ request: MaskRequest) async throws -> [AIMask]
 
+    /// The people People finds in the current photo, in the order its masks number them.
+    func peopleFound() async throws -> [PersonFound]
+
     /// A quick, low-resolution Objects mask for hovering, or nil when its model isn't ready.
     func previewObjectMask(_ request: MaskRequest) async throws -> MaskBitmap?
 
@@ -174,6 +177,10 @@ public protocol EditingEngine: AnyObject, Sendable {
 
 public extension EditingEngine {
     func warmUpMasks() {}
+
+    func peopleFound() async throws -> [PersonFound] {
+        []
+    }
 
     func modelNeeded(for kind: MaskKind, part _: PersonPart) async -> ModelInfo? {
         await modelNeeded(for: kind)

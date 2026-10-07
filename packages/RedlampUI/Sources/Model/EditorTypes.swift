@@ -345,6 +345,9 @@ public struct MaskOutline: Hashable, Identifiable, Sendable {
         public let kind: MaskKind?
         public let operation: MaskOperation
         public let inverted: Bool
+        /// An AI component's part (a People part, a Landscape class) and person.
+        public let part: String?
+        public let instance: Int?
     }
 
     public let id: UUID
@@ -361,8 +364,16 @@ public struct MaskOutline: Hashable, Identifiable, Sendable {
         name = mask.name
         isVisible = mask.isVisible
         inverted = mask.inverted
-        components = mask.components.map {
-            Component(id: $0.id, kind: $0.shape.kind, operation: $0.operation, inverted: $0.inverted)
+        components = mask.components.map { component in
+            let ai: AIMask? = if case let .ai(mask) = component.shape {
+                mask
+            } else {
+                nil
+            }
+            return Component(
+                id: component.id, kind: component.shape.kind, operation: component.operation,
+                inverted: component.inverted, part: ai?.part, instance: ai?.instance,
+            )
         }
         hasPointColor = !mask.pointColor.isEmpty
     }
