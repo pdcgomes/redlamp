@@ -348,9 +348,11 @@ struct IndexQuerySource: QuerySource {
                 store: saved.store, names: withDefinitions(saved.names), generation: generation, mapped: true,
             )
         }
+        async let names = index.read { try $0.queryNames() }
         let store = try await columnStore()
-        let (names, now) = try await index.read { try ($0.queryNames(), $0.generation()) }
-        let loaded = try await LoadedStore(store: store, names: withDefinitions(names), generation: generation)
+        let read = try await names
+        let now = try await index.read { try $0.generation() }
+        let loaded = try await LoadedStore(store: store, names: withDefinitions(read), generation: generation)
         guard now != generation else { return loaded }
         let caught = try await catchingUp(
             [], in: loaded.store, names: loaded.names, since: generation, readingNames: true,
