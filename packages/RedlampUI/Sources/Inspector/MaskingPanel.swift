@@ -642,7 +642,7 @@ struct CreateMaskMenu: View {
 
 struct MaskList: View {
     /// A menu button on the selected row and the one under the pointer, with the context menu's
-    /// actions (`MasksPanelNext`).
+    /// actions, and the canvas previewing the mask under the pointer (`MasksPanelNext`).
     var actionsOnScreen = false
     @Environment(EditorModel.self) private var model
     @State private var hovered: UUID?
@@ -708,6 +708,9 @@ struct MaskList: View {
                     } else if hovered == mask.id {
                         hovered = nil
                     }
+                    if actionsOnScreen {
+                        model.hoveredMaskID = hovered
+                    }
                 }
                 .onTapGesture(count: 2) {
                     draftName = mask.name
@@ -722,6 +725,11 @@ struct MaskList: View {
                 .contextMenu {
                     actions(for: mask)
                 }
+            }
+        }
+        .onDisappear {
+            if actionsOnScreen {
+                model.hoveredMaskID = nil
             }
         }
         // The list outlives photos and selections, so an unfinished rename mustn't.

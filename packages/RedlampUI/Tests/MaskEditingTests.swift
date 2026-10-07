@@ -479,6 +479,37 @@ struct MaskEditingTests {
         model.endEdit()
     }
 
+    /// The new panel's list previews the mask under the pointer (UX-23), with the overlay on or
+    /// off, and only in the Masking tool.
+    @Test func `the overlay shows the mask under the pointer, overlay on or off`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let model = EditorModel(engine: StubEngine())
+        model.select(folder.appending(path: "IMG_0006.ARW"))
+        for _ in 0 ..< 200 where model.info == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        for _ in 0 ..< 2 {
+            model.startDrawing(.radial)
+            model.beginDrawing(.radial(RadialMask(center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.2)))
+            model.finishDrawing()
+        }
+        let selected = try #require(model.selectedMaskID)
+        let other = try #require(model.masks.map(\.id).first { $0 != selected })
+        model.hoveredMaskID = other
+        #expect(model.maskOverlayShown == other)
+        model.showMaskOverlay = false
+        #expect(model.maskOverlayShown == other)
+        model.hoveredMaskID = nil
+        #expect(model.maskOverlayShown == nil)
+        model.showMaskOverlay = true
+        #expect(model.maskOverlayShown == selected)
+        model.hoveredMaskID = other
+        model.activeTool = .edit
+        #expect(model.maskOverlayShown == nil)
+    }
+
     @Test func `AI masks become components and update in place`() async throws {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
