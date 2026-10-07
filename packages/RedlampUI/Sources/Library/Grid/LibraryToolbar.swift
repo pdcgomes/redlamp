@@ -142,6 +142,8 @@ final class LibraryToolbarView: NSView {
             groupBy.selectItem(at: index)
         }
         groupBy.isHidden = !inGrid
+        // The photos are listed again as the library starts showing the folder, which grouping needs.
+        _ = model.library.count
         groupBy.isEnabled = model.canGroupPhotos || state.groupKey != .ungrouped
         let moments = inGrid && state.groupKey.usesMoments
         for view in [looseness, tighter, looser] as [NSView] {

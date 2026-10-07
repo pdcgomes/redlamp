@@ -39,8 +39,6 @@ import RedlampLibrary
     @ObservationIgnored @_spi(Harness) public private(set) var list: GroupedList?
     /// Each group's picks, from the photos' badges.
     @ObservationIgnored @_spi(Harness) public private(set) var picks: [Int] = []
-    /// Bumped by every change, for the views showing the groups' counts.
-    @_spi(Harness) public private(set) var revision = 0
     @_spi(Harness) public private(set) var coverage: Coverage?
     /// Only the moments without a pick are open (`showUnpicked`).
     @_spi(Harness) public private(set) var showsUnpicked = false
@@ -269,7 +267,6 @@ import RedlampLibrary
     }
 
     private func changed(_ change: Change) {
-        revision += 1
         for observer in observers.values {
             observer(change)
         }
