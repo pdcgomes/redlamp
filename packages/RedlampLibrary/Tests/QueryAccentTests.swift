@@ -42,10 +42,9 @@ struct QueryAccentTests {
                         location: PhotoLocation(city: "Zurich"),
                     ),
                 ])
-                let keywords = [["Lugares/Brasil/São Paulo"], ["Orte/Zu\u{308}rich"], ["Café"], ["ＴＯＫＹＯ"], [
-                    "Sao Paulo",
-                    "Tokyo",
-                ]]
+                let keywords = [
+                    ["Lugares/Brasil/São Paulo"], ["Orte/Zu\u{308}rich"], ["Café"], ["ＴＯＫＹＯ"], ["Sao Paulo", "Tokyo"],
+                ]
                 let collections = [["Viagens/São Paulo"], ["Reisen/Zürich"], ["Cafés"], ["ＴＯＫＹＯ"], ["Sao Paulo"]]
                 for (number, id) in ids.enumerated() {
                     try writer.setKeywords(keywords[number], forPhoto: id)
