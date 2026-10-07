@@ -125,4 +125,36 @@ struct ExportSheetTests {
         #expect(window.performKeyEquivalent(with: escapeKey))
         #expect(cancelled)
     }
+
+    /// Tab goes through every control or only the text fields, by the Mac's Keyboard
+    /// Navigation setting; either way it ends on Resolution, below the fold.
+    @Test func `Tab reaches the lowest field and scrolls it into view`() async throws {
+        let window = try await dialog(height: 560)
+        defer { window.contentViewController = nil }
+        window.makeKeyAndOrderFront(nil)
+        defer { window.orderOut(nil) }
+        try await settle(window)
+        let root = try #require(window.contentView)
+        let scroll = try #require(root.hitTest(NSPoint(x: root.bounds.midX, y: root.bounds.midY))?.enclosingScrollView)
+        let document = try #require(scroll.documentView)
+        let fields = Self.views(NSTextField.self, in: document).filter(\.isEditable)
+        let lowest = try #require(fields.max { $0.convert($0.bounds, to: document).maxY < $1.convert(
+            $1.bounds,
+            to: document,
+        ).maxY })
+        #expect(!scroll.contentView.documentVisibleRect.contains(lowest.convert(lowest.bounds, to: document)))
+        let tab = try key(kVK_Tab, "\t")
+        var focused: NSTextField?
+        for _ in 0 ..< 30 where focused !== lowest {
+            window.sendEvent(tab)
+            try await settle(window)
+            focused = (window.firstResponder as? NSTextView)?.delegate as? NSTextField
+        }
+        #expect(focused === lowest)
+        let frame = lowest.convert(lowest.bounds, to: document)
+        #expect(
+            scroll.contentView.documentVisibleRect.contains(frame),
+            "\(frame) outside \(scroll.contentView.documentVisibleRect)",
+        )
+    }
 }

@@ -254,7 +254,72 @@
     }
 
     enum ExportScenarios {
-        static let all: [Scenario] = [formats, sizes, metadata, previous]
+        static let all: [Scenario] = [formats, sizes, metadata, previous, shortWindow]
+
+        /// #290: on the editor window at its smallest, the dialog was taller than the window and
+        /// its settings didn't scroll, so the last ones were out of reach.
+        static let shortWindow = Scenario(
+            "export.short-window",
+            "On the smallest editor window, the Export dialog fits and Tab reaches its last setting",
+            claims: [.feature("export.dialog")],
+        ) { app in
+            try app.openWorking()
+            let frame = try app.main { _ -> NSRect? in
+                guard let window = Views.editorWindow else { return nil }
+                defer { window.setContentSize(window.contentMinSize) }
+                return window.frame
+            }
+            defer {
+                if let frame {
+                    try? app.main { _ in Views.editorWindow?.setFrame(frame, display: true) }
+                }
+            }
+            app.pause(0.5)
+            try app.choose(Menus.title(of: .export))
+            try app.waitForSheet("the Export dialog")
+            app.pause(0.5)
+            let fits = try app.main { _ -> Bool in
+                guard let window = Views.editorWindow, let sheet = window.attachedSheet else { return false }
+                return window.frame.contains(sheet.frame)
+            }
+            try app.expect(fits, "The Export dialog hangs past the bottom of the editor window")
+
+            /// Resolution, the lowest field: Tab ends on it whichever controls the Mac's Keyboard
+            /// Navigation setting lets it stop on, and the settings scroll to show it.
+            @MainActor func lowestField() -> (NSTextField, NSScrollView, NSWindow)? {
+                guard let sheet = Views.editorWindow?.attachedSheet, let root = sheet.contentView,
+                      let scroll = root.hitTest(NSPoint(x: root.bounds.midX, y: root.bounds.midY))?
+                      .enclosingScrollView,
+                      let document = scroll.documentView,
+                      let lowest = fields(in: document).max(by: {
+                          $0.convert($0.bounds, to: document).maxY < $1.convert($1.bounds, to: document).maxY
+                      })
+                else { return nil }
+                return (lowest, scroll, sheet)
+            }
+            var focused = false
+            for _ in 0 ..< 30 where !focused {
+                try app.main { _ in try Views.editorWindow?.attachedSheet?.sendEvent(Keyboard.event(KeyCombo(.tab))) }
+                app.pause(0.1)
+                focused = try app.main { _ in
+                    lowestField().map { field, _, sheet in (sheet.firstResponder as? NSTextView)?.delegate === field }
+                        ?? false
+                }
+            }
+            try app.expect(focused, "Tab didn't reach the Export dialog's last field")
+            app.pause(0.5)
+            let shown = try app.main { _ -> Bool in
+                guard let (field, scroll, _) = lowestField(), let document = scroll.documentView else { return false }
+                return scroll.contentView.documentVisibleRect.contains(field.convert(field.bounds, to: document))
+            }
+            try app.expect(shown, "The Export dialog didn't scroll its last field into view")
+            try app.expect(try app.pressInSheet(KeyCombo(.escape)), "The Export dialog didn't close on Escape")
+            app.covered(.feature("export.dialog"), via: .key)
+        }
+
+        @MainActor private static func fields(in view: NSView) -> [NSTextField] {
+            ((view as? NSTextField).map { $0.isEditable ? [$0] : [] } ?? []) + view.subviews.flatMap(fields)
+        }
 
         static let formats = Scenario(
             "export.formats", "Every format, bit depth and colour space writes the file it says",
