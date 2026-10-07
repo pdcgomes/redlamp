@@ -19,9 +19,12 @@ extension RedlampEngine {
         ProcessInfo.processInfo.environment["REDLAMP_SKY_METHOD"] ?? "auto"
     }
 
-    /// Sky from the models or the classical estimate, its edges solved per pixel; nil if
-    /// neither finds any.
-    func modelSky(_ analysis: (image: CGImage, hash: String)) async throws -> AIMask? {
+    /// Sky from the models or the classical estimate, its edges solved per pixel on `session`,
+    /// the photo `analysis` was rendered from, whichever photo is open by then; nil if neither
+    /// finds any.
+    func modelSky(
+        _ analysis: (image: CGImage, hash: String), session: ImageSession,
+    ) async throws -> AIMask? {
         let method = Self.skyMethod
         let image = analysis.image
         var da3: GrayMask?
@@ -58,7 +61,7 @@ extension RedlampEngine {
         var sky = coarse
         // REDLAMP_SKY_MATTE=off keeps the models' edges, to compare.
         if ProcessInfo.processInfo.environment["REDLAMP_SKY_MATTE"] != "off",
-           let session = currentSession(), let full = try? await matteImage(for: session) {
+           let full = try? await matteImage(for: session) {
             sky = await Task.detached(priority: .userInitiated) { SkyMatte.refine(coarse, image: full) }.value
         }
         guard let bitmap = sky.bitmap() else { return nil }
@@ -289,7 +292,8 @@ extension RedlampEngine {
         guard let session = currentSession() else { throw EngineError.noImageOpen }
         let analysis = try await analysisImage(for: session)
         let url = session.info.url
-        if request.kind == .sky, EmbeddedMattes.read(.sky, from: url) == nil, let sky = try await modelSky(analysis) {
+        if request.kind == .sky, EmbeddedMattes.read(.sky, from: url) == nil,
+           let sky = try await modelSky(analysis, session: session) {
             return [sky]
         }
         if request.kind == .depthRange, !session.embeddedMattes.contains(.depth) {

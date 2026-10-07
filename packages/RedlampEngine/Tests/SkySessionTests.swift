@@ -17,7 +17,7 @@ struct SkySessionTests {
             _ = engine.openIfReady(url)
             let session = try #require(engine.currentSession())
             let analysis = try await engine.analysisImage(for: session)
-            if let sky = try await engine.modelSky(analysis) {
+            if let sky = try await engine.modelSky(analysis, session: session) {
                 found = (url, session, analysis, sky)
                 break
             }
@@ -28,9 +28,7 @@ struct SkySessionTests {
         _ = engine.openIfReady(other)
         #expect(engine.currentSession() !== photo.session)
 
-        let sky = try await engine.modelSky(photo.analysis)
-        withKnownIssue("CONC-07: the edges are solved on the photo open now") {
-            #expect(sky?.bitmap.sha256 == photo.sky.bitmap.sha256)
-        }
+        let sky = try await engine.modelSky(photo.analysis, session: photo.session)
+        #expect(sky?.bitmap.sha256 == photo.sky.bitmap.sha256)
     }
 }
