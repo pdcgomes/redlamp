@@ -114,6 +114,16 @@ struct FocusStackTests {
         }
     }
 
+    /// A merge holds every frame's analysis at once, so its colour copy takes no padding.
+    @Test func `a frame's colour copy takes 12 bytes a pixel`() {
+        let analysis = FrameAnalysis(
+            width: 64, height: 48, rgb: [SIMD3<Float>](repeating: SIMD3(0.2, 0.3, 0.4), count: 64 * 48), factor: 1,
+        )
+        withKnownIssue("the colour copy is padded to 16 bytes a pixel") {
+            #expect(analysis.colour.withUnsafeBytes(\.count) == analysis.colourWidth * analysis.colourHeight * 12)
+        }
+    }
+
     /// Warping a frame by its true transform reproduces the reference, up to interpolation.
     @Test func `the GPU warp resamples a frame into the reference`() throws {
         let (width, height) = (320, 240)
