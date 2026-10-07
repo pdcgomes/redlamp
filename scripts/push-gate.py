@@ -342,10 +342,12 @@ def run(name: str, command: list[str], log, long: bool) -> bool:
         process.terminate()
         process.wait()
         raise
-    log.flush()
     result = "ok" if code == 0 and not stopped else "failed"
     early = " (stopped after the first bundle that failed)" if stopped else ""
-    say(f"{name}: {result}, {took(time.monotonic() - started)}{early}")
+    summary = f"{name}: {result}, {took(time.monotonic() - started)}{early}"
+    log.write(f"==> {summary}\n")
+    log.flush()
+    say(summary)
     if code != 0 and not shown:
         for line in tail:
             print(f"    {line.rstrip()}", flush=True)
@@ -408,14 +410,17 @@ def check(commit: str, theirs: str | None, asked: str, remote: str | None) -> bo
         if level != "checks":
             say(f"Log: {log_path}")
         with log_path.open("w") as log:
+            log.write(f"==> Push gate: {commit} at the {level} level, {'pushed to ' + remote if remote else 'by hand'}\n")
             for name, command, long in steps(level):
                 if not run(name, command, log, long):
+                    log.write(f"==> Push gate: {name} failed after {took(time.monotonic() - started)}\n")
                     say(f"Push gate: {name} failed{'; the push is stopped and nothing was sent' if remote else ''}.")
                     print(f"    Log: {log_path}\n    Worktree: {SRC}", flush=True)
                     if remote:
                         print("    Fix it and push again. If origin/main fails the same way, it needs fixing first; "
                               "`git push --no-verify` skips the gate.", flush=True)
                     return False
+            log.write(f"==> Push gate: passed in {took(time.monotonic() - started)}\n")
         remember(tree, commit, max(level, inherited, key=LEVELS.index))
         say(f"Push gate: passed in {took(time.monotonic() - started)}")
         return True
