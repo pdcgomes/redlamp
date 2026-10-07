@@ -65,6 +65,14 @@ final class LibraryFolderList: Sendable {
     private enum Event: Sendable {
         case update(PhotoListUpdate)
         case filter
+
+        var isUpdate: Bool {
+            if case .update = self {
+                true
+            } else {
+                false
+            }
+        }
     }
 
     /// The source the list shows, as the query engine knows it.
@@ -130,11 +138,12 @@ final class LibraryFolderList: Sendable {
                 case .filter:
                     orders = mapping.hasList && filter != handed.filter
                 }
-                if orders,
-                   let ordered = try? await handed.next(filter, from: &mapping, engine: engine, source: source) {
+                if orders, let ordered = try? await handed.next(
+                    filter, from: &mapping, engine: engine, source: source, changed: event.isUpdate,
+                ) {
                     await deliver(Change(ordered: ordered))
                 }
-                if case .update = event {
+                if event.isUpdate {
                     handing.yield()
                 }
             }
@@ -387,6 +396,8 @@ private extension LibraryFolderList {
     struct Handed {
         var items: [LibraryItem] = []
         var places: [Int64: Int32] = [:]
+        /// The IDs of the last list made, in its order, and each photo's index; nil for a list taken over.
+        var listed: (ids: [Int64], positions: [URL: Int])?
         /// The filter of the last list handed over; nil before the first.
         var filter: LibraryListFilter?
         /// The last change handed over was a filtered or sorted list.
@@ -401,11 +412,14 @@ private extension LibraryFolderList {
             let ids = mapping.walkOrder()
             items = ids.compactMap { mapping.items[$0] }
             places = Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($1, Int32($0)) })
+            listed = nil
         }
 
-        /// The list `filter` makes of `mapping`'s photos, against the list handed over before.
+        /// The list `filter` makes of `mapping`'s photos, against the list handed over before; `changed` when
+        /// the photos have changed since it was made.
         mutating func next(
             _ filter: LibraryListFilter, from mapping: inout Mapping, engine: QueryEngine, source: PhotoSource,
+            changed: Bool,
         ) async throws -> Ordered {
             var ids: [Int64]
             if filter.query == nil, filter.sort == nil {
@@ -421,8 +435,20 @@ private extension LibraryFolderList {
                 ids.reverse()
             }
             let first = self.filter == nil
+            // The photos the last list found, in its order and unchanged: that list again, at once at any count.
+            if !first, !changed, let listed, listed.ids == ids {
+                self.filter = filter
+                isOrdered = !filter.isEmpty
+                return Ordered(
+                    items: self.items, positions: listed.positions, previous: Array(0 ..< Int32(self.items.count)),
+                    previousCount: self.items.count, diff: LibraryDiff(), keys: [:], total: mapping.items.count,
+                    filter: filter,
+                )
+            }
             var items: [LibraryItem] = []
             items.reserveCapacity(ids.count)
+            var listedIDs: [Int64] = []
+            listedIDs.reserveCapacity(ids.count)
             var positions: [URL: Int] = [:]
             positions.reserveCapacity(ids.count)
             var previous: [Int32] = []
@@ -435,8 +461,13 @@ private extension LibraryFolderList {
             var inOrder = true
             var lastCarried: Int32 = -1
             for id in ids {
-                guard let item = mapping.items[id], positions[item.url] == nil else { continue }
+                guard let item = mapping.items[id] else { continue }
                 let index = items.count
+                // A URL listed twice keeps its first place.
+                if let earlier = positions.updateValue(index, forKey: item.url) {
+                    positions[item.url] = earlier
+                    continue
+                }
                 let before = first ? -1 : self.places[id] ?? -1
                 if before >= 0 {
                     carried.insert(Int(before))
@@ -449,7 +480,7 @@ private extension LibraryFolderList {
                     keys[item.url] = key
                 }
                 items.append(item)
-                positions[item.url] = index
+                listedIDs.append(id)
                 previous.append(before)
                 places[id] = Int32(index)
             }
@@ -463,6 +494,7 @@ private extension LibraryFolderList {
             )
             self.items = items
             self.places = places
+            listed = (listedIDs, positions)
             self.filter = filter
             isOrdered = !filter.isEmpty
             return ordered

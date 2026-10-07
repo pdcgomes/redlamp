@@ -737,6 +737,23 @@ extension LibraryFilterTests {
         #expect(names(model) == ["DSC_0005.JPG"])
     }
 
+    @Test func `a key that finds the photos the last one found changes nothing shown`() async throws {
+        defer { cleanUp() }
+        let (model, _) = try await open()
+        try await filtered(model, "IMG_0")
+        let shown = model.items
+        try #require(shown.count == 4)
+        var changes = 0
+        let observation = model.library.observe { _ in changes += 1 }
+        defer { observation.invalidate() }
+        try await filtered(model, "IMG_00")
+        #expect(model.items == shown)
+        #expect(changes == 0, "the same photos in the same order: nothing to change")
+        try await filtered(model, "IMG_000")
+        try await filtered(model, "IMG_0001")
+        #expect(names(model) == ["IMG_0001.JPG"] && changes == 1)
+    }
+
     @Test func `the selection keeps the photos that remain as the filter changes`() async throws {
         defer { cleanUp() }
         let (model, _) = try await open()
