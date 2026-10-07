@@ -3,6 +3,16 @@ import Metal
 import QuartzCore
 import Synchronization
 
+/// What the renderer needs of its display link; tests drive a stand-in.
+protocol CanvasDisplayLink: AnyObject {
+    var isPaused: Bool { get set }
+    func add(to runloop: RunLoop, forMode mode: RunLoop.Mode)
+    func remove(from runloop: RunLoop, forMode mode: RunLoop.Mode)
+    func invalidate()
+}
+
+extension CAMetalDisplayLink: CanvasDisplayLink {}
+
 /// Presents canvas scenes on its own thread. The display link runs only while there is
 /// something new to show, and pauses itself once the latest scene is on screen.
 final class CanvasRenderer: NSObject, CAMetalDisplayLinkDelegate, @unchecked Sendable {
@@ -31,20 +41,28 @@ final class CanvasRenderer: NSObject, CAMetalDisplayLinkDelegate, @unchecked Sen
     private let shared = Mutex(Shared())
     private let queue: any MTLCommandQueue
     private let pipeline: any MTLRenderPipelineState
-    private let link: CAMetalDisplayLink
+    private let link: any CanvasDisplayLink
     /// Set once by the render thread before `init` returns.
     private var runLoop: CFRunLoop?
+    /// For tests, on the render thread: as the link is about to go idle, and as a publish wakes it.
+    var beforeIdling: (() -> Void)?
+    var whileWaking: (() -> Void)?
 
-    init?(device: any MTLDevice, layer: CAMetalLayer) {
+    convenience init?(device: any MTLDevice, layer: CAMetalLayer) {
+        let link = CAMetalDisplayLink(metalLayer: layer)
+        link.preferredFrameLatency = 1
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 120, preferred: 120)
+        self.init(device: device, link: link)
+        link.delegate = self
+    }
+
+    init?(device: any MTLDevice, link: any CanvasDisplayLink) {
         guard let queue = device.makeCommandQueue(), let pipeline = Self.makePipeline(device: device)
         else { return nil }
         self.queue = queue
         self.pipeline = pipeline
-        link = CAMetalDisplayLink(metalLayer: layer)
+        self.link = link
         super.init()
-        link.delegate = self
-        link.preferredFrameLatency = 1
-        link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 120, preferred: 120)
         link.isPaused = true
 
         let started = DispatchSemaphore(value: 0)
@@ -52,12 +70,12 @@ final class CanvasRenderer: NSObject, CAMetalDisplayLinkDelegate, @unchecked Sen
             runLoop = CFRunLoopGetCurrent()
             // Keeps the run loop alive while the display link is paused.
             RunLoop.current.add(NSMachPort(), forMode: .default)
-            link.add(to: .current, forMode: .default)
+            self.link.add(to: .current, forMode: .default)
             started.signal()
             while !shared.withLock({ $0.stopped }) {
                 RunLoop.current.run(mode: .default, before: .distantFuture)
             }
-            link.invalidate()
+            self.link.invalidate()
         }
         thread.name = "Redlamp canvas"
         thread.qualityOfService = .userInteractive
@@ -71,11 +89,18 @@ final class CanvasRenderer: NSObject, CAMetalDisplayLinkDelegate, @unchecked Sen
             defer { shared.wakeScheduled = true }
             return !shared.wakeScheduled
         }
-        guard wake, let runLoop else { return }
-        CFRunLoopPerformBlock(runLoop, CFRunLoopMode.defaultMode.rawValue) { [self] in
+        guard wake else { return }
+        onRenderThread { [self] in
             shared.withLock { $0.wakeScheduled = false }
+            whileWaking?()
             link.isPaused = false
         }
+    }
+
+    /// Runs `body` on the render thread, after what was asked of it before.
+    func onRenderThread(_ body: @escaping () -> Void) {
+        guard let runLoop else { return }
+        CFRunLoopPerformBlock(runLoop, CFRunLoopMode.defaultMode.rawValue, body)
         CFRunLoopWakeUp(runLoop)
     }
 
@@ -87,16 +112,24 @@ final class CanvasRenderer: NSObject, CAMetalDisplayLinkDelegate, @unchecked Sen
         }
     }
 
-    func metalDisplayLink(_ link: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
+    func metalDisplayLink(_: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
+        guard let scene = nextScene() else { return }
+        draw(scene, to: update.drawable)
+    }
+
+    /// The scene to draw at this display update; with none, the link pauses. On the render
+    /// thread.
+    func nextScene() -> Scene? {
         let scene = shared.withLock { shared in
             defer { shared.pending = nil }
             return shared.pending
         }
-        guard let scene else {
-            link.isPaused = true
-            return
+        if let scene {
+            return scene
         }
-        draw(scene, to: update.drawable)
+        beforeIdling?()
+        link.isPaused = true
+        return nil
     }
 
     private func draw(_ scene: Scene, to drawable: any CAMetalDrawable) {
