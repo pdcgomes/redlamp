@@ -22,6 +22,8 @@ enum BuiltInScenes {
         catalog.register(.commandPaletteStates)
         catalog.register(.exportLive)
         catalog.register(.exportStates)
+        catalog.register(.masksPanel)
+        catalog.register(.masksPanelStates)
         return catalog
     }
 }

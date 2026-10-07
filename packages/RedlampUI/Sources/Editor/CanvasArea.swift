@@ -4,13 +4,19 @@ import RedlampEngineAPI
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct CanvasArea: View {
+/// The photo with everything drawn over it: the tools' overlays, the status pill, the canvas
+/// controls. The harness hosts it beside panels it is building.
+@_spi(Harness) public struct CanvasArea: View {
     let onOpen: () -> Void
     @Environment(EditorModel.self) private var model
     @Environment(ThemeSettings.self) private var theme
     @State private var dropTargeted = false
 
-    var body: some View {
+    public init(onOpen: @escaping () -> Void) {
+        self.onOpen = onOpen
+    }
+
+    public var body: some View {
         ZStack {
             Color(white: 0.12)
 

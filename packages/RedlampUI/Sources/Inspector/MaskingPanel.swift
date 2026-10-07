@@ -278,26 +278,36 @@ struct MaskActionsBar: View {
             }
             MaskPresetsMenu()
             Spacer()
-            Menu {
-                Button("Update AI Masks") { Task { await model.updateAIMasks() } }
-                    .disabled(model.aiMaskCount == 0 || model.aiMaskProgress != nil)
-                if model.isMultiSelecting {
-                    Button("Update AI Masks on \(model.selectedPhotos.count) Photos") {
-                        Task { await model.updateAIMasksInSelection() }
-                    }
-                    .disabled(model.aiMaskProgress != nil || model.settingsSync.progress != nil)
-                }
-                Divider()
-                Button("Delete All Masks", role: .destructive) { model.deleteAllMasks() }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-            }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .fixedSize()
+            MaskActionsMenu()
         }
         .padding(.horizontal, Theme.panelPadding)
         .padding(.vertical, 8)
+    }
+}
+
+/// What acts on every mask: Update AI Masks (here, or on every selected photo) and Delete All.
+struct MaskActionsMenu: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        Menu {
+            Button("Update AI Masks") { Task { await model.updateAIMasks() } }
+                .disabled(model.aiMaskCount == 0 || model.aiMaskProgress != nil)
+            if model.isMultiSelecting {
+                Button("Update AI Masks on \(model.selectedPhotos.count) Photos") {
+                    Task { await model.updateAIMasksInSelection() }
+                }
+                .disabled(model.aiMaskProgress != nil || model.settingsSync.progress != nil)
+            }
+            Divider()
+            Button("Delete All Masks", role: .destructive) { model.deleteAllMasks() }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help("Update AI Masks, Delete All Masks")
     }
 }
 
@@ -347,25 +357,10 @@ struct MaskStatus: View {
     @Environment(EditorModel.self) private var model
 
     var body: some View {
-        if let pending = model.pendingModel {
-            NoticeCard(
-                "\(pending.kind.name) masks use \(pending.model.name), a \(pending.model.formattedSize) download. It runs on this Mac; your photos are never uploaded. You can remove it in Settings › Models."
-                    + (pending.model.licence.map { " Its licence: \($0)." } ?? ""),
-                tone: .info, symbol: "arrow.down.circle.fill",
-            ) {
-                HStack(spacing: 6) {
-                    if let url = pending.model.licenceURL {
-                        Link("Read the licence", destination: url).font(Theme.labelFont)
-                    }
-                    Spacer()
-                    Button("Not Now") { model.declinePendingModel() }
-                    Button("Download") { Task { await model.downloadPendingModel() } }
-                        .keyboardShortcut(.defaultAction)
-                }
-                .controlSize(.small)
-            }
-            .padding(.horizontal, Theme.panelPadding)
-            .padding(.bottom, 10)
+        if model.pendingModel != nil {
+            ModelDownloadNotice()
+                .padding(.horizontal, Theme.panelPadding)
+                .padding(.bottom, 10)
         } else if let progress = model.modelDownloadProgress {
             HStack(spacing: 8) {
                 ProgressView(value: progress).controlSize(.small)
@@ -397,6 +392,37 @@ struct MaskStatus: View {
             }
             .padding(.horizontal, Theme.panelPadding)
             .padding(.bottom, 10)
+        }
+    }
+}
+
+/// An AI mask's model to download, asked before anything downloads (App Review 4.2.3: the size
+/// is shown, and nothing downloads without consent). `onDownload` runs as the download starts.
+struct ModelDownloadNotice: View {
+    var onDownload: () -> Void = {}
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        if let pending = model.pendingModel {
+            NoticeCard(
+                "\(pending.kind.name) masks use \(pending.model.name), a \(pending.model.formattedSize) download. It runs on this Mac; your photos are never uploaded. You can remove it in Settings › Models."
+                    + (pending.model.licence.map { " Its licence: \($0)." } ?? ""),
+                tone: .info, symbol: "arrow.down.circle.fill",
+            ) {
+                HStack(spacing: 6) {
+                    if let url = pending.model.licenceURL {
+                        Link("Read the licence", destination: url).font(Theme.labelFont)
+                    }
+                    Spacer()
+                    Button("Not Now") { model.declinePendingModel() }
+                    Button("Download") {
+                        onDownload()
+                        Task { await model.downloadPendingModel() }
+                    }
+                    .keyboardShortcut(.defaultAction)
+                }
+                .controlSize(.small)
+            }
         }
     }
 }
@@ -715,8 +741,10 @@ struct MaskList: View {
     }
 }
 
-private struct SelectedMaskEditor: View {
+struct SelectedMaskEditor: View {
     let mask: MaskOutline
+    /// Add, Subtract and Intersect open the picker (`MasksPanelNext`) rather than menus.
+    var usesPicker = false
     @Environment(EditorModel.self) private var model
 
     var body: some View {
@@ -725,8 +753,14 @@ private struct SelectedMaskEditor: View {
             ForEach(mask.components) { component in
                 ComponentRow(mask: mask, component: component)
             }
-            ComponentOperationMenus(mask: mask)
-                .padding(.top, 4)
+            Group {
+                if usesPicker {
+                    ComponentOperationButtons(mask: mask)
+                } else {
+                    ComponentOperationMenus(mask: mask)
+                }
+            }
+            .padding(.top, 4)
 
             switch MaskingPanel.componentTools(model) {
             case .radial:
