@@ -112,6 +112,10 @@ struct StackDetectorTests {
             lock.withLock { asked.append((true, urls)) }
             return urls.map { thumbnails[$0] }
         }
+
+        func imageProperties(of urls: [URL]) -> [ImageProperties?] {
+            urls.map { _ in nil }
+        }
     }
 
     @Test(arguments: [false, true])

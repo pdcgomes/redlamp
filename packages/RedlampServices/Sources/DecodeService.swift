@@ -298,6 +298,10 @@ public extension DecodedImage {
             }.map { $0?.grey }
         }
 
+        public func imageProperties(of urls: [URL]) -> [ImageProperties?] {
+            urls.map { _ in nil }
+        }
+
         private func inspect<T: Decodable>(
             _ urls: [URL], as _: T.Type,
             _ call: (any DecodeServiceProtocol, [Data], [String], @escaping @Sendable (Data?) -> Void) -> Void,

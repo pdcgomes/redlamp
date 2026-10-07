@@ -50,6 +50,10 @@ enum FileInspection {
     }
 
     /// The file's thumbnail drawn in grey at `GreyThumbnail.longEdge`, one byte a pixel.
+    static func imageProperties(_ source: CGImageSource) -> ImageProperties? {
+        (CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]).flatMap(ImageProperties.init)
+    }
+
     static func focusThumbnail(_ source: CGImageSource) -> FocusThumbnail? {
         let edge = GreyThumbnail.longEdge
         let options: [CFString: Any] = [
@@ -123,5 +127,9 @@ extension InProcessDecoder: FileInspecting {
         FileInspection.map(urls, concurrently: concurrently) { url in
             FileInspection.source(url).flatMap(FileInspection.focusThumbnail)?.grey
         }
+    }
+
+    public func imageProperties(of urls: [URL]) -> [ImageProperties?] {
+        urls.map { FileInspection.source($0).flatMap(FileInspection.imageProperties) }
     }
 }

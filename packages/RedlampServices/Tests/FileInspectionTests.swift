@@ -1,7 +1,9 @@
 import Foundation
+import ImageIO
 import RedlampEngineAPI
 import Synchronization
 import Testing
+import UniformTypeIdentifiers
 @testable import RedlampServices
 
 /// The library's reads of capture settings and focus thumbnails give the same answers in the
@@ -131,6 +133,68 @@ struct FileInspectionTests {
 
     private func size(_ url: URL) -> Int {
         (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? .max
+    }
+
+    /// What an export copies from its source, and the tags that tell an earlier export.
+    static var exportedProperties: [CFString] {
+        [
+            kCGImagePropertyExifDictionary, kCGImagePropertyExifAuxDictionary, kCGImagePropertyTIFFDictionary,
+            kCGImagePropertyGPSDictionary, kCGImagePropertyIPTCDictionary, kCGImagePropertyPNGDictionary,
+            kCGImagePropertyOrientation,
+        ]
+    }
+
+    /// A 16-pixel JPEG carrying `properties`.
+    private func jpeg(at url: URL, _ properties: [CFString: Any]) throws {
+        let context = try #require(CGContext(
+            data: nil, width: 16, height: 16, bitsPerComponent: 8, bytesPerRow: 64,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue,
+        ))
+        let image = try #require(context.makeImage())
+        let destination = try #require(
+            CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil),
+        )
+        CGImageDestinationAddImage(destination, image, properties as CFDictionary)
+        #expect(CGImageDestinationFinalize(destination))
+    }
+
+    @Test(.enabled(if: !DecodeRegressionTests.fixtures.isEmpty))
+    func `the service reads each file's properties as ImageIO does in the app`() throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let export = folder.appending(path: "IMG_0001.jpg")
+        let camera = folder.appending(path: "IMG_0002.JPG")
+        let damaged = folder.appending(path: "IMG_0003.jpg")
+        try jpeg(at: export, [
+            kCGImagePropertyTIFFDictionary: [
+                kCGImagePropertyTIFFSoftware: "Redlamp 0.2.5", kCGImagePropertyTIFFArtist: "A. Photographer",
+            ],
+            kCGImagePropertyGPSDictionary: [kCGImagePropertyGPSLatitude: 38.7, kCGImagePropertyGPSLatitudeRef: "N"],
+            kCGImagePropertyIPTCDictionary: [kCGImagePropertyIPTCCity: "Lisbon"],
+            kCGImagePropertyOrientation: 6,
+        ])
+        try jpeg(at: camera, [
+            kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFMake: "Camera"], kCGImagePropertyOrientation: 1,
+        ])
+        try Data(repeating: 7, count: 4096).write(to: damaged)
+        let files = DecodeRegressionTests.fixtures + DecodeRegressionTests.cameras + [export, camera, damaged]
+        let local = InProcessDecoder().imageProperties(of: files)
+        for (url, read) in zip(files.dropLast(), local) {
+            let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+            let imageIO = try #require(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+            let properties = try #require(read, "\(url.lastPathComponent)").dictionary
+            for key in Self.exportedProperties {
+                #expect(properties[key] as? NSObject == imageIO[key] as? NSObject, "\(url.lastPathComponent): \(key)")
+            }
+        }
+        #expect(local[files.count - 1] == nil, "a damaged file has none")
+
+        let listener = Listener()
+        let service = DecodeServiceClient(endpoint: listener.listener.endpoint)
+        withKnownIssue("The service reads no properties until it is asked them") {
+            #expect(service.imageProperties(of: files) == local)
+        }
     }
 
     @Test func `a thumbnail of a size the reader never draws is refused`() {

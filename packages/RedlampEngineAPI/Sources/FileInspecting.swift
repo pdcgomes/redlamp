@@ -11,6 +11,10 @@ public protocol FileInspecting: Sendable {
     /// Each file's grey thumbnail for focus-stack detection (`GreyThumbnail.longEdge`), as
     /// `captures(of:concurrently:)` reads.
     func focusThumbnails(of urls: [URL], concurrently: Bool) -> [GreyThumbnail?]
+
+    /// Each file's ImageIO properties (its first image's EXIF, TIFF, GPS, IPTC and the rest), for
+    /// an export to copy from its source or to tell an earlier export from a photo.
+    func imageProperties(of urls: [URL]) -> [ImageProperties?]
 }
 
 /// A reader that can read no file: for engines that read none, such as previews' and tests'.
@@ -23,6 +27,48 @@ public struct UnreadableFiles: FileInspecting {
 
     public func focusThumbnails(of urls: [URL], concurrently _: Bool) -> [GreyThumbnail?] {
         urls.map { _ in nil }
+    }
+
+    public func imageProperties(of urls: [URL]) -> [ImageProperties?] {
+        urls.map { _ in nil }
+    }
+}
+
+/// A file's ImageIO properties, as a property list: only the values one can hold (strings,
+/// numbers, data, dates, arrays and dictionaries of them) are kept.
+public struct ImageProperties: Sendable, Equatable, Codable {
+    public let propertyList: Data
+
+    public init?(_ dictionary: [CFString: Any]) {
+        guard let kept = Self.kept(dictionary as NSDictionary),
+              let data = try? PropertyListSerialization.data(fromPropertyList: kept, format: .binary, options: 0)
+        else { return nil }
+        propertyList = data
+    }
+
+    public var dictionary: [CFString: Any] {
+        (try? PropertyListSerialization.propertyList(from: propertyList, format: nil)) as? [CFString: Any] ?? [:]
+    }
+
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        (lhs.dictionary as NSDictionary).isEqual(rhs.dictionary as NSDictionary)
+    }
+
+    private static func kept(_ value: Any) -> Any? {
+        switch value {
+        case is NSString, is NSNumber, is NSData, is NSDate:
+            value
+        case let array as NSArray:
+            array.compactMap(kept)
+        case let dictionary as NSDictionary:
+            dictionary.reduce(into: [String: Any]()) { result, entry in
+                if let key = entry.key as? String, let value = kept(entry.value) {
+                    result[key] = value
+                }
+            }
+        default:
+            nil
+        }
     }
 }
 
