@@ -428,6 +428,22 @@ struct CullingTests {
         let photo = folder.root.appending(path: "Été à Montréal/Café-7706.JPG")
         let ids = await LibraryService.indexIDs(of: [photo], in: index)
         #expect(ids[photo] != nil, "found from the URL the app makes of it")
+        let subfolder = folder.root.appending(path: "Été à Montréal", directoryHint: .isDirectory)
+        #expect(
+            await folder.service.canShow(subfolder, includingSubfolders: false),
+            "its folder is shown from the library",
+        )
+
+        // A save of its own reaches its row.
+        try Library.writeMetadata(for: photo) { $0.rating = 4 }
+        folder.service.sidecarSaved(photo, store: SidecarStore())
+        var rating = 0
+        for _ in 0 ..< 500 where rating != 4 {
+            try await Task.sleep(for: .milliseconds(10))
+            rating = try await index
+                .read { [id = ids[photo]] reader in try id.flatMap { try reader.photo(id: $0) }?.rating ?? 0 }
+        }
+        #expect(rating == 4, "its row has what its sidecar holds")
     }
 
     @Test func `Undo through a photo's own save puts back what its sidecar held, not what the grid showed`(

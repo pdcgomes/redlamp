@@ -81,10 +81,10 @@ final class LibraryCore: Sendable {
 
     // MARK: - Redlamp's own writes
 
-    /// Brings photo `path`'s row in step with its sidecar as `store` reads it now, and tells the open
-    /// lists: FSEvents doesn't report Redlamp's own writes on this Mac. A photo the index doesn't
-    /// hold is left to the indexer.
-    func sidecarSaved(at path: String, photo: URL, store: SidecarStore) {
+    /// Brings `photo`'s row in step with its sidecar as `store` reads it now, and tells the open lists:
+    /// FSEvents doesn't report Redlamp's own writes on this Mac. A photo the index doesn't hold is left
+    /// to the indexer.
+    func sidecarSaved(_ photo: URL, store: SidecarStore) {
         serially { [index, live] in
             let summary = store.summary(for: photo)
             let sidecar = store.locator.readURL(for: photo)
@@ -93,7 +93,7 @@ final class LibraryCore: Sendable {
             let modified = summary == nil ? nil : (try? URL(fileURLWithPath: sidecar.path)
                 .resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
             let id = try? await index.write { writer -> Int64? in
-                guard var row = try writer.photo(path: path) else { return nil }
+                guard var row = try LibraryService.photo(at: photo, in: writer) else { return nil }
                 row.rating = summary?.metadata.rating ?? 0
                 row.flag = summary?.metadata.flag
                 row.label = summary?.metadata.label

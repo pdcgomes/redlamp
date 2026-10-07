@@ -372,7 +372,7 @@ public final class LibraryService {
         let indexed = rootIsCurrent ? [] : indexedFolders
         let listed = listed.map { Set($0.map { Self.path(URL(fileURLWithPath: $0, isDirectory: true)) }) }
         let folders = try? await core.index.read { reader -> [FolderRecord]? in
-            guard let top = try reader.folder(path: path) else { return nil }
+            guard let top = try Self.folder(at: path, in: reader) else { return nil }
             guard includingSubfolders else { return [top] }
             let below = path == "/" ? "/" : path + "/"
             return try reader.folders(inRoot: top.root).filter { $0.path == path || $0.path.hasPrefix(below) }
@@ -411,7 +411,7 @@ public final class LibraryService {
 
     /// Redlamp wrote `photo`'s sidecar through `store`.
     func sidecarSaved(_ photo: URL, store: SidecarStore) {
-        core?.sidecarSaved(at: Self.path(photo), photo: photo, store: store)
+        core?.sidecarSaved(photo, store: store)
     }
 
     // MARK: - Culling (LIB-15)
@@ -575,16 +575,7 @@ public final class LibraryService {
         return await (try? index.read { reader -> [URL: Int64] in
             var found: [URL: Int64] = [:]
             for (path, photos) in folders {
-                var record: FolderRecord?
-                for form in [
-                    path,
-                    path.precomposedStringWithCanonicalMapping,
-                    path.decomposedStringWithCanonicalMapping,
-                ]
-                    where record == nil {
-                    record = try reader.folder(path: form)
-                }
-                guard let folder = record else { continue }
+                guard let folder = try Self.folder(at: path, in: reader) else { continue }
                 let named = try Dictionary(reader.photos(inFolder: folder.id).map {
                     ($0.name.precomposedStringWithCanonicalMapping, $0.id)
                 }) { first, _ in first }
@@ -596,6 +587,39 @@ public final class LibraryService {
             }
             return found
         }) ?? [:]
+    }
+
+    /// The index's folder at `path` (as `path(_:)` gives it), in whichever of Unicode's forms the index keeps
+    /// its name: Foundation's URLs decompose names, and the index keeps them as listings gave them.
+    nonisolated static func folder(at path: String, in reader: some IndexQueries) throws -> FolderRecord? {
+        for form in forms(of: path) {
+            if let folder = try reader.folder(path: form) {
+                return folder
+            }
+        }
+        return nil
+    }
+
+    /// The index's row of the photo at `url`, its folder and name found in either of Unicode's forms.
+    nonisolated static func photo(at url: URL, in reader: some IndexQueries) throws -> PhotoRecord? {
+        guard let folder = try folder(at: path(url.deletingLastPathComponent()), in: reader) else { return nil }
+        for name in Self.forms(of: url.lastPathComponent) {
+            if let photo = try reader.photo(folder: folder.id, name: name) {
+                return photo
+            }
+        }
+        return nil
+    }
+
+    /// `text` as given, then composed, then decomposed, each once. Swift's strings compare equal in either
+    /// form; the index's SQL compares their bytes.
+    private nonisolated static func forms(of text: String) -> [String] {
+        var forms = [text]
+        for form in [text.precomposedStringWithCanonicalMapping, text.decomposedStringWithCanonicalMapping]
+            where !forms.contains(where: { $0.utf8.elementsEqual(form.utf8) }) {
+            forms.append(form)
+        }
+        return forms
     }
 
     /// The path the index keeps for `url`: standardised, without a trailing slash.
