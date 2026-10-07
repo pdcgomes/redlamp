@@ -48,7 +48,10 @@ public extension FolderLibrary {
     /// the folders in Folders; the tree counts the folders it has indexed from it.
     func attach(_ service: LibraryService) {
         self.service = service
-        counting.observation = service.observe { [weak self] in self?.countFolders() }
+        counting.observation = service.observe { [weak self] in
+            self?.countFolders()
+            self?.followTrash()
+        }
         service.start(following: roots.map(\.url))
     }
 
@@ -67,9 +70,11 @@ public extension FolderLibrary {
             : "Waiting for the library to open"
     }
 
-    /// The store's thumbnails and the content key of a photo shown from the library.
+    /// The store's thumbnails and the content key of a photo shown from the library, or from Recently
+    /// Trashed.
     func storeThumbnail(for item: LibraryItem) -> (StoreThumbnails, ContentKey)? {
-        guard let key = fromLibrary.keys[item.url], let thumbnails = service?.thumbnails else { return nil }
+        guard let key = fromLibrary.keys[item.url] ?? trash.keys[item.url], let thumbnails = service?.thumbnails
+        else { return nil }
         return (thumbnails, key)
     }
 

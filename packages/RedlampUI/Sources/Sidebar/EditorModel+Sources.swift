@@ -1,6 +1,8 @@
 import Foundation
 
-/// The actions of the sources the Folders panel chooses (LIB-10): Show Photos in Subfolders.
+/// The actions of the sources the Folders panel chooses: Show Photos in Subfolders (LIB-10), and Recently
+/// Trashed's (LIB-26, `EditorModel+Trash`), which come before every other action's so that Recently Trashed
+/// can leave off those that would write to its photos.
 extension EditorModel {
     /// Nil for every other action.
     func performSourceShortcut(_ action: ShortcutAction) -> Bool? {
@@ -9,7 +11,7 @@ extension EditorModel {
             setIncludesSubfolders(!library.includesSubfolders)
             return true
         default:
-            return nil
+            return performTrashShortcut(action)
         }
     }
 
@@ -17,7 +19,7 @@ extension EditorModel {
     func canPerformSourceShortcut(_ action: ShortcutAction) -> Bool? {
         switch action {
         case .showPhotosInSubfolders: true
-        default: nil
+        default: canPerformTrashShortcut(action)
         }
     }
 }

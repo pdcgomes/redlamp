@@ -44,7 +44,8 @@ public struct FolderNode: Sendable, Equatable {
 ///   folder beneath it is listed in parallel and streamed in in order. The badges of photos with a
 ///   sidecar follow from light probes of their `edit.json`, visible photos first.
 /// - With the library on, a folder it has indexed is shown from its photo list instead, and one it
-///   hasn't switches over once it has (see `FolderLibrary+Library`).
+///   hasn't switches over once it has (see `FolderLibrary+Library`). Recently Trashed, the photos its
+///   batches moved to the Trash, can be shown in place of a folder (see `FolderLibrary+Trash`).
 /// - `items` isn't observed (a badge mustn't re-render SwiftUI views); views observe `count`,
 ///   `revision` or `openFolder`, and the filmstrip applies `LibraryDiff`s row by row.
 @MainActor
@@ -67,10 +68,16 @@ public final class FolderLibrary {
     @ObservationIgnored var treeObservers: [UUID: @MainActor (Set<String>) -> Void] = [:]
     /// The library's counts of the folders it has indexed, for the tree (see `FolderLibrary+Library`).
     @ObservationIgnored var counting = Counting()
+    /// Recently Trashed as the library last listed it (see `FolderLibrary+Trash`).
+    @ObservationIgnored var trash = TrashFollowing()
     /// The open folder (and with subfolders, its tree) is still being listed.
     public internal(set) var isListing = false
     /// The open folder can't be listed (its volume went away).
     public internal(set) var isOpenFolderUnavailable = false
+    /// Recently Trashed is the source shown, in place of a folder (LIB-26, `FolderLibrary+Trash`).
+    public internal(set) var showsRecentlyTrashed = false
+    /// How many photos Recently Trashed holds; nil until the library has looked, and with it off.
+    public internal(set) var trashedCount: Int?
     /// The number of photos shown.
     public private(set) var count = 0
     /// Bumped by every change to `items`.
@@ -135,6 +142,10 @@ public final class FolderLibrary {
 
     isolated deinit {
         fromLibrary.list?.close()
+        trash.following?.cancel()
+        if let activation = trash.activation {
+            NotificationCenter.default.removeObserver(activation)
+        }
         watching.watcher?.stop()
         watching.poll?.invalidate()
         for observer in watching.mountObservers {
@@ -199,6 +210,10 @@ public final class FolderLibrary {
         let generation = generation
         scheduler.cancel(prefix: probeKeyPrefix(generation - 1))
         closeLibraryList()
+        showsRecentlyTrashed = false
+        trash.opened = nil
+        trash.folderBefore = nil
+        trash.keys = [:]
         openFolder = folder
         isOpenFolderUnavailable = false
         listedDirectories = []

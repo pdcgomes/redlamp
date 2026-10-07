@@ -475,11 +475,12 @@ public final class LibraryService {
 
     /// Gives each of `photos` its own fields (`fields`, by place), as one batch off the main thread, in the
     /// library's changes' turn (`LibraryCore.change`). Lists hear of its photos once the index holds it, as
-    /// `queue` allows for change `sequence`; the photos the index doesn't have are left for their own saves.
+    /// `queue` allows for change `sequence`; the photos the index doesn't have are left for their own saves,
+    /// but for those in the Trash (Recently Trashed's), which are left as they are.
     func cull(
         _ photos: [URL], fields: [[MetadataField]], sequence: UInt64, queue: CullingQueue,
     ) async -> CullingWritten {
-        guard let core, let metadata else { return CullingWritten(unindexed: photos) }
+        guard let core, let metadata else { return Self.leavingTrash(CullingWritten(unindexed: photos)) }
         return await core.change {
             let ids = await Self.indexIDs(of: photos, in: core.index)
             var written = CullingWritten(ids: Dictionary(ids.map { ($1, $0) }) { first, _ in first })
@@ -491,6 +492,7 @@ public final class LibraryService {
                     written.unindexed.append(photo)
                 }
             }
+            written = Self.leavingTrash(written)
             if !each.isEmpty {
                 do {
                     let plan = try await metadata.plan(.each(each))

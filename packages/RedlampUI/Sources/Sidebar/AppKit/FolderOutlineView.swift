@@ -9,15 +9,28 @@ import RedlampDocument
 /// only rows on screen get views, and only folders on screen are listed. A listing that changes a
 /// folder's subfolders reloads that row and its children, and a count that changes (from a listing,
 /// or the library's counts) that row alone; only the roots changing reloads the list.
+///
+/// Recently Trashed follows the folders while the library is open (LIB-26), with its count, and shown
+/// empty, a line under it saying what it holds.
 final class FolderOutlineView: SidebarOutlineView {
     private var rootNodes: [SidebarNode] = []
     private var nodes: [String: SidebarNode] = [:]
     private var placeholder = SidebarNode(.placeholder("Add a folder of photos with +"))
+    private let trashNode = SidebarNode(.recentlyTrashed(TrashRow(count: nil, isOpen: false)))
+    private let emptyTrashNode = SidebarNode(.placeholder(RecentlyTrashedText.empty))
+    /// Recently Trashed's rows after the folders: none with the library closed.
+    private var trashRows: [SidebarNode] = []
     private var structure: Tracker?
     private var openTracker: Tracker?
+    private var trashTracker: Tracker?
     private var treeObservation: LibraryObservation?
     private var countsObservation: LibraryObservation?
     private var openPath: String?
+
+    /// The rows at the top: the roots, or a line saying how to add one, then Recently Trashed's.
+    private var topNodes: [SidebarNode] {
+        (rootNodes.isEmpty ? [placeholder] : rootNodes) + trashRows
+    }
 
     private var library: FolderLibrary {
         model.library
@@ -44,6 +57,13 @@ final class FolderOutlineView: SidebarOutlineView {
             guard let self else { return }
             setOpen(library.openFolder)
         }
+        trashTracker = Tracker { [weak self] in
+            guard let self else { return }
+            showTrash(
+                TrashRow(count: library.trashedCount, isOpen: library.showsRecentlyTrashed),
+                available: library.canShowRecentlyTrashed,
+            )
+        }
         treeObservation = library.observeTree { [weak self] paths in self?.treeChanged(paths) }
         countsObservation = library.observeCounts { [weak self] paths in self?.countsChanged(paths) }
     }
@@ -51,8 +71,10 @@ final class FolderOutlineView: SidebarOutlineView {
     override func stopTracking() {
         structure?.cancel()
         openTracker?.cancel()
+        trashTracker?.cancel()
         structure = nil
         openTracker = nil
+        trashTracker = nil
         treeObservation = nil
         countsObservation = nil
     }
@@ -88,11 +110,31 @@ final class FolderOutlineView: SidebarOutlineView {
 
     private func showRoots(_ roots: [WorkingFolder], missing: Set<UUID>) {
         rootNodes = roots.map { node(for: $0.url, root: $0, missing: missing.contains($0.id)) }
+        reloadTop()
+    }
+
+    private func reloadTop() {
         isReloading = true
         reloadData()
         expandRemembered(rootNodes)
         isReloading = false
         invalidateColumnLayout()
+    }
+
+    /// Recently Trashed's row as `row` has it, and the line under it while it's shown empty; no row while
+    /// the library isn't open. Only a row coming or going reloads the list.
+    private func showTrash(_ row: TrashRow, available: Bool) {
+        trashNode.kind = .recentlyTrashed(row)
+        let rows = !available ? [] : row.isOpen && row.count == 0 ? [trashNode, emptyTrashNode] : [trashNode]
+        guard rows.map(ObjectIdentifier.init) == trashRows.map(ObjectIdentifier.init) else {
+            trashRows = rows
+            return reloadTop()
+        }
+        let index = self.row(forItem: trashNode)
+        if index >= 0, let cell = view(atColumn: 0, row: index, makeIfNecessary: false) as? SidebarCellView {
+            cell.refreshTrash(row)
+        }
+        refreshHighlights()
     }
 
     /// Opens the rows that were open, as their subfolders become known.
@@ -165,13 +207,13 @@ final class FolderOutlineView: SidebarOutlineView {
     // MARK: - Data source
 
     override func outlineView(_: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
-        guard let item = item as? SidebarNode else { return max(rootNodes.count, 1) }
+        guard let item = item as? SidebarNode else { return topNodes.count }
         guard case let .folder(row) = item.kind, !row.isMissing else { return 0 }
         return library.node(for: row.url)?.subfolders.count ?? 0
     }
 
     override func outlineView(_: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
-        guard let item = item as? SidebarNode else { return rootNodes.isEmpty ? placeholder : rootNodes[index] }
+        guard let item = item as? SidebarNode else { return topNodes[index] }
         guard case let .folder(row) = item.kind, let subfolders = library.node(for: row.url)?.subfolders,
               subfolders.indices.contains(index) else { return placeholder }
         return node(for: subfolders[index], root: row.root)

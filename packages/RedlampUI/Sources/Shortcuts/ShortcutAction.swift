@@ -77,6 +77,8 @@ public struct KeyCombo: Hashable, Sendable {
         case .right: return KeyboardShortcut(.rightArrow, modifiers: modifiers)
         case .up: return KeyboardShortcut(.upArrow, modifiers: modifiers)
         case .down: return KeyboardShortcut(.downArrow, modifiers: modifiers)
+        // A menu item matches the Delete key's U+007F, not SwiftUI's `.delete`, U+0008.
+        case .delete: return KeyboardShortcut(KeyEquivalent("\u{7F}"), modifiers: modifiers)
         default: return nil
         }
     }
@@ -106,6 +108,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
 
     /// Library
     case cycleGridStyle, largerThumbnails, smallerThumbnails, showInFinder, showPhotosInSubfolders
+    case showRecentlyTrashed, putBack, putBackBatch
     case toggleFilterBar, toggleFilters, lockFilters
     case sortByFolder, sortByCaptureTime, sortByName, sortByRating, sortByEditTime, sortByModified, sortByFileSize
     case reverseSort
@@ -159,6 +162,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .libraryModule, .developModule, .previousModule, .gridView, .loupeView, .compareView, .surveyView:
             .modules
         case .cycleGridStyle, .largerThumbnails, .smallerThumbnails, .showInFinder, .showPhotosInSubfolders,
+             .showRecentlyTrashed, .putBack, .putBackBatch,
              .toggleFilterBar, .toggleFilters, .lockFilters, .sortByFolder, .sortByCaptureTime, .sortByName,
              .sortByRating, .sortByEditTime, .sortByModified, .sortByFileSize, .reverseSort:
             .library
@@ -210,6 +214,9 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .smallerThumbnails: "Decrease Thumbnail Size"
         case .showInFinder: "Show in Finder"
         case .showPhotosInSubfolders: "Show Photos in Subfolders"
+        case .showRecentlyTrashed: "Show Recently Trashed"
+        case .putBack: "Put Back"
+        case .putBackBatch: "Put Back Whole Batch"
         case .toggleFilterBar: "Show / Hide Filter Bar"
         case .toggleFilters: "Enable Filters"
         case .lockFilters: "Lock Filters"
@@ -346,8 +353,11 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         // In Library, where Develop's Before / After key shows the filter bar, as in Lightroom Classic.
         case .toggleFilterBar: [.char("\\")]
         case .toggleFilters: [.char("l", command: true)]
-        case .showPhotosInSubfolders, .lockFilters, .sortByFolder, .sortByCaptureTime, .sortByName, .sortByRating,
-             .sortByEditTime, .sortByModified, .sortByFileSize, .reverseSort: []
+        case .showPhotosInSubfolders, .showRecentlyTrashed, .putBackBatch, .lockFilters, .sortByFolder,
+             .sortByCaptureTime, .sortByName, .sortByRating, .sortByEditTime, .sortByModified, .sortByFileSize,
+             .reverseSort: []
+        // Finder's Put Back, in the Trash.
+        case .putBack: [KeyCombo(.delete, command: true)]
         case .beforeAfter: [.char("\\")]
         case .nextCompareLayout: [.char("y")]
         case .previousCompareLayout: [.char("y", shift: true)]

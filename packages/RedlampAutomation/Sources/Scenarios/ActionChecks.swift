@@ -110,6 +110,20 @@
                     try app.main { _ = $0.perform(action) }
                     try app.wait("the folder listed again", timeout: 20) { !$0.library.isListing }
                 })
+            case .showRecentlyTrashed:
+                ActionCheck(action: action, setUp: { app in
+                    try app.wait("the library to open", timeout: 60) { $0.library.canShowRecentlyTrashed }
+                }, observe: { "\($0.library.showsRecentlyTrashed)" }, restore: { app in
+                    let photos = app.photos
+                    try app.main { model in
+                        model.showFolder(photos)
+                        model.showModule(.develop)
+                    }
+                    try app
+                        .wait("the photos folder again", timeout: 20) { $0.folder == photos && !$0.library.isListing }
+                })
+            case .putBack, .putBackBatch:
+                ActionCheck(action: action, unavailable: "needs a photo in Recently Trashed: checked by its scenario")
             // View
             case .beforeAfter: .toggle(action) { "\($0.showBefore)" }
             case .nextCompareLayout, .previousCompareLayout:

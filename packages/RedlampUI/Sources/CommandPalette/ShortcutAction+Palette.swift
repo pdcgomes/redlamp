@@ -16,6 +16,9 @@ extension ShortcutAction {
         .smallerThumbnails: ["thumbnail size", "smaller", "grid", "library"],
         .showInFinder: ["finder", "reveal", "folder", "file", "library"],
         .showPhotosInSubfolders: ["subfolders", "folders", "nested", "include", "count", "library"],
+        .showRecentlyTrashed: ["trash", "recently deleted", "deleted", "bin", "removed", "put back", "library"],
+        .putBack: ["trash", "restore", "undelete", "recover", "deleted", "put back", "library"],
+        .putBackBatch: ["trash", "restore", "undelete", "recover", "batch", "all", "put back", "library"],
         .toggleFilterBar: ["filter", "search", "find", "query", "library filter", "text", "attribute", "metadata"],
         .toggleFilters: ["filter", "filters off", "turn off", "library"],
         .lockFilters: ["filter", "lock", "keep", "every folder", "library"],
@@ -142,6 +145,9 @@ extension ShortcutAction {
         case .smallerThumbnails: "minus.square"
         case .showInFinder: "folder"
         case .showPhotosInSubfolders: "list.bullet.indent"
+        case .showRecentlyTrashed: "trash"
+        case .putBack: "arrow.uturn.backward.square"
+        case .putBackBatch: "arrow.uturn.backward.square.fill"
         case .toggleFilterBar: "line.3.horizontal.decrease.circle"
         case .toggleFilters: "line.3.horizontal.decrease"
         case .lockFilters: "lock"

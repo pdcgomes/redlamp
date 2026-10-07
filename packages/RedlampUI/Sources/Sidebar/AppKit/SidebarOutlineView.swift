@@ -19,6 +19,8 @@ final class SidebarNode: NSObject {
         case earlierStep(HistoryStep, session: HistorySession)
         /// A folder of the working set, its subfolders inside.
         case folder(FolderRow)
+        /// Recently Trashed, after the folders (LIB-26).
+        case recentlyTrashed(TrashRow)
     }
 
     /// Updated in place by lists that reload one row at a time (the Folders panel).
@@ -227,11 +229,12 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
         return row
     }
 
-    /// The current history step and the open folder.
+    /// The current history step, and the open folder or Recently Trashed.
     static func isHighlighted(_ node: SidebarNode?) -> Bool {
         switch node?.kind {
         case let .history(_, _, current, _): current
         case let .folder(folder): folder.isOpen
+        case let .recentlyTrashed(trash): trash.isOpen
         default: false
         }
     }
@@ -277,6 +280,8 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
             toggle(node)
         case let .folder(folder):
             clicked(node, folder)
+        case .recentlyTrashed:
+            model.showRecentlyTrashed()
         default:
             break
         }

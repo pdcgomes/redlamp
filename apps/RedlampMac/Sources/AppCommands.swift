@@ -44,6 +44,8 @@ struct AppCommands: Commands {
         CommandMenu("Photo") {
             // Ahead of Reset All Settings (⇧⌘R): AppKit gives ⌘R to the first item whose key is R.
             item(.showInFinder)
+            item(.putBack)
+            item(.putBackBatch)
             Divider()
             item(.copySettings)
             item(.copySettingsAgain)
@@ -179,6 +181,7 @@ struct AppCommands: Commands {
             ))
             .disabled(!model.canPerform(.labReadout))
             toggle(.showPhotosInSubfolders, isOn: model.library.includesSubfolders)
+            item(.showRecentlyTrashed)
             Menu("Develop Panels") {
                 ForEach(ShortcutAction.allCases.filter { $0.category == .panels && $0.isMenuShortcut }) { item($0) }
             }

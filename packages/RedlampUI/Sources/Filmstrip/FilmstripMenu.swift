@@ -5,10 +5,14 @@ import RedlampDesign
 /// Lightroom and Finder: on a selected photo, the Photo menu's copy, paste and sync items, acting
 /// on the selection as they do there; on any other photo, copying from it or pasting onto it
 /// alone, without opening it. Items that don't apply are left out. In Library, its rating, flag,
-/// labels and mark come first (`LibraryGridMenu.culling`); the grid's menu has its own.
+/// labels and mark come first (`LibraryGridMenu.culling`); the grid's menu has its own. A photo in
+/// Recently Trashed has Put Back's instead (`TrashMenu`).
 @MainActor
 enum FilmstripMenu {
     static func menu(for photo: URL, model: EditorModel, culling: Bool = false) -> NSMenu? {
+        if let trashed = TrashMenu.menu(for: photo, model: model) {
+            return trashed
+        }
         let menu = NSMenu()
         if culling {
             add(LibraryGridMenu.culling(for: photo, model: model), to: menu)

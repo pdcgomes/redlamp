@@ -32,7 +32,7 @@ final class SidebarCellView: NSTableCellView {
     private var chevron: ChevronView?
     private var icon: SymbolImageView?
     private var trailing: NSView?
-    /// What a folder's row shows, for `refreshFolder`.
+    /// What a folder's row or Recently Trashed's shows, for `refreshFolder` and `refreshTrash`.
     private var decoration: FolderDecoration?
     private var values: HistoryValuesView?
     private var amountSlider: NSSlider?
@@ -100,6 +100,9 @@ final class SidebarCellView: NSTableCellView {
             showHistory(node.kind)
         case let .folder(row):
             decorate(row)
+        case let .recentlyTrashed(row):
+            setAccessibilityIdentifier("folders.recently-trashed")
+            show(Self.trashDecoration(row))
         }
         if let symbol {
             showIcon(symbol)
@@ -125,6 +128,11 @@ final class SidebarCellView: NSTableCellView {
     /// sets its text and nothing else.
     func refreshFolder(_ row: FolderRow) {
         show(Self.folderDecoration(row))
+    }
+
+    /// Shows Recently Trashed's row as it is now, in place.
+    func refreshTrash(_ row: TrashRow) {
+        show(Self.trashDecoration(row))
     }
 
     /// Shows `shown` over what the row showed.

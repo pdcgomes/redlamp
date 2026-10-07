@@ -99,7 +99,11 @@ extension FolderLibrary {
         for name in [NSWorkspace.didMountNotification, NSWorkspace.didUnmountNotification] {
             watching.mountObservers
                 .append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                    MainActor.assumeIsolated { self?.volumesChanged() }
+                    MainActor.assumeIsolated {
+                        self?.volumesChanged()
+                        // A volume's Trash came or went with it, which its events don't say.
+                        self?.service?.checkTrash()
+                    }
                 })
         }
     }

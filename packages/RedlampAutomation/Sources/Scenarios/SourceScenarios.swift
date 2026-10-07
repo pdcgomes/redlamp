@@ -3,11 +3,145 @@
     import RedlampDesign
     import RedlampLibrary
     @_spi(Harness) import RedlampUI
+    import Synchronization
 
-    /// The sources the Folders panel chooses (LIB-10): folders counted with their subfolders' photos, and a
-    /// folder of folders showing every photo beneath it.
+    /// The sources the Folders panel chooses: folders counted with their subfolders' photos, and a folder of
+    /// folders showing every photo beneath it (LIB-10); and Recently Trashed, with Put Back (LIB-26).
     enum SourceScenarios {
-        static let all: [Scenario] = [subfolders, folderCounts]
+        static let all: [Scenario] = [subfolders, recentlyTrashed, folderCounts]
+
+        /// Photos a batch of the library's moved to the Trash: Recently Trashed from the palette, the photos put
+        /// back from the grid's menu, by ⌘⌫, from the Photo menu and the palette, Develop off for them, and the
+        /// Folders panel's line saying what it holds once it's empty. The photos are copies made on the
+        /// external disk's scratch folder, which the Trash there holds while they're in it; none is left there.
+        static let recentlyTrashed = Scenario(
+            "library.recently-trashed",
+            "Recently Trashed from the palette, and Put Back from the grid's menu, ⌘⌫, the Photo menu and the palette",
+            claims: [
+                .action(.showRecentlyTrashed),
+                .action(.putBack),
+                .action(.putBackBatch),
+                .feature("library.folders"),
+            ],
+        ) { app in
+            let token = UUID().uuidString.prefix(8)
+            let folder = URL(fileURLWithPath: "/Volumes/SSD/redlamp-tmp", isDirectory: true)
+                .appending(path: "e2e-trashed-\(token)", directoryHint: .isDirectory)
+            let names = ["A", "B", "C"].map { "Trashed \($0) \(token).jpg" }
+            let photos = names.map { folder.appending(path: $0, directoryHint: .notDirectory) }
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            for photo in photos {
+                try FileManager.default.copyItem(at: app.photos.appending(path: "Bitmap.jpg"), to: photo)
+            }
+            let service = try app.main { model -> LibraryService? in model.library.service }
+            guard let service else { throw ScenarioSkip("the library is off") }
+            defer {
+                try? app.run("emptying what's left in the Trash", timeout: 30) { model in
+                    for place in await service.trashedPlaces() {
+                        try? FileManager.default.removeItem(atPath: place)
+                    }
+                    if let root = model.library.root(containing: folder) {
+                        model.library.remove(root)
+                    }
+                }
+                try? FileManager.default.removeItem(at: folder)
+            }
+            try app.main { $0.open([folder]) }
+            let indexed = Flag()
+            try app.run("the library to index the folder", timeout: 90) { _ in
+                for _ in 0 ..< 900 where await !service.canShow(folder, includingSubfolders: true) {
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+                if await service.canShow(folder, includingSubfolders: true) {
+                    indexed.set()
+                }
+            }
+            try app.expect(indexed.isSet, "the library didn't index \(folder.path)")
+            let trashing = Mutex<String?>(nil)
+            try app.run("moving the photos to the Trash, two batches", timeout: 60) { _ in
+                do {
+                    try await service.moveToTrash([photos[0], photos[1]])
+                    try await service.moveToTrash([photos[2]])
+                } catch {
+                    trashing.withLock { $0 = "\(error)" }
+                }
+            }
+            if let failure = trashing.withLock({ $0 }) {
+                throw ScenarioFailure("The photos didn't go to the Trash: \(failure)")
+            }
+
+            // The palette shows Recently Trashed, in Library, where its photos don't open in Develop.
+            try app.runFromPalette(.showRecentlyTrashed)
+            try app.wait("Recently Trashed with the three photos", timeout: 20) { model in
+                model.library.showsRecentlyTrashed && model.items.count == 3 && model.module == .library
+            }
+            try app.expect(try app.main { !$0.canPerform(.developModule) }, "Develop is on for photos in the Trash")
+            @MainActor func place(_ index: Int) -> URL? {
+                app.model.items.first { app.model.library.trashedPhoto(at: $0.url)?.original == photos[index].path }?
+                    .url
+            }
+
+            // A photo's menu puts back A alone, the photo active being C, the newest batch's.
+            try app.wait("A in the filmstrip") { _ in
+                Views.editorWindow.flatMap { Views.find(Target.filmstrip(names[0]).identifier, in: $0) } != nil
+            }
+            try app.rightClick(.filmstrip(names[0]), choosing: ShortcutAction.putBack.title)
+            try app.wait("A back where it was", timeout: 20) { model in
+                FileManager.default.fileExists(atPath: photos[0].path) && model.items.count == 2
+            }
+            app.covered(.action(.putBack), via: .mouse)
+
+            // ⌘⌫ puts back the active photo.
+            try app.main { model in place(2).map { model.select($0) } }
+            try app.press(.putBack)
+            try app.wait("C back where it was", timeout: 20) { model in
+                FileManager.default.fileExists(atPath: photos[2].path) && model.items.count == 1
+            }
+
+            // The Photo menu puts back the rest of B's batch.
+            try app.click(.filmstrip(names[1]))
+            try app.wait("B active") { $0.selection?.lastPathComponent == names[1] }
+            try app.choose(.putBackBatch)
+            try app.wait("B back where it was, Recently Trashed empty", timeout: 20) { model in
+                FileManager.default.fileExists(atPath: photos[1].path) && model.items.isEmpty
+                    && model.library.trashedCount == 0
+            }
+            try app.wait("the Folders panel saying what Recently Trashed holds") { _ in
+                guard let root = Views.editorWindow?.contentView?.superview else { return false }
+                return Views.all(NSTextField.self, in: root).contains {
+                    $0.stringValue == RecentlyTrashedText.empty && !$0.isHiddenOrHasHiddenAncestor
+                }
+            }
+            app.covered(.feature("library.folders"), via: .mouse)
+
+            // All three to the Trash again as one batch: the palette puts back the selection.
+            let trashingAgain = Mutex<String?>(nil)
+            try app.run("moving the photos to the Trash again", timeout: 60) { _ in
+                do {
+                    try await service.moveToTrash(photos)
+                } catch {
+                    trashingAgain.withLock { $0 = "\(error)" }
+                }
+            }
+            if let failure = trashingAgain.withLock({ $0 }) {
+                throw ScenarioFailure("The photos didn't go to the Trash again: \(failure)")
+            }
+            try app.wait("the three in Recently Trashed again", timeout: 20) { $0.items.count == 3 }
+            try app.main { $0.selectAllPhotos() }
+            try app.runFromPalette(.putBack)
+            try app.wait("every photo back where it was", timeout: 20) { model in
+                photos.allSatisfy { FileManager.default.fileExists(atPath: $0.path) } && model.items.isEmpty
+            }
+
+            // As the run had it.
+            let folders = app.photos
+            try app.main { model in
+                model.showFolder(folders)
+                model.showModule(.develop)
+            }
+            try app.wait("the photos folder again", timeout: 20) { $0.folder == folders && !$0.library.isListing }
+            try app.openWorking()
+        }
 
         /// A folder holding only a folder with a photo in it: counted and shown with Show Photos in Subfolders,
         /// turned on and off from the View menu, a folder's own menu and the palette. The run starts with it
@@ -45,27 +179,54 @@
                 model.library.includesSubfolders && model.library.photoCount(of: outer) == 1
                     && model.library.photoCount(of: folders) ?? 0 > own
             }
-            try app.click(.identifier("folders." + outer.standardizedFileURL.path))
-            try app.wait("the folder of folders showing the photo beneath it", timeout: 20) { model in
-                model.folder == outer && !model.library.isListing && model.items.map(\.url) == [photo]
+            try app.main { $0.showFolder(outer) }
+            do {
+                try app.wait("the folder of folders showing the photo beneath it", timeout: 20) { model in
+                    model.folder == outer && !model.library.isListing && model.items.map(\.url) == [photo]
+                }
+            } catch {
+                let state = try app.main { model in
+                    "\(model.folder?.path ?? "no folder"), \(model.items.map(\.url.path)), listing \(model.library.isListing)"
+                }
+                throw ScenarioFailure("\(error) (\(state))")
             }
-            app.covered([.feature("library.subfolders"), .feature("library.folders")], via: .mouse)
+            app.covered([.feature("library.subfolders"), .feature("library.folders")], via: .model)
 
             // Its own menu turns it off: the folder shows and counts only its own photos, none.
-            try app.rightClick(
-                .identifier("folders." + outer.standardizedFileURL.path),
-                choosing: ShortcutAction.showPhotosInSubfolders.title,
-            )
+            let row = "folders." + outer.standardizedFileURL.path
+            try app.main { $0.library.listTree(folders, lane: .onScreen) }
+            do {
+                try app.wait("the folder of folders' row in the Folders panel") { _ in
+                    Views.editorWindow.flatMap { Views.find(row, in: $0) } != nil
+                }
+            } catch {
+                let rows = try app.main { _ -> [String] in
+                    guard let root = Views.editorWindow?.contentView?.superview else { return [] }
+                    return Views.all(NSView.self, in: root).compactMap { view in
+                        view.accessibilityIdentifier().hasPrefix("folders.") && !view.isHiddenOrHasHiddenAncestor
+                            ? view.accessibilityIdentifier() : nil
+                    }
+                }
+                throw ScenarioFailure("\(error) (rows on screen: \(rows))")
+            }
+            try app.rightClick(.identifier(row), choosing: ShortcutAction.showPhotosInSubfolders.title)
             try app.wait("the folder of folders empty without its subfolders", timeout: 20) { model in
                 !model.library.includesSubfolders && !model.library.isListing && model.items.isEmpty
                     && model.library.photoCount(of: outer) == 0
             }
-            app.covered(.action(.showPhotosInSubfolders), via: .mouse)
+            app.covered([.action(.showPhotosInSubfolders), .feature("library.folders")], via: .mouse)
 
             // The palette turns it on again.
             try app.runFromPalette(.showPhotosInSubfolders)
-            try app.wait("the photo beneath the folder again", timeout: 20) { model in
-                model.library.includesSubfolders && !model.library.isListing && model.items.map(\.url) == [photo]
+            do {
+                try app.wait("the photo beneath the folder again", timeout: 20) { model in
+                    model.library.includesSubfolders && !model.library.isListing && model.items.map(\.url) == [photo]
+                }
+            } catch {
+                let state = try app.main { model in
+                    "\(model.folder?.path ?? "no folder"), \(model.items.map(\.url.path)), listing \(model.library.isListing)"
+                }
+                throw ScenarioFailure("\(error) (\(state))")
             }
 
             // As the run had it.

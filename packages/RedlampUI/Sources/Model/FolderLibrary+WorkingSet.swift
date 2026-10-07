@@ -263,7 +263,7 @@ extension FolderLibrary {
     func saveSettings() {
         guard let defaults else { return }
         defaults.set(try? JSONEncoder().encode(roots), forKey: Key.roots)
-        defaults.set(openFolder?.standardizedFileURL.path, forKey: Key.open)
+        defaults.set((openFolder ?? trash.folderBefore)?.standardizedFileURL.path, forKey: Key.open)
         defaults.set(expandedFolders.sorted(), forKey: Key.expanded)
         defaults.set(
             lastPhotoOrder.compactMap { folder in lastPhotos[folder].map { [folder, $0] } },
