@@ -13,7 +13,8 @@ import UniformTypeIdentifiers
 /// Group By in the Library grid (LIB-41), over a folder the library has indexed: each key's groups, counts and
 /// picks as the library makes them, each a header in the grid; groups opened and closed with the selection and
 /// the active photo kept and the grid's cells moved rather than reloaded; ⌥← and ⌥→, and ← and → past closed
-/// groups; moments' Tighter–Looser setting; and Group By and the setting kept with each source.
+/// groups; moments' Tighter–Looser setting; Group By and the setting kept with each source; and the filter bar's
+/// orientation column and completions.
 @MainActor
 struct LibraryGroupsTests {
     /// A photo of the folder: when it was taken, seconds after 10:00 on 14 June 2024 by the camera's clock (nil
@@ -418,5 +419,32 @@ struct LibraryGroupsTests {
         #expect(again.groupKey == .lens && again.looseness == MomentSetting.loosest)
         again.setGroupKey(.day)
         #expect(again.restore("/Somewhere")?.group == .lens && again.groupKey == .lens)
+    }
+
+    // MARK: - Orientation in the filter bar
+
+    @Test func `the filter bar has an orientation column and completes orientations with their titles`() async throws {
+        defer { cleanUp() }
+        let (model, _, window) = try await open()
+        defer { window.contentView = nil }
+        let filters = try #require(model.libraryFilters)
+        #expect(FacetColumn.orientation.title == "Orientation")
+        filters.setBarShown(true)
+        filters.setFilter(LibraryFilter(sections: [.metadata], columns: [.orientation]))
+        filters.countColumns()
+        try await eventually { filters.columns[0]?.column == .orientation }
+        let counts = try #require(filters.columns[0])
+        let rows = FilterColumnRow.rows(counts, folder: nil)
+        #expect(rows.map(\.title) == ["Landscape", "Portrait", "Square"])
+        #expect(rows.map(\.count) == [11, 2, 1])
+        try filters.choose([#require(rows[1].value)], inColumn: 0)
+        try await eventually { model.items.count == 2 }
+        #expect(filters.filter.text == "orientation:portrait")
+        #expect(Set(model.items.map(\.name)) == ["A03.JPG", "B03.JPG"])
+
+        let completion = FilterCompletion(QueryCompletion(field: .orientation, value: "portrait"))
+        #expect(completion.title == "Portrait" && completion.kind == "Orientation")
+        #expect(completion.text == "orientation:portrait ")
+        filters.clear()
     }
 }

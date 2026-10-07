@@ -481,6 +481,7 @@ public struct FilterCompletion: Sendable, Hashable {
         case .folder: URL(fileURLWithPath: completion.value).pathComponents.suffix(2).joined(separator: "/")
         case .label: ColorLabel(rawValue: completion.value) == nil ? completion.value : completion.value.capitalized
         case .trait: LibraryQuery.Trait(rawValue: completion.value)?.title ?? completion.value
+        case .orientation: PhotoOrientation(rawValue: completion.value)?.title ?? completion.value
         default: completion.value
         }
         let kind = switch completion.field {
@@ -491,6 +492,7 @@ public struct FilterCompletion: Sendable, Hashable {
         case .label: ColorLabel(rawValue: completion.value) == nil ? "Custom Label" : "Label"
         case .collection: "Collection"
         case .trait: "Trait"
+        case .orientation: "Orientation"
         default: completion.field.rawValue
         }
         self.init(title: title, kind: kind, text: completion.term + " ", count: completion.count)

@@ -4,7 +4,7 @@ import RedlampDocument
 /// What a metadata column of the filter bar counts its photos by (LIB-18): a facet, keywords or
 /// collections.
 public enum FacetColumn: String, Sendable, Hashable, CaseIterable, Codable {
-    case date, camera, lens, iso, focal, aperture, keyword, label, folder, kind, flag, rating
+    case date, camera, lens, iso, focal, aperture, keyword, label, folder, kind, orientation, flag, rating
     case creator, city, country, collection, customLabel
 
     /// The facet it counts by: days for dates; nil for keywords and collections, which count a photo
@@ -21,6 +21,7 @@ public enum FacetColumn: String, Sendable, Hashable, CaseIterable, Codable {
         case .label: .label
         case .folder: .folder
         case .kind: .kind
+        case .orientation: .orientation
         case .flag: .flag
         case .rating: .rating
         case .creator: .creator
@@ -43,6 +44,7 @@ public enum FacetColumn: String, Sendable, Hashable, CaseIterable, Codable {
         case .label, .customLabel: .label
         case .folder: .folder
         case .kind: .ext
+        case .orientation: .orientation
         case .flag: .flag
         case .rating: .rating
         case .creator: .creator

@@ -92,6 +92,30 @@ struct QueryOrientationTests {
         #expect(groups[1].photos.elementsEqual([tall, phone]))
     }
 
+    @Test func `the filter bar's orientation column counts each way and filters by it`() async throws {
+        let (sandbox, _) = try await Self.library()
+        defer { sandbox.remove() }
+        let engine = QueryEngine(index: sandbox.index, timeZone: .gmt)
+        try await engine.load()
+        #expect(FacetColumn.orientation.facet == .orientation && FacetColumn.orientation.field == .orientation)
+        var counted: [FacetColumnCounts] = []
+        let requests = try [
+            FacetColumnRequest(.orientation, query: .all),
+            FacetColumnRequest(.orientation, query: LibraryQuery(parsing: "aspect>=1.4")),
+        ]
+        for try await counts in engine.columns(requests, in: .allPhotographs) {
+            counted.append(counts)
+        }
+        let all = try #require(counted.first { $0.index == 0 })
+        #expect(all.total == 6 && all.values.map(\.name) == ["landscape", "portrait", "square", nil])
+        #expect(all.values.map(\.count) == [2, 2, 1, 1])
+        #expect(all.values.map { $0.filter?.description } == [
+            "orientation:landscape", "orientation:portrait", "orientation:square", "orientation:none",
+        ])
+        let narrowed = try #require(counted.first { $0.index == 1 })
+        #expect(narrowed.values.filter { $0.count > 0 }.map(\.name) == ["landscape", "portrait"])
+    }
+
     @Test func `the column follows a photo whose size changes`() async throws {
         let (sandbox, ids) = try await Self.library()
         defer { sandbox.remove() }

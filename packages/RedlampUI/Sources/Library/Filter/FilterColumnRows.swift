@@ -43,6 +43,7 @@ final class FilterColumnRow: NSObject {
         case .collection: "No Collection"
         case .date: "No Date"
         case .customLabel: "No Custom Label"
+        case .orientation: "No Orientation"
         default: "Unknown"
         }
     }
@@ -65,6 +66,7 @@ final class FilterColumnRow: NSObject {
         case .flag: ["pick": "Picked", "reject": "Rejected", "none": "Unflagged"][name] ?? name
         case .rating: Int(name).map { $0 == 0 ? "Unrated" : String(repeating: "★", count: $0) } ?? name
         case .kind: ["raw": "Raw", "jpeg": "JPEG", "heic": "HEIC", "tiff": "TIFF", "png": "PNG"][name] ?? name
+        case .orientation: PhotoOrientation(rawValue: name)?.title ?? name
         default: name
         }
     }
@@ -225,6 +227,17 @@ public extension LibraryFilters {
     }
 }
 
+public extension PhotoOrientation {
+    /// Its name, as the orientation column and completion show it.
+    var title: String {
+        switch self {
+        case .landscape: "Landscape"
+        case .portrait: "Portrait"
+        case .square: "Square"
+        }
+    }
+}
+
 public extension FacetColumn {
     /// The column's name, as its header shows it.
     var title: String {
@@ -239,6 +252,7 @@ public extension FacetColumn {
         case .label: "Label"
         case .folder: "Folder"
         case .kind: "File Type"
+        case .orientation: "Orientation"
         case .flag: "Flag"
         case .rating: "Rating"
         case .creator: "Creator"
