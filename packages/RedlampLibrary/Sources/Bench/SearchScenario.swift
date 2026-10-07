@@ -58,8 +58,13 @@ public struct SearchScenario: BenchScenario {
         let photos = Double(engine.store?.count ?? 0)
         var results = [
             BenchResult(
-                scenario: name, id: "library-search-load", name: "Column store built",
+                scenario: name, id: "library-search-load",
+                name: setup.mapped ? "Column store mapped from its snapshot" : "Column store built",
                 value: setup.loaded.seconds * 1000, unit: "ms",
+            ),
+            BenchResult(
+                scenario: name, id: "library-search-mapped", name: "Column store mapped from its snapshot, not built",
+                value: setup.mapped ? 1 : 0, unit: "loads",
             ),
             BenchResult(
                 scenario: name, id: "library-search-memory", name: "Column store, a photo",
@@ -129,10 +134,12 @@ enum QueryScenario {
     }
 
     /// For search and facets: the fixture's index in `folder`, or in `indexFolder(for:)`, with a query
-    /// engine over it, its column store loaded, and how long that took. Throws `MissingIndex` when
-    /// there's no index there, or one that doesn't hold the manifest's photos.
+    /// engine over it, its column store loaded, how long that took and whether it was mapped from its
+    /// snapshot. A store built from the index saves its snapshot, and is searched mapped from it, as
+    /// after a launch. Throws `MissingIndex` when there's no index there, or one that doesn't hold
+    /// the manifest's photos.
     static func engine(searching context: BenchContext, in folder: URL?) async throws
-        -> (index: LibraryIndex, engine: QueryEngine, loaded: Duration) {
+        -> (index: LibraryIndex, engine: QueryEngine, loaded: Duration, mapped: Bool) {
         let url = (folder ?? indexFolder(for: context)).appending(path: "Index.sqlite")
         let expected = context.manifest.totals.photos
         guard FileManager.default.fileExists(atPath: url.path) else {
@@ -148,7 +155,12 @@ enum QueryScenario {
         let clock = ContinuousClock()
         let started = clock.now
         try await engine.load()
-        return (index, engine, clock.now - started)
+        let loaded = clock.now - started
+        let mapped = engine.isMapped
+        if !mapped {
+            try await engine.saveSnapshot()
+        }
+        return (index, engine, loaded, mapped)
     }
 
     /// The `fraction` percentile of `durations`, in milliseconds.

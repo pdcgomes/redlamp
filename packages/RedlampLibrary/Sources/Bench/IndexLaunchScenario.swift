@@ -9,7 +9,9 @@ import Synchronization
 /// every folder by signature and records the volume's history; the second replays that history,
 /// listing only the folders it names. Nothing is read again, no row changes, and the searches typed
 /// meanwhile keep the search budget. The process's footprint is followed through each launch, and
-/// read again once it has idled for 3 s after a trim, against the budgets for both.
+/// read again once it has idled for 3 s after a trim, against the budgets for both. Each launch saves
+/// the column store's snapshot as it quits, as the app does, so the second maps it rather than
+/// building the store (LIB-44).
 ///
 /// The index is built for the run, or kept in `indexFolder` and built there only the first time;
 /// each run launches a copy of it, so it starts with no history.
@@ -85,6 +87,8 @@ public struct IndexLaunchScenario: BenchScenario {
     struct Launch {
         var opened = Duration.zero
         var loaded = Duration.zero
+        /// Whether the store was mapped from its snapshot, rather than built.
+        var mapped = false
         /// All Photographs' first page and count.
         var shown = Duration.zero
         /// A search's first page and count, after All Photographs': visible and searchable.
@@ -126,6 +130,7 @@ public struct IndexLaunchScenario: BenchScenario {
         let engine = QueryEngine(index: index)
         try await engine.load()
         launch.loaded = clock.now - started
+        launch.mapped = engine.isMapped
         _ = try await first(engine.search(.all, sort: QuerySort(.captured, ascending: false)))
         launch.shown = clock.now - started
         launch.found = try await first(engine.search(LibraryQuery(parsing: query))).count ?? 0
@@ -151,6 +156,7 @@ public struct IndexLaunchScenario: BenchScenario {
         Footprint.relieve()
         try? await Task.sleep(for: idling)
         launch.idle = Footprint.current()
+        try await engine.saveSnapshot()
         launch.shownCompared = watch.listed.map { $0 - started }
         launch.replayed = reconciled.replayed
         launch.reason = reconciled.reason
@@ -305,8 +311,22 @@ public struct IndexLaunchScenario: BenchScenario {
                 value: again.searchable.seconds * 1000, unit: "ms", budget: .below(Self.budget, "ms"),
             ),
             BenchResult(
+                scenario: name, id: "library-launch-again-open", name: "Launched again: index opened",
+                value: again.opened.seconds * 1000, unit: "ms",
+            ),
+            BenchResult(
                 scenario: name, id: "library-launch-again-store", name: "Launched again: column store loaded",
                 value: again.loaded.seconds * 1000, unit: "ms",
+            ),
+            BenchResult(
+                scenario: name, id: "library-launch-again-mapped",
+                name: "Launched again: column store mapped from its snapshot, not built",
+                value: again.mapped ? 1 : 0, unit: "launches", budget: .exactly(1, "launches"),
+            ),
+            BenchResult(
+                scenario: name, id: "library-launch-again-memory-before",
+                name: "Launched again: memory before launching",
+                value: Footprint.megabytes(again.before), unit: "MB",
             ),
             BenchResult(
                 scenario: name, id: "library-launch-again-memory", name: "Launched again: memory over launch, the most",
