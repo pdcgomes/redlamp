@@ -260,9 +260,7 @@ struct EngineSmokeTests {
             #expect(frame.size.longEdge == sizes[index % 2].longEdge)
             last = frame
         }
-        withKnownIssue("PIPE-05: every size change makes three surfaces") {
-            #expect(engine.surfaces.surfacesMade - made <= 1)
-        }
+        #expect(engine.surfaces.surfacesMade - made <= 1)
 
         let frame = try #require(last)
         let fresh = try RedlampEngine()
