@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import ImageIO
+import RedlampDocument
 import RedlampEngine
 import RedlampEngineAPI
 import RedlampGenerative
@@ -115,21 +116,19 @@ func run(_ arguments: [String]) async throws {
             request.maxLongEdge = try Int(value())
         case "--recipe":
             let path = try URL(fileURLWithPath: value())
-            var isDirectory: ObjCBool = false
-            FileManager.default.fileExists(atPath: path.path, isDirectory: &isDirectory)
-            let package = isDirectory.boolValue ? path : nil
-            let data = try Data(contentsOf: package?.appending(path: "edit.json") ?? path)
-            // A sidecar holds the edit under "recipe" beside its other fields.
-            struct Stored: Decodable {
-                var recipe: EditRecipe?
-            }
-            if let stored = try? JSONDecoder().decode(Stored.self, from: data).recipe {
-                recipe = stored
-            } else {
+            do {
+                guard let sidecar = try SidecarStore().read(sidecarAt: path) else {
+                    throw CocoaError(.fileReadNoSuchFile, userInfo: [NSFilePathErrorKey: path.path])
+                }
+                recipe = sidecar.recipe
+            } catch let SidecarStoreError.unreadable(url) {
+                // A bare EditRecipe isn't a sidecar. A sidecar whose recipe doesn't decode isn't a
+                // bare recipe either: EditRecipe would read it as no edit at all.
+                guard let data = try? Data(contentsOf: path),
+                      case let .object(fields) = try? JSONDecoder().decode(JSONValue.self, from: data),
+                      fields["recipe"] == nil
+                else { throw SidecarStoreError.unreadable(url) }
                 recipe = try JSONDecoder().decode(EditRecipe.self, from: data)
-            }
-            if let package {
-                recipe.loadMaskBitmaps { sha in try? Data(contentsOf: package.appending(path: "masks/\(sha).png")) }
             }
         case "--mask":
             let spec = try value().split(separator: ":").map(String.init)

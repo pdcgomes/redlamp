@@ -202,16 +202,13 @@ struct SidecarTests {
         let damaged = folder.appending(path: "Damaged.redlamp")
         try Data("not json".utf8).write(to: damaged)
 
-        withKnownIssue("read(sidecarAt:) is a stub") {
-            let read = try #require(try store.read(sidecarAt: package))
-            #expect(read.recipe[.exposure] == 0.5)
-            #expect(read.recipe.maskBitmaps.first?.png == png)
-            #expect(try store.read(sidecarAt: single)?.recipe[.exposure] == 0.25)
-            let error = #expect(throws: SidecarStoreError.self) { try store.read(sidecarAt: damaged) }
-            guard case .damaged = error else {
-                Issue.record("a damaged sidecar threw \(String(describing: error))")
-                return
-            }
+        let read = try #require(try store.read(sidecarAt: package))
+        #expect(read.recipe[.exposure] == 0.5)
+        #expect(read.recipe.maskBitmaps.first?.png == png)
+        #expect(try store.read(sidecarAt: single)?.recipe[.exposure] == 0.25)
+        let error = #expect(throws: SidecarStoreError.self) { try store.read(sidecarAt: damaged) }
+        if case .damaged = error {} else {
+            Issue.record("a damaged sidecar threw \(String(describing: error))")
         }
         #expect(try store.read(sidecarAt: folder.appending(path: "None.redlamp")) == nil)
     }

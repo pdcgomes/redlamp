@@ -195,8 +195,8 @@ public struct SidecarStore: Sendable {
     /// The sidecar at `sidecar` (a package or a single file, wherever it is), with its mask
     /// bitmaps, read as `loadThrowing(for:)` reads a photo's: nil when there's nothing there, and
     /// the same errors. For tools given a sidecar's path rather than its photo's.
-    public func read(sidecarAt _: URL) throws -> Sidecar? {
-        nil
+    public func read(sidecarAt sidecar: URL) throws -> Sidecar? {
+        try Self.reading(sidecar) { try Self.decodeThrowing(sidecar: $0) }
     }
 
     /// Writes the sidecar unless nothing but `modified` changed, so unchanged edits don't
