@@ -9,7 +9,7 @@ FLUX.2 [klein] 4B (Black Forest Labs, Apache-2.0 weights, training data undisclo
 - **The port** (`Flux2Transformer`, `Flux2VAE`, `FluxInpainter`) follows diffusers' `Flux2KleinInpaintPipeline` at strength 1: four flow-match Euler steps, the latents outside the mask put back at each step's noise level, and a reference image's latents beside the noisy ones at time 10. Against diffusers in float32 from the same noise, the VAE, the first step's velocity and the token positions match, and a whole fill is above 40 dB (`FluxInpaintTests`).
 - **Precision.** The transformer's blocks are quantised to 4 bits (2.22 GB): 41 to 46 dB from float32 inside the mask, indistinguishable by eye, against 65 to 73 dB for bfloat16 (7.75 GB). A fill takes the same time at every precision, so the smallest download wins.
 - **No text encoder ships.** The download carries three prompts' embeddings, encoded by diffusers' own `encode_prompt` (`convert_flux.py`): `empty`, `background` and `remove`. Step 1's Qwen3 encoder stays for tests and a prompt add-on later.
-- **Delivery** is a manifest like the other models' (`flux2-klein-4b-fill.json`, 2.41 GB in 8 files, each under GitHub's 2 GB), published as a prerelease by `scripts/publish-model.py` once the owner approves the upload (DEC-26). The store resumes an interrupted file and reports progress within it, and the manifest's `minimumMemory` (16 GB until it's measured on smaller Macs) keeps it from Macs with less.
+- **Delivery** is a manifest like the other models' (`flux2-klein-4b-fill.json`, 2.41 GB in 8 files, each under GitHub's 2 GB), published as a prerelease by `scripts/publish-model.py` once the owner approves the upload (DEC-26). The store resumes an interrupted file and reports progress within it, and the manifest's `testedMemory` (16 GB) is the least memory it has been tested on: Macs with less are offered it with a note that it hasn't been tested on them (RM-15).
 
 ## What the model is shown
 
@@ -37,7 +37,7 @@ A fill is a field on a Remove spot (`RetouchSpot.fill`, a `GeneratedFill`), not 
 
 ## In the Healing tool
 
-Remove's Fill is Content-Aware or Generative, and Generative is shown only where the model is offered: downloaded, or published and the Mac has the memory. The first use offers the download, with its size, its licence and that its fills are labelled as generated. With Generative chosen, a new Remove spot, whether clicked, brushed, picked or found, gets three fills from three seeds, the first in the edit as soon as it is made; Find's Remove All gets one per spot, one after another. Arrows go through a spot's fills, More makes three more, and Content-Aware fills it from the photo again; each is a step in History. A spot moved or resized loses its fill, which no longer fits, and is filled again. Closing the tool unloads the model.
+Remove's Fill is Content-Aware or Generative, and Generative is shown only where the model is offered: downloaded, or published. The first use offers the download, with its size, its licence and that its fills are labelled as generated, and, on a Mac with less memory than the model has been tested on, that it may be slow or not work there. With Generative chosen, a new Remove spot, whether clicked, brushed, picked or found, gets three fills from three seeds, the first in the edit as soon as it is made; Find's Remove All gets one per spot, one after another. Arrows go through a spot's fills, More makes three more, and Content-Aware fills it from the photo again; each is a step in History. A spot moved or resized loses its fill, which no longer fits, and is filled again. Closing the tool unloads the model.
 
 ## What a fill costs
 
@@ -53,7 +53,7 @@ The reference doubles the transformer's tokens, and so its time; without one a 1
 
 At first a 1024-pixel fill peaked at 13.1 GB, nearly all of it the VAE's: MLX unfolds a convolution's input into a copy for each tap of its kernel, 9 GB for a 3 × 3 convolution over 1024 × 1024 pixels of 256 channels. The VAE now convolves large inputs in bands of rows, each with the rows its kernel reaches beyond it, and normalises and applies SiLU in one kernel, which gives the same latents and fills as diffusers. MLX's cache of freed memory is capped at 1 GB while filling, which costs about 7% of the time; uncapped, it doubled what the app held.
 
-The model is offered on Macs with 16 GB of memory or more: at 6.6 GB for the fill and the app's own couple of gigabytes, an 8 GB Mac would swap.
+The model has been tested on Macs with 16 GB of memory: at 6.6 GB for the fill and the app's own couple of gigabytes, an 8 GB Mac would swap. Smaller Macs are offered it too (RM-15), with a note in the download offer, in Settings › Models and in a failed fill's message that it hasn't been tested on Macs with less memory and may be slow or not work; what a fill costs on one hasn't been measured.
 
 ## Limits
 

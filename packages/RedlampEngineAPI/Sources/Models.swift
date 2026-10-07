@@ -30,15 +30,21 @@ public struct ModelInfo: Sendable, Hashable, Identifiable {
     /// The least memory it runs in, in bytes, and whether this Mac has that much.
     public var minimumMemory: Int?
     public var fitsThisMac: Bool
+    /// The least memory it has been tested on, in bytes, and whether this Mac has that much.
+    public var testedMemory: Int?
+    public var testedOnThisMac: Bool
 
     public init(
         id: String, name: String, purpose: String, downloadBytes: Int, state: State, isEvaluationOnly: Bool = false,
         isCleared: Bool = true, isPublished: Bool = true, decision: String? = nil, licence: String? = nil,
         licenceURL: URL? = nil, trainingData: [String] = [], minimumMemory: Int? = nil, fitsThisMac: Bool = true,
+        testedMemory: Int? = nil, testedOnThisMac: Bool = true,
     ) {
         self.trainingData = trainingData
         self.minimumMemory = minimumMemory
         self.fitsThisMac = fitsThisMac
+        self.testedMemory = testedMemory
+        self.testedOnThisMac = testedOnThisMac
         self.isCleared = isCleared
         self.isPublished = isPublished
         self.id = id
@@ -59,10 +65,28 @@ public struct ModelInfo: Sendable, Hashable, Identifiable {
     /// "Needs 16 GB of memory; this Mac has 8 GB", when this Mac has too little.
     public var memoryNote: String? {
         guard !fitsThisMac, let minimumMemory else { return nil }
-        let needs = ByteCountFormatter.string(fromByteCount: Int64(minimumMemory), countStyle: .memory)
-        let has = ByteCountFormatter.string(
-            fromByteCount: Int64(ProcessInfo.processInfo.physicalMemory), countStyle: .memory,
-        )
-        return "Needs \(needs) of memory; this Mac has \(has)."
+        return "Needs \(Self.memory(minimumMemory)) of memory; this Mac has \(Self.memory(Self.thisMac))."
+    }
+
+    /// "Not tested on Macs with less than 16 GB of memory; it may be slow or not work on this one
+    /// (8 GB).", when this Mac has less memory than it has been tested on.
+    public var untestedNote: String? {
+        guard !testedOnThisMac, let testedMemory else { return nil }
+        return "Not tested on Macs with less than \(Self.memory(testedMemory)) of memory; it may be slow or not work on this one (\(Self.memory(Self.thisMac)))."
+    }
+
+    /// "`feature` hasn't been tested on Macs with less than 16 GB of memory, and may be slow or not
+    /// work on this one (8 GB).", when this Mac has less memory than the model has been tested on.
+    public func untestedCaution(for feature: String) -> String? {
+        guard !testedOnThisMac, let testedMemory else { return nil }
+        return "\(feature) hasn't been tested on Macs with less than \(Self.memory(testedMemory)) of memory, and may be slow or not work on this one (\(Self.memory(Self.thisMac)))."
+    }
+
+    private static var thisMac: Int {
+        Int(ProcessInfo.processInfo.physicalMemory)
+    }
+
+    private static func memory(_ bytes: Int) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .memory)
     }
 }

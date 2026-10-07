@@ -316,6 +316,9 @@ func run(_ arguments: [String]) async throws {
             if case let .needsModel(model) = await engine.generativeFillAvailability() {
                 throw CLIError(description: "--generative needs \(model.name), from Redlamp's Settings › Models")
             }
+            if let caution = await engine.generativeFillCaution() {
+                FileHandle.standardError.write(Data("warning: \(caution)\n".utf8))
+            }
             for position in recipe.spots.indices where recipe.spots[position].mode == .remove
                 && recipe.spots[position].fill == nil {
                 let started = clock.now

@@ -122,6 +122,23 @@ struct ModelStoreTests {
         #expect(await ModelStore(root: root).location(of: model) == nil)
     }
 
+    @Test func `a model tested only on Macs with more memory is still offered and downloaded`() async throws {
+        let root = try temporary()
+        let source = try temporary()
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: source)
+        }
+        var model = try manifest(serving: Data(repeating: 7, count: 64), at: source)
+        model.testedMemory = 16 << 30
+        #expect(model.isTested(memory: 16 << 30))
+        #expect(!model.isTested(memory: 8 << 30))
+        model.testedMemory = Int.max
+        #expect(model.fits() && !model.isTested())
+        try await ModelStore(root: root).download(model)
+        #expect(await ModelStore(root: root).location(of: model) != nil)
+    }
+
     @Test func `a download carries on from the files that arrived whole`() async throws {
         let root = try temporary()
         let source = try temporary()

@@ -147,7 +147,8 @@ struct HealToolPanel: View {
         if model.fillsGeneratively, case let .needsModel(info) = availability {
             NoticeCard(
                 "Generative fill uses \(info.name), a \(info.formattedSize) download. It runs on this Mac; your photos are never uploaded. Its training data is undisclosed, so what it makes is labelled as generated fill."
-                    + (info.licence.map { " Its licence: \($0)." } ?? ""),
+                    + (info.licence.map { " Its licence: \($0)." } ?? "")
+                    + (model.generativeCaution.map { " \($0)" } ?? ""),
                 tone: .caution,
             ) {
                 HStack(spacing: 6) {

@@ -48,9 +48,16 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
     var generatedFor: [UUID] = []
     var generationTime = Duration.zero
     var generativeReleases = 0
+    /// Why generative fill may not work here, and what `generateFills` throws instead of filling.
+    var generativeCaution: String?
+    var fillError: (any Error)?
 
     func generativeFillAvailability() async -> GenerativeFillAvailability {
         generativeAvailability
+    }
+
+    func generativeFillCaution() async -> String? {
+        generativeCaution
     }
 
     /// One fill for each seed, each with its own bitmap.
@@ -62,6 +69,9 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         let made = generatedFor.count
         progress(0.5)
         try await Task.sleep(for: generationTime)
+        if let fillError {
+            throw fillError
+        }
         return seeds.map { seed in
             GeneratedFill(
                 bitmap: MaskBitmap(png: Data("fill \(made) \(seed)".utf8), width: 1, height: 1), peak: 1,

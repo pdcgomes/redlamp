@@ -149,6 +149,10 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// Whether a Remove spot can be filled generatively on this Mac (RM-10).
     func generativeFillAvailability() async -> GenerativeFillAvailability
 
+    /// Why generative fill may not work on this Mac: it has less memory than the model has been
+    /// tested on (RM-15). Nil otherwise.
+    func generativeFillCaution() async -> String?
+
     /// Fills for `spot`, a Remove spot of the open photo's `recipe`, one for each of `seeds`: the
     /// photo around it, with the spots before it in, repainted where the spot is by the generative
     /// model, as `options` say. `progress` hears 0…1 from any thread.
@@ -227,6 +231,10 @@ public extension EditingEngine {
 
     func generativeFillAvailability() async -> GenerativeFillAvailability {
         .unavailable("This build has no generative model.")
+    }
+
+    func generativeFillCaution() async -> String? {
+        nil
     }
 
     func withShadowAndReflection(_ mask: AIMask) async -> AIMask {

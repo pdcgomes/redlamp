@@ -187,6 +187,8 @@ RapidRAW competes on breadth, price and speed of shipping: free, on every deskto
 
 Generative Remove is offered on Macs with 16 GB or more because a 1024-pixel fill peaks at 6.6 GB, beside the app's own couple of gigabytes. Smaller crops need less: 4.2 GB at 512 pixels and 5.2 GB at 768 on the M1 Ultra, with the 4-bit model (2.22 GB). Fill times on other Macs haven't been measured. Measure fill time, memory pressure and swap on an 8 GB Mac at 512 and 768 pixels; if one fits, offer Generative Remove there with the crop capped at that size. The cap makes large holes coarser (the car's fill is already 508 × 234 pixels over 2032 × 936), which the panel should say. Size S; it needs an 8 GB Mac.
 
+**Decided** (7 October 2026, RM-15): the owner has no Mac with less than 16 GB, so instead of waiting for a measurement, smaller Macs are offered Generative Remove with a note that it hasn't been tested on them and may be slow or not work. The measurement, and a crop cap if it shows one is needed, wait for an 8 GB Mac.
+
 ### 5.2 Fills from a server the photographer runs (lesson 2)
 
 The seam is already there. The engine hands its model a crop through `GenerativeFiller` (`RedlampEngineAPI`): at most 1024 pixels square, sRGB-encoded, with a mask, a seed, a named prompt and, optionally, a reference image, and it gets the same form back, which it maps to camera RGB, stores, gives the photo's noise and blends. A remote filler implements the same protocol over the network:
@@ -279,7 +281,7 @@ Read from GitHub's licence API and Hugging Face's model API on 7 October 2026.
 
 | ID | Item | Recommended | Phase | Size | Depends on |
 | --- | --- | --- | --- | --- | --- |
-| RM-15 | Generative Remove on 8 GB Macs: fill time, memory and swap at 512 and 768 pixels, then the manifest's minimum memory where a crop fits | Adopt | P3 | S | RM-10 |
+| RM-15 | Generative Remove on Macs with less than 16 GB, offered with a note that it hasn't been tested on them (accepted 7 October; the measurement waits for an 8 GB Mac) | Adopt | P3 | S | RM-10 |
 | RM-16 | Fills from another Mac on the local network: `GenerativeFiller` to a Mac running Redlamp, found over Bonjour and paired once; iPad and iPhone in Phase 5 | Do better | P3, P5 | M | DEC-37, RM-10 |
 | RM-17 | ComfyUI as a fill server on the local network: its own API, templates with named inputs checked on import, shipped templates for commercially licensed models only | Adopt | P3–P4 | M | DEC-37, RM-10 |
 | INF-10 | AI-Free mode | Adopt | P3 | S | — |

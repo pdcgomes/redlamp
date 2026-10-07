@@ -42,11 +42,19 @@ public struct ModelManifest: Codable, Sendable, Hashable, Identifiable {
     public var published: Bool?
     /// The least memory a Mac needs to run it, in bytes; Macs with less aren't offered it.
     public var minimumMemory: Int?
+    /// The least memory it has been tried on, in bytes; Macs with less are offered it with a note
+    /// that it hasn't been tested on them.
+    public var testedMemory: Int?
     public var notes: String?
 
     /// Whether a Mac with `memory` bytes runs it (this Mac's by default).
     public func fits(memory: UInt64 = ProcessInfo.processInfo.physicalMemory) -> Bool {
         minimumMemory.map { memory >= UInt64($0) } ?? true
+    }
+
+    /// Whether it has been tried on a Mac with as little as `memory` bytes (this Mac's by default).
+    public func isTested(memory: UInt64 = ProcessInfo.processInfo.physicalMemory) -> Bool {
+        testedMemory.map { memory >= UInt64($0) } ?? true
     }
 
     public var isPublished: Bool {

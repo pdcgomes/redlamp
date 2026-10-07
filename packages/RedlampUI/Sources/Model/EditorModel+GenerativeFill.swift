@@ -22,9 +22,11 @@ public extension EditorModel {
         fillsGeneratively && generativeAvailability == .ready
     }
 
-    /// Asks the engine whether generative fill can run, for the Healing tool's Fill choice.
+    /// Asks the engine whether generative fill can run, and whether it has been tested on a Mac
+    /// like this one, for the Healing tool's Fill choice.
     func loadGenerativeFill() async {
         generativeAvailability = await engine.generativeFillAvailability()
+        generativeCaution = await engine.generativeFillCaution()
     }
 
     /// Downloads the generative model, then asks again.
@@ -92,6 +94,7 @@ public extension EditorModel {
                     } catch {
                         guard !Task.isCancelled, currentVisit == visit else { return }
                         generativeMessage = "The spot couldn't be filled: \(error.localizedDescription)"
+                            + (generativeCaution.map { " \($0)" } ?? "")
                         generating = nil
                         return
                     }

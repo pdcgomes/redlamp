@@ -375,6 +375,8 @@ public final class EditorModel {
 
     /// Whether generative fill can run here, as the Healing tool last asked.
     public internal(set) var generativeAvailability = GenerativeFillAvailability.unavailable("")
+    /// Why it may not work here, when this Mac has less memory than the model has been tested on.
+    public internal(set) var generativeCaution: String?
     /// The fill being made: its spot, how far along the spots being filled are (0…1), and the work,
     /// to cancel.
     public internal(set) var generating: (spot: UUID, progress: Double)?

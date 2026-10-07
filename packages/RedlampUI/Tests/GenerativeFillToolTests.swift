@@ -160,6 +160,39 @@ struct GenerativeFillToolTests {
         #expect(!model.offersGenerativeFill)
     }
 
+    @Test func `a model tested on more memory than this Mac has says so, and one tested on as little doesn't`() {
+        var info = ModelInfo(
+            id: "flux2-klein-4b-fill", name: "FLUX.2 [klein] 4B", purpose: "Generative fill", downloadBytes: 1,
+            state: .notDownloaded, testedMemory: 16 << 30, testedOnThisMac: false,
+        )
+        #expect(info.untestedNote?.hasPrefix("Not tested on Macs with less than 16 GB of memory;") == true)
+        #expect(info.untestedCaution(for: "Generative fill")?.hasPrefix(
+            "Generative fill hasn't been tested on Macs with less than 16 GB of memory, and may be slow or not work",
+        ) == true)
+        #expect(info.fitsThisMac && info.memoryNote == nil)
+        info.testedOnThisMac = true
+        #expect(info.untestedNote == nil && info.untestedCaution(for: "Generative fill") == nil)
+    }
+
+    @Test func `on a Mac with less memory than the model was tested on, a failed fill says so`() async throws {
+        let engine = StubEngine()
+        let caution =
+            "Generative fill hasn't been tested on Macs with less than 16 GB of memory, and may be slow or not work on this one (8 GB)."
+        engine.generativeCaution = caution
+        engine.fillError = EngineError.generativeFillUnavailable("The GPU ran out of memory.")
+        let (model, cleanup) = try await openEditor(engine)
+        defer { cleanup() }
+        #expect(model.generativeCaution == caution && model.fillsNewSpotsGeneratively)
+        await model.addSpot(at: ImagePoint(x: 0.5, y: 0.5))
+        try await finishFilling(model)
+        let message = try #require(model.generativeMessage)
+        #expect(message.hasPrefix("The spot couldn't be filled:") && message.hasSuffix(caution))
+
+        engine.generativeCaution = nil
+        await model.loadGenerativeFill()
+        #expect(model.generativeCaution == nil)
+    }
+
     @Test func `Remove All fills each spot once, one after another`() async throws {
         let engine = StubEngine()
         engine.things = ["car", "sign"]

@@ -51,6 +51,13 @@ public extension RedlampEngine {
         return .needsModel(info)
     }
 
+    func generativeFillCaution() async -> String? {
+        guard Self.generativeFillerFactory.withLock({ $0 }) != nil,
+              let manifest = ModelCatalog.manifest(Self.generativeModelID)
+        else { return nil }
+        return await info(manifest).untestedCaution(for: "Generative fill")
+    }
+
     func generateFills(
         for spot: RetouchSpot, in recipe: EditRecipe, seeds: [Int], options: GenerativeFillOptions,
         progress: @escaping @Sendable (Double) -> Void,

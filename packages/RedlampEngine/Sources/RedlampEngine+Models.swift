@@ -83,6 +83,7 @@ public extension RedlampEngine {
             decision: manifest.decision, licence: manifest.licenses.weights,
             licenceURL: manifest.files.first { $0.path == "LICENSE.txt" }.map(manifest.remote),
             trainingData: manifest.licenses.data, minimumMemory: manifest.minimumMemory, fitsThisMac: manifest.fits(),
+            testedMemory: manifest.testedMemory, testedOnThisMac: manifest.isTested(),
         )
     }
 }

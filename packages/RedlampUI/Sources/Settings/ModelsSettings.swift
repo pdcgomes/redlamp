@@ -71,6 +71,9 @@ struct ModelsSettings: View {
                 if let note = model.memoryNote, model.state != .ready {
                     Text(note).font(.caption).foregroundStyle(.secondary)
                 }
+                if let note = model.untestedNote {
+                    Text(note).font(.caption).foregroundStyle(.orange)
+                }
             }
             Spacer()
             if let fraction = progress[model.id] {
