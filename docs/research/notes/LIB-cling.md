@@ -8,7 +8,7 @@ Cling is GPL-3.0, and Redlamp ships under MPL-2.0 for the App Store (AGENTS.md, 
 
 - **The library's search is already faster than Cling's where they overlap.** Cling scores every candidate path with fzf's algorithm across all cores; the library compiles a query to bitsets over its column store and answers the first page and count in p95 2.5 ms at a million photos (LIB-06). Cling's engine isn't a replacement for LIB-06, and its 150 ms wait after each keystroke would break the filter bar's 16 ms budget.
 - **What's worth taking is around the search.** Four ideas, each measured here:
-  - **Names folded to bytes once** ([section 3](#3-names-folded-to-bytes-once-lib-06)), LIB-06's open point on text that isn't ASCII: a keystroke over the fixture's 5,604 folder paths goes from p50 38 ms and p95 172 to 175 ms to p50 0.27 ms and p95 0.34 ms, with the same answer for every pair but one edge, `stras` against `Straße` before the second `s` is typed.
+  - **Names folded to bytes once** ([section 3](#3-names-folded-to-bytes-once-lib-06)), LIB-06's open point on text that isn't ASCII: a keystroke over the fixture's 5,604 folder paths goes from p50 38 ms and p95 172 to 175 ms to p50 0.27 ms and p95 0.34 ms, with the same answer for every pair but one edge, `stras` against `Straße` before the second `s` is typed. Built on library/catalog since (e316f57), ignoring case only.
   - **The column store mapped from a file**, as Cling maps its index ([section 4](#4-the-column-store-mapped-from-a-file-lib-05-lib-06)): at a million photos, columns of 87 bytes a photo add 0.0 MB to the app's memory mapped, against 74 MB held in arrays, and map in under a millisecond; today they're built from SQLite at each launch, in 459 to 634 ms.
   - **Short text, fuzzy matching and typos** ([section 5](#5-short-text-fuzzy-matching-and-typos-lib-06-lib-18-lib-19)): free text under three characters is dropped today, small tables and all, so `z8`, `R5` and `東京` find every photo. Matched against the small tables, they find the camera or the folder. Fuzzy matching with typos, on rules like Cling's, over 8,673 names costs p95 1.6 to 1.7 ms a keystroke on one thread.
   - **Busy folders left out of change tracking** ([section 6](#6-busy-folders-under-a-root-lib-08)): a package written ten times a second under a watched root gives 3.4 FSEvents batches a second, each of which, by the library's code, becomes an indexer run and index writes while the user does nothing; with the package left out of the stream, none.
@@ -55,7 +55,7 @@ Cling is GPL-3.0, and Redlamp ships under MPL-2.0 for the App Store (AGENTS.md, 
 | A letter mask before scoring | Text through FTS5's trigram index, 0.22 ms for four characters at a million | Not needed there; used in [section 5](#5-short-text-fuzzy-matching-and-typos-lib-06-lib-18-lib-19) |
 | Columns mapped from a page-aligned file | Columns built from SQLite into arrays at each launch | [Section 4](#4-the-column-store-mapped-from-a-file-lib-05-lib-06) |
 | Read-ahead of a cold file | The index mapped with `MADV_WILLNEED` (`LibraryIndex.readAhead`) | Covered |
-| Paths as bytes, matched as bytes in any script | Bytes for ASCII; Foundation's search per name otherwise | [Section 3](#3-names-folded-to-bytes-once-lib-06) |
+| Paths as bytes, matched as bytes in any script | Bytes for ASCII; Foundation's search per name otherwise (bytes for every script since e316f57) | [Section 3](#3-names-folded-to-bytes-once-lib-06); built |
 | Searching from the first character | Free text under three characters dropped | [Section 5](#5-short-text-fuzzy-matching-and-typos-lib-06-lib-18-lib-19) |
 | Fuzzy matching, typos, a quality floor | Completion by substring: the start, a word's start, inside | [Section 5](#5-short-text-fuzzy-matching-and-typos-lib-06-lib-18-lib-19) |
 | What the finished indexes found, shown at 150 ms | The index shown at once; the first page as soon as it's full; facets cancelled by the next query | Covered |
@@ -69,6 +69,8 @@ Cling is GPL-3.0, and Redlamp ships under MPL-2.0 for the App Store (AGENTS.md, 
 | Renames that change only case | Folders listed again rather than paths checked one by one; no test of a Finder rename in case alone | A test to add ([section 6](#6-busy-folders-under-a-root-lib-08)) |
 
 ## 3. Names folded to bytes once (LIB-06)
+
+Built on library/catalog since this note was written (e316f57, `FoldedText`): names are case folded and decomposed once, matched by bytes and only where characters start and end, which keeps Foundation's case-only meaning; the library measures p95 0.38 to 0.78 ms a keystroke over 5,604 accented folder names. What follows is the prototype that measured the idea first; the question of accents below still stands.
 
 The design's open point: "Free text that isn't ASCII matches folder paths with Foundation's search, about 45 ms a keystroke over 5,604 folders, where ASCII text takes under a millisecond." `NameMatcher` and `NameCodes` keep each name's bytes lowercased only when the name is all ASCII; once the text or the name isn't, `QueryText.contains` calls `range(of:options: .caseInsensitive)`, for every folder, camera, lens, creator and place.
 
@@ -154,7 +156,7 @@ For the owner to accept; none is in the tracker yet. The new row is named "new",
 
 **Wording**
 
-- **LIB-06:** text matched as bytes in every script: each name of the small tables folded once when the vocabulary loads, the text folded the same way, and the SQL path folding alike; free text under three characters still matched against folders, cameras, lenses, creators, places and keyword synonyms, only the trigram index's part left out ([sections 3](#3-names-folded-to-bytes-once-lib-06) and [5](#5-short-text-fuzzy-matching-and-typos-lib-06-lib-18-lib-19)).
+- **LIB-06:** free text under three characters still matched against folders, cameras, lenses, creators, places and keyword synonyms, only the trigram index's part left out ([section 5](#5-short-text-fuzzy-matching-and-typos-lib-06-lib-18-lib-19)). Matching text in every script as bytes, proposed here first, is built (e316f57).
 - **LIB-18:** completion ranked by where the text matches (the start, a word's start, inside), then by its letters in order, then by a word one typo away (two from eight letters; letters only, four or more, never a word's first letter), always after every name that holds the text as typed, within a quality floor of the best match; a filter that finds nothing also offers a name one or two typos away.
 - **LIB-19:** folders, collections, keywords, cameras, lenses and places by name, ranked as completion ranks them; photos by name through the text index.
 - **LIB-08:** packages other than `.redlamp` sidecars, and other folders the walk skips, left out of each volume's stream (eight a stream; past eight, the busiest by events counted); events inside a package dropped before they become work; the event position written at most every few seconds and at quit.
@@ -162,7 +164,7 @@ For the owner to accept; none is in the tracker yet. The new row is named "new",
 
 **Decision**
 
-- **New, after DEC-44:** does text in the library ignore accents and width, as completion already does, so `sao` finds São Paulo and `zurich` finds Zürich? Proposed: yes, for the small tables, completion and the text index alike (the trigram index built again with `remove_diacritics`), so a name typed without its accents still finds the photos. It decides LIB-06's wording above.
+- **New, after DEC-44:** does text in the library ignore accents and width, as completion already does, so `sao` finds São Paulo and `zurich` finds Zürich? Proposed: yes, for the small tables, completion and the text index alike (the trigram index built again with `remove_diacritics`), so a name typed without its accents still finds the photos. It decides whether `FoldedText` (e316f57) folds accents and width as well as case.
 
 **The README and the comparison,** once these are accepted: nothing changes a README checkbox. In `docs/lightroom-comparison.md`, "Search and filters" could add "names found with a typo or by their letters in order, in completion and the palette". Whether Lightroom Classic's Text filter forgives a typo isn't in the Lightroom feature inventory and wasn't checked here.
 
