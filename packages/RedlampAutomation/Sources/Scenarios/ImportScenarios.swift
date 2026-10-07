@@ -8,7 +8,7 @@
     /// The import window (LIB-27), from copies of the run's raws in a folder of the run's own: never a
     /// card, and never this Mac's volumes, which the window is told to leave alone.
     enum ImportScenarios {
-        static let all: [Scenario] = [fromFolder]
+        static let all: [Scenario] = [fromFolder, performance]
 
         static let fromFolder = Scenario(
             "import.from-folder",
@@ -72,6 +72,65 @@
                 model.folder?.standardizedFileURL.path == folder.standardizedFileURL.path
                     && model.selectedPhotos.count == 3 && model.module == .library
             }
+        }
+
+        static let performance = Scenario(
+            "import.performance",
+            "A folder of 2,000 copies of raws: its first previews on screen, and the import grid scrolled while "
+                + "it's browsed and while it copies",
+            tiers: [.performance], claims: [],
+        ) { app in
+            try app.openWorking()
+            let scratch = try ImportScratch(app, photos: 2000)
+            defer { scratch.remove(app) }
+            try app.main { _ in ImportWindowController.ignoresVolumes = true }
+            try app.choose(.importPhotos)
+            try app.waitForImportWindow()
+            try app.inImportWindow { window in
+                window.prepare(
+                    destination: scratch.destination,
+                    backup: scratch.backup,
+                    folders: "Imported",
+                    names: "{name}",
+                )
+            }
+            let started = Date()
+            app.post { _ in Task { try? await ImportWindowController.current?.add(folder: scratch.card) } }
+            try app
+                .wait("the first preview", timeout: 30) { _ in (ImportWindowController.current?.imagesShown ?? 0) > 0 }
+            let first = Date().timeIntervalSince(started) * 1000
+            let visible = try app.inImportWindow { $0.visibleCount }
+            try app.wait("the first screenful", timeout: 30) { _ in
+                (ImportWindowController.current?.imagesShown ?? 0) >= visible
+            }
+            let screen = Date().timeIntervalSince(started) * 1000
+            app.record("e2e-import-first-preview", first)
+            app.record("e2e-import-first-screen", screen)
+
+            let browsing = try app.scrollImportGrid()
+            try app.wait("the folder browsed", timeout: 600) { _ in ImportWindowController.current?.isBrowsed == true }
+            let browsed = try app.scrollImportGrid()
+            try app.clickInImportWindow("import.import")
+            try app.wait("the copying", timeout: 120) { _ in ImportWindowController.current?.isCopying == true }
+            let copying = try app.scrollImportGrid()
+            try app.clickInImportWindow("import.cancel")
+            try app.wait("the import to stop", timeout: 300) { _ in ImportWindowController.current?.isFinished == true }
+            for (metric, summary) in [
+                ("e2e-import-scroll-browsing-p99", browsing), ("e2e-import-scroll-p99", browsed),
+                ("e2e-import-scroll-copying-p99", copying),
+            ] {
+                if let summary {
+                    app.record(metric, summary.p99)
+                }
+            }
+            let line = String(
+                format: "import: first preview %.0f ms, first screen (%d cells) %.0f ms; scrolling p99 %.2f ms "
+                    + "browsing, %.2f ms browsed, %.2f ms copying\n",
+                first, visible, screen, browsing?.p99 ?? -1, browsed?.p99 ?? -1, copying?.p99 ?? -1,
+            )
+            try? line.write(
+                to: app.runDirectory.appending(path: "import-performance.txt"), atomically: true, encoding: .utf8,
+            )
         }
     }
 
@@ -204,6 +263,26 @@
                 return view
             }
             return view.subviews.lazy.compactMap { Self.view(identifier, in: $0) }.first
+        }
+
+        /// Scrolls the import grid end to end in 4 s at 120 Hz, watching the main thread.
+        func scrollImportGrid() throws -> MainThreadMonitor.Summary? {
+            let monitor = try MainThread.run { () -> MainThreadMonitorBox in
+                let monitor = MainThreadMonitor()
+                monitor.start()
+                return MainThreadMonitorBox(monitor)
+            }
+            let duration = 4.0
+            let start = Date()
+            while Date().timeIntervalSince(start) < duration {
+                let fraction = Date().timeIntervalSince(start) / duration
+                post { _ in ImportWindowController.current?.scroll(to: fraction) }
+                pause(1.0 / 120)
+            }
+            return try MainThread.run { () -> MainThreadMonitor.Summary? in
+                monitor.monitor.stop()
+                return monitor.monitor.summary(seconds: duration)
+            }
         }
     }
 #endif

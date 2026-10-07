@@ -15,6 +15,8 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
     let collectionView = ImportCollectionView()
     private let scrollView = NSScrollView()
     private var prioritising: Task<Void, Never>?
+    /// Previews put on screen so far, for the harness.
+    @_spi(Harness) public private(set) var imagesShown = 0
 
     init(model: ImportWindowModel, thumbnails: ImportThumbnails?) {
         self.model = model
@@ -116,6 +118,7 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
               let item = collectionView.item(at: IndexPath(item: index, section: 0)) as? ImportGridItem
         else { return }
         item.setImage(image)
+        imagesShown += 1
     }
 
     /// A cell's box: the selection when the cell is in it, else the cell's photo alone.
@@ -172,6 +175,14 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
     private func prioritiseVisible() {
         let ids = collectionView.indexPathsForVisibleItems().map(\.item).sorted().compactMap { model.photo(at: $0)?.id }
         model.prioritise(ids)
+    }
+
+    /// Scrolls to `fraction` of the way down, 0 at the top: for the harness.
+    @_spi(Harness) public func scroll(to fraction: Double) {
+        let clip = scrollView.contentView
+        let height = max(collectionView.frame.height - clip.bounds.height, 0)
+        clip.scroll(to: NSPoint(x: 0, y: height * min(max(fraction, 0), 1)))
+        scrollView.reflectScrolledClipView(clip)
     }
 }
 

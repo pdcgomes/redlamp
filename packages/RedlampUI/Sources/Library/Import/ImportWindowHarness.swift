@@ -27,6 +27,16 @@ import RedlampLibrary
         !model.sources.isEmpty && model.sources.allSatisfy(\.isBrowsed)
     }
 
+    /// Previews put on screen in the grid so far.
+    var imagesShown: Int {
+        grid.imagesShown
+    }
+
+    /// The grid's cells on screen.
+    var visibleCount: Int {
+        grid.collectionView.indexPathsForVisibleItems().count
+    }
+
     /// The names of the photos given `rating` stars.
     func ratedNames(rating: Int) -> [String] {
         model.photos.filter { $0.choices.rating == rating }.map(\.primary.name)
@@ -46,6 +56,14 @@ import RedlampLibrary
     /// The rating, flag and label given the photo at `item`, as the grid's badges write them.
     func badges(at item: Int) -> String? {
         model.photo(at: item).map { ImportGridCell.badges($0, leftOut: false, copied: false) }
+    }
+
+    func scroll(to fraction: Double) {
+        grid.scroll(to: fraction)
+    }
+
+    var isCopying: Bool {
+        model.phase == .copying && model.progress != nil
     }
 
     var isFinished: Bool {
