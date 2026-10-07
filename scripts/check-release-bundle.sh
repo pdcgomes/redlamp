@@ -7,13 +7,16 @@
 # - any Mach-O still carries debugging symbols, which belong in the dSYMs;
 # - given the dSYMs' folder, a Mach-O built here has no dSYM of the same UUID, so its
 #   crash reports couldn't be symbolicated (Sparkle's come built and ship none);
+# - RedlampServices exports anything but its Swift and Objective-C symbols: LibRaw, linked in
+#   statically, is built hidden so dead-stripping can drop what Redlamp doesn't call;
 # - the bundle outgrows its budget, 2% above what it measured when the budget was set.
 #
 #   scripts/check-release-bundle.sh build/release/Redlamp.app [build/release/dSYMs]
 
 set -euo pipefail
 
-BUDGET_KB=57500
+BUDGET_KB=56500
+OWN_EXPORTS='^(_\$s|_OBJC_(METACLASS_|CLASS_)\$_|_RedlampServicesVersion)'
 
 APP="${1:?usage: check-release-bundle.sh <app> [dsyms]}"
 DSYMS="${2:-}"
@@ -27,6 +30,7 @@ checked=0
 wrong=()
 symbols=()
 undocumented=()
+exporting=()
 while IFS= read -r -d '' file; do
     file -b "$file" | grep -q Mach-O || continue
     checked=$((checked + 1))
@@ -36,6 +40,10 @@ while IFS= read -r -d '' file; do
     # The linker marks every binary with an OPT entry, stripped or not.
     stabs="$(nm -a "$file" 2>/dev/null | awk '$2 == "-" && $5 != "OPT"' | wc -l | tr -d ' ')"
     [ "$stabs" = 0 ] || symbols+=("$stabs: $name")
+    if [[ "$name" == */RedlampServices.framework/Versions/A/RedlampServices ]]; then
+        exports="$(nm -gU "$file" | awk '{print $3}' | grep -cvE "$OWN_EXPORTS" || true)"
+        [ "$exports" = 0 ] || exporting+=("$exports: $name")
+    fi
     if [ -n "$DSYMS" ] && [[ "$name" != */Sparkle.framework/* ]]; then
         while read -r uuid; do
             grep -qx "$uuid" <<<"$dsym_uuids" || undocumented+=("$uuid: $name")
@@ -57,6 +65,11 @@ fi
 if [ "${#undocumented[@]}" -gt 0 ]; then
     echo "error: ${#undocumented[@]} binaries have no dSYM in $DSYMS:" >&2
     printf '  %s\n' "${undocumented[@]}" >&2
+    failed=1
+fi
+if [ "${#exporting[@]}" -gt 0 ]; then
+    echo "error: RedlampServices exports LibRaw's symbols (count: file); build LibRaw hidden:" >&2
+    printf '  %s\n' "${exporting[@]}" >&2
     failed=1
 fi
 size_kb="$(du -sk "$APP" | cut -f1)"
