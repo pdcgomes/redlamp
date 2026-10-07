@@ -431,6 +431,59 @@ struct DetailStageTests {
         #expect(first == nil, "the first photo's session is still held")
     }
 
+    /// A crop's angle or a transform dragged a little moves the work area by a few texels: a
+    /// cached render whose area covers the new one serves it, with the texels a fresh render
+    /// makes there.
+    @Test(arguments: [10, EditRecipe.currentProcessVersion])
+    func `a work area inside a cached one is served from it`(process: Int) throws {
+        let session = try makeSession(.bayer, width: 2048, height: 1536) { x, y in
+            Float(0.2 + 0.1 * sin(Double(x) / 3) * cos(Double(y) / 5))
+        }
+        var recipe = Self.everyPassBeforeLadder
+        recipe.processVersion = process
+        recipe.crop = CropRect(left: 0.3, top: 0.3, right: 0.7, bottom: 0.7)
+        recipe[.cropAngle] = 2
+        let size = PixelSize(width: 820, height: 614)
+        func work(_ recipe: EditRecipe) -> DetailStage.WorkArea {
+            let geometry = GeometryMap(
+                recipe: recipe, imageSize: session.orientedSize, lens: session.info.lensCorrection,
+            )
+            return DetailStage.workArea(session: session, geometry: geometry, region: .full, outputSize: size)
+        }
+        let stage = DetailStage(device: device, kernels: kernels)
+        let first = try processAndRead(stage, session, recipe, outputSize: size)
+        for (parameter, value) in [(ParameterID.cropAngle, 2.1), (.transformVertical, 1)] {
+            var nudged = recipe
+            nudged[parameter] = value
+            let area = work(nudged)
+            #expect(area != work(recipe) && area.level == 0, "\(parameter) leaves the work area as it was")
+            let served = try processAndRead(stage, session, nudged, outputSize: size)
+            withKnownIssue("PIPE-02: the stage caches only the exact work area") {
+                #expect(served.output.texture === first.output.texture, "\(parameter) rendered again")
+            }
+            let fresh = try processAndRead(
+                DetailStage(device: device, kernels: kernels), session, nudged, outputSize: size, cache: false,
+            )
+            func texel(
+                _ read: (texels: [SIMD3<Float>], output: DetailStage.Output),
+                _ x: Int,
+                _ y: Int,
+            ) -> SIMD3<Float> {
+                let x0 = Int((read.output.area.x * Float(session.pyramid.width)).rounded())
+                let y0 = Int((read.output.area.y * Float(session.pyramid.height)).rounded())
+                return read.texels[(y - y0) * read.output.texture.width + x - x0]
+            }
+            var worst: Float = 0
+            let low = area.origin &+ DetailStage.margin, high = area.origin &+ area.size &- DetailStage.margin
+            for y in stride(from: low.y, to: high.y, by: 3) {
+                for x in stride(from: low.x, to: high.x, by: 3) {
+                    worst = max(worst, simd_abs(texel(served, x, y) - texel(fresh, x, y)).max())
+                }
+            }
+            #expect(worst < 1e-3, "\(parameter): largest difference \(worst)")
+        }
+    }
+
     /// Noise reduction reads only the masks that set Noise, and only that amount, so dragging a
     /// mask's Texture, Clarity or Sharpness reads the kept source or ladder; its Noise doesn't.
     @Test(arguments: [10, EditRecipe.currentProcessVersion])
