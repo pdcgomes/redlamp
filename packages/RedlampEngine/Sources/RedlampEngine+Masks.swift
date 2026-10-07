@@ -4,6 +4,7 @@ import Foundation
 import Metal
 import RedlampEngineAPI
 import RedlampMasking
+import Synchronization
 
 /// AI masks: computed on the analysis render (the photo with no edit, sRGB, 2048 px), so they
 /// don't move when the edit changes, and kept in the edit as bitmaps.
@@ -110,6 +111,10 @@ extension RedlampEngine {
     }
 
     static let vitMatteID = "vitmatte-base"
+
+    /// The Subject matte last solved, its edges per pixel, and what it was solved from. Background
+    /// is its inverse bit for bit (`closedForm`, `vitMatteStrands`), so either gives the other.
+    static let subjectMatte = Mutex<(key: SubjectMatteKey, mask: ProvidedMask)?>(nil)
 
     /// SAM 3, when it's on this Mac and offered (it is evaluation only).
     func sam3() async -> SAM3Concepts? {
@@ -346,6 +351,28 @@ extension RedlampEngine {
                 analysisHash: analysis.hash, center: request.prompts.first ?? mask.centroid, bitmap: bitmap,
             )]
         }
+        func aiMasks(_ provided: [ProvidedMask]) -> [AIMask] {
+            let osBuild = ProcessInfo.processInfo.operatingSystemVersionString
+            return provided.compactMap { mask in
+                guard let bitmap = mask.mask.bitmap() else { return nil }
+                return AIMask(
+                    kind: mask.kind, provider: mask.provider, revision: mask.revision, osBuild: osBuild,
+                    instance: mask.instance, part: mask.part?.rawValue, prompts: request.prompts,
+                    analysisHash: analysis.hash, center: mask.mask.centroid, bitmap: bitmap,
+                )
+            }
+        }
+        let edgeMatte = ProcessInfo.processInfo.environment["REDLAMP_EDGE_MATTE"]
+        var subjectKey: SubjectMatteKey?
+        if request.kind == .subject || request.kind == .background {
+            let key = await SubjectMatteKey(
+                analysisHash: analysis.hash, edgeMatte: edgeMatte, strands: isReady(Self.vitMatteID),
+            )
+            if let solved = Self.subjectMatte.withLock({ $0?.key == key ? $0?.mask : nil }) {
+                return aiMasks([solved.matte(as: request.kind)])
+            }
+            subjectKey = key
+        }
         let part = request.kind == .people && request.part != .entirePerson ? request.part : nil
         var provided: [ProvidedMask]
         do {
@@ -372,7 +399,6 @@ extension RedlampEngine {
         // matting, with the strands ViTMatte finds beyond it once it's downloaded. Embedded mattes
         // (iPhone) are already fine, and face parts are drawn shapes. REDLAMP_EDGE_MATTE=off keeps
         // Vision's edges, and =closed-form skips ViTMatte, to compare.
-        let edgeMatte = ProcessInfo.processInfo.environment["REDLAMP_EDGE_MATTE"]
         if edgeMatte != "off",
            provided.contains(where: Self.takesClosedFormMatte), let full = try? await matteImage(for: session) {
             let masks = provided
@@ -396,15 +422,11 @@ extension RedlampEngine {
                 }
             }.value
         }
-        let osBuild = ProcessInfo.processInfo.operatingSystemVersionString
-        return provided.compactMap { mask in
-            guard let bitmap = mask.mask.bitmap() else { return nil }
-            return AIMask(
-                kind: mask.kind, provider: mask.provider, revision: mask.revision, osBuild: osBuild,
-                instance: mask.instance, part: mask.part?.rawValue, prompts: request.prompts,
-                analysisHash: analysis.hash, center: mask.mask.centroid, bitmap: bitmap,
-            )
+        if let subjectKey, provided.count == 1, provided[0].provider.contains("+closed-form") {
+            let subject = provided[0].matte(as: .subject)
+            Self.subjectMatte.withLock { $0 = (subjectKey, subject) }
         }
+        return aiMasks(provided)
     }
 
     /// Subject doubts more of Vision's edge (`ClosedFormMatte.subjectInner`), and Background is
@@ -830,4 +852,23 @@ struct AnalysisCache: @unchecked Sendable {
     let session: ImageSession
     let image: CGImage
     let hash: String
+}
+
+/// What a Subject matte was solved from: the analysis render, the edge setting
+/// (REDLAMP_EDGE_MATTE) and whether ViTMatte is on this Mac.
+struct SubjectMatteKey: Equatable {
+    let analysisHash: String
+    let edgeMatte: String?
+    let strands: Bool
+}
+
+private extension ProvidedMask {
+    /// This Subject or Background matte as `kind`: itself, or its inverse as the other.
+    func matte(as kind: MaskKind) -> ProvidedMask {
+        guard kind != self.kind else { return self }
+        var other = self
+        other.kind = kind
+        other.mask = mask.inverted
+        return other
+    }
 }

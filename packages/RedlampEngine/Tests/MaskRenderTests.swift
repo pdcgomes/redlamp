@@ -853,9 +853,7 @@ struct MaskRenderTests {
             let complement = a.width == b.width && a.height == b.height && a.inverted.pixels == b.pixels
             #expect(complement, "\(url.lastPathComponent): Background isn't Subject inverted")
             #expect(background.provider == subject.provider && background.analysisHash == subject.analysisHash)
-            withKnownIssue("PIPE-09: Background solves the Subject matte again") {
-                #expect(taken < .milliseconds(300), "\(url.lastPathComponent): Background took \(taken)")
-            }
+            #expect(taken < .milliseconds(300), "\(url.lastPathComponent): Background took \(taken)")
         }
     }
 
