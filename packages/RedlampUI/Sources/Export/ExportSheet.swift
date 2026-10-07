@@ -5,11 +5,14 @@ import SwiftUI
 
 /// The Export dialog: a preset, then where the file goes, its format, size and metadata.
 public struct ExportSheet: View {
+    /// Its size on a window with room for it; on a shorter one, `height` is less and the
+    /// settings scroll above the buttons.
     public static let size = CGSize(width: 540, height: 720)
 
     let photo: URL
     let photoSize: PixelSize
     let store: ExportPresetStore
+    let height: CGFloat
     let onCancel: () -> Void
     /// The settings, the preset they started from, and the file to write.
     let onExport: (ExportSettings, UUID?, URL) -> Void
@@ -26,12 +29,14 @@ public struct ExportSheet: View {
         store: ExportPresetStore,
         settings: ExportSettings? = nil,
         presetID: UUID? = nil,
+        height: CGFloat = ExportSheet.size.height,
         onCancel: @escaping () -> Void,
         onExport: @escaping (ExportSettings, UUID?, URL) -> Void,
     ) {
         self.photo = photo
         self.photoSize = photoSize
         self.store = store
+        self.height = height
         self.onCancel = onCancel
         self.onExport = onExport
         _settings = State(initialValue: settings ?? store.initialSettings)
@@ -40,12 +45,10 @@ public struct ExportSheet: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            OverlayScroll {
-                form
-                    .fixedSize(horizontal: false, vertical: true)
-                    .tint(Theme.nativeTint)
-                    .focusEffectDisabled()
-            }
+            form
+                .frame(maxHeight: .infinity)
+                .tint(Theme.nativeTint)
+                .focusEffectDisabled()
             Divider()
             HStack {
                 if let problem {
@@ -62,7 +65,7 @@ public struct ExportSheet: View {
             }
             .padding(16)
         }
-        .frame(width: Self.size.width, height: Self.size.height)
+        .frame(width: Self.size.width, height: height)
         .tint(Theme.nativeTint)
         .alert(conflict.map(Self.conflictTitle) ?? "", isPresented: Binding(
             get: { conflict != nil },

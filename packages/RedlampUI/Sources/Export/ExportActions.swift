@@ -38,8 +38,9 @@ public enum ExportActions {
         guard let info = model.info, !model.isModalDialogOpen,
               let window = EditorWindowController.frontWindow, window.attachedSheet == nil
         else { return }
+        let height = window.sheetHeight(fitting: ExportSheet.size.height)
         let sheetWindow = RinglessWindow(
-            contentRect: CGRect(origin: .zero, size: ExportSheet.size),
+            contentRect: CGRect(x: 0, y: 0, width: ExportSheet.size.width, height: height),
             styleMask: [.titled],
             backing: .buffered,
             defer: false,
@@ -55,6 +56,7 @@ public enum ExportActions {
             photo: info.url,
             photoSize: info.pixelSize,
             store: store,
+            height: height,
             onCancel: close,
             onExport: { [weak window] settings, presetID, url in
                 close()
