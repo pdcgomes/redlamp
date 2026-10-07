@@ -148,6 +148,23 @@ def from_hook(remote: str, lines: list[str]) -> list[tuple[str, str | None]]:
     return pushes
 
 
+def moved_since(lines: list[str]) -> list[str]:
+    """The branches the push names that no longer name the commit the hook was given. Over HTTPS,
+    git reads a branch again when it sends, so it would send what landed meanwhile, unchecked."""
+    moved = []
+    for line in lines:
+        parts = line.split()
+        if len(parts) != 4 or parts[2] != MAIN or parts[1] == ZERO:
+            continue
+        name, commit = parts[0], parts[1]
+        if not (name.startswith("refs/") or name == "HEAD"):
+            continue
+        now = git("rev-parse", "--verify", "--quiet", f"{name}^{{commit}}", check=False)
+        if now != commit:
+            moved.append(f"{name} names {now[:7] or 'nothing'} now, not the {commit[:7]} it checked")
+    return moved
+
+
 def from_argument(name: str) -> tuple[str, str | None]:
     """The commit, with where it leaves origin/main, which is what a push of it would build on."""
     commit = git("rev-parse", "--verify", f"{name}^{{commit}}")
@@ -436,7 +453,8 @@ def main() -> int:
     parser.add_argument("--hook", nargs=2, metavar=("REMOTE", "URL"), help=argparse.SUPPRESS)
     args = parser.parse_args()
     asked = "full" if args.full else "suite" if args.suite else "checks"
-    pushes = from_hook(args.hook[0], sys.stdin.read().splitlines()) if args.hook else [from_argument(args.commit)]
+    lines = sys.stdin.read().splitlines() if args.hook else []
+    pushes = from_hook(args.hook[0], lines) if args.hook else [from_argument(args.commit)]
     try:
         for commit, theirs in pushes:
             if not check(commit, theirs, asked, args.hook[0] if args.hook else None):
@@ -444,6 +462,10 @@ def main() -> int:
     except KeyboardInterrupt:
         say("Push gate: interrupted")
         return 130
+    if moved := moved_since(lines):
+        say(f"Push gate: stopped, since {'; '.join(moved)}")
+        say("Push again to check what it names now, or push the checked commit: git push origin <commit>:refs/heads/main")
+        return 1
     return 0
 
 
