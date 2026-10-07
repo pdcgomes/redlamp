@@ -135,6 +135,11 @@ ditto "$PRODUCTS/redlamp" "$APP/Contents/Helpers/redlamp"
 # so they're signed here, inside out. Its XPC services are only for sandboxed apps.
 SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
 rm -rf "$SPARKLE/XPCServices" "$SPARKLE/Versions/B/XPCServices"
+# Sparkle's binaries come universal; Redlamp runs on Apple Silicon only.
+for binary in "$SPARKLE/Versions/B/Autoupdate" "$SPARKLE/Versions/B/Updater.app/Contents/MacOS/Updater" \
+    "$SPARKLE/Versions/B/Sparkle"; do
+    [ "$(lipo -archs "$binary")" = arm64 ] || lipo "$binary" -thin arm64 -output "$binary"
+done
 for code in "$SPARKLE/Versions/B/Autoupdate" "$SPARKLE/Versions/B/Updater.app" "$SPARKLE"; do
     codesign --force --options runtime --timestamp --sign "$IDENTITY" "$code"
 done
@@ -142,6 +147,7 @@ codesign --force --options runtime --timestamp \
     --preserve-metadata=entitlements,requirements,flags \
     --sign "$IDENTITY" "$APP"
 codesign --verify --deep --strict "$APP"
+scripts/check-release-bundle.sh "$APP" || fail "the app carries code for other than Apple Silicon"
 # With no arguments the CLI prints its usage and exits 1; dyld failures print something else.
 grep -q 'usage: redlamp' <<<"$("$APP/Contents/Helpers/redlamp" 2>&1 || true)" \
     || fail "the bundled CLI does not run (missing frameworks?)"
