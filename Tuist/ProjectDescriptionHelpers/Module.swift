@@ -72,9 +72,9 @@ public enum Module: String, CaseIterable {
         case .document: [.engineAPI]
         // Recipes are pure values plus analysis: shared by the apps, the CLI and a future
         // companion app, so they may never reach the engine or any UI layer.
-        case .recipes: [.engineAPI]
+        case .recipes: [.engineAPI, .color]
         // Masks computed from the photo (Apple Vision, embedded mattes) and mask bitmaps.
-        case .masking: [.engineAPI]
+        case .masking: [.engineAPI, .color]
         // Generative models on MLX (generative fill, RM-10), kept apart so nothing else links MLX.
         case .generative: [.engineAPI]
         case .engine: [.engineAPI, .kernels, .color, .services, .masking]
