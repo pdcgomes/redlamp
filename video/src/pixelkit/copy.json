@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "python": ["EVERY PIXEL IN THIS", "VIDEO IS PYTHON."],
+    "dialling": ["HOLD ON.", "IT'S DIALLING UP."],
+    "nophotoshop": ["NO PHOTOSHOP.", "JUST CODE."],
+    "bedroom": ["REMEMBER THIS", "BEDROOM?"],
+    "wait": ["WAIT TILL", "IT CONNECTS."]
+  },
+  "bbs": {
+    "title": "PIXEL PIT",
+    "sub": "BBS · NODE 1 · EST 1992",
+    "menu": [["M", "MESSAGES (3 NEW)"], ["S", "SHOWCASE"], ["D", "DOOR GAMES"], ["G", "GOODBYE"]],
+    "command": "S"
+  },
+  "how": ["ONE PYTHON KIT", "AND AN AGENT SKILL"],
+  "code": [
+    "c = Canvas(preset=\"wide\")",
+    "c.header(\"CUPS OF COFFEE\")",
+    "c.bar_chart(x, y, w, h, cups)",
+    "c.save(\"coffee.png\")"
+  ],
+  "ask": {
+    "continue": "CONTINUE?",
+    "title": "STAR IT ON GITHUB",
+    "address": "GITHUB.COM/PDCGOMES/PIXELARTVISUALS",
+    "reason": "FREE AND OPEN SOURCE",
+    "thanks": "THANKS FOR PLAYING"
+  }
+}

@@ -15,3 +15,6 @@ public/synced/
 # (scripts/storyboard.mjs).
 public/star/
 public/review/
+
+# The pixelkit promo's frames and score (scripts/pixelkit-frames.py, scripts/pixelkit-score.py).
+public/pixelkit/

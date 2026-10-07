@@ -557,6 +557,153 @@ def swell_into(signal, seconds, room):
     return tail / (np.max(np.abs(tail)) + 1e-9)
 
 
+# ---------------------------------------------------------------- chiptune
+# An 8-bit console's sound chip, warmed a little: pulses of a few widths, a stepped triangle, noise
+# from a shift register and chords as fast arpeggios; and the phone line's own sounds (key tones,
+# ringing, a modem connecting), for a scene with a modem in it. For a brief that asks for retro.
+
+
+def pulse_partials(duty):
+    """The harmonics of a pulse `duty` of a cycle wide: 0.5 is a square, 0.125 the thinnest."""
+    return [(k, abs(np.sin(np.pi * k * duty)) / k) for k in range(1, 64)]
+
+
+def pulse(note, length, velocity=1.0, duty=0.25, vibrato=0.0, slide=0.0, attack=0.003, decay=0.25, sustain=0.6,
+          release=0.06, warmth=6500):
+    """
+    A pulse channel: band-limited, with a vibrato of `vibrato` semitones that comes in after 0.1 s,
+    a slide in from `slide` semitones away, and `warmth`, a gentle low-pass that takes off the fizz.
+    """
+    t = times(length + release)
+    f = hz(note) * np.ones(len(t))
+    if slide:
+        f = f * 2 ** (slide * np.exp(-t / 0.03) / 12)
+    if vibrato:
+        f = f * 2 ** (vibrato * np.clip((t - 0.1) / 0.12, 0, 1) * np.sin(2 * np.pi * 5.8 * t) / 12)
+    tone = harmonics(f, len(t), pulse_partials(duty), cutoff=warmth, order=1)
+    return tone * envelope(len(t), attack, decay, sustain, release, hold=length) * velocity * 0.4
+
+
+def triangle(note, length, velocity=1.0, release=0.03):
+    """The triangle channel: a triangle in 16 steps, whose faint buzz is the sound; for the bass."""
+    t = times(length + release)
+    ramp = 1 - 4 * np.abs(phase_of(hz(note), len(t)) % 1 - 0.5)
+    stepped = lowpass(np.round(ramp * 7.5 + 7.5) / 7.5 - 1, 9000)
+    return stepped * envelope(len(t), 0.002, 10, 1.0, release, hold=length) * velocity * 0.6
+
+
+_registers = {}
+
+
+def chip_noise(seconds, rate=22000.0, short=False):
+    """
+    Noise as a sound chip makes it: a 15-bit shift register clocked `rate` times a second, from a
+    random point in its sequence. `short` feeds back from bit 6, for the metallic, pitched kind.
+    """
+    if short not in _registers:
+        reg, bits = 1, np.empty(32767)
+        for i in range(len(bits)):
+            bit = (reg ^ (reg >> (6 if short else 1))) & 1
+            reg = (reg >> 1) | (bit << 14)
+            bits[i] = 1.0 if reg & 1 else -1.0
+        _registers[short] = bits
+    bits = _registers[short]
+    n = int(round(seconds * SR))
+    start = int(rng.integers(len(bits)))
+    return bits[(start + (np.arange(n) * rate / SR).astype(int)) % len(bits)]
+
+
+def chip_kick(velocity=1.0):
+    """A triangle diving from about 200 Hz, with a tick of noise on its front."""
+    t = times(0.22)
+    ramp = 1 - 4 * np.abs(phase_of(45 + 160 * np.exp(-t / 0.025), len(t), 0.0) % 1 - 0.5)
+    body = np.round(ramp * 7.5) / 7.5 * np.exp(-t / 0.09)
+    tick = chip_noise(0.22, 30000) * np.exp(-t / 0.004) * 0.5
+    return (body + tick) * velocity * 0.9
+
+
+def chip_snare(velocity=1.0, length=0.2):
+    """A burst of the chip's noise over a falling square."""
+    t = times(length)
+    noise = chip_noise(length, 16000) * np.exp(-t / 0.055)
+    tone = np.sign(np.sin(2 * np.pi * phase_of(120 + 220 * np.exp(-t / 0.05), len(t), 0.0))) * np.exp(-t / 0.03) * 0.35
+    return lowpass(noise + tone, 9000) * velocity * 0.7
+
+
+def chip_hat(velocity=1.0, open=False):
+    t = times(0.18 if open else 0.04)
+    noise = highpass(chip_noise(len(t) / SR, 44000), 5000)
+    return noise * np.exp(-t / (0.06 if open else 0.01)) * velocity * 0.5
+
+
+def chip_crash(velocity=1.0, length=1.2):
+    """A long burst of noise that darkens as it dies: the chip's cymbal."""
+    t = times(length)
+    noise = chip_noise(length, 30000) * np.exp(-t / (length / 4))
+    bright = np.exp(-t / 0.3)
+    return (lowpass(noise, 9000) * bright + lowpass(noise, 3000) * (1 - bright)) * velocity * 0.45
+
+
+def arp(notes, length, velocity=1.0, rate=30.0, duty=0.125, release=0.04, warmth=5200):
+    """A chord the chip's way: one pulse running through `notes`, `rate` times a second."""
+    t = times(length + release)
+    f = hz(np.asarray(notes))[(t * rate).astype(int) % len(notes)]
+    tone = harmonics(f, len(t), pulse_partials(duty), cutoff=warmth, order=1)
+    return tone * envelope(len(t), 0.002, 0.4, 0.55, release, hold=length) * velocity * 0.32
+
+
+def blip(note, velocity=1.0, length=0.05, duty=0.25):
+    """A short beep, for menus, typed letters and countdowns."""
+    return pulse(note, length, velocity, duty=duty, attack=0.001, decay=0.06, sustain=0.3, release=0.02)
+
+
+def coin(velocity=1.0):
+    """An arcade taking a coin: two quick squares a fourth apart, the second left to ring."""
+    first = pulse(83, 0.06, velocity, duty=0.5, decay=1.0, sustain=1.0, release=0.005)
+    second = pulse(88, 0.5, velocity, duty=0.5, decay=0.2, sustain=0.0, release=0.1)
+    out = np.zeros(len(first) + len(second))
+    out[: len(first)] += first
+    out[int(0.065 * SR) : int(0.065 * SR) + len(second)] += second
+    return out
+
+
+DTMF = {"1": (697, 1209), "2": (697, 1336), "3": (697, 1477), "4": (770, 1209), "5": (770, 1336), "6": (770, 1477),
+        "7": (852, 1209), "8": (852, 1336), "9": (852, 1477), "*": (941, 1209), "0": (941, 1336), "#": (941, 1477)}
+
+
+def dtmf(key, seconds=0.09):
+    """A telephone key's tone: the pair of frequencies the standard gives that key."""
+    low, high = DTMF[key]
+    t = times(seconds)
+    edges = np.clip(t / 0.003, 0, 1) * np.clip((seconds - t) / 0.004, 0, 1)
+    return (np.sin(2 * np.pi * low * t) + 0.8 * np.sin(2 * np.pi * high * t)) * edges * 0.4
+
+
+def ringback(seconds=1.0):
+    """The ringing a caller hears in North America: 440 and 480 Hz together."""
+    t = times(seconds)
+    edges = np.clip(t / 0.01, 0, 1) * np.clip((seconds - t) / 0.03, 0, 1)
+    return (np.sin(2 * np.pi * 440 * t) + np.sin(2 * np.pi * 480 * t)) * 0.3 * edges
+
+
+def handshake(seconds=1.5):
+    """
+    A dial-up modem connecting, in miniature: the answer tone at 2100 Hz with its phase reversals,
+    bright alternating probes, then the hiss of training, all through a phone line's narrow band.
+    """
+    t = times(seconds)
+    n = len(t)
+    out = np.zeros(n)
+    a, b = int(0.3 * n), int(0.55 * n)
+    out[:a] = 0.5 * np.sin(2 * np.pi * 2100 * t[:a] + np.pi * (np.floor(t[:a] / 0.15) % 2))
+    probe = np.where((t[a:b] * 50).astype(int) % 2 == 0, 1200.0, 2400.0) * (1 + 0.02 * np.sin(2 * np.pi * 35 * t[a:b]))
+    out[a:b] = 0.3 * np.sign(np.sin(2 * np.pi * np.cumsum(probe) / SR))
+    rest = n - b
+    carrier = np.sin(2 * np.pi * 1800 * t[b:] + 2.2 * chip_noise(rest / SR, 2400))
+    out[b:] = 0.25 * carrier + 0.25 * chip_noise(rest / SR, 12000)
+    return bandpass(out, 1700, octaves=2.4) * envelope(n, 0.004, 10, 1.0, 0.05)
+
+
 # ---------------------------------------------------------------- mixing
 
 

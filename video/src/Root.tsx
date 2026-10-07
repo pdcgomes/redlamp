@@ -5,6 +5,7 @@ import { durationOf as filmDuration, Introducing, type IntroducingProps } from "
 import { stories } from "./introducing/Posters";
 import { Welcome } from "./introducing/Welcome";
 import { Storyboard, type StoryboardProps, storyboardSize } from "./kit/Storyboard";
+import { DEFAULT_HOOK, PIXELKIT_PROMO_FRAMES, PixelkitPromo, type PixelkitPromoProps } from "./pixelkit/PixelkitPromo";
 import { STAR_PROMO_FRAMES, StarPromo, type StarPromoProps } from "./star/StarPromo";
 import { stills } from "./stills";
 import { canvas } from "./stills/canvas";
@@ -20,6 +21,7 @@ export function RemotionRoot() {
   const explainer: ExplainerProps = { cut: "explainer", musicSrc: null };
   const social: ExplainerProps = { cut: "social", musicSrc: null };
   const star: StarPromoProps = { hook: "charging", stars: 25, musicSrc: "star/score.wav", guides: false };
+  const pixelkit: PixelkitPromoProps = { hook: DEFAULT_HOOK, musicSrc: "pixelkit/score.wav" };
   return (
     <>
       <Composition
@@ -103,6 +105,17 @@ export function RemotionRoot() {
           width={1080}
           height={1080}
           defaultProps={star}
+        />
+      </Folder>
+      <Folder name="Pixelkit">
+        <Composition
+          id="PixelkitPromo16x9"
+          component={PixelkitPromo}
+          durationInFrames={PIXELKIT_PROMO_FRAMES}
+          fps={FPS}
+          width={1920}
+          height={1080}
+          defaultProps={pixelkit}
         />
       </Folder>
       <Folder name="Review">

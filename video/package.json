@@ -19,6 +19,9 @@
     "prestar": "npm run sync-assets",
     "star": "node scripts/star.mjs",
     "star-score": "python3 scripts/star-score.py",
+    "pixelkit": "node scripts/pixelkit.mjs",
+    "pixelkit-frames": "python3 scripts/pixelkit-frames.py --hooks",
+    "pixelkit-score": "python3 scripts/pixelkit-score.py",
     "review": "node scripts/review.mjs",
     "storyboard": "node scripts/storyboard.mjs",
     "typecheck": "tsc --noEmit"
