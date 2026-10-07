@@ -18,7 +18,7 @@ import Synchronization
 ///
 /// A folder is shown from the library once it's indexed as its last listing found it and that
 /// listing is current: made in this session, or in a root change tracking has caught up with since
-/// launch (its history replayed, or its folders compared).
+/// launch (`ChangeTracker.Event.caughtUp`) and not lost since.
 @MainActor
 public final class LibraryService {
     public enum State: Equatable, Sendable {
@@ -56,7 +56,7 @@ public final class LibraryService {
     private(set) var roots: [String] = []
     private var opening: Task<Void, Never>?
     private var following: Task<Void, Never>?
-    /// Roots whose volumes change tracking has caught up with since launch.
+    /// Roots whose volumes change tracking has caught up with since launch, and that answer still.
     private(set) var currentRoots: Set<String> = []
     /// Folders indexed in this session, as they were listed then.
     private var indexedFolders: Set<String> = []
@@ -236,7 +236,7 @@ public final class LibraryService {
     }
 
     /// What following the roots found.
-    private enum Progress: Sendable {
+    enum Progress: Sendable, Equatable {
         /// Change tracking caught up with these roots' volume.
         case current([String])
         /// These roots' volume stopped answering.
@@ -262,31 +262,29 @@ public final class LibraryService {
             }
         }
         guard !Task.isCancelled else { return }
-        var running: String?
         for await event in core.tracker.start(roots.map { URL(fileURLWithPath: $0, isDirectory: true) }) {
-            switch event {
-            case let .reconciled(volume, _), let .changed(volume, _), let .polled(volume, _):
-                running = volume
-            case let .replayed(volume, folders):
-                running = folders == 0 ? nil : volume
-                if folders == 0 {
-                    await report(.current(rootPaths(onVolume: volume, core: core)))
-                }
-            case let .indexer(.finished(summary)):
-                if let volume = running {
-                    await report(.current(rootPaths(onVolume: volume, core: core)))
-                }
-                running = nil
-                if summary.photosInserted + summary.photosUpdated + summary.photosMoved + summary.photosRemoved > 0 {
-                    core.snapshotIfDue()
-                }
-            case let .indexer(.volumeOffline(volume)):
-                await report(.offline(rootPaths(onVolume: volume, core: core)))
-            default:
-                break
-            }
-            await received(event, core: core, report: report)
+            await followed(event, core: core, report: report)
         }
+    }
+
+    /// What change tracking's `event` makes of the roots: a volume's roots are current once its first
+    /// pass has run to its end (`caughtUp`, again after it's back), and not once it stops answering.
+    nonisolated static func followed(
+        _ event: ChangeTracker.Event, core: LibraryCore, report: @Sendable (Progress) async -> Void,
+    ) async {
+        switch event {
+        case let .caughtUp(volume):
+            await report(.current(rootPaths(onVolume: volume, core: core)))
+        case let .indexer(.volumeOffline(volume)):
+            await report(.offline(rootPaths(onVolume: volume, core: core)))
+        case let .indexer(.finished(summary)):
+            if summary.photosInserted + summary.photosUpdated + summary.photosMoved + summary.photosRemoved > 0 {
+                core.snapshotIfDue()
+            }
+        default:
+            break
+        }
+        await received(event, core: core, report: report)
     }
 
     private nonisolated static func received(
