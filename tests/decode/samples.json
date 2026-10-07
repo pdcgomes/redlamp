@@ -97,6 +97,17 @@
       "source": "raw.pixls.us"
     },
     {
+      "file": "Canon_EOS-R6-Mark-III.CR3",
+      "camera": "Canon EOS R6 Mark III",
+      "mode": "RAW (3:2)",
+      "covers": "a Canon body newer than LibRaw 0.22.2: its black level from the masked photosites, as LibRaw misreads its colour data (CAM-21), and the R6 Mark II's colour matrix, which LibRaw matches by name",
+      "url": "https://raw.pixls.us/getfile.php/8961/nice/Canon%20-%20EOS%20R6%20Mark%20III%20-%20RAW%20%283%3A2%29.CR3",
+      "sha256": "e491e4bb960961b5fa299361bf698310a80cbe7b15d30d8dad3bb21bc5457dab",
+      "megabytes": 33.01,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
       "file": "Canon_EOS-5D-Mark-IV.CR2",
       "camera": "Canon EOS 5D Mark IV",
       "mode": "RAW (3:2)",

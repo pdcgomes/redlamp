@@ -130,6 +130,39 @@
       0.6077
     ]
   },
+  "Canon_EOS-R6-Mark-III.CR3" : {
+    "asShotMultipliers" : [
+      2.2754,
+      1,
+      1.4199
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      512,
+      512,
+      512,
+      512
+    ],
+    "height" : 4639,
+    "layout" : "Bayer RGGB",
+    "make" : "Canon",
+    "model" : "EOS R6 Mark III",
+    "orientation" : 0,
+    "sampleChecksum" : "16b75a00762f5c4",
+    "whiteLevel" : 16383,
+    "width" : 6959,
+    "xyzToCamera" : [
+      0.9539,
+      -0.2795,
+      -0.1224,
+      -0.4175,
+      1.1998,
+      0.2458,
+      -0.0465,
+      0.1755,
+      0.6048
+    ]
+  },
   "Canon_EOS_R6_RAW_ISO_100_nocrop_nodual.CR3" : {
     "asShotMultipliers" : [
       1.8057,
