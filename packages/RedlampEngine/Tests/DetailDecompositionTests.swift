@@ -225,7 +225,7 @@ struct DetailDecompositionTests {
 
     // MARK: - Caches
 
-    /// Every drag renders what a fresh stage renders; those the ladder serves make only the output.
+    /// Every drag renders what a fresh stage renders; those the ladder serves make at most the output.
     @Test func `drags render what a fresh stage renders`() throws {
         let session = try base.makeSession(.bayer, width: 512, height: 384, signal: Self.smooth)
         let stage = DetailStage(device: base.device, kernels: base.kernels)
@@ -249,14 +249,14 @@ struct DetailDecompositionTests {
             let worst = zip(cached, fresh.texels).map { simd_abs($0 - $1).max() }.max() ?? 0
             #expect(worst == 0, "\(parameter): \(worst)")
             if ladderServes {
-                #expect(stage.allocated.count - before == 1, "\(parameter) made more than its output")
+                #expect(stage.allocated.count - before <= 1, "\(parameter) made more than its output")
             }
         }
     }
 
     /// Areas too large for their ladder keep the noise-reduced source: drags render what a fresh
-    /// stage renders, whole and in tiles, and those that leave noise reduction alone make only the
-    /// output once one has sized the scratch to their tiles.
+    /// stage renders, whole and in tiles, and those that leave noise reduction alone make at most
+    /// the output once one has sized the scratch to their tiles.
     @Test(arguments: [false, true])
     func `drags over a large area render what a fresh stage renders`(tiled: Bool) throws {
         let session = try base.makeSession(.bayer, width: 1024, height: 768, signal: Self.smooth)
@@ -290,7 +290,7 @@ struct DetailDecompositionTests {
             let worst = zip(cached, fresh.texels).map { simd_abs($0 - $1).max() }.max() ?? 0
             #expect(worst == 0, "\(parameter): \(worst)")
             if keepsSource, settled || !tiled {
-                #expect(stage.allocated.count - before == 1, "\(parameter) made more than its output")
+                #expect(stage.allocated.count - before <= 1, "\(parameter) made more than its output")
             }
         }
     }

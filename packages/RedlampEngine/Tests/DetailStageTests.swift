@@ -388,7 +388,7 @@ struct DetailStageTests {
     }
 
     /// A Noise drag before process 11 writes its noise-reduced source over the one it replaces, so
-    /// each tick makes only its output, as before the source was kept, and holds one source.
+    /// each tick makes at most its output, as before the source was kept, and holds one source.
     @Test func `noise drags before process 11 reuse the kept source`() throws {
         let session = try makeSession(.bayer, width: 1024, height: 768) { x, y in
             Float(0.2 + 0.1 * sin(Double(x) / 3) * cos(Double(y) / 5))
@@ -400,7 +400,7 @@ struct DetailStageTests {
             recipe[.noiseLuminance] = luminance
             let before = stage.allocated.count
             let cached = try processAndRead(stage, session, recipe).texels
-            #expect(stage.allocated.count - before == 1, "Luminance \(luminance) made more than its output")
+            #expect(stage.allocated.count - before <= 1, "Luminance \(luminance) made more than its output")
             #expect(stage.ladderCache.heldTextures.count == 1)
             let fresh = try processAndRead(DetailStage(device: device, kernels: kernels), session, recipe).texels
             #expect(EngineMemoryTests.differing(cached, fresh) == 0, "Luminance \(luminance)")

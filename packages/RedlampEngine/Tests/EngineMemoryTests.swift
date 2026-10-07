@@ -401,15 +401,9 @@ struct EngineMemoryTests {
             commands.commit()
             commands.waitUntilCompleted()
         }
-        withKnownIssue("PIPE-04: the stage allocates on every miss") {
-            #expect(drag == 0, "a Noise drag made \(drag) textures")
-        }
-        withKnownIssue("PIPE-04: the stage allocates on every miss") {
-            #expect(pan == 0, "a Before/After pan made \(pan) textures")
-        }
-        withKnownIssue("PIPE-04: the stage allocates on every miss") {
-            #expect(tiles == 0, "a still's tiles made \(tiles) textures")
-        }
+        #expect(drag == 0, "a Noise drag made \(drag) textures")
+        #expect(pan == 0, "a Before/After pan made \(pan) textures")
+        #expect(tiles == 0, "a still's tiles made \(tiles) textures")
     }
 
     /// The largest photos at 1:1, then a smaller photo: the scratch textures follow the photo

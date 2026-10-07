@@ -103,10 +103,12 @@ final class LadderCache {
     }
 
     private let residency: DetailResidency
+    private let pool: WorkTexturePool
     private var entries: [Entry] = []
 
-    init(residency: DetailResidency) {
+    init(residency: DetailResidency, pool: WorkTexturePool) {
         self.residency = residency
+        self.pool = pool
     }
 
     var heldTextures: [any MTLTexture] {
@@ -141,9 +143,12 @@ final class LadderCache {
     /// Before process 11: keeps `denoised` as its area's only noise-reduced source, dropping those
     /// of other photos, so the stage holds one per area of the photo being edited.
     func keep(denoised: any MTLTexture, key: LadderKey, owner: ImageSession) {
-        entries.removeAll {
-            $0.ladder == nil && ($0.key.session != key.session || ($0.key.work == key.work && !$0.key.decomposes))
+        let replaced = { (entry: Entry) in
+            entry.ladder == nil
+                && (entry.key.session != key.session || (entry.key.work == key.work && !entry.key.decomposes))
         }
+        pool.give(entries.filter(replaced).flatMap(\.textures))
+        entries.removeAll(where: replaced)
         store(denoised: denoised, key: key, owner: owner)
     }
 
@@ -165,7 +170,7 @@ final class LadderCache {
         entry.textures.forEach { residency.wake($0) }
         entries.append(entry)
         if entries.count > Self.maximumEntries {
-            entries.removeFirst()
+            pool.give(entries.removeFirst().textures)
         }
     }
 
@@ -206,9 +211,9 @@ extension DetailStage {
     /// A ladder in work textures of its own, to cache.
     func makeLadder(_ work: WorkArea, denoised: Bool) throws -> Ladder {
         try Ladder(
-            denoised: denoised ? makeWorkTexture(.rgba16Float, work) : nil,
-            bands: makeWorkTexture(.rgba16Float, work),
-            residual: makeWorkTexture(.r16Float, work),
+            denoised: denoised ? workTexture(.rgba16Float, work) : nil,
+            bands: workTexture(.rgba16Float, work),
+            residual: workTexture(.r16Float, work),
         )
     }
 

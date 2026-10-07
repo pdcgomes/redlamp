@@ -365,6 +365,7 @@ final class DetailStage {
     let residency = DetailResidency()
     let sharpenCache: SharpenCache
     let ladderCache: LadderCache
+    let pool: WorkTexturePool
     /// Process 11's Clarity base per photo, in the ladder's luminance, made when first needed.
     var clarityBases: [(owner: ImageSession, texture: any MTLTexture)] = []
     /// Each format's working textures by slot, allocated as passes first use them, for one photo.
@@ -375,7 +376,8 @@ final class DetailStage {
     /// The texels a scratch texture may grow to in the render being encoded.
     private var scratchLimit = 0
     private var layout: (key: LayoutKey, tiles: [Tile])?
-    /// The command buffer being encoded and the textures cached from it, which `forget` forgets.
+    /// The command buffer being encoded, the textures cached from it, which `forget` forgets, and
+    /// the work textures its renders took.
     private var encoding: Encoding?
     /// Textures made so far and their bytes.
     private(set) var allocated = (count: 0, bytes: 0)
@@ -401,13 +403,15 @@ final class DetailStage {
     init(device: any MTLDevice, kernels: KernelLibrary) {
         self.device = device
         self.kernels = kernels
-        sharpenCache = SharpenCache(residency: residency)
-        ladderCache = LadderCache(residency: residency)
+        pool = WorkTexturePool(residency: residency)
+        sharpenCache = SharpenCache(residency: residency, pool: pool)
+        ladderCache = LadderCache(residency: residency, pool: pool)
     }
 
     /// Every texture the stage keeps between renders.
     var heldTextures: [any MTLTexture] {
         scratch.values.flatMap(\.values) + cachedOutputs + sharpenCache.heldTextures + ladderCache.heldTextures
+            + pool.heldTextures
     }
 
     var cachedOutputs: [any MTLTexture] {
@@ -428,7 +432,8 @@ final class DetailStage {
 
     /// Lets go of what the stage keeps for photos other than `session`'s (for every photo when nil),
     /// and of their sessions: cached outputs, sharpening's analyses, ladders and kept sources, and
-    /// Clarity bases. Renders that cache call it when they move to another photo.
+    /// Clarity bases, and of the work textures kept to be written over. Renders that cache call it
+    /// when they move to another photo.
     func keepOnly(_ session: ImageSession?) {
         let photo = session.map { PhotoKey(url: $0.info.url, size: $0.info.pixelSize) }
         let other = { (owner: ImageSession) in PhotoKey(url: owner.info.url, size: owner.info.pixelSize) != photo }
@@ -436,6 +441,8 @@ final class DetailStage {
         sharpenCache.removeAll(where: other)
         ladderCache.removeAll(where: other)
         clarityBases.removeAll { other($0.owner) }
+        pool.removeAll()
+        encoding?.taken.removeAll()
         cachedPhoto = photo
     }
 
@@ -470,6 +477,13 @@ final class DetailStage {
         }
         residency.hold(until: commands)
         if encoding?.commands !== commands {
+            // What the last command buffer's renders took and nothing caches is written over from now on.
+            if let taken = encoding?.taken {
+                let held = Set((cachedOutputs + sharpenCache.heldTextures + ladderCache.heldTextures).map {
+                    ObjectIdentifier($0)
+                })
+                pool.give(taken.filter { !held.contains(ObjectIdentifier($0)) })
+            }
             encoding = Encoding(commands: commands)
         }
         do {
@@ -557,7 +571,7 @@ final class DetailStage {
             scratchPhoto = photo
         }
 
-        let texture = try makeWorkTexture(.rgba16Float, work)
+        let texture = try workTexture(.rgba16Float, work)
         let sigma = key.sharpen?.sigma(atLevel: work.level) ?? 0
         let ladderKey = passes.decomposes
             ? LadderKey(session: key.session, work: work, denoise: key.denoise, local: key.local, decomposes: true)
@@ -578,7 +592,7 @@ final class DetailStage {
             : nil
         var kept = sourceKey.map { KeptSource(given: ladderCache.denoised($0)) }
         if kept != nil, kept?.given == nil, let sourceKey {
-            kept?.target = try ladderCache.reclaimDenoised(sourceKey) ?? makeWorkTexture(.rgba16Float, work)
+            kept?.target = try ladderCache.reclaimDenoised(sourceKey) ?? workTexture(.rgba16Float, work)
         }
         let denoised = kept?.given != nil
         var measures = key.sharpen.map { _ in
@@ -606,10 +620,12 @@ final class DetailStage {
         tileCount = tiles.count
         if tiles.count == 1 {
             if measures != nil, measures?.analysis == nil {
-                measures?.analysisTarget = try makeWorkTexture(.rgba16Float, work)
+                // Only a cached analysis needs a texture of its own; a tile's takes this slot too.
+                measures?.analysisTarget = try cache
+                    ? workTexture(.rgba16Float, work) : scratchTexture(.rgba16Float, 10, work)
                 if measures?.separation == nil {
                     measures?.separationTarget = try cache && ladder == nil
-                        ? makeWorkTexture(.r16Float, work) : scratchTexture(.r16Float, 0, work)
+                        ? workTexture(.r16Float, work) : scratchTexture(.r16Float, 0, work)
                 }
             }
             if ladder != nil, ladder?.ladder == nil {
@@ -617,7 +633,7 @@ final class DetailStage {
                     ? makeLadder(work, denoised: key.denoise != nil) : scratchLadder(work, denoised: key.denoise != nil)
                 if keepsDenoised {
                     if ladder?.denoised == nil {
-                        ladder?.denoisedTarget = try makeWorkTexture(.rgba16Float, work)
+                        ladder?.denoisedTarget = try workTexture(.rgba16Float, work)
                     }
                     let source = ladder?.denoised ?? ladder?.denoisedTarget
                     ladder?.target?.denoised = source
@@ -636,16 +652,16 @@ final class DetailStage {
             }
         } else {
             if cache, measures != nil, measures?.analysis == nil {
-                measures?.analysisTarget = try makeWorkTexture(.rgba16Float, work)
+                measures?.analysisTarget = try workTexture(.rgba16Float, work)
                 if measures?.separation == nil, ladder == nil {
-                    measures?.separationTarget = try makeWorkTexture(.r16Float, work)
+                    measures?.separationTarget = try workTexture(.r16Float, work)
                 }
             }
             if cachesLadder, ladder != nil, ladder?.ladder == nil {
                 ladder?.target = try makeLadder(work, denoised: key.denoise != nil)
             }
             if keepsDenoised, ladder?.ladder == nil, ladder?.denoised == nil {
-                ladder?.denoisedTarget = try makeWorkTexture(.rgba16Float, work)
+                ladder?.denoisedTarget = try workTexture(.rgba16Float, work)
             }
             try encodeTiles(
                 tiles, passes, work: work, into: texture, measures: measures, ladder: ladder, kept: kept,
@@ -680,14 +696,23 @@ final class DetailStage {
             let sameArea = entries.indices
                 .filter { entries[$0].key.session == key.session && entries[$0].key.work == work }
             if sameArea.count >= Self.maximumEntriesPerArea {
-                entries.remove(at: sameArea[0])
+                pool.give([entries.remove(at: sameArea[0]).output.texture])
             }
             entries.append(Entry(key: key, session: session, output: output))
             if entries.count > Self.maximumEntries {
-                entries.removeFirst()
+                pool.give([entries.removeFirst().output.texture])
             }
         }
+        // The pool's idle textures come out of the scratch budget.
+        pool.trim(to: scratchBudget - scratch.values.flatMap(\.values).reduce(0) { $0 + $1.allocatedSize })
         return output
+    }
+
+    /// A work texture covering the work area: one the pool keeps when it has one that size.
+    func workTexture(_ format: MTLPixelFormat, _ work: WorkArea) throws -> any MTLTexture {
+        let texture = try pool.take(format, work.size) ?? makeWorkTexture(format, work)
+        encoding?.taken.append(texture)
+        return texture
     }
 
     /// Forgets what was cached from `commands`, which will never run, and stops keeping its
@@ -714,6 +739,7 @@ final class DetailStage {
         entries.removeAll()
         sharpenCache.removeAll()
         ladderCache.removeAll()
+        pool.removeAll()
         scratch.removeAll()
         layout = nil
         encoding = nil
@@ -724,6 +750,7 @@ final class DetailStage {
     private struct Encoding {
         weak var commands: (any MTLCommandBuffer)?
         var cached: Set<ObjectIdentifier> = []
+        var taken: [any MTLTexture] = []
     }
 
     /// What one render of the stage runs, for any work area or tile of it.

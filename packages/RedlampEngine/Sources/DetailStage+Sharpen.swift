@@ -67,11 +67,13 @@ final class SharpenCache {
     }
 
     private let residency: DetailResidency
+    private let pool: WorkTexturePool
     private var analyses: [Analysis] = []
     private var separations: [Separation] = []
 
-    init(residency: DetailResidency) {
+    init(residency: DetailResidency, pool: WorkTexturePool) {
         self.residency = residency
+        self.pool = pool
     }
 
     var heldTextures: [any MTLTexture] {
@@ -112,7 +114,7 @@ final class SharpenCache {
             texture: texture,
         ))
         if analyses.count > Self.maximumEntries {
-            analyses.removeFirst()
+            pool.give([analyses.removeFirst().texture])
         }
     }
 
@@ -130,7 +132,7 @@ final class SharpenCache {
         residency.wake(linear)
         separations.append(Separation(session: ObjectIdentifier(session), work: work, owner: session, linear: linear))
         if separations.count > Self.maximumEntries {
-            separations.removeFirst()
+            pool.give([separations.removeFirst().linear])
         }
     }
 
