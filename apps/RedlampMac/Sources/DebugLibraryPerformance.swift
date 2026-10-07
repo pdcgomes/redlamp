@@ -948,6 +948,7 @@
             phase("grouping, changing Group By and the setting", sampling: .milliseconds(8))
             var onScreen: [Double] = []
             var offMain: [Double] = []
+            var slowest = (label: "", onScreen: 0.0, offMain: 0.0)
             var missed = 0
             let keys: [GroupKey] = [.day, .camera, .folder, .lens, .orientation, .momentCamera, .moment]
             let steps = [-1, -2, -3, -4, -3, -2, -1, 0, 1, 2, 3, 4, 3, 2, 1, 0]
@@ -962,6 +963,9 @@
                         drawn()
                         onScreen.append((CFAbsoluteTimeGetCurrent() - started) * 1000)
                         offMain.append(seconds(groups.lastGrouping) * 1000)
+                        if let last = onScreen.last, last > slowest.onScreen {
+                            slowest = (key.title, last, offMain.last ?? 0)
+                        }
                     } else {
                         missed += 1
                     }
@@ -974,6 +978,9 @@
                         drawn()
                         onScreen.append((CFAbsoluteTimeGetCurrent() - started) * 1000)
                         offMain.append(seconds(groups.lastGrouping) * 1000)
+                        if let last = onScreen.last, last > slowest.onScreen {
+                            slowest = ("the setting at \(looseness)", last, offMain.last ?? 0)
+                        }
                     } else {
                         missed += 1
                     }
@@ -986,9 +993,11 @@
             var report = String(
                 format: "Grouping %d photos: first by moment (%d moments) on screen in %.1f ms (%.1f ms off the main "
                     + "thread, reading the photos' IDs); %d changes of Group By and the setting on screen p50 %.2f ms, "
-                    + "p95 %.2f ms, max %.2f ms (off the main thread p50 %.2f ms, max %.2f ms), %d not within 2 s",
+                    + "p95 %.2f ms, max %.2f ms (off the main thread p50 %.2f ms, max %.2f ms), %d not within 2 s; the "
+                    + "slowest, %@, on screen in %.2f ms, %.2f ms of it off the main thread",
                 model.items.count, count, first, firstOffMain, onScreen.count, percentile(onScreen, 0.5),
                 percentile(onScreen, 0.95), onScreen.max() ?? 0, percentile(offMain, 0.5), offMain.max() ?? 0, missed,
+                slowest.label, slowest.onScreen, slowest.offMain,
             )
             report += "\n" + monitor.report("Main thread changing Group By and the setting", seconds: elapsed)
 

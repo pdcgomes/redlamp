@@ -102,7 +102,9 @@ public extension LibraryGrouping {
                     1
                 ordinals.append(shown)
             }
-            let cameras = GroupFilters(field: .camera, values: combined.cameras)
+            // Each camera's term once: a list's moments are many more than its cameras.
+            let filters = GroupFilters(field: .camera, values: combined.cameras)
+            let cameras = Dictionary(combined.cameras.map { ($0, filters.filter(for: $0)) }) { first, _ in first }
             describe = { code, group, span in
                 let camera = code.flatMap(combined.cameraName)
                 let suffix = " — " + (camera ?? "No camera")
@@ -112,7 +114,7 @@ public extension LibraryGrouping {
                 let ordinal = newestFirst ? dated - 1 - ordinals[group] : ordinals[group]
                 var filter: LibraryQuery?
                 if !sorted.crossed.contains(code), let camera, let times = span.flatMap(Self.filter(spanning:)),
-                   let byCamera = cameras.filter(for: camera) {
+                   let byCamera = cameras[camera] ?? nil {
                     filter = .joined([times, byCamera], or: false)
                 }
                 return (.momentCamera(ordinal, camera: camera), Self.name(of: span) + suffix, filter)

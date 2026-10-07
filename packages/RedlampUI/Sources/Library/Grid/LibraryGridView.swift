@@ -42,6 +42,8 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     /// The groups as last followed, and their sections; nil while ungrouped. Items are read from these.
     private(set) var shownGroups: GroupedList?
     private(set) var sections: GridSections?
+    /// Each item's photo, -1 for a header, so the items on and near the screen are read without the groups' tree.
+    private var itemPhotos = ContiguousArray<Int64>()
     /// The headers on screen, by item, and those waiting to be used again.
     private(set) var headers: [Int: GroupHeaderCell] = [:]
     private var headerPool: [GroupHeaderCell] = []
@@ -229,6 +231,17 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         shownGroups = model.gridGroups.list
         sections = shownGroups.map(GridSections.init)
         shownCount = shownGroups?.count ?? model.items.count
+        itemPhotos = []
+        if let shownGroups {
+            itemPhotos.reserveCapacity(shownGroups.count)
+            for item in shownGroups {
+                if case let .photo(id) = item {
+                    itemPhotos.append(id)
+                } else {
+                    itemPhotos.append(-1)
+                }
+            }
+        }
     }
 
     /// The same source's photos in another order or another number (a filter, LIB-18), or grouped afresh:
@@ -348,12 +361,11 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     }
 
     private func content(ofItem index: Int) -> Item {
-        guard let shownGroups else { return model.items.indices.contains(index) ? .photo(row: index) : .none }
-        guard shownGroups.indices.contains(index) else { return .none }
-        switch shownGroups[index] {
-        case let .header(group): return .header(group: group)
-        case let .photo(id): return model.library.photoList.index(of: id).map { .photo(row: $0) } ?? .none
-        }
+        guard let sections else { return model.items.indices.contains(index) ? .photo(row: index) : .none }
+        guard itemPhotos.indices.contains(index) else { return .none }
+        let id = itemPhotos[index]
+        guard id >= 0 else { return .header(group: sections.group(ofItem: index)) }
+        return model.library.photoList.index(of: id).map { .photo(row: $0) } ?? .none
     }
 
     /// The row of item `index`'s photo; nil for a header.
